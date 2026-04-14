@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Boss 名古屋記帳 🇯🇵</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Hiragino Sans", sans-serif; -webkit-tap-highlight-color: transparent; }
+  .glass { backdrop-filter: blur(20px); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+  .tab-active { color: #f97316; }
+  .tab-inactive { color: #6b7280; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  @keyframes pulse-ring { 0% { transform: scale(0.95); opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
+  .pulse-ring::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: #f97316; animation: pulse-ring 1.5s ease-out infinite; }
+  .progress-shine { background: linear-gradient(90deg, #f97316, #fbbf24, #f97316); background-size: 200% 100%; animation: shine 3s linear infinite; }
+  @keyframes shine { to { background-position: 200% 0; } }
+  .fade-in { animation: fadeIn 0.3s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  input, select, textarea, button { -webkit-appearance: none; }
+</style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-gray-900 to-black text-white min-h-screen pb-24">
+
+<!-- ============ HEADER ============ -->
+<header class="sticky top-0 z-40 bg-gradient-to-b from-black/80 to-transparent backdrop-blur-xl px-5 pt-6 pb-4">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">名古屋之旅 🗾</h1>
+      <p class="text-xs text-gray-400 mt-0.5" id="dateLabel">—</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="text-right">
+        <p class="text-[10px] text-gray-500 uppercase tracking-wider">Day</p>
+        <p class="text-xl font-bold text-orange-400" id="dayCounter">—</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Budget bar -->
+  <div class="mt-4 glass rounded-2xl p-4">
+    <div class="flex justify-between items-baseline mb-2">
+      <span class="text-xs text-gray-400">旅程預算</span>
+      <span class="text-xs text-gray-500" id="budgetText">¥0 / ¥101,800</span>
+    </div>
+    <div class="h-2.5 bg-white/10 rounded-full overflow-hidden">
+      <div id="budgetBar" class="h-full progress-shine rounded-full transition-all duration-700" style="width:0%"></div>
+    </div>
+    <div class="flex justify-between mt-2">
+      <span class="text-[10px] text-gray-500"><span id="budgetPct">0</span>% 已用</span>
+      <span class="text-[10px] text-gray-500">餘 ¥<span id="budgetLeft">101,800</span></span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ TAB CONTENT ============ -->
+<main class="px-5 mt-2">
+
+  <!-- ============ DASHBOARD TAB ============ -->
+  <section id="tab-dashboard" class="tab-content fade-in">
+    <!-- Today -->
+    <div class="glass rounded-3xl p-6 mb-4">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-[10px] uppercase tracking-widest text-gray-400">今日花費</span>
+        <span class="text-[10px] text-orange-400" id="todayLocation">—</span>
+      </div>
+      <div class="flex items-baseline gap-2">
+        <span class="text-4xl font-bold">¥<span id="todaySpend">0</span></span>
+        <span class="text-sm text-gray-500">≈ HKD <span id="todaySpendHKD">0</span></span>
+      </div>
+      <p class="text-xs text-gray-500 mt-1"><span id="todayCount">0</span> 筆消費</p>
+    </div>
+
+    <!-- Quick stats -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="glass rounded-2xl p-4">
+        <p class="text-[10px] uppercase tracking-widest text-gray-400 mb-1">總消費</p>
+        <p class="text-2xl font-bold">¥<span id="totalSpend">0</span></p>
+        <p class="text-[10px] text-gray-500 mt-1"><span id="totalCount">0</span> 筆</p>
+      </div>
+      <div class="glass rounded-2xl p-4">
+        <p class="text-[10px] uppercase tracking-widest text-gray-400 mb-1">日均</p>
+        <p class="text-2xl font-bold">¥<span id="avgSpend">0</span></p>
+        <p class="text-[10px] text-gray-500 mt-1">過去 <span id="daysElapsed">0</span> 日</p>
+      </div>
+    </div>
+
+    <!-- Today list -->
+    <div class="mb-4">
+      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3 px-1">今日消費</h3>
+      <div id="todayList" class="space-y-2">
+        <p class="text-sm text-gray-500 text-center py-8">今日仲未有消費紀錄 ✨</p>
+      </div>
+    </div>
+
+    <!-- Itinerary -->
+    <div class="mb-4">
+      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3 px-1">行程</h3>
+      <div id="itineraryList" class="space-y-2"></div>
+    </div>
+  </section>
+
+  <!-- ============ SCAN TAB ============ -->
+  <section id="tab-scan" class="tab-content hidden fade-in">
+    <div class="glass rounded-3xl p-6 mb-4 text-center">
+      <div class="text-5xl mb-3">📸</div>
+      <h2 class="text-xl font-bold mb-1">掃描收據</h2>
+      <p class="text-xs text-gray-400">影相或上傳收據，AI 自動辨識</p>
+    </div>
+
+    <input type="file" id="receiptInput" accept="image/*" capture="environment" class="hidden">
+    <button id="scanBtn" class="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold py-5 rounded-2xl text-lg shadow-lg shadow-orange-500/30 active:scale-95 transition mb-3">
+      📷 影收據 / 揀相
+    </button>
+    <button id="manualBtn" class="w-full glass text-white font-medium py-4 rounded-2xl active:scale-95 transition">
+      ✍️ 手動輸入
+    </button>
+
+    <!-- Preview area -->
+    <div id="previewArea" class="hidden mt-4">
+      <div class="glass rounded-2xl p-4">
+        <img id="previewImg" class="w-full max-h-64 object-contain rounded-xl mb-3" alt="">
+        <div id="scanStatus" class="text-center py-4">
+          <div class="inline-block w-8 h-8 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
+          <p class="text-sm text-gray-400 mt-2">AI 正在辨識收據…</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HISTORY TAB ============ -->
+  <section id="tab-history" class="tab-content hidden fade-in">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-bold">消費紀錄</h2>
+      <select id="filterCat" class="glass rounded-xl px-3 py-1.5 text-xs border-0 bg-transparent">
+        <option value="">全部類別</option>
+      </select>
+    </div>
+    <div id="historyList" class="space-y-2">
+      <p class="text-sm text-gray-500 text-center py-12">未有任何紀錄</p>
+    </div>
+  </section>
+
+  <!-- ============ STATS TAB ============ -->
+  <section id="tab-stats" class="tab-content hidden fade-in">
+    <h2 class="text-xl font-bold mb-4">統計分析 📊</h2>
+
+    <!-- Category -->
+    <div class="glass rounded-2xl p-4 mb-4">
+      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">類別佔比</h3>
+      <div class="relative h-56"><canvas id="catChart"></canvas></div>
+    </div>
+
+    <!-- Payment -->
+    <div class="glass rounded-2xl p-4 mb-4">
+      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">支付方式</h3>
+      <div class="relative h-56"><canvas id="payChart"></canvas></div>
+    </div>
+
+    <!-- Daily trend -->
+    <div class="glass rounded-2xl p-4 mb-4">
+      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">每日趨勢</h3>
+      <div class="relative h-48"><canvas id="trendChart"></canvas></div>
+    </div>
+
+    <!-- TOP 10 -->
+    <div class="glass rounded-2xl p-4 mb-4">
+      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">TOP 10 消費</h3>
+      <div id="topList" class="space-y-2"><p class="text-xs text-gray-500 text-center py-4">未有紀錄</p></div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS TAB ============ -->
+  <section id="tab-settings" class="tab-content hidden fade-in">
+    <h2 class="text-xl font-bold mb-4">設定 ⚙️</h2>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs text-gray-400 uppercase tracking-wider">總預算 (JPY)</label>
+      <input type="number" id="setBudget" class="w-full bg-transparent text-2xl font-bold mt-1 focus:outline-none" value="101800">
+      <p class="text-[10px] text-gray-500 mt-1">≈ HKD <span id="setBudgetHKD">5000</span></p>
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs text-gray-400 uppercase tracking-wider">匯率 (1 HKD = ? JPY)</label>
+      <input type="number" id="setRate" class="w-full bg-transparent text-2xl font-bold mt-1 focus:outline-none" value="20.36" step="0.01">
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs text-gray-400 uppercase tracking-wider">Google API Key</label>
+      <input type="password" id="setApiKey" class="w-full bg-transparent text-sm font-mono mt-1 focus:outline-none" placeholder="AIza...">
+      <p class="text-[10px] text-gray-500 mt-1">用於 Gemini AI 收據辨識</p>
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs text-gray-400 uppercase tracking-wider">AI 模型</label>
+      <select id="setModel" class="w-full bg-transparent text-sm font-medium mt-1 focus:outline-none">
+        <option value="gemini-3.1-pro-preview" class="bg-gray-900">Gemini 3.1 Pro Preview ⭐</option>
+        <option value="gemini-3-pro-preview" class="bg-gray-900">Gemini 3 Pro Preview</option>
+        <option value="gemini-3-flash-preview" class="bg-gray-900">Gemini 3 Flash Preview</option>
+        <option value="gemini-2.5-pro" class="bg-gray-900">Gemini 2.5 Pro</option>
+        <option value="gemini-2.0-flash" class="bg-gray-900">Gemini 2.0 Flash</option>
+      </select>
+    </div>
+
+    <!-- ============ NOTION SYNC ============ -->
+    <div class="mt-6 mb-3">
+      <h3 class="text-xs uppercase tracking-widest text-gray-400 px-1 mb-2">📓 Notion 同步</h3>
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs text-gray-400 uppercase tracking-wider">Notion Integration Token</label>
+      <input type="password" id="setNotionToken" class="w-full bg-transparent text-sm font-mono mt-1 focus:outline-none" placeholder="ntn_... 或 secret_...">
+      <p class="text-[10px] text-gray-500 mt-1">notion.so/my-integrations 建立</p>
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs text-gray-400 uppercase tracking-wider">Database ID</label>
+      <input type="text" id="setNotionDb" class="w-full bg-transparent text-sm font-mono mt-1 focus:outline-none" placeholder="32 字元 ID（URL 中間嘅一段）">
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs text-gray-400 uppercase tracking-wider">CORS Proxy（瀏覽器需要）</label>
+      <input type="text" id="setProxy" class="w-full bg-transparent text-sm font-mono mt-1 focus:outline-none" value="https://corsproxy.io/?">
+      <p class="text-[10px] text-gray-500 mt-1">預設用 corsproxy.io；想自己部署 Cloudflare Worker 可以換</p>
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="flex items-center justify-between cursor-pointer">
+        <span class="text-sm">自動同步（每次新增/編輯）</span>
+        <input type="checkbox" id="setAutoSync" class="w-5 h-5">
+      </label>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 mb-3">
+      <button id="syncPushBtn" class="glass py-3 rounded-2xl text-sm font-medium">⬆️ 推送上 Notion</button>
+      <button id="syncPullBtn" class="glass py-3 rounded-2xl text-sm font-medium">⬇️ 從 Notion 拉</button>
+    </div>
+
+    <div class="glass rounded-2xl p-3 mb-3 text-[11px] text-gray-400">
+      <p class="font-bold text-orange-400 mb-1">📋 Notion Database 必需欄位（一字不差）：</p>
+      <ul class="space-y-0.5 font-mono">
+        <li>• <span class="text-white">店名</span> (Title)</li>
+        <li>• <span class="text-white">金額</span> (Number)</li>
+        <li>• <span class="text-white">日期</span> (Date)</li>
+        <li>• <span class="text-white">類別</span> (Select)</li>
+        <li>• <span class="text-white">支付</span> (Select)</li>
+        <li>• <span class="text-white">地區</span> (Text)</li>
+        <li>• <span class="text-white">品項</span> (Text)</li>
+        <li>• <span class="text-white">備註</span> (Text)</li>
+        <li>• <span class="text-white">SourceID</span> (Text — 用作 sync 識別)</li>
+      </ul>
+      <p class="mt-2 text-gray-500">建立後記得 Share → 加入你嘅 Integration ✅</p>
+    </div>
+
+    <button id="saveSettings" class="w-full bg-orange-500 text-white font-bold py-3 rounded-2xl mt-2">儲存設定</button>
+
+    <div class="mt-6 grid grid-cols-2 gap-3">
+      <button id="exportBtn" class="glass py-3 rounded-2xl text-sm font-medium">📤 匯出 CSV</button>
+      <button id="resetBtn" class="glass py-3 rounded-2xl text-sm font-medium text-red-400">🗑️ 清除全部</button>
+    </div>
+
+    <div class="mt-6 text-center text-[10px] text-gray-600">
+      <p>Built for Boss 💪 • 2026年4月20-25日</p>
+      <p class="mt-1">資料儲存喺你部 Mac，唔會上傳任何雲端</p>
+    </div>
+  </section>
+</main>
+
+<!-- ============ BOTTOM TAB BAR ============ -->
+<nav class="fixed bottom-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-xl border-t border-white/10">
+  <div class="grid grid-cols-5 max-w-md mx-auto">
+    <button data-tab="dashboard" class="tab-btn flex flex-col items-center py-3 tab-active">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      <span class="text-[10px] mt-1">主頁</span>
+    </button>
+    <button data-tab="scan" class="tab-btn flex flex-col items-center py-3 tab-inactive">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <span class="text-[10px] mt-1">掃描</span>
+    </button>
+    <button data-tab="history" class="tab-btn flex flex-col items-center py-3 tab-inactive">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      <span class="text-[10px] mt-1">紀錄</span>
+    </button>
+    <button data-tab="stats" class="tab-btn flex flex-col items-center py-3 tab-inactive">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      <span class="text-[10px] mt-1">統計</span>
+    </button>
+    <button data-tab="settings" class="tab-btn flex flex-col items-center py-3 tab-inactive">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <span class="text-[10px] mt-1">設定</span>
+    </button>
+  </div>
+</nav>
+
+<!-- ============ CONFIRM MODAL ============ -->
+<div id="confirmModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <div class="bg-gray-900 border border-white/10 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto scrollbar-hide">
+    <div class="sticky top-0 bg-gray-900 px-5 pt-5 pb-3 border-b border-white/5">
+      <div class="w-12 h-1 bg-white/20 rounded-full mx-auto mb-3 sm:hidden"></div>
+      <h3 class="text-lg font-bold">確認消費內容</h3>
+      <p class="text-xs text-gray-400 mt-1" id="modalSubtitle">請核對 AI 識別嘅資料</p>
+    </div>
+    <div class="p-5 space-y-3">
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">店名</label>
+        <input id="mStore" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-gray-400">總金額 ¥</label>
+          <input id="mTotal" type="number" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-gray-400">日期</label>
+          <input id="mDate" type="date" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-gray-400">類別</label>
+          <select id="mCat" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0"></select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-gray-400">支付</label>
+          <select id="mPay" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0"></select>
+        </div>
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">地區</label>
+        <input id="mRegion" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">品項明細</label>
+        <textarea id="mItems" rows="4" class="w-full glass rounded-xl px-3 py-2.5 text-sm mt-1 border-0 font-mono"></textarea>
+        <p class="text-[10px] text-gray-500 mt-1">每行一項：「品名 ¥金額」</p>
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">備註（可選）</label>
+        <input id="mNote" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+      </div>
+    </div>
+    <div class="sticky bottom-0 bg-gray-900 p-5 border-t border-white/5 grid grid-cols-2 gap-3">
+      <button id="modalCancel" class="glass py-3 rounded-xl font-medium">取消</button>
+      <button id="modalSave" class="bg-orange-500 py-3 rounded-xl font-bold">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TOAST ============ -->
+<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[70] bg-black/90 backdrop-blur-xl border border-white/10 rounded-full px-5 py-2.5 text-sm font-medium fade-in"></div>
+
+<script>
+// ============ CONFIG ============
+const CATEGORIES = [
+  { id:'transport', name:'交通', icon:'🚆', color:'#60a5fa' },
+  { id:'food', name:'餐飲', icon:'🍱', color:'#f97316' },
+  { id:'shopping', name:'購物', icon:'🛍️', color:'#a78bfa' },
+  { id:'lodging', name:'住宿', icon:'🏨', color:'#34d399' },
+  { id:'ticket', name:'門票', icon:'🎫', color:'#fbbf24' },
+  { id:'medicine', name:'藥品', icon:'💊', color:'#f472b6' },
+  { id:'other', name:'其他', icon:'📦', color:'#9ca3af' },
+];
+const PAYMENTS = [
+  { id:'cash', name:'現金', color:'#34d399' },
+  { id:'credit', name:'信用卡', color:'#60a5fa' },
+  { id:'paypay', name:'PayPay', color:'#f97316' },
+  { id:'suica', name:'Suica', color:'#a78bfa' },
+];
+// Boss 嘅名古屋行程 (HKT 日期)
+const ITINERARY = [
+  { date:'2026-04-20', day:1, region:'名古屋市區', highlight:'抵達 + 蓬萊軒鰻魚飯' },
+  { date:'2026-04-21', day:2, region:'飛驒高山 / 白川鄉', highlight:'KKday 三日團 Day 1' },
+  { date:'2026-04-22', day:3, region:'立山黑部', highlight:'雪之大谷 ❄️' },
+  { date:'2026-04-23', day:4, region:'上高地 / 金澤', highlight:'兼六園 + 鳥開總本家' },
+  { date:'2026-04-24', day:5, region:'名古屋', highlight:'生日慶祝 🎂' },
+  { date:'2026-04-25', day:6, region:'常滑 → 機場', highlight:'回程' },
+];
+const DEFAULT_API_KEY = 'AIzaSyBHBrjFCVCBlDwESkFyTNzR81j-DM3guvo';
+
+// ============ STATE ============
+let state = {
+  receipts: [],
+  budget: 101800,
+  rate: 20.36,
+  apiKey: DEFAULT_API_KEY,
+  model: 'gemini-3.1-pro-preview',
+  notionToken: '',
+  notionDb: '',
+  proxy: 'https://corsproxy.io/?',
+  autoSync: false,
+};
+
+function loadState() {
+  try {
+    const s = localStorage.getItem('boss-japan-tracker');
+    if (s) state = { ...state, ...JSON.parse(s) };
+  } catch(e) { console.warn(e); }
+}
+function saveState() {
+  localStorage.setItem('boss-japan-tracker', JSON.stringify(state));
+}
+
+// ============ HELPERS ============
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n||0).toLocaleString('en-US', { maximumFractionDigits:0 });
+function todayHKT() {
+  const d = new Date();
+  return new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000).toISOString().slice(0,10);
+}
+function getCurrentDay() {
+  const today = todayHKT();
+  const item = ITINERARY.find(i => i.date === today);
+  return item || ITINERARY.find(i => i.date >= today) || ITINERARY[0];
+}
+function getRegionForDate(date) {
+  const it = ITINERARY.find(i => i.date === date);
+  return it ? it.region : '名古屋';
+}
+function toast(msg) {
+  $('toast').textContent = msg;
+  $('toast').classList.remove('hidden');
+  setTimeout(() => $('toast').classList.add('hidden'), 2200);
+}
+
+// ============ RENDERING ============
+function renderHeader() {
+  const today = todayHKT();
+  $('dateLabel').textContent = new Date().toLocaleDateString('zh-HK', { month:'long', day:'numeric', weekday:'long' });
+  const cur = getCurrentDay();
+  const tripStart = '2026-04-20';
+  if (today < tripStart) {
+    const days = Math.ceil((new Date(tripStart) - new Date(today)) / 86400000);
+    $('dayCounter').textContent = '−' + days;
+  } else if (today > '2026-04-25') {
+    $('dayCounter').textContent = '✓';
+  } else {
+    $('dayCounter').textContent = cur.day;
+  }
+  // Budget
+  const total = state.receipts.reduce((s,r) => s + (Number(r.total)||0), 0);
+  const pct = Math.min(100, (total / state.budget) * 100);
+  $('budgetText').textContent = `¥${fmt(total)} / ¥${fmt(state.budget)}`;
+  $('budgetBar').style.width = pct + '%';
+  $('budgetPct').textContent = pct.toFixed(1);
+  $('budgetLeft').textContent = fmt(Math.max(0, state.budget - total));
+}
+
+function renderDashboard() {
+  const today = todayHKT();
+  const todayR = state.receipts.filter(r => r.date === today);
+  const todayTotal = todayR.reduce((s,r) => s + (Number(r.total)||0), 0);
+  $('todaySpend').textContent = fmt(todayTotal);
+  $('todaySpendHKD').textContent = (todayTotal / state.rate).toFixed(0);
+  $('todayCount').textContent = todayR.length;
+  $('todayLocation').textContent = '📍 ' + (getCurrentDay().region || '');
+
+  const total = state.receipts.reduce((s,r) => s + (Number(r.total)||0), 0);
+  $('totalSpend').textContent = fmt(total);
+  $('totalCount').textContent = state.receipts.length;
+
+  const dates = [...new Set(state.receipts.map(r => r.date))];
+  const days = Math.max(1, dates.length);
+  $('avgSpend').textContent = fmt(total / days);
+  $('daysElapsed').textContent = days;
+
+  // Today list
+  const list = $('todayList');
+  if (todayR.length === 0) {
+    list.innerHTML = '<p class="text-sm text-gray-500 text-center py-8">今日仲未有消費紀錄 ✨</p>';
+  } else {
+    list.innerHTML = todayR.slice().reverse().map(r => receiptCard(r)).join('');
+  }
+
+  // Itinerary
+  $('itineraryList').innerHTML = ITINERARY.map(it => {
+    const isToday = it.date === today;
+    const rDay = state.receipts.filter(r => r.date === it.date);
+    const dayTotal = rDay.reduce((s,r) => s + (Number(r.total)||0), 0);
+    return `
+      <div class="glass rounded-2xl p-3 ${isToday ? 'ring-2 ring-orange-500' : ''}">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center font-bold text-orange-400">${it.day}</div>
+            <div>
+              <p class="text-sm font-medium">${it.region}</p>
+              <p class="text-[10px] text-gray-500">${it.date} · ${it.highlight}</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <p class="text-sm font-bold ${dayTotal > 0 ? 'text-orange-400' : 'text-gray-600'}">¥${fmt(dayTotal)}</p>
+            <p class="text-[10px] text-gray-500">${rDay.length} 筆</p>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function receiptCard(r) {
+  const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[6];
+  const pay = PAYMENTS.find(p => p.id === r.payment) || PAYMENTS[0];
+  return `
+    <div class="glass rounded-2xl p-3 flex items-center justify-between" onclick="editReceipt('${r.id}')">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style="background:${cat.color}20;color:${cat.color}">${cat.icon}</div>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium truncate">${escapeHtml(r.store || '未命名')}</p>
+          <p class="text-[10px] text-gray-500">${cat.name} · ${pay.name}${r.region ? ' · ' + escapeHtml(r.region) : ''}</p>
+        </div>
+      </div>
+      <div class="text-right pl-2">
+        <p class="text-base font-bold">¥${fmt(r.total)}</p>
+        <p class="text-[10px] text-gray-500">NT$${(r.total/4.85).toFixed(0)}</p>
+      </div>
+    </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function renderHistory() {
+  const filter = $('filterCat').value;
+  let r = state.receipts.slice().reverse();
+  if (filter) r = r.filter(x => x.category === filter);
+  const list = $('historyList');
+  if (r.length === 0) {
+    list.innerHTML = '<p class="text-sm text-gray-500 text-center py-12">未有任何紀錄</p>';
+    return;
+  }
+  // Group by date
+  const groups = {};
+  r.forEach(x => { (groups[x.date] = groups[x.date] || []).push(x); });
+  list.innerHTML = Object.keys(groups).sort().reverse().map(date => {
+    const items = groups[date];
+    const sum = items.reduce((s,i) => s + (Number(i.total)||0), 0);
+    return `
+      <div class="mb-4">
+        <div class="flex items-baseline justify-between mb-2 px-1">
+          <span class="text-xs text-gray-400 font-medium">${date}</span>
+          <span class="text-xs text-orange-400 font-bold">¥${fmt(sum)}</span>
+        </div>
+        <div class="space-y-2">${items.map(i => receiptCard(i)).join('')}</div>
+      </div>`;
+  }).join('');
+}
+
+let charts = {};
+function renderStats() {
+  const cats = {}, pays = {}, daily = {};
+  state.receipts.forEach(r => {
+    cats[r.category] = (cats[r.category]||0) + Number(r.total||0);
+    pays[r.payment] = (pays[r.payment]||0) + Number(r.total||0);
+    daily[r.date] = (daily[r.date]||0) + Number(r.total||0);
+  });
+
+  if (charts.cat) charts.cat.destroy();
+  charts.cat = new Chart($('catChart'), {
+    type: 'doughnut',
+    data: {
+      labels: CATEGORIES.map(c => c.icon + ' ' + c.name),
+      datasets: [{ data: CATEGORIES.map(c => cats[c.id]||0), backgroundColor: CATEGORIES.map(c => c.color), borderWidth: 0 }]
+    },
+    options: { plugins: { legend: { position:'right', labels: { color:'#9ca3af', font:{ size:11 } } } }, cutout:'65%' }
+  });
+
+  if (charts.pay) charts.pay.destroy();
+  charts.pay = new Chart($('payChart'), {
+    type: 'doughnut',
+    data: {
+      labels: PAYMENTS.map(p => p.name),
+      datasets: [{ data: PAYMENTS.map(p => pays[p.id]||0), backgroundColor: PAYMENTS.map(p => p.color), borderWidth: 0 }]
+    },
+    options: { plugins: { legend: { position:'right', labels: { color:'#9ca3af', font:{ size:11 } } } }, cutout:'65%' }
+  });
+
+  const sortedDates = ITINERARY.map(i => i.date);
+  if (charts.trend) charts.trend.destroy();
+  charts.trend = new Chart($('trendChart'), {
+    type: 'bar',
+    data: {
+      labels: sortedDates.map(d => d.slice(5)),
+      datasets: [{ data: sortedDates.map(d => daily[d]||0), backgroundColor:'#f97316', borderRadius:6 }]
+    },
+    options: {
+      plugins: { legend: { display:false } },
+      scales: {
+        x: { ticks:{ color:'#9ca3af', font:{ size:10 } }, grid:{ display:false } },
+        y: { ticks:{ color:'#9ca3af', font:{ size:10 }, callback: v => '¥'+fmt(v) }, grid:{ color:'#ffffff10' } }
+      }
+    }
+  });
+
+  // Top 10
+  const top = state.receipts.slice().sort((a,b) => b.total - a.total).slice(0, 10);
+  $('topList').innerHTML = top.length === 0
+    ? '<p class="text-xs text-gray-500 text-center py-4">未有紀錄</p>'
+    : top.map((r,i) => {
+        const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[6];
+        return `
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-500 w-5">${i+1}</span>
+            <span class="text-base">${cat.icon}</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium truncate">${escapeHtml(r.store || '—')}</p>
+              <p class="text-[10px] text-gray-500">${r.date}</p>
+            </div>
+            <span class="text-sm font-bold text-orange-400">¥${fmt(r.total)}</span>
+          </div>`;
+      }).join('');
+}
+
+// ============ AI SCAN ============
+async function scanReceipt(file) {
+  $('previewArea').classList.remove('hidden');
+  $('previewImg').src = URL.createObjectURL(file);
+  $('scanStatus').innerHTML = `
+    <div class="inline-block w-8 h-8 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
+    <p class="text-sm text-gray-400 mt-2">AI 正在辨識收據…</p>`;
+
+  try {
+    const base64 = await fileToBase64(file);
+    const result = await callGemini(base64, file.type);
+    $('scanStatus').innerHTML = '<p class="text-green-400 text-sm">✅ 辨識完成</p>';
+    openConfirmModal(result, base64);
+  } catch (err) {
+    console.error(err);
+    $('scanStatus').innerHTML = `<p class="text-red-400 text-sm">❌ 錯誤：${escapeHtml(err.message)}</p>
+      <button onclick="openConfirmModal({},'')" class="mt-3 text-xs text-orange-400 underline">手動輸入</button>`;
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = () => res(reader.result.split(',')[1]);
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function callGemini(base64, mime) {
+  const apiKey = state.apiKey || DEFAULT_API_KEY;
+  if (!apiKey) throw new Error('未設定 API key');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${state.model}:generateContent?key=${apiKey}`;
+
+  const prompt = `你係一個專業日本收據辨識 AI。分析呢張日本收據圖片，提取以下資料並用繁體中文回覆 JSON 格式：
+
+{
+  "store": "店名（翻譯成繁體中文，如有原日文亦可保留）",
+  "total": 總金額數字,
+  "date": "YYYY-MM-DD",
+  "category": "transport|food|shopping|lodging|ticket|medicine|other 之一",
+  "payment": "cash|credit|paypay|suica 之一（如收據顯示）",
+  "items": [
+    { "name": "品項名稱（繁中翻譯）", "price": 金額 }
+  ],
+  "tax": 稅金金額,
+  "note": "任何重要備註"
+}
+
+類別判斷規則：
+- 餐廳/便利店食品/咖啡 → food
+- JR/巴士/地鐵/Taxi → transport
+- 服裝/紀念品/家品 → shopping
+- 酒店/旅館 → lodging
+- 景點/博物館門票 → ticket
+- 藥妝店藥品 → medicine
+- 其他 → other
+
+只回覆 JSON，唔好有任何其他文字或 markdown。`;
+
+  const body = {
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: mime, data: base64 } }
+      ]
+    }],
+    generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+  };
+
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`API ${r.status}: ${t.slice(0,200)}`);
+  }
+  const data = await r.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('AI 冇回覆');
+  try {
+    return JSON.parse(text);
+  } catch(e) {
+    const m = text.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]);
+    throw new Error('JSON parse 失敗');
+  }
+}
+
+// ============ NOTION SYNC ============
+const NOTION_VERSION = '2022-06-28';
+
+function notionUrl(path) {
+  return (state.proxy || '') + 'https://api.notion.com/v1' + path;
+}
+
+function buildNotionProps(r) {
+  const cat = CATEGORIES.find(c => c.id === r.category);
+  const pay = PAYMENTS.find(p => p.id === r.payment);
+  return {
+    '店名': { title: [{ text: { content: (r.store || '未命名').slice(0, 200) } }] },
+    '金額': { number: Number(r.total) || 0 },
+    '日期': { date: { start: r.date } },
+    '類別': { select: { name: cat ? cat.name : '其他' } },
+    '支付': { select: { name: pay ? pay.name : '現金' } },
+    '地區': { rich_text: [{ text: { content: (r.region || '').slice(0, 2000) } }] },
+    '品項': { rich_text: [{ text: { content: (r.itemsText || '').slice(0, 2000) } }] },
+    '備註': { rich_text: [{ text: { content: (r.note || '').slice(0, 2000) } }] },
+    'SourceID': { rich_text: [{ text: { content: r.id } }] },
+  };
+}
+
+async function notionFetch(path, options = {}) {
+  if (!state.notionToken) throw new Error('未設定 Notion token');
+  const r = await fetch(notionUrl(path), {
+    ...options,
+    headers: {
+      'Authorization': 'Bearer ' + state.notionToken,
+      'Notion-Version': NOTION_VERSION,
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`Notion ${r.status}: ${t.slice(0, 200)}`);
+  }
+  return r.json();
+}
+
+async function notionPushReceipt(r) {
+  if (!state.notionToken || !state.notionDb) return;
+  const props = buildNotionProps(r);
+  if (r.notionPageId) {
+    // Update existing
+    await notionFetch(`/pages/${r.notionPageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties: props })
+    });
+  } else {
+    // Create new
+    const data = await notionFetch('/pages', {
+      method: 'POST',
+      body: JSON.stringify({
+        parent: { database_id: state.notionDb },
+        properties: props
+      })
+    });
+    r.notionPageId = data.id;
+    saveState();
+  }
+}
+
+async function notionPushAll() {
+  if (!state.notionToken || !state.notionDb) {
+    toast('⚠️ 請先設定 Notion token + database ID');
+    return;
+  }
+  toast('⬆️ 推送中…');
+  let ok = 0, fail = 0;
+  for (const r of state.receipts) {
+    try { await notionPushReceipt(r); ok++; }
+    catch (e) { console.error(e); fail++; }
+  }
+  saveState();
+  toast(`✅ 已推送 ${ok} 筆${fail ? ' (失敗 ' + fail + ')' : ''}`);
+}
+
+async function notionPullAll() {
+  if (!state.notionToken || !state.notionDb) {
+    toast('⚠️ 請先設定 Notion');
+    return;
+  }
+  toast('⬇️ 拉取中…');
+  try {
+    const data = await notionFetch(`/databases/${state.notionDb}/query`, {
+      method: 'POST',
+      body: JSON.stringify({ page_size: 100 })
+    });
+    const merged = new Map(state.receipts.map(r => [r.id, r]));
+    let added = 0, updated = 0;
+    for (const page of (data.results || [])) {
+      const p = page.properties;
+      const sourceId = p.SourceID?.rich_text?.[0]?.plain_text;
+      const id = sourceId || ('r_notion_' + page.id.slice(0, 8));
+      const cat = CATEGORIES.find(c => c.name === p['類別']?.select?.name)?.id || 'other';
+      const pay = PAYMENTS.find(x => x.name === p['支付']?.select?.name)?.id || 'cash';
+      const r = {
+        id,
+        store: p['店名']?.title?.[0]?.plain_text || '',
+        total: p['金額']?.number || 0,
+        date: p['日期']?.date?.start || todayHKT(),
+        category: cat,
+        payment: pay,
+        region: p['地區']?.rich_text?.[0]?.plain_text || '',
+        itemsText: p['品項']?.rich_text?.[0]?.plain_text || '',
+        note: p['備註']?.rich_text?.[0]?.plain_text || '',
+        notionPageId: page.id,
+        createdAt: new Date(page.created_time).getTime(),
+      };
+      if (merged.has(id)) {
+        Object.assign(merged.get(id), r);
+        updated++;
+      } else {
+        merged.set(id, r);
+        added++;
+      }
+    }
+    state.receipts = Array.from(merged.values()).sort((a,b) => a.createdAt - b.createdAt);
+    saveState();
+    refresh();
+    toast(`✅ 新增 ${added}，更新 ${updated}`);
+  } catch (e) {
+    console.error(e);
+    toast('❌ ' + e.message);
+  }
+}
+
+// ============ MODAL ============
+let editingId = null;
+function populateModalSelects() {
+  $('mCat').innerHTML = CATEGORIES.map(c => `<option value="${c.id}" class="bg-gray-900">${c.icon} ${c.name}</option>`).join('');
+  $('mPay').innerHTML = PAYMENTS.map(p => `<option value="${p.id}" class="bg-gray-900">${p.name}</option>`).join('');
+  $('filterCat').innerHTML = '<option value="" class="bg-gray-900">全部類別</option>' +
+    CATEGORIES.map(c => `<option value="${c.id}" class="bg-gray-900">${c.icon} ${c.name}</option>`).join('');
+}
+
+function openConfirmModal(data, base64) {
+  editingId = null;
+  $('modalSubtitle').textContent = '請核對 AI 識別嘅資料';
+  $('mStore').value = data.store || '';
+  $('mTotal').value = data.total || '';
+  $('mDate').value = data.date || todayHKT();
+  $('mCat').value = data.category || 'food';
+  $('mPay').value = data.payment || 'cash';
+  $('mRegion').value = getRegionForDate(data.date || todayHKT());
+  $('mItems').value = (data.items||[]).map(i => `${i.name} ¥${i.price}`).join('\n');
+  $('mNote').value = data.note || '';
+  $('confirmModal').classList.remove('hidden');
+}
+
+function editReceipt(id) {
+  const r = state.receipts.find(x => x.id === id);
+  if (!r) return;
+  editingId = id;
+  $('modalSubtitle').textContent = '編輯紀錄';
+  $('mStore').value = r.store || '';
+  $('mTotal').value = r.total || '';
+  $('mDate').value = r.date;
+  $('mCat').value = r.category;
+  $('mPay').value = r.payment;
+  $('mRegion').value = r.region || '';
+  $('mItems').value = r.itemsText || '';
+  $('mNote').value = r.note || '';
+  $('confirmModal').classList.remove('hidden');
+}
+window.editReceipt = editReceipt;
+
+function saveModal() {
+  const r = {
+    id: editingId || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2,7)),
+    store: $('mStore').value.trim(),
+    total: Number($('mTotal').value) || 0,
+    date: $('mDate').value || todayHKT(),
+    category: $('mCat').value,
+    payment: $('mPay').value,
+    region: $('mRegion').value.trim(),
+    itemsText: $('mItems').value,
+    note: $('mNote').value,
+    createdAt: editingId ? (state.receipts.find(x=>x.id===editingId)?.createdAt || Date.now()) : Date.now(),
+  };
+  if (r.total <= 0) { toast('⚠️ 金額必須大過 0'); return; }
+  if (editingId) {
+    const idx = state.receipts.findIndex(x => x.id === editingId);
+    r.notionPageId = state.receipts[idx]?.notionPageId;
+    state.receipts[idx] = r;
+    toast('✅ 已更新');
+  } else {
+    state.receipts.push(r);
+    toast('✅ 已儲存');
+  }
+  saveState();
+  closeModal();
+  refresh();
+  $('previewArea').classList.add('hidden');
+  $('receiptInput').value = '';
+
+  // Auto-sync to Notion
+  if (state.autoSync && state.notionToken && state.notionDb) {
+    notionPushReceipt(r).then(() => {
+      saveState();
+      toast('☁️ 已同步到 Notion');
+    }).catch(e => {
+      console.error(e);
+      toast('⚠️ Notion sync 失敗');
+    });
+  }
+}
+
+function closeModal() {
+  $('confirmModal').classList.add('hidden');
+  editingId = null;
+}
+
+// ============ TABS ============
+function switchTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  $('tab-' + name).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('tab-active', b.dataset.tab === name);
+    b.classList.toggle('tab-inactive', b.dataset.tab !== name);
+  });
+  if (name === 'stats') renderStats();
+  if (name === 'history') renderHistory();
+}
+
+// ============ EXPORT / RESET ============
+function exportCSV() {
+  if (state.receipts.length === 0) { toast('未有紀錄可匯出'); return; }
+  const rows = [['日期','店名','類別','支付','金額(¥)','地區','備註','品項']];
+  state.receipts.forEach(r => {
+    const cat = CATEGORIES.find(c => c.id === r.category)?.name || '';
+    const pay = PAYMENTS.find(p => p.id === r.payment)?.name || '';
+    rows.push([r.date, r.store, cat, pay, r.total, r.region||'', r.note||'', (r.itemsText||'').replace(/\n/g,'; ')]);
+  });
+  const csv = '\uFEFF' + rows.map(row => row.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `nagoya-receipts-${todayHKT()}.csv`;
+  a.click();
+  toast('✅ 已匯出');
+}
+
+// ============ INIT ============
+function refresh() {
+  renderHeader();
+  renderDashboard();
+  if (!$('tab-history').classList.contains('hidden')) renderHistory();
+  if (!$('tab-stats').classList.contains('hidden')) renderStats();
+}
+
+function init() {
+  loadState();
+  populateModalSelects();
+
+  // Settings inputs
+  $('setBudget').value = state.budget;
+  $('setRate').value = state.rate;
+  $('setApiKey').value = state.apiKey;
+  $('setModel').value = state.model;
+  $('setNotionToken').value = state.notionToken || '';
+  $('setNotionDb').value = state.notionDb || '';
+  $('setProxy').value = state.proxy || 'https://corsproxy.io/?';
+  $('setAutoSync').checked = !!state.autoSync;
+  $('setBudgetHKD').textContent = (state.budget / state.rate).toFixed(0);
+  $('setBudget').addEventListener('input', () => {
+    $('setBudgetHKD').textContent = ($('setBudget').value / ($('setRate').value || 20.36)).toFixed(0);
+  });
+  $('setRate').addEventListener('input', () => {
+    $('setBudgetHKD').textContent = ($('setBudget').value / ($('setRate').value || 20.36)).toFixed(0);
+  });
+  $('saveSettings').addEventListener('click', () => {
+    state.budget = Number($('setBudget').value) || 101800;
+    state.rate = Number($('setRate').value) || 20.36;
+    state.apiKey = $('setApiKey').value.trim();
+    state.model = $('setModel').value;
+    state.notionToken = $('setNotionToken').value.trim();
+    state.notionDb = $('setNotionDb').value.trim().replace(/-/g, '').match(/.{1,32}/)?.[0] || '';
+    state.proxy = $('setProxy').value.trim();
+    state.autoSync = $('setAutoSync').checked;
+    saveState();
+    refresh();
+    toast('✅ 設定已儲存');
+  });
+
+  // Notion sync buttons
+  $('syncPushBtn').addEventListener('click', notionPushAll);
+  $('syncPullBtn').addEventListener('click', notionPullAll);
+
+  // Tab buttons
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.addEventListener('click', () => switchTab(b.dataset.tab));
+  });
+
+  // Scan
+  $('scanBtn').addEventListener('click', () => $('receiptInput').click());
+  $('receiptInput').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) scanReceipt(f);
+  });
+  $('manualBtn').addEventListener('click', () => openConfirmModal({}, ''));
+
+  // Modal
+  $('modalCancel').addEventListener('click', closeModal);
+  $('modalSave').addEventListener('click', saveModal);
+
+  // History filter
+  $('filterCat').addEventListener('change', renderHistory);
+
+  // Export / reset
+  $('exportBtn').addEventListener('click', exportCSV);
+  $('resetBtn').addEventListener('click', () => {
+    if (confirm('確定要清除所有紀錄？此動作無法復原。')) {
+      state.receipts = [];
+      saveState();
+      refresh();
+      toast('已清除');
+    }
+  });
+
+  refresh();
+
+  // Refresh header every minute
+  setInterval(renderHeader, 60000);
+}
+
+init();
+</script>
+</body>
+</html>
