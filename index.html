@@ -26,8 +26,8 @@
     --n-text: #1A1A2E; --n-muted: #6B7285; --n-blue: #2D5A8E;
     --n-blue-dim: #EEF3FA; --n-shadow: rgba(26,26,46,0.07);
   }
-  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Hiragino Sans", sans-serif; -webkit-tap-highlight-color: transparent; background: var(--n-bg); color: var(--n-text); }
-  .glass { background: var(--n-surface) !important; border: 1px solid var(--n-border) !important; box-shadow: 0 1px 6px var(--n-shadow) !important; backdrop-filter: none !important; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Hiragino Sans", sans-serif; -webkit-tap-highlight-color: transparent; background: linear-gradient(160deg, #E6EDF8 0%, #EEF0F8 30%, #EAF0EC 65%, #F2EEF0 100%); background-attachment: fixed; min-height: 100vh; color: var(--n-text); }
+  .glass { background: rgba(255,255,255,0.78) !important; border: 1px solid rgba(255,255,255,0.9) !important; box-shadow: 0 4px 24px rgba(45,90,142,0.09), inset 0 1px 0 rgba(255,255,255,0.75) !important; backdrop-filter: blur(20px) saturate(180%) !important; -webkit-backdrop-filter: blur(20px) saturate(180%) !important; }
   .tab-active { color: var(--n-blue); }
   .tab-inactive { color: #A0AAB8; }
   .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -41,7 +41,7 @@
   input, select, textarea, button { -webkit-appearance: none; }
   /* Nordic text refinements */
   h1, h2, h3 { letter-spacing: -0.02em; }
-  .nordic-card { background: var(--n-surface); border: 1px solid var(--n-border); box-shadow: 0 1px 6px var(--n-shadow); border-radius: 1rem; }
+  .nordic-card { background: rgba(255,255,255,0.78); border: 1px solid rgba(255,255,255,0.9); box-shadow: 0 4px 24px rgba(45,90,142,0.09); border-radius: 1rem; backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); }
   details summary { cursor: pointer; list-style: none; }
   details summary::-webkit-details-marker { display: none; }
 
@@ -112,7 +112,7 @@
 <div id="offlineBar" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:45;background:#FEF3C7;color:#92400E;text-align:center;padding:6px;font-size:12px;font-weight:500">📡 離線模式 — 資料儲存喺本機</div>
 
 <!-- ============ HEADER ============ -->
-<header class="sticky top-0 z-40 px-5 pt-6 pb-4" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
+<header class="sticky top-0 z-40 px-5 pt-6 pb-4" style="background:rgba(255,255,255,0.82);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(255,255,255,0.6)">
   <div class="flex items-center justify-between">
     <div>
       <h1 class="text-2xl font-bold tracking-tight" style="color:var(--n-text)">名古屋之旅 🗾</h1>
@@ -217,6 +217,9 @@
     <input type="file" id="receiptInput" accept="image/*" capture="environment" class="hidden">
     <button id="scanBtn" class="w-full text-white font-bold py-5 rounded-2xl text-lg active:scale-95 transition mb-3" style="background:var(--n-blue);box-shadow:0 4px 14px rgba(45,90,142,0.25)">
       📷 影收據 / 揀相
+    </button>
+    <button id="voiceBtn" class="w-full glass font-medium py-4 rounded-2xl active:scale-95 transition mb-3" style="color:var(--n-blue)">
+      🎤 語音輸入
     </button>
     <button id="manualBtn" class="w-full glass font-medium py-4 rounded-2xl active:scale-95 transition" style="color:var(--n-blue)">
       ✍️ 手動輸入
@@ -415,7 +418,7 @@
 </main>
 
 <!-- ============ BOTTOM TAB BAR ============ -->
-<nav class="fixed bottom-0 left-0 right-0 z-50" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
+<nav class="fixed bottom-0 left-0 right-0 z-50" style="background:rgba(255,255,255,0.85);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-top:1px solid rgba(255,255,255,0.6)">
   <div class="grid grid-cols-6 max-w-md mx-auto">
     <button data-tab="dashboard" class="tab-btn flex flex-col items-center py-3 tab-active">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
@@ -444,6 +447,21 @@
   </div>
 </nav>
 
+<!-- ============ VOICE OVERLAY ============ -->
+<div id="voiceOverlay" class="hidden fixed inset-0 z-[70] flex items-center justify-center" style="background:rgba(0,0,0,0.55);backdrop-filter:blur(8px)">
+  <div class="glass rounded-3xl p-8 text-center mx-6 max-w-xs w-full">
+    <div class="relative w-20 h-20 mx-auto mb-5">
+      <div class="absolute inset-0 rounded-full opacity-30" style="background:var(--n-blue);animation:pulse-ring 1.5s ease-out infinite"></div>
+      <div class="relative w-20 h-20 rounded-full flex items-center justify-center text-3xl" style="background:var(--n-blue)">🎤</div>
+    </div>
+    <p class="font-bold text-lg mb-1" style="color:var(--n-text)">正在聆聽…</p>
+    <p class="text-xs mb-2" style="color:var(--n-muted)">講出消費資料，例如：</p>
+    <p class="text-xs rounded-xl px-3 py-2 mb-5" style="background:var(--n-blue-dim);color:var(--n-blue)">"矢場とん 味噌豬排 兩千円 現金"</p>
+    <div id="voiceInterim" class="text-sm min-h-[20px] mb-4 font-medium" style="color:var(--n-blue)"></div>
+    <button onclick="stopVoiceInput()" class="px-8 py-2.5 rounded-full text-white text-sm font-medium" style="background:#DC2626">停止</button>
+  </div>
+</div>
+
 <!-- ============ CONFIRM MODAL ============ -->
 <div id="confirmModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
   <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto scrollbar-hide" style="background:var(--n-surface);border:1px solid var(--n-border)">
@@ -453,6 +471,10 @@
       <p class="text-xs mt-1" style="color:var(--n-muted)" id="modalSubtitle">請核對 AI 識別嘅資料</p>
     </div>
     <div class="p-5 space-y-3">
+      <!-- Receipt photo thumbnail (shown after scan) -->
+      <div id="mPhotoWrap" class="hidden">
+        <img id="mPhotoThumb" class="w-full max-h-40 object-contain rounded-xl" style="background:var(--n-bg)" alt="收據">
+      </div>
       <div id="mPersonWrap">
         <label class="text-[10px] uppercase tracking-wider" style="color:var(--n-muted)">消費人</label>
         <div id="mPersonRow" class="flex gap-2 mt-2 flex-wrap"></div>
@@ -1078,6 +1100,77 @@ function fileToBase64(file) {
   });
 }
 
+// ============ VOICE INPUT ============
+let voiceRecognition = null;
+
+function startVoiceInput() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showToast('此瀏覽器唔支援語音輸入，請用 Chrome 或 Safari', 'error');
+    return;
+  }
+  const rec = new SR();
+  rec.lang = 'zh-HK';
+  rec.continuous = false;
+  rec.interimResults = true;
+  $('voiceInterim').textContent = '';
+  $('voiceOverlay').classList.remove('hidden');
+
+  rec.onresult = (e) => {
+    const interim = Array.from(e.results).map(r => r[0].transcript).join('');
+    $('voiceInterim').textContent = interim;
+    if (e.results[e.results.length - 1].isFinal) {
+      stopVoiceInput();
+      parseVoiceExpense(interim);
+    }
+  };
+  rec.onerror = (e) => {
+    stopVoiceInput();
+    showToast('語音識別失敗：' + e.error, 'error');
+  };
+  rec.onend = () => { $('voiceOverlay').classList.add('hidden'); };
+  voiceRecognition = rec;
+  rec.start();
+}
+
+function stopVoiceInput() {
+  if (voiceRecognition) { try { voiceRecognition.stop(); } catch(e) {} voiceRecognition = null; }
+  $('voiceOverlay').classList.add('hidden');
+}
+
+async function parseVoiceExpense(transcript) {
+  showToast('🎤 解析中…');
+  const today = todayHKT();
+  const prompt = `你係旅行記帳 AI。用戶講咗：「${transcript}」
+
+提取消費資料回覆 JSON（只回覆 JSON，唔好任何其他文字）：
+{"store":"店名（繁中，冇就 null）","total":金額數字JPY（冇就 null）,"date":"${today}","category":"transport|food|shopping|lodging|ticket|medicine|other","payment":"cash|credit|paypay|suica","note":"備註（冇就 null）"}
+
+類別：食物/餐廳/便利店→food；交通/JR/巴士/的士→transport；購物/衫/紀念品→shopping；酒店→lodging；門票/景點→ticket；藥→medicine；其他→other
+支付：現金→cash；卡/VISA/信用→credit；PayPay→paypay；Suica/交通IC→suica`;
+
+  try {
+    const apiKey = getActiveApiKey();
+    const model = state.model || 'gemini-3-flash-preview';
+    const body = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+    };
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('API ' + r.status);
+    const data = await r.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('No response');
+    const parsed = JSON.parse(text);
+    openConfirmModal(parsed, '');
+  } catch(e) {
+    showToast('解析失敗，請手動輸入', 'error');
+    openConfirmModal({}, '');
+  }
+}
+
 const FALLBACK_MODEL = 'gemini-3-flash-preview';
 
 const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。分析呢張日本收據圖片，提取資料並回覆嚴格 JSON 格式（唔好加任何文字或 markdown，只回覆 JSON）：
@@ -1233,14 +1326,31 @@ async function notionPushReceipt(r) {
       body: JSON.stringify({ properties: props })
     });
   } else {
-    // Create new
-    const data = await notionFetch('/pages', {
-      method: 'POST',
-      body: JSON.stringify({
-        parent: { database_id: state.notionDb },
-        properties: props
-      })
-    });
+    // Create new — add structured content blocks
+    const children = [];
+    // Items breakdown
+    if (r.itemsText && r.itemsText.trim()) {
+      children.push({ object:'block', type:'heading_3', heading_3:{ rich_text:[{ text:{ content:'品項明細' } }] } });
+      r.itemsText.trim().split('\n').filter(Boolean).forEach(line => {
+        children.push({ object:'block', type:'bulleted_list_item', bulleted_list_item:{ rich_text:[{ text:{ content: line.slice(0,2000) } }] } });
+      });
+    }
+    // Tax / subtotal
+    if (r.subtotal || r.tax) {
+      const taxLine = [r.subtotal ? `小計: ¥${r.subtotal}` : '', r.tax ? `稅金: ¥${r.tax}` : ''].filter(Boolean).join('　');
+      children.push({ object:'block', type:'paragraph', paragraph:{ rich_text:[{ text:{ content: taxLine }, annotations:{ color:'gray' } }] } });
+    }
+    // Note
+    if (r.note && r.note.trim()) {
+      children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content: r.note.slice(0,2000) } }], icon:{ emoji:'📝' } } });
+    }
+    // Photo note
+    if (r.photoThumb) {
+      children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content:'📷 收據相片已儲存喺裝置本機' } }], icon:{ emoji:'📷' }, color:'blue_background' } });
+    }
+    const body = { parent: { database_id: state.notionDb }, properties: props };
+    if (children.length) body.children = children;
+    const data = await notionFetch('/pages', { method: 'POST', body: JSON.stringify(body) });
     r.notionPageId = data.id;
     saveState();
   }
@@ -1323,7 +1433,25 @@ function populateModalSelects() {
     CATEGORIES.map(c => `<option value="${c.id}" class="bg-white text-[#1A1A2E]">${c.icon} ${c.name}</option>`).join('');
 }
 
-let pendingTax = null, pendingSubtotal = null;
+let pendingTax = null, pendingSubtotal = null, pendingPhotoBase64 = null, pendingPhotoMime = 'image/jpeg';
+
+async function compressPhoto(base64, mime) {
+  if (!base64) return null;
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 480;
+      const scale = Math.min(1, maxW / img.width);
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', 0.65).split(',')[1]);
+    };
+    img.onerror = () => resolve(null);
+    img.src = `data:${mime || 'image/jpeg'};base64,${base64}`;
+  });
+}
 
 // Sanity-check date from Gemini: if >60 days away from today, treat as OCR error
 function sanitizeDate(aiDate) {
@@ -1358,6 +1486,16 @@ function openConfirmModal(data, base64) {
   $('mNote').value = data.note || '';
   pendingTax = data.tax || null;
   pendingSubtotal = data.subtotal || null;
+  // Store photo for saving
+  pendingPhotoBase64 = base64 || null;
+  pendingPhotoMime = 'image/jpeg';
+  // Show thumbnail in modal if photo available
+  if (base64) {
+    $('mPhotoThumb').src = `data:image/jpeg;base64,${base64}`;
+    $('mPhotoWrap').classList.remove('hidden');
+  } else {
+    $('mPhotoWrap').classList.add('hidden');
+  }
   $('confirmModal').classList.remove('hidden');
   renderPersonRow();
 }
@@ -1367,6 +1505,7 @@ function editReceipt(id) {
   if (!r) return;
   editingId = id;
   selectedPersonId = r.personId || getPersons()[0].id;
+  pendingPhotoBase64 = null;
   $('modalDelete').classList.remove('hidden');
   $('modalSubtitle').textContent = '編輯紀錄';
   $('mStore').value = r.store || '';
@@ -1377,6 +1516,13 @@ function editReceipt(id) {
   $('mRegion').value = r.region || '';
   $('mItems').value = r.itemsText || '';
   $('mNote').value = r.note || '';
+  // Show stored receipt photo if available
+  if (r.photoThumb) {
+    $('mPhotoThumb').src = `data:image/jpeg;base64,${r.photoThumb}`;
+    $('mPhotoWrap').classList.remove('hidden');
+  } else {
+    $('mPhotoWrap').classList.add('hidden');
+  }
   $('confirmModal').classList.remove('hidden');
   renderPersonRow();
 }
@@ -1405,6 +1551,15 @@ async function saveModal() {
     createdAt: existing?.createdAt || Date.now(),
   };
   if (r.total <= 0) { toast('⚠️ 金額必須大過 0'); return; }
+
+  // Compress & store receipt photo thumbnail
+  if (pendingPhotoBase64) {
+    r.photoThumb = await compressPhoto(pendingPhotoBase64, pendingPhotoMime);
+    pendingPhotoBase64 = null;
+  } else if (existing?.photoThumb) {
+    r.photoThumb = existing.photoThumb; // preserve on edit
+  }
+
   if (editingId) {
     const idx = state.receipts.findIndex(x => x.id === editingId);
     r.notionPageId = state.receipts[idx]?.notionPageId;
@@ -1603,6 +1758,7 @@ function init() {
     const f = e.target.files[0];
     if (f) scanReceipt(f);
   });
+  $('voiceBtn').addEventListener('click', startVoiceInput);
   $('manualBtn').addEventListener('click', () => openConfirmModal({}, ''));
 
   // Modal
