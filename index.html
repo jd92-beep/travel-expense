@@ -378,6 +378,12 @@
     </div>
 
     <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs text-gray-400 uppercase tracking-wider">📷 imgbb API Key（收據相片上傳）</label>
+      <input type="text" id="setImgbbKey" class="w-full bg-transparent text-sm font-mono mt-1 focus:outline-none" placeholder="從 api.imgbb.com 免費申請">
+      <p class="text-[10px] mt-1" style="color:var(--n-muted)">設定後掃描收據時自動上傳相片到 Notion 頁面</p>
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
       <label class="flex items-center justify-between cursor-pointer">
         <span class="text-sm">自動同步（每次新增/編輯）</span>
         <input type="checkbox" id="setAutoSync" class="w-5 h-5">
@@ -646,6 +652,7 @@ let state = {
   notionDb: '3438d94d5f7c81878221fcda6d65d39d',
   proxy: 'https://corsproxy.io/?',
   autoSync: false,
+  imgbbKey: '',
   persons: [{ id: 'p_boss', name: 'Tony', emoji: '🧔', color: '#2D5A8E' }],
 };
 
@@ -1443,9 +1450,11 @@ async function notionPushReceipt(r) {
     if (r.note && r.note.trim()) {
       children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content: r.note.slice(0,2000) } }], icon:{ emoji:'📝' } } });
     }
-    // Photo note
-    if (r.photoThumb) {
-      children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content:'📷 收據相片已儲存喺裝置本機' } }], icon:{ emoji:'📷' }, color:'blue_background' } });
+    // Receipt photo — real image block if URL available, else text note
+    if (r.photoUrl) {
+      children.unshift({ object:'block', type:'image', image:{ type:'external', external:{ url: r.photoUrl } } });
+    } else if (r.photoThumb) {
+      children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content:'📷 收據相片已儲存喺裝置本機（設定 imgbb key 可上傳到 Notion）' } }], icon:{ emoji:'📷' }, color:'blue_background' } });
     }
     const body = { parent: { database_id: state.notionDb }, properties: props };
     if (children.length) body.children = children;
@@ -1557,6 +1566,20 @@ async function compressPhoto(base64, mime) {
   });
 }
 
+// Upload compressed photo to imgbb → returns public URL or null
+async function uploadToImgbb(base64) {
+  if (!state.imgbbKey || !base64) return null;
+  try {
+    const form = new FormData();
+    form.append('key', state.imgbbKey);
+    form.append('image', base64);
+    const r = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: form });
+    if (!r.ok) { console.warn('[imgbb]', r.status); return null; }
+    const data = await r.json();
+    return data?.data?.display_url || null;
+  } catch(e) { console.warn('[imgbb] upload failed:', e); return null; }
+}
+
 // Sanity-check date from Gemini: if >60 days away from today, treat as OCR error
 function sanitizeDate(aiDate) {
   const today = todayHKT();
@@ -1664,8 +1687,13 @@ async function saveModal() {
   if (pendingPhotoBase64) {
     r.photoThumb = await compressPhoto(pendingPhotoBase64, pendingPhotoMime);
     pendingPhotoBase64 = null;
+    // Upload to imgbb for Notion image embedding
+    if (state.imgbbKey) {
+      r.photoUrl = await uploadToImgbb(r.photoThumb);
+    }
   } else if (existing?.photoThumb) {
     r.photoThumb = existing.photoThumb; // preserve on edit
+    if (existing?.photoUrl) r.photoUrl = existing.photoUrl;
   }
 
   if (editingId) {
@@ -1774,6 +1802,7 @@ function init() {
   $('setModel').value = state.model;
   $('setNotionDb').value = state.notionDb || '';
   $('setProxy').value = state.proxy || 'https://corsproxy.io/?';
+  $('setImgbbKey').value = state.imgbbKey || '';
   $('setAutoSync').checked = !!state.autoSync;
   $('setBudgetHKD').textContent = (state.budget / state.rate).toFixed(0);
 
@@ -1812,6 +1841,7 @@ function init() {
     const rawDb = $('setNotionDb').value.trim().replace(/-/g, '');
     state.notionDb = rawDb.match(/[0-9a-f]{32}/i)?.[0] || '';
     state.proxy = $('setProxy').value.trim();
+    state.imgbbKey = $('setImgbbKey').value.trim();
     state.autoSync = $('setAutoSync').checked;
     saveState();
     refresh();
