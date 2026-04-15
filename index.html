@@ -2,16 +2,16 @@
 <html lang="zh-HK">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="名古屋記帳">
-<meta name="theme-color" content="#f97316">
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23f97316'/><text x='12' y='85' font-size='78'>🗾</text></svg>">
+<meta name="theme-color" content="#2D5A8E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232D5A8E'/><text x='12' y='85' font-size='78'>🗾</text></svg>">
 <script>
 // Inline PWA manifest — needed for single-file app (no server)
 (function(){
-  var m = {name:'Boss 名古屋記帳',short_name:'名古屋記帳',start_url:'.',display:'standalone',background_color:'#0f172a',theme_color:'#f97316',orientation:'portrait'};
+  var m = {name:'Boss 名古屋記帳',short_name:'名古屋記帳',start_url:'.',display:'standalone',background_color:'#F4F4EF',theme_color:'#2D5A8E',orientation:'portrait'};
   var b = new Blob([JSON.stringify(m)], {type:'application/manifest+json'});
   var l = document.createElement('link'); l.rel='manifest'; l.href=URL.createObjectURL(b);
   document.head.appendChild(l);
@@ -322,15 +322,15 @@
     <div class="glass rounded-2xl p-3 mb-3 text-[11px] text-gray-400">
       <p class="font-bold text-[#2D5A8E] mb-1">📋 Notion Database 必需欄位（一字不差）：</p>
       <ul class="space-y-0.5 font-mono">
-        <li>• <span class="text-white">店名</span> (Title)</li>
-        <li>• <span class="text-white">金額</span> (Number)</li>
-        <li>• <span class="text-white">日期</span> (Date)</li>
-        <li>• <span class="text-white">類別</span> (Select)</li>
-        <li>• <span class="text-white">支付</span> (Select)</li>
-        <li>• <span class="text-white">地區</span> (Text)</li>
-        <li>• <span class="text-white">品項</span> (Text)</li>
-        <li>• <span class="text-white">備註</span> (Text)</li>
-        <li>• <span class="text-white">SourceID</span> (Text — 用作 sync 識別)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">店名</span> (Title)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">金額</span> (Number)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">日期</span> (Date)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">類別</span> (Select)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">支付</span> (Select)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">地區</span> (Text)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">品項</span> (Text)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">備註</span> (Text)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">SourceID</span> (Text — 用作 sync 識別)</li>
       </ul>
       <p class="mt-2 text-gray-500">建立後記得 Share → 加入你嘅 Integration ✅</p>
     </div>
@@ -341,8 +341,10 @@
 
     <div class="mt-6 grid grid-cols-2 gap-3">
       <button id="exportBtn" class="glass py-3 rounded-2xl text-sm font-medium">📤 匯出 CSV</button>
-      <button id="resetBtn" class="glass py-3 rounded-2xl text-sm font-medium text-red-400">🗑️ 清除全部</button>
+      <button id="resetBtn" class="glass py-3 rounded-2xl text-sm font-medium" style="color:#DC2626">🗑️ 清除全部</button>
     </div>
+
+    <button id="lockDeviceBtn" class="hidden w-full glass py-3 rounded-2xl text-sm font-medium mt-3" style="color:#B45309">🔒 清除此裝置信任（需重新輸入密碼）</button>
 
     <div class="mt-6 text-center text-[10px] text-gray-600">
       <p>Built for Boss 💪 • 2026年4月20-25日</p>
@@ -428,9 +430,12 @@
         <input id="mNote" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
       </div>
     </div>
-    <div class="sticky bottom-0 p-5 grid grid-cols-2 gap-3" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
-      <button id="modalCancel" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
-      <button id="modalSave" class="py-3 rounded-xl font-bold text-white" style="background:var(--n-blue)">儲存</button>
+    <div class="sticky bottom-0 p-5" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
+      <button id="modalDelete" class="hidden w-full py-2.5 rounded-xl font-medium mb-2" style="background:#FEE2E2;color:#DC2626">🗑️ 刪除呢筆紀錄</button>
+      <div class="grid grid-cols-2 gap-3">
+        <button id="modalCancel" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
+        <button id="modalSave" class="py-3 rounded-xl font-bold text-white" style="background:var(--n-blue)">儲存</button>
+      </div>
     </div>
   </div>
 </div>
@@ -630,25 +635,36 @@ window.pickEmoji = function(e) {
   if (b) { b.style.background = '#EEF3FA'; b.style.outline = '2px solid #2D5A8E'; }
 };
 
-// ============ LIVE EXCHANGE RATE ============
-async function fetchLiveRate() {
+// ============ LIVE EXCHANGE RATE (cached 1hr) ============
+async function fetchLiveRate(force = false) {
+  const now = Date.now();
+  const cacheAge = now - (state.rateFetchedAt || 0);
+  // Use cached rate if < 1 hour old
+  if (!force && state.rateFetchedAt && cacheAge < 3600000) return;
   try {
-    const r = await fetch('https://open.er-api.com/v6/latest/HKD');
+    // Race against 4s timeout to avoid blocking save on slow networks
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const r = await fetch('https://open.er-api.com/v6/latest/HKD', { signal: ctrl.signal });
+    clearTimeout(timer);
     const data = await r.json();
     const rate = data?.rates?.JPY;
     if (rate && rate > 0) {
       state.rate = parseFloat(rate.toFixed(4));
+      state.rateFetchedAt = now;
       saveState();
       const el = document.getElementById('setRate');
       if (el) el.value = state.rate;
       const st = document.getElementById('rateStatus');
       if (st) {
-        st.textContent = '✓ 已更新';
-        setTimeout(() => { st.textContent = '⟳ 每次入數自動更新'; }, 2000);
+        st.textContent = '✓ 已更新 ' + new Date().toLocaleTimeString('zh-HK', {hour:'2-digit',minute:'2-digit'});
+        setTimeout(() => { st.textContent = '⟳ 每小時自動更新'; }, 2500);
       }
     }
   } catch(e) {
-    console.warn('匯率獲取失敗:', e);
+    console.warn('匯率獲取失敗:', e.message);
+    // Silent fallback — user sees cached rate, only toast if they were waiting
+    if (force) toast('📡 離線，用緩存匯率');
   }
 }
 
@@ -684,9 +700,21 @@ function renderDashboard() {
   $('todayCount').textContent = todayR.length;
   $('todayLocation').textContent = '📍 ' + (getCurrentDay().region || '');
 
-  // Daily budget alert (budget / 6 days)
-  const dailyBudget = Math.floor(state.budget / 6);
-  if (todayTotal > dailyBudget) {
+  // Adaptive daily budget: (remaining budget) / (days left including today)
+  const tripStart = '2026-04-20', tripEnd = '2026-04-25';
+  const totalSpentBeforeToday = state.receipts
+    .filter(r => r.date < today)
+    .reduce((s,r) => s + (Number(r.total)||0), 0);
+  const remainingBudget = Math.max(0, state.budget - totalSpentBeforeToday);
+  let dailyBudget;
+  if (today < tripStart || today > tripEnd) {
+    dailyBudget = Math.floor(state.budget / 6);
+  } else {
+    const msLeft = new Date(tripEnd) - new Date(today);
+    const daysLeft = Math.max(1, Math.floor(msLeft / 86400000) + 1);
+    dailyBudget = Math.floor(remainingBudget / daysLeft);
+  }
+  if (todayTotal > dailyBudget && dailyBudget > 0) {
     $('dailyBudgetAmt').textContent = fmt(dailyBudget);
     $('dailyOverAmt').textContent = fmt(todayTotal);
     $('dailyAlert').classList.remove('hidden');
@@ -865,12 +893,12 @@ async function scanReceipt(file) {
   try {
     const base64 = await fileToBase64(file);
     const result = await callGemini(base64, file.type);
-    $('scanStatus').innerHTML = '<p class="text-green-400 text-sm">✅ 辨識完成</p>';
+    $('scanStatus').innerHTML = '<p class="text-sm" style="color:#059669">✅ 辨識完成</p>';
     openConfirmModal(result, base64);
   } catch (err) {
     console.error(err);
-    $('scanStatus').innerHTML = `<p class="text-red-400 text-sm">❌ 錯誤：${escapeHtml(err.message)}</p>
-      <button onclick="openConfirmModal({},'')" class="mt-3 text-xs text-[#2D5A8E] underline">手動輸入</button>`;
+    $('scanStatus').innerHTML = `<p class="text-sm" style="color:#DC2626">❌ 錯誤：${escapeHtml(err.message)}</p>
+      <button onclick="openConfirmModal({},'')" class="mt-3 text-xs underline" style="color:var(--n-blue)">手動輸入</button>`;
   }
 }
 
@@ -1086,6 +1114,7 @@ function populateModalSelects() {
 function openConfirmModal(data, base64) {
   editingId = null;
   selectedPersonId = getPersons()[0].id;
+  $('modalDelete').classList.add('hidden');
   $('modalSubtitle').textContent = '請核對 AI 識別嘅資料';
   $('mStore').value = data.store || '';
   $('mTotal').value = data.total || '';
@@ -1104,6 +1133,7 @@ function editReceipt(id) {
   if (!r) return;
   editingId = id;
   selectedPersonId = r.personId || getPersons()[0].id;
+  $('modalDelete').classList.remove('hidden');
   $('modalSubtitle').textContent = '編輯紀錄';
   $('mStore').value = r.store || '';
   $('mTotal').value = r.total || '';
@@ -1119,7 +1149,8 @@ function editReceipt(id) {
 window.editReceipt = editReceipt;
 
 async function saveModal() {
-  await fetchLiveRate();
+  // Non-blocking: refresh rate in background if cache expired, save uses current rate
+  fetchLiveRate();
   const r = {
     id: editingId || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2,7)),
     store: $('mStore').value.trim(),
@@ -1163,7 +1194,30 @@ async function saveModal() {
 
 function closeModal() {
   $('confirmModal').classList.add('hidden');
+  $('modalDelete').classList.add('hidden');
   editingId = null;
+}
+
+async function deleteReceipt() {
+  if (!editingId) return;
+  if (!confirm('確定要刪除呢筆紀錄？無法復原。')) return;
+  const idx = state.receipts.findIndex(x => x.id === editingId);
+  if (idx < 0) return;
+  const deleted = state.receipts[idx];
+  // Remove from Notion too if synced
+  if (deleted.notionPageId && state.notionToken) {
+    try {
+      await notionFetch(`/pages/${deleted.notionPageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ archived: true })
+      });
+    } catch(e) { console.warn('Notion archive failed:', e.message); }
+  }
+  state.receipts.splice(idx, 1);
+  saveState();
+  closeModal();
+  refresh();
+  toast('🗑️ 已刪除');
 }
 
 // ============ TABS ============
@@ -1212,13 +1266,30 @@ function init() {
   // Settings inputs
   $('setBudget').value = state.budget;
   $('setRate').value = state.rate;
-  $('setApiKey').value = state.apiKey;
   $('setModel').value = state.model;
-  $('setNotionToken').value = state.notionToken || '';
   $('setNotionDb').value = state.notionDb || '';
   $('setProxy').value = state.proxy || 'https://corsproxy.io/?';
   $('setAutoSync').checked = !!state.autoSync;
   $('setBudgetHKD').textContent = (state.budget / state.rate).toFixed(0);
+
+  // VAULT MODE: when unlocked from vault, hide sensitive credentials from UI to
+  // (a) stop them leaking to anyone with the device and (b) avoid clobbering the vault on Save.
+  const vaultActive = localStorage.getItem('vault_unlocked') === '1' && state.apiKey;
+  if (vaultActive) {
+    $('setApiKey').value = '••••••••  已鎖定喺密碼保險箱';
+    $('setApiKey').disabled = true;
+    $('setApiKey').type = 'text';
+    $('setApiKey').style.color = '#9CA3AF';
+    $('setNotionToken').value = state.notionToken ? '••••••••  已鎖定喺密碼保險箱' : '';
+    if (state.notionToken) {
+      $('setNotionToken').disabled = true;
+      $('setNotionToken').type = 'text';
+      $('setNotionToken').style.color = '#9CA3AF';
+    }
+  } else {
+    $('setApiKey').value = state.apiKey;
+    $('setNotionToken').value = state.notionToken || '';
+  }
   $('setBudget').addEventListener('input', () => {
     $('setBudgetHKD').textContent = ($('setBudget').value / ($('setRate').value || 20.36)).toFixed(0);
   });
@@ -1228,10 +1299,13 @@ function init() {
   $('saveSettings').addEventListener('click', () => {
     state.budget = Number($('setBudget').value) || 101800;
     state.rate = Number($('setRate').value) || 20.36;
-    state.apiKey = $('setApiKey').value.trim();
     state.model = $('setModel').value;
-    state.notionToken = $('setNotionToken').value.trim();
-    state.notionDb = $('setNotionDb').value.trim().replace(/-/g, '').match(/.{1,32}/)?.[0] || '';
+    // Only save credential fields if they're NOT vault-locked
+    if (!$('setApiKey').disabled) state.apiKey = $('setApiKey').value.trim();
+    if (!$('setNotionToken').disabled) state.notionToken = $('setNotionToken').value.trim();
+    // Accept URL, UUID w/ dashes, or raw 32-char ID — extract the 32 hex chars
+    const rawDb = $('setNotionDb').value.trim().replace(/-/g, '');
+    state.notionDb = rawDb.match(/[0-9a-f]{32}/i)?.[0] || '';
     state.proxy = $('setProxy').value.trim();
     state.autoSync = $('setAutoSync').checked;
     saveState();
@@ -1292,6 +1366,7 @@ function init() {
   // Modal
   $('modalCancel').addEventListener('click', closeModal);
   $('modalSave').addEventListener('click', saveModal);
+  $('modalDelete').addEventListener('click', deleteReceipt);
 
   // History filter
   $('filterCat').addEventListener('change', renderHistory);
@@ -1305,6 +1380,19 @@ function init() {
       refresh();
       toast('已清除');
     }
+  });
+
+  // Show "lock device" button only when vault unlocked
+  if (localStorage.getItem('vault_unlocked') === '1') {
+    $('lockDeviceBtn').classList.remove('hidden');
+  }
+  $('lockDeviceBtn').addEventListener('click', () => {
+    if (!confirm('清除信任後，下次打開要再輸入密碼「0424」。確認？')) return;
+    localStorage.removeItem('vault_unlocked');
+    state.apiKey = '';
+    state.notionToken = '';
+    saveState();
+    location.reload();
   });
 
   refresh();
