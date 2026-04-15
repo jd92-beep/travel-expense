@@ -1165,6 +1165,18 @@ function populateModalSelects() {
 
 let pendingTax = null, pendingSubtotal = null;
 
+// Sanity-check date from Gemini: if >60 days away from today, treat as OCR error
+function sanitizeDate(aiDate) {
+  const today = todayHKT();
+  if (!aiDate || !/^\d{4}-\d{2}-\d{2}$/.test(aiDate)) return today;
+  const diffDays = Math.abs((new Date(aiDate) - new Date(today)) / 86400000);
+  if (diffDays > 60) {
+    console.warn(`[scan] date ${aiDate} is ${Math.round(diffDays)}d from today — likely OCR error, using today`);
+    return today;
+  }
+  return aiDate;
+}
+
 function openConfirmModal(data, base64) {
   editingId = null;
   selectedPersonId = getPersons()[0].id;
@@ -1172,10 +1184,16 @@ function openConfirmModal(data, base64) {
   $('modalSubtitle').textContent = '請核對 AI 識別嘅資料';
   $('mStore').value = data.store || '';
   $('mTotal').value = data.total || '';
-  $('mDate').value = data.date || todayHKT();
-  $('mCat').value = data.category || 'food';
-  $('mPay').value = data.payment || 'cash';
-  $('mRegion').value = getRegionForDate(data.date || todayHKT());
+  const cleanDate = sanitizeDate(data.date);
+  $('mDate').value = cleanDate;
+  // Whitelist AI-returned category/payment — unknown values fall back to 'other'/'cash'
+  const validCats = CATEGORIES.map(c => c.id);
+  const validPays = PAYMENTS.map(p => p.id);
+  const aiCat = (data.category || '').toLowerCase().trim();
+  const aiPay = (data.payment || '').toLowerCase().trim();
+  $('mCat').value = validCats.includes(aiCat) ? aiCat : 'other';
+  $('mPay').value = validPays.includes(aiPay) ? aiPay : 'cash';
+  $('mRegion').value = getRegionForDate(cleanDate);
   $('mItems').value = (data.items||[]).map(i => `${i.name} ¥${i.price}`).join('\n');
   $('mNote').value = data.note || '';
   pendingTax = data.tax || null;
