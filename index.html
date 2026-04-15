@@ -191,18 +191,18 @@
       <div id="personBreakdown" class="grid grid-cols-2 gap-3"></div>
     </div>
 
+    <!-- Itinerary -->
+    <div class="mb-4">
+      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3 px-1">6日行程</h3>
+      <div id="itineraryList" class="space-y-2"></div>
+    </div>
+
     <!-- Today list -->
     <div class="mb-4">
       <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3 px-1">今日消費</h3>
       <div id="todayList" class="space-y-2">
         <p class="text-sm text-gray-500 text-center py-8">今日仲未有消費紀錄 ✨</p>
       </div>
-    </div>
-
-    <!-- Itinerary -->
-    <div class="mb-4">
-      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3 px-1">行程</h3>
-      <div id="itineraryList" class="space-y-2"></div>
     </div>
   </section>
 
@@ -1497,6 +1497,7 @@ function refresh() {
   renderDashboard();
   if (!$('tab-history').classList.contains('hidden')) renderHistory();
   if (!$('tab-stats').classList.contains('hidden')) renderStats();
+  if (!$('tab-timeline').classList.contains('hidden')) renderTimeline();
 }
 
 function init() {
