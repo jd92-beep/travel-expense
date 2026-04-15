@@ -920,29 +920,37 @@ function fileToBase64(file) {
 
 const FALLBACK_MODEL = 'gemini-3-flash-preview';
 
-const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。分析呢張日本收據圖片，提取以下資料並用繁體中文回覆 JSON 格式：
+const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。分析呢張日本收據圖片，提取資料並回覆嚴格 JSON 格式（唔好加任何文字或 markdown，只回覆 JSON）：
 
 {
-  "store": "店名（翻譯成繁體中文，如有原日文亦可保留）",
-  "total": 總金額數字,
-  "date": "YYYY-MM-DD",
+  "store": "店名，用繁體中文（簡短，唔好加括號註解）",
+  "total": 總金額純數字,
+  "subtotal": 稅前小計純數字（如有，否則 null）,
+  "tax": 稅金純數字（如有，否則 null）,
+  "date": "YYYY-MM-DD 格式",
   "category": "transport|food|shopping|lodging|ticket|medicine|other 之一",
-  "payment": "cash|credit|paypay|suica 之一（如收據顯示）",
-  "items": [ { "name": "品項名稱（繁中翻譯）", "price": 金額 } ],
-  "tax": 稅金金額,
-  "note": "任何重要備註"
+  "payment": "cash|credit|paypay|suica 之一",
+  "items": [ { "name": "品項繁中翻譯（簡短）", "price": 金額 } ],
+  "note": "額外重要資訊（例如付款卡尾四碼、優惠），無即留空"
 }
 
 類別判斷規則：
-- 餐廳/便利店食品/咖啡 → food
-- JR/巴士/地鐵/Taxi → transport
-- 服裝/紀念品/家品 → shopping
-- 酒店/旅館 → lodging
-- 景點/博物館門票 → ticket
-- 藥妝店藥品 → medicine
-- 其他 → other
+- 餐廳 / 便利店食品 / 咖啡 / 居酒屋 → food
+- JR / 新幹線 / 巴士 / 地鐵 / Taxi / 機場鐵路 → transport
+- 服裝 / 紀念品 / 家品 / 電器 → shopping
+- 酒店 / 旅館 / 民宿 → lodging
+- 景點 / 博物館 / 主題樂園門票 → ticket
+- 藥妝店藥品 / 醫院 → medicine
+- 分類唔到 → other
 
-只回覆 JSON，唔好有任何其他文字或 markdown。`;
+店名規則：只返回一個名，繁體中文優先。例子：「セブン-イレブン」→ "7-Eleven"，「蓬莱軒」→ "蓬萊軒"。唔好輸出「7-Eleven (セブン-イレブン)」呢種括號嘅格式。
+
+支付方式規則：
+- 現金 / CASH → cash
+- クレジット / VISA / MASTER / JCB / AMEX → credit
+- PayPay / ペイペイ → paypay
+- Suica / スイカ / 交通IC → suica
+- 未清楚 → cash`;
 
 async function callGeminiWithModel(base64, mime, model, apiKey) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -993,7 +1001,8 @@ async function callGemini(base64, mime) {
   } catch (err) {
     console.warn(`[Gemini] 主模型 ${primary} 失敗: ${err.message}`);
     if (primary !== FALLBACK_MODEL && shouldFallback(err)) {
-      toast(`⚠️ ${primary} 失敗，改用 Flash`);
+      // Silent fallback — the user doesn't care WHY it worked, only that it worked
+      console.info(`[Gemini] Falling back to ${FALLBACK_MODEL}`);
       try {
         return await callGeminiWithModel(base64, mime, FALLBACK_MODEL, apiKey);
       } catch (err2) {
@@ -1015,7 +1024,9 @@ function notionUrl(path) {
 function buildNotionProps(r) {
   const cat = CATEGORIES.find(c => c.id === r.category);
   const pay = PAYMENTS.find(p => p.id === r.payment);
-  return {
+  const person = (state.persons || []).find(p => p.id === r.personId);
+  const personLabel = person ? `${person.emoji} ${person.name}` : '';
+  const props = {
     '店名': { title: [{ text: { content: (r.store || '未命名').slice(0, 200) } }] },
     '金額': { number: Number(r.total) || 0 },
     '日期': { date: { start: r.date } },
@@ -1024,8 +1035,14 @@ function buildNotionProps(r) {
     '地區': { rich_text: [{ text: { content: (r.region || '').slice(0, 2000) } }] },
     '品項': { rich_text: [{ text: { content: (r.itemsText || '').slice(0, 2000) } }] },
     '備註': { rich_text: [{ text: { content: (r.note || '').slice(0, 2000) } }] },
+    '旅伴': { rich_text: [{ text: { content: personLabel } }] },
     'SourceID': { rich_text: [{ text: { content: r.id } }] },
   };
+  // Only include numeric fields if they have values (Notion accepts null but some existing dbs may not have the column)
+  if (r.hkd != null) props['HKD'] = { number: Number(r.hkd) };
+  if (r.tax != null) props['稅金'] = { number: Number(r.tax) };
+  if (r.subtotal != null) props['小計'] = { number: Number(r.subtotal) };
+  return props;
 }
 
 async function notionFetch(path, options = {}) {
@@ -1107,6 +1124,9 @@ async function notionPullAll() {
         id,
         store: p['店名']?.title?.[0]?.plain_text || '',
         total: p['金額']?.number || 0,
+        subtotal: p['小計']?.number ?? null,
+        tax: p['稅金']?.number ?? null,
+        hkd: p['HKD']?.number ?? null,
         date: p['日期']?.date?.start || todayHKT(),
         category: cat,
         payment: pay,
@@ -1143,6 +1163,8 @@ function populateModalSelects() {
     CATEGORIES.map(c => `<option value="${c.id}" class="bg-white text-[#1A1A2E]">${c.icon} ${c.name}</option>`).join('');
 }
 
+let pendingTax = null, pendingSubtotal = null;
+
 function openConfirmModal(data, base64) {
   editingId = null;
   selectedPersonId = getPersons()[0].id;
@@ -1156,6 +1178,8 @@ function openConfirmModal(data, base64) {
   $('mRegion').value = getRegionForDate(data.date || todayHKT());
   $('mItems').value = (data.items||[]).map(i => `${i.name} ¥${i.price}`).join('\n');
   $('mNote').value = data.note || '';
+  pendingTax = data.tax || null;
+  pendingSubtotal = data.subtotal || null;
   $('confirmModal').classList.remove('hidden');
   renderPersonRow();
 }
@@ -1183,10 +1207,16 @@ window.editReceipt = editReceipt;
 async function saveModal() {
   // Non-blocking: refresh rate in background if cache expired, save uses current rate
   fetchLiveRate();
+  const total = Number($('mTotal').value) || 0;
+  const existing = editingId ? state.receipts.find(x=>x.id===editingId) : null;
   const r = {
     id: editingId || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2,7)),
     store: $('mStore').value.trim(),
-    total: Number($('mTotal').value) || 0,
+    total,
+    subtotal: pendingSubtotal ?? existing?.subtotal ?? null,
+    tax: pendingTax ?? existing?.tax ?? null,
+    hkd: state.rate > 0 ? Math.round((total / state.rate) * 100) / 100 : null,
+    rateUsed: state.rate,
     date: $('mDate').value || todayHKT(),
     category: $('mCat').value,
     payment: $('mPay').value,
@@ -1194,7 +1224,7 @@ async function saveModal() {
     itemsText: $('mItems').value,
     note: $('mNote').value,
     personId: selectedPersonId || getPersons()[0].id,
-    createdAt: editingId ? (state.receipts.find(x=>x.id===editingId)?.createdAt || Date.now()) : Date.now(),
+    createdAt: existing?.createdAt || Date.now(),
   };
   if (r.total <= 0) { toast('⚠️ 金額必須大過 0'); return; }
   if (editingId) {
