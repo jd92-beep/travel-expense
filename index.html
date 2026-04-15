@@ -44,6 +44,48 @@
   .nordic-card { background: var(--n-surface); border: 1px solid var(--n-border); box-shadow: 0 1px 6px var(--n-shadow); border-radius: 1rem; }
   details summary { cursor: pointer; list-style: none; }
   details summary::-webkit-details-marker { display: none; }
+
+  /* ==== Vertical alternating timeline ==== */
+  .timeline { position: relative; padding: 8px 0; }
+  .timeline::before {
+    content: ''; position: absolute; left: 50%; top: 0; bottom: 0;
+    width: 2px; background: var(--n-border); transform: translateX(-50%);
+  }
+  .tl-day-header {
+    position: relative; z-index: 2; text-align: center;
+    margin: 20px 0 12px; padding: 6px 14px;
+    background: var(--n-blue); color: white;
+    border-radius: 999px; font-size: 11px; font-weight: 600;
+    width: max-content; margin-left: auto; margin-right: auto;
+    letter-spacing: 0.5px;
+  }
+  .tl-item {
+    position: relative; width: 50%; padding: 4px 18px 4px 0;
+    box-sizing: border-box; margin-bottom: 10px;
+  }
+  .tl-item[data-side="left"] { margin-right: auto; text-align: right; }
+  .tl-item[data-side="right"] { margin-left: auto; padding: 4px 0 4px 18px; text-align: left; }
+  .tl-item::before {
+    content: ''; position: absolute; top: 16px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--n-bg); border: 2px solid var(--n-border); z-index: 2;
+  }
+  .tl-item[data-side="left"]::before { right: -8px; }
+  .tl-item[data-side="right"]::before { left: -8px; }
+  .tl-item.actual::before { background: var(--n-blue); border-color: var(--n-blue); }
+  .tl-card {
+    display: inline-block; padding: 10px 12px; border-radius: 12px;
+    background: var(--n-surface); border: 1px solid var(--n-border);
+    box-shadow: 0 1px 4px var(--n-shadow); max-width: 100%;
+  }
+  .tl-item.planned .tl-card { background: var(--n-bg); border-style: dashed; }
+  .tl-item.actual .tl-card { border-color: var(--n-blue); }
+  .tl-time { font-size: 10px; color: var(--n-muted); font-weight: 600; letter-spacing: 0.3px; }
+  .tl-name { font-size: 13px; font-weight: 600; color: var(--n-text); margin-top: 2px; line-height: 1.3; }
+  .tl-amount { font-size: 14px; font-weight: 700; color: var(--n-blue); margin-top: 4px; }
+  .tl-amount-hkd { font-size: 9px; color: var(--n-muted); font-weight: 400; }
+  .tl-note { font-size: 10px; color: var(--n-muted); margin-top: 3px; }
+  .tl-icon { font-size: 16px; margin-right: 3px; }
 </style>
 </head>
 <body class="min-h-screen pb-24" style="background:var(--n-bg);color:var(--n-text)">
@@ -234,6 +276,21 @@
     </div>
   </section>
 
+  <!-- ============ TIMELINE TAB ============ -->
+  <section id="tab-timeline" class="tab-content hidden fade-in">
+    <div class="flex items-baseline justify-between mb-4">
+      <h2 class="text-xl font-bold">旅程時間軸 🗾</h2>
+      <span class="text-[10px]" style="color:var(--n-muted)">計劃 + 實際</span>
+    </div>
+    <div class="glass rounded-2xl p-3 mb-4 text-[11px]" style="color:var(--n-muted)">
+      <div class="flex items-center gap-3">
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-full" style="background:var(--n-bg);border:2px solid var(--n-border)"></span>計劃中</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-full" style="background:var(--n-blue)"></span>實際消費</span>
+      </div>
+    </div>
+    <div id="timelineList" class="timeline"></div>
+  </section>
+
   <!-- ============ SETTINGS TAB ============ -->
   <section id="tab-settings" class="tab-content hidden fade-in">
     <h2 class="text-xl font-bold mb-4">設定 ⚙️</h2>
@@ -359,26 +416,30 @@
 
 <!-- ============ BOTTOM TAB BAR ============ -->
 <nav class="fixed bottom-0 left-0 right-0 z-50" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
-  <div class="grid grid-cols-5 max-w-md mx-auto">
+  <div class="grid grid-cols-6 max-w-md mx-auto">
     <button data-tab="dashboard" class="tab-btn flex flex-col items-center py-3 tab-active">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-      <span class="text-[10px] mt-1">主頁</span>
+      <span class="text-[9px] mt-1">主頁</span>
     </button>
     <button data-tab="scan" class="tab-btn flex flex-col items-center py-3 tab-inactive">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-      <span class="text-[10px] mt-1">掃描</span>
+      <span class="text-[9px] mt-1">掃描</span>
+    </button>
+    <button data-tab="timeline" class="tab-btn flex flex-col items-center py-3 tab-inactive">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span class="text-[9px] mt-1">行程</span>
     </button>
     <button data-tab="history" class="tab-btn flex flex-col items-center py-3 tab-inactive">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-      <span class="text-[10px] mt-1">紀錄</span>
+      <span class="text-[9px] mt-1">紀錄</span>
     </button>
     <button data-tab="stats" class="tab-btn flex flex-col items-center py-3 tab-inactive">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-      <span class="text-[10px] mt-1">統計</span>
+      <span class="text-[9px] mt-1">統計</span>
     </button>
     <button data-tab="settings" class="tab-btn flex flex-col items-center py-3 tab-inactive">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-      <span class="text-[10px] mt-1">設定</span>
+      <span class="text-[9px] mt-1">設定</span>
     </button>
   </div>
 </nav>
@@ -465,14 +526,54 @@ const PAYMENTS = [
   { id:'suica', name:'Suica', color:'#a78bfa' },
 ];
 const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
-// Boss 嘅名古屋行程 (HKT 日期)
+// Boss 嘅名古屋行程 (HKT 日期) — 每日詳細 spots
 const ITINERARY = [
-  { date:'2026-04-20', day:1, region:'名古屋市區', highlight:'抵達 + 蓬萊軒鰻魚飯' },
-  { date:'2026-04-21', day:2, region:'飛驒高山 / 白川鄉', highlight:'KKday 三日團 Day 1' },
-  { date:'2026-04-22', day:3, region:'立山黑部', highlight:'雪之大谷 ❄️' },
-  { date:'2026-04-23', day:4, region:'上高地 / 金澤', highlight:'兼六園 + 鳥開總本家' },
-  { date:'2026-04-24', day:5, region:'名古屋', highlight:'生日慶祝 🎂' },
-  { date:'2026-04-25', day:6, region:'常滑 → 機場', highlight:'回程' },
+  { date:'2026-04-20', day:1, region:'名古屋市區', highlight:'抵達 + 蓬萊軒鰻魚飯', spots:[
+    { time:'09:00', name:'中部國際機場 抵達', type:'transport' },
+    { time:'11:00', name:'JR 名古屋站', type:'transport', note:'買 Suica' },
+    { time:'12:30', name:'蓬萊軒 本店', type:'food', note:'ひつまぶし ~¥4,500' },
+    { time:'14:30', name:'熱田神宮', type:'ticket' },
+    { time:'17:00', name:'大須商店街', type:'shopping' },
+    { time:'19:30', name:'矢場とん', type:'food', note:'味噌豬排 ~¥2,000' },
+    { time:'21:00', name:'酒店 Check-in', type:'lodging' },
+  ]},
+  { date:'2026-04-21', day:2, region:'飛驒高山 / 白川鄉', highlight:'KKday 三日團 Day 1', spots:[
+    { time:'07:30', name:'名古屋站 集合', type:'transport' },
+    { time:'10:00', name:'高山陣屋', type:'ticket' },
+    { time:'12:00', name:'高山老街 (午餐)', type:'food', note:'飛驒牛' },
+    { time:'14:30', name:'白川鄉 合掌村', type:'ticket' },
+    { time:'18:00', name:'飛驒高山住宿', type:'lodging' },
+  ]},
+  { date:'2026-04-22', day:3, region:'立山黑部', highlight:'雪之大谷 ❄️', spots:[
+    { time:'08:00', name:'高山出發', type:'transport' },
+    { time:'10:30', name:'室堂 (立山)', type:'transport' },
+    { time:'11:30', name:'雪之大谷 ❄️', type:'ticket' },
+    { time:'13:00', name:'室堂餐廳', type:'food' },
+    { time:'15:00', name:'黑部水庫', type:'ticket' },
+    { time:'18:30', name:'信濃大町住宿', type:'lodging' },
+  ]},
+  { date:'2026-04-23', day:4, region:'上高地 / 金澤', highlight:'兼六園 + 鳥開總本家', spots:[
+    { time:'08:00', name:'上高地', type:'ticket', note:'河童橋 + 明神池' },
+    { time:'13:00', name:'移動到金澤', type:'transport' },
+    { time:'15:30', name:'兼六園', type:'ticket' },
+    { time:'17:00', name:'近江町市場', type:'shopping' },
+    { time:'19:00', name:'鳥開總本家', type:'food', note:'親子丼' },
+    { time:'21:00', name:'金澤住宿', type:'lodging' },
+  ]},
+  { date:'2026-04-24', day:5, region:'名古屋', highlight:'生日慶祝 🎂', spots:[
+    { time:'09:00', name:'返回名古屋', type:'transport' },
+    { time:'11:00', name:'名古屋城', type:'ticket' },
+    { time:'13:00', name:'午餐', type:'food' },
+    { time:'15:00', name:'OASIS 21', type:'shopping' },
+    { time:'19:00', name:'生日晚餐 🎂', type:'food', note:'慶祝！' },
+  ]},
+  { date:'2026-04-25', day:6, region:'常滑 → 機場', highlight:'回程', spots:[
+    { time:'09:00', name:'常滑 (陶器之鄉)', type:'shopping' },
+    { time:'11:00', name:'招財貓大道', type:'ticket' },
+    { time:'13:00', name:'午餐', type:'food' },
+    { time:'15:00', name:'中部機場', type:'transport' },
+    { time:'17:00', name:'回程航班', type:'transport' },
+  ]},
 ];
 const DEFAULT_API_KEY = '';
 
@@ -819,6 +920,65 @@ function renderHistory() {
         <div class="space-y-2">${items.map(i => receiptCard(i)).join('')}</div>
       </div>`;
   }).join('');
+}
+
+// ============ TIMELINE ============
+function renderTimeline() {
+  const container = $('timelineList');
+  if (!container) return;
+  const today = todayHKT();
+  let html = '';
+
+  ITINERARY.forEach(day => {
+    // Day header
+    const isToday = day.date === today;
+    const dayReceipts = state.receipts
+      .filter(r => r.date === day.date)
+      .slice()
+      .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    const dayTotal = dayReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
+
+    html += `<div class="tl-day-header">Day ${day.day} · ${day.date.slice(5)} · ${escapeHtml(day.region)}${isToday ? ' · 今日' : ''}${dayTotal > 0 ? ' · ¥' + fmt(dayTotal) : ''}</div>`;
+
+    // Merge spots (planned) + receipts (actual) for this day
+    const items = [];
+    (day.spots || []).forEach(sp => {
+      items.push({ kind: 'planned', time: sp.time, name: sp.name, type: sp.type, note: sp.note });
+    });
+    dayReceipts.forEach(r => {
+      const t = new Date(r.createdAt || Date.now());
+      const time = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+      items.push({ kind: 'actual', time, receipt: r });
+    });
+    items.sort((a,b) => (a.time||'99:99').localeCompare(b.time||'99:99'));
+
+    items.forEach((item, i) => {
+      const side = i % 2 === 0 ? 'left' : 'right';
+      if (item.kind === 'planned') {
+        const cat = CATEGORIES.find(c => c.id === item.type) || CATEGORIES[6];
+        html += `<div class="tl-item planned" data-side="${side}">
+          <div class="tl-card">
+            <div class="tl-time">${item.time || ''}</div>
+            <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(item.name)}</div>
+            ${item.note ? `<div class="tl-note">${escapeHtml(item.note)}</div>` : ''}
+          </div>
+        </div>`;
+      } else {
+        const r = item.receipt;
+        const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[6];
+        const hkd = state.rate > 0 ? `<span class="tl-amount-hkd"> · HKD ${(r.total/state.rate).toFixed(0)}</span>` : '';
+        html += `<div class="tl-item actual" data-side="${side}" onclick="editReceipt('${r.id}')" style="cursor:pointer">
+          <div class="tl-card">
+            <div class="tl-time">${item.time}</div>
+            <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(r.store || '未命名')}</div>
+            <div class="tl-amount">¥${fmt(r.total)}${hkd}</div>
+          </div>
+        </div>`;
+      }
+    });
+  });
+
+  container.innerHTML = html;
 }
 
 let charts = {};
@@ -1310,6 +1470,7 @@ function switchTab(name) {
   });
   if (name === 'stats') renderStats();
   if (name === 'history') renderHistory();
+  if (name === 'timeline') renderTimeline();
 }
 
 // ============ EXPORT / RESET ============
