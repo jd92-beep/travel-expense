@@ -48,6 +48,23 @@
 </head>
 <body class="min-h-screen pb-24" style="background:var(--n-bg);color:var(--n-text)">
 
+<!-- Password Gate Modal -->
+<div id="lockScreen" style="position:fixed;inset:0;z-index:9999;background:var(--n-bg);display:none;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--n-surface);border:1px solid var(--n-border);border-radius:16px;padding:32px 24px;max-width:360px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.08)">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:48px;margin-bottom:8px">🔒</div>
+      <h2 style="font-size:20px;font-weight:700;color:var(--n-text);margin-bottom:4px">旅行記帳</h2>
+      <p id="lockSubtitle" style="font-size:13px;color:#6B7280">輸入密碼解鎖</p>
+    </div>
+    <input id="lockPw" type="password" inputmode="numeric" placeholder="密碼" autocomplete="off"
+      style="width:100%;padding:14px 16px;border:1px solid var(--n-border);border-radius:10px;font-size:18px;text-align:center;letter-spacing:4px;outline:none;background:var(--n-bg);color:var(--n-text)">
+    <p id="lockError" style="color:#DC2626;font-size:13px;text-align:center;margin-top:12px;min-height:18px"></p>
+    <button id="lockBtn" style="width:100%;padding:14px;margin-top:8px;background:var(--n-blue);color:white;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">解鎖</button>
+    <p style="font-size:11px;color:#9CA3AF;text-align:center;margin-top:16px">解鎖後此裝置會被記住，唔使再輸入</p>
+  </div>
+</div>
+
+
 <!-- ============ HEADER ============ -->
 <header class="sticky top-0 z-40 px-5 pt-6 pb-4" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
   <div class="flex items-center justify-between">
@@ -449,6 +466,33 @@ const ITINERARY = [
   { date:'2026-04-25', day:6, region:'常滑 → 機場', highlight:'回程' },
 ];
 const DEFAULT_API_KEY = '';
+
+// Encrypted vault (AES-256-GCM + PBKDF2/SHA-256 @ 100k iterations)
+// Contains: apiKey, notionToken, notionDb — decryptable only with correct password
+const VAULT_CT = 'U4PWnwJKPdqGjDCFyNrZiw==.cf0U8FPd2H6QRYG5.FGvmHhf3u5sPY9gEE99yLBqwEa73Dr8AdOVO1j2dbZkfFGBrNUA+LTJ55Pt1Q6MYPGMMixnJbiYd1G54MSu3+hQIC67TvAgs0O6lP90S5F+BFdOsw+YperGLTQ9ohc2r05db2dy0QfxOt6ZaKQZ78S96L6eTOBhwp1nNOA9xKn4wTYytQeGDwRT1vSdMrF2nBPjZEImTvKlnlIrkBEf+ImXu+03kZSMDBWQa1A0P0437qedi1Q==';
+
+const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+async function deriveKey(password, salt) {
+  const pwKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    pwKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+}
+
+async function unlockVault(password) {
+  const [saltB64, ivB64, ctB64] = VAULT_CT.split('.');
+  const salt = b64d(saltB64);
+  const iv = b64d(ivB64);
+  const ct = b64d(ctB64);
+  const key = await deriveKey(password, salt);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return JSON.parse(new TextDecoder().decode(pt));
+}
 
 // ============ STATE ============
 let state = {
@@ -1269,7 +1313,66 @@ function init() {
   setInterval(renderHeader, 60000);
 }
 
-init();
+// ========== GATE: unlock vault before init ==========
+async function applyVault(vault) {
+  // Merge vault credentials into state & persist for future visits on this device
+  state.apiKey = vault.apiKey || state.apiKey;
+  state.notionToken = vault.notionToken || state.notionToken;
+  state.notionDb = vault.notionDb || state.notionDb;
+  saveState();
+  localStorage.setItem('vault_unlocked', '1');
+}
+
+async function gateAndInit() {
+  const app = document.querySelector('.container') || document.body;
+  const lock = document.getElementById('lockScreen');
+  const unlocked = localStorage.getItem('vault_unlocked') === '1';
+
+  if (unlocked) {
+    // Already trusted on this device — skip password
+    init();
+    return;
+  }
+
+  // Show password gate
+  lock.style.display = 'flex';
+  // Hide everything else until unlocked
+  [...document.body.children].forEach(el => {
+    if (el.id !== 'lockScreen') el.style.display = 'none';
+  });
+
+  const pwInput = document.getElementById('lockPw');
+  const btn = document.getElementById('lockBtn');
+  const err = document.getElementById('lockError');
+  pwInput.focus();
+
+  async function tryUnlock() {
+    err.textContent = '';
+    btn.disabled = true;
+    btn.textContent = '解鎖中...';
+    try {
+      const vault = await unlockVault(pwInput.value);
+      await applyVault(vault);
+      // Reveal the app
+      lock.style.display = 'none';
+      [...document.body.children].forEach(el => {
+        if (el.id !== 'lockScreen') el.style.display = '';
+      });
+      init();
+    } catch (e) {
+      err.textContent = '密碼錯誤，請再試';
+      pwInput.value = '';
+      pwInput.focus();
+      btn.disabled = false;
+      btn.textContent = '解鎖';
+    }
+  }
+
+  btn.addEventListener('click', tryUnlock);
+  pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+}
+
+gateAndInit();
 </script>
 </body>
 </html>
