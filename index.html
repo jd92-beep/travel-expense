@@ -215,9 +215,15 @@
     </div>
 
     <input type="file" id="receiptInput" accept="image/*" capture="environment" class="hidden">
-    <button id="scanBtn" class="w-full text-white font-bold py-5 rounded-2xl text-lg active:scale-95 transition mb-3" style="background:var(--n-blue);box-shadow:0 4px 14px rgba(45,90,142,0.25)">
-      📷 影收據 / 揀相
-    </button>
+    <input type="file" id="galleryInput" accept="image/*" class="hidden">
+    <div class="grid grid-cols-2 gap-3 mb-3">
+      <button id="scanBtn" class="text-white font-bold py-5 rounded-2xl text-lg active:scale-95 transition" style="background:var(--n-blue);box-shadow:0 4px 14px rgba(45,90,142,0.25)">
+        📷 拍攝收據
+      </button>
+      <button id="galleryBtn" class="glass font-bold py-5 rounded-2xl text-lg active:scale-95 transition" style="color:var(--n-blue)">
+        🖼️ 本地相簿
+      </button>
+    </div>
     <button id="voiceBtn" class="w-full glass font-medium py-4 rounded-2xl active:scale-95 transition mb-3" style="color:var(--n-blue)">
       🎤 語音輸入
     </button>
@@ -457,8 +463,11 @@
     <p class="font-bold text-lg mb-1" style="color:var(--n-text)">正在聆聽…</p>
     <p class="text-xs mb-2" style="color:var(--n-muted)">講出消費資料，例如：</p>
     <p class="text-xs rounded-xl px-3 py-2 mb-5" style="background:var(--n-blue-dim);color:var(--n-blue)">"矢場とん 味噌豬排 兩千円 現金"</p>
-    <div id="voiceInterim" class="text-sm min-h-[20px] mb-4 font-medium" style="color:var(--n-blue)"></div>
-    <button onclick="stopVoiceInput()" class="px-8 py-2.5 rounded-full text-white text-sm font-medium" style="background:#DC2626">停止</button>
+    <div id="voiceInterim" class="text-sm min-h-[20px] mb-3 font-medium" style="color:var(--n-blue)"></div>
+    <div class="flex items-center justify-center gap-4">
+      <button onclick="stopVoiceInput()" class="px-8 py-2.5 rounded-full text-white text-sm font-medium" style="background:#DC2626">停止並解析</button>
+      <span id="voiceTimer" class="text-xs font-mono" style="color:var(--n-muted)">60s</span>
+    </div>
   </div>
 </div>
 
@@ -1136,40 +1145,67 @@ function fileToBase64(file) {
 
 // ============ VOICE INPUT ============
 let voiceRecognition = null;
+let voiceFinalText = '';
+let voiceTimer = null;
 
 function startVoiceInput() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    toast('此瀏覽器唔支援語音輸入，請用 Chrome 或 Safari', 'error');
+    toast('此瀏覽器唔支援語音輸入，請用 Chrome 或 Safari');
     return;
   }
+  voiceFinalText = '';
   const rec = new SR();
   rec.lang = 'zh-HK';
-  rec.continuous = false;
+  rec.continuous = true;       // keep listening until user taps Stop
   rec.interimResults = true;
   $('voiceInterim').textContent = '';
   $('voiceOverlay').classList.remove('hidden');
 
+  // 60-second countdown timer
+  let secsLeft = 60;
+  if ($('voiceTimer')) $('voiceTimer').textContent = secsLeft + 's';
+  voiceTimer = setInterval(() => {
+    secsLeft--;
+    if ($('voiceTimer')) $('voiceTimer').textContent = secsLeft + 's';
+    if (secsLeft <= 0) stopVoiceInput();
+  }, 1000);
+
   rec.onresult = (e) => {
-    const interim = Array.from(e.results).map(r => r[0].transcript).join('');
-    $('voiceInterim').textContent = interim;
-    if (e.results[e.results.length - 1].isFinal) {
-      stopVoiceInput();
-      parseVoiceExpense(interim);
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) voiceFinalText += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
     }
+    $('voiceInterim').textContent = voiceFinalText + interim;
   };
   rec.onerror = (e) => {
+    if (e.error === 'no-speech') return; // silence gap — keep listening
     stopVoiceInput();
-    toast('語音識別失敗：' + e.error, 'error');
+    toast('語音識別失敗：' + e.error);
   };
-  rec.onend = () => { $('voiceOverlay').classList.add('hidden'); };
+  // Browser auto-stops on silence: restart if session still active
+  rec.onend = () => {
+    if (voiceRecognition) {
+      try { voiceRecognition.start(); } catch(err) {}
+    }
+  };
   voiceRecognition = rec;
   rec.start();
 }
 
 function stopVoiceInput() {
-  if (voiceRecognition) { try { voiceRecognition.stop(); } catch(e) {} voiceRecognition = null; }
+  if (voiceTimer) { clearInterval(voiceTimer); voiceTimer = null; }
+  const text = voiceFinalText.trim();
+  if (voiceRecognition) {
+    voiceRecognition.onend = null; // prevent restart loop
+    try { voiceRecognition.stop(); } catch(e) {}
+    voiceRecognition = null;
+  }
+  voiceFinalText = '';
   $('voiceOverlay').classList.add('hidden');
+  if (text) parseVoiceExpense(text);
+  else toast('未偵測到語音，請再試');
 }
 
 async function parseVoiceExpense(transcript) {
@@ -1793,6 +1829,12 @@ function init() {
 
   // Scan
   $('scanBtn').addEventListener('click', () => $('receiptInput').click());
+  $('galleryBtn').addEventListener('click', () => $('galleryInput').click());
+  $('galleryInput').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) scanReceipt(f);
+    $('galleryInput').value = '';
+  });
   $('receiptInput').addEventListener('change', e => {
     const f = e.target.files[0];
     if (f) scanReceipt(f);
