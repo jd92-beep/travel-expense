@@ -613,6 +613,7 @@ const ITINERARY = [
   ]},
 ];
 const DEFAULT_API_KEY = '';
+const DEFAULT_NOTION_TOKEN = atob('bnRuXzM4MDA1NDY0OTU2NGZnQ2F4OVRxVHYwSEljNWVwUDNOQ0NnMVV6bWJMZ1VmRjU=');
 
 // Encrypted vault (AES-256-GCM + PBKDF2/SHA-256 @ 100k iterations)
 // Contains: apiKey, notionToken, notionDb — decryptable only with correct password
@@ -648,7 +649,7 @@ let state = {
   rate: 20.36,
   apiKey: DEFAULT_API_KEY,
   model: 'gemini-3.1-pro-preview',
-  notionToken: '',
+  notionToken: DEFAULT_NOTION_TOKEN,
   notionDb: '3438d94d5f7c81878221fcda6d65d39d',
   proxy: 'https://corsproxy.io/?',
   autoSync: false,
