@@ -643,11 +643,45 @@ let state = {
 function loadState() {
   try {
     const s = localStorage.getItem('boss-japan-tracker');
-    if (s) state = { ...state, ...JSON.parse(s) };
-  } catch(e) { console.warn(e); }
+    if (s) {
+      const parsed = JSON.parse(s);
+      if (typeof parsed !== 'object' || parsed === null) throw new Error('corrupt');
+      state = { ...state, ...parsed };
+      // credentials are NOT persisted to localStorage — they come from vault unlock only
+    }
+  } catch(e) {
+    console.warn('[loadState] parse error:', e);
+    // Don't wipe data, but flag it
+    setTimeout(() => toast('⚠️ 本地資料讀取異常，請檢查設定'), 1000);
+  }
 }
 function saveState() {
-  localStorage.setItem('boss-japan-tracker', JSON.stringify(state));
+  // Strip sensitive credentials before persisting — they live in memory only
+  const { apiKey, notionToken, ...safeState } = state;
+  try {
+    localStorage.setItem('boss-japan-tracker', JSON.stringify(safeState));
+  } catch(e) {
+    if (e.name === 'QuotaExceededError') {
+      // Auto-prune oldest photo thumbnails to free space
+      const byAge = [...state.receipts].sort((a,b) => (a.createdAt||0)-(b.createdAt||0));
+      let pruned = 0;
+      for (const r of byAge) {
+        if (!r.photoThumb) continue;
+        delete r.photoThumb;
+        pruned++;
+        try {
+          const { apiKey: _a, notionToken: _n, ...s2 } = state;
+          localStorage.setItem('boss-japan-tracker', JSON.stringify(s2));
+          break;
+        } catch(e2) { continue; }
+      }
+      if (pruned) toast(`⚠️ 儲存空間不足，已移除 ${pruned} 張收據縮圖`);
+      else toast('❌ 儲存空間已滿，請匯出資料後清除');
+    }
+  }
+  // Warn at 4MB (typical 5-10MB limit)
+  const used = new Blob([localStorage.getItem('boss-japan-tracker') || '']).size;
+  if (used > 4 * 1024 * 1024) toast('⚠️ 本地儲存接近上限 (4MB+)，建議同步 Notion 後清除舊圖');
 }
 
 // ============ HELPERS ============
@@ -1106,7 +1140,7 @@ let voiceRecognition = null;
 function startVoiceInput() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    showToast('此瀏覽器唔支援語音輸入，請用 Chrome 或 Safari', 'error');
+    toast('此瀏覽器唔支援語音輸入，請用 Chrome 或 Safari', 'error');
     return;
   }
   const rec = new SR();
@@ -1126,7 +1160,7 @@ function startVoiceInput() {
   };
   rec.onerror = (e) => {
     stopVoiceInput();
-    showToast('語音識別失敗：' + e.error, 'error');
+    toast('語音識別失敗：' + e.error, 'error');
   };
   rec.onend = () => { $('voiceOverlay').classList.add('hidden'); };
   voiceRecognition = rec;
@@ -1139,7 +1173,7 @@ function stopVoiceInput() {
 }
 
 async function parseVoiceExpense(transcript) {
-  showToast('🎤 解析中…');
+  toast('🎤 解析中…');
   const today = todayHKT();
   const prompt = `你係旅行記帳 AI。用戶講咗：「${transcript}」
 
@@ -1166,7 +1200,7 @@ async function parseVoiceExpense(transcript) {
     const parsed = JSON.parse(text);
     openConfirmModal(parsed, '');
   } catch(e) {
-    showToast('解析失敗，請手動輸入', 'error');
+    toast('解析失敗，請手動輸入', 'error');
     openConfirmModal({}, '');
   }
 }
@@ -1362,13 +1396,18 @@ async function notionPushAll() {
     return;
   }
   toast('⬆️ 推送中…');
-  let ok = 0, fail = 0;
+  const failed = [];
+  let ok = 0;
   for (const r of state.receipts) {
     try { await notionPushReceipt(r); ok++; }
-    catch (e) { console.error(e); fail++; }
+    catch (e) { failed.push(r.store || r.id); }
   }
   saveState();
-  toast(`✅ 已推送 ${ok} 筆${fail ? ' (失敗 ' + fail + ')' : ''}`);
+  if (failed.length === 0) {
+    toast(`✅ 全部 ${ok} 筆已同步到 Notion`);
+  } else {
+    toast(`⚠️ ${ok} 筆成功，${failed.length} 筆失敗：${failed.slice(0,3).join('、')}${failed.length > 3 ? '…' : ''}`);
+  }
 }
 
 async function notionPullAll() {
@@ -1785,8 +1824,9 @@ function init() {
     $('lockDeviceBtn').classList.remove('hidden');
   }
   $('lockDeviceBtn').addEventListener('click', () => {
-    if (!confirm('清除信任後，下次打開要再輸入密碼「0424」。確認？')) return;
+    if (!confirm('清除裝置信任後，下次打開需要重新輸入密碼。確認？')) return;
     localStorage.removeItem('vault_unlocked');
+    localStorage.removeItem('_vt');
     state.apiKey = '';
     state.notionToken = '';
     saveState();
@@ -1808,24 +1848,60 @@ function init() {
 }
 
 // ========== GATE: unlock vault before init ==========
-async function applyVault(vault) {
-  // Merge vault credentials into state & persist for future visits on this device
+
+// Device-bound token: XOR password bytes with SHA-256 of device fingerprint
+// so the stored token is useless on a different device
+async function _deviceKey() {
+  const info = [navigator.userAgent, screen.width, screen.height, navigator.language].join('|');
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(info));
+  return new Uint8Array(buf);
+}
+async function _storeVaultToken(pw) {
+  const dk = await _deviceKey();
+  const pwb = new TextEncoder().encode(pw);
+  const xored = new Uint8Array(pwb.length);
+  for (let i = 0; i < pwb.length; i++) xored[i] = pwb[i] ^ dk[i % dk.length];
+  localStorage.setItem('_vt', btoa(String.fromCharCode(...xored)));
+}
+async function _recoverVaultToken() {
+  const t = localStorage.getItem('_vt');
+  if (!t) return null;
+  try {
+    const dk = await _deviceKey();
+    const xored = Uint8Array.from(atob(t), c => c.charCodeAt(0));
+    const pwb = new Uint8Array(xored.length);
+    for (let i = 0; i < xored.length; i++) pwb[i] = xored[i] ^ dk[i % dk.length];
+    return new TextDecoder().decode(pwb);
+  } catch(e) { return null; }
+}
+
+async function applyVault(vault, pw) {
+  // Credentials stay in memory only — NOT written to localStorage
   state.apiKey = vault.apiKey || state.apiKey;
   state.notionToken = vault.notionToken || state.notionToken;
   state.notionDb = vault.notionDb || state.notionDb;
-  saveState();
+  saveState(); // saves everything EXCEPT apiKey/notionToken
   localStorage.setItem('vault_unlocked', '1');
+  if (pw) await _storeVaultToken(pw); // device-bound token for auto-reload
 }
 
 async function gateAndInit() {
-  const app = document.querySelector('.container') || document.body;
   const lock = document.getElementById('lockScreen');
   const unlocked = localStorage.getItem('vault_unlocked') === '1';
 
   if (unlocked) {
-    // Already trusted on this device — skip password
-    init();
-    return;
+    // Trusted device — auto-unlock using device-bound token (no user interaction)
+    try {
+      const pw = await _recoverVaultToken();
+      if (pw) {
+        const vault = await unlockVault(pw);
+        state.apiKey = vault.apiKey || state.apiKey;
+        state.notionToken = vault.notionToken || state.notionToken;
+        state.notionDb = vault.notionDb || state.notionDb;
+        init();
+        return;
+      }
+    } catch(e) { /* token stale or device changed — fall through to password screen */ }
   }
 
   // Show password gate
@@ -1845,8 +1921,9 @@ async function gateAndInit() {
     btn.disabled = true;
     btn.textContent = '解鎖中...';
     try {
-      const vault = await unlockVault(pwInput.value);
-      await applyVault(vault);
+      const pw = pwInput.value;
+      const vault = await unlockVault(pw);
+      await applyVault(vault, pw);
       // Reveal the app
       lock.style.display = 'none';
       [...document.body.children].forEach(el => {
