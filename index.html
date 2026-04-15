@@ -5,38 +5,60 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="名古屋記帳">
+<meta name="theme-color" content="#f97316">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23f97316'/><text x='12' y='85' font-size='78'>🗾</text></svg>">
+<script>
+// Inline PWA manifest — needed for single-file app (no server)
+(function(){
+  var m = {name:'Boss 名古屋記帳',short_name:'名古屋記帳',start_url:'.',display:'standalone',background_color:'#0f172a',theme_color:'#f97316',orientation:'portrait'};
+  var b = new Blob([JSON.stringify(m)], {type:'application/manifest+json'});
+  var l = document.createElement('link'); l.rel='manifest'; l.href=URL.createObjectURL(b);
+  document.head.appendChild(l);
+})();
+</script>
 <title>Boss 名古屋記帳 🇯🇵</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Hiragino Sans", sans-serif; -webkit-tap-highlight-color: transparent; }
-  .glass { backdrop-filter: blur(20px); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
-  .tab-active { color: #f97316; }
-  .tab-inactive { color: #6b7280; }
+  :root {
+    --n-bg: #F4F4EF; --n-surface: #FFFFFF; --n-border: #E4E4DF;
+    --n-text: #1A1A2E; --n-muted: #6B7285; --n-blue: #2D5A8E;
+    --n-blue-dim: #EEF3FA; --n-shadow: rgba(26,26,46,0.07);
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Hiragino Sans", sans-serif; -webkit-tap-highlight-color: transparent; background: var(--n-bg); color: var(--n-text); }
+  .glass { background: var(--n-surface) !important; border: 1px solid var(--n-border) !important; box-shadow: 0 1px 6px var(--n-shadow) !important; backdrop-filter: none !important; }
+  .tab-active { color: var(--n-blue); }
+  .tab-inactive { color: #A0AAB8; }
   .scrollbar-hide::-webkit-scrollbar { display: none; }
   .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
   @keyframes pulse-ring { 0% { transform: scale(0.95); opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
-  .pulse-ring::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: #f97316; animation: pulse-ring 1.5s ease-out infinite; }
-  .progress-shine { background: linear-gradient(90deg, #f97316, #fbbf24, #f97316); background-size: 200% 100%; animation: shine 3s linear infinite; }
+  .pulse-ring::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--n-blue); animation: pulse-ring 1.5s ease-out infinite; }
+  .progress-shine { background: linear-gradient(90deg, #2D5A8E, #5B8EC9, #2D5A8E); background-size: 200% 100%; animation: shine 3s linear infinite; }
   @keyframes shine { to { background-position: 200% 0; } }
   .fade-in { animation: fadeIn 0.3s ease-out; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   input, select, textarea, button { -webkit-appearance: none; }
+  /* Nordic text refinements */
+  h1, h2, h3 { letter-spacing: -0.02em; }
+  .nordic-card { background: var(--n-surface); border: 1px solid var(--n-border); box-shadow: 0 1px 6px var(--n-shadow); border-radius: 1rem; }
+  details summary { cursor: pointer; list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
 </style>
 </head>
-<body class="bg-gradient-to-br from-slate-900 via-gray-900 to-black text-white min-h-screen pb-24">
+<body class="min-h-screen pb-24" style="background:var(--n-bg);color:var(--n-text)">
 
 <!-- ============ HEADER ============ -->
-<header class="sticky top-0 z-40 bg-gradient-to-b from-black/80 to-transparent backdrop-blur-xl px-5 pt-6 pb-4">
+<header class="sticky top-0 z-40 px-5 pt-6 pb-4" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight">名古屋之旅 🗾</h1>
-      <p class="text-xs text-gray-400 mt-0.5" id="dateLabel">—</p>
+      <h1 class="text-2xl font-bold tracking-tight" style="color:var(--n-text)">名古屋之旅 🗾</h1>
+      <p class="text-xs mt-0.5" style="color:var(--n-muted)" id="dateLabel">—</p>
     </div>
     <div class="flex items-center gap-2">
       <div class="text-right">
         <p class="text-[10px] text-gray-500 uppercase tracking-wider">Day</p>
-        <p class="text-xl font-bold text-orange-400" id="dayCounter">—</p>
+        <p class="text-xl font-bold" style="color:var(--n-blue)" id="dayCounter">—</p>
       </div>
     </div>
   </div>
@@ -66,13 +88,24 @@
     <div class="glass rounded-3xl p-6 mb-4">
       <div class="flex items-center gap-2 mb-1">
         <span class="text-[10px] uppercase tracking-widest text-gray-400">今日花費</span>
-        <span class="text-[10px] text-orange-400" id="todayLocation">—</span>
+        <span class="text-[10px]" style="color:var(--n-blue)" id="todayLocation">—</span>
       </div>
       <div class="flex items-baseline gap-2">
-        <span class="text-4xl font-bold">¥<span id="todaySpend">0</span></span>
+        <span class="text-4xl font-bold" style="color:var(--n-text)">¥<span id="todaySpend">0</span></span>
         <span class="text-sm text-gray-500">≈ HKD <span id="todaySpendHKD">0</span></span>
       </div>
       <p class="text-xs text-gray-500 mt-1"><span id="todayCount">0</span> 筆消費</p>
+    </div>
+
+    <!-- Daily budget alert -->
+    <div id="dailyAlert" class="hidden rounded-2xl p-3 mb-4 fade-in" style="background:#FEF0E7;border:1px solid #E8944A">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">🚨</span>
+        <div>
+          <p class="text-sm font-bold" style="color:#C4622D">今日超出日均預算！</p>
+          <p class="text-xs mt-0.5" style="color:#A0522D">日均上限 ¥<span id="dailyBudgetAmt">16,967</span>，今日已用 ¥<span id="dailyOverAmt">0</span></p>
+        </div>
+      </div>
     </div>
 
     <!-- Quick stats -->
@@ -87,6 +120,12 @@
         <p class="text-2xl font-bold">¥<span id="avgSpend">0</span></p>
         <p class="text-[10px] text-gray-500 mt-1">過去 <span id="daysElapsed">0</span> 日</p>
       </div>
+    </div>
+
+    <!-- Person breakdown (hidden when solo) -->
+    <div id="personBreakdownWrap" class="hidden mb-4">
+      <h3 class="text-xs uppercase tracking-widest mb-3 px-1" style="color:var(--n-muted)">旅伴花費</h3>
+      <div id="personBreakdown" class="grid grid-cols-2 gap-3"></div>
     </div>
 
     <!-- Today list -->
@@ -113,10 +152,10 @@
     </div>
 
     <input type="file" id="receiptInput" accept="image/*" capture="environment" class="hidden">
-    <button id="scanBtn" class="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold py-5 rounded-2xl text-lg shadow-lg shadow-orange-500/30 active:scale-95 transition mb-3">
+    <button id="scanBtn" class="w-full text-white font-bold py-5 rounded-2xl text-lg active:scale-95 transition mb-3" style="background:var(--n-blue);box-shadow:0 4px 14px rgba(45,90,142,0.25)">
       📷 影收據 / 揀相
     </button>
-    <button id="manualBtn" class="w-full glass text-white font-medium py-4 rounded-2xl active:scale-95 transition">
+    <button id="manualBtn" class="w-full glass font-medium py-4 rounded-2xl active:scale-95 transition" style="color:var(--n-blue)">
       ✍️ 手動輸入
     </button>
 
@@ -125,7 +164,7 @@
       <div class="glass rounded-2xl p-4">
         <img id="previewImg" class="w-full max-h-64 object-contain rounded-xl mb-3" alt="">
         <div id="scanStatus" class="text-center py-4">
-          <div class="inline-block w-8 h-8 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
+          <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
           <p class="text-sm text-gray-400 mt-2">AI 正在辨識收據…</p>
         </div>
       </div>
@@ -178,6 +217,23 @@
   <section id="tab-settings" class="tab-content hidden fade-in">
     <h2 class="text-xl font-bold mb-4">設定 ⚙️</h2>
 
+    <!-- Person Management -->
+    <div class="glass rounded-2xl p-4 mb-3">
+      <div class="flex items-center justify-between mb-3">
+        <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">👥 旅伴管理</label>
+        <button id="addPersonBtn" class="text-xs px-3 py-1.5 rounded-full text-white font-medium" style="background:var(--n-blue)">+ 新增旅伴</button>
+      </div>
+      <div id="personList" class="space-y-2"></div>
+      <div id="addPersonForm" class="hidden pt-3 mt-3" style="border-top:1px solid var(--n-border)">
+        <input id="newPersonName" type="text" placeholder="旅伴名字" class="w-full bg-transparent text-sm focus:outline-none mb-3" style="border-bottom:1px solid var(--n-border);padding-bottom:6px;color:var(--n-text)">
+        <div id="emojiPicker" class="flex flex-wrap gap-2 mb-3"></div>
+        <div class="flex gap-2">
+          <button id="confirmAddPerson" class="text-xs px-4 py-1.5 rounded-full text-white font-medium" style="background:var(--n-blue)">確認</button>
+          <button id="cancelAddPerson" class="text-xs px-4 py-1.5 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
+        </div>
+      </div>
+    </div>
+
     <div class="glass rounded-2xl p-4 mb-3">
       <label class="text-xs text-gray-400 uppercase tracking-wider">總預算 (JPY)</label>
       <input type="number" id="setBudget" class="w-full bg-transparent text-2xl font-bold mt-1 focus:outline-none" value="101800">
@@ -185,7 +241,10 @@
     </div>
 
     <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs text-gray-400 uppercase tracking-wider">匯率 (1 HKD = ? JPY)</label>
+      <div class="flex items-center justify-between">
+        <label class="text-xs text-gray-400 uppercase tracking-wider">匯率 (1 HKD = ? JPY)</label>
+        <span id="rateStatus" class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">⟳ 每次入數自動更新</span>
+      </div>
       <input type="number" id="setRate" class="w-full bg-transparent text-2xl font-bold mt-1 focus:outline-none" value="20.36" step="0.01">
     </div>
 
@@ -198,18 +257,21 @@
     <div class="glass rounded-2xl p-4 mb-3">
       <label class="text-xs text-gray-400 uppercase tracking-wider">AI 模型</label>
       <select id="setModel" class="w-full bg-transparent text-sm font-medium mt-1 focus:outline-none">
-        <option value="gemini-3.1-pro-preview" class="bg-gray-900">Gemini 3.1 Pro Preview ⭐</option>
-        <option value="gemini-3-pro-preview" class="bg-gray-900">Gemini 3 Pro Preview</option>
-        <option value="gemini-3-flash-preview" class="bg-gray-900">Gemini 3 Flash Preview</option>
-        <option value="gemini-2.5-pro" class="bg-gray-900">Gemini 2.5 Pro</option>
-        <option value="gemini-2.0-flash" class="bg-gray-900">Gemini 2.0 Flash</option>
+        <option value="gemini-3.1-pro-preview" class="bg-white text-[#1A1A2E]">Gemini 3.1 Pro Preview ⭐</option>
+        <option value="gemini-3-pro-preview" class="bg-white text-[#1A1A2E]">Gemini 3 Pro Preview</option>
+        <option value="gemini-3-flash-preview" class="bg-white text-[#1A1A2E]">Gemini 3 Flash Preview</option>
+        <option value="gemini-2.5-pro" class="bg-white text-[#1A1A2E]">Gemini 2.5 Pro</option>
+        <option value="gemini-2.0-flash" class="bg-white text-[#1A1A2E]">Gemini 2.0 Flash</option>
       </select>
     </div>
 
     <!-- ============ NOTION SYNC ============ -->
-    <div class="mt-6 mb-3">
-      <h3 class="text-xs uppercase tracking-widest text-gray-400 px-1 mb-2">📓 Notion 同步</h3>
-    </div>
+    <details class="mt-6">
+    <summary class="flex items-center justify-between px-1 mb-3 cursor-pointer select-none">
+      <h3 class="text-xs uppercase tracking-widest" style="color:var(--n-muted)">📓 Notion 雲端備份（選用）</h3>
+      <span class="text-xs px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
+    </summary>
+    <p class="text-xs mb-3 px-1" style="color:var(--n-muted)">⚠️ 唔設定都可以正常使用，資料會儲喺本機。</p>
 
     <div class="glass rounded-2xl p-4 mb-3">
       <label class="text-xs text-gray-400 uppercase tracking-wider">Notion Integration Token</label>
@@ -241,7 +303,7 @@
     </div>
 
     <div class="glass rounded-2xl p-3 mb-3 text-[11px] text-gray-400">
-      <p class="font-bold text-orange-400 mb-1">📋 Notion Database 必需欄位（一字不差）：</p>
+      <p class="font-bold text-[#2D5A8E] mb-1">📋 Notion Database 必需欄位（一字不差）：</p>
       <ul class="space-y-0.5 font-mono">
         <li>• <span class="text-white">店名</span> (Title)</li>
         <li>• <span class="text-white">金額</span> (Number)</li>
@@ -256,7 +318,9 @@
       <p class="mt-2 text-gray-500">建立後記得 Share → 加入你嘅 Integration ✅</p>
     </div>
 
-    <button id="saveSettings" class="w-full bg-orange-500 text-white font-bold py-3 rounded-2xl mt-2">儲存設定</button>
+    </details>
+
+    <button id="saveSettings" class="w-full text-white font-bold py-3 rounded-2xl mt-2" style="background:var(--n-blue)">儲存設定</button>
 
     <div class="mt-6 grid grid-cols-2 gap-3">
       <button id="exportBtn" class="glass py-3 rounded-2xl text-sm font-medium">📤 匯出 CSV</button>
@@ -271,7 +335,7 @@
 </main>
 
 <!-- ============ BOTTOM TAB BAR ============ -->
-<nav class="fixed bottom-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-xl border-t border-white/10">
+<nav class="fixed bottom-0 left-0 right-0 z-50" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
   <div class="grid grid-cols-5 max-w-md mx-auto">
     <button data-tab="dashboard" class="tab-btn flex flex-col items-center py-3 tab-active">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
@@ -298,13 +362,17 @@
 
 <!-- ============ CONFIRM MODAL ============ -->
 <div id="confirmModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-  <div class="bg-gray-900 border border-white/10 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto scrollbar-hide">
-    <div class="sticky top-0 bg-gray-900 px-5 pt-5 pb-3 border-b border-white/5">
-      <div class="w-12 h-1 bg-white/20 rounded-full mx-auto mb-3 sm:hidden"></div>
-      <h3 class="text-lg font-bold">確認消費內容</h3>
-      <p class="text-xs text-gray-400 mt-1" id="modalSubtitle">請核對 AI 識別嘅資料</p>
+  <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto scrollbar-hide" style="background:var(--n-surface);border:1px solid var(--n-border)">
+    <div class="sticky top-0 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
+      <div class="w-12 h-1 rounded-full mx-auto mb-3 sm:hidden" style="background:var(--n-border)"></div>
+      <h3 class="text-lg font-bold" style="color:var(--n-text)">確認消費內容</h3>
+      <p class="text-xs mt-1" style="color:var(--n-muted)" id="modalSubtitle">請核對 AI 識別嘅資料</p>
     </div>
     <div class="p-5 space-y-3">
+      <div id="mPersonWrap">
+        <label class="text-[10px] uppercase tracking-wider" style="color:var(--n-muted)">消費人</label>
+        <div id="mPersonRow" class="flex gap-2 mt-2 flex-wrap"></div>
+      </div>
       <div>
         <label class="text-[10px] uppercase tracking-wider text-gray-400">店名</label>
         <input id="mStore" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
@@ -343,15 +411,15 @@
         <input id="mNote" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
       </div>
     </div>
-    <div class="sticky bottom-0 bg-gray-900 p-5 border-t border-white/5 grid grid-cols-2 gap-3">
-      <button id="modalCancel" class="glass py-3 rounded-xl font-medium">取消</button>
-      <button id="modalSave" class="bg-orange-500 py-3 rounded-xl font-bold">儲存</button>
+    <div class="sticky bottom-0 p-5 grid grid-cols-2 gap-3" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
+      <button id="modalCancel" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
+      <button id="modalSave" class="py-3 rounded-xl font-bold text-white" style="background:var(--n-blue)">儲存</button>
     </div>
   </div>
 </div>
 
 <!-- ============ TOAST ============ -->
-<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[70] bg-black/90 backdrop-blur-xl border border-white/10 rounded-full px-5 py-2.5 text-sm font-medium fade-in"></div>
+<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[70] rounded-full px-5 py-2.5 text-sm font-medium text-white fade-in" style="background:var(--n-text)"></div>
 
 <script>
 // ============ CONFIG ============
@@ -362,7 +430,7 @@ const CATEGORIES = [
   { id:'lodging', name:'住宿', icon:'🏨', color:'#34d399' },
   { id:'ticket', name:'門票', icon:'🎫', color:'#fbbf24' },
   { id:'medicine', name:'藥品', icon:'💊', color:'#f472b6' },
-  { id:'other', name:'其他', icon:'📦', color:'#9ca3af' },
+  { id:'other', name:'其他', icon:'📦', color:'#6B7285' },
 ];
 const PAYMENTS = [
   { id:'cash', name:'現金', color:'#34d399' },
@@ -370,6 +438,7 @@ const PAYMENTS = [
   { id:'paypay', name:'PayPay', color:'#f97316' },
   { id:'suica', name:'Suica', color:'#a78bfa' },
 ];
+const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
 // Boss 嘅名古屋行程 (HKT 日期)
 const ITINERARY = [
   { date:'2026-04-20', day:1, region:'名古屋市區', highlight:'抵達 + 蓬萊軒鰻魚飯' },
@@ -379,7 +448,7 @@ const ITINERARY = [
   { date:'2026-04-24', day:5, region:'名古屋', highlight:'生日慶祝 🎂' },
   { date:'2026-04-25', day:6, region:'常滑 → 機場', highlight:'回程' },
 ];
-const DEFAULT_API_KEY = 'AIzaSyBHBrjFCVCBlDwESkFyTNzR81j-DM3guvo';
+const DEFAULT_API_KEY = '';
 
 // ============ STATE ============
 let state = {
@@ -389,9 +458,10 @@ let state = {
   apiKey: DEFAULT_API_KEY,
   model: 'gemini-3.1-pro-preview',
   notionToken: '',
-  notionDb: '',
+  notionDb: '3438d94d5f7c81878221fcda6d65d39d',
   proxy: 'https://corsproxy.io/?',
   autoSync: false,
+  persons: [{ id: 'p_boss', name: 'Tony', emoji: '🧔', color: '#2D5A8E' }],
 };
 
 function loadState() {
@@ -426,6 +496,118 @@ function toast(msg) {
   setTimeout(() => $('toast').classList.add('hidden'), 2200);
 }
 
+// ============ PERSONS ============
+let selectedPersonId = null;
+let selectedNewEmoji = '🧔';
+
+function getPersons() {
+  return (state.persons && state.persons.length > 0)
+    ? state.persons
+    : [{ id: 'p_boss', name: 'Tony', emoji: '🧔', color: '#2D5A8E' }];
+}
+
+function renderPersonRow() {
+  const row = document.getElementById('mPersonRow');
+  if (!row) return;
+  const persons = getPersons();
+  if (!selectedPersonId) selectedPersonId = persons[0].id;
+  // Hide selector when only one person
+  const wrap = document.getElementById('mPersonWrap');
+  if (wrap) wrap.classList.toggle('hidden', persons.length <= 1);
+  row.innerHTML = persons.map(p => {
+    const on = selectedPersonId === p.id;
+    return `<button type="button" onclick="selectPerson('${p.id}')"
+      class="flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition"
+      style="${on ? 'background:#EEF3FA;outline:2px solid #2D5A8E' : 'background:var(--n-bg);outline:2px solid transparent'}">
+      <span class="text-2xl">${p.emoji}</span>
+      <span class="text-[10px] font-medium" style="color:${on ? '#2D5A8E' : 'var(--n-muted)'}">${escapeHtml(p.name)}</span>
+    </button>`;
+  }).join('');
+}
+window.selectPerson = function(id) { selectedPersonId = id; renderPersonRow(); };
+
+function renderPersonBreakdown() {
+  const persons = getPersons();
+  const wrap = document.getElementById('personBreakdownWrap');
+  const el = document.getElementById('personBreakdown');
+  if (!wrap || !el) return;
+  if (persons.length <= 1) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  const firstId = persons[0].id;
+  el.innerHTML = persons.map(p => {
+    const total = state.receipts
+      .filter(r => (r.personId || firstId) === p.id)
+      .reduce((s, r) => s + (Number(r.total) || 0), 0);
+    const count = state.receipts.filter(r => (r.personId || firstId) === p.id).length;
+    return `<div class="glass rounded-2xl p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-2xl">${p.emoji}</span>
+        <p class="text-xs font-medium truncate" style="color:var(--n-muted)">${escapeHtml(p.name)}</p>
+      </div>
+      <p class="text-xl font-bold" style="color:var(--n-text)">¥${fmt(total)}</p>
+      <p class="text-[10px] mt-0.5" style="color:var(--n-muted)">≈ HKD ${(total/state.rate).toFixed(0)} · ${count} 筆</p>
+    </div>`;
+  }).join('');
+}
+
+function renderPersonList() {
+  const el = document.getElementById('personList');
+  if (!el) return;
+  const persons = getPersons();
+  el.innerHTML = persons.map((p, i) => `
+    <div class="flex items-center justify-between py-1.5">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">${p.emoji}</span>
+        <span class="text-sm font-medium" style="color:var(--n-text)">${escapeHtml(p.name)}</span>
+      </div>
+      ${i === 0
+        ? '<span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">主要</span>'
+        : `<button onclick="removePerson('${p.id}')" class="text-[10px] px-2 py-0.5 rounded-full" style="color:#DC2626;background:#FEE2E2">移除</button>`}
+    </div>`).join('');
+}
+
+window.removePerson = function(id) {
+  if (!state.persons || state.persons.length <= 1) { toast('⚠️ 最少保留一位旅伴'); return; }
+  state.persons = state.persons.filter(p => p.id !== id);
+  const firstId = state.persons[0].id;
+  state.receipts.forEach(r => { if (r.personId === id) r.personId = firstId; });
+  saveState();
+  renderPersonList();
+  toast('已移除');
+};
+
+window.pickEmoji = function(e) {
+  selectedNewEmoji = e;
+  document.querySelectorAll('[id^="ep-"]').forEach(b => {
+    b.style.background = 'var(--n-bg)';
+    b.style.outline = '2px solid transparent';
+  });
+  const b = document.getElementById('ep-' + e);
+  if (b) { b.style.background = '#EEF3FA'; b.style.outline = '2px solid #2D5A8E'; }
+};
+
+// ============ LIVE EXCHANGE RATE ============
+async function fetchLiveRate() {
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/HKD');
+    const data = await r.json();
+    const rate = data?.rates?.JPY;
+    if (rate && rate > 0) {
+      state.rate = parseFloat(rate.toFixed(4));
+      saveState();
+      const el = document.getElementById('setRate');
+      if (el) el.value = state.rate;
+      const st = document.getElementById('rateStatus');
+      if (st) {
+        st.textContent = '✓ 已更新';
+        setTimeout(() => { st.textContent = '⟳ 每次入數自動更新'; }, 2000);
+      }
+    }
+  } catch(e) {
+    console.warn('匯率獲取失敗:', e);
+  }
+}
+
 // ============ RENDERING ============
 function renderHeader() {
   const today = todayHKT();
@@ -458,6 +640,16 @@ function renderDashboard() {
   $('todayCount').textContent = todayR.length;
   $('todayLocation').textContent = '📍 ' + (getCurrentDay().region || '');
 
+  // Daily budget alert (budget / 6 days)
+  const dailyBudget = Math.floor(state.budget / 6);
+  if (todayTotal > dailyBudget) {
+    $('dailyBudgetAmt').textContent = fmt(dailyBudget);
+    $('dailyOverAmt').textContent = fmt(todayTotal);
+    $('dailyAlert').classList.remove('hidden');
+  } else {
+    $('dailyAlert').classList.add('hidden');
+  }
+
   const total = state.receipts.reduce((s,r) => s + (Number(r.total)||0), 0);
   $('totalSpend').textContent = fmt(total);
   $('totalCount').textContent = state.receipts.length;
@@ -466,6 +658,8 @@ function renderDashboard() {
   const days = Math.max(1, dates.length);
   $('avgSpend').textContent = fmt(total / days);
   $('daysElapsed').textContent = days;
+
+  renderPersonBreakdown();
 
   // Today list
   const list = $('todayList');
@@ -481,17 +675,17 @@ function renderDashboard() {
     const rDay = state.receipts.filter(r => r.date === it.date);
     const dayTotal = rDay.reduce((s,r) => s + (Number(r.total)||0), 0);
     return `
-      <div class="glass rounded-2xl p-3 ${isToday ? 'ring-2 ring-orange-500' : ''}">
+      <div class="glass rounded-2xl p-3 ${isToday ? 'ring-2 ring-[#2D5A8E]' : ''}">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center font-bold text-orange-400">${it.day}</div>
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold" style="background:#EEF3FA;color:#2D5A8E">${it.day}</div>
             <div>
               <p class="text-sm font-medium">${it.region}</p>
               <p class="text-[10px] text-gray-500">${it.date} · ${it.highlight}</p>
             </div>
           </div>
           <div class="text-right">
-            <p class="text-sm font-bold ${dayTotal > 0 ? 'text-orange-400' : 'text-gray-600'}">¥${fmt(dayTotal)}</p>
+            <p class="text-sm font-bold ${dayTotal > 0 ? 'text-[#2D5A8E]' : 'text-[#C8CDD6]'}">¥${fmt(dayTotal)}</p>
             <p class="text-[10px] text-gray-500">${rDay.length} 筆</p>
           </div>
         </div>
@@ -502,6 +696,8 @@ function renderDashboard() {
 function receiptCard(r) {
   const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[6];
   const pay = PAYMENTS.find(p => p.id === r.payment) || PAYMENTS[0];
+  const persons = getPersons();
+  const person = persons.length > 1 ? (persons.find(p => p.id === r.personId) || persons[0]) : null;
   return `
     <div class="glass rounded-2xl p-3 flex items-center justify-between" onclick="editReceipt('${r.id}')">
       <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -512,8 +708,9 @@ function receiptCard(r) {
         </div>
       </div>
       <div class="text-right pl-2">
+        ${person ? `<span class="text-base">${person.emoji}</span>` : ''}
         <p class="text-base font-bold">¥${fmt(r.total)}</p>
-        <p class="text-[10px] text-gray-500">NT$${(r.total/4.85).toFixed(0)}</p>
+        <p class="text-[10px] text-gray-500">≈ HKD ${(r.total/state.rate).toFixed(0)}</p>
       </div>
     </div>`;
 }
@@ -541,7 +738,7 @@ function renderHistory() {
       <div class="mb-4">
         <div class="flex items-baseline justify-between mb-2 px-1">
           <span class="text-xs text-gray-400 font-medium">${date}</span>
-          <span class="text-xs text-orange-400 font-bold">¥${fmt(sum)}</span>
+          <span class="text-xs text-[#2D5A8E] font-bold">¥${fmt(sum)}</span>
         </div>
         <div class="space-y-2">${items.map(i => receiptCard(i)).join('')}</div>
       </div>`;
@@ -564,7 +761,7 @@ function renderStats() {
       labels: CATEGORIES.map(c => c.icon + ' ' + c.name),
       datasets: [{ data: CATEGORIES.map(c => cats[c.id]||0), backgroundColor: CATEGORIES.map(c => c.color), borderWidth: 0 }]
     },
-    options: { plugins: { legend: { position:'right', labels: { color:'#9ca3af', font:{ size:11 } } } }, cutout:'65%' }
+    options: { plugins: { legend: { position:'right', labels: { color:'#6B7285', font:{ size:11 } } } }, cutout:'65%' }
   });
 
   if (charts.pay) charts.pay.destroy();
@@ -574,7 +771,7 @@ function renderStats() {
       labels: PAYMENTS.map(p => p.name),
       datasets: [{ data: PAYMENTS.map(p => pays[p.id]||0), backgroundColor: PAYMENTS.map(p => p.color), borderWidth: 0 }]
     },
-    options: { plugins: { legend: { position:'right', labels: { color:'#9ca3af', font:{ size:11 } } } }, cutout:'65%' }
+    options: { plugins: { legend: { position:'right', labels: { color:'#6B7285', font:{ size:11 } } } }, cutout:'65%' }
   });
 
   const sortedDates = ITINERARY.map(i => i.date);
@@ -583,13 +780,13 @@ function renderStats() {
     type: 'bar',
     data: {
       labels: sortedDates.map(d => d.slice(5)),
-      datasets: [{ data: sortedDates.map(d => daily[d]||0), backgroundColor:'#f97316', borderRadius:6 }]
+      datasets: [{ data: sortedDates.map(d => daily[d]||0), backgroundColor:'#2D5A8E', borderRadius:6 }]
     },
     options: {
       plugins: { legend: { display:false } },
       scales: {
-        x: { ticks:{ color:'#9ca3af', font:{ size:10 } }, grid:{ display:false } },
-        y: { ticks:{ color:'#9ca3af', font:{ size:10 }, callback: v => '¥'+fmt(v) }, grid:{ color:'#ffffff10' } }
+        x: { ticks:{ color:'#6B7285', font:{ size:10 } }, grid:{ display:false } },
+        y: { ticks:{ color:'#6B7285', font:{ size:10 }, callback: v => '¥'+fmt(v) }, grid:{ color:'#E4E4DF' } }
       }
     }
   });
@@ -608,7 +805,7 @@ function renderStats() {
               <p class="text-sm font-medium truncate">${escapeHtml(r.store || '—')}</p>
               <p class="text-[10px] text-gray-500">${r.date}</p>
             </div>
-            <span class="text-sm font-bold text-orange-400">¥${fmt(r.total)}</span>
+            <span class="text-sm font-bold text-[#2D5A8E]">¥${fmt(r.total)}</span>
           </div>`;
       }).join('');
 }
@@ -618,7 +815,7 @@ async function scanReceipt(file) {
   $('previewArea').classList.remove('hidden');
   $('previewImg').src = URL.createObjectURL(file);
   $('scanStatus').innerHTML = `
-    <div class="inline-block w-8 h-8 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
+    <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
     <p class="text-sm text-gray-400 mt-2">AI 正在辨識收據…</p>`;
 
   try {
@@ -629,7 +826,7 @@ async function scanReceipt(file) {
   } catch (err) {
     console.error(err);
     $('scanStatus').innerHTML = `<p class="text-red-400 text-sm">❌ 錯誤：${escapeHtml(err.message)}</p>
-      <button onclick="openConfirmModal({},'')" class="mt-3 text-xs text-orange-400 underline">手動輸入</button>`;
+      <button onclick="openConfirmModal({},'')" class="mt-3 text-xs text-[#2D5A8E] underline">手動輸入</button>`;
   }
 }
 
@@ -836,14 +1033,15 @@ async function notionPullAll() {
 // ============ MODAL ============
 let editingId = null;
 function populateModalSelects() {
-  $('mCat').innerHTML = CATEGORIES.map(c => `<option value="${c.id}" class="bg-gray-900">${c.icon} ${c.name}</option>`).join('');
-  $('mPay').innerHTML = PAYMENTS.map(p => `<option value="${p.id}" class="bg-gray-900">${p.name}</option>`).join('');
-  $('filterCat').innerHTML = '<option value="" class="bg-gray-900">全部類別</option>' +
-    CATEGORIES.map(c => `<option value="${c.id}" class="bg-gray-900">${c.icon} ${c.name}</option>`).join('');
+  $('mCat').innerHTML = CATEGORIES.map(c => `<option value="${c.id}" class="bg-white text-[#1A1A2E]">${c.icon} ${c.name}</option>`).join('');
+  $('mPay').innerHTML = PAYMENTS.map(p => `<option value="${p.id}" class="bg-white text-[#1A1A2E]">${p.name}</option>`).join('');
+  $('filterCat').innerHTML = '<option value="" class="bg-white text-[#1A1A2E]">全部類別</option>' +
+    CATEGORIES.map(c => `<option value="${c.id}" class="bg-white text-[#1A1A2E]">${c.icon} ${c.name}</option>`).join('');
 }
 
 function openConfirmModal(data, base64) {
   editingId = null;
+  selectedPersonId = getPersons()[0].id;
   $('modalSubtitle').textContent = '請核對 AI 識別嘅資料';
   $('mStore').value = data.store || '';
   $('mTotal').value = data.total || '';
@@ -854,12 +1052,14 @@ function openConfirmModal(data, base64) {
   $('mItems').value = (data.items||[]).map(i => `${i.name} ¥${i.price}`).join('\n');
   $('mNote').value = data.note || '';
   $('confirmModal').classList.remove('hidden');
+  renderPersonRow();
 }
 
 function editReceipt(id) {
   const r = state.receipts.find(x => x.id === id);
   if (!r) return;
   editingId = id;
+  selectedPersonId = r.personId || getPersons()[0].id;
   $('modalSubtitle').textContent = '編輯紀錄';
   $('mStore').value = r.store || '';
   $('mTotal').value = r.total || '';
@@ -870,10 +1070,12 @@ function editReceipt(id) {
   $('mItems').value = r.itemsText || '';
   $('mNote').value = r.note || '';
   $('confirmModal').classList.remove('hidden');
+  renderPersonRow();
 }
 window.editReceipt = editReceipt;
 
-function saveModal() {
+async function saveModal() {
+  await fetchLiveRate();
   const r = {
     id: editingId || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2,7)),
     store: $('mStore').value.trim(),
@@ -884,6 +1086,7 @@ function saveModal() {
     region: $('mRegion').value.trim(),
     itemsText: $('mItems').value,
     note: $('mNote').value,
+    personId: selectedPersonId || getPersons()[0].id,
     createdAt: editingId ? (state.receipts.find(x=>x.id===editingId)?.createdAt || Date.now()) : Date.now(),
   };
   if (r.total <= 0) { toast('⚠️ 金額必須大過 0'); return; }
@@ -959,6 +1162,7 @@ function refresh() {
 
 function init() {
   loadState();
+  fetchLiveRate();
   populateModalSelects();
 
   // Settings inputs
@@ -989,6 +1193,39 @@ function init() {
     saveState();
     refresh();
     toast('✅ 設定已儲存');
+  });
+
+  // Person management
+  renderPersonList();
+  const emojiPicker = $('emojiPicker');
+  if (emojiPicker) {
+    emojiPicker.innerHTML = PERSON_EMOJIS.map(e =>
+      `<button type="button" onclick="pickEmoji('${e}')" id="ep-${e}"
+        class="text-xl w-9 h-9 rounded-xl flex items-center justify-center transition"
+        style="background:var(--n-bg)">${e}</button>`
+    ).join('');
+    // Pre-select first emoji
+    setTimeout(() => window.pickEmoji(PERSON_EMOJIS[0]), 0);
+  }
+  $('addPersonBtn')?.addEventListener('click', () => {
+    $('addPersonForm').classList.remove('hidden');
+    $('newPersonName').focus();
+  });
+  $('cancelAddPerson')?.addEventListener('click', () => {
+    $('addPersonForm').classList.add('hidden');
+    $('newPersonName').value = '';
+  });
+  $('confirmAddPerson')?.addEventListener('click', () => {
+    const name = $('newPersonName').value.trim();
+    if (!name) { toast('⚠️ 請輸入名字'); return; }
+    if (!state.persons) state.persons = [];
+    state.persons.push({ id: 'p_' + Date.now(), name, emoji: selectedNewEmoji, color: '#2D5A8E' });
+    saveState();
+    renderPersonList();
+    $('addPersonForm').classList.add('hidden');
+    $('newPersonName').value = '';
+    selectedNewEmoji = '🧔';
+    toast('✅ 已新增 ' + name);
   });
 
   // Notion sync buttons
