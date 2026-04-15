@@ -1112,9 +1112,10 @@ function renderStats() {
 }
 
 // ============ AI SCAN ============
+let lastScanBase64 = null, lastScanMime = 'image/jpeg';
+
 async function scanReceipt(file) {
   $('previewArea').classList.remove('hidden');
-  // Revoke any previous preview URL to avoid leaking memory
   const prevImg = $('previewImg');
   if (prevImg.src && prevImg.src.startsWith('blob:')) URL.revokeObjectURL(prevImg.src);
   prevImg.src = URL.createObjectURL(file);
@@ -1124,15 +1125,43 @@ async function scanReceipt(file) {
 
   try {
     const base64 = await fileToBase64(file);
-    const result = await callGemini(base64, file.type);
+    lastScanBase64 = base64;
+    lastScanMime = file.type || 'image/jpeg';
+    await runScanWithBase64(base64, file.type);
+  } catch (err) {
+    console.error(err);
+    showScanError(err.message);
+  }
+}
+
+async function runScanWithBase64(base64, mime) {
+  $('scanStatus').innerHTML = `
+    <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
+    <p class="text-sm mt-2" style="color:var(--n-muted)">AI 正在辨識收據…</p>`;
+  try {
+    const result = await callGemini(base64, mime || 'image/jpeg');
     $('scanStatus').innerHTML = '<p class="text-sm" style="color:#059669">✅ 辨識完成</p>';
     openConfirmModal(result, base64);
   } catch (err) {
     console.error(err);
-    $('scanStatus').innerHTML = `<p class="text-sm" style="color:#DC2626">❌ 錯誤：${escapeHtml(err.message)}</p>
-      <button onclick="openConfirmModal({},'')" class="mt-3 text-xs underline" style="color:var(--n-blue)">手動輸入</button>`;
+    showScanError(err.message);
   }
 }
+
+function showScanError(msg) {
+  $('scanStatus').innerHTML = `
+    <p class="text-sm font-medium mb-3" style="color:#DC2626">❌ 辨識失敗：${escapeHtml(msg)}</p>
+    <div class="flex gap-2 justify-center flex-wrap">
+      ${lastScanBase64 ? `<button onclick="retryLastScan()" class="px-4 py-2 rounded-xl text-sm font-medium text-white" style="background:var(--n-blue)">🔄 重試辨識</button>` : ''}
+      <button onclick="openConfirmModal({},'')" class="px-4 py-2 rounded-xl text-sm font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">✍️ 手動輸入</button>
+    </div>`;
+}
+
+function retryLastScan() {
+  if (!lastScanBase64) return;
+  runScanWithBase64(lastScanBase64, lastScanMime);
+}
+window.retryLastScan = retryLastScan;
 
 function fileToBase64(file) {
   return new Promise((res, rej) => {
@@ -1253,7 +1282,7 @@ const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。分析呢張日
   "date": "YYYY-MM-DD 格式",
   "category": "transport|food|shopping|lodging|ticket|medicine|other 之一",
   "payment": "cash|credit|paypay|suica 之一",
-  "items": [ { "name": "品項繁中翻譯（簡短）", "price": 金額 } ],
+  "items": [ { "name": "品項繁中翻譯（簡短）", "name_jp": "日本語原文（直接從收據抄）", "price": 金額純數字 } ],
   "note": "額外重要資訊（例如付款卡尾四碼、優惠），無即留空"
 }
 
@@ -1557,7 +1586,11 @@ function openConfirmModal(data, base64) {
   $('mCat').value = validCats.includes(aiCat) ? aiCat : 'other';
   $('mPay').value = validPays.includes(aiPay) ? aiPay : 'cash';
   $('mRegion').value = getRegionForDate(cleanDate);
-  $('mItems').value = (data.items||[]).map(i => `${i.name} ¥${i.price}`).join('\n');
+  $('mItems').value = (data.items||[]).map(i => {
+    const jp = i.name_jp ? ` (${i.name_jp})` : '';
+    const hkd = (state.rate > 0 && i.price) ? ` (HKD ${Math.round(i.price / state.rate)})` : '';
+    return `${i.name}${jp} ¥${i.price}${hkd}`;
+  }).join('\n');
   $('mNote').value = data.note || '';
   pendingTax = data.tax || null;
   pendingSubtotal = data.subtotal || null;
