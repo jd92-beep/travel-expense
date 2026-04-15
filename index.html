@@ -60,10 +60,14 @@
       style="width:100%;padding:14px 16px;border:1px solid var(--n-border);border-radius:10px;font-size:18px;text-align:center;letter-spacing:4px;outline:none;background:var(--n-bg);color:var(--n-text)">
     <p id="lockError" style="color:#DC2626;font-size:13px;text-align:center;margin-top:12px;min-height:18px"></p>
     <button id="lockBtn" style="width:100%;padding:14px;margin-top:8px;background:var(--n-blue);color:white;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">解鎖</button>
-    <p style="font-size:11px;color:#9CA3AF;text-align:center;margin-top:16px">解鎖後此裝置會被記住，唔使再輸入</p>
+    <button id="skipLockBtn" style="width:100%;padding:10px;margin-top:8px;background:transparent;color:#9CA3AF;border:none;font-size:11px;cursor:pointer">跳過解鎖（手動輸入 API key）</button>
+    <p style="font-size:11px;color:#9CA3AF;text-align:center;margin-top:12px">解鎖後此裝置會被記住，唔使再輸入</p>
   </div>
 </div>
 
+
+<!-- Offline indicator -->
+<div id="offlineBar" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:45;background:#FEF3C7;color:#92400E;text-align:center;padding:6px;font-size:12px;font-weight:500">📡 離線模式 — 資料儲存喺本機</div>
 
 <!-- ============ HEADER ============ -->
 <header class="sticky top-0 z-40 px-5 pt-6 pb-4" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
@@ -885,10 +889,13 @@ function renderStats() {
 // ============ AI SCAN ============
 async function scanReceipt(file) {
   $('previewArea').classList.remove('hidden');
-  $('previewImg').src = URL.createObjectURL(file);
+  // Revoke any previous preview URL to avoid leaking memory
+  const prevImg = $('previewImg');
+  if (prevImg.src && prevImg.src.startsWith('blob:')) URL.revokeObjectURL(prevImg.src);
+  prevImg.src = URL.createObjectURL(file);
   $('scanStatus').innerHTML = `
     <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
-    <p class="text-sm text-gray-400 mt-2">AI 正在辨識收據…</p>`;
+    <p class="text-sm mt-2" style="color:var(--n-muted)">AI 正在辨識收據…</p>`;
 
   try {
     const base64 = await fileToBase64(file);
@@ -911,12 +918,9 @@ function fileToBase64(file) {
   });
 }
 
-async function callGemini(base64, mime) {
-  const apiKey = state.apiKey || DEFAULT_API_KEY;
-  if (!apiKey) throw new Error('未設定 API key');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${state.model}:generateContent?key=${apiKey}`;
+const FALLBACK_MODEL = 'gemini-3-flash-preview';
 
-  const prompt = `你係一個專業日本收據辨識 AI。分析呢張日本收據圖片，提取以下資料並用繁體中文回覆 JSON 格式：
+const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。分析呢張日本收據圖片，提取以下資料並用繁體中文回覆 JSON 格式：
 
 {
   "store": "店名（翻譯成繁體中文，如有原日文亦可保留）",
@@ -924,9 +928,7 @@ async function callGemini(base64, mime) {
   "date": "YYYY-MM-DD",
   "category": "transport|food|shopping|lodging|ticket|medicine|other 之一",
   "payment": "cash|credit|paypay|suica 之一（如收據顯示）",
-  "items": [
-    { "name": "品項名稱（繁中翻譯）", "price": 金額 }
-  ],
+  "items": [ { "name": "品項名稱（繁中翻譯）", "price": 金額 } ],
   "tax": 稅金金額,
   "note": "任何重要備註"
 }
@@ -942,16 +944,12 @@ async function callGemini(base64, mime) {
 
 只回覆 JSON，唔好有任何其他文字或 markdown。`;
 
+async function callGeminiWithModel(base64, mime, model, apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const body = {
-    contents: [{
-      parts: [
-        { text: prompt },
-        { inline_data: { mime_type: mime, data: base64 } }
-      ]
-    }],
+    contents: [{ parts: [ { text: GEMINI_PROMPT }, { inline_data: { mime_type: mime, data: base64 } } ] }],
     generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
   };
-
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -959,7 +957,14 @@ async function callGemini(base64, mime) {
   });
   if (!r.ok) {
     const t = await r.text();
-    throw new Error(`API ${r.status}: ${t.slice(0,200)}`);
+    let msg = `${r.status}`;
+    try {
+      const j = JSON.parse(t);
+      msg = `${r.status} ${j.error?.message?.slice(0,120) || ''}`;
+    } catch(_) { msg = `${r.status}: ${t.slice(0,120)}`; }
+    const err = new Error(msg);
+    err.status = r.status;
+    throw err;
   }
   const data = await r.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -970,6 +975,33 @@ async function callGemini(base64, mime) {
     const m = text.match(/\{[\s\S]*\}/);
     if (m) return JSON.parse(m[0]);
     throw new Error('JSON parse 失敗');
+  }
+}
+
+// Transient errors where fallback makes sense: model not found, quota, server errors, rate limits
+function shouldFallback(err) {
+  const s = err.status;
+  return s === 404 || s === 429 || s === 500 || s === 503 || /not found|unavailable|overload|quota/i.test(err.message || '');
+}
+
+async function callGemini(base64, mime) {
+  const apiKey = state.apiKey || DEFAULT_API_KEY;
+  if (!apiKey) throw new Error('未設定 API key — 請喺設定入面輸入');
+  const primary = state.model || 'gemini-3.1-pro-preview';
+  try {
+    return await callGeminiWithModel(base64, mime, primary, apiKey);
+  } catch (err) {
+    console.warn(`[Gemini] 主模型 ${primary} 失敗: ${err.message}`);
+    if (primary !== FALLBACK_MODEL && shouldFallback(err)) {
+      toast(`⚠️ ${primary} 失敗，改用 Flash`);
+      try {
+        return await callGeminiWithModel(base64, mime, FALLBACK_MODEL, apiKey);
+      } catch (err2) {
+        console.error(`[Gemini] Fallback ${FALLBACK_MODEL} 亦失敗: ${err2.message}`);
+        throw new Error(`主/備 model 都失敗：${err2.message}`);
+      }
+    }
+    throw err;
   }
 }
 
@@ -1399,6 +1431,14 @@ function init() {
 
   // Refresh header every minute
   setInterval(renderHeader, 60000);
+
+  // Online/offline detection
+  const updateOnline = () => {
+    $('offlineBar').classList.toggle('hidden', navigator.onLine);
+  };
+  window.addEventListener('online', updateOnline);
+  window.addEventListener('offline', updateOnline);
+  updateOnline();
 }
 
 // ========== GATE: unlock vault before init ==========
@@ -1458,6 +1498,15 @@ async function gateAndInit() {
 
   btn.addEventListener('click', tryUnlock);
   pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+
+  // Escape hatch: proceed without vault (user enters API key manually in Settings)
+  document.getElementById('skipLockBtn')?.addEventListener('click', () => {
+    if (!confirm('跳過後你要自己喺設定輸入 API key。繼續？')) return;
+    localStorage.setItem('vault_unlocked', '0'); // marker: skipped
+    lock.style.display = 'none';
+    [...document.body.children].forEach(el => { if (el.id !== 'lockScreen') el.style.display = ''; });
+    init();
+  });
 }
 
 gateAndInit();
