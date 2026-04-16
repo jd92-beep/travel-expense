@@ -388,10 +388,10 @@
 
     <div class="glass rounded-2xl p-4 mb-3">
       <div class="flex items-center justify-between">
-        <label class="text-xs text-gray-400 uppercase tracking-wider">匯率 (1 HKD = ? JPY)</label>
+        <label class="text-xs text-gray-400 uppercase tracking-wider">匯率 (100 JPY ≈ ? HKD)</label>
         <span id="rateStatus" class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">⟳ 每次入數自動更新</span>
       </div>
-      <input type="number" id="setRate" class="w-full bg-transparent text-2xl font-bold mt-1 focus:outline-none" value="20.36" step="0.01">
+      <input type="number" id="setRate" class="w-full bg-transparent text-2xl font-bold mt-1 focus:outline-none" value="4.91" step="0.0001">
       <p id="rateReverse" class="text-[11px] mt-1" style="color:var(--n-muted)"></p>
     </div>
 
@@ -948,9 +948,9 @@ async function fetchLiveRate(force = false) {
       state.rateFetchedAt = now;
       saveState();
       const el = document.getElementById('setRate');
-      if (el) el.value = state.rate;
+      if (el) el.value = (100 / state.rate).toFixed(4);
       const rv = document.getElementById('rateReverse');
-      if (rv) rv.textContent = `100 JPY ≈ HKD ${(100 / state.rate).toFixed(2)}`;
+      if (rv) rv.textContent = `1 HKD = ${state.rate.toFixed(2)} JPY`;
       const st = document.getElementById('rateStatus');
       if (st) {
         st.textContent = '✓ 已更新 ' + new Date().toLocaleTimeString('zh-HK', {hour:'2-digit',minute:'2-digit'});
@@ -2021,7 +2021,7 @@ function init() {
 
   // Settings inputs
   $('setBudget').value = state.budget;
-  $('setRate').value = state.rate;
+  $('setRate').value = (100 / state.rate).toFixed(4);
   renderModelCards();
   $('setNotionDb').value = state.notionDb || '';
   $('setProxy').value = state.proxy || 'https://corsproxy.io/?';
@@ -2042,22 +2042,23 @@ function init() {
   } else {
     $('setNotionToken').value = state.notionToken || '';
   }
-  $('setBudget').addEventListener('input', () => {
-    $('setBudgetHKD').textContent = ($('setBudget').value / ($('setRate').value || 20.36)).toFixed(0);
-  });
+  function hkdPer100jpy() { return parseFloat($('setRate').value) || 4.91; }
+  function jpyPerHkd()    { return 100 / hkdPer100jpy(); }
   function updateRateReverse() {
-    const r = parseFloat($('setRate').value) || 20.36;
-    const hkd = (100 / r).toFixed(2);
-    $('rateReverse').textContent = `100 JPY ≈ HKD ${hkd}`;
+    $('rateReverse').textContent = `1 HKD = ${jpyPerHkd().toFixed(2)} JPY`;
+  }
+  function updateBudgetHKD() {
+    // budget is in JPY; convert to HKD: budget * (HKD per 100 JPY) / 100
+    $('setBudgetHKD').textContent = ($('setBudget').value * hkdPer100jpy() / 100).toFixed(0);
   }
   updateRateReverse();
-  $('setRate').addEventListener('input', () => {
-    $('setBudgetHKD').textContent = ($('setBudget').value / ($('setRate').value || 20.36)).toFixed(0);
-    updateRateReverse();
-  });
+  updateBudgetHKD();
+  $('setBudget').addEventListener('input', updateBudgetHKD);
+  $('setRate').addEventListener('input', () => { updateBudgetHKD(); updateRateReverse(); });
   $('saveSettings').addEventListener('click', () => {
     state.budget = Number($('setBudget').value) || 101800;
-    state.rate = Number($('setRate').value) || 20.36;
+    const displayedHkdPer100 = parseFloat($('setRate').value) || 4.91;
+    state.rate = parseFloat((100 / displayedHkdPer100).toFixed(4));
     // state.model is saved instantly via switchModel() — no need to read from form
     // Only save credential fields if they're NOT vault-locked
     if (!$('setNotionToken').disabled) state.notionToken = $('setNotionToken').value.trim();
