@@ -400,11 +400,17 @@
 
     <div class="glass rounded-2xl p-4 mb-3">
       <div class="flex items-center justify-between mb-1">
-        <label class="text-xs text-gray-400 uppercase tracking-wider">AI 模型</label>
+        <label class="text-xs text-gray-400 uppercase tracking-wider">📸 收據掃描模型</label>
         <span id="lastScanBadge" class="text-[10px] px-2 py-0.5 rounded-full font-medium hidden" style="background:#D1FAE5;color:#065F46"></span>
       </div>
-      <p class="text-[10px] mb-3" style="color:var(--n-muted)">📸 掃描鏈：GLM-4.6V → MiniMax → <strong>選定模型</strong> → Flash（自動 fallback）<br>🎤 語音輸入：直接使用<strong>選定模型</strong>解析</p>
-      <div id="modelCards" class="grid grid-cols-2 gap-2"></div>
+      <p class="text-[10px] mb-3" style="color:var(--n-muted)">掃描鏈：GLM-4.6V → MiniMax → <strong>選定模型</strong> → Flash（自動 fallback）</p>
+      <div id="scanModelCards" class="grid grid-cols-2 gap-2"></div>
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs text-gray-400 uppercase tracking-wider mb-3 block">🎤 語音解析模型</label>
+      <p class="text-[10px] mb-3" style="color:var(--n-muted)">語音輸入後，由選定模型解析廣東話並填寫欄位</p>
+      <div id="voiceModelCards" class="grid grid-cols-2 gap-2"></div>
     </div>
 
     <!-- ============ NOTION SYNC ============ -->
@@ -414,29 +420,6 @@
       <span class="text-xs px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
     </summary>
     <p class="text-xs mb-3 px-1" style="color:var(--n-muted)">⚠️ 唔設定都可以正常使用，資料會儲喺本機。</p>
-
-    <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs text-gray-400 uppercase tracking-wider">Notion Integration Token</label>
-      <input type="password" id="setNotionToken" class="w-full bg-transparent text-sm font-mono mt-1 focus:outline-none" placeholder="ntn_... 或 secret_...">
-      <p class="text-[10px] text-gray-500 mt-1">notion.so/my-integrations 建立</p>
-    </div>
-
-    <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs text-gray-400 uppercase tracking-wider">Database ID</label>
-      <input type="text" id="setNotionDb" class="w-full bg-transparent text-sm font-mono mt-1 focus:outline-none" placeholder="32 字元 ID（URL 中間嘅一段）">
-    </div>
-
-    <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs text-gray-400 uppercase tracking-wider">CORS Proxy（瀏覽器需要）</label>
-      <input type="text" id="setProxy" class="w-full bg-transparent text-sm font-mono mt-1 focus:outline-none" value="https://corsproxy.io/?">
-      <p class="text-[10px] text-gray-500 mt-1">預設用 corsproxy.io；想自己部署 Cloudflare Worker 可以換</p>
-    </div>
-
-    <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs text-gray-400 uppercase tracking-wider">📷 imgbb API Key（收據相片上傳）</label>
-      <input type="text" id="setImgbbKey" class="w-full bg-transparent text-sm font-mono mt-1 focus:outline-none" placeholder="從 api.imgbb.com 免費申請">
-      <p class="text-[10px] mt-1" style="color:var(--n-muted)">設定後掃描收據時自動上傳相片到 Notion 頁面</p>
-    </div>
 
     <div class="glass rounded-2xl p-4 mb-3">
       <label class="flex items-center justify-between cursor-pointer">
@@ -620,13 +603,19 @@ const PAYMENTS = [
   { id:'suica', name:'Suica', color:'#a78bfa' },
 ];
 const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
-const GEMINI_MODELS = [
+const SCAN_MODELS = [
   { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live', sub: 'Preview · Live · 最新', tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',        tag: '⭐', color: '#E04040' },
   { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',        tag: '🔵', color: '#2D5A8E' },
   { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',          tag: '⚡', color: '#F5A623' },
   { id: 'gemini-2.5-pro',               name: 'Gemini 2.5 Pro',        sub: '穩定版',                tag: '🟢', color: '#059669' },
   { id: 'gemini-2.0-flash',             name: 'Gemini 2.0 Flash',      sub: '輕量 · 最快',           tag: '🚀', color: '#7C3AED' },
+];
+const VOICE_MODELS = [
+  { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 廣東話優化',     tag: '🟣', color: '#7C3AED' },
+  { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live', sub: 'Preview · Live · 最新', tag: '🔴', color: '#CC2929' },
+  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',        tag: '⭐', color: '#E04040' },
+  { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',          tag: '⚡', color: '#F5A623' },
 ];
 // Boss 嘅名古屋行程 (HKT 日期) — 每日詳細 spots
 const ITINERARY = [
@@ -714,6 +703,8 @@ let state = {
   rate: 20.36,
   apiKey: DEFAULT_API_KEY,
   model: 'gemini-3.1-flash-live-preview',
+  scanModel: 'gemini-3.1-flash-live-preview',
+  voiceModel: 'glm-4-flash',
   notionToken: DEFAULT_NOTION_TOKEN,
   notionDb: '',
   proxy: 'https://corsproxy.io/?',
@@ -887,43 +878,106 @@ window.removePerson = function(id) {
   toast('已移除');
 };
 
-function renderModelCards() {
-  const el = document.getElementById('modelCards');
-  if (!el) return;
-  const cur = state.model || 'gemini-3.1-flash-live-preview';
-  el.innerHTML = GEMINI_MODELS.map(m => {
-    const on = cur === m.id;
-    return `<button type="button" onclick="switchModel('${m.id}')"
-      class="text-left rounded-2xl p-3 transition-all"
-      style="${on
-        ? `background:${m.color}15;outline:2px solid ${m.color}`
-        : 'background:var(--n-bg);outline:2px solid var(--n-border)'}">
-      <div class="flex items-center gap-1.5 mb-0.5">
-        <span class="text-base">${m.tag}</span>
-        <span class="text-[11px] font-bold truncate" style="color:${on ? m.color : 'var(--n-text)'}">${m.name}</span>
-        ${on ? `<span class="ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full" style="background:${m.color};color:#fff">用緊</span>` : ''}
-      </div>
-      <p class="text-[9px]" style="color:var(--n-muted)">${m.sub}</p>
-    </button>`;
-  }).join('');
+// Per-model connection status (transient, not persisted)
+let modelTestStatus = {};
 
+async function testModelConnection(modelId) {
+  const apiKey = state.apiKey || DEFAULT_API_KEY;
+  try {
+    if (modelId === 'glm-4-flash') {
+      if (!VAULT_ZAI_KEY) return { ok: false, msg: 'vault 未解鎖' };
+      const r = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'glm-4-flash', messages: [{ role: 'user', content: 'hi' }], stream: false, max_tokens: 5 })
+      });
+      return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
+    } else {
+      if (!apiKey) return { ok: false, msg: 'API key 未設定' };
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: 'hi' }] }], generationConfig: { maxOutputTokens: 5 } })
+      });
+      return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
+    }
+  } catch(e) {
+    return { ok: false, msg: '❌ ' + (e.message || '網絡錯誤').slice(0, 40) };
+  }
+}
+
+function buildModelCard(m, isSelected, type) {
+  const status = modelTestStatus[m.id];
+  const statusHtml = status
+    ? `<span class="text-[8px] mt-0.5 block" style="color:${status.ok ? '#059669' : '#e23b4a'}">${status.msg}</span>`
+    : '';
+  return `<button type="button" onclick="switchModel_${type}('${m.id}')"
+    class="text-left rounded-2xl p-3 transition-all"
+    style="${isSelected
+      ? `background:${m.color}15;outline:2px solid ${m.color}`
+      : 'background:var(--n-bg);outline:2px solid var(--n-border)'}">
+    <div class="flex items-center gap-1.5 mb-0.5">
+      <span class="text-base">${m.tag}</span>
+      <span class="text-[11px] font-bold truncate" style="color:${isSelected ? m.color : 'var(--n-text)'}">${m.name}</span>
+      ${isSelected ? `<span class="ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full" style="background:${m.color};color:#fff">用緊</span>` : ''}
+    </div>
+    <p class="text-[9px]" style="color:var(--n-muted)">${m.sub}</p>
+    ${statusHtml}
+  </button>`;
+}
+
+function renderScanModelCards() {
+  const el = document.getElementById('scanModelCards');
+  if (!el) return;
+  const cur = state.scanModel || state.model || 'gemini-3.1-flash-live-preview';
+  el.innerHTML = SCAN_MODELS.map(m => buildModelCard(m, cur === m.id, 'scan')).join('');
   // Last scan badge
   const badge = document.getElementById('lastScanBadge');
   if (badge) {
     if (state.lastScanModel) {
       badge.textContent = '✅ 上次: ' + state.lastScanModel;
       badge.classList.remove('hidden');
-    } else {
-      badge.classList.add('hidden');
-    }
+    } else { badge.classList.add('hidden'); }
   }
 }
-window.switchModel = function(id) {
-  state.model = id;
+
+function renderVoiceModelCards() {
+  const el = document.getElementById('voiceModelCards');
+  if (!el) return;
+  const cur = state.voiceModel || 'glm-4-flash';
+  el.innerHTML = VOICE_MODELS.map(m => buildModelCard(m, cur === m.id, 'voice')).join('');
+}
+
+function renderModelCards() {
+  renderScanModelCards();
+  renderVoiceModelCards();
+}
+
+window.switchModel_scan = async function(id) {
+  state.scanModel = id;
+  state.model = id; // backward compat
   saveState();
-  renderModelCards();
-  toast('✅ 已切換至 ' + (GEMINI_MODELS.find(m => m.id === id)?.name || id));
+  renderScanModelCards();
+  toast('📸 掃描模型: ' + (SCAN_MODELS.find(m => m.id === id)?.name || id));
+  modelTestStatus[id] = { ok: null, msg: '測試中…' };
+  renderScanModelCards();
+  modelTestStatus[id] = await testModelConnection(id);
+  renderScanModelCards();
 };
+
+window.switchModel_voice = async function(id) {
+  state.voiceModel = id;
+  saveState();
+  renderVoiceModelCards();
+  toast('🎤 語音模型: ' + (VOICE_MODELS.find(m => m.id === id)?.name || id));
+  modelTestStatus[id] = { ok: null, msg: '測試中…' };
+  renderVoiceModelCards();
+  modelTestStatus[id] = await testModelConnection(id);
+  renderVoiceModelCards();
+};
+
+// Legacy alias (used in callGemini after scan)
+window.switchModel = window.switchModel_scan;
 
 window.pickEmoji = function(e) {
   selectedNewEmoji = e;
@@ -1449,7 +1503,8 @@ function stopVoiceInput() {
 }
 
 async function parseVoiceExpense(transcript) {
-  toast('🎤 解析中… ' + (VAULT_ZAI_KEY ? 'GLM-4-Flash' : (state.model || 'Gemini')));
+  const voicePrimary = state.voiceModel || 'glm-4-flash';
+  toast('🎤 解析中… ' + (VOICE_MODELS.find(m => m.id === voicePrimary)?.name || voicePrimary));
   const today = todayHKT();
   const prompt = `你係旅行記帳 AI。用戶用廣東話講咗：「${transcript}」
 
@@ -1529,25 +1584,39 @@ async function parseVoiceExpense(transcript) {
 
   let parsed = null;
   let lastErr = null;
-  // Phase 1: GLM-4-Flash (best at Cantonese, always has key from vault)
-  try {
-    parsed = await tryGLM(prompt);
-    console.info('[Voice] ✅ GLM-4-Flash 成功');
-    toast('✅ 語音解析完成 (GLM-4-Flash)');
-  } catch(e) {
-    console.warn('[Voice] ❌ GLM-4-Flash 失敗:', e.message);
-    lastErr = e;
-  }
-  // Phase 2: Gemini fallback (only if API key exists)
-  if (!parsed && apiKey) {
-    const geminiModels = [state.model || 'gemini-3.1-flash-live-preview', 'gemini-3-flash-preview'];
-    for (const m of geminiModels) {
+  const voicePrimaryModel = state.voiceModel || 'glm-4-flash';
+
+  if (voicePrimaryModel === 'glm-4-flash') {
+    // GLM primary → Gemini fallback
+    try {
+      parsed = await tryGLM(prompt);
+      console.info('[Voice] ✅ GLM-4-Flash 成功');
+      toast('✅ 語音解析完成 (GLM-4-Flash)');
+    } catch(e) {
+      console.warn('[Voice] ❌ GLM-4-Flash 失敗:', e.message);
+      lastErr = e;
+    }
+    if (!parsed && apiKey) {
+      const geminiModels = ['gemini-3.1-flash-live-preview', 'gemini-3-flash-preview'];
+      for (const m of geminiModels) {
+        try { parsed = await tryGemini(prompt, m); if (parsed) { toast('✅ 語音解析完成 (' + m + ')'); break; } } catch(e) { console.warn(`[Voice] ❌ ${m} 失敗: ${e.message}`); lastErr = e; }
+      }
+    }
+  } else {
+    // Gemini primary → GLM fallback
+    try {
+      parsed = await tryGemini(prompt, voicePrimaryModel);
+      if (parsed) { console.info(`[Voice] ✅ ${voicePrimaryModel} 成功`); toast('✅ 語音解析完成 (' + voicePrimaryModel + ')'); }
+    } catch(e) { console.warn(`[Voice] ❌ ${voicePrimaryModel} 失敗:`, e.message); lastErr = e; }
+    if (!parsed) {
       try {
-        parsed = await tryGemini(prompt, m);
-        console.info(`[Voice] ✅ ${m} 成功`);
-        toast('✅ 語音解析完成 (' + m + ')');
-        break;
-      } catch(e) { console.warn(`[Voice] ❌ ${m} 失敗: ${e.message}`); lastErr = e; }
+        parsed = await tryGLM(prompt);
+        if (parsed) { console.info('[Voice] ✅ GLM-4-Flash 成功'); toast('✅ 語音解析完成 (GLM-4-Flash)'); }
+      } catch(e) { console.warn('[Voice] ❌ GLM-4-Flash 失敗:', e.message); lastErr = e; }
+    }
+    // Last resort: flash
+    if (!parsed && apiKey && voicePrimaryModel !== 'gemini-3-flash-preview') {
+      try { parsed = await tryGemini(prompt, 'gemini-3-flash-preview'); } catch(e) { lastErr = e; }
     }
   }
 
@@ -1677,7 +1746,7 @@ async function callGeminiWithModel(base64, mime, model, apiKey) {
 // ── Main OCR entry point: 4-model sequential fallback ────────────────────────
 async function callGemini(base64, mime) {
   const geminiKey = state.apiKey || DEFAULT_API_KEY;
-  const primaryModel = state.model || 'gemini-3.1-pro-preview';
+  const primaryModel = state.scanModel || state.model || 'gemini-3.1-pro-preview';
   // Flash as last-resort fallback (skip if user already selected flash as primary)
   const flashModel = 'gemini-3-flash-preview';
   const chain = [
@@ -2189,25 +2258,9 @@ function init() {
   $('setBudget').value = state.budget;
   $('setRate').value = (100 / state.rate).toFixed(4);
   renderModelCards();
-  $('setNotionDb').value = state.notionDb || '';
-  $('setProxy').value = state.proxy || 'https://corsproxy.io/?';
-  $('setImgbbKey').value = state.imgbbKey || '';
   $('setAutoSync').checked = !!state.autoSync;
   $('setBudgetHKD').textContent = (state.budget / state.rate).toFixed(0);
 
-  // VAULT MODE: when unlocked from vault, hide sensitive credentials from UI to
-  // (a) stop them leaking to anyone with the device and (b) avoid clobbering the vault on Save.
-  const vaultActive = localStorage.getItem('vault_unlocked') === '1' && state.apiKey;
-  if (vaultActive) {
-    $('setNotionToken').value = state.notionToken ? '••••••••  已鎖定喺密碼保險箱' : '';
-    if (state.notionToken) {
-      $('setNotionToken').disabled = true;
-      $('setNotionToken').type = 'text';
-      $('setNotionToken').style.color = '#9CA3AF';
-    }
-  } else {
-    $('setNotionToken').value = state.notionToken || '';
-  }
   function hkdPer100jpy() { return parseFloat($('setRate').value) || 4.91; }
   function jpyPerHkd()    { return 100 / hkdPer100jpy(); }
   function updateRateReverse() {
@@ -2225,14 +2278,7 @@ function init() {
     state.budget = Number($('setBudget').value) || 101800;
     const displayedHkdPer100 = parseFloat($('setRate').value) || 4.91;
     state.rate = parseFloat((100 / displayedHkdPer100).toFixed(4));
-    // state.model is saved instantly via switchModel() — no need to read from form
-    // Only save credential fields if they're NOT vault-locked
-    if (!$('setNotionToken').disabled) state.notionToken = $('setNotionToken').value.trim();
-    // Accept URL, UUID w/ dashes, or raw 32-char ID — extract the 32 hex chars
-    const rawDb = $('setNotionDb').value.trim().replace(/-/g, '');
-    state.notionDb = rawDb.match(/[0-9a-f]{32}/i)?.[0] || '';
-    state.proxy = $('setProxy').value.trim();
-    state.imgbbKey = $('setImgbbKey').value.trim();
+    // state.model / scanModel / voiceModel saved instantly via switchModel_scan/voice()
     state.autoSync = $('setAutoSync').checked;
     saveState();
     refresh();
