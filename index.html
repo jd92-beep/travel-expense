@@ -401,14 +401,12 @@
     </div>
 
     <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs text-gray-400 uppercase tracking-wider">AI 模型</label>
-      <select id="setModel" class="w-full bg-transparent text-sm font-medium mt-1 focus:outline-none">
-        <option value="gemini-3.1-pro-preview" class="bg-white text-[#1A1A2E]">Gemini 3.1 Pro Preview ⭐</option>
-        <option value="gemini-3-pro-preview" class="bg-white text-[#1A1A2E]">Gemini 3 Pro Preview</option>
-        <option value="gemini-3-flash-preview" class="bg-white text-[#1A1A2E]">Gemini 3 Flash Preview</option>
-        <option value="gemini-2.5-pro" class="bg-white text-[#1A1A2E]">Gemini 2.5 Pro</option>
-        <option value="gemini-2.0-flash" class="bg-white text-[#1A1A2E]">Gemini 2.0 Flash</option>
-      </select>
+      <div class="flex items-center justify-between mb-1">
+        <label class="text-xs text-gray-400 uppercase tracking-wider">Gemini 主力模型</label>
+        <span id="lastScanBadge" class="text-[10px] px-2 py-0.5 rounded-full font-medium hidden" style="background:#D1FAE5;color:#065F46"></span>
+      </div>
+      <p class="text-[10px] mb-3" style="color:var(--n-muted)">掃描鏈：GLM-4.6V → MiniMax → <strong>選定模型</strong> → Flash（自動 fallback）</p>
+      <div id="modelCards" class="grid grid-cols-2 gap-2"></div>
     </div>
 
     <!-- ============ NOTION SYNC ============ -->
@@ -622,6 +620,13 @@ const PAYMENTS = [
   { id:'suica', name:'Suica', color:'#a78bfa' },
 ];
 const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
+const GEMINI_MODELS = [
+  { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', sub: 'Preview · 最新旗艦', tag: '⭐', color: '#CC2929' },
+  { id: 'gemini-3-pro-preview',   name: 'Gemini 3 Pro',   sub: 'Preview · 穩定',     tag: '🔵', color: '#2D5A8E' },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', sub: 'Preview · 快',        tag: '⚡', color: '#F5A623' },
+  { id: 'gemini-2.5-pro',         name: 'Gemini 2.5 Pro', sub: '穩定版',              tag: '🟢', color: '#059669' },
+  { id: 'gemini-2.0-flash',       name: 'Gemini 2.0 Flash',sub:'輕量 · 最快',         tag: '🚀', color: '#7C3AED' },
+];
 // Boss 嘅名古屋行程 (HKT 日期) — 每日詳細 spots
 const ITINERARY = [
   { date:'2026-04-20', day:1, region:'名古屋市區', highlight:'抵達 + 蓬萊軒鰻魚飯', spots:[
@@ -879,6 +884,44 @@ window.removePerson = function(id) {
   saveState();
   renderPersonList();
   toast('已移除');
+};
+
+function renderModelCards() {
+  const el = document.getElementById('modelCards');
+  if (!el) return;
+  const cur = state.model || 'gemini-3.1-pro-preview';
+  el.innerHTML = GEMINI_MODELS.map(m => {
+    const on = cur === m.id;
+    return `<button type="button" onclick="switchModel('${m.id}')"
+      class="text-left rounded-2xl p-3 transition-all"
+      style="${on
+        ? `background:${m.color}15;outline:2px solid ${m.color}`
+        : 'background:var(--n-bg);outline:2px solid var(--n-border)'}">
+      <div class="flex items-center gap-1.5 mb-0.5">
+        <span class="text-base">${m.tag}</span>
+        <span class="text-[11px] font-bold truncate" style="color:${on ? m.color : 'var(--n-text)'}">${m.name}</span>
+        ${on ? `<span class="ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full" style="background:${m.color};color:#fff">用緊</span>` : ''}
+      </div>
+      <p class="text-[9px]" style="color:var(--n-muted)">${m.sub}</p>
+    </button>`;
+  }).join('');
+
+  // Last scan badge
+  const badge = document.getElementById('lastScanBadge');
+  if (badge) {
+    if (state.lastScanModel) {
+      badge.textContent = '✅ 上次: ' + state.lastScanModel;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+}
+window.switchModel = function(id) {
+  state.model = id;
+  saveState();
+  renderModelCards();
+  toast('✅ 已切換至 ' + (GEMINI_MODELS.find(m => m.id === id)?.name || id));
 };
 
 window.pickEmoji = function(e) {
@@ -1526,17 +1569,26 @@ async function callGeminiWithModel(base64, mime, model, apiKey) {
 // ── Main OCR entry point: 4-model sequential fallback ────────────────────────
 async function callGemini(base64, mime) {
   const geminiKey = state.apiKey || DEFAULT_API_KEY;
+  const primaryModel = state.model || 'gemini-3.1-pro-preview';
+  // Flash as last-resort fallback (skip if user already selected flash as primary)
+  const flashModel = 'gemini-3-flash-preview';
   const chain = [
-    { name: 'GLM-4.6V',              fn: () => callGLM(base64, mime) },
-    { name: 'MiniMax VLM',           fn: () => callMiniMax(base64, mime) },
-    { name: 'gemini-3.1-pro-preview', fn: () => callGeminiWithModel(base64, mime, 'gemini-3.1-pro-preview', geminiKey) },
-    { name: 'gemini-3-flash-preview', fn: () => callGeminiWithModel(base64, mime, 'gemini-3-flash-preview', geminiKey) },
+    { name: 'GLM-4.6V',    fn: () => callGLM(base64, mime) },
+    { name: 'MiniMax VLM', fn: () => callMiniMax(base64, mime) },
+    { name: primaryModel,  fn: () => callGeminiWithModel(base64, mime, primaryModel, geminiKey) },
+    ...(primaryModel !== flashModel
+      ? [{ name: flashModel, fn: () => callGeminiWithModel(base64, mime, flashModel, geminiKey) }]
+      : []),
   ];
   let lastErr;
   for (const { name, fn } of chain) {
     try {
       const result = await fn();
       console.info(`[OCR] ✅ ${name} 成功`);
+      // Record which model succeeded
+      state.lastScanModel = name;
+      saveState();
+      renderModelCards();
       return result;
     } catch (err) {
       console.warn(`[OCR] ❌ ${name} 失敗: ${err.message}`);
@@ -1935,6 +1987,7 @@ function switchTab(name) {
   if (name === 'stats') renderStats();
   if (name === 'history') renderHistory();
   if (name === 'timeline') renderTimeline();
+  if (name === 'settings') renderModelCards();
 }
 
 // ============ EXPORT / RESET ============
@@ -1972,7 +2025,7 @@ function init() {
   // Settings inputs
   $('setBudget').value = state.budget;
   $('setRate').value = state.rate;
-  $('setModel').value = state.model;
+  renderModelCards();
   $('setNotionDb').value = state.notionDb || '';
   $('setProxy').value = state.proxy || 'https://corsproxy.io/?';
   $('setImgbbKey').value = state.imgbbKey || '';
@@ -2006,7 +2059,7 @@ function init() {
   $('saveSettings').addEventListener('click', () => {
     state.budget = Number($('setBudget').value) || 101800;
     state.rate = Number($('setRate').value) || 20.36;
-    state.model = $('setModel').value;
+    // state.model is saved instantly via switchModel() — no need to read from form
     // Only save credential fields if they're NOT vault-locked
     if (!$('setApiKey').disabled) state.apiKey = $('setApiKey').value.trim();
     if (!$('setNotionToken').disabled) state.notionToken = $('setNotionToken').value.trim();
