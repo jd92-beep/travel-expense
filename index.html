@@ -714,7 +714,7 @@ let state = {
   voiceModel: 'gemini-3.1-flash-lite-preview',
   notionToken: DEFAULT_NOTION_TOKEN,
   notionDb: DEFAULT_NOTION_DB,
-  proxy: 'https://corsproxy.io/?',
+  proxy: 'https://notion-proxy.ftjdfr.workers.dev/?',
   autoSync: true,
   imgbbKey: '',
   persons: [
@@ -1826,7 +1826,7 @@ async function callGemini(base64, mime) {
 const NOTION_VERSION = '2022-06-28';
 
 function notionUrl(path) {
-  return (state.proxy || '') + 'https://api.notion.com/v1' + path;
+  return (state.proxy || 'https://notion-proxy.ftjdfr.workers.dev/?') + 'https://api.notion.com/v1' + path;
 }
 
 function buildNotionProps(r) {
@@ -1859,7 +1859,7 @@ async function notionFetch(path, options = {}) {
     // basic guard — if db is empty we'll get bad requests anyway
   }
   const targetUrl = 'https://api.notion.com/v1' + path;
-  const baseProxy = state.proxy || 'https://corsproxy.io/?';
+  const baseProxy = state.proxy || 'https://notion-proxy.ftjdfr.workers.dev/?';
 
   // Build proxy URL — support both ?URL and ?url=URL formats
   function makeProxyUrl(proxy, url) {
@@ -1867,11 +1867,11 @@ async function notionFetch(path, options = {}) {
     return proxy + url;
   }
 
-  // Proxy candidates: current setting → corsproxy encoded → allorigins
+  // Proxy candidates: our own CF worker → corsproxy fallback → allorigins
   const proxyCandidates = [
-    baseProxy,
-    baseProxy === 'https://corsproxy.io/?' ? 'https://corsproxy.io/?url=' : null,
-    'https://api.allorigins.win/raw?url=',
+    'https://notion-proxy.ftjdfr.workers.dev/?',
+    baseProxy !== 'https://notion-proxy.ftjdfr.workers.dev/?' ? baseProxy : null,
+    'https://corsproxy.io/?url=',
   ].filter(Boolean);
 
   const reqHeaders = {
