@@ -298,7 +298,10 @@
   <!-- ============ HISTORY TAB ============ -->
   <section id="tab-history" class="tab-content hidden fade-in">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-bold">消費紀錄</h2>
+      <div class="flex items-center gap-2">
+        <h2 class="text-xl font-bold">消費紀錄</h2>
+        <span id="historySyncBadge" class="hidden text-[10px] px-2 py-0.5 rounded-full font-medium" style="background:rgba(0,168,126,0.15);color:#00a87e">☁️ 同步中…</span>
+      </div>
       <select id="filterCat" class="glass rounded-xl px-3 py-1.5 text-xs border-0 bg-transparent">
         <option value="">全部類別</option>
       </select>
@@ -712,7 +715,7 @@ let state = {
   notionToken: DEFAULT_NOTION_TOKEN,
   notionDb: DEFAULT_NOTION_DB,
   proxy: 'https://corsproxy.io/?',
-  autoSync: false,
+  autoSync: true,
   imgbbKey: '',
   persons: [
     { id: 'p_boss', name: 'Tony', emoji: '👦', color: '#CC2929' },
@@ -1974,12 +1977,12 @@ async function notionPushAll() {
   }
 }
 
-async function notionPullAll() {
+async function notionPullAll(silent = false) {
   if (!state.notionToken || !state.notionDb) {
-    toast('⚠️ 請先設定 Notion');
+    if (!silent) toast('⚠️ 請先設定 Notion');
     return;
   }
-  toast('⬇️ 拉取中…');
+  if (!silent) toast('⬇️ 拉取中…');
   try {
     const data = await notionFetch(`/databases/${state.notionDb}/query`, {
       method: 'POST',
@@ -2024,10 +2027,12 @@ async function notionPullAll() {
     state.receipts = Array.from(merged.values()).sort((a,b) => a.createdAt - b.createdAt);
     saveState();
     refresh();
-    toast(`✅ 新增 ${added}，更新 ${updated}`);
+    if (!silent) toast(`✅ 新增 ${added}，更新 ${updated}`);
+    else if (added > 0 || updated > 0) toast(`☁️ 同步完成：+${added} 筆，更新 ${updated} 筆`);
   } catch (e) {
     console.error(e);
-    toast('❌ ' + e.message);
+    if (!silent) toast('❌ ' + e.message);
+    throw e; // re-throw so switchTab can catch it
   }
 }
 
@@ -2249,6 +2254,8 @@ async function deleteReceipt() {
 }
 
 // ============ TABS ============
+let _lastNotionPull = 0;
+
 function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   $('tab-' + name).classList.remove('hidden');
@@ -2257,7 +2264,25 @@ function switchTab(name) {
     b.classList.toggle('tab-inactive', b.dataset.tab !== name);
   });
   if (name === 'stats') renderStats();
-  if (name === 'history') renderHistory();
+  if (name === 'history') {
+    renderHistory();
+    // Auto-pull from Notion when opening history tab (30s cooldown to avoid hammering)
+    if (state.notionToken && state.notionDb) {
+      const now = Date.now();
+      if (now - _lastNotionPull > 30000) {
+        _lastNotionPull = now;
+        const syncBadge = $('historySyncBadge');
+        if (syncBadge) { syncBadge.textContent = '☁️ 同步中…'; syncBadge.classList.remove('hidden'); }
+        notionPullAll(true).then(() => {
+          if (syncBadge) { syncBadge.textContent = '✅ 已同步'; setTimeout(() => syncBadge.classList.add('hidden'), 2000); }
+          renderHistory();
+        }).catch(e => {
+          console.warn('[autoSync]', e.message);
+          if (syncBadge) { syncBadge.textContent = '⚠️ 同步失敗'; setTimeout(() => syncBadge.classList.add('hidden'), 3000); }
+        });
+      }
+    }
+  }
   if (name === 'timeline') renderTimeline();
   if (name === 'settings') renderModelCards();
 }
