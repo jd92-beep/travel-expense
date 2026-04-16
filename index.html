@@ -670,7 +670,8 @@ const ITINERARY = [
 ];
 const DEFAULT_API_KEY        = atob('QUl6YVN5Q0N6X084S1drenJhaVdBWHIwV2U3TThSVVpQN3NuSk9B');
 const DEFAULT_BACKUP_API_KEY = atob('QUl6YVN5Q0l2T0I2ejBvYkRZZkdMU08tSENrcXV1X1llWHU3RG84');
-const DEFAULT_NOTION_TOKEN = '';
+const DEFAULT_NOTION_TOKEN = atob('bnRuXzM4MDA1NDY0OTU2NGZnQ2F4OVRxVHYwSEljNWVwUDNOQ0NnMVV6bWJMZ1VmRjU=');
+const DEFAULT_NOTION_DB    = atob('MzQzOGQ5NGQ1ZjdjODE4NzgyMjFmY2RhNmQ2NWQzOWQ=');
 
 // Encrypted vault (AES-256-GCM + PBKDF2/SHA-256 @ 100k iterations)
 // Contains: apiKey, notionToken, notionDb, zaiKey, minimaxKey — decryptable only with correct password
@@ -709,7 +710,7 @@ let state = {
   scanModel: 'glm-4.6v',
   voiceModel: 'gemini-3.1-flash-lite-preview',
   notionToken: DEFAULT_NOTION_TOKEN,
-  notionDb: '',
+  notionDb: DEFAULT_NOTION_DB,
   proxy: 'https://corsproxy.io/?',
   autoSync: false,
   imgbbKey: '',
