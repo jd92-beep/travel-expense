@@ -1486,20 +1486,40 @@ async function parseVoiceExpense(transcript) {
 例子：「喺全家買咗飯糰同埋飲料，一共580蚊」→ {"store":"全家便利店","total":580,"category":"food","payment":"cash","items":[{"name":"飯糰","name_jp":null,"price":null},{"name":"飲料","name_jp":null,"price":null}],"note":null}`;
 
   const apiKey = state.apiKey || DEFAULT_API_KEY;
+  const voiceSchema = {
+    type: 'OBJECT',
+    properties: {
+      store:    { type: 'STRING', nullable: true },
+      total:    { type: 'NUMBER', nullable: true },
+      date:     { type: 'STRING' },
+      category: { type: 'STRING', enum: ['transport','food','shopping','lodging','ticket','medicine','other'] },
+      payment:  { type: 'STRING', enum: ['cash','credit','paypay','suica'] },
+      items:    { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+        name: { type: 'STRING' }, name_jp: { type: 'STRING', nullable: true }, price: { type: 'NUMBER', nullable: true }
+      }}},
+      note:     { type: 'STRING', nullable: true }
+    },
+    required: ['total', 'category', 'payment', 'items']
+  };
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+    generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: voiceSchema }
   };
   const tryModel = async (model) => {
     console.info(`[Voice] 嘗試 ${model}…`);
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     });
-    if (!r.ok) throw new Error('API ' + r.status);
+    if (!r.ok) {
+      const errBody = await r.text().catch(() => '');
+      console.error(`[Voice] ${model} API ${r.status}:`, errBody.slice(0, 200));
+      throw new Error('API ' + r.status);
+    }
     const data = await r.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.info(`[Voice] ${model} raw response:`, text?.slice(0, 300));
     if (!text) throw new Error('No response');
-    return JSON.parse(text);
+    return parseReceiptJson(text); // robust parser — handles markdown-wrapped JSON
   };
 
   // Model fallback chain for voice: selected → 3.1 pro → 3 flash
@@ -1510,10 +1530,11 @@ async function parseVoiceExpense(transcript) {
 
   let parsed = null;
   let lastErr = null;
+  // Phase 1: try with strict responseSchema
   for (const m of voiceChain) {
     try {
       parsed = await tryModel(m);
-      console.info(`[Voice] ✅ ${m} 成功`);
+      console.info(`[Voice] ✅ ${m} 成功 (schema mode)`);
       toast('✅ 語音解析完成 (' + m + ')');
       break;
     } catch(e) {
@@ -1521,16 +1542,39 @@ async function parseVoiceExpense(transcript) {
       lastErr = e;
     }
   }
+  // Phase 2: if all failed with schema, retry primary WITHOUT responseSchema/responseMimeType
+  if (!parsed) {
+    console.info('[Voice] Phase 2: retry without responseSchema...');
+    const bodyNoSchema = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1 }
+    };
+    for (const m of voiceChain.slice(0, 2)) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyNoSchema)
+        });
+        if (!r.ok) continue;
+        const data = await r.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        console.info(`[Voice] ${m} (no-schema) raw:`, text?.slice(0, 300));
+        if (text) { parsed = parseReceiptJson(text); console.info(`[Voice] ✅ ${m} 成功 (no-schema)`); toast('✅ 語音解析完成 (' + m + ')'); break; }
+      } catch(e) { console.warn(`[Voice] ❌ ${m} no-schema 失敗: ${e.message}`); }
+    }
+  }
 
+  console.info('[Voice] parsed result:', JSON.stringify(parsed));
   if (parsed && (parsed.store || parsed.total || (parsed.items && parsed.items.length))) {
-    // If total is null but items exist with prices, sum them up
+    // If total is null/0 but items exist with prices, sum them up
     if (!parsed.total && parsed.items && parsed.items.length) {
       const sum = parsed.items.reduce((acc, i) => acc + (Number(i.price) || 0), 0);
       if (sum > 0) parsed.total = sum;
     }
+    // Ensure total is a number (not string)
+    if (parsed.total && typeof parsed.total === 'string') parsed.total = Number(parsed.total.replace(/[^0-9.]/g, ''));
     openConfirmModal(parsed, '');
   } else {
-    // All models failed or returned empty — open modal with transcript in note
+    console.warn('[Voice] All models failed. parsed:', parsed, 'lastErr:', lastErr?.message);
     toast('⚠️ AI 未能解析，請手動填寫', 'error');
     openConfirmModal({ note: '🎤 ' + transcript, date: today }, '');
   }
