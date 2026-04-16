@@ -579,6 +579,11 @@
     </div>
     <div class="sticky bottom-0 p-5" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
       <button id="modalDelete" class="hidden w-full py-2.5 rounded-xl font-medium mb-2" style="background:#FEE2E2;color:#DC2626">🗑️ 刪除呢筆紀錄</button>
+      <!-- Re-scan with different model (shown only when scan result exists) -->
+      <div id="modalRescanWrap" class="hidden mb-3 p-3 rounded-2xl" style="background:rgba(79,70,229,0.06);border:1px solid rgba(79,70,229,0.15)">
+        <p class="text-[10px] font-semibold mb-2" style="color:#4f46e5">🔄 辨識唔準？換個 AI 重新掃：</p>
+        <div id="modalRescanRow" class="flex flex-wrap gap-1.5"></div>
+      </div>
       <div class="grid grid-cols-2 gap-3">
         <button id="modalCancel" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
         <button id="modalSave" class="py-3 rounded-xl font-bold text-white" style="background:var(--n-blue)">儲存</button>
@@ -1450,6 +1455,53 @@ function reopenLastScan() {
 }
 window.reopenLastScan = reopenLastScan;
 
+// Models available for manual rescan
+const RESCAN_MODELS = [
+  { id: 'glm-4.6v',                     label: 'GLM-4.6V',    color: '#7C3AED' },
+  { id: 'minimax',                       label: 'MiniMax VLM', color: '#0EA5E9' },
+  { id: 'gemini-3.1-flash-lite-preview', label: 'G Flash',     color: '#CC2929' },
+  { id: 'gemini-3.1-pro-preview',        label: 'G Pro',       color: '#059669' },
+  { id: 'gemini-3-pro-preview',          label: 'G 3 Pro',     color: '#2D5A8E' },
+];
+
+function renderRescanButtons(loadingId = null) {
+  const row = $('modalRescanRow');
+  if (!row) return;
+  row.innerHTML = RESCAN_MODELS.map(m => {
+    const isLoading = m.id === loadingId;
+    return `<button onclick="rescanWithModel('${m.id}')"
+      style="font-size:11px;padding:5px 10px;border-radius:999px;border:1px solid ${m.color}22;
+             background:${m.color}11;color:${m.color};font-weight:600;
+             opacity:${isLoading ? 0.5 : 1};pointer-events:${isLoading ? 'none' : 'auto'}"
+    >${isLoading ? '⏳' : '▶'} ${m.label}</button>`;
+  }).join('');
+}
+window.renderRescanButtons = renderRescanButtons;
+
+async function rescanWithModel(modelId) {
+  if (!lastScanBase64) { toast('⚠️ 冇可用圖片，請重新上傳收據'); return; }
+  renderRescanButtons(modelId); // show loading state on clicked button
+  try {
+    let result;
+    const geminiKey = state.apiKey || DEFAULT_API_KEY;
+    if (modelId === 'glm-4.6v') {
+      result = await callGLM(lastScanBase64, lastScanMime);
+    } else if (modelId === 'minimax') {
+      result = await callMiniMax(lastScanBase64, lastScanMime);
+    } else {
+      result = await callGeminiWithModel(lastScanBase64, lastScanMime, modelId, geminiKey);
+    }
+    lastScanResult = result;
+    openConfirmModal(result, lastScanBase64);
+    toast(`✅ ${RESCAN_MODELS.find(m=>m.id===modelId)?.label || modelId} 辨識完成`);
+  } catch(e) {
+    console.error('[rescan]', e);
+    toast('❌ ' + (e.message || '辨識失敗').slice(0, 80), 'error');
+    renderRescanButtons(); // restore buttons
+  }
+}
+window.rescanWithModel = rescanWithModel;
+
 function fileToBase64(file) {
   return new Promise((res, rej) => {
     const reader = new FileReader();
@@ -1679,17 +1731,27 @@ const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。分析呢張日
 
 {
   "store": "店名，用繁體中文（簡短，唔好加括號註解）",
-  "total": 總金額純數字,
+  "total": 最終應付總金額純數字,
   "subtotal": 稅前小計純數字（如有，否則 null）,
   "tax": 稅金純數字（如有，否則 null）,
   "date": "YYYY-MM-DD 格式",
   "category": "transport|food|shopping|lodging|ticket|medicine|other 之一",
   "payment": "cash|credit|paypay|suica 之一",
-  "items": [ { "name": "品項繁體中文翻譯（必須用中文，唔好用日文字符）", "name_jp": "日本語原文", "price": 金額純數字 } ],
+  "items": [ { "name": "品項廣東話翻譯（必須用繁體中文）", "name_jp": "日本語原文（原汁原味保留日文）", "price": 金額純數字 } ],
   "note": "額外重要資訊（例如付款卡尾四碼、優惠），無即留空"
 }
 
-品項翻譯規則（重要）：name 欄位必須係繁體中文，唔好留日文。例：「とんかつ」→ "炸豬扒"，「お好み焼き」→ "大阪燒"，「たこ焼き」→ "章魚燒"，「ラーメン」→ "拉麵"，「寿司」→ "壽司"，「天ぷら」→ "天婦羅"，「カレー」→ "咖喱飯"。即使唔識翻譯都要用漢字意譯。
+⚠️ total 辨識規則（極重要，唔好搞錯）：
+- total 只取「合計」「お会計」「ご請求額」「お支払い」「total」欄位對應嘅數字
+- 「小計」係稅前金額，唔係 total
+- 「お預かり」係顧客俾嘅錢（可能係整數，唔係消費金額），唔係 total
+- 「お釣り」係找零，唔係 total
+- 如有疑問：total = 小計 + 消費税（例：小計¥1,000 + 税¥100 → total=1100）
+- 如果收據上有「合計 ¥XXXX」同「小計 ¥YYYY」，total = 合計，唔係小計
+
+品項規則（重要）：
+- name：必須係繁體中文廣東話翻譯。例：「とんかつ」→「炸豬扒」，「お好み焼き」→「大阪燒」，「たこ焼き」→「章魚燒」，「ラーメン」→「拉麵」，「寿司」→「壽司」，「天ぷら」→「天婦羅」，「カレー」→「咖喱飯」，「うなぎ」→「鰻魚」，「鰻重」→「鰻魚飯」，「ビール」→「啤酒」。即使唔識翻譯都要用漢字意譯。
+- name_jp：原汁原味保留日文原文（漢字、平假名、片假名全部保留），方便核對
 
 類別判斷規則：
 - 餐廳 / 便利店食品 / 咖啡 / 居酒屋 → food
@@ -2228,8 +2290,9 @@ function openConfirmModal(data, base64) {
   $('mPay').value = validPays.includes(aiPay) ? aiPay : 'cash';
   $('mRegion').value = getRegionForDate(cleanDate);
   $('mItems').value = (data.items||[]).map(i => {
-    const hkd = (state.rate > 0 && i.price) ? ` (HKD ${Math.round(i.price / state.rate)})` : '';
-    return `${i.name} ¥${i.price}${hkd}`;
+    const jp = i.name_jp ? ` (${i.name_jp})` : '';
+    const hkd = (state.rate > 0 && i.price) ? ` ≈HKD${Math.round(i.price / state.rate)}` : '';
+    return `${i.name}${jp} ¥${i.price || '?'}${hkd}`;
   }).join('\n');
   $('mNote').value = data.note || '';
   pendingTax = data.tax || null;
@@ -2244,6 +2307,13 @@ function openConfirmModal(data, base64) {
   } else {
     $('mPhotoWrap').classList.add('hidden');
   }
+  // Show rescan buttons only when coming from a real scan (has image)
+  if (base64 && lastScanBase64) {
+    $('modalRescanWrap').classList.remove('hidden');
+    renderRescanButtons();
+  } else {
+    $('modalRescanWrap').classList.add('hidden');
+  }
   $('confirmModal').classList.remove('hidden');
   renderPersonRow();
 }
@@ -2255,6 +2325,7 @@ function editReceipt(id) {
   selectedPersonId = r.personId || getPersons()[0].id;
   pendingPhotoBase64 = null;
   $('modalDelete').classList.remove('hidden');
+  $('modalRescanWrap').classList.add('hidden'); // rescan not available in edit mode
   $('modalSubtitle').textContent = '編輯紀錄';
   $('mStore').value = r.store || '';
   $('mTotal').value = r.total || '';
