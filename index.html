@@ -1219,16 +1219,17 @@ function renderStats() {
     }
   });
 
-  // Settlement card
-  const [t0, t1] = personTotals;
-  const [p0, p1] = persons;
-  const grandTotal = t0 + t1;
-  const fairShare = grandTotal / 2;
-  const diff = Math.round(Math.abs(t0 - t1) / 2);
+  // Settlement card (safe for any number of persons)
   const settle = $('settlementCard');
-  if (!grandTotal) {
-    settle.innerHTML = '<p class="text-sm text-gray-400">未有記帳資料</p>';
+  const grandTotal = personTotals.reduce((a, b) => a + b, 0);
+  if (persons.length < 2 || !grandTotal) {
+    settle.innerHTML = persons.length < 2
+      ? '<p class="text-sm text-gray-400">需要至少兩位旅伴</p>'
+      : '<p class="text-sm text-gray-400">未有記帳資料</p>';
   } else {
+    const [t0, t1] = personTotals;
+    const [p0, p1] = persons;
+    const diff = Math.round(Math.abs(t0 - t1) / 2);
     const debtorEmoji = t0 < t1 ? p0.emoji : p1.emoji;
     const debtorName = t0 < t1 ? p0.name : p1.name;
     const creditorEmoji = t0 < t1 ? p1.emoji : p0.emoji;
@@ -1445,7 +1446,7 @@ async function parseVoiceExpense(transcript) {
 類別：食物/餐廳/便利店→food；交通/JR/巴士/的士→transport；購物/衫/紀念品→shopping；酒店→lodging；門票/景點→ticket；藥→medicine；其他→other
 支付：現金→cash；卡/VISA/信用→credit；PayPay→paypay；Suica/交通IC→suica`;
 
-  const apiKey = getActiveApiKey();
+  const apiKey = state.apiKey || DEFAULT_API_KEY;
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
@@ -1755,6 +1756,9 @@ async function notionPullAll() {
       const id = sourceId || ('r_notion_' + page.id.slice(0, 8));
       const cat = CATEGORIES.find(c => c.name === p['類別']?.select?.name)?.id || 'other';
       const pay = PAYMENTS.find(x => x.name === p['支付']?.select?.name)?.id || 'cash';
+      // Map 旅伴 text back to personId
+      const companionText = p['旅伴']?.rich_text?.[0]?.plain_text || '';
+      const matchedPerson = getPersons().find(pe => companionText.includes(pe.name));
       const r = {
         id,
         store: p['店名']?.title?.[0]?.plain_text || '',
@@ -1768,6 +1772,7 @@ async function notionPullAll() {
         region: p['地區']?.rich_text?.[0]?.plain_text || '',
         itemsText: p['品項']?.rich_text?.[0]?.plain_text || '',
         note: p['備註']?.rich_text?.[0]?.plain_text || '',
+        personId: matchedPerson?.id || getPersons()[0].id,
         notionPageId: page.id,
         createdAt: new Date(page.created_time).getTime(),
       };
@@ -1963,14 +1968,15 @@ async function saveModal() {
   $('previewArea').classList.add('hidden');
   $('receiptInput').value = '';
 
-  // Auto-sync to Notion
+  // Auto-sync to Notion (r is a ref inside state.receipts — notionPageId mutated in-place)
   if (state.autoSync && state.notionToken && state.notionDb) {
     notionPushReceipt(r).then(() => {
-      saveState();
+      // Only persist the notionPageId update — don't clobber other concurrent changes
+      if (r.notionPageId) saveState();
       toast('☁️ 已同步到 Notion');
     }).catch(e => {
-      console.error(e);
-      toast('⚠️ Notion sync 失敗');
+      console.error('[autoSync]', e);
+      toast('⚠️ Notion sync 失敗: ' + (e.message || ''));
     });
   }
 }
@@ -2020,11 +2026,15 @@ function switchTab(name) {
 // ============ EXPORT / RESET ============
 function exportCSV() {
   if (state.receipts.length === 0) { toast('未有紀錄可匯出'); return; }
-  const rows = [['日期','店名','類別','支付','金額(¥)','地區','備註','品項']];
+  const rows = [['日期','店名','類別','支付','金額(¥)','HKD','付款人','地區','備註','品項']];
+  const persons = getPersons();
+  const firstId = persons[0].id;
   state.receipts.forEach(r => {
     const cat = CATEGORIES.find(c => c.id === r.category)?.name || '';
     const pay = PAYMENTS.find(p => p.id === r.payment)?.name || '';
-    rows.push([r.date, r.store, cat, pay, r.total, r.region||'', r.note||'', (r.itemsText||'').replace(/\n/g,'; ')]);
+    const person = persons.find(p => p.id === (r.personId || firstId));
+    const hkd = state.rate ? (r.total / state.rate).toFixed(0) : '';
+    rows.push([r.date, r.store, cat, pay, r.total, hkd, person ? `${person.emoji} ${person.name}` : '', r.region||'', r.note||'', (r.itemsText||'').replace(/\n/g,'; ')]);
   });
   const csv = '\uFEFF' + rows.map(row => row.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type:'text/csv' });
