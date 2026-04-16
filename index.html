@@ -1803,49 +1803,37 @@ async function callGLM(base64, mime) {
   return parseReceiptJson(text);
 }
 
-// ── Model 2: MiniMax VLM — direct OpenAI-compatible API ──────────────────────
+// ── Model 2: MiniMax VLM — coding_plan/vlm endpoint ─────────────────────────
+// Correct endpoint per minimax-coding-plan-vlm-guide.md:
+//   POST /v1/coding_plan/vlm  payload: { prompt, image_url }
+//   MiniMax-M2.7 messages API does NOT support image input — wrong route
 const DEFAULT_MINIMAX_KEY = atob('c2stY3AtVEd3a3RBb2hqSTFnVFF2b1pwWFRpZHBQeFlBZWVvZUNZdnJsUUdWaW83c3BnWDEtLVg4Y201WFlwSDFQbUJfcmVGTmRrMWlTa2RtNnVIbklzSWxaUVUydDFNNE1DUy1CSms1VWY2T2lXLWZiNHlJbXZzdXZrdzg=');
 async function callMiniMax(base64, mime) {
   const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
   if (!key) throw new Error('MiniMax key 未設定');
-  const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
-  const body = JSON.stringify({
-    model: 'MiniMax-VL-01',
-    messages: [{ role: 'user', content: [
-      { type: 'text', text: GEMINI_PROMPT },
-      { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } }
-    ]}],
-    temperature: 0.1,
-    max_tokens: 2048,
-    stream: false,
+  const r = await fetch('https://api.minimax.io/v1/coding_plan/vlm', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'MM-API-Source': 'Minimax-MCP',
+    },
+    body: JSON.stringify({
+      prompt: GEMINI_PROMPT,
+      image_url: `data:${mime};base64,${base64}`,
+    }),
   });
-  // Try direct call first (MiniMax may allow CORS); fall back through a CORS proxy
-  const attempts = [
-    MINIMAX_URL,
-    'https://corsproxy.io/?url=' + encodeURIComponent(MINIMAX_URL),
-  ];
-  let lastErr;
-  for (const url of attempts) {
-    try {
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body,
-      });
-      if (!r.ok) {
-        const t = await r.text();
-        const e = new Error(`MiniMax ${r.status}: ${t.slice(0, 200)}`); e.status = r.status; throw e;
-      }
-      const data = await r.json();
-      const text = data?.choices?.[0]?.message?.content;
-      if (!text) throw new Error('MiniMax 冇回覆 (empty content)');
-      return parseReceiptJson(text);
-    } catch(e) {
-      lastErr = e;
-      if (e.status === 401 || e.status === 403) throw e; // auth error — no point retrying
-    }
+  if (!r.ok) {
+    const t = await r.text();
+    const e = new Error(`MiniMax ${r.status}: ${t.slice(0, 200)}`); e.status = r.status; throw e;
   }
-  throw lastErr || new Error('MiniMax 所有端點失敗');
+  const data = await r.json();
+  if (data?.base_resp?.status_code !== 0) {
+    throw new Error(`MiniMax error ${data?.base_resp?.status_code}: ${data?.base_resp?.status_msg || 'unknown'}`);
+  }
+  const text = data?.content;
+  if (!text) throw new Error('MiniMax 冇回覆 (empty content)');
+  return parseReceiptJson(text);
 }
 
 // ── Model 3 & 4: Gemini (fallback 2 & 3) — tries primary key then backup ────
