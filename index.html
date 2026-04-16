@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="名古屋記帳">
-<meta name="theme-color" content="#2D5A8E">
+<meta name="theme-color" content="#CC2929">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232D5A8E'/><text x='12' y='85' font-size='78'>🗾</text></svg>">
 <script>
 // Inline PWA manifest — needed for single-file app (no server)
@@ -22,42 +22,70 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --n-bg: #F4F4EF; --n-surface: #FFFFFF; --n-border: #E4E4DF;
-    --n-text: #1A1A2E; --n-muted: #6B7285; --n-blue: #2D5A8E;
-    --n-blue-dim: #EEF3FA; --n-shadow: rgba(26,26,46,0.07);
+    --n-bg: #FDF5EF; --n-surface: #FFFFFF; --n-border: #E4E4DF;
+    --n-text: #1A1A2E; --n-muted: #6B7285; --n-blue: #CC2929;
+    --n-blue-dim: #FCEAEA; --n-shadow: rgba(204,41,41,0.10);
+    --sakura: #FF91A4; --gold: #F5A623;
   }
-  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Hiragino Sans", sans-serif; -webkit-tap-highlight-color: transparent; background: linear-gradient(160deg, #E6EDF8 0%, #EEF0F8 30%, #EAF0EC 65%, #F2EEF0 100%); background-attachment: fixed; min-height: 100vh; color: var(--n-text); }
-  .glass { background: rgba(255,255,255,0.78) !important; border: 1px solid rgba(255,255,255,0.9) !important; box-shadow: 0 4px 24px rgba(45,90,142,0.09), inset 0 1px 0 rgba(255,255,255,0.75) !important; backdrop-filter: blur(20px) saturate(180%) !important; -webkit-backdrop-filter: blur(20px) saturate(180%) !important; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Hiragino Sans", sans-serif; -webkit-tap-highlight-color: transparent; background: linear-gradient(155deg, #FEF0F0 0%, #FDF8F0 35%, #FDF0FA 65%, #F4F0FE 100%) fixed; min-height: 100vh; color: var(--n-text); }
+  .glass { background: rgba(255,255,255,0.80) !important; border: 1px solid rgba(255,220,210,0.60) !important; box-shadow: 0 8px 32px rgba(204,41,41,0.07), 0 1px 4px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.95) !important; backdrop-filter: blur(28px) saturate(220%) !important; -webkit-backdrop-filter: blur(28px) saturate(220%) !important; }
   .tab-active { color: var(--n-blue); }
-  .tab-inactive { color: #A0AAB8; }
+  .tab-inactive { color: rgba(255,255,255,0.38); }
   .scrollbar-hide::-webkit-scrollbar { display: none; }
   .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
   @keyframes pulse-ring { 0% { transform: scale(0.95); opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
   .pulse-ring::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--n-blue); animation: pulse-ring 1.5s ease-out infinite; }
-  .progress-shine { background: linear-gradient(90deg, #2D5A8E, #5B8EC9, #2D5A8E); background-size: 200% 100%; animation: shine 3s linear infinite; }
-  @keyframes shine { to { background-position: 200% 0; } }
+  .progress-shine { background: linear-gradient(90deg, #CC2929, #FF91A4, #F5A623, #CC2929); background-size: 300% 100%; animation: shine 4s linear infinite; }
+  @keyframes shine { to { background-position: 300% 0; } }
   .fade-in { animation: fadeIn 0.3s ease-out; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes bounceIn { 0% { opacity:0; transform: scale(0.85) translateY(12px); } 60% { transform: scale(1.04) translateY(-2px); } 100% { opacity:1; transform: scale(1) translateY(0); } }
   input, select, textarea, button { -webkit-appearance: none; }
-  /* Nordic text refinements */
+  /* Hanami text refinements */
   h1, h2, h3 { letter-spacing: -0.02em; }
-  .nordic-card { background: rgba(255,255,255,0.78); border: 1px solid rgba(255,255,255,0.9); box-shadow: 0 4px 24px rgba(45,90,142,0.09); border-radius: 1rem; backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); }
+  .nordic-card { background: rgba(255,255,255,0.80); border: 1px solid rgba(255,220,210,0.60); box-shadow: 0 8px 32px rgba(204,41,41,0.07); border-radius: 1rem; backdrop-filter: blur(28px) saturate(220%); -webkit-backdrop-filter: blur(28px) saturate(220%); }
   details summary { cursor: pointer; list-style: none; }
   details summary::-webkit-details-marker { display: none; }
+
+  /* Category accent classes */
+  .cat-food     { border-left: 3px solid #FF6B35 !important; }
+  .cat-transport{ border-left: 3px solid #3B82F6 !important; }
+  .cat-shopping { border-left: 3px solid #EC4899 !important; }
+  .cat-lodging  { border-left: 3px solid #8B5CF6 !important; }
+  .cat-ticket   { border-left: 3px solid #10B981 !important; }
+  .cat-medicine { border-left: 3px solid #EF4444 !important; }
+  .cat-other    { border-left: 3px solid #9CA3AF !important; }
+
+  /* Floating sakura petals */
+  .petal {
+    position: fixed; pointer-events: none; z-index: 1; font-size: 18px;
+    opacity: 0; animation: petalFall linear infinite;
+    user-select: none; top: -40px;
+  }
+  @keyframes petalFall {
+    0%   { opacity: 0; transform: translateY(0) rotate(0deg) translateX(0px); }
+    8%   { opacity: 0.75; }
+    88%  { opacity: 0.55; }
+    100% { opacity: 0; transform: translateY(105vh) rotate(540deg) translateX(60px); }
+  }
+
+  /* Tab pill indicator */
+  .tab-pill { position: relative; }
+  .tab-pill::after { content: ''; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--n-blue); }
 
   /* ==== Vertical alternating timeline ==== */
   .timeline { position: relative; padding: 8px 0; }
   .timeline::before {
     content: ''; position: absolute; left: 50%; top: 0; bottom: 0;
-    width: 2px; background: var(--n-border); transform: translateX(-50%);
+    width: 2px; background: linear-gradient(180deg, #FF91A4, #CC2929, #F5A623); transform: translateX(-50%);
   }
   .tl-day-header {
     position: relative; z-index: 2; text-align: center;
     margin: 20px 0 12px; padding: 6px 14px;
-    background: var(--n-blue); color: white;
+    background: linear-gradient(135deg, #CC2929, #FF91A4); color: white;
     border-radius: 999px; font-size: 11px; font-weight: 600;
     width: max-content; margin-left: auto; margin-right: auto;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(204,41,41,0.30);
   }
   .tl-item {
     position: relative; width: 50%; padding: 4px 18px 4px 0;
@@ -68,14 +96,14 @@
   .tl-item::before {
     content: ''; position: absolute; top: 16px;
     width: 14px; height: 14px; border-radius: 50%;
-    background: var(--n-bg); border: 2px solid var(--n-border); z-index: 2;
+    background: var(--n-bg); border: 2px solid var(--sakura); z-index: 2;
   }
   .tl-item[data-side="left"]::before { right: -8px; }
   .tl-item[data-side="right"]::before { left: -8px; }
   .tl-item.actual::before { background: var(--n-blue); border-color: var(--n-blue); }
   .tl-card {
     display: inline-block; padding: 10px 12px; border-radius: 12px;
-    background: var(--n-surface); border: 1px solid var(--n-border);
+    background: var(--n-surface); border: 1px solid rgba(255,220,210,0.60);
     box-shadow: 0 1px 4px var(--n-shadow); max-width: 100%;
   }
   .tl-item.planned .tl-card { background: var(--n-bg); border-style: dashed; }
@@ -89,6 +117,16 @@
 </style>
 </head>
 <body class="min-h-screen pb-24" style="background:var(--n-bg);color:var(--n-text)">
+
+<!-- Sakura petals -->
+<div class="petal" style="left:5%;animation-duration:12s;animation-delay:0s">🌸</div>
+<div class="petal" style="left:15%;animation-duration:15s;animation-delay:2s">🌺</div>
+<div class="petal" style="left:28%;animation-duration:10s;animation-delay:4s">🌸</div>
+<div class="petal" style="left:42%;animation-duration:14s;animation-delay:1s">🌸</div>
+<div class="petal" style="left:58%;animation-duration:11s;animation-delay:6s">🌺</div>
+<div class="petal" style="left:70%;animation-duration:16s;animation-delay:3s">🌸</div>
+<div class="petal" style="left:82%;animation-duration:9s;animation-delay:5s">🌸</div>
+<div class="petal" style="left:92%;animation-duration:13s;animation-delay:7s">🌺</div>
 
 <!-- Password Gate Modal -->
 <div id="lockScreen" style="position:fixed;inset:0;z-index:9999;background:var(--n-bg);display:none;align-items:center;justify-content:center;padding:20px">
@@ -112,10 +150,10 @@
 <div id="offlineBar" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:45;background:#FEF3C7;color:#92400E;text-align:center;padding:6px;font-size:12px;font-weight:500">📡 離線模式 — 資料儲存喺本機</div>
 
 <!-- ============ HEADER ============ -->
-<header class="sticky top-0 z-40 px-5 pt-6 pb-4" style="background:rgba(255,255,255,0.82);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(255,255,255,0.6)">
+<header class="sticky top-0 z-40 px-5 pt-6 pb-4" style="background:rgba(255,250,248,0.88);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(255,180,160,0.3)">
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight" style="color:var(--n-text)">名古屋之旅 🗾</h1>
+      <h1 class="text-3xl font-black tracking-tight" style="background:linear-gradient(135deg,#CC2929,#FF91A4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">名古屋之旅 🗾</h1>
       <p class="text-xs mt-0.5" style="color:var(--n-muted)" id="dateLabel">—</p>
     </div>
     <div class="flex items-center gap-2">
@@ -154,7 +192,7 @@
         <span class="text-[10px]" style="color:var(--n-blue)" id="todayLocation">—</span>
       </div>
       <div class="flex items-baseline gap-2">
-        <span class="text-4xl font-bold" style="color:var(--n-text)">¥<span id="todaySpend">0</span></span>
+        <span class="text-5xl font-black" style="background:linear-gradient(135deg,#CC2929,#FF6B35);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">¥<span id="todaySpend">0</span></span>
         <span class="text-sm text-gray-500">≈ HKD <span id="todaySpendHKD">0</span></span>
       </div>
       <p class="text-xs text-gray-500 mt-1"><span id="todayCount">0</span> 筆消費</p>
@@ -217,7 +255,7 @@
     <input type="file" id="receiptInput" accept="image/*" capture="environment" class="hidden">
     <input type="file" id="galleryInput" accept="image/*" class="hidden">
     <div class="grid grid-cols-2 gap-3 mb-3">
-      <button id="scanBtn" class="text-white font-bold py-5 rounded-2xl text-lg active:scale-95 transition" style="background:var(--n-blue);box-shadow:0 4px 14px rgba(45,90,142,0.25)">
+      <button id="scanBtn" class="text-white font-bold py-6 rounded-2xl text-lg active:scale-95 transition" style="background:linear-gradient(135deg,#CC2929,#E85454);box-shadow:0 8px 24px rgba(204,41,41,0.40)">
         📷 拍攝收據
       </button>
       <button id="galleryBtn" class="glass font-bold py-5 rounded-2xl text-lg active:scale-95 transition" style="color:var(--n-blue)">
@@ -258,7 +296,7 @@
 
   <!-- ============ STATS TAB ============ -->
   <section id="tab-stats" class="tab-content hidden fade-in">
-    <h2 class="text-xl font-bold mb-4">統計分析 📊</h2>
+    <h2 class="text-2xl font-black mb-4">統計分析 📊</h2>
 
     <!-- Category -->
     <div class="glass rounded-2xl p-4 mb-4">
@@ -430,7 +468,7 @@
 </main>
 
 <!-- ============ BOTTOM TAB BAR ============ -->
-<nav class="fixed bottom-0 left-0 right-0 z-50" style="background:rgba(255,255,255,0.85);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-top:1px solid rgba(255,255,255,0.6)">
+<nav class="fixed bottom-0 left-0 right-0 z-50" style="background:rgba(28,24,32,0.94);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-top:1px solid rgba(255,255,255,0.08)">
   <div class="grid grid-cols-6 max-w-md mx-auto">
     <button data-tab="dashboard" class="tab-btn flex flex-col items-center py-3 tab-active">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
