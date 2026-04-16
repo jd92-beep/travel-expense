@@ -604,19 +604,19 @@ const PAYMENTS = [
 ];
 const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
 const SCAN_MODELS = [
-  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺旗艦',       tag: '🟣', color: '#7C3AED' },
-  { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live', sub: 'Preview · Live · 最新', tag: '🔴', color: '#CC2929' },
-  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',        tag: '⭐', color: '#E04040' },
-  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',        tag: '🔵', color: '#2D5A8E' },
-  { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',          tag: '⚡', color: '#F5A623' },
-  { id: 'gemini-2.5-pro',               name: 'Gemini 2.5 Pro',        sub: '穩定版',                tag: '🟢', color: '#059669' },
+  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺旗艦',          tag: '🟣', color: '#7C3AED' },
+  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: 'Preview · 輕量 · 推薦 ✅', tag: '🔴', color: '#CC2929' },
+  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',           tag: '⭐', color: '#E04040' },
+  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',           tag: '🔵', color: '#2D5A8E' },
+  { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',             tag: '⚡', color: '#F5A623' },
+  { id: 'gemini-2.5-pro',               name: 'Gemini 2.5 Pro',        sub: '穩定版',                   tag: '🟢', color: '#059669' },
 ];
 const VOICE_MODELS = [
-  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺+文字',      tag: '🔮', color: '#6D28D9' },
-  { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live', sub: 'Preview · Live · 最新', tag: '🔴', color: '#CC2929' },
-  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',        tag: '⭐', color: '#E04040' },
-  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',        tag: '🔵', color: '#2D5A8E' },
-  { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',          tag: '⚡', color: '#F5A623' },
+  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺+文字',          tag: '🔮', color: '#6D28D9' },
+  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: 'Preview · 輕量 · 推薦 ✅',  tag: '🔴', color: '#CC2929' },
+  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',           tag: '⭐', color: '#E04040' },
+  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',           tag: '🔵', color: '#2D5A8E' },
+  { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',             tag: '⚡', color: '#F5A623' },
 ];
 // Boss 嘅名古屋行程 (HKT 日期) — 每日詳細 spots
 const ITINERARY = [
@@ -667,7 +667,8 @@ const ITINERARY = [
     { time:'17:00', name:'回程航班', type:'transport' },
   ]},
 ];
-const DEFAULT_API_KEY = '';
+const DEFAULT_API_KEY        = atob('QUl6YVN5Q0N6X084S1drenJhaVdBWHIwV2U3TThSVVpQN3NuSk9B');
+const DEFAULT_BACKUP_API_KEY = atob('QUl6YVN5Q0l2T0I2ejBvYkRZZkdMU08tSENrcXV1X1llWHU3RG84');
 const DEFAULT_NOTION_TOKEN = '';
 
 // Encrypted vault (AES-256-GCM + PBKDF2/SHA-256 @ 100k iterations)
@@ -703,8 +704,8 @@ let state = {
   budget: 101800,
   rate: 20.36,
   apiKey: DEFAULT_API_KEY,
-  model: 'gemini-3.1-flash-live-preview',
-  scanModel: 'gemini-3.1-flash-live-preview',
+  model: 'gemini-3.1-flash-lite-preview',
+  scanModel: 'gemini-3.1-flash-lite-preview',
   voiceModel: 'glm-4.6v',
   notionToken: DEFAULT_NOTION_TOKEN,
   notionDb: '',
@@ -899,13 +900,20 @@ async function testModelConnection(modelId) {
       });
       return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
     } else {
-      if (!apiKey) return { ok: false, msg: 'API key 未設定' };
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: 'hi' }] }], generationConfig: { maxOutputTokens: 5 } })
-      });
-      return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
+      const testKeys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k, i, a) => k && a.indexOf(k) === i);
+      if (!testKeys.length) return { ok: false, msg: 'API key 未設定' };
+      let lastStatus;
+      for (const key of testKeys) {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${key}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: 'hi' }] }], generationConfig: { maxOutputTokens: 5 } })
+        });
+        if (r.ok) return { ok: true, msg: '✅ 連線正常' };
+        lastStatus = r.status;
+        if (r.status !== 429 && r.status !== 403) break;
+      }
+      return { ok: false, msg: `❌ HTTP ${lastStatus}` };
     }
   } catch(e) {
     return { ok: false, msg: '❌ ' + (e.message || '網絡錯誤').slice(0, 40) };
@@ -1575,18 +1583,28 @@ async function parseVoiceExpense(transcript) {
 
   // Strategy 2: Gemini (only if API key exists)
   async function tryGemini(prompt, model) {
-    if (!apiKey) throw new Error('No Gemini API key');
-    console.info(`[Voice] 嘗試 ${model}…`);
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1 } })
-    });
-    if (!r.ok) { console.error(`[Voice] ${model} API ${r.status}`); throw new Error('API ' + r.status); }
-    const data = await r.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    console.info(`[Voice] ${model} raw:`, text?.slice(0, 400));
-    if (!text) throw new Error('No response');
-    return parseReceiptJson(text);
+    const gemKeys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k, i, a) => k && a.indexOf(k) === i);
+    if (!gemKeys.length) throw new Error('No Gemini API key');
+    let lastErr;
+    for (const key of gemKeys) {
+      console.info(`[Voice] 嘗試 ${model}…`);
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1 } })
+      });
+      if (!r.ok) {
+        console.error(`[Voice] ${model} API ${r.status}`);
+        lastErr = new Error('API ' + r.status);
+        if (r.status === 429 || r.status === 403) continue;
+        throw lastErr;
+      }
+      const data = await r.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      console.info(`[Voice] ${model} raw:`, text?.slice(0, 400));
+      if (!text) throw new Error('No response');
+      return parseReceiptJson(text);
+    }
+    throw lastErr;
   }
 
   let parsed = null;
@@ -1624,7 +1642,7 @@ async function parseVoiceExpense(transcript) {
     }
     // Last resort: flash
     if (!parsed && apiKey && voicePrimaryModel !== 'gemini-3-flash-preview') {
-      try { parsed = await tryGemini(prompt, 'gemini-3-flash-preview'); } catch(e) { lastErr = e; }
+      try { parsed = await tryGemini(prompt, 'gemini-3.1-flash-lite-preview'); } catch(e) { lastErr = e; }
     }
   }
 
@@ -1731,32 +1749,40 @@ async function callMiniMax(base64, mime) {
   return parseReceiptJson(text);
 }
 
-// ── Model 3 & 4: Gemini (fallback 2 & 3) ─────────────────────────────────────
+// ── Model 3 & 4: Gemini (fallback 2 & 3) — tries primary key then backup ────
 async function callGeminiWithModel(base64, mime, model, apiKey) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  const body = {
-    contents: [{ parts: [ { text: GEMINI_PROMPT }, { inline_data: { mime_type: mime, data: base64 } } ] }],
-    generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
-  };
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!r.ok) {
-    const t = await r.text();
-    let msg = `${r.status}`;
-    try { msg = `${r.status} ${JSON.parse(t).error?.message?.slice(0,120) || ''}`; } catch(_) {}
-    const err = new Error(msg); err.status = r.status; throw err;
+  const keys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k, i, a) => k && a.indexOf(k) === i);
+  let lastErr;
+  for (const key of keys) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+    const body = {
+      contents: [{ parts: [ { text: GEMINI_PROMPT }, { inline_data: { mime_type: mime, data: base64 } } ] }],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+    };
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) {
+      const t = await r.text();
+      let msg = `${r.status}`;
+      try { msg = `${r.status} ${JSON.parse(t).error?.message?.slice(0,120) || ''}`; } catch(_) {}
+      const err = new Error(msg); err.status = r.status;
+      // On quota/auth error, try next key; on other errors (404, 400) stop
+      if (r.status === 429 || r.status === 403) { lastErr = err; continue; }
+      throw err;
+    }
+    const data = await r.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('Gemini 冇回覆');
+    return parseReceiptJson(text);
   }
-  const data = await r.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini 冇回覆');
-  return parseReceiptJson(text);
+  throw lastErr || new Error('Gemini 所有 key 都失敗');
 }
 
 // ── Main OCR entry point: 4-model sequential fallback ────────────────────────
 async function callGemini(base64, mime) {
   const geminiKey = state.apiKey || DEFAULT_API_KEY;
-  const primaryModel = state.scanModel || state.model || 'gemini-3.1-pro-preview';
+  const primaryModel = state.scanModel || state.model || 'gemini-3.1-flash-lite-preview';
   // Flash as last-resort fallback (skip if user already selected flash as primary)
-  const flashModel = 'gemini-3-flash-preview';
+  const flashModel = 'gemini-3.1-flash-lite-preview';
   // Build chain: GLM-4.6V → MiniMax → [user Gemini choice] → Flash fallback
   // If user picked a GLM model as scanModel, skip pos-3 (GLM already at pos-1)
   const primaryIsGLM = primaryModel.startsWith('glm-');
