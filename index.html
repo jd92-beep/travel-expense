@@ -286,7 +286,7 @@
     <!-- Preview area -->
     <div id="previewArea" class="hidden mt-4">
       <div class="glass rounded-2xl p-4">
-        <img id="previewImg" class="w-full max-h-64 object-contain rounded-xl mb-3" alt="">
+        <img id="previewImg" class="w-full max-h-64 object-contain rounded-xl mb-3 cursor-pointer active:opacity-75 transition-opacity" alt="" title="點擊重新確認" onclick="reopenLastScan()">
         <div id="scanStatus" class="text-center py-4">
           <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
           <p class="text-sm text-gray-400 mt-2">AI 正在辨識收據…</p>
@@ -1308,13 +1308,14 @@ function renderStats() {
 }
 
 // ============ AI SCAN ============
-let lastScanBase64 = null, lastScanMime = 'image/jpeg';
+let lastScanBase64 = null, lastScanMime = 'image/jpeg', lastScanResult = null;
 
 async function scanReceipt(file) {
   $('previewArea').classList.remove('hidden');
   const prevImg = $('previewImg');
   if (prevImg.src && prevImg.src.startsWith('blob:')) URL.revokeObjectURL(prevImg.src);
   prevImg.src = URL.createObjectURL(file);
+  lastScanResult = null; // clear previous result when new scan starts
   $('scanStatus').innerHTML = `
     <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
     <p class="text-sm mt-2" style="color:var(--n-muted)">AI 正在辨識收據…</p>`;
@@ -1336,7 +1337,8 @@ async function runScanWithBase64(base64, mime) {
     <p class="text-sm mt-2" style="color:var(--n-muted)">AI 正在辨識收據…</p>`;
   try {
     const result = await callGemini(base64, mime || 'image/jpeg');
-    $('scanStatus').innerHTML = '<p class="text-sm" style="color:#059669">✅ 辨識完成</p>';
+    lastScanResult = result;
+    $('scanStatus').innerHTML = '<p class="text-sm" style="color:#059669">✅ 辨識完成 — 點擊圖片可重新確認</p>';
     openConfirmModal(result, base64);
   } catch (err) {
     console.error(err);
@@ -1358,6 +1360,17 @@ function retryLastScan() {
   runScanWithBase64(lastScanBase64, lastScanMime);
 }
 window.retryLastScan = retryLastScan;
+
+function reopenLastScan() {
+  if (!lastScanResult && !lastScanBase64) return;
+  if (lastScanResult) {
+    openConfirmModal(lastScanResult, lastScanBase64 || '');
+  } else if (lastScanBase64) {
+    // result lost but image exists — re-run scan
+    runScanWithBase64(lastScanBase64, lastScanMime);
+  }
+}
+window.reopenLastScan = reopenLastScan;
 
 function fileToBase64(file) {
   return new Promise((res, rej) => {
