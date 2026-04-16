@@ -1380,7 +1380,7 @@ function startVoiceInput() {
   }
   voiceFinalText = '';
   const rec = new SR();
-  rec.lang = 'zh-HK';
+  rec.lang = 'yue-Hant-HK';   // Cantonese (NOT Mandarin zh-CN)
   rec.continuous = true;       // keep listening until user taps Stop
   rec.interimResults = true;
   $('voiceInterim').textContent = '';
@@ -1433,9 +1433,11 @@ function stopVoiceInput() {
 }
 
 async function parseVoiceExpense(transcript) {
-  toast('🎤 解析中…');
+  toast('🎤 解析中… 用緊 ' + (state.model || 'gemini-3.1-flash-live-preview'));
   const today = todayHKT();
-  const prompt = `你係旅行記帳 AI。用戶講咗：「${transcript}」
+  const prompt = `你係旅行記帳 AI。用戶用廣東話講咗：「${transcript}」
+
+注意：輸入係廣東話口語（粵語），例如「兩千蚊」即 2000、「俾咗」即「付了」、「食飯」即「餐飲」。
 
 提取消費資料回覆 JSON（只回覆 JSON，唔好任何其他文字）：
 {"store":"店名（繁中，冇就 null）","total":金額數字JPY（冇就 null）,"date":"${today}","category":"transport|food|shopping|lodging|ticket|medicine|other","payment":"cash|credit|paypay|suica","note":"備註（冇就 null）"}
@@ -1449,6 +1451,7 @@ async function parseVoiceExpense(transcript) {
     generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
   };
   const tryModel = async (model) => {
+    console.info(`[Voice] 嘗試 ${model}…`);
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     });
@@ -1458,19 +1461,33 @@ async function parseVoiceExpense(transcript) {
     if (!text) throw new Error('No response');
     return JSON.parse(text);
   };
-  try {
-    const primary = state.model || 'gemini-3.1-flash-live-preview';
-    let parsed;
+
+  // Model fallback chain for voice: selected → 3.1 pro → 3 flash
+  const primary = state.model || 'gemini-3.1-flash-live-preview';
+  const voiceChain = [primary];
+  if (primary !== 'gemini-3.1-pro-preview') voiceChain.push('gemini-3.1-pro-preview');
+  if (primary !== 'gemini-3-flash-preview') voiceChain.push('gemini-3-flash-preview');
+
+  let parsed = null;
+  let lastErr = null;
+  for (const m of voiceChain) {
     try {
-      parsed = await tryModel(primary);
+      parsed = await tryModel(m);
+      console.info(`[Voice] ✅ ${m} 成功`);
+      toast('✅ 語音解析完成 (' + m + ')');
+      break;
     } catch(e) {
-      console.warn(`[Voice] ${primary} 失敗 (${e.message})，fallback → gemini-3-flash-preview`);
-      parsed = await tryModel('gemini-3-flash-preview');
+      console.warn(`[Voice] ❌ ${m} 失敗: ${e.message}`);
+      lastErr = e;
     }
+  }
+
+  if (parsed && (parsed.store || parsed.total)) {
     openConfirmModal(parsed, '');
-  } catch(e) {
-    toast('解析失敗，請手動輸入', 'error');
-    openConfirmModal({}, '');
+  } else {
+    // All models failed or returned empty — open modal with transcript in note
+    toast('⚠️ AI 未能解析，請手動填寫', 'error');
+    openConfirmModal({ note: '🎤 ' + transcript, date: today }, '');
   }
 }
 
