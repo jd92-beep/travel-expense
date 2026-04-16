@@ -604,15 +604,16 @@ const PAYMENTS = [
 ];
 const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
 const SCAN_MODELS = [
+  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺旗艦',       tag: '🟣', color: '#7C3AED' },
   { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live', sub: 'Preview · Live · 最新', tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',        tag: '⭐', color: '#E04040' },
   { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',        tag: '🔵', color: '#2D5A8E' },
   { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',          tag: '⚡', color: '#F5A623' },
   { id: 'gemini-2.5-pro',               name: 'Gemini 2.5 Pro',        sub: '穩定版',                tag: '🟢', color: '#059669' },
-  { id: 'gemini-2.0-flash',             name: 'Gemini 2.0 Flash',      sub: '輕量 · 最快',           tag: '🚀', color: '#7C3AED' },
 ];
 const VOICE_MODELS = [
   { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 廣東話優化',     tag: '🟣', color: '#7C3AED' },
+  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺+文字',      tag: '🔮', color: '#6D28D9' },
   { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live', sub: 'Preview · Live · 最新', tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',        tag: '⭐', color: '#E04040' },
   { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',          tag: '⚡', color: '#F5A623' },
@@ -884,12 +885,17 @@ let modelTestStatus = {};
 async function testModelConnection(modelId) {
   const apiKey = state.apiKey || DEFAULT_API_KEY;
   try {
-    if (modelId === 'glm-4-flash') {
+    if (modelId === 'glm-4-flash' || modelId === 'glm-4.6v') {
       if (!VAULT_ZAI_KEY) return { ok: false, msg: 'vault 未解鎖' };
       const r = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'glm-4-flash', messages: [{ role: 'user', content: 'hi' }], stream: false, max_tokens: 5 })
+        body: JSON.stringify({
+          model: modelId,
+          messages: [{ role: 'user', content: 'hi' }],
+          thinking: { type: 'disabled' },
+          stream: false, max_tokens: 5
+        })
       });
       return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
     } else {
@@ -1545,23 +1551,24 @@ async function parseVoiceExpense(transcript) {
   // ── Voice model chain: GLM-4-Flash (primary) → Gemini (backup if key exists) ──
   const apiKey = state.apiKey || DEFAULT_API_KEY;
 
-  // Strategy 1: GLM-4-Flash (text model, free, excellent at Chinese/Cantonese)
-  async function tryGLM(prompt) {
+  // Strategy 1: GLM (text call — glm-4-flash or glm-4.6v, both support text)
+  async function tryGLM(prompt, modelId = 'glm-4-flash') {
     if (!VAULT_ZAI_KEY) throw new Error('GLM key not available (vault locked)');
-    console.info('[Voice] 嘗試 GLM-4-Flash…');
+    console.info(`[Voice] 嘗試 ${modelId}…`);
     const r = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'glm-4-flash',
+        model: modelId,
         messages: [{ role: 'user', content: prompt }],
+        thinking: { type: 'disabled' },
         temperature: 0.1, stream: false
       })
     });
-    if (!r.ok) { const t = await r.text().catch(()=>''); console.error('[Voice] GLM API', r.status, t.slice(0,200)); throw new Error('GLM ' + r.status); }
+    if (!r.ok) { const t = await r.text().catch(()=>''); console.error(`[Voice] ${modelId} API`, r.status, t.slice(0,200)); throw new Error('GLM ' + r.status); }
     const data = await r.json();
     const text = data?.choices?.[0]?.message?.content;
-    console.info('[Voice] GLM raw:', text?.slice(0, 400));
+    console.info(`[Voice] ${modelId} raw:`, text?.slice(0, 400));
     if (!text) throw new Error('GLM 冇回覆');
     return parseReceiptJson(text);
   }
@@ -1586,14 +1593,15 @@ async function parseVoiceExpense(transcript) {
   let lastErr = null;
   const voicePrimaryModel = state.voiceModel || 'glm-4-flash';
 
-  if (voicePrimaryModel === 'glm-4-flash') {
-    // GLM primary → Gemini fallback
+  if (voicePrimaryModel === 'glm-4-flash' || voicePrimaryModel === 'glm-4.6v') {
+    // GLM primary (flash or 4.6v) → Gemini fallback
     try {
-      parsed = await tryGLM(prompt);
-      console.info('[Voice] ✅ GLM-4-Flash 成功');
-      toast('✅ 語音解析完成 (GLM-4-Flash)');
+      parsed = await tryGLM(prompt, voicePrimaryModel);
+      const modelName = voicePrimaryModel === 'glm-4.6v' ? 'GLM-4.6V' : 'GLM-4-Flash';
+      console.info(`[Voice] ✅ ${modelName} 成功`);
+      toast(`✅ 語音解析完成 (${modelName})`);
     } catch(e) {
-      console.warn('[Voice] ❌ GLM-4-Flash 失敗:', e.message);
+      console.warn(`[Voice] ❌ ${voicePrimaryModel} 失敗:`, e.message);
       lastErr = e;
     }
     if (!parsed && apiKey) {
@@ -1749,13 +1757,21 @@ async function callGemini(base64, mime) {
   const primaryModel = state.scanModel || state.model || 'gemini-3.1-pro-preview';
   // Flash as last-resort fallback (skip if user already selected flash as primary)
   const flashModel = 'gemini-3-flash-preview';
+  // Build chain: GLM-4.6V → MiniMax → [user Gemini choice] → Flash fallback
+  // If user picked a GLM model as scanModel, skip pos-3 (GLM already at pos-1)
+  const primaryIsGLM = primaryModel.startsWith('glm-');
+  const geminiChain = primaryIsGLM
+    ? [{ name: flashModel, fn: () => callGeminiWithModel(base64, mime, flashModel, geminiKey) }]
+    : [
+        { name: primaryModel, fn: () => callGeminiWithModel(base64, mime, primaryModel, geminiKey) },
+        ...(primaryModel !== flashModel
+          ? [{ name: flashModel, fn: () => callGeminiWithModel(base64, mime, flashModel, geminiKey) }]
+          : []),
+      ];
   const chain = [
     { name: 'GLM-4.6V',    fn: () => callGLM(base64, mime) },
     { name: 'MiniMax VLM', fn: () => callMiniMax(base64, mime) },
-    { name: primaryModel,  fn: () => callGeminiWithModel(base64, mime, primaryModel, geminiKey) },
-    ...(primaryModel !== flashModel
-      ? [{ name: flashModel, fn: () => callGeminiWithModel(base64, mime, flashModel, geminiKey) }]
-      : []),
+    ...geminiChain,
   ];
   let lastErr;
   for (const { name, fn } of chain) {
