@@ -436,22 +436,24 @@
       <button id="syncPullBtn" class="glass py-3 rounded-2xl text-sm font-medium">⬇️ 從 Notion 拉</button>
       <button id="notionTestBtn" class="glass py-3 rounded-2xl text-sm font-medium">🔌 測試連線</button>
     </div>
+    <button id="notionMigrateBtn" class="w-full glass py-3 rounded-2xl text-sm font-medium mb-2" style="border:1px solid rgba(93,73,220,0.30);color:#4f46e5">✨ 美化 Notion Schema（加 emoji 欄位名）</button>
     <div id="notionStatus" class="text-[11px] text-center mb-2 hidden"></div>
 
     <div class="glass rounded-2xl p-3 mb-3 text-[11px] text-gray-400">
-      <p class="font-bold text-[#2D5A8E] mb-1">📋 Notion Database 必需欄位（一字不差）：</p>
+      <p class="font-bold text-[#2D5A8E] mb-1">📋 Notion Database 必需欄位：</p>
       <ul class="space-y-0.5 font-mono">
-        <li>• <span style="color:var(--n-text);font-weight:600">店名</span> (Title)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">金額</span> (Number)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">日期</span> (Date)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">類別</span> (Select)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">支付</span> (Select)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">地區</span> (Text)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">品項</span> (Text)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">備註</span> (Text)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">SourceID</span> (Text — 用作 sync 識別)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">🏪 店名</span> (Title)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">💴 金額 ¥</span> (Number)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">📅 日期</span> (Date)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">🗂 類別</span> (Select)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">💳 支付</span> (Select)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">📍 地區</span> (Text)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">🧾 品項</span> (Text)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">📝 備註</span> (Text)</li>
+        <li>• <span style="color:var(--n-text);font-weight:600">🔑 SourceID</span> (Text — sync key)</li>
       </ul>
-      <p class="mt-2 text-gray-500">建立後記得 Share → 加入你嘅 Integration ✅</p>
+      <p class="mt-2 text-[#4f46e5] font-medium">💡 點「✨ 美化 Notion Schema」可自動幫現有 DB 加 emoji + 色彩</p>
+      <p class="mt-1 text-gray-500">建立後記得 Share → 加入你嘅 Integration ✅</p>
     </div>
 
     </details>
@@ -1830,28 +1832,125 @@ function notionUrl(path) {
   return (state.proxy || 'https://notion-proxy.ftjdfr.workers.dev/?') + 'https://api.notion.com/v1' + path;
 }
 
+// Notion property name map — emoji-prefixed (new) with plain fallbacks (old)
+const N = {
+  store:    ['🏪 店名',   '店名'],
+  amount:   ['💴 金額 ¥', '金額'],
+  date:     ['📅 日期',   '日期'],
+  cat:      ['🗂 類別',   '類別'],
+  pay:      ['💳 支付',   '支付'],
+  region:   ['📍 地區',   '地區'],
+  items:    ['🧾 品項',   '品項'],
+  note:     ['📝 備註',   '備註'],
+  person:   ['👥 旅伴',   '旅伴'],
+  sourceId: ['🔑 SourceID', 'SourceID'],
+  hkd:      ['💵 HKD',    'HKD'],
+  tax:      ['💸 稅金 ¥', '稅金'],
+  subtotal: ['🧮 小計 ¥', '小計'],
+};
+// Read a Notion property trying new name first, then legacy name
+function nGet(props, key) {
+  const [newName, oldName] = N[key];
+  return props[newName] ?? props[oldName] ?? null;
+}
+
 function buildNotionProps(r) {
   const cat = CATEGORIES.find(c => c.id === r.category);
   const pay = PAYMENTS.find(p => p.id === r.payment);
   const person = (state.persons || []).find(p => p.id === r.personId);
   const personLabel = person ? `${person.emoji} ${person.name}` : '';
   const props = {
-    '店名': { title: [{ text: { content: (r.store || '未命名').slice(0, 200) } }] },
-    '金額': { number: Number(r.total) || 0 },
-    '日期': { date: { start: r.date } },
-    '類別': { select: { name: cat ? cat.name : '其他' } },
-    '支付': { select: { name: pay ? pay.name : '現金' } },
-    '地區': { rich_text: [{ text: { content: (r.region || '').slice(0, 2000) } }] },
-    '品項': { rich_text: [{ text: { content: (r.itemsText || '').slice(0, 2000) } }] },
-    '備註': { rich_text: [{ text: { content: (r.note || '').slice(0, 2000) } }] },
-    '旅伴': { rich_text: [{ text: { content: personLabel } }] },
-    'SourceID': { rich_text: [{ text: { content: r.id } }] },
+    [N.store[0]]:    { title: [{ text: { content: (r.store || '未命名').slice(0, 200) } }] },
+    [N.amount[0]]:   { number: Number(r.total) || 0 },
+    [N.date[0]]:     { date: { start: r.date } },
+    [N.cat[0]]:      { select: { name: cat ? cat.name : '其他' } },
+    [N.pay[0]]:      { select: { name: pay ? pay.name : '現金' } },
+    [N.region[0]]:   { rich_text: [{ text: { content: (r.region || '').slice(0, 2000) } }] },
+    [N.items[0]]:    { rich_text: [{ text: { content: (r.itemsText || '').slice(0, 2000) } }] },
+    [N.note[0]]:     { rich_text: [{ text: { content: (r.note || '').slice(0, 2000) } }] },
+    [N.person[0]]:   { rich_text: [{ text: { content: personLabel } }] },
+    [N.sourceId[0]]: { rich_text: [{ text: { content: r.id } }] },
   };
-  // Only include numeric fields if they have values (Notion accepts null but some existing dbs may not have the column)
-  if (r.hkd != null) props['HKD'] = { number: Number(r.hkd) };
-  if (r.tax != null) props['稅金'] = { number: Number(r.tax) };
-  if (r.subtotal != null) props['小計'] = { number: Number(r.subtotal) };
+  if (r.hkd != null)      props[N.hkd[0]]      = { number: Number(r.hkd) };
+  if (r.tax != null)      props[N.tax[0]]       = { number: Number(r.tax) };
+  if (r.subtotal != null) props[N.subtotal[0]]  = { number: Number(r.subtotal) };
   return props;
+}
+
+// Migrate existing Notion DB to emoji-prefixed property names + coloured select options
+async function notionMigrateSchema() {
+  if (!state.notionToken || !state.notionDb) {
+    toast('⚠️ 請先設定 Notion token 同 Database ID', 'error'); return;
+  }
+  toast('🔍 讀取 Notion Schema…');
+  try {
+    // 1. Fetch current DB schema
+    const db = await notionFetch(`/databases/${state.notionDb}`, { method: 'GET' });
+    const existing = db.properties || {};
+
+    // 2. Build rename map — only rename if old (plain) name still exists
+    const renameMap = [
+      ['店名',    N.store[0]],
+      ['金額',    N.amount[0]],
+      ['日期',    N.date[0]],
+      ['類別',    N.cat[0]],
+      ['支付',    N.pay[0]],
+      ['地區',    N.region[0]],
+      ['品項',    N.items[0]],
+      ['備註',    N.note[0]],
+      ['旅伴',    N.person[0]],
+      ['SourceID',N.sourceId[0]],
+      ['HKD',    N.hkd[0]],
+      ['稅金',    N.tax[0]],
+      ['小計',    N.subtotal[0]],
+    ];
+
+    const patchProps = {};
+    let needsMigration = false;
+
+    for (const [oldName, newName] of renameMap) {
+      if (!existing[oldName]) continue; // already renamed or doesn't exist
+      needsMigration = true;
+      if (oldName === '類別') {
+        patchProps[oldName] = { name: newName, select: { options: [
+          { name: '交通', color: 'blue' },
+          { name: '餐飲', color: 'orange' },
+          { name: '購物', color: 'pink' },
+          { name: '住宿', color: 'purple' },
+          { name: '門票', color: 'green' },
+          { name: '藥品', color: 'red' },
+          { name: '其他', color: 'gray' },
+        ]}};
+      } else if (oldName === '支付') {
+        patchProps[oldName] = { name: newName, select: { options: [
+          { name: '現金',  color: 'green' },
+          { name: '信用卡', color: 'blue' },
+          { name: 'PayPay', color: 'orange' },
+          { name: 'Suica',  color: 'purple' },
+        ]}};
+      } else {
+        patchProps[oldName] = { name: newName };
+      }
+    }
+
+    if (!needsMigration) {
+      toast('✅ Schema 已是最新版本 🎉'); return;
+    }
+
+    // 3. Rename the database title + apply property changes
+    await notionFetch(`/databases/${state.notionDb}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: [{ type: 'text', text: { content: '🗾 名古屋記帳 2026' } }],
+        properties: patchProps,
+      })
+    });
+
+    toast('✅ Notion 已美化！欄位名已加上 emoji 🎉');
+  } catch(e) {
+    console.error('[notionMigrateSchema]', e);
+    toast('❌ 美化失敗：' + (e.message || '').slice(0, 100), 'error');
+  }
 }
 
 async function notionFetch(path, options = {}) {
@@ -1999,26 +2098,28 @@ async function notionPullAll(silent = false) {
       if (deletedPageIds.has(page.id)) continue;
       returnedNotionPageIds.add(page.id);
       const p = page.properties;
-      const sourceId = p.SourceID?.rich_text?.[0]?.plain_text;
+      const sourceId = nGet(p,'sourceId')?.rich_text?.[0]?.plain_text;
       const id = sourceId || ('r_notion_' + page.id.slice(0, 8));
-      const cat = CATEGORIES.find(c => c.name === p['類別']?.select?.name)?.id || 'other';
-      const pay = PAYMENTS.find(x => x.name === p['支付']?.select?.name)?.id || 'cash';
+      const catName = nGet(p,'cat')?.select?.name || '';
+      const cat = CATEGORIES.find(c => c.name === catName)?.id || 'other';
+      const payName = nGet(p,'pay')?.select?.name || '';
+      const pay = PAYMENTS.find(x => x.name === payName)?.id || 'cash';
       // Map 旅伴 text back to personId
-      const companionText = p['旅伴']?.rich_text?.[0]?.plain_text || '';
+      const companionText = nGet(p,'person')?.rich_text?.[0]?.plain_text || '';
       const matchedPerson = getPersons().find(pe => companionText.includes(pe.name));
       const r = {
         id,
-        store: p['店名']?.title?.[0]?.plain_text || '',
-        total: p['金額']?.number || 0,
-        subtotal: p['小計']?.number ?? null,
-        tax: p['稅金']?.number ?? null,
-        hkd: p['HKD']?.number ?? null,
-        date: p['日期']?.date?.start || todayHKT(),
+        store: nGet(p,'store')?.title?.[0]?.plain_text || '',
+        total: nGet(p,'amount')?.number || 0,
+        subtotal: nGet(p,'subtotal')?.number ?? null,
+        tax: nGet(p,'tax')?.number ?? null,
+        hkd: nGet(p,'hkd')?.number ?? null,
+        date: nGet(p,'date')?.date?.start || todayHKT(),
         category: cat,
         payment: pay,
-        region: p['地區']?.rich_text?.[0]?.plain_text || '',
-        itemsText: p['品項']?.rich_text?.[0]?.plain_text || '',
-        note: p['備註']?.rich_text?.[0]?.plain_text || '',
+        region: nGet(p,'region')?.rich_text?.[0]?.plain_text || '',
+        itemsText: nGet(p,'items')?.rich_text?.[0]?.plain_text || '',
+        note: nGet(p,'note')?.rich_text?.[0]?.plain_text || '',
         personId: matchedPerson?.id || getPersons()[0].id,
         notionPageId: page.id,
         createdAt: new Date(page.created_time).getTime(),
@@ -2418,6 +2519,7 @@ function init() {
   // Notion sync buttons
   $('syncPushBtn').addEventListener('click', notionPushAll);
   $('syncPullBtn').addEventListener('click', notionPullAll);
+  $('notionMigrateBtn').addEventListener('click', notionMigrateSchema);
   $('notionTestBtn')?.addEventListener('click', async () => {
     const statusEl = $('notionStatus');
     statusEl.className = 'text-[11px] text-center mb-2';
