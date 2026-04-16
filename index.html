@@ -1447,7 +1447,7 @@ function stopVoiceInput() {
 }
 
 async function parseVoiceExpense(transcript) {
-  toast('🎤 解析中… 用緊 ' + (state.model || 'gemini-3.1-flash-live-preview'));
+  toast('🎤 解析中… ' + (VAULT_ZAI_KEY ? 'GLM-4-Flash' : (state.model || 'Gemini')));
   const today = todayHKT();
   const prompt = `你係旅行記帳 AI。用戶用廣東話講咗：「${transcript}」
 
@@ -1485,81 +1485,67 @@ async function parseVoiceExpense(transcript) {
 例子：「食咗炸豬扒 2300幾yen」→ {"store":null,"total":2300,"category":"food","payment":"cash","items":[{"name":"炸豬扒","name_jp":null,"price":2300}],"note":null}
 例子：「喺全家買咗飯糰同埋飲料，一共580蚊」→ {"store":"全家便利店","total":580,"category":"food","payment":"cash","items":[{"name":"飯糰","name_jp":null,"price":null},{"name":"飲料","name_jp":null,"price":null}],"note":null}`;
 
+  // ── Voice model chain: GLM-4-Flash (primary) → Gemini (backup if key exists) ──
   const apiKey = state.apiKey || DEFAULT_API_KEY;
-  const voiceSchema = {
-    type: 'OBJECT',
-    properties: {
-      store:    { type: 'STRING', nullable: true },
-      total:    { type: 'NUMBER', nullable: true },
-      date:     { type: 'STRING' },
-      category: { type: 'STRING', enum: ['transport','food','shopping','lodging','ticket','medicine','other'] },
-      payment:  { type: 'STRING', enum: ['cash','credit','paypay','suica'] },
-      items:    { type: 'ARRAY', items: { type: 'OBJECT', properties: {
-        name: { type: 'STRING' }, name_jp: { type: 'STRING', nullable: true }, price: { type: 'NUMBER', nullable: true }
-      }}},
-      note:     { type: 'STRING', nullable: true }
-    },
-    required: ['total', 'category', 'payment', 'items']
-  };
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: voiceSchema }
-  };
-  const tryModel = async (model) => {
+
+  // Strategy 1: GLM-4-Flash (text model, free, excellent at Chinese/Cantonese)
+  async function tryGLM(prompt) {
+    if (!VAULT_ZAI_KEY) throw new Error('GLM key not available (vault locked)');
+    console.info('[Voice] 嘗試 GLM-4-Flash…');
+    const r = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'glm-4-flash',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1, stream: false
+      })
+    });
+    if (!r.ok) { const t = await r.text().catch(()=>''); console.error('[Voice] GLM API', r.status, t.slice(0,200)); throw new Error('GLM ' + r.status); }
+    const data = await r.json();
+    const text = data?.choices?.[0]?.message?.content;
+    console.info('[Voice] GLM raw:', text?.slice(0, 400));
+    if (!text) throw new Error('GLM 冇回覆');
+    return parseReceiptJson(text);
+  }
+
+  // Strategy 2: Gemini (only if API key exists)
+  async function tryGemini(prompt, model) {
+    if (!apiKey) throw new Error('No Gemini API key');
     console.info(`[Voice] 嘗試 ${model}…`);
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1 } })
     });
-    if (!r.ok) {
-      const errBody = await r.text().catch(() => '');
-      console.error(`[Voice] ${model} API ${r.status}:`, errBody.slice(0, 200));
-      throw new Error('API ' + r.status);
-    }
+    if (!r.ok) { console.error(`[Voice] ${model} API ${r.status}`); throw new Error('API ' + r.status); }
     const data = await r.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    console.info(`[Voice] ${model} raw response:`, text?.slice(0, 300));
+    console.info(`[Voice] ${model} raw:`, text?.slice(0, 400));
     if (!text) throw new Error('No response');
-    return parseReceiptJson(text); // robust parser — handles markdown-wrapped JSON
-  };
-
-  // Model fallback chain for voice: selected → 3.1 pro → 3 flash
-  const primary = state.model || 'gemini-3.1-flash-live-preview';
-  const voiceChain = [primary];
-  if (primary !== 'gemini-3.1-pro-preview') voiceChain.push('gemini-3.1-pro-preview');
-  if (primary !== 'gemini-3-flash-preview') voiceChain.push('gemini-3-flash-preview');
+    return parseReceiptJson(text);
+  }
 
   let parsed = null;
   let lastErr = null;
-  // Phase 1: try with strict responseSchema
-  for (const m of voiceChain) {
-    try {
-      parsed = await tryModel(m);
-      console.info(`[Voice] ✅ ${m} 成功 (schema mode)`);
-      toast('✅ 語音解析完成 (' + m + ')');
-      break;
-    } catch(e) {
-      console.warn(`[Voice] ❌ ${m} 失敗: ${e.message}`);
-      lastErr = e;
-    }
+  // Phase 1: GLM-4-Flash (best at Cantonese, always has key from vault)
+  try {
+    parsed = await tryGLM(prompt);
+    console.info('[Voice] ✅ GLM-4-Flash 成功');
+    toast('✅ 語音解析完成 (GLM-4-Flash)');
+  } catch(e) {
+    console.warn('[Voice] ❌ GLM-4-Flash 失敗:', e.message);
+    lastErr = e;
   }
-  // Phase 2: if all failed with schema, retry primary WITHOUT responseSchema/responseMimeType
-  if (!parsed) {
-    console.info('[Voice] Phase 2: retry without responseSchema...');
-    const bodyNoSchema = {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1 }
-    };
-    for (const m of voiceChain.slice(0, 2)) {
+  // Phase 2: Gemini fallback (only if API key exists)
+  if (!parsed && apiKey) {
+    const geminiModels = [state.model || 'gemini-3.1-flash-live-preview', 'gemini-3-flash-preview'];
+    for (const m of geminiModels) {
       try {
-        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyNoSchema)
-        });
-        if (!r.ok) continue;
-        const data = await r.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        console.info(`[Voice] ${m} (no-schema) raw:`, text?.slice(0, 300));
-        if (text) { parsed = parseReceiptJson(text); console.info(`[Voice] ✅ ${m} 成功 (no-schema)`); toast('✅ 語音解析完成 (' + m + ')'); break; }
-      } catch(e) { console.warn(`[Voice] ❌ ${m} no-schema 失敗: ${e.message}`); }
+        parsed = await tryGemini(prompt, m);
+        console.info(`[Voice] ✅ ${m} 成功`);
+        toast('✅ 語音解析完成 (' + m + ')');
+        break;
+      } catch(e) { console.warn(`[Voice] ❌ ${m} 失敗: ${e.message}`); lastErr = e; }
     }
   }
 
