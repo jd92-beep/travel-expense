@@ -392,6 +392,7 @@
         <span id="rateStatus" class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">⟳ 每次入數自動更新</span>
       </div>
       <input type="number" id="setRate" class="w-full bg-transparent text-2xl font-bold mt-1 focus:outline-none" value="20.36" step="0.01">
+      <p id="rateReverse" class="text-[11px] mt-1" style="color:var(--n-muted)"></p>
     </div>
 
     <div class="glass rounded-2xl p-4 mb-3">
@@ -948,6 +949,8 @@ async function fetchLiveRate(force = false) {
       saveState();
       const el = document.getElementById('setRate');
       if (el) el.value = state.rate;
+      const rv = document.getElementById('rateReverse');
+      if (rv) rv.textContent = `100 JPY ≈ HKD ${(100 / state.rate).toFixed(2)}`;
       const st = document.getElementById('rateStatus');
       if (st) {
         st.textContent = '✓ 已更新 ' + new Date().toLocaleTimeString('zh-HK', {hour:'2-digit',minute:'2-digit'});
@@ -2042,8 +2045,15 @@ function init() {
   $('setBudget').addEventListener('input', () => {
     $('setBudgetHKD').textContent = ($('setBudget').value / ($('setRate').value || 20.36)).toFixed(0);
   });
+  function updateRateReverse() {
+    const r = parseFloat($('setRate').value) || 20.36;
+    const hkd = (100 / r).toFixed(2);
+    $('rateReverse').textContent = `100 JPY ≈ HKD ${hkd}`;
+  }
+  updateRateReverse();
   $('setRate').addEventListener('input', () => {
     $('setBudgetHKD').textContent = ($('setBudget').value / ($('setRate').value || 20.36)).toFixed(0);
+    updateRateReverse();
   });
   $('saveSettings').addEventListener('click', () => {
     state.budget = Number($('setBudget').value) || 101800;
