@@ -619,11 +619,12 @@ const PAYMENTS = [
 ];
 const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
 const GEMINI_MODELS = [
-  { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', sub: 'Preview · 最新旗艦', tag: '⭐', color: '#CC2929' },
-  { id: 'gemini-3-pro-preview',   name: 'Gemini 3 Pro',   sub: 'Preview · 穩定',     tag: '🔵', color: '#2D5A8E' },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', sub: 'Preview · 快',        tag: '⚡', color: '#F5A623' },
-  { id: 'gemini-2.5-pro',         name: 'Gemini 2.5 Pro', sub: '穩定版',              tag: '🟢', color: '#059669' },
-  { id: 'gemini-2.0-flash',       name: 'Gemini 2.0 Flash',sub:'輕量 · 最快',         tag: '🚀', color: '#7C3AED' },
+  { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live', sub: 'Preview · Live · 最新', tag: '🔴', color: '#CC2929' },
+  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',        tag: '⭐', color: '#E04040' },
+  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',        tag: '🔵', color: '#2D5A8E' },
+  { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',          tag: '⚡', color: '#F5A623' },
+  { id: 'gemini-2.5-pro',               name: 'Gemini 2.5 Pro',        sub: '穩定版',                tag: '🟢', color: '#059669' },
+  { id: 'gemini-2.0-flash',             name: 'Gemini 2.0 Flash',      sub: '輕量 · 最快',           tag: '🚀', color: '#7C3AED' },
 ];
 // Boss 嘅名古屋行程 (HKT 日期) — 每日詳細 spots
 const ITINERARY = [
@@ -710,7 +711,7 @@ let state = {
   budget: 101800,
   rate: 20.36,
   apiKey: DEFAULT_API_KEY,
-  model: 'gemini-3.1-pro-preview',
+  model: 'gemini-3.1-flash-live-preview',
   notionToken: DEFAULT_NOTION_TOKEN,
   notionDb: '3438d94d5f7c81878221fcda6d65d39d',
   proxy: 'https://corsproxy.io/?',
@@ -887,7 +888,7 @@ window.removePerson = function(id) {
 function renderModelCards() {
   const el = document.getElementById('modelCards');
   if (!el) return;
-  const cur = state.model || 'gemini-3.1-pro-preview';
+  const cur = state.model || 'gemini-3.1-flash-live-preview';
   el.innerHTML = GEMINI_MODELS.map(m => {
     const on = cur === m.id;
     return `<button type="button" onclick="switchModel('${m.id}')"
