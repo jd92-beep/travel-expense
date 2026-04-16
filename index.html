@@ -676,11 +676,11 @@ const ITINERARY = [
   ]},
 ];
 const DEFAULT_API_KEY = '';
-const DEFAULT_NOTION_TOKEN = atob('bnRuXzM4MDA1NDY0OTU2NGZnQ2F4OVRxVHYwSEljNWVwUDNOQ0NnMVV6bWJMZ1VmRjU=');
+const DEFAULT_NOTION_TOKEN = '';
 
 // Encrypted vault (AES-256-GCM + PBKDF2/SHA-256 @ 100k iterations)
-// Contains: apiKey, notionToken, notionDb — decryptable only with correct password
-const VAULT_CT = 'PuGLJr8IdUZ5XcoCUFC0/g==.PwztV3+nvD1foby9.hqOn13VF0gIY/NECsagQHI9i1fEbvgAAAJ5LT9LWi8CHwjHVqryxtFX2o1EpC+JNcPPtTJkJRgjoIPDl3Tr52zu6zOB+oX6q//vuVmlVg+uxFfa/T2y2PgUuulxQzV9xexyuEuyOaw5pK3uNUwwXELFpZ/8T3aTrRPVon6tr2QYCUs51HGqPoZWJk/rpQN8PgfNde7XyPq+PL914CTUfiGE/6VzpbRYzMDWoYte9FNjoCjVrbA==';
+// Contains: apiKey, notionToken, notionDb, zaiKey, minimaxKey — decryptable only with correct password
+const VAULT_CT = 'k6vqfv9QlaYBaa80fOWepw==.ev2aSoyLibHL8trT.mx3zCKZeI5aUD3WY8CojCr4N8Z7j2OnGS7BAHxRemqzWJ4sbCq5zc+wmEl2Vc/ysDl76ZtmqobsGoKNI80tot5nQk2JqUG46tgjyAYHN+omyY9ZAYnWgBbtJp5T+ekJ1ONweTNspIw04XoZQKzW2t2YqjSoUzsASJqdAWezKvG/6yyhNtS4F+IF5OxrzI22MzqZ9fxGEMvIehW8bpBqXXep7xuW8RrYfka7N8wiAke9vA0mb5qHM+H26pOJW0dKniADQsC9xunBmVGbQk9eATwDWJp+Kw28nOJN/Em+i/LqARn9Ptv5i+UmoPWreQgHm5VNFRvKqJOYRZae+GNtcnxP/SDx3kycAjQZ0jQvGiftWKYq9AHbWjNn/kt9KYPqV8F68plOn2gGv18QsG7nIu102BtHwNh/r1EFxpfhrPrUR/Yjwcn3HYDsd2QV0JQQK6A5lnxoh9dg=';
 
 const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 
@@ -691,7 +691,7 @@ async function deriveKey(password, salt) {
     pwKey,
     { name: 'AES-GCM', length: 256 },
     false,
-    ['decrypt']
+    ['encrypt', 'decrypt']
   );
 }
 
@@ -713,7 +713,7 @@ let state = {
   apiKey: DEFAULT_API_KEY,
   model: 'gemini-3.1-flash-live-preview',
   notionToken: DEFAULT_NOTION_TOKEN,
-  notionDb: '3438d94d5f7c81878221fcda6d65d39d',
+  notionDb: '',
   proxy: 'https://corsproxy.io/?',
   autoSync: false,
   imgbbKey: '',
@@ -1492,8 +1492,9 @@ async function parseVoiceExpense(transcript) {
   }
 }
 
-const DEFAULT_ZAI_KEY     = atob('OWFhMTVkMmQyNmRlNGZlNjgwMWY5ODNlNTVmOWQ0MjcueDI5UXhKRHZQZ2E2VlA1NQ==');
-const DEFAULT_MINIMAX_KEY = atob('c2stY3AtVEd3a3RBb2hqSTFnVFF2b1pwWFRpZHBQeFlBZWVvZUNZdnJsUUdWaW83c3BnWDEtLVg4Y201WFlwSDFQbUJfcmVGTmRrMWlTa2RtNnVIbklzSWxaUVUydDFNNE1DUy1CSms1VWY2T2lXLWZiNHlJbXZzdXZrdzg=');
+// API keys stored in vault only — no hardcoded defaults
+let VAULT_ZAI_KEY = '';
+let VAULT_MINIMAX_KEY = '';
 
 const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。分析呢張日本收據圖片，提取資料並回覆嚴格 JSON 格式（唔好加任何文字或 markdown，只回覆 JSON）：
 
@@ -1549,7 +1550,8 @@ async function callGLM(base64, mime) {
     max_tokens: 1024,
     stream: false
   };
-  const r = await fetch(url, { method: 'POST', headers: { 'Authorization': `Bearer ${DEFAULT_ZAI_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!VAULT_ZAI_KEY) throw new Error('GLM key not available (vault locked)');
+  const r = await fetch(url, { method: 'POST', headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!r.ok) { const e = new Error(`GLM ${r.status}`); e.status = r.status; throw e; }
   const data = await r.json();
   const text = data?.choices?.[0]?.message?.content;
@@ -1968,14 +1970,13 @@ async function saveModal() {
   $('previewArea').classList.add('hidden');
   $('receiptInput').value = '';
 
-  // Auto-sync to Notion (r is a ref inside state.receipts — notionPageId mutated in-place)
-  if (state.autoSync && state.notionToken && state.notionDb) {
+  // Always sync to Notion if credentials exist (new → create, edit → update)
+  if (state.notionToken && state.notionDb) {
     notionPushReceipt(r).then(() => {
-      // Only persist the notionPageId update — don't clobber other concurrent changes
       if (r.notionPageId) saveState();
       toast('☁️ 已同步到 Notion');
     }).catch(e => {
-      console.error('[autoSync]', e);
+      console.error('[notionSync]', e);
       toast('⚠️ Notion sync 失敗: ' + (e.message || ''));
     });
   }
@@ -1993,20 +1994,23 @@ async function deleteReceipt() {
   const idx = state.receipts.findIndex(x => x.id === editingId);
   if (idx < 0) return;
   const deleted = state.receipts[idx];
-  // Remove from Notion too if synced
-  if (deleted.notionPageId && state.notionToken) {
-    try {
-      await notionFetch(`/pages/${deleted.notionPageId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ archived: true })
-      });
-    } catch(e) { console.warn('Notion archive failed:', e.message); }
-  }
   state.receipts.splice(idx, 1);
   saveState();
   closeModal();
   refresh();
   toast('🗑️ 已刪除');
+  // Archive from Notion if synced
+  if (deleted.notionPageId && state.notionToken) {
+    notionFetch(`/pages/${deleted.notionPageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ archived: true })
+    }).then(() => {
+      toast('☁️ Notion 已同步刪除');
+    }).catch(e => {
+      console.warn('[notionDelete]', e.message);
+      toast('⚠️ Notion 刪除失敗（本地已刪）');
+    });
+  }
 }
 
 // ============ TABS ============
@@ -2219,10 +2223,18 @@ function init() {
 
 // ========== GATE: unlock vault before init ==========
 
-// Device-bound token: XOR password bytes with SHA-256 of device fingerprint
-// so the stored token is useless on a different device
+// Device-bound token: XOR password bytes with SHA-256 of device fingerprint + random salt
+// so the stored token is useless on a different device AND not reconstructable from public info
 async function _deviceKey() {
-  const info = [navigator.userAgent, screen.width, screen.height, navigator.language].join('|');
+  // Random salt generated once per device, stored in localStorage
+  let salt = localStorage.getItem('_dk_salt');
+  if (!salt) {
+    const arr = new Uint8Array(32);
+    crypto.getRandomValues(arr);
+    salt = btoa(String.fromCharCode(...arr));
+    localStorage.setItem('_dk_salt', salt);
+  }
+  const info = [navigator.userAgent, screen.width, screen.height, navigator.language, salt].join('|');
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(info));
   return new Uint8Array(buf);
 }
@@ -2250,6 +2262,8 @@ async function applyVault(vault, pw) {
   state.apiKey = vault.apiKey || state.apiKey;
   state.notionToken = vault.notionToken || state.notionToken;
   state.notionDb = vault.notionDb || state.notionDb;
+  VAULT_ZAI_KEY = vault.zaiKey || VAULT_ZAI_KEY;
+  VAULT_MINIMAX_KEY = vault.minimaxKey || VAULT_MINIMAX_KEY;
   saveState(); // saves everything EXCEPT apiKey/notionToken
   localStorage.setItem('vault_unlocked', '1');
   if (pw) await _storeVaultToken(pw); // device-bound token for auto-reload
@@ -2268,6 +2282,8 @@ async function gateAndInit() {
         state.apiKey = vault.apiKey || state.apiKey;
         state.notionToken = vault.notionToken || state.notionToken;
         state.notionDb = vault.notionDb || state.notionDb;
+        VAULT_ZAI_KEY = vault.zaiKey || VAULT_ZAI_KEY;
+        VAULT_MINIMAX_KEY = vault.minimaxKey || VAULT_MINIMAX_KEY;
         init();
         return;
       }
