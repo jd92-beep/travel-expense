@@ -188,7 +188,7 @@
 <main class="px-5 mt-2">
 
   <!-- ============ DASHBOARD TAB ============ -->
-  <section id="tab-dashboard" class="tab-content fade-in">
+  <section id="tab-dashboard" class="tab-content hidden fade-in">
     <!-- Today -->
     <div class="rounded-3xl p-6 mb-4" style="background:linear-gradient(135deg,#C0281E 0%,#E04040 45%,#FF7A94 100%);box-shadow:0 16px 48px rgba(192,40,30,0.40),0 4px 12px rgba(0,0,0,0.12)">
       <div class="flex items-center justify-between mb-2">
@@ -254,7 +254,7 @@
   </section>
 
   <!-- ============ SCAN TAB ============ -->
-  <section id="tab-scan" class="tab-content hidden fade-in">
+  <section id="tab-scan" class="tab-content fade-in">
     <div class="rounded-3xl p-7 mb-5 text-center" style="background:linear-gradient(145deg,#1B2D55 0%,#2D5088 55%,#3D70B8 100%);box-shadow:0 16px 48px rgba(27,45,85,0.35)">
       <div class="text-6xl mb-3" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,0.3))">📸</div>
       <h2 class="text-2xl font-black mb-1" style="color:white">掃描收據</h2>
@@ -484,11 +484,11 @@
 <!-- ============ BOTTOM TAB BAR ============ -->
 <nav class="fixed bottom-0 left-0 right-0 z-50" style="background:rgba(28,24,32,0.94);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-top:1px solid rgba(255,255,255,0.08)">
   <div class="grid grid-cols-6 max-w-md mx-auto">
-    <button data-tab="dashboard" class="tab-btn flex flex-col items-center py-3 tab-active">
+    <button data-tab="dashboard" class="tab-btn flex flex-col items-center py-3 tab-inactive">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
       <span class="text-[9px] mt-1">主頁</span>
     </button>
-    <button data-tab="scan" class="tab-btn flex flex-col items-center py-3 tab-inactive">
+    <button data-tab="scan" class="tab-btn flex flex-col items-center py-3 tab-active">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       <span class="text-[9px] mt-1">掃描</span>
     </button>
