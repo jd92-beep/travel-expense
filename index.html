@@ -615,6 +615,7 @@ const PAYMENTS = [
 const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
 const SCAN_MODELS = [
   { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺旗艦',          tag: '🟣', color: '#7C3AED' },
+  { id: 'minimax',                        name: 'MiniMax VLM',           sub: 'MiniMax · 視覺模型',       tag: '🔷', color: '#0EA5E9' },
   { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: 'Preview · 輕量 · 推薦 ✅', tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',           tag: '⭐', color: '#E04040' },
   { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',           tag: '🔵', color: '#2D5A8E' },
@@ -1851,24 +1852,45 @@ async function callGeminiWithModel(base64, mime, model, apiKey) {
 async function callGemini(base64, mime) {
   const geminiKey = state.apiKey || DEFAULT_API_KEY;
   const primaryModel = state.scanModel || state.model || 'gemini-3.1-flash-lite-preview';
-  // Flash as last-resort fallback (skip if user already selected flash as primary)
   const flashModel = 'gemini-3.1-flash-lite-preview';
-  // Build chain: GLM-4.6V → MiniMax → [user Gemini choice] → Flash fallback
-  // If user picked a GLM model as scanModel, skip pos-3 (GLM already at pos-1)
-  const primaryIsGLM = primaryModel.startsWith('glm-');
-  const geminiChain = primaryIsGLM
-    ? [{ name: flashModel, fn: () => callGeminiWithModel(base64, mime, flashModel, geminiKey) }]
-    : [
+
+  // Determine user's primary model type so we can de-dup the fallback chain
+  const primaryIsGLM     = primaryModel.startsWith('glm-');
+  const primaryIsMiniMax = primaryModel === 'minimax';
+  const primaryIsGemini  = !primaryIsGLM && !primaryIsMiniMax;
+
+  // Build the Gemini portion of the chain (skip if user chose a non-Gemini primary)
+  const geminiChain = primaryIsGemini
+    ? [
         { name: primaryModel, fn: () => callGeminiWithModel(base64, mime, primaryModel, geminiKey) },
         ...(primaryModel !== flashModel
           ? [{ name: flashModel, fn: () => callGeminiWithModel(base64, mime, flashModel, geminiKey) }]
           : []),
-      ];
-  const chain = [
-    { name: 'GLM-4.6V',    fn: () => callGLM(base64, mime) },
-    { name: 'MiniMax VLM', fn: () => callMiniMax(base64, mime) },
-    ...geminiChain,
-  ];
+      ]
+    : [{ name: flashModel, fn: () => callGeminiWithModel(base64, mime, flashModel, geminiKey) }];
+
+  // Full chain: put user's chosen model first if it's GLM or MiniMax, else use the standard order
+  let chain;
+  if (primaryIsGLM) {
+    chain = [
+      { name: primaryModel, fn: () => callGLM(base64, mime) },
+      { name: 'MiniMax VLM', fn: () => callMiniMax(base64, mime) },
+      ...geminiChain,
+    ];
+  } else if (primaryIsMiniMax) {
+    chain = [
+      { name: 'MiniMax VLM', fn: () => callMiniMax(base64, mime) },
+      { name: 'GLM-4.6V',    fn: () => callGLM(base64, mime) },
+      ...geminiChain,
+    ];
+  } else {
+    // Gemini primary: GLM → MiniMax → chosen Gemini → Flash
+    chain = [
+      { name: 'GLM-4.6V',    fn: () => callGLM(base64, mime) },
+      { name: 'MiniMax VLM', fn: () => callMiniMax(base64, mime) },
+      ...geminiChain,
+    ];
+  }
   let lastErr;
   for (const { name, fn } of chain) {
     try {
