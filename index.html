@@ -1343,13 +1343,13 @@ async function callGLM(base64, mime) {
   return parseReceiptJson(text);
 }
 
-// ── Model 2: MiniMax VLM (fallback 1) ────────────────────────────────────────
+/// ── Model 2: MiniMax VLM (fallback 1) ────────────────────────────────────────
 async function callMiniMax(base64, mime) {
-  // MiniMax blocks CORS — route through the same proxy used for Notion
-  const url = (state.proxy || 'https://corsproxy.io/?') + 'https://api.minimax.io/v1/coding_plan/vlm';
-  const r = await fetch(url, {
+  // Use our Cloudflare Worker proxy — handles CORS + auth server-side, accepts full base64 body
+  const WORKER_URL = 'https://minimax-proxy.ftjdfr.workers.dev';
+  const r = await fetch(WORKER_URL, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${DEFAULT_MINIMAX_KEY}`, 'Content-Type': 'application/json', 'MM-API-Source': 'Minimax-MCP' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt: GEMINI_PROMPT, image_url: `data:${mime};base64,${base64}` })
   });
   if (!r.ok) { const e = new Error(`MiniMax ${r.status}`); e.status = r.status; throw e; }
