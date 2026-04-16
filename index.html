@@ -313,6 +313,13 @@
     <h2 class="text-2xl font-black mb-4">統計分析 📊</h2>
 
     <!-- Category -->
+    <!-- Person split + settlement -->
+    <div id="personStatsWrap" class="glass rounded-2xl p-4 mb-4">
+      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">👦👧 各人花費對比</h3>
+      <div class="relative h-40 mb-4"><canvas id="personChart"></canvas></div>
+      <div id="settlementCard" class="rounded-2xl p-4 text-center" style="background:linear-gradient(135deg,#FFF0F3,#FFF9EC)"></div>
+    </div>
+
     <div class="glass rounded-2xl p-4 mb-4">
       <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">類別佔比</h3>
       <div class="relative h-56"><canvas id="catChart"></canvas></div>
@@ -706,7 +713,10 @@ let state = {
   proxy: 'https://corsproxy.io/?',
   autoSync: false,
   imgbbKey: '',
-  persons: [{ id: 'p_boss', name: 'Tony', emoji: '🧔', color: '#2D5A8E' }],
+  persons: [
+    { id: 'p_boss', name: 'Tony', emoji: '👦', color: '#CC2929' },
+    { id: 'p_xinxin', name: '欣欣', emoji: '👧', color: '#FF91A4' },
+  ],
 };
 
 function loadState() {
@@ -716,6 +726,17 @@ function loadState() {
       const parsed = JSON.parse(s);
       if (typeof parsed !== 'object' || parsed === null) throw new Error('corrupt');
       state = { ...state, ...parsed };
+      // Migrate: ensure Tony emoji is 👦 and 欣欣 is always present
+      if (state.persons) {
+        const boss = state.persons.find(p => p.id === 'p_boss');
+        if (boss) { boss.emoji = '👦'; boss.color = '#CC2929'; }
+        if (!state.persons.find(p => p.id === 'p_xinxin')) {
+          state.persons.push({ id: 'p_xinxin', name: '欣欣', emoji: '👧', color: '#FF91A4' });
+        } else {
+          const xx = state.persons.find(p => p.id === 'p_xinxin');
+          xx.emoji = '👧'; xx.color = '#FF91A4';
+        }
+      }
       // credentials are NOT persisted to localStorage — they come from vault unlock only
     }
   } catch(e) {
@@ -782,7 +803,10 @@ let selectedNewEmoji = '🧔';
 function getPersons() {
   return (state.persons && state.persons.length > 0)
     ? state.persons
-    : [{ id: 'p_boss', name: 'Tony', emoji: '🧔', color: '#2D5A8E' }];
+    : [
+        { id: 'p_boss', name: 'Tony', emoji: '👦', color: '#CC2929' },
+        { id: 'p_xinxin', name: '欣欣', emoji: '👧', color: '#FF91A4' },
+      ];
 }
 
 function renderPersonRow() {
@@ -790,16 +814,19 @@ function renderPersonRow() {
   if (!row) return;
   const persons = getPersons();
   if (!selectedPersonId) selectedPersonId = persons[0].id;
-  // Hide selector when only one person
+  // Always show person selector
   const wrap = document.getElementById('mPersonWrap');
-  if (wrap) wrap.classList.toggle('hidden', persons.length <= 1);
+  if (wrap) wrap.classList.remove('hidden');
   row.innerHTML = persons.map(p => {
     const on = selectedPersonId === p.id;
     return `<button type="button" onclick="selectPerson('${p.id}')"
-      class="flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition"
-      style="${on ? 'background:#EEF3FA;outline:2px solid #2D5A8E' : 'background:var(--n-bg);outline:2px solid transparent'}">
-      <span class="text-2xl">${p.emoji}</span>
-      <span class="text-[10px] font-medium" style="color:${on ? '#2D5A8E' : 'var(--n-muted)'}">${escapeHtml(p.name)}</span>
+      class="flex flex-col items-center gap-1 flex-1 py-3 rounded-2xl transition-all"
+      style="${on
+        ? `background:${p.color}18;outline:3px solid ${p.color};transform:scale(1.05)`
+        : 'background:var(--n-bg);outline:2px solid var(--n-border)'}">
+      <span class="text-4xl">${p.emoji}</span>
+      <span class="text-xs font-bold mt-1" style="color:${on ? p.color : 'var(--n-muted)'}">${escapeHtml(p.name)}</span>
+      ${on ? `<span class="text-[9px] font-semibold px-2 py-0.5 rounded-full mt-0.5" style="background:${p.color};color:#fff">付款</span>` : ''}
     </button>`;
   }).join('');
 }
@@ -810,7 +837,6 @@ function renderPersonBreakdown() {
   const wrap = document.getElementById('personBreakdownWrap');
   const el = document.getElementById('personBreakdown');
   if (!wrap || !el) return;
-  if (persons.length <= 1) { wrap.classList.add('hidden'); return; }
   wrap.classList.remove('hidden');
   const firstId = persons[0].id;
   el.innerHTML = persons.map(p => {
@@ -818,10 +844,10 @@ function renderPersonBreakdown() {
       .filter(r => (r.personId || firstId) === p.id)
       .reduce((s, r) => s + (Number(r.total) || 0), 0);
     const count = state.receipts.filter(r => (r.personId || firstId) === p.id).length;
-    return `<div class="glass rounded-2xl p-4">
+    return `<div class="glass rounded-2xl p-4" style="border-left:4px solid ${p.color}">
       <div class="flex items-center gap-2 mb-2">
         <span class="text-2xl">${p.emoji}</span>
-        <p class="text-xs font-medium truncate" style="color:var(--n-muted)">${escapeHtml(p.name)}</p>
+        <p class="text-xs font-bold" style="color:${p.color}">${escapeHtml(p.name)}</p>
       </div>
       <p class="text-xl font-bold" style="color:var(--n-text)">¥${fmt(total)}</p>
       <p class="text-[10px] mt-0.5" style="color:var(--n-muted)">≈ HKD ${(total/state.rate).toFixed(0)} · ${count} 筆</p>
@@ -839,8 +865,8 @@ function renderPersonList() {
         <span class="text-2xl">${p.emoji}</span>
         <span class="text-sm font-medium" style="color:var(--n-text)">${escapeHtml(p.name)}</span>
       </div>
-      ${i === 0
-        ? '<span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">主要</span>'
+      ${(p.id === 'p_boss' || p.id === 'p_xinxin')
+        ? `<span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:${p.color}22;color:${p.color}">${p.emoji}</span>`
         : `<button onclick="removePerson('${p.id}')" class="text-[10px] px-2 py-0.5 rounded-full" style="color:#DC2626;background:#FEE2E2">移除</button>`}
     </div>`).join('');
 }
@@ -999,7 +1025,7 @@ function receiptCard(r) {
   const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[6];
   const pay = PAYMENTS.find(p => p.id === r.payment) || PAYMENTS[0];
   const persons = getPersons();
-  const person = persons.length > 1 ? (persons.find(p => p.id === r.personId) || persons[0]) : null;
+  const person = persons.find(p => p.id === r.personId) || persons[0];
   return `
     <div class="glass rounded-2xl p-3 flex items-center justify-between" onclick="editReceipt('${r.id}')">
       <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -1010,7 +1036,7 @@ function receiptCard(r) {
         </div>
       </div>
       <div class="text-right pl-2">
-        ${person ? `<span class="text-base">${person.emoji}</span>` : ''}
+        <span class="text-base" title="${escapeHtml(person.name)}">${person.emoji}</span>
         <p class="text-base font-bold">¥${fmt(r.total)}</p>
         <p class="text-[10px] text-gray-500">≈ HKD ${(r.total/state.rate).toFixed(0)}</p>
       </div>
@@ -1114,6 +1140,71 @@ function renderStats() {
     pays[r.payment] = (pays[r.payment]||0) + Number(r.total||0);
     daily[r.date] = (daily[r.date]||0) + Number(r.total||0);
   });
+
+  // ── Person split chart + settlement ──────────────────────────
+  const persons = getPersons();
+  const firstId = persons[0].id;
+  const personTotals = persons.map(p =>
+    state.receipts
+      .filter(r => (r.personId || firstId) === p.id)
+      .reduce((s, r) => s + (Number(r.total)||0), 0)
+  );
+  const personCounts = persons.map(p =>
+    state.receipts.filter(r => (r.personId || firstId) === p.id).length
+  );
+  if (charts.person) charts.person.destroy();
+  charts.person = new Chart($('personChart'), {
+    type: 'bar',
+    data: {
+      labels: persons.map(p => p.emoji + ' ' + p.name),
+      datasets: [{
+        data: personTotals,
+        backgroundColor: persons.map(p => p.color + 'CC'),
+        borderColor: persons.map(p => p.color),
+        borderWidth: 2,
+        borderRadius: 10,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color:'#6B7285', font:{ size:10 }, callback: v => '¥'+fmt(v) }, grid:{ color:'#E4E4DF' } },
+        y: { ticks: { color:'#1A1A2E', font:{ size:13 } }, grid:{ display:false } }
+      }
+    }
+  });
+
+  // Settlement card
+  const [t0, t1] = personTotals;
+  const [p0, p1] = persons;
+  const grandTotal = t0 + t1;
+  const fairShare = grandTotal / 2;
+  const diff = Math.round(Math.abs(t0 - t1) / 2);
+  const settle = $('settlementCard');
+  if (!grandTotal) {
+    settle.innerHTML = '<p class="text-sm text-gray-400">未有記帳資料</p>';
+  } else {
+    const debtorEmoji = t0 < t1 ? p0.emoji : p1.emoji;
+    const debtorName = t0 < t1 ? p0.name : p1.name;
+    const creditorEmoji = t0 < t1 ? p1.emoji : p0.emoji;
+    const creditorName = t0 < t1 ? p1.name : p0.name;
+    const debtorColor = t0 < t1 ? p0.color : p1.color;
+    settle.innerHTML = diff === 0
+      ? `<p class="text-2xl mb-1">🤝</p><p class="text-sm font-bold" style="color:var(--n-text)">完美五五分！</p><p class="text-xs mt-1" style="color:var(--n-muted)">總花費 ¥${fmt(grandTotal)}</p>`
+      : `<p class="text-xs mb-2" style="color:var(--n-muted)">五五分結算</p>
+         <div class="flex items-center justify-center gap-3">
+           <span class="text-3xl">${debtorEmoji}</span>
+           <div class="text-center">
+             <p class="text-xs" style="color:var(--n-muted)">應付給</p>
+             <p class="text-2xl font-black" style="color:${debtorColor}">¥${fmt(diff)}</p>
+             <p class="text-[10px]" style="color:var(--n-muted)">≈ HKD ${(diff/state.rate).toFixed(0)}</p>
+           </div>
+           <span class="text-3xl">${creditorEmoji}</span>
+         </div>
+         <p class="text-[10px] mt-3" style="color:var(--n-muted)">${debtorEmoji} ${debtorName} 付較少 · 總花費 ¥${fmt(grandTotal)}</p>`;
+  }
+  // ─────────────────────────────────────────────────────────────
 
   if (charts.cat) charts.cat.destroy();
   charts.cat = new Chart($('catChart'), {
