@@ -18,21 +18,37 @@
 })();
 </script>
 <title>Boss 名古屋記帳 🇯🇵</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --n-bg: #FDF5EF; --n-surface: #FFFFFF; --n-border: #E4E4DF;
-    --n-text: #1A1A2E; --n-muted: #6B7285; --n-blue: #CC2929;
-    --n-blue-dim: #FCEAEA; --n-shadow: rgba(204,41,41,0.10);
-    --sakura: #FF91A4; --gold: #F5A623;
+    /* === Revolut Dark Foundation === */
+    --n-bg: #191c1f;          /* Revolut Dark — near-black base */
+    --n-surface: #242830;     /* Slightly lighter dark surface */
+    --n-surface2: #2d3340;    /* Cards on surface */
+    --n-border: rgba(255,255,255,0.09);  /* Subtle white border */
+    --n-text: #ffffff;         /* White on dark */
+    --n-muted: #8d969e;       /* Revolut: Cool Gray */
+    --n-blue: #CC2929;        /* Arsenal Red — primary brand */
+    --n-blue-dim: rgba(204,41,41,0.18);
+    --n-shadow: none;         /* Revolut: zero shadows */
+    --sakura: #FF91A4;
+    --gold: #F5A623;
+    /* Revolut semantic tokens */
+    --rui-teal: #00a87e;
+    --rui-danger: #e23b4a;
+    --rui-warning: #ec7e00;
+    --rui-blue: #494fdf;
   }
-  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Hiragino Sans", sans-serif; -webkit-tap-highlight-color: transparent; background: #FDF5EF; min-height: 100vh; color: var(--n-text); position: relative; }
+  body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang HK", "Hiragino Sans", sans-serif; -webkit-tap-highlight-color: transparent; background: #191c1f; min-height: 100vh; color: var(--n-text); position: relative; }
   body::before { content: ''; position: absolute; inset: 0; min-height: 100vh; z-index: 0; pointer-events: none;
-    background-image: radial-gradient(circle, rgba(204,41,41,0.055) 1px, transparent 1px);
-    background-size: 22px 22px; }
+    background-image: radial-gradient(circle, rgba(255,255,255,0.022) 1px, transparent 1px);
+    background-size: 28px 28px; }
   main, header, nav { position: relative; z-index: 2; }
-  .glass { background: rgba(255,255,255,0.80) !important; border: 1px solid rgba(255,220,210,0.60) !important; box-shadow: 0 8px 32px rgba(204,41,41,0.07), 0 1px 4px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.95) !important; backdrop-filter: blur(28px) saturate(220%) !important; -webkit-backdrop-filter: blur(28px) saturate(220%) !important; }
+  .glass { background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.10) !important; box-shadow: none !important; backdrop-filter: blur(24px) saturate(160%) !important; -webkit-backdrop-filter: blur(24px) saturate(160%) !important; }
   .tab-active { color: var(--n-blue); }
   .tab-inactive { color: rgba(255,255,255,0.38); }
   .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -45,9 +61,15 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes bounceIn { 0% { opacity:0; transform: scale(0.85) translateY(12px); } 60% { transform: scale(1.04) translateY(-2px); } 100% { opacity:1; transform: scale(1) translateY(0); } }
   input, select, textarea, button { -webkit-appearance: none; }
-  /* Hanami text refinements */
-  h1, h2, h3 { letter-spacing: -0.02em; }
-  .nordic-card { background: rgba(255,255,255,0.80); border: 1px solid rgba(255,220,210,0.60); box-shadow: 0 8px 32px rgba(204,41,41,0.07); border-radius: 1rem; backdrop-filter: blur(28px) saturate(220%); -webkit-backdrop-filter: blur(28px) saturate(220%); }
+  /* Revolut typography — tight headings, airy body */
+  h1, h2, h3 { letter-spacing: -0.025em; font-weight: 600; }
+  /* Revolut: pill buttons everywhere */
+  button:not(.tab-btn):not([data-tabpill]) { border-radius: 9999px !important; }
+  /* Revolut: Inter body positive tracking */
+  p, span, label, input, select, textarea { letter-spacing: 0.01em; }
+  /* Input fields — dark surface */
+  input, select, textarea { background: var(--n-surface2) !important; color: var(--n-text) !important; border-color: var(--n-border) !important; }
+  .nordic-card { background: var(--n-surface2); border: 1px solid var(--n-border); box-shadow: none; border-radius: 20px; backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%); }
   details summary { cursor: pointer; list-style: none; }
   details summary::-webkit-details-marker { display: none; }
 
@@ -106,11 +128,11 @@
   .tl-item[data-side="right"]::before { left: -8px; }
   .tl-item.actual::before { background: var(--n-blue); border-color: var(--n-blue); }
   .tl-card {
-    display: inline-block; padding: 10px 12px; border-radius: 12px;
-    background: var(--n-surface); border: 1px solid rgba(255,220,210,0.60);
-    box-shadow: 0 1px 4px var(--n-shadow); max-width: 100%;
+    display: inline-block; padding: 10px 12px; border-radius: 16px;
+    background: var(--n-surface2); border: 1px solid var(--n-border);
+    box-shadow: none; max-width: 100%;
   }
-  .tl-item.planned .tl-card { background: var(--n-bg); border-style: dashed; }
+  .tl-item.planned .tl-card { background: rgba(255,255,255,0.03); border-style: dashed; }
   .tl-item.actual .tl-card { border-color: var(--n-blue); }
   .tl-time { font-size: 10px; color: var(--n-muted); font-weight: 600; letter-spacing: 0.3px; }
   .tl-name { font-size: 13px; font-weight: 600; color: var(--n-text); margin-top: 2px; line-height: 1.3; }
@@ -138,7 +160,7 @@
     <div style="text-align:center;margin-bottom:24px">
       <div style="font-size:48px;margin-bottom:8px">🔒</div>
       <h2 style="font-size:20px;font-weight:700;color:var(--n-text);margin-bottom:4px">旅行記帳</h2>
-      <p id="lockSubtitle" style="font-size:13px;color:#6B7280">輸入密碼解鎖</p>
+      <p id="lockSubtitle" style="font-size:13px;color:#8d969e">輸入密碼解鎖</p>
     </div>
     <input id="lockPw" type="password" inputmode="numeric" placeholder="密碼" autocomplete="off"
       style="width:100%;padding:14px 16px;border:1px solid var(--n-border);border-radius:10px;font-size:18px;text-align:center;letter-spacing:4px;outline:none;background:var(--n-bg);color:var(--n-text)">
@@ -151,10 +173,10 @@
 
 
 <!-- Offline indicator -->
-<div id="offlineBar" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:45;background:#FEF3C7;color:#92400E;text-align:center;padding:6px;font-size:12px;font-weight:500">📡 離線模式 — 資料儲存喺本機</div>
+<div id="offlineBar" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:45;background:#2d2a1a;color:#F5A623;text-align:center;padding:6px;font-size:12px;font-weight:500">📡 離線模式 — 資料儲存喺本機</div>
 
 <!-- ============ HEADER ============ -->
-<header class="sticky top-0 z-40 px-5 pt-6 pb-4" style="background:rgba(255,250,248,0.88);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(255,180,160,0.3)">
+<header class="sticky top-0 z-40 px-5 pt-6 pb-4" style="background:rgba(25,28,31,0.92);backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);border-bottom:1px solid rgba(255,255,255,0.08)">
   <div class="flex items-center justify-between">
     <div>
       <h1 class="text-3xl font-black tracking-tight" style="background:linear-gradient(135deg,#CC2929,#FF91A4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">名古屋之旅 🗾</h1>
@@ -169,9 +191,9 @@
   </div>
 
   <!-- Budget bar -->
-  <div class="mt-4 rounded-2xl p-4" style="background:rgba(255,255,255,0.88);border:1px solid rgba(255,190,170,0.45);box-shadow:0 4px 20px rgba(204,41,41,0.08)">
+  <div class="mt-4 rounded-2xl p-4" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);box-shadow:none">
     <div class="flex justify-between items-center mb-2.5">
-      <span class="text-xs font-semibold" style="color:#8B7D85">🎯 旅程預算</span>
+      <span class="text-xs font-semibold" style="color:#8d969e">🎯 旅程預算</span>
       <span class="text-xs font-bold" style="color:#CC2929" id="budgetText">¥0 / ¥101,800</span>
     </div>
     <div class="h-3 rounded-full overflow-hidden" style="background:rgba(204,41,41,0.10)">
@@ -179,7 +201,7 @@
     </div>
     <div class="flex justify-between mt-2">
       <span class="text-[10px] font-medium" style="color:#CC2929"><span id="budgetPct">0</span>% 已用</span>
-      <span class="text-[10px]" style="color:#8B7D85">餘 ¥<span id="budgetLeft">101,800</span></span>
+      <span class="text-[10px]" style="color:#8d969e">餘 ¥<span id="budgetLeft">101,800</span></span>
     </div>
   </div>
 </header>
@@ -208,7 +230,7 @@
     </div>
 
     <!-- Daily budget alert -->
-    <div id="dailyAlert" class="hidden rounded-2xl p-3 mb-4 fade-in" style="background:#FEF0E7;border:1px solid #E8944A">
+    <div id="dailyAlert" class="hidden rounded-2xl p-3 mb-4 fade-in" style="background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.35)">
       <div class="flex items-center gap-3">
         <span class="text-2xl">🚨</span>
         <div>
@@ -272,14 +294,14 @@
       <button id="scanBtn" class="text-white font-black py-6 rounded-2xl active:scale-95 transition-transform" style="background:linear-gradient(135deg,#C0281E,#E04040);box-shadow:0 10px 32px rgba(192,40,30,0.45);font-size:17px">
         📷 拍攝收據
       </button>
-      <button id="galleryBtn" class="font-bold py-6 rounded-2xl active:scale-95 transition-transform" style="background:rgba(255,255,255,0.90);color:#CC2929;border:2px solid rgba(204,41,41,0.18);box-shadow:0 4px 16px rgba(204,41,41,0.10);font-size:17px">
+      <button id="galleryBtn" class="font-bold py-6 rounded-2xl active:scale-95 transition-transform" style="background:rgba(204,41,41,0.14);color:#CC2929;border:2px solid rgba(204,41,41,0.30);box-shadow:none;font-size:17px">
         🖼️ 本地相簿
       </button>
     </div>
-    <button id="voiceBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3" style="background:rgba(255,255,255,0.90);color:#1B2D55;border:2px solid rgba(27,45,85,0.12);box-shadow:0 4px 16px rgba(27,45,85,0.08)">
+    <button id="voiceBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3" style="background:rgba(255,255,255,0.07);color:#ffffff;border:2px solid rgba(255,255,255,0.14);box-shadow:none">
       🎤 語音輸入
     </button>
-    <button id="manualBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform" style="background:rgba(255,255,255,0.90);color:#1B2D55;border:2px solid rgba(27,45,85,0.12);box-shadow:0 4px 16px rgba(27,45,85,0.08)">
+    <button id="manualBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform" style="background:rgba(255,255,255,0.07);color:#ffffff;border:2px solid rgba(255,255,255,0.14);box-shadow:none">
       ✍️ 手動輸入
     </button>
 
@@ -288,7 +310,7 @@
       <div class="glass rounded-2xl p-4">
         <img id="previewImg" class="w-full max-h-64 object-contain rounded-xl mb-3" alt="">
         <div id="scanStatus" class="text-center py-4">
-          <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
+          <div class="inline-block w-8 h-8 border-4 border-[rgba(255,255,255,0.12)] border-t-[#494fdf] rounded-full animate-spin"></div>
           <p class="text-sm text-gray-400 mt-2">AI 正在辨識收據…</p>
         </div>
       </div>
@@ -392,7 +414,7 @@
     <div class="glass rounded-2xl p-4 mb-3">
       <div class="flex items-center justify-between">
         <label class="text-xs text-gray-400 uppercase tracking-wider">匯率 (100 JPY ≈ ? HKD)</label>
-        <span id="rateStatus" class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">⟳ 每次入數自動更新</span>
+        <span id="rateStatus" class="text-[10px] px-2 py-0.5 rounded-full" style="background:rgba(73,79,223,0.15);color:#7b82f5">⟳ 每次入數自動更新</span>
       </div>
       <input type="number" id="setRate" class="w-full bg-transparent text-2xl font-bold mt-1 focus:outline-none" value="4.91" step="0.0001">
       <p id="rateReverse" class="text-[11px] mt-1" style="color:var(--n-muted)"></p>
@@ -411,7 +433,7 @@
     <details class="mt-6">
     <summary class="flex items-center justify-between px-1 mb-3 cursor-pointer select-none">
       <h3 class="text-xs uppercase tracking-widest" style="color:var(--n-muted)">📓 Notion 雲端備份（選用）</h3>
-      <span class="text-xs px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
+      <span class="text-xs px-2 py-0.5 rounded-full" style="background:rgba(73,79,223,0.15);color:#7b82f5">可展開</span>
     </summary>
     <p class="text-xs mb-3 px-1" style="color:var(--n-muted)">⚠️ 唔設定都可以正常使用，資料會儲喺本機。</p>
 
@@ -451,7 +473,7 @@
     </div>
 
     <div class="glass rounded-2xl p-3 mb-3 text-[11px] text-gray-400">
-      <p class="font-bold text-[#2D5A8E] mb-1">📋 Notion Database 必需欄位（一字不差）：</p>
+      <p class="font-bold text-[#7b82f5] mb-1">📋 Notion Database 必需欄位（一字不差）：</p>
       <ul class="space-y-0.5 font-mono">
         <li>• <span style="color:var(--n-text);font-weight:600">店名</span> (Title)</li>
         <li>• <span style="color:var(--n-text);font-weight:600">金額</span> (Number)</li>
@@ -588,7 +610,7 @@
       </div>
     </div>
     <div class="sticky bottom-0 p-5" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
-      <button id="modalDelete" class="hidden w-full py-2.5 rounded-xl font-medium mb-2" style="background:#FEE2E2;color:#DC2626">🗑️ 刪除呢筆紀錄</button>
+      <button id="modalDelete" class="hidden w-full py-2.5 rounded-xl font-medium mb-2" style="background:rgba(226,59,74,0.15);color:#e23b4a">🗑️ 刪除呢筆紀錄</button>
       <div class="grid grid-cols-2 gap-3">
         <button id="modalCancel" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
         <button id="modalSave" class="py-3 rounded-xl font-bold text-white" style="background:var(--n-blue)">儲存</button>
@@ -621,7 +643,7 @@ const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','
 const GEMINI_MODELS = [
   { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live', sub: 'Preview · Live · 最新', tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',        tag: '⭐', color: '#E04040' },
-  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',        tag: '🔵', color: '#2D5A8E' },
+  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',        tag: '🔵', color: '#494fdf' },
   { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',          tag: '⚡', color: '#F5A623' },
   { id: 'gemini-2.5-pro',               name: 'Gemini 2.5 Pro',        sub: '穩定版',                tag: '🟢', color: '#059669' },
   { id: 'gemini-2.0-flash',             name: 'Gemini 2.0 Flash',      sub: '輕量 · 最快',           tag: '🚀', color: '#7C3AED' },
@@ -871,7 +893,7 @@ function renderPersonList() {
       </div>
       ${(p.id === 'p_boss' || p.id === 'p_xinxin')
         ? `<span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:${p.color}22;color:${p.color}">${p.emoji}</span>`
-        : `<button onclick="removePerson('${p.id}')" class="text-[10px] px-2 py-0.5 rounded-full" style="color:#DC2626;background:#FEE2E2">移除</button>`}
+        : `<button onclick="removePerson('${p.id}')" class="text-[10px] px-2 py-0.5 rounded-full" style="color:#e23b4a;background:rgba(226,59,74,0.15)">移除</button>`}
     </div>`).join('');
 }
 
@@ -930,7 +952,7 @@ window.pickEmoji = function(e) {
     b.style.outline = '2px solid transparent';
   });
   const b = document.getElementById('ep-' + e);
-  if (b) { b.style.background = '#EEF3FA'; b.style.outline = '2px solid #2D5A8E'; }
+  if (b) { b.style.background = 'rgba(73,79,223,0.15)'; b.style.outline = '2px solid #494fdf'; }
 };
 
 // ============ LIVE EXCHANGE RATE (cached 1hr) ============
@@ -1047,17 +1069,17 @@ function renderDashboard() {
     const rDay = state.receipts.filter(r => r.date === it.date);
     const dayTotal = rDay.reduce((s,r) => s + (Number(r.total)||0), 0);
     return `
-      <div class="glass rounded-2xl p-3 ${isToday ? 'ring-2 ring-[#2D5A8E]' : ''}">
+      <div class="glass rounded-2xl p-3 ${isToday ? 'ring-2 ring-[#494fdf]' : ''}">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold" style="background:#EEF3FA;color:#2D5A8E">${it.day}</div>
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold" style="background:rgba(73,79,223,0.15);color:#7b82f5">${it.day}</div>
             <div>
               <p class="text-sm font-medium">${it.region}</p>
               <p class="text-[10px] text-gray-500">${it.date} · ${it.highlight}</p>
             </div>
           </div>
           <div class="text-right">
-            <p class="text-sm font-bold ${dayTotal > 0 ? 'text-[#2D5A8E]' : 'text-[#C8CDD6]'}">¥${fmt(dayTotal)}</p>
+            <p class="text-sm font-bold ${dayTotal > 0 ? 'text-[#7b82f5]' : 'text-[#505a63]'}">¥${fmt(dayTotal)}</p>
             <p class="text-[10px] text-gray-500">${rDay.length} 筆</p>
           </div>
         </div>
@@ -1110,7 +1132,7 @@ function renderHistory() {
       <div class="mb-4">
         <div class="flex items-baseline justify-between mb-2 px-1">
           <span class="text-xs text-gray-400 font-medium">${date}</span>
-          <span class="text-xs text-[#2D5A8E] font-bold">¥${fmt(sum)}</span>
+          <span class="text-xs text-[#7b82f5] font-bold">¥${fmt(sum)}</span>
         </div>
         <div class="space-y-2">${items.map(i => receiptCard(i)).join('')}</div>
       </div>`;
@@ -1277,7 +1299,7 @@ function renderStats() {
     type: 'bar',
     data: {
       labels: sortedDates.map(d => d.slice(5)),
-      datasets: [{ data: sortedDates.map(d => daily[d]||0), backgroundColor:'#2D5A8E', borderRadius:6 }]
+      datasets: [{ data: sortedDates.map(d => daily[d]||0), backgroundColor:'#494fdf', borderRadius:6 }]
     },
     options: {
       plugins: { legend: { display:false } },
@@ -1302,7 +1324,7 @@ function renderStats() {
               <p class="text-sm font-medium truncate">${escapeHtml(r.store || '—')}</p>
               <p class="text-[10px] text-gray-500">${r.date}</p>
             </div>
-            <span class="text-sm font-bold text-[#2D5A8E]">¥${fmt(r.total)}</span>
+            <span class="text-sm font-bold text-[#7b82f5]">¥${fmt(r.total)}</span>
           </div>`;
       }).join('');
 }
@@ -1316,7 +1338,7 @@ async function scanReceipt(file) {
   if (prevImg.src && prevImg.src.startsWith('blob:')) URL.revokeObjectURL(prevImg.src);
   prevImg.src = URL.createObjectURL(file);
   $('scanStatus').innerHTML = `
-    <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
+    <div class="inline-block w-8 h-8 border-4 border-[rgba(255,255,255,0.12)] border-t-[#494fdf] rounded-full animate-spin"></div>
     <p class="text-sm mt-2" style="color:var(--n-muted)">AI 正在辨識收據…</p>`;
 
   try {
@@ -1332,7 +1354,7 @@ async function scanReceipt(file) {
 
 async function runScanWithBase64(base64, mime) {
   $('scanStatus').innerHTML = `
-    <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
+    <div class="inline-block w-8 h-8 border-4 border-[rgba(255,255,255,0.12)] border-t-[#494fdf] rounded-full animate-spin"></div>
     <p class="text-sm mt-2" style="color:var(--n-muted)">AI 正在辨識收據…</p>`;
   try {
     const result = await callGemini(base64, mime || 'image/jpeg');
@@ -1799,10 +1821,10 @@ async function notionPullAll() {
 // ============ MODAL ============
 let editingId = null;
 function populateModalSelects() {
-  $('mCat').innerHTML = CATEGORIES.map(c => `<option value="${c.id}" class="bg-white text-[#1A1A2E]">${c.icon} ${c.name}</option>`).join('');
-  $('mPay').innerHTML = PAYMENTS.map(p => `<option value="${p.id}" class="bg-white text-[#1A1A2E]">${p.name}</option>`).join('');
-  $('filterCat').innerHTML = '<option value="" class="bg-white text-[#1A1A2E]">全部類別</option>' +
-    CATEGORIES.map(c => `<option value="${c.id}" class="bg-white text-[#1A1A2E]">${c.icon} ${c.name}</option>`).join('');
+  $('mCat').innerHTML = CATEGORIES.map(c => `<option value="${c.id}" class="bg-[#242830] text-white">${c.icon} ${c.name}</option>`).join('');
+  $('mPay').innerHTML = PAYMENTS.map(p => `<option value="${p.id}" class="bg-[#242830] text-white">${p.name}</option>`).join('');
+  $('filterCat').innerHTML = '<option value="" class="bg-[#242830] text-white">全部類別</option>' +
+    CATEGORIES.map(c => `<option value="${c.id}" class="bg-[#242830] text-white">${c.icon} ${c.name}</option>`).join('');
 }
 
 let pendingTax = null, pendingSubtotal = null, pendingPhotoBase64 = null, pendingPhotoMime = 'image/jpeg';
@@ -2141,7 +2163,7 @@ function init() {
     const name = $('newPersonName').value.trim();
     if (!name) { toast('⚠️ 請輸入名字'); return; }
     if (!state.persons) state.persons = [];
-    state.persons.push({ id: 'p_' + Date.now(), name, emoji: selectedNewEmoji, color: '#2D5A8E' });
+    state.persons.push({ id: 'p_' + Date.now(), name, emoji: selectedNewEmoji, color: '#494fdf' });
     saveState();
     renderPersonList();
     $('addPersonForm').classList.add('hidden');
