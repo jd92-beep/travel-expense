@@ -403,7 +403,7 @@
         <label class="text-xs text-gray-400 uppercase tracking-wider">AI 模型</label>
         <span id="lastScanBadge" class="text-[10px] px-2 py-0.5 rounded-full font-medium hidden" style="background:#D1FAE5;color:#065F46"></span>
       </div>
-      <p class="text-[10px] mb-3" style="color:var(--n-muted)">掃描鏈：GLM-4.6V → MiniMax → <strong>選定模型</strong> → Flash（自動 fallback）</p>
+      <p class="text-[10px] mb-3" style="color:var(--n-muted)">📸 掃描鏈：GLM-4.6V → MiniMax → <strong>選定模型</strong> → Flash（自動 fallback）<br>🎤 語音輸入：直接使用<strong>選定模型</strong>解析</p>
       <div id="modelCards" class="grid grid-cols-2 gap-2"></div>
     </div>
 
@@ -1443,13 +1443,12 @@ async function parseVoiceExpense(transcript) {
 類別：食物/餐廳/便利店→food；交通/JR/巴士/的士→transport；購物/衫/紀念品→shopping；酒店→lodging；門票/景點→ticket；藥→medicine；其他→other
 支付：現金→cash；卡/VISA/信用→credit；PayPay→paypay；Suica/交通IC→suica`;
 
-  try {
-    const apiKey = getActiveApiKey();
-    const model = state.model || 'gemini-3-flash-preview';
-    const body = {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
-    };
+  const apiKey = getActiveApiKey();
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+  };
+  const tryModel = async (model) => {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     });
@@ -1457,7 +1456,17 @@ async function parseVoiceExpense(transcript) {
     const data = await r.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) throw new Error('No response');
-    const parsed = JSON.parse(text);
+    return JSON.parse(text);
+  };
+  try {
+    const primary = state.model || 'gemini-3.1-flash-live-preview';
+    let parsed;
+    try {
+      parsed = await tryModel(primary);
+    } catch(e) {
+      console.warn(`[Voice] ${primary} 失敗 (${e.message})，fallback → gemini-3-flash-preview`);
+      parsed = await tryModel('gemini-3-flash-preview');
+    }
     openConfirmModal(parsed, '');
   } catch(e) {
     toast('解析失敗，請手動輸入', 'error');
