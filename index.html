@@ -612,10 +612,10 @@ const SCAN_MODELS = [
   { id: 'gemini-2.5-pro',               name: 'Gemini 2.5 Pro',        sub: '穩定版',                tag: '🟢', color: '#059669' },
 ];
 const VOICE_MODELS = [
-  { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 廣東話優化',     tag: '🟣', color: '#7C3AED' },
   { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺+文字',      tag: '🔮', color: '#6D28D9' },
   { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live', sub: 'Preview · Live · 最新', tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',        tag: '⭐', color: '#E04040' },
+  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',        tag: '🔵', color: '#2D5A8E' },
   { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',          tag: '⚡', color: '#F5A623' },
 ];
 // Boss 嘅名古屋行程 (HKT 日期) — 每日詳細 spots
@@ -705,7 +705,7 @@ let state = {
   apiKey: DEFAULT_API_KEY,
   model: 'gemini-3.1-flash-live-preview',
   scanModel: 'gemini-3.1-flash-live-preview',
-  voiceModel: 'glm-4-flash',
+  voiceModel: 'glm-4.6v',
   notionToken: DEFAULT_NOTION_TOKEN,
   notionDb: '',
   proxy: 'https://corsproxy.io/?',
@@ -950,7 +950,7 @@ function renderScanModelCards() {
 function renderVoiceModelCards() {
   const el = document.getElementById('voiceModelCards');
   if (!el) return;
-  const cur = state.voiceModel || 'glm-4-flash';
+  const cur = state.voiceModel || 'glm-4.6v';
   el.innerHTML = VOICE_MODELS.map(m => buildModelCard(m, cur === m.id, 'voice')).join('');
 }
 
@@ -1509,7 +1509,7 @@ function stopVoiceInput() {
 }
 
 async function parseVoiceExpense(transcript) {
-  const voicePrimary = state.voiceModel || 'glm-4-flash';
+  const voicePrimary = state.voiceModel || 'glm-4.6v';
   toast('🎤 解析中… ' + (VOICE_MODELS.find(m => m.id === voicePrimary)?.name || voicePrimary));
   const today = todayHKT();
   const prompt = `你係旅行記帳 AI。用戶用廣東話講咗：「${transcript}」
@@ -1591,7 +1591,7 @@ async function parseVoiceExpense(transcript) {
 
   let parsed = null;
   let lastErr = null;
-  const voicePrimaryModel = state.voiceModel || 'glm-4-flash';
+  const voicePrimaryModel = state.voiceModel || 'glm-4.6v';
 
   if (voicePrimaryModel === 'glm-4-flash' || voicePrimaryModel === 'glm-4.6v') {
     // GLM primary (flash or 4.6v) → Gemini fallback
