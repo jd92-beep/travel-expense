@@ -381,9 +381,12 @@
     </div>
 
     <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs text-gray-400 uppercase tracking-wider">總預算 (JPY)</label>
-      <input type="number" id="setBudget" class="w-full bg-transparent text-2xl font-bold mt-1 focus:outline-none" value="101800">
-      <p class="text-[10px] text-gray-500 mt-1">≈ HKD <span id="setBudgetHKD">5000</span></p>
+      <label class="text-xs text-gray-400 uppercase tracking-wider">旅程預算</label>
+      <div class="flex items-baseline gap-2 mt-1">
+        <input type="number" id="setBudget" class="bg-transparent text-2xl font-bold focus:outline-none w-full" value="101800">
+        <span class="text-sm font-semibold shrink-0" style="color:var(--n-muted)">JPY</span>
+      </div>
+      <p class="text-sm font-semibold mt-1" style="color:var(--n-blue)">≈ HKD <span id="setBudgetHKD">5000</span></p>
     </div>
 
     <div class="glass rounded-2xl p-4 mb-3">
