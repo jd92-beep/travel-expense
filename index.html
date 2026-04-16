@@ -445,10 +445,12 @@
       </label>
     </div>
 
-    <div class="grid grid-cols-2 gap-3 mb-3">
-      <button id="syncPushBtn" class="glass py-3 rounded-2xl text-sm font-medium">⬆️ 推送上 Notion</button>
+    <div class="grid grid-cols-3 gap-2 mb-2">
+      <button id="syncPushBtn" class="glass py-3 rounded-2xl text-sm font-medium">⬆️ 推送 Notion</button>
       <button id="syncPullBtn" class="glass py-3 rounded-2xl text-sm font-medium">⬇️ 從 Notion 拉</button>
+      <button id="notionTestBtn" class="glass py-3 rounded-2xl text-sm font-medium">🔌 測試連線</button>
     </div>
+    <div id="notionStatus" class="text-[11px] text-center mb-2 hidden"></div>
 
     <div class="glass rounded-2xl p-3 mb-3 text-[11px] text-gray-400">
       <p class="font-bold text-[#2D5A8E] mb-1">📋 Notion Database 必需欄位（一字不差）：</p>
@@ -1580,9 +1582,11 @@ const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。分析呢張日
   "date": "YYYY-MM-DD 格式",
   "category": "transport|food|shopping|lodging|ticket|medicine|other 之一",
   "payment": "cash|credit|paypay|suica 之一",
-  "items": [ { "name": "品項繁中翻譯（簡短）", "name_jp": "日本語原文（直接從收據抄）", "price": 金額純數字 } ],
+  "items": [ { "name": "品項繁體中文翻譯（必須用中文，唔好用日文字符）", "name_jp": "日本語原文", "price": 金額純數字 } ],
   "note": "額外重要資訊（例如付款卡尾四碼、優惠），無即留空"
 }
+
+品項翻譯規則（重要）：name 欄位必須係繁體中文，唔好留日文。例：「とんかつ」→ "炸豬扒"，「お好み焼き」→ "大阪燒"，「たこ焼き」→ "章魚燒"，「ラーメン」→ "拉麵"，「寿司」→ "壽司"，「天ぷら」→ "天婦羅"，「カレー」→ "咖喱飯"。即使唔識翻譯都要用漢字意譯。
 
 類別判斷規則：
 - 餐廳 / 便利店食品 / 咖啡 / 居酒屋 → food
@@ -1735,20 +1739,53 @@ function buildNotionProps(r) {
 
 async function notionFetch(path, options = {}) {
   if (!state.notionToken) throw new Error('未設定 Notion token');
-  const r = await fetch(notionUrl(path), {
-    ...options,
-    headers: {
-      'Authorization': 'Bearer ' + state.notionToken,
-      'Notion-Version': NOTION_VERSION,
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    }
-  });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`Notion ${r.status}: ${t.slice(0, 200)}`);
+  if (!state.notionDb && path !== '/databases/' + state.notionDb) {
+    // basic guard — if db is empty we'll get bad requests anyway
   }
-  return r.json();
+  const targetUrl = 'https://api.notion.com/v1' + path;
+  const baseProxy = state.proxy || 'https://corsproxy.io/?';
+
+  // Build proxy URL — support both ?URL and ?url=URL formats
+  function makeProxyUrl(proxy, url) {
+    if (proxy.endsWith('=')) return proxy + encodeURIComponent(url);
+    return proxy + url;
+  }
+
+  // Proxy candidates: current setting → corsproxy encoded → allorigins
+  const proxyCandidates = [
+    baseProxy,
+    baseProxy === 'https://corsproxy.io/?' ? 'https://corsproxy.io/?url=' : null,
+    'https://api.allorigins.win/raw?url=',
+  ].filter(Boolean);
+
+  const reqHeaders = {
+    'Authorization': 'Bearer ' + state.notionToken,
+    'Notion-Version': NOTION_VERSION,
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
+
+  let lastErr;
+  for (const proxy of proxyCandidates) {
+    try {
+      const url = makeProxyUrl(proxy, targetUrl);
+      const r = await fetch(url, { ...options, headers: reqHeaders });
+      if (!r.ok) {
+        const t = await r.text();
+        // Don't retry on Notion-level errors (4xx) — only on proxy/network errors
+        if (r.status >= 400 && r.status < 500) {
+          throw new Error(`Notion ${r.status}: ${t.slice(0, 300)}`);
+        }
+        throw new Error(`Proxy ${r.status}: ${t.slice(0, 200)}`);
+      }
+      return r.json();
+    } catch(e) {
+      lastErr = e;
+      // If Notion returned 4xx, no point retrying with different proxy
+      if (e.message?.startsWith('Notion 4')) throw e;
+    }
+  }
+  throw lastErr || new Error('Notion fetch failed');
 }
 
 async function notionPushReceipt(r) {
@@ -1794,20 +1831,31 @@ async function notionPushReceipt(r) {
 }
 
 async function notionPushAll() {
-  if (!state.notionToken || !state.notionDb) {
-    toast('⚠️ 請先設定 Notion token + database ID');
+  if (!state.notionToken) {
+    toast('⚠️ Notion token 未設定（請解鎖 vault 或手動輸入）', 'error');
+    return;
+  }
+  if (!state.notionDb) {
+    toast('⚠️ 請先填寫 Notion Database ID 並儲存設定', 'error');
     return;
   }
   toast('⬆️ 推送中…');
   const failed = [];
+  const errors = [];
   let ok = 0;
   for (const r of state.receipts) {
     try { await notionPushReceipt(r); ok++; }
-    catch (e) { failed.push(r.store || r.id); }
+    catch (e) {
+      failed.push(r.store || r.id);
+      if (errors.length < 2) errors.push(e.message?.slice(0, 80) || 'unknown');
+    }
   }
   saveState();
   if (failed.length === 0) {
     toast(`✅ 全部 ${ok} 筆已同步到 Notion`);
+  } else if (ok === 0) {
+    const hint = errors[0] || '';
+    toast(`❌ 全部失敗 — ${hint}`, 'error');
   } else {
     toast(`⚠️ ${ok} 筆成功，${failed.length} 筆失敗：${failed.slice(0,3).join('、')}${failed.length > 3 ? '…' : ''}`);
   }
@@ -1943,9 +1991,8 @@ function openConfirmModal(data, base64) {
   $('mPay').value = validPays.includes(aiPay) ? aiPay : 'cash';
   $('mRegion').value = getRegionForDate(cleanDate);
   $('mItems').value = (data.items||[]).map(i => {
-    const jp = i.name_jp ? ` (${i.name_jp})` : '';
     const hkd = (state.rate > 0 && i.price) ? ` (HKD ${Math.round(i.price / state.rate)})` : '';
-    return `${i.name}${jp} ¥${i.price}${hkd}`;
+    return `${i.name} ¥${i.price}${hkd}`;
   }).join('\n');
   $('mNote').value = data.note || '';
   pendingTax = data.tax || null;
@@ -2051,7 +2098,8 @@ async function saveModal() {
       toast('☁️ 已同步到 Notion');
     }).catch(e => {
       console.error('[notionSync]', e);
-      toast('⚠️ Notion sync 失敗: ' + (e.message || ''));
+      const msg = (e.message || '').slice(0, 120);
+      toast('⚠️ Notion sync 失敗 — ' + (msg || '網絡錯誤，請到設定重新推送'), 'error');
     });
   }
 }
@@ -2227,6 +2275,25 @@ function init() {
   // Notion sync buttons
   $('syncPushBtn').addEventListener('click', notionPushAll);
   $('syncPullBtn').addEventListener('click', notionPullAll);
+  $('notionTestBtn')?.addEventListener('click', async () => {
+    const statusEl = $('notionStatus');
+    statusEl.className = 'text-[11px] text-center mb-2';
+    statusEl.textContent = '🔄 測試中…';
+    if (!state.notionToken) {
+      statusEl.textContent = '❌ 未設定 Notion token'; statusEl.style.color = '#e23b4a'; return;
+    }
+    if (!state.notionDb) {
+      statusEl.textContent = '❌ 未設定 Database ID'; statusEl.style.color = '#e23b4a'; return;
+    }
+    try {
+      await notionFetch('/databases/' + state.notionDb);
+      statusEl.textContent = '✅ Notion 連線正常！';
+      statusEl.style.color = '#00a87e';
+    } catch(e) {
+      statusEl.textContent = '❌ ' + (e.message || '連線失敗').slice(0, 100);
+      statusEl.style.color = '#e23b4a';
+    }
+  });
 
   // Tab buttons
   document.querySelectorAll('.tab-btn').forEach(b => {
