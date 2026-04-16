@@ -717,6 +717,7 @@ let state = {
   proxy: 'https://notion-proxy.ftjdfr.workers.dev/?',
   autoSync: true,
   imgbbKey: '',
+  notionDeletedIds: [],   // Notion page IDs deleted locally — skip on pull
   persons: [
     { id: 'p_boss', name: 'Tony', emoji: '👦', color: '#CC2929' },
     { id: 'p_xinxin', name: '欣欣', emoji: '👧', color: '#FF91A4' },
@@ -1989,8 +1990,14 @@ async function notionPullAll(silent = false) {
       body: JSON.stringify({ page_size: 100 })
     });
     const merged = new Map(state.receipts.map(r => [r.id, r]));
+    const deletedPageIds = new Set(state.notionDeletedIds || []);
     let added = 0, updated = 0;
+    const returnedNotionPageIds = new Set();
+
     for (const page of (data.results || [])) {
+      // Skip pages that were deleted locally — don't let Notion re-add them
+      if (deletedPageIds.has(page.id)) continue;
+      returnedNotionPageIds.add(page.id);
       const p = page.properties;
       const sourceId = p.SourceID?.rich_text?.[0]?.plain_text;
       const id = sourceId || ('r_notion_' + page.id.slice(0, 8));
@@ -2024,11 +2031,22 @@ async function notionPullAll(silent = false) {
         added++;
       }
     }
+
+    // Remove local records that were synced to Notion but are no longer returned
+    // (archived/deleted on another device) — this is how cross-device deletion syncs
+    let removed = 0;
+    for (const [id, receipt] of merged.entries()) {
+      if (receipt.notionPageId && !returnedNotionPageIds.has(receipt.notionPageId)) {
+        merged.delete(id);
+        removed++;
+      }
+    }
+
     state.receipts = Array.from(merged.values()).sort((a,b) => a.createdAt - b.createdAt);
     saveState();
     refresh();
-    if (!silent) toast(`✅ 新增 ${added}，更新 ${updated}`);
-    else if (added > 0 || updated > 0) toast(`☁️ 同步完成：+${added} 筆，更新 ${updated} 筆`);
+    if (!silent) toast(`✅ 新增 ${added}，更新 ${updated}${removed ? `，刪除 ${removed}` : ''}`);
+    else if (added > 0 || updated > 0 || removed > 0) toast(`☁️ 同步完成：+${added} 筆${removed ? `，刪除 ${removed}` : ''}`);
   } catch (e) {
     console.error(e);
     if (!silent) toast('❌ ' + e.message);
@@ -2234,13 +2252,23 @@ async function deleteReceipt() {
   const idx = state.receipts.findIndex(x => x.id === editingId);
   if (idx < 0) return;
   const deleted = state.receipts[idx];
+
+  // Track deleted Notion page ID BEFORE removing — so pull won't re-add it
+  if (deleted.notionPageId) {
+    if (!Array.isArray(state.notionDeletedIds)) state.notionDeletedIds = [];
+    if (!state.notionDeletedIds.includes(deleted.notionPageId)) {
+      state.notionDeletedIds.push(deleted.notionPageId);
+    }
+  }
+
   state.receipts.splice(idx, 1);
   saveState();
   closeModal();
   refresh();
   toast('🗑️ 已刪除');
-  // Archive from Notion if synced
-  if (deleted.notionPageId && state.notionToken) {
+
+  // Archive in Notion (best-effort — notionDeletedIds prevents it coming back even if this fails)
+  if (deleted.notionPageId && state.notionToken && state.notionDb) {
     notionFetch(`/pages/${deleted.notionPageId}`, {
       method: 'PATCH',
       body: JSON.stringify({ archived: true })
@@ -2248,7 +2276,7 @@ async function deleteReceipt() {
       toast('☁️ Notion 已同步刪除');
     }).catch(e => {
       console.warn('[notionDelete]', e.message);
-      toast('⚠️ Notion 刪除失敗（本地已刪）');
+      // Don't show error toast — local deletion tracking handles re-add prevention
     });
   }
 }
