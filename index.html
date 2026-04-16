@@ -1451,13 +1451,39 @@ async function parseVoiceExpense(transcript) {
   const today = todayHKT();
   const prompt = `你係旅行記帳 AI。用戶用廣東話講咗：「${transcript}」
 
-注意：輸入係廣東話口語（粵語），例如「兩千蚊」即 2000、「俾咗」即「付了」、「食飯」即「餐飲」。
+【廣東話數字對照】
+- 「兩千三百」「兩千三」「2300蚊」「2300幾蚊」「2300幾yen」→ 2300
+- 「一千幾」「一千零幾」→ 約1000-1100
+- 「三百幾」→ 約300-399
+- 「幾十蚊」→ 約50-90
+- 「五百蚊」「¥500」「500円」→ 500
+- 「多」「幾」「零」修飾詞忽略，取主要數字
 
-提取消費資料回覆 JSON（只回覆 JSON，唔好任何其他文字）：
-{"store":"店名（繁中，冇就 null）","total":金額數字JPY（冇就 null）,"date":"${today}","category":"transport|food|shopping|lodging|ticket|medicine|other","payment":"cash|credit|paypay|suica","note":"備註（冇就 null）"}
+【品項規則】
+- 如用戶提及食物/物品名稱，放入 items 陣列
+- 如只有一樣嘢，total = 該物品價格
+- 如有多樣，total = 合計（或最後提到嘅合計）
+- 食物名稱用繁體中文
 
-類別：食物/餐廳/便利店→food；交通/JR/巴士/的士→transport；購物/衫/紀念品→shopping；酒店→lodging；門票/景點→ticket；藥→medicine；其他→other
-支付：現金→cash；卡/VISA/信用→credit；PayPay→paypay；Suica/交通IC→suica`;
+【類別判斷】
+食物/餐廳/便利店/炸豬扒/拉麵/壽司→food；JR/地鐵/巴士/的士/船→transport；衫/紀念品/藥妝/電器→shopping；酒店/民宿→lodging；門票/景點→ticket；藥/藥房→medicine；其他→other
+
+【支付判斷】
+現金/cash→cash；卡/VISA/信用→credit；PayPay→paypay；Suica/IC→suica
+
+只回覆 JSON，唔好任何其他文字：
+{
+  "store": "店名繁體中文（冇就null）",
+  "total": 總金額JPY數字（冇就null）,
+  "date": "${today}",
+  "category": "food|transport|shopping|lodging|ticket|medicine|other",
+  "payment": "cash|credit|paypay|suica",
+  "items": [{"name":"品項繁體中文","name_jp":null,"price":價格數字}],
+  "note": "備註（冇就null）"
+}
+
+例子：「食咗炸豬扒 2300幾yen」→ {"store":null,"total":2300,"category":"food","payment":"cash","items":[{"name":"炸豬扒","name_jp":null,"price":2300}],"note":null}
+例子：「喺全家買咗飯糰同埋飲料，一共580蚊」→ {"store":"全家便利店","total":580,"category":"food","payment":"cash","items":[{"name":"飯糰","name_jp":null,"price":null},{"name":"飲料","name_jp":null,"price":null}],"note":null}`;
 
   const apiKey = state.apiKey || DEFAULT_API_KEY;
   const body = {
@@ -1496,7 +1522,12 @@ async function parseVoiceExpense(transcript) {
     }
   }
 
-  if (parsed && (parsed.store || parsed.total)) {
+  if (parsed && (parsed.store || parsed.total || (parsed.items && parsed.items.length))) {
+    // If total is null but items exist with prices, sum them up
+    if (!parsed.total && parsed.items && parsed.items.length) {
+      const sum = parsed.items.reduce((acc, i) => acc + (Number(i.price) || 0), 0);
+      if (sum > 0) parsed.total = sum;
+    }
     openConfirmModal(parsed, '');
   } else {
     // All models failed or returned empty — open modal with transcript in note
