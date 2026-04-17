@@ -614,13 +614,13 @@
         <label class="text-xs text-gray-400 uppercase tracking-wider">📸 收據掃描模型</label>
         <span id="lastScanBadge" class="text-[10px] px-2 py-0.5 rounded-full font-medium hidden" style="background:#D1FAE5;color:#065F46"></span>
       </div>
-      <p class="text-[10px] mb-3" style="color:var(--n-muted)">掃描鏈：GLM-4.6V → MiniMax → <strong>選定模型</strong> → Flash（自動 fallback）</p>
+      <p class="text-[10px] mb-3" style="color:var(--n-muted)">掃描鏈：GLM-4.6V → MiniMax VLM → Gemini 3.1 Flash Lite → Gemini 3 Flash → Gemini 2.5 Flash（每個 model 輪試 5 條 key，自動 fallback）</p>
       <div id="scanModelCards" class="grid grid-cols-2 gap-2"></div>
     </div>
 
     <div class="glass rounded-2xl p-4 mb-3">
       <label class="text-xs text-gray-400 uppercase tracking-wider mb-3 block">🎤 語音解析模型</label>
-      <p class="text-[10px] mb-3" style="color:var(--n-muted)">語音輸入後，由選定模型解析廣東話並填寫欄位</p>
+      <p class="text-[10px] mb-3" style="color:var(--n-muted)">語音輸入後解析廣東話。主力 GLM-4-Flash → fallback Gemini 3.1 Flash Lite → Gemini 3 Flash → Gemini 2.5 Flash → Gemma 4 31B → Gemma 4 26B（每個 model 輪試 5 條 key）</p>
       <div id="voiceModelCards" class="grid grid-cols-2 gap-2"></div>
     </div>
 
@@ -641,8 +641,8 @@
         <li>App → History tab → 黃色卡片 → 按「✅ 確認」</li>
       </ol>
       <div class="mt-2 pt-2 border-t border-amber-200">
-        <p class="text-[10px] font-bold" style="color:#92400E">🛡 6 層 AI fallback（text-only，email 純文字不需 vision model）</p>
-        <p class="text-[10px] leading-relaxed" style="color:#92400E">GLM-5 → GLM-5-turbo → MiniMax-M2.7 → Gemini×2 → GLM-4-Flash → 下一 cycle 再試 (×3)。每個 model 3 次 backoff retry。單一 model 429 唔會整個 pipeline 死。</p>
+        <p class="text-[10px] font-bold" style="color:#92400E">🛡 多層 AI fallback（text-only，email 純文字不需 vision model）</p>
+        <p class="text-[10px] leading-relaxed" style="color:#92400E">GLM-5 → GLM-5-turbo → MiniMax-M2.7 → <strong>Gemini（5 keys × 5 models：3.1 Flash Lite / 3 Flash / 2.5 Flash / Gemma 4 31B / Gemma 4 26B）</strong> → GLM-4-Flash → defer 到下一 cycle (×3)。每個 model 自動輪試全部 key，429 唔會殺死 pipeline。</p>
       </div>
     </div>
 
@@ -656,14 +656,14 @@
     <div class="glass rounded-2xl p-3 mb-3 text-[10px] text-gray-500">
       <p class="font-bold mb-1" style="color:#92400E">⚙️ 一次性設定 (~3 min)：</p>
       <ol class="space-y-1 list-decimal pl-4">
-        <li>點「📋 複製 Apps Script 代碼」（會自動填晒 Gemini × 2 + GLM + Notion keys）</li>
+        <li>點「📋 複製 Apps Script 代碼」（會自動填晒 Gemini × 5 + GLM + MiniMax + Notion keys）</li>
         <li>點「🔗 開 Apps Script 編輯器」→ "New Project"</li>
         <li>貼入代碼（credentials 已入晒）</li>
         <li>點 Run → 揀 <code class="px-1 bg-gray-100 rounded">setup</code> → 授權 Gmail + 網絡 access</li>
         <li>Gmail 設 filter：<code class="px-1 bg-gray-100 rounded">to:ftjdfr+expense@gmail.com</code> → label「travel-expense」</li>
       </ol>
       <p class="mt-2 font-medium" style="color:#00a87e">✅ 之後每 5 分鐘自動 scan 一次，零人手操作。</p>
-      <p class="mt-1 text-[9px] text-gray-400">🤖 AI chain: GLM-5 → GLM-5-turbo → MiniMax-M2.7 → Gemini×2 → GLM-4-Flash → defer to next cycle (×3)</p>
+      <p class="mt-1 text-[9px] text-gray-400">🤖 AI chain: GLM-5 → GLM-5-turbo → MiniMax-M2.7 → Gemini 5keys×5models → GLM-4-Flash → defer (×3 cycles)</p>
     </div>
 
     </details>
@@ -692,20 +692,20 @@
     <div id="notionStatus" class="text-[11px] text-center mb-2 hidden"></div>
 
     <div class="glass rounded-2xl p-3 mb-3 text-[11px] text-gray-400">
-      <p class="font-bold text-[#2D5A8E] mb-1">📋 Notion Database 必需欄位：</p>
-      <ul class="space-y-0.5 font-mono">
-        <li>• <span style="color:var(--n-text);font-weight:600">🏪 店名</span> (Title)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">💴 金額 ¥</span> (Number)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">📅 日期</span> (Date)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">🗂 類別</span> (Select)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">💳 支付</span> (Select)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">📍 地區</span> (Text)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">🧾 品項</span> (Text)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">📝 備註</span> (Text)</li>
-        <li>• <span style="color:var(--n-text);font-weight:600">🔑 SourceID</span> (Text — sync key)</li>
-      </ul>
-      <p class="mt-2 text-[#4f46e5] font-medium">💡 點「✨ 美化 Notion Schema」可自動幫現有 DB 加 emoji + 色彩</p>
-      <p class="mt-1 text-gray-500">建立後記得 Share → 加入你嘅 Integration ✅</p>
+      <p class="font-bold text-[#2D5A8E] mb-1">📋 Notion Database 必需欄位（名稱必須完全一致）：</p>
+      <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono text-[10px] mb-2">
+        <div>• <span style="color:var(--n-text);font-weight:600">店名</span> <span class="text-gray-500">(Title)</span></div>
+        <div>• <span style="color:var(--n-text);font-weight:600">金額</span> <span class="text-gray-500">(Number)</span></div>
+        <div>• <span style="color:var(--n-text);font-weight:600">日期</span> <span class="text-gray-500">(Date)</span></div>
+        <div>• <span style="color:var(--n-text);font-weight:600">類別</span> <span class="text-gray-500">(Select)</span></div>
+        <div>• <span style="color:var(--n-text);font-weight:600">支付</span> <span class="text-gray-500">(Select)</span></div>
+        <div>• <span style="color:var(--n-text);font-weight:600">地區</span> <span class="text-gray-500">(Text)</span></div>
+        <div>• <span style="color:var(--n-text);font-weight:600">品項</span> <span class="text-gray-500">(Text)</span></div>
+        <div>• <span style="color:var(--n-text);font-weight:600">備註</span> <span class="text-gray-500">(Text)</span></div>
+        <div class="col-span-2">• <span style="color:var(--n-text);font-weight:600">SourceID</span> <span class="text-gray-500">(Text — sync key，防止重複入帳)</span></div>
+      </div>
+      <p class="text-[10px] text-[#4f46e5] font-medium mb-1">💡 點「✨ 美化 Notion Schema」可自動幫現有 DB 加 emoji（🏪 店名、💴 金額 等），app 兩個格式都支援。</p>
+      <p class="text-[10px] text-gray-500">⚠️ 建立後記得喺 Notion DB 右上角 → Share → 加入你嘅 Integration，否則 API 會 401</p>
     </div>
 
     </details>
@@ -929,21 +929,27 @@ const PAYMENTS = [
 ];
 const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
 const SCAN_MODELS = [
-  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺旗艦',          tag: '🟣', color: '#7C3AED' },
-  { id: 'minimax',                        name: 'MiniMax VLM',           sub: 'MiniMax · 視覺模型',       tag: '🔷', color: '#0EA5E9' },
-  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: 'Preview · 輕量 · 推薦 ✅', tag: '🔴', color: '#CC2929' },
-  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',           tag: '⭐', color: '#E04040' },
-  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',           tag: '🔵', color: '#2D5A8E' },
-  { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',             tag: '⚡', color: '#F5A623' },
-  { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 文字輔助',          tag: '🟣', color: '#7C3AED' },
+  // Vision-capable models (can read receipt images)
+  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺旗艦 · 首選',    tag: '🟣', color: '#7C3AED' },
+  { id: 'minimax',                        name: 'MiniMax VLM',           sub: 'MiniMax · 視覺模型',        tag: '🔷', color: '#0EA5E9' },
+  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: '輕量 · 5 key rotation ✅',  tag: '🔴', color: '#CC2929' },
+  { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: '快速 · 5 key rotation',     tag: '⚡', color: '#F5A623' },
+  { id: 'gemini-2.5-flash',              name: 'Gemini 2.5 Flash',      sub: '最新 · 5 key rotation',     tag: '🟠', color: '#EA6C00' },
+  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦視覺',        tag: '⭐', color: '#E04040' },
+  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定旗艦',        tag: '🔵', color: '#2D5A8E' },
+  { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 文字輔助',           tag: '🟣', color: '#7C3AED' },
 ];
 const VOICE_MODELS = [
-  { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 100% 準確 · 免費',   tag: '🟣', color: '#7C3AED' },
-  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺+文字',          tag: '🔮', color: '#6D28D9' },
-  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: 'Preview · 輕量 · 推薦 ✅',  tag: '🔴', color: '#CC2929' },
-  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',           tag: '⭐', color: '#E04040' },
-  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',           tag: '🔵', color: '#2D5A8E' },
-  { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: 'Preview · 快',             tag: '⚡', color: '#F5A623' },
+  // Text-only models (voice parsing doesn't need vision)
+  { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 廣東話首選 · 免費',  tag: '🟣', color: '#7C3AED' },
+  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 旗艦',               tag: '🔮', color: '#6D28D9' },
+  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: '輕量 · 5 key rotation ✅',  tag: '🔴', color: '#CC2929' },
+  { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: '快速 · 5 key rotation',     tag: '⚡', color: '#F5A623' },
+  { id: 'gemini-2.5-flash',              name: 'Gemini 2.5 Flash',      sub: '最新 · 5 key rotation',     tag: '🟠', color: '#EA6C00' },
+  { id: 'gemma-4-31b-it',               name: 'Gemma 4 31B',           sub: 'Google · 開源旗艦',         tag: '🌐', color: '#4285F4' },
+  { id: 'gemma-4-26b-a4b-it',           name: 'Gemma 4 26B',           sub: 'Google · 開源輕量',         tag: '🌐', color: '#34A853' },
+  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',            tag: '⭐', color: '#E04040' },
+  { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',            tag: '🔵', color: '#2D5A8E' },
 ];
 // Boss 嘅名古屋行程 (HKT 日期) — 每日詳細 spots
 const ITINERARY = [
@@ -2374,13 +2380,15 @@ function reopenLastScan() {
 }
 window.reopenLastScan = reopenLastScan;
 
-// Models available for manual rescan
+// Models available for manual rescan (vision-capable only)
 const RESCAN_MODELS = [
-  { id: 'glm-4.6v',                     label: 'GLM-4.6V',    color: '#7C3AED' },
-  { id: 'minimax',                       label: 'MiniMax VLM', color: '#0EA5E9' },
-  { id: 'gemini-3.1-flash-lite-preview', label: 'G Flash',     color: '#CC2929' },
-  { id: 'gemini-3.1-pro-preview',        label: 'G Pro',       color: '#059669' },
-  { id: 'gemini-3-pro-preview',          label: 'G 3 Pro',     color: '#2D5A8E' },
+  { id: 'glm-4.6v',                      label: 'GLM-4.6V',      color: '#7C3AED' },
+  { id: 'minimax',                        label: 'MiniMax VLM',   color: '#0EA5E9' },
+  { id: 'gemini-3.1-flash-lite-preview',  label: 'G 3.1 Flash',  color: '#CC2929' },
+  { id: 'gemini-3-flash-preview',         label: 'G 3 Flash',    color: '#F5A623' },
+  { id: 'gemini-2.5-flash',               label: 'G 2.5 Flash',  color: '#EA6C00' },
+  { id: 'gemini-3.1-pro-preview',         label: 'G 3.1 Pro',    color: '#059669' },
+  { id: 'gemini-3-pro-preview',           label: 'G 3 Pro',      color: '#2D5A8E' },
 ];
 
 function renderRescanButtons(loadingId = null) {
