@@ -630,16 +630,20 @@
       <h3 class="text-xs uppercase tracking-widest" style="color:var(--n-muted)">📧 Email 自動匯入（免費 · 全自動）</h3>
       <span class="text-xs px-2 py-0.5 rounded-full" style="background:#FEF3C7;color:#92400E">推薦</span>
     </summary>
-    <p class="text-xs mb-3 px-1" style="color:var(--n-muted)">Forward 確認 email 去你 Gmail → Google Apps Script（免費）用 Gemini 解析 → 自動入 Notion → app 顯示「⏳ 待確認」俾你一 tap 確認</p>
+    <p class="text-xs mb-3 px-1" style="color:var(--n-muted)">Forward 確認 email 去 Gmail → Google Apps Script（免費）多 AI 模型 fallback 解析 → 自動入 Notion → 一 tap 確認</p>
 
     <div class="glass rounded-2xl p-4 mb-3" style="background:linear-gradient(135deg,#FEF3C7,#FFFBEB)">
       <p class="text-sm font-bold mb-2" style="color:#92400E">🚀 點樣用？</p>
       <ol class="text-[11px] space-y-1.5 list-decimal pl-4" style="color:var(--n-text)">
-        <li>喺 Gmail filter 設定：subject 含 <code class="px-1 bg-white rounded">#expense</code> → label <code class="px-1 bg-white rounded">travel-expense</code></li>
-        <li>Forward 任何 confirmation email 去你自己 Gmail，主旨加 <code class="px-1 bg-white rounded">#expense</code></li>
-        <li>5 分鐘內：Notion 會自動出現「⏳ 待確認」嘅 entry</li>
-        <li>App 打開 History tab → 黃色卡片 → 按「✅ 確認」即可</li>
+        <li>Forward email → <code class="px-1 bg-white rounded text-[10px]">ftjdfr+expense@gmail.com</code></li>
+        <li>或 subject 加 <code class="px-1 bg-white rounded">#expense</code> 然後用 Gmail filter → label「travel-expense」</li>
+        <li>5 分鐘內：Notion 自動出現「⏳ 待確認」entry</li>
+        <li>App → History tab → 黃色卡片 → 按「✅ 確認」</li>
       </ol>
+      <div class="mt-2 pt-2 border-t border-amber-200">
+        <p class="text-[10px] font-bold" style="color:#92400E">🛡 Gemini rate limit 防護</p>
+        <p class="text-[10px]" style="color:#92400E">AI 解析有多重 fallback：2× Gemini keys → GLM-4-Flash (智譜免費) → exponential backoff 重試 → 下個 trigger cycle 再試，最多 3 輪。單一 model 429 唔會整個 pipeline 死。</p>
+      </div>
     </div>
 
     <div class="grid grid-cols-2 gap-2 mb-2">
@@ -652,13 +656,14 @@
     <div class="glass rounded-2xl p-3 mb-3 text-[10px] text-gray-500">
       <p class="font-bold mb-1" style="color:#92400E">⚙️ 一次性設定 (~3 min)：</p>
       <ol class="space-y-1 list-decimal pl-4">
-        <li>點「📋 複製 Apps Script 代碼」</li>
+        <li>點「📋 複製 Apps Script 代碼」（會自動填晒 Gemini × 2 + GLM + Notion keys）</li>
         <li>點「🔗 開 Apps Script 編輯器」→ "New Project"</li>
-        <li>貼入代碼，填入 Gemini key / Notion token / DB ID（app 同一套）</li>
+        <li>貼入代碼（credentials 已入晒）</li>
         <li>點 Run → 揀 <code class="px-1 bg-gray-100 rounded">setup</code> → 授權 Gmail + 網絡 access</li>
-        <li>Gmail 設 filter，完成！</li>
+        <li>Gmail 設 filter：<code class="px-1 bg-gray-100 rounded">to:ftjdfr+expense@gmail.com</code> → label「travel-expense」</li>
       </ol>
       <p class="mt-2 font-medium" style="color:#00a87e">✅ 之後每 5 分鐘自動 scan 一次，零人手操作。</p>
+      <p class="mt-1 text-[9px] text-gray-400">🤖 AI chain: Gemini (primary key) → Gemini (backup key) → GLM-4-Flash (Zhipu 免費) → defer to next cycle (×3)</p>
     </div>
 
     </details>
@@ -4378,8 +4383,14 @@ function init() {
       const r = await fetch(APPS_SCRIPT_URL + '?t=' + Date.now());
       if (!r.ok) throw new Error('HTTP ' + r.status);
       let code = await r.text();
-      // Auto-fill user's existing credentials so they don't have to copy-paste from vault
-      if (state.apiKey)      code = code.replace('PASTE_GEMINI_API_KEY_HERE', state.apiKey);
+      // Auto-fill user's existing credentials + fallback keys
+      // Primary Gemini key (user's own, or DEFAULT_API_KEY)
+      const primaryGem = state.apiKey || DEFAULT_API_KEY;
+      if (primaryGem)        code = code.replace('PASTE_GEMINI_API_KEY_HERE', primaryGem);
+      // Backup Gemini key (rotates on 429)
+      if (DEFAULT_BACKUP_API_KEY) code = code.replace('PASTE_GEMINI_BACKUP_KEY_OR_LEAVE', DEFAULT_BACKUP_API_KEY);
+      // Zhipu GLM-4-Flash key (fallback when Gemini is rate-limited)
+      if (VAULT_ZAI_KEY)     code = code.replace('PASTE_ZAI_KEY_OR_LEAVE', VAULT_ZAI_KEY);
       if (state.notionToken) code = code.replace('PASTE_NOTION_INTEGRATION_TOKEN_HERE', state.notionToken);
       if (state.notionDb)    code = code.replace('PASTE_NOTION_DATABASE_ID_HERE', state.notionDb);
       try {
