@@ -2,3 +2,12 @@
 *.log
 node_modules/
 .env
+
+# Claude Code internal
+.claude/
+.playwright-mcp/
+
+# Test/temp artifacts
+smoke_test.jpg
+*.tmp
+.tmp/
