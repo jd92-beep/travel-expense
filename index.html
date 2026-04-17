@@ -481,6 +481,47 @@
       <div id="shareRatiosWrap"></div>
     </div>
 
+    <!-- iOS Shortcut setup guide -->
+    <details class="glass rounded-2xl p-4 mb-3">
+      <summary class="cursor-pointer flex items-center justify-between select-none">
+        <label class="text-xs uppercase tracking-wider cursor-pointer" style="color:var(--n-muted)">📱 iOS Shortcut 快速匯入</label>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#F0FDF4;color:#065F46">可展開</span>
+      </summary>
+      <div class="mt-3 text-[11px] space-y-3" style="color:var(--n-text)">
+        <p style="color:var(--n-muted)">安裝一次 iOS Shortcut，之後 Mail / Gmail 入面撳一下 Share → 自動貼落 app 解析。</p>
+
+        <div class="p-3 rounded-xl" style="background:#F0FDF4;border:1px solid #86EFAC">
+          <p class="font-semibold mb-2" style="color:#065F46">🚀 一鍵安裝</p>
+          <button id="copyShortcutUrlBtn" class="w-full py-2 rounded-lg text-[11px] font-semibold" style="background:#059669;color:white">📋 複製 Shortcut URL 範本</button>
+          <p class="text-[10px] mt-2" style="color:#047857">複製完喺 Safari 貼，會開 Shortcuts app 提示匯入。</p>
+        </div>
+
+        <div>
+          <p class="font-semibold mb-1">🛠️ 自己整 Shortcut（3 個步驟）：</p>
+          <ol class="space-y-1.5 pl-4" style="color:var(--n-text);list-style:decimal">
+            <li><strong>Get Contents of Input</strong>（類型：Text）</li>
+            <li><strong>Base64 Encode</strong>（Encode，URL Encoded）</li>
+            <li><strong>Open URL</strong>：<code class="text-[10px] px-1 rounded" style="background:var(--n-bg)">你嘅 app URL#email=<em>[Base64 Output]</em>&auto=1</code></li>
+          </ol>
+          <p class="text-[10px] mt-2" style="color:var(--n-muted)">Shortcut 類型設為「Receive Text from Share Sheet」</p>
+        </div>
+
+        <div>
+          <p class="font-semibold mb-1">📲 用法：</p>
+          <ol class="space-y-0.5 pl-4" style="color:var(--n-text);list-style:decimal">
+            <li>打開 Klook / 航空確認 email</li>
+            <li>長按 email 正文 → 全選 → 共享 (Share)</li>
+            <li>揀「🗾 匯入 Boss 記帳」shortcut</li>
+            <li>自動跳去 app，AI 解析一下就完 ✅</li>
+          </ol>
+        </div>
+
+        <div class="p-3 rounded-xl" style="background:#FEF3C7;border:1px solid #FCD34D">
+          <p class="text-[10px]" style="color:#92400E">⚠️ URL 最長約 8000 字符。好長嘅 email 用返 📧 手動貼 flow。</p>
+        </div>
+      </div>
+    </details>
+
     <!-- Trip itinerary config -->
     <div class="glass rounded-2xl p-4 mb-3">
       <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">🗾 行程設定</label>
@@ -742,10 +783,18 @@
           <li class="mt-1" style="color:#065F46"><strong>或者</strong>：直接影 email 截圖都得（用影相按鈕）</li>
         </ol>
       </div>
-      <textarea id="emailText" rows="12" placeholder="貼 email 全文喺度⋯⋯&#10;&#10;例：&#10;Subject: Your Klook Booking Confirmation&#10;Booking ID: ABC123&#10;Activity: 立山黑部 Day Tour&#10;Travel Date: 2026-04-22&#10;Total: USD 280.00&#10;..." class="w-full rounded-xl p-3 text-sm focus:outline-none font-mono" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text);min-height:240px"></textarea>
+      <textarea id="emailText" rows="12" placeholder="貼 email 全文喺度（可以貼多封 email 連埋一齊）⋯⋯&#10;&#10;例：&#10;Subject: Your Klook Booking Confirmation&#10;Booking ID: ABC123&#10;Activity: 立山黑部 Day Tour&#10;Travel Date: 2026-04-22&#10;Total: USD 280.00&#10;..." class="w-full rounded-xl p-3 text-sm focus:outline-none font-mono" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text);min-height:220px"></textarea>
       <div class="flex items-center justify-between mt-2 text-[10px]" style="color:var(--n-muted)">
         <span id="emailCharCount">0 字符</span>
         <button id="emailPasteClipboardBtn" class="px-2 py-1 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">📋 從剪貼簿貼</button>
+      </div>
+
+      <!-- Or: upload email screenshot(s) -->
+      <div class="mt-3 pt-3" style="border-top:1px dashed var(--n-border)">
+        <p class="text-[11px] font-semibold mb-2" style="color:var(--n-muted)">📷 或者：上傳 email 截圖（可選多張）</p>
+        <input type="file" id="emailImageInput" accept="image/*" multiple style="display:none">
+        <button id="emailImageBtn" class="w-full py-2.5 rounded-xl text-sm font-medium" style="background:rgba(79,70,229,0.08);border:1px dashed rgba(79,70,229,0.40);color:#4f46e5">🖼️ 揀 email 截圖（可多張）</button>
+        <div id="emailImagePreview" class="hidden mt-2 flex flex-wrap gap-2"></div>
       </div>
     </div>
     <div class="sticky bottom-0 p-5 space-y-2" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
@@ -2469,15 +2518,22 @@ function parseReceiptJson(text) {
 // Klook, KKday, Trip.com, Agoda, Booking.com, Expedia, Hotels.com,
 // Cathay Pacific, ANA, JAL, AirAsia, HK Express, Uber Eats, etc.
 // Returns an array even for single-booking emails for unified downstream handling.
-const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。分析以下 email（可能係文字或圖片），提取 **所有** 獨立消費項目。
+const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。分析以下內容（可能係 **一封或多封 email** 貼埋一齊，亦可能係圖片），提取 **所有** 獨立消費項目。
 
 ⚠️ 極重要規則：
 
-1. **一封 email 可以包含多筆消費**，每筆獨立返一個 object：
-   - 來回機票 → **去程一筆 + 回程一筆**（唔好合併）
+0. **支援多 email 拼接**：用戶可能將「機票 email + 酒店 email + Klook email」全部連續貼喺一齊。你要：
+   - 逐個 email section 獨立分析（睇 "From:"、"Subject:"、"===="、"---- EMAIL ----"、空白行分隔等 signal）
+   - 將所有 email 嘅 bookings 集合返一個 bookings array
+   - 唔好因為 email 邊界混亂就跳過任何 booking
+
+1. **一封 email 可以包含多筆消費**，每筆獨立返一個 object。**即使多封 email 一齊貼，呢啲規則都要嚴格執行，唔好為咗簡化而合併**：
+   - 來回機票 = **強制拆成 2 筆**：去程一筆 + 回程一筆，每筆 total 係 total ÷ 2（因為 base fare 通常平均）
+   - 除非 email 明確分開標明單程票價（例：去程 HKD 2800、回程 HKD 2800），否則直接對半分
    - Klook/KKday 一次訂多個 activity → **每個 activity 一筆**
    - Agoda/Booking 多晚酒店 → **合併成一筆**（total = 全程總額）
    - 機票加行李 / 選座 → 主機票一筆 + 附加費用另一筆
+   - Rule of thumb：每個唯一嘅 service date 通常對應一筆獨立 booking（除咗多晚酒店）
 
 2. **金額一律轉成日元 (JPY)**：
    - 如果 email 顯示 HKD/USD/CNY 等，**自己用粗略匯率換**：
@@ -2534,20 +2590,40 @@ const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。�
 
 如果 email 完全無法解析（例如唔係 booking confirmation），返 \`{"source": "other", "bookings": []}\`。`;
 
-// Send text-only email body to LLM for multi-booking extraction.
-// Uses a 3-tier fallback: primary Gemini → GLM-Flash → Gemini 3 Flash
-async function parseEmailText(text) {
-  if (!text || !text.trim()) throw new Error('Email 內容為空');
-  const apiKey = state.apiKey || DEFAULT_API_KEY;
-  const primaryModel = state.model || 'gemini-3.1-flash-lite-preview';
-  const userContent = MULTI_BOOKING_PROMPT + '\n\n---- EMAIL START ----\n' + text.slice(0, 30000) + '\n---- EMAIL END ----';
+// Parse email input (text body and/or images) into multi-booking JSON.
+// Accepts either form — text, images, or both combined (e.g. screenshot + paste).
+// 3-tier fallback chain adapts based on whether images are present.
+async function parseEmailInput({ text = '', images = [] }) {
+  const hasText = !!(text && text.trim());
+  const hasImages = Array.isArray(images) && images.length > 0;
+  if (!hasText && !hasImages) throw new Error('Email 內容為空');
 
-  // Try in order: primary Gemini → GLM-4-Flash → Gemini Flash Lite fallback
-  const attempts = [
-    { name: primaryModel, fn: () => callGeminiText(userContent, primaryModel, apiKey) },
-    { name: 'glm-4-flash', fn: () => callGLMText(userContent) },
-    { name: 'gemini-3-flash-preview', fn: () => callGeminiText(userContent, 'gemini-3-flash-preview', apiKey) },
-  ];
+  const apiKey = state.apiKey || DEFAULT_API_KEY;
+  const primaryVisionModel = state.scanModel || 'gemini-3.1-flash-lite-preview';
+  const primaryTextModel = state.model || 'gemini-3.1-flash-lite-preview';
+
+  // Build instruction block: prompt + optional text body
+  const textBlock = hasText
+    ? MULTI_BOOKING_PROMPT + '\n\n---- EMAIL TEXT START ----\n' + text.slice(0, 30000) + '\n---- EMAIL TEXT END ----' +
+      (hasImages ? '\n\n[ALSO see ' + images.length + ' attached screenshot(s)]' : '')
+    : MULTI_BOOKING_PROMPT + '\n\n[Analyse the attached screenshot(s) only — ' + images.length + ' image(s)]';
+
+  // Build attempt list — prefer vision models when images are present
+  const attempts = [];
+  if (hasImages) {
+    // Vision-capable Gemini models
+    attempts.push({ name: primaryVisionModel, fn: () => callGeminiMultimodal(textBlock, images, primaryVisionModel, apiKey) });
+    if (primaryVisionModel !== 'gemini-3.1-flash-lite-preview') {
+      attempts.push({ name: 'gemini-3.1-flash-lite-preview', fn: () => callGeminiMultimodal(textBlock, images, 'gemini-3.1-flash-lite-preview', apiKey) });
+    }
+    attempts.push({ name: 'gemini-3-flash-preview', fn: () => callGeminiMultimodal(textBlock, images, 'gemini-3-flash-preview', apiKey) });
+  } else {
+    // Text-only chain
+    attempts.push({ name: primaryTextModel, fn: () => callGeminiText(textBlock, primaryTextModel, apiKey) });
+    attempts.push({ name: 'glm-4-flash', fn: () => callGLMText(textBlock) });
+    attempts.push({ name: 'gemini-3-flash-preview', fn: () => callGeminiText(textBlock, 'gemini-3-flash-preview', apiKey) });
+  }
+
   let lastErr;
   for (const { name, fn } of attempts) {
     try {
@@ -2564,6 +2640,41 @@ async function parseEmailText(text) {
     }
   }
   throw new Error('所有 AI 都失敗：' + (lastErr?.message || 'unknown'));
+}
+
+// Legacy text-only wrapper kept for back-compat with existing call sites
+async function parseEmailText(text) {
+  return parseEmailInput({ text, images: [] });
+}
+
+// Multimodal Gemini call — accepts text + N image parts (each {base64, mime})
+async function callGeminiMultimodal(promptText, images, model, apiKey) {
+  const keys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k,i,a) => k && a.indexOf(k) === i);
+  let lastErr;
+  for (const key of keys) {
+    const parts = [{ text: promptText }];
+    for (const img of images) {
+      parts.push({ inline_data: { mime_type: img.mime || 'image/jpeg', data: img.base64 } });
+    }
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { temperature: 0.15, responseMimeType: 'application/json' },
+      })
+    });
+    if (!r.ok) {
+      if (r.status === 429 || r.status === 403) { lastErr = new Error('Gemini ' + r.status); continue; }
+      const t = await r.text();
+      throw new Error(`Gemini ${r.status}: ${t.slice(0,150)}`);
+    }
+    const data = await r.json();
+    const out = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!out) throw new Error('Gemini 空回應');
+    return out;
+  }
+  throw lastErr || new Error('Gemini 所有 key 都失敗');
 }
 
 async function callGeminiText(content, model, apiKey) {
@@ -3287,13 +3398,14 @@ function populateModalSelects() {
 
 let pendingTax = null, pendingSubtotal = null, pendingPhotoBase64 = null, pendingPhotoMime = 'image/jpeg';
 
-async function compressPhoto(base64, mime) {
+async function compressPhoto(base64, mime, maxWOverride) {
   if (!base64) return null;
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
       try {
-      const maxW = 480;
+      // Default 480px for receipt thumbnails; callers can override (e.g. 1200 for OCR)
+      const maxW = Number(maxWOverride) || 480;
       const scale = Math.min(1, maxW / img.width);
       const c = document.createElement('canvas');
       c.width = Math.round(img.width * scale);
@@ -3677,6 +3789,20 @@ function init() {
     saveState(); refresh();
   });
 
+  // iOS Shortcut URL template — self-documenting + installable via iCloud share link
+  $('copyShortcutUrlBtn')?.addEventListener('click', async () => {
+    // Build a template URL that the user can substitute into the Shortcut's "Open URL" step
+    const base = location.origin + location.pathname;
+    const template = base + '#email=<<base64-encoded-email-text>>&auto=1';
+    try {
+      await navigator.clipboard.writeText(template);
+      toast('📋 已複製 URL 範本 — 貼入 Shortcut 嘅「Open URL」步驟');
+    } catch(e) {
+      // Fallback: show in a prompt so user can manually copy
+      prompt('請複製以下 URL 範本，貼入 Shortcut 嘅「Open URL」步驟：', template);
+    }
+  });
+
   $('itiExportBtn')?.addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(getItinerary(), null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -3860,12 +3986,55 @@ function init() {
   $('manualBtn').addEventListener('click', () => openConfirmModal({}, ''));
 
   // ── Email import flow ──
+  // Pending email screenshots staged before parse
+  let _emailImageQueue = [];
+  function renderEmailImagePreview() {
+    const wrap = $('emailImagePreview');
+    if (!wrap) return;
+    if (_emailImageQueue.length === 0) {
+      wrap.classList.add('hidden');
+      wrap.innerHTML = '';
+      return;
+    }
+    wrap.classList.remove('hidden');
+    wrap.innerHTML = _emailImageQueue.map((img, i) => `
+      <div class="relative">
+        <img src="data:${img.mime};base64,${img.base64}" class="w-14 h-14 object-cover rounded-lg" style="border:1px solid var(--n-border)">
+        <button onclick="removeEmailImage(${i})" class="absolute -top-1 -right-1 w-5 h-5 rounded-full text-[11px] font-bold" style="background:#DC2626;color:white;line-height:1;padding:0">×</button>
+      </div>`).join('');
+  }
+  window.removeEmailImage = function(idx) {
+    _emailImageQueue.splice(idx, 1);
+    renderEmailImagePreview();
+  };
+
   $('emailImportBtn')?.addEventListener('click', () => {
     $('emailText').value = '';
     $('emailCharCount').textContent = '0 字符';
     $('emailParseStatus').classList.add('hidden');
+    _emailImageQueue = [];
+    renderEmailImagePreview();
     $('emailPasteModal').classList.remove('hidden');
     setTimeout(() => $('emailText').focus(), 100);
+  });
+
+  $('emailImageBtn')?.addEventListener('click', () => $('emailImageInput').click());
+  $('emailImageInput')?.addEventListener('change', async (ev) => {
+    const files = Array.from(ev.target.files || []);
+    for (const f of files) {
+      try {
+        const base64 = await fileToBase64(f);
+        // Compress large images before sending to AI (save tokens + upload bandwidth)
+        const compressed = await compressPhoto(base64, f.type, 1200);
+        _emailImageQueue.push({ base64: compressed || base64, mime: compressed ? 'image/jpeg' : (f.type || 'image/jpeg') });
+      } catch(e) {
+        console.warn('[emailImage] load failed:', e);
+        toast('⚠️ 圖片載入失敗');
+      }
+    }
+    ev.target.value = ''; // allow re-selecting same file
+    renderEmailImagePreview();
+    if (_emailImageQueue.length > 0) toast(`📷 已加 ${files.length} 張截圖`);
   });
   $('emailCancelBtn')?.addEventListener('click', () => {
     $('emailPasteModal').classList.add('hidden');
@@ -3890,21 +4059,31 @@ function init() {
   });
   $('emailParseBtn')?.addEventListener('click', async () => {
     const text = $('emailText').value.trim();
-    if (text.length < 40) { toast('⚠️ Email 內容太短（少於 40 字符）'); return; }
+    const images = _emailImageQueue.slice(); // snapshot
+    if (text.length < 40 && images.length === 0) {
+      toast('⚠️ 請貼 email 文字（>40 字符）或加截圖');
+      return;
+    }
     const status = $('emailParseStatus');
     status.classList.remove('hidden');
-    status.innerHTML = '<div class="inline-block w-4 h-4 border-2 border-[#CCDCF0] border-t-[#059669] rounded-full animate-spin"></div> <span class="ml-2">AI 解析中…</span>';
+    const inputDesc = images.length
+      ? (text.length > 40 ? `文字 + ${images.length} 截圖` : `${images.length} 張截圖`)
+      : '文字';
+    status.innerHTML = `<div class="inline-block w-4 h-4 border-2 border-[#CCDCF0] border-t-[#059669] rounded-full animate-spin"></div> <span class="ml-2">AI 解析中…（${inputDesc}）</span>`;
     $('emailParseBtn').disabled = true;
     try {
-      const result = await parseEmailText(text);
+      const result = await parseEmailInput({ text, images });
       if (!result.bookings || result.bookings.length === 0) {
-        status.innerHTML = '<span style="color:#DC2626">❌ 解析唔到任何 booking。確認係否 booking confirmation email？</span>';
+        status.innerHTML = '<span style="color:#DC2626">❌ 解析唔到任何 booking。確認係否 booking confirmation？</span>';
         $('emailParseBtn').disabled = false;
         return;
       }
       $('emailPasteModal').classList.add('hidden');
       openBatchConfirmModal(result.bookings, result.source, result.modelUsed);
       toast(`🤖 解析到 ${result.bookings.length} 筆 booking`);
+      // Clear staged images after successful parse
+      _emailImageQueue = [];
+      renderEmailImagePreview();
     } catch(e) {
       console.error('[emailParse]', e);
       status.innerHTML = '<span style="color:#DC2626">❌ ' + escapeHtml(e.message.slice(0, 120)) + '</span>';
@@ -3999,6 +4178,45 @@ function init() {
   // Skips refresh if user is interacting (modal open, recently active, or offline).
   // Data persists via localStorage, so page reload is non-destructive.
   scheduleAutoRefresh();
+
+  // Handle URL-hash deep-link for iOS Shortcut share flow:
+  //   #email=<base64-text>        → open paste modal pre-filled
+  //   #email=<base64-text>&auto=1 → also auto-click parse
+  // Falls back silently if the hash doesn't decode.
+  handleUrlHashImport();
+}
+
+function handleUrlHashImport() {
+  if (!location.hash || !location.hash.includes('email=')) return;
+  try {
+    // Don't use URLSearchParams — it treats '+' as space, which corrupts base64
+    // that contains '+' characters. Manually extract the email=... token instead.
+    const hashRaw = location.hash.slice(1); // drop leading '#'
+    const match = hashRaw.match(/(^|&)email=([^&]*)/);
+    if (!match || !match[2]) return;
+    const encoded = decodeURIComponent(match[2]); // just %-decode (doesn't touch '+')
+    const autoMatch = hashRaw.match(/(^|&)auto=([^&]*)/);
+    const autoParse = autoMatch && autoMatch[2] === '1';
+    // Accept both standard base64 ('+', '/') and base64url ('-', '_')
+    const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encoded.length/4)*4, '=');
+    const text = decodeURIComponent(escape(atob(b64))); // UTF-8 safe
+    // Clear the hash so refresh doesn't re-trigger
+    history.replaceState(null, '', location.pathname + location.search);
+    // Open paste modal + fill
+    setTimeout(() => {
+      $('emailImportBtn')?.click();
+      setTimeout(() => {
+        $('emailText').value = text;
+        $('emailText').dispatchEvent(new Event('input'));
+        toast('📧 已由 Shortcut 填入 — 撳「AI 解析」開始');
+        if (autoParse && text.length >= 40) {
+          setTimeout(() => $('emailParseBtn').click(), 300);
+        }
+      }, 200);
+    }, 400);
+  } catch(e) {
+    console.warn('[urlHashImport] decode failed:', e);
+  }
 }
 
 // ============ AUTO-REFRESH SCHEDULER ============
