@@ -10,8 +10,31 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232D5A8E'/><text x='12' y='85' font-size='78'>🗾</text></svg>">
 <script>
 // Inline PWA manifest — needed for single-file app (no server)
+// Includes share_target so the installed PWA shows up in Android's share sheet
+// when the user shares email text from Gmail/Mail/any app.
 (function(){
-  var m = {name:'Boss 名古屋記帳',short_name:'名古屋記帳',start_url:'.',display:'standalone',background_color:'#F4F4EF',theme_color:'#2D5A8E',orientation:'portrait'};
+  var m = {
+    name:'Boss 名古屋記帳',
+    short_name:'名古屋記帳',
+    start_url:'./',
+    scope:'./',
+    display:'standalone',
+    background_color:'#F4F4EF',
+    theme_color:'#2D5A8E',
+    orientation:'portrait',
+    // Web Share Target Level 2 — Android Chrome/Edge/Samsung register this
+    // after the PWA is installed via "Add to Home Screen".
+    share_target: {
+      action: './',
+      method: 'GET',
+      enctype: 'application/x-www-form-urlencoded',
+      params: {
+        title: 'shared_title',
+        text: 'shared_text',
+        url: 'shared_url'
+      }
+    }
+  };
   var b = new Blob([JSON.stringify(m)], {type:'application/manifest+json'});
   var l = document.createElement('link'); l.rel='manifest'; l.href=URL.createObjectURL(b);
   document.head.appendChild(l);
@@ -481,43 +504,42 @@
       <div id="shareRatiosWrap"></div>
     </div>
 
-    <!-- iOS Shortcut setup guide -->
+    <!-- Share flow setup guide (Android + iOS) -->
     <details class="glass rounded-2xl p-4 mb-3">
       <summary class="cursor-pointer flex items-center justify-between select-none">
-        <label class="text-xs uppercase tracking-wider cursor-pointer" style="color:var(--n-muted)">📱 iOS Shortcut 快速匯入</label>
+        <label class="text-xs uppercase tracking-wider cursor-pointer" style="color:var(--n-muted)">📱 快速匯入（Share 功能）</label>
         <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#F0FDF4;color:#065F46">可展開</span>
       </summary>
       <div class="mt-3 text-[11px] space-y-3" style="color:var(--n-text)">
-        <p style="color:var(--n-muted)">安裝一次 iOS Shortcut，之後 Mail / Gmail 入面撳一下 Share → 自動貼落 app 解析。</p>
+        <p style="color:var(--n-muted)">喺 Gmail / Outlook / 瀏覽器 入面撳 Share → 直接匯入呢個 app，自動解析。</p>
 
+        <!-- Android PWA setup -->
+        <div class="p-3 rounded-xl" style="background:#E0F2FE;border:1px solid #7DD3FC">
+          <p class="font-semibold mb-1.5" style="color:#0C4A6E">🤖 Android（推薦，零 setup code）</p>
+          <ol class="text-[11px] space-y-1 pl-4" style="color:#075985;list-style:decimal">
+            <li>Chrome 開呢個 app → 選單 (⋮) → <strong>「Add to Home screen」/「安裝應用程式」</strong></li>
+            <li>Gmail 開 email → 撳右上角 ⋮ → <strong>「Share」</strong> → 揀「名古屋記帳」</li>
+            <li>自動跳返呢個 app，內容貼落去 → AI 解析 → 完 ✅</li>
+          </ol>
+          <p class="text-[10px] mt-2" style="color:#0369A1">📌 安裝 PWA 之後先會出現喺 Share menu。只安裝一次。</p>
+        </div>
+
+        <!-- iOS Shortcut setup -->
         <div class="p-3 rounded-xl" style="background:#F0FDF4;border:1px solid #86EFAC">
-          <p class="font-semibold mb-2" style="color:#065F46">🚀 一鍵安裝</p>
-          <button id="copyShortcutUrlBtn" class="w-full py-2 rounded-lg text-[11px] font-semibold" style="background:#059669;color:white">📋 複製 Shortcut URL 範本</button>
-          <p class="text-[10px] mt-2" style="color:#047857">複製完喺 Safari 貼，會開 Shortcuts app 提示匯入。</p>
-        </div>
-
-        <div>
-          <p class="font-semibold mb-1">🛠️ 自己整 Shortcut（3 個步驟）：</p>
-          <ol class="space-y-1.5 pl-4" style="color:var(--n-text);list-style:decimal">
-            <li><strong>Get Contents of Input</strong>（類型：Text）</li>
-            <li><strong>Base64 Encode</strong>（Encode，URL Encoded）</li>
-            <li><strong>Open URL</strong>：<code class="text-[10px] px-1 rounded" style="background:var(--n-bg)">你嘅 app URL#email=<em>[Base64 Output]</em>&auto=1</code></li>
-          </ol>
-          <p class="text-[10px] mt-2" style="color:var(--n-muted)">Shortcut 類型設為「Receive Text from Share Sheet」</p>
-        </div>
-
-        <div>
-          <p class="font-semibold mb-1">📲 用法：</p>
-          <ol class="space-y-0.5 pl-4" style="color:var(--n-text);list-style:decimal">
-            <li>打開 Klook / 航空確認 email</li>
-            <li>長按 email 正文 → 全選 → 共享 (Share)</li>
-            <li>揀「🗾 匯入 Boss 記帳」shortcut</li>
-            <li>自動跳去 app，AI 解析一下就完 ✅</li>
+          <p class="font-semibold mb-1.5" style="color:#065F46">🍎 iOS（需要設 Shortcut）</p>
+          <button id="copyShortcutUrlBtn" class="w-full py-2 rounded-lg text-[11px] font-semibold mb-2" style="background:#059669;color:white">📋 複製 Shortcut URL 範本</button>
+          <p class="text-[10px] mb-1" style="color:#047857">Shortcuts app 整 3 步（Receive Text from Share Sheet）：</p>
+          <ol class="text-[11px] space-y-0.5 pl-4" style="color:#047857;list-style:decimal">
+            <li><strong>Get Contents of Input</strong>（Text）</li>
+            <li><strong>Base64 Encode</strong> → URL Encoded</li>
+            <li><strong>Open URL</strong>：貼上面範本，<em>[Base64 Output]</em> 替換中間</li>
           </ol>
         </div>
 
+        <!-- Universal fallback -->
         <div class="p-3 rounded-xl" style="background:#FEF3C7;border:1px solid #FCD34D">
-          <p class="text-[10px]" style="color:#92400E">⚠️ URL 最長約 8000 字符。好長嘅 email 用返 📧 手動貼 flow。</p>
+          <p class="text-[10px] font-semibold mb-1" style="color:#92400E">🎯 任何情況都 work</p>
+          <p class="text-[10px]" style="color:#92400E">Copy email 全文 → 開 Scan tab → 📧 匯入 → 📋 從剪貼簿貼 → AI 解析。零 setup，100% 可靠。</p>
         </div>
       </div>
     </details>
@@ -819,6 +841,7 @@
       <div id="batchItems" class="space-y-2.5"></div>
     </div>
     <div class="sticky bottom-0 p-5 space-y-2" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
+      <button id="batchRetryStrongerBtn" class="hidden w-full py-2.5 rounded-xl font-semibold text-sm" style="background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white">🎯 用更強 AI 重新解析</button>
       <div class="grid grid-cols-2 gap-3">
         <button id="batchCancelBtn" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
         <button id="batchSaveBtn" class="py-3 rounded-xl font-bold text-white" style="background:var(--n-blue)">全部儲存 (<span id="batchSaveCount">0</span>)</button>
@@ -2661,7 +2684,11 @@ async function callGeminiMultimodal(promptText, images, model, apiKey) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts }],
-        generationConfig: { temperature: 0.15, responseMimeType: 'application/json' },
+        generationConfig: {
+          temperature: 0.15,
+          responseMimeType: 'application/json',
+          responseSchema: MULTI_BOOKING_SCHEMA,
+        },
       })
     });
     if (!r.ok) {
@@ -2677,6 +2704,35 @@ async function callGeminiMultimodal(promptText, images, model, apiKey) {
   throw lastErr || new Error('Gemini 所有 key 都失敗');
 }
 
+// Gemini structured-output schema — forces the model to conform to our shape.
+// Even weak models stay on-script when given explicit schema constraints.
+const MULTI_BOOKING_SCHEMA = {
+  type: 'object',
+  properties: {
+    source: { type: 'string' },
+    bookings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          store: { type: 'string' },
+          total: { type: 'number' },
+          original_currency: { type: 'string' },
+          original_amount: { type: 'number' },
+          date: { type: 'string' },
+          category: { type: 'string', enum: ['transport','food','shopping','lodging','ticket','medicine','other'] },
+          payment: { type: 'string' },
+          items_text: { type: 'string' },
+          note: { type: 'string' },
+          confidence: { type: 'string', enum: ['high','medium','low'] },
+        },
+        required: ['store', 'total', 'category', 'confidence'],
+      }
+    }
+  },
+  required: ['bookings'],
+};
+
 async function callGeminiText(content, model, apiKey) {
   const keys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k,i,a) => k && a.indexOf(k) === i);
   let lastErr;
@@ -2686,7 +2742,11 @@ async function callGeminiText(content, model, apiKey) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: content }] }],
-        generationConfig: { temperature: 0.15, responseMimeType: 'application/json' },
+        generationConfig: {
+          temperature: 0.15,
+          responseMimeType: 'application/json',
+          responseSchema: MULTI_BOOKING_SCHEMA,
+        },
       })
     });
     if (!r.ok) {
@@ -2722,29 +2782,128 @@ async function callGLMText(content) {
   return out;
 }
 
-// Normalize a single booking from AI into a draft receipt (with defaults for missing fields)
+// ==================== POST-PROCESS VALIDATION & REPAIR ====================
+// Weak LLMs (glm-4-flash, older Gemini) often return:
+//  - Wrong currency conversion (rate off by 10x)
+//  - Missing dates or wrong year
+//  - Wrong category (hotel → "other")
+//  - Empty store name
+//  - Total = 0 or negative
+// This function deterministically repairs these in JS, without another LLM call,
+// and attaches warnings[] for UI display so user can verify.
+
+// Known exchange rate reference (rough — better-than-nothing sanity check)
+const RATE_TO_JPY = {
+  JPY: 1, HKD: 20, USD: 150, CNY: 20, EUR: 160, GBP: 185, TWD: 4.7,
+  SGD: 110, KRW: 0.11, AUD: 98, CAD: 110, THB: 4.3, MYR: 33, PHP: 2.7, IDR: 0.0095,
+};
+
+// Keyword → category hints (fallback when LLM returns 'other')
+const CATEGORY_KEYWORDS = {
+  transport: [/flight|airline|cathay|ana|jal|airasia|hkexpress|united|emirates|ticket.*air|boarding/i, /機票|航班|航空|新幹線|shinkansen|JR|taxi|uber|bus|train|rail|railway|地鐵|巴士|車票/],
+  lodging:   [/hotel|hostel|airbnb|agoda|booking\.com|expedia|hotels\.com|ryokan|onsen|check-?in|check-?out/i, /酒店|旅館|民宿|溫泉/],
+  ticket:    [/klook|kkday|tour|activity|admission|entry|pass|ticket/i, /門票|景點|樂園|演出|表演/],
+  food:      [/restaurant|menu|dining|lunch|dinner|breakfast|buffet/i, /餐廳|餐|菜|食/],
+  medicine:  [/pharmacy|drug|medical|hospital|clinic/i, /藥|醫/],
+};
+function inferCategoryFromText(text) {
+  const t = (text || '').toLowerCase();
+  for (const [cat, patterns] of Object.entries(CATEGORY_KEYWORDS)) {
+    for (const p of patterns) if (p.test(t)) return cat;
+  }
+  return null;
+}
+
+// Normalize a single booking from AI into a draft receipt + validation/repair
 function bookingToDraft(b, indexHint = 0) {
   const validCats = CATEGORIES.map(c => c.id);
   const validPays = PAYMENTS.map(p => p.id);
-  const cat = validCats.includes(b.category) ? b.category : 'other';
-  const pay = validPays.includes(b.payment) ? b.payment : 'credit'; // sensible default for email bookings
-  const date = (b.date && /^\d{4}-\d{2}-\d{2}$/.test(b.date)) ? b.date : todayHKT();
-  const total = Math.max(0, Math.round(Number(b.total) || 0));
-  const origNote = b.original_currency && b.original_currency !== 'JPY' && b.original_amount
-    ? `原價 ${b.original_currency} ${Number(b.original_amount).toLocaleString()}`
+  const warnings = []; // user-facing concerns
+
+  // ── Store name ──
+  let store = (b.store || '').toString().trim().slice(0, 120);
+  if (!store) {
+    // Fallback: use email source (klook, cathay, agoda...) as rough label
+    const src = (b._source || b.source || '').toString().trim();
+    store = src ? src.toUpperCase() + ' 預訂' : '未命名';
+    warnings.push('店名缺失，用 email 來源代替');
+  }
+
+  // ── Date ──
+  let date = todayHKT();
+  if (b.date && /^\d{4}-\d{2}-\d{2}$/.test(b.date)) {
+    date = b.date;
+    // Sanity: if year <1990 or >2050, treat as wrong
+    const yr = Number(date.slice(0, 4));
+    if (yr < 1990 || yr > 2050) {
+      date = todayHKT();
+      warnings.push('日期年份可疑，已用今日代替');
+    }
+  } else if (b.date) {
+    warnings.push('日期格式錯，已用今日代替');
+  } else {
+    warnings.push('冇日期，已用今日代替');
+  }
+
+  // ── Currency + total cross-validation ──
+  let total = Math.max(0, Math.round(Number(b.total) || 0));
+  const origCcy = (b.original_currency || '').toString().toUpperCase();
+  const origAmt = Number(b.original_amount) || 0;
+  if (origCcy && origCcy !== 'JPY' && origAmt > 0 && RATE_TO_JPY[origCcy]) {
+    const expected = Math.round(origAmt * RATE_TO_JPY[origCcy]);
+    // Use state.rate if user has a fresher HKD rate
+    if (origCcy === 'HKD' && Number(state.rate) > 0) {
+      const refined = Math.round(origAmt * state.rate);
+      if (!total || Math.abs(total - refined) / Math.max(1, refined) > 0.20) {
+        total = refined;
+        warnings.push(`金額校正：用匯率重算 HKD ${origAmt} → ¥${fmt(total)}`);
+      }
+    } else if (!total || Math.abs(total - expected) / Math.max(1, expected) > 0.30) {
+      // AI conversion was off by >30% — override with our reference rate
+      total = expected;
+      warnings.push(`金額校正：${origCcy} ${origAmt} → ¥${fmt(total)}`);
+    }
+  }
+  if (total <= 0) warnings.push('金額係 0 或負數，請手動輸入');
+
+  // ── Category ──
+  let cat = validCats.includes(b.category) ? b.category : 'other';
+  if (cat === 'other') {
+    // Try to infer from store name + items text
+    const inferred = inferCategoryFromText((store + ' ' + (b.items_text || '')).slice(0, 300));
+    if (inferred) {
+      cat = inferred;
+      warnings.push(`類別自動推斷：${CATEGORIES.find(c => c.id === inferred)?.name}`);
+    }
+  }
+
+  // ── Payment ──
+  const payAuto = !validPays.includes(b.payment);
+  const pay = validPays.includes(b.payment) ? b.payment : 'credit';
+  if (payAuto) warnings.push('付款方式缺，預設信用卡（請確認）');
+
+  // ── Confidence escalation ──
+  let conf = b.confidence || 'medium';
+  if (warnings.length >= 3) conf = 'low';
+  else if (warnings.length >= 1 && conf === 'high') conf = 'medium';
+
+  const origNote = origCcy && origCcy !== 'JPY' && origAmt > 0
+    ? `原價 ${origCcy} ${origAmt.toLocaleString()}`
     : '';
   const noteParts = [origNote, b.note].filter(Boolean);
+
   return {
     _draftIndex: indexHint,
-    _confidence: b.confidence || 'medium',
-    _paymentAuto: !validPays.includes(b.payment), // flag so UI can warn
-    store: (b.store || '').slice(0, 120),
+    _confidence: conf,
+    _paymentAuto: payAuto,
+    _warnings: warnings,
+    store,
     total,
     category: cat,
     payment: pay,
     date,
     region: getRegionForDate(date),
-    itemsText: (b.items_text || '').slice(0, 400),
+    itemsText: (b.items_text || '').toString().slice(0, 400),
     note: noteParts.join(' · ').slice(0, 300),
     personId: (state.persons && state.persons[0]?.id) || 'p_boss',
   };
@@ -2753,13 +2912,54 @@ function bookingToDraft(b, indexHint = 0) {
 // ============ BATCH CONFIRM MODAL ============
 let batchDrafts = [];
 let batchSelected = new Set();
+let batchLastInput = null; // { text, images } for retry with stronger model
 
-function openBatchConfirmModal(bookings, source, modelUsed) {
+function openBatchConfirmModal(bookings, source, modelUsed, originalInput = null) {
   batchDrafts = bookings.map((b, i) => bookingToDraft(b, i));
-  batchSelected = new Set(batchDrafts.map((_, i) => i)); // all selected by default
-  $('batchSubtitle').textContent = `來源：${source || 'email'} · 用 ${modelUsed} 解析 · 預設全選`;
+  batchSelected = new Set(batchDrafts.map((_, i) => i));
+  batchLastInput = originalInput; // preserved for retry
+  // Compute aggregate quality so user sees if retry is advisable
+  const lowCount = batchDrafts.filter(d => d._confidence === 'low').length;
+  const warnCount = batchDrafts.reduce((n, d) => n + (d._warnings?.length || 0), 0);
+  const qualityLabel = lowCount > 0
+    ? `⚠️ ${lowCount} 筆低信心 · ${warnCount} 個警告`
+    : (warnCount > 0 ? `${warnCount} 個建議核對` : '全部高信心');
+  $('batchSubtitle').textContent = `來源：${source || 'email'} · 模型：${modelUsed} · ${qualityLabel}`;
+  // Show the "retry with stronger model" button only if we have the original input + quality is suspect
+  const retryBtn = $('batchRetryStrongerBtn');
+  if (retryBtn) {
+    if (batchLastInput && (lowCount > 0 || warnCount >= 2)) {
+      retryBtn.classList.remove('hidden');
+    } else {
+      retryBtn.classList.add('hidden');
+    }
+  }
   renderBatchItems();
   $('batchConfirmModal').classList.remove('hidden');
+}
+
+// Retry parsing with the strongest available model (Gemini 3 Pro)
+async function retryBatchWithStrongerModel() {
+  if (!batchLastInput) { toast('⚠️ 原始輸入已失效，請重新貼 email'); return; }
+  const btn = $('batchRetryStrongerBtn');
+  if (btn) { btn.disabled = true; btn.innerText = '🔄 重新解析中…'; }
+  try {
+    // Force strongest model by temporarily swapping state.model
+    const saved = state.model;
+    state.model = 'gemini-3.1-pro-preview';
+    const result = await parseEmailInput(batchLastInput);
+    state.model = saved;
+    if (result.bookings && result.bookings.length) {
+      openBatchConfirmModal(result.bookings, result.source, result.modelUsed + ' 🔒 高精度', batchLastInput);
+      toast(`🎯 用 ${result.modelUsed} 重解析到 ${result.bookings.length} 筆`);
+    } else {
+      toast('⚠️ 強模型都解析唔到，請檢查 email 內容');
+    }
+  } catch(e) {
+    toast('❌ 重試失敗：' + e.message.slice(0, 80));
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerText = '🎯 用更強 AI 重新解析'; }
+  }
 }
 
 function renderBatchItems() {
@@ -2818,6 +3018,10 @@ function renderBatchItems() {
             </div>
             ${d.itemsText ? `<p class="text-[10px] mt-1.5" style="color:var(--n-muted)">${escapeHtml(d.itemsText)}</p>` : ''}
             ${d.note ? `<p class="text-[10px] mt-0.5 italic" style="color:var(--n-muted)">📝 ${escapeHtml(d.note)}</p>` : ''}
+            ${(d._warnings && d._warnings.length) ? `
+              <div class="mt-1.5 p-1.5 rounded-lg" style="background:#FEF3C7;border:1px solid #FCD34D">
+                ${d._warnings.map(w => `<p class="text-[9px]" style="color:#92400E">⚠️ ${escapeHtml(w)}</p>`).join('')}
+              </div>` : ''}
             <div class="flex items-center gap-2 mt-1.5 text-[10px]" style="color:var(--n-muted)">
               <span>${phaseBadge}</span>
               <span>· 📍 ${escapeHtml(d.region)}</span>
@@ -4079,7 +4283,8 @@ function init() {
         return;
       }
       $('emailPasteModal').classList.add('hidden');
-      openBatchConfirmModal(result.bookings, result.source, result.modelUsed);
+      // Preserve the original input so "retry with stronger model" can re-parse
+      openBatchConfirmModal(result.bookings, result.source, result.modelUsed, { text, images });
       toast(`🤖 解析到 ${result.bookings.length} 筆 booking`);
       // Clear staged images after successful parse
       _emailImageQueue = [];
@@ -4098,6 +4303,7 @@ function init() {
     batchDrafts = []; batchSelected.clear();
   });
   $('batchSaveBtn')?.addEventListener('click', saveBatchBookings);
+  $('batchRetryStrongerBtn')?.addEventListener('click', retryBatchWithStrongerModel);
 
   // Quick-add prep expense from dashboard prep summary card
   $('prepQuickAddBtn')?.addEventListener('click', () => {
@@ -4179,45 +4385,66 @@ function init() {
   // Data persists via localStorage, so page reload is non-destructive.
   scheduleAutoRefresh();
 
-  // Handle URL-hash deep-link for iOS Shortcut share flow:
-  //   #email=<base64-text>        → open paste modal pre-filled
-  //   #email=<base64-text>&auto=1 → also auto-click parse
-  // Falls back silently if the hash doesn't decode.
-  handleUrlHashImport();
+  // Handle deep-link share import from:
+  //   iOS Shortcut:     #email=<base64>[&auto=1]
+  //   Android PWA share: ?shared_text=<raw>&shared_title=...
+  // Both routes flow into the same paste-modal-prefilled UX.
+  handleImportDeepLink();
 }
 
-function handleUrlHashImport() {
-  if (!location.hash || !location.hash.includes('email=')) return;
-  try {
-    // Don't use URLSearchParams — it treats '+' as space, which corrupts base64
-    // that contains '+' characters. Manually extract the email=... token instead.
-    const hashRaw = location.hash.slice(1); // drop leading '#'
-    const match = hashRaw.match(/(^|&)email=([^&]*)/);
-    if (!match || !match[2]) return;
-    const encoded = decodeURIComponent(match[2]); // just %-decode (doesn't touch '+')
-    const autoMatch = hashRaw.match(/(^|&)auto=([^&]*)/);
-    const autoParse = autoMatch && autoMatch[2] === '1';
-    // Accept both standard base64 ('+', '/') and base64url ('-', '_')
-    const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encoded.length/4)*4, '=');
-    const text = decodeURIComponent(escape(atob(b64))); // UTF-8 safe
-    // Clear the hash so refresh doesn't re-trigger
-    history.replaceState(null, '', location.pathname + location.search);
-    // Open paste modal + fill
-    setTimeout(() => {
-      $('emailImportBtn')?.click();
-      setTimeout(() => {
-        $('emailText').value = text;
-        $('emailText').dispatchEvent(new Event('input'));
-        toast('📧 已由 Shortcut 填入 — 撳「AI 解析」開始');
-        if (autoParse && text.length >= 40) {
-          setTimeout(() => $('emailParseBtn').click(), 300);
-        }
-      }, 200);
-    }, 400);
-  } catch(e) {
-    console.warn('[urlHashImport] decode failed:', e);
+function handleImportDeepLink() {
+  // 1. iOS Shortcut path (base64 in hash)
+  if (location.hash && location.hash.includes('email=')) {
+    try {
+      const hashRaw = location.hash.slice(1);
+      const match = hashRaw.match(/(^|&)email=([^&]*)/);
+      if (match && match[2]) {
+        const encoded = decodeURIComponent(match[2]);
+        const autoMatch = hashRaw.match(/(^|&)auto=([^&]*)/);
+        const autoParse = autoMatch && autoMatch[2] === '1';
+        const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encoded.length/4)*4, '=');
+        const text = decodeURIComponent(escape(atob(b64)));
+        history.replaceState(null, '', location.pathname + location.search);
+        return prefillAndOpenPasteModal(text, autoParse, '📧 已由 Shortcut 填入');
+      }
+    } catch(e) { console.warn('[deepLink:hash] decode failed:', e); }
+  }
+
+  // 2. Android PWA share target path (plain text in query)
+  // The PWA manifest declares share_target params: shared_title, shared_text, shared_url
+  if (location.search && location.search.includes('shared_')) {
+    try {
+      const params = new URLSearchParams(location.search);
+      const parts = [
+        params.get('shared_title'),
+        params.get('shared_text'),
+        params.get('shared_url'),
+      ].filter(Boolean);
+      if (parts.length === 0) return;
+      const text = parts.join('\n\n');
+      history.replaceState(null, '', location.pathname); // strip query
+      // Auto-parse if the shared content is substantial (likely email body, not a URL)
+      const autoParse = text.length >= 80;
+      return prefillAndOpenPasteModal(text, autoParse, '📱 已由分享接收');
+    } catch(e) { console.warn('[deepLink:share] decode failed:', e); }
   }
 }
+
+function prefillAndOpenPasteModal(text, autoParse, toastMsg) {
+  setTimeout(() => {
+    $('emailImportBtn')?.click();
+    setTimeout(() => {
+      $('emailText').value = text;
+      $('emailText').dispatchEvent(new Event('input'));
+      toast(toastMsg + (autoParse ? ' — 自動解析中' : ' — 撳「AI 解析」開始'));
+      if (autoParse && text.length >= 40) {
+        setTimeout(() => $('emailParseBtn').click(), 300);
+      }
+    }, 200);
+  }, 400);
+}
+// Back-compat alias
+function handleUrlHashImport() { handleImportDeepLink(); }
 
 // ============ AUTO-REFRESH SCHEDULER ============
 let _lastActivityTs = Date.now();
