@@ -641,8 +641,8 @@
         <li>App → History tab → 黃色卡片 → 按「✅ 確認」</li>
       </ol>
       <div class="mt-2 pt-2 border-t border-amber-200">
-        <p class="text-[10px] font-bold" style="color:#92400E">🛡 Gemini rate limit 防護</p>
-        <p class="text-[10px]" style="color:#92400E">AI 解析有多重 fallback：2× Gemini keys → GLM-4-Flash (智譜免費) → exponential backoff 重試 → 下個 trigger cycle 再試，最多 3 輪。單一 model 429 唔會整個 pipeline 死。</p>
+        <p class="text-[10px] font-bold" style="color:#92400E">🛡 6 層 AI fallback（text-only，email 純文字不需 vision model）</p>
+        <p class="text-[10px] leading-relaxed" style="color:#92400E">GLM-5 → GLM-5-turbo → MiniMax-M2.7 → Gemini×2 → GLM-4-Flash → 下一 cycle 再試 (×3)。每個 model 3 次 backoff retry。單一 model 429 唔會整個 pipeline 死。</p>
       </div>
     </div>
 
@@ -663,7 +663,7 @@
         <li>Gmail 設 filter：<code class="px-1 bg-gray-100 rounded">to:ftjdfr+expense@gmail.com</code> → label「travel-expense」</li>
       </ol>
       <p class="mt-2 font-medium" style="color:#00a87e">✅ 之後每 5 分鐘自動 scan 一次，零人手操作。</p>
-      <p class="mt-1 text-[9px] text-gray-400">🤖 AI chain: Gemini (primary key) → Gemini (backup key) → GLM-4-Flash (Zhipu 免費) → defer to next cycle (×3)</p>
+      <p class="mt-1 text-[9px] text-gray-400">🤖 AI chain: GLM-5 → GLM-5-turbo → MiniMax-M2.7 → Gemini×2 → GLM-4-Flash → defer to next cycle (×3)</p>
     </div>
 
     </details>
@@ -4383,14 +4383,17 @@ function init() {
       const r = await fetch(APPS_SCRIPT_URL + '?t=' + Date.now());
       if (!r.ok) throw new Error('HTTP ' + r.status);
       let code = await r.text();
-      // Auto-fill user's existing credentials + fallback keys
-      // Primary Gemini key (user's own, or DEFAULT_API_KEY)
+      // Auto-fill ALL credentials so user can paste and go (zero manual editing).
+      // Zhipu key unlocks GLM-5, GLM-5-turbo AND GLM-4-Flash (same key, same endpoint).
+      if (VAULT_ZAI_KEY)     code = code.replace('PASTE_ZHIPU_KEY_OR_LEAVE', VAULT_ZAI_KEY);
+      // MiniMax-portal OAuth (same token as in-app MiniMax VLM).
+      const minimaxTok = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
+      if (minimaxTok)        code = code.replace('PASTE_MINIMAX_OAUTH_TOKEN_OR_LEAVE', minimaxTok);
+      // Gemini primary + backup keys
       const primaryGem = state.apiKey || DEFAULT_API_KEY;
       if (primaryGem)        code = code.replace('PASTE_GEMINI_API_KEY_HERE', primaryGem);
-      // Backup Gemini key (rotates on 429)
       if (DEFAULT_BACKUP_API_KEY) code = code.replace('PASTE_GEMINI_BACKUP_KEY_OR_LEAVE', DEFAULT_BACKUP_API_KEY);
-      // Zhipu GLM-4-Flash key (fallback when Gemini is rate-limited)
-      if (VAULT_ZAI_KEY)     code = code.replace('PASTE_ZAI_KEY_OR_LEAVE', VAULT_ZAI_KEY);
+      // Notion credentials
       if (state.notionToken) code = code.replace('PASTE_NOTION_INTEGRATION_TOKEN_HERE', state.notionToken);
       if (state.notionDb)    code = code.replace('PASTE_NOTION_DATABASE_ID_HERE', state.notionDb);
       try {
