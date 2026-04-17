@@ -3340,32 +3340,64 @@ const N = {
   tax:      ['💸 稅金 ¥', '稅金'],
   subtotal: ['🧮 小計 ¥', '小計'],
 };
+
+// ── Schema cache ──────────────────────────────────────────────────────────────
+// Stores { store: '店名', amount: '金額', ... } — the ACTUAL names present in the DB.
+// Populated lazily on first push/pull; cleared when token/DB changes or after migration.
+let _notionSchemaCache = null;
+
+/** Fetch DB schema once, resolve which property name variant exists for each key. */
+async function notionEnsureSchema() {
+  if (_notionSchemaCache) return _notionSchemaCache;
+  const db = await notionFetch(`/databases/${state.notionDb}`, { method: 'GET' });
+  const existing = db.properties || {};
+  const cache = {};
+  for (const [key, [newName, oldName]] of Object.entries(N)) {
+    // Prefer emoji name if it's already in the DB; otherwise use plain name
+    cache[key] = existing[newName] ? newName : oldName;
+  }
+  _notionSchemaCache = cache;
+  console.log('[notion] schema resolved:', cache);
+  return cache;
+}
+
+/** Call whenever token / DB ID changes so next operation re-fetches. */
+function notionClearSchemaCache() { _notionSchemaCache = null; }
+
 // Read a Notion property trying new name first, then legacy name
 function nGet(props, key) {
   const [newName, oldName] = N[key];
   return props[newName] ?? props[oldName] ?? null;
 }
 
-function buildNotionProps(r) {
+/**
+ * Build the Notion properties object for a receipt.
+ * @param {object} r - receipt
+ * @param {object|null} schemaMap - { key: actualPropertyName } from notionEnsureSchema().
+ *   If null, falls back to emoji names (N[key][0]) — only safe after migration.
+ */
+function buildNotionProps(r, schemaMap) {
+  // nm(key) → the property name we should use for this DB
+  const nm = key => (schemaMap && schemaMap[key]) ? schemaMap[key] : N[key][0];
   const cat = CATEGORIES.find(c => c.id === r.category);
   const pay = PAYMENTS.find(p => p.id === r.payment);
   const person = (state.persons || []).find(p => p.id === r.personId);
   const personLabel = person ? `${person.emoji} ${person.name}` : '';
   const props = {
-    [N.store[0]]:    { title: [{ text: { content: (r.store || '未命名').slice(0, 200) } }] },
-    [N.amount[0]]:   { number: Number(r.total) || 0 },
-    [N.date[0]]:     { date: { start: r.date } },
-    [N.cat[0]]:      { select: { name: cat ? cat.name : '其他' } },
-    [N.pay[0]]:      { select: { name: pay ? pay.name : '現金' } },
-    [N.region[0]]:   { rich_text: [{ text: { content: (r.region || '').slice(0, 2000) } }] },
-    [N.items[0]]:    { rich_text: [{ text: { content: (r.itemsText || '').slice(0, 2000) } }] },
-    [N.note[0]]:     { rich_text: [{ text: { content: (r.note || '').slice(0, 2000) } }] },
-    [N.person[0]]:   { rich_text: [{ text: { content: personLabel } }] },
-    [N.sourceId[0]]: { rich_text: [{ text: { content: r.id } }] },
+    [nm('store')]:    { title: [{ text: { content: (r.store || '未命名').slice(0, 200) } }] },
+    [nm('amount')]:   { number: Number(r.total) || 0 },
+    [nm('date')]:     { date: { start: r.date } },
+    [nm('cat')]:      { select: { name: cat ? cat.name : '其他' } },
+    [nm('pay')]:      { select: { name: pay ? pay.name : '現金' } },
+    [nm('region')]:   { rich_text: [{ text: { content: (r.region || '').slice(0, 2000) } }] },
+    [nm('items')]:    { rich_text: [{ text: { content: (r.itemsText || '').slice(0, 2000) } }] },
+    [nm('note')]:     { rich_text: [{ text: { content: (r.note || '').slice(0, 2000) } }] },
+    [nm('person')]:   { rich_text: [{ text: { content: personLabel } }] },
+    [nm('sourceId')]: { rich_text: [{ text: { content: r.id } }] },
   };
-  if (r.hkd != null)      props[N.hkd[0]]      = { number: Number(r.hkd) };
-  if (r.tax != null)      props[N.tax[0]]       = { number: Number(r.tax) };
-  if (r.subtotal != null) props[N.subtotal[0]]  = { number: Number(r.subtotal) };
+  if (r.hkd != null)      props[nm('hkd')]      = { number: Number(r.hkd) };
+  if (r.tax != null)      props[nm('tax')]       = { number: Number(r.tax) };
+  if (r.subtotal != null) props[nm('subtotal')]  = { number: Number(r.subtotal) };
   return props;
 }
 
@@ -3438,6 +3470,7 @@ async function notionMigrateSchema() {
       })
     });
 
+    notionClearSchemaCache(); // force next push to re-detect emoji property names
     toast('✅ Notion 已美化！欄位名已加上 emoji 🎉');
   } catch(e) {
     console.error('[notionMigrateSchema]', e);
@@ -3498,7 +3531,8 @@ async function notionFetch(path, options = {}) {
 
 async function notionPushReceipt(r) {
   if (!state.notionToken || !state.notionDb) return;
-  const props = buildNotionProps(r);
+  const schemaMap = await notionEnsureSchema(); // resolve actual property names once
+  const props = buildNotionProps(r, schemaMap);
   if (r.notionPageId) {
     // Update existing
     await notionFetch(`/pages/${r.notionPageId}`, {
@@ -4228,6 +4262,7 @@ function init() {
     const statusEl = $('notionStatus');
     statusEl.className = 'text-[11px] text-center mb-2';
     statusEl.textContent = '🔄 測試中…';
+    statusEl.style.color = '';
     if (!state.notionToken) {
       statusEl.textContent = '❌ 未設定 Notion token'; statusEl.style.color = '#e23b4a'; return;
     }
@@ -4235,8 +4270,12 @@ function init() {
       statusEl.textContent = '❌ 未設定 Database ID'; statusEl.style.color = '#e23b4a'; return;
     }
     try {
-      await notionFetch('/databases/' + state.notionDb);
-      statusEl.textContent = '✅ Notion 連線正常！';
+      notionClearSchemaCache(); // force fresh schema detection
+      const schema = await notionEnsureSchema();
+      // Determine if DB uses emoji names or plain names
+      const usesEmoji = Object.values(schema).some(n => /\p{Emoji}/u.test(n));
+      const schemaLabel = usesEmoji ? '（emoji 版 ✨）' : '（純中文版）';
+      statusEl.textContent = `✅ Notion 連線正常！DB 欄位 ${schemaLabel}`;
       statusEl.style.color = '#00a87e';
     } catch(e) {
       statusEl.textContent = '❌ ' + (e.message || '連線失敗').slice(0, 100);
@@ -4642,6 +4681,7 @@ async function applyVault(vault, pw) {
   state.notionDb = vault.notionDb || state.notionDb;
   VAULT_ZAI_KEY = vault.zaiKey || VAULT_ZAI_KEY;
   VAULT_MINIMAX_KEY = vault.minimaxKey || VAULT_MINIMAX_KEY;
+  notionClearSchemaCache(); // credentials changed → re-detect DB property names on next push
   saveState(); // saves everything EXCEPT apiKey/notionToken
   localStorage.setItem('vault_unlocked', '1');
   if (pw) await _storeVaultToken(pw); // device-bound token for auto-reload
@@ -4662,6 +4702,7 @@ async function gateAndInit() {
         state.notionDb = vault.notionDb || state.notionDb;
         VAULT_ZAI_KEY = vault.zaiKey || VAULT_ZAI_KEY;
         VAULT_MINIMAX_KEY = vault.minimaxKey || VAULT_MINIMAX_KEY;
+        notionClearSchemaCache();
         init();
         return;
       }
