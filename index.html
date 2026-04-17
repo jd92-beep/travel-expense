@@ -1007,10 +1007,10 @@ const DEFAULT_GEMINI_KEY4    = atob('QUl6YVN5Q2V3R0tPVURZWWhtN1FBV0tYTDZaVGNVTEd
 const DEFAULT_GEMINI_KEY5    = atob('QUl6YVN5QUdKWmtGX0lMM21kQUZtNG16REJhOHJhTWpZTG9zcmlr');
 // All hardcoded Gemini keys in rotation order (state.apiKey from vault is prepended at runtime)
 const GEMINI_DEFAULT_KEYS = [DEFAULT_API_KEY, DEFAULT_BACKUP_API_KEY, DEFAULT_GEMINI_KEY3, DEFAULT_GEMINI_KEY4, DEFAULT_GEMINI_KEY5].filter(Boolean);
-// Returns the full ordered key list: vault key first (if set), then defaults (deduped)
-function getGeminiKeys() {
-  const userKey = state?.apiKey;
-  return [userKey, ...GEMINI_DEFAULT_KEYS].filter((k, i, a) => k && a.indexOf(k) === i);
+// Returns the full ordered key list: user key (explicit or from vault) first, then defaults (deduped)
+function getGeminiKeys(userKey) {
+  const firstKey = userKey !== undefined ? userKey : state?.apiKey;
+  return [firstKey, ...GEMINI_DEFAULT_KEYS].filter((k, i, a) => k && a.indexOf(k) === i);
 }
 const DEFAULT_NOTION_TOKEN = atob('bnRuXzM4MDA1NDY0OTU2NGZnQ2F4OVRxVHYwSEljNWVwUDNOQ0NnMVV6bWJMZ1VmRjU=');
 const DEFAULT_NOTION_DB    = atob('MzQzOGQ5NGQ1ZjdjODE4NzgyMjFmY2RhNmQ2NWQzOWQ=');
@@ -1120,6 +1120,23 @@ function loadState() {
     console.warn('[loadState] parse error:', e);
     // Don't wipe data, but flag it
     setTimeout(() => toast('⚠️ 本地資料讀取異常，請檢查設定'), 1000);
+  }
+  // Always-on invariants — normalize shapes even if load() succeeded with partial/legacy data
+  if (!Array.isArray(state.receipts)) state.receipts = [];
+  if (!Array.isArray(state.notionDeletedIds)) state.notionDeletedIds = [];
+  if (!Array.isArray(state.persons) || !state.persons.length) {
+    state.persons = [
+      { id: 'p_boss',   name: 'Tony', emoji: '👦', color: '#CC2929' },
+      { id: 'p_xinxin', name: '欣欣', emoji: '👧', color: '#FF91A4' },
+    ];
+  }
+  // Drop receipts missing mandatory fields — prevents downstream renders from crashing
+  const before = state.receipts.length;
+  state.receipts = state.receipts.filter(r =>
+    r && typeof r === 'object' && r.id && typeof r.store !== 'undefined'
+  );
+  if (state.receipts.length !== before) {
+    console.warn('[loadState] dropped', before - state.receipts.length, 'malformed receipts');
   }
 }
 function saveState() {
@@ -2570,26 +2587,30 @@ async function parseVoiceExpense(transcript) {
 
   // Strategy 2: Gemini (only if API key exists)
   async function tryGemini(prompt, model) {
-    const gemKeys = [apiKey, ...GEMINI_DEFAULT_KEYS].filter((k, i, a) => k && a.indexOf(k) === i);
+    const gemKeys = getGeminiKeys(apiKey);
     if (!gemKeys.length) throw new Error('No Gemini API key');
     let lastErr;
     for (const key of gemKeys) {
-      console.info(`[Voice] 嘗試 ${model}…`);
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1 } })
-      });
-      if (!r.ok) {
-        console.error(`[Voice] ${model} API ${r.status}`);
-        lastErr = new Error('API ' + r.status);
-        if (r.status === 429 || r.status === 403) continue;
-        throw lastErr;
+      try {
+        console.info(`[Voice] 嘗試 ${model}…`);
+        const r = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1 } })
+        }, 30000);
+        if (!r.ok) {
+          console.error(`[Voice] ${model} API ${r.status}`);
+          lastErr = new Error('API ' + r.status);
+          if (r.status === 429 || r.status === 403 || r.status === 503) continue;
+          throw lastErr;
+        }
+        const text = extractGeminiText(await r.json());
+        console.info(`[Voice] ${model} raw:`, text?.slice(0, 400));
+        return parseReceiptJson(text);
+      } catch(e) {
+        if (e?.name === 'AbortError') { lastErr = new Error('Voice Gemini timeout'); continue; }
+        if (e.message?.includes('blocked by safety filter')) throw e;
+        lastErr = e;
       }
-      const data = await r.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      console.info(`[Voice] ${model} raw:`, text?.slice(0, 400));
-      if (!text) throw new Error('No response');
-      return parseReceiptJson(text);
     }
     throw lastErr;
   }
@@ -2699,11 +2720,50 @@ const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。分析呢張日
 - 未清楚 → cash`;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+// Robust JSON extraction: direct parse → markdown fence strip → largest brace block.
+// Handles markdown-wrapped output (```json...```) and trailing commentary.
 function parseReceiptJson(text) {
-  try { return JSON.parse(text); } catch(_) {}
-  const m = text.match(/\{[\s\S]*\}/);
-  if (m) return JSON.parse(m[0]);
-  throw new Error('JSON parse 失敗');
+  if (!text || !String(text).trim()) throw new Error('Empty LLM response');
+  const raw = String(text).trim();
+  try { return JSON.parse(raw); } catch(_) {}
+  // Strip markdown code fences
+  const cleaned = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+  try { return JSON.parse(cleaned); } catch(_) {}
+  // Extract largest { ... } block
+  const first = cleaned.indexOf('{');
+  const last = cleaned.lastIndexOf('}');
+  if (first >= 0 && last > first) {
+    try { return JSON.parse(cleaned.slice(first, last + 1)); } catch(_) {}
+  }
+  throw new Error('JSON parse 失敗: ' + raw.slice(0, 120));
+}
+
+// fetch() with automatic timeout via AbortController.
+// Prevents indefinite hang when an LLM API stalls — default 60s, caller can override.
+async function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { ...options, signal: ctrl.signal });
+    return r;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Extract text from a Gemini response, detecting safety-filter blocks explicitly.
+// Returns a string; throws descriptive error if blocked or empty.
+function extractGeminiText(data) {
+  const cand = data?.candidates?.[0];
+  if (!cand) throw new Error('Gemini: no candidates (prompt possibly blocked)');
+  const reason = cand.finishReason;
+  if (reason === 'SAFETY' || reason === 'BLOCKED' || reason === 'PROHIBITED_CONTENT' || reason === 'RECITATION') {
+    throw new Error('Gemini: response blocked by safety filter (' + reason + ')');
+  }
+  const text = cand.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Gemini: empty text (finishReason=' + (reason || '?') + ')');
+  return text;
 }
 
 // ==================== EMAIL IMPORT (multi-booking extraction) ====================
@@ -2843,34 +2903,42 @@ async function parseEmailText(text) {
 
 // Multimodal Gemini call — accepts text + N image parts (each {base64, mime})
 async function callGeminiMultimodal(promptText, images, model, apiKey) {
-  const keys = [apiKey, ...GEMINI_DEFAULT_KEYS].filter((k,i,a) => k && a.indexOf(k) === i);
+  const keys = getGeminiKeys(apiKey);
   let lastErr;
   for (const key of keys) {
-    const parts = [{ text: promptText }];
-    for (const img of images) {
-      parts.push({ inline_data: { mime_type: img.mime || 'image/jpeg', data: img.base64 } });
+    try {
+      const parts = [{ text: promptText }];
+      for (const img of images) {
+        parts.push({ inline_data: { mime_type: img.mime || 'image/jpeg', data: img.base64 } });
+      }
+      const r = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            temperature: 0.15,
+            responseMimeType: 'application/json',
+            responseSchema: MULTI_BOOKING_SCHEMA,
+          },
+        })
+      }, 90000); // images need more time
+      if (!r.ok) {
+        // 429/403/503 → try next key; any other 4xx → hard fail
+        if (r.status === 429 || r.status === 403 || r.status === 503) {
+          lastErr = new Error('Gemini ' + r.status); continue;
+        }
+        const t = await r.text();
+        throw new Error(`Gemini ${r.status}: ${t.slice(0,150)}`);
+      }
+      return extractGeminiText(await r.json());
+    } catch(e) {
+      // AbortError (timeout) also triggers next-key retry
+      if (e?.name === 'AbortError') { lastErr = new Error('Gemini timeout'); continue; }
+      // Safety-filter blocks are consistent across keys — no point retrying
+      if (e.message?.includes('blocked by safety filter')) throw e;
+      lastErr = e;
     }
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: {
-          temperature: 0.15,
-          responseMimeType: 'application/json',
-          responseSchema: MULTI_BOOKING_SCHEMA,
-        },
-      })
-    });
-    if (!r.ok) {
-      if (r.status === 429 || r.status === 403) { lastErr = new Error('Gemini ' + r.status); continue; }
-      const t = await r.text();
-      throw new Error(`Gemini ${r.status}: ${t.slice(0,150)}`);
-    }
-    const data = await r.json();
-    const out = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!out) throw new Error('Gemini 空回應');
-    return out;
   }
   throw lastErr || new Error('Gemini 所有 key 都失敗');
 }
@@ -2905,37 +2973,42 @@ const MULTI_BOOKING_SCHEMA = {
 };
 
 async function callGeminiText(content, model, apiKey) {
-  const keys = [apiKey, ...GEMINI_DEFAULT_KEYS].filter((k,i,a) => k && a.indexOf(k) === i);
+  const keys = getGeminiKeys(apiKey);
   let lastErr;
   for (const key of keys) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: content }] }],
-        generationConfig: {
-          temperature: 0.15,
-          responseMimeType: 'application/json',
-          responseSchema: MULTI_BOOKING_SCHEMA,
-        },
-      })
-    });
-    if (!r.ok) {
-      if (r.status === 429 || r.status === 403) { lastErr = new Error('Gemini ' + r.status); continue; }
-      const t = await r.text();
-      throw new Error(`Gemini ${r.status}: ${t.slice(0,150)}`);
+    try {
+      const r = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: content }] }],
+          generationConfig: {
+            temperature: 0.15,
+            responseMimeType: 'application/json',
+            responseSchema: MULTI_BOOKING_SCHEMA,
+          },
+        })
+      }, 45000);
+      if (!r.ok) {
+        if (r.status === 429 || r.status === 403 || r.status === 503) {
+          lastErr = new Error('Gemini ' + r.status); continue;
+        }
+        const t = await r.text();
+        throw new Error(`Gemini ${r.status}: ${t.slice(0,150)}`);
+      }
+      return extractGeminiText(await r.json());
+    } catch(e) {
+      if (e?.name === 'AbortError') { lastErr = new Error('Gemini timeout'); continue; }
+      if (e.message?.includes('blocked by safety filter')) throw e;
+      lastErr = e;
     }
-    const data = await r.json();
-    const out = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!out) throw new Error('Gemini 空回應');
-    return out;
   }
   throw lastErr || new Error('Gemini 所有 key 都失敗');
 }
 
 async function callGLMText(content) {
   if (!VAULT_ZAI_KEY) throw new Error('GLM key 未解鎖');
-  const r = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+  const r = await fetchWithTimeout('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -2945,7 +3018,7 @@ async function callGLMText(content) {
       max_tokens: 4096,
       stream: false,
     })
-  });
+  }, 45000);
   if (!r.ok) throw new Error(`GLM ${r.status}`);
   const data = await r.json();
   const out = data?.choices?.[0]?.message?.content;
@@ -3317,11 +3390,11 @@ async function callGLM(base64, mime) {
     stream: false
   };
   if (!VAULT_ZAI_KEY) throw new Error('GLM key not available (vault locked)');
-  const r = await fetch(url, { method: 'POST', headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const r = await fetchWithTimeout(url, { method: 'POST', headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, 60000);
   if (!r.ok) { const e = new Error(`GLM ${r.status}`); e.status = r.status; throw e; }
   const data = await r.json();
   const text = data?.choices?.[0]?.message?.content;
-  if (!text) throw new Error('GLM 冇回覆');
+  if (!text) throw new Error('GLM 冇回覆 (empty response — possibly filtered)');
   return parseReceiptJson(text);
 }
 
@@ -3337,7 +3410,7 @@ async function callMiniMax(base64, mime) {
   // send it from a browser. Server-side Python clients can, but Access-Control-
   // Allow-Headers from api.minimax.io only includes: Authorization, Content-Type,
   // Origin, Accept, etc. Sending MM-API-Source causes CORS preflight to fail.
-  const r = await fetch('https://api.minimax.io/v1/coding_plan/vlm', {
+  const r = await fetchWithTimeout('https://api.minimax.io/v1/coding_plan/vlm', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${key}`,
@@ -3347,7 +3420,7 @@ async function callMiniMax(base64, mime) {
       prompt: GEMINI_PROMPT,
       image_url: `data:${mime};base64,${base64}`,
     }),
-  });
+  }, 90000);
   if (!r.ok) {
     const t = await r.text();
     const e = new Error(`MiniMax ${r.status}: ${t.slice(0, 200)}`); e.status = r.status; throw e;
@@ -3363,28 +3436,31 @@ async function callMiniMax(base64, mime) {
 
 // ── Model 3 & 4: Gemini (fallback 2 & 3) — tries all 5 keys before giving up ────
 async function callGeminiWithModel(base64, mime, model, apiKey) {
-  const keys = [apiKey, ...GEMINI_DEFAULT_KEYS].filter((k, i, a) => k && a.indexOf(k) === i);
+  const keys = getGeminiKeys(apiKey);
   let lastErr;
   for (const key of keys) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-    const body = {
-      contents: [{ parts: [ { text: GEMINI_PROMPT }, { inline_data: { mime_type: mime, data: base64 } } ] }],
-      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
-    };
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) {
-      const t = await r.text();
-      let msg = `${r.status}`;
-      try { msg = `${r.status} ${JSON.parse(t).error?.message?.slice(0,120) || ''}`; } catch(_) {}
-      const err = new Error(msg); err.status = r.status;
-      // On quota/auth error, try next key; on other errors (404, 400) stop
-      if (r.status === 429 || r.status === 403) { lastErr = err; continue; }
-      throw err;
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      const body = {
+        contents: [{ parts: [ { text: GEMINI_PROMPT }, { inline_data: { mime_type: mime, data: base64 } } ] }],
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+      };
+      const r = await fetchWithTimeout(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, 90000);
+      if (!r.ok) {
+        const t = await r.text();
+        let msg = `${r.status}`;
+        try { msg = `${r.status} ${JSON.parse(t).error?.message?.slice(0,120) || ''}`; } catch(_) {}
+        const err = new Error(msg); err.status = r.status;
+        // On rate-limit / overload, try next key; on other errors (404, 400) stop
+        if (r.status === 429 || r.status === 403 || r.status === 503) { lastErr = err; continue; }
+        throw err;
+      }
+      return parseReceiptJson(extractGeminiText(await r.json()));
+    } catch(e) {
+      if (e?.name === 'AbortError') { lastErr = new Error('Gemini timeout'); continue; }
+      if (e.message?.includes('blocked by safety filter')) throw e;
+      lastErr = e;
     }
-    const data = await r.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('Gemini 冇回覆');
-    return parseReceiptJson(text);
   }
   throw lastErr || new Error('Gemini 所有 key 都失敗');
 }
@@ -3438,6 +3514,7 @@ async function callGemini(base64, mime) {
       ...geminiChain,
     ];
   }
+  const attempts = [];
   let lastErr;
   for (const { name, fn } of chain) {
     try {
@@ -3449,11 +3526,20 @@ async function callGemini(base64, mime) {
       renderModelCards();
       return result;
     } catch (err) {
-      console.warn(`[OCR] ❌ ${name} 失敗: ${err.message}`);
+      const summary = `${name}: ${(err.message || 'unknown').slice(0, 60)}`;
+      attempts.push(summary);
+      console.warn(`[OCR] ❌ ${summary}`);
       lastErr = err;
     }
   }
-  throw new Error(`所有 OCR 模型都失敗：${lastErr?.message}`);
+  // Build a helpful error summary so user knows which models failed and why
+  const rateLimited = attempts.filter(a => /429|quota|rate/i.test(a)).length;
+  const blocked = attempts.some(a => /blocked|safety|filter/i.test(a));
+  let hint = '';
+  if (blocked) hint = '（內容被 safety filter 攔截）';
+  else if (rateLimited === attempts.length) hint = '（全部模型被 rate-limit — 試等 1 分鐘）';
+  else if (rateLimited > 0) hint = `（${rateLimited}/${attempts.length} 個 rate-limit）`;
+  throw new Error(`所有 ${attempts.length} 個 OCR 模型都失敗 ${hint}：${lastErr?.message || ''}`.slice(0, 200));
 }
 
 // ============ NOTION SYNC ============
@@ -3654,6 +3740,11 @@ async function notionFetch(path, options = {}) {
         const t = await r.text();
         // Don't retry on Notion-level errors (4xx) — only on proxy/network errors
         if (r.status >= 400 && r.status < 500) {
+          // Invalidate schema cache on auth/permission errors — token might have changed
+          // or DB could have been recreated. Next request re-detects property names.
+          if (r.status === 401 || r.status === 403 || r.status === 404) {
+            _notionSchemaCache = null;
+          }
           throw new Error(`Notion ${r.status}: ${t.slice(0, 300)}`);
         }
         throw new Error(`Proxy ${r.status}: ${t.slice(0, 200)}`);
@@ -3673,12 +3764,24 @@ async function notionPushReceipt(r) {
   const schemaMap = await notionEnsureSchema(); // resolve actual property names once
   const props = buildNotionProps(r, schemaMap);
   if (r.notionPageId) {
-    // Update existing
-    await notionFetch(`/pages/${r.notionPageId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ properties: props })
-    });
-  } else {
+    // Update existing — but recover from 404 (page was deleted/archived in Notion)
+    try {
+      await notionFetch(`/pages/${r.notionPageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ properties: props })
+      });
+      return;
+    } catch(e) {
+      const msg = String(e?.message || '');
+      if (/Notion\s+40[04]/.test(msg)) {
+        console.warn('[notion] page', r.notionPageId, 'is gone — recreating as new');
+        r.notionPageId = null; // fall through to create-new path below
+      } else {
+        throw e;
+      }
+    }
+  }
+  if (!r.notionPageId) {
     // Create new — add structured content blocks
     const children = [];
     // Items breakdown
@@ -3772,6 +3875,8 @@ async function notionPullAll(silent = false) {
     const returnedNotionPageIds = new Set();
 
     for (const page of allResults) {
+      // Skip archived pages — Notion marks deleted-via-UI as archived but still returns them
+      if (page.archived || page.in_trash) continue;
       // Skip pages that were deleted locally — don't let Notion re-add them
       if (deletedPageIds.has(page.id)) continue;
       returnedNotionPageIds.add(page.id);
