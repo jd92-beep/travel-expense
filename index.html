@@ -78,10 +78,42 @@
   .tab-pill::after { content: ''; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--n-blue); }
 
   /* ==== Vertical alternating timeline ==== */
-  .timeline { position: relative; padding: 8px 0; }
+  .timeline { position: relative; padding: 8px 0; --progress: 0px; }
+  /* Base rail — pale, represents the whole trip */
   .timeline::before {
     content: ''; position: absolute; left: 50%; top: 0; bottom: 0;
-    width: 2px; background: linear-gradient(180deg, #FF91A4, #CC2929, #F5A623); transform: translateX(-50%);
+    width: 3px; background: #F5E1E1; transform: translateX(-50%);
+    border-radius: 2px; z-index: 0;
+  }
+  /* Progress rail — bold gradient overlay from top down to --progress px */
+  .timeline::after {
+    content: ''; position: absolute; left: 50%; top: 0;
+    width: 5px; height: var(--progress);
+    background: linear-gradient(180deg, #FF91A4 0%, #CC2929 50%, #F5A623 100%);
+    transform: translateX(-50%);
+    border-radius: 3px;
+    box-shadow: 0 0 12px rgba(204,41,41,0.45), 0 0 4px rgba(204,41,41,0.30);
+    z-index: 1;
+    transition: height 0.8s ease-out;
+  }
+  /* "You are here" moving marker at the tip of the progress bar */
+  .timeline .tl-you-are-here {
+    position: absolute; left: 50%; width: 22px; height: 22px;
+    transform: translate(-50%, -50%);
+    top: var(--progress);
+    background: radial-gradient(circle, #CC2929 0%, #CC2929 40%, transparent 72%);
+    border-radius: 50%; z-index: 3;
+    animation: pulse-here 1.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .timeline .tl-you-are-here::after {
+    content: '🚆'; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+  }
+  @keyframes pulse-here {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(204,41,41,0.45); }
+    50% { box-shadow: 0 0 0 12px rgba(204,41,41,0); }
   }
   .tl-day-header {
     position: relative; z-index: 2; text-align: center;
@@ -101,10 +133,17 @@
     content: ''; position: absolute; top: 16px;
     width: 14px; height: 14px; border-radius: 50%;
     background: var(--n-bg); border: 2px solid var(--sakura); z-index: 2;
+    transition: all 0.3s;
   }
   .tl-item[data-side="left"]::before { right: -8px; }
   .tl-item[data-side="right"]::before { left: -8px; }
   .tl-item.actual::before { background: var(--n-blue); border-color: var(--n-blue); }
+  /* Metro-station "passed" state — highlighted dot once the train has rolled past */
+  .tl-item.passed::before {
+    background: var(--n-blue); border-color: var(--n-blue);
+    box-shadow: 0 0 0 3px rgba(204,41,41,0.15);
+  }
+  .tl-item.passed.planned .tl-card { opacity: 0.78; }
   .tl-card {
     display: inline-block; padding: 10px 12px; border-radius: 12px;
     background: var(--n-surface); border: 1px solid rgba(255,220,210,0.60);
@@ -118,6 +157,29 @@
   .tl-amount-hkd { font-size: 9px; color: var(--n-muted); font-weight: 400; }
   .tl-note { font-size: 10px; color: var(--n-muted); margin-top: 3px; }
   .tl-icon { font-size: 16px; margin-right: 3px; }
+
+  /* ==== Stats ==== */
+  .stat-legend-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 10px;
+    background: rgba(255,255,255,0.60);
+    transition: background 0.2s;
+  }
+  .stat-legend-row:hover { background: rgba(255,255,255,0.95); }
+  .stat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .stat-label { font-size: 12px; color: var(--n-text); flex: 1; min-width: 0; font-weight: 500; }
+  .stat-val { font-size: 12px; font-weight: 700; color: var(--n-blue); }
+  .stat-val-hkd { font-size: 10px; color: var(--n-muted); font-weight: 500; }
+  .stat-pct { font-size: 10px; color: var(--n-muted); font-weight: 600; min-width: 36px; text-align: right; }
+
+  .doughnut-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; pointer-events: none;
+    text-align: center;
+  }
+  .doughnut-center .dc-label { font-size: 10px; color: var(--n-muted); letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+  .doughnut-center .dc-value { font-size: 22px; font-weight: 900; color: var(--n-text); line-height: 1.1; margin-top: 2px; }
+  .doughnut-center .dc-sub { font-size: 10px; color: var(--n-muted); margin-top: 2px; }
 </style>
 </head>
 <body class="min-h-screen pb-24" style="background:var(--n-bg);color:var(--n-text)">
@@ -172,14 +234,17 @@
   <div class="mt-4 rounded-2xl p-4" style="background:rgba(255,255,255,0.88);border:1px solid rgba(255,190,170,0.45);box-shadow:0 4px 20px rgba(204,41,41,0.08)">
     <div class="flex justify-between items-center mb-2.5">
       <span class="text-xs font-semibold" style="color:#8B7D85">🎯 旅程預算</span>
-      <span class="text-xs font-bold" style="color:#CC2929" id="budgetText">¥0 / ¥101,800</span>
+      <span class="text-xs font-bold text-right" style="color:#CC2929" id="budgetText">HKD 0 / 5,000</span>
     </div>
     <div class="h-3 rounded-full overflow-hidden" style="background:rgba(204,41,41,0.10)">
       <div id="budgetBar" class="h-full progress-shine rounded-full transition-all duration-700" style="width:0%"></div>
     </div>
-    <div class="flex justify-between mt-2">
+    <div class="flex justify-between items-center mt-2">
       <span class="text-[10px] font-medium" style="color:#CC2929"><span id="budgetPct">0</span>% 已用</span>
-      <span class="text-[10px]" style="color:#8B7D85">餘 ¥<span id="budgetLeft">101,800</span></span>
+      <div class="text-right">
+        <span class="text-[10px] font-semibold" style="color:#CC2929">餘 HKD <span id="budgetLeftHKD">5,000</span></span>
+        <span class="text-[9px] block" style="color:#8B7D85">¥<span id="budgetLeft">101,800</span></span>
+      </div>
     </div>
   </div>
 </header>
@@ -223,11 +288,13 @@
       <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,#1B2D55,#3060A0);box-shadow:0 8px 28px rgba(27,45,85,0.28)">
         <p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:rgba(255,255,255,0.55)">總消費</p>
         <p class="text-2xl font-black" style="color:white">¥<span id="totalSpend">0</span></p>
+        <p class="text-xs font-semibold mt-0.5" style="color:rgba(255,255,255,0.85)">≈ HKD <span id="totalSpendHKD">0</span></p>
         <p class="text-[10px] mt-1.5" style="color:rgba(255,255,255,0.50)"><span id="totalCount">0</span> 筆紀錄</p>
       </div>
       <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,#D4760F,#F5A623);box-shadow:0 8px 28px rgba(212,118,15,0.32)">
         <p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:rgba(255,255,255,0.65)">日均花費</p>
         <p class="text-2xl font-black" style="color:white">¥<span id="avgSpend">0</span></p>
+        <p class="text-xs font-semibold mt-0.5" style="color:rgba(255,255,255,0.85)">≈ HKD <span id="avgSpendHKD">0</span></p>
         <p class="text-[10px] mt-1.5" style="color:rgba(255,255,255,0.55)">過去 <span id="daysElapsed">0</span> 日</p>
       </div>
     </div>
@@ -315,29 +382,37 @@
   <section id="tab-stats" class="tab-content hidden fade-in">
     <h2 class="text-2xl font-black mb-4">統計分析 📊</h2>
 
-    <!-- Category -->
     <!-- Person split + settlement -->
     <div id="personStatsWrap" class="glass rounded-2xl p-4 mb-4">
-      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">👦👧 各人花費對比</h3>
-      <div class="relative h-40 mb-4"><canvas id="personChart"></canvas></div>
-      <div id="settlementCard" class="rounded-2xl p-4 text-center" style="background:linear-gradient(135deg,#FFF0F3,#FFF9EC)"></div>
+      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">👥 各人花費對比</h3>
+      <div class="relative h-44 mb-4"><canvas id="personChart"></canvas></div>
+      <div id="settlementCard" class="rounded-2xl p-4" style="background:linear-gradient(135deg,#FFF0F3,#FFF9EC);border:1px solid rgba(255,145,164,0.30)"></div>
     </div>
 
+    <!-- Category -->
     <div class="glass rounded-2xl p-4 mb-4">
       <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">類別佔比</h3>
-      <div class="relative h-56"><canvas id="catChart"></canvas></div>
+      <div class="relative h-48 mb-3">
+        <canvas id="catChart"></canvas>
+        <div id="catChartCenter" class="doughnut-center"></div>
+      </div>
+      <div id="catLegend" class="space-y-1"></div>
     </div>
 
     <!-- Payment -->
     <div class="glass rounded-2xl p-4 mb-4">
       <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">支付方式</h3>
-      <div class="relative h-56"><canvas id="payChart"></canvas></div>
+      <div class="relative h-48 mb-3">
+        <canvas id="payChart"></canvas>
+        <div id="payChartCenter" class="doughnut-center"></div>
+      </div>
+      <div id="payLegend" class="space-y-1"></div>
     </div>
 
     <!-- Daily trend -->
     <div class="glass rounded-2xl p-4 mb-4">
       <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">每日趨勢</h3>
-      <div class="relative h-48"><canvas id="trendChart"></canvas></div>
+      <div class="relative h-52"><canvas id="trendChart"></canvas></div>
     </div>
 
     <!-- TOP 10 -->
@@ -383,13 +458,54 @@
       </div>
     </div>
 
+    <!-- Share ratios for split-bill settlement -->
     <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs text-gray-400 uppercase tracking-wider">旅程預算</label>
-      <div class="flex items-baseline gap-2 mt-1">
-        <input type="number" id="setBudget" class="bg-transparent text-2xl font-bold focus:outline-none w-full" value="101800">
-        <span class="text-sm font-semibold shrink-0" style="color:var(--n-muted)">JPY</span>
+      <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">⚖️ 分帳比例</label>
+      <p class="text-[11px] mt-1 mb-2" style="color:var(--n-muted)">每人應承擔嘅份數。加/減旅伴後會自動更新。</p>
+      <div id="shareRatiosWrap"></div>
+    </div>
+
+    <!-- Trip itinerary config -->
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">🗾 行程設定</label>
+      <div class="mt-2 space-y-2">
+        <div>
+          <span class="text-[10px]" style="color:var(--n-muted)">行程名稱</span>
+          <input id="setTripName" type="text" class="w-full bg-transparent text-sm font-semibold focus:outline-none mt-0.5" style="border-bottom:1px solid var(--n-border);padding-bottom:4px;color:var(--n-text)" value="名古屋 2026">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <span class="text-[10px]" style="color:var(--n-muted)">開始日期</span>
+            <input id="setTripStart" type="date" class="w-full bg-transparent text-sm focus:outline-none mt-0.5" style="border-bottom:1px solid var(--n-border);padding-bottom:4px;color:var(--n-text)">
+          </div>
+          <div>
+            <span class="text-[10px]" style="color:var(--n-muted)">結束日期</span>
+            <input id="setTripEnd" type="date" class="w-full bg-transparent text-sm focus:outline-none mt-0.5" style="border-bottom:1px solid var(--n-border);padding-bottom:4px;color:var(--n-text)">
+          </div>
+        </div>
       </div>
-      <p class="text-sm font-semibold mt-1" style="color:var(--n-blue)">≈ HKD <span id="setBudgetHKD">5000</span></p>
+      <div class="mt-3 grid grid-cols-3 gap-2">
+        <button id="itiExportBtn" class="text-[11px] py-2 rounded-xl" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">📤 匯出</button>
+        <button id="itiImportBtn" class="text-[11px] py-2 rounded-xl" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">📥 匯入</button>
+        <button id="itiResetBtn" class="text-[11px] py-2 rounded-xl" style="background:var(--n-bg);border:1px solid var(--n-border);color:#DC2626">↺ 還原預設</button>
+      </div>
+      <input type="file" id="itiFileInput" accept="application/json,.json" style="display:none">
+      <p id="itiStatus" class="text-[10px] mt-2" style="color:var(--n-muted)">可匯出編輯後再匯入，複用此 app 去其他旅行</p>
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs text-gray-400 uppercase tracking-wider">旅程預算（可改 HKD 或 JPY，互相同步）</label>
+      <!-- HKD primary row -->
+      <div class="flex items-baseline gap-2 mt-2">
+        <input type="number" id="setBudgetHKDInput" class="bg-transparent text-2xl font-bold focus:outline-none w-full" value="5000" step="1" min="0">
+        <span class="text-sm font-semibold shrink-0" style="color:var(--n-blue)">HKD</span>
+      </div>
+      <!-- JPY secondary row -->
+      <div class="flex items-baseline gap-2 mt-2 pt-2" style="border-top:1px dashed var(--n-border)">
+        <input type="number" id="setBudget" class="bg-transparent text-lg font-semibold focus:outline-none w-full" style="color:var(--n-muted)" value="101800" step="100" min="0">
+        <span class="text-xs shrink-0" style="color:var(--n-muted)">JPY</span>
+      </div>
+      <p class="text-[10px] mt-2" style="color:var(--n-muted)">改任何一邊，另一邊會自動換算 · 最終以 HKD 為主</p>
     </div>
 
     <div class="glass rounded-2xl p-4 mb-3">
@@ -730,7 +846,30 @@ let state = {
     { id: 'p_boss', name: 'Tony', emoji: '👦', color: '#CC2929' },
     { id: 'p_xinxin', name: '欣欣', emoji: '👧', color: '#FF91A4' },
   ],
+  customItinerary: null,  // Optional user-supplied itinerary (JSON). null = use built-in ITINERARY.
+  shareRatios: {},         // { personId: weight } — relative shares for bill settlement
+  tripName: '名古屋 2026',
+  tripDateRange: { start: '2026-04-20', end: '2026-04-25' },
 };
+
+// Runtime reference to the effective itinerary; assigned in loadState()
+window.CURRENT_ITINERARY = null;
+function getItinerary() {
+  return window.CURRENT_ITINERARY || ITINERARY;
+}
+// Basic shape validation for imported itineraries
+function validateItinerary(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return '必須係非空陣列';
+  for (let i = 0; i < arr.length; i++) {
+    const d = arr[i];
+    if (!d || typeof d !== 'object') return `第 ${i+1} 項必須係 object`;
+    if (!d.date || !/^\d{4}-\d{2}-\d{2}$/.test(d.date)) return `日期格式錯誤：${d.date}`;
+    if (typeof d.day !== 'number') return `Day ${d.date}: day 必須係數字`;
+    if (!d.region) return `Day ${d.day}: 缺少 region`;
+    if (d.spots && !Array.isArray(d.spots)) return `Day ${d.day}: spots 必須係陣列`;
+  }
+  return null; // valid
+}
 
 function loadState() {
   try {
@@ -739,6 +878,16 @@ function loadState() {
       const parsed = JSON.parse(s);
       if (typeof parsed !== 'object' || parsed === null) throw new Error('corrupt');
       state = { ...state, ...parsed };
+      // Activate custom itinerary if user imported one and it validates
+      if (state.customItinerary) {
+        const err = validateItinerary(state.customItinerary);
+        if (err) {
+          console.warn('[itinerary] invalid custom itinerary, falling back to default:', err);
+          state.customItinerary = null;
+        } else {
+          window.CURRENT_ITINERARY = state.customItinerary;
+        }
+      }
       // Migrate: ensure Tony emoji is 👦 and 欣欣 is always present
       if (state.persons) {
         const boss = state.persons.find(p => p.id === 'p_boss');
@@ -796,11 +945,12 @@ function todayHKT() {
 }
 function getCurrentDay() {
   const today = todayHKT();
-  const item = ITINERARY.find(i => i.date === today);
-  return item || ITINERARY.find(i => i.date >= today) || ITINERARY[0];
+  const iti = getItinerary();
+  const item = iti.find(i => i.date === today);
+  return item || iti.find(i => i.date >= today) || iti[0];
 }
 function getRegionForDate(date) {
-  const it = ITINERARY.find(i => i.date === date);
+  const it = getItinerary().find(i => i.date === date);
   return it ? it.region : '名古屋';
 }
 function toast(msg) {
@@ -872,15 +1022,15 @@ function renderPersonList() {
   const el = document.getElementById('personList');
   if (!el) return;
   const persons = getPersons();
-  el.innerHTML = persons.map((p, i) => `
+  el.innerHTML = persons.map((p) => `
     <div class="flex items-center justify-between py-1.5">
       <div class="flex items-center gap-3">
         <span class="text-2xl">${p.emoji}</span>
         <span class="text-sm font-medium" style="color:var(--n-text)">${escapeHtml(p.name)}</span>
       </div>
-      ${(p.id === 'p_boss' || p.id === 'p_xinxin')
-        ? `<span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:${p.color}22;color:${p.color}">${p.emoji}</span>`
-        : `<button onclick="removePerson('${p.id}')" class="text-[10px] px-2 py-0.5 rounded-full" style="color:#DC2626;background:#FEE2E2">移除</button>`}
+      ${persons.length > 1
+        ? `<button onclick="removePerson('${p.id}')" class="text-[10px] px-2 py-0.5 rounded-full" style="color:#DC2626;background:#FEE2E2">移除</button>`
+        : `<span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:${p.color}22;color:${p.color}">唯一</span>`}
     </div>`).join('');
 }
 
@@ -889,8 +1039,12 @@ window.removePerson = function(id) {
   state.persons = state.persons.filter(p => p.id !== id);
   const firstId = state.persons[0].id;
   state.receipts.forEach(r => { if (r.personId === id) r.personId = firstId; });
+  // Prune share ratio for removed person
+  if (state.shareRatios) delete state.shareRatios[id];
   saveState();
   renderPersonList();
+  if (typeof window.renderShareRatios === 'function') window.renderShareRatios();
+  if (!$('tab-stats').classList.contains('hidden')) renderStats();
   toast('已移除');
 };
 
@@ -1055,8 +1209,10 @@ async function fetchLiveRate(force = false) {
       state.rateFetchedAt = now;
       saveState();
       const el = document.getElementById('setRate');
-      // Don't clobber user's in-progress typing in the settings field
+      // Don't clobber user's in-progress typing in any settings field
       if (el && document.activeElement !== el) el.value = (100 / state.rate).toFixed(4);
+      const elHkd = document.getElementById('setBudgetHKDInput');
+      if (elHkd && document.activeElement !== elHkd) elHkd.value = Math.round(state.budget / state.rate);
       const rv = document.getElementById('rateReverse');
       if (rv) rv.textContent = `1 HKD = ${state.rate.toFixed(2)} JPY`;
       const st = document.getElementById('rateStatus');
@@ -1077,22 +1233,29 @@ function renderHeader() {
   const today = todayHKT();
   $('dateLabel').textContent = new Date().toLocaleDateString('zh-HK', { month:'long', day:'numeric', weekday:'long' });
   const cur = getCurrentDay();
-  const tripStart = '2026-04-20';
+  const tripStart = (state.tripDateRange && state.tripDateRange.start) || '2026-04-20';
+  const tripEnd = (state.tripDateRange && state.tripDateRange.end) || '2026-04-25';
   if (today < tripStart) {
     const days = Math.ceil((new Date(tripStart) - new Date(today)) / 86400000);
     $('dayCounter').textContent = '−' + days;
-  } else if (today > '2026-04-25') {
+  } else if (today > tripEnd) {
     $('dayCounter').textContent = '✓';
   } else {
     $('dayCounter').textContent = cur.day;
   }
-  // Budget
+  // Budget — HKD primary, JPY secondary
   const total = state.receipts.reduce((s,r) => s + (Number(r.total)||0), 0);
-  const pct = Math.min(100, (total / state.budget) * 100);
-  $('budgetText').textContent = `¥${fmt(total)} / ¥${fmt(state.budget)}`;
+  const pct = state.budget > 0 ? Math.min(100, (total / state.budget) * 100) : 0;
+  const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
+  const totalHKD = Math.round(total / safeRate);
+  const budgetHKD = Math.round(state.budget / safeRate);
+  const leftJPY = Math.max(0, state.budget - total);
+  const leftHKD = Math.round(leftJPY / safeRate);
+  $('budgetText').textContent = `HKD ${fmt(totalHKD)} / ${fmt(budgetHKD)}  (¥${fmt(total)} / ¥${fmt(state.budget)})`;
   $('budgetBar').style.width = pct + '%';
   $('budgetPct').textContent = pct.toFixed(1);
-  $('budgetLeft').textContent = fmt(Math.max(0, state.budget - total));
+  $('budgetLeft').textContent = fmt(leftJPY);
+  $('budgetLeftHKD').textContent = fmt(leftHKD);
 }
 
 function renderDashboard() {
@@ -1105,19 +1268,22 @@ function renderDashboard() {
   $('todayLocation').textContent = '📍 ' + (getCurrentDay().region || '');
 
   // Adaptive daily budget: (remaining budget) / (days left including today)
-  const tripStart = '2026-04-20', tripEnd = '2026-04-25';
+  const tripStart = (state.tripDateRange && state.tripDateRange.start) || '2026-04-20';
+  const tripEnd = (state.tripDateRange && state.tripDateRange.end) || '2026-04-25';
   const totalSpentBeforeToday = state.receipts
     .filter(r => r.date < today)
     .reduce((s,r) => s + (Number(r.total)||0), 0);
   const remainingBudget = Math.max(0, state.budget - totalSpentBeforeToday);
+  const tripDays = Math.max(1, getItinerary().length || 6);
   let dailyBudget;
   if (today < tripStart || today > tripEnd) {
-    dailyBudget = Math.floor(state.budget / 6);
+    dailyBudget = Math.floor(state.budget / Math.max(1, tripDays));
   } else {
     const msLeft = new Date(tripEnd) - new Date(today);
     const daysLeft = Math.max(1, Math.floor(msLeft / 86400000) + 1);
     dailyBudget = Math.floor(remainingBudget / daysLeft);
   }
+  if (!isFinite(dailyBudget) || dailyBudget < 0) dailyBudget = 0;
   if (todayTotal > dailyBudget && dailyBudget > 0) {
     $('dailyBudgetAmt').textContent = fmt(dailyBudget);
     $('dailyOverAmt').textContent = fmt(todayTotal);
@@ -1127,12 +1293,16 @@ function renderDashboard() {
   }
 
   const total = state.receipts.reduce((s,r) => s + (Number(r.total)||0), 0);
+  const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
   $('totalSpend').textContent = fmt(total);
+  $('totalSpendHKD').textContent = fmt(Math.round(total / safeRate));
   $('totalCount').textContent = state.receipts.length;
 
   const dates = [...new Set(state.receipts.map(r => r.date))];
   const days = Math.max(1, dates.length);
-  $('avgSpend').textContent = fmt(total / days);
+  const avg = total / days;
+  $('avgSpend').textContent = fmt(avg);
+  $('avgSpendHKD').textContent = fmt(Math.round(avg / safeRate));
   $('daysElapsed').textContent = days;
 
   renderPersonBreakdown();
@@ -1146,7 +1316,7 @@ function renderDashboard() {
   }
 
   // Itinerary
-  $('itineraryList').innerHTML = ITINERARY.map(it => {
+  $('itineraryList').innerHTML = getItinerary().map(it => {
     const isToday = it.date === today;
     const rDay = state.receipts.filter(r => r.date === it.date);
     const dayTotal = rDay.reduce((s,r) => s + (Number(r.total)||0), 0);
@@ -1222,40 +1392,56 @@ function renderHistory() {
 }
 
 // ============ TIMELINE ============
+// Helper: derive a comparable "datetime" string for sorting/positioning
+// Receipt items use their createdAt time; planned items use their `time` field.
+function _tlKey(dateYMD, hhmm) {
+  return `${dateYMD} ${(hhmm || '99:99')}`;
+}
+
 function renderTimeline() {
   const container = $('timelineList');
   if (!container) return;
   const today = todayHKT();
+  // Live HKT clock — used to position the metro-station "you are here" marker
+  const nowHKT = new Date().toLocaleString('en-GB', {
+    timeZone: 'Asia/Hong_Kong', year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', hour12:false
+  }); // "DD/MM/YYYY, HH:MM"
+  // Convert "DD/MM/YYYY, HH:MM" → "YYYY-MM-DD HH:MM"
+  const m = nowHKT.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s+(\d{2}):(\d{2})/);
+  const nowKey = m ? `${m[3]}-${m[2]}-${m[1]} ${m[4]}:${m[5]}` : `${today} 00:00`;
+
+  const iti = window.CURRENT_ITINERARY || ITINERARY;
   let html = '';
 
-  ITINERARY.forEach(day => {
-    // Day header
+  iti.forEach(day => {
     const isToday = day.date === today;
     const dayReceipts = state.receipts
       .filter(r => r.date === day.date)
       .slice()
       .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
     const dayTotal = dayReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
+    const dayHKD = state.rate > 0 ? Math.round(dayTotal / state.rate) : 0;
 
-    html += `<div class="tl-day-header">Day ${day.day} · ${day.date.slice(5)} · ${escapeHtml(day.region)}${isToday ? ' · 今日' : ''}${dayTotal > 0 ? ' · ¥' + fmt(dayTotal) : ''}</div>`;
+    html += `<div class="tl-day-header" data-day-header="${day.date}">Day ${day.day} · ${day.date.slice(5)} · ${escapeHtml(day.region)}${isToday ? ' · 今日' : ''}${dayTotal > 0 ? ' · ¥' + fmt(dayTotal) + ' (HK$' + fmt(dayHKD) + ')' : ''}</div>`;
 
-    // Merge spots (planned) + receipts (actual) for this day
     const items = [];
     (day.spots || []).forEach(sp => {
-      items.push({ kind: 'planned', time: sp.time, name: sp.name, type: sp.type, note: sp.note });
+      items.push({ kind: 'planned', time: sp.time, name: sp.name, type: sp.type, note: sp.note, tlKey: _tlKey(day.date, sp.time) });
     });
     dayReceipts.forEach(r => {
       const t = new Date(r.createdAt || Date.now());
       const time = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
-      items.push({ kind: 'actual', time, receipt: r });
+      items.push({ kind: 'actual', time, receipt: r, tlKey: _tlKey(day.date, time) });
     });
-    items.sort((a,b) => (a.time||'99:99').localeCompare(b.time||'99:99'));
+    items.sort((a,b) => a.tlKey.localeCompare(b.tlKey));
 
     items.forEach((item, i) => {
       const side = i % 2 === 0 ? 'left' : 'right';
+      const passed = item.tlKey <= nowKey ? ' passed' : '';
       if (item.kind === 'planned') {
         const cat = CATEGORIES.find(c => c.id === item.type) || CATEGORIES[6];
-        html += `<div class="tl-item planned" data-side="${side}">
+        html += `<div class="tl-item planned${passed}" data-side="${side}" data-tl-key="${item.tlKey}">
           <div class="tl-card">
             <div class="tl-time">${item.time || ''}</div>
             <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(item.name)}</div>
@@ -1265,8 +1451,8 @@ function renderTimeline() {
       } else {
         const r = item.receipt;
         const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[6];
-        const hkd = state.rate > 0 ? `<span class="tl-amount-hkd"> · HKD ${(r.total/state.rate).toFixed(0)}</span>` : '';
-        html += `<div class="tl-item actual" data-side="${side}" onclick="editReceipt('${r.id}')" style="cursor:pointer">
+        const hkd = state.rate > 0 ? `<span class="tl-amount-hkd"> · HKD ${Math.round(r.total/state.rate)}</span>` : '';
+        html += `<div class="tl-item actual${passed}" data-side="${side}" data-tl-key="${item.tlKey}" onclick="editReceipt('${r.id}')" style="cursor:pointer">
           <div class="tl-card">
             <div class="tl-time">${item.time}</div>
             <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(r.store || '未命名')}</div>
@@ -1278,9 +1464,172 @@ function renderTimeline() {
   });
 
   container.innerHTML = html;
+  updateTimelineProgress();
 }
 
+// Compute pixel position for the metro-station-style progress bar based on
+// the last "passed" item (the train's current stop).
+function updateTimelineProgress() {
+  const container = $('timelineList');
+  if (!container) return;
+  const passed = container.querySelectorAll('.tl-item.passed');
+  // Remove old "you are here" marker
+  const oldMarker = container.querySelector('.tl-you-are-here');
+  if (oldMarker) oldMarker.remove();
+
+  if (!passed.length) {
+    container.style.setProperty('--progress', '0px');
+    return;
+  }
+  const last = passed[passed.length - 1];
+  // Dot is positioned at top:16px inside the item, so offset from container top = item.offsetTop + 16
+  const progressPx = last.offsetTop + 16 + 7; // +7 to center through the dot
+  container.style.setProperty('--progress', progressPx + 'px');
+
+  // Insert "you are here" marker at the tip
+  const marker = document.createElement('div');
+  marker.className = 'tl-you-are-here';
+  container.appendChild(marker);
+}
+
+// Re-calc progress if user resizes window (layout reflow changes offsetTop)
+let _tlResizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_tlResizeTimer);
+  _tlResizeTimer = setTimeout(() => {
+    if (!$('tab-timeline').classList.contains('hidden')) updateTimelineProgress();
+  }, 150);
+});
+// Auto-tick every 5 minutes to advance the progress bar while the app is open
+setInterval(() => {
+  if (!$('tab-timeline').classList.contains('hidden')) renderTimeline();
+}, 5 * 60 * 1000);
+
 let charts = {};
+
+// ============ N-PERSON BILL SETTLEMENT ============
+// Given persons array, each person's paid amount, and share ratio map,
+// compute who pays whom how much. Uses greedy creditor↔debtor matching which
+// gives a provably-minimal number of transfers (≤ N-1).
+function computeSettlements(persons, personTotals, shareRatios) {
+  if (persons.length < 2) return [];
+  const ratios = persons.map(p => {
+    const v = Number(shareRatios?.[p.id]);
+    return (isFinite(v) && v >= 0) ? v : 1; // default equal share
+  });
+  const sumRatio = ratios.reduce((a,b) => a+b, 0);
+  if (sumRatio === 0) return []; // all zero = no-one owes anyone
+  const grandTotal = personTotals.reduce((a,b) => a+b, 0);
+  if (grandTotal === 0) return [];
+
+  // balance[i] = what person i paid − what person i should have paid (fair share)
+  // Positive → creditor (others owe them); negative → debtor (owes others).
+  const balances = persons.map((p, i) => {
+    const shouldPay = grandTotal * (ratios[i] / sumRatio);
+    return { id: p.id, name: p.name, emoji: p.emoji, color: p.color, balance: personTotals[i] - shouldPay };
+  });
+
+  // Greedy match: biggest debtor pays biggest creditor until settled.
+  // Work on a copy, sorted each iteration. Stop when |balance| < ¥1 (sub-yen noise).
+  const transfers = [];
+  const work = balances.map(b => ({ ...b }));
+  const MIN = 1; // below 1 yen, ignore
+  for (let safety = 0; safety < 100; safety++) {
+    work.sort((a, b) => a.balance - b.balance); // most negative first
+    const debtor = work[0];
+    const creditor = work[work.length - 1];
+    if (!debtor || !creditor) break;
+    if (Math.abs(debtor.balance) < MIN || Math.abs(creditor.balance) < MIN) break;
+    if (debtor.balance >= 0 || creditor.balance <= 0) break;
+    const amount = Math.min(-debtor.balance, creditor.balance);
+    transfers.push({
+      from: { id: debtor.id, name: debtor.name, emoji: debtor.emoji, color: debtor.color },
+      to:   { id: creditor.id, name: creditor.name, emoji: creditor.emoji, color: creditor.color },
+      amount: Math.round(amount),
+    });
+    debtor.balance += amount;
+    creditor.balance -= amount;
+  }
+  return transfers;
+}
+
+function renderSettlementHtml(persons, personTotals, grandTotal, settlements) {
+  if (persons.length < 2) {
+    return '<p class="text-sm text-center" style="color:var(--n-muted)">需要至少兩位旅伴先計算分帳</p>';
+  }
+  if (grandTotal === 0) {
+    return '<p class="text-sm text-center" style="color:var(--n-muted)">未有記帳資料</p>';
+  }
+  const allZeroRatios = persons.every(p => !(Number((state.shareRatios||{})[p.id]) > 0));
+  if (allZeroRatios) {
+    return '<p class="text-xs text-center py-3" style="color:#DC2626">⚠️ 所有旅伴分擔比例為 0，無法計算分帳。請到設定 → 分帳比例調整。</p>';
+  }
+  const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
+
+  // Header summary: total + share labels
+  // Normalize ratio for each person: use stored value if valid (0 allowed, negatives → 1 default).
+  // computeSettlements uses the same normalization, so the display stays consistent.
+  const rawRatios = state.shareRatios || {};
+  const normRatio = (pid) => {
+    const v = Number(rawRatios[pid]);
+    return (isFinite(v) && v >= 0) ? v : 1;
+  };
+  const ratios = Object.fromEntries(persons.map(p => [p.id, normRatio(p.id)]));
+  const ratioSum = persons.reduce((s,p) => s + ratios[p.id], 0);
+  const headerHTML = `
+    <div class="flex justify-between items-baseline mb-3 pb-2" style="border-bottom:1px dashed rgba(204,41,41,0.25)">
+      <span class="text-[10px] font-semibold" style="color:var(--n-muted)">總花費</span>
+      <div class="text-right">
+        <span class="text-lg font-black" style="color:var(--n-text)">¥${fmt(grandTotal)}</span>
+        <span class="text-[11px] ml-1" style="color:var(--n-muted)">≈ HK$${fmt(Math.round(grandTotal/safeRate))}</span>
+      </div>
+    </div>`;
+
+  // Per-person breakdown: paid vs. fair-share
+  const rows = persons.map((p, i) => {
+    const paid = personTotals[i];
+    const ratio = ratios[p.id];
+    const shouldPay = ratioSum > 0 ? grandTotal * (ratio / ratioSum) : 0;
+    const bal = paid - shouldPay;
+    const balColor = bal > 0 ? '#059669' : (bal < 0 ? '#DC2626' : 'var(--n-muted)');
+    const balSign = bal > 0 ? '+' : '';
+    return `
+      <div class="flex items-center gap-2 py-1.5 text-xs" style="border-bottom:1px solid rgba(229,229,229,0.4)">
+        <span class="text-base">${p.emoji}</span>
+        <span class="flex-1 font-medium" style="color:var(--n-text)">${escapeHtml(p.name)}</span>
+        <div class="text-right">
+          <div style="color:var(--n-text)">已付 ¥${fmt(paid)}</div>
+          <div class="text-[10px]" style="color:var(--n-muted)">應付 ¥${fmt(Math.round(shouldPay))}</div>
+        </div>
+        <div class="text-right min-w-[62px]">
+          <div style="color:${balColor};font-weight:700">${balSign}¥${fmt(Math.round(bal))}</div>
+          <div class="text-[9px]" style="color:var(--n-muted)">≈${balSign}HK$${fmt(Math.round(bal/safeRate))}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Transfer instructions
+  let transfersHTML;
+  if (settlements.length === 0) {
+    transfersHTML = '<div class="text-center py-3"><p class="text-2xl mb-1">🤝</p><p class="text-sm font-bold" style="color:var(--n-text)">剛好平衡，唔需要互相轉帳！</p></div>';
+  } else {
+    transfersHTML = '<div class="mt-3 pt-3 space-y-2" style="border-top:1px dashed rgba(204,41,41,0.25)">' +
+      `<p class="text-[10px] font-semibold mb-1" style="color:var(--n-muted)">💸 建議轉帳 (${settlements.length} 筆)：</p>` +
+      settlements.map(t => `
+        <div class="flex items-center gap-2 justify-center text-xs py-1 px-2 rounded-lg" style="background:rgba(255,255,255,0.55)">
+          <span class="text-lg">${t.from.emoji}</span>
+          <span class="font-medium" style="color:var(--n-text)">${escapeHtml(t.from.name)}</span>
+          <span style="color:var(--n-muted)">→</span>
+          <span class="text-lg">${t.to.emoji}</span>
+          <span class="font-medium" style="color:var(--n-text)">${escapeHtml(t.to.name)}</span>
+          <span class="ml-auto font-black" style="color:${t.to.color}">¥${fmt(t.amount)}</span>
+          <span class="text-[10px]" style="color:var(--n-muted)">HK$${fmt(Math.round(t.amount/safeRate))}</span>
+        </div>`).join('') + '</div>';
+  }
+
+  return headerHTML + '<div class="mb-2">' + rows + '</div>' + transfersHTML;
+}
+
 function renderStats() {
   const cats = {}, pays = {}, daily = {};
   state.receipts.forEach(r => {
@@ -1323,68 +1672,165 @@ function renderStats() {
     }
   });
 
-  // Settlement card (safe for any number of persons)
+  // ── N-person settlement with configurable share ratios ──
   const settle = $('settlementCard');
   const grandTotal = personTotals.reduce((a, b) => a + b, 0);
-  if (persons.length < 2 || !grandTotal) {
-    settle.innerHTML = persons.length < 2
-      ? '<p class="text-sm text-gray-400">需要至少兩位旅伴</p>'
-      : '<p class="text-sm text-gray-400">未有記帳資料</p>';
-  } else {
-    const [t0, t1] = personTotals;
-    const [p0, p1] = persons;
-    const diff = Math.round(Math.abs(t0 - t1) / 2);
-    const debtorEmoji = t0 < t1 ? p0.emoji : p1.emoji;
-    const debtorName = t0 < t1 ? p0.name : p1.name;
-    const creditorEmoji = t0 < t1 ? p1.emoji : p0.emoji;
-    const creditorName = t0 < t1 ? p1.name : p0.name;
-    const debtorColor = t0 < t1 ? p0.color : p1.color;
-    settle.innerHTML = diff === 0
-      ? `<p class="text-2xl mb-1">🤝</p><p class="text-sm font-bold" style="color:var(--n-text)">完美五五分！</p><p class="text-xs mt-1" style="color:var(--n-muted)">總花費 ¥${fmt(grandTotal)}</p>`
-      : `<p class="text-xs mb-2" style="color:var(--n-muted)">五五分結算</p>
-         <div class="flex items-center justify-center gap-3">
-           <span class="text-3xl">${debtorEmoji}</span>
-           <div class="text-center">
-             <p class="text-xs" style="color:var(--n-muted)">應付給</p>
-             <p class="text-2xl font-black" style="color:${debtorColor}">¥${fmt(diff)}</p>
-             <p class="text-[10px]" style="color:var(--n-muted)">≈ HKD ${(diff/state.rate).toFixed(0)}</p>
-           </div>
-           <span class="text-3xl">${creditorEmoji}</span>
-         </div>
-         <p class="text-[10px] mt-3" style="color:var(--n-muted)">${debtorEmoji} ${escapeHtml(debtorName)} 付較少 · 總花費 ¥${fmt(grandTotal)}</p>`;
-  }
+  const settlements = computeSettlements(persons, personTotals, state.shareRatios || {});
+  settle.innerHTML = renderSettlementHtml(persons, personTotals, grandTotal, settlements);
   // ─────────────────────────────────────────────────────────────
 
+  const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
+
+  // ── Beautified category doughnut + legend ──
+  const catTotalAll = CATEGORIES.reduce((s, c) => s + (cats[c.id]||0), 0);
+  // Filter to only categories with non-zero totals to avoid clutter
+  const catActive = CATEGORIES.filter(c => (cats[c.id]||0) > 0);
   if (charts.cat) charts.cat.destroy();
-  charts.cat = new Chart($('catChart'), {
-    type: 'doughnut',
-    data: {
-      labels: CATEGORIES.map(c => c.icon + ' ' + c.name),
-      datasets: [{ data: CATEGORIES.map(c => cats[c.id]||0), backgroundColor: CATEGORIES.map(c => c.color), borderWidth: 0 }]
-    },
-    options: { plugins: { legend: { position:'right', labels: { color:'#6B7285', font:{ size:11 } } } }, cutout:'65%' }
-  });
+  if (catActive.length === 0) {
+    $('catChart').style.display = 'none';
+    $('catChartCenter').innerHTML = '<div class="dc-label">類別佔比</div><div class="dc-sub">未有紀錄</div>';
+  } else {
+    $('catChart').style.display = '';
+    charts.cat = new Chart($('catChart'), {
+      type: 'doughnut',
+      data: {
+        labels: catActive.map(c => c.icon + ' ' + c.name),
+        datasets: [{
+          data: catActive.map(c => cats[c.id]||0),
+          backgroundColor: catActive.map(c => c.color),
+          borderColor: '#FFFFFF',
+          borderWidth: 3,
+          hoverOffset: 8,
+        }]
+      },
+      options: {
+        cutout: '70%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const v = ctx.parsed;
+                const pct = ((v/catTotalAll)*100).toFixed(1);
+                return ` ¥${fmt(v)}  ·  HK$${fmt(Math.round(v/safeRate))}  ·  ${pct}%`;
+              }
+            }
+          }
+        },
+        animation: { animateRotate: true, duration: 700 }
+      }
+    });
+    $('catChartCenter').innerHTML = `
+      <div class="dc-label">類別佔比</div>
+      <div class="dc-value">¥${fmt(catTotalAll)}</div>
+      <div class="dc-sub">HK$ ${fmt(Math.round(catTotalAll/safeRate))}</div>`;
+  }
+  // Category legend table — sorted by amount desc
+  $('catLegend').innerHTML = CATEGORIES
+    .map(c => ({ c, amt: cats[c.id]||0 }))
+    .filter(x => x.amt > 0)
+    .sort((a,b) => b.amt - a.amt)
+    .map(x => {
+      const pct = catTotalAll > 0 ? ((x.amt/catTotalAll)*100).toFixed(1) : '0.0';
+      return `<div class="stat-legend-row">
+        <span class="stat-dot" style="background:${x.c.color}"></span>
+        <span class="stat-label">${x.c.icon} ${x.c.name}</span>
+        <span class="stat-pct">${pct}%</span>
+        <div style="text-align:right">
+          <div class="stat-val">¥${fmt(x.amt)}</div>
+          <div class="stat-val-hkd">HK$ ${fmt(Math.round(x.amt/safeRate))}</div>
+        </div>
+      </div>`;
+    }).join('') || '<p class="text-xs text-center py-3" style="color:var(--n-muted)">未有紀錄</p>';
 
+  // ── Beautified payment doughnut + legend ──
+  const payTotalAll = PAYMENTS.reduce((s, p) => s + (pays[p.id]||0), 0);
+  const payActive = PAYMENTS.filter(p => (pays[p.id]||0) > 0);
   if (charts.pay) charts.pay.destroy();
-  charts.pay = new Chart($('payChart'), {
-    type: 'doughnut',
-    data: {
-      labels: PAYMENTS.map(p => p.name),
-      datasets: [{ data: PAYMENTS.map(p => pays[p.id]||0), backgroundColor: PAYMENTS.map(p => p.color), borderWidth: 0 }]
-    },
-    options: { plugins: { legend: { position:'right', labels: { color:'#6B7285', font:{ size:11 } } } }, cutout:'65%' }
-  });
+  if (payActive.length === 0) {
+    $('payChart').style.display = 'none';
+    $('payChartCenter').innerHTML = '<div class="dc-label">支付方式</div><div class="dc-sub">未有紀錄</div>';
+  } else {
+    $('payChart').style.display = '';
+    charts.pay = new Chart($('payChart'), {
+      type: 'doughnut',
+      data: {
+        labels: payActive.map(p => p.name),
+        datasets: [{
+          data: payActive.map(p => pays[p.id]||0),
+          backgroundColor: payActive.map(p => p.color),
+          borderColor: '#FFFFFF',
+          borderWidth: 3,
+          hoverOffset: 8,
+        }]
+      },
+      options: {
+        cutout: '70%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const v = ctx.parsed;
+                const pct = ((v/payTotalAll)*100).toFixed(1);
+                return ` ¥${fmt(v)}  ·  HK$${fmt(Math.round(v/safeRate))}  ·  ${pct}%`;
+              }
+            }
+          }
+        }
+      }
+    });
+    $('payChartCenter').innerHTML = `
+      <div class="dc-label">支付方式</div>
+      <div class="dc-value">¥${fmt(payTotalAll)}</div>
+      <div class="dc-sub">HK$ ${fmt(Math.round(payTotalAll/safeRate))}</div>`;
+  }
+  $('payLegend').innerHTML = PAYMENTS
+    .map(p => ({ p, amt: pays[p.id]||0 }))
+    .filter(x => x.amt > 0)
+    .sort((a,b) => b.amt - a.amt)
+    .map(x => {
+      const pct = payTotalAll > 0 ? ((x.amt/payTotalAll)*100).toFixed(1) : '0.0';
+      return `<div class="stat-legend-row">
+        <span class="stat-dot" style="background:${x.p.color}"></span>
+        <span class="stat-label">${x.p.name}</span>
+        <span class="stat-pct">${pct}%</span>
+        <div style="text-align:right">
+          <div class="stat-val">¥${fmt(x.amt)}</div>
+          <div class="stat-val-hkd">HK$ ${fmt(Math.round(x.amt/safeRate))}</div>
+        </div>
+      </div>`;
+    }).join('') || '<p class="text-xs text-center py-3" style="color:var(--n-muted)">未有紀錄</p>';
 
-  const sortedDates = ITINERARY.map(i => i.date);
+  // ── Daily trend (bar) — with HKD in tooltip ──
+  const iti = window.CURRENT_ITINERARY || ITINERARY;
+  const sortedDates = iti.map(i => i.date);
   if (charts.trend) charts.trend.destroy();
   charts.trend = new Chart($('trendChart'), {
     type: 'bar',
     data: {
-      labels: sortedDates.map(d => d.slice(5)),
-      datasets: [{ data: sortedDates.map(d => daily[d]||0), backgroundColor:'#2D5A8E', borderRadius:6 }]
+      labels: sortedDates.map(d => 'Day ' + iti.find(i => i.date === d).day),
+      datasets: [{
+        data: sortedDates.map(d => daily[d]||0),
+        backgroundColor: sortedDates.map(d => {
+          const v = daily[d]||0;
+          return v > (state.budget/sortedDates.length) ? '#E04040' : '#2D5A8E';
+        }),
+        borderRadius: 8,
+      }]
     },
     options: {
-      plugins: { legend: { display:false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed.y;
+              return ` ¥${fmt(v)}  ·  HK$ ${fmt(Math.round(v/safeRate))}`;
+            }
+          }
+        }
+      },
       scales: {
         x: { ticks:{ color:'#6B7285', font:{ size:10 } }, grid:{ display:false } },
         y: { ticks:{ color:'#6B7285', font:{ size:10 }, callback: v => '¥'+fmt(v) }, grid:{ color:'#E4E4DF' } }
@@ -2615,44 +3061,192 @@ function init() {
   fetchLiveRate();
   populateModalSelects();
 
-  // Settings inputs
+  // Settings inputs — HKD primary, JPY secondary, auto-sync
   $('setBudget').value = state.budget;
   $('setRate').value = (100 / state.rate).toFixed(4);
+  $('setBudgetHKDInput').value = Math.round(state.budget / state.rate);
   renderModelCards();
   $('setAutoSync').checked = !!state.autoSync;
-  $('setBudgetHKD').textContent = (state.budget / state.rate).toFixed(0);
 
   function hkdPer100jpy() { return parseFloat($('setRate').value) || 4.91; }
   function jpyPerHkd()    { return 100 / hkdPer100jpy(); }
   function updateRateReverse() {
-    $('rateReverse').textContent = `1 HKD = ${jpyPerHkd().toFixed(2)} JPY`;
+    $('rateReverse').textContent = `1 HKD ≈ ${jpyPerHkd().toFixed(2)} JPY · 100 JPY ≈ ${hkdPer100jpy().toFixed(3)} HKD`;
   }
-  function updateBudgetHKD() {
-    // budget is in JPY; convert to HKD: budget * (HKD per 100 JPY) / 100
-    $('setBudgetHKD').textContent = ($('setBudget').value * hkdPer100jpy() / 100).toFixed(0);
+  // Suppress flag to avoid infinite sync loops between HKD ↔ JPY inputs
+  let _budgetSyncing = false;
+  function syncFromJPY() {
+    if (_budgetSyncing) return;
+    _budgetSyncing = true;
+    const jpy = Number($('setBudget').value) || 0;
+    const hkd = Math.round(jpy * hkdPer100jpy() / 100);
+    if (document.activeElement !== $('setBudgetHKDInput')) $('setBudgetHKDInput').value = hkd;
+    _budgetSyncing = false;
+  }
+  function syncFromHKD() {
+    if (_budgetSyncing) return;
+    _budgetSyncing = true;
+    const hkd = Number($('setBudgetHKDInput').value) || 0;
+    const jpy = Math.round(hkd * 100 / hkdPer100jpy());
+    if (document.activeElement !== $('setBudget')) $('setBudget').value = jpy;
+    _budgetSyncing = false;
   }
   updateRateReverse();
-  updateBudgetHKD();
-  $('setBudget').addEventListener('input', updateBudgetHKD);
-  $('setRate').addEventListener('input', () => { updateBudgetHKD(); updateRateReverse(); });
+  $('setBudget').addEventListener('input', syncFromJPY);
+  $('setBudgetHKDInput').addEventListener('input', syncFromHKD);
+  $('setRate').addEventListener('input', () => {
+    updateRateReverse();
+    // When rate changes, keep HKD as anchor (primary) and recompute JPY
+    syncFromHKD();
+  });
   $('saveSettings').addEventListener('click', () => {
-    state.budget = Math.max(1, Number($('setBudget').value) || 101800);
     // Clamp rate to a sane range [2.0, 10.0] HKD per 100 JPY; default 4.91
     let displayedHkdPer100 = parseFloat($('setRate').value);
     if (!isFinite(displayedHkdPer100) || displayedHkdPer100 < 2 || displayedHkdPer100 > 10) {
       displayedHkdPer100 = 4.91;
     }
     state.rate = parseFloat((100 / displayedHkdPer100).toFixed(4));
-    if (!isFinite(state.rate) || state.rate <= 0) state.rate = 20.36; // final safety net
-    // state.model / scanModel / voiceModel saved instantly via switchModel_scan/voice()
+    if (!isFinite(state.rate) || state.rate <= 0) state.rate = 20.36;
+
+    // HKD is the anchor — derive JPY from HKD × rate for canonical storage
+    const hkd = Number($('setBudgetHKDInput').value);
+    if (hkd > 0) {
+      state.budget = Math.round(hkd * state.rate);
+    } else {
+      state.budget = Math.max(1, Number($('setBudget').value) || 101800);
+    }
     state.autoSync = $('setAutoSync').checked;
+    // Settlement share ratios (populated by renderSettlementRatios below)
+    const ratios = {};
+    (state.persons || []).forEach(p => {
+      const el = document.getElementById('ratio_' + p.id);
+      if (el) ratios[p.id] = Math.max(0, Number(el.value) || 0);
+    });
+    if (Object.keys(ratios).length) state.shareRatios = ratios;
     saveState();
     refresh();
     toast('✅ 設定已儲存');
   });
 
+  // ── Trip itinerary import/export/reset ──
+  $('setTripName').value = state.tripName || '名古屋 2026';
+  $('setTripStart').value = (state.tripDateRange && state.tripDateRange.start) || '2026-04-20';
+  $('setTripEnd').value = (state.tripDateRange && state.tripDateRange.end) || '2026-04-25';
+
+  $('setTripName').addEventListener('change', () => { state.tripName = $('setTripName').value.trim() || '我的旅行'; saveState(); });
+  $('setTripStart').addEventListener('change', () => {
+    state.tripDateRange = state.tripDateRange || {};
+    state.tripDateRange.start = $('setTripStart').value;
+    saveState(); refresh();
+  });
+  $('setTripEnd').addEventListener('change', () => {
+    state.tripDateRange = state.tripDateRange || {};
+    state.tripDateRange.end = $('setTripEnd').value;
+    saveState(); refresh();
+  });
+
+  $('itiExportBtn')?.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(getItinerary(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (state.tripName || 'itinerary').replace(/\s+/g,'_') + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('📤 已匯出行程 JSON');
+  });
+  $('itiImportBtn')?.addEventListener('click', () => $('itiFileInput').click());
+  $('itiFileInput')?.addEventListener('change', async (ev) => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const err = validateItinerary(parsed);
+      if (err) { toast('❌ 格式錯誤：' + err); return; }
+      // Sort ascending by date — unordered input would reverse tripDateRange otherwise
+      parsed.sort((a, b) => a.date.localeCompare(b.date));
+      state.customItinerary = parsed;
+      window.CURRENT_ITINERARY = parsed;
+      // Also align trip date range automatically
+      state.tripDateRange = { start: parsed[0].date, end: parsed[parsed.length-1].date };
+      $('setTripStart').value = parsed[0].date;
+      $('setTripEnd').value = parsed[parsed.length-1].date;
+      saveState(); refresh();
+      toast(`✅ 已匯入 ${parsed.length} 日行程`);
+    } catch(e) {
+      toast('❌ 匯入失敗：' + e.message.slice(0, 60));
+    } finally {
+      ev.target.value = ''; // allow re-selecting the same file
+    }
+  });
+  $('itiResetBtn')?.addEventListener('click', () => {
+    if (!confirm('還原為預設名古屋行程？你匯入嘅行程會被移除。')) return;
+    state.customItinerary = null;
+    window.CURRENT_ITINERARY = null;
+    state.tripDateRange = { start: '2026-04-20', end: '2026-04-25' };
+    state.tripName = '名古屋 2026';
+    saveState(); refresh();
+    $('setTripName').value = state.tripName;
+    $('setTripStart').value = state.tripDateRange.start;
+    $('setTripEnd').value = state.tripDateRange.end;
+    toast('↺ 已還原預設行程');
+  });
+
+  // ── Share ratios (rendered when person list changes) ──
+  window.renderShareRatios = function() {
+    const wrap = $('shareRatiosWrap');
+    if (!wrap) return;
+    const persons = getPersons();
+    if (persons.length < 2) {
+      wrap.innerHTML = '<p class="text-[11px]" style="color:var(--n-muted)">至少兩位旅伴先會顯示分帳比例</p>';
+      return;
+    }
+    state.shareRatios = state.shareRatios || {};
+    // Initialize any missing ratios to 1 (equal split by default)
+    persons.forEach(p => { if (state.shareRatios[p.id] == null) state.shareRatios[p.id] = 1; });
+
+    wrap.innerHTML = persons.map(p => `
+      <div class="flex items-center gap-2 py-1.5" data-ratio-row="${p.id}">
+        <span class="text-lg">${p.emoji}</span>
+        <span class="text-xs flex-1" style="color:var(--n-text)">${escapeHtml(p.name)}</span>
+        <input type="number" id="ratio_${p.id}" min="0" step="0.1" value="${state.shareRatios[p.id]}"
+          class="w-20 text-sm text-right bg-transparent focus:outline-none"
+          style="border-bottom:1px solid var(--n-border);padding-bottom:2px;color:var(--n-text)">
+        <span class="text-[11px]" style="color:var(--n-muted)">份</span>
+        <span class="text-[10px] w-12 text-right" data-ratio-pct="${p.id}" style="color:var(--n-muted)">—</span>
+      </div>`).join('') + `
+      <button id="ratioResetEqual" class="mt-2 text-[10px] py-1.5 px-3 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">重設為均分</button>
+      <p class="text-[10px] mt-2" style="color:var(--n-muted)">例：設 1:1 即係平均分；2:1 即係 Tony 承擔 2/3；0 表示該人唔用承擔費用。</p>`;
+
+    const recompute = () => {
+      const ratios = {};
+      let sum = 0;
+      persons.forEach(p => {
+        const v = Math.max(0, Number(document.getElementById('ratio_' + p.id).value) || 0);
+        ratios[p.id] = v; sum += v;
+      });
+      persons.forEach(p => {
+        const pctEl = document.querySelector(`[data-ratio-pct="${p.id}"]`);
+        if (pctEl) pctEl.textContent = sum > 0 ? ((ratios[p.id]/sum)*100).toFixed(1) + '%' : '—';
+      });
+      state.shareRatios = ratios;
+      // Save immediately + trigger re-render of settlement card if stats tab is open
+      saveState();
+      if (!$('tab-stats').classList.contains('hidden')) renderStats();
+    };
+    persons.forEach(p => document.getElementById('ratio_' + p.id).addEventListener('input', recompute));
+    document.getElementById('ratioResetEqual').addEventListener('click', () => {
+      persons.forEach(p => { document.getElementById('ratio_' + p.id).value = 1; });
+      recompute();
+      toast('✅ 已重設為均分');
+    });
+    recompute();
+  };
+
   // Person management
   renderPersonList();
+  renderShareRatios();
   const emojiPicker = $('emojiPicker');
   if (emojiPicker) {
     emojiPicker.innerHTML = PERSON_EMOJIS.map(e =>
@@ -2675,9 +3269,14 @@ function init() {
     const name = $('newPersonName').value.trim();
     if (!name) { toast('⚠️ 請輸入名字'); return; }
     if (!state.persons) state.persons = [];
-    state.persons.push({ id: 'p_' + Date.now(), name, emoji: selectedNewEmoji, color: '#2D5A8E' });
+    const newId = 'p_' + Date.now();
+    state.persons.push({ id: newId, name, emoji: selectedNewEmoji, color: '#2D5A8E' });
+    state.shareRatios = state.shareRatios || {};
+    state.shareRatios[newId] = 1; // default equal share for new person
     saveState();
     renderPersonList();
+    if (typeof window.renderShareRatios === 'function') window.renderShareRatios();
+    if (!$('tab-stats').classList.contains('hidden')) renderStats();
     $('addPersonForm').classList.add('hidden');
     $('newPersonName').value = '';
     selectedNewEmoji = '🧔';
