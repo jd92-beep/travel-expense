@@ -47,12 +47,23 @@ const ZHIPU_KEY = 'PASTE_ZHIPU_KEY_OR_LEAVE';
 // This token is long-lived (expires ~2027) but if it fails with 401 we skip it.
 const MINIMAX_TOKEN = 'PASTE_MINIMAX_OAUTH_TOKEN_OR_LEAVE';
 
-// Gemini keys (primary + backup) — rotate on 429
+// Gemini keys (up to 5) — rotated on 429/403 before moving to next provider
 const GEMINI_KEYS = [
   'PASTE_GEMINI_API_KEY_HERE',
-  'PASTE_GEMINI_BACKUP_KEY_OR_LEAVE',
+  'PASTE_GEMINI_KEY2_OR_LEAVE',
+  'PASTE_GEMINI_KEY3_OR_LEAVE',
+  'PASTE_GEMINI_KEY4_OR_LEAVE',
+  'PASTE_GEMINI_KEY5_OR_LEAVE',
 ];
-const GEMINI_MODEL = 'gemini-3.1-flash-preview';
+// Gemini model fallback order — text-only (email parsing needs no vision)
+const GEMINI_MODELS = [
+  'gemini-3.1-flash-lite-preview',
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash',
+  'gemma-4-31b-it',
+  'gemma-4-26b-a4b-it',
+];
+const GEMINI_MODEL = GEMINI_MODELS[0]; // primary (used in setup() display)
 
 // Notion credentials
 const NOTION_TOKEN = 'PASTE_NOTION_INTEGRATION_TOKEN_HERE';
@@ -178,15 +189,23 @@ function extractBookingsWithFallback(emailText) {
     } catch (e) { errors.push('minimax: ' + e.message); console.warn('[fallback] minimax-m2.7 failed:', e.message); }
   }
 
-  // 4-5. Gemini keys
+  // 4+. Gemini — try each model with each key before moving on
+  // Key rotation first: if key1 hits 429, key2 tries same model before abandoning it.
   const geminiKeys = GEMINI_KEYS.filter(k => k && !k.startsWith('PASTE_'));
-  for (let i = 0; i < geminiKeys.length; i++) {
-    try {
-      const r = _callGeminiWithBackoff(prompt, geminiKeys[i]);
-      if (r) { r._provider = 'gemini-key' + (i + 1); return r; }
-    } catch (e) {
-      errors.push('gemini-key' + (i + 1) + ': ' + e.message);
-      console.warn('[fallback] gemini key ' + (i + 1) + ' failed:', e.message);
+  for (let mi = 0; mi < GEMINI_MODELS.length; mi++) {
+    const gModel = GEMINI_MODELS[mi];
+    let modelOk = false;
+    for (let ki = 0; ki < geminiKeys.length; ki++) {
+      try {
+        const r = _callGeminiWithBackoff(prompt, geminiKeys[ki], gModel);
+        if (r) { r._provider = gModel + '-key' + (ki + 1); return r; }
+      } catch (e) {
+        const label = gModel + '-key' + (ki + 1);
+        errors.push(label + ': ' + e.message);
+        console.warn('[fallback] ' + label + ' failed:', e.message);
+        // If error is NOT rate-limit (e.g. model not found), skip remaining keys for this model
+        if (!e.message.match(/429|503|quota/i)) { break; }
+      }
     }
   }
 
@@ -291,8 +310,9 @@ function _callMiniMaxWithBackoff(prompt) {
 }
 
 // ── GEMINI ─────────────────────────────────────────────────
-function _callGeminiWithBackoff(prompt, key) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + key;
+function _callGeminiWithBackoff(prompt, key, model) {
+  const modelId = model || GEMINI_MODEL;
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelId + ':generateContent?key=' + key;
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },

@@ -996,6 +996,16 @@ const ITINERARY = [
 ];
 const DEFAULT_API_KEY        = atob('QUl6YVN5Q0N6X084S1drenJhaVdBWHIwV2U3TThSVVpQN3NuSk9B');
 const DEFAULT_BACKUP_API_KEY = atob('QUl6YVN5Q0l2T0I2ejBvYkRZZkdMU08tSENrcXV1X1llWHU3RG84');
+const DEFAULT_GEMINI_KEY3    = atob('QVEuQWI4Uk42S0x0S1ZOZU1uM05Fc2VDLUlieUdDeDNtdGp6X0x4cU1Sd1ZPX1h1VGJTQVE=');
+const DEFAULT_GEMINI_KEY4    = atob('QUl6YVN5Q2V3R0tPVURZWWhtN1FBV0tYTDZaVGNVTEdlc081cHl3');
+const DEFAULT_GEMINI_KEY5    = atob('QUl6YVN5QUdKWmtGX0lMM21kQUZtNG16REJhOHJhTWpZTG9zcmlr');
+// All hardcoded Gemini keys in rotation order (state.apiKey from vault is prepended at runtime)
+const GEMINI_DEFAULT_KEYS = [DEFAULT_API_KEY, DEFAULT_BACKUP_API_KEY, DEFAULT_GEMINI_KEY3, DEFAULT_GEMINI_KEY4, DEFAULT_GEMINI_KEY5].filter(Boolean);
+// Returns the full ordered key list: vault key first (if set), then defaults (deduped)
+function getGeminiKeys() {
+  const userKey = state?.apiKey;
+  return [userKey, ...GEMINI_DEFAULT_KEYS].filter((k, i, a) => k && a.indexOf(k) === i);
+}
 const DEFAULT_NOTION_TOKEN = atob('bnRuXzM4MDA1NDY0OTU2NGZnQ2F4OVRxVHYwSEljNWVwUDNOQ0NnMVV6bWJMZ1VmRjU=');
 const DEFAULT_NOTION_DB    = atob('MzQzOGQ5NGQ1ZjdjODE4NzgyMjFmY2RhNmQ2NWQzOWQ=');
 
@@ -2552,7 +2562,7 @@ async function parseVoiceExpense(transcript) {
 
   // Strategy 2: Gemini (only if API key exists)
   async function tryGemini(prompt, model) {
-    const gemKeys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k, i, a) => k && a.indexOf(k) === i);
+    const gemKeys = [apiKey, ...GEMINI_DEFAULT_KEYS].filter((k, i, a) => k && a.indexOf(k) === i);
     if (!gemKeys.length) throw new Error('No Gemini API key');
     let lastErr;
     for (const key of gemKeys) {
@@ -2591,8 +2601,8 @@ async function parseVoiceExpense(transcript) {
       console.warn(`[Voice] ❌ ${voicePrimaryModel} 失敗:`, e.message);
       lastErr = e;
     }
-    if (!parsed && apiKey) {
-      const geminiModels = ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview'];
+    if (!parsed) {
+      const geminiModels = ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemma-4-31b-it', 'gemma-4-26b-a4b-it'];
       for (const m of geminiModels) {
         try { parsed = await tryGemini(prompt, m); if (parsed) { toast('✅ 語音解析完成 (' + m + ')'); break; } } catch(e) { console.warn(`[Voice] ❌ ${m} 失敗: ${e.message}`); lastErr = e; }
       }
@@ -2786,17 +2796,18 @@ async function parseEmailInput({ text = '', images = [] }) {
   // Build attempt list — prefer vision models when images are present
   const attempts = [];
   if (hasImages) {
-    // Vision-capable Gemini models
-    attempts.push({ name: primaryVisionModel, fn: () => callGeminiMultimodal(textBlock, images, primaryVisionModel, apiKey) });
-    if (primaryVisionModel !== 'gemini-3.1-flash-lite-preview') {
-      attempts.push({ name: 'gemini-3.1-flash-lite-preview', fn: () => callGeminiMultimodal(textBlock, images, 'gemini-3.1-flash-lite-preview', apiKey) });
-    }
-    attempts.push({ name: 'gemini-3-flash-preview', fn: () => callGeminiMultimodal(textBlock, images, 'gemini-3-flash-preview', apiKey) });
+    // Vision-capable Gemini models (all 3, deduped from primary)
+    const visionModels = ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash'];
+    [primaryVisionModel, ...visionModels.filter(m => m !== primaryVisionModel)].forEach(m => {
+      attempts.push({ name: m, fn: () => callGeminiMultimodal(textBlock, images, m, apiKey) });
+    });
   } else {
-    // Text-only chain
-    attempts.push({ name: primaryTextModel, fn: () => callGeminiText(textBlock, primaryTextModel, apiKey) });
+    // Text-only chain — Gemini + Gemma + GLM fallbacks
+    const textModels = ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemma-4-31b-it', 'gemma-4-26b-a4b-it'];
+    [primaryTextModel, ...textModels.filter(m => m !== primaryTextModel)].forEach(m => {
+      attempts.push({ name: m, fn: () => callGeminiText(textBlock, m, apiKey) });
+    });
     attempts.push({ name: 'glm-4-flash', fn: () => callGLMText(textBlock) });
-    attempts.push({ name: 'gemini-3-flash-preview', fn: () => callGeminiText(textBlock, 'gemini-3-flash-preview', apiKey) });
   }
 
   let lastErr;
@@ -2824,7 +2835,7 @@ async function parseEmailText(text) {
 
 // Multimodal Gemini call — accepts text + N image parts (each {base64, mime})
 async function callGeminiMultimodal(promptText, images, model, apiKey) {
-  const keys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k,i,a) => k && a.indexOf(k) === i);
+  const keys = [apiKey, ...GEMINI_DEFAULT_KEYS].filter((k,i,a) => k && a.indexOf(k) === i);
   let lastErr;
   for (const key of keys) {
     const parts = [{ text: promptText }];
@@ -2886,7 +2897,7 @@ const MULTI_BOOKING_SCHEMA = {
 };
 
 async function callGeminiText(content, model, apiKey) {
-  const keys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k,i,a) => k && a.indexOf(k) === i);
+  const keys = [apiKey, ...GEMINI_DEFAULT_KEYS].filter((k,i,a) => k && a.indexOf(k) === i);
   let lastErr;
   for (const key of keys) {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
@@ -3342,9 +3353,9 @@ async function callMiniMax(base64, mime) {
   return parseReceiptJson(text);
 }
 
-// ── Model 3 & 4: Gemini (fallback 2 & 3) — tries primary key then backup ────
+// ── Model 3 & 4: Gemini (fallback 2 & 3) — tries all 5 keys before giving up ────
 async function callGeminiWithModel(base64, mime, model, apiKey) {
-  const keys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k, i, a) => k && a.indexOf(k) === i);
+  const keys = [apiKey, ...GEMINI_DEFAULT_KEYS].filter((k, i, a) => k && a.indexOf(k) === i);
   let lastErr;
   for (const key of keys) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
@@ -3381,15 +3392,21 @@ async function callGemini(base64, mime) {
   const primaryIsMiniMax = primaryModel === 'minimax';
   const primaryIsGemini  = !primaryIsGLM && !primaryIsMiniMax;
 
+  // All Gemini vision-capable models in fallback order (text-only Gemma models excluded)
+  const GEMINI_VISION_MODELS = [
+    'gemini-3.1-flash-lite-preview',
+    'gemini-3-flash-preview',
+    'gemini-2.5-flash',
+  ];
   // Build the Gemini portion of the chain (skip if user chose a non-Gemini primary)
   const geminiChain = primaryIsGemini
     ? [
         { name: primaryModel, fn: () => callGeminiWithModel(base64, mime, primaryModel, geminiKey) },
-        ...(primaryModel !== flashModel
-          ? [{ name: flashModel, fn: () => callGeminiWithModel(base64, mime, flashModel, geminiKey) }]
-          : []),
+        ...GEMINI_VISION_MODELS
+          .filter(m => m !== primaryModel)
+          .map(m => ({ name: m, fn: () => callGeminiWithModel(base64, mime, m, geminiKey) })),
       ]
-    : [{ name: flashModel, fn: () => callGeminiWithModel(base64, mime, flashModel, geminiKey) }];
+    : GEMINI_VISION_MODELS.map(m => ({ name: m, fn: () => callGeminiWithModel(base64, mime, m, geminiKey) }));
 
   // Full chain: put user's chosen model first if it's GLM or MiniMax, else use the standard order
   let chain;
@@ -4389,10 +4406,18 @@ function init() {
       // MiniMax-portal OAuth (same token as in-app MiniMax VLM).
       const minimaxTok = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
       if (minimaxTok)        code = code.replace('PASTE_MINIMAX_OAUTH_TOKEN_OR_LEAVE', minimaxTok);
-      // Gemini primary + backup keys
-      const primaryGem = state.apiKey || DEFAULT_API_KEY;
-      if (primaryGem)        code = code.replace('PASTE_GEMINI_API_KEY_HERE', primaryGem);
-      if (DEFAULT_BACKUP_API_KEY) code = code.replace('PASTE_GEMINI_BACKUP_KEY_OR_LEAVE', DEFAULT_BACKUP_API_KEY);
+      // Gemini keys — inject all 5 in order (vault key first, then defaults)
+      const allGemKeys = getGeminiKeys();
+      const gemPlaceholders = [
+        'PASTE_GEMINI_API_KEY_HERE',
+        'PASTE_GEMINI_KEY2_OR_LEAVE',
+        'PASTE_GEMINI_KEY3_OR_LEAVE',
+        'PASTE_GEMINI_KEY4_OR_LEAVE',
+        'PASTE_GEMINI_KEY5_OR_LEAVE',
+      ];
+      gemPlaceholders.forEach((ph, i) => {
+        if (allGemKeys[i]) code = code.replace(ph, allGemKeys[i]);
+      });
       // Notion credentials
       if (state.notionToken) code = code.replace('PASTE_NOTION_INTEGRATION_TOKEN_HERE', state.notionToken);
       if (state.notionDb)    code = code.replace('PASTE_NOTION_DATABASE_ID_HERE', state.notionDb);
