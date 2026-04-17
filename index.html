@@ -328,6 +328,17 @@
       <div id="personBreakdown" class="grid grid-cols-2 gap-3"></div>
     </div>
 
+    <!-- Pending email-imports banner (shown only if there are pending entries awaiting confirmation) -->
+    <div id="pendingBanner" class="hidden mb-4 rounded-2xl p-4 cursor-pointer" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);border:2px solid #F59E0B" onclick="switchTab('history')">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-xs uppercase tracking-widest font-bold" style="color:#92400E">📧 Email 自動匯入</h3>
+          <p class="text-sm font-bold mt-1" style="color:#92400E"><span id="pendingCount">0</span> 筆待確認 → tap 去 History 審核</p>
+        </div>
+        <span class="text-3xl">⏳</span>
+      </div>
+    </div>
+
     <!-- Prep-phase spending summary (shown only if there are prep receipts) -->
     <div id="prepSummary" class="hidden mb-4 rounded-2xl p-4" style="background:linear-gradient(135deg,#FFF7ED,#FEF3C7);border:1px solid #FCD34D">
       <div class="flex items-baseline justify-between mb-2">
@@ -612,6 +623,45 @@
       <p class="text-[10px] mb-3" style="color:var(--n-muted)">語音輸入後，由選定模型解析廣東話並填寫欄位</p>
       <div id="voiceModelCards" class="grid grid-cols-2 gap-2"></div>
     </div>
+
+    <!-- ============ EMAIL → NOTION AUTO-IMPORT ============ -->
+    <details class="mt-6">
+    <summary class="flex items-center justify-between px-1 mb-3 cursor-pointer select-none">
+      <h3 class="text-xs uppercase tracking-widest" style="color:var(--n-muted)">📧 Email 自動匯入（免費 · 全自動）</h3>
+      <span class="text-xs px-2 py-0.5 rounded-full" style="background:#FEF3C7;color:#92400E">推薦</span>
+    </summary>
+    <p class="text-xs mb-3 px-1" style="color:var(--n-muted)">Forward 確認 email 去你 Gmail → Google Apps Script（免費）用 Gemini 解析 → 自動入 Notion → app 顯示「⏳ 待確認」俾你一 tap 確認</p>
+
+    <div class="glass rounded-2xl p-4 mb-3" style="background:linear-gradient(135deg,#FEF3C7,#FFFBEB)">
+      <p class="text-sm font-bold mb-2" style="color:#92400E">🚀 點樣用？</p>
+      <ol class="text-[11px] space-y-1.5 list-decimal pl-4" style="color:var(--n-text)">
+        <li>喺 Gmail filter 設定：subject 含 <code class="px-1 bg-white rounded">#expense</code> → label <code class="px-1 bg-white rounded">travel-expense</code></li>
+        <li>Forward 任何 confirmation email 去你自己 Gmail，主旨加 <code class="px-1 bg-white rounded">#expense</code></li>
+        <li>5 分鐘內：Notion 會自動出現「⏳ 待確認」嘅 entry</li>
+        <li>App 打開 History tab → 黃色卡片 → 按「✅ 確認」即可</li>
+      </ol>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2 mb-2">
+      <button id="copyAppsScriptBtn" class="glass py-3 rounded-2xl text-sm font-medium" style="color:#92400E;border:1px solid rgba(245,158,11,0.40)">📋 複製 Apps Script 代碼</button>
+      <button id="openAppsScriptBtn" class="glass py-3 rounded-2xl text-sm font-medium" style="color:#92400E;border:1px solid rgba(245,158,11,0.40)">🔗 開 Apps Script 編輯器</button>
+    </div>
+    <button id="pullPendingBtn" class="w-full glass py-3 rounded-2xl text-sm font-medium mb-2" style="border:1px solid rgba(0,168,126,0.30);color:#00a87e">🔄 即刻檢查有冇新 email 入帳</button>
+    <div id="emailImportStatus" class="text-[11px] text-center mb-2 hidden"></div>
+
+    <div class="glass rounded-2xl p-3 mb-3 text-[10px] text-gray-500">
+      <p class="font-bold mb-1" style="color:#92400E">⚙️ 一次性設定 (~3 min)：</p>
+      <ol class="space-y-1 list-decimal pl-4">
+        <li>點「📋 複製 Apps Script 代碼」</li>
+        <li>點「🔗 開 Apps Script 編輯器」→ "New Project"</li>
+        <li>貼入代碼，填入 Gemini key / Notion token / DB ID（app 同一套）</li>
+        <li>點 Run → 揀 <code class="px-1 bg-gray-100 rounded">setup</code> → 授權 Gmail + 網絡 access</li>
+        <li>Gmail 設 filter，完成！</li>
+      </ol>
+      <p class="mt-2 font-medium" style="color:#00a87e">✅ 之後每 5 分鐘自動 scan 一次，零人手操作。</p>
+    </div>
+
+    </details>
 
     <!-- ============ NOTION SYNC ============ -->
     <details class="mt-6">
@@ -1481,6 +1531,18 @@ function renderDashboard() {
   }
   if (!isFinite(dailyBudget) || dailyBudget < 0) dailyBudget = 0;
 
+  // Pending email-import banner (visible when ≥1 pending entry)
+  const pendingReceipts = state.receipts.filter(isPendingReceipt);
+  const pendingBanner = $('pendingBanner');
+  if (pendingBanner) {
+    if (pendingReceipts.length > 0) {
+      pendingBanner.classList.remove('hidden');
+      $('pendingCount').textContent = pendingReceipts.length;
+    } else {
+      pendingBanner.classList.add('hidden');
+    }
+  }
+
   // Prep-phase summary card
   const prepWrap = $('prepSummary');
   if (prepWrap) {
@@ -1596,27 +1658,74 @@ function renderDashboard() {
   if (header) header.textContent = getItinerary().length + '日行程';
 }
 
+// Email-imported pending receipts have a "⏳ " prefix on store name (set by Apps Script).
+function isPendingReceipt(r) {
+  return typeof r.store === 'string' && r.store.startsWith('⏳ ');
+}
+function displayStore(r) {
+  return isPendingReceipt(r) ? r.store.slice(2) : (r.store || '');
+}
+
 function receiptCard(r) {
   const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[6];
   const pay = PAYMENTS.find(p => p.id === r.payment) || PAYMENTS[0];
   const persons = getPersons();
   const person = persons.find(p => p.id === r.personId) || persons[0];
+  const pending = isPendingReceipt(r);
+  const borderStyle = pending ? 'border:2px solid #F59E0B;background:linear-gradient(135deg,#FFFBEB,#FEF3C7)' : '';
+  const pendingBadge = pending ? '<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold mr-1" style="background:#F59E0B;color:white">⏳ 待確認</span>' : '';
+  const confirmBtn = pending ? `<button onclick="event.stopPropagation();confirmPendingReceipt('${r.id}')" class="ml-2 px-2 py-1 rounded-lg text-[10px] font-bold text-white" style="background:#00a87e">✅ 確認</button>` : '';
   return `
-    <div class="glass rounded-2xl p-3 flex items-center justify-between" onclick="editReceipt('${r.id}')">
+    <div class="glass rounded-2xl p-3 flex items-center justify-between" style="${borderStyle}" onclick="editReceipt('${r.id}')">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style="background:${cat.color}20;color:${cat.color}">${cat.icon}</div>
         <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium truncate">${escapeHtml(r.store || '未命名')}</p>
+          <p class="text-sm font-medium truncate">${pendingBadge}${escapeHtml(displayStore(r) || '未命名')}</p>
           <p class="text-[10px] text-gray-500">${cat.name} · ${pay.name}${r.region ? ' · ' + escapeHtml(r.region) : ''}</p>
         </div>
       </div>
-      <div class="text-right pl-2">
-        <span class="text-base" title="${escapeHtml(person.name)}">${person.emoji}</span>
-        <p class="text-base font-bold">¥${fmt(r.total)}</p>
-        <p class="text-[10px] text-gray-500">≈ HKD ${(r.total/state.rate).toFixed(0)}</p>
+      <div class="text-right pl-2 flex items-center">
+        <div>
+          <span class="text-base" title="${escapeHtml(person.name)}">${person.emoji}</span>
+          <p class="text-base font-bold">¥${fmt(r.total)}</p>
+          <p class="text-[10px] text-gray-500">≈ HKD ${(r.total/state.rate).toFixed(0)}</p>
+        </div>
+        ${confirmBtn}
       </div>
     </div>`;
 }
+
+// One-tap confirm for email-imported pending receipts.
+// Strips the "⏳ " prefix both locally AND in Notion so the entry becomes permanent.
+async function confirmPendingReceipt(id) {
+  const r = state.receipts.find(x => x.id === id);
+  if (!r || !isPendingReceipt(r)) return;
+  const cleanStore = r.store.slice(2).trim();
+  r.store = cleanStore;
+  saveState();
+  renderHistory();
+  refreshTodayList && refreshTodayList();
+  toast('✅ 已確認：' + cleanStore);
+  // Sync back to Notion (best-effort — local state already reflects confirmation)
+  if (r.notionPageId && state.notionToken && state.notionDb) {
+    try {
+      const schemaMap = await notionEnsureSchema();
+      const storeKey = schemaMap.store || N.store[0];
+      await notionFetch(`/pages/${r.notionPageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          properties: {
+            [storeKey]: { title: [{ text: { content: cleanStore } }] }
+          }
+        })
+      });
+    } catch(e) {
+      console.warn('[confirmPendingReceipt] Notion sync failed:', e.message);
+      toast('⚠️ 本機已確認，但 Notion 同步失敗（下次拉取時會重試）');
+    }
+  }
+}
+window.confirmPendingReceipt = confirmPendingReceipt;
 
 function escapeHtml(s) {
   return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -1687,7 +1796,7 @@ function renderTimeline() {
       out += `<div class="tl-item actual${passed}" data-side="${side}" data-tl-key="${tlKey}" onclick="editReceipt('${r.id}')" style="cursor:pointer">
         <div class="tl-card">
           <div class="tl-time">${r.date} ${time}</div>
-          <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(r.store || '未命名')}</div>
+          <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${isPendingReceipt(r) ? '<span style="background:#F59E0B;color:white;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:700;margin-right:4px">⏳</span>' : ''}${escapeHtml(displayStore(r) || '未命名')}</div>
           <div class="tl-amount">¥${fmt(r.total)}${hkd}</div>
         </div>
       </div>`;
@@ -1745,7 +1854,7 @@ function renderTimeline() {
         html += `<div class="tl-item actual${passed}" data-side="${side}" data-tl-key="${item.tlKey}" onclick="editReceipt('${r.id}')" style="cursor:pointer">
           <div class="tl-card">
             <div class="tl-time">${item.time}</div>
-            <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(r.store || '未命名')}</div>
+            <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${isPendingReceipt(r) ? '<span style="background:#F59E0B;color:white;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:700;margin-right:4px">⏳</span>' : ''}${escapeHtml(displayStore(r) || '未命名')}</div>
             <div class="tl-amount">¥${fmt(r.total)}${hkd}</div>
           </div>
         </div>`;
@@ -4258,6 +4367,56 @@ function init() {
   $('syncPushBtn').addEventListener('click', notionPushAll);
   $('syncPullBtn').addEventListener('click', notionPullAll);
   $('notionMigrateBtn').addEventListener('click', notionMigrateSchema);
+
+  // ── Email → Notion auto-import: Apps Script setup helpers ──
+  const APPS_SCRIPT_URL = 'https://raw.githubusercontent.com/jd92-beep/travel-expense/main/email-to-notion.gs';
+  $('copyAppsScriptBtn')?.addEventListener('click', async () => {
+    const statusEl = $('emailImportStatus');
+    statusEl.className = 'text-[11px] text-center mb-2';
+    statusEl.textContent = '⬇️ 下載最新 Apps Script…';
+    try {
+      const r = await fetch(APPS_SCRIPT_URL + '?t=' + Date.now());
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      let code = await r.text();
+      // Auto-fill user's existing credentials so they don't have to copy-paste from vault
+      if (state.apiKey)      code = code.replace('PASTE_GEMINI_API_KEY_HERE', state.apiKey);
+      if (state.notionToken) code = code.replace('PASTE_NOTION_INTEGRATION_TOKEN_HERE', state.notionToken);
+      if (state.notionDb)    code = code.replace('PASTE_NOTION_DATABASE_ID_HERE', state.notionDb);
+      try {
+        await navigator.clipboard.writeText(code);
+        statusEl.textContent = '✅ 已複製！貼入 Apps Script 編輯器即可';
+        statusEl.style.color = '#00a87e';
+      } catch(_) {
+        // Fallback: show in a prompt
+        prompt('請手動複製以下代碼（已自動填入你嘅 keys）：', code.slice(0, 500) + '...');
+        statusEl.textContent = '⚠️ Clipboard 唔畀用，用 prompt 顯示代替';
+        statusEl.style.color = '#F59E0B';
+      }
+    } catch(e) {
+      statusEl.textContent = '❌ 下載失敗：' + e.message;
+      statusEl.style.color = '#e23b4a';
+    }
+  });
+  $('openAppsScriptBtn')?.addEventListener('click', () => {
+    window.open('https://script.google.com/home/projects/create', '_blank');
+  });
+  $('pullPendingBtn')?.addEventListener('click', async () => {
+    const statusEl = $('emailImportStatus');
+    statusEl.className = 'text-[11px] text-center mb-2';
+    statusEl.textContent = '🔄 從 Notion 拉最新紀錄…';
+    statusEl.style.color = '#2D5A8E';
+    try {
+      await notionPullAll(true);
+      const pendingCount = (state.receipts || []).filter(isPendingReceipt).length;
+      statusEl.textContent = pendingCount > 0
+        ? `✅ 已拉取 · ${pendingCount} 筆待確認（去 History tab 睇）`
+        : '✅ 已拉取 · 冇新 email';
+      statusEl.style.color = '#00a87e';
+    } catch(e) {
+      statusEl.textContent = '❌ ' + (e.message || '').slice(0, 100);
+      statusEl.style.color = '#e23b4a';
+    }
+  });
   $('notionTestBtn')?.addEventListener('click', async () => {
     const statusEl = $('notionStatus');
     statusEl.className = 'text-[11px] text-center mb-2';
