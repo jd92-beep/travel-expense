@@ -356,6 +356,9 @@
         🖼️ 本地相簿
       </button>
     </div>
+    <button id="emailImportBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3" style="background:linear-gradient(135deg,#065F46,#059669);color:white;border:2px solid rgba(5,150,105,0.30);box-shadow:0 4px 16px rgba(5,150,105,0.25)">
+      📧 從 Email 匯入（機票/酒店/Klook）
+    </button>
     <button id="voiceBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3" style="background:rgba(255,255,255,0.90);color:#1B2D55;border:2px solid rgba(27,45,85,0.12);box-shadow:0 4px 16px rgba(27,45,85,0.08)">
       🎤 語音輸入
     </button>
@@ -716,6 +719,60 @@
       <div class="grid grid-cols-2 gap-3">
         <button id="modalCancel" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
         <button id="modalSave" class="py-3 rounded-xl font-bold text-white" style="background:var(--n-blue)">儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EMAIL PASTE MODAL ============ -->
+<div id="emailPasteModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[92vh] flex flex-col" style="background:var(--n-surface);border:1px solid var(--n-border)">
+    <div class="sticky top-0 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
+      <div class="w-12 h-1 rounded-full mx-auto mb-3 sm:hidden" style="background:var(--n-border)"></div>
+      <h3 class="text-lg font-bold" style="color:var(--n-text)">📧 從 Email 匯入預訂</h3>
+      <p class="text-xs mt-1" style="color:var(--n-muted)">支援 Klook / Agoda / 航空公司 / Booking / KKday 等確認 email — AI 自動抽出全部 booking</p>
+    </div>
+    <div class="p-5 flex-1 overflow-y-auto scrollbar-hide">
+      <div class="mb-3 p-3 rounded-xl" style="background:#F0FDF4;border:1px solid #86EFAC">
+        <p class="text-[11px] font-semibold mb-1" style="color:#065F46">💡 點樣用：</p>
+        <ol class="text-[11px] space-y-0.5" style="color:#047857">
+          <li>1. Mail/Gmail 打開確認 email</li>
+          <li>2. 長按 → 全選 → 複製全文</li>
+          <li>3. 切返嚟 app → 喺下面貼 → 撳「AI 解析」</li>
+          <li class="mt-1" style="color:#065F46"><strong>或者</strong>：直接影 email 截圖都得（用影相按鈕）</li>
+        </ol>
+      </div>
+      <textarea id="emailText" rows="12" placeholder="貼 email 全文喺度⋯⋯&#10;&#10;例：&#10;Subject: Your Klook Booking Confirmation&#10;Booking ID: ABC123&#10;Activity: 立山黑部 Day Tour&#10;Travel Date: 2026-04-22&#10;Total: USD 280.00&#10;..." class="w-full rounded-xl p-3 text-sm focus:outline-none font-mono" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text);min-height:240px"></textarea>
+      <div class="flex items-center justify-between mt-2 text-[10px]" style="color:var(--n-muted)">
+        <span id="emailCharCount">0 字符</span>
+        <button id="emailPasteClipboardBtn" class="px-2 py-1 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">📋 從剪貼簿貼</button>
+      </div>
+    </div>
+    <div class="sticky bottom-0 p-5 space-y-2" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
+      <div id="emailParseStatus" class="hidden text-xs text-center" style="color:var(--n-muted)"></div>
+      <div class="grid grid-cols-2 gap-3">
+        <button id="emailCancelBtn" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
+        <button id="emailParseBtn" class="py-3 rounded-xl font-bold text-white" style="background:linear-gradient(135deg,#065F46,#059669)">🤖 AI 解析</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BATCH CONFIRM MODAL ============ -->
+<div id="batchConfirmModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[92vh] flex flex-col" style="background:var(--n-surface);border:1px solid var(--n-border)">
+    <div class="sticky top-0 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
+      <div class="w-12 h-1 rounded-full mx-auto mb-3 sm:hidden" style="background:var(--n-border)"></div>
+      <h3 class="text-lg font-bold" style="color:var(--n-text)">✅ AI 解析結果</h3>
+      <p class="text-xs mt-1" style="color:var(--n-muted)" id="batchSubtitle">核對後儲存</p>
+    </div>
+    <div class="p-5 flex-1 overflow-y-auto scrollbar-hide">
+      <div id="batchItems" class="space-y-2.5"></div>
+    </div>
+    <div class="sticky bottom-0 p-5 space-y-2" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
+      <div class="grid grid-cols-2 gap-3">
+        <button id="batchCancelBtn" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
+        <button id="batchSaveBtn" class="py-3 rounded-xl font-bold text-white" style="background:var(--n-blue)">全部儲存 (<span id="batchSaveCount">0</span>)</button>
       </div>
     </div>
   </div>
@@ -2407,6 +2464,321 @@ function parseReceiptJson(text) {
   throw new Error('JSON parse 失敗');
 }
 
+// ==================== EMAIL IMPORT (multi-booking extraction) ====================
+// Designed to handle varied confirmation email formats from:
+// Klook, KKday, Trip.com, Agoda, Booking.com, Expedia, Hotels.com,
+// Cathay Pacific, ANA, JAL, AirAsia, HK Express, Uber Eats, etc.
+// Returns an array even for single-booking emails for unified downstream handling.
+const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。分析以下 email（可能係文字或圖片），提取 **所有** 獨立消費項目。
+
+⚠️ 極重要規則：
+
+1. **一封 email 可以包含多筆消費**，每筆獨立返一個 object：
+   - 來回機票 → **去程一筆 + 回程一筆**（唔好合併）
+   - Klook/KKday 一次訂多個 activity → **每個 activity 一筆**
+   - Agoda/Booking 多晚酒店 → **合併成一筆**（total = 全程總額）
+   - 機票加行李 / 選座 → 主機票一筆 + 附加費用另一筆
+
+2. **金額一律轉成日元 (JPY)**：
+   - 如果 email 顯示 HKD/USD/CNY 等，**自己用粗略匯率換**：
+     - 1 HKD ≈ 20 JPY，1 USD ≈ 150 JPY，1 CNY ≈ 20 JPY，1 EUR ≈ 160 JPY
+   - \`total\` 永遠係 JPY
+   - \`original_currency\` + \`original_amount\` 記錄原幣
+
+3. **日期係 service date（實際使用日）**，唔係 booking 日期：
+   - 機票：起飛日期
+   - 酒店：Check-in 日期
+   - Activity / Tour：旅遊日
+   - 如果係 booking 日（例如付押金）就用 booking 日，但 note 標註
+
+4. **缺失欄位返 null，唔好亂估**：
+   - 冇寫付款方式 → \`payment: null\`（用戶會補填）
+   - 冇寫具體店名 → 用 booking 來源（如「Klook」「國泰」）
+   - 日期唔清楚 → null + 低 confidence
+
+回覆嚴格 JSON（唔好加 markdown 或解釋）：
+
+\`\`\`json
+{
+  "source": "klook|kkday|agoda|booking|expedia|hotels|cathay|ana|jal|airasia|hkexpress|tripcom|other",
+  "bookings": [
+    {
+      "store": "商戶名（繁體中文，簡短。例：「國泰 CX564」「Agoda 名古屋酒店」「Klook 立山黑部」）",
+      "total": 總金額純數字（JPY，已換算）,
+      "original_currency": "原幣 ISO code（HKD/USD/JPY/CNY/EUR 等）",
+      "original_amount": 原幣金額純數字,
+      "date": "YYYY-MM-DD（service date）或 null",
+      "category": "transport|food|shopping|lodging|ticket|medicine|other",
+      "payment": "cash|credit|paypay|suica 或 null",
+      "items_text": "1-2 句描述，例：「去程 CX564 HKG→NGO 經濟艙」「立山黑部 Day Tour 含午餐」",
+      "note": "booking reference / 確認號碼 / 房型 / 其他關鍵資訊（簡短）",
+      "confidence": "high|medium|low"
+    }
+  ]
+}
+\`\`\`
+
+類別判斷：
+- 機票 / 鐵路 / Taxi / 接送 / 火車證 → transport
+- 酒店 / 民宿 / Airbnb / 溫泉旅館 → lodging
+- Tour / Activity / Day trip / 門票 / 演唱會 / 樂園 → ticket
+- 餐廳訂座 / set menu prepaid → food
+- 電話卡 / eSIM / 保險 / Wi-Fi 蛋 → other
+- 郵寄 / 行李託運 → transport
+
+店名例子：
+- 「Cathay Pacific E-Ticket」→ store: "國泰 CX564"（加埋航班號），items_text: "HKG→NGO 去程"
+- 「Klook Booking Confirmation」→ store: "Klook 立山黑部"，items_text: activity 名
+- 「Agoda Booking」→ store: "Agoda 名古屋 XX Hotel"，date: check-in date, total: 全程總額
+- 「KKday 三日團」→ 如果一個 booking 包 3 日分開 activity，就返 3 筆；如果係一 package，就返一筆
+
+如果 email 完全無法解析（例如唔係 booking confirmation），返 \`{"source": "other", "bookings": []}\`。`;
+
+// Send text-only email body to LLM for multi-booking extraction.
+// Uses a 3-tier fallback: primary Gemini → GLM-Flash → Gemini 3 Flash
+async function parseEmailText(text) {
+  if (!text || !text.trim()) throw new Error('Email 內容為空');
+  const apiKey = state.apiKey || DEFAULT_API_KEY;
+  const primaryModel = state.model || 'gemini-3.1-flash-lite-preview';
+  const userContent = MULTI_BOOKING_PROMPT + '\n\n---- EMAIL START ----\n' + text.slice(0, 30000) + '\n---- EMAIL END ----';
+
+  // Try in order: primary Gemini → GLM-4-Flash → Gemini Flash Lite fallback
+  const attempts = [
+    { name: primaryModel, fn: () => callGeminiText(userContent, primaryModel, apiKey) },
+    { name: 'glm-4-flash', fn: () => callGLMText(userContent) },
+    { name: 'gemini-3-flash-preview', fn: () => callGeminiText(userContent, 'gemini-3-flash-preview', apiKey) },
+  ];
+  let lastErr;
+  for (const { name, fn } of attempts) {
+    try {
+      const raw = await fn();
+      console.info('[emailParse] succeeded with', name);
+      const parsed = parseReceiptJson(raw);
+      if (!parsed || !Array.isArray(parsed.bookings)) {
+        throw new Error('JSON 缺少 bookings 陣列');
+      }
+      return { source: parsed.source || 'other', bookings: parsed.bookings, modelUsed: name };
+    } catch(e) {
+      console.warn(`[emailParse] ${name} failed: ${e.message}`);
+      lastErr = e;
+    }
+  }
+  throw new Error('所有 AI 都失敗：' + (lastErr?.message || 'unknown'));
+}
+
+async function callGeminiText(content, model, apiKey) {
+  const keys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k,i,a) => k && a.indexOf(k) === i);
+  let lastErr;
+  for (const key of keys) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: content }] }],
+        generationConfig: { temperature: 0.15, responseMimeType: 'application/json' },
+      })
+    });
+    if (!r.ok) {
+      if (r.status === 429 || r.status === 403) { lastErr = new Error('Gemini ' + r.status); continue; }
+      const t = await r.text();
+      throw new Error(`Gemini ${r.status}: ${t.slice(0,150)}`);
+    }
+    const data = await r.json();
+    const out = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!out) throw new Error('Gemini 空回應');
+    return out;
+  }
+  throw lastErr || new Error('Gemini 所有 key 都失敗');
+}
+
+async function callGLMText(content) {
+  if (!VAULT_ZAI_KEY) throw new Error('GLM key 未解鎖');
+  const r = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'glm-4-flash',
+      messages: [{ role: 'user', content }],
+      temperature: 0.15,
+      max_tokens: 4096,
+      stream: false,
+    })
+  });
+  if (!r.ok) throw new Error(`GLM ${r.status}`);
+  const data = await r.json();
+  const out = data?.choices?.[0]?.message?.content;
+  if (!out) throw new Error('GLM 空回應');
+  return out;
+}
+
+// Normalize a single booking from AI into a draft receipt (with defaults for missing fields)
+function bookingToDraft(b, indexHint = 0) {
+  const validCats = CATEGORIES.map(c => c.id);
+  const validPays = PAYMENTS.map(p => p.id);
+  const cat = validCats.includes(b.category) ? b.category : 'other';
+  const pay = validPays.includes(b.payment) ? b.payment : 'credit'; // sensible default for email bookings
+  const date = (b.date && /^\d{4}-\d{2}-\d{2}$/.test(b.date)) ? b.date : todayHKT();
+  const total = Math.max(0, Math.round(Number(b.total) || 0));
+  const origNote = b.original_currency && b.original_currency !== 'JPY' && b.original_amount
+    ? `原價 ${b.original_currency} ${Number(b.original_amount).toLocaleString()}`
+    : '';
+  const noteParts = [origNote, b.note].filter(Boolean);
+  return {
+    _draftIndex: indexHint,
+    _confidence: b.confidence || 'medium',
+    _paymentAuto: !validPays.includes(b.payment), // flag so UI can warn
+    store: (b.store || '').slice(0, 120),
+    total,
+    category: cat,
+    payment: pay,
+    date,
+    region: getRegionForDate(date),
+    itemsText: (b.items_text || '').slice(0, 400),
+    note: noteParts.join(' · ').slice(0, 300),
+    personId: (state.persons && state.persons[0]?.id) || 'p_boss',
+  };
+}
+
+// ============ BATCH CONFIRM MODAL ============
+let batchDrafts = [];
+let batchSelected = new Set();
+
+function openBatchConfirmModal(bookings, source, modelUsed) {
+  batchDrafts = bookings.map((b, i) => bookingToDraft(b, i));
+  batchSelected = new Set(batchDrafts.map((_, i) => i)); // all selected by default
+  $('batchSubtitle').textContent = `來源：${source || 'email'} · 用 ${modelUsed} 解析 · 預設全選`;
+  renderBatchItems();
+  $('batchConfirmModal').classList.remove('hidden');
+}
+
+function renderBatchItems() {
+  const container = $('batchItems');
+  if (batchDrafts.length === 0) {
+    container.innerHTML = '<p class="text-sm text-center py-8" style="color:var(--n-muted)">AI 解析唔到任何 booking 資料</p>';
+    $('batchSaveCount').textContent = '0';
+    return;
+  }
+  const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
+  container.innerHTML = batchDrafts.map((d, i) => {
+    const cat = CATEGORIES.find(c => c.id === d.category) || CATEGORIES[6];
+    const pay = PAYMENTS.find(p => p.id === d.payment) || PAYMENTS[1];
+    const isSelected = batchSelected.has(i);
+    const phase = getTripPhase(d.date);
+    const phaseBadge = phase === 'prep' ? '🧳 準備' : (phase === 'post' ? '🏠 返程' : '🗾 旅途');
+    const confBadge = d._confidence === 'low'
+      ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full font-semibold" style="background:#FEF3C7;color:#92400E">⚠️ 低信心</span>'
+      : (d._confidence === 'medium'
+        ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full" style="background:#E0E7FF;color:#3730A3">中</span>'
+        : '<span class="text-[9px] px-1.5 py-0.5 rounded-full" style="background:#D1FAE5;color:#065F46">高</span>');
+    const payWarn = d._paymentAuto
+      ? '<span class="text-[9px] ml-1" style="color:#B45309">⚠️ 付款方式請確認</span>'
+      : '';
+    return `
+      <div class="rounded-2xl p-3 ${isSelected ? '' : 'opacity-50'}" style="background:var(--n-bg);border:1px solid ${isSelected ? cat.color+'55' : 'var(--n-border)'}">
+        <div class="flex items-start gap-3">
+          <input type="checkbox" ${isSelected ? 'checked' : ''} data-batch-checkbox="${i}" class="mt-1 w-4 h-4 shrink-0">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap mb-1">
+              <span class="text-lg">${cat.icon}</span>
+              <span class="text-sm font-bold truncate" style="color:var(--n-text)">${escapeHtml(d.store || '未命名')}</span>
+              ${confBadge}
+            </div>
+            <div class="grid grid-cols-2 gap-1.5 mt-2 text-[11px]">
+              <label class="flex flex-col">
+                <span style="color:var(--n-muted)">日期</span>
+                <input type="date" value="${d.date}" data-batch-field="date" data-batch-idx="${i}" class="bg-transparent rounded px-1 py-0.5" style="color:var(--n-text);border:1px solid var(--n-border)">
+              </label>
+              <label class="flex flex-col">
+                <span style="color:var(--n-muted)">¥ JPY</span>
+                <input type="number" value="${d.total}" data-batch-field="total" data-batch-idx="${i}" class="bg-transparent rounded px-1 py-0.5" style="color:var(--n-text);border:1px solid var(--n-border)">
+              </label>
+              <label class="flex flex-col">
+                <span style="color:var(--n-muted)">類別</span>
+                <select data-batch-field="category" data-batch-idx="${i}" class="bg-transparent rounded px-1 py-0.5" style="color:var(--n-text);border:1px solid var(--n-border)">
+                  ${CATEGORIES.map(c => `<option value="${c.id}" ${c.id === d.category ? 'selected' : ''}>${c.icon} ${c.name}</option>`).join('')}
+                </select>
+              </label>
+              <label class="flex flex-col">
+                <span style="color:var(--n-muted)">付款 ${payWarn}</span>
+                <select data-batch-field="payment" data-batch-idx="${i}" class="bg-transparent rounded px-1 py-0.5" style="color:var(--n-text);border:1px solid var(--n-border)">
+                  ${PAYMENTS.map(p => `<option value="${p.id}" ${p.id === d.payment ? 'selected' : ''}>${p.name}</option>`).join('')}
+                </select>
+              </label>
+            </div>
+            ${d.itemsText ? `<p class="text-[10px] mt-1.5" style="color:var(--n-muted)">${escapeHtml(d.itemsText)}</p>` : ''}
+            ${d.note ? `<p class="text-[10px] mt-0.5 italic" style="color:var(--n-muted)">📝 ${escapeHtml(d.note)}</p>` : ''}
+            <div class="flex items-center gap-2 mt-1.5 text-[10px]" style="color:var(--n-muted)">
+              <span>${phaseBadge}</span>
+              <span>· 📍 ${escapeHtml(d.region)}</span>
+              <span class="ml-auto">≈ HK$ ${fmt(Math.round(d.total / safeRate))}</span>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Bind checkbox + edit inputs
+  container.querySelectorAll('[data-batch-checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const i = Number(cb.dataset.batchCheckbox);
+      if (cb.checked) batchSelected.add(i); else batchSelected.delete(i);
+      $('batchSaveCount').textContent = batchSelected.size;
+      // Just dim the row instead of full re-render
+      cb.closest('.rounded-2xl').classList.toggle('opacity-50', !cb.checked);
+    });
+  });
+  container.querySelectorAll('[data-batch-field]').forEach(el => {
+    el.addEventListener('change', () => {
+      const i = Number(el.dataset.batchIdx);
+      const field = el.dataset.batchField;
+      const val = el.type === 'number' ? Number(el.value) : el.value;
+      batchDrafts[i][field] = val;
+      // If date changed, re-suggest region
+      if (field === 'date') batchDrafts[i].region = getRegionForDate(val);
+    });
+  });
+  $('batchSaveCount').textContent = batchSelected.size;
+}
+
+async function saveBatchBookings() {
+  const selected = [...batchSelected].sort((a,b) => a-b).map(i => batchDrafts[i]);
+  if (selected.length === 0) { toast('⚠️ 冇揀任何 booking'); return; }
+
+  // Phase 1: save all receipts locally + refresh UI immediately (no blocking on Notion)
+  const now = Date.now();
+  const savedReceipts = selected.map((d, i) => ({
+    id: 'r_' + now + '_' + i + '_' + Math.random().toString(36).slice(2, 6),
+    store: d.store || '未命名',
+    total: Number(d.total) || 0,
+    category: d.category,
+    payment: d.payment,
+    date: d.date,
+    region: d.region,
+    itemsText: d.itemsText || '',
+    note: d.note || '',
+    personId: d.personId,
+    createdAt: now + i,
+  }));
+  state.receipts.push(...savedReceipts);
+  saveState();
+  refresh();
+  $('batchConfirmModal').classList.add('hidden');
+  toast(`✅ 已儲存 ${savedReceipts.length} 筆 📝`);
+
+  // Phase 2: fire-and-forget Notion push in parallel (non-blocking)
+  if (state.autoSync && state.notionToken && state.notionDb) {
+    Promise.allSettled(savedReceipts.map(r => notionPushReceipt(r))).then(results => {
+      const ok = results.filter(x => x.status === 'fulfilled').length;
+      const failed = results.length - ok;
+      if (failed > 0) {
+        toast(`☁️ Notion: ${ok} 成功 · ${failed} 失敗（本機已儲存）`);
+      } else if (ok > 0) {
+        toast(`☁️ ${ok} 筆已同步 Notion`);
+      }
+    }).catch(e => console.warn('[notion batch]', e));
+  }
+}
+
 // ── Model 1: GLM-4.6V (primary) ──────────────────────────────────────────────
 async function callGLM(base64, mime) {
   const url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
@@ -3486,6 +3858,67 @@ function init() {
   });
   $('voiceBtn').addEventListener('click', startVoiceInput);
   $('manualBtn').addEventListener('click', () => openConfirmModal({}, ''));
+
+  // ── Email import flow ──
+  $('emailImportBtn')?.addEventListener('click', () => {
+    $('emailText').value = '';
+    $('emailCharCount').textContent = '0 字符';
+    $('emailParseStatus').classList.add('hidden');
+    $('emailPasteModal').classList.remove('hidden');
+    setTimeout(() => $('emailText').focus(), 100);
+  });
+  $('emailCancelBtn')?.addEventListener('click', () => {
+    $('emailPasteModal').classList.add('hidden');
+  });
+  $('emailText')?.addEventListener('input', () => {
+    const len = $('emailText').value.length;
+    $('emailCharCount').textContent = fmt(len) + ' 字符';
+  });
+  $('emailPasteClipboardBtn')?.addEventListener('click', async () => {
+    try {
+      const txt = await navigator.clipboard.readText();
+      if (txt) {
+        $('emailText').value = txt;
+        $('emailText').dispatchEvent(new Event('input'));
+        toast('📋 已貼入');
+      } else {
+        toast('⚠️ 剪貼簿係空');
+      }
+    } catch(e) {
+      toast('⚠️ 無法讀取剪貼簿，請手動貼');
+    }
+  });
+  $('emailParseBtn')?.addEventListener('click', async () => {
+    const text = $('emailText').value.trim();
+    if (text.length < 40) { toast('⚠️ Email 內容太短（少於 40 字符）'); return; }
+    const status = $('emailParseStatus');
+    status.classList.remove('hidden');
+    status.innerHTML = '<div class="inline-block w-4 h-4 border-2 border-[#CCDCF0] border-t-[#059669] rounded-full animate-spin"></div> <span class="ml-2">AI 解析中…</span>';
+    $('emailParseBtn').disabled = true;
+    try {
+      const result = await parseEmailText(text);
+      if (!result.bookings || result.bookings.length === 0) {
+        status.innerHTML = '<span style="color:#DC2626">❌ 解析唔到任何 booking。確認係否 booking confirmation email？</span>';
+        $('emailParseBtn').disabled = false;
+        return;
+      }
+      $('emailPasteModal').classList.add('hidden');
+      openBatchConfirmModal(result.bookings, result.source, result.modelUsed);
+      toast(`🤖 解析到 ${result.bookings.length} 筆 booking`);
+    } catch(e) {
+      console.error('[emailParse]', e);
+      status.innerHTML = '<span style="color:#DC2626">❌ ' + escapeHtml(e.message.slice(0, 120)) + '</span>';
+      $('emailParseBtn').disabled = false;
+    }
+  });
+
+  // Batch-confirm modal buttons
+  $('batchCancelBtn')?.addEventListener('click', () => {
+    if (batchSelected.size > 0 && !confirm('放棄 ' + batchSelected.size + ' 筆 booking？')) return;
+    $('batchConfirmModal').classList.add('hidden');
+    batchDrafts = []; batchSelected.clear();
+  });
+  $('batchSaveBtn')?.addEventListener('click', saveBatchBookings);
 
   // Quick-add prep expense from dashboard prep summary card
   $('prepQuickAddBtn')?.addEventListener('click', () => {
