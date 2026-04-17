@@ -913,6 +913,18 @@ async function testModelConnection(modelId) {
         })
       });
       return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
+    } else if (modelId === 'minimax') {
+      // Lightweight auth probe — invalid key returns 401 quickly
+      const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
+      if (!key) return { ok: false, msg: 'MiniMax key 未設定' };
+      const r = await fetch('https://api.minimax.io/v1/coding_plan/vlm', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'ping', image_url: 'https://www.gstatic.com/webp/gallery/1.jpg' })
+      });
+      // 200 with any base_resp means auth worked
+      if (r.ok) return { ok: true, msg: '✅ 連線正常' };
+      return { ok: false, msg: `❌ HTTP ${r.status}` };
     } else {
       const testKeys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k, i, a) => k && a.indexOf(k) === i);
       if (!testKeys.length) return { ok: false, msg: 'API key 未設定' };
@@ -957,7 +969,7 @@ function buildModelCard(m, isSelected, type) {
 function renderScanModelCards() {
   const el = document.getElementById('scanModelCards');
   if (!el) return;
-  const cur = state.scanModel || state.model || 'gemini-3.1-flash-live-preview';
+  const cur = state.scanModel || state.model || 'gemini-3.1-flash-lite-preview';
   el.innerHTML = SCAN_MODELS.map(m => buildModelCard(m, cur === m.id, 'scan')).join('');
   // Last scan badge
   const badge = document.getElementById('lastScanBadge');
@@ -981,27 +993,34 @@ function renderModelCards() {
   renderVoiceModelCards();
 }
 
-window.switchModel_scan = async function(id) {
+// Per-model test-call generation counter. When user taps model A then quickly
+// taps model B, A's pending test result is ignored (prevents race overwrites).
+let _testGen = {};
+async function runModelTest(id, renderFn) {
+  const gen = (_testGen[id] = (_testGen[id] || 0) + 1);
+  modelTestStatus[id] = { ok: null, msg: '測試中…' };
+  renderFn();
+  const result = await testModelConnection(id);
+  if (_testGen[id] !== gen) return; // stale — user clicked again
+  modelTestStatus[id] = result;
+  renderFn();
+}
+
+window.switchModel_scan = function(id) {
   state.scanModel = id;
   state.model = id; // backward compat
   saveState();
   renderScanModelCards();
   toast('📸 掃描模型: ' + (SCAN_MODELS.find(m => m.id === id)?.name || id));
-  modelTestStatus[id] = { ok: null, msg: '測試中…' };
-  renderScanModelCards();
-  modelTestStatus[id] = await testModelConnection(id);
-  renderScanModelCards();
+  runModelTest(id, renderScanModelCards);
 };
 
-window.switchModel_voice = async function(id) {
+window.switchModel_voice = function(id) {
   state.voiceModel = id;
   saveState();
   renderVoiceModelCards();
   toast('🎤 語音模型: ' + (VOICE_MODELS.find(m => m.id === id)?.name || id));
-  modelTestStatus[id] = { ok: null, msg: '測試中…' };
-  renderVoiceModelCards();
-  modelTestStatus[id] = await testModelConnection(id);
-  renderVoiceModelCards();
+  runModelTest(id, renderVoiceModelCards);
 };
 
 // Legacy alias (used in callGemini after scan)
@@ -1036,7 +1055,8 @@ async function fetchLiveRate(force = false) {
       state.rateFetchedAt = now;
       saveState();
       const el = document.getElementById('setRate');
-      if (el) el.value = (100 / state.rate).toFixed(4);
+      // Don't clobber user's in-progress typing in the settings field
+      if (el && document.activeElement !== el) el.value = (100 / state.rate).toFixed(4);
       const rv = document.getElementById('rateReverse');
       if (rv) rv.textContent = `1 HKD = ${state.rate.toFixed(2)} JPY`;
       const st = document.getElementById('rateStatus');
@@ -1331,7 +1351,7 @@ function renderStats() {
            </div>
            <span class="text-3xl">${creditorEmoji}</span>
          </div>
-         <p class="text-[10px] mt-3" style="color:var(--n-muted)">${debtorEmoji} ${debtorName} 付較少 · 總花費 ¥${fmt(grandTotal)}</p>`;
+         <p class="text-[10px] mt-3" style="color:var(--n-muted)">${debtorEmoji} ${escapeHtml(debtorName)} 付較少 · 總花費 ¥${fmt(grandTotal)}</p>`;
   }
   // ─────────────────────────────────────────────────────────────
 
@@ -1422,7 +1442,8 @@ async function runScanWithBase64(base64, mime) {
   try {
     const result = await callGemini(base64, mime || 'image/jpeg');
     lastScanResult = result;
-    $('scanStatus').innerHTML = '<p class="text-sm" style="color:#059669">✅ 辨識完成 — 點擊圖片可重新確認</p>';
+    const usedModel = state.lastScanModel || 'AI';
+    $('scanStatus').innerHTML = `<p class="text-sm" style="color:#059669">✅ 辨識完成 (${escapeHtml(usedModel)}) — 點擊圖片可重新確認</p>`;
     openConfirmModal(result, base64);
   } catch (err) {
     console.error(err);
@@ -1684,7 +1705,7 @@ async function parseVoiceExpense(transcript) {
       lastErr = e;
     }
     if (!parsed && apiKey) {
-      const geminiModels = ['gemini-3.1-flash-live-preview', 'gemini-3-flash-preview'];
+      const geminiModels = ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview'];
       for (const m of geminiModels) {
         try { parsed = await tryGemini(prompt, m); if (parsed) { toast('✅ 語音解析完成 (' + m + ')'); break; } } catch(e) { console.warn(`[Voice] ❌ ${m} 失敗: ${e.message}`); lastErr = e; }
       }
@@ -1811,12 +1832,15 @@ const DEFAULT_MINIMAX_KEY = atob('c2stY3AtVEd3a3RBb2hqSTFnVFF2b1pwWFRpZHBQeFlBZW
 async function callMiniMax(base64, mime) {
   const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
   if (!key) throw new Error('MiniMax key 未設定');
+  // NOTE: MM-API-Source header is NOT in MiniMax's CORS allow-list, so we can't
+  // send it from a browser. Server-side Python clients can, but Access-Control-
+  // Allow-Headers from api.minimax.io only includes: Authorization, Content-Type,
+  // Origin, Accept, etc. Sending MM-API-Source causes CORS preflight to fail.
   const r = await fetch('https://api.minimax.io/v1/coding_plan/vlm', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${key}`,
       'Content-Type': 'application/json',
-      'MM-API-Source': 'Minimax-MCP',
     },
     body: JSON.stringify({
       prompt: GEMINI_PROMPT,
@@ -2184,16 +2208,29 @@ async function notionPullAll(silent = false) {
   }
   if (!silent) toast('⬇️ 拉取中…');
   try {
-    const data = await notionFetch(`/databases/${state.notionDb}/query`, {
-      method: 'POST',
-      body: JSON.stringify({ page_size: 100 })
-    });
+    // Paginate through ALL pages — without this, >100 records get silently
+    // flagged as "deleted" by the removal loop below (data loss).
+    const allResults = [];
+    let cursor = undefined;
+    let fullWalkOk = false;
+    for (let i = 0; i < 20; i++) { // safety cap: 20*100 = 2000 receipts
+      const body = cursor
+        ? { page_size: 100, start_cursor: cursor }
+        : { page_size: 100 };
+      const page = await notionFetch(`/databases/${state.notionDb}/query`, {
+        method: 'POST', body: JSON.stringify(body)
+      });
+      allResults.push(...(page.results || []));
+      if (!page.has_more) { fullWalkOk = true; break; }
+      cursor = page.next_cursor;
+    }
+
     const merged = new Map(state.receipts.map(r => [r.id, r]));
     const deletedPageIds = new Set(state.notionDeletedIds || []);
     let added = 0, updated = 0;
     const returnedNotionPageIds = new Set();
 
-    for (const page of (data.results || [])) {
+    for (const page of allResults) {
       // Skip pages that were deleted locally — don't let Notion re-add them
       if (deletedPageIds.has(page.id)) continue;
       returnedNotionPageIds.add(page.id);
@@ -2234,13 +2271,19 @@ async function notionPullAll(silent = false) {
     }
 
     // Remove local records that were synced to Notion but are no longer returned
-    // (archived/deleted on another device) — this is how cross-device deletion syncs
+    // (archived/deleted on another device) — this is how cross-device deletion syncs.
+    // ONLY run this if we fully walked the DB (has_more === false on last page).
+    // If pagination hit the safety cap, skipping deletion is safer than losing data.
     let removed = 0;
-    for (const [id, receipt] of merged.entries()) {
-      if (receipt.notionPageId && !returnedNotionPageIds.has(receipt.notionPageId)) {
-        merged.delete(id);
-        removed++;
+    if (fullWalkOk) {
+      for (const [id, receipt] of merged.entries()) {
+        if (receipt.notionPageId && !returnedNotionPageIds.has(receipt.notionPageId)) {
+          merged.delete(id);
+          removed++;
+        }
       }
+    } else {
+      console.warn('[notionPullAll] pagination cap hit — deletion sync skipped for safety');
     }
 
     state.receipts = Array.from(merged.values()).sort((a,b) => a.createdAt - b.createdAt);
@@ -2271,6 +2314,7 @@ async function compressPhoto(base64, mime) {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
+      try {
       const maxW = 480;
       const scale = Math.min(1, maxW / img.width);
       const c = document.createElement('canvas');
@@ -2278,6 +2322,11 @@ async function compressPhoto(base64, mime) {
       c.height = Math.round(img.height * scale);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       resolve(c.toDataURL('image/jpeg', 0.65).split(',')[1]);
+      } catch(e) {
+        // OOM on low-memory iPhones when processing huge photos — fail gracefully
+        console.warn('[compressPhoto] failed:', e.message);
+        resolve(null);
+      }
     };
     img.onerror = () => resolve(null);
     img.src = `data:${mime || 'image/jpeg'};base64,${base64}`;
@@ -2557,6 +2606,11 @@ function refresh() {
 }
 
 function init() {
+  // Idempotency guard: gateAndInit can invoke init() twice on auto-unlock fallthrough,
+  // causing duplicate event listeners and setInterval timers.
+  if (window._appInitialised) { console.info('[init] already initialised — skip'); return; }
+  window._appInitialised = true;
+
   loadState();
   fetchLiveRate();
   populateModalSelects();
@@ -2582,9 +2636,14 @@ function init() {
   $('setBudget').addEventListener('input', updateBudgetHKD);
   $('setRate').addEventListener('input', () => { updateBudgetHKD(); updateRateReverse(); });
   $('saveSettings').addEventListener('click', () => {
-    state.budget = Number($('setBudget').value) || 101800;
-    const displayedHkdPer100 = parseFloat($('setRate').value) || 4.91;
+    state.budget = Math.max(1, Number($('setBudget').value) || 101800);
+    // Clamp rate to a sane range [2.0, 10.0] HKD per 100 JPY; default 4.91
+    let displayedHkdPer100 = parseFloat($('setRate').value);
+    if (!isFinite(displayedHkdPer100) || displayedHkdPer100 < 2 || displayedHkdPer100 > 10) {
+      displayedHkdPer100 = 4.91;
+    }
     state.rate = parseFloat((100 / displayedHkdPer100).toFixed(4));
+    if (!isFinite(state.rate) || state.rate <= 0) state.rate = 20.36; // final safety net
     // state.model / scanModel / voiceModel saved instantly via switchModel_scan/voice()
     state.autoSync = $('setAutoSync').checked;
     saveState();
@@ -2714,6 +2773,61 @@ function init() {
   window.addEventListener('online', updateOnline);
   window.addEventListener('offline', updateOnline);
   updateOnline();
+
+  // ── Scheduled auto-refresh: every hour on the hour between 06:00–00:00 HKT ──
+  // Skips refresh if user is interacting (modal open, recently active, or offline).
+  // Data persists via localStorage, so page reload is non-destructive.
+  scheduleAutoRefresh();
+}
+
+// ============ AUTO-REFRESH SCHEDULER ============
+let _lastActivityTs = Date.now();
+['mousemove','keydown','touchstart','click','scroll'].forEach(ev =>
+  window.addEventListener(ev, () => { _lastActivityTs = Date.now(); }, { passive: true })
+);
+
+function scheduleAutoRefresh() {
+  // Compute delay until next top of hour, in HKT (UTC+8)
+  const now = new Date();
+  const nextHour = new Date(now);
+  nextHour.setMinutes(0, 0, 0);
+  nextHour.setHours(now.getHours() + 1);
+  const delay = nextHour.getTime() - now.getTime();
+  setTimeout(tryAutoRefresh, delay + 1000); // +1s jitter to avoid edge
+  console.info('[AutoRefresh] next tick at', nextHour.toLocaleTimeString('zh-HK'));
+}
+
+function tryAutoRefresh() {
+  try {
+    // HKT hour — browser may be in any TZ, so compute HKT explicitly
+    const hktHour = Number(new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit', hour12: false, timeZone: 'Asia/Hong_Kong'
+    }).format(new Date()));
+    const inWindow = hktHour >= 6 && hktHour <= 23; // 06:00–23:59 HKT
+    // Only check modals that actually exist. `!undefined?.contains()` returns true,
+    // which would permanently disable auto-refresh for non-existent modal IDs.
+    const modalOpen = !$('confirmModal').classList.contains('hidden');
+    const recentlyActive = (Date.now() - _lastActivityTs) < 2 * 60 * 1000; // 2 min
+    const offline = !navigator.onLine;
+
+    if (!inWindow) {
+      console.info('[AutoRefresh] outside 06:00-23:59 HKT window — skipping');
+    } else if (modalOpen) {
+      console.info('[AutoRefresh] modal open — skipping');
+    } else if (recentlyActive) {
+      console.info('[AutoRefresh] user active within 2min — skipping');
+    } else if (offline) {
+      console.info('[AutoRefresh] offline — skipping');
+    } else {
+      console.info('[AutoRefresh] reloading…');
+      location.reload();
+      return; // no reschedule needed
+    }
+  } catch(e) {
+    console.warn('[AutoRefresh] check failed:', e);
+  }
+  // Reschedule for next hour
+  scheduleAutoRefresh();
 }
 
 // ========== GATE: unlock vault before init ==========
