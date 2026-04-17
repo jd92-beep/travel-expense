@@ -504,43 +504,45 @@
       <div id="shareRatiosWrap"></div>
     </div>
 
-    <!-- Share flow setup guide (Android + iOS) -->
+    <!-- Email import — zero-install flow first -->
     <details class="glass rounded-2xl p-4 mb-3">
       <summary class="cursor-pointer flex items-center justify-between select-none">
-        <label class="text-xs uppercase tracking-wider cursor-pointer" style="color:var(--n-muted)">📱 快速匯入（Share 功能）</label>
+        <label class="text-xs uppercase tracking-wider cursor-pointer" style="color:var(--n-muted)">📧 匯入 Email 預訂</label>
         <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#F0FDF4;color:#065F46">可展開</span>
       </summary>
       <div class="mt-3 text-[11px] space-y-3" style="color:var(--n-text)">
-        <p style="color:var(--n-muted)">喺 Gmail / Outlook / 瀏覽器 入面撳 Share → 直接匯入呢個 app，自動解析。</p>
 
-        <!-- Android PWA setup -->
-        <div class="p-3 rounded-xl" style="background:#E0F2FE;border:1px solid #7DD3FC">
-          <p class="font-semibold mb-1.5" style="color:#0C4A6E">🤖 Android（推薦，零 setup code）</p>
-          <ol class="text-[11px] space-y-1 pl-4" style="color:#075985;list-style:decimal">
-            <li>Chrome 開呢個 app → 選單 (⋮) → <strong>「Add to Home screen」/「安裝應用程式」</strong></li>
-            <li>Gmail 開 email → 撳右上角 ⋮ → <strong>「Share」</strong> → 揀「名古屋記帳」</li>
-            <li>自動跳返呢個 app，內容貼落去 → AI 解析 → 完 ✅</li>
+        <!-- Primary zero-install flow -->
+        <div class="p-3 rounded-xl" style="background:#F0FDF4;border:2px solid #059669">
+          <p class="font-bold mb-2" style="color:#065F46">🎯 標準用法（零安裝，所有瀏覽器都 work）</p>
+          <ol class="text-[11px] space-y-1.5 pl-4" style="color:#047857;list-style:decimal">
+            <li>Email app 開咗封 confirmation email（機票/酒店/Klook）</li>
+            <li><strong>長按正文 → 全選 → 複製</strong></li>
+            <li>返嚟呢個網頁 → Scan tab → <strong>「📧 從 Email 匯入」</strong></li>
+            <li>撳 <strong>「📋 從剪貼簿貼」</strong>（或者手動 paste）</li>
+            <li>撳 <strong>「🤖 AI 解析」</strong> → 核對 → 全部儲存 ✅</li>
           </ol>
-          <p class="text-[10px] mt-2" style="color:#0369A1">📌 安裝 PWA 之後先會出現喺 Share menu。只安裝一次。</p>
+          <p class="text-[10px] mt-2" style="color:#065F46">💡 如果 email 太長複製唔到，改用截圖：📧 匯入 modal 入面有「🖼️ 揀 email 截圖」按鈕。</p>
         </div>
 
-        <!-- iOS Shortcut setup -->
-        <div class="p-3 rounded-xl" style="background:#F0FDF4;border:1px solid #86EFAC">
-          <p class="font-semibold mb-1.5" style="color:#065F46">🍎 iOS（需要設 Shortcut）</p>
-          <button id="copyShortcutUrlBtn" class="w-full py-2 rounded-lg text-[11px] font-semibold mb-2" style="background:#059669;color:white">📋 複製 Shortcut URL 範本</button>
-          <p class="text-[10px] mb-1" style="color:#047857">Shortcuts app 整 3 步（Receive Text from Share Sheet）：</p>
-          <ol class="text-[11px] space-y-0.5 pl-4" style="color:#047857;list-style:decimal">
-            <li><strong>Get Contents of Input</strong>（Text）</li>
-            <li><strong>Base64 Encode</strong> → URL Encoded</li>
-            <li><strong>Open URL</strong>：貼上面範本，<em>[Base64 Output]</em> 替換中間</li>
-          </ol>
-        </div>
+        <!-- Optional bonus: install as PWA -->
+        <details class="rounded-xl p-3" style="background:var(--n-bg);border:1px dashed var(--n-border)">
+          <summary class="cursor-pointer font-semibold text-[11px]" style="color:var(--n-muted)">⚡ 進階（選擇性）：安裝做 PWA／設 Shortcut，直接 Share 唔使複製</summary>
+          <div class="mt-2 space-y-2.5 text-[10px]">
+            <p style="color:var(--n-muted)">如果經常要入帳，安裝後可以喺 Gmail Share menu 直接發送。<strong>唔安裝都用得完全冇問題</strong>。</p>
 
-        <!-- Universal fallback -->
-        <div class="p-3 rounded-xl" style="background:#FEF3C7;border:1px solid #FCD34D">
-          <p class="text-[10px] font-semibold mb-1" style="color:#92400E">🎯 任何情況都 work</p>
-          <p class="text-[10px]" style="color:#92400E">Copy email 全文 → 開 Scan tab → 📧 匯入 → 📋 從剪貼簿貼 → AI 解析。零 setup，100% 可靠。</p>
-        </div>
+            <div class="p-2 rounded-lg" style="background:#E0F2FE">
+              <p class="font-semibold mb-1" style="color:#0C4A6E">Android：</p>
+              <p style="color:#075985">Chrome 選單 ⋮ → 「Add to Home screen」→ 之後 Gmail Share 見到「名古屋記帳」。</p>
+            </div>
+
+            <div class="p-2 rounded-lg" style="background:#FEF3C7">
+              <p class="font-semibold mb-1" style="color:#92400E">iOS（要整 Shortcut）：</p>
+              <button id="copyShortcutUrlBtn" class="w-full py-1.5 rounded text-[10px] font-semibold mb-1" style="background:#F59E0B;color:white">📋 複製 Shortcut URL 範本</button>
+              <p style="color:#92400E">3 步 Shortcut：Get Contents of Input (Text) → Base64 Encode → Open URL（貼範本）。</p>
+            </div>
+          </div>
+        </details>
       </div>
     </details>
 
@@ -1052,11 +1054,12 @@ function loadState() {
 function saveState() {
   // Strip sensitive credentials before persisting — they live in memory only
   const { apiKey, notionToken, ...safeState } = state;
+  const jsonPayload = JSON.stringify(safeState);
   try {
-    localStorage.setItem('boss-japan-tracker', JSON.stringify(safeState));
+    localStorage.setItem('boss-japan-tracker', jsonPayload);
   } catch(e) {
-    if (e.name === 'QuotaExceededError') {
-      // Auto-prune oldest photo thumbnails to free space
+    if (e && e.name === 'QuotaExceededError') {
+      // Tier 1: prune oldest photoThumb values one by one
       const byAge = [...state.receipts].sort((a,b) => (a.createdAt||0)-(b.createdAt||0));
       let pruned = 0;
       for (const r of byAge) {
@@ -1066,16 +1069,38 @@ function saveState() {
         try {
           const { apiKey: _a, notionToken: _n, ...s2 } = state;
           localStorage.setItem('boss-japan-tracker', JSON.stringify(s2));
-          break;
+          toast(`⚠️ 儲存空間不足，已移除 ${pruned} 張收據縮圖`);
+          return;
         } catch(e2) { continue; }
       }
-      if (pruned) toast(`⚠️ 儲存空間不足，已移除 ${pruned} 張收據縮圖`);
-      else toast('❌ 儲存空間已滿，請匯出資料後清除');
+      // Tier 2: nuclear — strip ALL photoThumb + photoUrl fields and retry
+      let stripped = 0;
+      state.receipts.forEach(r => {
+        if (r.photoThumb) { delete r.photoThumb; stripped++; }
+        if (r.photoUrl)   { delete r.photoUrl;   stripped++; }
+      });
+      try {
+        const { apiKey: _a, notionToken: _n, ...s3 } = state;
+        localStorage.setItem('boss-japan-tracker', JSON.stringify(s3));
+        toast(`⚠️ 儲存空間滿，已移除 ${stripped} 個圖片，資料仍保留`);
+        return;
+      } catch(e3) {
+        toast('❌ 儲存空間已滿，請匯出 CSV 後清除');
+        return;
+      }
     }
+    // Non-quota error — surface it so user isn't left thinking save succeeded
+    console.error('[saveState] non-quota error:', e);
+    toast('❌ 本機儲存失敗：' + (e?.message || 'unknown').slice(0, 60));
+    return;
   }
-  // Warn at 4MB (typical 5-10MB limit)
-  const used = new Blob([localStorage.getItem('boss-japan-tracker') || '']).size;
-  if (used > 4 * 1024 * 1024) toast('⚠️ 本地儲存接近上限 (4MB+)，建議同步 Notion 後清除舊圖');
+  // Warn at 4MB (typical 5-10MB limit) — wrap getItem in try since it can throw
+  // on corrupted storage or under private browsing.
+  try {
+    const raw = localStorage.getItem('boss-japan-tracker') || '';
+    const used = new Blob([raw]).size;
+    if (used > 4 * 1024 * 1024) toast('⚠️ 本地儲存接近上限 (4MB+)，建議同步 Notion 後清除舊圖');
+  } catch(_) { /* ignore */ }
 }
 
 // ============ HELPERS ============
@@ -1803,10 +1828,10 @@ function computeSettlements(persons, personTotals, shareRatios) {
   });
 
   // Greedy match: biggest debtor pays biggest creditor until settled.
-  // Work on a copy, sorted each iteration. Stop when |balance| < ¥1 (sub-yen noise).
+  // Work on a copy, sorted each iteration.
   const transfers = [];
   const work = balances.map(b => ({ ...b }));
-  const MIN = 1; // below 1 yen, ignore
+  const MIN = 0.5; // sub-half-yen residual — below this we call it balanced
   for (let safety = 0; safety < 100; safety++) {
     work.sort((a, b) => a.balance - b.balance); // most negative first
     const debtor = work[0];
@@ -1815,13 +1840,15 @@ function computeSettlements(persons, personTotals, shareRatios) {
     if (Math.abs(debtor.balance) < MIN || Math.abs(creditor.balance) < MIN) break;
     if (debtor.balance >= 0 || creditor.balance <= 0) break;
     const amount = Math.min(-debtor.balance, creditor.balance);
+    // Keep the exact float amount while ledgering to avoid ±1 ¥ drift;
+    // round only for the user-facing display.
+    debtor.balance += amount;
+    creditor.balance -= amount;
     transfers.push({
       from: { id: debtor.id, name: debtor.name, emoji: debtor.emoji, color: debtor.color },
       to:   { id: creditor.id, name: creditor.name, emoji: creditor.emoji, color: creditor.color },
       amount: Math.round(amount),
     });
-    debtor.balance += amount;
-    creditor.balance -= amount;
   }
   return transfers;
 }
@@ -1837,7 +1864,18 @@ function renderSettlementHtml(persons, personTotals, grandTotal, settlements) {
   if (allZeroRatios) {
     return '<p class="text-xs text-center py-3" style="color:#DC2626">⚠️ 所有旅伴分擔比例為 0，無法計算分帳。請到設定 → 分帳比例調整。</p>';
   }
+  // Warn if any person has ratio=0 but has paid money — the math is correct
+  // but the UX is confusing (they end up as a pure creditor who paid their
+  // own expense, and others foot the bill entirely).
+  const oddZeroShare = persons
+    .map((p, i) => ({ p, paid: personTotals[i], ratio: Number((state.shareRatios||{})[p.id]) || 0 }))
+    .filter(x => x.ratio === 0 && x.paid > 0);
   const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
+  const zeroShareBanner = oddZeroShare.length > 0
+    ? `<div class="mb-3 p-2 rounded-lg text-[11px]" style="background:#FEF3C7;border:1px solid #FCD34D;color:#92400E">
+         ⚠️ ${oddZeroShare.map(x => `${x.p.emoji} ${escapeHtml(x.p.name)}`).join('、')} 分擔比例 0 但有支出，其他人會全額 reimburse。若想正確分帳，請到設定調整比例。
+       </div>`
+    : '';
 
   // Header summary: total + share labels
   // Normalize ratio for each person: use stored value if valid (0 allowed, negatives → 1 default).
@@ -1900,7 +1938,7 @@ function renderSettlementHtml(persons, personTotals, grandTotal, settlements) {
         </div>`).join('') + '</div>';
   }
 
-  return headerHTML + '<div class="mb-2">' + rows + '</div>' + transfersHTML;
+  return zeroShareBanner + headerHTML + '<div class="mb-2">' + rows + '</div>' + transfersHTML;
 }
 
 function renderStats() {
@@ -2800,18 +2838,30 @@ const RATE_TO_JPY = {
 
 // Keyword → category hints (fallback when LLM returns 'other')
 const CATEGORY_KEYWORDS = {
-  transport: [/flight|airline|cathay|ana|jal|airasia|hkexpress|united|emirates|ticket.*air|boarding/i, /機票|航班|航空|新幹線|shinkansen|JR|taxi|uber|bus|train|rail|railway|地鐵|巴士|車票/],
+  transport: [/flight|airline|cathay|ana|jal|airasia|hkexpress|united|emirates|boarding/i, /機票|航班|航空|新幹線|shinkansen|JR|taxi|uber|bus|train|rail|railway|地鐵|巴士|車票/],
   lodging:   [/hotel|hostel|airbnb|agoda|booking\.com|expedia|hotels\.com|ryokan|onsen|check-?in|check-?out/i, /酒店|旅館|民宿|溫泉/],
-  ticket:    [/klook|kkday|tour|activity|admission|entry|pass|ticket/i, /門票|景點|樂園|演出|表演/],
+  ticket:    [/klook|kkday|tour|activity|admission|entry|ticket\b/i, /門票|景點|樂園|演出|表演/],
   food:      [/restaurant|menu|dining|lunch|dinner|breakfast|buffet/i, /餐廳|餐|菜|食/],
   medicine:  [/pharmacy|drug|medical|hospital|clinic/i, /藥|醫/],
 };
-function inferCategoryFromText(text) {
-  const t = (text || '').toLowerCase();
+// Score-based inference: matches in the store name weigh 3x (the store is the
+// strongest signal), matches in items_text weigh 1x. Prevents "Flight arrives
+// at..." inside a hotel email from flipping the category to transport.
+function inferCategoryFromFields({ store = '', itemsText = '' }) {
+  const storeLower = store.toLowerCase();
+  const itemsLower = itemsText.toLowerCase();
+  const scores = { transport: 0, lodging: 0, ticket: 0, food: 0, medicine: 0 };
   for (const [cat, patterns] of Object.entries(CATEGORY_KEYWORDS)) {
-    for (const p of patterns) if (p.test(t)) return cat;
+    for (const p of patterns) {
+      if (p.test(storeLower)) scores[cat] += 3;
+      if (p.test(itemsLower)) scores[cat] += 1;
+    }
   }
-  return null;
+  let best = null, bestScore = 0;
+  for (const [cat, s] of Object.entries(scores)) {
+    if (s > bestScore) { bestScore = s; best = cat; }
+  }
+  return bestScore > 0 ? best : null;
 }
 
 // Normalize a single booking from AI into a draft receipt + validation/repair
@@ -2831,13 +2881,14 @@ function bookingToDraft(b, indexHint = 0) {
 
   // ── Date ──
   let date = todayHKT();
+  let dateFallback = true;
   if (b.date && /^\d{4}-\d{2}-\d{2}$/.test(b.date)) {
-    date = b.date;
-    // Sanity: if year <1990 or >2050, treat as wrong
-    const yr = Number(date.slice(0, 4));
+    const yr = Number(b.date.slice(0, 4));
     if (yr < 1990 || yr > 2050) {
-      date = todayHKT();
       warnings.push('日期年份可疑，已用今日代替');
+    } else {
+      date = b.date;
+      dateFallback = false;
     }
   } else if (b.date) {
     warnings.push('日期格式錯，已用今日代替');
@@ -2869,8 +2920,8 @@ function bookingToDraft(b, indexHint = 0) {
   // ── Category ──
   let cat = validCats.includes(b.category) ? b.category : 'other';
   if (cat === 'other') {
-    // Try to infer from store name + items text
-    const inferred = inferCategoryFromText((store + ' ' + (b.items_text || '')).slice(0, 300));
+    // Score-weighted inference: store name weights 3x vs items text (1x)
+    const inferred = inferCategoryFromFields({ store, itemsText: b.items_text || '' });
     if (inferred) {
       cat = inferred;
       warnings.push(`類別自動推斷：${CATEGORIES.find(c => c.id === inferred)?.name}`);
@@ -2881,6 +2932,21 @@ function bookingToDraft(b, indexHint = 0) {
   const payAuto = !validPays.includes(b.payment);
   const pay = validPays.includes(b.payment) ? b.payment : 'credit';
   if (payAuto) warnings.push('付款方式缺，預設信用卡（請確認）');
+
+  // ── Prep-category date correction ──
+  // If AI failed to extract date AND we're mid-trip AND the category looks
+  // like a pre-trip booking (flight/hotel/tour), a receipt dated today would
+  // mis-classify as 'trip' phase. Default to day before tripStart instead.
+  if (dateFallback && ['transport','lodging','ticket'].includes(cat)) {
+    const today = todayHKT();
+    const tripStart = (state.tripDateRange && state.tripDateRange.start) || '2026-04-20';
+    if (today >= tripStart) {
+      // Put it pre-trip so phase classification is sensible
+      const prepDate = new Date(new Date(tripStart).getTime() - 86400000).toISOString().slice(0, 10);
+      date = prepDate;
+      warnings.push(`日期缺，按預訂類別放咗去準備階段 (${prepDate})，請核對`);
+    }
+  }
 
   // ── Confidence escalation ──
   let conf = b.confidence || 'medium';
@@ -2943,12 +3009,11 @@ async function retryBatchWithStrongerModel() {
   if (!batchLastInput) { toast('⚠️ 原始輸入已失效，請重新貼 email'); return; }
   const btn = $('batchRetryStrongerBtn');
   if (btn) { btn.disabled = true; btn.innerText = '🔄 重新解析中…'; }
+  const savedModel = state.model;
   try {
     // Force strongest model by temporarily swapping state.model
-    const saved = state.model;
     state.model = 'gemini-3.1-pro-preview';
     const result = await parseEmailInput(batchLastInput);
-    state.model = saved;
     if (result.bookings && result.bookings.length) {
       openBatchConfirmModal(result.bookings, result.source, result.modelUsed + ' 🔒 高精度', batchLastInput);
       toast(`🎯 用 ${result.modelUsed} 重解析到 ${result.bookings.length} 筆`);
@@ -2958,6 +3023,8 @@ async function retryBatchWithStrongerModel() {
   } catch(e) {
     toast('❌ 重試失敗：' + e.message.slice(0, 80));
   } finally {
+    // CRITICAL: restore model even if thrown, else user is stuck on expensive model
+    state.model = savedModel;
     if (btn) { btn.disabled = false; btn.innerText = '🎯 用更強 AI 重新解析'; }
   }
 }
@@ -3080,17 +3147,25 @@ async function saveBatchBookings() {
   $('batchConfirmModal').classList.add('hidden');
   toast(`✅ 已儲存 ${savedReceipts.length} 筆 📝`);
 
-  // Phase 2: fire-and-forget Notion push in parallel (non-blocking)
+  // Phase 2: sequential Notion push with pacing (Notion rate-limits ~3 rps).
+  // Parallel firing hits 429 on big batches → half fail → next pushAll dupes them.
   if (state.autoSync && state.notionToken && state.notionDb) {
-    Promise.allSettled(savedReceipts.map(r => notionPushReceipt(r))).then(results => {
-      const ok = results.filter(x => x.status === 'fulfilled').length;
-      const failed = results.length - ok;
-      if (failed > 0) {
-        toast(`☁️ Notion: ${ok} 成功 · ${failed} 失敗（本機已儲存）`);
-      } else if (ok > 0) {
-        toast(`☁️ ${ok} 筆已同步 Notion`);
+    (async () => {
+      window._notionInFlight = (window._notionInFlight || 0) + 1;
+      let ok = 0, failed = 0;
+      try {
+        for (const r of savedReceipts) {
+          try { await notionPushReceipt(r); ok++; }
+          catch(e) { console.warn('[notion batch]', e.message); failed++; }
+          await new Promise(res => setTimeout(res, 350)); // spacing below Notion rate limit
+        }
+        saveState(); // persist the notionPageId additions
+      } finally {
+        window._notionInFlight--;
       }
-    }).catch(e => console.warn('[notion batch]', e));
+      if (failed > 0) toast(`☁️ Notion: ${ok} 成功 · ${failed} 失敗（本機已儲存）`);
+      else if (ok > 0) toast(`☁️ ${ok} 筆已同步 Notion`);
+    })().catch(e => console.warn('[notion batch wrapper]', e));
   }
 }
 
@@ -4392,8 +4467,24 @@ function init() {
   handleImportDeepLink();
 }
 
+// UTF-8 safe base64 decode — handles emoji, kanji, non-BMP chars.
+// The old `escape(atob(b64))` pattern fails on 4-byte UTF-8 sequences.
+function _b64ToUtf8(b64) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return new TextDecoder('utf-8').decode(bytes);
+}
+// Pad base64 with '=' correctly. Reject %4===1 lengths (always invalid).
+function _padBase64(encoded) {
+  const rem = encoded.length % 4;
+  if (rem === 1) throw new Error('invalid base64 length (len%4===1)');
+  return encoded + '='.repeat(rem ? 4 - rem : 0);
+}
+
 function handleImportDeepLink() {
-  // 1. iOS Shortcut path (base64 in hash)
+  // Process hash OR query — always clear BOTH after success to avoid stale re-trigger
+  const clearUrl = () => { try { history.replaceState(null, '', location.pathname); } catch(_) {} };
+
+  // 1. iOS Shortcut path (base64 in hash) — takes priority when both present
   if (location.hash && location.hash.includes('email=')) {
     try {
       const hashRaw = location.hash.slice(1);
@@ -4402,16 +4493,20 @@ function handleImportDeepLink() {
         const encoded = decodeURIComponent(match[2]);
         const autoMatch = hashRaw.match(/(^|&)auto=([^&]*)/);
         const autoParse = autoMatch && autoMatch[2] === '1';
-        const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encoded.length/4)*4, '=');
-        const text = decodeURIComponent(escape(atob(b64)));
-        history.replaceState(null, '', location.pathname + location.search);
+        const b64 = _padBase64(encoded.replace(/-/g, '+').replace(/_/g, '/'));
+        const text = _b64ToUtf8(b64);
+        clearUrl();
         return prefillAndOpenPasteModal(text, autoParse, '📧 已由 Shortcut 填入');
       }
-    } catch(e) { console.warn('[deepLink:hash] decode failed:', e); }
+    } catch(e) {
+      console.warn('[deepLink:hash] decode failed:', e);
+      clearUrl();
+      toast('❌ 分享內容解碼失敗，請改用複製貼上');
+      return;
+    }
   }
 
   // 2. Android PWA share target path (plain text in query)
-  // The PWA manifest declares share_target params: shared_title, shared_text, shared_url
   if (location.search && location.search.includes('shared_')) {
     try {
       const params = new URLSearchParams(location.search);
@@ -4419,14 +4514,16 @@ function handleImportDeepLink() {
         params.get('shared_title'),
         params.get('shared_text'),
         params.get('shared_url'),
-      ].filter(Boolean);
-      if (parts.length === 0) return;
+      ].filter(s => s && s.trim());
+      if (parts.length === 0) { clearUrl(); return; }
       const text = parts.join('\n\n');
-      history.replaceState(null, '', location.pathname); // strip query
-      // Auto-parse if the shared content is substantial (likely email body, not a URL)
+      clearUrl();
       const autoParse = text.length >= 80;
       return prefillAndOpenPasteModal(text, autoParse, '📱 已由分享接收');
-    } catch(e) { console.warn('[deepLink:share] decode failed:', e); }
+    } catch(e) {
+      console.warn('[deepLink:share] decode failed:', e);
+      clearUrl();
+    }
   }
 }
 
@@ -4470,9 +4567,13 @@ function tryAutoRefresh() {
       hour: '2-digit', hour12: false, timeZone: 'Asia/Hong_Kong'
     }).format(new Date()));
     const inWindow = hktHour >= 6 && hktHour <= 23; // 06:00–23:59 HKT
-    // Only check modals that actually exist. `!undefined?.contains()` returns true,
-    // which would permanently disable auto-refresh for non-existent modal IDs.
-    const modalOpen = !$('confirmModal').classList.contains('hidden');
+    // Null-safe check — confirmModal could be absent during unusual DOM states.
+    // `?.contains()` returns undefined if confirmModal is null, and `!undefined` = true
+    // would force modalOpen permanently; the ?? false default makes that a hard false.
+    const modalOpen = $('confirmModal')?.classList.contains('hidden') === false
+                   || $('batchConfirmModal')?.classList.contains('hidden') === false
+                   || $('emailPasteModal')?.classList.contains('hidden') === false;
+    const notionBusy = (window._notionInFlight || 0) > 0;
     const recentlyActive = (Date.now() - _lastActivityTs) < 2 * 60 * 1000; // 2 min
     const offline = !navigator.onLine;
 
@@ -4484,6 +4585,8 @@ function tryAutoRefresh() {
       console.info('[AutoRefresh] user active within 2min — skipping');
     } else if (offline) {
       console.info('[AutoRefresh] offline — skipping');
+    } else if (notionBusy) {
+      console.info('[AutoRefresh] notion push in flight — skipping to avoid orphan receipts');
     } else {
       console.info('[AutoRefresh] reloading…');
       location.reload();
