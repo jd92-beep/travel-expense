@@ -543,11 +543,20 @@ function pushToNotion(b, source, emailSubject, threadId, bookingIdx) {
   const hkdKey = pn('💵 HKD', 'HKD');
   if (dbSchema[hkdKey]) props[hkdKey] = { number: hkd };
 
-  // Dedup: if a page with this SourceID already exists, UPDATE instead of creating new
-  const existingPageId = _findNotionPageBySourceId(sourceId);
-  if (existingPageId) {
-    console.log('🔁 Existing page found for ' + sourceId + ' — updating instead of creating');
-    _notionFetchWithRetry('https://api.notion.com/v1/pages/' + existingPageId, 'patch',
+  // Dedup with archive-awareness:
+  //   - Live page with this SourceID exists → UPDATE (same as before)
+  //   - Only an ARCHIVED page with this SourceID exists → user deleted it, SKIP
+  //     (don't un-archive, don't create a new page — this was the bug that caused
+  //      "Klook 立山黑部" and similar entries to resurrect after deletion)
+  //   - Nothing exists → CREATE
+  const existing = _findNotionPageBySourceId(sourceId);
+  if (existing) {
+    if (existing.archived) {
+      console.log('⏹ Archived page found for ' + sourceId + ' — user previously deleted, skipping (won\'t re-create).');
+      return;
+    }
+    console.log('🔁 Existing live page found for ' + sourceId + ' — updating instead of creating');
+    _notionFetchWithRetry('https://api.notion.com/v1/pages/' + existing.id, 'patch',
       JSON.stringify({ properties: props }));
     return;
   }
@@ -589,20 +598,31 @@ function _notionFetchWithRetry(url, method, payload, maxAttempts) {
   throw new Error('Notion exhausted ' + attempts + ' retries: ' + lastBody);
 }
 
-// Query Notion DB for a page with matching SourceID. Returns pageId or null.
+// Query Notion DB for pages with matching SourceID.
+// Returns { id, archived } of the best match, or null.
+//   - Prefer a live (non-archived) page; if only archived pages exist, return the archived one
+//   - This allows pushToNotion() to SKIP re-creating archived (user-deleted) entries
 function _findNotionPageBySourceId(sourceId) {
   const dbSchema = _getDbSchema();
   const sidProp = dbSchema['🔑 SourceID'] ? '🔑 SourceID' : 'SourceID';
   try {
+    // page_size: 10 — catch possible archived + live duplicates if they co-exist.
+    // Notion DB queries include archived pages by default (no archive filter = all).
     const resp = _notionFetchWithRetry(
       'https://api.notion.com/v1/databases/' + NOTION_DB + '/query', 'post',
       JSON.stringify({
         filter: { property: sidProp, rich_text: { equals: sourceId } },
-        page_size: 1,
+        page_size: 10,
       }),
       2 // fewer retries for lookup
     );
-    return (resp.results && resp.results[0] && resp.results[0].id) || null;
+    const results = (resp && resp.results) || [];
+    if (!results.length) return null;
+    const live = results.find(function(p) { return !p.archived && !p.in_trash; });
+    if (live) return { id: live.id, archived: false };
+    const arch = results.find(function(p) { return p.archived || p.in_trash; });
+    if (arch) return { id: arch.id, archived: true };
+    return null;
   } catch (e) {
     console.warn('[dedup] SourceID lookup failed (will create new):', e.message);
     return null;

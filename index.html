@@ -389,16 +389,23 @@
 
     <input type="file" id="receiptInput" accept="image/*" capture="environment" class="hidden">
     <input type="file" id="galleryInput" accept="image/*" class="hidden">
+    <!-- Row 1: main entry points — 掃描收據 (camera) + 從 Email 匯入 -->
     <div class="grid grid-cols-2 gap-3 mb-3">
       <button id="scanBtn" class="text-white font-black py-6 rounded-2xl active:scale-95 transition-transform" style="background:linear-gradient(135deg,#C0281E,#E04040);box-shadow:0 10px 32px rgba(192,40,30,0.45);font-size:17px">
-        📷 拍攝收據
+        📷 掃描收據
       </button>
-      <button id="galleryBtn" class="font-bold py-6 rounded-2xl active:scale-95 transition-transform" style="background:rgba(255,255,255,0.90);color:#CC2929;border:2px solid rgba(204,41,41,0.18);box-shadow:0 4px 16px rgba(204,41,41,0.10);font-size:17px">
-        🖼️ 本地相簿
+      <button id="emailImportBtn" class="text-white font-black py-6 rounded-2xl active:scale-95 transition-transform" style="background:linear-gradient(135deg,#065F46,#059669);box-shadow:0 10px 32px rgba(5,150,105,0.45);font-size:17px">
+        📧 從 Email 匯入
       </button>
     </div>
-    <button id="emailImportBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3" style="background:linear-gradient(135deg,#065F46,#059669);color:white;border:2px solid rgba(5,150,105,0.30);box-shadow:0 4px 16px rgba(5,150,105,0.25)">
-      📧 從 Email 匯入（機票/酒店/Klook）
+    <!-- Row 2: copy Gmail import address to clipboard (replaces old full-width email button) -->
+    <button id="copyGmailAddrBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3 flex items-center justify-center gap-2" style="background:rgba(255,255,255,0.90);color:#065F46;border:2px solid rgba(5,150,105,0.30);box-shadow:0 4px 16px rgba(5,150,105,0.15)">
+      <span>📋 複製 Gmail 匯入地址</span>
+      <span class="text-[11px] font-mono px-2 py-0.5 rounded" style="background:rgba(5,150,105,0.08)">ftjdfr+expense@gmail.com</span>
+    </button>
+    <!-- Row 3: gallery upload (secondary entry — for scans already on phone) -->
+    <button id="galleryBtn" class="w-full font-semibold py-3 rounded-2xl active:scale-95 transition-transform mb-3" style="background:rgba(255,255,255,0.85);color:#CC2929;border:1px solid rgba(204,41,41,0.18)">
+      🖼️ 從本地相簿選相
     </button>
     <button id="voiceBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3" style="background:rgba(255,255,255,0.90);color:#1B2D55;border:2px solid rgba(27,45,85,0.12);box-shadow:0 4px 16px rgba(27,45,85,0.08)">
       🎤 語音輸入
@@ -502,75 +509,15 @@
   <section id="tab-settings" class="tab-content hidden fade-in">
     <h2 class="text-xl font-bold mb-4">設定 ⚙️</h2>
 
-    <!-- Person Management -->
-    <div class="glass rounded-2xl p-4 mb-3">
-      <div class="flex items-center justify-between mb-3">
-        <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">👥 旅伴管理</label>
-        <button id="addPersonBtn" class="text-xs px-3 py-1.5 rounded-full text-white font-medium" style="background:var(--n-blue)">+ 新增旅伴</button>
-      </div>
-      <div id="personList" class="space-y-2"></div>
-      <div id="addPersonForm" class="hidden pt-3 mt-3" style="border-top:1px solid var(--n-border)">
-        <input id="newPersonName" type="text" placeholder="旅伴名字" class="w-full bg-transparent text-sm focus:outline-none mb-3" style="border-bottom:1px solid var(--n-border);padding-bottom:6px;color:var(--n-text)">
-        <div id="emojiPicker" class="flex flex-wrap gap-2 mb-3"></div>
-        <div class="flex gap-2">
-          <button id="confirmAddPerson" class="text-xs px-4 py-1.5 rounded-full text-white font-medium" style="background:var(--n-blue)">確認</button>
-          <button id="cancelAddPerson" class="text-xs px-4 py-1.5 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
-        </div>
-      </div>
+    <!-- ══════ SECTION A: 旅程設定 ══════ -->
+    <div class="mt-1 mb-2 px-1 flex items-center gap-2">
+      <span class="text-xs font-bold uppercase tracking-widest" style="color:var(--n-blue)">🗾 旅程設定</span>
+      <span class="flex-1 h-px" style="background:var(--n-border)"></span>
     </div>
-
-    <!-- Share ratios for split-bill settlement -->
-    <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">⚖️ 分帳比例</label>
-      <p class="text-[11px] mt-1 mb-2" style="color:var(--n-muted)">每人承擔嘅百分比（%）。加/減旅伴後自動重算。</p>
-      <div id="shareRatiosWrap"></div>
-    </div>
-
-    <!-- Email import — zero-install flow first -->
-    <details class="glass rounded-2xl p-4 mb-3">
-      <summary class="cursor-pointer flex items-center justify-between select-none">
-        <label class="text-xs uppercase tracking-wider cursor-pointer" style="color:var(--n-muted)">📧 匯入 Email 預訂</label>
-        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#F0FDF4;color:#065F46">可展開</span>
-      </summary>
-      <div class="mt-3 text-[11px] space-y-3" style="color:var(--n-text)">
-
-        <!-- Primary zero-install flow -->
-        <div class="p-3 rounded-xl" style="background:#F0FDF4;border:2px solid #059669">
-          <p class="font-bold mb-2" style="color:#065F46">🎯 標準用法（零安裝，所有瀏覽器都 work）</p>
-          <ol class="text-[11px] space-y-1.5 pl-4" style="color:#047857;list-style:decimal">
-            <li>Email app 開咗封 confirmation email（機票/酒店/Klook）</li>
-            <li><strong>長按正文 → 全選 → 複製</strong></li>
-            <li>返嚟呢個網頁 → Scan tab → <strong>「📧 從 Email 匯入」</strong></li>
-            <li>撳 <strong>「📋 從剪貼簿貼」</strong>（或者手動 paste）</li>
-            <li>撳 <strong>「🤖 AI 解析」</strong> → 核對 → 全部儲存 ✅</li>
-          </ol>
-          <p class="text-[10px] mt-2" style="color:#065F46">💡 如果 email 太長複製唔到，改用截圖：📧 匯入 modal 入面有「🖼️ 揀 email 截圖」按鈕。</p>
-        </div>
-
-        <!-- Optional bonus: install as PWA -->
-        <details class="rounded-xl p-3" style="background:var(--n-bg);border:1px dashed var(--n-border)">
-          <summary class="cursor-pointer font-semibold text-[11px]" style="color:var(--n-muted)">⚡ 進階（選擇性）：安裝做 PWA／設 Shortcut，直接 Share 唔使複製</summary>
-          <div class="mt-2 space-y-2.5 text-[10px]">
-            <p style="color:var(--n-muted)">如果經常要入帳，安裝後可以喺 Gmail Share menu 直接發送。<strong>唔安裝都用得完全冇問題</strong>。</p>
-
-            <div class="p-2 rounded-lg" style="background:#E0F2FE">
-              <p class="font-semibold mb-1" style="color:#0C4A6E">Android：</p>
-              <p style="color:#075985">Chrome 選單 ⋮ → 「Add to Home screen」→ 之後 Gmail Share 見到「名古屋記帳」。</p>
-            </div>
-
-            <div class="p-2 rounded-lg" style="background:#FEF3C7">
-              <p class="font-semibold mb-1" style="color:#92400E">iOS（要整 Shortcut）：</p>
-              <button id="copyShortcutUrlBtn" class="w-full py-1.5 rounded text-[10px] font-semibold mb-1" style="background:#F59E0B;color:white">📋 複製 Shortcut URL 範本</button>
-              <p style="color:#92400E">3 步 Shortcut：Get Contents of Input (Text) → Base64 Encode → Open URL（貼範本）。</p>
-            </div>
-          </div>
-        </details>
-      </div>
-    </details>
 
     <!-- Trip itinerary config -->
     <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">🗾 行程設定</label>
+      <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">行程名稱與日期</label>
       <div class="mt-2 space-y-2">
         <div>
           <span class="text-[10px]" style="color:var(--n-muted)">行程名稱</span>
@@ -596,28 +543,84 @@
       <p id="itiStatus" class="text-[10px] mt-2" style="color:var(--n-muted)">可匯出編輯後再匯入，複用此 app 去其他旅行</p>
     </div>
 
+    <!-- Budget -->
     <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs text-gray-400 uppercase tracking-wider">旅程預算（可改 HKD 或 JPY，互相同步）</label>
-      <!-- HKD primary row -->
+      <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">旅程預算（HKD ⇄ JPY 自動同步）</label>
       <div class="flex items-baseline gap-2 mt-2">
         <input type="number" id="setBudgetHKDInput" class="bg-transparent text-2xl font-bold focus:outline-none w-full" value="5000" step="1" min="0">
         <span class="text-sm font-semibold shrink-0" style="color:var(--n-blue)">HKD</span>
       </div>
-      <!-- JPY secondary row -->
       <div class="flex items-baseline gap-2 mt-2 pt-2" style="border-top:1px dashed var(--n-border)">
         <input type="number" id="setBudget" class="bg-transparent text-lg font-semibold focus:outline-none w-full" style="color:var(--n-muted)" value="101800" step="100" min="0">
         <span class="text-xs shrink-0" style="color:var(--n-muted)">JPY</span>
       </div>
-      <p class="text-[10px] mt-2" style="color:var(--n-muted)">改任何一邊，另一邊會自動換算 · 最終以 HKD 為主</p>
+    </div>
+
+    <!-- Exchange rate with currency selector + Visa source -->
+    <div class="glass rounded-2xl p-4 mb-3">
+      <div class="flex items-center justify-between">
+        <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">即時匯率（Visa 官方）</label>
+        <span id="rateStatus" class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">⟳ 每小時自動更新</span>
+      </div>
+      <div class="mt-2 flex items-center gap-2">
+        <span class="text-[11px]" style="color:var(--n-muted)">100 JPY =</span>
+        <input type="number" id="setRate" class="bg-transparent text-2xl font-bold focus:outline-none flex-1" value="4.91" step="0.0001">
+        <span class="text-[11px]" style="color:var(--n-muted)">HKD</span>
+      </div>
+      <div class="mt-2 flex items-center gap-2 text-[11px]" style="color:var(--n-muted)">
+        <span>旅遊國家貨幣：</span>
+        <select id="setTripCurrency" class="bg-transparent text-[11px] focus:outline-none" style="border:1px solid var(--n-border);border-radius:6px;padding:2px 6px;color:var(--n-text)">
+          <option value="JPY">🇯🇵 日圓 JPY</option>
+          <option value="USD">🇺🇸 美元 USD</option>
+          <option value="KRW">🇰🇷 韓圜 KRW</option>
+          <option value="TWD">🇹🇼 台幣 TWD</option>
+          <option value="CNY">🇨🇳 人民幣 CNY</option>
+          <option value="EUR">🇪🇺 歐元 EUR</option>
+          <option value="GBP">🇬🇧 英鎊 GBP</option>
+          <option value="AUD">🇦🇺 澳元 AUD</option>
+          <option value="SGD">🇸🇬 新加坡元 SGD</option>
+          <option value="THB">🇹🇭 泰銖 THB</option>
+          <option value="MYR">🇲🇾 馬幣 MYR</option>
+          <option value="VND">🇻🇳 越南盾 VND</option>
+        </select>
+        <button id="refreshRateBtn" class="ml-auto text-[10px] px-2 py-1 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-blue)">⟳ 即刻更新</button>
+      </div>
+      <p id="rateReverse" class="text-[11px] mt-2" style="color:var(--n-muted)"></p>
+      <p class="text-[10px] mt-1" style="color:var(--n-muted)">資料源：Visa 官方即時匯率 calculator · 若 Visa 失敗自動回落 open.er-api.com</p>
+    </div>
+
+    <!-- ══════ SECTION B: 旅伴 & 分帳 ══════ -->
+    <div class="mt-5 mb-2 px-1 flex items-center gap-2">
+      <span class="text-xs font-bold uppercase tracking-widest" style="color:#9333ea">👥 旅伴 & 分帳</span>
+      <span class="flex-1 h-px" style="background:var(--n-border)"></span>
     </div>
 
     <div class="glass rounded-2xl p-4 mb-3">
-      <div class="flex items-center justify-between">
-        <label class="text-xs text-gray-400 uppercase tracking-wider">匯率 (100 JPY ≈ ? HKD)</label>
-        <span id="rateStatus" class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">⟳ 每次入數自動更新</span>
+      <div class="flex items-center justify-between mb-3">
+        <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">旅伴管理</label>
+        <button id="addPersonBtn" class="text-xs px-3 py-1.5 rounded-full text-white font-medium" style="background:var(--n-blue)">+ 新增旅伴</button>
       </div>
-      <input type="number" id="setRate" class="w-full bg-transparent text-2xl font-bold mt-1 focus:outline-none" value="4.91" step="0.0001">
-      <p id="rateReverse" class="text-[11px] mt-1" style="color:var(--n-muted)"></p>
+      <div id="personList" class="space-y-2"></div>
+      <div id="addPersonForm" class="hidden pt-3 mt-3" style="border-top:1px solid var(--n-border)">
+        <input id="newPersonName" type="text" placeholder="旅伴名字" class="w-full bg-transparent text-sm focus:outline-none mb-3" style="border-bottom:1px solid var(--n-border);padding-bottom:6px;color:var(--n-text)">
+        <div id="emojiPicker" class="flex flex-wrap gap-2 mb-3"></div>
+        <div class="flex gap-2">
+          <button id="confirmAddPerson" class="text-xs px-4 py-1.5 rounded-full text-white font-medium" style="background:var(--n-blue)">確認</button>
+          <button id="cancelAddPerson" class="text-xs px-4 py-1.5 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass rounded-2xl p-4 mb-3">
+      <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">⚖️ 分帳比例</label>
+      <p class="text-[11px] mt-1 mb-2" style="color:var(--n-muted)">每人承擔嘅百分比（%）。加/減旅伴後自動重算。</p>
+      <div id="shareRatiosWrap"></div>
+    </div>
+
+    <!-- ══════ SECTION C: AI 模型（全部收起） ══════ -->
+    <div class="mt-5 mb-2 px-1 flex items-center gap-2">
+      <span class="text-xs font-bold uppercase tracking-widest" style="color:#06b6d4">🤖 AI 模型</span>
+      <span class="flex-1 h-px" style="background:var(--n-border)"></span>
     </div>
 
     <details class="glass rounded-2xl mb-3 overflow-hidden">
@@ -629,7 +632,7 @@
         <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
       </summary>
       <div class="px-4 pb-4">
-        <p class="text-[10px] mb-3" style="color:var(--n-muted)">掃描鏈：GLM-4.6V → MiniMax VLM → Gemini 3.1 Flash Lite → Gemini 3 Flash → Gemini 2.5 Flash（每個 model 輪試 5 條 key，自動 fallback）</p>
+        <p class="text-[10px] mb-3" style="color:var(--n-muted)">掃描鏈：MiniMax VLM（預設）→ GLM-4.6V → Gemini 3.1 Flash Lite → Gemini 3 Flash → Gemini 2.5 Flash（每個 model 輪試 5 條 key，自動 fallback）</p>
         <div id="scanModelCards" class="grid grid-cols-2 gap-2"></div>
       </div>
     </details>
@@ -640,7 +643,7 @@
         <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
       </summary>
       <div class="px-4 pb-4">
-        <p class="text-[10px] mb-3" style="color:var(--n-muted)">語音輸入後解析廣東話。主力 GLM-4-Flash → 🐘 Elephant Alpha → Gemini 3.1/3/2.5 Flash → Gemma 4 31B/26B（Gemini 每個 model 輪試 5 條 key）</p>
+        <p class="text-[10px] mb-3" style="color:var(--n-muted)">語音輸入後解析廣東話。主力 MiniMax VLM → GLM-4-Flash → 🐘 Elephant Alpha → Gemini 3.1/3/2.5 Flash → Gemma 4 31B/26B</p>
         <div id="voiceModelCards" class="grid grid-cols-2 gap-2"></div>
       </div>
     </details>
@@ -654,96 +657,158 @@
         <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
       </summary>
       <div class="px-4 pb-4">
-        <p class="text-[10px] mb-3" style="color:var(--n-muted)">「插入 Email」功能用嘅 AI。揀你主力模型；如果失敗，自動 fallback 到其他 provider（OpenRouter → GLM → MiniMax → Gemini × 5 keys → Gemma → GLM-4-Flash）</p>
+        <p class="text-[10px] mb-3" style="color:var(--n-muted)">「插入 Email」功能用嘅 AI。揀你主力模型；如果失敗，自動 fallback 到其他 provider（GLM-5.1 / 5 / 5-turbo → OpenRouter → MiniMax → Gemini × 5 keys → Gemma → GLM-4-Flash）</p>
         <div id="emailModelCards" class="grid grid-cols-2 gap-2"></div>
       </div>
     </details>
 
-    <!-- ============ EMAIL → NOTION AUTO-IMPORT ============ -->
-    <details class="mt-6">
-    <summary class="flex items-center justify-between px-1 mb-3 cursor-pointer select-none">
-      <h3 class="text-xs uppercase tracking-widest" style="color:var(--n-muted)">📧 Email 自動匯入（免費 · 全自動）</h3>
-      <span class="text-xs px-2 py-0.5 rounded-full" style="background:#FEF3C7;color:#92400E">推薦</span>
-    </summary>
-    <p class="text-xs mb-3 px-1" style="color:var(--n-muted)">Forward 確認 email 去 Gmail → Google Apps Script（免費）多 AI 模型 fallback 解析 → 自動入 Notion → 一 tap 確認</p>
+    <!-- ══════ SECTION D: 自動化 & 同步 ══════ -->
+    <div class="mt-5 mb-2 px-1 flex items-center gap-2">
+      <span class="text-xs font-bold uppercase tracking-widest" style="color:#059669">☁️ 自動化 & 同步</span>
+      <span class="flex-1 h-px" style="background:var(--n-border)"></span>
+    </div>
 
-    <div class="glass rounded-2xl p-4 mb-3" style="background:linear-gradient(135deg,#FEF3C7,#FFFBEB)">
-      <p class="text-sm font-bold mb-2" style="color:#92400E">🚀 點樣用？</p>
-      <ol class="text-[11px] space-y-1.5 list-decimal pl-4" style="color:var(--n-text)">
-        <li>Forward email → <code class="px-1 bg-white rounded text-[10px]">ftjdfr+expense@gmail.com</code></li>
-        <li>或 subject 加 <code class="px-1 bg-white rounded">#expense</code> 然後用 Gmail filter → label「travel-expense」</li>
-        <li>5 分鐘內：Notion 自動出現「⏳ 待確認」entry</li>
-        <li>App → History tab → 黃色卡片 → 按「✅ 確認」</li>
-      </ol>
-      <div class="mt-2 pt-2 border-t border-amber-200">
-        <p class="text-[10px] font-bold" style="color:#92400E">🛡 多層 AI fallback（text-only，email 純文字不需 vision model）</p>
-        <p class="text-[10px] leading-relaxed" style="color:#92400E">GLM-5 → GLM-5-turbo → MiniMax-M2.7 → <strong>🐘 OpenRouter Elephant Alpha（stealth · 免費）</strong> → <strong>Gemini（5 keys × 5 models：3.1 Flash Lite / 3 Flash / 2.5 Flash / Gemma 4 31B / Gemma 4 26B）</strong> → GLM-4-Flash → defer 到下一 cycle (×3)。每個 model 自動輪試全部 key，429 唔會殺死 pipeline。</p>
+    <!-- Email auto-import -->
+    <details class="glass rounded-2xl mb-3 overflow-hidden">
+      <summary class="flex items-center justify-between p-4 cursor-pointer select-none list-none">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-gray-400 uppercase tracking-wider cursor-pointer">📧 Email → Notion 自動匯入</label>
+          <span class="text-[10px] px-2 py-0.5 rounded-full font-medium" style="background:#D1FAE5;color:#065F46">推薦 · 免費</span>
+        </div>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
+      </summary>
+      <div class="px-4 pb-4 space-y-3">
+        <p class="text-[11px]" style="color:var(--n-muted)">Forward email 去 Gmail → Google Apps Script 自動用 AI 解析 → 自動入 Notion → 一 tap 確認</p>
+
+        <!-- Trigger frequency info card -->
+        <div class="rounded-xl p-3" style="background:rgba(5,150,105,0.06);border:1px solid rgba(5,150,105,0.20)">
+          <p class="text-[11px] font-bold mb-1.5" style="color:#065F46">⏱ 觸發頻率：每 5 分鐘</p>
+          <p class="text-[10px] leading-relaxed" style="color:#047857">
+            Google Apps Script 時間觸發器每 5 分鐘掃一次 Gmail inbox。
+            <strong>唔會密</strong> — 只檢查 travel-expense label 內嘅新 email，每封 email 只 parse 一次（用 SourceID 去重）。
+          </p>
+          <p class="text-[10px] leading-relaxed mt-1.5" style="color:#047857">
+            <strong>費用：全免費</strong> ✅
+            用戶嘅 Gmail quota（每日 20k 讀取）+ GLM/Gemini/OpenRouter/MiniMax 嘅免費 tier（每月數百萬 tokens）+ Notion API 免費額度。
+            多 AI fallback 會輪流用唔同 provider，單一 provider rate-limit 唔會炒晒其他 service。
+          </p>
+          <p class="text-[10px] mt-1.5" style="color:#047857">
+            要改頻率？喺 <strong>🤖 AI 助手改腳本</strong> 打：<em>「改觸發器去 15 分鐘」</em> 即可。
+          </p>
+        </div>
+
+        <div class="rounded-xl p-3 text-[11px]" style="background:var(--n-bg);border:1px solid var(--n-border)">
+          <p class="font-bold mb-1.5" style="color:var(--n-text)">🚀 點樣用</p>
+          <ol class="space-y-1 list-decimal pl-4" style="color:var(--n-muted)">
+            <li>Forward email → <code class="px-1 rounded text-[10px]" style="background:var(--n-surface)">ftjdfr+expense@gmail.com</code>（Scan tab 有快捷複製鈕）</li>
+            <li>5 分鐘內 Notion 自動出現「⏳ 待確認」entry</li>
+            <li>History tab → 黃色卡片 → ✅ 確認</li>
+          </ol>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button id="openScriptAgentBtn" class="py-3 rounded-2xl text-xs font-semibold" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);color:#92400E;border:1px solid rgba(245,158,11,0.50)">🤖 AI 助手改腳本</button>
+          <button id="openAppsScriptBtn" class="py-3 rounded-2xl text-xs font-semibold" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">🔗 開 Apps Script</button>
+        </div>
+        <button id="pullPendingBtn" class="w-full py-3 rounded-2xl text-xs font-semibold" style="background:rgba(0,168,126,0.08);border:1px solid rgba(0,168,126,0.30);color:#00a87e">🔄 即刻檢查有冇新 email</button>
+        <div id="emailImportStatus" class="text-[11px] text-center hidden"></div>
       </div>
-    </div>
-
-    <div class="grid grid-cols-2 gap-2 mb-2">
-      <button id="openScriptAgentBtn" class="glass py-3 rounded-2xl text-sm font-medium" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);color:#92400E;border:1px solid rgba(245,158,11,0.50)">🤖 AI 助手改腳本</button>
-      <button id="openAppsScriptBtn" class="glass py-3 rounded-2xl text-sm font-medium" style="color:#92400E;border:1px solid rgba(245,158,11,0.40)">🔗 開 Apps Script</button>
-    </div>
-    <button id="pullPendingBtn" class="w-full glass py-3 rounded-2xl text-sm font-medium mb-2" style="border:1px solid rgba(0,168,126,0.30);color:#00a87e">🔄 即刻檢查有冇新 email 入帳</button>
-    <div id="emailImportStatus" class="text-[11px] text-center mb-2 hidden"></div>
-
     </details>
 
-    <!-- ============ NOTION SYNC ============ -->
-    <details class="mt-6">
-    <summary class="flex items-center justify-between px-1 mb-3 cursor-pointer select-none">
-      <h3 class="text-xs uppercase tracking-widest" style="color:var(--n-muted)">📓 Notion 雲端備份（選用）</h3>
-      <span class="text-xs px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
-    </summary>
-    <p class="text-xs mb-3 px-1" style="color:var(--n-muted)">⚠️ 唔設定都可以正常使用，資料會儲喺本機。</p>
+    <!-- Notion cloud backup -->
+    <details class="glass rounded-2xl mb-3 overflow-hidden">
+      <summary class="flex items-center justify-between p-4 cursor-pointer select-none list-none">
+        <label class="text-xs text-gray-400 uppercase tracking-wider cursor-pointer">📓 Notion 雲端備份</label>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">選用</span>
+      </summary>
+      <div class="px-4 pb-4 space-y-3">
+        <p class="text-[11px]" style="color:var(--n-muted)">⚠️ 唔設定都正常用，資料儲喺本機。設好後，兩台裝置可以 sync。</p>
 
-    <div class="glass rounded-2xl p-4 mb-3">
-      <label class="flex items-center justify-between cursor-pointer">
-        <span class="text-sm">自動同步（每次新增/編輯）</span>
-        <input type="checkbox" id="setAutoSync" class="w-5 h-5">
-      </label>
-    </div>
+        <div class="rounded-xl p-3" style="background:var(--n-bg);border:1px solid var(--n-border)">
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-xs">自動同步（每次新增/編輯）</span>
+            <input type="checkbox" id="setAutoSync" class="w-5 h-5">
+          </label>
+        </div>
 
-    <div class="grid grid-cols-3 gap-2 mb-2">
-      <button id="syncPushBtn" class="glass py-3 rounded-2xl text-sm font-medium">⬆️ 推送 Notion</button>
-      <button id="syncPullBtn" class="glass py-3 rounded-2xl text-sm font-medium">⬇️ 從 Notion 拉</button>
-      <button id="notionTestBtn" class="glass py-3 rounded-2xl text-sm font-medium">🔌 測試連線</button>
-    </div>
-    <button id="notionMigrateBtn" class="w-full glass py-3 rounded-2xl text-sm font-medium mb-2" style="border:1px solid rgba(93,73,220,0.30);color:#4f46e5">✨ 美化 Notion Schema（加 emoji 欄位名）</button>
-    <div id="notionStatus" class="text-[11px] text-center mb-2 hidden"></div>
+        <div class="grid grid-cols-3 gap-2">
+          <button id="syncPushBtn" class="py-2.5 rounded-xl text-xs font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">⬆️ 推送</button>
+          <button id="syncPullBtn" class="py-2.5 rounded-xl text-xs font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">⬇️ 拉取</button>
+          <button id="notionTestBtn" class="py-2.5 rounded-xl text-xs font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">🔌 測試</button>
+        </div>
+        <button id="notionMigrateBtn" class="w-full py-2.5 rounded-xl text-xs font-medium" style="background:rgba(93,73,220,0.06);border:1px solid rgba(93,73,220,0.30);color:#4f46e5">✨ 美化 Notion Schema（加 emoji 欄位名）</button>
+        <div id="notionStatus" class="text-[11px] text-center hidden"></div>
 
-    <div class="glass rounded-2xl p-3 mb-3 text-[11px] text-gray-400">
-      <p class="font-bold text-[#2D5A8E] mb-1">📋 Notion Database 必需欄位（名稱必須完全一致）：</p>
-      <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono text-[10px] mb-2">
-        <div>• <span style="color:var(--n-text);font-weight:600">店名</span> <span class="text-gray-500">(Title)</span></div>
-        <div>• <span style="color:var(--n-text);font-weight:600">金額</span> <span class="text-gray-500">(Number)</span></div>
-        <div>• <span style="color:var(--n-text);font-weight:600">日期</span> <span class="text-gray-500">(Date)</span></div>
-        <div>• <span style="color:var(--n-text);font-weight:600">類別</span> <span class="text-gray-500">(Select)</span></div>
-        <div>• <span style="color:var(--n-text);font-weight:600">支付</span> <span class="text-gray-500">(Select)</span></div>
-        <div>• <span style="color:var(--n-text);font-weight:600">地區</span> <span class="text-gray-500">(Text)</span></div>
-        <div>• <span style="color:var(--n-text);font-weight:600">品項</span> <span class="text-gray-500">(Text)</span></div>
-        <div>• <span style="color:var(--n-text);font-weight:600">備註</span> <span class="text-gray-500">(Text)</span></div>
-        <div class="col-span-2">• <span style="color:var(--n-text);font-weight:600">SourceID</span> <span class="text-gray-500">(Text — sync key，防止重複入帳)</span></div>
+        <div class="rounded-xl p-3 text-[10px]" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-muted)">
+          <p class="font-semibold mb-1" style="color:var(--n-text)">📋 DB 必需欄位（名稱完全一致）</p>
+          <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono text-[9px]">
+            <div>店名 (Title)</div><div>金額 (Number)</div>
+            <div>日期 (Date)</div><div>類別 (Select)</div>
+            <div>支付 (Select)</div><div>地區 (Text)</div>
+            <div>品項 (Text)</div><div>備註 (Text)</div>
+            <div class="col-span-2">SourceID (Text · 去重 key)</div>
+          </div>
+          <p class="mt-1.5">⚠️ 建好後 Share → 加入你嘅 Integration，否則 API 會 401</p>
+        </div>
       </div>
-      <p class="text-[10px] text-[#4f46e5] font-medium mb-1">💡 點「✨ 美化 Notion Schema」可自動幫現有 DB 加 emoji（🏪 店名、💴 金額 等），app 兩個格式都支援。</p>
-      <p class="text-[10px] text-gray-500">⚠️ 建立後記得喺 Notion DB 右上角 → Share → 加入你嘅 Integration，否則 API 會 401</p>
-    </div>
-
     </details>
 
-    <button id="saveSettings" class="w-full text-white font-bold py-3 rounded-2xl mt-2" style="background:var(--n-blue)">儲存設定</button>
+    <!-- ══════ SECTION E: 使用說明（收起） ══════ -->
+    <div class="mt-5 mb-2 px-1 flex items-center gap-2">
+      <span class="text-xs font-bold uppercase tracking-widest" style="color:#F59E0B">📖 使用說明</span>
+      <span class="flex-1 h-px" style="background:var(--n-border)"></span>
+    </div>
 
-    <div class="mt-6 grid grid-cols-2 gap-3">
+    <details class="glass rounded-2xl mb-3 overflow-hidden">
+      <summary class="flex items-center justify-between p-4 cursor-pointer select-none list-none">
+        <label class="text-xs text-gray-400 uppercase tracking-wider cursor-pointer">📧 手動匯入 Email（如唔用自動匯入）</label>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
+      </summary>
+      <div class="px-4 pb-4 space-y-2 text-[11px]" style="color:var(--n-muted)">
+        <div class="rounded-xl p-3" style="background:#F0FDF4;border:1px solid rgba(5,150,105,0.30)">
+          <p class="font-bold mb-1.5" style="color:#065F46">🎯 標準用法（零安裝）</p>
+          <ol class="text-[11px] space-y-1 pl-4" style="color:#047857;list-style:decimal">
+            <li>Email app 開咗封 confirmation email</li>
+            <li>長按正文 → 全選 → 複製</li>
+            <li>Scan tab → <strong>「📧 從 Email 匯入」</strong></li>
+            <li>撳「📋 從剪貼簿貼」→「🤖 AI 解析」→ 核對 → 儲存</li>
+          </ol>
+        </div>
+        <details class="rounded-xl p-3" style="background:var(--n-bg);border:1px dashed var(--n-border)">
+          <summary class="cursor-pointer font-semibold text-[11px]" style="color:var(--n-muted)">⚡ 進階：PWA / iOS Shortcut</summary>
+          <div class="mt-2 space-y-2 text-[10px]">
+            <div class="p-2 rounded-lg" style="background:#E0F2FE">
+              <p class="font-semibold mb-0.5" style="color:#0C4A6E">Android</p>
+              <p style="color:#075985">Chrome ⋮ → Add to Home screen → 之後 Gmail Share 選此 app。</p>
+            </div>
+            <div class="p-2 rounded-lg" style="background:#FEF3C7">
+              <p class="font-semibold mb-0.5" style="color:#92400E">iOS</p>
+              <button id="copyShortcutUrlBtn" class="w-full py-1.5 rounded text-[10px] font-semibold mb-1" style="background:#F59E0B;color:white">📋 複製 Shortcut URL 範本</button>
+              <p style="color:#92400E">3 步 Shortcut：Get Contents → Base64 → Open URL。</p>
+            </div>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <!-- ══════ SECTION F: 資料管理 ══════ -->
+    <div class="mt-5 mb-2 px-1 flex items-center gap-2">
+      <span class="text-xs font-bold uppercase tracking-widest" style="color:#6B7285">🛠 資料管理</span>
+      <span class="flex-1 h-px" style="background:var(--n-border)"></span>
+    </div>
+
+    <button id="saveSettings" class="w-full text-white font-bold py-3 rounded-2xl mb-3" style="background:var(--n-blue)">💾 儲存設定</button>
+
+    <div class="grid grid-cols-2 gap-3 mb-3">
       <button id="exportBtn" class="glass py-3 rounded-2xl text-sm font-medium">📤 匯出 CSV</button>
       <button id="resetBtn" class="glass py-3 rounded-2xl text-sm font-medium" style="color:#DC2626">🗑️ 清除全部</button>
     </div>
 
-    <button id="lockDeviceBtn" class="hidden w-full glass py-3 rounded-2xl text-sm font-medium mt-3" style="color:#B45309">🔒 清除此裝置信任（需重新輸入密碼）</button>
+    <button id="lockDeviceBtn" class="hidden w-full glass py-3 rounded-2xl text-sm font-medium mb-3" style="color:#B45309">🔒 清除此裝置信任（需重新輸入密碼）</button>
 
-    <div class="mt-6 text-center text-[10px] text-gray-600">
+    <div class="mt-5 text-center text-[10px]" style="color:var(--n-muted)">
       <p>Built for Boss 💪 • 2026年4月20-25日</p>
-      <p class="mt-1">資料儲存喺你部 Mac，唔會上傳任何雲端</p>
+      <p class="mt-1">本機 localStorage 儲存 · Notion 同步選用</p>
     </div>
   </section>
 </main>
@@ -799,7 +864,7 @@
 <!-- ============ CONFIRM MODAL ============ -->
 <div id="confirmModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
   <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto scrollbar-hide" style="background:var(--n-surface);border:1px solid var(--n-border)">
-    <div class="sticky top-0 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
+    <div class="sticky top-0 z-10 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
       <div class="w-12 h-1 rounded-full mx-auto mb-3 sm:hidden" style="background:var(--n-border)"></div>
       <h3 class="text-lg font-bold" style="color:var(--n-text)">確認消費內容</h3>
       <p class="text-xs mt-1" style="color:var(--n-muted)" id="modalSubtitle">請核對 AI 識別嘅資料</p>
@@ -883,7 +948,7 @@
 <!-- ============ EMAIL PASTE MODAL ============ -->
 <div id="emailPasteModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
   <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[92vh] flex flex-col" style="background:var(--n-surface);border:1px solid var(--n-border)">
-    <div class="sticky top-0 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
+    <div class="sticky top-0 z-10 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
       <div class="w-12 h-1 rounded-full mx-auto mb-3 sm:hidden" style="background:var(--n-border)"></div>
       <h3 class="text-lg font-bold" style="color:var(--n-text)">📧 從 Email 匯入預訂</h3>
       <p class="text-xs mt-1" style="color:var(--n-muted)">支援 Klook / Agoda / 航空公司 / Booking / KKday 等確認 email — AI 自動抽出全部 booking</p>
@@ -925,7 +990,7 @@
 <!-- ============ BATCH CONFIRM MODAL ============ -->
 <div id="batchConfirmModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
   <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[92vh] flex flex-col" style="background:var(--n-surface);border:1px solid var(--n-border)">
-    <div class="sticky top-0 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
+    <div class="sticky top-0 z-10 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
       <div class="w-12 h-1 rounded-full mx-auto mb-3 sm:hidden" style="background:var(--n-border)"></div>
       <h3 class="text-lg font-bold" style="color:var(--n-text)">✅ AI 解析結果</h3>
       <p class="text-xs mt-1" style="color:var(--n-muted)" id="batchSubtitle">核對後儲存</p>
@@ -1062,7 +1127,6 @@ const SCAN_MODELS = [
   { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: '輕量 · 5 key rotation ✅',  tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: '快速 · 5 key rotation',     tag: '⚡', color: '#F5A623' },
   { id: 'gemini-2.5-flash',              name: 'Gemini 2.5 Flash',      sub: '最新 · 5 key rotation',     tag: '🟠', color: '#EA6C00' },
-  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦視覺',        tag: '⭐', color: '#E04040' },
   { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定旗艦',        tag: '🔵', color: '#2D5A8E' },
   { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 文字輔助',           tag: '🟣', color: '#7C3AED' },
 ];
@@ -1080,7 +1144,6 @@ const VOICE_MODELS = [
   { id: 'gemini-2.5-flash',              name: 'Gemini 2.5 Flash',      sub: '最新 · 5 key rotation',     tag: '🟠', color: '#EA6C00' },
   { id: 'gemma-4-31b-it',               name: 'Gemma 4 31B',           sub: 'Google · 開源旗艦',         tag: '🌐', color: '#4285F4' },
   { id: 'gemma-4-26b-a4b-it',           name: 'Gemma 4 26B',           sub: 'Google · 開源輕量',         tag: '🌐', color: '#34A853' },
-  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: 'Preview · 旗艦',            tag: '⭐', color: '#E04040' },
   { id: 'gemini-3-pro-preview',          name: 'Gemini 3 Pro',          sub: 'Preview · 穩定',            tag: '🔵', color: '#2D5A8E' },
 ];
 // Email extraction models — text-only (same universe as voice).
@@ -1094,7 +1157,6 @@ const EMAIL_MODELS = [
   { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: '輕量 · structured JSON',    tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: '快速 · structured JSON',     tag: '⚡', color: '#F5A623' },
   { id: 'gemini-2.5-flash',              name: 'Gemini 2.5 Flash',      sub: '最新 · structured JSON',     tag: '🟠', color: '#EA6C00' },
-  { id: 'gemini-3.1-pro-preview',        name: 'Gemini 3.1 Pro',        sub: '旗艦 · 最準',                tag: '⭐', color: '#E04040' },
   { id: 'gemma-4-31b-it',                name: 'Gemma 4 31B',           sub: '開源旗艦',                  tag: '🌐', color: '#4285F4' },
   { id: 'gemma-4-26b-a4b-it',            name: 'Gemma 4 26B',           sub: '開源輕量',                  tag: '🌐', color: '#34A853' },
   { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 基本 fallback',       tag: '🟣', color: '#7C3AED' },
@@ -1731,40 +1793,91 @@ window.pickEmoji = function(e) {
 };
 
 // ============ LIVE EXCHANGE RATE (cached 1hr) ============
+// Trip base currency (foreign) + home currency. Derived from trip dest, defaults JPY/HKD.
+// state.tripCurrency defines the foreign currency (what receipts are in); HKD is always home.
+function _getTripCurrency() {
+  return (state.tripCurrency || 'JPY').toUpperCase();
+}
+function _setTripCurrency(code) {
+  state.tripCurrency = (code || 'JPY').toUpperCase();
+  saveState();
+}
+
+// Visa's official daily exchange rate endpoint. The global Visa site uses the same
+// backend, so we hit visa.co.uk (CORS-friendly-ish via corsproxy) to get the rate.
+// Returns {rate, source} where rate = how many <foreign> you get per 1 HKD.
+async function _fetchVisaRate(foreignCurr, homeCurr) {
+  const today = new Date();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const yyyy = today.getFullYear();
+  const datePart = mm + '%2F' + dd + '%2F' + yyyy;
+  // NOTE: Visa publishes rate as "1 <fromCurr> = X <toCurr>". For our app we want
+  // "1 HKD = X JPY" (foreign per HKD). So fromCurr=HKD, toCurr=JPY.
+  const url = `https://www.visa.co.uk/cmsapi/fx/rates?amount=1&fee=0&utcConvertedDate=${datePart}&exchangedate=${datePart}&fromCurr=${homeCurr}&toCurr=${foreignCurr}`;
+  const proxies = [
+    'https://corsproxy.io/?',
+    'https://api.codetabs.com/v1/proxy?quest=',
+  ];
+  for (const proxy of proxies) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 5000);
+      const r = await fetch(proxy + encodeURIComponent(url), { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!r.ok) continue;
+      const data = await r.json();
+      // Visa response: { convertedAmount, fxRateVisa, ... }. fxRateVisa is string "20.36"
+      const rate = parseFloat(data.convertedAmount || data.fxRateVisa);
+      if (rate && rate > 0 && isFinite(rate)) return { rate, source: 'Visa' };
+    } catch(e) { /* try next proxy */ }
+  }
+  return null;
+}
+
+// Fallback rate source (free, no key). Returns {rate, source} or null.
+async function _fetchErApiRate(foreignCurr, homeCurr) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const r = await fetch('https://open.er-api.com/v6/latest/' + homeCurr, { signal: ctrl.signal });
+    clearTimeout(timer);
+    const data = await r.json();
+    const rate = data?.rates?.[foreignCurr];
+    if (rate && rate > 0) return { rate: parseFloat(rate.toFixed(4)), source: 'ER-API' };
+  } catch(_) {}
+  return null;
+}
+
 async function fetchLiveRate(force = false) {
   const now = Date.now();
   const cacheAge = now - (state.rateFetchedAt || 0);
   // Use cached rate if < 1 hour old
   if (!force && state.rateFetchedAt && cacheAge < 3600000) return;
-  try {
-    // Race against 4s timeout to avoid blocking save on slow networks
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 4000);
-    const r = await fetch('https://open.er-api.com/v6/latest/HKD', { signal: ctrl.signal });
-    clearTimeout(timer);
-    const data = await r.json();
-    const rate = data?.rates?.JPY;
-    if (rate && rate > 0) {
-      state.rate = parseFloat(rate.toFixed(4));
-      state.rateFetchedAt = now;
-      saveState();
-      const el = document.getElementById('setRate');
-      // Don't clobber user's in-progress typing in any settings field
-      if (el && document.activeElement !== el) el.value = (100 / state.rate).toFixed(4);
-      const elHkd = document.getElementById('setBudgetHKDInput');
-      if (elHkd && document.activeElement !== elHkd) elHkd.value = Math.round(state.budget / state.rate);
-      const rv = document.getElementById('rateReverse');
-      if (rv) rv.textContent = `1 HKD = ${state.rate.toFixed(2)} JPY`;
-      const st = document.getElementById('rateStatus');
-      if (st) {
-        st.textContent = '✓ 已更新 ' + new Date().toLocaleTimeString('zh-HK', {hour:'2-digit',minute:'2-digit'});
-        setTimeout(() => { st.textContent = '⟳ 每小時自動更新'; }, 2500);
-      }
-    }
-  } catch(e) {
-    console.warn('匯率獲取失敗:', e.message);
-    // Silent fallback — user sees cached rate, only toast if they were waiting
-    if (force) toast('📡 離線，用緩存匯率');
+  const foreignCurr = _getTripCurrency();
+  const homeCurr = 'HKD';
+  // Try Visa first (official rate used by all Visa cards), then fallback to ER-API
+  let result = await _fetchVisaRate(foreignCurr, homeCurr);
+  if (!result) result = await _fetchErApiRate(foreignCurr, homeCurr);
+  if (!result) {
+    console.warn('匯率獲取失敗 — both Visa and fallback failed');
+    if (force) toast('📡 匯率獲取失敗，用緩存');
+    return;
+  }
+  state.rate = parseFloat(result.rate.toFixed(4));
+  state.rateFetchedAt = now;
+  state.rateSource = result.source;
+  saveState();
+  const el = document.getElementById('setRate');
+  if (el && document.activeElement !== el) el.value = (100 / state.rate).toFixed(4);
+  const elHkd = document.getElementById('setBudgetHKDInput');
+  if (elHkd && document.activeElement !== elHkd) elHkd.value = Math.round(state.budget / state.rate);
+  const rv = document.getElementById('rateReverse');
+  if (rv) rv.textContent = `1 ${homeCurr} = ${state.rate.toFixed(2)} ${foreignCurr} (${result.source})`;
+  const st = document.getElementById('rateStatus');
+  if (st) {
+    st.textContent = '✓ ' + result.source + ' ' + new Date().toLocaleTimeString('zh-HK', {hour:'2-digit',minute:'2-digit'});
+    setTimeout(() => { st.textContent = '⟳ 每小時自動更新（Visa 官方匯率）'; }, 3000);
   }
 }
 
@@ -3005,7 +3118,6 @@ const RESCAN_MODELS = [
   { id: 'gemini-3.1-flash-lite-preview',  label: 'G 3.1 Flash',  color: '#CC2929' },
   { id: 'gemini-3-flash-preview',         label: 'G 3 Flash',    color: '#F5A623' },
   { id: 'gemini-2.5-flash',               label: 'G 2.5 Flash',  color: '#EA6C00' },
-  { id: 'gemini-3.1-pro-preview',         label: 'G 3.1 Pro',    color: '#059669' },
   { id: 'gemini-3-pro-preview',           label: 'G 3 Pro',      color: '#2D5A8E' },
 ];
 
@@ -3238,7 +3350,7 @@ async function parseVoiceExpense(transcript) {
     'minimax-m2.7',
     'gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash',
     'gemma-4-31b-it', 'gemma-4-26b-a4b-it',
-    'gemini-3.1-pro-preview', 'gemini-3-pro-preview',
+    'gemini-3-pro-preview',
   ];
   const voiceOrder = [voicePrimaryModel, ...VOICE_FALLBACK.filter(m => m !== voicePrimaryModel)];
 
@@ -3809,7 +3921,6 @@ const GEMINI_TEXT_MODELS = new Set([
   'gemini-3.1-flash-lite-preview',
   'gemini-3-flash-preview',
   'gemini-2.5-flash',
-  'gemini-3.1-pro-preview',
   'gemini-3-pro-preview',
   'gemma-4-31b-it',
   'gemma-4-26b-a4b-it',
@@ -4021,7 +4132,7 @@ async function retryBatchWithStrongerModel() {
   const savedModel = state.model;
   try {
     // Force strongest model by temporarily swapping state.model
-    state.model = 'gemini-3.1-pro-preview';
+    state.model = 'gemini-3-pro-preview';
     const result = await parseEmailInput(batchLastInput);
     if (result.bookings && result.bookings.length) {
       openBatchConfirmModal(result.bookings, result.source, result.modelUsed + ' 🔒 高精度', batchLastInput);
@@ -5479,6 +5590,28 @@ function init() {
   // Scan
   $('scanBtn').addEventListener('click', () => $('receiptInput').click());
   $('galleryBtn').addEventListener('click', () => $('galleryInput').click());
+  // Trip currency selector — triggers Visa rate refetch on change
+  $('setTripCurrency')?.addEventListener('change', e => {
+    _setTripCurrency(e.target.value);
+    fetchLiveRate(true);
+  });
+  $('refreshRateBtn')?.addEventListener('click', () => {
+    toast('⟳ 獲取 Visa 最新匯率…');
+    fetchLiveRate(true);
+  });
+  // Reflect stored tripCurrency in selector on init
+  const tcSelect = $('setTripCurrency');
+  if (tcSelect) tcSelect.value = _getTripCurrency();
+  // Copy Gmail forward address to clipboard
+  $('copyGmailAddrBtn')?.addEventListener('click', async () => {
+    const addr = 'ftjdfr+expense@gmail.com';
+    try {
+      await navigator.clipboard.writeText(addr);
+      toast('✅ 已複製：' + addr);
+    } catch(_) {
+      prompt('手動複製呢個地址 → Forward email 去呢度：', addr);
+    }
+  });
   $('galleryInput').addEventListener('change', e => {
     const f = e.target.files[0];
     if (f) scanReceipt(f);
