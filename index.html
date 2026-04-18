@@ -916,6 +916,26 @@
   </div>
 </div>
 
+<!-- ============ HOTEL POPUP ============ -->
+<div id="hotelPopup" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeHotelPopup()">
+  <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-5" style="background:var(--n-surface);border:1px solid var(--n-border)">
+    <div class="w-12 h-1 rounded-full mx-auto mb-4 sm:hidden" style="background:var(--n-border)"></div>
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl" style="background:#34d39920;color:#34d399">🏨</div>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs mb-0.5" style="color:var(--n-muted)">今晚住宿</p>
+        <p id="hotelPopupName" class="text-base font-bold leading-tight" style="color:var(--n-text)">酒店名稱</p>
+      </div>
+    </div>
+    <div id="hotelPopupAddressRow" class="mb-4 rounded-xl p-3 flex items-start gap-2 cursor-pointer active:opacity-70" style="background:var(--n-bg);border:1px solid var(--n-border)" onclick="openMapsFromPopup()">
+      <span class="text-base flex-shrink-0">📍</span>
+      <span id="hotelPopupAddressText" class="text-sm flex-1" style="color:var(--n-blue);text-decoration:underline;text-underline-offset:2px">點擊開啟地圖</span>
+      <span class="text-xs flex-shrink-0" style="color:var(--n-muted)">›</span>
+    </div>
+    <button onclick="closeHotelPopup()" class="w-full py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">關閉</button>
+  </div>
+</div>
+
 <!-- ============ TOAST ============ -->
 <div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[70] rounded-full px-5 py-2.5 text-sm font-medium text-white fade-in" style="background:var(--n-text)"></div>
 
@@ -1776,6 +1796,20 @@ function renderDashboard() {
     const isToday = it.date === today;
     const rDay = state.receipts.filter(r => r.date === it.date);
     const dayTotal = rDay.reduce((s,r) => s + (Number(r.total)||0), 0);
+    const effectiveSpots = getEffectiveSpots(it);
+    const spotsHtml = effectiveSpots.map(spot => {
+      const cat = CATEGORIES.find(c => c.id === spot.type) || CATEGORIES[6];
+      const isHotel = spot.type === 'lodging' && spot.receiptId;
+      const safeNameJs = (spot.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const safeAddrJs = (spot.address||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const hotelAttrs = isHotel ? `onclick="showHotelPopup('${safeNameJs}','${safeAddrJs}')" style="cursor:pointer;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25);border-radius:10px;padding:4px 8px;margin:-2px -4px"` : '';
+      return `<div class="flex items-center gap-2 py-0.5" ${hotelAttrs}>
+        <span class="flex-shrink-0 text-sm" style="width:18px;text-align:center">${cat.icon}</span>
+        <span class="text-[10px] flex-shrink-0 w-8" style="color:var(--n-muted)">${spot.time}</span>
+        <span class="text-xs flex-1 truncate" style="color:var(--n-text)">${escapeHtml(spot.name)}</span>
+        ${isHotel ? '<span class="text-[10px] flex-shrink-0" style="color:#34d399">📍›</span>' : ''}
+      </div>`;
+    }).join('');
     return `
       <div class="glass rounded-2xl p-3 ${isToday ? 'ring-2 ring-[#2D5A8E]' : ''}">
         <div class="flex items-center justify-between">
@@ -1791,6 +1825,7 @@ function renderDashboard() {
             <p class="text-[10px] text-gray-500">${rDay.length} 筆</p>
           </div>
         </div>
+        ${effectiveSpots.length ? `<div class="mt-2 pt-2 space-y-0.5" style="border-top:1px solid var(--n-border)">${spotsHtml}</div>` : ''}
       </div>`;
   }));
   // Post-trip row shown when any post receipts exist
@@ -1827,6 +1862,50 @@ function isPendingReceipt(r) {
 }
 function displayStore(r) {
   return isPendingReceipt(r) ? r.store.slice(2) : (r.store || '');
+}
+
+// Returns the ITINERARY spots for a given day, with lodging overridden/added from receipts.
+function getEffectiveSpots(it) {
+  let spots = (it.spots || []).map(s => Object.assign({}, s));
+  const lodgingReceipt = state.receipts.find(r => r.date === it.date && r.category === 'lodging');
+  if (lodgingReceipt) {
+    const hotelName = displayStore(lodgingReceipt);
+    const address = (lodgingReceipt.note || '').trim();
+    const hotelSpot = { time:'23:00', name:hotelName, type:'lodging', receiptId:lodgingReceipt.id, address:address };
+    const lodgingIdx = spots.findIndex(s => s.type === 'lodging');
+    if (lodgingIdx >= 0) {
+      spots[lodgingIdx] = hotelSpot;
+    } else {
+      spots.push(hotelSpot);
+      spots.sort((a,b) => a.time.localeCompare(b.time));
+    }
+  }
+  return spots;
+}
+
+// Hotel info popup (for itinerary lodging spots backed by a receipt)
+let _hotelPopupAddress = '';
+function showHotelPopup(name, address) {
+  $('hotelPopupName').textContent = name;
+  _hotelPopupAddress = address;
+  $('hotelPopupAddressText').textContent = address || '地址未提供';
+  $('hotelPopupAddressRow').style.display = address ? 'flex' : 'none';
+  $('hotelPopup').classList.remove('hidden');
+}
+function closeHotelPopup() {
+  $('hotelPopup').classList.add('hidden');
+}
+function openMapsFromPopup() {
+  if (!_hotelPopupAddress) return;
+  const q = encodeURIComponent(_hotelPopupAddress);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS) {
+    // Open Apple Maps; fall back to Google Maps if Apple Maps not available
+    window.location.href = 'maps://?q=' + q;
+    setTimeout(function() { window.open('https://maps.google.com/maps?q=' + q, '_blank'); }, 1200);
+  } else {
+    window.open('https://maps.google.com/maps?q=' + q, '_blank');
+  }
 }
 
 function receiptCard(r) {
