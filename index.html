@@ -253,8 +253,8 @@
     </div>
   </div>
 
-  <!-- Budget bar -->
-  <div class="mt-4 rounded-2xl p-4" style="background:rgba(255,255,255,0.88);border:1px solid rgba(255,190,170,0.45);box-shadow:0 4px 20px rgba(204,41,41,0.08)">
+  <!-- Budget bar — shown only when 紀錄 tab is active -->
+  <div id="budgetSection" class="mt-4 rounded-2xl p-4" style="background:rgba(255,255,255,0.88);border:1px solid rgba(255,190,170,0.45);box-shadow:0 4px 20px rgba(204,41,41,0.08);display:none">
     <div class="flex justify-between items-center mb-2.5">
       <span class="text-xs font-semibold" style="color:#8B7D85">🎯 旅程預算</span>
       <span class="text-xs font-bold text-right" style="color:#CC2929" id="budgetText">HKD 0 / 5,000</span>
@@ -609,29 +609,44 @@
       <p id="rateReverse" class="text-[11px] mt-1" style="color:var(--n-muted)"></p>
     </div>
 
-    <div class="glass rounded-2xl p-4 mb-3">
-      <div class="flex items-center justify-between mb-1">
-        <label class="text-xs text-gray-400 uppercase tracking-wider">📸 收據掃描模型</label>
-        <span id="lastScanBadge" class="text-[10px] px-2 py-0.5 rounded-full font-medium hidden" style="background:#D1FAE5;color:#065F46"></span>
+    <details class="glass rounded-2xl mb-3 overflow-hidden">
+      <summary class="flex items-center justify-between p-4 cursor-pointer select-none list-none">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-gray-400 uppercase tracking-wider cursor-pointer">📸 收據掃描模型</label>
+          <span id="lastScanBadge" class="text-[10px] px-2 py-0.5 rounded-full font-medium hidden" style="background:#D1FAE5;color:#065F46"></span>
+        </div>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
+      </summary>
+      <div class="px-4 pb-4">
+        <p class="text-[10px] mb-3" style="color:var(--n-muted)">掃描鏈：GLM-4.6V → MiniMax VLM → Gemini 3.1 Flash Lite → Gemini 3 Flash → Gemini 2.5 Flash（每個 model 輪試 5 條 key，自動 fallback）</p>
+        <div id="scanModelCards" class="grid grid-cols-2 gap-2"></div>
       </div>
-      <p class="text-[10px] mb-3" style="color:var(--n-muted)">掃描鏈：GLM-4.6V → MiniMax VLM → Gemini 3.1 Flash Lite → Gemini 3 Flash → Gemini 2.5 Flash（每個 model 輪試 5 條 key，自動 fallback）</p>
-      <div id="scanModelCards" class="grid grid-cols-2 gap-2"></div>
-    </div>
+    </details>
 
-    <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs text-gray-400 uppercase tracking-wider mb-3 block">🎤 語音解析模型</label>
-      <p class="text-[10px] mb-3" style="color:var(--n-muted)">語音輸入後解析廣東話。主力 GLM-4-Flash → 🐘 Elephant Alpha → Gemini 3.1/3/2.5 Flash → Gemma 4 31B/26B（Gemini 每個 model 輪試 5 條 key）</p>
-      <div id="voiceModelCards" class="grid grid-cols-2 gap-2"></div>
-    </div>
-
-    <div class="glass rounded-2xl p-4 mb-3">
-      <div class="flex items-center justify-between mb-1">
-        <label class="text-xs text-gray-400 uppercase tracking-wider">📧 Email 解析模型</label>
-        <span id="lastEmailBadge" class="text-[10px] px-2 py-0.5 rounded-full font-medium hidden" style="background:#D1FAE5;color:#065F46"></span>
+    <details class="glass rounded-2xl mb-3 overflow-hidden">
+      <summary class="flex items-center justify-between p-4 cursor-pointer select-none list-none">
+        <label class="text-xs text-gray-400 uppercase tracking-wider cursor-pointer">🎤 語音解析模型</label>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
+      </summary>
+      <div class="px-4 pb-4">
+        <p class="text-[10px] mb-3" style="color:var(--n-muted)">語音輸入後解析廣東話。主力 GLM-4-Flash → 🐘 Elephant Alpha → Gemini 3.1/3/2.5 Flash → Gemma 4 31B/26B（Gemini 每個 model 輪試 5 條 key）</p>
+        <div id="voiceModelCards" class="grid grid-cols-2 gap-2"></div>
       </div>
-      <p class="text-[10px] mb-3" style="color:var(--n-muted)">「插入 Email」功能用嘅 AI。揀你主力模型；如果失敗，自動 fallback 到其他 provider（OpenRouter → GLM → MiniMax → Gemini × 5 keys → Gemma → GLM-4-Flash）</p>
-      <div id="emailModelCards" class="grid grid-cols-2 gap-2"></div>
-    </div>
+    </details>
+
+    <details class="glass rounded-2xl mb-3 overflow-hidden">
+      <summary class="flex items-center justify-between p-4 cursor-pointer select-none list-none">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-gray-400 uppercase tracking-wider cursor-pointer">📧 Email 解析模型</label>
+          <span id="lastEmailBadge" class="text-[10px] px-2 py-0.5 rounded-full font-medium hidden" style="background:#D1FAE5;color:#065F46"></span>
+        </div>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">可展開</span>
+      </summary>
+      <div class="px-4 pb-4">
+        <p class="text-[10px] mb-3" style="color:var(--n-muted)">「插入 Email」功能用嘅 AI。揀你主力模型；如果失敗，自動 fallback 到其他 provider（OpenRouter → GLM → MiniMax → Gemini × 5 keys → Gemma → GLM-4-Flash）</p>
+        <div id="emailModelCards" class="grid grid-cols-2 gap-2"></div>
+      </div>
+    </details>
 
     <!-- ============ EMAIL → NOTION AUTO-IMPORT ============ -->
     <details class="mt-6">
@@ -1008,7 +1023,7 @@ const ITINERARY = [
     { time:'14:30', name:'熱田神宮', type:'ticket' },
     { time:'17:00', name:'大須商店街', type:'shopping' },
     { time:'19:30', name:'矢場とん', type:'food', note:'味噌豬排 ~¥2,000' },
-    { time:'21:00', name:'酒店 Check-in', type:'lodging' },
+    { time:'23:00', name:'Agoda Daiwa Roynet 名古屋太間通口', type:'lodging', address:'名古屋市中村区名駅 太閤通口' },
   ]},
   { date:'2026-04-21', day:2, region:'飛驒高山 / 白川鄉', highlight:'KKday 三日團 Day 1', spots:[
     { time:'07:30', name:'名古屋站 集合', type:'transport' },
@@ -1799,7 +1814,7 @@ function renderDashboard() {
     const effectiveSpots = getEffectiveSpots(it);
     const spotsHtml = effectiveSpots.map(spot => {
       const cat = CATEGORIES.find(c => c.id === spot.type) || CATEGORIES[6];
-      const isHotel = spot.type === 'lodging' && spot.receiptId;
+      const isHotel = spot.type === 'lodging' && (spot.receiptId || spot.address);
       const safeNameJs = (spot.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       const safeAddrJs = (spot.address||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       const hotelAttrs = isHotel ? `onclick="showHotelPopup('${safeNameJs}','${safeAddrJs}')" style="cursor:pointer;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25);border-radius:10px;padding:4px 8px;margin:-2px -4px"` : '';
@@ -1864,22 +1879,47 @@ function displayStore(r) {
   return isPendingReceipt(r) ? r.store.slice(2) : (r.store || '');
 }
 
-// Returns the ITINERARY spots for a given day, with lodging overridden/added from receipts.
+// Returns the ITINERARY spots for a given day, with lodging/ticket overridden from receipts.
 function getEffectiveSpots(it) {
   let spots = (it.spots || []).map(s => Object.assign({}, s));
+
+  // 1. Lodging: replace/add hotel spot from receipt
   const lodgingReceipt = state.receipts.find(r => r.date === it.date && r.category === 'lodging');
   if (lodgingReceipt) {
     const hotelName = displayStore(lodgingReceipt);
-    const address = (lodgingReceipt.note || '').trim();
+    // Address: prefer receipt note; fall back to static spot's address if present
+    const staticLodgingSpot = spots.find(s => s.type === 'lodging');
+    const address = (lodgingReceipt.note || staticLodgingSpot?.address || '').trim();
     const hotelSpot = { time:'23:00', name:hotelName, type:'lodging', receiptId:lodgingReceipt.id, address:address };
     const lodgingIdx = spots.findIndex(s => s.type === 'lodging');
-    if (lodgingIdx >= 0) {
-      spots[lodgingIdx] = hotelSpot;
-    } else {
-      spots.push(hotelSpot);
-      spots.sort((a,b) => a.time.localeCompare(b.time));
-    }
+    if (lodgingIdx >= 0) spots[lodgingIdx] = hotelSpot;
+    else { spots.push(hotelSpot); spots.sort((a,b) => a.time.localeCompare(b.time)); }
   }
+
+  // 2. Tours/tickets: overlay receipt names onto matching ITINERARY ticket spots.
+  // Matching priority: keyword overlap in store ↔ spot name; fallback: first free slot.
+  const tourReceipts = state.receipts.filter(r => r.date === it.date && r.category === 'ticket');
+  if (tourReceipts.length) {
+    let freeTicketIdxs = spots.reduce((acc, s, i) => { if (s.type === 'ticket' && !s.receiptId) acc.push(i); return acc; }, []);
+    tourReceipts.forEach(r => {
+      if (!freeTicketIdxs.length) return;
+      const rName = displayStore(r).toLowerCase();
+      // Try keyword match (ignore short words)
+      let bestIdx = freeTicketIdxs.find(i => {
+        const sName = spots[i].name.toLowerCase();
+        return sName.split(/[\s　]+/).some(w => w.length > 2 && rName.includes(w)) ||
+               rName.split(/[\s　]+/).some(w => w.length > 2 && sName.includes(w));
+      });
+      if (bestIdx === undefined) bestIdx = freeTicketIdxs[0]; // fallback: first free
+      spots[bestIdx] = Object.assign({}, spots[bestIdx], {
+        name: displayStore(r),
+        receiptId: r.id,
+        itineraryNote: r.note || '',
+      });
+      freeTicketIdxs = freeTicketIdxs.filter(i => i !== bestIdx);
+    });
+  }
+
   return spots;
 }
 
@@ -4527,7 +4567,7 @@ async function _saveModalInner() {
   const existing = editingId ? state.receipts.find(x=>x.id===editingId) : null;
   const r = {
     id: editingId || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2,7)),
-    store: $('mStore').value.trim(),
+    store: $('mStore').value.trim().replace(/^⏳\s+/, ''),
     total,
     subtotal: pendingSubtotal ?? existing?.subtotal ?? null,
     tax: pendingTax ?? existing?.tax ?? null,
@@ -4644,6 +4684,9 @@ function switchTab(name) {
     b.classList.toggle('tab-active', b.dataset.tab === name);
     b.classList.toggle('tab-inactive', b.dataset.tab !== name);
   });
+  // Budget bar only visible on 紀錄 tab
+  const bs = $('budgetSection');
+  if (bs) bs.style.display = (name === 'history') ? '' : 'none';
   if (name === 'stats') renderStats();
   if (name === 'history') {
     renderHistory();
