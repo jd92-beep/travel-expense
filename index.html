@@ -5074,25 +5074,39 @@ async function notionPullAll(silent = false) {
         noteClean = firstLineEnd >= 0 ? rawNote.slice(firstLineEnd + 1) : '';
       }
       const storeTitle = nGet(p,'store')?.title?.[0]?.plain_text || '';
-      // Detect itinerary-update marker and apply as ITINERARY override instead of receipt
-      if (storeTitle.startsWith('🗓 行程更新：')) {
+      // Detect itinerary-update marker — must ignore the ⏳ pending prefix that
+      // Apps Script auto-prepends to all email-imported entries.
+      const cleanTitle = storeTitle.replace(/^⏳\s+/, '');
+      if (cleanTitle.startsWith('🗓 行程更新：')) {
         const updDate = nGet(p,'date')?.date?.start;
-        const updName = storeTitle.replace(/^🗓\s*行程更新：/, '').split('@')[0].trim();
+        const updName = cleanTitle.replace(/^🗓\s*行程更新：/, '').split('@')[0].trim();
         if (updDate) {
           const day = ITINERARY.find(d => d.date === updDate);
           if (day && day.spots?.length) {
-            // Match by type first, else first free slot
             const catName2 = nGet(p,'cat')?.select?.name || '';
             const targetType = CATEGORIES.find(c => c.name === catName2)?.id || 'other';
+            // Match by type first; if no same-type spot, skip instead of picking
+            // random slot 0 (which would pollute the spot at index 0).
             let idx = day.spots.findIndex(s => s.type === targetType);
-            if (idx < 0) idx = 0;
-            state.itineraryOverrides = state.itineraryOverrides || {};
-            state.itineraryOverrides[updDate + '_' + idx] = {
-              name: updName, time: parsedTime || day.spots[idx].time, type: targetType, note: noteClean.slice(0, 200),
-            };
+            // Avoid overriding a spot already occupied by another itinerary update
+            // for the same day (e.g., day has 2 lodging entries — unusual).
+            const alreadyOverridden = idx >= 0 && !!(state.itineraryOverrides?.[updDate + '_' + idx]?.name);
+            if (idx >= 0 && !alreadyOverridden) {
+              state.itineraryOverrides = state.itineraryOverrides || {};
+              state.itineraryOverrides[updDate + '_' + idx] = {
+                name: updName,
+                time: parsedTime || day.spots[idx].time,
+                type: targetType,
+                note: noteClean.slice(0, 200),
+              };
+            } else if (idx >= 0 && alreadyOverridden) {
+              console.log('[itinerary-update] slot already overridden, skipping dup:', updDate, targetType, updName);
+            } else {
+              console.log('[itinerary-update] no same-type spot for', updDate, targetType, '—', updName);
+            }
           }
         }
-        // Track as "seen" (so it's not re-pulled) but don't add as receipt
+        // Track as "seen" (so deletion-sync knows about it) but don't add as receipt
         merged.set(id, { id, _itineraryOnly: true, notionPageId: page.id });
         continue;
       }
