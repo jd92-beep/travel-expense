@@ -47,6 +47,10 @@ const ZHIPU_KEY = 'PASTE_ZHIPU_KEY_OR_LEAVE';
 // This token is long-lived (expires ~2027) but if it fails with 401 we skip it.
 const MINIMAX_TOKEN = 'PASTE_MINIMAX_OAUTH_TOKEN_OR_LEAVE';
 
+// OpenRouter API key — gateway to openrouter/elephant-alpha (free stealth model)
+const OPENROUTER_KEY = 'PASTE_OPENROUTER_KEY_OR_LEAVE';
+const OPENROUTER_MODEL = 'openrouter/elephant-alpha';
+
 // Gemini keys (up to 5) — rotated on 429/403 before moving to next provider
 const GEMINI_KEYS = [
   'PASTE_GEMINI_API_KEY_HERE',
@@ -84,8 +88,9 @@ const FX_TO_JPY = {
 };
 
 // Endpoints
-const ZHIPU_URL   = 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions';
-const MINIMAX_URL = 'https://api.minimax.io/anthropic/v1/messages';
+const ZHIPU_URL      = 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions';
+const MINIMAX_URL    = 'https://api.minimax.io/anthropic/v1/messages';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 // ── MAIN ENTRY POINT ──────────────────────────────────────
 function processExpenseEmails() {
@@ -177,6 +182,7 @@ function extractBookingsWithFallback(emailText) {
   const errors = [];
   const hasZhipu = ZHIPU_KEY && !ZHIPU_KEY.startsWith('PASTE_');
   const hasMinimax = MINIMAX_TOKEN && !MINIMAX_TOKEN.startsWith('PASTE_');
+  const hasOpenRouter = OPENROUTER_KEY && !OPENROUTER_KEY.startsWith('PASTE_');
 
   // Each entry: { name, fn: () => parsedResult | null }
   const providers = [];
@@ -186,6 +192,9 @@ function extractBookingsWithFallback(emailText) {
   }
   if (hasMinimax) {
     providers.push({ name: 'minimax-m2.7', fn: () => _callMiniMaxWithBackoff(prompt) });
+  }
+  if (hasOpenRouter) {
+    providers.push({ name: OPENROUTER_MODEL, fn: () => _callOpenRouterWithBackoff(prompt) });
   }
   // Gemini: model-first, key-second rotation
   const geminiKeys = GEMINI_KEYS.filter(k => k && !k.startsWith('PASTE_'));
@@ -281,6 +290,52 @@ function _callZhipuWithBackoff(prompt, modelId) {
     throw new Error('Zhipu ' + code + ': ' + resp.getContentText().slice(0, 200));
   }
   throw new Error('Zhipu ' + modelId + ' 429 after 3 retries');
+}
+
+// ── OPENROUTER (elephant-alpha — OpenAI-compatible) ─────────
+function _callOpenRouterWithBackoff(prompt) {
+  const body = {
+    model: OPENROUTER_MODEL,
+    messages: [
+      { role: 'system', content: 'JSON only. No markdown fences, no prose.' },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.2,
+    max_tokens: 4096,
+  };
+  const payload = JSON.stringify(body);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const resp = UrlFetchApp.fetch(OPENROUTER_URL, {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        'Authorization': 'Bearer ' + OPENROUTER_KEY,
+        'HTTP-Referer': 'https://travel-expense.local',
+        'X-Title': 'travel-expense email-to-notion',
+      },
+      payload: payload,
+      muteHttpExceptions: true,
+    });
+    const code = resp.getResponseCode();
+    if (code === 200) {
+      const data = JSON.parse(resp.getContentText());
+      const text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+      if (!text) return null;
+      return _parseJsonLoose(text);
+    }
+    if (code === 401) {
+      throw new Error('OpenRouter 401 — invalid/expired key');
+    }
+    if (code === 429 || code === 503) {
+      const waitMs = Math.min(30000, 1500 * Math.pow(2, attempt));
+      console.log('OpenRouter ' + code + ', waiting ' + waitMs + 'ms…');
+      Utilities.sleep(waitMs);
+      continue;
+    }
+    throw new Error('OpenRouter ' + code + ': ' + resp.getContentText().slice(0, 200));
+  }
+  throw new Error('OpenRouter 429 after 3 retries');
 }
 
 // ── MINIMAX-M2.7 (Anthropic-compatible portal) ──────────────
@@ -546,9 +601,10 @@ function setup() {
   const providers = [];
   if (ZHIPU_KEY && !ZHIPU_KEY.startsWith('PASTE_'))     providers.push('GLM-5', 'GLM-5-turbo');
   if (MINIMAX_TOKEN && !MINIMAX_TOKEN.startsWith('PASTE_')) providers.push('MiniMax-M2.7');
+  if (OPENROUTER_KEY && !OPENROUTER_KEY.startsWith('PASTE_')) providers.push(OPENROUTER_MODEL);
   GEMINI_KEYS.forEach((k, i) => { if (k && !k.startsWith('PASTE_')) providers.push('Gemini-' + (i + 1)); });
   if (ZHIPU_KEY && !ZHIPU_KEY.startsWith('PASTE_'))     providers.push('GLM-4-Flash');
-  if (!providers.length) throw new Error('⛔ Fill in at least one of ZHIPU_KEY / MINIMAX_TOKEN / GEMINI_KEYS');
+  if (!providers.length) throw new Error('⛔ Fill in at least one of ZHIPU_KEY / MINIMAX_TOKEN / OPENROUTER_KEY / GEMINI_KEYS');
   if (NOTION_TOKEN.startsWith('PASTE_')) throw new Error('⛔ Fill in NOTION_TOKEN');
   if (NOTION_DB.startsWith('PASTE_'))    throw new Error('⛔ Fill in NOTION_DB');
 
