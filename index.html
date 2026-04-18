@@ -376,36 +376,33 @@
 
   <!-- ============ SCAN TAB ============ -->
   <section id="tab-scan" class="tab-content fade-in">
-    <div class="rounded-3xl p-7 mb-5 text-center" style="background:linear-gradient(145deg,#1B2D55 0%,#2D5088 55%,#3D70B8 100%);box-shadow:0 16px 48px rgba(27,45,85,0.35)">
+    <!-- BLUE HEADER IS NOW THE CAMERA BUTTON. Tap anywhere on this card → opens camera -->
+    <button id="scanHeaderBtn" class="w-full rounded-3xl p-7 mb-5 text-center active:scale-[0.98] transition-transform" style="background:linear-gradient(145deg,#1B2D55 0%,#2D5088 55%,#3D70B8 100%);box-shadow:0 16px 48px rgba(27,45,85,0.35);border:none;cursor:pointer">
       <div class="text-6xl mb-3" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,0.3))">📸</div>
       <h2 class="text-2xl font-black mb-1" style="color:white">掃描收據</h2>
-      <p class="text-sm" style="color:rgba(255,255,255,0.60)">影相或上傳收據，AI 自動辨識</p>
+      <p class="text-sm" style="color:rgba(255,255,255,0.70)">點此影相 · AI 自動辨識</p>
       <div class="flex justify-center gap-2 mt-3">
-        <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)">GLM-4.6V</span>
         <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)">MiniMax</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)">GLM-4.6V</span>
         <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)">Gemini</span>
       </div>
-    </div>
+    </button>
 
     <input type="file" id="receiptInput" accept="image/*" capture="environment" class="hidden">
     <input type="file" id="galleryInput" accept="image/*" class="hidden">
-    <!-- Row 1: main entry points — 掃描收據 (camera) + 從 Email 匯入 -->
+    <!-- Row 1: secondary entry points — 本地相簿 (red, fills space left by old camera button) + Email 匯入 (green) -->
     <div class="grid grid-cols-2 gap-3 mb-3">
-      <button id="scanBtn" class="text-white font-black py-6 rounded-2xl active:scale-95 transition-transform" style="background:linear-gradient(135deg,#C0281E,#E04040);box-shadow:0 10px 32px rgba(192,40,30,0.45);font-size:17px">
-        📷 掃描收據
+      <button id="galleryBtn" class="text-white font-black py-6 rounded-2xl active:scale-95 transition-transform" style="background:linear-gradient(135deg,#C0281E,#E04040);box-shadow:0 10px 32px rgba(192,40,30,0.45);font-size:17px">
+        🖼️ 從本地相簿
       </button>
       <button id="emailImportBtn" class="text-white font-black py-6 rounded-2xl active:scale-95 transition-transform" style="background:linear-gradient(135deg,#065F46,#059669);box-shadow:0 10px 32px rgba(5,150,105,0.45);font-size:17px">
         📧 從 Email 匯入
       </button>
     </div>
-    <!-- Row 2: copy Gmail import address to clipboard (replaces old full-width email button) -->
+    <!-- Row 2: copy Gmail address to clipboard -->
     <button id="copyGmailAddrBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3 flex items-center justify-center gap-2" style="background:rgba(255,255,255,0.90);color:#065F46;border:2px solid rgba(5,150,105,0.30);box-shadow:0 4px 16px rgba(5,150,105,0.15)">
       <span>📋 複製 Gmail 匯入地址</span>
       <span class="text-[11px] font-mono px-2 py-0.5 rounded" style="background:rgba(5,150,105,0.08)">ftjdfr+expense@gmail.com</span>
-    </button>
-    <!-- Row 3: gallery upload (secondary entry — for scans already on phone) -->
-    <button id="galleryBtn" class="w-full font-semibold py-3 rounded-2xl active:scale-95 transition-transform mb-3" style="background:rgba(255,255,255,0.85);color:#CC2929;border:1px solid rgba(204,41,41,0.18)">
-      🖼️ 從本地相簿選相
     </button>
     <button id="voiceBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3" style="background:rgba(255,255,255,0.90);color:#1B2D55;border:2px solid rgba(27,45,85,0.12);box-shadow:0 4px 16px rgba(27,45,85,0.08)">
       🎤 語音輸入
@@ -1008,6 +1005,23 @@
   </div>
 </div>
 
+<!-- ============ DAY RECEIPTS MODAL (collapsible summary from itinerary) ============ -->
+<div id="dayReceiptsModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeDayReceiptsModal()">
+  <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md flex flex-col" style="background:var(--n-surface);border:1px solid var(--n-border);max-height:90vh">
+    <div class="sticky top-0 z-10 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
+      <div class="w-12 h-1 rounded-full mx-auto mb-3 sm:hidden" style="background:var(--n-border)"></div>
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <h3 class="text-base font-bold" style="color:var(--n-text)">💰 當日消費</h3>
+          <p id="dayReceiptsSubtitle" class="text-[10px] mt-0.5" style="color:var(--n-muted)">—</p>
+        </div>
+        <button onclick="closeDayReceiptsModal()" class="w-8 h-8 rounded-full flex items-center justify-center text-sm" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-muted)">✕</button>
+      </div>
+    </div>
+    <div id="dayReceiptsList" class="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-hide"></div>
+  </div>
+</div>
+
 <!-- ============ SPOT EDIT MODAL ============ -->
 <div id="spotEditModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeSpotEdit()">
   <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-5" style="background:var(--n-surface);border:1px solid var(--n-border)">
@@ -1440,20 +1454,18 @@ function getTripPhase(date) {
   if (date > tripEnd) return 'post';
   return 'trip';
 }
-// Smart phase calculator — takes the full receipt object. Pre-paid bookings
-// (lodging/ticket/localtour/transport) whose receipt was created BEFORE the
-// trip count as 'prep', even if the service date is during the trip.
-// Falls back to date-based phase for in-trip purchases.
+// Smart phase calculator — takes the full receipt object.
+// Rule: ANY receipt created before tripStart = 'prep' phase
+// (user intent: "all records I entered before trip start date are preparation")
+// Regardless of service date or category. Falls back to date-based phase otherwise.
 function getReceiptPhase(r) {
   if (!r) return 'trip';
   const tripStart = (state.tripDateRange && state.tripDateRange.start) || '2026-04-20';
   const tripStartMs = new Date(tripStart + 'T00:00:00+08:00').getTime();
   // Manual override wins (set by user in edit modal)
   if (r.phase === 'prep' || r.phase === 'trip' || r.phase === 'post') return r.phase;
-  // Category heuristic: pre-payable bookings created before trip = prep
-  if (PRE_PAID_CATEGORIES.has(r.category) && r.createdAt && r.createdAt < tripStartMs) {
-    return 'prep';
-  }
+  // Created before trip start → prep phase (covers all pre-trip bookings)
+  if (r.createdAt && r.createdAt < tripStartMs) return 'prep';
   return getTripPhase(r.date);
 }
 function getCurrentDay() {
@@ -2027,6 +2039,9 @@ function renderDashboard() {
     const rDay = state.receipts.filter(r => r.date === it.date);
     const dayTotal = rDay.reduce((s,r) => s + (Number(r.total)||0), 0);
     const effectiveSpots = getEffectiveSpots(it);
+    // Receipts not represented as spots (food/shopping/ticket/etc.) collapse into a single chip
+    const uncoveredReceipts = getDayReceiptsNotInSpots(it.date);
+    const uncoveredTotal = uncoveredReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
     const spotsHtml = effectiveSpots.map(spot => {
       const cat = CATEGORIES.find(c => c.id === spot.type) || CATEGORIES[6];
       const isHotel = spot.type === 'lodging' && (spot.receiptId || spot.address);
@@ -2038,7 +2053,8 @@ function renderDashboard() {
       const safeTimeJs = (spot.time||'').replace(/'/g,"\\'");
       const safeTypeJs = (spot.type||'other').replace(/'/g,"\\'");
       const safeNoteJs = (spot.note||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ');
-      const onTap = `showSpotPopup({name:'${safeNameJs}',address:'${safeAddrJs}',date:'${it.date}',spotIdx:${spotIdx},type:'${safeTypeJs}',time:'${safeTimeJs}',note:'${safeNoteJs}'})`;
+      const rid = spot.receiptId ? `'${String(spot.receiptId).replace(/'/g,"\\'")}'` : 'null';
+      const onTap = `showSpotPopup({name:'${safeNameJs}',address:'${safeAddrJs}',date:'${it.date}',spotIdx:${spotIdx},type:'${safeTypeJs}',time:'${safeTimeJs}',note:'${safeNoteJs}',receiptId:${rid}})`;
       const bg = isHotel
         ? 'background:rgba(52,211,153,0.10);border:1px solid rgba(52,211,153,0.30);'
         : (hasOverride
@@ -2069,6 +2085,13 @@ function renderDashboard() {
           </div>
         </div>
         ${effectiveSpots.length ? `<div class="mt-2 pt-2 space-y-0.5" style="border-top:1px solid var(--n-border)">${spotsHtml}</div>` : ''}
+        ${uncoveredReceipts.length > 0 ? `
+          <div class="mt-2 pt-2 flex items-center gap-2 py-2 cursor-pointer" style="border-top:1px dashed var(--n-border);background:rgba(251,191,36,0.06);border-radius:10px;padding:6px 10px" onclick="openDayReceiptsModal('${it.date}')">
+            <span class="text-base flex-shrink-0">💰</span>
+            <span class="text-xs flex-1 font-medium" style="color:var(--n-text)">${uncoveredReceipts.length} 筆消費</span>
+            <span class="text-xs font-bold" style="color:#d97706">¥${fmt(uncoveredTotal)}</span>
+            <span class="text-[10px]" style="color:var(--n-muted)">›</span>
+          </div>` : ''}
       </div>`;
   }));
   // Post-trip row shown when any post receipts exist
@@ -2120,8 +2143,21 @@ function _setItineraryOverride(date, idx, patch) {
   saveState();
 }
 
-// Returns the ITINERARY spots for a given day, with user overrides + lodging/ticket
-// overridden from receipts applied on top.
+// Utility: "HH:mm" string → minutes since midnight (for time proximity matching)
+function _timeToMin(t) {
+  if (!t || typeof t !== 'string') return null;
+  const m = t.match(/^(\d{1,2}):(\d{2})/);
+  return m ? (Number(m[1]) * 60 + Number(m[2])) : null;
+}
+
+// Returns the ITINERARY spots for a given day, with:
+// - user edits applied first
+// - lodging receipts overlaid (replace or insert at 23:00)
+// - transport receipts (flights etc.) overlaid — these are the "key events"
+//   that stay visible in the timeline (per user: "show flight info in box")
+// Other categories (food/shopping/ticket/localtour/medicine/other) are NOT
+// overlaid onto spots — they're displayed as a separate "receipts chip"
+// to keep the timeline focused on scenery spots as main characters.
 function getEffectiveSpots(it) {
   // 0. Apply user edits first (tagged with spotIdx so UI can round-trip them)
   let spots = (it.spots || []).map((s, i) => {
@@ -2129,51 +2165,75 @@ function getEffectiveSpots(it) {
     return Object.assign({ _spotIdx: i }, s, ov || {});
   });
 
-  // 1. Lodging: replace/add hotel spot from receipt
+  // 1. Lodging overlay — replace or insert at 23:00
   const lodgingReceipt = state.receipts.find(r => r.date === it.date && r.category === 'lodging');
   if (lodgingReceipt) {
     const hotelName = displayStore(lodgingReceipt);
-    // Address priority:
-    //   1. Dedicated r.address field (filled by AI or user in confirm modal)
-    //   2. "📍 <address>" marker in note (legacy Apps Script format)
-    //   3. Static ITINERARY spot's address
-    // Raw note is NEVER used — often contains payment junk like
-    // "原價 HKD 860.4 · 已付款 · 卡號尾數 0373".
     const staticLodgingSpot = spots.find(s => s.type === 'lodging');
     const noteStr = lodgingReceipt.note || '';
     const addrFromNote = noteStr.match(/^📍\s*([^\n\[]+?)(?=\s*\[|\n|$)/)?.[1]?.trim();
     const address = (lodgingReceipt.address || addrFromNote || staticLodgingSpot?.address || '').trim();
-    const hotelSpot = { time:'23:00', name:hotelName, type:'lodging', receiptId:lodgingReceipt.id, address:address };
+    const hotelSpot = {
+      time: lodgingReceipt.time || '23:00', name: hotelName, type: 'lodging',
+      receiptId: lodgingReceipt.id, address
+    };
     const lodgingIdx = spots.findIndex(s => s.type === 'lodging');
     if (lodgingIdx >= 0) spots[lodgingIdx] = hotelSpot;
     else { spots.push(hotelSpot); spots.sort((a,b) => a.time.localeCompare(b.time)); }
   }
 
-  // 2. Tours/tickets: overlay receipt names onto matching ITINERARY ticket spots.
-  // Matching priority: keyword overlap in store ↔ spot name; fallback: first free slot.
-  const tourReceipts = state.receipts.filter(r => r.date === it.date && r.category === 'ticket');
-  if (tourReceipts.length) {
-    let freeTicketIdxs = spots.reduce((acc, s, i) => { if (s.type === 'ticket' && !s.receiptId) acc.push(i); return acc; }, []);
-    tourReceipts.forEach(r => {
-      if (!freeTicketIdxs.length) return;
-      const rName = displayStore(r).toLowerCase();
-      // Try keyword match (ignore short words)
-      let bestIdx = freeTicketIdxs.find(i => {
-        const sName = spots[i].name.toLowerCase();
-        return sName.split(/[\s　]+/).some(w => w.length > 2 && rName.includes(w)) ||
-               rName.split(/[\s　]+/).some(w => w.length > 2 && sName.includes(w));
-      });
-      if (bestIdx === undefined) bestIdx = freeTicketIdxs[0]; // fallback: first free
-      spots[bestIdx] = Object.assign({}, spots[bestIdx], {
-        name: displayStore(r),
+  // 2. Transport/flight overlay — keep visible (key time-sensitive events)
+  // Match by time proximity to existing transport spots (within 2 hours) OR insert as new
+  const transportReceipts = state.receipts.filter(r => r.date === it.date && r.category === 'transport');
+  if (transportReceipts.length) {
+    let freeTxIdxs = spots.reduce((acc, s, i) => {
+      if (s.type === 'transport' && !s.receiptId) acc.push(i);
+      return acc;
+    }, []);
+    transportReceipts.forEach(r => {
+      const rName = displayStore(r);
+      const rTime = r.time || '';
+      const rMin = _timeToMin(rTime);
+      // Try to find a close-by existing transport spot (±120 min)
+      let bestIdx = -1;
+      if (rMin != null && freeTxIdxs.length) {
+        let bestDist = 121;
+        freeTxIdxs.forEach(i => {
+          const sMin = _timeToMin(spots[i].time);
+          if (sMin == null) return;
+          const d = Math.abs(sMin - rMin);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        });
+      }
+      if (bestIdx < 0 && freeTxIdxs.length) bestIdx = freeTxIdxs[0]; // fallback
+      const flightSpot = {
+        time: rTime || (bestIdx >= 0 ? spots[bestIdx].time : '00:00'),
+        name: rName, type: 'transport',
         receiptId: r.id,
-        itineraryNote: r.note || '',
-      });
-      freeTicketIdxs = freeTicketIdxs.filter(i => i !== bestIdx);
+        address: (r.address || '').trim(),
+        note: r.itemsText || r.note || '',
+      };
+      if (bestIdx >= 0) {
+        spots[bestIdx] = Object.assign({}, spots[bestIdx], flightSpot);
+        freeTxIdxs = freeTxIdxs.filter(i => i !== bestIdx);
+      } else {
+        spots.push(Object.assign({ _spotIdx: -1 }, flightSpot));
+        spots.sort((a,b) => (a.time||'').localeCompare(b.time||''));
+      }
     });
   }
 
   return spots;
+}
+
+// Returns receipts for a day that AREN'T already shown as a timeline spot.
+// (Used to build the "💰 N 筆消費" collapsible chip beneath the spots list.)
+function getDayReceiptsNotInSpots(date) {
+  const day = ITINERARY.find(d => d.date === date);
+  if (!day) return state.receipts.filter(r => r.date === date);
+  const effectiveSpots = getEffectiveSpots(day);
+  const overlaidIds = new Set(effectiveSpots.map(s => s.receiptId).filter(Boolean));
+  return state.receipts.filter(r => r.date === date && !overlaidIds.has(r.id));
 }
 
 // Generic spot popup — works for ALL itinerary types (hotel/food/transport/ticket/…).
@@ -2202,14 +2262,20 @@ const SPOT_POPUP_STYLES = {
   shopping:  { label: '購物',      icon: '🛍️', bg: 'rgba(167,139,250,0.15)', fg: '#a78bfa' },
   other:     { label: '行程項目',  icon: '📍', bg: 'rgba(107,114,133,0.15)', fg: '#6B7285' },
 };
+// Tracks which receipt (if any) is attached to the currently-shown spot popup.
+// null when the spot is pure ITINERARY (no backing receipt).
+let _hotelPopupReceiptId = null;
 // Unified popup opener. Call for any itinerary spot.
-// Back-compat shim: showHotelPopup(name, address) still works for old code paths.
+// If spot has a backing receipt (receiptId) → popup shows READ-ONLY details of
+// that receipt + "去紀錄 tab 編輯" button (per user req: edits happen in Records tab).
+// If spot is pure itinerary → popup shows static spot info + "✏️ 編輯行程" button.
 function showSpotPopup(opts) {
   const o = opts || {};
   _hotelPopupName = o.name || '';
   _hotelPopupAddress = _isLikelyAddress(o.address) ? o.address : '';
   _hotelPopupDate = o.date || '';
   _hotelPopupIdx = (typeof o.spotIdx === 'number') ? o.spotIdx : -1;
+  _hotelPopupReceiptId = o.receiptId || null;
   const style = SPOT_POPUP_STYLES[o.type] || SPOT_POPUP_STYLES.other;
   $('hotelPopupIcon').textContent = style.icon;
   $('hotelPopupIcon').style.background = style.bg;
@@ -2220,17 +2286,46 @@ function showSpotPopup(opts) {
   const timeEl = $('hotelPopupTime');
   if (o.time) { timeEl.textContent = '⏰ ' + o.time; timeEl.classList.remove('hidden'); }
   else timeEl.classList.add('hidden');
-  // Address row — always tappable; falls back to name-only search
+  // Address row — always tappable; Maps query falls back to spot name
   $('hotelPopupAddressText').textContent = _hotelPopupAddress || ('用 ' + (_hotelPopupName || '名稱') + ' 搜尋地圖');
   $('hotelPopupAddressRow').style.display = 'flex';
-  // Note row (optional free-text context)
+  // Build a richer note row: if receipt-backed, pull live receipt details
   const noteEl = $('hotelPopupNoteRow');
-  if (o.note) { noteEl.textContent = o.note; noteEl.classList.remove('hidden'); }
+  let bodyHtml = '';
+  if (_hotelPopupReceiptId) {
+    const r = state.receipts.find(x => x.id === _hotelPopupReceiptId);
+    if (r) {
+      const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
+      const catDef = CATEGORIES.find(c => c.id === r.category);
+      const payDef = PAYMENTS.find(p => p.id === r.payment);
+      const amount = r.total ? `<div><span class="text-[10px]" style="color:var(--n-muted)">金額</span><div class="text-sm font-bold" style="color:var(--n-text)">¥${fmt(r.total)} · HKD ${fmt(Math.round(r.total/safeRate))}</div></div>` : '';
+      const meta = `<div class="text-[11px] mt-1" style="color:var(--n-muted)">${catDef?catDef.name:''}${payDef?' · '+payDef.name:''}${r.bookingRef?' · 編號 '+r.bookingRef:''}</div>`;
+      const items = r.itemsText ? `<div class="mt-2 text-[11px]" style="color:var(--n-text)">${escapeHtml(r.itemsText.slice(0,200))}</div>` : '';
+      const note = r.note && !r.note.startsWith('📍') ? `<div class="mt-1 text-[10px] italic" style="color:var(--n-muted)">${escapeHtml(r.note.slice(0,150))}</div>` : '';
+      bodyHtml = amount + meta + items + note;
+    }
+  } else if (o.note) {
+    bodyHtml = `<div class="text-[11px]" style="color:var(--n-text)">${escapeHtml(o.note)}</div>`;
+  }
+  if (bodyHtml) { noteEl.innerHTML = bodyHtml; noteEl.classList.remove('hidden'); }
   else noteEl.classList.add('hidden');
-  // Edit button only available for real static spots (not virtual/receipt overlays)
+  // Bottom button: changes label + action depending on whether a receipt backs this spot
   const editBtn = $('hotelPopupEditBtn');
-  if (_hotelPopupDate && _hotelPopupIdx >= 0) editBtn.classList.remove('hidden');
-  else editBtn.classList.add('hidden');
+  if (_hotelPopupReceiptId) {
+    editBtn.classList.remove('hidden');
+    editBtn.textContent = '📖 去紀錄 tab 編輯';
+    editBtn.style.background = 'rgba(45,90,142,0.1)';
+    editBtn.style.border = '1px solid rgba(45,90,142,0.3)';
+    editBtn.style.color = '#2D5A8E';
+  } else if (_hotelPopupDate && _hotelPopupIdx >= 0) {
+    editBtn.classList.remove('hidden');
+    editBtn.textContent = '✏️ 編輯行程項目';
+    editBtn.style.background = 'rgba(99,102,241,0.1)';
+    editBtn.style.border = '1px solid rgba(99,102,241,0.3)';
+    editBtn.style.color = '#6366f1';
+  } else {
+    editBtn.classList.add('hidden');
+  }
   $('hotelPopup').classList.remove('hidden');
 }
 // Back-compat wrapper
@@ -2241,6 +2336,12 @@ function closeHotelPopup() {
   $('hotelPopup').classList.add('hidden');
 }
 function editFromSpotPopup() {
+  // Receipt-backed spot → jump to records tab (read-only in popup, edit there)
+  if (_hotelPopupReceiptId) {
+    jumpToReceipt(_hotelPopupReceiptId);
+    return;
+  }
+  // Pure itinerary spot → open spot edit modal (for overriding static ITINERARY)
   const d = _hotelPopupDate, i = _hotelPopupIdx;
   closeHotelPopup();
   if (d && i >= 0) openSpotEdit(d, i);
@@ -2252,6 +2353,76 @@ function openMapsFromPopup() {
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   const url = isIOS ? 'https://maps.apple.com/?q=' + q : 'https://maps.google.com/maps?q=' + q;
   window.open(url, '_blank');
+}
+
+// ── DAY RECEIPTS MODAL — shows collapsed receipts for one trip day ──
+function openDayReceiptsModal(date) {
+  // Pull ALL receipts for the date (not just uncovered — user wants full picture)
+  const dayList = state.receipts.filter(r => r.date === date);
+  if (!dayList.length) { toast('冇當日紀錄'); return; }
+  const sorted = dayList.slice().sort((a,b) => {
+    const at = _timeToMin(a.time) ?? (a.createdAt || 0);
+    const bt = _timeToMin(b.time) ?? (b.createdAt || 0);
+    return at - bt;
+  });
+  const total = sorted.reduce((s,r) => s + (Number(r.total)||0), 0);
+  const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
+  $('dayReceiptsSubtitle').textContent = `${date} · ${sorted.length} 筆 · 總計 ¥${fmt(total)} (HKD ${fmt(Math.round(total/safeRate))})`;
+
+  $('dayReceiptsList').innerHTML = sorted.map(r => {
+    const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[CATEGORIES.length-1];
+    const pay = PAYMENTS.find(p => p.id === r.payment);
+    const pending = isPendingReceipt(r);
+    const timeLabel = r.time ? `<span class="text-[10px] font-mono" style="color:var(--n-muted)">${r.time}</span>` : '';
+    const hkdApprox = (r.total && state.rate) ? ` · HKD ${Math.round(r.total/safeRate)}` : '';
+    return `
+      <div class="rounded-xl p-3 cursor-pointer active:opacity-70" style="background:${pending?'linear-gradient(135deg,#FFFBEB,#FEF3C7)':'var(--n-bg)'};border:1px solid ${pending?'#F59E0B':'var(--n-border)'}" onclick="jumpToReceipt('${r.id}')">
+        <div class="flex items-start gap-2.5">
+          <div class="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center text-base" style="background:${cat.color}20;color:${cat.color}">${cat.icon}</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-0.5">
+              ${timeLabel}
+              ${pending ? '<span class="text-[9px] px-1.5 py-0.5 rounded font-bold" style="background:#F59E0B;color:white">⏳ 待確認</span>' : ''}
+            </div>
+            <p class="text-sm font-semibold truncate" style="color:var(--n-text)">${escapeHtml(displayStore(r) || '未命名')}</p>
+            ${r.itemsText ? `<p class="text-[10px] mt-0.5 line-clamp-2" style="color:var(--n-muted)">${escapeHtml(r.itemsText.slice(0,80))}</p>` : ''}
+            ${r.note && !r.note.startsWith('📍') ? `<p class="text-[10px] mt-0.5 italic" style="color:var(--n-muted)">${escapeHtml(r.note.slice(0,100))}</p>` : ''}
+          </div>
+          <div class="text-right flex-shrink-0">
+            <p class="text-sm font-bold" style="color:var(--n-text)">${r.total ? '¥'+fmt(r.total) : '—'}</p>
+            <p class="text-[9px]" style="color:var(--n-muted)">${cat.name}${pay ? ' · '+pay.name : ''}${hkdApprox}</p>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  $('dayReceiptsModal').classList.remove('hidden');
+}
+function closeDayReceiptsModal() {
+  $('dayReceiptsModal').classList.add('hidden');
+}
+
+// Navigate to History tab and highlight a specific receipt. Used by popup / chip jumps.
+function jumpToReceipt(id) {
+  closeDayReceiptsModal();
+  closeHotelPopup();
+  switchTab('history');
+  // Defer scroll until after render
+  setTimeout(() => {
+    // renderHistory uses receiptCard which wraps each with onclick=editReceipt(id); no direct id on card.
+    // Find by onclick attribute — reliable because it contains the exact receipt id.
+    const cards = document.querySelectorAll('#historyList [onclick*="editReceipt"]');
+    const target = Array.from(cards).find(c => (c.getAttribute('onclick')||'').includes("'"+id+"'"));
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Brief flash
+      const origBoxShadow = target.style.boxShadow;
+      target.style.boxShadow = '0 0 0 3px #2D5A8E, 0 0 20px rgba(45,90,142,0.4)';
+      target.style.transition = 'box-shadow 0.3s';
+      setTimeout(() => { target.style.boxShadow = origBoxShadow; }, 1800);
+    } else {
+      toast('⚠️ 喺紀錄 tab 揾唔到呢筆（可能被 filter 隱藏咗）');
+    }
+  }, 200);
 }
 
 // ── SPOT EDIT (itinerary) ───────────────────────────────────
@@ -5436,15 +5607,16 @@ function init() {
       return;
     }
     state.shareRatios = state.shareRatios || {};
-    // Default = equal split in percentage (100 / N per person)
-    const equalPct = Math.round(100 / persons.length);
+    // Default = equal split. For N persons: 100/N with 1 decimal precision.
+    // e.g. 2 persons → 50.0 each; 3 → 33.3 each; 6 → 16.7 each.
+    const equalPct = Math.round((100 / persons.length) * 10) / 10;
     persons.forEach(p => { if (state.shareRatios[p.id] == null) state.shareRatios[p.id] = equalPct; });
 
     wrap.innerHTML = persons.map(p => `
       <div class="flex items-center gap-2 py-1.5" data-ratio-row="${p.id}">
         <span class="text-lg">${p.emoji}</span>
         <span class="text-xs flex-1" style="color:var(--n-text)">${escapeHtml(p.name)}</span>
-        <input type="number" id="ratio_${p.id}" min="0" max="100" step="1" value="${state.shareRatios[p.id]}"
+        <input type="number" id="ratio_${p.id}" min="0" max="100" step="0.1" value="${state.shareRatios[p.id]}"
           class="w-20 text-sm text-right bg-transparent focus:outline-none"
           style="border-bottom:1px solid var(--n-border);padding-bottom:2px;color:var(--n-text)">
         <span class="text-sm flex-shrink-0" style="color:var(--n-muted)">%</span>
@@ -5473,7 +5645,7 @@ function init() {
     };
     persons.forEach(p => document.getElementById('ratio_' + p.id).addEventListener('input', recompute));
     document.getElementById('ratioResetEqual').addEventListener('click', () => {
-      const eq = Math.round(100 / persons.length);
+      const eq = Math.round((100 / persons.length) * 10) / 10;
       persons.forEach(p => { document.getElementById('ratio_' + p.id).value = eq; });
       recompute();
       toast('✅ 已重設為均分 ' + eq + '%');
@@ -5587,8 +5759,8 @@ function init() {
     b.addEventListener('click', () => switchTab(b.dataset.tab));
   });
 
-  // Scan
-  $('scanBtn').addEventListener('click', () => $('receiptInput').click());
+  // Scan — the blue gradient header card is now the camera button
+  $('scanHeaderBtn')?.addEventListener('click', () => $('receiptInput').click());
   $('galleryBtn').addEventListener('click', () => $('galleryInput').click());
   // Trip currency selector — triggers Visa rate refetch on change
   $('setTripCurrency')?.addEventListener('change', e => {
