@@ -1407,7 +1407,9 @@ async function testModelConnection(modelId) {
     }
     // MiniMax VLM (coding_plan/vlm endpoint — scan picker)
     if (modelId === 'minimax') {
-      const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
+      // Precedence: user-set custom key → fresh hardcoded DEFAULT → legacy vault (last).
+// Vault may contain a STALE MiniMax key from a previous build; DEFAULT is always current.
+const key = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
       if (!key) return { ok: false, msg: 'MiniMax key 未設定' };
       const r = await fetchWithTimeout('https://api.minimax.io/v1/coding_plan/vlm', {
         method: 'POST',
@@ -1421,7 +1423,9 @@ async function testModelConnection(modelId) {
     // permits Authorization + Content-Type. Any other header fails CORS preflight
     // and surfaces as "Failed to fetch" in the browser.
     if (modelId === 'minimax-m2.7') {
-      const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
+      // Precedence: user-set custom key → fresh hardcoded DEFAULT → legacy vault (last).
+// Vault may contain a STALE MiniMax key from a previous build; DEFAULT is always current.
+const key = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
       if (!key) return { ok: false, msg: 'MiniMax key 未設定' };
       const r = await fetchWithTimeout('https://api.minimax.io/anthropic/v1/messages', {
         method: 'POST',
@@ -3299,7 +3303,9 @@ async function callGLM5Text(content, modelId) {
 // permits Authorization + Content-Type. Any other header fails CORS preflight
 // and the browser reports "Failed to fetch" before the request ever leaves.
 async function callMiniMaxText(content) {
-  const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
+  // Precedence: user-set custom key → fresh hardcoded DEFAULT → legacy vault (last).
+// Vault may contain a STALE MiniMax key from a previous build; DEFAULT is always current.
+const key = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
   if (!key) throw new Error('MiniMax key 未設定');
   const r = await fetchWithTimeout('https://api.minimax.io/anthropic/v1/messages', {
     method: 'POST',
@@ -3736,7 +3742,9 @@ async function callGLM(base64, mime) {
 //   MiniMax-M2.7 messages API does NOT support image input — wrong route
 const DEFAULT_MINIMAX_KEY = atob('c2stY3AtVEd3a3RBb2hqSTFnVFF2b1pwWFRpZHBQeFlBZWVvZUNZdnJsUUdWaW83c3BnWDEtLVg4Y201WFlwSDFQbUJfcmVGTmRrMWlTa2RtNnVIbklzSWxaUVUydDFNNE1DUy1CSms1VWY2T2lXLWZiNHlJbXZzdXZrdzg=');
 async function callMiniMax(base64, mime) {
-  const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
+  // Precedence: user-set custom key → fresh hardcoded DEFAULT → legacy vault (last).
+// Vault may contain a STALE MiniMax key from a previous build; DEFAULT is always current.
+const key = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
   if (!key) throw new Error('MiniMax key 未設定');
   // NOTE: MM-API-Source header is NOT in MiniMax's CORS allow-list, so we can't
   // send it from a browser. Server-side Python clients can, but Access-Control-
@@ -4877,7 +4885,8 @@ function init() {
       // Zhipu key unlocks GLM-5, GLM-5-turbo AND GLM-4-Flash (same key, same endpoint).
       if (VAULT_ZAI_KEY)     code = code.replace('PASTE_ZHIPU_KEY_OR_LEAVE', VAULT_ZAI_KEY);
       // MiniMax-portal OAuth (same token as in-app MiniMax VLM).
-      const minimaxTok = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
+      // Prefer fresh DEFAULT over (possibly stale) vault key — see note at callMiniMaxText.
+      const minimaxTok = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
       if (minimaxTok)        code = code.replace('PASTE_MINIMAX_OAUTH_TOKEN_OR_LEAVE', minimaxTok);
       // OpenRouter (elephant-alpha stealth model — free)
       const openrouterKey = state.openrouterKey || DEFAULT_OPENROUTER_KEY;
