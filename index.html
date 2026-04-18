@@ -914,10 +914,6 @@
         </div>
       </div>
       <div>
-        <label class="text-[10px] uppercase tracking-wider text-gray-400">地區</label>
-        <input id="mRegion" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
-      </div>
-      <div>
         <label class="text-[10px] uppercase tracking-wider text-gray-400">品項明細</label>
         <textarea id="mItems" rows="4" class="w-full glass rounded-xl px-3 py-2.5 text-sm mt-1 border-0 font-mono"></textarea>
         <p class="text-[10px] text-gray-500 mt-1">每行一項：「品名 ¥金額」</p>
@@ -1441,6 +1437,44 @@ const fmt = n => Number(n||0).toLocaleString('en-US', { maximumFractionDigits:0 
 function todayHKT() {
   const d = new Date();
   return new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000).toISOString().slice(0,10);
+}
+// Current local time as "HH:mm" (used as default for manual-entry mTime input)
+function nowHHMM() {
+  const d = new Date();
+  return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+}
+// Address cascade for the manual-entry / scan-confirm modal:
+//   1. AI-extracted address (if well-formed)
+//   2. Store name contains a known ITINERARY region/spot → use that
+//   3. ITINERARY region for the given date → use region name
+//   4. Empty string
+// Gives users a sensible default when AI couldn't extract a precise street address.
+function resolveAddressCascade(aiAddress, store, date) {
+  // 1. AI already gave a good address
+  if (typeof _isLikelyAddress === 'function' && _isLikelyAddress(aiAddress)) return aiAddress;
+  // 2. Check if store name contains any ITINERARY region or spot name
+  const s = (store || '').toLowerCase();
+  if (s && typeof ITINERARY !== 'undefined') {
+    for (const day of ITINERARY) {
+      const regionTokens = (day.region || '').split(/[\s　/]+/).filter(t => t && t.length >= 2);
+      for (const t of regionTokens) {
+        if (s.includes(t.toLowerCase())) return day.region;
+      }
+      for (const spot of (day.spots || [])) {
+        const sp = (spot.name || '').toLowerCase();
+        // match only if store contains a meaningful slice of the spot name
+        for (const w of sp.split(/[\s　]+/).filter(w => w.length >= 3)) {
+          if (s.includes(w)) return spot.name;
+        }
+      }
+    }
+  }
+  // 3. Fall back to ITINERARY region for the date
+  if (date && typeof ITINERARY !== 'undefined') {
+    const day = ITINERARY.find(d => d.date === date);
+    if (day && day.region) return day.region;
+  }
+  return '';
 }
 // Classify a YYYY-MM-DD date relative to the trip window.
 // 'prep'  → pre-trip prep (hotel bookings, flights, tour deposits, etc.)
@@ -4657,6 +4691,7 @@ const N = {
   hkd:      ['💵 HKD',    'HKD'],
   tax:      ['💸 稅金 ¥', '稅金'],
   subtotal: ['🧮 小計 ¥', '小計'],
+  photo:    ['📷 收據相片', '收據相片'],  // Files & media — image URL (from imgbb)
 };
 
 // ── Schema cache ──────────────────────────────────────────────────────────────
@@ -4664,15 +4699,33 @@ const N = {
 // Populated lazily on first push/pull; cleared when token/DB changes or after migration.
 let _notionSchemaCache = null;
 
-/** Fetch DB schema once, resolve which property name variant exists for each key. */
+/** Fetch DB schema once, resolve which property name variant exists for each key.
+ *  Also auto-creates the 📷 收據相片 Files property on first call so image sync
+ *  works out of the box (no manual "美化 Schema" click required). */
 async function notionEnsureSchema() {
   if (_notionSchemaCache) return _notionSchemaCache;
   const db = await notionFetch(`/databases/${state.notionDb}`, { method: 'GET' });
-  const existing = db.properties || {};
+  let existing = db.properties || {};
+
+  // Auto-create the photo Files property if missing — one-time side-effect.
+  // (Silent; errors ignored — app falls back to page body image blocks.)
+  const hasPhoto = !!(existing[N.photo[0]] || existing[N.photo[1]]);
+  if (!hasPhoto) {
+    try {
+      const r = await notionFetch(`/databases/${state.notionDb}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ properties: { [N.photo[0]]: { files: {} } } })
+      });
+      existing = r.properties || existing;
+      console.log('[notion] auto-created 📷 收據相片 property');
+    } catch(e) {
+      console.warn('[notion] could not auto-create 📷 收據相片 (will use body image blocks):', e.message);
+    }
+  }
+
   const cache = {};
   for (const [key, [newName, oldName]] of Object.entries(N)) {
-    // Prefer emoji name if it's already in the DB; otherwise use plain name
-    cache[key] = existing[newName] ? newName : oldName;
+    cache[key] = existing[newName] ? newName : (existing[oldName] ? oldName : newName);
   }
   _notionSchemaCache = cache;
   console.log('[notion] schema resolved:', cache);
@@ -4716,6 +4769,16 @@ function buildNotionProps(r, schemaMap) {
   if (r.hkd != null)      props[nm('hkd')]      = { number: Number(r.hkd) };
   if (r.tax != null)      props[nm('tax')]       = { number: Number(r.tax) };
   if (r.subtotal != null) props[nm('subtotal')]  = { number: Number(r.subtotal) };
+  // Receipt photo (Files & media property) — only when the DB has this column
+  // AND we have a public URL (imgbb). This enables gallery view in Notion.
+  if (r.photoUrl && schemaMap && schemaMap.photo) {
+    // Filename preview: use store + date so Notion list shows meaningful titles
+    const baseName = (r.store || 'receipt').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
+    const fileName = `${baseName}_${r.date || 'nodate'}.jpg`;
+    props[nm('photo')] = {
+      files: [{ name: fileName, type: 'external', external: { url: r.photoUrl } }]
+    };
+  }
   return props;
 }
 
@@ -4775,6 +4838,15 @@ async function notionMigrateSchema() {
       }
     }
 
+    // ADD 📷 收據相片 Files property if it doesn't exist yet (either variant)
+    const hasPhotoProp = !!(existing[N.photo[0]] || existing[N.photo[1]]);
+    let addedPhoto = false;
+    if (!hasPhotoProp) {
+      patchProps[N.photo[0]] = { files: {} };
+      needsMigration = true;
+      addedPhoto = true;
+    }
+
     if (!needsMigration) {
       toast('✅ Schema 已是最新版本 🎉'); return;
     }
@@ -4789,7 +4861,7 @@ async function notionMigrateSchema() {
     });
 
     notionClearSchemaCache(); // force next push to re-detect emoji property names
-    toast('✅ Notion 已美化！欄位名已加上 emoji 🎉');
+    toast(addedPhoto ? '✅ Notion 已美化 + 新增 📷 收據相片欄！' : '✅ Notion 已美化！欄位名已加上 emoji 🎉');
   } catch(e) {
     console.error('[notionMigrateSchema]', e);
     toast('❌ 美化失敗：' + (e.message || '').slice(0, 100), 'error');
@@ -5024,6 +5096,11 @@ async function notionPullAll(silent = false) {
         merged.set(id, { id, _itineraryOnly: true, notionPageId: page.id });
         continue;
       }
+      // Photo URL: prefer new Files property if present; else fall back to scanning
+      // page content blocks (image blocks) — not included in basic pull but placeholder for future.
+      const photoProp = nGet(p,'photo');
+      const photoFirst = photoProp?.files?.[0];
+      const photoUrl = photoFirst?.external?.url || photoFirst?.file?.url || null;
       const r = {
         id,
         store: storeTitle,
@@ -5044,6 +5121,7 @@ async function notionPullAll(silent = false) {
         notionPageId: page.id,
         createdAt: new Date(page.created_time).getTime(),
       };
+      if (photoUrl) r.photoUrl = photoUrl;
       if (merged.has(id)) {
         const local = merged.get(id);
         // Preserve user-confirmed receipts: if local has no ⏳ prefix but Notion still has one,
@@ -5166,8 +5244,10 @@ function openConfirmModal(data, base64) {
   $('mTotal').value = data.total || '';
   const cleanDate = sanitizeDate(data.date);
   $('mDate').value = cleanDate;
-  if ($('mTime')) $('mTime').value = data.time || '';
-  if ($('mAddress')) $('mAddress').value = data.address || '';
+  // Default time: use AI-extracted time, else fall back to current local time (HH:mm)
+  if ($('mTime')) $('mTime').value = data.time || nowHHMM();
+  // Address cascade: AI → store name → ITINERARY region for date
+  if ($('mAddress')) $('mAddress').value = resolveAddressCascade(data.address, data.store, cleanDate);
   if ($('mBookingRef')) $('mBookingRef').value = data.booking_ref || data.bookingRef || '';
   // Whitelist AI-returned category/payment — unknown values fall back to 'other'/'cash'
   const validCats = CATEGORIES.map(c => c.id);
@@ -5176,7 +5256,6 @@ function openConfirmModal(data, base64) {
   const aiPay = (data.payment || '').toLowerCase().trim();
   $('mCat').value = validCats.includes(aiCat) ? aiCat : 'other';
   $('mPay').value = validPays.includes(aiPay) ? aiPay : 'cash';
-  $('mRegion').value = getRegionForDate(cleanDate);
   $('mItems').value = (data.items||[]).map(i => {
     const jp = i.name_jp ? ` (${i.name_jp})` : '';
     const hkd = (state.rate > 0 && i.price) ? ` ≈HKD${Math.round(i.price / state.rate)}` : '';
@@ -5223,7 +5302,6 @@ function editReceipt(id) {
   if ($('mBookingRef')) $('mBookingRef').value = r.bookingRef || '';
   $('mCat').value = r.category;
   $('mPay').value = r.payment;
-  $('mRegion').value = r.region || '';
   $('mItems').value = r.itemsText || '';
   $('mNote').value = r.note || '';
   // Show stored receipt photo if available
@@ -5266,7 +5344,9 @@ async function _saveModalInner() {
     bookingRef: ($('mBookingRef')?.value || '').trim(),
     category: $('mCat').value,
     payment: $('mPay').value,
-    region: $('mRegion').value.trim(),
+    // region removed — address field replaces it (deduped). Keep r.region from existing
+    // so backwards-compat with old Notion data doesn't lose it until user re-saves.
+    region: existing?.region || '',
     itemsText: $('mItems').value,
     note: $('mNote').value,
     personId: selectedPersonId || getPersons()[0].id,
@@ -5927,17 +6007,18 @@ function init() {
     }, '');
   });
 
-  // When user changes the date inside the modal, auto-update the region hint
-  // to match the new phase (prep/trip/post). User can still override.
+  // When user changes the date inside the modal, auto-update the address hint
+  // using the same cascade logic — but only if the current value looks like a
+  // stale auto-suggestion (ITINERARY region name), not a user's manual entry.
   $('mDate')?.addEventListener('change', () => {
     const d = sanitizeDate($('mDate').value);
-    const current = $('mRegion').value;
-    const suggested = getRegionForDate(d);
-    // Only auto-replace if the current value looks like a stale auto-suggestion,
-    // not a user's manual entry.
-    const staleAutoValues = ['—', '名古屋', '準備階段', '返程後', ...getItinerary().map(i => i.region)];
-    if (staleAutoValues.includes(current) || !current) {
-      $('mRegion').value = suggested;
+    const addrEl = $('mAddress');
+    if (!addrEl) return;
+    const current = addrEl.value || '';
+    const itineraryRegions = (typeof ITINERARY !== 'undefined' ? ITINERARY.map(i => i.region) : []);
+    const staleAutoValues = ['', '—', '名古屋', '準備階段', '返程後', ...itineraryRegions];
+    if (staleAutoValues.includes(current)) {
+      addrEl.value = resolveAddressCascade(null, $('mStore').value, d);
     }
   });
 
