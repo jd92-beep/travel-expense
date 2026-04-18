@@ -1157,6 +1157,20 @@ function loadState() {
   // Always-on invariants — normalize shapes even if load() succeeded with partial/legacy data
   if (!Array.isArray(state.receipts)) state.receipts = [];
   if (!Array.isArray(state.notionDeletedIds)) state.notionDeletedIds = [];
+  // Reset email/voice/scan model if stored value is no longer in the catalog
+  // (prevents silent fallback to wrong provider after a catalog update).
+  if (state.emailModel && !EMAIL_MODELS.some(m => m.id === state.emailModel)) {
+    console.warn('[loadState] unknown emailModel', state.emailModel, '— resetting to default');
+    state.emailModel = 'glm-5-turbo';
+  }
+  if (state.voiceModel && !VOICE_MODELS.some(m => m.id === state.voiceModel)) {
+    console.warn('[loadState] unknown voiceModel', state.voiceModel, '— resetting');
+    state.voiceModel = 'glm-4.6v';
+  }
+  if (state.scanModel && !SCAN_MODELS.some(m => m.id === state.scanModel)) {
+    console.warn('[loadState] unknown scanModel', state.scanModel, '— resetting');
+    state.scanModel = 'glm-4.6v';
+  }
   if (!Array.isArray(state.persons) || !state.persons.length) {
     state.persons = [
       { id: 'p_boss',   name: 'Tony', emoji: '👦', color: '#CC2929' },
@@ -1365,49 +1379,94 @@ let modelTestStatus = {};
 async function testModelConnection(modelId) {
   const apiKey = state.apiKey || DEFAULT_API_KEY;
   try {
+    // GLM-4 family (chat endpoint) — glm-4-flash + glm-4.6v
     if (modelId === 'glm-4-flash' || modelId === 'glm-4.6v') {
       if (!VAULT_ZAI_KEY) return { ok: false, msg: 'vault 未解鎖' };
-      const r = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+      const r = await fetchWithTimeout('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: modelId,
-          messages: [{ role: 'user', content: 'hi' }],
-          thinking: { type: 'disabled' },
-          stream: false, max_tokens: 5
+          model: modelId, messages: [{ role: 'user', content: 'hi' }],
+          thinking: { type: 'disabled' }, stream: false, max_tokens: 5
         })
-      });
+      }, 15000);
       return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
-    } else if (modelId === 'minimax') {
-      // Lightweight auth probe — invalid key returns 401 quickly
+    }
+    // GLM-5 family (coding endpoint) — glm-5, glm-5-turbo
+    if (modelId === 'glm-5' || modelId === 'glm-5-turbo') {
+      if (!VAULT_ZAI_KEY) return { ok: false, msg: 'vault 未解鎖' };
+      const r = await fetchWithTimeout('https://open.bigmodel.cn/api/coding/paas/v4/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: modelId, messages: [{ role: 'user', content: 'hi' }],
+          thinking: { type: 'disabled' }, stream: false, max_tokens: 5
+        })
+      }, 15000);
+      return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
+    }
+    // MiniMax VLM (coding_plan/vlm endpoint — scan picker)
+    if (modelId === 'minimax') {
       const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
       if (!key) return { ok: false, msg: 'MiniMax key 未設定' };
-      const r = await fetch('https://api.minimax.io/v1/coding_plan/vlm', {
+      const r = await fetchWithTimeout('https://api.minimax.io/v1/coding_plan/vlm', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: 'ping', image_url: 'https://www.gstatic.com/webp/gallery/1.jpg' })
-      });
-      // 200 with any base_resp means auth worked
-      if (r.ok) return { ok: true, msg: '✅ 連線正常' };
-      return { ok: false, msg: `❌ HTTP ${r.status}` };
-    } else {
-      const testKeys = [apiKey, DEFAULT_BACKUP_API_KEY].filter((k, i, a) => k && a.indexOf(k) === i);
-      if (!testKeys.length) return { ok: false, msg: 'API key 未設定' };
-      let lastStatus;
-      for (const key of testKeys) {
-        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${key}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: 'hi' }] }], generationConfig: { maxOutputTokens: 5 } })
-        });
-        if (r.ok) return { ok: true, msg: '✅ 連線正常' };
-        lastStatus = r.status;
-        if (r.status !== 429 && r.status !== 403) break;
-      }
-      return { ok: false, msg: `❌ HTTP ${lastStatus}` };
+      }, 15000);
+      return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
     }
+    // MiniMax M2.7 (Anthropic portal — voice/email picker)
+    if (modelId === 'minimax-m2.7') {
+      const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
+      if (!key) return { ok: false, msg: 'MiniMax key 未設定' };
+      const r = await fetchWithTimeout('https://api.minimax.io/anthropic/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'MiniMax-M2.7', max_tokens: 5,
+          messages: [{ role: 'user', content: 'hi' }],
+        })
+      }, 15000);
+      return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
+    }
+    // OpenRouter (text-only — elephant-alpha etc.)
+    if (modelId === OPENROUTER_MODEL || (typeof modelId === 'string' && modelId.startsWith('openrouter/'))) {
+      const key = state.openrouterKey || DEFAULT_OPENROUTER_KEY;
+      if (!key) return { ok: false, msg: 'OpenRouter key 未設定' };
+      const r = await fetchWithTimeout(OPENROUTER_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://travel-expense.local', 'X-Title': 'travel-expense',
+        },
+        body: JSON.stringify({
+          model: modelId, max_tokens: 5,
+          messages: [{ role: 'user', content: 'hi' }],
+        })
+      }, 15000);
+      return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
+    }
+    // Default: assume Gemini / Gemma model ID
+    const testKeys = getGeminiKeys(apiKey);
+    if (!testKeys.length) return { ok: false, msg: 'API key 未設定' };
+    let lastStatus;
+    for (const key of testKeys) {
+      const r = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: 'hi' }] }], generationConfig: { maxOutputTokens: 5 } })
+      }, 15000);
+      if (r.ok) return { ok: true, msg: '✅ 連線正常' };
+      lastStatus = r.status;
+      if (r.status !== 429 && r.status !== 403 && r.status !== 503) break;
+    }
+    return { ok: false, msg: `❌ HTTP ${lastStatus}` };
   } catch(e) {
-    return { ok: false, msg: '❌ ' + (e.message || '網絡錯誤').slice(0, 40) };
+    return { ok: false, msg: '❌ ' + String(e?.message || '網絡錯誤').slice(0, 40) };
   }
 }
 
@@ -1456,7 +1515,7 @@ function renderVoiceModelCards() {
 function renderEmailModelCards() {
   const el = document.getElementById('emailModelCards');
   if (!el) return;
-  const cur = state.emailModel || 'openrouter/elephant-alpha';
+  const cur = state.emailModel || 'glm-5-turbo';
   el.innerHTML = EMAIL_MODELS.map(m => buildModelCard(m, cur === m.id, 'email')).join('');
   const badge = document.getElementById('lastEmailBadge');
   if (badge) {
@@ -1504,11 +1563,12 @@ window.switchModel_voice = function(id) {
 };
 
 window.switchModel_email = function(id) {
+  const model = EMAIL_MODELS.find(m => m.id === id);
+  if (!model) { console.warn('[switchModel_email] unknown id:', id); toast('⚠️ 未知模型 ID'); return; }
   state.emailModel = id;
   saveState();
   renderEmailModelCards();
-  toast('📧 Email 解析模型: ' + (EMAIL_MODELS.find(m => m.id === id)?.name || id));
-  // Optional connectivity test — use runModelTest if the model is supported by it
+  toast('📧 Email 解析模型: ' + model.name);
   runModelTest(id, renderEmailModelCards);
 };
 
@@ -2689,62 +2749,43 @@ async function parseVoiceExpense(transcript) {
   let lastErr = null;
   const voicePrimaryModel = state.voiceModel || 'glm-4.6v';
 
-  if (voicePrimaryModel === OPENROUTER_MODEL) {
-    // OpenRouter primary → GLM → Gemini/Gemma
+  // Unified chain: try user's primary first, then a stable fallback order.
+  // Uses callAnyTextModel (+ tryGemini for responseSchema text calls) so every
+  // VOICE_MODELS entry — including glm-5/glm-5-turbo/minimax-m2.7 — is reachable.
+  const VOICE_FALLBACK = [
+    'glm-4-flash', 'glm-4.6v',
+    'openrouter/elephant-alpha',
+    'glm-5-turbo', 'glm-5',
+    'minimax-m2.7',
+    'gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash',
+    'gemma-4-31b-it', 'gemma-4-26b-a4b-it',
+    'gemini-3.1-pro-preview', 'gemini-3-pro-preview',
+  ];
+  const voiceOrder = [voicePrimaryModel, ...VOICE_FALLBACK.filter(m => m !== voicePrimaryModel)];
+
+  for (const modelId of voiceOrder) {
     try {
-      parsed = await tryOpenRouter(prompt);
-      if (parsed) { console.info('[Voice] ✅ ' + OPENROUTER_MODEL + ' 成功'); toast('✅ 語音解析完成 (' + OPENROUTER_MODEL + ')'); }
-    } catch(e) { console.warn('[Voice] ❌ ' + OPENROUTER_MODEL + ' 失敗:', e.message); lastErr = e; }
-    if (!parsed) {
-      try { parsed = await tryGLM(prompt); if (parsed) toast('✅ 語音解析完成 (GLM-4-Flash)'); }
-      catch(e) { lastErr = e; }
-    }
-    if (!parsed) {
-      const geminiModels = ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemma-4-31b-it', 'gemma-4-26b-a4b-it'];
-      for (const m of geminiModels) {
-        try { parsed = await tryGemini(prompt, m); if (parsed) { toast('✅ 語音解析完成 (' + m + ')'); break; } } catch(e) { lastErr = e; }
+      console.info('[Voice] 嘗試 ' + modelId + '…');
+      let rawOrParsed;
+      // Gemini/Gemma models: use tryGemini() which handles key rotation + safety-filter
+      if (GEMINI_TEXT_MODELS.has(modelId)) {
+        parsed = await tryGemini(prompt, modelId);
+      } else {
+        // Any other model (OpenRouter/GLM/MiniMax): use the unified dispatcher
+        rawOrParsed = await callAnyTextModel(modelId, prompt);
+        parsed = parseReceiptJson(rawOrParsed);
       }
-    }
-  } else if (voicePrimaryModel === 'glm-4-flash' || voicePrimaryModel === 'glm-4.6v') {
-    // GLM primary (flash or 4.6v) → OpenRouter → Gemini/Gemma fallback
-    try {
-      parsed = await tryGLM(prompt, voicePrimaryModel);
-      const modelName = voicePrimaryModel === 'glm-4.6v' ? 'GLM-4.6V' : 'GLM-4-Flash';
-      console.info(`[Voice] ✅ ${modelName} 成功`);
-      toast(`✅ 語音解析完成 (${modelName})`);
+      if (parsed) {
+        const label = VOICE_MODELS.find(m => m.id === modelId)?.name || modelId;
+        console.info('[Voice] ✅ ' + label + ' 成功');
+        toast('✅ 語音解析完成 (' + label + ')');
+        break;
+      }
     } catch(e) {
-      console.warn(`[Voice] ❌ ${voicePrimaryModel} 失敗:`, e.message);
+      console.warn('[Voice] ❌ ' + modelId + ' 失敗:', e?.message);
       lastErr = e;
-    }
-    if (!parsed) {
-      try { parsed = await tryOpenRouter(prompt); if (parsed) toast('✅ 語音解析完成 (' + OPENROUTER_MODEL + ')'); }
-      catch(e) { console.warn('[Voice] ❌ ' + OPENROUTER_MODEL + ' 失敗:', e.message); lastErr = e; }
-    }
-    if (!parsed) {
-      const geminiModels = ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemma-4-31b-it', 'gemma-4-26b-a4b-it'];
-      for (const m of geminiModels) {
-        try { parsed = await tryGemini(prompt, m); if (parsed) { toast('✅ 語音解析完成 (' + m + ')'); break; } } catch(e) { console.warn(`[Voice] ❌ ${m} 失敗: ${e.message}`); lastErr = e; }
-      }
-    }
-  } else {
-    // Gemini primary → OpenRouter → GLM fallback
-    try {
-      parsed = await tryGemini(prompt, voicePrimaryModel);
-      if (parsed) { console.info(`[Voice] ✅ ${voicePrimaryModel} 成功`); toast('✅ 語音解析完成 (' + voicePrimaryModel + ')'); }
-    } catch(e) { console.warn(`[Voice] ❌ ${voicePrimaryModel} 失敗:`, e.message); lastErr = e; }
-    if (!parsed) {
-      try { parsed = await tryOpenRouter(prompt); if (parsed) toast('✅ 語音解析完成 (' + OPENROUTER_MODEL + ')'); }
-      catch(e) { console.warn('[Voice] ❌ ' + OPENROUTER_MODEL + ' 失敗:', e.message); lastErr = e; }
-    }
-    if (!parsed) {
-      try {
-        parsed = await tryGLM(prompt);
-        if (parsed) { console.info('[Voice] ✅ GLM-4-Flash 成功'); toast('✅ 語音解析完成 (GLM-4-Flash)'); }
-      } catch(e) { console.warn('[Voice] ❌ GLM-4-Flash 失敗:', e.message); lastErr = e; }
-    }
-    // Last resort: flash
-    if (!parsed && apiKey && voicePrimaryModel !== 'gemini-3-flash-preview') {
-      try { parsed = await tryGemini(prompt, 'gemini-3.1-flash-lite-preview'); } catch(e) { lastErr = e; }
+      // Safety-filter blocks are consistent across keys/models of same vendor
+      if (String(e?.message || '').includes('safety filter')) continue;
     }
   }
 
@@ -2975,8 +3016,11 @@ async function parseEmailInput({ text = '', images = [] }) {
 
   const apiKey = state.apiKey || DEFAULT_API_KEY;
   const primaryVisionModel = state.scanModel || 'gemini-3.1-flash-lite-preview';
-  // Email extraction model — user's choice from Settings (defaults to OpenRouter elephant-alpha)
-  const primaryEmailModel = state.emailModel || 'openrouter/elephant-alpha';
+  // Email extraction model — user's choice from Settings (defaults to GLM-5-turbo).
+  // If state.emailModel is stale/unknown, fall back to the known-good default.
+  const primaryEmailModel = (state.emailModel && EMAIL_MODELS.some(m => m.id === state.emailModel))
+    ? state.emailModel
+    : 'glm-5-turbo';
 
   // Build instruction block: prompt + optional text body
   const textBlock = hasText
@@ -3025,11 +3069,17 @@ async function parseEmailInput({ text = '', images = [] }) {
       if (!parsed || !Array.isArray(parsed.bookings)) {
         throw new Error('JSON 缺少 bookings 陣列');
       }
-      // Drop obviously hollow bookings (no store AND no total AND no date) —
-      // some models emit [{}] when they can't extract anything useful.
-      parsed.bookings = parsed.bookings.filter(b =>
-        b && typeof b === 'object' && (b.store || b.total || b.date || b.items_text)
-      );
+      // Drop obviously hollow bookings (no useful fields at all) — some models
+      // emit [{}] when they can't extract anything. Explicit null/undefined
+      // checks preserve intentional `total: 0` (e.g. price-TBD reservations).
+      parsed.bookings = parsed.bookings.filter(b => {
+        if (!b || typeof b !== 'object') return false;
+        const hasStore = typeof b.store === 'string' && b.store.trim().length > 0;
+        const hasTotal = b.total !== undefined && b.total !== null;
+        const hasDate  = typeof b.date === 'string' && b.date.trim().length > 0;
+        const hasItems = typeof b.items_text === 'string' && b.items_text.trim().length > 0;
+        return hasStore || hasTotal || hasDate || hasItems;
+      });
       // If bookings is empty, try next provider (maybe the model silently dropped
       // content due to prompt/schema issues). Accept empty only as last resort.
       if (parsed.bookings.length === 0) {
@@ -3270,18 +3320,30 @@ async function callMiniMaxText(content) {
   throw new Error('MiniMax 空回應');
 }
 
+// Known text-only model IDs that route to Gemini/Gemma endpoint.
+// Explicitly enumerated so a typo/unknown ID throws instead of silently hitting Gemini.
+const GEMINI_TEXT_MODELS = new Set([
+  'gemini-3.1-flash-lite-preview',
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash',
+  'gemini-3.1-pro-preview',
+  'gemini-3-pro-preview',
+  'gemma-4-31b-it',
+  'gemma-4-26b-a4b-it',
+]);
+
 // Unified entry: call any text-only model by ID (used by email extractor).
-// Returns raw string; caller must parseReceiptJson().
+// Returns raw string; caller must parseReceiptJson(). Throws on unknown modelId.
 async function callAnyTextModel(modelId, prompt) {
   const apiKey = state.apiKey || DEFAULT_API_KEY;
-  if (modelId === OPENROUTER_MODEL || modelId === 'openrouter/elephant-alpha') {
+  if (modelId === OPENROUTER_MODEL || (typeof modelId === 'string' && modelId.startsWith('openrouter/'))) {
     return callOpenRouterText(prompt);
   }
   if (modelId === 'minimax-m2.7') return callMiniMaxText(prompt);
   if (modelId === 'glm-5' || modelId === 'glm-5-turbo') return callGLM5Text(prompt, modelId);
   if (modelId === 'glm-4-flash' || modelId === 'glm-4.6v') return callGLMText(prompt);
-  // Default: assume Gemini / Gemma model ID → use structured-output text call
-  return callGeminiText(prompt, modelId, apiKey);
+  if (GEMINI_TEXT_MODELS.has(modelId)) return callGeminiText(prompt, modelId, apiKey);
+  throw new Error('Unknown model ID: ' + modelId + ' (not in EMAIL_MODELS catalog)');
 }
 
 // ==================== POST-PROCESS VALIDATION & REPAIR ====================
