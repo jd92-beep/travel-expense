@@ -832,7 +832,14 @@
           <label class="text-[10px] uppercase tracking-wider text-gray-400">時間</label>
           <input id="mTime" type="time" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
         </div>
-        <div></div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-gray-400">預訂編號</label>
+          <input id="mBookingRef" type="text" placeholder="例：KNR358047" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+        </div>
+      </div>
+      <div class="mt-3">
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">地址（用於 Google Maps）</label>
+        <input id="mAddress" type="text" placeholder="例：名古屋市中村区名駅4-6-25" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
@@ -1029,9 +1036,13 @@ const CATEGORIES = [
   { id:'shopping', name:'購物', icon:'🛍️', color:'#a78bfa' },
   { id:'lodging', name:'住宿', icon:'🏨', color:'#34d399' },
   { id:'ticket', name:'門票', icon:'🎫', color:'#fbbf24' },
+  { id:'localtour', name:'當地旅遊', icon:'🗺️', color:'#06b6d4' },
   { id:'medicine', name:'藥品', icon:'💊', color:'#f472b6' },
   { id:'other', name:'其他', icon:'📦', color:'#6B7285' },
 ];
+// Categories that are usually pre-paid before a trip (even if service date is during trip,
+// they belong to 'prep' phase for budget purposes). Used by getReceiptPhase.
+const PRE_PAID_CATEGORIES = new Set(['lodging', 'ticket', 'localtour', 'transport']);
 const PAYMENTS = [
   { id:'cash', name:'現金', color:'#34d399' },
   { id:'credit', name:'信用卡', color:'#60a5fa' },
@@ -1058,6 +1069,7 @@ const VOICE_MODELS = [
   { id: 'glm-5.1',                       name: 'GLM-5.1',               sub: '智譜 · 升級版',              tag: '🟪', color: '#4C1D95' },
   { id: 'glm-5-turbo',                   name: 'GLM-5-turbo',           sub: '智譜 · 快速 · 免費',        tag: '🟪', color: '#6B21A8' },
   { id: 'openrouter/elephant-alpha',     name: 'Elephant Alpha',        sub: 'OpenRouter · Stealth · 免費', tag: '🐘', color: '#64748B' },
+  { id: 'minimax',                       name: 'MiniMax VLM',           sub: 'MiniMax · 視覺/文字',       tag: '🔷', color: '#0284C7' },
   { id: 'minimax-m2.7',                  name: 'MiniMax M2.7',          sub: 'MiniMax · Anthropic portal', tag: '🔷', color: '#0EA5E9' },
   { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: '輕量 · 5 key rotation ✅',  tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: '快速 · 5 key rotation',     tag: '⚡', color: '#F5A623' },
@@ -1361,6 +1373,22 @@ function getTripPhase(date) {
   if (date < tripStart) return 'prep';
   if (date > tripEnd) return 'post';
   return 'trip';
+}
+// Smart phase calculator — takes the full receipt object. Pre-paid bookings
+// (lodging/ticket/localtour/transport) whose receipt was created BEFORE the
+// trip count as 'prep', even if the service date is during the trip.
+// Falls back to date-based phase for in-trip purchases.
+function getReceiptPhase(r) {
+  if (!r) return 'trip';
+  const tripStart = (state.tripDateRange && state.tripDateRange.start) || '2026-04-20';
+  const tripStartMs = new Date(tripStart + 'T00:00:00+08:00').getTime();
+  // Manual override wins (set by user in edit modal)
+  if (r.phase === 'prep' || r.phase === 'trip' || r.phase === 'post') return r.phase;
+  // Category heuristic: pre-payable bookings created before trip = prep
+  if (PRE_PAID_CATEGORIES.has(r.category) && r.createdAt && r.createdAt < tripStartMs) {
+    return 'prep';
+  }
+  return getTripPhase(r.date);
 }
 function getCurrentDay() {
   const today = todayHKT();
@@ -1782,9 +1810,9 @@ function renderDashboard() {
   // so that the per-day quota during the trip isn't squeezed by flight/hotel pre-pay.
   const tripStart = (state.tripDateRange && state.tripDateRange.start) || '2026-04-20';
   const tripEnd = (state.tripDateRange && state.tripDateRange.end) || '2026-04-25';
-  const prepReceipts = state.receipts.filter(r => getTripPhase(r.date) === 'prep');
+  const prepReceipts = state.receipts.filter(r => getReceiptPhase(r) === 'prep');
   const tripSpentBeforeToday = state.receipts
-    .filter(r => r.date < today && getTripPhase(r.date) === 'trip')
+    .filter(r => r.date < today && getReceiptPhase(r) === 'trip')
     .reduce((s,r) => s + (Number(r.total)||0), 0);
   const prepTotal = prepReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
   const remainingTripBudget = Math.max(0, state.budget - prepTotal - tripSpentBeforeToday);
@@ -1889,17 +1917,23 @@ function renderDashboard() {
       const safeNameJs = (spot.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       const safeAddrJs = (spot.address||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       // Tap behaviour: hotel → map popup; other spots → edit modal (only non-virtual static spots)
+      const hasOverride = spotIdx >= 0 && !!_getItineraryOverride(it.date, spotIdx);
       let tapAttrs = '';
       if (isHotel) {
-        tapAttrs = `onclick="showHotelPopup('${safeNameJs}','${safeAddrJs}')" style="cursor:pointer;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25);border-radius:10px;padding:4px 8px;margin:-2px -4px"`;
+        tapAttrs = `onclick="showHotelPopup('${safeNameJs}','${safeAddrJs}')" style="cursor:pointer;background:rgba(52,211,153,0.10);border:1px solid rgba(52,211,153,0.30);border-radius:10px;padding:5px 8px;margin:-2px -4px"`;
       } else if (spotIdx >= 0) {
-        tapAttrs = `onclick="openSpotEdit('${it.date}',${spotIdx})" style="cursor:pointer;border-radius:8px;padding:2px 4px;margin:-2px -4px"`;
+        const editBg = hasOverride ? 'background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);' : 'background:rgba(0,0,0,0.02);border:1px solid rgba(0,0,0,0.06);';
+        tapAttrs = `onclick="openSpotEdit('${it.date}',${spotIdx})" style="cursor:pointer;${editBg}border-radius:8px;padding:5px 8px;margin:-1px -4px"`;
       }
-      return `<div class="flex items-center gap-2 py-0.5" ${tapAttrs}>
+      // Right-side indicator — use clear emoji (renders on all devices) at readable size
+      let rightIcon = '';
+      if (isHotel) rightIcon = '<span class="text-xs flex-shrink-0" style="color:#10b981">📍 ›</span>';
+      else if (spotIdx >= 0) rightIcon = `<span class="text-xs flex-shrink-0" style="color:${hasOverride?'#6366f1':'#9CA3AF'}">✏️</span>`;
+      return `<div class="flex items-center gap-2 py-1" ${tapAttrs}>
         <span class="flex-shrink-0 text-sm" style="width:18px;text-align:center">${cat.icon}</span>
-        <span class="text-[10px] flex-shrink-0 w-8" style="color:var(--n-muted)">${spot.time}</span>
+        <span class="text-[11px] flex-shrink-0 w-10 font-medium" style="color:var(--n-muted)">${spot.time}</span>
         <span class="text-xs flex-1 truncate" style="color:var(--n-text)">${escapeHtml(spot.name)}</span>
-        ${isHotel ? '<span class="text-[10px] flex-shrink-0" style="color:#34d399">📍›</span>' : (spotIdx >= 0 ? '<span class="text-[10px] flex-shrink-0" style="color:var(--n-muted)">✎</span>' : '')}
+        ${rightIcon}
       </div>`;
     }).join('');
     return `
@@ -1921,7 +1955,7 @@ function renderDashboard() {
       </div>`;
   }));
   // Post-trip row shown when any post receipts exist
-  const postReceipts = state.receipts.filter(r => getTripPhase(r.date) === 'post');
+  const postReceipts = state.receipts.filter(r => getReceiptPhase(r) === 'post');
   if (postReceipts.length > 0) {
     const postTotal = postReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
     const postSafeRate = Math.max(0.1, Number(state.rate) || 20.36);
@@ -1982,14 +2016,16 @@ function getEffectiveSpots(it) {
   const lodgingReceipt = state.receipts.find(r => r.date === it.date && r.category === 'lodging');
   if (lodgingReceipt) {
     const hotelName = displayStore(lodgingReceipt);
-    // Address extraction: first try "📍 <address>" marker (from Apps Script) at
-    // start of note field. Else fall back to static ITINERARY spot's address.
-    // (We deliberately DO NOT use raw note as address — it often contains payment
-    //  junk like "原價 HKD 860.4 · 已付款 · 卡號尾數 0373".)
+    // Address priority:
+    //   1. Dedicated r.address field (filled by AI or user in confirm modal)
+    //   2. "📍 <address>" marker in note (legacy Apps Script format)
+    //   3. Static ITINERARY spot's address
+    // Raw note is NEVER used — often contains payment junk like
+    // "原價 HKD 860.4 · 已付款 · 卡號尾數 0373".
     const staticLodgingSpot = spots.find(s => s.type === 'lodging');
     const noteStr = lodgingReceipt.note || '';
-    const addrMatch = noteStr.match(/^📍\s*([^\n\[]+?)(?=\s*\[|\n|$)/);
-    const address = (addrMatch ? addrMatch[1].trim() : (staticLodgingSpot?.address || '')).trim();
+    const addrFromNote = noteStr.match(/^📍\s*([^\n\[]+?)(?=\s*\[|\n|$)/)?.[1]?.trim();
+    const address = (lodgingReceipt.address || addrFromNote || staticLodgingSpot?.address || '').trim();
     const hotelSpot = { time:'23:00', name:hotelName, type:'lodging', receiptId:lodgingReceipt.id, address:address };
     const lodgingIdx = spots.findIndex(s => s.type === 'lodging');
     if (lodgingIdx >= 0) spots[lodgingIdx] = hotelSpot;
@@ -2361,7 +2397,7 @@ function renderTimeline() {
   };
 
   // ── PREP PHASE section (before Day 1) ──
-  const prepReceipts = state.receipts.filter(r => getTripPhase(r.date) === 'prep');
+  const prepReceipts = state.receipts.filter(r => getReceiptPhase(r) === 'prep');
   if (prepReceipts.length > 0) {
     const prepTotal = prepReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
     html += `<div class="tl-day-header" style="background:linear-gradient(135deg,#F59E0B,#FCD34D);box-shadow:0 4px 12px rgba(245,158,11,0.30)">🧳 Day 0 · 準備階段 · ¥${fmt(prepTotal)} (HK$${fmt(Math.round(prepTotal/safeRate))})</div>`;
@@ -2419,7 +2455,7 @@ function renderTimeline() {
   });
 
   // ── POST PHASE section (after last day) ──
-  const postReceipts = state.receipts.filter(r => getTripPhase(r.date) === 'post');
+  const postReceipts = state.receipts.filter(r => getReceiptPhase(r) === 'post');
   if (postReceipts.length > 0) {
     const postTotal = postReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
     html += `<div class="tl-day-header" style="background:linear-gradient(135deg,#64748B,#94A3B8);box-shadow:0 4px 12px rgba(100,116,139,0.30)">🏠 返程後 · ¥${fmt(postTotal)} (HK$${fmt(Math.round(postTotal/safeRate))})</div>`;
@@ -3745,7 +3781,7 @@ async function callAnyTextModel(modelId, prompt) {
   if (modelId === OPENROUTER_MODEL || (typeof modelId === 'string' && modelId.startsWith('openrouter/'))) {
     return callOpenRouterText(prompt);
   }
-  if (modelId === 'minimax-m2.7') return callMiniMaxText(prompt);
+  if (modelId === 'minimax-m2.7' || modelId === 'minimax') return callMiniMaxText(prompt);
   if (modelId === 'glm-5' || modelId === 'glm-5-turbo' || modelId === 'glm-5.1') return callGLM5Text(prompt, modelId);
   if (modelId === 'glm-4-flash' || modelId === 'glm-4.6v') return callGLMText(prompt);
   if (GEMINI_TEXT_MODELS.has(modelId)) return callGeminiText(prompt, modelId, apiKey);
@@ -4627,19 +4663,60 @@ async function notionPullAll(silent = false) {
       // Map 旅伴 text back to personId
       const companionText = nGet(p,'person')?.rich_text?.[0]?.plain_text || '';
       const matchedPerson = getPersons().find(pe => companionText.includes(pe.name));
+      const rawNote = nGet(p,'note')?.rich_text?.[0]?.plain_text || '';
+      // Parse structured meta line: "📍 <addr> | 🔖 <ref> | ⏰ <HH:mm>\n..."
+      let parsedAddress = '', parsedBookingRef = '', parsedTime = '';
+      let noteClean = rawNote;
+      const firstLineEnd = rawNote.indexOf('\n');
+      const firstLine = firstLineEnd >= 0 ? rawNote.slice(0, firstLineEnd) : rawNote;
+      if (/[📍🔖⏰]/.test(firstLine)) {
+        const parts = firstLine.split(/\s*\|\s*/);
+        parts.forEach(p => {
+          const m = p.match(/^📍\s*(.+)$/); if (m) { parsedAddress = m[1].trim(); return; }
+          const m2 = p.match(/^🔖\s*(.+)$/); if (m2) { parsedBookingRef = m2[1].trim(); return; }
+          const m3 = p.match(/^⏰\s*(\d{1,2}:\d{2})/); if (m3) { parsedTime = m3[1]; return; }
+        });
+        noteClean = firstLineEnd >= 0 ? rawNote.slice(firstLineEnd + 1) : '';
+      }
+      const storeTitle = nGet(p,'store')?.title?.[0]?.plain_text || '';
+      // Detect itinerary-update marker and apply as ITINERARY override instead of receipt
+      if (storeTitle.startsWith('🗓 行程更新：')) {
+        const updDate = nGet(p,'date')?.date?.start;
+        const updName = storeTitle.replace(/^🗓\s*行程更新：/, '').split('@')[0].trim();
+        if (updDate) {
+          const day = ITINERARY.find(d => d.date === updDate);
+          if (day && day.spots?.length) {
+            // Match by type first, else first free slot
+            const catName2 = nGet(p,'cat')?.select?.name || '';
+            const targetType = CATEGORIES.find(c => c.name === catName2)?.id || 'other';
+            let idx = day.spots.findIndex(s => s.type === targetType);
+            if (idx < 0) idx = 0;
+            state.itineraryOverrides = state.itineraryOverrides || {};
+            state.itineraryOverrides[updDate + '_' + idx] = {
+              name: updName, time: parsedTime || day.spots[idx].time, type: targetType, note: noteClean.slice(0, 200),
+            };
+          }
+        }
+        // Track as "seen" (so it's not re-pulled) but don't add as receipt
+        merged.set(id, { id, _itineraryOnly: true, notionPageId: page.id });
+        continue;
+      }
       const r = {
         id,
-        store: nGet(p,'store')?.title?.[0]?.plain_text || '',
+        store: storeTitle,
         total: nGet(p,'amount')?.number || 0,
         subtotal: nGet(p,'subtotal')?.number ?? null,
         tax: nGet(p,'tax')?.number ?? null,
         hkd: nGet(p,'hkd')?.number ?? null,
         date: nGet(p,'date')?.date?.start || todayHKT(),
+        time: parsedTime,
+        address: parsedAddress,
+        bookingRef: parsedBookingRef,
         category: cat,
         payment: pay,
         region: nGet(p,'region')?.rich_text?.[0]?.plain_text || '',
         itemsText: nGet(p,'items')?.rich_text?.[0]?.plain_text || '',
-        note: nGet(p,'note')?.rich_text?.[0]?.plain_text || '',
+        note: noteClean,
         personId: matchedPerson?.id || getPersons()[0].id,
         notionPageId: page.id,
         createdAt: new Date(page.created_time).getTime(),
@@ -4680,7 +4757,10 @@ async function notionPullAll(silent = false) {
       console.warn('[notionPullAll] pagination cap hit — deletion sync skipped for safety');
     }
 
-    state.receipts = Array.from(merged.values()).sort((a,b) => a.createdAt - b.createdAt);
+    // Filter out itinerary-only stubs — they're side-effects (applied as overrides) not receipts
+    state.receipts = Array.from(merged.values())
+      .filter(r => !r._itineraryOnly)
+      .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
     saveState();
     refresh();
     if (!silent) toast(`✅ 新增 ${added}，更新 ${updated}${removed ? `，刪除 ${removed}` : ''}`);
@@ -4764,6 +4844,8 @@ function openConfirmModal(data, base64) {
   const cleanDate = sanitizeDate(data.date);
   $('mDate').value = cleanDate;
   if ($('mTime')) $('mTime').value = data.time || '';
+  if ($('mAddress')) $('mAddress').value = data.address || '';
+  if ($('mBookingRef')) $('mBookingRef').value = data.booking_ref || data.bookingRef || '';
   // Whitelist AI-returned category/payment — unknown values fall back to 'other'/'cash'
   const validCats = CATEGORIES.map(c => c.id);
   const validPays = PAYMENTS.map(p => p.id);
@@ -4814,6 +4896,8 @@ function editReceipt(id) {
   $('mTotal').value = r.total || '';
   $('mDate').value = r.date;
   if ($('mTime')) $('mTime').value = r.time || '';
+  if ($('mAddress')) $('mAddress').value = r.address || '';
+  if ($('mBookingRef')) $('mBookingRef').value = r.bookingRef || '';
   $('mCat').value = r.category;
   $('mPay').value = r.payment;
   $('mRegion').value = r.region || '';
@@ -4855,6 +4939,8 @@ async function _saveModalInner() {
     rateUsed: state.rate,
     date: $('mDate').value || todayHKT(),
     time: $('mTime')?.value || '',   // HH:mm optional
+    address: ($('mAddress')?.value || '').trim(),
+    bookingRef: ($('mBookingRef')?.value || '').trim(),
     category: $('mCat').value,
     payment: $('mPay').value,
     region: $('mRegion').value.trim(),

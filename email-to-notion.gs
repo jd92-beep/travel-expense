@@ -173,13 +173,17 @@ function processExpenseEmails() {
         }
       }
 
-      if (!result || !result.bookings || !result.bookings.length) {
-        console.log('⚠️ No bookings extracted: "' + subject + '"');
+      const hasBookings = result && result.bookings && result.bookings.length > 0;
+      const hasItinUpdates = result && result.itinerary_updates && result.itinerary_updates.length > 0;
+      if (!hasBookings && !hasItinUpdates) {
+        console.log('⚠️ No bookings or itinerary updates extracted: "' + subject + '"');
         thread.removeLabel(inbox); thread.removeLabel(retry); thread.addLabel(fail);
         scriptProps.deleteProperty(retryKey);
         permanentFail++;
         return;
       }
+      if (!result.bookings) result.bookings = [];
+      if (!result.itinerary_updates) result.itinerary_updates = [];
 
       result.bookings.forEach((b, idx) => {
         // Skip semantically empty bookings (LLM hallucinated null row)
@@ -189,6 +193,21 @@ function processExpenseEmails() {
         }
         try { pushToNotion(b, result.source || 'email', subject, threadId, idx); bookingCount++; }
         catch (e) { console.error('❌ Notion push failed [booking ' + idx + ']:', e.message); }
+      });
+
+      // Itinerary-only updates → push as special "🗓 行程更新" entries (total=null, category='other').
+      // Client detects the store prefix + marker and applies them as ITINERARY overrides.
+      (result.itinerary_updates || []).forEach((iu, idx) => {
+        if (!iu || (!iu.date && !iu.name)) return;
+        const storeName = '🗓 行程更新：' + (iu.name || '?') + (iu.time ? (' @ ' + iu.time) : '');
+        const fake = {
+          store: storeName, total: null, date: iu.date || null,
+          category: iu.type || 'other', payment: null,
+          items_text: '[行程更新]', note: iu.note || '', address: null, booking_ref: null,
+          itinerary_note: null,
+        };
+        try { pushToNotion(fake, result.source || 'email', subject, threadId, 'iu_' + idx); }
+        catch (e) { console.error('❌ Notion push failed [itin_update ' + idx + ']:', e.message); }
       });
       thread.removeLabel(inbox); thread.removeLabel(retry); thread.addLabel(done);
       scriptProps.deleteProperty(retryKey);
@@ -494,15 +513,19 @@ function _validateBookings(parsed) {
 function pushToNotion(b, source, emailSubject, threadId, bookingIdx) {
   const jpy = _convertToJpy(b.total, b.original_currency);
   const hkd = Math.round((jpy / 20.36) * 100) / 100;
-  const catMap = { transport:'交通', food:'餐飲', shopping:'購物', lodging:'住宿', ticket:'門票', medicine:'藥品', other:'其他' };
+  const catMap = { transport:'交通', food:'餐飲', shopping:'購物', lodging:'住宿', ticket:'門票', localtour:'當地旅遊', medicine:'藥品', other:'其他' };
   const payMap = { cash:'現金', credit:'信用卡', paypay:'PayPay', suica:'Suica' };
   // Stable SourceID = email_<threadId>_<idx> — idempotent across retries.
   const sourceId = 'email_' + (threadId || 'nothread').slice(0, 16) + '_' + (bookingIdx || 0);
   const storeName = '⏳ ' + (b.store || '待確認');
   const itinWarning = b.itinerary_note ? ' ⚠️ 行程提示：' + b.itinerary_note : '';
-  // Prefix address with a marker so client can parse it back out for Maps
-  const addrLine = b.address ? '📍 ' + b.address + '\n' : '';
-  const noteText = addrLine + '[📧 ' + (source || 'email') + '] ' + (b.note || '') + ' · Subject: ' + (emailSubject || '').slice(0, 120) + itinWarning;
+  // Embed structured metadata in note so client can extract address / booking_ref / time without a separate schema change.
+  const metaParts = [];
+  if (b.address)     metaParts.push('📍 ' + b.address);
+  if (b.booking_ref) metaParts.push('🔖 ' + b.booking_ref);
+  if (b.time)        metaParts.push('⏰ ' + b.time);
+  const metaLine = metaParts.length ? metaParts.join(' | ') + '\n' : '';
+  const noteText = metaLine + '[📧 ' + (source || 'email') + '] ' + (b.note || '') + ' · Subject: ' + (emailSubject || '').slice(0, 120) + itinWarning;
 
   const dbSchema = _getDbSchema();
   const pn = (emoji, plain) => dbSchema[emoji] ? emoji : plain;
@@ -739,7 +762,11 @@ Day 6 (2026-04-25): 常滑→機場。常滑陶器之鄉→招財貓大道→午
 `;
 
 // ── GEMINI PROMPT (TEXT-ONLY, no images) ───────────────────
-const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。分析以下 email 內容，提取 **所有** 預訂/消費項目。
+const MULTI_BOOKING_PROMPT = `你係一個專業旅遊 email 解析 AI。分析以下 email，判斷佢係：
+ (A) 純消費/預訂（有錢、有確認號碼）→ 放入 bookings
+ (B) 純行程更新（pickup 時間改、景點改、meetup point 改，冇錢）→ 放入 itinerary_updates
+ (C) 兩者都有 → 兩邊都要填
+冇任何相關內容 → 兩個都返空 array。
 
 【行程參考】以下係呢次旅行嘅預定行程，用嚟對照 booking 嘅日期同地點係咪正確：
 ${TRIP_ITINERARY}
@@ -786,11 +813,26 @@ ${TRIP_ITINERARY}
       "items_text": "1-2 句描述",
       "note": "booking reference / 房型 / 其他簡短資訊（唔好放價錢、卡號、支付狀態，呢啲係雜訊）",
       "address": "酒店/餐廳/景點嘅實際街道地址（例如：'愛知県名古屋市中村区名駅4-6-25'）；如果 email 冇寫就返 null。唔好亂填，唔好放價錢資訊。",
+      "booking_ref": "純訂單編號字串（例如：'KNR358047'、'R5C7K8'）；冇就返 null",
+      "time": "service start 時間 HH:mm（例如：'14:00' for check-in、'07:30' for pickup）；冇就返 null",
       "itinerary_note": "如果呢個 booking 嘅日期/地點同上面行程參考有出入，用一句話指出；如果一致就返 null",
       "confidence": "high|medium|low"
     }
+  ],
+  "itinerary_updates": [
+    {
+      "date": "YYYY-MM-DD（對應行程邊一日）",
+      "time": "新時間 HH:mm 或 null",
+      "name": "新活動/地點名稱（簡短）",
+      "type": "transport|food|shopping|lodging|ticket|localtour|other",
+      "note": "簡短說明（例如：'pickup 時間由 07:30 提前到 07:00'）"
+    }
   ]
 }
+
+類別新增：
+- localtour = 當地旅遊（Klook/KKday 本地一日遊、當地導遊行程）
+- ticket = 純景點門票（博物館、樂園、單點入場券）
 
 類別判斷：
 - 機票/鐵路/Taxi/接送 → transport
