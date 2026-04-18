@@ -761,88 +761,200 @@ Day 5 (2026-04-24): 名古屋。返回名古屋→名古屋城→午餐→OASIS 
 Day 6 (2026-04-25): 常滑→機場。常滑陶器之鄉→招財貓大道→午餐→中部機場→17:00回程航班
 `;
 
-// ── GEMINI PROMPT (TEXT-ONLY, no images) ───────────────────
-const MULTI_BOOKING_PROMPT = `你係一個專業旅遊 email 解析 AI。分析以下 email，判斷佢係：
- (A) 純消費/預訂（有錢、有確認號碼）→ 放入 bookings
- (B) 純行程更新（pickup 時間改、景點改、meetup point 改，冇錢）→ 放入 itinerary_updates
- (C) 兩者都有 → 兩邊都要填
-冇任何相關內容 → 兩個都返空 array。
+// ── EMAIL EXTRACTION PROMPT (TEXT-ONLY, no images) ─────────
+const MULTI_BOOKING_PROMPT = `你係一個專業旅遊 email 解析 AI，專門將旅遊確認 email 轉換成結構化支出紀錄。
 
-【行程參考】以下係呢次旅行嘅預定行程，用嚟對照 booking 嘅日期同地點係咪正確：
+══════════════════════════════════════════════════════
+【任務】讀懂 email，分類成 3 種情況：
+  (A) 純消費/預訂（有 confirmed 金額、訂單編號）→ 填 bookings[]
+  (B) 純行程更新（pickup 時間改、景點改、無金額）   → 填 itinerary_updates[]
+  (C) 兩者都有                                      → 兩邊都要填
+  (D) 完全無關                                      → 兩個 array 都 []
+══════════════════════════════════════════════════════
+
+【參考行程】用嚟 cross-check booking 日期 / 地點係咪正確：
 ${TRIP_ITINERARY}
 
-📋 **支援嘅 booking 類型（全部都要抽）**：
-- ✈️ 機票、🏨 酒店（Agoda/Booking/Expedia/直接訂 Daiwa 等）、🍽️ 餐廳預訂（HotPepper/Tabelog — 即使冇確定價錢都要抽）、🎫 Activity/Tour/門票、🚅 鐵路/JR Pass、📱 eSIM/保險、🚕 接送/Taxi
+══════════════════════════════════════════════════════
+【核心規則 — 必須遵守】
+══════════════════════════════════════════════════════
 
-⚠️ 呢啲 email 係純文字 — 唔會有附件或圖片。
+1. **拆分邏輯（極重要，錯咗好難復修）**
+   ✅ 來回機票（有 outbound + return / 兩個航班號 / 兩個日期）→ **必拆 2 筆**，total ÷ 2
+   ✅ Klook/KKday multi-activity 訂單 → **每 activity 一筆**（按各自金額分）
+   ✅ Agoda/Booking 多晚同一酒店 → **合併 1 筆**，total = 總額，note 寫 "N 晚"
+   ✅ 多個餐廳訂座 → **分開** 每個一筆
+   ❌ 單程機票（one-way）→ **唔好拆**
+   ❌ 同一訂單 itemize 細項（早餐、稅、服務費）→ **唔好拆**
 
-極重要規則：
+2. **金額（total 一律 JPY）**
+   標準換算：1 HKD≈20 / 1 USD≈150 / 1 CNY≈20 / 1 EUR≈160 / 1 AUD≈102 / 1 TWD≈5 JPY
+   - 記住 original_currency + original_amount（原幣）
+   - 如果 email 已經有 JPY，original_currency="JPY", original_amount = JPY 金額
+   - **價錢未定**（"Price TBD" / "Pay at store" / 「下單後確定」）→ total=null, items_text="預訂座位，價格現場確認", confidence="medium"
+   - **唔好將 "HKD 860.40" 當 JPY** — 必須 ×20 換算做 17208
 
-0. **支援多 email 拼接**：逐個 section 獨立分析，bookings 集合返一個 array。
+3. **日期 = service date（消費實際發生果日）**
+   ✅ 機票 = 起飛日       ✅ 酒店 = Check-in 日
+   ✅ 餐廳訂座 = 用餐日   ✅ Tour = 出團日
+   ❌ 唔好用 email 發送日、付款日
+   格式：YYYY-MM-DD。中文「2026年4月23日」→ "2026-04-23"
+   如果酒店有多晚，date = Check-in 日；note 寫 "4/20–4/22 共 2 晚"
 
-1. **一封 email 可以包含多筆消費**：
-   - 來回機票（有 outbound + return / 兩個明確航班號 / 兩個日期）= **強制拆成 2 筆**，每筆 total = total ÷ 2
-   - 單程機票（one-way / 只有一個航班號 / 只有一個日期）= **1 筆，唔好拆**
-   - Klook/KKday 多 activity → **每個 activity 一筆**
-   - Agoda/Booking 多晚酒店 → **合併成一筆**（total = 全程總額）
-   - 餐廳訂座 / Activity booking → 抽出即使價錢未定
+4. **類別分類（一個 booking 一個 category）**
+   🚆 transport  = 機票、鐵路、JR Pass、Taxi、接送車、巴士、船票
+   🏨 lodging    = 酒店、民宿、Ryokan、AirBnB
+   🍱 food       = 餐廳訂座、HotPepper/Tabelog、訂餐
+   🗺️ localtour  = Klook/KKday/Viator 多小時當地一日遊或導遊團
+   🎫 ticket     = 單點門票（博物館、樂園、滑雪場、單次入場）
+   🛍️ shopping   = 線上購物、手信、電器
+   💊 medicine   = 藥品、診所、體檢
+   📦 other      = eSIM、保險、Wi-Fi 蛋、匯款費、其他
+   ⚠️ localtour vs ticket：多於 3 小時嘅導遊行程 = localtour；單次入場券 = ticket
 
-2. **金額處理**：
-   - 正常：1 HKD≈20、1 USD≈150、1 CNY≈20、1 EUR≈160、1 AUD≈102 JPY
-   - \`total\` 永遠係 JPY；\`original_currency\` + \`original_amount\` 記錄原幣
-   - **🔴 價錢未定**（「下單後確定」「Price TBD」「Pay at store」）：total=null，items_text 寫「預訂座位，價格現場確認」，confidence="medium"
+5. **店名（store）要求**
+   ✅ 商戶真實名（繁中優先，原文都 OK）："Daiwa Roynet 名古屋太閤通口"、"蓬萊軒 本店"、"Klook 立山黑部一日遊"
+   ❌ 唔好放平台名做店名（錯：store="Klook"；正：store="Klook 立山黑部一日遊"）
+   ❌ 唔好放金額：錯："Daiwa Roynet HKD 860"
+   ❌ 唔好加 emoji prefix（系統會自動加 ⏳）
 
-3. **日期係 service date**（機票起飛、酒店 Check-in、餐廳造訪日、Activity 旅遊日）
-   - 中文「2026年4月23日」→ "2026-04-23"
+6. **address（必須係實際街道地址，唔係城市）**
+   ✅ "愛知県名古屋市中村区名駅4-6-25"  ✅ "東京都港区六本木6-10-1"
+   ❌ "名古屋"、"日本"、"東京都"（太空泛）
+   ❌ 絕對唔好放：價錢、預訂狀態、卡號、付款方式（呢啲 NOT address）
+   ✅ email 無明確地址 → 返 null（寧可空過亂填）
 
-4. **缺失欄位返 null，唔好亂估**
+7. **booking_ref（純訂單編號）**
+   ✅ "KNR358047"、"R5C7K8"、"BK-2026-04-XXXX"
+   ❌ 唔好加前綴："編號：KNR358047" → 錯；"KNR358047" → 正
 
-回覆嚴格 JSON（唔好加 markdown 或解釋）：
+8. **time（HH:mm 格式）**
+   ✅ Check-in time = "15:00"、Pickup time = "07:30"、Flight departure = "09:15"
+   ❌ 冇明確時間 → 返 null（唔好估）
+
+9. **note（備註 — 乾淨、有用、簡短）**
+   ✅ 內容：房型（"和室雙人 含早"）、航班號（"JL088"）、備註（"加購保險"）、tour highlights
+   ❌ 絕對禁止：金額、卡號、付款狀態（例 "已付款"、"HKD 860.40"、"尾數 0373"）
+   ❌ 禁止 emoji prefix／重複 store name
+   長度：1-2 句話（<100 字）
+
+10. **缺失欄位一律返 null — 唔好亂估、唔好編造**
+
+══════════════════════════════════════════════════════
+【JSON 輸出格式】（嚴格 JSON，唔可加 markdown / 解釋 / code fence）
+══════════════════════════════════════════════════════
 
 {
-  "source": "klook|kkday|agoda|booking|expedia|cathay|ana|jal|hkexpress|tripcom|hotpepper|tabelog|other",
+  "source": "klook|kkday|agoda|booking|expedia|trip|cathay|ana|jal|hkexpress|hotpepper|tabelog|airbnb|other",
   "bookings": [
     {
-      "store": "商戶名（繁中，簡短）",
-      "total": 純數字 JPY 或 null,
-      "original_currency": "HKD|USD|JPY|CNY|EUR|AUD 或 null",
-      "original_amount": 原幣數字 或 null,
-      "date": "YYYY-MM-DD 或 null",
-      "category": "transport|food|shopping|lodging|ticket|medicine|other",
-      "payment": "cash|credit|paypay|suica 或 null",
-      "items_text": "1-2 句描述",
-      "note": "booking reference / 房型 / 其他簡短資訊（唔好放價錢、卡號、支付狀態，呢啲係雜訊）",
-      "address": "酒店/餐廳/景點嘅實際街道地址（例如：'愛知県名古屋市中村区名駅4-6-25'）；如果 email 冇寫就返 null。唔好亂填，唔好放價錢資訊。",
-      "booking_ref": "純訂單編號字串（例如：'KNR358047'、'R5C7K8'）；冇就返 null",
-      "time": "service start 時間 HH:mm（例如：'14:00' for check-in、'07:30' for pickup）；冇就返 null",
-      "itinerary_note": "如果呢個 booking 嘅日期/地點同上面行程參考有出入，用一句話指出；如果一致就返 null",
+      "store": "商戶真實名（繁中優先）",
+      "total": number_JPY_or_null,
+      "original_currency": "HKD|USD|JPY|CNY|EUR|AUD|TWD|KRW",
+      "original_amount": number_in_original_currency,
+      "date": "YYYY-MM-DD",
+      "time": "HH:mm or null",
+      "category": "transport|food|shopping|lodging|ticket|localtour|medicine|other",
+      "payment": "cash|credit|paypay|suica or null",
+      "address": "街道地址 or null",
+      "booking_ref": "純訂單編號 or null",
+      "items_text": "1-2 句描述訂購內容",
+      "note": "房型/航班號/特別安排（禁止放金額、卡號、付款狀態）",
+      "itinerary_note": "如同參考行程有衝突，一句話指出；一致就 null",
       "confidence": "high|medium|low"
     }
   ],
   "itinerary_updates": [
     {
-      "date": "YYYY-MM-DD（對應行程邊一日）",
-      "time": "新時間 HH:mm 或 null",
-      "name": "新活動/地點名稱（簡短）",
+      "date": "YYYY-MM-DD",
+      "time": "HH:mm or null",
+      "name": "活動名稱（簡短）",
       "type": "transport|food|shopping|lodging|ticket|localtour|other",
-      "note": "簡短說明（例如：'pickup 時間由 07:30 提前到 07:00'）"
+      "note": "變更說明"
     }
   ]
 }
 
-類別新增：
-- localtour = 當地旅遊（Klook/KKday 本地一日遊、當地導遊行程）
-- ticket = 純景點門票（博物館、樂園、單點入場券）
+══════════════════════════════════════════════════════
+【示範例子】
+══════════════════════════════════════════════════════
 
-類別判斷：
-- 機票/鐵路/Taxi/接送 → transport
-- 酒店/民宿/Ryokan → lodging
-- Tour/Activity/門票/樂園 → ticket
-- 餐廳訂座/HotPepper/Tabelog → food
-- eSIM/保險/Wi-Fi 蛋 → other
+★ 例 1 — Agoda 酒店預訂確認（純消費）
+Input: "Agoda 確認 — Daiwa Roynet Hotel Nagoya Taiko-dori, Check-in 2026-04-20, 2 晚, Room Type: Standard Twin, HKD 1,720.80 已付, 信用卡尾數 0373, Address: 名古屋市中村区名駅4-6-25"
+Output:
+{
+  "source":"agoda",
+  "bookings":[{
+    "store":"Daiwa Roynet Hotel 名古屋太閤通口",
+    "total":34416,"original_currency":"HKD","original_amount":1720.80,
+    "date":"2026-04-20","time":"15:00",
+    "category":"lodging","payment":"credit",
+    "address":"愛知県名古屋市中村区名駅4-6-25",
+    "booking_ref":"AGD-9876543",
+    "items_text":"Standard Twin · 2 晚",
+    "note":"4/20–4/22 · Standard Twin",
+    "itinerary_note":null,"confidence":"high"
+  }],
+  "itinerary_updates":[]
+}
 
-例子：
-- HotPepper 餐廳訂座（價錢未定）→ store:"店名",total:null,date:"2026-04-23",category:"food",items_text:"預訂座位 2人（價格現場確認）",note:"預約編號 RAU826858",confidence:"medium"
-- Daiwa Roynet 酒店 1晚 HKD 860.40 → store:"Daiwa Roynet ...",total:17208,original_currency:"HKD",original_amount:860.40,date:"2026-04-20",category:"lodging",payment:"credit"
+★ 例 2 — KKday 三日遊（多 activity）
+Input: "KKday 中部三日遊 — Day 1: 飛驒高山/白川鄉 2026-04-21, Day 2: 立山黑部 2026-04-22, Day 3: 上高地/金澤 2026-04-23, Total HKD 4,500, 訂單 KKD-ABC123"
+Output:
+{
+  "source":"kkday",
+  "bookings":[
+    {"store":"KKday 飛驒高山/白川鄉一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-21","time":"07:30","category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"Day 1 · 名古屋站集合","note":"三日團 Day 1/3","itinerary_note":null,"confidence":"high"},
+    {"store":"KKday 立山黑部一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-22","time":null,"category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"Day 2 · 雪之大谷","note":"三日團 Day 2/3","itinerary_note":null,"confidence":"high"},
+    {"store":"KKday 上高地/金澤一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-23","time":null,"category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"Day 3 · 兼六園","note":"三日團 Day 3/3","itinerary_note":null,"confidence":"high"}
+  ],
+  "itinerary_updates":[]
+}
 
-如果完全無法解析，返 {"source":"other","bookings":[]}。`;
+★ 例 3 — HotPepper 餐廳訂座（價錢未定）
+Input: "HotPepper — 壽司匠 蔵 預約 2026-04-23 19:00, 2 位, 預約編號 RAU826858, 店舖地址: 石川県金沢市片町1-7-4"
+Output:
+{
+  "source":"hotpepper",
+  "bookings":[{
+    "store":"壽司匠 蔵",
+    "total":null,"original_currency":null,"original_amount":null,
+    "date":"2026-04-23","time":"19:00",
+    "category":"food","payment":null,
+    "address":"石川県金沢市片町1-7-4",
+    "booking_ref":"RAU826858",
+    "items_text":"預訂座位 2人（現場結賬）",
+    "note":"2 位",
+    "itinerary_note":null,"confidence":"medium"
+  }],
+  "itinerary_updates":[]
+}
+
+★ 例 4 — 純行程更新（pickup 時間變動，冇錢）
+Input: "KKday 通知 — Day 1 pickup 時間由 07:30 提前到 07:00，地點不變"
+Output:
+{
+  "source":"kkday",
+  "bookings":[],
+  "itinerary_updates":[{
+    "date":"2026-04-21","time":"07:00","name":"名古屋站集合 (KKday pickup 提前)",
+    "type":"transport","note":"pickup 由 07:30 提早到 07:00"
+  }]
+}
+
+★ 例 5 — 來回機票（強制拆 2 筆）
+Input: "Cathay CX568/CX569 — HKG→NGO 2026-04-20 09:15 / NGO→HKG 2026-04-25 17:00, Total HKD 3,200"
+Output:
+{
+  "source":"cathay",
+  "bookings":[
+    {"store":"國泰 CX568 HKG→NGO","total":32000,"original_currency":"HKD","original_amount":1600,"date":"2026-04-20","time":"09:15","category":"transport","payment":"credit","address":null,"booking_ref":null,"items_text":"去程航班","note":"CX568","itinerary_note":null,"confidence":"high"},
+    {"store":"國泰 CX569 NGO→HKG","total":32000,"original_currency":"HKD","original_amount":1600,"date":"2026-04-25","time":"17:00","category":"transport","payment":"credit","address":null,"booking_ref":null,"items_text":"回程航班","note":"CX569","itinerary_note":null,"confidence":"high"}
+  ],
+  "itinerary_updates":[]
+}
+
+══════════════════════════════════════════════════════
+如果完全無法解析，返：{"source":"other","bookings":[],"itinerary_updates":[]}
+
+⚠️ ⚠️ ⚠️ 只返 JSON object，冇 markdown、冇 \`\`\`、冇解釋文字。`;

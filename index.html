@@ -522,7 +522,7 @@
     <!-- Share ratios for split-bill settlement -->
     <div class="glass rounded-2xl p-4 mb-3">
       <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">⚖️ 分帳比例</label>
-      <p class="text-[11px] mt-1 mb-2" style="color:var(--n-muted)">每人應承擔嘅份數。加/減旅伴後會自動更新。</p>
+      <p class="text-[11px] mt-1 mb-2" style="color:var(--n-muted)">每人承擔嘅百分比（%）。加/減旅伴後自動重算。</p>
       <div id="shareRatiosWrap"></div>
     </div>
 
@@ -1005,23 +1005,28 @@
   </div>
 </div>
 
-<!-- ============ HOTEL POPUP ============ -->
+<!-- ============ SPOT POPUP (generic — works for all itinerary types) ============ -->
 <div id="hotelPopup" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeHotelPopup()">
   <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-5" style="background:var(--n-surface);border:1px solid var(--n-border)">
     <div class="w-12 h-1 rounded-full mx-auto mb-4 sm:hidden" style="background:var(--n-border)"></div>
     <div class="flex items-center gap-3 mb-4">
-      <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl" style="background:#34d39920;color:#34d399">🏨</div>
+      <div id="hotelPopupIcon" class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl" style="background:#34d39920;color:#34d399">🏨</div>
       <div class="flex-1 min-w-0">
-        <p class="text-xs mb-0.5" style="color:var(--n-muted)">今晚住宿</p>
-        <p id="hotelPopupName" class="text-base font-bold leading-tight" style="color:var(--n-text)">酒店名稱</p>
+        <p id="hotelPopupLabel" class="text-xs mb-0.5" style="color:var(--n-muted)">今晚住宿</p>
+        <p id="hotelPopupName" class="text-base font-bold leading-tight" style="color:var(--n-text)">名稱</p>
+        <p id="hotelPopupTime" class="text-[10px] mt-0.5 hidden" style="color:var(--n-muted)">—</p>
       </div>
     </div>
-    <div id="hotelPopupAddressRow" class="mb-4 rounded-xl p-3 flex items-start gap-2 cursor-pointer active:opacity-70" style="background:var(--n-bg);border:1px solid var(--n-border)" onclick="openMapsFromPopup()">
+    <div id="hotelPopupAddressRow" class="mb-3 rounded-xl p-3 flex items-start gap-2 cursor-pointer active:opacity-70" style="background:var(--n-bg);border:1px solid var(--n-border)" onclick="openMapsFromPopup()">
       <span class="text-base flex-shrink-0">📍</span>
-      <span id="hotelPopupAddressText" class="text-sm flex-1" style="color:var(--n-blue);text-decoration:underline;text-underline-offset:2px">點擊開啟地圖</span>
+      <span id="hotelPopupAddressText" class="text-sm flex-1" style="color:var(--n-blue);text-decoration:underline;text-underline-offset:2px">用名稱搜尋地圖</span>
       <span class="text-xs flex-shrink-0" style="color:var(--n-muted)">›</span>
     </div>
-    <button onclick="closeHotelPopup()" class="w-full py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">關閉</button>
+    <div id="hotelPopupNoteRow" class="mb-3 rounded-xl p-3 text-xs hidden" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-muted)"></div>
+    <div class="grid grid-cols-2 gap-2">
+      <button id="hotelPopupEditBtn" class="py-3 rounded-xl font-medium text-xs hidden" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:#6366f1" onclick="editFromSpotPopup()">✏️ 編輯</button>
+      <button onclick="closeHotelPopup()" class="py-3 rounded-xl font-medium text-xs" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">關閉</button>
+    </div>
   </div>
 </div>
 
@@ -1052,8 +1057,8 @@ const PAYMENTS = [
 const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
 const SCAN_MODELS = [
   // Vision-capable models (can read receipt images)
-  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺旗艦 · 首選',    tag: '🟣', color: '#7C3AED' },
-  { id: 'minimax',                        name: 'MiniMax VLM',           sub: 'MiniMax · 視覺模型',        tag: '🔷', color: '#0EA5E9' },
+  { id: 'minimax',                        name: 'MiniMax VLM',           sub: 'MiniMax · 視覺 · 預設 ✅',   tag: '🔷', color: '#0EA5E9' },
+  { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺旗艦',           tag: '🟣', color: '#7C3AED' },
   { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: '輕量 · 5 key rotation ✅',  tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: '快速 · 5 key rotation',     tag: '⚡', color: '#F5A623' },
   { id: 'gemini-2.5-flash',              name: 'Gemini 2.5 Flash',      sub: '最新 · 5 key rotation',     tag: '🟠', color: '#EA6C00' },
@@ -1062,14 +1067,13 @@ const SCAN_MODELS = [
   { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 文字輔助',           tag: '🟣', color: '#7C3AED' },
 ];
 const VOICE_MODELS = [
-  // Text-only models (voice parsing doesn't need vision)
+  { id: 'minimax',                       name: 'MiniMax VLM',           sub: 'MiniMax · 預設 ✅',          tag: '🔷', color: '#0284C7' },
   { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 廣東話首選 · 免費',  tag: '🟣', color: '#7C3AED' },
   { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 旗艦',               tag: '🔮', color: '#6D28D9' },
   { id: 'glm-5',                         name: 'GLM-5',                 sub: '智譜 · 最強文字模型',       tag: '🟪', color: '#581C87' },
   { id: 'glm-5.1',                       name: 'GLM-5.1',               sub: '智譜 · 升級版',              tag: '🟪', color: '#4C1D95' },
   { id: 'glm-5-turbo',                   name: 'GLM-5-turbo',           sub: '智譜 · 快速 · 免費',        tag: '🟪', color: '#6B21A8' },
   { id: 'openrouter/elephant-alpha',     name: 'Elephant Alpha',        sub: 'OpenRouter · Stealth · 免費', tag: '🐘', color: '#64748B' },
-  { id: 'minimax',                       name: 'MiniMax VLM',           sub: 'MiniMax · 視覺/文字',       tag: '🔷', color: '#0284C7' },
   { id: 'minimax-m2.7',                  name: 'MiniMax M2.7',          sub: 'MiniMax · Anthropic portal', tag: '🔷', color: '#0EA5E9' },
   { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: '輕量 · 5 key rotation ✅',  tag: '🔴', color: '#CC2929' },
   { id: 'gemini-3-flash-preview',        name: 'Gemini 3 Flash',        sub: '快速 · 5 key rotation',     tag: '⚡', color: '#F5A623' },
@@ -1082,9 +1086,9 @@ const VOICE_MODELS = [
 // Email extraction models — text-only (same universe as voice).
 // User chooses which model runs FIRST for email parsing; fallback chain handles rate limits.
 const EMAIL_MODELS = [
-  { id: 'glm-5-turbo',                   name: 'GLM-5-turbo',           sub: '智譜 · 快 · 免費 · 預設 ✅', tag: '🟪', color: '#6B21A8' },
+  { id: 'glm-5.1',                       name: 'GLM-5.1',               sub: '智譜 · 升級版 · 預設 ✅',    tag: '🟪', color: '#4C1D95' },
+  { id: 'glm-5-turbo',                   name: 'GLM-5-turbo',           sub: '智譜 · 快 · 免費',           tag: '🟪', color: '#6B21A8' },
   { id: 'glm-5',                         name: 'GLM-5',                 sub: '智譜 · 最強文字',            tag: '🟪', color: '#581C87' },
-  { id: 'glm-5.1',                       name: 'GLM-5.1',               sub: '智譜 · 升級版文字',          tag: '🟪', color: '#4C1D95' },
   { id: 'openrouter/elephant-alpha',     name: 'Elephant Alpha',        sub: 'Stealth · 免費',             tag: '🐘', color: '#64748B' },
   { id: 'minimax-m2.7',                  name: 'MiniMax M2.7',          sub: 'MiniMax portal',             tag: '🔷', color: '#0EA5E9' },
   { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: '輕量 · structured JSON',    tag: '🔴', color: '#CC2929' },
@@ -1198,9 +1202,9 @@ let state = {
   rate: 20.36,
   apiKey: DEFAULT_API_KEY,
   model: 'gemini-3.1-flash-lite-preview',
-  scanModel: 'glm-4.6v',
-  voiceModel: 'gemini-3.1-flash-lite-preview',
-  emailModel: 'glm-5-turbo', // user-configurable primary for email extraction (most reliable)
+  scanModel: 'minimax',           // default receipt vision = MiniMax VLM
+  voiceModel: 'minimax',          // default voice parsing = MiniMax VLM (handles text too)
+  emailModel: 'glm-5.1',          // default email parsing = GLM-5.1
   notionToken: DEFAULT_NOTION_TOKEN,
   notionDb: DEFAULT_NOTION_DB,
   proxy: 'https://notion-proxy.ftjdfr.workers.dev/?',
@@ -1278,15 +1282,15 @@ function loadState() {
   // (prevents silent fallback to wrong provider after a catalog update).
   if (state.emailModel && !EMAIL_MODELS.some(m => m.id === state.emailModel)) {
     console.warn('[loadState] unknown emailModel', state.emailModel, '— resetting to default');
-    state.emailModel = 'glm-5-turbo';
+    state.emailModel = 'glm-5.1';
   }
   if (state.voiceModel && !VOICE_MODELS.some(m => m.id === state.voiceModel)) {
     console.warn('[loadState] unknown voiceModel', state.voiceModel, '— resetting');
-    state.voiceModel = 'glm-4.6v';
+    state.voiceModel = 'minimax';
   }
   if (state.scanModel && !SCAN_MODELS.some(m => m.id === state.scanModel)) {
     console.warn('[loadState] unknown scanModel', state.scanModel, '— resetting');
-    state.scanModel = 'glm-4.6v';
+    state.scanModel = 'minimax';
   }
   if (!Array.isArray(state.persons) || !state.persons.length) {
     state.persons = [
@@ -1649,14 +1653,14 @@ function renderScanModelCards() {
 function renderVoiceModelCards() {
   const el = document.getElementById('voiceModelCards');
   if (!el) return;
-  const cur = state.voiceModel || 'glm-4.6v';
+  const cur = state.voiceModel || 'minimax';
   el.innerHTML = VOICE_MODELS.map(m => buildModelCard(m, cur === m.id, 'voice')).join('');
 }
 
 function renderEmailModelCards() {
   const el = document.getElementById('emailModelCards');
   if (!el) return;
-  const cur = state.emailModel || 'glm-5-turbo';
+  const cur = state.emailModel || 'glm-5.1';
   el.innerHTML = EMAIL_MODELS.map(m => buildModelCard(m, cur === m.id, 'email')).join('');
   const badge = document.getElementById('lastEmailBadge');
   if (badge) {
@@ -1916,19 +1920,19 @@ function renderDashboard() {
       const spotIdx = (typeof spot._spotIdx === 'number') ? spot._spotIdx : -1;
       const safeNameJs = (spot.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       const safeAddrJs = (spot.address||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      // Tap behaviour: hotel → map popup; other spots → edit modal (only non-virtual static spots)
+      // Tap → unified spot popup (name + address + Maps + Edit button)
       const hasOverride = spotIdx >= 0 && !!_getItineraryOverride(it.date, spotIdx);
-      let tapAttrs = '';
-      if (isHotel) {
-        tapAttrs = `onclick="showHotelPopup('${safeNameJs}','${safeAddrJs}')" style="cursor:pointer;background:rgba(52,211,153,0.10);border:1px solid rgba(52,211,153,0.30);border-radius:10px;padding:5px 8px;margin:-2px -4px"`;
-      } else if (spotIdx >= 0) {
-        const editBg = hasOverride ? 'background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);' : 'background:rgba(0,0,0,0.02);border:1px solid rgba(0,0,0,0.06);';
-        tapAttrs = `onclick="openSpotEdit('${it.date}',${spotIdx})" style="cursor:pointer;${editBg}border-radius:8px;padding:5px 8px;margin:-1px -4px"`;
-      }
-      // Right-side indicator — use clear emoji (renders on all devices) at readable size
-      let rightIcon = '';
-      if (isHotel) rightIcon = '<span class="text-xs flex-shrink-0" style="color:#10b981">📍 ›</span>';
-      else if (spotIdx >= 0) rightIcon = `<span class="text-xs flex-shrink-0" style="color:${hasOverride?'#6366f1':'#9CA3AF'}">✏️</span>`;
+      const safeTimeJs = (spot.time||'').replace(/'/g,"\\'");
+      const safeTypeJs = (spot.type||'other').replace(/'/g,"\\'");
+      const safeNoteJs = (spot.note||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ');
+      const onTap = `showSpotPopup({name:'${safeNameJs}',address:'${safeAddrJs}',date:'${it.date}',spotIdx:${spotIdx},type:'${safeTypeJs}',time:'${safeTimeJs}',note:'${safeNoteJs}'})`;
+      const bg = isHotel
+        ? 'background:rgba(52,211,153,0.10);border:1px solid rgba(52,211,153,0.30);'
+        : (hasOverride
+            ? 'background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);'
+            : 'background:rgba(0,0,0,0.02);border:1px solid rgba(0,0,0,0.06);');
+      const tapAttrs = `onclick="${onTap}" style="cursor:pointer;${bg}border-radius:10px;padding:5px 8px;margin:-2px -4px"`;
+      const rightIcon = `<span class="text-xs flex-shrink-0" style="color:${isHotel?'#10b981':(hasOverride?'#6366f1':'#9CA3AF')}">📍›</span>`;
       return `<div class="flex items-center gap-2 py-1" ${tapAttrs}>
         <span class="flex-shrink-0 text-sm" style="width:18px;text-align:center">${cat.icon}</span>
         <span class="text-[11px] flex-shrink-0 w-10 font-medium" style="color:var(--n-muted)">${spot.time}</span>
@@ -2059,9 +2063,12 @@ function getEffectiveSpots(it) {
   return spots;
 }
 
-// Hotel info popup (for itinerary lodging spots backed by a receipt)
+// Generic spot popup — works for ALL itinerary types (hotel/food/transport/ticket/…).
+// Shows name, optional address, Maps link, and Edit button (for non-virtual spots).
 let _hotelPopupName = '';
 let _hotelPopupAddress = '';
+let _hotelPopupDate = '';
+let _hotelPopupIdx = -1;
 // Heuristic: filter out noise like "原價 HKD 860.4", "預訂已付款", "卡號尾數 0373"
 // that the AI sometimes puts in the note field.
 function _isLikelyAddress(s) {
@@ -2069,33 +2076,68 @@ function _isLikelyAddress(s) {
   const t = String(s).trim();
   if (!t) return false;
   if (t.length > 200) return false;
-  // Reject strings that look like payment/pricing junk rather than an address
   if (/原價|HKD|USD|JPY|¥|預訂已|已付款|卡號|信用卡|payment|visa|master|paid|尾數/i.test(t)) return false;
   return true;
 }
-function showHotelPopup(name, address) {
-  _hotelPopupName = name || '';
-  _hotelPopupAddress = _isLikelyAddress(address) ? address : '';
+// Per-type label + icon + background colour for the popup header
+const SPOT_POPUP_STYLES = {
+  lodging:   { label: '今晚住宿',  icon: '🏨', bg: 'rgba(52,211,153,0.15)', fg: '#34d399' },
+  food:      { label: '用餐地點',  icon: '🍱', bg: 'rgba(249,115,22,0.15)', fg: '#f97316' },
+  transport: { label: '交通',      icon: '🚆', bg: 'rgba(96,165,250,0.15)', fg: '#60a5fa' },
+  ticket:    { label: '景點/門票', icon: '🎫', bg: 'rgba(251,191,36,0.15)', fg: '#fbbf24' },
+  localtour: { label: '當地旅遊',  icon: '🗺️', bg: 'rgba(6,182,212,0.15)',  fg: '#06b6d4' },
+  shopping:  { label: '購物',      icon: '🛍️', bg: 'rgba(167,139,250,0.15)', fg: '#a78bfa' },
+  other:     { label: '行程項目',  icon: '📍', bg: 'rgba(107,114,133,0.15)', fg: '#6B7285' },
+};
+// Unified popup opener. Call for any itinerary spot.
+// Back-compat shim: showHotelPopup(name, address) still works for old code paths.
+function showSpotPopup(opts) {
+  const o = opts || {};
+  _hotelPopupName = o.name || '';
+  _hotelPopupAddress = _isLikelyAddress(o.address) ? o.address : '';
+  _hotelPopupDate = o.date || '';
+  _hotelPopupIdx = (typeof o.spotIdx === 'number') ? o.spotIdx : -1;
+  const style = SPOT_POPUP_STYLES[o.type] || SPOT_POPUP_STYLES.other;
+  $('hotelPopupIcon').textContent = style.icon;
+  $('hotelPopupIcon').style.background = style.bg;
+  $('hotelPopupIcon').style.color = style.fg;
+  $('hotelPopupLabel').textContent = style.label;
   $('hotelPopupName').textContent = _hotelPopupName;
-  $('hotelPopupAddressText').textContent = _hotelPopupAddress || '用酒店名搜尋地圖';
-  // Always show the address row — tapping it opens Maps (name is enough to find most hotels)
+  // Time
+  const timeEl = $('hotelPopupTime');
+  if (o.time) { timeEl.textContent = '⏰ ' + o.time; timeEl.classList.remove('hidden'); }
+  else timeEl.classList.add('hidden');
+  // Address row — always tappable; falls back to name-only search
+  $('hotelPopupAddressText').textContent = _hotelPopupAddress || ('用 ' + (_hotelPopupName || '名稱') + ' 搜尋地圖');
   $('hotelPopupAddressRow').style.display = 'flex';
+  // Note row (optional free-text context)
+  const noteEl = $('hotelPopupNoteRow');
+  if (o.note) { noteEl.textContent = o.note; noteEl.classList.remove('hidden'); }
+  else noteEl.classList.add('hidden');
+  // Edit button only available for real static spots (not virtual/receipt overlays)
+  const editBtn = $('hotelPopupEditBtn');
+  if (_hotelPopupDate && _hotelPopupIdx >= 0) editBtn.classList.remove('hidden');
+  else editBtn.classList.add('hidden');
   $('hotelPopup').classList.remove('hidden');
+}
+// Back-compat wrapper
+function showHotelPopup(name, address) {
+  showSpotPopup({ name, address, type: 'lodging' });
 }
 function closeHotelPopup() {
   $('hotelPopup').classList.add('hidden');
 }
+function editFromSpotPopup() {
+  const d = _hotelPopupDate, i = _hotelPopupIdx;
+  closeHotelPopup();
+  if (d && i >= 0) openSpotEdit(d, i);
+}
 function openMapsFromPopup() {
-  // Combine hotel name + address for the Maps query. Name alone is usually
-  // enough (hotels are well-indexed). Falling back to junk notes would send
-  // users to the wrong place, so we always include the reliable name.
   const parts = [_hotelPopupName, _hotelPopupAddress].filter(Boolean);
   if (!parts.length) return;
   const q = encodeURIComponent(parts.join(' '));
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  const url = isIOS
-    ? 'https://maps.apple.com/?q=' + q
-    : 'https://maps.google.com/maps?q=' + q;
+  const url = isIOS ? 'https://maps.apple.com/?q=' + q : 'https://maps.google.com/maps?q=' + q;
   window.open(url, '_blank');
 }
 
@@ -3452,12 +3494,11 @@ async function parseEmailInput({ text = '', images = [] }) {
   if (!hasText && !hasImages) throw new Error('Email 內容為空');
 
   const apiKey = state.apiKey || DEFAULT_API_KEY;
-  const primaryVisionModel = state.scanModel || 'gemini-3.1-flash-lite-preview';
-  // Email extraction model — user's choice from Settings (defaults to GLM-5-turbo).
-  // If state.emailModel is stale/unknown, fall back to the known-good default.
+  const primaryVisionModel = state.scanModel || 'minimax';
+  // Email extraction model — user's choice from Settings (defaults to GLM-5.1).
   const primaryEmailModel = (state.emailModel && EMAIL_MODELS.some(m => m.id === state.emailModel))
     ? state.emailModel
-    : 'glm-5-turbo';
+    : 'glm-5.1';
 
   // Build instruction block: prompt + optional text body
   const textBlock = hasText
@@ -5284,21 +5325,24 @@ function init() {
       return;
     }
     state.shareRatios = state.shareRatios || {};
-    // Initialize any missing ratios to 1 (equal split by default)
-    persons.forEach(p => { if (state.shareRatios[p.id] == null) state.shareRatios[p.id] = 1; });
+    // Default = equal split in percentage (100 / N per person)
+    const equalPct = Math.round(100 / persons.length);
+    persons.forEach(p => { if (state.shareRatios[p.id] == null) state.shareRatios[p.id] = equalPct; });
 
     wrap.innerHTML = persons.map(p => `
       <div class="flex items-center gap-2 py-1.5" data-ratio-row="${p.id}">
         <span class="text-lg">${p.emoji}</span>
         <span class="text-xs flex-1" style="color:var(--n-text)">${escapeHtml(p.name)}</span>
-        <input type="number" id="ratio_${p.id}" min="0" step="0.1" value="${state.shareRatios[p.id]}"
+        <input type="number" id="ratio_${p.id}" min="0" max="100" step="1" value="${state.shareRatios[p.id]}"
           class="w-20 text-sm text-right bg-transparent focus:outline-none"
           style="border-bottom:1px solid var(--n-border);padding-bottom:2px;color:var(--n-text)">
-        <span class="text-[11px]" style="color:var(--n-muted)">份</span>
-        <span class="text-[10px] w-12 text-right" data-ratio-pct="${p.id}" style="color:var(--n-muted)">—</span>
+        <span class="text-sm flex-shrink-0" style="color:var(--n-muted)">%</span>
       </div>`).join('') + `
-      <button id="ratioResetEqual" class="mt-2 text-[10px] py-1.5 px-3 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">重設為均分</button>
-      <p class="text-[10px] mt-2" style="color:var(--n-muted)">例：設 1:1 即係平均分；2:1 即係 Tony 承擔 2/3；0 表示該人唔用承擔費用。</p>`;
+      <div class="flex items-center justify-between mt-2 px-1">
+        <span id="ratioSum" class="text-[11px]" style="color:var(--n-muted)">合計：0%</span>
+        <button id="ratioResetEqual" class="text-[10px] py-1.5 px-3 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">重設為均分</button>
+      </div>
+      <p class="text-[10px] mt-2" style="color:var(--n-muted)">輸入百分比（%）；系統會按輸入比例自動分帳（總和不一定需要 100%）。</p>`;
 
     const recompute = () => {
       const ratios = {};
@@ -5307,20 +5351,21 @@ function init() {
         const v = Math.max(0, Number(document.getElementById('ratio_' + p.id).value) || 0);
         ratios[p.id] = v; sum += v;
       });
-      persons.forEach(p => {
-        const pctEl = document.querySelector(`[data-ratio-pct="${p.id}"]`);
-        if (pctEl) pctEl.textContent = sum > 0 ? ((ratios[p.id]/sum)*100).toFixed(1) + '%' : '—';
-      });
+      const sumEl = $('ratioSum');
+      if (sumEl) {
+        sumEl.textContent = '合計：' + sum.toFixed(0) + '%';
+        sumEl.style.color = (sum === 100) ? '#10b981' : (sum === 0 ? '#dc2626' : 'var(--n-muted)');
+      }
       state.shareRatios = ratios;
-      // Save immediately + trigger re-render of settlement card if stats tab is open
       saveState();
       if (!$('tab-stats').classList.contains('hidden')) renderStats();
     };
     persons.forEach(p => document.getElementById('ratio_' + p.id).addEventListener('input', recompute));
     document.getElementById('ratioResetEqual').addEventListener('click', () => {
-      persons.forEach(p => { document.getElementById('ratio_' + p.id).value = 1; });
+      const eq = Math.round(100 / persons.length);
+      persons.forEach(p => { document.getElementById('ratio_' + p.id).value = eq; });
       recompute();
-      toast('✅ 已重設為均分');
+      toast('✅ 已重設為均分 ' + eq + '%');
     });
     recompute();
   };
