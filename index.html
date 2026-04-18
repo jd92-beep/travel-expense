@@ -196,13 +196,20 @@
   .stat-pct { font-size: 10px; color: var(--n-muted); font-weight: 600; min-width: 36px; text-align: right; }
 
   .doughnut-center {
-    position: absolute; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; pointer-events: none;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    pointer-events: none;
     text-align: center;
+    /* Constrain to the 70%-cutout hole so large amounts don't bleed onto the ring */
+    max-width: 58%;
+    width: 58%;
   }
-  .doughnut-center .dc-label { font-size: 10px; color: var(--n-muted); letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
-  .doughnut-center .dc-value { font-size: 22px; font-weight: 900; color: var(--n-text); line-height: 1.1; margin-top: 2px; }
-  .doughnut-center .dc-sub { font-size: 10px; color: var(--n-muted); margin-top: 2px; }
+  .doughnut-center .dc-label { font-size: 9px; color: var(--n-muted); letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+  .doughnut-center .dc-value { font-size: 17px; font-weight: 900; color: var(--n-text); line-height: 1.1; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .doughnut-center .dc-sub { font-size: 9px; color: var(--n-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 </style>
 </head>
 <body class="min-h-screen pb-24" style="background:var(--n-bg);color:var(--n-text)">
