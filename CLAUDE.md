@@ -166,6 +166,22 @@ DEFAULT_API_KEY = 'AIzaSy...' (Boss's Gemini key, hardcoded)
 - [ ] 加 TypeScript + build step
 - [ ] 用 IndexedDB 取代 localStorage（容量上限高）
 
+## Git Workflow (MANDATORY)
+
+**每次完成任何 task 之後，必須立即 commit + push 到 GitHub。**
+
+```bash
+git add index.html email-to-notion.gs CLAUDE.md   # 或相關改動嘅 file
+git commit -m "type: description"
+git push origin main
+```
+
+- 唔需要等 Boss 問，做完就自動 push
+- Commit message 用 conventional commits（feat/fix/refactor/docs）
+- Push 失敗要 report，唔好靜靜雞唔出聲
+
+---
+
 ## Development Notes
 
 ### 測試方法
