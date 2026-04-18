@@ -782,83 +782,182 @@ Day 6 (2026-04-25): 常滑→機場。常滑陶器之鄉→招財貓大道→午
 `;
 
 // ── EMAIL EXTRACTION PROMPT (TEXT-ONLY, no images) ─────────
-const MULTI_BOOKING_PROMPT = `你係一個專業旅遊 email 解析 AI，專門將旅遊確認 email 轉換成結構化支出紀錄。
+const MULTI_BOOKING_PROMPT = `你係專業旅遊 email → 支出紀錄 解析 AI。你嘅輸出會直接寫入 Notion 同個人財務 app，所以【準確度比齊全更重要】。不確定就返 null，唔好估。
 
 ══════════════════════════════════════════════════════
-【任務】讀懂 email，分類成 3 種情況：
-  (A) 純消費/預訂（有 confirmed 金額、訂單編號）→ 填 bookings[]
-  (B) 純行程更新（pickup 時間改、景點改、無金額）   → 填 itinerary_updates[]
-  (C) 兩者都有                                      → 兩邊都要填
-  (D) 完全無關                                      → 兩個 array 都 []
+【第 0 步 — 先判斷 email 類型】
 ══════════════════════════════════════════════════════
 
-【參考行程】用嚟 cross-check booking 日期 / 地點係咪正確：
-${TRIP_ITINERARY}
+  (A) 預訂/消費確認     (有金額 + 訂單編號)        → bookings[]
+  (B) 純行程更新        (pickup/時間/地點變更，無錢)  → itinerary_updates[]
+  (C) 兩者都有                                      → 兩邊都填
+  (D) 退款 / 取消通知                               → bookings=[], 只填 itinerary_updates 如有影響行程
+  (E) 垃圾郵件/推廣/純 marketing                    → bookings=[], itinerary_updates=[]
+
+⚠️ 見到以下字眼 = 取消/退款，NOT booking，千萬唔好建立 booking：
+   "refunded" / "cancelled" / "訂單已取消" / "取消確認" / "退款通知" / "未完成"
+   → 返 empty arrays + source="other"（除非同時有有效的行程更新）
 
 ══════════════════════════════════════════════════════
-【核心規則 — 必須遵守】
+【第 1 步 — 拆分與合併（錯呢步成個 record 錯哂）】
 ══════════════════════════════════════════════════════
 
-1. **拆分邏輯（極重要，錯咗好難復修）**
-   ✅ 來回機票（有 outbound + return / 兩個航班號 / 兩個日期）→ **必拆 2 筆**，total ÷ 2
-   ✅ Klook/KKday multi-activity 訂單 → **每 activity 一筆**（按各自金額分）
-   ✅ Agoda/Booking 多晚同一酒店 → **合併 1 筆**，total = 總額，note 寫 "N 晚"
-   ✅ 多個餐廳訂座 → **分開** 每個一筆
-   ❌ 單程機票（one-way）→ **唔好拆**
-   ❌ 同一訂單 itemize 細項（早餐、稅、服務費）→ **唔好拆**
+必拆（一筆變多筆）：
+  ✅ 來回機票（outbound + return / 兩個航班號 / 兩個起飛日）→ 必拆 2 筆，total ÷ 2
+  ✅ Klook/KKday 多日行程/多 activity 訂單 → 每日/每 activity 一筆，total 按明細分；
+     若只有 grand total，平均分配
+  ✅ 多個餐廳訂座（同一 email 幾間餐廳）→ 每間一筆
 
-2. **金額（total 一律 JPY）**
-   標準換算：1 HKD≈20 / 1 USD≈150 / 1 CNY≈20 / 1 EUR≈160 / 1 AUD≈102 / 1 TWD≈5 JPY
-   - 記住 original_currency + original_amount（原幣）
-   - 如果 email 已經有 JPY，original_currency="JPY", original_amount = JPY 金額
-   - **價錢未定**（"Price TBD" / "Pay at store" / 「下單後確定」）→ total=null, items_text="預訂座位，價格現場確認", confidence="medium"
-   - **唔好將 "HKD 860.40" 當 JPY** — 必須 ×20 換算做 17208
+必合（多項變一筆）：
+  ❌ 同一酒店多晚（Check-in 2026-04-20, 4 晚）→ 一筆，date=Check-in 日，note 寫 "N 晚"
+  ❌ 一筆內分項（住宿費 + 稅 + 服務費 / 主菜 + 飲品）→ 一筆，total=grand total
+  ❌ 多人同行（2 adults × HKD 1,600）→ 一筆，total=HKD 3,200 換算，items_text 寫 "2 位"
+  ❌ 單程機票 → 一筆，唔拆
 
-3. **日期 = service date（消費實際發生果日）**
-   ✅ 機票 = 起飛日       ✅ 酒店 = Check-in 日
-   ✅ 餐廳訂座 = 用餐日   ✅ Tour = 出團日
-   ❌ 唔好用 email 發送日、付款日
-   格式：YYYY-MM-DD。中文「2026年4月23日」→ "2026-04-23"
-   如果酒店有多晚，date = Check-in 日；note 寫 "4/20–4/22 共 2 晚"
+══════════════════════════════════════════════════════
+【第 2 步 — 金額（total 必須係 JPY 整數）】
+══════════════════════════════════════════════════════
 
-4. **類別分類（一個 booking 一個 category）**
-   🚆 transport  = 機票、鐵路、JR Pass、Taxi、接送車、巴士、船票
-   🏨 lodging    = 酒店、民宿、Ryokan、AirBnB
-   🍱 food       = 餐廳訂座、HotPepper/Tabelog、訂餐
-   🗺️ localtour  = Klook/KKday/Viator 多小時當地一日遊或導遊團
-   🎫 ticket     = 單點門票（博物館、樂園、滑雪場、單次入場）
-   🛍️ shopping   = 線上購物、手信、電器
-   💊 medicine   = 藥品、診所、體檢
-   📦 other      = eSIM、保險、Wi-Fi 蛋、匯款費、其他
-   ⚠️ localtour vs ticket：多於 3 小時嘅導遊行程 = localtour；單次入場券 = ticket
+匯率表（近似，用喺 original → JPY 換算）：
+   1 HKD ≈ 20 JPY    1 USD ≈ 150 JPY   1 CNY ≈ 20 JPY   1 EUR ≈ 160 JPY
+   1 AUD ≈ 102 JPY   1 TWD ≈ 5 JPY     1 KRW ≈ 0.11 JPY  1 GBP ≈ 185 JPY
+   1 SGD ≈ 110 JPY   1 THB ≈ 4.3 JPY   1 MYR ≈ 33 JPY
 
-5. **店名（store）要求**
-   ✅ 商戶真實名（繁中優先，原文都 OK）："Daiwa Roynet 名古屋太閤通口"、"蓬萊軒 本店"、"Klook 立山黑部一日遊"
-   ❌ 唔好放平台名做店名（錯：store="Klook"；正：store="Klook 立山黑部一日遊"）
-   ❌ 唔好放金額：錯："Daiwa Roynet HKD 860"
-   ❌ 唔好加 emoji prefix（系統會自動加 ⏳）
+嚴格規則：
+  ① 永遠記錄 original_currency + original_amount（無論幾種幣）
+  ② total = Math.round(original_amount × rate)（取整數 JPY）
+  ③ 若 email 已經用 JPY → original_currency="JPY", original_amount=JPY 金額, total 相同
+  ④ 價錢未定（"TBD" / "Pay at store" / "到付")→ total=null,
+     items_text="預訂座位，價格現場確認", confidence="medium"
+  ⑤ 有折扣：用【實付金額】，唔好用「原價」
+     例：「原價 HKD 3,500，特價 HKD 3,200」→ original_amount=3200
+  ⑥ 稅/服務費：用【含稅總額】（grand total），唔好減稅
 
-6. **address（必須係實際街道地址，唔係城市）**
-   ✅ "愛知県名古屋市中村区名駅4-6-25"  ✅ "東京都港区六本木6-10-1"
-   ❌ "名古屋"、"日本"、"東京都"（太空泛）
-   ❌ 絕對唔好放：價錢、預訂狀態、卡號、付款方式（呢啲 NOT address）
-   ✅ email 無明確地址 → 返 null（寧可空過亂填）
+❌ 常見致命錯：
+  - 將 "HKD 860.40" 填入 total 當 JPY（應該 ×20 = 17208）
+  - 用 "Subtotal" 而非 "Grand Total"
+  - 忘記 ×匯率
 
-7. **booking_ref（純訂單編號）**
-   ✅ "KNR358047"、"R5C7K8"、"BK-2026-04-XXXX"
-   ❌ 唔好加前綴："編號：KNR358047" → 錯；"KNR358047" → 正
+══════════════════════════════════════════════════════
+【第 3 步 — 日期（service date，當地時區）】
+══════════════════════════════════════════════════════
 
-8. **time（HH:mm 格式）**
-   ✅ Check-in time = "15:00"、Pickup time = "07:30"、Flight departure = "09:15"
-   ❌ 冇明確時間 → 返 null（唔好估）
+✅ 用 service date（消費實際發生當日，當地時區）：
+   機票=起飛日 · 酒店=Check-in 日 · 餐廳=用餐日 · Tour=出團日 · 門票=入場日
 
-9. **note（備註 — 乾淨、有用、簡短）**
-   ✅ 內容：房型（"和室雙人 含早"）、航班號（"JL088"）、備註（"加購保險"）、tour highlights
-   ❌ 絕對禁止：金額、卡號、付款狀態（例 "已付款"、"HKD 860.40"、"尾數 0373"）
-   ❌ 禁止 emoji prefix／重複 store name
-   長度：1-2 句話（<100 字）
+❌ 絕對唔好用：
+   email 發送日 · 付款/扣卡日 · booking 建立日 · Check-out 日
 
-10. **缺失欄位一律返 null — 唔好亂估、唔好編造**
+格式 YYYY-MM-DD：
+  「2026年4月23日」→ "2026-04-23"
+  "Apr 23, 2026" → "2026-04-23"
+  "23/04/2026" (日/月/年) → "2026-04-23"
+  ⚠️ "4/5/2026" 歧義！若上下文係北美 email → "2026-04-05"；若亞洲/歐洲 email → "2026-05-04"。有疑問返 null
+
+日期唔喺行程範圍內（2026-04-20 至 04-25）但 email 明顯係呢次旅行：
+  → 保留 email 日期，寫入 itinerary_note="日期 2026-XX-XX 不在行程範圍"
+
+══════════════════════════════════════════════════════
+【第 4 步 — Category（每 booking 一個）】
+══════════════════════════════════════════════════════
+
+  🚆 transport  機票、鐵路、JR Pass、Taxi、接送、巴士、船、共享單車
+  🏨 lodging    酒店、民宿、Ryokan、AirBnB、膠囊旅館
+  🍱 food       餐廳預訂、HotPepper、Tabelog、飲品訂購
+  🗺️ localtour  Klook/KKday/Viator 多小時 guided tour、一日遊、導遊團
+  🎫 ticket     單次入場券（博物館、樂園、滑雪場 day pass、纜車票）
+  🛍️ shopping   線上購物、手信、電器預訂、機場免稅店
+  💊 medicine   藥品、診所費、疫苗、體檢
+  📦 other      eSIM、保險、Wi-Fi 蛋、匯款費、簽證
+
+邊界判斷：
+  - Klook 3 小時以上導遊團 = localtour；單張博物館票 = ticket
+  - JR Pass 7 日券 = transport（同一筆，唔拆每日）
+  - 租車 = transport
+  - 酒店內餐廳晚餐（含入住）= 一筆 lodging；獨立訂 = food
+
+══════════════════════════════════════════════════════
+【第 5 步 — Payment 推斷（保守）】
+══════════════════════════════════════════════════════
+
+只有當 email 明確講先填，否則 null：
+  "信用卡尾數 XXXX" / "Visa ending" / "MasterCard"     → "credit"
+  "PayPay" / "ペイペイ"                                → "paypay"
+  "Suica" / "IC Card"                                 → "suica"
+  "現金付款" / "Cash"                                 → "cash"
+  "Apple Pay / Google Pay"                            → "credit"（背後係信用卡）
+  "到店付款" / "Pay at store" / "現場結賬"             → null（仲未付）
+
+❌ 唔好估：冇明確講就返 null
+
+══════════════════════════════════════════════════════
+【第 6 步 — 每個欄位嚴格要求】
+══════════════════════════════════════════════════════
+
+store（商戶名）
+  ✅ 真實商戶名，繁中優先：「Daiwa Roynet 名古屋太閤通口」「蓬萊軒 本店」「Klook 立山黑部一日遊」
+  ✅ 平台 + 產品：「KKday 中部三日遊」而非只寫「KKday」
+  ❌ 唔好放金額、訂單編號、狀態：錯「Daiwa Roynet HKD 860 已付」
+  ❌ 唔好加 ⏳/✅ 等 emoji（系統自動加）
+  ❌ 唔好全大寫 shouting：錯「DAIWA ROYNET NAGOYA」
+
+address（街道地址）
+  ✅ 完整地址：「愛知県名古屋市中村区名駅4-6-25」「東京都港区六本木6-10-1」
+  ✅ 郵遞 code 可選：「〒450-0002 愛知県名古屋市中村区名駅4-6-25」
+  ❌ 城市/國家級：「名古屋」「日本」「東京」→ 太空泛，返 null
+  ❌ 絕對禁止：價錢、付款狀態、卡號、訂單號、預訂日期
+  ❌ 如果 email 只有 meeting point 而非 venue address，酌情考慮：
+     – 機場接送 pickup = null（無固定地址）
+     – Tour meeting point = 可以填（例：「名古屋駅 新幹線口集合」）
+
+booking_ref（純訂單號）
+  ✅ 「KNR358047」「BK-2026-04-XXXX」「R5C7K8」
+  ❌ 加前綴：錯「編號：KNR358047」；正「KNR358047」
+  ❌ 兩個編號：只填最主要嘅（如 airline PNR 優先於 agency ref）
+
+time（HH:mm）
+  ✅ 明確時間：Check-in "15:00" · pickup "07:30" · flight depart "09:15"
+  ✅ 當地時間（destination timezone），唔使 convert
+  ❌ email 冇明確時間 → null（唔好用預設 "12:00"）
+
+note（<100 字，只放有用 context）
+  ✅ 包含：房型、航班號、餐廳座位數、tour highlights、特別要求
+     例：「和室雙人 · 含朝食」「CX568 · 經濟艙 14K」「2 位 · 吸煙區」
+  ❌ 嚴禁：金額/幣別/卡號/付款狀態
+     錯：「HKD 860 已付 · 尾數 0373」
+     錯：「Payment: Paid with Visa」
+  ❌ 嚴禁：重複 store name、emoji prefix
+
+items_text（1–2 句簡述）
+  ✅ 描述訂購內容：「Standard Twin · 2 晚」「去程航班」「Day 1 · 名古屋站集合」
+  ✅ 多人：「2 位 · 19:00 · 2026-04-23」
+  ❌ 唔好寫金額 / 訂單號
+
+itinerary_note
+  ✅ 只在【日期/地點/時間 同 TRIP_ITINERARY 有明顯衝突】先填，一句話
+     例：「KKday Day 1 pickup 2026-04-21 07:30 同行程 Day 2 名古屋站集合 07:30 吻合 ✓」
+         「Email 日期 2026-04-19 早過行程開始 04-20，可能係到達前夜」
+  ✅ 完全一致 → null
+  ❌ 唔好重複 items_text / note 內容
+
+confidence
+  ✅ "high"   = 所有關鍵欄位（store, total, date）明確 + 無歧義
+  ✅ "medium" = 部分欄位靠推斷（例：價錢未定 / 多幣需換算 / 類別邊界）
+  ✅ "low"    = 整封 email 難解釋 / 多個可能解讀 / 資料非常殘缺
+
+══════════════════════════════════════════════════════
+【第 7 步 — 返回前 Self-Check（逐項心裡 review）】
+══════════════════════════════════════════════════════
+
+返 JSON 前，逐個 booking 檢查：
+  □ total 係整數 JPY？有冇忘記 ×匯率？
+  □ date 係 service date（當地）唔係 email 發送日？
+  □ store 有冇夾雜金額/訂單號？
+  □ address 係實際街道地址唔係城市名？
+  □ note 有冇夾雜金額/卡號/付款狀態？
+  □ 來回機票有冇拆成 2 筆？多晚酒店有冇合成 1 筆？
+  □ 係咪取消/退款 email？（若係 → empty bookings）
+  □ 所有 string 都用 "..."，冇 markdown、冇 code fence
 
 ══════════════════════════════════════════════════════
 【JSON 輸出格式】（嚴格 JSON，唔可加 markdown / 解釋 / code fence）
@@ -896,83 +995,83 @@ ${TRIP_ITINERARY}
 }
 
 ══════════════════════════════════════════════════════
-【示範例子】
+【示範例子 — 7 個 cover 常見情景】
 ══════════════════════════════════════════════════════
 
-★ 例 1 — Agoda 酒店預訂確認（純消費）
-Input: "Agoda 確認 — Daiwa Roynet Hotel Nagoya Taiko-dori, Check-in 2026-04-20, 2 晚, Room Type: Standard Twin, HKD 1,720.80 已付, 信用卡尾數 0373, Address: 名古屋市中村区名駅4-6-25"
+★ 例 1 — 酒店 multi-night（必合成 1 筆）
+Input: "Agoda confirmation — Daiwa Roynet Hotel Nagoya Taiko-dori, Check-in 2026-04-20, Check-out 2026-04-22, Standard Twin, Total HKD 1,720.80, 信用卡尾數 0373, Address: 〒450-0002 愛知県名古屋市中村区名駅4-6-25, Booking: AGD-9876543"
 Output:
-{
-  "source":"agoda",
-  "bookings":[{
-    "store":"Daiwa Roynet Hotel 名古屋太閤通口",
-    "total":34416,"original_currency":"HKD","original_amount":1720.80,
-    "date":"2026-04-20","time":"15:00",
-    "category":"lodging","payment":"credit",
-    "address":"愛知県名古屋市中村区名駅4-6-25",
-    "booking_ref":"AGD-9876543",
-    "items_text":"Standard Twin · 2 晚",
-    "note":"4/20–4/22 · Standard Twin",
-    "itinerary_note":null,"confidence":"high"
-  }],
-  "itinerary_updates":[]
-}
+{"source":"agoda","bookings":[{
+  "store":"Daiwa Roynet Hotel 名古屋太閤通口",
+  "total":34416,"original_currency":"HKD","original_amount":1720.80,
+  "date":"2026-04-20","time":"15:00",
+  "category":"lodging","payment":"credit",
+  "address":"〒450-0002 愛知県名古屋市中村区名駅4-6-25",
+  "booking_ref":"AGD-9876543",
+  "items_text":"Standard Twin · 2 晚",
+  "note":"Check-in 4/20, Check-out 4/22 · Standard Twin",
+  "itinerary_note":null,"confidence":"high"
+}],"itinerary_updates":[]}
 
-★ 例 2 — KKday 三日遊（多 activity）
-Input: "KKday 中部三日遊 — Day 1: 飛驒高山/白川鄉 2026-04-21, Day 2: 立山黑部 2026-04-22, Day 3: 上高地/金澤 2026-04-23, Total HKD 4,500, 訂單 KKD-ABC123"
+★ 例 2 — KKday 多日團（必拆 N 筆，total 平分）
+Input: "KKday 中部三日遊 — Day 1: 飛驒高山/白川鄉 2026-04-21 07:30 pickup, Day 2: 立山黑部 2026-04-22, Day 3: 上高地/金澤 2026-04-23, 訂單 KKD-ABC123, 總價 HKD 4,500"
 Output:
-{
-  "source":"kkday",
-  "bookings":[
-    {"store":"KKday 飛驒高山/白川鄉一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-21","time":"07:30","category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"Day 1 · 名古屋站集合","note":"三日團 Day 1/3","itinerary_note":null,"confidence":"high"},
-    {"store":"KKday 立山黑部一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-22","time":null,"category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"Day 2 · 雪之大谷","note":"三日團 Day 2/3","itinerary_note":null,"confidence":"high"},
-    {"store":"KKday 上高地/金澤一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-23","time":null,"category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"Day 3 · 兼六園","note":"三日團 Day 3/3","itinerary_note":null,"confidence":"high"}
-  ],
-  "itinerary_updates":[]
-}
+{"source":"kkday","bookings":[
+  {"store":"KKday 飛驒高山/白川鄉一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-21","time":"07:30","category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"三日團 Day 1 · 名古屋站集合","note":"三日團 Day 1/3","itinerary_note":null,"confidence":"high"},
+  {"store":"KKday 立山黑部一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-22","time":null,"category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"三日團 Day 2 · 雪之大谷","note":"三日團 Day 2/3","itinerary_note":null,"confidence":"high"},
+  {"store":"KKday 上高地/金澤一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-23","time":null,"category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"三日團 Day 3 · 兼六園","note":"三日團 Day 3/3","itinerary_note":null,"confidence":"high"}
+],"itinerary_updates":[]}
 
-★ 例 3 — HotPepper 餐廳訂座（價錢未定）
-Input: "HotPepper — 壽司匠 蔵 預約 2026-04-23 19:00, 2 位, 預約編號 RAU826858, 店舖地址: 石川県金沢市片町1-7-4"
+★ 例 3 — 餐廳訂座（價錢未定，有 meeting point 唔當 address）
+Input: "HotPepper — 壽司匠 蔵 予約完了 2026-04-23 19:00, 2 名様, 予約番号 RAU826858, 支払い：現地決済, 〒920-0981 石川県金沢市片町1-7-4"
 Output:
-{
-  "source":"hotpepper",
-  "bookings":[{
-    "store":"壽司匠 蔵",
-    "total":null,"original_currency":null,"original_amount":null,
-    "date":"2026-04-23","time":"19:00",
-    "category":"food","payment":null,
-    "address":"石川県金沢市片町1-7-4",
-    "booking_ref":"RAU826858",
-    "items_text":"預訂座位 2人（現場結賬）",
-    "note":"2 位",
-    "itinerary_note":null,"confidence":"medium"
-  }],
-  "itinerary_updates":[]
-}
+{"source":"hotpepper","bookings":[{
+  "store":"壽司匠 蔵",
+  "total":null,"original_currency":null,"original_amount":null,
+  "date":"2026-04-23","time":"19:00",
+  "category":"food","payment":null,
+  "address":"〒920-0981 石川県金沢市片町1-7-4",
+  "booking_ref":"RAU826858",
+  "items_text":"2 位 · 19:00 · 現場結賬",
+  "note":"2 位",
+  "itinerary_note":null,"confidence":"medium"
+}],"itinerary_updates":[]}
 
-★ 例 4 — 純行程更新（pickup 時間變動，冇錢）
-Input: "KKday 通知 — Day 1 pickup 時間由 07:30 提前到 07:00，地點不變"
+★ 例 4 — 來回機票（必拆 2 筆，有 promo 要用實付）
+Input: "Cathay Pacific — CX568 HKG→NGO 2026-04-20 09:15 depart, CX569 NGO→HKG 2026-04-25 17:00 depart, 2 passengers, List price HKD 7,200, Promotional fare HKD 6,400, PNR: ABC123, paid with Visa ending 0373"
 Output:
-{
-  "source":"kkday",
-  "bookings":[],
-  "itinerary_updates":[{
-    "date":"2026-04-21","time":"07:00","name":"名古屋站集合 (KKday pickup 提前)",
-    "type":"transport","note":"pickup 由 07:30 提早到 07:00"
-  }]
-}
+{"source":"cathay","bookings":[
+  {"store":"國泰 CX568 HKG→NGO","total":64000,"original_currency":"HKD","original_amount":3200,"date":"2026-04-20","time":"09:15","category":"transport","payment":"credit","address":null,"booking_ref":"ABC123","items_text":"去程航班 · 2 位","note":"CX568 · 2 位","itinerary_note":null,"confidence":"high"},
+  {"store":"國泰 CX569 NGO→HKG","total":64000,"original_currency":"HKD","original_amount":3200,"date":"2026-04-25","time":"17:00","category":"transport","payment":"credit","address":null,"booking_ref":"ABC123","items_text":"回程航班 · 2 位","note":"CX569 · 2 位","itinerary_note":null,"confidence":"high"}
+],"itinerary_updates":[]}
+(注：用 promotional HKD 6,400 而非 list HKD 7,200；2 位共乘同一 booking，唔拆)
 
-★ 例 5 — 來回機票（強制拆 2 筆）
-Input: "Cathay CX568/CX569 — HKG→NGO 2026-04-20 09:15 / NGO→HKG 2026-04-25 17:00, Total HKD 3,200"
+★ 例 5 — 純行程更新（cancellation refund 例外處理）
+Input: "KKday 通知 — 因應天氣關係，Day 1 pickup 時間由 07:30 提早到 07:00，集合地點不變"
 Output:
-{
-  "source":"cathay",
-  "bookings":[
-    {"store":"國泰 CX568 HKG→NGO","total":32000,"original_currency":"HKD","original_amount":1600,"date":"2026-04-20","time":"09:15","category":"transport","payment":"credit","address":null,"booking_ref":null,"items_text":"去程航班","note":"CX568","itinerary_note":null,"confidence":"high"},
-    {"store":"國泰 CX569 NGO→HKG","total":32000,"original_currency":"HKD","original_amount":1600,"date":"2026-04-25","time":"17:00","category":"transport","payment":"credit","address":null,"booking_ref":null,"items_text":"回程航班","note":"CX569","itinerary_note":null,"confidence":"high"}
-  ],
-  "itinerary_updates":[]
-}
+{"source":"kkday","bookings":[],"itinerary_updates":[{
+  "date":"2026-04-21","time":"07:00","name":"名古屋站集合 (pickup 提前)",
+  "type":"transport","note":"pickup 由 07:30 提早到 07:00，集合地點不變"
+}]}
+
+★ 例 6 — 退款通知（NOT a booking — 返 empty arrays）
+Input: "KKday 訂單取消通知 — 訂單 KKD-XYZ789 已取消，HKD 1,500 將於 3-5 工作天退回原支付方式"
+Output:
+{"source":"kkday","bookings":[],"itinerary_updates":[]}
+
+★ 例 7 — eSIM / 附加服務（other category）
+Input: "Trip.com — Japan Unlimited eSIM, 8 days (2026-04-20 to 2026-04-27), USD 19.90 paid, Order TC-ES-2026041912345, activation code sent to email"
+Output:
+{"source":"trip","bookings":[{
+  "store":"Trip.com Japan eSIM 8 日",
+  "total":2985,"original_currency":"USD","original_amount":19.90,
+  "date":"2026-04-20","time":null,
+  "category":"other","payment":"credit",
+  "address":null,
+  "booking_ref":"TC-ES-2026041912345",
+  "items_text":"Unlimited eSIM · 8 日 (4/20–4/27)","note":"Activation code 由 email 獨立發送",
+  "itinerary_note":null,"confidence":"high"
+}],"itinerary_updates":[]}
 
 ══════════════════════════════════════════════════════
 如果完全無法解析，返：{"source":"other","bookings":[],"itinerary_updates":[]}
