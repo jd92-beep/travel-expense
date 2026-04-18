@@ -94,6 +94,16 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 // ── MAIN ENTRY POINT ──────────────────────────────────────
 function processExpenseEmails() {
+  // ── Self-install time trigger on first run (idempotent) ───────────
+  const existingTriggers = ScriptApp.getProjectTriggers().filter(function(t) {
+    return t.getHandlerFunction() === 'processExpenseEmails';
+  });
+  if (!existingTriggers.length) {
+    ScriptApp.newTrigger('processExpenseEmails').timeBased().everyMinutes(5).create();
+    console.log('⏱ Time trigger created (every 5 min)');
+  }
+  // ── End self-install ──────────────────────────────────────────────
+
   const inbox = GmailApp.getUserLabelByName(INBOX_LABEL);
   if (!inbox) { console.log('ℹ️ Label not found — run setup()'); return; }
   const done  = _ensureLabel(DONE_LABEL);
@@ -102,7 +112,9 @@ function processExpenseEmails() {
 
   const inboxThreads = inbox.getThreads(0, 20);
   const retryThreads = retry.getThreads(0, 20);
-  const allThreads = inboxThreads.concat(retryThreads);
+  // Also re-process failed threads that were moved there by a previous buggy run
+  const failedThreads = fail.getThreads(0, 20);
+  const allThreads = inboxThreads.concat(retryThreads).concat(failedThreads);
   if (!allThreads.length) { console.log('📭 Nothing to process'); return; }
 
   const scriptProps = PropertiesService.getScriptProperties();
@@ -117,10 +129,28 @@ function processExpenseEmails() {
       const msg = thread.getMessages()[0];
       const subject = msg.getSubject() || '';
       const from = msg.getFrom() || '';
-      const rawBody = msg.getPlainBody() || _stripHtml(msg.getBody() || '');
-      // Strip forwarded-chain duplicates — keep only the first (innermost) email
-      // Forwarded emails often contain the full history; AI would extract same booking twice.
-      const firstOnly = rawBody.split(/^-{3,}\s*(Forwarded message|Original Message|轉寄郵件)/mi)[0];
+      // ── Email body extraction ─────────────────────────────────────────
+      // HTML-heavy emails (Klook, KKday, Agoda etc) put all data in HTML tables;
+      // getPlainBody() strips those to nearly nothing. Use whichever is longer.
+      const plainBody = msg.getPlainBody() || '';
+      const htmlBody  = msg.getBody() || '';
+      const stripped  = htmlBody ? _stripHtml(htmlBody) : '';
+      const rawBody = stripped.length > plainBody.length * 0.8 ? stripped : (plainBody || stripped);
+      // ── Forwarded-chain dedup ─────────────────────────────────────────
+      // Two scenarios:
+      //  A) Email is a Gmail forward → starts with "---------- Forwarded message ---------"
+      //     split()[0] is EMPTY; actual content is in split()[2]
+      //  B) Email has a quoted original at the bottom
+      //     split()[0] has the real content; drop the rest
+      const fwdParts = rawBody.split(/^-{3,}\s*(Forwarded message|Original Message|轉寄郵件)/mi);
+      let firstOnly;
+      if (fwdParts[0].trim().length < 100 && fwdParts.length > 2) {
+        // Case A: content comes AFTER the forwarding divider; strip mini-header lines
+        const afterDivider = fwdParts.slice(2).join('');
+        firstOnly = afterDivider.replace(/^[^\n]*\n(From:[^\n]*\n)?(Date:[^\n]*\n)?(Subject:[^\n]*\n)?(To:[^\n]*\n)?\n?/, '');
+      } else {
+        firstOnly = fwdParts[0];
+      }
       const source = 'From: ' + from + '\nSubject: ' + subject + '\n\n' + firstOnly;
       const truncated = source.slice(0, 30000);
 
@@ -585,14 +615,27 @@ function _convertToJpy(amount, currency) {
 function _todayJST() { return Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd'); }
 function _stripHtml(html) {
   return String(html || '')
+    // Remove invisible sections entirely
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    // Block-level breaks → newlines (before tag-strip)
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|tr|li|h\d)>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/<tr\b[^>]*>/gi, '\n')                    // table row start → newline
+    .replace(/<\/tr>/gi, '')
+    .replace(/<\/?(td|th)\b[^>]*>/gi, '\t')            // table cells → tab separator
+    .replace(/<\/(p|div|li|h\d)\b[^>]*>/gi, '\n')
+    // Strip all remaining tags
+    .replace(/<[^>]+>/g, '')
+    // HTML entities
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"')
-    .replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n\n').trim();
+    .replace(/&#\d+;/g, ' ')
+    // Clean up whitespace
+    .replace(/[ ]{2,}/g, ' ')
+    .replace(/\t[ \t]*/g, '\t')
+    .replace(/\n[ \t]+\n/g, '\n\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 function _ensureLabel(name) { return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name); }
 
@@ -636,6 +679,49 @@ function setup() {
 }
 
 function testNow() { processExpenseEmails(); }
+
+// ── RESET: move failed/retry threads back to inbox for reprocessing ──────────
+function resetFailedToInbox() {
+  const inbox  = _ensureLabel(INBOX_LABEL);
+  const fail   = GmailApp.getUserLabelByName(FAIL_LABEL);
+  const retry  = GmailApp.getUserLabelByName(RETRY_LABEL);
+  let moved = 0;
+  [fail, retry].forEach(function(lbl) {
+    if (!lbl) return;
+    lbl.getThreads(0, 50).forEach(function(t) {
+      t.removeLabel(lbl);
+      t.addLabel(inbox);
+      PropertiesService.getScriptProperties().deleteProperty('retry_' + t.getId());
+      moved++;
+    });
+  });
+  console.log('✅ Moved ' + moved + ' thread(s) back to travel-expense for reprocessing');
+}
+
+// ── DEBUG: show extracted text for emails in all travel-expense labels ────────
+function debugEmail() {
+  const inbox  = GmailApp.getUserLabelByName(INBOX_LABEL);
+  const retry  = GmailApp.getUserLabelByName(RETRY_LABEL);
+  const fail   = GmailApp.getUserLabelByName(FAIL_LABEL);
+  const all    = []
+    .concat(inbox  ? inbox.getThreads(0, 5)  : [])
+    .concat(retry  ? retry.getThreads(0, 5)  : [])
+    .concat(fail   ? fail.getThreads(0, 5)   : []);
+
+  if (!all.length) { console.log('📭 No emails in travel-expense / retry / failed labels'); return; }
+
+  all.slice(0, 3).forEach(function(thread) {
+    const msg     = thread.getMessages()[0];
+    const subject = msg.getSubject() || '(no subject)';
+    const plain   = msg.getPlainBody() || '';
+    const html    = msg.getBody() || '';
+    const stripped = html ? _stripHtml(html) : '';
+    console.log('Subject: ' + subject);
+    console.log('Plain body length: ' + plain.length + ' | Stripped HTML length: ' + stripped.length);
+    console.log('── Stripped HTML (first 2000 chars) ──');
+    console.log(stripped.slice(0, 2000));
+  });
+}
 
 // ── GEMINI PROMPT (TEXT-ONLY, no images) ───────────────────
 const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。分析以下 email 內容，提取 **所有** 預訂/消費項目。
