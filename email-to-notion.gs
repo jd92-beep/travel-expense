@@ -217,6 +217,7 @@ function extractBookingsWithFallback(emailText) {
   // Each entry: { name, fn: () => parsedResult | null }
   const providers = [];
   if (hasZhipu) {
+    providers.push({ name: 'glm-5.1',     fn: () => _callZhipuWithBackoff(prompt, 'glm-5.1') });
     providers.push({ name: 'glm-5',       fn: () => _callZhipuWithBackoff(prompt, 'glm-5') });
     providers.push({ name: 'glm-5-turbo', fn: () => _callZhipuWithBackoff(prompt, 'glm-5-turbo') });
   }
@@ -499,7 +500,9 @@ function pushToNotion(b, source, emailSubject, threadId, bookingIdx) {
   const sourceId = 'email_' + (threadId || 'nothread').slice(0, 16) + '_' + (bookingIdx || 0);
   const storeName = '⏳ ' + (b.store || '待確認');
   const itinWarning = b.itinerary_note ? ' ⚠️ 行程提示：' + b.itinerary_note : '';
-  const noteText = '[📧 ' + (source || 'email') + '] ' + (b.note || '') + ' · Subject: ' + (emailSubject || '').slice(0, 120) + itinWarning;
+  // Prefix address with a marker so client can parse it back out for Maps
+  const addrLine = b.address ? '📍 ' + b.address + '\n' : '';
+  const noteText = addrLine + '[📧 ' + (source || 'email') + '] ' + (b.note || '') + ' · Subject: ' + (emailSubject || '').slice(0, 120) + itinWarning;
 
   const dbSchema = _getDbSchema();
   const pn = (emoji, plain) => dbSchema[emoji] ? emoji : plain;
@@ -781,8 +784,9 @@ ${TRIP_ITINERARY}
       "category": "transport|food|shopping|lodging|ticket|medicine|other",
       "payment": "cash|credit|paypay|suica 或 null",
       "items_text": "1-2 句描述",
-      "note": "booking reference / 房型 / 其他簡短資訊",
-      "itinerary_note": "如果呢個 booking 嘅日期/地點同上面行程參考有出入，用一句話指出（例如：'KKday三日遊Day1應係2026-04-21名古屋站集合，但email日期係2026-04-20，請核實'）；如果一致就返 null",
+      "note": "booking reference / 房型 / 其他簡短資訊（唔好放價錢、卡號、支付狀態，呢啲係雜訊）",
+      "address": "酒店/餐廳/景點嘅實際街道地址（例如：'愛知県名古屋市中村区名駅4-6-25'）；如果 email 冇寫就返 null。唔好亂填，唔好放價錢資訊。",
+      "itinerary_note": "如果呢個 booking 嘅日期/地點同上面行程參考有出入，用一句話指出；如果一致就返 null",
       "confidence": "high|medium|low"
     }
   ]

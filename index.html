@@ -827,6 +827,13 @@
           <input id="mDate" type="date" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
         </div>
       </div>
+      <div class="grid grid-cols-2 gap-3 mt-3">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-gray-400">時間</label>
+          <input id="mTime" type="time" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+        </div>
+        <div></div>
+      </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-[10px] uppercase tracking-wider text-gray-400">類別</label>
@@ -929,6 +936,45 @@
   </div>
 </div>
 
+<!-- ============ SPOT EDIT MODAL ============ -->
+<div id="spotEditModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeSpotEdit()">
+  <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-5" style="background:var(--n-surface);border:1px solid var(--n-border)">
+    <div class="w-12 h-1 rounded-full mx-auto mb-4 sm:hidden" style="background:var(--n-border)"></div>
+    <h3 class="text-base font-bold mb-1" style="color:var(--n-text)">✏️ 編輯行程項目</h3>
+    <p class="text-[10px] mb-4" id="spotEditSubtitle" style="color:var(--n-muted)">—</p>
+    <div class="space-y-3">
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">時間</label>
+        <input id="spotEditTime" type="time" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">地點/活動名稱</label>
+        <input id="spotEditName" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">類別</label>
+        <select id="spotEditType" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+          <option value="transport">🚆 交通</option>
+          <option value="food">🍱 餐飲</option>
+          <option value="ticket">🎫 景點/門票</option>
+          <option value="lodging">🏨 住宿</option>
+          <option value="shopping">🛍️ 購物</option>
+          <option value="other">📦 其他</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">備註（可選）</label>
+        <input id="spotEditNote" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+      </div>
+    </div>
+    <div class="grid grid-cols-3 gap-2 mt-5">
+      <button onclick="resetSpotEdit()" class="py-2.5 rounded-xl text-xs font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-muted)">🔄 還原</button>
+      <button onclick="closeSpotEdit()" class="py-2.5 rounded-xl text-xs font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
+      <button onclick="saveSpotEdit()" class="py-2.5 rounded-xl text-xs font-bold text-white" style="background:var(--n-blue)">儲存</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ SCRIPT AGENT MODAL ============ -->
 <div id="scriptAgentModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeScriptAgent()">
   <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg flex flex-col" style="background:var(--n-surface);border:1px solid var(--n-border);max-height:92vh">
@@ -1009,6 +1055,7 @@ const VOICE_MODELS = [
   { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 廣東話首選 · 免費',  tag: '🟣', color: '#7C3AED' },
   { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 旗艦',               tag: '🔮', color: '#6D28D9' },
   { id: 'glm-5',                         name: 'GLM-5',                 sub: '智譜 · 最強文字模型',       tag: '🟪', color: '#581C87' },
+  { id: 'glm-5.1',                       name: 'GLM-5.1',               sub: '智譜 · 升級版',              tag: '🟪', color: '#4C1D95' },
   { id: 'glm-5-turbo',                   name: 'GLM-5-turbo',           sub: '智譜 · 快速 · 免費',        tag: '🟪', color: '#6B21A8' },
   { id: 'openrouter/elephant-alpha',     name: 'Elephant Alpha',        sub: 'OpenRouter · Stealth · 免費', tag: '🐘', color: '#64748B' },
   { id: 'minimax-m2.7',                  name: 'MiniMax M2.7',          sub: 'MiniMax · Anthropic portal', tag: '🔷', color: '#0EA5E9' },
@@ -1025,6 +1072,7 @@ const VOICE_MODELS = [
 const EMAIL_MODELS = [
   { id: 'glm-5-turbo',                   name: 'GLM-5-turbo',           sub: '智譜 · 快 · 免費 · 預設 ✅', tag: '🟪', color: '#6B21A8' },
   { id: 'glm-5',                         name: 'GLM-5',                 sub: '智譜 · 最強文字',            tag: '🟪', color: '#581C87' },
+  { id: 'glm-5.1',                       name: 'GLM-5.1',               sub: '智譜 · 升級版文字',          tag: '🟪', color: '#4C1D95' },
   { id: 'openrouter/elephant-alpha',     name: 'Elephant Alpha',        sub: 'Stealth · 免費',             tag: '🐘', color: '#64748B' },
   { id: 'minimax-m2.7',                  name: 'MiniMax M2.7',          sub: 'MiniMax portal',             tag: '🔷', color: '#0EA5E9' },
   { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: '輕量 · structured JSON',    tag: '🔴', color: '#CC2929' },
@@ -1449,8 +1497,8 @@ async function testModelConnection(modelId) {
       }, 15000);
       return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
     }
-    // GLM-5 family (coding endpoint) — glm-5, glm-5-turbo
-    if (modelId === 'glm-5' || modelId === 'glm-5-turbo') {
+    // GLM-5 family (coding endpoint) — glm-5, glm-5-turbo, glm-5.1
+    if (modelId === 'glm-5' || modelId === 'glm-5-turbo' || modelId === 'glm-5.1') {
       if (!VAULT_ZAI_KEY) return { ok: false, msg: 'vault 未解鎖' };
       const r = await fetchWithTimeout('https://open.bigmodel.cn/api/coding/paas/v4/chat/completions', {
         method: 'POST',
@@ -1837,14 +1885,21 @@ function renderDashboard() {
     const spotsHtml = effectiveSpots.map(spot => {
       const cat = CATEGORIES.find(c => c.id === spot.type) || CATEGORIES[6];
       const isHotel = spot.type === 'lodging' && (spot.receiptId || spot.address);
+      const spotIdx = (typeof spot._spotIdx === 'number') ? spot._spotIdx : -1;
       const safeNameJs = (spot.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       const safeAddrJs = (spot.address||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      const hotelAttrs = isHotel ? `onclick="showHotelPopup('${safeNameJs}','${safeAddrJs}')" style="cursor:pointer;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25);border-radius:10px;padding:4px 8px;margin:-2px -4px"` : '';
-      return `<div class="flex items-center gap-2 py-0.5" ${hotelAttrs}>
+      // Tap behaviour: hotel → map popup; other spots → edit modal (only non-virtual static spots)
+      let tapAttrs = '';
+      if (isHotel) {
+        tapAttrs = `onclick="showHotelPopup('${safeNameJs}','${safeAddrJs}')" style="cursor:pointer;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25);border-radius:10px;padding:4px 8px;margin:-2px -4px"`;
+      } else if (spotIdx >= 0) {
+        tapAttrs = `onclick="openSpotEdit('${it.date}',${spotIdx})" style="cursor:pointer;border-radius:8px;padding:2px 4px;margin:-2px -4px"`;
+      }
+      return `<div class="flex items-center gap-2 py-0.5" ${tapAttrs}>
         <span class="flex-shrink-0 text-sm" style="width:18px;text-align:center">${cat.icon}</span>
         <span class="text-[10px] flex-shrink-0 w-8" style="color:var(--n-muted)">${spot.time}</span>
         <span class="text-xs flex-1 truncate" style="color:var(--n-text)">${escapeHtml(spot.name)}</span>
-        ${isHotel ? '<span class="text-[10px] flex-shrink-0" style="color:#34d399">📍›</span>' : ''}
+        ${isHotel ? '<span class="text-[10px] flex-shrink-0" style="color:#34d399">📍›</span>' : (spotIdx >= 0 ? '<span class="text-[10px] flex-shrink-0" style="color:var(--n-muted)">✎</span>' : '')}
       </div>`;
     }).join('');
     return `
@@ -1901,17 +1956,40 @@ function displayStore(r) {
   return isPendingReceipt(r) ? r.store.slice(2) : (r.store || '');
 }
 
-// Returns the ITINERARY spots for a given day, with lodging/ticket overridden from receipts.
+// User-edited itinerary overrides. Keyed by `<date>_<spotIndex>` → partial spot.
+// Example: state.itineraryOverrides = { "2026-04-20_2": { time: "13:00", name: "新餐廳" } }
+function _getItineraryOverride(date, idx) {
+  return (state.itineraryOverrides || {})[date + '_' + idx] || null;
+}
+function _setItineraryOverride(date, idx, patch) {
+  state.itineraryOverrides = state.itineraryOverrides || {};
+  const key = date + '_' + idx;
+  if (patch == null) delete state.itineraryOverrides[key];
+  else state.itineraryOverrides[key] = patch;
+  saveState();
+}
+
+// Returns the ITINERARY spots for a given day, with user overrides + lodging/ticket
+// overridden from receipts applied on top.
 function getEffectiveSpots(it) {
-  let spots = (it.spots || []).map(s => Object.assign({}, s));
+  // 0. Apply user edits first (tagged with spotIdx so UI can round-trip them)
+  let spots = (it.spots || []).map((s, i) => {
+    const ov = _getItineraryOverride(it.date, i);
+    return Object.assign({ _spotIdx: i }, s, ov || {});
+  });
 
   // 1. Lodging: replace/add hotel spot from receipt
   const lodgingReceipt = state.receipts.find(r => r.date === it.date && r.category === 'lodging');
   if (lodgingReceipt) {
     const hotelName = displayStore(lodgingReceipt);
-    // Address: prefer receipt note; fall back to static spot's address if present
+    // Address extraction: first try "📍 <address>" marker (from Apps Script) at
+    // start of note field. Else fall back to static ITINERARY spot's address.
+    // (We deliberately DO NOT use raw note as address — it often contains payment
+    //  junk like "原價 HKD 860.4 · 已付款 · 卡號尾數 0373".)
     const staticLodgingSpot = spots.find(s => s.type === 'lodging');
-    const address = (lodgingReceipt.note || staticLodgingSpot?.address || '').trim();
+    const noteStr = lodgingReceipt.note || '';
+    const addrMatch = noteStr.match(/^📍\s*([^\n\[]+?)(?=\s*\[|\n|$)/);
+    const address = (addrMatch ? addrMatch[1].trim() : (staticLodgingSpot?.address || '')).trim();
     const hotelSpot = { time:'23:00', name:hotelName, type:'lodging', receiptId:lodgingReceipt.id, address:address };
     const lodgingIdx = spots.findIndex(s => s.type === 'lodging');
     if (lodgingIdx >= 0) spots[lodgingIdx] = hotelSpot;
@@ -1946,27 +2024,88 @@ function getEffectiveSpots(it) {
 }
 
 // Hotel info popup (for itinerary lodging spots backed by a receipt)
+let _hotelPopupName = '';
 let _hotelPopupAddress = '';
+// Heuristic: filter out noise like "原價 HKD 860.4", "預訂已付款", "卡號尾數 0373"
+// that the AI sometimes puts in the note field.
+function _isLikelyAddress(s) {
+  if (!s) return false;
+  const t = String(s).trim();
+  if (!t) return false;
+  if (t.length > 200) return false;
+  // Reject strings that look like payment/pricing junk rather than an address
+  if (/原價|HKD|USD|JPY|¥|預訂已|已付款|卡號|信用卡|payment|visa|master|paid|尾數/i.test(t)) return false;
+  return true;
+}
 function showHotelPopup(name, address) {
-  $('hotelPopupName').textContent = name;
-  _hotelPopupAddress = address;
-  $('hotelPopupAddressText').textContent = address || '地址未提供';
-  $('hotelPopupAddressRow').style.display = address ? 'flex' : 'none';
+  _hotelPopupName = name || '';
+  _hotelPopupAddress = _isLikelyAddress(address) ? address : '';
+  $('hotelPopupName').textContent = _hotelPopupName;
+  $('hotelPopupAddressText').textContent = _hotelPopupAddress || '用酒店名搜尋地圖';
+  // Always show the address row — tapping it opens Maps (name is enough to find most hotels)
+  $('hotelPopupAddressRow').style.display = 'flex';
   $('hotelPopup').classList.remove('hidden');
 }
 function closeHotelPopup() {
   $('hotelPopup').classList.add('hidden');
 }
 function openMapsFromPopup() {
-  if (!_hotelPopupAddress) return;
-  const q = encodeURIComponent(_hotelPopupAddress);
-  // Use Apple Maps URL on iOS (always available; opens in Maps app via universal link)
-  // Google Maps on everything else
+  // Combine hotel name + address for the Maps query. Name alone is usually
+  // enough (hotels are well-indexed). Falling back to junk notes would send
+  // users to the wrong place, so we always include the reliable name.
+  const parts = [_hotelPopupName, _hotelPopupAddress].filter(Boolean);
+  if (!parts.length) return;
+  const q = encodeURIComponent(parts.join(' '));
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   const url = isIOS
     ? 'https://maps.apple.com/?q=' + q
     : 'https://maps.google.com/maps?q=' + q;
   window.open(url, '_blank');
+}
+
+// ── SPOT EDIT (itinerary) ───────────────────────────────────
+let _spotEditDate = '';
+let _spotEditIdx = -1;
+function openSpotEdit(date, idx) {
+  _spotEditDate = date;
+  _spotEditIdx = idx;
+  const day = ITINERARY.find(d => d.date === date);
+  const originalSpot = day?.spots?.[idx];
+  if (!originalSpot) return;
+  const override = _getItineraryOverride(date, idx);
+  const effective = Object.assign({}, originalSpot, override || {});
+  $('spotEditSubtitle').textContent = `${date} · 原定「${originalSpot.name}」${override ? ' · 已有修改' : ''}`;
+  $('spotEditTime').value = effective.time || '';
+  $('spotEditName').value = effective.name || '';
+  $('spotEditType').value = effective.type || 'other';
+  $('spotEditNote').value = effective.note || '';
+  $('spotEditModal').classList.remove('hidden');
+}
+function closeSpotEdit() {
+  $('spotEditModal').classList.add('hidden');
+  _spotEditDate = ''; _spotEditIdx = -1;
+}
+function resetSpotEdit() {
+  if (!_spotEditDate || _spotEditIdx < 0) return;
+  if (!confirm('還原為預設行程內容？你嘅修改會被清除。')) return;
+  _setItineraryOverride(_spotEditDate, _spotEditIdx, null);
+  closeSpotEdit();
+  refresh();
+  toast('🔄 已還原預設');
+}
+function saveSpotEdit() {
+  if (!_spotEditDate || _spotEditIdx < 0) return;
+  const patch = {
+    time: ($('spotEditTime').value || '').trim(),
+    name: ($('spotEditName').value || '').trim(),
+    type: $('spotEditType').value,
+    note: ($('spotEditNote').value || '').trim(),
+  };
+  if (!patch.name) { toast('⚠️ 名稱不能為空'); return; }
+  _setItineraryOverride(_spotEditDate, _spotEditIdx, patch);
+  closeSpotEdit();
+  refresh();
+  toast('✅ 行程已更新');
 }
 
 // ── SCRIPT AGENT ────────────────────────────────────────────
@@ -3303,6 +3442,7 @@ async function parseEmailInput({ text = '', images = [] }) {
     // Full fallback order (after primary): OpenRouter → GLM-5 family → MiniMax → Gemini text × 3 → Gemma × 2 → GLM-4-Flash
     const fallbackOrder = [
       'openrouter/elephant-alpha',
+      'glm-5.1',
       'glm-5-turbo',
       'glm-5',
       'minimax-m2.7',
@@ -3606,7 +3746,7 @@ async function callAnyTextModel(modelId, prompt) {
     return callOpenRouterText(prompt);
   }
   if (modelId === 'minimax-m2.7') return callMiniMaxText(prompt);
-  if (modelId === 'glm-5' || modelId === 'glm-5-turbo') return callGLM5Text(prompt, modelId);
+  if (modelId === 'glm-5' || modelId === 'glm-5-turbo' || modelId === 'glm-5.1') return callGLM5Text(prompt, modelId);
   if (modelId === 'glm-4-flash' || modelId === 'glm-4.6v') return callGLMText(prompt);
   if (GEMINI_TEXT_MODELS.has(modelId)) return callGeminiText(prompt, modelId, apiKey);
   throw new Error('Unknown model ID: ' + modelId + ' (not in EMAIL_MODELS catalog)');
@@ -4465,6 +4605,7 @@ async function notionPullAll(silent = false) {
 
     const merged = new Map(state.receipts.map(r => [r.id, r]));
     const deletedPageIds = new Set(state.notionDeletedIds || []);
+    const deletedSourceIds = new Set(state.notionDeletedSourceIds || []);
     let added = 0, updated = 0;
     const returnedNotionPageIds = new Set();
 
@@ -4476,6 +4617,8 @@ async function notionPullAll(silent = false) {
       returnedNotionPageIds.add(page.id);
       const p = page.properties;
       const sourceId = nGet(p,'sourceId')?.rich_text?.[0]?.plain_text;
+      // Skip if this SourceID was deleted locally (survives Apps Script re-creation)
+      if (sourceId && deletedSourceIds.has(sourceId)) continue;
       const id = sourceId || ('r_notion_' + page.id.slice(0, 8));
       const catName = nGet(p,'cat')?.select?.name || '';
       const cat = CATEGORIES.find(c => c.name === catName)?.id || 'other';
@@ -4620,6 +4763,7 @@ function openConfirmModal(data, base64) {
   $('mTotal').value = data.total || '';
   const cleanDate = sanitizeDate(data.date);
   $('mDate').value = cleanDate;
+  if ($('mTime')) $('mTime').value = data.time || '';
   // Whitelist AI-returned category/payment — unknown values fall back to 'other'/'cash'
   const validCats = CATEGORIES.map(c => c.id);
   const validPays = PAYMENTS.map(p => p.id);
@@ -4669,6 +4813,7 @@ function editReceipt(id) {
   $('mStore').value = (r.store || '').replace(/^⏳\s+/, '');  // strip pending prefix for editing
   $('mTotal').value = r.total || '';
   $('mDate').value = r.date;
+  if ($('mTime')) $('mTime').value = r.time || '';
   $('mCat').value = r.category;
   $('mPay').value = r.payment;
   $('mRegion').value = r.region || '';
@@ -4709,6 +4854,7 @@ async function _saveModalInner() {
     hkd: state.rate > 0 ? Math.round((total / state.rate) * 100) / 100 : null,
     rateUsed: state.rate,
     date: $('mDate').value || todayHKT(),
+    time: $('mTime')?.value || '',   // HH:mm optional
     category: $('mCat').value,
     payment: $('mPay').value,
     region: $('mRegion').value.trim(),
@@ -4786,6 +4932,15 @@ async function deleteReceipt() {
     if (!Array.isArray(state.notionDeletedIds)) state.notionDeletedIds = [];
     if (!state.notionDeletedIds.includes(deleted.notionPageId)) {
       state.notionDeletedIds.push(deleted.notionPageId);
+    }
+  }
+  // ALSO track SourceID — Notion query hides archived pages, so Apps Script may
+  // re-create a NEW page with the SAME SourceID (different pageId) on next cycle.
+  // Tracking SourceID catches this resurrection.
+  if (deleted.id && deleted.id.startsWith('email_')) {
+    if (!Array.isArray(state.notionDeletedSourceIds)) state.notionDeletedSourceIds = [];
+    if (!state.notionDeletedSourceIds.includes(deleted.id)) {
+      state.notionDeletedSourceIds.push(deleted.id);
     }
   }
 
