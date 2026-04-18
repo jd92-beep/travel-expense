@@ -414,7 +414,7 @@
 
   <!-- ============ HISTORY TAB ============ -->
   <section id="tab-history" class="tab-content hidden fade-in">
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-3">
       <div class="flex items-center gap-2">
         <h2 class="text-xl font-bold">消費紀錄</h2>
         <span id="historySyncBadge" class="hidden text-[10px] px-2 py-0.5 rounded-full font-medium" style="background:rgba(0,168,126,0.15);color:#00a87e">☁️ 同步中…</span>
@@ -422,6 +422,10 @@
       <select id="filterCat" class="glass rounded-xl px-3 py-1.5 text-xs border-0 bg-transparent">
         <option value="">全部類別</option>
       </select>
+    </div>
+    <div class="relative mb-4">
+      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color:var(--n-muted)">🔍</span>
+      <input id="historySearch" type="text" placeholder="搜尋店名、備註…" class="w-full pl-8 pr-3 py-2.5 rounded-xl text-sm focus:outline-none" style="background:var(--n-surface);border:1px solid var(--n-border);color:var(--n-text)">
     </div>
     <div id="historyList" class="space-y-2">
       <p class="text-sm text-gray-500 text-center py-12">未有任何紀錄</p>
@@ -671,24 +675,11 @@
     </div>
 
     <div class="grid grid-cols-2 gap-2 mb-2">
-      <button id="copyAppsScriptBtn" class="glass py-3 rounded-2xl text-sm font-medium" style="color:#92400E;border:1px solid rgba(245,158,11,0.40)">📋 複製 Apps Script 代碼</button>
-      <button id="openAppsScriptBtn" class="glass py-3 rounded-2xl text-sm font-medium" style="color:#92400E;border:1px solid rgba(245,158,11,0.40)">🔗 開 Apps Script 編輯器</button>
+      <button id="openScriptAgentBtn" class="glass py-3 rounded-2xl text-sm font-medium" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);color:#92400E;border:1px solid rgba(245,158,11,0.50)">🤖 AI 助手改腳本</button>
+      <button id="openAppsScriptBtn" class="glass py-3 rounded-2xl text-sm font-medium" style="color:#92400E;border:1px solid rgba(245,158,11,0.40)">🔗 開 Apps Script</button>
     </div>
     <button id="pullPendingBtn" class="w-full glass py-3 rounded-2xl text-sm font-medium mb-2" style="border:1px solid rgba(0,168,126,0.30);color:#00a87e">🔄 即刻檢查有冇新 email 入帳</button>
     <div id="emailImportStatus" class="text-[11px] text-center mb-2 hidden"></div>
-
-    <div class="glass rounded-2xl p-3 mb-3 text-[10px] text-gray-500">
-      <p class="font-bold mb-1" style="color:#92400E">⚙️ 一次性設定 (~3 min)：</p>
-      <ol class="space-y-1 list-decimal pl-4">
-        <li>點「📋 複製 Apps Script 代碼」（會自動填晒 Gemini × 5 + GLM + MiniMax + OpenRouter + Notion keys）</li>
-        <li>點「🔗 開 Apps Script 編輯器」→ "New Project"</li>
-        <li>貼入代碼（credentials 已入晒）</li>
-        <li>點 Run → 揀 <code class="px-1 bg-gray-100 rounded">setup</code> → 授權 Gmail + 網絡 access</li>
-        <li>Gmail 設 filter：<code class="px-1 bg-gray-100 rounded">to:ftjdfr+expense@gmail.com</code> → label「travel-expense」</li>
-      </ol>
-      <p class="mt-2 font-medium" style="color:#00a87e">✅ 之後每 5 分鐘自動 scan 一次，零人手操作。</p>
-      <p class="mt-1 text-[9px] text-gray-400">🤖 AI chain: GLM-5 → GLM-5-turbo → MiniMax-M2.7 → 🐘 Elephant-Alpha → Gemini 5keys×5models → GLM-4-Flash → defer (×3 cycles)</p>
-    </div>
 
     </details>
 
@@ -931,6 +922,29 @@
   </div>
 </div>
 
+<!-- ============ SCRIPT AGENT MODAL ============ -->
+<div id="scriptAgentModal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeScriptAgent()">
+  <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg flex flex-col" style="background:var(--n-surface);border:1px solid var(--n-border);max-height:92vh">
+    <div class="px-5 pt-5 pb-3 flex items-center justify-between" style="border-bottom:1px solid var(--n-border)">
+      <div class="w-12 h-1 rounded-full mx-auto mb-3 sm:hidden" style="background:var(--n-border)"></div>
+      <div>
+        <h3 class="text-base font-bold" style="color:var(--n-text)">🤖 Apps Script AI 助手</h3>
+        <p class="text-[10px] mt-0.5" style="color:var(--n-muted)">話俾 AI 知你想改咩，佢會生成更新後代碼</p>
+      </div>
+      <button onclick="closeScriptAgent()" class="w-8 h-8 rounded-full flex items-center justify-center text-sm" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-muted)">✕</button>
+    </div>
+    <div id="agentChatLog" class="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide" style="min-height:180px"></div>
+    <div class="px-4 pb-2 pt-2 flex gap-2" style="border-top:1px solid var(--n-border)">
+      <button id="agentCopyCodeBtn" class="flex-1 py-2 rounded-xl text-xs font-bold hidden" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);color:#92400E;border:1px solid rgba(245,158,11,0.4)">📋 複製最新代碼</button>
+      <button onclick="window.open('https://script.google.com/home/projects/create','_blank')" class="flex-1 py-2 rounded-xl text-xs font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">🔗 開 Apps Script</button>
+    </div>
+    <div class="px-4 pb-4 pt-2 flex gap-2">
+      <input id="agentChatInput" type="text" placeholder="例：改觸發器去 10 分鐘一次…" class="flex-1 px-3 py-2.5 rounded-xl text-sm focus:outline-none" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">
+      <button id="agentSendBtn" onclick="sendAgentMessage()" class="px-4 py-2.5 rounded-xl text-sm font-bold text-white" style="background:var(--n-blue)">發送</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ HOTEL POPUP ============ -->
 <div id="hotelPopup" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeHotelPopup()">
   <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-5" style="background:var(--n-surface);border:1px solid var(--n-border)">
@@ -1076,6 +1090,7 @@ function getGeminiKeys(userKey) {
   return [firstKey, ...GEMINI_DEFAULT_KEYS].filter((k, i, a) => k && a.indexOf(k) === i);
 }
 const DEFAULT_NOTION_TOKEN = atob('bnRuXzM4MDA1NDY0OTU2NGZnQ2F4OVRxVHYwSEljNWVwUDNOQ0NnMVV6bWJMZ1VmRjU=');
+const APPS_SCRIPT_URL = 'https://raw.githubusercontent.com/jd92-beep/travel-expense/main/email-to-notion.gs';
 const DEFAULT_NOTION_DB    = atob('MzQzOGQ5NGQ1ZjdjODE4NzgyMjFmY2RhNmQ2NWQzOWQ=');
 // OpenRouter key (text-only gateway to openrouter/elephant-alpha stealth model)
 const DEFAULT_OPENROUTER_KEY = atob('c2stb3ItdjEtZTNhZjZmOGFhOTg5OTEyYmRlYTUyMTM5NDY2YmQ5MTllMzQ4N2ZkNGRlZWNmNTJiZjhmMDM4NzNhOTYyNGU3MA==');
@@ -1938,13 +1953,119 @@ function closeHotelPopup() {
 function openMapsFromPopup() {
   if (!_hotelPopupAddress) return;
   const q = encodeURIComponent(_hotelPopupAddress);
+  // Use Apple Maps URL on iOS (always available; opens in Maps app via universal link)
+  // Google Maps on everything else
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  if (isIOS) {
-    // Open Apple Maps; fall back to Google Maps if Apple Maps not available
-    window.location.href = 'maps://?q=' + q;
-    setTimeout(function() { window.open('https://maps.google.com/maps?q=' + q, '_blank'); }, 1200);
-  } else {
-    window.open('https://maps.google.com/maps?q=' + q, '_blank');
+  const url = isIOS
+    ? 'https://maps.apple.com/?q=' + q
+    : 'https://maps.google.com/maps?q=' + q;
+  window.open(url, '_blank');
+}
+
+// ── SCRIPT AGENT ────────────────────────────────────────────
+let _agentBaseCode = '';
+let _agentFilledCode = '';
+let _agentModifiedCode = '';
+let _agentLoading = false;
+
+function _injectCredsIntoCode(code) {
+  let c = code;
+  if (VAULT_ZAI_KEY)        c = c.replace('PASTE_ZHIPU_KEY_OR_LEAVE', VAULT_ZAI_KEY);
+  const minimaxTok = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
+  if (minimaxTok)            c = c.replace('PASTE_MINIMAX_OAUTH_TOKEN_OR_LEAVE', minimaxTok);
+  const openrouterKey = state.openrouterKey || DEFAULT_OPENROUTER_KEY;
+  if (openrouterKey)         c = c.replace('PASTE_OPENROUTER_KEY_OR_LEAVE', openrouterKey);
+  const allGemKeys = getGeminiKeys();
+  ['PASTE_GEMINI_API_KEY_HERE','PASTE_GEMINI_KEY2_OR_LEAVE','PASTE_GEMINI_KEY3_OR_LEAVE','PASTE_GEMINI_KEY4_OR_LEAVE','PASTE_GEMINI_KEY5_OR_LEAVE']
+    .forEach((ph, i) => { if (allGemKeys[i]) c = c.replace(ph, allGemKeys[i]); });
+  if (state.notionToken)     c = c.replace('PASTE_NOTION_INTEGRATION_TOKEN_HERE', state.notionToken);
+  if (state.notionDb)        c = c.replace('PASTE_NOTION_DATABASE_ID_HERE', state.notionDb);
+  return c;
+}
+
+function _agentAddMsg(role, text) {
+  const log = $('agentChatLog');
+  if (!log) return;
+  const isAI = role === 'ai';
+  const div = document.createElement('div');
+  div.className = 'flex ' + (isAI ? 'justify-start' : 'justify-end');
+  const html = escapeHtml(text)
+    .replace(/```[\w]*\n?([\s\S]*?)```/g, '<pre class="text-[9px] overflow-x-auto p-2 rounded mt-1 mb-1 scrollbar-hide" style="background:rgba(0,0,0,0.07);max-height:140px;overflow-y:auto;white-space:pre-wrap">$1</pre>')
+    .replace(/\n/g, '<br>');
+  div.innerHTML = `<div class="max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${isAI?'rounded-tl-sm':'rounded-tr-sm'}" style="${isAI?'background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)':'background:var(--n-blue);color:white'}">${html}</div>`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function openScriptAgent() {
+  $('scriptAgentModal').classList.remove('hidden');
+  const log = $('agentChatLog');
+  if (_agentBaseCode) { setTimeout(() => $('agentChatInput')?.focus(), 100); return; }
+  log.innerHTML = '<div class="text-xs text-center py-6" style="color:var(--n-muted)">⬇️ 載入 Apps Script…</div>';
+  try {
+    const r = await fetch(APPS_SCRIPT_URL + '?t=' + Date.now());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _agentBaseCode = await r.text();
+    _agentFilledCode = _injectCredsIntoCode(_agentBaseCode);
+    _agentModifiedCode = _agentFilledCode;
+    log.innerHTML = '';
+    _agentAddMsg('ai', '你好！我係你嘅 Apps Script 助手 🤖\n\n我已載入 email → Notion 自動匯入腳本，credentials 已填入。\n\n可以叫我：\n• 「改觸發器去 10 分鐘一次」\n• 「加 Booking.com email 支援」\n• 「改 Notion 欄位 mapping」\n• 「加 HKExpress 機票解析」\n\n修改後我會生成完整新代碼，你 copy 去 Apps Script 貼入即可 ✅');
+    const inp = $('agentChatInput');
+    if (inp) {
+      inp.focus();
+      inp.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAgentMessage(); } };
+    }
+  } catch(e) {
+    log.innerHTML = `<div class="text-xs text-center py-4" style="color:#e23b4a">❌ 載入失敗：${e.message}</div>`;
+  }
+}
+
+function closeScriptAgent() {
+  $('scriptAgentModal').classList.add('hidden');
+}
+
+async function sendAgentMessage() {
+  if (_agentLoading) return;
+  const inp = $('agentChatInput');
+  const text = (inp?.value || '').trim();
+  if (!text) return;
+  inp.value = '';
+  _agentAddMsg('user', text);
+  _agentLoading = true;
+  const sendBtn = $('agentSendBtn');
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '…'; }
+
+  const loadId = 'ald-' + Date.now();
+  const ld = document.createElement('div');
+  ld.id = loadId; ld.className = 'flex justify-start';
+  ld.innerHTML = '<div class="px-3 py-2 rounded-2xl rounded-tl-sm text-xs" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-muted)">🤔 思考中…</div>';
+  $('agentChatLog').appendChild(ld);
+  $('agentChatLog').scrollTop = $('agentChatLog').scrollHeight;
+
+  try {
+    const codeCtx = (_agentModifiedCode || _agentFilledCode).slice(0, 14000);
+    const prompt = `你係 Google Apps Script 專家，以廣東話回覆。\n\n當前腳本代碼：\n\`\`\`javascript\n${codeCtx}\n\`\`\`\n\n用戶請求修改時：\n1. 廣東話簡述改了什麼（1-2句）\n2. 返回完整更新後代碼放喺 \`\`\`javascript ... \`\`\` block 入面，credentials 原樣保留\n\n如果係問題而非修改，直接廣東話回答即可。\n\n用戶：${text}`;
+    const modelId = state.emailModel || 'glm-5';
+    const tryModels = [modelId, 'glm-5', OPENROUTER_MODEL, 'gemini-3.1-flash-lite-preview'];
+    let response = null;
+    for (const m of tryModels) {
+      try { response = await callAnyTextModel(m, prompt); if (response) break; }
+      catch(e) { console.warn('[agent] ' + m + ':', e.message); }
+    }
+    if (!response) throw new Error('所有 AI 模型均失敗');
+    const codeMatch = response.match(/```(?:javascript|js|groovy)?\n?([\s\S]+?)```/);
+    if (codeMatch) {
+      _agentModifiedCode = codeMatch[1].trim();
+      $('agentCopyCodeBtn').classList.remove('hidden');
+    }
+    document.getElementById(loadId)?.remove();
+    _agentAddMsg('ai', response);
+  } catch(e) {
+    document.getElementById(loadId)?.remove();
+    _agentAddMsg('ai', '❌ 出錯：' + e.message);
+  } finally {
+    _agentLoading = false;
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '發送'; }
   }
 }
 
@@ -2015,8 +2136,15 @@ function escapeHtml(s) {
 
 function renderHistory() {
   const filter = $('filterCat').value;
+  const searchRaw = ($('historySearch')?.value || '').trim().toLowerCase();
   let r = state.receipts.slice().reverse();
   if (filter) r = r.filter(x => x.category === filter);
+  if (searchRaw) r = r.filter(x =>
+    (x.store||'').toLowerCase().includes(searchRaw) ||
+    (x.note||'').toLowerCase().includes(searchRaw) ||
+    (x.itemsText||'').toLowerCase().includes(searchRaw) ||
+    (x.region||'').toLowerCase().includes(searchRaw)
+  );
   const list = $('historyList');
   if (r.length === 0) {
     list.innerHTML = '<p class="text-sm text-gray-500 text-center py-12">未有任何紀錄</p>';
@@ -4531,7 +4659,7 @@ function editReceipt(id) {
   $('modalDelete').classList.remove('hidden');
   $('modalRescanWrap').classList.add('hidden'); // rescan not available in edit mode
   $('modalSubtitle').textContent = '編輯紀錄';
-  $('mStore').value = r.store || '';
+  $('mStore').value = (r.store || '').replace(/^⏳\s+/, '');  // strip pending prefix for editing
   $('mTotal').value = r.total || '';
   $('mDate').value = r.date;
   $('mCat').value = r.category;
@@ -4684,9 +4812,9 @@ function switchTab(name) {
     b.classList.toggle('tab-active', b.dataset.tab === name);
     b.classList.toggle('tab-inactive', b.dataset.tab !== name);
   });
-  // Budget bar only visible on 紀錄 tab
+  // Budget bar visible on 主頁 + 紀錄 tabs
   const bs = $('budgetSection');
-  if (bs) bs.style.display = (name === 'history') ? '' : 'none';
+  if (bs) bs.style.display = (name === 'history' || name === 'dashboard') ? '' : 'none';
   if (name === 'stats') renderStats();
   if (name === 'history') {
     renderHistory();
@@ -4993,58 +5121,20 @@ function init() {
   $('syncPullBtn').addEventListener('click', notionPullAll);
   $('notionMigrateBtn').addEventListener('click', notionMigrateSchema);
 
-  // ── Email → Notion auto-import: Apps Script setup helpers ──
-  const APPS_SCRIPT_URL = 'https://raw.githubusercontent.com/jd92-beep/travel-expense/main/email-to-notion.gs';
-  $('copyAppsScriptBtn')?.addEventListener('click', async () => {
-    const statusEl = $('emailImportStatus');
-    statusEl.className = 'text-[11px] text-center mb-2';
-    statusEl.textContent = '⬇️ 下載最新 Apps Script…';
-    try {
-      const r = await fetch(APPS_SCRIPT_URL + '?t=' + Date.now());
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      let code = await r.text();
-      // Auto-fill ALL credentials so user can paste and go (zero manual editing).
-      // Zhipu key unlocks GLM-5, GLM-5-turbo AND GLM-4-Flash (same key, same endpoint).
-      if (VAULT_ZAI_KEY)     code = code.replace('PASTE_ZHIPU_KEY_OR_LEAVE', VAULT_ZAI_KEY);
-      // MiniMax-portal OAuth (same token as in-app MiniMax VLM).
-      // Prefer fresh DEFAULT over (possibly stale) vault key — see note at callMiniMaxText.
-      const minimaxTok = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
-      if (minimaxTok)        code = code.replace('PASTE_MINIMAX_OAUTH_TOKEN_OR_LEAVE', minimaxTok);
-      // OpenRouter (elephant-alpha stealth model — free)
-      const openrouterKey = state.openrouterKey || DEFAULT_OPENROUTER_KEY;
-      if (openrouterKey)     code = code.replace('PASTE_OPENROUTER_KEY_OR_LEAVE', openrouterKey);
-      // Gemini keys — inject all 5 in order (vault key first, then defaults)
-      const allGemKeys = getGeminiKeys();
-      const gemPlaceholders = [
-        'PASTE_GEMINI_API_KEY_HERE',
-        'PASTE_GEMINI_KEY2_OR_LEAVE',
-        'PASTE_GEMINI_KEY3_OR_LEAVE',
-        'PASTE_GEMINI_KEY4_OR_LEAVE',
-        'PASTE_GEMINI_KEY5_OR_LEAVE',
-      ];
-      gemPlaceholders.forEach((ph, i) => {
-        if (allGemKeys[i]) code = code.replace(ph, allGemKeys[i]);
-      });
-      // Notion credentials
-      if (state.notionToken) code = code.replace('PASTE_NOTION_INTEGRATION_TOKEN_HERE', state.notionToken);
-      if (state.notionDb)    code = code.replace('PASTE_NOTION_DATABASE_ID_HERE', state.notionDb);
-      try {
-        await navigator.clipboard.writeText(code);
-        statusEl.textContent = '✅ 已複製！貼入 Apps Script 編輯器即可';
-        statusEl.style.color = '#00a87e';
-      } catch(_) {
-        // Fallback: show in a prompt
-        prompt('請手動複製以下代碼（已自動填入你嘅 keys）：', code.slice(0, 500) + '...');
-        statusEl.textContent = '⚠️ Clipboard 唔畀用，用 prompt 顯示代替';
-        statusEl.style.color = '#F59E0B';
-      }
-    } catch(e) {
-      statusEl.textContent = '❌ 下載失敗：' + e.message;
-      statusEl.style.color = '#e23b4a';
-    }
-  });
+  // ── Email → Notion: AI Agent + Apps Script buttons ──
+  $('openScriptAgentBtn')?.addEventListener('click', openScriptAgent);
   $('openAppsScriptBtn')?.addEventListener('click', () => {
     window.open('https://script.google.com/home/projects/create', '_blank');
+  });
+  $('agentCopyCodeBtn')?.addEventListener('click', async () => {
+    const code = _agentModifiedCode || _agentFilledCode;
+    if (!code) { toast('⚠️ 先開 AI 助手生成代碼'); return; }
+    try {
+      await navigator.clipboard.writeText(code);
+      toast('✅ 已複製最新代碼！貼入 Apps Script 即可');
+    } catch(_) {
+      prompt('請手動複製：', code.slice(0, 500) + '…');
+    }
   });
   $('pullPendingBtn')?.addEventListener('click', async () => {
     const statusEl = $('emailImportStatus');
@@ -5260,6 +5350,7 @@ function init() {
 
   // History filter
   $('filterCat').addEventListener('change', renderHistory);
+  $('historySearch')?.addEventListener('input', renderHistory);
 
   // Export / reset
   $('exportBtn').addEventListener('click', exportCSV);
@@ -5287,6 +5378,10 @@ function init() {
   });
 
   refresh();
+  // Ensure budget bar reflects the initial active tab (scan = hidden)
+  const _initActiveTab = document.querySelector('.tab-btn.tab-active')?.dataset?.tab || 'scan';
+  const _bs = $('budgetSection');
+  if (_bs) _bs.style.display = (_initActiveTab === 'history' || _initActiveTab === 'dashboard') ? '' : 'none';
 
   // Refresh header every minute
   setInterval(renderHeader, 60000);
