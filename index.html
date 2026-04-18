@@ -1417,6 +1417,9 @@ async function testModelConnection(modelId) {
       return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
     }
     // MiniMax M2.7 (Anthropic portal — voice/email picker)
+    // NOTE: Do NOT send `anthropic-version` header — MiniMax CORS allow-list only
+    // permits Authorization + Content-Type. Any other header fails CORS preflight
+    // and surfaces as "Failed to fetch" in the browser.
     if (modelId === 'minimax-m2.7') {
       const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
       if (!key) return { ok: false, msg: 'MiniMax key 未設定' };
@@ -1424,11 +1427,12 @@ async function testModelConnection(modelId) {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'MiniMax-M2.7', max_tokens: 5,
-          messages: [{ role: 'user', content: 'hi' }],
+          // MiniMax M2.7 emits `thinking` content before `text`; need enough tokens
+          // for text to appear in the test ping (thinking alone is ~30-50 tokens).
+          model: 'MiniMax-M2.7', max_tokens: 80,
+          messages: [{ role: 'user', content: 'reply OK' }],
         })
       }, 15000);
       return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
@@ -3291,6 +3295,9 @@ async function callGLM5Text(content, modelId) {
 }
 
 // MiniMax M2.7 text call (Anthropic-compatible portal)
+// NOTE: Do NOT send `anthropic-version` header — MiniMax's CORS allow-list only
+// permits Authorization + Content-Type. Any other header fails CORS preflight
+// and the browser reports "Failed to fetch" before the request ever leaves.
 async function callMiniMaxText(content) {
   const key = VAULT_MINIMAX_KEY || state.minimaxKey || DEFAULT_MINIMAX_KEY;
   if (!key) throw new Error('MiniMax key 未設定');
@@ -3299,7 +3306,6 @@ async function callMiniMaxText(content) {
     headers: {
       'Authorization': `Bearer ${key}`,
       'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
       model: 'MiniMax-M2.7',
