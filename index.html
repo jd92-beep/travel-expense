@@ -2738,6 +2738,7 @@ function saveSpotEdit() {
     name: ($('spotEditName').value || '').trim(),
     type: $('spotEditType').value,
     note: ($('spotEditNote').value || '').trim(),
+    _source: 'user',
   };
   if (!patch.name) { toast('⚠️ 名稱不能為空'); return; }
   _setItineraryOverride(_spotEditDate, _spotEditIdx, patch);
@@ -4409,13 +4410,15 @@ function applyItineraryUpdates(updates) {
     }
     if (idx < 0) continue;
     const key = u.date + '_' + idx;
-    // Skip if that slot already has a manual override (don't overwrite user's edit)
-    if (state.itineraryOverrides[key]?.name) continue;
+    // Skip if that slot was manually edited by user — email may re-override a previous email override
+    const existingOv = state.itineraryOverrides[key];
+    if (existingOv?._source === 'user') continue;
     state.itineraryOverrides[key] = {
       name: String(u.name).slice(0, 120),
       time: u.time || day.spots[idx].time,
       type,
       note: String(u.note || '').slice(0, 200),
+      _source: 'email',
     };
     applied++;
   }

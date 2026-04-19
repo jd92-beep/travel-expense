@@ -126,16 +126,22 @@ function processExpenseEmails() {
     const retryCount = Number(scriptProps.getProperty(retryKey) || 0);
 
     try {
-      const msg = thread.getMessages()[0];
+      // Read ALL messages in thread so corrections / cancellations in reply emails are not missed.
+      const msgs = thread.getMessages();
+      const msg = msgs[0]; // first message for metadata (subject, from)
       const subject = msg.getSubject() || '';
       const from = msg.getFrom() || '';
       // ── Email body extraction ─────────────────────────────────────────
       // HTML-heavy emails (Klook, KKday, Agoda etc) put all data in HTML tables;
       // getPlainBody() strips those to nearly nothing. Use whichever is longer.
-      const plainBody = msg.getPlainBody() || '';
-      const htmlBody  = msg.getBody() || '';
-      const stripped  = htmlBody ? _stripHtml(htmlBody) : '';
-      const rawBody = stripped.length > plainBody.length * 0.8 ? stripped : (plainBody || stripped);
+      // Concatenate all messages in the thread (newest last), separated by dividers.
+      const rawBody = msgs.map((m, mi) => {
+        const plain = m.getPlainBody() || '';
+        const html  = m.getBody() || '';
+        const stripped = html ? _stripHtml(html) : '';
+        const body = stripped.length > plain.length * 0.8 ? stripped : (plain || stripped);
+        return mi === 0 ? body : '\n\n--- Message ' + (mi + 1) + ' (from: ' + (m.getFrom() || '') + ') ---\n' + body;
+      }).join('');
       // ── Forwarded-chain dedup ─────────────────────────────────────────
       // Two scenarios:
       //  A) Email is a Gmail forward → starts with "---------- Forwarded message ---------"
@@ -532,10 +538,12 @@ function pushToNotion(b, source, emailSubject, threadId, bookingIdx) {
 
   const props = {};
   props[pn('🏪 店名', '店名')]       = { title: [{ text: { content: storeName.slice(0, 200) } }] };
-  props[pn('💴 金額 ¥', '金額')]    = { number: Math.round(jpy) || 0 };
+  props[pn('💴 金額 ¥', '金額')]    = { number: (jpy !== null && jpy !== undefined) ? Math.round(jpy) : null };
   props[pn('📅 日期', '日期')]        = { date: { start: b.date || _todayJST() } };
   props[pn('🗂 類別', '類別')]         = { select: { name: catMap[b.category] || '其他' } };
-  props[pn('💳 支付', '支付')]         = { select: { name: payMap[b.payment] || '信用卡' } };
+  if (b.payment && payMap[b.payment]) {
+    props[pn('💳 支付', '支付')] = { select: { name: payMap[b.payment] } };
+  }
   props[pn('📍 地區', '地區')]      = { rich_text: [{ text: { content: (b.region || '').slice(0, 200) } }] };
   props[pn('🧾 品項', '品項')]       = { rich_text: [{ text: { content: (b.items_text || '').slice(0, 2000) } }] };
   props[pn('📝 備註', '備註')]        = { rich_text: [{ text: { content: noteText.slice(0, 2000) } }] };
@@ -758,15 +766,19 @@ function debugEmail() {
   if (!all.length) { console.log('📭 No emails in travel-expense / retry / failed labels'); return; }
 
   all.slice(0, 3).forEach(function(thread) {
-    const msg     = thread.getMessages()[0];
+    const msgs    = thread.getMessages();
+    const msg     = msgs[0];
     const subject = msg.getSubject() || '(no subject)';
-    const plain   = msg.getPlainBody() || '';
-    const html    = msg.getBody() || '';
-    const stripped = html ? _stripHtml(html) : '';
-    console.log('Subject: ' + subject);
-    console.log('Plain body length: ' + plain.length + ' | Stripped HTML length: ' + stripped.length);
-    console.log('── Stripped HTML (first 2000 chars) ──');
-    console.log(stripped.slice(0, 2000));
+    console.log('Subject: ' + subject + ' (' + msgs.length + ' message(s) in thread)');
+    msgs.forEach(function(m, mi) {
+      const plain   = m.getPlainBody() || '';
+      const html    = m.getBody() || '';
+      const stripped = html ? _stripHtml(html) : '';
+      console.log('── Message ' + (mi + 1) + ' (from: ' + (m.getFrom() || '') + ') ──');
+      console.log('Plain body length: ' + plain.length + ' | Stripped HTML length: ' + stripped.length);
+      console.log('── Stripped HTML (first 2000 chars) ──');
+      console.log(stripped.slice(0, 2000));
+    });
   });
 }
 

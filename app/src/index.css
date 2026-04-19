@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --tap-highlight: transparent;
+}
+
+html,
+body {
+  -webkit-tap-highlight-color: var(--tap-highlight);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ambient grain overlay for depth */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+/* Thin scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); }
+
+/* Remove tap delay + iOS focus styles on inputs */
+input,
+button,
+textarea,
+select {
+  -webkit-appearance: none;
+  font-family: inherit;
+}
+
+/* iOS Safari auto-zooms any input whose font-size is < 16px on focus.
+   Force a 16px floor so focus is smooth. */
+input[type='text'],
+input[type='search'],
+input[type='number'],
+input[type='email'],
+input[type='tel'],
+input[type='password'],
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Accessible focus ring shared across interactive elements */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgba(239, 65, 53, 0.7);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+@layer components {
+  .glass {
+    @apply bg-ink-900/70 backdrop-blur-xl border border-white/5 shadow-card;
+  }
+  .glass-strong {
+    @apply bg-ink-900/85 backdrop-blur-2xl border border-white/10 shadow-card;
+  }
+  .num {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .text-gradient-arsenal {
+    background: linear-gradient(135deg, #ef4135 0%, #f97316 45%, #fbbf24 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
+
+@layer utilities {
+  .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 0.75rem); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .shadow-inner-border {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+}
