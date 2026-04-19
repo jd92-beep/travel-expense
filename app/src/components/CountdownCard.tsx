@@ -33,9 +33,9 @@ export function CountdownCard({ daysUntil }: CountdownCardProps) {
               <span className="num text-6xl font-extrabold text-gradient-arsenal leading-none tracking-tight">
                 {daysUntil}
               </span>
-              <span className="text-lg text-paper-800 font-medium">日後</span>
+              <span className="text-lg text-ink-300 font-medium">日後</span>
             </div>
-            <div className="mt-2 text-xs text-paper-800 num">{first.date} · {first.region}</div>
+            <div className="mt-2 text-xs text-ink-300 num">{first.date} · {first.region}</div>
             <div className="text-xs text-ember-300 mt-0.5">✈️ UO690 HKG → NGO</div>
           </div>
           <motion.div

@@ -160,25 +160,21 @@ export async function scanReceipt(
   apiKey: string,
   preferredModel?: string,
 ): Promise<{ result: ScanResult; modelUsed: string }> {
-  if (!apiKey) throw new Error('未設定 Gemini API Key — 去設定解鎖 Vault 或輸入 key');
-  const validIds = new Set(GEMINI_VISION_MODELS.map((m) => m.id));
-  // Force valid Gemini model. Legacy 'minimax' / 'glm-*' 404 on Gemini endpoint
-  // and silently eat ~2s before the fallback fires, which looks like a hang.
-  const first =
-    preferredModel && validIds.has(preferredModel) ? preferredModel : DEFAULT_SCAN_MODEL;
-  const chain = [first, ...GEMINI_VISION_MODELS.map((m) => m.id).filter((id) => id !== first)];
-  console.info('[scan] chain:', chain, 'mime:', mime, 'keyPrefix:', apiKey.slice(0, 10) + '…');
+  if (!apiKey) throw new Error('未設定 Gemini API Key');
+  const chain = [
+    preferredModel || DEFAULT_SCAN_MODEL,
+    ...GEMINI_VISION_MODELS.map((m) => m.id).filter((id) => id !== (preferredModel || DEFAULT_SCAN_MODEL)),
+  ];
   let lastErr: Error | null = null;
   for (const model of chain) {
     try {
       const raw = await callGeminiOnce({ base64, mime, apiKey, model });
       const parsed = JSON.parse(raw) as ScanResult & { error?: string };
       if (parsed.error === 'not_a_receipt') throw new Error('唔似係收據');
-      console.info('[scan] ✅', model);
       return { result: normalizeScan(parsed), modelUsed: model };
     } catch (e) {
       lastErr = e as Error;
-      console.warn(`[scan] ❌ ${model}:`, lastErr.message);
+      // On safety-block or not-a-receipt, don't retry other models — waste of time.
       if (/blocked by safety|not_a_receipt|唔似係收據/.test(lastErr.message)) throw lastErr;
     }
   }
