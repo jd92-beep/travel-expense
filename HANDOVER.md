@@ -3,7 +3,7 @@
 > **Purpose of this file:** Every Claude session (desktop app OR CLI) reads this first to resume work without re-reading the whole chat history. Updated at the end of each session.
 
 **Last updated:** 2026-04-19 (HKT)
-**Latest commit:** `5504464` — "chore(itinerary): apply KKday 三日團 route corrections — 長野 + 金澤 hotels"
+**Latest commit:** `cdf8aa7` — "fix: deep smoke test — 17 bugs fixed across category, AI prompts, itinerary, and sync"
 
 ---
 
@@ -41,7 +41,7 @@ GitHub Pages rebuilds within 1–2 minutes.
 - **Tabs:** 主頁 (dashboard), 掃描 (scan), 行程 (timeline), 紀錄 (history), 統計 (stats), 設定 (settings)
 
 ### Apps Script (email-to-notion.gs)
-- Runs every **5 min** via time trigger (self-installing in `processExpenseEmails`)
+- Runs every **2 hours** via time trigger (self-installing in `processExpenseEmails`)
 - Reads Gmail labels: `travel-expense`, `travel-expense/retry`, `travel-expense/failed`
 - Multi-provider AI fallback: **GLM-5.1 → GLM-5 → GLM-5-turbo → MiniMax-M2.7 → OpenRouter Elephant-Alpha → Gemini×5keys×5models → GLM-4-Flash**
 - Writes to Notion DB (script ID `1W-bMNbhjSssQl4ju4Wr8YdG5HvSNKbBLLaVdFPi0XoEmSLYiKbsO5DTt`)
@@ -80,11 +80,14 @@ Forward email → Gmail label travel-expense
   - Pencil icon ✏️ visible for editable spots; indigo tint when user has override set
 - Budget bar visible only on 主頁 + 紀錄 tabs
 
-### Scan (掃描)
-- **Blue gradient header IS the camera button** (tap anywhere on card → opens camera)
-- Row 1: 🖼️ 本地相簿 (red) · 📧 從 Email 匯入 (green)
-- Row 2: 📋 複製 Gmail 匯入地址 (`ftjdfr+expense@gmail.com`)
-- Manual / voice / email-paste entry points below
+### Scan (掃描) — 3-section redesign
+- **Blue gradient header IS the camera button** (tap → opens camera)
+- 🖼️ 從相簿選取 (slim secondary row)
+- **📧 Email 記帳** section (list-card style, 3 items):
+  - ⚡ 即時同步最新 Email 記帳 → `notionPullAll()` with spinner, auto-jumps to History if pending
+  - 📋 貼上 Email 文字解析 (paste modal)
+  - 📮 複製收帳 Gmail 地址 (`ftjdfr+expense@gmail.com`)
+- **⌨️ 其他記帳方式**: 🎤 語音輸入 · ✍️ 手動輸入
 
 ### Record / Confirm modal
 - Fields: 店名 / 總金額 / 日期 / 時間 (defaults to current HH:mm) / 預訂編號 / 地址 / 類別 / 支付 / 品項 / 備註
@@ -108,16 +111,9 @@ Forward email → Gmail label travel-expense
 1. 🗾 **旅程設定** (trip name/dates, budget, **Visa official exchange rate** with 12-currency selector)
 2. 👥 **旅伴 & 分帳** (% split with 1-decimal precision — 3 persons defaults to 33.3/33.3/33.3)
 3. 🤖 **AI 模型** (scan/voice/email, all collapsed)
-4. ☁️ **自動化 & 同步** (Email auto-import with 5-min trigger explainer + Notion backup)
+4. ☁️ **自動化 & 同步** (Email auto-import with 2-hour trigger explainer + Notion backup; "AI 助手" + "開 Apps Script" buttons **REMOVED**)
 5. 📖 **使用說明** (manual email import guide, PWA/Shortcut setup)
 6. 🛠 **資料管理** (save settings, CSV export, reset, lock device)
-
-### AI Script Agent (設定 → ☁️)
-- "🤖 AI 助手改腳本" button → opens chat modal
-- Loads current Apps Script code from GitHub raw, injects credentials from vault
-- Chat via same fallback chain (glm-5.1 → elephant-alpha → gemini)
-- AI returns full updated code in ` ```javascript ``` ` block
-- "📋 複製最新代碼" button copies to clipboard for pasting into Apps Script editor
 
 ### Hotel / Spot popup (`#hotelPopup`)
 - Generic — supports all spot types (lodging/food/transport/ticket/localtour/shopping/other)
@@ -180,6 +176,10 @@ Credentials to inject (same `sed -i ''` pattern each time) are documented in ses
 
 | Commit | Date | Summary |
 |---|---|---|
+| `cdf8aa7` | 2026-04-19 | Deep smoke test — 17 bugs fixed (category fallback, localtour AI prompts, ITINERARY refs, autoSync, CSS, sort) |
+| `5e40f54` | 2026-04-19 | Settings: remove AI agent + Apps Script buttons; 5min→2hr trigger; rename email sync btn |
+| `fcb4fb0` | 2026-04-19 | Scan tab 3-section redesign + ⚡ instant email sync button |
+| `784eb26` | 2026-04-19 | docs: add HANDOVER.md for cross-session continuity |
 | `5504464` | 2026-04-19 | Itinerary Day 2/3 hotels updated: 長野松代美居 + MYSTAYS 金澤 |
 | `f848e1d` | 2026-04-19 | Fix: strip ⏳ prefix before 🗓 行程更新 detection |
 | `198a8ee` | 2026-04-19 | Manual entry UX: default time, address cascade, remove 地區, Notion photo property auto-created |
@@ -202,7 +202,7 @@ Credentials to inject (same `sed -i ''` pattern each time) are documented in ses
 - [ ] `state.region` field retained on legacy receipts for back-compat; new receipts store `''`. Could purge eventually.
 - [ ] Gemini 3.1 Pro removed from all lists — if user wants it back, re-add to SCAN_MODELS / VOICE_MODELS / EMAIL_MODELS arrays.
 - [ ] Itinerary overrides stored in localStorage only. If user clears browser cache, overrides lost. (Could sync to Notion itinerary DB but that's complex.)
-- [ ] Apps Script API Executable not deployed — can't run `clasp run processExpenseEmails` directly. User triggers via "🔄 即刻檢查" button or waits 5 min.
+- [ ] Apps Script API Executable not deployed — can't run `clasp run processExpenseEmails` directly. User triggers via Scan tab "⚡ 即時同步" button or waits 2 hr.
 - [ ] Receipt image sync to Notion requires `state.imgbbKey`. Without it, image stays local-only (callout message shown in Notion).
 
 ---
