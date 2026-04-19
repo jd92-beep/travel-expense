@@ -404,8 +404,8 @@
       <button id="checkEmailNowBtn" class="w-full text-left px-4 py-4 flex items-center gap-3 active:bg-emerald-50 transition-colors" style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border-bottom:1px solid rgba(5,150,105,0.15)">
         <span class="text-2xl">⚡</span>
         <div class="flex-1 min-w-0">
-          <p class="font-bold text-sm" style="color:#065F46">立即撈取最新 Email 記帳</p>
-          <p class="text-[11px] mt-0.5" style="color:#059669">同步 Apps Script 處理好的新記錄</p>
+          <p class="font-bold text-sm" style="color:#065F46">即時同步最新 Email 記帳</p>
+          <p class="text-[11px] mt-0.5" style="color:#059669">手動觸發 · 唔想等 2 小時自動同步</p>
         </div>
         <span id="checkEmailNowSpinner" class="hidden w-4 h-4 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin flex-shrink-0"></span>
         <span id="checkEmailNowArrow" class="text-emerald-500 text-sm flex-shrink-0">›</span>
@@ -719,18 +719,14 @@
 
         <!-- Trigger frequency info card -->
         <div class="rounded-xl p-3" style="background:rgba(5,150,105,0.06);border:1px solid rgba(5,150,105,0.20)">
-          <p class="text-[11px] font-bold mb-1.5" style="color:#065F46">⏱ 觸發頻率：每 5 分鐘</p>
+          <p class="text-[11px] font-bold mb-1.5" style="color:#065F46">⏱ 觸發頻率：每 2 小時</p>
           <p class="text-[10px] leading-relaxed" style="color:#047857">
-            Google Apps Script 時間觸發器每 5 分鐘掃一次 Gmail inbox。
-            <strong>唔會密</strong> — 只檢查 travel-expense label 內嘅新 email，每封 email 只 parse 一次（用 SourceID 去重）。
+            Google Apps Script 時間觸發器每 2 小時掃一次 Gmail inbox。
+            只檢查 travel-expense label 內嘅新 email，每封 email 只 parse 一次（用 SourceID 去重）。
           </p>
           <p class="text-[10px] leading-relaxed mt-1.5" style="color:#047857">
             <strong>費用：全免費</strong> ✅
             用戶嘅 Gmail quota（每日 20k 讀取）+ GLM/Gemini/OpenRouter/MiniMax 嘅免費 tier（每月數百萬 tokens）+ Notion API 免費額度。
-            多 AI fallback 會輪流用唔同 provider，單一 provider rate-limit 唔會炒晒其他 service。
-          </p>
-          <p class="text-[10px] mt-1.5" style="color:#047857">
-            要改頻率？喺 <strong>🤖 AI 助手改腳本</strong> 打：<em>「改觸發器去 15 分鐘」</em> 即可。
           </p>
         </div>
 
@@ -738,16 +734,12 @@
           <p class="font-bold mb-1.5" style="color:var(--n-text)">🚀 點樣用</p>
           <ol class="space-y-1 list-decimal pl-4" style="color:var(--n-muted)">
             <li>Forward email → <code class="px-1 rounded text-[10px]" style="background:var(--n-surface)">ftjdfr+expense@gmail.com</code>（Scan tab 有快捷複製鈕）</li>
-            <li>5 分鐘內 Notion 自動出現「⏳ 待確認」entry</li>
+            <li>Apps Script 自動解析，入 Notion 做「⏳ 待確認」entry（最長等 2 小時，或 Scan tab 手動撈）</li>
             <li>History tab → 黃色卡片 → ✅ 確認</li>
           </ol>
         </div>
 
-        <div class="grid grid-cols-2 gap-2">
-          <button id="openScriptAgentBtn" class="py-3 rounded-2xl text-xs font-semibold" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);color:#92400E;border:1px solid rgba(245,158,11,0.50)">🤖 AI 助手改腳本</button>
-          <button id="openAppsScriptBtn" class="py-3 rounded-2xl text-xs font-semibold" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">🔗 開 Apps Script</button>
-        </div>
-        <button id="pullPendingBtn" class="w-full py-3 rounded-2xl text-xs font-semibold" style="background:rgba(0,168,126,0.08);border:1px solid rgba(0,168,126,0.30);color:#00a87e">🔄 即刻檢查有冇新 email</button>
+        <button id="pullPendingBtn" class="w-full py-3 rounded-2xl text-xs font-semibold" style="background:rgba(0,168,126,0.08);border:1px solid rgba(0,168,126,0.30);color:#00a87e">📬 即時同步最新 Email 記帳</button>
         <div id="emailImportStatus" class="text-[11px] text-center hidden"></div>
       </div>
     </details>
@@ -5831,11 +5823,7 @@ function init() {
   $('syncPullBtn').addEventListener('click', notionPullAll);
   $('notionMigrateBtn').addEventListener('click', notionMigrateSchema);
 
-  // ── Email → Notion: AI Agent + Apps Script buttons ──
-  $('openScriptAgentBtn')?.addEventListener('click', openScriptAgent);
-  $('openAppsScriptBtn')?.addEventListener('click', () => {
-    window.open('https://script.google.com/home/projects/create', '_blank');
-  });
+
   $('agentCopyCodeBtn')?.addEventListener('click', async () => {
     const code = _agentModifiedCode || _agentFilledCode;
     if (!code) { toast('⚠️ 先開 AI 助手生成代碼'); return; }
