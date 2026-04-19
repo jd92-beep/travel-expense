@@ -26,7 +26,7 @@
 | Secrets | AES-256-GCM encrypted vault, unlocked with password at startup |
 | Receipt OCR | MiniMax VLM → GLM-4.6V → Gemini (vision fallback chain) |
 | Email parsing | GLM-5.1 → GLM-5 → MiniMax M2.7 → OpenRouter → Gemini × 5 keys → GLM-4-Flash |
-| Backend | Google Apps Script (2-hour cron) — no server required |
+| Backend | Google Apps Script (5-min cron) — no server required |
 | Database | Notion API (via CORS proxy) |
 | Weather | Open-Meteo `jma_seamless` model — official JMA data, free, no key |
 | Deploy | GitHub Pages (auto from `main`) |
@@ -49,7 +49,7 @@ travel-expense/
 
 ```
 Forward email → Gmail label "travel-expense"
-  → Apps Script (2h cron) parses with AI
+  → Apps Script (5-min cron) parses with AI
   → Writes "⏳ 待確認" entry to Notion (dedup by SourceID)
   → App pulls from Notion when you open History tab
   → Tap ✅ to confirm → strips ⏳, syncs back to Notion

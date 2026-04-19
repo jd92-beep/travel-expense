@@ -2463,7 +2463,7 @@ function showSpotPopup(opts) {
       const catDef = CATEGORIES.find(c => c.id === r.category);
       const payDef = PAYMENTS.find(p => p.id === r.payment);
       const amount = r.total ? `<div><span class="text-[10px]" style="color:var(--n-muted)">金額</span><div class="text-sm font-bold" style="color:var(--n-text)">¥${fmt(r.total)} · HKD ${fmt(Math.round(r.total/safeRate))}</div></div>` : '';
-      const meta = `<div class="text-[11px] mt-1" style="color:var(--n-muted)">${catDef?catDef.name:''}${payDef?' · '+payDef.name:''}${r.bookingRef?' · 編號 '+r.bookingRef:''}</div>`;
+      const meta = `<div class="text-[11px] mt-1" style="color:var(--n-muted)">${catDef?catDef.name:''}${payDef?' · '+payDef.name:''}${r.bookingRef?' · 編號 '+escapeHtml(r.bookingRef):''}</div>`;
       const items = r.itemsText ? `<div class="mt-2 text-[11px]" style="color:var(--n-text)">${escapeHtml(r.itemsText.slice(0,200))}</div>` : '';
       const note = r.note && !r.note.startsWith('📍') ? `<div class="mt-1 text-[10px] italic" style="color:var(--n-muted)">${escapeHtml(r.note.slice(0,150))}</div>` : '';
       bodyHtml = amount + meta + items + note;
@@ -4869,8 +4869,8 @@ function bookingToDraft(b, indexHint = 0) {
 
   // ── Payment ──
   const payAuto = !validPays.includes(b.payment);
-  const pay = validPays.includes(b.payment) ? b.payment : 'credit';
-  if (payAuto) warnings.push('付款方式缺，預設信用卡（請確認）');
+  const pay = validPays.includes(b.payment) ? b.payment : null;
+  if (payAuto) warnings.push('付款方式未知，請確認');
 
   // ── Prep-category date correction ──
   // If AI failed to extract date AND we're mid-trip AND the category looks
@@ -5485,9 +5485,7 @@ async function notionMigrateSchema() {
 
 async function notionFetch(path, options = {}) {
   if (!state.notionToken) throw new Error('未設定 Notion token');
-  if (!state.notionDb && path !== '/databases/' + state.notionDb) {
-    // basic guard — if db is empty we'll get bad requests anyway
-  }
+  if (!state.notionDb) throw new Error('未設定 Notion DB ID');
   const targetUrl = 'https://api.notion.com/v1' + path;
   const baseProxy = state.proxy || 'https://notion-proxy.ftjdfr.workers.dev/?';
 
@@ -6066,13 +6064,21 @@ function openConfirmModal(data, base64, warnings) {
   // Address cascade: AI → store name → ITINERARY region for date
   if ($('mAddress')) $('mAddress').value = resolveAddressCascade(data.address, data.store, cleanDate);
   if ($('mBookingRef')) $('mBookingRef').value = data.booking_ref || data.bookingRef || '';
-  // Whitelist AI-returned category/payment — unknown values fall back to 'other'/'cash'
+  // Whitelist AI-returned category/payment — unknown category → 'other', unknown payment → placeholder
   const validCats = CATEGORIES.map(c => c.id);
   const validPays = PAYMENTS.map(p => p.id);
   const aiCat = (data.category || '').toLowerCase().trim();
   const aiPay = (data.payment || '').toLowerCase().trim();
   $('mCat').value = validCats.includes(aiCat) ? aiCat : 'other';
-  $('mPay').value = validPays.includes(aiPay) ? aiPay : 'cash';
+  if (validPays.includes(aiPay)) {
+    $('mPay').value = aiPay;
+  } else {
+    // preserve null — inject a placeholder so the user is forced to pick
+    if (!$('mPay').querySelector('option[value=""]')) {
+      $('mPay').insertAdjacentHTML('afterbegin', '<option value="" style="color:#9CA3AF">— 請選擇 —</option>');
+    }
+    $('mPay').value = '';
+  }
   $('mItems').value = (data.items||[]).map(i => {
     const jp = i.name_jp ? ` (${i.name_jp})` : '';
     const hkd = (state.rate > 0 && i.price) ? ` ≈HKD${Math.round(i.price / state.rate)}` : '';
