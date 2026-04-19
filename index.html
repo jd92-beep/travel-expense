@@ -391,22 +391,22 @@
       </div>
     </button>
 
-    <!-- 🔴 RED BLOCK — 即時同步 Email 記帳 (Arsenal red nod) -->
-    <button id="checkEmailNowBtn" class="w-full rounded-3xl p-5 mb-3 text-center active:scale-[0.98] transition-transform relative" style="background:linear-gradient(145deg,#7F1D1D 0%,#B91C1C 50%,#DC2626 100%);box-shadow:0 14px 40px rgba(185,28,28,0.35);border:none;cursor:pointer">
-      <div class="text-4xl mb-1.5" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,0.3))">⚡</div>
-      <h2 class="text-lg font-black mb-0.5" style="color:white">即時同步 Email 記帳</h2>
-      <p class="text-xs" style="color:rgba(255,255,255,0.75)">手動觸發 · 唔想等 2 小時自動同步</p>
-      <span id="checkEmailNowSpinner" class="hidden absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
-      <span id="checkEmailNowArrow" class="hidden"></span>
+    <!-- 🟢 GREEN BLOCK — 從相簿選取 (now big hero, swapped with email sync) -->
+    <button id="galleryBtn" class="w-full rounded-3xl p-5 mb-3 text-center active:scale-[0.98] transition-transform relative" style="background:linear-gradient(145deg,#064E3B 0%,#059669 50%,#10B981 100%);box-shadow:0 14px 40px rgba(5,150,105,0.35);border:none;cursor:pointer">
+      <div class="text-4xl mb-1.5" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,0.3))">🖼️</div>
+      <h2 class="text-lg font-black mb-0.5" style="color:white">從相簿選取</h2>
+      <p class="text-xs" style="color:rgba(255,255,255,0.80)">已有相片？揀張現成嘅即掃</p>
     </button>
 
-    <!-- 🟢 GREEN BLOCK — 其他記帳方式 quick row (gallery / voice / manual) -->
+    <!-- 🔴/🟣/🟦 quick-action row — email sync (red) + voice + manual -->
     <div class="grid grid-cols-3 gap-2 mb-5">
-      <button id="galleryBtn" class="rounded-2xl p-4 text-center active:scale-95 transition-transform" style="background:linear-gradient(145deg,#065F46 0%,#059669 55%,#10B981 100%);box-shadow:0 8px 24px rgba(5,150,105,0.30);border:none;cursor:pointer">
-        <div class="text-3xl mb-1" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.25))">🖼️</div>
-        <p class="text-xs font-bold" style="color:white">從相簿選取</p>
+      <button id="checkEmailNowBtn" class="rounded-2xl p-4 text-center active:scale-95 transition-transform relative" style="background:linear-gradient(145deg,#7F1D1D 0%,#B91C1C 55%,#DC2626 100%);box-shadow:0 8px 24px rgba(185,28,28,0.30);border:none;cursor:pointer">
+        <div class="text-3xl mb-1" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.25))">⚡</div>
+        <p class="text-xs font-bold leading-tight" style="color:white">Email 同步</p>
+        <span id="checkEmailNowSpinner" class="hidden absolute right-2 top-2 w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
+        <span id="checkEmailNowArrow" class="hidden"></span>
       </button>
-      <button id="voiceBtn" class="rounded-2xl p-4 text-center active:scale-95 transition-transform" style="background:linear-gradient(145deg,#065F46 0%,#0F766E 55%,#14B8A6 100%);box-shadow:0 8px 24px rgba(15,118,110,0.30);border:none;cursor:pointer">
+      <button id="voiceBtn" class="rounded-2xl p-4 text-center active:scale-95 transition-transform" style="background:linear-gradient(145deg,#581C87 0%,#7C3AED 55%,#A855F7 100%);box-shadow:0 8px 24px rgba(124,58,237,0.30);border:none;cursor:pointer">
         <div class="text-3xl mb-1" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.25))">🎤</div>
         <p class="text-xs font-bold" style="color:white">語音輸入</p>
       </button>
@@ -469,6 +469,20 @@
     </div>
     <div id="historyList" class="space-y-2">
       <p class="text-sm text-gray-500 text-center py-12">未有任何紀錄</p>
+    </div>
+  </section>
+
+  <!-- ============ WEATHER TAB ============ -->
+  <section id="tab-weather" class="tab-content hidden fade-in">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="text-2xl font-black">天氣預報 ☀️</h2>
+      <button id="weatherRefreshBtn" class="text-[11px] px-3 py-1.5 rounded-full font-semibold" style="background:rgba(14,165,233,0.12);color:#0369A1">🔄 重新載入</button>
+    </div>
+    <p class="text-[11px] mb-4" style="color:var(--n-muted)">
+      每日行程景點嘅天氣 · 資料源：<span class="font-semibold" style="color:#065F46">氣象廳 JMA</span>（Open-Meteo jma_seamless）
+    </p>
+    <div id="weatherContent">
+      <p class="text-sm text-center py-8" style="color:var(--n-muted)">☁️ 點 🔄 載入天氣…</p>
     </div>
   </section>
 
@@ -849,6 +863,10 @@
     <button data-tab="history" class="tab-btn flex flex-col items-center py-3 tab-inactive">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
       <span class="text-[9px] mt-1">紀錄</span>
+    </button>
+    <button data-tab="weather" class="tab-btn flex flex-col items-center py-3 tab-inactive">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999A5.002 5.002 0 006.23 8.33 5 5 0 003 15z"/></svg>
+      <span class="text-[9px] mt-1">天氣</span>
     </button>
     <button data-tab="stats" class="tab-btn flex flex-col items-center py-3 tab-inactive">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
@@ -5983,6 +6001,214 @@ async function deleteReceipt() {
 // ============ TABS ============
 let _lastNotionPull = 0;
 
+// ============ WEATHER TAB ============
+// Auto-detects scenic spots from the ITINERARY (via getItinerary() — which honours
+// any user overrides in localStorage). For each day, looks up region + spot names
+// against a keyword table and assigns lat/lon of the regional city. Shopping malls
+// / restaurants inside a city inherit that city's weather rather than pinpointing
+// the specific venue (which is both inaccurate for point forecasts and overkill).
+//
+// Primary data source: 氣象廳 JMA (Japan Meteorological Agency) via Open-Meteo's
+// `models=jma_seamless` parameter, which pulls directly from JMA's public feed.
+// Secondary fallback: Open-Meteo's default multi-model blend (still high quality).
+// Both are CORS-enabled and free — no API key required.
+
+const WEATHER_REGION_COORDS = [
+  { keywords: ['名古屋', 'nagoya', '中村', '大須', '熱田', 'oasis'],
+    name: '名古屋', en: 'Nagoya', lat: 35.1815, lon: 136.9066 },
+  { keywords: ['白川', 'shirakawa'],
+    name: '白川鄉', en: 'Shirakawa-go', lat: 36.2583, lon: 136.9063 },
+  { keywords: ['飛驒', '飛騨', '高山', 'takayama', 'hida'],
+    name: '飛驒高山', en: 'Takayama', lat: 36.1429, lon: 137.2538 },
+  { keywords: ['立山', '黑部', '黒部', '室堂', 'tateyama', 'kurobe', 'murodo', '雪之大谷'],
+    name: '立山黑部（室堂）', en: 'Tateyama Kurobe (Murodo)', lat: 36.5776, lon: 137.6064 },
+  { keywords: ['上高地', 'kamikochi', 'kamikōchi', '河童橋'],
+    name: '上高地', en: 'Kamikochi', lat: 36.2497, lon: 137.6343 },
+  { keywords: ['金澤', '金沢', 'kanazawa', '兼六', '近江町', 'mystays'],
+    name: '金澤', en: 'Kanazawa', lat: 36.5613, lon: 136.6562 },
+  { keywords: ['長野', 'nagano', '松代'],
+    name: '長野', en: 'Nagano', lat: 36.6485, lon: 138.1943 },
+  { keywords: ['常滑', 'tokoname', '中部國際機場', '中部機場', 'centrair', '招財貓'],
+    name: '常滑 / 中部機場', en: 'Tokoname / Centrair', lat: 34.8871, lon: 136.8356 },
+  { keywords: ['京都', 'kyoto'],
+    name: '京都', en: 'Kyoto', lat: 35.0116, lon: 135.7681 },
+  { keywords: ['大阪', 'osaka'],
+    name: '大阪', en: 'Osaka', lat: 34.6937, lon: 135.5023 },
+  { keywords: ['東京', 'tokyo'],
+    name: '東京', en: 'Tokyo', lat: 35.6762, lon: 139.6503 },
+];
+const WEATHER_DEFAULT_COORD = { name: '日本', en: 'Japan', lat: 35.6762, lon: 139.6503 };
+const WEATHER_SLOT_HOURS = [9, 12, 15, 18, 21];
+const WEATHER_CACHE_TTL_MS = 3600 * 1000; // 1 hour
+
+// Scan a day's region + spots and return up to 2 matching coord entries. If the
+// day spans two regions (e.g. "飛驒高山/白川鄉 → 長野"), both show up.
+function weatherCoordsForDay(day) {
+  const texts = [day.region || '', (day.spots || []).map(s => (s.name||'') + ' ' + (s.address||'') + ' ' + (s.note||'')).join(' ')];
+  const hay = texts.join(' ').toLowerCase();
+  const found = new Map();
+  for (const r of WEATHER_REGION_COORDS) {
+    if (r.keywords.some(k => hay.includes(k.toLowerCase()))) {
+      found.set(r.name, r);
+      if (found.size >= 2) break;
+    }
+  }
+  return found.size ? Array.from(found.values()) : [WEATHER_DEFAULT_COORD];
+}
+
+function weatherCodeIcon(code) {
+  if (code === 0) return { icon: '☀️', label: '晴朗' };
+  if (code === 1) return { icon: '🌤️', label: '晴' };
+  if (code === 2) return { icon: '⛅', label: '多雲' };
+  if (code === 3) return { icon: '☁️', label: '陰' };
+  if (code === 45 || code === 48) return { icon: '🌫️', label: '霧' };
+  if (code >= 51 && code <= 57) return { icon: '🌦️', label: '毛毛雨' };
+  if (code >= 61 && code <= 67) return { icon: '🌧️', label: '雨' };
+  if (code >= 71 && code <= 77) return { icon: '❄️', label: '雪' };
+  if (code >= 80 && code <= 82) return { icon: '🌦️', label: '驟雨' };
+  if (code === 85 || code === 86) return { icon: '🌨️', label: '陣雪' };
+  if (code >= 95) return { icon: '⛈️', label: '雷暴' };
+  return { icon: '❓', label: '—' };
+}
+
+async function fetchWeather(coord) {
+  const cacheKey = `wx_${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`;
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+    if (cached && (Date.now() - cached.ts) < WEATHER_CACHE_TTL_MS) {
+      return { data: cached.data, source: cached.source + '（快取）' };
+    }
+  } catch(_) {}
+
+  // PRIMARY: JMA via Open-Meteo jma_seamless (official Japanese govt data)
+  const primary = `https://api.open-meteo.com/v1/forecast?latitude=${coord.lat}&longitude=${coord.lon}&hourly=temperature_2m,weather_code,precipitation_probability&current=temperature_2m,weather_code&timezone=Asia/Tokyo&models=jma_seamless&forecast_days=7`;
+  try {
+    const r = await fetchWithTimeout(primary, {}, 10000);
+    if (r.ok) {
+      const data = await r.json();
+      if (data && data.hourly) {
+        const payload = { data, source: 'JMA 氣象廳' };
+        try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), ...payload })); } catch(_) {}
+        return payload;
+      }
+    }
+  } catch(e) { console.warn('[weather] JMA primary failed:', e.message); }
+
+  // FALLBACK: Open-Meteo default multi-model blend
+  const fallback = `https://api.open-meteo.com/v1/forecast?latitude=${coord.lat}&longitude=${coord.lon}&hourly=temperature_2m,weather_code,precipitation_probability&current=temperature_2m,weather_code&timezone=Asia/Tokyo&forecast_days=7`;
+  try {
+    const r = await fetchWithTimeout(fallback, {}, 10000);
+    if (r.ok) {
+      const data = await r.json();
+      const payload = { data, source: 'Open-Meteo' };
+      try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), ...payload })); } catch(_) {}
+      return payload;
+    }
+  } catch(e) { console.warn('[weather] fallback failed:', e.message); }
+
+  return { data: null, source: 'N/A' };
+}
+
+function weatherSlotValue(data, date, hour) {
+  if (!data || !data.hourly) return null;
+  const ts = `${date}T${String(hour).padStart(2, '0')}:00`;
+  const i = data.hourly.time.indexOf(ts);
+  if (i < 0) return null;
+  return {
+    temp: data.hourly.temperature_2m?.[i],
+    code: data.hourly.weather_code?.[i],
+    rainProb: data.hourly.precipitation_probability?.[i],
+  };
+}
+
+// Returns true if the given {date, hour} matches the current Asia/Tokyo wall clock
+// within ±1.5h — the slot is showing "live" rather than pure forecast.
+function isLiveSlot(date, hour) {
+  const now = new Date();
+  const tokyoStr = now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit' });
+  // Parse "MM/DD/YYYY, HH" out of en-US format
+  const m = tokyoStr.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s+(\d{1,2})/);
+  if (!m) return false;
+  const tokyoDate = `${m[3]}-${m[1]}-${m[2]}`;
+  const tokyoHour = parseInt(m[4], 10);
+  return tokyoDate === date && Math.abs(tokyoHour - hour) < 1.5;
+}
+
+async function renderWeather() {
+  const box = $('weatherContent');
+  if (!box) return;
+  box.innerHTML = '<p class="text-sm text-center py-8" style="color:var(--n-muted)">☁️ 載入中…</p>';
+  const iti = getItinerary();
+  // Build per-day blocks sequentially so we cache API responses across days that
+  // share a city (e.g. Day 1 & Day 5 both Nagoya)
+  const rows = [];
+  for (const day of iti) {
+    const coords = weatherCoordsForDay(day);
+    const perSpot = [];
+    for (const coord of coords) {
+      const { data, source } = await fetchWeather(coord);
+      perSpot.push({ coord, data, source });
+    }
+    rows.push({ day, perSpot });
+  }
+
+  box.innerHTML = rows.map(({ day, perSpot }) => {
+    const spotCards = perSpot.map(({ coord, data, source }) => {
+      const slots = WEATHER_SLOT_HOURS.map(h => {
+        const v = weatherSlotValue(data, day.date, h);
+        const live = isLiveSlot(day.date, h);
+        if (!v || v.temp == null) {
+          return `<div class="rounded-lg p-2 text-center" style="background:var(--n-bg);opacity:0.5">
+            <p class="text-[10px] font-bold">${h}:00</p>
+            <p class="text-xl my-1">—</p>
+          </div>`;
+        }
+        const wi = weatherCodeIcon(v.code);
+        const liveBadge = live
+          ? '<span class="text-[8px] px-1 py-0.5 rounded font-black ml-1" style="background:#DC2626;color:white">● LIVE</span>'
+          : '';
+        const rainRow = v.rainProb != null
+          ? `<p class="text-[9px]" style="color:#0369A1">☔ ${Math.round(v.rainProb)}%</p>`
+          : '';
+        const bg = live
+          ? 'background:linear-gradient(145deg,#FEE2E2,#FECACA);border:2px solid #DC2626'
+          : 'background:var(--n-bg);border:1px solid var(--n-border)';
+        return `<div class="rounded-lg p-2 text-center" style="${bg}">
+          <p class="text-[10px] font-bold">${h}:00${liveBadge}</p>
+          <div class="text-xl my-0.5">${wi.icon}</div>
+          <p class="text-sm font-black">${Math.round(v.temp)}°C</p>
+          <p class="text-[9px]" style="color:var(--n-muted)">${wi.label}</p>
+          ${rainRow}
+        </div>`;
+      }).join('');
+      const sourceTag = source.includes('JMA')
+        ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full font-semibold" style="background:rgba(5,150,105,0.12);color:#065F46">🇯🇵 JMA</span>'
+        : source.includes('Open-Meteo')
+          ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full font-semibold" style="background:rgba(14,165,233,0.12);color:#0369A1">Open-Meteo</span>'
+          : '<span class="text-[9px] px-1.5 py-0.5 rounded-full" style="background:#FEE2E2;color:#991B1B">離線</span>';
+      return `<div class="mb-3">
+        <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+          <span class="text-sm font-black">${escapeHtml(coord.name)}</span>
+          <span class="text-[10px]" style="color:var(--n-muted)">${escapeHtml(coord.en)}</span>
+          ${sourceTag}
+        </div>
+        <div class="grid grid-cols-5 gap-1.5">${slots}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="rounded-2xl p-4 mb-3" style="background:var(--n-surface);border:1px solid var(--n-border)">
+      <div class="flex items-baseline justify-between mb-3">
+        <h3 class="font-black text-base">Day ${day.day} · ${escapeHtml(day.region)}</h3>
+        <p class="text-[11px]" style="color:var(--n-muted)">${day.date}</p>
+      </div>
+      ${spotCards}
+    </div>`;
+  }).join('') + `<p class="text-[10px] text-center mt-4" style="color:var(--n-muted)">
+    主要資料：氣象廳 JMA（Japan Meteorological Agency）· 備援：Open-Meteo 多模型融合<br>
+    天氣行程自動跟住你 <b>行程 tab</b> 嘅景點，編輯行程後重新整理呢頁即更新
+  </p>`;
+}
+
 function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   $('tab-' + name).classList.remove('hidden');
@@ -5993,6 +6219,7 @@ function switchTab(name) {
   // Budget bar visible on 主頁 + 紀錄 tabs
   const bs = $('budgetSection');
   if (bs) bs.style.display = (name === 'history' || name === 'dashboard') ? '' : 'none';
+  if (name === 'weather') renderWeather();
   if (name === 'stats') renderStats();
   if (name === 'history') {
     renderHistory();
@@ -6431,6 +6658,15 @@ function init() {
   });
   $('voiceBtn').addEventListener('click', startVoiceInput);
   $('manualBtn').addEventListener('click', () => openConfirmModal({}, ''));
+  // Weather tab: manual refresh bypasses the 1h cache
+  $('weatherRefreshBtn')?.addEventListener('click', () => {
+    // Clear all weather caches so next fetch re-pulls from JMA
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('wx_')) localStorage.removeItem(k);
+    }
+    renderWeather();
+  });
 
   // ── Email import flow ──
   // Pending email screenshots staged before parse
