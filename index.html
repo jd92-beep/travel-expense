@@ -585,7 +585,10 @@
 
     <!-- Budget -->
     <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">旅程預算（HKD ⇄ JPY 自動同步）</label>
+      <div class="flex items-center justify-between">
+        <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">旅程預算（HKD ⇄ JPY 自動同步）</label>
+        <button id="saveBudgetBtn" class="text-[11px] px-3 py-1 rounded-full font-semibold" style="background:rgba(45,90,142,0.10);color:#2D5A8E">💾 儲存預算</button>
+      </div>
       <div class="flex items-baseline gap-2 mt-2">
         <input type="number" id="setBudgetHKDInput" class="bg-transparent text-2xl font-bold focus:outline-none w-full" value="5000" step="1" min="0">
         <span class="text-sm font-semibold shrink-0" style="color:var(--n-blue)">HKD</span>
@@ -3979,6 +3982,19 @@ const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。�
 - 格式：「預約番號 XXXXXX」 / 「Conf# CX-12345」 / 「Order #KK-789012」
 - 如有房型 / 座位等重要資訊，加落 note（30 字以內）
 
+### 規則 5.5 — ⭐ 同時建立 itinerary_updates（必做，唔可漏）
+每當 booking 有具體【日期 + 時間 + 地點承諾】，**必須同時建立對應嘅 itinerary_updates 條目**。呢樣係為咗令用戶行程 tab 自動跟住 email 同步。
+
+必建 itinerary_updates 嘅 booking 類型：
+- ✈️ **機票** → 起飛日 + check-in 時間（起飛前 2h）或 email 標明時間，name=「{airline} {flight_no} 機場 check-in」，type=transport
+- 🗺️ **多日 Tour**（KKday / Klook / Viator）→ 每日 pickup 時間 + 集合點，name=「KKday Day N · {地點}」，type=transport 或 localtour
+- 🏨 **酒店** → check-in 日（15:00 或 email 明講時間）+ 酒店名，type=lodging
+- 🍽️ **訂座餐廳** → 訪問日 + 時間 + 餐廳名，type=food
+- 🚅 **新幹線指定席 / JR** → 乘車日 + 時間，type=transport
+
+**絕對唔可漏** —（例）HKExpress 機票 email 只填 bookings[] 而漏 itinerary_updates[]，就係錯。
+itinerary_updates 欄位：{ date, time, name, type, note }（note < 80 字，寫 booking_ref + 位數等 context）
+
 ### 規則 6 — 缺失欄位
 - 冇金額 → \`total: null\`，confidence: "medium"
 - 日期唔明 → \`date: null\`，confidence: "low"
@@ -4172,7 +4188,9 @@ async function parseEmailInput({ text = '', images = [] }) {
       state.lastEmailModel = name;
       try { saveState(); } catch(_) {}
       try { renderEmailModelCards(); } catch(_) {}
-      return { source: parsed.source || 'other', bookings: parsed.bookings, modelUsed: name };
+      // Pass itinerary_updates through; downstream applies them to state.itineraryOverrides
+      const itineraryUpdates = Array.isArray(parsed.itinerary_updates) ? parsed.itinerary_updates : [];
+      return { source: parsed.source || 'other', bookings: parsed.bookings, itinerary_updates: itineraryUpdates, modelUsed: name };
     } catch(e) {
       console.warn(`[emailParse] ${name} failed: ${String(e?.message || 'unknown').slice(0, 120)}`);
       lastErr = e;
@@ -4184,6 +4202,49 @@ async function parseEmailInput({ text = '', images = [] }) {
 // Legacy text-only wrapper kept for back-compat with existing call sites
 async function parseEmailText(text) {
   return parseEmailInput({ text, images: [] });
+}
+
+// Apply a batch of itinerary_updates (from paste-email parsing) to
+// state.itineraryOverrides. Same matching heuristic as the Notion 🗓 handler:
+// find spot on that date whose type matches; skip if no matching spot or if
+// that slot has already been overridden (avoids clobbering a prior manual edit).
+// Returns count applied.
+function applyItineraryUpdates(updates) {
+  if (!Array.isArray(updates) || updates.length === 0) return 0;
+  let applied = 0;
+  state.itineraryOverrides = state.itineraryOverrides || {};
+  for (const u of updates) {
+    if (!u || !u.date || !u.name) continue;
+    const day = (typeof getItinerary === 'function' ? getItinerary() : ITINERARY).find(d => d.date === u.date);
+    if (!day || !Array.isArray(day.spots) || day.spots.length === 0) continue;
+    const type = u.type || 'other';
+    let idx = day.spots.findIndex(s => s.type === type);
+    // If no same-type match, fall back to closest-time spot so we don't lose the update
+    if (idx < 0 && u.time) {
+      const uMin = (Number(u.time.slice(0,2))||0) * 60 + (Number(u.time.slice(3,5))||0);
+      let best = -1, bestDiff = Infinity;
+      day.spots.forEach((s, i) => {
+        if (!s.time) return;
+        const sMin = (Number(s.time.slice(0,2))||0) * 60 + (Number(s.time.slice(3,5))||0);
+        const d = Math.abs(sMin - uMin);
+        if (d < bestDiff) { bestDiff = d; best = i; }
+      });
+      if (best >= 0 && bestDiff <= 180) idx = best; // within 3h
+    }
+    if (idx < 0) continue;
+    const key = u.date + '_' + idx;
+    // Skip if that slot already has a manual override (don't overwrite user's edit)
+    if (state.itineraryOverrides[key]?.name) continue;
+    state.itineraryOverrides[key] = {
+      name: String(u.name).slice(0, 120),
+      time: u.time || day.spots[idx].time,
+      type,
+      note: String(u.note || '').slice(0, 200),
+    };
+    applied++;
+  }
+  if (applied > 0) { try { saveState(); } catch(_) {} }
+  return applied;
 }
 
 // Multimodal Gemini call — accepts text + N image parts (each {base64, mime})
@@ -4252,6 +4313,23 @@ const MULTI_BOOKING_SCHEMA = {
           confidence: { type: 'string', enum: ['high','medium','low'] },
         },
         required: ['store', 'category', 'confidence'],
+      }
+    },
+    // Itinerary commitments that travel WITH the bookings (flight check-in times,
+    // tour pickup, hotel check-in, restaurant reservations). Auto-applied to
+    // state.itineraryOverrides so the day-by-day plan stays in sync with bookings.
+    itinerary_updates: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          date: { type: 'string' },
+          time: { type: 'string', nullable: true },
+          name: { type: 'string' },
+          type: { type: 'string', enum: ['transport','food','shopping','lodging','ticket','localtour','medicine','other'] },
+          note: { type: 'string' },
+        },
+        required: ['date', 'name', 'type'],
       }
     }
   },
@@ -6318,6 +6396,32 @@ function init() {
   updateRateReverse();
   $('setBudget').addEventListener('input', syncFromJPY);
   $('setBudgetHKDInput').addEventListener('input', syncFromHKD);
+
+  // Quick-save JUST the budget without touching rate/autoSync/share ratios
+  $('saveBudgetBtn')?.addEventListener('click', () => {
+    const hkd = Number($('setBudgetHKDInput').value);
+    if (hkd > 0) {
+      state.budget = Math.round(hkd * (state.rate || 20.36));
+    } else {
+      state.budget = Math.max(1, Number($('setBudget').value) || 101800);
+    }
+    saveState();
+    refresh();
+    // Visual feedback on the button itself
+    const btn = $('saveBudgetBtn');
+    if (btn) {
+      const original = btn.textContent;
+      btn.textContent = '✅ 已儲存';
+      btn.style.background = 'rgba(5,150,105,0.15)';
+      btn.style.color = '#065F46';
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.style.background = 'rgba(45,90,142,0.10)';
+        btn.style.color = '#2D5A8E';
+      }, 1500);
+    }
+    toast('✅ 預算已儲存');
+  });
   $('setRate').addEventListener('input', () => {
     updateRateReverse();
     // When rate changes, keep HKD as anchor (primary) and recompute JPY
@@ -6756,15 +6860,26 @@ function init() {
     $('emailParseBtn').disabled = true;
     try {
       const result = await parseEmailInput({ text, images });
-      if (!result.bookings || result.bookings.length === 0) {
-        status.innerHTML = '<span style="color:#DC2626">❌ 解析唔到任何 booking。確認係否 booking confirmation？</span>';
+      if ((!result.bookings || result.bookings.length === 0)
+          && (!result.itinerary_updates || result.itinerary_updates.length === 0)) {
+        status.innerHTML = '<span style="color:#DC2626">❌ 解析唔到任何 booking 或行程。確認係否 booking confirmation？</span>';
         $('emailParseBtn').disabled = false;
         return;
       }
+      // Apply itinerary_updates directly to state.itineraryOverrides (no modal — these
+      // are complementary to bookings, not independent expenses). If the user
+      // disagrees they can edit in 行程 tab.
+      const itiCount = applyItineraryUpdates(result.itinerary_updates || []);
       $('emailPasteModal').classList.add('hidden');
-      // Preserve the original input so "retry with stronger model" can re-parse
-      openBatchConfirmModal(result.bookings, result.source, result.modelUsed, { text, images });
-      toast(`🤖 解析到 ${result.bookings.length} 筆 booking`);
+      if (result.bookings && result.bookings.length > 0) {
+        // Preserve the original input so "retry with stronger model" can re-parse
+        openBatchConfirmModal(result.bookings, result.source, result.modelUsed, { text, images });
+        const itiNote = itiCount > 0 ? ` + ${itiCount} 項行程更新` : '';
+        toast(`🤖 解析到 ${result.bookings.length} 筆 booking${itiNote}`);
+      } else if (itiCount > 0) {
+        toast(`🗓 已自動更新 ${itiCount} 項行程（冇 booking）`);
+        refresh();
+      }
       // Clear staged images after successful parse
       _emailImageQueue = [];
       renderEmailImagePreview();
