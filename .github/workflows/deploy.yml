@@ -21,13 +21,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare public dir (index.html only)
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install React app deps
+        working-directory: app
+        run: npm install --no-audit --no-fund
+
+      - name: Build React app
+        working-directory: app
+        run: npm run build
+
+      - name: Prepare _site (React app + legacy)
         run: |
-          mkdir _site
-          cp index.html _site/index.html
+          mkdir -p _site
+          cp -r app/dist/* _site/
+          cp index.html _site/legacy.html
+
       - uses: actions/configure-pages@v4
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: '_site'
+
       - id: deployment
         uses: actions/deploy-pages@v4
