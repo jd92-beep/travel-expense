@@ -11,3 +11,4 @@ node_modules/
 smoke_test.jpg
 *.tmp
 .tmp/
+test_receipts/
