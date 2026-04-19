@@ -2390,6 +2390,15 @@ function getEffectiveSpots(it) {
   return spots;
 }
 
+// Timeline-tab version of getEffectiveSpots: applies itineraryOverrides only.
+// Does NOT overlay lodging/transport receipts — 行程 tab is a pure schedule view.
+function getScheduleSpots(it) {
+  return (it.spots || []).map((s, i) => {
+    const ov = _getItineraryOverride(it.date, i);
+    return Object.assign({ _spotIdx: i }, s, ov || {});
+  });
+}
+
 // Returns receipts for a day that AREN'T already shown as a timeline spot.
 // (Used to build the "💰 N 筆消費" collapsible chip beneath the spots list.)
 function getDayReceiptsNotInSpots(date) {
@@ -2953,107 +2962,42 @@ function renderTimeline() {
   const container = $('timelineList');
   if (!container) return;
   const today = todayHKT();
-  // Live HKT clock — used to position the metro-station "you are here" marker
   const nowHKT = new Date().toLocaleString('en-GB', {
     timeZone: 'Asia/Hong_Kong', year:'numeric', month:'2-digit', day:'2-digit',
     hour:'2-digit', minute:'2-digit', hour12:false
-  }); // "DD/MM/YYYY, HH:MM"
-  // Convert "DD/MM/YYYY, HH:MM" → "YYYY-MM-DD HH:MM"
+  });
   const m = nowHKT.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s+(\d{2}):(\d{2})/);
   const nowKey = m ? `${m[3]}-${m[2]}-${m[1]} ${m[4]}:${m[5]}` : `${today} 00:00`;
 
   const iti = window.CURRENT_ITINERARY || ITINERARY;
-  const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
   let html = '';
 
-  // Helper: render a group of actual receipts (used by prep / per-day / post)
-  const renderActualGroup = (receipts, groupStartSide = 0) => {
-    const items = receipts.slice().sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
-    let out = '';
-    items.forEach((r, i) => {
-      const side = (i + groupStartSide) % 2 === 0 ? 'left' : 'right';
-      const t = new Date(r.createdAt || Date.now());
-      const time = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
-      const tlKey = _tlKey(r.date, time);
+  // ── TRIP DAYS — pure schedule view, no expense records ──
+  iti.forEach(day => {
+    const isToday = day.date === today;
+    html += `<div class="tl-day-header" data-day-header="${day.date}">Day ${day.day} · ${day.date.slice(5)} · ${escapeHtml(day.region)}${isToday ? ' · 今日 📍' : ''}</div>`;
+
+    const spots = getScheduleSpots(day);
+    spots.forEach((spot, i) => {
+      const side = i % 2 === 0 ? 'left' : 'right';
+      const tlKey = _tlKey(day.date, spot.time);
       const passed = tlKey <= nowKey ? ' passed' : '';
-      const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES.find(c=>c.id==='other') || CATEGORIES[CATEGORIES.length-1];
-      const hkd = `<span class="tl-amount-hkd"> · HKD ${Math.round(r.total/safeRate)}</span>`;
-      out += `<div class="tl-item actual${passed}" data-side="${side}" data-tl-key="${tlKey}" onclick="editReceipt('${r.id}')" style="cursor:pointer">
+      const cat = CATEGORIES.find(c => c.id === spot.type) || CATEGORIES.find(c=>c.id==='other') || CATEGORIES[CATEGORIES.length-1];
+      const spotIdx = typeof spot._spotIdx === 'number' ? spot._spotIdx : -1;
+      const hasOverride = spotIdx >= 0 && !!_getItineraryOverride(day.date, spotIdx);
+      const overrideBadge = hasOverride ? '<span style="background:#6366f1;color:white;padding:1px 4px;border-radius:3px;font-size:8px;font-weight:700;margin-left:4px">✏️ 已更新</span>' : '';
+      const tzBadge = spot.timezone ? `<span style="font-size:8px;font-weight:600;color:#6366f1;margin-left:4px">${escapeHtml(spot.timezone)}</span>` : '';
+      const editAttr = spotIdx >= 0 && typeof openSpotEditModal === 'function'
+        ? `onclick="openSpotEditModal('${day.date}',${spotIdx})" style="cursor:pointer"` : '';
+      html += `<div class="tl-item planned${passed}" data-side="${side}" data-tl-key="${tlKey}" ${editAttr}>
         <div class="tl-card">
-          <div class="tl-time">${r.date} ${time}</div>
-          <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${isPendingReceipt(r) ? '<span style="background:#F59E0B;color:white;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:700;margin-right:4px">⏳</span>' : ''}${escapeHtml(displayStore(r) || '未命名')}</div>
-          <div class="tl-amount">¥${fmt(r.total)}${hkd}</div>
+          <div class="tl-time">${spot.time || ''}${tzBadge}</div>
+          <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(spot.name)}${overrideBadge}</div>
+          ${spot.note ? `<div class="tl-note">${escapeHtml(String(spot.note).slice(0,120))}</div>` : ''}
         </div>
       </div>`;
     });
-    return out;
-  };
-
-  // ── PREP PHASE section (before Day 1) ──
-  const prepReceipts = state.receipts.filter(r => getReceiptPhase(r) === 'prep');
-  if (prepReceipts.length > 0) {
-    const prepTotal = prepReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
-    html += `<div class="tl-day-header" style="background:linear-gradient(135deg,#F59E0B,#FCD34D);box-shadow:0 4px 12px rgba(245,158,11,0.30)">🧳 Day 0 · 準備階段 · ¥${fmt(prepTotal)} (HK$${fmt(Math.round(prepTotal/safeRate))})</div>`;
-    html += renderActualGroup(prepReceipts, 0);
-  }
-
-  // ── TRIP DAYS ──
-  iti.forEach(day => {
-    const isToday = day.date === today;
-    const dayReceipts = state.receipts
-      .filter(r => r.date === day.date)
-      .slice()
-      .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
-    const dayTotal = dayReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
-    const dayHKD = Math.round(dayTotal / safeRate);
-
-    html += `<div class="tl-day-header" data-day-header="${day.date}">Day ${day.day} · ${day.date.slice(5)} · ${escapeHtml(day.region)}${isToday ? ' · 今日' : ''}${dayTotal > 0 ? ' · ¥' + fmt(dayTotal) + ' (HK$' + fmt(dayHKD) + ')' : ''}</div>`;
-
-    const items = [];
-    (day.spots || []).forEach(sp => {
-      items.push({ kind: 'planned', time: sp.time, name: sp.name, type: sp.type, note: sp.note, tlKey: _tlKey(day.date, sp.time) });
-    });
-    dayReceipts.forEach(r => {
-      const t = new Date(r.createdAt || Date.now());
-      const time = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
-      items.push({ kind: 'actual', time, receipt: r, tlKey: _tlKey(day.date, time) });
-    });
-    items.sort((a,b) => a.tlKey.localeCompare(b.tlKey));
-
-    items.forEach((item, i) => {
-      const side = i % 2 === 0 ? 'left' : 'right';
-      const passed = item.tlKey <= nowKey ? ' passed' : '';
-      if (item.kind === 'planned') {
-        const cat = CATEGORIES.find(c => c.id === item.type) || CATEGORIES.find(c=>c.id==='other') || CATEGORIES[CATEGORIES.length-1];
-        html += `<div class="tl-item planned${passed}" data-side="${side}" data-tl-key="${item.tlKey}">
-          <div class="tl-card">
-            <div class="tl-time">${item.time || ''}</div>
-            <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(item.name)}</div>
-            ${item.note ? `<div class="tl-note">${escapeHtml(item.note)}</div>` : ''}
-          </div>
-        </div>`;
-      } else {
-        const r = item.receipt;
-        const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES.find(c=>c.id==='other') || CATEGORIES[CATEGORIES.length-1];
-        const hkd = `<span class="tl-amount-hkd"> · HKD ${Math.round(r.total/safeRate)}</span>`;
-        html += `<div class="tl-item actual${passed}" data-side="${side}" data-tl-key="${item.tlKey}" onclick="editReceipt('${r.id}')" style="cursor:pointer">
-          <div class="tl-card">
-            <div class="tl-time">${item.time}</div>
-            <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${isPendingReceipt(r) ? '<span style="background:#F59E0B;color:white;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:700;margin-right:4px">⏳</span>' : ''}${escapeHtml(displayStore(r) || '未命名')}</div>
-            <div class="tl-amount">¥${fmt(r.total)}${hkd}</div>
-          </div>
-        </div>`;
-      }
-    });
   });
-
-  // ── POST PHASE section (after last day) ──
-  const postReceipts = state.receipts.filter(r => getReceiptPhase(r) === 'post');
-  if (postReceipts.length > 0) {
-    const postTotal = postReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
-    html += `<div class="tl-day-header" style="background:linear-gradient(135deg,#64748B,#94A3B8);box-shadow:0 4px 12px rgba(100,116,139,0.30)">🏠 返程後 · ¥${fmt(postTotal)} (HK$${fmt(Math.round(postTotal/safeRate))})</div>`;
-    html += renderActualGroup(postReceipts, 0);
-  }
 
   container.innerHTML = html;
   updateTimelineProgress();
@@ -3309,6 +3253,8 @@ function renderStats() {
         }]
       },
       options: {
+        responsive: true,
+        maintainAspectRatio: false,
         cutout: '70%',
         plugins: {
           legend: { display: false },
@@ -3370,6 +3316,8 @@ function renderStats() {
         }]
       },
       options: {
+        responsive: true,
+        maintainAspectRatio: false,
         cutout: '70%',
         plugins: {
           legend: { display: false },
@@ -4175,7 +4123,10 @@ const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。�
 每當 booking 有具體【日期 + 時間 + 地點承諾】，**必須同時建立對應嘅 itinerary_updates 條目**。呢樣係為咗令用戶行程 tab 自動跟住 email 同步。
 
 必建 itinerary_updates 嘅 booking 類型：
-- ✈️ **機票** → 起飛日 + check-in 時間（起飛前 2h）或 email 標明時間，name=「{airline} {flight_no} 機場 check-in」，type=transport
+- ✈️ **機票** → 每程必建 **2 條**（出發 + 抵達）：
+  - 出發：date=起飛日，time=起飛時間，name=「✈️ {flight_no} 離港 {orig}→{dest}」，type=transport，note=時區（HKT/JST 等）
+  - 抵達：date=抵達日（跨日需調整），time=抵達時間，name=「✈️ {flight_no} 抵達 {dest}」，type=transport，note=時區
+  - **唔好只建 check-in 時間** — 用戶要睇起飛同抵達時間
 - 🗺️ **多日 Tour**（KKday / Klook / Viator）→ 每日 pickup 時間 + 集合點，name=「KKday Day N · {地點}」，type=transport 或 localtour
 - 🏨 **酒店** → check-in 日（15:00 或 email 明講時間）+ 酒店名，type=lodging
 - 🍽️ **訂座餐廳** → 訪問日 + 時間 + 餐廳名，type=food
@@ -4195,6 +4146,7 @@ itinerary_updates 欄位：{ date, time, name, type, note }（note < 80 字，�
 
 \`\`\`json
 {
+  "email_type": "expense_only|itinerary_only|both|neither",
   "source": "klook|kkday|agoda|booking|expedia|hotels|cathay|ana|jal|airasia|hkexpress|tripcom|other",
   "bookings": [
     {
@@ -4299,9 +4251,11 @@ Output:
   {"store":"HK Express UO690 HKG→NGO","total":65000,"original_currency":"HKD","original_amount":3250,"date":"2026-04-20","time":"10:50","category":"transport","payment":"credit","items_text":"去程 · 2 位 · UO690 10:50 HKG→NGO","note":"TD87QN · 2 pax 出發票價+稅費 HKD 3250","confidence":"high"},
   {"store":"HK Express UO691 NGO→HKG","total":70840,"original_currency":"HKD","original_amount":3542,"date":"2026-04-25","time":"16:45","category":"transport","payment":"credit","items_text":"回程 · 2 位 · UO691 16:45 NGO→HKG","note":"TD87QN · 2 pax 回程票價+稅費 HKD 3542","confidence":"high"}
 ],"itinerary_updates":[
-  {"date":"2026-04-20","time":"08:50","name":"UO690 HKG T1 辦理登機 (起飛 10:50 HKT)","type":"transport","note":"TD87QN · 起飛前 2h"},
-  {"date":"2026-04-25","time":"14:45","name":"UO691 NGO T2 辦理登機 (起飛 16:45 JST)","type":"transport","note":"TD87QN · 起飛前 2h"}
-]}
+  {"date":"2026-04-20","time":"10:50","name":"✈️ UO690 離港 HKG→NGO","type":"transport","note":"TD87QN · HKT"},
+  {"date":"2026-04-20","time":"15:50","name":"✈️ UO690 抵達名古屋 NGO","type":"transport","note":"TD87QN · JST"},
+  {"date":"2026-04-25","time":"16:45","name":"✈️ UO691 離港 NGO→HKG","type":"transport","note":"TD87QN · JST"},
+  {"date":"2026-04-25","time":"20:00","name":"✈️ UO691 抵達香港 HKG","type":"transport","note":"TD87QN · HKT"}
+],"email_type":"both"}
 \`\`\`
 ⚠️ 注意: 3250 + 3542 = 6792 = 總計 ✓ 唔係 6792 × 2 = 13584！每筆用每程嘅費用合計，唔係 Grand Total！
 
@@ -4391,9 +4345,13 @@ async function parseEmailInput({ text = '', images = [] }) {
       state.lastEmailModel = name;
       try { saveState(); } catch(_) {}
       try { renderEmailModelCards(); } catch(_) {}
-      // Pass itinerary_updates through; downstream applies them to state.itineraryOverrides
       const itineraryUpdates = Array.isArray(parsed.itinerary_updates) ? parsed.itinerary_updates : [];
-      return { source: parsed.source || 'other', bookings: parsed.bookings, itinerary_updates: itineraryUpdates, modelUsed: name };
+      // Derive email_type: prefer LLM-declared value, fall back to content-based inference
+      const emailType = parsed.email_type ||
+        (parsed.bookings?.length > 0 && itineraryUpdates.length > 0 ? 'both' :
+         parsed.bookings?.length > 0 ? 'expense_only' :
+         itineraryUpdates.length > 0 ? 'itinerary_only' : 'neither');
+      return { source: parsed.source || 'other', bookings: parsed.bookings, itinerary_updates: itineraryUpdates, email_type: emailType, modelUsed: name };
     } catch(e) {
       console.warn(`[emailParse] ${name} failed: ${String(e?.message || 'unknown').slice(0, 120)}`);
       lastErr = e;
@@ -4421,8 +4379,23 @@ function applyItineraryUpdates(updates) {
     const day = (typeof getItinerary === 'function' ? getItinerary() : ITINERARY).find(d => d.date === u.date);
     if (!day || !Array.isArray(day.spots) || day.spots.length === 0) continue;
     const type = u.type || 'other';
-    let idx = day.spots.findIndex(s => s.type === type);
-    // If no same-type match, fall back to closest-time spot so we don't lose the update
+    // Collect all same-type spot indices on this day
+    const sameTypeIdxs = day.spots.reduce((acc, s, i) => { if (s.type === type) acc.push(i); return acc; }, []);
+    let idx = -1;
+    if (sameTypeIdxs.length === 1) {
+      idx = sameTypeIdxs[0]; // unique match — use directly
+    } else if (sameTypeIdxs.length > 1 && u.time) {
+      // Multiple same-type spots on same day (e.g. departure + arrival) → time proximity
+      const uMin = (Number(u.time.slice(0,2))||0)*60 + (Number(u.time.slice(3,5))||0);
+      let bestDiff = Infinity;
+      sameTypeIdxs.forEach(i => {
+        if (!day.spots[i].time) return;
+        const sMin = (Number(day.spots[i].time.slice(0,2))||0)*60 + (Number(day.spots[i].time.slice(3,5))||0);
+        const d = Math.abs(sMin - uMin);
+        if (d < bestDiff) { bestDiff = d; idx = i; }
+      });
+    }
+    // No same-type match → fall back to closest-time spot overall (within 3h)
     if (idx < 0 && u.time) {
       const uMin = (Number(u.time.slice(0,2))||0) * 60 + (Number(u.time.slice(3,5))||0);
       let best = -1, bestDiff = Infinity;
@@ -4432,7 +4405,7 @@ function applyItineraryUpdates(updates) {
         const d = Math.abs(sMin - uMin);
         if (d < bestDiff) { bestDiff = d; best = i; }
       });
-      if (best >= 0 && bestDiff <= 180) idx = best; // within 3h
+      if (best >= 0 && bestDiff <= 180) idx = best;
     }
     if (idx < 0) continue;
     const key = u.date + '_' + idx;
@@ -7082,19 +7055,25 @@ function init() {
         $('emailParseBtn').disabled = false;
         return;
       }
-      // Apply itinerary_updates directly to state.itineraryOverrides (no modal — these
-      // are complementary to bookings, not independent expenses). If the user
-      // disagrees they can edit in 行程 tab.
+      // Always apply itinerary updates silently to state.itineraryOverrides
       const itiCount = applyItineraryUpdates(result.itinerary_updates || []);
       $('emailPasteModal').classList.add('hidden');
-      if (result.bookings && result.bookings.length > 0) {
-        // Preserve the original input so "retry with stronger model" can re-parse
-        openBatchConfirmModal(result.bookings, result.source, result.modelUsed, { text, images });
-        const itiNote = itiCount > 0 ? ` + ${itiCount} 項行程更新` : '';
-        toast(`🤖 解析到 ${result.bookings.length} 筆 booking${itiNote}`);
-      } else if (itiCount > 0) {
-        toast(`🗓 已自動更新 ${itiCount} 項行程（冇 booking）`);
+      const emailType = result.email_type || 'both';
+      const hasExpenses = !!(result.bookings && result.bookings.length > 0);
+      const hasItiUpdates = itiCount > 0;
+
+      if (emailType === 'itinerary_only' || (!hasExpenses && hasItiUpdates)) {
+        // Pure schedule update — no expense modal, just refresh timeline
+        toast(`🗓 行程已更新 ${itiCount} 項（無消費記錄）`);
+        if (hasItiUpdates) { try { renderTimeline(); } catch(_) {} }
         refresh();
+      } else if (hasExpenses) {
+        // Has expense records — show batch confirm modal for user review
+        openBatchConfirmModal(result.bookings, result.source, result.modelUsed, { text, images });
+        const itiNote = hasItiUpdates ? ` + 行程更新 ${itiCount} 項` : '';
+        toast(`🤖 解析到 ${result.bookings.length} 筆消費${itiNote}`);
+      } else {
+        toast(`⚠️ 解析唔到任何消費或行程`, 'warning');
       }
       // Clear staged images after successful parse
       _emailImageQueue = [];
