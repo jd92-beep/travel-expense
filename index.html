@@ -1443,6 +1443,28 @@ function loadState() {
         }
       }
       // credentials are NOT persisted to localStorage — they come from vault unlock only
+
+      // ── Migration: clear stale flight itinerary overrides ──────────────────
+      // Old email processing wrote wrong times (e.g. '12:48') to overrides for
+      // Day 1 transport spots (indices 0-1 = UO690) and Day 6 (indices 4-5 = UO691).
+      // The ITINERARY const now has correct times; remove any override that doesn't
+      // already match the correct flight spot names so the const values shine through.
+      if (state.itineraryOverrides) {
+        const flightSlots = [
+          { key: '2026-04-20_0', must: ['UO690', '✈️'] },
+          { key: '2026-04-20_1', must: ['UO690', '✈️'] },
+          { key: '2026-04-25_4', must: ['UO691', '✈️'] },
+          { key: '2026-04-25_5', must: ['UO691', '✈️'] },
+        ];
+        flightSlots.forEach(({ key, must }) => {
+          const ov = state.itineraryOverrides[key];
+          if (ov && ov.name && !must.some(m => ov.name.includes(m))) {
+            console.log('[migrate] clearing stale flight override:', key, ov.name);
+            delete state.itineraryOverrides[key];
+          }
+        });
+      }
+      // ── End flight override migration ───────────────────────────────────────
     }
   } catch(e) {
     console.warn('[loadState] parse error:', e);
@@ -2348,9 +2370,13 @@ function getEffectiveSpots(it) {
         receiptId: r.id,
         address: (r.address || '').trim(),
         note: r.itemsText || r.note || '',
+        // Preserve timezone badge from ITINERARY const if receipt doesn't set one
+        timezone: undefined,
       };
       if (bestIdx >= 0) {
+        const baseTz = spots[bestIdx].timezone; // keep HKT/JST from ITINERARY
         spots[bestIdx] = Object.assign({}, spots[bestIdx], flightSpot);
+        if (!flightSpot.timezone && baseTz) spots[bestIdx].timezone = baseTz;
         freeTxIdxs = freeTxIdxs.filter(i => i !== bestIdx);
       } else {
         spots.push(Object.assign({ _spotIdx: -1 }, flightSpot));
