@@ -68,13 +68,13 @@ export function Scan() {
         <div className="flex items-start gap-3">
           <div className="text-2xl">✨</div>
           <div className="flex-1">
-            <div className="font-semibold text-ink-100">AI 後端遷移中</div>
+            <div className="font-semibold text-ink-100">🧪 React Beta · UI 預覽</div>
             <p className="text-xs text-ink-300 mt-1 leading-relaxed">
-              呢個 React 版本嘅 UI 已經完成。掃描、OCR、Notion sync 等功能將從舊版逐步遷入，期間可以回到舊版繼續記帳，所有資料會自動共享。
+              呢個係 UI 預覽版。所有記帳功能（掃描、Email、Notion sync、vault）仍喺正式版運行中。資料共享 localStorage，兩邊都可以睇到。
             </p>
-            <a href="./legacy.html" className="inline-block mt-3">
+            <a href="../" className="inline-block mt-3">
               <Button variant="secondary" size="sm">
-                <ExternalLink size={13} /> 打開舊版
+                <ExternalLink size={13} /> 去正式版記帳
               </Button>
             </a>
           </div>

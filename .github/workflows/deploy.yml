@@ -35,11 +35,13 @@ jobs:
         working-directory: app
         run: npm run build
 
-      - name: Prepare _site (React app + legacy)
+      - name: Prepare _site (legacy at root, React preview at /react/)
         run: |
-          mkdir -p _site
-          cp -r app/dist/* _site/
-          cp index.html _site/legacy.html
+          mkdir -p _site/react
+          # Legacy working app stays at root — all OCR / email / Notion / vault features live.
+          cp index.html _site/index.html
+          # React UI preview (functional backend still being ported from legacy).
+          cp -r app/dist/* _site/react/
 
       - uses: actions/configure-pages@v4
 
