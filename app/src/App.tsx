@@ -4,7 +4,11 @@ import { AmbientBackground } from '@/components/AmbientBackground';
 import { CursorGlow } from '@/components/CursorGlow';
 import { TabBar, type TabId } from '@/components/TabBar';
 import { useAppState } from '@/hooks/useAppState';
+import { ToastProvider, useToast } from '@/hooks/useToast';
+import { ReceiptEditModal } from '@/components/modals/ReceiptEditModal';
 import { nowHKTime } from '@/lib/itinerary';
+import { notionPushReceipt, notionArchivePage } from '@/lib/notion';
+import type { Receipt } from '@/lib/types';
 import { Dashboard } from '@/tabs/Dashboard';
 import { Scan } from '@/tabs/Scan';
 import { Itinerary } from '@/tabs/Itinerary';
@@ -24,9 +28,30 @@ const TAB_ORDER: TabId[] = [
 ];
 
 export function App() {
+  return (
+    <ToastProvider>
+      <AppInner />
+    </ToastProvider>
+  );
+}
+
+function AppInner() {
   const [tab, setTab] = useState<TabId>('home');
   const directionRef = useRef(0);
-  const { state, updateState } = useAppState();
+  const {
+    state,
+    updateState,
+    upsertReceipt,
+    deleteReceipt,
+    updateReceipt,
+    replaceReceipts,
+  } = useAppState();
+  const { toast } = useToast();
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingReceipt = editingId
+    ? state.receipts.find((r) => r.id === editingId) ?? null
+    : null;
 
   const handleTabChange = useCallback(
     (next: TabId) => {
@@ -39,19 +64,109 @@ export function App() {
     [tab],
   );
 
-  const handleOpenReceipt = (_id: string) => {
-    // Receipt edit modal — next iteration
-  };
+  const pushToNotion = useCallback(
+    async (r: Receipt): Promise<void> => {
+      if (!state.notionToken || !state.notionDb) return;
+      const pushed = await notionPushReceipt(r, {
+        token: state.notionToken,
+        db: state.notionDb,
+        proxy: state.proxy,
+      });
+      if (pushed.notionPageId && pushed.notionPageId !== r.notionPageId) {
+        updateReceipt(r.id, { notionPageId: pushed.notionPageId });
+      }
+    },
+    [state.notionToken, state.notionDb, state.proxy, updateReceipt],
+  );
+
+  const handleEditSave = useCallback(
+    async (r: Receipt) => {
+      upsertReceipt(r);
+      if (state.autoSync !== false && state.notionToken && state.notionDb) {
+        try {
+          await pushToNotion(r);
+        } catch (e) {
+          toast('⚠️ Notion 更新失敗：' + (e as Error).message.slice(0, 60), 'warning');
+        }
+      }
+    },
+    [upsertReceipt, state.autoSync, state.notionToken, state.notionDb, pushToNotion, toast],
+  );
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      const r = state.receipts.find((x) => x.id === id);
+      deleteReceipt(id);
+      if (r?.notionPageId && state.notionToken && state.notionDb) {
+        try {
+          await notionArchivePage(r.notionPageId, {
+            token: state.notionToken,
+            db: state.notionDb,
+            proxy: state.proxy,
+          });
+        } catch (e) {
+          console.warn('[notion] archive failed', e);
+        }
+      }
+    },
+    [state.receipts, state.notionToken, state.notionDb, state.proxy, deleteReceipt],
+  );
+
+  const handleClearReceipts = useCallback(() => {
+    replaceReceipts([]);
+  }, [replaceReceipts]);
+
+  const openReceipt = useCallback((id: string) => {
+    setEditingId(id);
+  }, []);
 
   const content = (() => {
     switch (tab) {
-      case 'home':      return <Dashboard state={state} onOpenReceipt={handleOpenReceipt} onGoScan={() => handleTabChange('scan')} />;
-      case 'scan':      return <Scan />;
-      case 'itinerary': return <Itinerary />;
-      case 'history':   return <History state={state} onOpenReceipt={handleOpenReceipt} />;
-      case 'stats':     return <Stats state={state} />;
-      case 'weather':   return <Weather />;
-      case 'settings':  return <Settings state={state} updateState={updateState} />;
+      case 'home':
+        return (
+          <Dashboard
+            state={state}
+            onOpenReceipt={openReceipt}
+            onGoScan={() => handleTabChange('scan')}
+          />
+        );
+      case 'scan':
+        return (
+          <Scan
+            state={state}
+            onAddReceipt={async (r) => {
+              upsertReceipt(r);
+              if (state.autoSync !== false && state.notionToken && state.notionDb) {
+                try {
+                  await pushToNotion(r);
+                } catch (e) {
+                  toast(
+                    '⚠️ Notion 同步失敗：' + (e as Error).message.slice(0, 60),
+                    'warning',
+                  );
+                }
+              }
+            }}
+            onReplaceReceipts={replaceReceipts}
+            onPushReceipt={pushToNotion}
+          />
+        );
+      case 'itinerary':
+        return <Itinerary />;
+      case 'history':
+        return <History state={state} onOpenReceipt={openReceipt} />;
+      case 'stats':
+        return <Stats state={state} />;
+      case 'weather':
+        return <Weather />;
+      case 'settings':
+        return (
+          <Settings
+            state={state}
+            updateState={updateState}
+            onClearReceipts={handleClearReceipts}
+          />
+        );
     }
   })();
 
@@ -78,6 +193,14 @@ export function App() {
         </AnimatePresence>
       </div>
       <TabBar active={tab} onChange={handleTabChange} />
+
+      <ReceiptEditModal
+        open={!!editingReceipt}
+        receipt={editingReceipt}
+        onClose={() => setEditingId(null)}
+        onSave={handleEditSave}
+        onDelete={handleDelete}
+      />
     </>
   );
 }

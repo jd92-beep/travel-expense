@@ -155,3 +155,8 @@ export function dayProgressHKT(): number {
   const s = Number(parts.find((p) => p.type === 'second')?.value ?? 0);
   return (h * 3600 + m * 60 + s) / 86_400;
 }
+
+/** Return the itinerary region for a given YYYY-MM-DD, or empty string if out of trip. */
+export function getRegionForDate(date: string): string {
+  return ITINERARY.find((d) => d.date === date)?.region ?? '';
+}
