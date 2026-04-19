@@ -321,12 +321,14 @@
         <p class="text-2xl font-black" style="color:white">¥<span id="totalSpend">0</span></p>
         <p class="text-xs font-semibold mt-0.5" style="color:rgba(255,255,255,0.85)">≈ HKD <span id="totalSpendHKD">0</span></p>
         <p class="text-[10px] mt-1.5" style="color:rgba(255,255,255,0.50)"><span id="totalCount">0</span> 筆紀錄</p>
+        <p id="totalSpendNote" class="text-[9px] mt-1" style="color:rgba(255,255,255,0.40)">不含交通/住宿</p>
       </div>
       <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,#D4760F,#F5A623);box-shadow:0 8px 28px rgba(212,118,15,0.32)">
         <p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:rgba(255,255,255,0.65)">日均花費</p>
         <p class="text-2xl font-black" style="color:white">¥<span id="avgSpend">0</span></p>
         <p class="text-xs font-semibold mt-0.5" style="color:rgba(255,255,255,0.85)">≈ HKD <span id="avgSpendHKD">0</span></p>
         <p class="text-[10px] mt-1.5" style="color:rgba(255,255,255,0.55)">過去 <span id="daysElapsed">0</span> 日</p>
+        <p id="avgSpendNote" class="text-[9px] mt-1" style="color:rgba(255,255,255,0.50)">不含交通/住宿</p>
       </div>
     </div>
 
@@ -601,6 +603,27 @@
         <input type="number" id="setBudget" class="bg-transparent text-lg font-semibold focus:outline-none w-full" style="color:var(--n-muted)" value="101800" step="100" min="0">
         <span class="text-xs shrink-0" style="color:var(--n-muted)">JPY</span>
       </div>
+    </div>
+
+    <!-- Stats display toggle -->
+    <div class="glass rounded-2xl p-4 mb-3">
+      <div class="flex items-center justify-between mb-1">
+        <div>
+          <p class="text-xs uppercase tracking-wider font-semibold" style="color:var(--n-muted)">📊 首頁統計顯示</p>
+          <p class="text-[11px] mt-1" style="color:var(--n-muted)">總消費 & 日均花費 block 是否計入<span style="color:#C0281E;font-weight:600">交通</span>和<span style="color:#C0281E;font-weight:600">住宿</span>（機票/酒店）</p>
+        </div>
+      </div>
+      <label class="flex items-center justify-between mt-2 cursor-pointer select-none">
+        <div class="flex items-center gap-2">
+          <span class="text-sm">✈️🏨 包括交通 & 住宿支出</span>
+        </div>
+        <div class="relative">
+          <input type="checkbox" id="toggleStatsTransportLodging" class="sr-only">
+          <div id="toggleStatsTrack" class="w-11 h-6 rounded-full transition-colors duration-200" style="background:#E5E7EB"></div>
+          <div id="toggleStatsThumb" class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"></div>
+        </div>
+      </label>
+      <p id="statsToggleHint" class="text-[10px] mt-2" style="color:var(--n-muted)">目前：不計入交通/住宿（顯示日常消費）</p>
     </div>
 
     <!-- Exchange rate with currency selector + Visa source -->
@@ -1395,6 +1418,7 @@ let state = {
   shareRatios: {},         // { personId: weight } — relative shares for bill settlement
   tripName: '名古屋 2026',
   tripDateRange: { start: '2026-04-20', end: '2026-04-25' },
+  statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
 };
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -2148,18 +2172,26 @@ function renderDashboard() {
     $('dailyAlert').classList.add('hidden');
   }
 
-  const total = state.receipts.reduce((s,r) => s + (Number(r.total)||0), 0);
   const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
+  const inclTL = !!state.statsIncludeTransportLodging;
+  const statsReceipts = inclTL
+    ? state.receipts
+    : state.receipts.filter(r => r.category !== 'transport' && r.category !== 'lodging');
+  const total = statsReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
   $('totalSpend').textContent = fmt(total);
   $('totalSpendHKD').textContent = fmt(Math.round(total / safeRate));
-  $('totalCount').textContent = state.receipts.length;
+  $('totalCount').textContent = statsReceipts.length;
+  const totalNote = $('totalSpendNote');
+  if (totalNote) totalNote.textContent = inclTL ? '含全部類別' : '不含交通/住宿';
 
-  const dates = [...new Set(state.receipts.map(r => r.date))];
+  const dates = [...new Set(statsReceipts.map(r => r.date))];
   const days = Math.max(1, dates.length);
   const avg = total / days;
   $('avgSpend').textContent = fmt(avg);
   $('avgSpendHKD').textContent = fmt(Math.round(avg / safeRate));
   $('daysElapsed').textContent = days;
+  const avgNote = $('avgSpendNote');
+  if (avgNote) avgNote.textContent = inclTL ? '含全部類別' : '不含交通/住宿';
 
   renderPersonBreakdown();
 
@@ -6554,6 +6586,26 @@ function init() {
   $('setBudgetHKDInput').value = Math.round(state.budget / state.rate);
   renderModelCards();
   $('setAutoSync').checked = !!state.autoSync;
+
+  // Stats transport/lodging toggle — init from state + wire up
+  function _applyStatsToggleUI(val) {
+    const track = $('toggleStatsTrack');
+    const thumb = $('toggleStatsThumb');
+    const hint  = $('statsToggleHint');
+    const cb    = $('toggleStatsTransportLodging');
+    if (!track) return;
+    cb.checked = !!val;
+    track.style.background = val ? '#C0281E' : '#E5E7EB';
+    thumb.style.transform   = val ? 'translateX(20px)' : 'translateX(0)';
+    if (hint) hint.textContent = val ? '目前：計入交通/住宿（顯示全部消費）' : '目前：不計入交通/住宿（顯示日常消費）';
+  }
+  _applyStatsToggleUI(!!state.statsIncludeTransportLodging);
+  $('toggleStatsTransportLodging').addEventListener('change', function() {
+    state.statsIncludeTransportLodging = this.checked;
+    _applyStatsToggleUI(this.checked);
+    saveState();
+    renderDashboard();
+  });
 
   function hkdPer100jpy() { return parseFloat($('setRate').value) || 4.91; }
   function jpyPerHkd()    { return 100 / hkdPer100jpy(); }
