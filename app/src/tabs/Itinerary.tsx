@@ -1,23 +1,16 @@
 import { motion } from 'framer-motion';
-import { MapPin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ITINERARY, todayHK, dayProgressHKT } from '@/lib/itinerary';
-import { Card, CardLabel } from '@/components/ui/Card';
+import { CardLabel } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import type { ItineraryDay } from '@/lib/types';
 
 const SPOT_ICONS: Record<string, string> = {
-  transport: '🚆',
-  food: '🍜',
-  lodging: '🏨',
-  sightseeing: '⛩',
-  shopping: '🛍️',
-  ticket: '🎟️',
-  medicine: '💊',
-  other: '📍',
+  transport:'🚆', food:'🍜', lodging:'🏨', sightseeing:'⛩',
+  shopping:'🛍️', ticket:'🎟️', localtour:'🗺️', medicine:'💊', other:'📍',
 };
 
-function timeToFraction(t?: string): number | null {
+function timeToFrac(t?: string): number | null {
   if (!t) return null;
   const [hh, mm] = t.split(':').map(Number);
   if (Number.isNaN(hh)) return null;
@@ -27,41 +20,43 @@ function timeToFraction(t?: string): number | null {
 export function Itinerary() {
   const today = todayHK();
   return (
-    <div className="space-y-5 pb-6">
+    <div className="space-y-6 pb-6">
       <div>
         <CardLabel>旅程 · Nagoya 2026</CardLabel>
         <h1 className="font-display text-2xl mt-1 text-gradient-arsenal font-bold">
           名古屋 · 中部阿爾卑斯山
         </h1>
-        <p className="text-xs text-ink-400 mt-1 num">
-          2026-04-20 → 2026-04-25 · 6 日 5 夜
-        </p>
+        <p className="text-xs text-paper-600 mt-1 num">2026-04-20 → 2026-04-25 · 6 日 5 夜</p>
       </div>
-      <div className="space-y-4">
-        {ITINERARY.map((day, i) => (
-          <DayCard key={day.date} day={day} i={i} today={today} />
-        ))}
+
+      <div className="relative">
+        <div aria-hidden className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-1 rounded-full"
+          style={{ background:'linear-gradient(180deg, #CC2929 0%, #F5A623 45%, #FF91A4 100%)',
+                   boxShadow:'0 0 20px rgba(204,41,41,0.25)' }} />
+        <motion.div aria-hidden className="absolute left-1/2 -translate-x-1/2 top-0 w-1.5 rounded-full"
+          style={{ background:'linear-gradient(180deg, rgba(255,255,255,0.85), transparent)' }}
+          initial={{ height: 0 }} animate={{ height: '100%' }}
+          transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }} />
+
+        <div className="space-y-10">
+          {ITINERARY.map((day, i) => (
+            <DayRow key={day.date} day={day} idx={i} today={today} side={i % 2 === 0 ? 'left' : 'right'} />
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function DayCard({
-  day,
-  i,
-  today,
+function DayRow({
+  day, idx, today, side,
 }: {
-  day: ItineraryDay;
-  i: number;
-  today: string;
+  day: ItineraryDay; idx: number; today: string; side: 'left' | 'right';
 }) {
   const isToday = day.date === today;
-  const isPast = day.date < today;
+  const isPast  = day.date < today;
 
-  // Live "now" indicator only on today's day
-  const [nowFrac, setNowFrac] = useState<number | null>(() =>
-    isToday ? dayProgressHKT() : null,
-  );
+  const [nowFrac, setNowFrac] = useState<number | null>(() => (isToday ? dayProgressHKT() : null));
   useEffect(() => {
     if (!isToday) return;
     setNowFrac(dayProgressHKT());
@@ -69,106 +64,74 @@ function DayCard({
     return () => clearInterval(id);
   }, [isToday]);
 
-  // Determine which spot is "current" (last spot with time <= now)
   let currentSpotIdx = -1;
   if (isToday && nowFrac !== null) {
     for (let j = 0; j < day.spots.length; j++) {
-      const f = timeToFraction(day.spots[j].time);
+      const f = timeToFrac(day.spots[j].time);
       if (f !== null && f <= nowFrac) currentSpotIdx = j;
     }
   }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: i * 0.04 }}
-      className={isPast ? 'opacity-55' : ''}
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-50px' }}
+      transition={{ delay: idx * 0.05, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      className={`relative grid grid-cols-[1fr_56px_1fr] gap-2 items-start ${isPast ? 'opacity-60' : ''}`}
     >
-      <Card glowing={isToday} className={isToday ? 'border-arsenal-500/30' : ''}>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="grid place-items-center h-9 w-9 rounded-xl bg-gradient-arsenal text-white font-bold num text-sm shadow-glow-sm">
-            {day.day}
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-ink-100">{day.region}</span>
-              {isToday && (
-                <Badge className="bg-arsenal-500/20 border-arsenal-500/40 text-arsenal-100 animate-glow-pulse">
-                  TODAY
-                </Badge>
-              )}
-              {isPast && <Badge className="bg-white/5 text-ink-400">已過</Badge>}
-            </div>
-            <div className="text-[11px] text-ink-400 num mt-0.5">{day.date}</div>
-          </div>
-          <MapPin size={14} className="text-ember-400" />
+      <div className="col-start-2 col-end-3 flex flex-col items-center relative z-10">
+        <motion.div whileHover={{ scale: 1.1 }}
+          className={`grid place-items-center h-14 w-14 rounded-full font-bold num text-lg shadow-glow border-4 ${
+            isToday ? 'bg-gradient-arsenal text-white border-white animate-glow-pulse'
+            : isPast ? 'bg-paper-300 text-paper-600 border-paper-100'
+            : 'bg-white text-arsenal-600 border-arsenal-200'
+          }`}>
+          {day.day}
+        </motion.div>
+        <div className="mt-2 text-center">
+          <div className="text-[10px] font-semibold text-paper-900 num">{day.date.slice(5)}</div>
+          {isToday && <Badge className="mt-1 bg-arsenal-500/20 border-arsenal-500/50 text-arsenal-700">TODAY</Badge>}
         </div>
-        <div className="text-xs text-ember-300 mb-3 flex items-center gap-1.5 pl-1">
-          ✨ {day.highlight}
-        </div>
-        <ul className="relative space-y-2">
-          {/* Vertical timeline rail */}
-          <div
-            aria-hidden
-            className="absolute left-[72px] top-2 bottom-2 w-px bg-gradient-to-b from-arsenal-500/30 via-ember-400/20 to-transparent"
-          />
-          {day.spots.map((s, j) => {
-            const isCurrent = isToday && j === currentSpotIdx;
-            return (
-              <motion.li
-                key={j}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.04 + j * 0.03 }}
-                className="flex items-start gap-3 relative"
-              >
-                <div
-                  className={`shrink-0 num text-[11px] w-12 pt-1.5 text-right ${
-                    isCurrent ? 'text-ember-400 font-bold' : 'text-ink-400'
-                  }`}
-                >
-                  {s.time || '—'}
-                </div>
-                <div
-                  className={`grid place-items-center h-8 w-8 rounded-lg text-sm shrink-0 relative z-10 transition-all ${
-                    isCurrent
-                      ? 'bg-gradient-arsenal border border-arsenal-300/60 shadow-glow-sm scale-110'
-                      : 'bg-white/5 border border-white/10'
-                  }`}
-                >
-                  {SPOT_ICONS[s.type] || '📍'}
-                </div>
-                <div className="flex-1 min-w-0 pt-0.5">
-                  <div
-                    className={`text-sm leading-snug ${
-                      isCurrent ? 'text-white font-semibold' : 'text-ink-100'
-                    }`}
-                  >
-                    {s.name}
-                  </div>
-                  {s.note && (
-                    <div className="text-[11px] text-ink-400 mt-0.5 line-clamp-2">
-                      {s.note}
+      </div>
+
+      <div className={`row-start-1 ${side === 'left' ? 'col-start-1 col-end-2 text-right' : 'col-start-3 col-end-4 text-left'}`}>
+        <motion.div whileHover={{ y: -2 }}
+          className={`glass rounded-2xl p-4 relative overflow-hidden ${isToday ? 'border-arsenal-500/40 shadow-glow-sm' : ''}`}>
+          <div className={`text-xs font-semibold mb-0.5 ${side === 'left' ? 'text-right' : 'text-left'} text-paper-900`}>
+            {day.region}
+          </div>
+          <div className={`text-[11px] text-paper-600 ${side === 'left' ? 'text-right' : 'text-left'} mb-3`}>
+            ✨ {day.highlight}
+          </div>
+          <ul className={`space-y-1.5 flex flex-col ${side === 'left' ? 'items-end' : 'items-start'}`}>
+            {day.spots.map((s, j) => {
+              const isCurrent = isToday && j === currentSpotIdx;
+              return (
+                <motion.li key={j}
+                  initial={{ opacity: 0, x: side === 'left' ? 8 : -8 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.05 + j * 0.04 }}
+                  className={`flex items-start gap-2 w-full ${side === 'left' ? 'flex-row-reverse text-right' : 'text-left'}`}>
+                  <div className={`shrink-0 grid place-items-center h-6 w-6 rounded-md text-sm transition-all ${
+                    isCurrent ? 'bg-gradient-arsenal text-white shadow-glow-sm scale-110'
+                              : 'bg-paper-200 border border-paper-300'
+                  }`}>{SPOT_ICONS[s.type] || '📍'}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className={`text-[12px] leading-snug ${isCurrent ? 'font-semibold text-arsenal-600' : 'text-paper-900'}`}>
+                      {s.name}
                     </div>
-                  )}
-                </div>
-                {isCurrent && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="absolute right-0 top-1.5"
-                  >
-                    <Badge className="bg-ember-400/15 border-ember-400/40 text-ember-300 animate-glow-pulse">
-                      現在
-                    </Badge>
-                  </motion.div>
-                )}
-              </motion.li>
-            );
-          })}
-        </ul>
-      </Card>
+                    <div className="text-[10px] text-paper-500 num">
+                      {s.time || '—'}{isCurrent && ' · 現在'}
+                    </div>
+                  </div>
+                </motion.li>
+              );
+            })}
+          </ul>
+        </motion.div>
+      </div>
     </motion.div>
   );
 }

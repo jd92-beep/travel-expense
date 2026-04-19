@@ -13,8 +13,8 @@ import { cn } from '@/lib/utils';
 export type TabId = 'home' | 'scan' | 'itinerary' | 'history' | 'stats' | 'weather' | 'settings';
 
 const TABS: { id: TabId; label: string; Icon: typeof Home }[] = [
-  { id: 'home',      label: '主頁', Icon: Home },
   { id: 'scan',      label: '掃描', Icon: ScanLine },
+  { id: 'home',      label: '主頁', Icon: Home },
   { id: 'itinerary', label: '行程', Icon: Map },
   { id: 'history',   label: '紀錄', Icon: HistoryIcon },
   { id: 'stats',     label: '統計', Icon: BarChart3 },
@@ -48,7 +48,7 @@ export function TabBar({
                 aria-label={tab.label}
                 className={cn(
                   'relative z-10 flex flex-col items-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-medium transition-colors flex-1 min-w-0',
-                  isActive ? 'text-white' : 'text-ink-400 hover:text-ink-200',
+                  isActive ? 'text-white' : 'text-paper-600 hover:text-paper-900',
                 )}
               >
                 {isActive && (

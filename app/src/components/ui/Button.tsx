@@ -11,12 +11,10 @@ type ButtonProps = HTMLMotionProps<'button'> & {
 };
 
 const variants: Record<Variant, string> = {
-  primary:
-    'bg-gradient-arsenal text-white shadow-glow-sm hover:shadow-glow border border-white/10',
-  secondary:
-    'bg-ink-800/80 text-ink-200 border border-white/10 hover:bg-ink-700/80',
-  ghost: 'text-ink-300 hover:text-white hover:bg-white/5',
-  danger: 'bg-rose-500/90 text-white hover:bg-rose-500',
+  primary:   'bg-gradient-arsenal text-white shadow-glow-sm hover:shadow-glow border border-arsenal-400',
+  secondary: 'bg-white text-paper-900 border border-paper-300 hover:border-arsenal-400 hover:bg-paper-100',
+  ghost:     'text-paper-700 hover:text-paper-900 hover:bg-paper-200',
+  danger:    'bg-arsenal-600 text-white hover:bg-arsenal-700 border border-paper-300',
 };
 
 const sizes: Record<Size, string> = {

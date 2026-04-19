@@ -120,7 +120,7 @@ export function ReceiptForm({
               className={`px-2 py-2 rounded-xl text-xs font-medium transition-all border ${
                 category === id
                   ? 'bg-gradient-arsenal text-white border-transparent shadow-glow-sm'
-                  : 'bg-ink-800/60 text-ink-300 border-white/5 hover:border-white/15'
+                  : 'bg-paper-200/70 text-paper-800 border-paper-300/80 hover:border-arsenal-300'
               }`}
             >
               <div className="text-base leading-none">{c.icon}</div>
@@ -139,7 +139,7 @@ export function ReceiptForm({
               className={`px-2 py-2 rounded-xl text-xs font-medium transition-all border ${
                 payment === id
                   ? 'bg-gradient-arsenal text-white border-transparent shadow-glow-sm'
-                  : 'bg-ink-800/60 text-ink-300 border-white/5 hover:border-white/15'
+                  : 'bg-paper-200/70 text-paper-800 border-paper-300/80 hover:border-arsenal-300'
               }`}
             >
               <div className="text-base leading-none">{p.icon}</div>
@@ -191,7 +191,7 @@ export function ReceiptForm({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[10px] uppercase tracking-[0.18em] text-ink-400 font-medium block mb-1.5">
+      <span className="text-[10px] uppercase tracking-[0.18em] text-paper-600 font-medium block mb-1.5">
         {label}
       </span>
       {children}

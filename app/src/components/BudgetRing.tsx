@@ -120,7 +120,7 @@ export function BudgetRing({
 
       {/* Center readout */}
       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-        <span className="text-ink-400 text-[10px] uppercase tracking-[0.22em]">{label}</span>
+        <span className="text-paper-600 text-[10px] uppercase tracking-[0.22em]">{label}</span>
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -129,7 +129,7 @@ export function BudgetRing({
           {usedPct}
           <span className="text-2xl align-top">%</span>
         </motion.div>
-        <div className="text-ink-400 text-[11px] mt-1.5 num">
+        <div className="text-paper-600 text-[11px] mt-1.5 num">
           {overBudget ? (
             <span className="text-rose-400 font-semibold">
               超支 ¥{Math.round(used - total).toLocaleString()}
