@@ -3,7 +3,7 @@
 > **Purpose of this file:** Every Claude session (desktop app OR CLI) reads this first to resume work without re-reading the whole chat history. Updated at the end of each session.
 
 **Last updated:** 2026-04-19 (HKT)
-**Latest commits:** `87b0968` email recognition deep rewrite · next: receipt image recognition deep rewrite (pending push to main — local-only)
+**Latest commits:** `4bfdf29` budget quick-save + dual-array email LLM (bookings+itinerary_updates) · Apps Script deployed via clasp ✅
 
 ---
 
@@ -176,6 +176,12 @@ Credentials to inject (same `sed -i ''` pattern each time) are documented in ses
 
 | Commit | Date | Summary |
 |---|---|---|
+| `4bfdf29` | 2026-04-19 | Budget quick-save pill + email LLM dual-array (bookings+itinerary_updates) + applyItineraryUpdates() · **clasp deployed** |
+| `528aab9` | 2026-04-19 | Fix nav bar: grid-cols-6 → grid-cols-7 (7 tabs, 1 row) |
+| `359e757` | 2026-04-19 | Scan block swap (gallery↔email) + Weather tab (JMA via Open-Meteo, 5 slots, LIVE badge) |
+| `f1b32ae` | 2026-04-19 | Scan tab: restore coloured hero blocks (blue camera / green gallery / 3-up row) |
+| `22b94e8` | 2026-04-19 | Receipt scan: smoke-test bug fixes (warnings banner, old-date heuristic, phone-number booking refs) |
+| `87b0968` | 2026-04-19 | Deep receipt OCR rewrite (GEMINI_PROMPT 11 rules 7 examples, prepareForOCR 2016px, normalizeScanResult) |
 | `cdf8aa7` | 2026-04-19 | Deep smoke test — 17 bugs fixed (category fallback, localtour AI prompts, ITINERARY refs, autoSync, CSS, sort) |
 | `5e40f54` | 2026-04-19 | Settings: remove AI agent + Apps Script buttons; 5min→2hr trigger; rename email sync btn |
 | `fcb4fb0` | 2026-04-19 | Scan tab 3-section redesign + ⚡ instant email sync button |
