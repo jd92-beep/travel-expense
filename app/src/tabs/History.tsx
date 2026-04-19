@@ -1,8 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useMemo, useState } from 'react';
 import { Search, Filter } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
 import { ReceiptCard } from '@/components/ReceiptCard';
+import { EmptyState } from '@/components/EmptyState';
 import { CATEGORIES } from '@/lib/constants';
 import { byDateDesc, formatJPY } from '@/lib/utils';
 import type { AppState, Category, Receipt } from '@/lib/types';
@@ -127,10 +127,19 @@ export function History({
           })}
         </AnimatePresence>
         {filtered.length === 0 && (
-          <Card className="py-12 text-center text-ink-400">
-            <Filter size={22} className="mx-auto mb-2 opacity-50" />
-            <div className="text-sm">冇符合嘅記錄</div>
-          </Card>
+          <EmptyState
+            title={query || cat !== 'all' ? '冇符合嘅記錄' : '仲未有任何記錄'}
+            subtitle={
+              query || cat !== 'all'
+                ? '試下清除篩選，或者搜尋其他關鍵字'
+                : '掃描第一張收據就會出現喺度 ✨'
+            }
+            glyph={
+              <div className="h-16 w-16 rounded-2xl bg-gradient-arsenal/20 border border-arsenal-500/30 grid place-items-center shadow-glow-sm">
+                <Filter size={28} className="text-arsenal-400" />
+              </div>
+            }
+          />
         )}
       </div>
     </div>

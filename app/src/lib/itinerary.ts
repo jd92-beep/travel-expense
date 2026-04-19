@@ -78,14 +78,32 @@ export const ITINERARY: ItineraryDay[] = [
   },
 ];
 
+const HK_DATE_FMT = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Hong_Kong',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+const HK_TIME_FMT = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Hong_Kong',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
 export function todayHK(): string {
-  const now = new Date();
-  const hkMillis = now.getTime() + (now.getTimezoneOffset() + 480) * 60000;
-  const hk = new Date(hkMillis);
-  const yyyy = hk.getFullYear();
-  const mm = String(hk.getMonth() + 1).padStart(2, '0');
-  const dd = String(hk.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  // en-CA natively formats as YYYY-MM-DD
+  return HK_DATE_FMT.format(new Date());
+}
+
+export function nowHKTime(): string {
+  // HH:MM only — drop seconds
+  const parts = HK_TIME_FMT.formatToParts(new Date());
+  const h = parts.find((p) => p.type === 'hour')?.value ?? '00';
+  const m = parts.find((p) => p.type === 'minute')?.value ?? '00';
+  return `${h}:${m}`;
 }
 
 export function currentDay(): ItineraryDay | null {
@@ -96,4 +114,44 @@ export function currentDay(): ItineraryDay | null {
 export function dayNumberFor(date: string): number {
   const idx = ITINERARY.findIndex((d) => d.date === date);
   return idx >= 0 ? idx + 1 : 0;
+}
+
+export function daysBetween(from: string, to: string): number {
+  const f = new Date(from + 'T00:00:00+08:00').getTime();
+  const t = new Date(to + 'T00:00:00+08:00').getTime();
+  return Math.round((t - f) / 86_400_000);
+}
+
+export type TripStatus =
+  | { phase: 'before'; daysUntil: number }
+  | { phase: 'during'; dayNum: number }
+  | { phase: 'after'; daysSince: number };
+
+export function tripStatus(): TripStatus {
+  const t = todayHK();
+  const first = ITINERARY[0].date;
+  const last = ITINERARY[ITINERARY.length - 1].date;
+  if (t < first) return { phase: 'before', daysUntil: daysBetween(t, first) };
+  if (t > last) return { phase: 'after', daysSince: daysBetween(last, t) };
+  return { phase: 'during', dayNum: dayNumberFor(t) };
+}
+
+export function timeGreeting(): { text: string; emoji: string; tone: string } {
+  const h = new Date().getHours();
+  if (h < 5)  return { text: '夜半靜', emoji: '🌙', tone: '休息下' };
+  if (h < 11) return { text: '早晨 Boss', emoji: '🌅', tone: '新一日' };
+  if (h < 14) return { text: '午飯時間', emoji: '🍜', tone: '食乜好?' };
+  if (h < 17) return { text: '下午好', emoji: '🍵', tone: '慢嘆茶' };
+  if (h < 19) return { text: '黃昏已至', emoji: '🌇', tone: '漫步散心' };
+  if (h < 23) return { text: '晚上好', emoji: '✨', tone: '夜幕降臨' };
+  return { text: '夜深喇', emoji: '🌌', tone: '早啲訓' };
+}
+
+/** Returns fraction [0..1] of how far through the current day we are, in HKT. */
+export function dayProgressHKT(): number {
+  const parts = HK_TIME_FMT.formatToParts(new Date());
+  const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
+  const m = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
+  const s = Number(parts.find((p) => p.type === 'second')?.value ?? 0);
+  return (h * 3600 + m * 60 + s) / 86_400;
 }

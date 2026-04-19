@@ -1,94 +1,134 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { CalendarDays, MapPin, Sparkles, TrendingUp } from 'lucide-react';
-import { useMemo } from 'react';
+import { CalendarDays, MapPin, Sparkles, TrendingUp, ScanLine } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { BudgetRing } from '@/components/BudgetRing';
 import { Card, CardLabel } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { NumberRoll } from '@/components/NumberRoll';
 import { ReceiptCard } from '@/components/ReceiptCard';
-import { ITINERARY, todayHK, currentDay, dayNumberFor } from '@/lib/itinerary';
+import { Sparkline } from '@/components/Sparkline';
+import { CountdownCard } from '@/components/CountdownCard';
+import { EmptyState } from '@/components/EmptyState';
+import {
+  ITINERARY,
+  todayHK,
+  currentDay,
+  dayNumberFor,
+  timeGreeting,
+  tripStatus,
+} from '@/lib/itinerary';
 import type { AppState } from '@/lib/types';
 
 interface DashboardProps {
   state: AppState;
   onOpenReceipt: (id: string) => void;
+  onGoScan: () => void;
 }
 
-export function Dashboard({ state, onOpenReceipt }: DashboardProps) {
+export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
   const today = todayHK();
   const day = currentDay();
   const dayNum = dayNumberFor(today);
+  const [greeting, setGreeting] = useState(() => timeGreeting());
+  const trip = useMemo(() => tripStatus(), []);
 
-  const { todaySpend, totalSpend, dailyAvg, todayReceipts } = useMemo(() => {
+  // Refresh greeting + tick every 5 minutes so the tone text matches reality.
+  useEffect(() => {
+    const id = setInterval(() => setGreeting(timeGreeting()), 5 * 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const { todaySpend, totalSpend, dailyAvg, todayReceipts, dailyTrend } = useMemo(() => {
     const rs = state.receipts;
     const todayRs = rs.filter((r) => r.date === today);
     const total = rs.reduce((s, r) => s + (r.total || 0), 0);
-    const daysSeen = new Set(rs.map((r) => r.date));
+    const perDay = new Map<string, number>();
+    for (const r of rs) perDay.set(r.date, (perDay.get(r.date) || 0) + (r.total || 0));
+    const trend = ITINERARY.map((d) => perDay.get(d.date) || 0);
     return {
       todaySpend: todayRs.reduce((s, r) => s + (r.total || 0), 0),
       totalSpend: total,
-      dailyAvg: daysSeen.size > 0 ? total / daysSeen.size : 0,
+      dailyAvg: perDay.size > 0 ? total / perDay.size : 0,
       todayReceipts: todayRs,
+      dailyTrend: trend,
     };
   }, [state.receipts, today]);
 
+  // Day markers on ring. Evenly spaced, active = today, past = before today.
+  const dayMarkers = useMemo(
+    () =>
+      ITINERARY.map((d, i) => ({
+        progress: i / ITINERARY.length,
+        active: d.date === today,
+        past: d.date < today,
+      })),
+    [today],
+  );
+
+  const trendPositive = dailyTrend.some((v) => v > 0);
+
   return (
     <div className="space-y-5 pb-6">
-      {/* Hero */}
+      {/* Greeting */}
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="flex items-center gap-2 mb-2">
-          <CardLabel>今日</CardLabel>
+          <CardLabel>{greeting.tone}</CardLabel>
           <span className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
           <span className="num text-[11px] text-ink-400">{today}</span>
         </div>
         <h1 className="font-display text-3xl leading-tight">
-          {day ? (
-            <span>
-              <span className="text-ink-400 text-base">Day {dayNum} · </span>
-              <span className="text-gradient-arsenal font-bold">{day.region}</span>
-            </span>
-          ) : (
-            <span className="text-ink-300">準備出發 · 名古屋 2026</span>
-          )}
+          <span className="mr-2">{greeting.emoji}</span>
+          <span className="text-gradient-arsenal font-bold">{greeting.text}</span>
         </h1>
-        {day && (
-          <p className="text-sm text-ink-400 mt-1 flex items-center gap-1.5">
+        {trip.phase === 'during' && day && (
+          <p className="text-sm text-ink-400 mt-1.5 flex items-center gap-1.5">
             <Sparkles size={14} className="text-ember-400" />
-            {day.highlight}
+            <span>
+              Day {dayNum} · <span className="text-ink-200">{day.region}</span> · {day.highlight}
+            </span>
+          </p>
+        )}
+        {trip.phase === 'after' && (
+          <p className="text-sm text-ink-400 mt-1.5 flex items-center gap-1.5">
+            <Sparkles size={14} className="text-sakura-300" />
+            旅程結束 · 已返程 {trip.daysSince} 日
           </p>
         )}
       </motion.section>
 
+      {/* Pre-trip countdown hero */}
+      {trip.phase === 'before' && <CountdownCard daysUntil={trip.daysUntil} />}
+
       {/* Budget Ring */}
-      <Card className="py-7 flex flex-col items-center">
-        <BudgetRing used={totalSpend} total={state.budget} />
+      <Card className="py-8 flex flex-col items-center">
+        <BudgetRing used={totalSpend} total={state.budget} dayMarkers={dayMarkers} />
         <div className="grid grid-cols-3 gap-3 mt-6 w-full text-center">
-          <div>
-            <CardLabel>今日</CardLabel>
-            <div className="num text-xl font-bold text-white mt-1">
-              <NumberRoll value={todaySpend} prefix="¥" />
-            </div>
-          </div>
-          <div className="border-x border-white/5">
-            <CardLabel>總開支</CardLabel>
-            <div className="num text-xl font-bold text-white mt-1">
-              <NumberRoll value={totalSpend} prefix="¥" />
-            </div>
-          </div>
-          <div>
-            <CardLabel>日均</CardLabel>
-            <div className="num text-xl font-bold text-white mt-1">
-              <NumberRoll value={dailyAvg} prefix="¥" />
-            </div>
-          </div>
+          <Metric label="今日" value={todaySpend} />
+          <Metric label="總開支" value={totalSpend} bordered />
+          <Metric label="日均" value={dailyAvg} />
         </div>
+        {trendPositive && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="mt-5 w-full flex items-center justify-between px-2"
+          >
+            <div>
+              <CardLabel>6 日走勢</CardLabel>
+              <div className="text-[11px] text-ink-500 mt-0.5 num">JPY · 每日</div>
+            </div>
+            <Sparkline data={dailyTrend} color="#f97316" />
+          </motion.div>
+        )}
       </Card>
 
-      {/* Itinerary mini timeline */}
+      {/* Itinerary carousel */}
       <section>
         <div className="flex items-center gap-2 mb-3">
           <CalendarDays size={14} className="text-ember-400" />
@@ -108,7 +148,7 @@ export function Dashboard({ state, onOpenReceipt }: DashboardProps) {
               >
                 <Card
                   glowing={isToday}
-                  className={`py-4 px-4 h-full ${isPast ? 'opacity-45' : ''} ${
+                  className={`py-4 px-4 h-full ${isPast ? 'opacity-50' : ''} ${
                     isToday ? 'border-arsenal-500/40' : ''
                   }`}
                 >
@@ -137,7 +177,7 @@ export function Dashboard({ state, onOpenReceipt }: DashboardProps) {
       </section>
 
       {/* Today's spending */}
-      {todayReceipts.length > 0 && (
+      {todayReceipts.length > 0 ? (
         <section>
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={14} className="text-jade-400" />
@@ -157,21 +197,40 @@ export function Dashboard({ state, onOpenReceipt }: DashboardProps) {
             </AnimatePresence>
           </div>
         </section>
+      ) : (
+        <EmptyState
+          title={totalSpend === 0 ? '仲未有任何記錄' : '今日仲未消費'}
+          subtitle={
+            totalSpend === 0
+              ? '由第一張收據開始吧 ✨'
+              : '影咗收據之後會自動出現喺度'
+          }
+          action={
+            <Button onClick={onGoScan} size="sm">
+              <ScanLine size={14} /> 開始掃描
+            </Button>
+          }
+        />
       )}
+    </div>
+  );
+}
 
-      {todayReceipts.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-10 text-ink-400 text-sm"
-        >
-          <div className="inline-block px-5 py-3 rounded-2xl glass">
-            <span className="opacity-80">仲未有消費記錄 · 去 </span>
-            <span className="text-gradient-arsenal font-semibold">掃描</span>
-            <span className="opacity-80"> 開始 ✨</span>
-          </div>
-        </motion.div>
-      )}
+function Metric({
+  label,
+  value,
+  bordered,
+}: {
+  label: string;
+  value: number;
+  bordered?: boolean;
+}) {
+  return (
+    <div className={bordered ? 'border-x border-white/5' : ''}>
+      <CardLabel>{label}</CardLabel>
+      <div className="num text-xl font-bold text-white mt-1">
+        <NumberRoll value={value} prefix="¥" />
+      </div>
     </div>
   );
 }

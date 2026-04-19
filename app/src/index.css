@@ -42,6 +42,30 @@ select {
   font-family: inherit;
 }
 
+/* iOS Safari auto-zooms any input whose font-size is < 16px on focus.
+   Force a 16px floor so focus is smooth. */
+input[type='text'],
+input[type='search'],
+input[type='number'],
+input[type='email'],
+input[type='tel'],
+input[type='password'],
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Accessible focus ring shared across interactive elements */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgba(239, 65, 53, 0.7);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
 @layer components {
   .glass {
     @apply bg-ink-900/70 backdrop-blur-xl border border-white/5 shadow-card;

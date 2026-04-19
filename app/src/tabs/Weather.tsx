@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
-import { Cloud, Sun, CloudRain, CloudSnow, CloudDrizzle } from 'lucide-react';
-import { ITINERARY } from '@/lib/itinerary';
+import { Cloud, Sun, CloudSnow, CloudDrizzle } from 'lucide-react';
+import { ITINERARY, currentDay, tripStatus } from '@/lib/itinerary';
 import { Card, CardLabel } from '@/components/ui/Card';
 
 // Placeholder forecast until Open-Meteo/JMA API is wired in
@@ -14,6 +14,11 @@ const FAKE_FORECAST = [
 ];
 
 export function Weather() {
+  const day = currentDay();
+  const trip = tripStatus();
+  const heroRegion = day?.region ?? (trip.phase === 'before' ? ITINERARY[0].region : '名古屋');
+  const heroLabel = trip.phase === 'before' ? '出發當日' : trip.phase === 'after' ? '返港後' : '今日';
+
   return (
     <div className="space-y-5 pb-6">
       <div>
@@ -27,7 +32,7 @@ export function Weather() {
       <Card className="bg-gradient-to-br from-arsenal-900/20 to-ember-600/10 border-arsenal-500/20">
         <div className="flex items-center justify-between">
           <div>
-            <CardLabel>今日 · 名古屋</CardLabel>
+            <CardLabel>{heroLabel} · {heroRegion}</CardLabel>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="num text-4xl font-extrabold text-white">22°</span>
               <span className="text-sm text-ink-400">/ 13°</span>
