@@ -151,7 +151,7 @@ export function Stats({ state }: { state: AppState }) {
         <div className="num text-4xl font-extrabold text-white mt-1 tracking-tight">
           <NumberRoll value={total} prefix="¥" />
         </div>
-        <div className="text-xs text-paper-600 mt-1 num">
+        <div className="text-xs text-ink-400 mt-1 num">
           {state.receipts.length} 筆 · 日均 ¥
           {Math.round(byDay.length ? total / byDay.length : 0).toLocaleString()}
         </div>
@@ -170,7 +170,7 @@ export function Stats({ state }: { state: AppState }) {
                 <Doughnut data={doughnutData} options={doughnutOpts as never} />
                 <div className="absolute inset-0 grid place-items-center pointer-events-none">
                   <div className="text-center">
-                    <div className="num text-[10px] text-paper-600 uppercase tracking-[0.2em]">
+                    <div className="num text-[10px] text-ink-400 uppercase tracking-[0.2em]">
                       total
                     </div>
                     <div className="num text-lg font-bold text-white">{formatJPY(total)}</div>
@@ -178,7 +178,7 @@ export function Stats({ state }: { state: AppState }) {
                 </div>
               </>
             ) : (
-              <div className="h-full grid place-items-center text-paper-600 text-sm">冇數據</div>
+              <div className="h-full grid place-items-center text-ink-400 text-sm">冇數據</div>
             )}
           </div>
           <div className="space-y-1.5">
@@ -191,9 +191,9 @@ export function Stats({ state }: { state: AppState }) {
                     className="h-2.5 w-2.5 rounded-full shrink-0"
                     style={{ background: CATEGORIES[k].color }}
                   />
-                  <span className="text-paper-900 flex-1 truncate">{CATEGORIES[k].name}</span>
-                  <span className="num text-paper-800">{formatJPY(v)}</span>
-                  <span className="num text-[10px] text-paper-500 w-10 text-right">
+                  <span className="text-ink-200 flex-1 truncate">{CATEGORIES[k].name}</span>
+                  <span className="num text-ink-300">{formatJPY(v)}</span>
+                  <span className="num text-[10px] text-ink-500 w-10 text-right">
                     {total > 0 ? Math.round((v / total) * 100) : 0}%
                   </span>
                 </div>
@@ -212,7 +212,7 @@ export function Stats({ state }: { state: AppState }) {
           {byDay.length > 0 ? (
             <Bar data={barData} options={barOpts as never} />
           ) : (
-            <div className="h-full grid place-items-center text-paper-600 text-sm">冇數據</div>
+            <div className="h-full grid place-items-center text-ink-400 text-sm">冇數據</div>
           )}
         </div>
       </Card>
@@ -230,12 +230,12 @@ export function Stats({ state }: { state: AppState }) {
               const pct = total > 0 ? (v / total) * 100 : 0;
               return (
                 <div key={k}>
-                  <div className="flex items-center justify-between text-xs text-paper-800 mb-1">
+                  <div className="flex items-center justify-between text-xs text-ink-300 mb-1">
                     <span>
                       {pay?.icon} {pay?.name || k}
                     </span>
                     <span className="num">
-                      {formatJPY(v)} <span className="text-paper-500">{pct.toFixed(0)}%</span>
+                      {formatJPY(v)} <span className="text-ink-500">{pct.toFixed(0)}%</span>
                     </span>
                   </div>
                   <div className="h-2 rounded-full bg-white/5 overflow-hidden">
@@ -250,7 +250,7 @@ export function Stats({ state }: { state: AppState }) {
               );
             })}
           {byPay.size === 0 && (
-            <div className="text-sm text-paper-600 text-center py-4">冇數據</div>
+            <div className="text-sm text-ink-400 text-center py-4">冇數據</div>
           )}
         </div>
       </Card>
@@ -274,17 +274,17 @@ export function Stats({ state }: { state: AppState }) {
                 className={`num text-[10px] font-bold grid place-items-center h-6 w-6 rounded-lg ${
                   i < 3
                     ? 'bg-gradient-arsenal text-white shadow-glow-sm'
-                    : 'bg-white/5 text-paper-600'
+                    : 'bg-white/5 text-ink-400'
                 }`}
               >
                 {i + 1}
               </span>
-              <span className="text-paper-900 flex-1 truncate">{name}</span>
-              <span className="num text-paper-800 font-semibold">{formatJPY(v)}</span>
+              <span className="text-ink-200 flex-1 truncate">{name}</span>
+              <span className="num text-ink-300 font-semibold">{formatJPY(v)}</span>
             </motion.div>
           ))}
           {byStore.length === 0 && (
-            <div className="text-sm text-paper-600 text-center py-4">冇數據</div>
+            <div className="text-sm text-ink-400 text-center py-4">冇數據</div>
           )}
         </div>
       </Card>

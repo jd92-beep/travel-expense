@@ -79,22 +79,22 @@ export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
         <div className="flex items-center gap-2 mb-2">
           <CardLabel>{greeting.tone}</CardLabel>
           <span className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
-          <span className="num text-[11px] text-paper-600">{today}</span>
+          <span className="num text-[11px] text-ink-400">{today}</span>
         </div>
         <h1 className="font-display text-3xl leading-tight">
           <span className="mr-2">{greeting.emoji}</span>
           <span className="text-gradient-arsenal font-bold">{greeting.text}</span>
         </h1>
         {trip.phase === 'during' && day && (
-          <p className="text-sm text-paper-600 mt-1.5 flex items-center gap-1.5">
+          <p className="text-sm text-ink-400 mt-1.5 flex items-center gap-1.5">
             <Sparkles size={14} className="text-ember-400" />
             <span>
-              Day {dayNum} · <span className="text-paper-900">{day.region}</span> · {day.highlight}
+              Day {dayNum} · <span className="text-ink-200">{day.region}</span> · {day.highlight}
             </span>
           </p>
         )}
         {trip.phase === 'after' && (
-          <p className="text-sm text-paper-600 mt-1.5 flex items-center gap-1.5">
+          <p className="text-sm text-ink-400 mt-1.5 flex items-center gap-1.5">
             <Sparkles size={14} className="text-sakura-300" />
             旅程結束 · 已返程 {trip.daysSince} 日
           </p>
@@ -121,7 +121,7 @@ export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
           >
             <div>
               <CardLabel>6 日走勢</CardLabel>
-              <div className="text-[11px] text-paper-500 mt-0.5 num">JPY · 每日</div>
+              <div className="text-[11px] text-ink-500 mt-0.5 num">JPY · 每日</div>
             </div>
             <Sparkline data={dailyTrend} color="#f97316" />
           </motion.div>
@@ -153,20 +153,20 @@ export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="num text-[10px] text-paper-600">Day {it.day}</span>
+                    <span className="num text-[10px] text-ink-400">Day {it.day}</span>
                     {isToday && (
                       <Badge className="bg-arsenal-500/20 border-arsenal-500/40 text-arsenal-100 animate-glow-pulse">
                         TODAY
                       </Badge>
                     )}
                   </div>
-                  <div className="mt-2 font-semibold text-sm text-paper-900 line-clamp-1">
+                  <div className="mt-2 font-semibold text-sm text-ink-100 line-clamp-1">
                     {it.region}
                   </div>
-                  <div className="text-[11px] text-paper-600 line-clamp-1 mt-0.5">
+                  <div className="text-[11px] text-ink-400 line-clamp-1 mt-0.5">
                     {it.highlight}
                   </div>
-                  <div className="num text-[10px] text-paper-600 mt-2 flex items-center gap-1">
+                  <div className="num text-[10px] text-ink-400 mt-2 flex items-center gap-1">
                     <MapPin size={10} /> {it.date.slice(5)}
                   </div>
                 </Card>
@@ -182,7 +182,7 @@ export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={14} className="text-jade-400" />
             <CardLabel>今日記錄</CardLabel>
-            <span className="text-paper-600 text-[11px] num">· {todayReceipts.length}</span>
+            <span className="text-ink-400 text-[11px] num">· {todayReceipts.length}</span>
           </div>
           <div className="space-y-2">
             <AnimatePresence initial={false}>
@@ -226,7 +226,7 @@ function Metric({
   bordered?: boolean;
 }) {
   return (
-    <div className={bordered ? 'border-x border-paper-300/80' : ''}>
+    <div className={bordered ? 'border-x border-white/5' : ''}>
       <CardLabel>{label}</CardLabel>
       <div className="num text-xl font-bold text-white mt-1">
         <NumberRoll value={value} prefix="¥" />

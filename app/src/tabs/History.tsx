@@ -49,10 +49,10 @@ export function History({
     <div className="space-y-4 pb-6">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-paper-600">記錄</div>
+          <div className="text-[10px] uppercase tracking-[0.2em] text-ink-400">記錄</div>
           <div className="num text-3xl font-bold leading-tight mt-0.5">
             {filtered.length}
-            <span className="text-xs text-paper-600 font-normal ml-2">
+            <span className="text-xs text-ink-400 font-normal ml-2">
               筆 · {formatJPY(totalFiltered)}
             </span>
           </div>
@@ -62,7 +62,7 @@ export function History({
       {/* Search */}
       <div className="relative">
         <Search
-          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-paper-600"
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400"
           size={16}
         />
         <input
@@ -70,7 +70,7 @@ export function History({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜尋店名 / 備註 / 品項…"
-          className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white/80 border border-paper-300/80 text-sm placeholder:text-paper-500 focus:outline-none focus:border-arsenal-500/40 focus:shadow-glow-sm transition-all"
+          className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-ink-900/70 border border-white/5 text-sm placeholder:text-ink-500 focus:outline-none focus:border-arsenal-500/40 focus:shadow-glow-sm transition-all"
         />
       </div>
 
@@ -102,11 +102,11 @@ export function History({
                 animate={{ opacity: 1 }}
                 transition={{ delay: gi * 0.02 }}
               >
-                <div className="sticky top-0 z-10 mb-2 flex items-center justify-between bg-paper-100/85 backdrop-blur-md py-2 -mx-5 px-5">
+                <div className="sticky top-0 z-10 mb-2 flex items-center justify-between bg-ink-950/85 backdrop-blur-md py-2 -mx-5 px-5">
                   <div className="flex items-center gap-2">
                     <div className="h-1 w-6 rounded-full bg-gradient-arsenal" />
-                    <span className="num text-sm font-semibold text-paper-900">{date}</span>
-                    <span className="text-[11px] text-paper-600">· {list.length} 筆</span>
+                    <span className="num text-sm font-semibold text-ink-100">{date}</span>
+                    <span className="text-[11px] text-ink-400">· {list.length} 筆</span>
                   </div>
                   <span className="num text-sm font-semibold text-ember-400">
                     {formatJPY(total)}
@@ -166,7 +166,7 @@ function FilterPill({
       className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
         active
           ? 'bg-gradient-arsenal text-white shadow-glow-sm'
-          : 'bg-white/60 text-paper-800 border border-paper-300/80 hover:border-arsenal-300'
+          : 'bg-ink-900/60 text-ink-300 border border-white/5 hover:border-white/15'
       }`}
       style={active && color ? { boxShadow: `0 0 20px -4px ${color}77` } : undefined}
     >

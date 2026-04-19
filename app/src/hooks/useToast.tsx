@@ -35,7 +35,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toneStyles: Record<ToastTone, string> = {
-    info:    'bg-paper-100/95 border-paper-300 text-paper-900',
+    info:    'bg-ink-800/95 border-white/10 text-ink-100',
     success: 'bg-jade-600/90 border-jade-400/40 text-white',
     warning: 'bg-ember-600/90 border-ember-400/40 text-white',
     error:   'bg-rose-600/90 border-rose-400/40 text-white',

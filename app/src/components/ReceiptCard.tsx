@@ -41,7 +41,7 @@ export function ReceiptCard({
       exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
       className={cn(
         'w-full text-left glass rounded-2xl relative overflow-hidden group',
-        'transition-colors duration-200 hover:border-arsenal-300',
+        'transition-colors duration-200 hover:border-white/15',
       )}
     >
       <motion.button
@@ -60,7 +60,7 @@ export function ReceiptCard({
         />
         <div className="flex items-start gap-3 pl-2">
           <div
-            className="h-11 w-11 rounded-xl grid place-items-center text-lg shrink-0 shadow-inner-glow border border-paper-300/80"
+            className="h-11 w-11 rounded-xl grid place-items-center text-lg shrink-0 shadow-inner-glow border border-white/5"
             style={{
               background: `linear-gradient(135deg, ${cat.color}2e 0%, ${cat.color}08 100%)`,
             }}
@@ -70,10 +70,10 @@ export function ReceiptCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-sm font-semibold truncate text-paper-900">
+                <div className="text-sm font-semibold truncate text-ink-200">
                   {receipt.store || '未命名'}
                 </div>
-                <div className="text-[11px] text-paper-600 truncate mt-0.5">
+                <div className="text-[11px] text-ink-400 truncate mt-0.5">
                   {cat.name} · {pay.icon} {pay.name}
                   {receipt.region ? ` · ${receipt.region}` : ''}
                 </div>
@@ -82,13 +82,13 @@ export function ReceiptCard({
                 <div className="num text-lg font-bold text-white leading-tight">
                   {formatJPY(receipt.total)}
                 </div>
-                <div className="num text-[10px] text-paper-600 mt-0.5">
+                <div className="num text-[10px] text-ink-400 mt-0.5">
                   {formatHKD(receipt.total, rate)}
                 </div>
               </div>
             </div>
             {receipt.note && !open && (
-              <div className="mt-1.5 text-[11px] text-paper-600 line-clamp-1">
+              <div className="mt-1.5 text-[11px] text-ink-400 line-clamp-1">
                 {receipt.note}
               </div>
             )}
@@ -97,7 +97,7 @@ export function ReceiptCard({
             <motion.div
               animate={{ rotate: open ? 180 : 0 }}
               transition={{ duration: 0.25 }}
-              className="text-paper-500 self-center"
+              className="text-ink-500 self-center"
             >
               <ChevronDown size={16} />
             </motion.div>
@@ -121,7 +121,7 @@ export function ReceiptCard({
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-4 pt-1 border-t border-paper-300/80 text-xs text-paper-800 space-y-2">
+            <div className="px-5 pb-4 pt-1 border-t border-white/5 text-xs text-ink-300 space-y-2">
               {receipt.time && (
                 <DetailRow icon={<Clock size={12} />} label="時間" value={receipt.time} />
               )}
@@ -138,16 +138,16 @@ export function ReceiptCard({
               )}
               {receipt.itemsText && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-paper-500 mb-1">品項</div>
-                  <pre className="num text-[11px] text-paper-800 whitespace-pre-wrap leading-relaxed max-h-40 overflow-auto">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-ink-500 mb-1">品項</div>
+                  <pre className="num text-[11px] text-ink-300 whitespace-pre-wrap leading-relaxed max-h-40 overflow-auto">
                     {receipt.itemsText}
                   </pre>
                 </div>
               )}
               {receipt.note && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-paper-500 mb-1">備註</div>
-                  <div className="text-[11px] text-paper-800 leading-relaxed">{receipt.note}</div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-ink-500 mb-1">備註</div>
+                  <div className="text-[11px] text-ink-300 leading-relaxed">{receipt.note}</div>
                 </div>
               )}
             </div>
@@ -171,9 +171,9 @@ function DetailRow({
 }) {
   return (
     <div className="flex items-start gap-2">
-      <span className="mt-0.5 text-paper-500">{icon}</span>
-      <span className="text-paper-500 w-10 shrink-0">{label}</span>
-      <span className={cn('flex-1 text-paper-900 break-words', mono && 'num')}>{value}</span>
+      <span className="mt-0.5 text-ink-500">{icon}</span>
+      <span className="text-ink-500 w-10 shrink-0">{label}</span>
+      <span className={cn('flex-1 text-ink-200 break-words', mono && 'num')}>{value}</span>
     </div>
   );
 }

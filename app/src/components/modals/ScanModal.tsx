@@ -136,7 +136,7 @@ export function ScanModal({
     <Modal open={open} onClose={handleClose} title="掃描收據" size="md">
       {phase === 'pick' && (
         <div className="p-5 space-y-3">
-          <p className="text-xs text-paper-600">影張相或者揀相，AI 會自動辨識收據內容</p>
+          <p className="text-xs text-ink-400">影張相或者揀相，AI 會自動辨識收據內容</p>
           <div className="grid grid-cols-2 gap-3">
             <ActionBtn
               icon={<Camera size={24} />}
@@ -165,7 +165,7 @@ export function ScanModal({
               });
               setPhase('confirm');
             }}
-            className="w-full mt-2 text-xs text-paper-600 hover:text-paper-900 underline underline-offset-4"
+            className="w-full mt-2 text-xs text-ink-400 hover:text-ink-200 underline underline-offset-4"
           >
             或者 手動輸入
           </button>
@@ -203,8 +203,8 @@ export function ScanModal({
           >
             <Loader2 size={32} className="text-arsenal-400" />
           </motion.div>
-          <div className="text-sm text-paper-900">AI 正在辨識收據…</div>
-          <div className="text-[11px] text-paper-600">通常需要 3–10 秒</div>
+          <div className="text-sm text-ink-200">AI 正在辨識收據…</div>
+          <div className="text-[11px] text-ink-400">通常需要 3–10 秒</div>
         </div>
       )}
 
@@ -212,7 +212,7 @@ export function ScanModal({
         <div className="p-6 space-y-4 text-center">
           <AlertTriangle size={32} className="mx-auto text-rose-400" />
           <div className="text-sm text-rose-300">辨識失敗</div>
-          <div className="text-[11px] text-paper-600 break-words">{error}</div>
+          <div className="text-[11px] text-ink-400 break-words">{error}</div>
           <div className="flex gap-2 justify-center">
             {lastB64 && (
               <Button size="sm" variant="secondary" onClick={retry}>
@@ -245,10 +245,10 @@ export function ScanModal({
               <img
                 src={preview}
                 alt=""
-                className="max-h-40 w-full object-contain rounded-xl border border-paper-300/80"
+                className="max-h-40 w-full object-contain rounded-xl border border-white/5"
               />
               {modelUsed && (
-                <div className="text-[10px] text-paper-600 mt-2 text-center">
+                <div className="text-[10px] text-ink-400 mt-2 text-center">
                   ✓ {modelUsed}
                   {scanned.confidence && ` · 信心度 ${scanned.confidence}`}
                 </div>
@@ -288,7 +288,7 @@ function ActionBtn({
       className="glass rounded-2xl p-4 text-left"
     >
       <div
-        className="h-12 w-12 rounded-xl grid place-items-center mb-2 border border-paper-300/80"
+        className="h-12 w-12 rounded-xl grid place-items-center mb-2 border border-white/5"
         style={{
           background: `linear-gradient(135deg, ${color}38 0%, ${color}0a 100%)`,
           color,
@@ -296,8 +296,8 @@ function ActionBtn({
       >
         {icon}
       </div>
-      <div className="text-sm font-semibold text-paper-900">{label}</div>
-      <div className="text-[11px] text-paper-600 mt-0.5">{desc}</div>
+      <div className="text-sm font-semibold text-ink-100">{label}</div>
+      <div className="text-[11px] text-ink-400 mt-0.5">{desc}</div>
     </motion.button>
   );
 }
