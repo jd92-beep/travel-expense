@@ -1322,11 +1322,13 @@ const ITINERARY = [
     { time:'20:00', name:'✈️ UO691 抵達香港 HKG', type:'transport', note:'HKG T1 · TD87QN', timezone:'HKT' },
   ]},
 ];
-const DEFAULT_API_KEY        = atob('QUl6YVN5Q0N6X084S1drenJhaVdBWHIwV2U3TThSVVpQN3NuSk9B');
-const DEFAULT_BACKUP_API_KEY = atob('QUl6YVN5Q0l2T0I2ejBvYkRZZkdMU08tSENrcXV1X1llWHU3RG84');
-const DEFAULT_GEMINI_KEY3    = atob('QVEuQWI4Uk42S0x0S1ZOZU1uM05Fc2VDLUlieUdDeDNtdGp6X0x4cU1Sd1ZPX1h1VGJTQVE=');
-const DEFAULT_GEMINI_KEY4    = atob('QUl6YVN5Q2V3R0tPVURZWWhtN1FBV0tYTDZaVGNVTEdlc081cHl3');
-const DEFAULT_GEMINI_KEY5    = atob('QUl6YVN5QUdKWmtGX0lMM21kQUZtNG16REJhOHJhTWpZTG9zcmlr');
+// Keys are stored in the encrypted vault only — never hardcoded in source.
+// Unlock the vault at startup to activate all AI and sync features.
+const DEFAULT_API_KEY        = '';
+const DEFAULT_BACKUP_API_KEY = '';
+const DEFAULT_GEMINI_KEY3    = '';
+const DEFAULT_GEMINI_KEY4    = '';
+const DEFAULT_GEMINI_KEY5    = '';
 // All hardcoded Gemini keys in rotation order (state.apiKey from vault is prepended at runtime)
 const GEMINI_DEFAULT_KEYS = [DEFAULT_API_KEY, DEFAULT_BACKUP_API_KEY, DEFAULT_GEMINI_KEY3, DEFAULT_GEMINI_KEY4, DEFAULT_GEMINI_KEY5].filter(Boolean);
 // Returns the full ordered key list: user key (explicit or from vault) first, then defaults (deduped)
@@ -1334,11 +1336,11 @@ function getGeminiKeys(userKey) {
   const firstKey = userKey !== undefined ? userKey : state?.apiKey;
   return [firstKey, ...GEMINI_DEFAULT_KEYS].filter((k, i, a) => k && a.indexOf(k) === i);
 }
-const DEFAULT_NOTION_TOKEN = atob('bnRuXzM4MDA1NDY0OTU2NGZnQ2F4OVRxVHYwSEljNWVwUDNOQ0NnMVV6bWJMZ1VmRjU=');
+const DEFAULT_NOTION_TOKEN = '';
 const APPS_SCRIPT_URL = 'https://raw.githubusercontent.com/jd92-beep/travel-expense/main/email-to-notion.gs';
-const DEFAULT_NOTION_DB    = atob('MzQzOGQ5NGQ1ZjdjODE4NzgyMjFmY2RhNmQ2NWQzOWQ=');
+const DEFAULT_NOTION_DB    = '';
 // OpenRouter key (text-only gateway to openrouter/elephant-alpha stealth model)
-const DEFAULT_OPENROUTER_KEY = atob('c2stb3ItdjEtZTNhZjZmOGFhOTg5OTEyYmRlYTUyMTM5NDY2YmQ5MTllMzQ4N2ZkNGRlZWNmNTJiZjhmMDM4NzNhOTYyNGU3MA==');
+const DEFAULT_OPENROUTER_KEY = '';
 const OPENROUTER_URL         = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_MODEL       = 'openrouter/elephant-alpha';
 
@@ -5139,7 +5141,7 @@ async function callGLM(base64, mime) {
 // Correct endpoint per minimax-coding-plan-vlm-guide.md:
 //   POST /v1/coding_plan/vlm  payload: { prompt, image_url }
 //   MiniMax-M2.7 messages API does NOT support image input — wrong route
-const DEFAULT_MINIMAX_KEY = atob('c2stY3AtVEd3a3RBb2hqSTFnVFF2b1pwWFRpZHBQeFlBZWVvZUNZdnJsUUdWaW83c3BnWDEtLVg4Y201WFlwSDFQbUJfcmVGTmRrMWlTa2RtNnVIbklzSWxaUVUydDFNNE1DUy1CSms1VWY2T2lXLWZiNHlJbXZzdXZrdzg=');
+const DEFAULT_MINIMAX_KEY = '';
 async function callMiniMax(base64, mime) {
   // Precedence: user-set custom key → fresh hardcoded DEFAULT → legacy vault (last).
 // Vault may contain a STALE MiniMax key from a previous build; DEFAULT is always current.
