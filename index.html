@@ -900,6 +900,9 @@
       <p class="text-xs mt-1" style="color:var(--n-muted)" id="modalSubtitle">請核對 AI 識別嘅資料</p>
     </div>
     <div class="p-5 space-y-3">
+      <!-- AI warnings (shown only when normalizeScanResult returns warnings) -->
+      <div id="scanWarnings" class="hidden p-3 rounded-2xl space-y-1" style="background:#FEF3C7;border:1px solid #FCD34D">
+      </div>
       <!-- Receipt photo thumbnail (shown after scan) -->
       <div id="mPhotoWrap" class="hidden">
         <img id="mPhotoThumb" class="w-full max-h-40 object-contain rounded-xl" style="background:var(--n-bg)" alt="收據">
@@ -3281,7 +3284,7 @@ function renderStats() {
 }
 
 // ============ AI SCAN ============
-let lastScanBase64 = null, lastScanMime = 'image/jpeg', lastScanResult = null;
+let lastScanBase64 = null, lastScanMime = 'image/jpeg', lastScanResult = null, lastScanWarnings = [];
 
 async function scanReceipt(file) {
   $('previewArea').classList.remove('hidden');
@@ -3294,10 +3297,13 @@ async function scanReceipt(file) {
     <p class="text-sm mt-2" style="color:var(--n-muted)">AI 正在辨識收據…</p>`;
 
   try {
-    const base64 = await fileToBase64(file);
+    const rawBase64 = await fileToBase64(file);
+    // Pre-resize to MiniMax's 2016px native max: prevents server-side downscale
+    // that blurs thermal-paper text. Gemini/GLM also benefit from the smaller payload.
+    const { base64, mime } = await prepareForOCR(rawBase64, file.type || 'image/jpeg');
     lastScanBase64 = base64;
-    lastScanMime = file.type || 'image/jpeg';
-    await runScanWithBase64(base64, file.type);
+    lastScanMime = mime;
+    await runScanWithBase64(base64, mime);
   } catch (err) {
     console.error(err);
     showScanError(err.message);
@@ -3313,10 +3319,12 @@ async function runScanWithBase64(base64, mime) {
     <p class="text-sm mt-2" style="color:var(--n-muted)">AI 正在辨識收據…</p>`;
   try {
     const result = await callGemini(base64, mime || 'image/jpeg');
-    lastScanResult = result;
+    const { cleaned, warnings } = normalizeScanResult(result);
+    lastScanResult = cleaned;
+    lastScanWarnings = warnings;
     const usedModel = state.lastScanModel || 'AI';
     $('scanStatus').innerHTML = `<p class="text-sm" style="color:#059669">✅ 辨識完成 (${escapeHtml(usedModel)}) — 點擊圖片可重新確認</p>`;
-    openConfirmModal(result, base64);
+    openConfirmModal(cleaned, base64, warnings);
   } catch (err) {
     console.error(err);
     showScanError(String(err?.message || 'unknown'));
@@ -3343,7 +3351,7 @@ window.retryLastScan = retryLastScan;
 function reopenLastScan() {
   if (!lastScanResult && !lastScanBase64) return;
   if (lastScanResult) {
-    openConfirmModal(lastScanResult, lastScanBase64 || '');
+    openConfirmModal(lastScanResult, lastScanBase64 || '', lastScanWarnings);
   } else if (lastScanBase64) {
     // result lost but image exists — re-run scan
     runScanWithBase64(lastScanBase64, lastScanMime);
@@ -3388,8 +3396,10 @@ async function rescanWithModel(modelId) {
     } else {
       result = await callGeminiWithModel(lastScanBase64, lastScanMime, modelId, geminiKey);
     }
-    lastScanResult = result;
-    openConfirmModal(result, lastScanBase64);
+    const { cleaned, warnings } = normalizeScanResult(result);
+    lastScanResult = cleaned;
+    lastScanWarnings = warnings;
+    openConfirmModal(cleaned, lastScanBase64, warnings);
     toast(`✅ ${RESCAN_MODELS.find(m=>m.id===modelId)?.label || modelId} 辨識完成`);
   } catch(e) {
     console.error('[rescan]', e);
@@ -3641,50 +3651,211 @@ async function parseVoiceExpense(transcript) {
 let VAULT_ZAI_KEY = '';
 let VAULT_MINIMAX_KEY = '';
 
-const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。分析呢張日本收據圖片，提取資料並回覆嚴格 JSON 格式（唔好加任何文字或 markdown，只回覆 JSON）：
+const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。仔細睇收據圖片，抽結構化資料。**只回覆嚴格 JSON，唔好加任何文字、解釋、prefix、或 markdown fence（例如 \`\`\`json）**。唔好重複、唔好補充、唔好諗 step-by-step — 直接出 JSON。
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ **兩條紅線（違反即完全錯）**：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**紅線 1 — 日文原文絕對保留，唔准翻譯成中文**
+店名と品項は必ず領収書の原文（漢字・カタカナ・ひらがな）をそのままコピーせよ。中国語に翻訳・変換するな。
+- ❌ 「ローソン」→ "罗森" / "羅森" / "Lawson"（錯）
+- ✅ 「ローソン」→ store: "ローソン"
+- ❌ 「松屋」→ "松屋餐廳"（多嘢）
+- ✅ 「松屋」→ store: "松屋"
+- 唯一例外：items[i].name 欄位用繁體中文意譯（方便 Boss 睇），但 items[i].name_jp **100% 保留日文原文**
+
+**紅線 2 — TOTAL 係收據最底最終嗰個「合計」嘅銀碼**
+係收據上面嘅空間位置：subtotal → tax → **合計（TOTAL 喺呢度）** → お預かり → お釣り
+- ✅ 合計 / お会計 / ご請求額 / お支払い / 合計金額 / TOTAL / Grand Total = TOTAL
+- ❌ 小計 / Subtotal：稅前數，**唔係 TOTAL**
+- ❌ お預かり / Cash Tendered：顧客俾嘅錢（例如 10000 円大鈔）**唔係 TOTAL**
+- ❌ お釣り / 釣銭 / Change：找零，**唔係 TOTAL**
+- ❌ 課税対象 8%/10% 小計：中間分類 subtotal
+- Cross-check：total ≈ subtotal + tax（差 1-3 円 rounding OK）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📐 **日本收據典型 layout（幫你定位各欄位）**：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. 頂部：店名、分店、地址〒XXX-XXXX、電話、收銀員
+2. 單據編號 + 日期時間（YYYY/MM/DD HH:MM 或令和X年）
+3. 品項行 ×N（左邊品名，右邊 ¥金額；有 ※ 標記 = 軽減税率 8%）
+4. 小計 block：小計 ¥XXX
+5. 稅金 block：消費税 ¥XXX（或 内税/外税 + 稅率）
+6. **合計 block：合計 ¥XXXX ← TOTAL 喺呢度**
+7. 付款 block：クレジット / 現金 / PayPay / Suica
+8. お預かり ¥XXXX / お釣り ¥XXX（現金先有）
+9. 底部：卡尾四碼、優惠、積分
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 **JSON Schema（嚴格照呢個輸出）**：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+\`\`\`json
 {
-  "store": "店名，用繁體中文（簡短，唔好加括號註解）",
-  "total": 最終應付總金額純數字,
-  "subtotal": 稅前小計純數字（如有，否則 null）,
-  "tax": 稅金純數字（如有，否則 null）,
-  "date": "YYYY-MM-DD 格式",
-  "category": "transport|food|shopping|lodging|ticket|localtour|medicine|other 之一",
-  "payment": "cash|credit|paypay|suica 之一",
-  "items": [ { "name": "品項廣東話翻譯（必須用繁體中文）", "name_jp": "日本語原文（原汁原味保留日文）", "price": 金額純數字 } ],
-  "note": "額外重要資訊（例如付款卡尾四碼、優惠），無即留空"
+  "store": "店名（原文，簡短，唔加括號）",
+  "total": 最終應付金額（純數字 integer，JPY）,
+  "subtotal": 稅前小計（數字或 null）,
+  "tax": 消費税（數字或 null）,
+  "date": "YYYY-MM-DD",
+  "time": "HH:MM（24h）或 null",
+  "address": "住所原文（如有印，否則 null）",
+  "booking_ref": "單據號 / レシート番号 / 取引番号（如有，否則 null）",
+  "category": "transport|food|shopping|lodging|ticket|localtour|medicine|other",
+  "payment": "cash|credit|paypay|suica 或 null",
+  "items": [
+    { "name": "繁體中文意譯", "name_jp": "日文原文（唔准轉字）", "price": 數字 }
+  ],
+  "note": "其他關鍵資訊（卡尾四碼 / 優惠 / 稅率 / 免税 / 割引 等），否則 null",
+  "confidence": "high|medium|low"
 }
+\`\`\`
 
-⚠️ total 辨識規則（極重要，唔好搞錯）：
-- total 只取「合計」「お会計」「ご請求額」「お支払い」「total」欄位對應嘅數字
-- 「小計」係稅前金額，唔係 total
-- 「お預かり」係顧客俾嘅錢（可能係整數，唔係消費金額），唔係 total
-- 「お釣り」係找零，唔係 total
-- 如有疑問：total = 小計 + 消費税（例：小計¥1,000 + 税¥100 → total=1100）
-- 如果收據上有「合計 ¥XXXX」同「小計 ¥YYYY」，total = 合計，唔係小計
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📏 **11 條解析規則**：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-品項規則（重要）：
-- name：必須係繁體中文廣東話翻譯。例：「とんかつ」→「炸豬扒」，「お好み焼き」→「大阪燒」，「たこ焼き」→「章魚燒」，「ラーメン」→「拉麵」，「寿司」→「壽司」，「天ぷら」→「天婦羅」，「カレー」→「咖喱飯」，「うなぎ」→「鰻魚」，「鰻重」→「鰻魚飯」，「ビール」→「啤酒」。即使唔識翻譯都要用漢字意譯。
-- name_jp：原汁原味保留日文原文（漢字、平假名、片假名全部保留），方便核對
+**規則 1 — 金額純整數**：全部 JPY integer，無符號、無逗號、無「円」
+- \`¥1,800\` → 1800
+- \`¥1,800円\` → 1800
+- \`税込¥1800\` → 1800（税込 = 含稅，即 total）
+- \`税抜¥1800\` → 1800（税抜 = 不含稅，呢個可能係 subtotal）
 
-類別判斷規則：
-- 餐廳 / 便利店食品 / 咖啡 / 居酒屋 → food
-- JR / 新幹線 / 巴士 / 地鐵 / Taxi / 機場鐵路 → transport
-- 服裝 / 紀念品 / 家品 / 電器 → shopping
-- 酒店 / 旅館 / 民宿 → lodging
-- Day tour / Local tour / 一日遊 / 半日遊 / Klook / KKday 活動 → localtour
-- 景點入場門票 / 博物館 / 主題樂園 → ticket
-- 藥妝店藥品 / 醫院 → medicine
-- 分類唔到 → other
+**規則 2 — 日期轉 YYYY-MM-DD**：支援多種原文
+- \`2026/04/23\` / \`2026-04-23\` / \`2026.04.23\` → \`2026-04-23\`
+- \`26/04/23\` / \`26.04.23\` → \`2026-04-23\`（2 位數年預設 20XX）
+- \`令和8年4月23日\` → \`2026-04-23\`（令和元年=2019，即 2018+X）
+- \`令和6年\` → 2024，\`平成X年\` → 1988+X
+- \`2026年4月23日（木）\` → \`2026-04-23\`（去掉曜日）
+- 若估算日期同今日差超過 60 日，confidence: low
 
-店名規則：只返回一個名，繁體中文優先。例子：「セブン-イレブン」→ "7-Eleven"，「蓬莱軒」→ "蓬萊軒"。唔好輸出「7-Eleven (セブン-イレブン)」呢種括號嘅格式。
+**規則 3 — 時間**：印上嘅 HH:MM（24h），無就 null
 
-支付方式規則：
-- 現金 / CASH → cash
-- クレジット / VISA / MASTER / JCB / AMEX → credit
-- PayPay / ペイペイ → paypay
-- Suica / スイカ / 交通IC → suica
-- 未清楚 → cash`;
+**規則 4 — 折扣行**：割引 / クーポン / 値引き / サービス / ポイント利用 — 呢啲行顯示做負數，**已經計入 total**，唔好自己再加減
+
+**規則 5 — 軽減税率同其他標記**：
+- ※ / * / 軽 標記 = 8% 減稅（外帶食品）— Seven-Eleven 通常用 \`*\`，Lawson/FamilyMart 用 \`※\`
+- ⚠️ **イートイン** (eat-in) 即使喺便利店都變 10%
+- ★ 標記（常見於マツキヨ）= **セルフメディケーション税制対象品**（自我療治對象藥品），**同稅率冇關**，唔好當 8% 處理
+- 雙稅率收據（mixed basket）：總 tax = 8% 稅 + 10% 稅嘅總和，例：\`(8%対象 ¥540 内税 ¥40) (10%対象 ¥1,100 内税 ¥100)\` → tax = 140
+- 喺 note 寫明標記含義（例：「2 項含軽減税率 ※」或「★ 自我療治對象品」）
+
+**規則 6 — 店名**：原文優先、簡短、唔加括號
+- 「ローソン 名古屋駅前店」→ store: "ローソン"
+- 「松屋 名駅西店」→ store: "松屋"
+- 「マツモトキヨシ」→ store: "マツモトキヨシ"
+- 「ドン・キホーテ」→ store: "ドン・キホーテ"
+- ❌ 唔好輸出「ローソン（LAWSON）」呢種括號
+- 漢字店名保持漢字：「蓬莱軒」→ "蓬莱軒"（Boss 睇得明中文漢字）
+
+**規則 7 — 品項**：
+- \`name\`：繁中意譯。例：とんかつ→「炸豬扒」、お好み焼き→「大阪燒」、ラーメン→「拉麵」、寿司→「壽司」、天ぷら→「天婦羅」、カレー→「咖喱飯」、鰻重→「鰻魚飯」、ビール→「啤酒」
+- \`name_jp\`：**100% 保留原文**，漢字/平假/片假/※符號全留
+- \`price\`：JPY integer
+- 太多品項（>15）只抽主要幾個，note 加「另有 X 項細額」
+
+**規則 8 — 類別（日本實際店名為準）**：
+- **food**：便利店（ローソン、セブン-イレブン、ファミリーマート）、快餐（松屋、吉野家、すき家、Mos Burger、モス）、咖啡（スタバ、ドトール、コメダ）、居酒屋、拉麵店、蓬莱軒、矢場とん、壽司店
+- **transport**：JR、私鉄（名鉄、近鉄）、地下鉄、新幹線、タクシー、バス、空港鉄道、ETC、Pasmo/Suica チャージ
+- **shopping**：Uniqlo、ZARA、Bic Camera、ヨドバシ、ドン・キホーテ、LOFT、無印良品、百貨店（高島屋、三越）
+- **medicine**：マツモトキヨシ（マツキヨ）、サンドラッグ、ウエルシア、ココカラファイン、ドラッグストア、薬局、病院
+- **lodging**：Daiwa Roynet、APA、Toyoko Inn、Super Hotel、旅館、民宿、ホテル
+- **ticket**：USJ、東京スカイツリー、美術館、博物館、動物園、主題樂園單一入場
+- **localtour**：Klook / KKday / 半日遊 / 一日遊 / ガイド付きツアー
+- **other**：寄物櫃（コインロッカー）、Pocket Wi-Fi、eSIM、郵便
+
+**規則 9 — 付款**：
+- 現金 / CASH → \`cash\`
+- クレジット / クレジットカード / VISA / Master / JCB / AMEX / 銀聯 → \`credit\`
+- PayPay / ペイペイ → \`paypay\`
+- Suica / Pasmo / スイカ / 交通IC / ICOCA / Manaca / nanaco / WAON → \`suica\`
+- 睇唔到 → \`null\`（唔好靠估）
+- 卡尾四碼（例 \`****1234\`）放入 \`note\`
+
+**規則 10 — 免税 / Tax Free**：
+- 「Tax Free Shop」/「免税」/「免稅」標記
+- **免税收據 消費税 印 ¥0**（稅已喺收銀時扣咗），合計 = 已扣稅價
+- **唔好自己加稅**！total = 收據印嘅合計，subtotal = 合計（兩者相等）
+- note 寫「免税 Tax Free」
+
+**規則 10a — 酒店特殊稅（lodging）**：
+- **宿泊税**（lodging tax）= 定額（東京 ¥100-200/人/晚），**唔包喺消費税入面**
+- **入湯税**（onsen tax，溫泉旅館）= ¥150/人/晚，flat fee
+- 呢啲稅要 CAPTURE 到 note（例：「宿泊税 ¥200 + 消費税 ¥980」），total 按收據印嘅合計
+
+**規則 10b — 新幹線 / JR 領収書**：
+- **乗車券**（basic fare）+ **特急券**（express ticket）= 合計
+- items 要分開兩行（乗車券 + 特急券），各自 price
+- 例：\`乗車券 ¥6,380 + 特急券 ¥5,370 = 合計 ¥11,750\`
+
+**規則 10c — 居酒屋 / 餐廳**：
+- **お通し / 席料 / チャージ**（¥300-500）= 必收小食費，**係食物消費（唔係 tip、唔係稅）**，列入 items
+- **サービス料 10-15%**：某啲餐廳加收，已計入合計，喺 note 寫明
+
+**規則 10d — タクシー（Taxi）**：
+- **午夜過後（23:00 後乘車，00:XX 下車）**：收據印嘅日期係 **下車日**（不是搭乘日），直接用印嘅日期
+- 通常印 車両番号 / ドライバー ID — 唔使抽
+
+**規則 11 — 圖片質素判斷 confidence**：
+- \`high\`：清晰、平放、打印完整，所有欄位可讀
+- \`medium\`：輕微模糊 / 歪 / 陰影，主要欄位可讀，細位靠估
+- \`low\`：嚴重模糊 / 光暗 / 歪斜 / 摺 / 裁咗，關鍵欄位睇唔清
+- confidence: low 時，**寧願返 null 都好過估**（尤其金額、日期）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ **5 個 worked examples**：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Example 1 — 便利店（Lawson）**
+收據睇到：\`ローソン 名古屋駅前店 / 2026/04/20 08:15 / おにぎり ¥150※ / お茶 ¥130※ / 小計 ¥280 / 消費税(8%) ¥22 / 合計 ¥302 / お預かり ¥1000 / お釣り ¥698 / 現金\`
+\`\`\`json
+{"store":"ローソン","total":302,"subtotal":280,"tax":22,"date":"2026-04-20","time":"08:15","address":null,"booking_ref":null,"category":"food","payment":"cash","items":[{"name":"飯糰","name_jp":"おにぎり","price":150},{"name":"茶","name_jp":"お茶","price":130}],"note":"2 項含軽減税率 ※","confidence":"high"}
+\`\`\`
+
+**Example 2 — 快餐（Matsuya，堂食 10%）**
+收據睇到：\`松屋 名駅西店 / 2026.04.21 12:30 / プレミアム牛めし(並) ¥490 / 生玉子 ¥60 / 小計 ¥550 / 消費税 ¥55 / 合計 ¥605 / クレジット VISA ****5678\`
+\`\`\`json
+{"store":"松屋","total":605,"subtotal":550,"tax":55,"date":"2026-04-21","time":"12:30","address":null,"booking_ref":null,"category":"food","payment":"credit","items":[{"name":"特製牛肉飯(普通)","name_jp":"プレミアム牛めし(並)","price":490},{"name":"生雞蛋","name_jp":"生玉子","price":60}],"note":"Visa ****5678","confidence":"high"}
+\`\`\`
+
+**Example 3 — 藥妝店（マツキヨ）有折扣**
+收據睇到：\`マツモトキヨシ 金山店 / 令和8年4月22日 15:40 / リップ ¥680 / 化粧水 ¥1,280 / 小計 ¥1,960 / クーポン割引 -¥200 / 消費税(10%) ¥176 / 合計 ¥1,936 / PayPay\`
+\`\`\`json
+{"store":"マツモトキヨシ","total":1936,"subtotal":1760,"tax":176,"date":"2026-04-22","time":"15:40","address":null,"booking_ref":null,"category":"medicine","payment":"paypay","items":[{"name":"唇膏","name_jp":"リップ","price":680},{"name":"化妝水","name_jp":"化粧水","price":1280}],"note":"クーポン割引 -¥200（已計入 total）","confidence":"high"}
+\`\`\`
+
+**Example 4 — 新幹線（乗車券 + 特急券 分行）**
+收據睇到：\`JR東海 みどりの窓口 / 東海道新幹線 名古屋→東京 のぞみ / 2026.04.25 大人1名 / 乗車券 ¥6,380 / 特急券(指定) ¥5,370 / 合計 ¥11,750 / クレジット\`
+\`\`\`json
+{"store":"JR東海","total":11750,"subtotal":null,"tax":null,"date":"2026-04-25","time":null,"address":null,"booking_ref":null,"category":"transport","payment":"credit","items":[{"name":"車票（名古屋→東京）","name_jp":"乗車券 名古屋→東京","price":6380},{"name":"特急券（のぞみ指定席）","name_jp":"特急券(指定) のぞみ","price":5370}],"note":null,"confidence":"high"}
+\`\`\`
+
+**Example 5 — 居酒屋（お通し + サービス料）**
+收據睇到：\`居酒屋 鳥海 名駅西店 / 2026/04/24 19:45 2名 / お通し ×2 ¥600 / 生ビール ×2 ¥1,200 / 刺身盛合せ ¥1,800 / 小計 ¥3,600 / サービス料10% ¥360 / 消費税(10%) ¥396 / 合計 ¥4,356 / 予約番号 RAU826858\`
+\`\`\`json
+{"store":"居酒屋 鳥海","total":4356,"subtotal":3960,"tax":396,"date":"2026-04-24","time":"19:45","address":null,"booking_ref":"RAU826858","category":"food","payment":null,"items":[{"name":"小食（2份）","name_jp":"お通し ×2","price":600},{"name":"生啤（2杯）","name_jp":"生ビール ×2","price":1200},{"name":"刺身拼盤","name_jp":"刺身盛合せ","price":1800}],"note":"サービス料10% ¥360（已計入 total）","confidence":"high"}
+\`\`\`
+
+**Example 6 — 免税（Don Quijote Tax Free）**
+收據睇到：\`Tax-Free Shop ドン・キホーテ 栄店 / 2026/04/22 16:20 / カメラ ¥50,000 / 小計 ¥50,000 / 消費税 ¥0 / 合計 ¥50,000 / *免税手続き済* / VISA ****1234\`
+\`\`\`json
+{"store":"ドン・キホーテ","total":50000,"subtotal":50000,"tax":0,"date":"2026-04-22","time":"16:20","address":null,"booking_ref":null,"category":"shopping","payment":"credit","items":[{"name":"相機","name_jp":"カメラ","price":50000}],"note":"免税 Tax Free · Visa ****1234","confidence":"high"}
+\`\`\`
+
+**Example 7 — 模糊圖片（低信心）**
+收據睇到（大部份模糊）：\`[店名糊] / 2026/04/?? / [品項不清] ¥??? / 合計 ¥1,200 / 現金\`
+\`\`\`json
+{"store":"[店名不清]","total":1200,"subtotal":null,"tax":null,"date":null,"time":null,"address":null,"booking_ref":null,"category":"other","payment":"cash","items":[],"note":"圖片模糊，只能讀到 total 同付款方式","confidence":"low"}
+\`\`\`
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔎 **Self-check（出 JSON 前最後確認）**：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. total ≈ subtotal + tax？如果差太遠，重新睇啱 total
+2. store 同 items[].name_jp 係咪全部保留日文原文（無翻譯成中文）？
+3. date 係咪 YYYY-MM-DD 格式？
+4. confidence 合理？清圖 high / 模糊 low
+
+再講多次：**只回覆 JSON，一個字都唔好多**。`;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -5380,6 +5551,37 @@ async function compressPhoto(base64, mime, maxWOverride) {
   });
 }
 
+// Pre-OCR resize: cap longer edge at 2016px (MiniMax VLM native max) + JPEG 0.85 quality.
+// Above 2016 gets server-side downscaled (losing thermal-paper text). Below is lossless pass-through.
+// Returns { base64, mime } so callers don't need to track the mime change.
+async function prepareForOCR(base64, mime) {
+  if (!base64) return { base64, mime };
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const longer = Math.max(img.width, img.height);
+        // No-op if already within budget (don't re-encode good JPEGs)
+        if (longer <= 2016) return resolve({ base64, mime });
+        const scale = 2016 / longer;
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        // 0.85 quality: sweet spot for receipt text sharpness vs file size
+        const out = c.toDataURL('image/jpeg', 0.85).split(',')[1];
+        resolve({ base64: out, mime: 'image/jpeg' });
+      } catch(e) {
+        console.warn('[prepareForOCR] failed, using original:', e.message);
+        resolve({ base64, mime }); // fallback: send original
+      }
+    };
+    img.onerror = () => resolve({ base64, mime });
+    img.src = `data:${mime || 'image/jpeg'};base64,${base64}`;
+  });
+}
+
 // Upload compressed photo to imgbb → returns public URL or null
 async function uploadToImgbb(base64) {
   if (!state.imgbbKey || !base64) return null;
@@ -5397,20 +5599,130 @@ async function uploadToImgbb(base64) {
 // Sanity-check date from Gemini: if >60 days away from today, treat as OCR error
 function sanitizeDate(aiDate) {
   const today = todayHKT();
-  if (!aiDate || !/^\d{4}-\d{2}-\d{2}$/.test(aiDate)) return today;
-  const diffDays = Math.abs((new Date(aiDate) - new Date(today)) / 86400000);
+  if (!aiDate) return today;
+  const raw = String(aiDate).trim();
+  // Try ISO first, then non-ISO formats (Japanese 年月日, English long/short, DD/MM/YYYY)
+  let iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+  if (!iso && typeof parseDateFallback === 'function') iso = parseDateFallback(raw);
+  if (!iso) return today;
+  const diffDays = Math.abs((new Date(iso) - new Date(today)) / 86400000);
   if (diffDays > 60) {
-    console.warn(`[scan] date ${aiDate} is ${Math.round(diffDays)}d from today — likely OCR error, using today`);
+    console.warn(`[scan] date ${iso} is ${Math.round(diffDays)}d from today — likely OCR error, using today`);
     return today;
   }
-  return aiDate;
+  return iso;
 }
 
-function openConfirmModal(data, base64) {
+// Normalise + validate a raw AI scan result before it hits the modal.
+// Cross-checks numeric fields, detects discount items, normalises store name,
+// whitelists category/payment, preserves Japanese originals in items[].name_jp.
+// Returns { cleaned, warnings } — warnings surface as a banner in the modal.
+function normalizeScanResult(raw) {
+  const warnings = [];
+  const data = { ...(raw || {}) };
+
+  // ── Numeric fields (strip ¥ / commas / 円 / full-width digits) ──
+  const toNum = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    // Normalise full-width digits → half-width, strip currency symbols/commas/「円」
+    const s = String(v)
+      .replace(/[\uFF10-\uFF19]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+      .replace(/[¥￥,\s円]/g, '');
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+  let total = toNum(data.total);
+  let subtotal = toNum(data.subtotal);
+  let tax = toNum(data.tax);
+
+  // ── If total missing but items sum to a sensible number, use that ──
+  if ((total == null || total <= 0) && Array.isArray(data.items) && data.items.length) {
+    const sum = data.items.reduce((acc, i) => acc + (toNum(i.price) || 0), 0);
+    if (sum > 0) {
+      total = sum;
+      warnings.push(`total 缺，用 items 加總替代 ¥${sum.toLocaleString()}`);
+    }
+  }
+
+  // ── Cross-check: total ≈ subtotal + tax (±3円 rounding) ──
+  if (total != null && subtotal != null && tax != null) {
+    const expected = subtotal + tax;
+    const diff = Math.abs(total - expected);
+    if (diff > 3) {
+      // If sum is closer to a plausible total, flag for user review
+      warnings.push(`金額對唔上：subtotal ¥${subtotal} + tax ¥${tax} = ¥${expected}，但 total = ¥${total}（差 ¥${diff}）— 請核對`);
+    }
+  }
+
+  // ── Discount detection: any item with negative price ──
+  if (Array.isArray(data.items)) {
+    const discounts = data.items.filter(i => (toNum(i.price) || 0) < 0);
+    if (discounts.length) {
+      const total_d = discounts.reduce((a, i) => a + (toNum(i.price) || 0), 0);
+      warnings.push(`偵測到 ${discounts.length} 項折扣（合共 ¥${total_d}）— 已計入 total`);
+    }
+  }
+
+  // ── Category whitelist (fall back to 'other' on unknown) ──
+  const validCats = CATEGORIES.map(c => c.id);
+  const cat = String(data.category || '').toLowerCase().trim();
+  if (!validCats.includes(cat)) {
+    if (cat) warnings.push(`類別「${cat}」不認識，已改為 other`);
+    data.category = 'other';
+  }
+
+  // ── Payment whitelist (preserve null rather than defaulting to cash) ──
+  const validPays = PAYMENTS.map(p => p.id);
+  const pay = String(data.payment || '').toLowerCase().trim();
+  if (pay && !validPays.includes(pay)) {
+    warnings.push(`付款方式「${pay}」不認識，預設現金`);
+    data.payment = 'cash';
+  } else if (!pay) {
+    // Leave as empty string — modal sanitises downstream
+  }
+
+  // ── Store name: strip parentheses with translations (e.g. "ローソン（LAWSON）" → "ローソン") ──
+  if (typeof data.store === 'string') {
+    const stripped = data.store.replace(/\s*[（(][^)）]*[)）]\s*/g, '').trim();
+    if (stripped && stripped !== data.store) {
+      data.store = stripped;
+    }
+    data.store = data.store.slice(0, 120);
+  }
+
+  // ── Confidence signals: low / too-many warnings → flag ──
+  const conf = String(data.confidence || '').toLowerCase();
+  if (conf === 'low') {
+    warnings.push('AI 信心偏低，建議對住收據核對所有欄位');
+  }
+
+  // Write numeric fields back (null-safe)
+  data.total = total;
+  data.subtotal = subtotal;
+  data.tax = tax;
+
+  return { cleaned: data, warnings };
+}
+
+function openConfirmModal(data, base64, warnings) {
   editingId = null;
   selectedPersonId = getPersons()[0].id;
   $('modalDelete').classList.add('hidden');
   $('modalSubtitle').textContent = '請核對 AI 識別嘅資料';
+  // Render warning banner (or hide it) — warnings come from normalizeScanResult()
+  const warnBox = $('scanWarnings');
+  if (warnBox) {
+    if (Array.isArray(warnings) && warnings.length) {
+      warnBox.innerHTML = warnings.map(w =>
+        `<p class="text-[11px]" style="color:#92400E">⚠️ ${escapeHtml(w)}</p>`
+      ).join('');
+      warnBox.classList.remove('hidden');
+    } else {
+      warnBox.classList.add('hidden');
+      warnBox.innerHTML = '';
+    }
+  }
   $('mStore').value = data.store || '';
   $('mTotal').value = data.total || '';
   const cleanDate = sanitizeDate(data.date);
@@ -5465,6 +5777,9 @@ function editReceipt(id) {
   $('modalDelete').classList.remove('hidden');
   $('modalRescanWrap').classList.add('hidden'); // rescan not available in edit mode
   $('modalSubtitle').textContent = '編輯紀錄';
+  // Clear scan warnings (they only apply to fresh scans, not edits)
+  const warnBox = $('scanWarnings');
+  if (warnBox) { warnBox.classList.add('hidden'); warnBox.innerHTML = ''; }
   $('mStore').value = (r.store || '').replace(/^⏳\s+/, '');  // strip pending prefix for editing
   $('mTotal').value = r.total || '';
   $('mDate').value = r.date;

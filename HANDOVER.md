@@ -3,7 +3,7 @@
 > **Purpose of this file:** Every Claude session (desktop app OR CLI) reads this first to resume work without re-reading the whole chat history. Updated at the end of each session.
 
 **Last updated:** 2026-04-19 (HKT)
-**Latest commit:** `cdf8aa7` — "fix: deep smoke test — 17 bugs fixed across category, AI prompts, itinerary, and sync"
+**Latest commits:** `87b0968` email recognition deep rewrite · next: receipt image recognition deep rewrite (pending push to main — local-only)
 
 ---
 
