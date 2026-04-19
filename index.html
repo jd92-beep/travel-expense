@@ -215,6 +215,36 @@
 </head>
 <body class="min-h-screen pb-24" style="background:var(--n-bg);color:var(--n-text)">
 
+<!-- ── React 2.0 migration banner ─────────────────────────────
+     This legacy page is kept at /legacy.html for users with cached
+     installs or those who prefer the original UI. The new React app
+     lives at root. Banner is dismissible and remembers the choice.       -->
+<script>(function(){
+  try {
+    if (localStorage.getItem('legacy-banner-dismissed-v2') === '1') return;
+    var wrap = document.createElement('div');
+    wrap.id = 'react-banner';
+    wrap.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;padding:max(8px,env(safe-area-inset-top)) 12px 10px;background:linear-gradient(135deg,#ef4135 0%,#f97316 45%,#fbbf24 100%);color:#fff;font:500 13px/1.35 -apple-system,BlinkMacSystemFont,"PingFang HK","Hiragino Sans",system-ui,sans-serif;box-shadow:0 2px 20px -4px rgba(239,65,53,0.55);display:flex;align-items:center;gap:10px';
+    var link = document.createElement('a');
+    link.href = './';
+    link.style.cssText = 'color:#fff;text-decoration:none;flex:1;display:flex;align-items:center;gap:8px;min-width:0';
+    link.innerHTML = '<span style="font-size:16px">✨</span><span style="min-width:0;flex:1"><strong>新版 React UI</strong> 已上線 · 掃一掃 → <span style="opacity:0.85">試下 ≫</span></span>';
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.setAttribute('aria-label','關閉');
+    close.style.cssText = 'background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:5px 10px;border-radius:10px;font:600 12px -apple-system,system-ui,sans-serif;cursor:pointer;flex-shrink:0';
+    close.textContent = '暫時不要';
+    close.onclick = function(e){
+      e.preventDefault(); e.stopPropagation();
+      try { localStorage.setItem('legacy-banner-dismissed-v2','1'); } catch(_){}
+      wrap.remove();
+    };
+    wrap.appendChild(link);
+    wrap.appendChild(close);
+    document.body.insertBefore(wrap, document.body.firstChild);
+  } catch(_){}
+})();</script>
+
 <!-- Sakura petals -->
 <div class="petal" style="left:5%;animation-duration:12s;animation-delay:0s">🌸</div>
 <div class="petal" style="left:15%;animation-duration:15s;animation-delay:2s">🌺</div>
