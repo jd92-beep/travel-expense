@@ -376,43 +376,83 @@
 
   <!-- ============ SCAN TAB ============ -->
   <section id="tab-scan" class="tab-content fade-in">
-    <!-- BLUE HEADER IS NOW THE CAMERA BUTTON. Tap anywhere on this card → opens camera -->
-    <button id="scanHeaderBtn" class="w-full rounded-3xl p-7 mb-5 text-center active:scale-[0.98] transition-transform" style="background:linear-gradient(145deg,#1B2D55 0%,#2D5088 55%,#3D70B8 100%);box-shadow:0 16px 48px rgba(27,45,85,0.35);border:none;cursor:pointer">
-      <div class="text-6xl mb-3" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,0.3))">📸</div>
-      <h2 class="text-2xl font-black mb-1" style="color:white">掃描收據</h2>
-      <p class="text-sm" style="color:rgba(255,255,255,0.70)">點此影相 · AI 自動辨識</p>
-      <div class="flex justify-center gap-2 mt-3">
+
+    <!-- ── 📸 相片辨識 ── -->
+    <!-- Primary: tap the whole card to open camera -->
+    <button id="scanHeaderBtn" class="w-full rounded-3xl p-6 mb-3 text-center active:scale-[0.98] transition-transform" style="background:linear-gradient(145deg,#1B2D55 0%,#2D5088 55%,#3D70B8 100%);box-shadow:0 14px 40px rgba(27,45,85,0.35);border:none;cursor:pointer">
+      <div class="text-5xl mb-2" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,0.3))">📸</div>
+      <h2 class="text-xl font-black mb-0.5" style="color:white">拍攝收據</h2>
+      <p class="text-xs" style="color:rgba(255,255,255,0.65)">點此開相機 · AI 即時辨識</p>
+      <div class="flex justify-center gap-2 mt-2.5">
         <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)">MiniMax</span>
         <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)">GLM-4.6V</span>
         <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold" style="background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)">Gemini</span>
       </div>
     </button>
+    <!-- Secondary: pick from gallery -->
+    <button id="galleryBtn" class="w-full font-semibold py-3 rounded-2xl active:scale-95 transition-transform mb-5 flex items-center justify-center gap-2" style="background:rgba(255,255,255,0.90);color:#1B2D55;border:2px solid rgba(27,45,85,0.12);box-shadow:0 4px 14px rgba(27,45,85,0.08)">
+      🖼️ <span>從相簿選取</span>
+    </button>
 
     <input type="file" id="receiptInput" accept="image/*" capture="environment" class="hidden">
     <input type="file" id="galleryInput" accept="image/*" class="hidden">
-    <!-- Row 1: secondary entry points — 本地相簿 (red, fills space left by old camera button) + Email 匯入 (green) -->
-    <div class="grid grid-cols-2 gap-3 mb-3">
-      <button id="galleryBtn" class="text-white font-black py-6 rounded-2xl active:scale-95 transition-transform" style="background:linear-gradient(135deg,#C0281E,#E04040);box-shadow:0 10px 32px rgba(192,40,30,0.45);font-size:17px">
-        🖼️ 從本地相簿
+
+    <!-- ── 📧 Email 記帳 ── -->
+    <p class="text-[10px] uppercase tracking-widest font-semibold mb-2 px-1" style="color:var(--n-muted)">📧 Email 記帳</p>
+    <div class="rounded-2xl overflow-hidden mb-5" style="border:1px solid rgba(5,150,105,0.20);box-shadow:0 4px 20px rgba(5,150,105,0.10)">
+      <!-- NEW: Check email now — triggers notionPullAll -->
+      <button id="checkEmailNowBtn" class="w-full text-left px-4 py-4 flex items-center gap-3 active:bg-emerald-50 transition-colors" style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border-bottom:1px solid rgba(5,150,105,0.15)">
+        <span class="text-2xl">⚡</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-sm" style="color:#065F46">立即撈取最新 Email 記帳</p>
+          <p class="text-[11px] mt-0.5" style="color:#059669">同步 Apps Script 處理好的新記錄</p>
+        </div>
+        <span id="checkEmailNowSpinner" class="hidden w-4 h-4 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin flex-shrink-0"></span>
+        <span id="checkEmailNowArrow" class="text-emerald-500 text-sm flex-shrink-0">›</span>
       </button>
-      <button id="emailImportBtn" class="text-white font-black py-6 rounded-2xl active:scale-95 transition-transform" style="background:linear-gradient(135deg,#065F46,#059669);box-shadow:0 10px 32px rgba(5,150,105,0.45);font-size:17px">
-        📧 從 Email 匯入
+      <!-- Paste email text manually -->
+      <button id="emailImportBtn" class="w-full text-left px-4 py-4 flex items-center gap-3 active:bg-emerald-50 transition-colors" style="background:white;border-bottom:1px solid rgba(5,150,105,0.10)">
+        <span class="text-2xl">📋</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-sm" style="color:#1A1A2E">貼上 Email 文字解析</p>
+          <p class="text-[11px] mt-0.5" style="color:var(--n-muted)">複製 email 內容 → AI 抽取記帳資料</p>
+        </div>
+        <span class="text-gray-400 text-sm">›</span>
+      </button>
+      <!-- Copy Gmail address -->
+      <button id="copyGmailAddrBtn" class="w-full text-left px-4 py-4 flex items-center gap-3 active:bg-emerald-50 transition-colors" style="background:white">
+        <span class="text-2xl">📮</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-sm" style="color:#1A1A2E">複製收帳 Gmail 地址</p>
+          <p class="text-[11px] font-mono mt-0.5 truncate" style="color:#059669">ftjdfr+expense@gmail.com</p>
+        </div>
+        <span class="text-gray-400 text-sm">›</span>
       </button>
     </div>
-    <!-- Row 2: copy Gmail address to clipboard -->
-    <button id="copyGmailAddrBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3 flex items-center justify-center gap-2" style="background:rgba(255,255,255,0.90);color:#065F46;border:2px solid rgba(5,150,105,0.30);box-shadow:0 4px 16px rgba(5,150,105,0.15)">
-      <span>📋 複製 Gmail 匯入地址</span>
-      <span class="text-[11px] font-mono px-2 py-0.5 rounded" style="background:rgba(5,150,105,0.08)">ftjdfr+expense@gmail.com</span>
-    </button>
-    <button id="voiceBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform mb-3" style="background:rgba(255,255,255,0.90);color:#1B2D55;border:2px solid rgba(27,45,85,0.12);box-shadow:0 4px 16px rgba(27,45,85,0.08)">
-      🎤 語音輸入
-    </button>
-    <button id="manualBtn" class="w-full font-semibold py-4 rounded-2xl active:scale-95 transition-transform" style="background:rgba(255,255,255,0.90);color:#1B2D55;border:2px solid rgba(27,45,85,0.12);box-shadow:0 4px 16px rgba(27,45,85,0.08)">
-      ✍️ 手動輸入
-    </button>
+
+    <!-- ── ⌨️ 其他記帳方式 ── -->
+    <p class="text-[10px] uppercase tracking-widest font-semibold mb-2 px-1" style="color:var(--n-muted)">⌨️ 其他記帳方式</p>
+    <div class="rounded-2xl overflow-hidden mb-5" style="border:1px solid rgba(27,45,85,0.10);box-shadow:0 4px 14px rgba(27,45,85,0.06)">
+      <button id="voiceBtn" class="w-full text-left px-4 py-4 flex items-center gap-3 active:bg-slate-50 transition-colors" style="background:white;border-bottom:1px solid rgba(27,45,85,0.06)">
+        <span class="text-2xl">🎤</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-sm" style="color:#1A1A2E">語音輸入</p>
+          <p class="text-[11px] mt-0.5" style="color:var(--n-muted)">講出消費 · AI 自動填寫</p>
+        </div>
+        <span class="text-gray-400 text-sm">›</span>
+      </button>
+      <button id="manualBtn" class="w-full text-left px-4 py-4 flex items-center gap-3 active:bg-slate-50 transition-colors" style="background:white">
+        <span class="text-2xl">✍️</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-sm" style="color:#1A1A2E">手動輸入</p>
+          <p class="text-[11px] mt-0.5" style="color:var(--n-muted)">自己填寫所有欄位</p>
+        </div>
+        <span class="text-gray-400 text-sm">›</span>
+      </button>
+    </div>
 
     <!-- Preview area -->
-    <div id="previewArea" class="hidden mt-4">
+    <div id="previewArea" class="hidden mt-2">
       <div class="glass rounded-2xl p-4">
         <img id="previewImg" class="w-full max-h-64 object-contain rounded-xl mb-3 cursor-pointer active:opacity-75 transition-opacity" alt="" title="點擊重新確認" onclick="reopenLastScan()">
         <div id="scanStatus" class="text-center py-4">
@@ -5856,6 +5896,39 @@ function init() {
   // Scan — the blue gradient header card is now the camera button
   $('scanHeaderBtn')?.addEventListener('click', () => $('receiptInput').click());
   $('galleryBtn').addEventListener('click', () => $('galleryInput').click());
+
+  // ⚡ Check Email Now — pull latest from Notion (Apps Script already processed them)
+  $('checkEmailNowBtn')?.addEventListener('click', async () => {
+    if (!state.notionToken || !state.notionDb) {
+      toast('⚠️ 請先喺設定設好 Notion'); return;
+    }
+    const spinner = $('checkEmailNowSpinner');
+    const arrow   = $('checkEmailNowArrow');
+    const btn     = $('checkEmailNowBtn');
+    btn.disabled = true;
+    spinner?.classList.remove('hidden');
+    arrow?.classList.add('hidden');
+    const before = (state.receipts || []).length;
+    try {
+      await notionPullAll(true);
+      const after   = (state.receipts || []).length;
+      const added   = Math.max(0, after - before);
+      const pending = (state.receipts || []).filter(isPendingReceipt).length;
+      if (added > 0) {
+        toast(`📬 撈到 ${added} 筆新記錄${pending > 0 ? '，去 History 確認' : ''}`);
+        if (pending > 0) setTimeout(() => switchTab('history'), 1200);
+      } else {
+        toast('✅ 冇新記錄，已係最新');
+      }
+      renderAll();
+    } catch(e) {
+      toast('❌ 同步失敗：' + (e.message || '').slice(0, 60));
+    } finally {
+      btn.disabled = false;
+      spinner?.classList.add('hidden');
+      arrow?.classList.remove('hidden');
+    }
+  });
   // Trip currency selector — triggers Visa rate refetch on change
   $('setTripCurrency')?.addEventListener('change', e => {
     _setTripCurrency(e.target.value);
