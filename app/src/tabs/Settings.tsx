@@ -51,12 +51,12 @@ export function Settings({
       <Card className="bg-gradient-to-br from-arsenal-900/30 to-ember-600/15 border-arsenal-500/25">
         <div className="flex items-center gap-2 mb-3">
           <Database size={14} className="text-arsenal-400" />
-          <CardLabel>進階功能 · 暫用舊版</CardLabel>
+          <CardLabel>進階功能 · 去正式版</CardLabel>
         </div>
         <p className="text-xs text-ink-300 leading-relaxed mb-4">
-          API key、Notion sync、vault 密碼、imgbb 等設定仍喺舊版。新 React 版本正在逐步接駁所有後端。
+          掃描、AI OCR、Email sync、Notion、vault 密碼、imgbb 等所有後端功能喺正式版。兩邊共用 localStorage，資料完全同步。
         </p>
-        <a href="./legacy.html">
+        <a href="../">
           <Button variant="secondary" size="sm">
             <ExternalLink size={13} /> 打開舊版
           </Button>
