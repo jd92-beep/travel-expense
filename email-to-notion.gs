@@ -823,7 +823,11 @@ const MULTI_BOOKING_PROMPT = `你係專業旅遊 email → 支出紀錄 解析 A
 ══════════════════════════════════════════════════════
 
 必拆（一筆變多筆）：
-  ✅ 來回機票（outbound + return / 兩個航班號 / 兩個起飛日）→ 必拆 2 筆，total ÷ 2
+  ✅ 來回機票（outbound + return / 兩個航班號 / 兩個起飛日）→ 必拆 2 筆
+     ⚠️ 絕對唔好將 Grand Total / 總計 填入每一筆！Grand Total = 全部航程 × 全部乘客嘅總和
+     → 若 email 列出各程逐項費用 → 每程 amount = 該程所有乘客費用之和（去程合計 + 回程合計）
+     → 若 email 只有一個 Grand Total 無逐項 → 每筆 = Grand Total ÷ 2
+     → 自驗：去程 amount + 回程 amount 必須等於 Grand Total，否則數字有誤！
   ✅ Klook/KKday 多日行程/多 activity 訂單 → 每日/每 activity 一筆，total 按明細分；
      若只有 grand total，平均分配
   ✅ 多個餐廳訂座（同一 email 幾間餐廳）→ 每間一筆
@@ -1128,22 +1132,38 @@ Output:
   "itinerary_note":null,"confidence":"high"
 }],"itinerary_updates":[]}
 
-★ 例 8 — HK Express 單程機票（bookings + itinerary_updates 同時建）
-Input: "HK Express booking confirmation — UO610 Hong Kong (HKG) to Nagoya (NGO), Departure 2026-04-20 08:40, 2 adults, Fare HKD 1,280, Taxes HKD 820, Total HKD 2,100, Booking reference: HX-ABC123XY, Payment: Visa xxxx-0373"
+★ 例 8 — HK Express 來回機票（TD87QN，2 位乘客，有逐項費用 → 拆 2 筆 + itinerary_updates）
+Input: "HK Express 訂單確認 TD87QN
+出發 UO690 HKG→NGO 10:50 2026-04-20 | 回程 UO691 NGO→HKG 16:45 2026-04-25
+小姐 Hoi Yan Chu — 出發: 票價 HKD 1130 + 燃油 140 + 機場費 355 = HKD 1625；回程: 票價 HKD 1480 + 燃油 140 + 日本稅費 151 = HKD 1771
+先生 Kin On Chow — 出發: HKD 1625；回程: HKD 1771
+總計: HKD 6792.00 · Mastercard HKD 6291.70 + Asia Miles HKD 500.30"
 Output:
 {"source":"hkexpress","bookings":[{
-  "store":"HK Express UO610 HKG→NGO",
-  "total":42000,"original_currency":"HKD","original_amount":2100,
-  "date":"2026-04-20","time":"08:40",
+  "store":"HK Express UO690 HKG→NGO",
+  "total":65000,"original_currency":"HKD","original_amount":3250,
+  "date":"2026-04-20","time":"10:50",
   "category":"transport","payment":"credit",
   "address":null,
-  "booking_ref":"HX-ABC123XY",
-  "items_text":"去程單程 · 2 位",
-  "note":"UO610 · 2 位",
+  "booking_ref":"TD87QN",
+  "items_text":"去程 · 2 位 · UO690 10:50 HKG→NGO",
+  "note":"TD87QN · 2 pax 出發費用合計 HKD 3250 (1625×2)",
+  "itinerary_note":null,"confidence":"high"
+},{
+  "store":"HK Express UO691 NGO→HKG",
+  "total":70840,"original_currency":"HKD","original_amount":3542,
+  "date":"2026-04-25","time":"16:45",
+  "category":"transport","payment":"credit",
+  "address":null,
+  "booking_ref":"TD87QN",
+  "items_text":"回程 · 2 位 · UO691 16:45 NGO→HKG",
+  "note":"TD87QN · 2 pax 回程費用合計 HKD 3542 (1771×2)",
   "itinerary_note":null,"confidence":"high"
 }],"itinerary_updates":[
-  {"date":"2026-04-20","time":"06:30","name":"HK Express UO610 HKG 機場 check-in (起飛 08:40)","type":"transport","note":"booking HX-ABC123XY · 2 位 · 起飛前 2h"}
+  {"date":"2026-04-20","time":"08:50","name":"UO690 HKG T1 辦理登機 (起飛 10:50 HKT)","type":"transport","note":"TD87QN · 起飛前 2h"},
+  {"date":"2026-04-25","time":"14:45","name":"UO691 NGO T2 辦理登機 (起飛 16:45 JST)","type":"transport","note":"TD87QN · 起飛前 2h"}
 ]}
+⚠️ 自驗: 3250 + 3542 = 6792 = 總計 ✓ (唔係 6792 × 2!)
 
 ★ 例 9 — Agoda 酒店（bookings + itinerary_updates 同時建）
 Input: "Agoda — Daiwa Roynet Hotel Nagoya Taiko-dori, Check-in 2026-04-20 15:00, Check-out 2026-04-22, 2 nights, Standard Twin, Total HKD 1,720, Booking AGD-9876, Paid Visa ending 0373"
