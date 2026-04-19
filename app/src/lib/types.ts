@@ -4,27 +4,40 @@ export type Category =
   | 'shopping'
   | 'lodging'
   | 'ticket'
+  | 'localtour'
   | 'medicine'
   | 'other';
 
 export type Payment = 'cash' | 'credit' | 'paypay' | 'suica';
 
+export interface ReceiptItem {
+  name: string;
+  name_jp?: string;
+  price?: number;
+}
+
 export interface Receipt {
   id: string;
   store: string;
   total: number;
-  date: string; // YYYY-MM-DD
+  subtotal?: number | null;
+  tax?: number | null;
+  hkd?: number | null;
+  date: string;
+  time?: string;
   category: Category;
   payment: Payment;
   region?: string;
   itemsText?: string;
+  items?: ReceiptItem[];
   note?: string;
+  address?: string;
+  bookingRef?: string;
+  confidence?: 'high' | 'medium' | 'low';
   createdAt: number;
   notionPageId?: string;
-  bookingRef?: string;
-  time?: string;
-  address?: string;
   photoBase64?: string;
+  photoUrl?: string;
 }
 
 export interface AppState {
@@ -33,12 +46,15 @@ export interface AppState {
   rate: number;
   currency?: string;
   apiKey?: string;
-  model?: string;
   notionToken?: string;
   notionDb?: string;
   proxy?: string;
+  model?: string;
+  scanModel?: string;
   autoSync?: boolean;
   itineraryOverrides?: Record<string, ItineraryOverride>;
+  tripName?: string;
+  notionDeletedIds?: string[];
 }
 
 export interface ItineraryOverride {
@@ -63,4 +79,29 @@ export interface ItineraryDay {
   title: string;
   highlight: string;
   spots: ItinerarySpot[];
+}
+
+export interface ScanResult {
+  store: string;
+  total: number | null;
+  subtotal?: number | null;
+  tax?: number | null;
+  date: string;
+  time?: string | null;
+  address?: string | null;
+  booking_ref?: string | null;
+  category: Category;
+  payment?: Payment | null;
+  items?: ReceiptItem[];
+  note?: string | null;
+  confidence?: 'high' | 'medium' | 'low';
+}
+
+export interface WeatherDay {
+  date: string;
+  tmax: number;
+  tmin: number;
+  code: number;
+  label: string;
+  icon: string;
 }

@@ -85,6 +85,11 @@ select:focus-visible {
     -webkit-text-fill-color: transparent;
     color: transparent;
   }
+  .input {
+    @apply w-full px-3.5 py-2.5 rounded-xl bg-ink-800/80 border border-white/5
+           placeholder:text-ink-500 focus:outline-none focus:border-arsenal-500/50
+           focus:shadow-glow-sm transition-all text-ink-100;
+  }
 }
 
 @layer utilities {
