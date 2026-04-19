@@ -23,8 +23,8 @@ export function EmptyState({ title, subtitle, glyph, action }: EmptyStateProps) 
       >
         {glyph ?? <FloatingReceipt />}
       </motion.div>
-      <div className="mt-5 font-semibold text-ink-100">{title}</div>
-      {subtitle && <div className="mt-1 text-xs text-ink-400 leading-relaxed">{subtitle}</div>}
+      <div className="mt-5 font-semibold text-paper-900">{title}</div>
+      {subtitle && <div className="mt-1 text-xs text-paper-600 leading-relaxed">{subtitle}</div>}
       {action && <div className="mt-4">{action}</div>}
     </motion.div>
   );

@@ -27,7 +27,7 @@ export function CardLabel({
   return (
     <span
       className={cn(
-        'text-[10px] uppercase tracking-[0.2em] text-ink-400 font-medium',
+        'text-[10px] uppercase tracking-[0.2em] text-paper-600 font-medium',
         className,
       )}
     >

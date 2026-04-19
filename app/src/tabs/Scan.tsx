@@ -60,7 +60,7 @@ export function Scan({ state, onAddReceipt, onReplaceReceipts }: ScanTabProps) {
       <div>
         <CardLabel>記錄一筆</CardLabel>
         <h1 className="font-display text-2xl mt-1">揀一個方式開始</h1>
-        <p className="text-xs text-ink-400 mt-1 leading-relaxed">影張相 AI 自動辨識，或手動輸入。</p>
+        <p className="text-xs text-paper-600 mt-1 leading-relaxed">影張相 AI 自動辨識，或手動輸入。</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -106,8 +106,8 @@ export function Scan({ state, onAddReceipt, onReplaceReceipts }: ScanTabProps) {
           <div className="flex items-start gap-3">
             <AlertTriangle size={18} className="text-ember-400 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <div className="font-semibold text-ink-100">需要先設定 API Key</div>
-              <p className="text-xs text-ink-300 mt-1 leading-relaxed">
+              <div className="font-semibold text-paper-900">需要先設定 API Key</div>
+              <p className="text-xs text-paper-800 mt-1 leading-relaxed">
                 去「設定」頁面解鎖 Vault 或手動輸入 Gemini API Key，就可以用 AI 掃描。
               </p>
             </div>
@@ -161,7 +161,7 @@ function ActionTile({
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       className={`glass rounded-2xl p-4 text-left relative overflow-hidden group ${
-        disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-white/15'
+        disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-arsenal-300'
       }`}
     >
       <div
@@ -171,7 +171,7 @@ function ActionTile({
       />
       <div className="relative">
         <div
-          className="h-11 w-11 rounded-xl grid place-items-center mb-3 border border-white/5 shadow-inner-glow"
+          className="h-11 w-11 rounded-xl grid place-items-center mb-3 border border-paper-300/80 shadow-inner-glow"
           style={{
             background: `linear-gradient(135deg, ${color}38 0%, ${color}0a 100%)`,
             color,
@@ -179,8 +179,8 @@ function ActionTile({
         >
           {icon}
         </div>
-        <div className="font-semibold text-sm text-ink-100">{label}</div>
-        <div className="text-[11px] text-ink-400 mt-0.5">{desc}</div>
+        <div className="font-semibold text-sm text-paper-900">{label}</div>
+        <div className="text-[11px] text-paper-600 mt-0.5">{desc}</div>
       </div>
     </motion.button>
   );

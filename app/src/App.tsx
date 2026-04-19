@@ -36,7 +36,7 @@ export function App() {
 }
 
 function AppInner() {
-  const [tab, setTab] = useState<TabId>('home');
+  const [tab, setTab] = useState<TabId>('scan');
   const directionRef = useRef(0);
   const {
     state,
@@ -241,14 +241,14 @@ function AppHeader() {
         </motion.div>
         <div>
           <div className="font-display text-lg leading-none font-bold">旅費</div>
-          <div className="text-[10px] text-ink-400 tracking-[0.22em] num mt-0.5">
+          <div className="text-[10px] text-paper-600 tracking-[0.22em] num mt-0.5">
             NAGOYA · 2026
           </div>
         </div>
       </div>
       <div className="text-right">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-ink-400">HKT</div>
-        <div className="num text-xs text-ink-200 mt-0.5 font-semibold">{time}</div>
+        <div className="text-[10px] uppercase tracking-[0.22em] text-paper-600">HKT</div>
+        <div className="num text-xs text-paper-900 mt-0.5 font-semibold">{time}</div>
       </div>
     </header>
   );
