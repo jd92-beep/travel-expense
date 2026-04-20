@@ -258,7 +258,7 @@
 
   /* ── Stagger item entrance ── */
   @keyframes staggerIn { from { opacity:0; transform: translateY(14px); } to { opacity:1; transform: translateY(0); } }
-  .stagger-item { opacity:0; animation: staggerIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
+  .stagger-item { animation: staggerIn 0.3s cubic-bezier(0.16,1,0.3,1) both; }
 
   /* ── Tab icon bounce ── */
   @keyframes iconBounce { 0%,100% { transform: scale(1) translateY(0); } 35% { transform: scale(1.32) translateY(-3px); } 65% { transform: scale(0.92) translateY(1px); } }
@@ -2503,6 +2503,7 @@ function renderDashboard() {
   // Update header label if trip length is non-6
   const header = $('itineraryHeader');
   if (header) header.textContent = getItinerary().length + '日行程';
+  _reInitAnimations();
 }
 
 // Email-imported pending receipts have a "⏳ " prefix on store name (set by Apps Script).
@@ -3174,6 +3175,7 @@ function renderHistory() {
       </div>`;
   }).join('');
   _staggerCards(list);
+  _reInitAnimations();
 }
 
 // ============ TIMELINE ============
@@ -6931,6 +6933,7 @@ function switchTab(name) {
 
   const bs = $('budgetSection');
   if (bs) bs.style.display = (name === 'history' || name === 'dashboard') ? '' : 'none';
+  if (name === 'dashboard') renderDashboard();
   if (name === 'weather') renderWeather();
   if (name === 'stats') renderStats();
   if (name === 'history') {
@@ -7665,10 +7668,6 @@ function init() {
 
   // ── Animation init ──
   _initAnimations();
-  const _origRenderDashboard = renderDashboard;
-  renderDashboard = function() { _origRenderDashboard.apply(this, arguments); _reInitAnimations(); };
-  const _origRenderHistory = renderHistory;
-  renderHistory = function() { _origRenderHistory.apply(this, arguments); _reInitAnimations(); };
 }
 
 // UTF-8 safe base64 decode — handles emoji, kanji, non-BMP chars.
@@ -7865,8 +7864,16 @@ function _staggerCards(container) {
   if (!container) return;
   const items = container.querySelectorAll('.glass, .rounded-2xl');
   items.forEach((el, i) => {
+    el.classList.remove('stagger-item');
+    void el.offsetWidth; // force reflow to restart animation
     el.classList.add('stagger-item');
     el.style.animationDelay = (i * 0.045) + 's';
+    // Always remove class after animation completes so opacity:0 never sticks
+    const removeDelay = Math.round((i * 0.045 + 0.35) * 1000);
+    setTimeout(() => {
+      el.classList.remove('stagger-item');
+      el.style.animationDelay = '';
+    }, removeDelay);
   });
 }
 
