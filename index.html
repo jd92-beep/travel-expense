@@ -211,9 +211,105 @@
   .doughnut-center .dc-label { font-size: 9px; color: var(--n-muted); letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
   .doughnut-center .dc-value { font-size: 17px; font-weight: 900; color: var(--n-text); line-height: 1.1; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .doughnut-center .dc-sub { font-size: 9px; color: var(--n-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+  /* ── Button press ripple ── */
+  @keyframes rippleOut {
+    0%   { transform: scale(0); opacity: 0.45; }
+    100% { transform: scale(3.5); opacity: 0; }
+  }
+  .ripple-container { position: relative; overflow: hidden; }
+  .ripple-dot {
+    position: absolute; border-radius: 50%;
+    width: 12px; height: 12px;
+    background: rgba(255,255,255,0.55);
+    pointer-events: none;
+    animation: rippleOut 0.55s ease-out forwards;
+    transform-origin: center;
+    margin-left: -6px; margin-top: -6px;
+  }
+
+  /* ── Tab slide transitions ── */
+  @keyframes slideInRight  { from { opacity:0; transform: translateX(24px);  } to { opacity:1; transform: translateX(0); } }
+  @keyframes slideInLeft   { from { opacity:0; transform: translateX(-24px); } to { opacity:1; transform: translateX(0); } }
+  @keyframes slideOutRight { from { opacity:1; transform: translateX(0); } to { opacity:0; transform: translateX(24px);  } }
+  @keyframes slideOutLeft  { from { opacity:1; transform: translateX(0); } to { opacity:0; transform: translateX(-24px); } }
+  .tab-slide-in-right  { animation: slideInRight  0.28s cubic-bezier(0.16,1,0.3,1) both; }
+  .tab-slide-in-left   { animation: slideInLeft   0.28s cubic-bezier(0.16,1,0.3,1) both; }
+  .tab-slide-out-right { animation: slideOutRight 0.18s ease-in both; }
+  .tab-slide-out-left  { animation: slideOutLeft  0.18s ease-in both; }
+
+  /* ── Modal slide-up ── */
+  @keyframes modalSlideUp   { from { opacity:0; transform: translateY(48px) scale(0.97); } to { opacity:1; transform: translateY(0) scale(1); } }
+  @keyframes modalSlideDown { from { opacity:1; transform: translateY(0) scale(1); } to { opacity:0; transform: translateY(48px) scale(0.97); } }
+  @keyframes backdropIn  { from { opacity:0; } to { opacity:1; } }
+  @keyframes backdropOut { from { opacity:1; } to { opacity:0; } }
+  .modal-in  { animation: modalSlideUp   0.32s cubic-bezier(0.16,1,0.3,1) both; }
+  .modal-out { animation: modalSlideDown 0.22s ease-in both; }
+  .backdrop-in  { animation: backdropIn  0.22s ease both; }
+  .backdrop-out { animation: backdropOut 0.18s ease both; }
+
+  /* ── Button press feedback ── */
+  @keyframes btnPress  { 0%,100% { transform: scale(1); } 40% { transform: scale(0.94); } 70% { transform: scale(1.03); } }
+  .btn-press { animation: btnPress 0.28s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+  /* ── Card tap lift ── */
+  @keyframes cardTap { 0%,100% { transform: scale(1); box-shadow: 0 8px 32px rgba(204,41,41,0.07); } 40% { transform: scale(0.97) translateY(2px); } 70% { transform: scale(1.01) translateY(-2px); } }
+  .card-tap { animation: cardTap 0.3s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+  /* ── Stagger item entrance ── */
+  @keyframes staggerIn { from { opacity:0; transform: translateY(14px); } to { opacity:1; transform: translateY(0); } }
+  .stagger-item { opacity:0; animation: staggerIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
+
+  /* ── Tab icon bounce ── */
+  @keyframes iconBounce { 0%,100% { transform: scale(1) translateY(0); } 35% { transform: scale(1.32) translateY(-3px); } 65% { transform: scale(0.92) translateY(1px); } }
+  .icon-bounce { animation: iconBounce 0.38s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+  /* ── Tab pill spring ── */
+  @keyframes pillPop { 0% { transform: scaleX(0.6) scaleY(0.8); opacity:0.4; } 60% { transform: scaleX(1.08) scaleY(1.04); } 100% { transform: scaleX(1) scaleY(1); opacity:1; } }
+  .pill-pop { animation: pillPop 0.32s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+  /* ── Toast bounce-in ── */
+  @keyframes toastIn  { 0% { opacity:0; transform: translateX(-50%) translateY(-16px) scale(0.9); } 60% { transform: translateX(-50%) translateY(3px) scale(1.02); } 100% { opacity:1; transform: translateX(-50%) translateY(0) scale(1); } }
+  @keyframes toastOut { from { opacity:1; transform: translateX(-50%) translateY(0) scale(1); } to { opacity:0; transform: translateX(-50%) translateY(-10px) scale(0.92); } }
+  .toast-in  { animation: toastIn  0.32s cubic-bezier(0.34,1.56,0.64,1) both; }
+  .toast-out { animation: toastOut 0.22s ease-in both; }
+
+  /* ── Success flash ── */
+  @keyframes successFlash { 0% { transform: translate(-50%,-50%) scale(0); opacity:1; } 60% { transform: translate(-50%,-50%) scale(1.2); opacity:1; } 80% { transform: translate(-50%,-50%) scale(0.95); opacity:1; } 100% { transform: translate(-50%,-50%) scale(1.1); opacity:0; } }
+  @keyframes ringExpand  { 0% { transform: translate(-50%,-50%) scale(0.3); opacity:0.7; } 100% { transform: translate(-50%,-50%) scale(2.8); opacity:0; } }
+  .success-flash-el { position:fixed; top:50%; left:50%; z-index:9999; pointer-events:none; }
+
+  /* ── Shutter flash (scan) ── */
+  @keyframes shutterFlash { 0% { opacity:0.75; } 100% { opacity:0; } }
+  #shutterFlash { position:fixed; inset:0; background:white; z-index:9998; pointer-events:none; animation: shutterFlash 0.35s ease-out forwards; display:none; }
+
+  /* ── Floating action glow pulse ── */
+  @keyframes glowPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(204,41,41,0.35); } 50% { box-shadow: 0 0 0 10px rgba(204,41,41,0); } }
+  .glow-pulse { animation: glowPulse 2.2s ease-in-out infinite; }
+
+  /* ── Scan tile pulsing ring ── */
+  @keyframes scanRing { 0%   { transform: scale(1);    opacity: 0.7; } 100% { transform: scale(1.18);  opacity: 0; } }
+  .scan-ring::before, .scan-ring::after {
+    content:''; position:absolute; inset:-4px; border-radius:inherit;
+    border: 2px solid currentColor; pointer-events:none;
+    animation: scanRing 2s ease-out infinite;
+  }
+  .scan-ring::after { animation-delay: 1s; }
+
+  /* ── Number count-up flash ── */
+  @keyframes numFlash { 0%,100% { opacity:1; } 30% { opacity:0.3; } }
+  .num-update { animation: numFlash 0.25s ease; }
+
+  /* ── Active tab label slide-up ── */
+  @keyframes labelUp { from { opacity:0.4; transform: translateY(4px); } to { opacity:1; transform: translateY(0); } }
+  .label-up { animation: labelUp 0.22s ease-out both; }
+
+  /* ── Drag indicator bounce ── */
+  @keyframes handleBounce { 0%,100%{ transform: scaleX(1); } 40%{ transform: scaleX(0.6); } }
 </style>
 </head>
 <body class="min-h-screen pb-24" style="background:var(--n-bg);color:var(--n-text)">
+<div id="shutterFlash"></div>
 
 <!-- Sakura petals -->
 <div class="petal" style="left:5%;animation-duration:12s;animation-delay:0s">🌸</div>
@@ -382,7 +478,7 @@
 
     <!-- ── 🎨 三大色塊：三種主要記帳方式 ── -->
     <!-- 🔵 BLUE BLOCK — 拍攝收據 (primary action) -->
-    <button id="scanHeaderBtn" class="w-full rounded-3xl p-6 mb-3 text-center active:scale-[0.98] transition-transform" style="background:linear-gradient(145deg,#1B2D55 0%,#2D5088 55%,#3D70B8 100%);box-shadow:0 14px 40px rgba(27,45,85,0.35);border:none;cursor:pointer">
+    <button id="scanHeaderBtn" class="w-full rounded-3xl p-6 mb-3 text-center active:scale-[0.98] transition-transform scan-ring" style="position:relative;background:linear-gradient(145deg,#1B2D55 0%,#2D5088 55%,#3D70B8 100%);box-shadow:0 14px 40px rgba(27,45,85,0.35);border:none;cursor:pointer;color:rgba(255,255,255,0.4)">
       <div class="text-5xl mb-2" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,0.3))">📸</div>
       <h2 class="text-xl font-black mb-0.5" style="color:white">拍攝收據</h2>
       <p class="text-xs" style="color:rgba(255,255,255,0.70)">點此開相機 · AI 即時辨識</p>
@@ -394,7 +490,7 @@
     </button>
 
     <!-- 🟢 GREEN BLOCK — 從相簿選取 (now big hero, swapped with email sync) -->
-    <button id="galleryBtn" class="w-full rounded-3xl p-5 mb-3 text-center active:scale-[0.98] transition-transform relative" style="background:linear-gradient(145deg,#064E3B 0%,#059669 50%,#10B981 100%);box-shadow:0 14px 40px rgba(5,150,105,0.35);border:none;cursor:pointer">
+    <button id="galleryBtn" class="w-full rounded-3xl p-5 mb-3 text-center active:scale-[0.98] transition-transform relative scan-ring" style="position:relative;background:linear-gradient(145deg,#064E3B 0%,#059669 50%,#10B981 100%);box-shadow:0 14px 40px rgba(5,150,105,0.35);border:none;cursor:pointer;color:rgba(255,255,255,0.4)">
       <div class="text-4xl mb-1.5" style="filter:drop-shadow(0 4px 8px rgba(0,0,0,0.3))">🖼️</div>
       <h2 class="text-lg font-black mb-0.5" style="color:white">從相簿選取</h2>
       <p class="text-xs" style="color:rgba(255,255,255,0.80)">已有相片？揀張現成嘅即掃</p>
@@ -1747,10 +1843,24 @@ function getRegionForDate(date) {
   if (phase === 'post') return '返程後';
   return '—';
 }
-function toast(msg) {
-  $('toast').textContent = msg;
-  $('toast').classList.remove('hidden');
-  setTimeout(() => $('toast').classList.add('hidden'), 2200);
+function toast(msg, type) {
+  const el = $('toast');
+  if (!el) return;
+  el.textContent = msg;
+  // Color by type
+  if (type === 'success') el.style.background = '#059669';
+  else if (type === 'error') el.style.background = '#DC2626';
+  else if (type === 'warning') el.style.background = '#D97706';
+  else el.style.background = 'var(--n-text)';
+
+  el.classList.remove('hidden','toast-in','toast-out');
+  void el.offsetWidth; // reflow
+  el.classList.add('toast-in');
+  clearTimeout(el._toastTimer);
+  el._toastTimer = setTimeout(() => {
+    el.classList.add('toast-out');
+    setTimeout(() => { el.classList.add('hidden'); el.classList.remove('toast-in','toast-out'); }, 220);
+  }, 2200);
 }
 
 // ============ PERSONS ============
@@ -2275,6 +2385,7 @@ function renderDashboard() {
     list.innerHTML = '<p class="text-sm text-gray-500 text-center py-8">今日仲未有消費紀錄 ✨</p>';
   } else {
     list.innerHTML = todayR.slice().reverse().map(r => receiptCard(r)).join('');
+    _staggerCards(list);
   }
 
   // Itinerary + prep/post rows
@@ -2383,6 +2494,7 @@ function renderDashboard() {
       </div>`);
   }
   $('itineraryList').innerHTML = itiRows.join('');
+  _staggerCards($('itineraryList'));
   // Update header label if trip length is non-6
   const header = $('itineraryHeader');
   if (header) header.textContent = getItinerary().length + '日行程';
@@ -3056,6 +3168,7 @@ function renderHistory() {
         <div class="space-y-2">${items.map(i => receiptCard(i)).join('')}</div>
       </div>`;
   }).join('');
+  _staggerCards(list);
 }
 
 // ============ TIMELINE ============
@@ -3537,6 +3650,7 @@ function renderStats() {
 let lastScanBase64 = null, lastScanMime = 'image/jpeg', lastScanResult = null, lastScanWarnings = [];
 
 async function scanReceipt(file) {
+  triggerShutterFlash();
   $('previewArea').classList.remove('hidden');
   const prevImg = $('previewImg');
   if (prevImg.src && prevImg.src.startsWith('blob:')) URL.revokeObjectURL(prevImg.src);
@@ -3693,7 +3807,7 @@ async function startAddToItinerary() {
       if (m) parsed = JSON.parse(m[0]);
     }
     // Close confirm modal, open itinerary modal
-    $('confirmModal').classList.add('hidden');
+    _closeModalOverlay('confirmModal');
     _openAddItiModal(parsed);
   } catch(e) {
     toast('❌ AI 辨識失敗：' + e.message.slice(0, 60));
@@ -3732,7 +3846,7 @@ function _openAddItiModal(data) {
     $('addItiPhotoWrap').classList.add('hidden');
   }
 
-  $('addItiModal').classList.remove('hidden');
+  _openModalOverlay('addItiModal');
 }
 
 function saveAddToItinerary() {
@@ -3765,7 +3879,7 @@ function saveAddToItinerary() {
   state.customItinerary = currentIti;
   window.CURRENT_ITINERARY = currentIti;
   saveState();
-  $('addItiModal').classList.add('hidden');
+  _closeModalOverlay('addItiModal');
   toast(`✅ 已加入 Day ${iti[dayIdx].day} 行程：${name}`);
   refresh();
 }
@@ -5206,7 +5320,7 @@ function openBatchConfirmModal(bookings, source, modelUsed, originalInput = null
     }
   }
   renderBatchItems();
-  $('batchConfirmModal').classList.remove('hidden');
+  _openModalOverlay('batchConfirmModal');
 }
 
 // Retry parsing with the strongest available model (Gemini 3 Pro)
@@ -5355,7 +5469,7 @@ async function saveBatchBookings() {
   state.receipts.push(...savedReceipts);
   saveState();
   refresh();
-  $('batchConfirmModal').classList.add('hidden');
+  _closeModalOverlay('batchConfirmModal');
   toast(`✅ 已儲存 ${savedReceipts.length} 筆 📝`);
 
   // Phase 2: sequential Notion push with pacing (Notion rate-limits ~3 rps).
@@ -6376,7 +6490,7 @@ function openConfirmModal(data, base64, warnings) {
   } else {
     $('modalAddItiWrap').classList.add('hidden');
   }
-  $('confirmModal').classList.remove('hidden');
+  _openModalOverlay('confirmModal');
   renderPersonRow();
 }
 
@@ -6410,7 +6524,7 @@ function editReceipt(id) {
   } else {
     $('mPhotoWrap').classList.add('hidden');
   }
-  $('confirmModal').classList.remove('hidden');
+  _openModalOverlay('confirmModal');
   renderPersonRow();
 }
 window.editReceipt = editReceipt;
@@ -6482,6 +6596,7 @@ async function _saveModalInner() {
   } else {
     state.receipts.push(r);
     toast('✅ 已儲存');
+    triggerSuccessFlash();
   }
   saveState();
   closeModal();
@@ -6503,9 +6618,10 @@ async function _saveModalInner() {
 }
 
 function closeModal() {
-  $('confirmModal').classList.add('hidden');
-  $('modalDelete').classList.add('hidden');
-  editingId = null;
+  _closeModalOverlay('confirmModal', () => {
+    $('modalDelete').classList.add('hidden');
+    editingId = null;
+  });
 }
 
 async function deleteReceipt() {
@@ -6769,21 +6885,51 @@ async function renderWeather() {
   </p>`;
 }
 
+const TAB_ORDER = ['dashboard','scan','history','weather','stats','timeline','settings'];
+let _currentTab = 'scan';
 function switchTab(name) {
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-  $('tab-' + name).classList.remove('hidden');
+  const oldTab = _currentTab;
+  const oldEl = $('tab-' + oldTab);
+  const newEl = $('tab-' + name);
+  if (!newEl || oldTab === name) return;
+
+  const oldIdx = TAB_ORDER.indexOf(oldTab);
+  const newIdx = TAB_ORDER.indexOf(name);
+  const dir = newIdx > oldIdx ? 1 : -1; // 1=going right, -1=going left
+
+  // Animate old tab out
+  if (oldEl && !oldEl.classList.contains('hidden')) {
+    oldEl.classList.remove('tab-slide-in-right','tab-slide-in-left');
+    oldEl.classList.add(dir > 0 ? 'tab-slide-out-left' : 'tab-slide-out-right');
+    setTimeout(() => { oldEl.classList.add('hidden'); oldEl.classList.remove('tab-slide-out-left','tab-slide-out-right'); }, 180);
+  }
+
+  // Animate new tab in
+  newEl.classList.remove('hidden','tab-slide-in-right','tab-slide-in-left');
+  newEl.classList.add(dir > 0 ? 'tab-slide-in-right' : 'tab-slide-in-left');
+  setTimeout(() => newEl.classList.remove('tab-slide-in-right','tab-slide-in-left'), 300);
+
+  _currentTab = name;
+
+  // Tab bar: bounce active icon + pop pill
   document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.toggle('tab-active', b.dataset.tab === name);
-    b.classList.toggle('tab-inactive', b.dataset.tab !== name);
+    const isActive = b.dataset.tab === name;
+    b.classList.toggle('tab-active', isActive);
+    b.classList.toggle('tab-inactive', !isActive);
+    if (isActive) {
+      const icon = b.querySelector('svg, .tab-icon');
+      if (icon) { icon.classList.remove('icon-bounce'); void icon.offsetWidth; icon.classList.add('icon-bounce'); }
+      const label = b.querySelector('span');
+      if (label) { label.classList.remove('label-up'); void label.offsetWidth; label.classList.add('label-up'); }
+    }
   });
-  // Budget bar visible on 主頁 + 紀錄 tabs
+
   const bs = $('budgetSection');
   if (bs) bs.style.display = (name === 'history' || name === 'dashboard') ? '' : 'none';
   if (name === 'weather') renderWeather();
   if (name === 'stats') renderStats();
   if (name === 'history') {
     renderHistory();
-    // Auto-pull from Notion when opening history tab (30s cooldown to avoid hammering)
     if (state.notionToken && state.notionDb) {
       const now = Date.now();
       if (now - _lastNotionPull > 30000) {
@@ -6803,6 +6949,7 @@ function switchTab(name) {
   if (name === 'timeline') renderTimeline();
   if (name === 'settings') renderModelCards();
 }
+window.switchTab = switchTab;
 
 // ============ EXPORT / RESET ============
 function exportCSV() {
@@ -7310,7 +7457,7 @@ function init() {
     $('emailParseStatus').classList.add('hidden');
     _emailImageQueue = [];
     renderEmailImagePreview();
-    $('emailPasteModal').classList.remove('hidden');
+    _openModalOverlay('emailPasteModal');
     setTimeout(() => $('emailText').focus(), 100);
   });
 
@@ -7333,7 +7480,7 @@ function init() {
     if (_emailImageQueue.length > 0) toast(`📷 已加 ${files.length} 張截圖`);
   });
   $('emailCancelBtn')?.addEventListener('click', () => {
-    $('emailPasteModal').classList.add('hidden');
+    _closeModalOverlay('emailPasteModal');
   });
   $('emailText')?.addEventListener('input', () => {
     const len = $('emailText').value.length;
@@ -7377,7 +7524,7 @@ function init() {
       }
       // Always apply itinerary updates silently to state.itineraryOverrides
       const itiCount = applyItineraryUpdates(result.itinerary_updates || []);
-      $('emailPasteModal').classList.add('hidden');
+      _closeModalOverlay('emailPasteModal');
       const emailType = result.email_type || 'both';
       const hasExpenses = !!(result.bookings && result.bookings.length > 0);
       const hasItiUpdates = itiCount > 0;
@@ -7408,7 +7555,7 @@ function init() {
   // Batch-confirm modal buttons
   $('batchCancelBtn')?.addEventListener('click', () => {
     if (batchSelected.size > 0 && !confirm('放棄 ' + batchSelected.size + ' 筆 booking？')) return;
-    $('batchConfirmModal').classList.add('hidden');
+    _closeModalOverlay('batchConfirmModal');
     batchDrafts = []; batchSelected.clear();
   });
   $('batchSaveBtn')?.addEventListener('click', saveBatchBookings);
@@ -7451,7 +7598,7 @@ function init() {
 
   // "Add to itinerary instead" button in confirm modal
   $('modalAddIti').addEventListener('click', startAddToItinerary);
-  $('addItiCancel').addEventListener('click', () => $('addItiModal').classList.add('hidden'));
+  $('addItiCancel').addEventListener('click', () => _closeModalOverlay('addItiModal'));
   $('addItiSave').addEventListener('click', saveAddToItinerary);
 
   // History filter
@@ -7510,6 +7657,13 @@ function init() {
   //   Android PWA share: ?shared_text=<raw>&shared_title=...
   // Both routes flow into the same paste-modal-prefilled UX.
   handleImportDeepLink();
+
+  // ── Animation init ──
+  _initAnimations();
+  const _origRenderDashboard = renderDashboard;
+  renderDashboard = function() { _origRenderDashboard.apply(this, arguments); _reInitAnimations(); };
+  const _origRenderHistory = renderHistory;
+  renderHistory = function() { _origRenderHistory.apply(this, arguments); _reInitAnimations(); };
 }
 
 // UTF-8 safe base64 decode — handles emoji, kanji, non-BMP chars.
@@ -7642,6 +7796,127 @@ function tryAutoRefresh() {
   }
   // Reschedule for next hour
   scheduleAutoRefresh();
+}
+
+// ========== ANIMATIONS ==========
+
+// ── openModal / closeModal (animated) ────────────────────────────────────────
+// NOTE: a `closeModal` function already exists above (for confirmModal with editingId logic).
+// These helpers are for generic overlay animation; confirmModal close goes through the
+// existing closeModal() which now calls _closeModalOverlay() internally.
+function _openModalOverlay(id) {
+  const overlay = $(id);
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  const inner = overlay.querySelector('.rounded-t-3xl, .rounded-3xl');
+  if (inner) { inner.classList.remove('modal-in','modal-out'); void inner.offsetWidth; inner.classList.add('modal-in'); }
+  overlay.classList.remove('backdrop-in','backdrop-out');
+  void overlay.offsetWidth;
+  overlay.classList.add('backdrop-in');
+}
+
+function _closeModalOverlay(id, onDone) {
+  const overlay = $(id);
+  if (!overlay) return;
+  const inner = overlay.querySelector('.rounded-t-3xl, .rounded-3xl');
+  if (inner) { inner.classList.remove('modal-in','modal-out'); void inner.offsetWidth; inner.classList.add('modal-out'); }
+  overlay.classList.remove('backdrop-in','backdrop-out');
+  void overlay.offsetWidth;
+  overlay.classList.add('backdrop-out');
+  setTimeout(() => {
+    overlay.classList.add('hidden');
+    overlay.classList.remove('backdrop-in','backdrop-out');
+    if (inner) inner.classList.remove('modal-out');
+    if (onDone) onDone();
+  }, 240);
+}
+
+// ── Shutter flash ─────────────────────────────────────────────────────────────
+function triggerShutterFlash() {
+  const el = $('shutterFlash');
+  if (!el) return;
+  el.style.display = 'block';
+  el.style.animation = 'none';
+  void el.offsetWidth;
+  el.style.animation = 'shutterFlash 0.35s ease-out forwards';
+  setTimeout(() => { el.style.display = 'none'; }, 380);
+}
+
+// ── Success flash ─────────────────────────────────────────────────────────────
+function triggerSuccessFlash() {
+  const el = document.createElement('div');
+  el.className = 'success-flash-el';
+  el.innerHTML = `
+    <div style="font-size:48px;animation:successFlash 0.7s ease-out forwards">✅</div>
+    <div style="position:absolute;top:50%;left:50%;width:80px;height:80px;border-radius:50%;border:3px solid #059669;animation:ringExpand 0.6s ease-out forwards"></div>
+    <div style="position:absolute;top:50%;left:50%;width:80px;height:80px;border-radius:50%;border:3px solid #34d399;animation:ringExpand 0.6s ease-out 0.12s forwards"></div>
+  `;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 800);
+}
+
+// ── Stagger card entrance ─────────────────────────────────────────────────────
+function _staggerCards(container) {
+  if (!container) return;
+  const items = container.querySelectorAll('.glass, .rounded-2xl');
+  items.forEach((el, i) => {
+    el.classList.add('stagger-item');
+    el.style.animationDelay = (i * 0.045) + 's';
+  });
+}
+
+// ── Global ripple on every button/clickable ───────────────────────────────────
+function _spawnRipple(el, e) {
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+  const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+  const dot = document.createElement('span');
+  dot.className = 'ripple-dot';
+  dot.style.left = x + 'px';
+  dot.style.top  = y + 'px';
+  const maxDim = Math.max(rect.width, rect.height);
+  dot.style.transform = 'scale(0)';
+  dot.style.width = dot.style.height = Math.max(12, maxDim * 0.15) + 'px';
+  dot.style.marginLeft = dot.style.marginTop = '-' + Math.max(6, maxDim * 0.075) + 'px';
+  el.style.position = el.style.position || 'relative';
+  el.style.overflow = 'hidden';
+  el.appendChild(dot);
+  setTimeout(() => dot.remove(), 600);
+}
+
+function _btnPress(el) {
+  if (!el) return;
+  el.classList.remove('btn-press');
+  void el.offsetWidth;
+  el.classList.add('btn-press');
+  setTimeout(() => el.classList.remove('btn-press'), 300);
+}
+
+function _initAnimations() {
+  document.querySelectorAll('button, [onclick], .cursor-pointer').forEach(el => {
+    if (el._animInit) return;
+    el._animInit = true;
+    el.addEventListener('pointerdown', (e) => {
+      _spawnRipple(el, e);
+      _btnPress(el);
+    });
+  });
+
+  document.querySelectorAll('.glass.rounded-2xl, .glass.rounded-3xl').forEach(el => {
+    if (el._cardAnimInit) return;
+    el._cardAnimInit = true;
+    el.addEventListener('pointerdown', () => {
+      el.classList.remove('card-tap');
+      void el.offsetWidth;
+      el.classList.add('card-tap');
+      setTimeout(() => el.classList.remove('card-tap'), 320);
+    });
+  });
+}
+
+function _reInitAnimations() {
+  setTimeout(_initAnimations, 50);
 }
 
 // ========== GATE: unlock vault before init ==========
