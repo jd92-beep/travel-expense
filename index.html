@@ -941,7 +941,8 @@
       </div>
       <!-- Receipt photo thumbnail (shown after scan) -->
       <div id="mPhotoWrap" class="hidden">
-        <img id="mPhotoThumb" class="w-full max-h-40 object-contain rounded-xl" style="background:var(--n-bg)" alt="收據">
+        <img id="mPhotoThumb" class="w-full max-h-40 object-contain rounded-xl cursor-zoom-in active:opacity-80 transition-opacity" style="background:var(--n-bg)" alt="收據" onclick="openImgLightbox(this.src)" title="點擊放大">
+        <p class="text-[10px] text-center mt-1" style="color:var(--n-muted)">👆 點擊放大 · 兩指縮放</p>
       </div>
       <div id="mPersonWrap">
         <label class="text-[10px] uppercase tracking-wider" style="color:var(--n-muted)">消費人</label>
@@ -1006,6 +1007,79 @@
         <button id="modalCancel" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
         <button id="modalSave" class="py-3 rounded-xl font-bold text-white" style="background:var(--n-blue)">儲存</button>
       </div>
+      <!-- Add to itinerary instead — only shown when a scanned image is available -->
+      <div id="modalAddItiWrap" class="hidden mt-2">
+        <button id="modalAddIti" class="w-full py-2.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2" style="background:linear-gradient(135deg,rgba(5,150,105,0.10),rgba(16,185,129,0.08));border:1px solid rgba(16,185,129,0.35);color:#065F46">
+          <span>🗺️</span><span>加入行程代替記帳</span>
+          <span id="modalAddItiSpinner" class="hidden w-4 h-4 border-2 border-emerald-400/40 border-t-emerald-600 rounded-full animate-spin"></span>
+        </button>
+        <p class="text-[10px] text-center mt-1" style="color:var(--n-muted)">AI 重新辨識圖片，抽取行程資料加入行程表</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ IMAGE LIGHTBOX ============ -->
+<div id="imgLightbox" class="hidden fixed inset-0 z-[100] bg-black/95 flex items-center justify-center" onclick="closeImgLightbox()">
+  <button class="absolute top-5 right-5 text-white/70 hover:text-white text-3xl leading-none z-10" onclick="closeImgLightbox()">✕</button>
+  <p class="absolute bottom-5 left-0 right-0 text-center text-white/50 text-xs pointer-events-none">兩指縮放 · 點擊任意位置關閉</p>
+  <div id="imgLightboxContainer" class="w-full h-full flex items-center justify-center overflow-hidden" onclick="event.stopPropagation()">
+    <img id="imgLightboxImg" src="" alt="收據" class="max-w-full max-h-full object-contain select-none" style="transform-origin:center;touch-action:none">
+  </div>
+</div>
+
+<!-- ============ ADD TO ITINERARY CONFIRM MODAL ============ -->
+<div id="addItiModal" class="hidden fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto scrollbar-hide" style="background:var(--n-surface);border:1px solid var(--n-border)">
+    <div class="sticky top-0 z-10 px-5 pt-5 pb-3" style="background:var(--n-surface);border-bottom:1px solid var(--n-border)">
+      <div class="w-12 h-1 rounded-full mx-auto mb-3 sm:hidden" style="background:var(--n-border)"></div>
+      <h3 class="text-lg font-bold" style="color:var(--n-text)">🗺️ 加入行程</h3>
+      <p class="text-xs mt-1" style="color:var(--n-muted)">核對 AI 識別嘅行程資料，選擇加入邊日</p>
+    </div>
+    <div class="p-5 space-y-3">
+      <div id="addItiPhotoWrap" class="hidden">
+        <img id="addItiPhoto" class="w-full max-h-32 object-contain rounded-xl cursor-zoom-in" style="background:var(--n-bg)" alt="收據" onclick="openImgLightbox(this.src)">
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">地點 / 名稱</label>
+        <input id="addItiName" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0" placeholder="例：蓬萊軒">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-gray-400">類型</label>
+          <select id="addItiType" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+            <option value="sightseeing">⛩ 景點</option>
+            <option value="food">🍜 餐飲</option>
+            <option value="transport">🚆 交通</option>
+            <option value="lodging">🏨 住宿</option>
+            <option value="shopping">🛍️ 購物</option>
+            <option value="ticket">🎟️ 票務</option>
+            <option value="localtour">🗺️ 本地遊</option>
+            <option value="medicine">💊 藥品</option>
+            <option value="other">📍 其他</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-gray-400">時間</label>
+          <input id="addItiTime" type="time" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+        </div>
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">地址（用於 Google Maps）</label>
+        <input id="addItiAddress" type="text" placeholder="例：名古屋市中区栄3-15-18" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">加入邊日行程</label>
+        <select id="addItiDay" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0"></select>
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-gray-400">備註</label>
+        <input id="addItiNote" type="text" class="w-full glass rounded-xl px-3 py-2.5 text-base mt-1 border-0">
+      </div>
+    </div>
+    <div class="sticky bottom-0 p-5 grid grid-cols-2 gap-3" style="background:var(--n-surface);border-top:1px solid var(--n-border)">
+      <button id="addItiCancel" class="py-3 rounded-xl font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
+      <button id="addItiSave" class="py-3 rounded-xl font-bold text-white" style="background:linear-gradient(135deg,#065F46,#059669)">➕ 加入行程</button>
     </div>
   </div>
 </div>
@@ -3535,6 +3609,167 @@ function reopenLastScan() {
 }
 window.reopenLastScan = reopenLastScan;
 
+// ── Image lightbox with pinch-to-zoom ────────────────────────────────────────
+function openImgLightbox(src) {
+  const lb = $('imgLightbox');
+  const img = $('imgLightboxImg');
+  if (!lb || !img) return;
+  img.src = src;
+  img.style.transform = 'scale(1)';
+  _lbScale = 1; _lbLastDist = null;
+  lb.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+function closeImgLightbox() {
+  const lb = $('imgLightbox');
+  if (lb) lb.classList.add('hidden');
+  document.body.style.overflow = '';
+}
+window.openImgLightbox  = openImgLightbox;
+window.closeImgLightbox = closeImgLightbox;
+
+// Pinch-to-zoom state
+let _lbScale = 1, _lbLastDist = null;
+document.addEventListener('DOMContentLoaded', () => {
+  const img = $('imgLightboxImg');
+  if (!img) return;
+  img.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      _lbLastDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+    }
+  }, { passive: true });
+  img.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && _lbLastDist !== null) {
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      _lbScale = Math.min(8, Math.max(0.5, _lbScale * (dist / _lbLastDist)));
+      img.style.transform = `scale(${_lbScale})`;
+      _lbLastDist = dist;
+    }
+  }, { passive: false });
+  img.addEventListener('touchend', () => { _lbLastDist = null; }, { passive: true });
+  // Double-tap to reset zoom
+  let _lbLastTap = 0;
+  img.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - _lbLastTap < 300) { _lbScale = 1; img.style.transform = 'scale(1)'; }
+    _lbLastTap = now;
+  });
+});
+
+// ── Add to itinerary instead ───────────────────────────��─────────────────────
+async function startAddToItinerary() {
+  if (!lastScanBase64) { toast('⚠️ 冇圖片，請先掃描'); return; }
+  const btn = $('modalAddIti');
+  const spinner = $('modalAddItiSpinner');
+  btn.disabled = true;
+  spinner.classList.remove('hidden');
+  try {
+    // Use Gemini with itinerary extraction prompt
+    const geminiKey = state.apiKey || DEFAULT_API_KEY;
+    const model = (state.scanModel && !state.scanModel.startsWith('glm') && state.scanModel !== 'minimax')
+      ? state.scanModel : 'gemini-3.1-flash-lite-preview';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+    const body = {
+      contents: [{ parts: [
+        { text: ITINERARY_EXTRACT_PROMPT },
+        { inline_data: { mime_type: lastScanMime || 'image/jpeg', data: lastScanBase64 } }
+      ]}],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+    };
+    const r = await fetchWithTimeout(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) }, 30000);
+    if (!r.ok) throw new Error(`Gemini ${r.status}`);
+    const raw = extractGeminiText(await r.json());
+    let parsed = {};
+    try { parsed = JSON.parse(raw); } catch(_) {
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (m) parsed = JSON.parse(m[0]);
+    }
+    // Close confirm modal, open itinerary modal
+    $('confirmModal').classList.add('hidden');
+    _openAddItiModal(parsed);
+  } catch(e) {
+    toast('❌ AI 辨識失敗：' + e.message.slice(0, 60));
+  } finally {
+    btn.disabled = false;
+    spinner.classList.add('hidden');
+  }
+}
+
+function _openAddItiModal(data) {
+  // Fill form fields
+  $('addItiName').value    = data.name || data.name_zh || '';
+  $('addItiType').value    = data.type || 'sightseeing';
+  $('addItiTime').value    = data.time || '';
+  $('addItiAddress').value = data.address || '';
+  $('addItiNote').value    = [data.note, data.name_zh && data.name ? `中文：${data.name_zh}` : ''].filter(Boolean).join(' · ');
+
+  // Day selector: populate with itinerary days
+  const sel = $('addItiDay');
+  sel.innerHTML = '';
+  const today = todayHKT();
+  getItinerary().forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.date;
+    opt.textContent = `Day ${d.day} · ${d.date} · ${d.region}`;
+    if (data.date && d.date === data.date) opt.selected = true;
+    else if (!data.date && d.date === today) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  // Show photo
+  if (lastScanBase64) {
+    $('addItiPhoto').src = `data:${lastScanMime||'image/jpeg'};base64,${lastScanBase64}`;
+    $('addItiPhotoWrap').classList.remove('hidden');
+  } else {
+    $('addItiPhotoWrap').classList.add('hidden');
+  }
+
+  $('addItiModal').classList.remove('hidden');
+}
+
+function saveAddToItinerary() {
+  const name    = $('addItiName').value.trim();
+  const type    = $('addItiType').value || 'sightseeing';
+  const time    = $('addItiTime').value || '';
+  const address = $('addItiAddress').value.trim();
+  const note    = $('addItiNote').value.trim();
+  const date    = $('addItiDay').value;
+  if (!name) { toast('⚠️ 請填寫地點名稱'); return; }
+  if (!date) { toast('⚠️ 請選擇加入邊日'); return; }
+
+  // Find the itinerary day and append a new spot via override mechanism
+  const iti = getItinerary();
+  const dayIdx = iti.findIndex(d => d.date === date);
+  if (dayIdx < 0) { toast('⚠️ 揾唔到對應日期'); return; }
+  const day = iti[dayIdx];
+  const existingSpots = (day.spots || []).length;
+
+  // Add new spot as a user override at a virtual index beyond existing spots
+  // We use customItinerary approach: push into state.customItinerary or create it
+  const currentIti = state.customItinerary ? JSON.parse(JSON.stringify(state.customItinerary)) : JSON.parse(JSON.stringify(getItinerary()));
+  const targetDay = currentIti.find(d => d.date === date);
+  if (!targetDay) { toast('⚠️ 日期不存在'); return; }
+  targetDay.spots = targetDay.spots || [];
+  targetDay.spots.push({ name, type, time: time || '00:00', address: address || undefined, note: note || undefined });
+  // Sort by time
+  targetDay.spots.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+
+  state.customItinerary = currentIti;
+  window.CURRENT_ITINERARY = currentIti;
+  saveState();
+  $('addItiModal').classList.add('hidden');
+  toast(`✅ 已加入 Day ${iti[dayIdx].day} 行程：${name}`);
+  refresh();
+}
+
 // Models available for manual rescan (vision-capable only)
 const RESCAN_MODELS = [
   { id: 'glm-4.6v',                      label: 'GLM-4.6V',      color: '#7C3AED' },
@@ -4083,6 +4318,29 @@ function extractGeminiText(data) {
 // ==================== EMAIL IMPORT (multi-booking extraction) ====================
 // Designed to handle varied confirmation email formats from:
 // Klook, KKday, Trip.com, Agoda, Booking.com, Expedia, Hotels.com,
+// ── Itinerary spot extraction prompt ─────────────────────────────────────────
+const ITINERARY_EXTRACT_PROMPT = `你係一個旅遊行程辨識 AI。仔細睇圖片（可能係景點票、確認書、地圖截圖、導覽單張、門票、收據等），抽取行程地點資料。**只回覆嚴格 JSON，唔好加任何文字或 markdown fence**。
+
+目標：提取**一個主要地點 / 活動**嘅結構化資料，用於加入旅行行程表。
+
+回覆格式（JSON object，所有欄位必填，無值用 null）：
+{"name":"地點或活動名稱（日文原文優先，唔好翻譯店名）","name_zh":"繁體中文名稱或意譯（方便 Boss 睇）","type":"sightseeing|food|transport|lodging|shopping|ticket|localtour|medicine|other","time":"HH:mm 或 null","date":"YYYY-MM-DD 或 null","address":"日文地址或 null","note":"補充資訊例如預訂號、特別說明、開放時間等，或 null","confidence":"high|medium|low"}
+
+type 選擇規則：
+- transport = 機票、新幹線、巴士、交通票
+- lodging = 酒店、民宿、旅館
+- ticket = 景點門票、入場券、遊樂設施
+- localtour = 一日遊、導遊 tour、KKday/Klook 活動
+- sightseeing = 免費景點、神社、公園、城堡
+- food = 餐廳、咖啡店、食物相關
+- shopping = 購物、免稅店
+- other = 其他唔符合以上任何類別
+
+注意：
+- name 欄位保留日文原文（漢字/カタカナ/ひらがな），唔好翻成中文
+- name_zh 係方便睇嘅中文意譯
+- 如果圖片係收據，都要提取地點資料（唔係金額），type 跟 category 邏輯`;
+
 // Cathay Pacific, ANA, JAL, AirAsia, HK Express, Uber Eats, etc.
 // Returns an array even for single-booking emails for unified downstream handling.
 const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。分析以下內容（可能係 **一封或多封 email** 貼埋一齊，亦可能係截圖），提取 **所有** 預訂/消費項目。
@@ -6112,6 +6370,12 @@ function openConfirmModal(data, base64, warnings) {
   } else {
     $('modalRescanWrap').classList.add('hidden');
   }
+  // Show "add to itinerary" button only when a scan image is available
+  if (base64 && lastScanBase64) {
+    $('modalAddItiWrap').classList.remove('hidden');
+  } else {
+    $('modalAddItiWrap').classList.add('hidden');
+  }
   $('confirmModal').classList.remove('hidden');
   renderPersonRow();
 }
@@ -6124,6 +6388,7 @@ function editReceipt(id) {
   pendingPhotoBase64 = null;
   $('modalDelete').classList.remove('hidden');
   $('modalRescanWrap').classList.add('hidden'); // rescan not available in edit mode
+  $('modalAddItiWrap').classList.add('hidden'); // itinerary add not available in edit mode
   $('modalSubtitle').textContent = '編輯紀錄';
   // Clear scan warnings (they only apply to fresh scans, not edits)
   const warnBox = $('scanWarnings');
@@ -7183,6 +7448,11 @@ function init() {
   $('modalCancel').addEventListener('click', closeModal);
   $('modalSave').addEventListener('click', saveModal);
   $('modalDelete').addEventListener('click', deleteReceipt);
+
+  // "Add to itinerary instead" button in confirm modal
+  $('modalAddIti').addEventListener('click', startAddToItinerary);
+  $('addItiCancel').addEventListener('click', () => $('addItiModal').classList.add('hidden'));
+  $('addItiSave').addEventListener('click', saveAddToItinerary);
 
   // History filter
   $('filterCat').addEventListener('change', renderHistory);
