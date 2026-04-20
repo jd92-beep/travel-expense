@@ -1337,11 +1337,16 @@
         <p id="hotelPopupTime" class="text-[10px] mt-0.5 hidden" style="color:var(--n-muted)">—</p>
       </div>
     </div>
-    <div id="hotelPopupAddressRow" class="mb-3 rounded-xl p-3 flex items-start gap-2 cursor-pointer active:opacity-70" style="background:var(--n-bg);border:1px solid var(--n-border)" onclick="openMapsFromPopup()">
+    <!-- REAL <a> element — iOS PWA needs a direct user-tap on an anchor;
+         programmatic .click() on synthetic anchors is restricted in standalone mode.
+         href is set dynamically by showSpotPopup(). -->
+    <a id="hotelPopupAddressRow" href="#" target="_blank" rel="noopener noreferrer"
+       class="mb-3 rounded-xl p-3 flex items-start gap-2 cursor-pointer active:opacity-70"
+       style="background:var(--n-bg);border:1px solid var(--n-border);text-decoration:none">
       <span class="text-base flex-shrink-0">📍</span>
       <span id="hotelPopupAddressText" class="text-sm flex-1" style="color:var(--n-blue);text-decoration:underline;text-underline-offset:2px">用名稱搜尋地圖</span>
       <span class="text-xs flex-shrink-0" style="color:var(--n-muted)">›</span>
-    </div>
+    </a>
     <div id="hotelPopupNoteRow" class="mb-3 rounded-xl p-3 text-xs hidden" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-muted)"></div>
     <div class="grid grid-cols-2 gap-2">
       <button id="hotelPopupEditBtn" class="py-3 rounded-xl font-medium text-xs hidden" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:#6366f1" onclick="editFromSpotPopup()">✏️ 編輯</button>
@@ -2686,9 +2691,26 @@ function showSpotPopup(opts) {
   const timeEl = $('hotelPopupTime');
   if (o.time) { timeEl.textContent = '⏰ ' + o.time; timeEl.classList.remove('hidden'); }
   else timeEl.classList.add('hidden');
-  // Address row — always tappable; Maps query falls back to spot name
+  // Address row — always tappable; Maps query falls back to spot name.
+  // Set href directly on the <a> element so iOS treats the user's tap as a
+  // direct anchor activation (works in Safari PWA standalone mode where
+  // programmatic window.open / synthetic anchor clicks are blocked).
   $('hotelPopupAddressText').textContent = _hotelPopupAddress || ('用 ' + (_hotelPopupName || '名稱') + ' 搜尋地圖');
-  $('hotelPopupAddressRow').style.display = 'flex';
+  const row = $('hotelPopupAddressRow');
+  row.style.display = 'flex';
+  const qParts = [_hotelPopupName, _hotelPopupAddress].filter(Boolean);
+  if (qParts.length) {
+    const q = encodeURIComponent(qParts.join(' '));
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    row.href = isIOS
+      ? 'https://maps.apple.com/?q=' + q
+      : 'https://www.google.com/maps/search/?api=1&query=' + q;
+    row.target = '_blank';
+    row.rel = 'noopener noreferrer';
+  } else {
+    row.href = '#';
+    row.removeAttribute('target');
+  }
   // Build a richer note row: if receipt-backed, pull live receipt details
   const noteEl = $('hotelPopupNoteRow');
   let bodyHtml = '';
@@ -2774,6 +2796,9 @@ function _openExternalUrl(url) {
 }
 window._openExternalUrl = _openExternalUrl;
 
+// Kept for backward-compat (still referenced from older inline handlers elsewhere).
+// The new primary entry point is the <a href> on the popup whose href is set
+// by showSpotPopup(); iOS PWA treats that direct anchor tap correctly.
 function openMapsFromPopup() {
   const parts = [_hotelPopupName, _hotelPopupAddress].filter(Boolean);
   if (!parts.length) {
@@ -2782,8 +2807,6 @@ function openMapsFromPopup() {
   }
   const q = encodeURIComponent(parts.join(' '));
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  // Prefer universal https:// URLs — they're handled by the OS map-handler
-  // (Apple Maps on iOS / Google Maps on Android / browser tab on desktop).
   const url = isIOS
     ? 'https://maps.apple.com/?q=' + q
     : 'https://www.google.com/maps/search/?api=1&query=' + q;
@@ -5891,15 +5914,23 @@ function buildNotionProps(r, schemaMap) {
   if (r.hkd != null)      props[nm('hkd')]      = { number: Number(r.hkd) };
   if (r.tax != null)      props[nm('tax')]       = { number: Number(r.tax) };
   if (r.subtotal != null) props[nm('subtotal')]  = { number: Number(r.subtotal) };
-  // Receipt photo (Files & media property) — only when the DB has this column
-  // AND we have a public URL (imgbb). This enables gallery view in Notion.
-  if (r.photoUrl && schemaMap && schemaMap.photo) {
-    // Filename preview: use store + date so Notion list shows meaningful titles
+  // Receipt photo (Files & media property) — attach native Notion file_upload
+  // preferentially, or fall back to imgbb external URL. This enables gallery
+  // view in Notion regardless of whether the user set up an image host.
+  if (schemaMap && schemaMap.photo) {
     const baseName = (r.store || 'receipt').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
     const fileName = `${baseName}_${r.date || 'nodate'}.jpg`;
-    props[nm('photo')] = {
-      files: [{ name: fileName, type: 'external', external: { url: r.photoUrl } }]
-    };
+    if (r.notionFileUploadId) {
+      // Native Notion upload — preferred, no third-party host involved.
+      props[nm('photo')] = {
+        files: [{ name: fileName, type: 'file_upload', file_upload: { id: r.notionFileUploadId } }]
+      };
+    } else if (r.photoUrl) {
+      // Fallback: imgbb or any external public URL.
+      props[nm('photo')] = {
+        files: [{ name: fileName, type: 'external', external: { url: r.photoUrl } }]
+      };
+    }
   }
   return props;
 }
@@ -6048,6 +6079,24 @@ async function notionFetch(path, options = {}) {
 async function notionPushReceipt(r) {
   if (!state.notionToken || !state.notionDb) return;
   const schemaMap = await notionEnsureSchema(); // resolve actual property names once
+  // Upload photo to Notion's native file storage if we have a local thumb and
+  // haven't uploaded it yet. One-shot per receipt — the fileUploadId is
+  // persistent and gets reused across future updates, so this only runs once
+  // per receipt-with-photo. Best-effort: if upload fails we still push the
+  // text properties.
+  if (r.photoThumb && !r.notionFileUploadId && !r.photoUrl) {
+    try {
+      const up = await notionUploadFile(
+        r.photoThumb,
+        'image/jpeg',
+        (r.store || 'receipt') + '_' + (r.date || 'nodate') + '.jpg'
+      );
+      if (up?.fileUploadId) {
+        r.notionFileUploadId = up.fileUploadId;
+        saveState();
+      }
+    } catch(e) { console.warn('[notionPush] photo upload failed:', e.message); }
+  }
   const props = buildNotionProps(r, schemaMap);
   if (r.notionPageId) {
     // Update existing — but recover from 404 (page was deleted/archived in Notion)
@@ -6086,11 +6135,15 @@ async function notionPushReceipt(r) {
     if (r.note && r.note.trim()) {
       children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content: r.note.slice(0,2000) } }], icon:{ emoji:'📝' } } });
     }
-    // Receipt photo — real image block if URL available, else text note
-    if (r.photoUrl) {
+    // Receipt photo — prefer native Notion file_upload → fall back to external URL → else note.
+    if (r.notionFileUploadId) {
+      children.unshift({ object:'block', type:'image', image:{ type:'file_upload', file_upload:{ id: r.notionFileUploadId } } });
+    } else if (r.photoUrl) {
       children.unshift({ object:'block', type:'image', image:{ type:'external', external:{ url: r.photoUrl } } });
     } else if (r.photoThumb) {
-      children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content:'📷 收據相片已儲存喺裝置本機（設定 imgbb key 可上傳到 Notion）' } }], icon:{ emoji:'📷' }, color:'blue_background' } });
+      // Photo exists locally but upload pending / failed — leave a note so user
+      // knows a photo exists and can trigger a manual re-push.
+      children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content:'📷 收據相片儲存喺裝置本機；下次同步會上傳' } }], icon:{ emoji:'📷' }, color:'blue_background' } });
     }
     const body = { parent: { database_id: state.notionDb }, properties: props };
     if (children.length) body.children = children;
@@ -6273,8 +6326,11 @@ async function notionPullAll(silent = false) {
         //     page.created_time is when the row was uploaded, not when the expense happened
         //     — overwriting with sync-time flips prep → trip and corrupts budget math.
         //   - photoUrl: only overwrite if Notion actually returned one.
+        //   - notionFileUploadId, photoThumb: local-only, never come from pull.
         if (local.createdAt) r.createdAt = local.createdAt;
         if (local.personId && !r.personId_fromNotion) r.personId = local.personId;
+        if (local.notionFileUploadId) r.notionFileUploadId = local.notionFileUploadId;
+        if (local.photoThumb) r.photoThumb = local.photoThumb;
         // (we tag r.personId with _fromNotion only when 旅伴 explicitly matched — see below)
         if (!localStillPending && remoteStillPending) {
           // Keep local confirmation; update only safe fields (amount, date, region, etc.)
@@ -6386,6 +6442,84 @@ async function prepareForOCR(base64, mime) {
     img.onerror = () => resolve({ base64, mime });
     img.src = `data:${mime || 'image/jpeg'};base64,${base64}`;
   });
+}
+
+// Upload a base64 image to Notion's native file storage.
+// Uses Notion's file_uploads API (available since 2024) — no third-party
+// image host required. Returns { fileUploadId } on success, null on failure.
+// Two-step flow:
+//   1) POST /v1/file_uploads → returns { id, upload_url }
+//   2) POST upload_url with multipart form-data file
+// The resulting file_upload id can be referenced in a Files & media property
+// via { type: 'file_upload', file_upload: { id } } — Notion persists it.
+async function notionUploadFile(base64, mime, filename) {
+  if (!base64 || !state.notionToken) return null;
+  try {
+    // Step 1: create file_upload object
+    const safeName = (filename || 'receipt').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+    const finalName = /\.(jpe?g|png|webp)$/i.test(safeName) ? safeName : safeName + '.jpg';
+    const createRes = await notionFetch('/file_uploads', {
+      method: 'POST',
+      body: JSON.stringify({
+        mode: 'single_part',
+        filename: finalName,
+        content_type: mime || 'image/jpeg'
+      })
+    });
+    const uploadId = createRes?.id;
+    const sendUrl = createRes?.upload_url;
+    if (!uploadId || !sendUrl) {
+      console.warn('[notionUpload] no upload_url in response:', createRes);
+      return null;
+    }
+
+    // Step 2: decode base64 → Blob, POST via multipart
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mime || 'image/jpeg' });
+
+    const form = new FormData();
+    form.append('file', blob, finalName);
+
+    // The upload_url is on api.notion.com, so it must also go through the CORS
+    // proxy. Route via the same proxy-candidate chain as notionFetch.
+    const baseProxy = state.proxy || 'https://notion-proxy.ftjdfr.workers.dev/?';
+    const proxyCandidates = [
+      'https://notion-proxy.ftjdfr.workers.dev/?',
+      baseProxy !== 'https://notion-proxy.ftjdfr.workers.dev/?' ? baseProxy : null,
+      'https://corsproxy.io/?url=',
+    ].filter(Boolean);
+
+    let lastErr;
+    for (const proxy of proxyCandidates) {
+      try {
+        const proxiedUrl = proxy.endsWith('=')
+          ? proxy + encodeURIComponent(sendUrl)
+          : proxy + sendUrl;
+        const sendRes = await fetch(proxiedUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + state.notionToken,
+            'Notion-Version': NOTION_VERSION,
+            // IMPORTANT: do NOT set Content-Type — browser auto-adds the correct
+            // multipart/form-data boundary. Manual header = broken upload.
+          },
+          body: form
+        });
+        if (!sendRes.ok) {
+          const t = await sendRes.text();
+          lastErr = new Error(`Notion upload ${sendRes.status}: ${t.slice(0, 200)}`);
+          continue;
+        }
+        return { fileUploadId: uploadId };
+      } catch(e) { lastErr = e; }
+    }
+    throw lastErr || new Error('Notion upload failed (all proxies)');
+  } catch(e) {
+    console.warn('[notionUpload]', e?.message || e);
+    return null;
+  }
 }
 
 // Upload compressed photo to imgbb → returns public URL or null
