@@ -971,7 +971,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v24</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v25</p>
     </div>
   </section>
 </main>
@@ -2743,41 +2743,40 @@ function showSpotPopup(opts) {
     const q = encodeURIComponent(qParts.join(' '));
     const ua = navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
-    // UNIVERSAL approach: use the standard Google Maps URL + target="_blank".
-    // Android Chrome's App Links system recognizes maps.google.com and offers
-    // to open Google Maps app (or opens in new Chrome tab if app unavailable).
-    // iOS uses maps.apple.com (Universal Link → Maps app).
-    // Desktop: opens in new tab. Same URL works everywhere.
-    //
-    // ABANDONED: `geo:0,0?q=X` scheme. Boss reported it doesn't open Maps on
-    // his Android — likely because Chrome PWA doesn't route geo: URLs to
-    // intent handler the same way a regular Chrome tab does.
-    row.href = isIOS
+    const mapUrl = isIOS
       ? 'https://maps.apple.com/?q=' + q
       : 'https://www.google.com/maps/search/?api=1&query=' + q;
+    // Still set href/target so the element looks/feels like a link (long-press
+    // copy-URL, desktop anchor semantics, etc.).
+    row.href = mapUrl;
     row.target = '_blank';
     row.rel = 'noopener noreferrer';
-    // Belt-and-suspenders onclick: preventDefault the native anchor activation
-    // and instead open the URL via a freshly-created anchor programmatic click.
-    // A brand-new anchor has no stale animation/pointerdown handlers attached.
-    // This bypasses any leftover interference from _initAnimations or previous
-    // PR attempts that might still be cached in Boss's PWA.
-    const mapUrl = row.href;
+    // onclick: preventDefault + window.open in the same synchronous tick as
+    // the user's tap. Browsers treat window.open during a user-gesture click
+    // handler as user-initiated — popup blockers don't apply, PWAs hand off
+    // to external browser. This is the most reliable cross-platform pattern.
     row.onclick = (e) => {
       e.stopPropagation();
       e.preventDefault();
-      try {
-        const a = document.createElement('a');
-        a.href = mapUrl;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => a.remove(), 600);
-      } catch(_) {
-        // Absolute last-resort fallback: navigate current window.
-        window.location.href = mapUrl;
+      // Primary: window.open. If blocked (returns null), fall back to
+      // programmatic anchor click — which typically succeeds because it's
+      // still within the user gesture. If that also fails, last resort:
+      // navigate the current window (loses app state but guarantees Maps opens).
+      let opened = null;
+      try { opened = window.open(mapUrl, '_blank', 'noopener,noreferrer'); } catch(_) {}
+      if (!opened) {
+        try {
+          const a = document.createElement('a');
+          a.href = mapUrl;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => a.remove(), 300);
+        } catch(_) {
+          window.location.href = mapUrl;
+        }
       }
     };
   } else {
@@ -2836,42 +2835,22 @@ function showHotelPopup(name, address) {
 }
 function closeHotelPopup() {
   $('hotelPopup').classList.add('hidden');
-  // Defensive clear of any prior overflow lock in case user loaded an old
-  // cached version of showSpotPopup before this fix.
   if (document.body.style.overflow === 'hidden') document.body.style.overflow = '';
-  // ── ANDROID GHOST-CLICK DEFENSE (layered) ──
+  // ── ANDROID GHOST-CLICK DEFENSE ──
+  // After touchend on the 關閉 button, Android Chrome synthesizes a `click`
+  // event ~100-300ms later. If the popup is already hidden by then, that
+  // delayed click falls through to whatever element is at the same (x,y) —
+  // often a tab bar button, causing an unwanted tab switch.
   //
-  // Android browsers have a ~300ms synthesis delay between touchend and the
-  // `click` event. If Boss taps 關閉 on the popup, popup immediately hides
-  // (display:none), then 300ms later the synthesized click fires at the
-  // same (x,y) — but now lands on whatever element is there, potentially
-  // the scan tab button underneath. That causes unwanted tab switches.
-  //
-  // Three layers of protection because cached old versions of the code
-  // (PWAs are hard to force-refresh) may not have all of them:
-  //
-  // Layer 1: block the bottom-nav specifically (targeted, fast release)
+  // Disable pointer events on the bottom nav for 500ms (comfortably exceeds
+  // the Android synthesis delay). Narrowly scoped — avoids the previous
+  // capture-phase blocker which blocked legitimate user taps too.
   const nav = document.querySelector('nav.fixed.bottom-0, nav[class*="bottom-0"]') || document.querySelector('nav');
   if (nav) {
     nav.style.pointerEvents = 'none';
     setTimeout(() => { nav.style.pointerEvents = ''; }, 500);
   }
-  // Layer 2: capture-phase click blocker for ANY click event in the first
-  // 500ms after close. This is bulletproof — no matter where the ghost
-  // click lands, we intercept it before it reaches any listener.
-  const blockGhost = (e) => {
-    // Only block synthesized clicks that happen without a real user gesture
-    // in the hotelPopup area. `e.isTrusted` is true for user-initiated
-    // events including synthesized clicks, so we can't distinguish by that
-    // alone — we rely on timing (only active within 500ms of close).
-    e.stopImmediatePropagation();
-    e.preventDefault();
-  };
-  document.addEventListener('click', blockGhost, { capture: true });
-  setTimeout(() => {
-    document.removeEventListener('click', blockGhost, { capture: true });
-  }, 500);
-  // Clear popup state so a subsequent show doesn't leak stale data from previous.
+  // Clear popup state.
   _hotelPopupName = '';
   _hotelPopupAddress = '';
   _hotelPopupDate = '';
@@ -7408,16 +7387,30 @@ function switchTab(name) {
 
   const oldIdx = TAB_ORDER.indexOf(oldTab);
   const newIdx = TAB_ORDER.indexOf(name);
-  const dir = newIdx > oldIdx ? 1 : -1; // 1=going right, -1=going left
+  const dir = newIdx > oldIdx ? 1 : -1;
 
-  // Animate old tab out
-  if (oldEl && !oldEl.classList.contains('hidden')) {
-    oldEl.classList.remove('tab-slide-in-right','tab-slide-in-left');
-    oldEl.classList.add(dir > 0 ? 'tab-slide-out-left' : 'tab-slide-out-right');
-    setTimeout(() => { oldEl.classList.add('hidden'); oldEl.classList.remove('tab-slide-out-left','tab-slide-out-right'); }, 180);
+  // ── CRITICAL: Hide old tab SYNCHRONOUSLY ──
+  //
+  // Previously this was wrapped in a 180ms setTimeout to let the slide-out
+  // animation finish before adding `hidden` (display:none). On slow Android
+  // or during GC pauses, that setTimeout could be delayed arbitrarily. During
+  // the delay, BOTH tabs were display:block and STACKED in document flow —
+  // dashboard at top, scan below (or vice versa).
+  //
+  // When Boss tapped a spot on the dashboard and the popup opened (fixed
+  // position, full viewport), the viewport behind the popup's translucent
+  // backdrop could be showing content from the OTHER tab if the user had
+  // scrolled down. That's the "popup shows on scan tab" bug.
+  //
+  // Fix: instant hide on switch — no race window. We lose the slide-out
+  // animation but the slide-in still plays on the new tab, which is the
+  // more visible half of the transition anyway.
+  if (oldEl) {
+    oldEl.classList.remove('tab-slide-in-right','tab-slide-in-left','tab-slide-out-left','tab-slide-out-right');
+    oldEl.classList.add('hidden');
   }
 
-  // Animate new tab in
+  // Show new tab with slide-in animation
   newEl.classList.remove('hidden','tab-slide-in-right','tab-slide-in-left');
   newEl.classList.add(dir > 0 ? 'tab-slide-in-right' : 'tab-slide-in-left');
   setTimeout(() => newEl.classList.remove('tab-slide-in-right','tab-slide-in-left'), 300);
