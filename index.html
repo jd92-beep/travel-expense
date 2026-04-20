@@ -1519,6 +1519,10 @@ const ITINERARY = [
 // Keys are stored in the encrypted vault only — never hardcoded in source.
 // Unlock the vault at startup to activate all AI and sync features.
 const DEFAULT_API_KEY        = '';
+// MiniMax VLM key (hoisted here to avoid TDZ — originally declared near callMiniMax
+// at line ~5612, but references at lines 1992/2008/2982/3819 are inside async fns
+// whose callers may fire before the original declaration during aggressive re-entry).
+const DEFAULT_MINIMAX_KEY    = '';
 const DEFAULT_BACKUP_API_KEY = '';
 const DEFAULT_GEMINI_KEY3    = '';
 const DEFAULT_GEMINI_KEY4    = '';
@@ -3111,11 +3115,15 @@ function receiptCard(r) {
 async function confirmPendingReceipt(id) {
   const r = state.receipts.find(x => x.id === id);
   if (!r || !isPendingReceipt(r)) return;
-  const cleanStore = r.store.slice(2).trim();
+  // Use regex for prefix removal — tolerates half-width vs full-width space and
+  // any other whitespace Apps Script might insert (original `slice(2)` was brittle).
+  const cleanStore = r.store.replace(/^⏳\s*/, '').trim();
   r.store = cleanStore;
   saveState();
   renderHistory();
-  refreshTodayList && refreshTodayList();
+  // Dashboard's today list is rendered by renderDashboard(), not a standalone refreshTodayList.
+  // Guard prevents ReferenceError when that helper isn't defined.
+  if (typeof renderDashboard === 'function') renderDashboard();
   toast('✅ 已確認：' + cleanStore);
   // Sync back to Notion (best-effort — local state already reflects confirmation)
   if (r.notionPageId && state.notionToken && state.notionDb) {
@@ -3785,6 +3793,94 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── Add to itinerary instead ───────────────────────────��─────────────────────
+// Multi-model vision helper for non-receipt prompts (returns raw JSON string).
+// Mirrors the routing logic in callGemini() so "Add to Itinerary" honors the
+// user's chosen scan model and falls back through MiniMax/GLM/Gemini chain.
+async function _callVisionWithPrompt(base64, mime, prompt, preferModelId) {
+  const geminiKey = state.apiKey || DEFAULT_API_KEY;
+  const GEMINI_VISION_MODELS = ['gemini-3.1-flash-lite-preview','gemini-3-flash-preview','gemini-2.5-flash'];
+  const tryGemini = async (model) => {
+    const keys = getGeminiKeys(geminiKey);
+    let lastErr;
+    for (const key of keys) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        const body = {
+          contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }] }],
+          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+        };
+        const r = await fetchWithTimeout(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) }, 60000);
+        if (!r.ok) {
+          const err = new Error(`Gemini(${model}) ${r.status}`); err.status = r.status;
+          if (r.status === 429 || r.status === 403 || r.status === 503) { lastErr = err; continue; }
+          throw err;
+        }
+        return extractGeminiText(await r.json());
+      } catch(e) { lastErr = e; }
+    }
+    throw lastErr || new Error(`Gemini(${model}) all keys failed`);
+  };
+  const tryGLM = async () => {
+    if (!VAULT_ZAI_KEY) throw new Error('GLM key not available');
+    const r = await fetchWithTimeout('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'glm-4.6v',
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } }
+        ]}],
+        thinking: { type: 'disabled' }, temperature: 0.1, max_tokens: 1024, stream: false
+      })
+    }, 60000);
+    if (!r.ok) { const e = new Error(`GLM ${r.status}`); e.status = r.status; throw e; }
+    const txt = (await r.json())?.choices?.[0]?.message?.content;
+    if (!txt) throw new Error('GLM empty response');
+    return txt;
+  };
+  const tryMiniMax = async () => {
+    const key = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
+    if (!key) throw new Error('MiniMax key 未設定');
+    const r = await fetchWithTimeout('https://api.minimax.io/v1/coding_plan/vlm', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, image_url: `data:${mime};base64,${base64}` })
+    }, 90000);
+    if (!r.ok) { const e = new Error(`MiniMax ${r.status}`); e.status = r.status; throw e; }
+    const data = await r.json();
+    if (data?.base_resp?.status_code !== 0) throw new Error(`MiniMax ${data?.base_resp?.status_msg}`);
+    if (!data?.content) throw new Error('MiniMax empty');
+    return data.content;
+  };
+
+  const primary = preferModelId || state.scanModel || 'minimax';
+  const isGLM = primary.startsWith('glm-');
+  const isMM  = primary === 'minimax';
+  const chain = [];
+  if (isGLM)      chain.push({name: primary, fn: tryGLM});
+  else if (isMM)  chain.push({name: 'MiniMax', fn: tryMiniMax});
+  else            chain.push({name: primary, fn: () => tryGemini(primary)});
+  // Fallbacks (deduped)
+  if (!isMM)  chain.push({name: 'MiniMax', fn: tryMiniMax});
+  if (!isGLM) chain.push({name: 'GLM',     fn: tryGLM});
+  GEMINI_VISION_MODELS.filter(m => m !== primary).forEach(m => chain.push({name: m, fn: () => tryGemini(m)}));
+
+  let lastErr;
+  for (const {name, fn} of chain) {
+    try {
+      console.info(`[itinerary-extract] trying ${name}...`);
+      const txt = await fn();
+      console.info(`[itinerary-extract] ✅ ${name}`);
+      return txt;
+    } catch(e) {
+      console.warn(`[itinerary-extract] ❌ ${name}: ${e.message}`);
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('所有 AI 模型都失敗');
+}
+
 async function startAddToItinerary() {
   if (!lastScanBase64) { toast('⚠️ 冇圖片，請先掃描'); return; }
   const btn = $('modalAddIti');
@@ -3792,21 +3888,11 @@ async function startAddToItinerary() {
   btn.disabled = true;
   spinner.classList.remove('hidden');
   try {
-    // Use Gemini with itinerary extraction prompt
-    const geminiKey = state.apiKey || DEFAULT_API_KEY;
-    const model = (state.scanModel && !state.scanModel.startsWith('glm') && state.scanModel !== 'minimax')
-      ? state.scanModel : 'gemini-3.1-flash-lite-preview';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
-    const body = {
-      contents: [{ parts: [
-        { text: ITINERARY_EXTRACT_PROMPT },
-        { inline_data: { mime_type: lastScanMime || 'image/jpeg', data: lastScanBase64 } }
-      ]}],
-      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
-    };
-    const r = await fetchWithTimeout(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) }, 30000);
-    if (!r.ok) throw new Error(`Gemini ${r.status}`);
-    const raw = extractGeminiText(await r.json());
+    const raw = await _callVisionWithPrompt(
+      lastScanBase64,
+      lastScanMime || 'image/jpeg',
+      ITINERARY_EXTRACT_PROMPT
+    );
     let parsed = {};
     try { parsed = JSON.parse(raw); } catch(_) {
       const m = raw.match(/\{[\s\S]*\}/);
@@ -3816,7 +3902,7 @@ async function startAddToItinerary() {
     _closeModalOverlay('confirmModal');
     _openAddItiModal(parsed);
   } catch(e) {
-    toast('❌ AI 辨識失敗：' + e.message.slice(0, 60));
+    toast('❌ AI 辨識失敗：' + (e.message || '').slice(0, 80));
   } finally {
     btn.disabled = false;
     spinner.classList.add('hidden');
@@ -5527,7 +5613,8 @@ async function callGLM(base64, mime) {
 // Correct endpoint per minimax-coding-plan-vlm-guide.md:
 //   POST /v1/coding_plan/vlm  payload: { prompt, image_url }
 //   MiniMax-M2.7 messages API does NOT support image input — wrong route
-const DEFAULT_MINIMAX_KEY = '';
+// NOTE: DEFAULT_MINIMAX_KEY is declared near the top of the script with other
+// DEFAULT_*_KEY constants to avoid temporal-dead-zone errors.
 async function callMiniMax(base64, mime) {
   // Precedence: user-set custom key → fresh hardcoded DEFAULT → legacy vault (last).
 // Vault may contain a STALE MiniMax key from a previous build; DEFAULT is always current.
@@ -6134,6 +6221,9 @@ async function notionPullAll(silent = false) {
         notionPageId: page.id,
         createdAt: new Date(page.created_time).getTime(),
       };
+      // Tag whether personId came from an actual Notion match — merge logic uses this
+      // to decide whether to trust Notion's 旅伴 column or preserve the local assignment.
+      if (matchedPerson) r.personId_fromNotion = true;
       if (photoUrl) r.photoUrl = photoUrl;
       if (merged.has(id)) {
         const local = merged.get(id);
@@ -6141,6 +6231,16 @@ async function notionPullAll(silent = false) {
         // the user confirmed locally but the push hasn't reached Notion yet. Don't overwrite.
         const localStillPending = typeof local.store === 'string' && local.store.startsWith('⏳ ');
         const remoteStillPending = typeof r.store === 'string' && r.store.startsWith('⏳ ');
+        // Protect LOCAL-AUTHORITATIVE fields that Notion should never clobber:
+        //   - personId: Notion's 旅伴 column can be empty/unmatched; default-to-person-0
+        //     would flip 媽媽/欣欣 receipts back to Boss on every sync.
+        //   - createdAt: used by getReceiptPhase() to classify prep/trip/post. Notion's
+        //     page.created_time is when the row was uploaded, not when the expense happened
+        //     — overwriting with sync-time flips prep → trip and corrupts budget math.
+        //   - photoUrl: only overwrite if Notion actually returned one.
+        if (local.createdAt) r.createdAt = local.createdAt;
+        if (local.personId && !r.personId_fromNotion) r.personId = local.personId;
+        // (we tag r.personId with _fromNotion only when 旅伴 explicitly matched — see below)
         if (!localStillPending && remoteStillPending) {
           // Keep local confirmation; update only safe fields (amount, date, region, etc.)
           const { store, ...safeRemote } = r;
@@ -6390,12 +6490,16 @@ function normalizeScanResult(raw) {
     if (iso) {
       const diffDays = Math.abs((new Date(iso) - new Date(today)) / 86400000);
       if (diffDays > 60) {
-        warnings.push(`日期「${iso}」離今日 ${Math.round(diffDays)} 日，可能係舊收據或誤讀 — 已預設今日，請核對`);
+        // Far-future/past date — keep parsed ISO but flag it. Don't silently today-override.
+        warnings.push(`日期「${iso}」離今日 ${Math.round(diffDays)} 日，可能係舊收據或誤讀，請核對`);
+        data.date = iso; // still pass normalized form so user can see + edit in modal
       } else {
         data.date = iso; // pass normalised form downstream
       }
     } else {
-      warnings.push(`日期「${raw}」格式無法識別，已預設今日`);
+      // Can't parse the date at all — explicitly fall back to today.
+      warnings.push(`日期「${raw}」格式無法識別，已預設今日，請核對`);
+      data.date = today;
     }
   }
 
@@ -6627,6 +6731,12 @@ function closeModal() {
   _closeModalOverlay('confirmModal', () => {
     $('modalDelete').classList.add('hidden');
     editingId = null;
+    // Clear scan buffers so the NEXT modal (e.g. Add-to-Itinerary) can't accidentally
+    // run on a stale previous image. Safe no-op if already null.
+    lastScanBase64 = null;
+    lastScanMime = 'image/jpeg';
+    lastScanResult = null;
+    lastScanWarnings = [];
   });
 }
 
