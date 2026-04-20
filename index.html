@@ -971,7 +971,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v25</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v26</p>
     </div>
   </section>
 </main>
@@ -2836,15 +2836,20 @@ function showHotelPopup(name, address) {
 function closeHotelPopup() {
   $('hotelPopup').classList.add('hidden');
   if (document.body.style.overflow === 'hidden') document.body.style.overflow = '';
-  // ── ANDROID GHOST-CLICK DEFENSE ──
-  // After touchend on the 關閉 button, Android Chrome synthesizes a `click`
-  // event ~100-300ms later. If the popup is already hidden by then, that
-  // delayed click falls through to whatever element is at the same (x,y) —
-  // often a tab bar button, causing an unwanted tab switch.
+  // ── ANDROID GHOST-CLICK DEFENSE — dual layer ──
+  // After touchend on 關閉, Android Chrome synthesizes a `click` event
+  // ~100-300ms later. If the popup is already hidden by then, that delayed
+  // click falls through to whatever element is at the same (x,y) — often
+  // a tab bar button, causing an unwanted tab switch.
   //
-  // Disable pointer events on the bottom nav for 500ms (comfortably exceeds
-  // the Android synthesis delay). Narrowly scoped — avoids the previous
-  // capture-phase blocker which blocked legitimate user taps too.
+  // Layer A (CSS): pointer-events:none on the bottom nav for 500ms. Blocks
+  // real user touches within the window. Does NOT block programmatically
+  // dispatched JS events.
+  //
+  // Layer B (JS): set _popupClosedAt timestamp. switchTab() checks this
+  // timestamp and refuses to run within 500ms. Blocks ALL click sources,
+  // including synthesized mobile-browser ghost clicks.
+  _popupClosedAt = Date.now();
   const nav = document.querySelector('nav.fixed.bottom-0, nav[class*="bottom-0"]') || document.querySelector('nav');
   if (nav) {
     nav.style.pointerEvents = 'none';
@@ -7379,7 +7384,22 @@ async function renderWeather() {
 
 const TAB_ORDER = ['dashboard','scan','history','weather','stats','timeline','settings'];
 let _currentTab = 'scan';
+// Timestamp of the last popup close — used by switchTab to reject ghost
+// clicks that fire ~200-400ms after closeHotelPopup() hides the popup.
+// CSS pointer-events:none blocks real user touches but NOT synthesized
+// mobile-browser click events (which are dispatched via JS, bypassing
+// CSS hit-testing). This JS-level guard is bulletproof.
+let _popupClosedAt = 0;
 function switchTab(name) {
+  // Reject tab switches within 500ms of closing a popup. This blocks the
+  // Android ghost-click-through that made Boss see scan tab after closing
+  // the spot popup. Legitimate user switches within this 500ms window are
+  // rare (user just closed popup, immediately wants to switch tabs) — if
+  // needed they can tap again after the window.
+  if (Date.now() - _popupClosedAt < 500) {
+    console.info('[switchTab] rejected — ghost click window (popup just closed)');
+    return;
+  }
   const oldTab = _currentTab;
   const oldEl = $('tab-' + oldTab);
   const newEl = $('tab-' + name);
