@@ -2,8 +2,8 @@
 
 > **Purpose of this file:** Every Claude session (desktop app OR CLI) reads this first to resume work without re-reading the whole chat history. Updated at the end of each session.
 
-**Last updated:** 2026-04-19 (HKT)
-**Latest commits:** `4bfdf29` budget quick-save + dual-array email LLM (bookings+itinerary_updates) · Apps Script deployed via clasp ✅
+**Last updated:** 2026-04-20 (HKT)
+**Latest commits:** `2bb709a` Android Maps app handoff + last-tab restore ✅ · `1f0f122` ghost-click timestamp guard · `4c07b7b` sync-hide old tab + map open hardening
 
 ---
 
@@ -119,7 +119,8 @@ Forward email → Gmail label travel-expense
 - Generic — supports all spot types (lodging/food/transport/ticket/localtour/shopping/other)
 - Per-type icon, background colour, label
 - **Read-only** — edit goes to records tab (for receipt-backed) or spotEditModal (for pure itinerary)
-- `openMapsFromPopup()` uses `name + address`; iOS → `maps.apple.com`, else → `maps.google.com`
+- Android address tap now uses a direct `intent://...com.google.android.apps.maps...` handoff with browser fallback, so tapping from the PWA opens **Google Maps app** instead of a web page / dead tap
+- iOS still uses `maps.apple.com`; desktop uses Google Maps web in new tab
 
 ### Exchange rate
 - **Visa official** rates via `www.visa.co.uk/cmsapi/fx/rates` through CORS proxy
@@ -176,6 +177,7 @@ Credentials to inject (same `sed -i ''` pattern each time) are documented in ses
 
 | Commit | Date | Summary |
 |---|---|---|
+| `2bb709a` | 2026-04-20 | Fix homepage location flow: Android popup map link now uses direct Google Maps app intent, active tab is persisted/restored after reload, build bumped to v27 |
 | `4bfdf29` | 2026-04-19 | Budget quick-save pill + email LLM dual-array (bookings+itinerary_updates) + applyItineraryUpdates() · **clasp deployed** |
 | `528aab9` | 2026-04-19 | Fix nav bar: grid-cols-6 → grid-cols-7 (7 tabs, 1 row) |
 | `359e757` | 2026-04-19 | Scan block swap (gallery↔email) + Weather tab (JMA via Open-Meteo, 5 slots, LIVE badge) |
@@ -208,6 +210,7 @@ Credentials to inject (same `sed -i ''` pattern each time) are documented in ses
 - [ ] `state.region` field retained on legacy receipts for back-compat; new receipts store `''`. Could purge eventually.
 - [ ] Gemini 3.1 Pro removed from all lists — if user wants it back, re-add to SCAN_MODELS / VOICE_MODELS / EMAIL_MODELS arrays.
 - [ ] Itinerary overrides stored in localStorage only. If user clears browser cache, overrides lost. (Could sync to Notion itinerary DB but that's complex.)
+- [ ] `lastTab` restore is local-only. If Boss opens the app from a brand-new device / fresh install, the default tab is still scan unless we intentionally change product default.
 - [ ] Apps Script API Executable not deployed — can't run `clasp run processExpenseEmails` directly. User triggers via Scan tab "⚡ 即時同步" button or waits 2 hr.
 - [ ] Receipt image sync to Notion requires `state.imgbbKey`. Without it, image stays local-only (callout message shown in Notion).
 

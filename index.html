@@ -971,7 +971,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v26</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v27</p>
     </div>
   </section>
 </main>
@@ -1623,6 +1623,7 @@ let state = {
   tripName: '名古屋 2026',
   tripDateRange: { start: '2026-04-20', end: '2026-04-25' },
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
+  lastTab: 'scan',
 };
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -1717,6 +1718,9 @@ function loadState() {
   if (state.scanModel && !SCAN_MODELS.some(m => m.id === state.scanModel)) {
     console.warn('[loadState] unknown scanModel', state.scanModel, '— resetting');
     state.scanModel = 'minimax';
+  }
+  if (!TAB_ORDER.includes(state.lastTab)) {
+    state.lastTab = 'scan';
   }
   if (!Array.isArray(state.persons) || !state.persons.length) {
     state.persons = [
@@ -2742,43 +2746,60 @@ function showSpotPopup(opts) {
   if (qParts.length) {
     const q = encodeURIComponent(qParts.join(' '));
     const ua = navigator.userAgent;
+    const isAndroid = /Android/i.test(ua);
     const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
-    const mapUrl = isIOS
-      ? 'https://maps.apple.com/?q=' + q
-      : 'https://www.google.com/maps/search/?api=1&query=' + q;
-    // Still set href/target so the element looks/feels like a link (long-press
-    // copy-URL, desktop anchor semantics, etc.).
-    row.href = mapUrl;
-    row.target = '_blank';
-    row.rel = 'noopener noreferrer';
-    // onclick: preventDefault + window.open in the same synchronous tick as
-    // the user's tap. Browsers treat window.open during a user-gesture click
-    // handler as user-initiated — popup blockers don't apply, PWAs hand off
-    // to external browser. This is the most reliable cross-platform pattern.
-    row.onclick = (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      // Primary: window.open. If blocked (returns null), fall back to
-      // programmatic anchor click — which typically succeeds because it's
-      // still within the user gesture. If that also fails, last resort:
-      // navigate the current window (loses app state but guarantees Maps opens).
-      let opened = null;
-      try { opened = window.open(mapUrl, '_blank', 'noopener,noreferrer'); } catch(_) {}
-      if (!opened) {
-        try {
-          const a = document.createElement('a');
-          a.href = mapUrl;
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer';
-          a.style.display = 'none';
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(() => a.remove(), 300);
-        } catch(_) {
-          window.location.href = mapUrl;
+    const httpsMapUrl = 'https://www.google.com/maps/search/?api=1&query=' + q;
+    const appleMapUrl = 'https://maps.apple.com/?q=' + q;
+    // Android requirement is stricter than desktop/iOS: Boss wants the
+    // Google Maps APP itself, not a maps web page in Chrome. Direct anchor
+    // activation of an intent:// URL is the most reliable app-handoff path
+    // from Chrome/PWA, and browser_fallback_url keeps a safe web fallback.
+    if (isAndroid) {
+      row.href = 'intent://www.google.com/maps/search/?api=1&query=' + q
+        + '#Intent;scheme=https;package=com.google.android.apps.maps;S.browser_fallback_url=' + encodeURIComponent(httpsMapUrl) + ';end';
+      row.dataset.fallbackUrl = httpsMapUrl;
+      row.removeAttribute('target');
+      row.rel = 'noopener noreferrer';
+      // Let the native anchor activation proceed untouched so Android can hand
+      // it to the OS intent resolver. Only stop bubbling so backdrop click-to-
+      // close does not run on the same tap.
+      row.onclick = (e) => { e.stopPropagation(); };
+    } else {
+      const mapUrl = isIOS ? appleMapUrl : httpsMapUrl;
+      // Still set href/target so the element looks/feels like a link (long-press
+      // copy-URL, desktop anchor semantics, etc.).
+      row.href = mapUrl;
+      row.target = '_blank';
+      row.rel = 'noopener noreferrer';
+      // onclick: preventDefault + window.open in the same synchronous tick as
+      // the user's tap. Browsers treat window.open during a user-gesture click
+      // handler as user-initiated — popup blockers don't apply, PWAs hand off
+      // to external browser. This is the most reliable cross-platform pattern.
+      row.onclick = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        // Primary: window.open. If blocked (returns null), fall back to
+        // programmatic anchor click — which typically succeeds because it's
+        // still within the user gesture. If that also fails, last resort:
+        // navigate the current window (loses app state but guarantees Maps opens).
+        let opened = null;
+        try { opened = window.open(mapUrl, '_blank', 'noopener,noreferrer'); } catch(_) {}
+        if (!opened) {
+          try {
+            const a = document.createElement('a');
+            a.href = mapUrl;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => a.remove(), 300);
+          } catch(_) {
+            window.location.href = mapUrl;
+          }
         }
-      }
-    };
+      };
+    }
   } else {
     // No data — block the default anchor navigation so we don't scroll to top.
     row.removeAttribute('href');
@@ -7436,6 +7457,8 @@ function switchTab(name) {
   setTimeout(() => newEl.classList.remove('tab-slide-in-right','tab-slide-in-left'), 300);
 
   _currentTab = name;
+  state.lastTab = name;
+  saveState();
 
   // Tab bar: bounce active icon + pop pill
   document.querySelectorAll('.tab-btn').forEach(b => {
@@ -8164,8 +8187,11 @@ function init() {
   });
 
   refresh();
+  if (state.lastTab && state.lastTab !== _currentTab) {
+    switchTab(state.lastTab);
+  }
   // Ensure budget bar reflects the initial active tab (scan = hidden)
-  const _initActiveTab = document.querySelector('.tab-btn.tab-active')?.dataset?.tab || 'scan';
+  const _initActiveTab = state.lastTab || document.querySelector('.tab-btn.tab-active')?.dataset?.tab || 'scan';
   const _bs = $('budgetSection');
   if (_bs) _bs.style.display = (_initActiveTab === 'history' || _initActiveTab === 'dashboard') ? '' : 'none';
 
