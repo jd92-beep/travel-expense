@@ -2362,7 +2362,6 @@ function renderDashboard() {
   }
 
   const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
-  const inclTL = !!state.statsIncludeTransportLodging;
   const statsReceipts = inclTL
     ? state.receipts
     : state.receipts.filter(r => r.category !== 'transport' && r.category !== 'lodging');
