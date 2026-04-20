@@ -1717,8 +1717,15 @@ function saveState() {
     localStorage.setItem('boss-japan-tracker', jsonPayload);
   } catch(e) {
     if (e && e.name === 'QuotaExceededError') {
-      // Tier 1: prune oldest photoThumb values one by one
-      const byAge = [...state.receipts].sort((a,b) => (a.createdAt||0)-(b.createdAt||0));
+      // Tier 1: prune photoThumb values, preferring receipts already synced to
+      // Notion (safe — Notion has the canonical copy) and then oldest first.
+      const byAge = [...state.receipts].sort((a,b) => {
+        // Synced-to-Notion thumbs go first (prune them with zero data loss)
+        const aSynced = a._photoSyncedToNotion ? 0 : 1;
+        const bSynced = b._photoSyncedToNotion ? 0 : 1;
+        if (aSynced !== bSynced) return aSynced - bSynced;
+        return (a.createdAt||0) - (b.createdAt||0);
+      });
       let pruned = 0;
       for (const r of byAge) {
         if (!r.photoThumb) continue;
@@ -1765,8 +1772,15 @@ function saveState() {
 const $ = id => document.getElementById(id);
 const fmt = n => Number(n||0).toLocaleString('en-US', { maximumFractionDigits:0 });
 function todayHKT() {
-  const d = new Date();
-  return new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000).toISOString().slice(0,10);
+  // Use Intl for DST-safe TZ conversion. en-CA locale gives ISO-style YYYY-MM-DD.
+  // Falls back to the old manual-offset approach if Intl.DateTimeFormat lacks
+  // timeZone support (very old browsers — should never fire in practice).
+  try {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Hong_Kong' });
+  } catch(_) {
+    const d = new Date();
+    return new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000).toISOString().slice(0,10);
+  }
 }
 // Current local time as "HH:mm" (used as default for manual-entry mTime input)
 function nowHHMM() {
@@ -2220,7 +2234,10 @@ async function _fetchVisaRate(foreignCurr, homeCurr) {
       // Visa response: { convertedAmount, fxRateVisa, ... }. fxRateVisa is string "20.36"
       const rate = parseFloat(data.convertedAmount || data.fxRateVisa);
       if (rate && rate > 0 && isFinite(rate)) return { rate, source: 'Visa' };
-    } catch(e) { /* try next proxy */ }
+    } catch(e) {
+      // Log so stale-rate bugs are debuggable; but don't toast (we'll try next proxy / fallback).
+      console.warn('[fx:visa]', e?.message || e);
+    }
   }
   return null;
 }
@@ -2707,9 +2724,12 @@ function showSpotPopup(opts) {
       : 'https://www.google.com/maps/search/?api=1&query=' + q;
     row.target = '_blank';
     row.rel = 'noopener noreferrer';
+    row.onclick = null;
   } else {
-    row.href = '#';
+    // No data — block the default anchor navigation so we don't scroll to top.
+    row.removeAttribute('href');
     row.removeAttribute('target');
+    row.onclick = (e) => { e.preventDefault(); toast('⚠️ 冇地址或名稱'); };
   }
   // Build a richer note row: if receipt-backed, pull live receipt details
   const noteEl = $('hotelPopupNoteRow');
@@ -2785,8 +2805,9 @@ function _openExternalUrl(url) {
     document.body.appendChild(a);
     a.click();
     // Defer cleanup so iOS has a chance to pick up the click before the node
-    // is removed from the DOM.
-    setTimeout(() => a.remove(), 200);
+    // is removed from the DOM. 600ms to accommodate "Leave app?" system prompts
+    // that can take >200ms on older iOS.
+    setTimeout(() => a.remove(), 600);
   } catch(e) {
     // Absolute last-resort fallback: navigate current tab. Loses app state but
     // the user asked to open the URL, so this is better than failing silently.
@@ -3233,7 +3254,7 @@ function renderHistory() {
     return `
       <div class="mb-4">
         <div class="flex items-baseline justify-between mb-2 px-1">
-          <span class="text-xs text-gray-400 font-medium">${date}</span>
+          <span class="text-xs text-gray-400 font-medium">${escapeHtml(date)}</span>
           <span class="text-xs text-[#2D5A8E] font-bold">¥${fmt(sum)}</span>
         </div>
         <div class="space-y-2">${items.map(i => receiptCard(i)).join('')}</div>
@@ -3328,8 +3349,11 @@ window.addEventListener('resize', () => {
     if (!$('tab-timeline').classList.contains('hidden')) updateTimelineProgress();
   }, 150);
 });
-// Auto-tick every 5 minutes to advance the progress bar while the app is open
+// Auto-tick every 5 minutes to advance the progress bar while the app is open.
+// Skip when the tab is not visible (document.hidden) or timeline tab is hidden —
+// no point re-rendering offscreen content, and it keeps battery usage lower.
 setInterval(() => {
+  if (document.hidden) return;
   if (!$('tab-timeline').classList.contains('hidden')) renderTimeline();
 }, 5 * 60 * 1000);
 
@@ -3722,6 +3746,14 @@ function renderStats() {
 let lastScanBase64 = null, lastScanMime = 'image/jpeg', lastScanResult = null, lastScanWarnings = [];
 
 async function scanReceipt(file) {
+  // Guard against double-scan races: if the user rapid-taps or iOS fires
+  // the file-change event twice, the second scan would clobber lastScanBase64
+  // (and lastScanResult) mid-flight — resulting in confirm modal showing
+  // photo-B with parsed data from photo-A. Worst kind of silent data bug.
+  if (_scanInFlight) {
+    toast('⚠️ 仲在辨識緊，請稍候');
+    return;
+  }
   triggerShutterFlash();
   $('previewArea').classList.remove('hidden');
   const prevImg = $('previewImg');
@@ -3935,6 +3967,14 @@ async function _callVisionWithPrompt(base64, mime, prompt, preferModelId) {
       console.warn(`[itinerary-extract] ❌ ${name}: ${e.message}`);
       lastErr = e;
     }
+  }
+  // Helpful hint when the user hasn't supplied any credentials yet —
+  // "all models failed" is unhelpful if the root cause is "no keys".
+  const haveGemini = !!(state.apiKey || DEFAULT_API_KEY);
+  const haveMiniMax = !!(state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY);
+  const haveGLM = !!VAULT_ZAI_KEY;
+  if (!haveGemini && !haveMiniMax && !haveGLM) {
+    throw new Error('所有 AI 模型都冇 key — 請解鎖 vault 或喺設定填 Gemini API Key');
   }
   throw lastErr || new Error('所有 AI 模型都失敗');
 }
@@ -4549,6 +4589,9 @@ function parseReceiptJson(text) {
   if (first >= 0 && last > first) {
     try { return JSON.parse(cleaned.slice(first, last + 1)); } catch(_) {}
   }
+  // Before throwing, log the full raw so we can debug in DevTools.
+  // (Previously all three attempts failed silently and the error only had a 120-char preview.)
+  console.error('[parseReceiptJson] all attempts failed. Raw response:', raw);
   throw new Error('JSON parse 失敗: ' + raw.slice(0, 120));
 }
 
@@ -4899,7 +4942,7 @@ async function parseEmailInput({ text = '', images = [] }) {
       // Record which model succeeded for the Settings badge
       state.lastEmailModel = name;
       try { saveState(); } catch(_) {}
-      try { renderEmailModelCards(); } catch(_) {}
+      try { renderEmailModelCards(); } catch(e) { console.warn('[renderEmailModelCards]', e); }
       const itineraryUpdates = Array.isArray(parsed.itinerary_updates) ? parsed.itinerary_updates : [];
       // Derive email_type: prefer LLM-declared value, fall back to content-based inference
       const emailType = parsed.email_type ||
@@ -6093,6 +6136,10 @@ async function notionPushReceipt(r) {
       );
       if (up?.fileUploadId) {
         r.notionFileUploadId = up.fileUploadId;
+        // We now have a canonical copy in Notion — keep the local thumb for
+        // offline viewing but flag it so quota pruning can drop it first
+        // when localStorage approaches the 5 MB limit.
+        r._photoSyncedToNotion = true;
         saveState();
       }
     } catch(e) { console.warn('[notionPush] photo upload failed:', e.message); }
@@ -6111,6 +6158,10 @@ async function notionPushReceipt(r) {
       if (/Notion\s+40[04]/.test(msg)) {
         console.warn('[notion] page', r.notionPageId, 'is gone — recreating as new');
         r.notionPageId = null; // fall through to create-new path below
+        // file_upload IDs are bound to their original upload session + page.
+        // Reusing one when we recreate the page risks a 400. Re-upload on next push.
+        delete r.notionFileUploadId;
+        delete r._photoSyncedToNotion;
       } else {
         throw e;
       }
@@ -6167,11 +6218,22 @@ async function notionPushAll() {
   const errors = [];
   let ok = 0;
   for (const r of state.receipts) {
-    try { await notionPushReceipt(r); ok++; }
-    catch (e) {
+    try {
+      await notionPushReceipt(r);
+      ok++;
+    } catch (e) {
+      // One free retry specifically for rate-limit (429) — Notion allows 3 rps
+      // globally but bursts of photo uploads easily hit it. 2-second backoff.
+      if (/\b429\b/.test(String(e?.message))) {
+        await new Promise(res => setTimeout(res, 2000));
+        try { await notionPushReceipt(r); ok++; continue; }
+        catch(e2) { e = e2; /* fall through to failed bookkeeping */ }
+      }
       failed.push(r.store || r.id);
       if (errors.length < 2) errors.push(e.message?.slice(0, 80) || 'unknown');
     }
+    // Mild spacing below rate limit — keeps bursts at ~2.8 rps.
+    await new Promise(res => setTimeout(res, 350));
   }
   saveState();
   if (failed.length === 0) {
@@ -6366,6 +6428,11 @@ async function notionPullAll(silent = false) {
     state.receipts = Array.from(merged.values())
       .filter(r => !r._itineraryOnly)
       .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    // personId_fromNotion is a TRANSIENT per-sync flag — never persist it.
+    // If left on, the merge guard at next pull would make Notion's 旅伴 column
+    // permanently authoritative, silently reverting any local personId edits
+    // the user makes between syncs.
+    state.receipts.forEach(r => { delete r.personId_fromNotion; });
     saveState();
     refresh();
     if (!silent) toast(`✅ 新增 ${added}，更新 ${updated}${removed ? `，刪除 ${removed}` : ''}`);
@@ -6454,6 +6521,12 @@ async function prepareForOCR(base64, mime) {
 // via { type: 'file_upload', file_upload: { id } } — Notion persists it.
 async function notionUploadFile(base64, mime, filename) {
   if (!base64 || !state.notionToken) return null;
+  // Defensive strip of data-URL prefix — callers that accidentally pass
+  // "data:image/jpeg;base64,XXX" would otherwise make atob() throw
+  // InvalidCharacterError on the prefix characters.
+  const pureB64 = base64.includes(',') ? base64.split(',')[1] : base64;
+  if (!pureB64) return null;
+  let uploadId = null;
   try {
     // Step 1: create file_upload object
     const safeName = (filename || 'receipt').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
@@ -6466,7 +6539,7 @@ async function notionUploadFile(base64, mime, filename) {
         content_type: mime || 'image/jpeg'
       })
     });
-    const uploadId = createRes?.id;
+    uploadId = createRes?.id;
     const sendUrl = createRes?.upload_url;
     if (!uploadId || !sendUrl) {
       console.warn('[notionUpload] no upload_url in response:', createRes);
@@ -6474,7 +6547,7 @@ async function notionUploadFile(base64, mime, filename) {
     }
 
     // Step 2: decode base64 → Blob, POST via multipart
-    const bin = atob(base64);
+    const bin = atob(pureB64);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     const blob = new Blob([bytes], { type: mime || 'image/jpeg' });
@@ -6518,6 +6591,12 @@ async function notionUploadFile(base64, mime, filename) {
     throw lastErr || new Error('Notion upload failed (all proxies)');
   } catch(e) {
     console.warn('[notionUpload]', e?.message || e);
+    // Clean up the orphan file_upload object so it doesn't count against Notion's
+    // 24h quota on failed upload sessions. Best-effort — failure here is fine.
+    if (uploadId) {
+      notionFetch('/file_uploads/' + uploadId, { method: 'DELETE' })
+        .catch(() => {});
+    }
     return null;
   }
 }
@@ -6848,15 +6927,35 @@ async function _saveModalInner() {
 
   // Compress & store receipt photo thumbnail
   if (pendingPhotoBase64) {
-    r.photoThumb = await compressPhoto(pendingPhotoBase64, pendingPhotoMime);
+    const compressed = await compressPhoto(pendingPhotoBase64, pendingPhotoMime);
     pendingPhotoBase64 = null;
-    // Upload to imgbb for Notion image embedding
-    if (state.imgbbKey) {
-      r.photoUrl = await uploadToImgbb(r.photoThumb);
+    if (compressed) {
+      r.photoThumb = compressed;
+      // New photo — invalidate any previously-uploaded file_upload_id / external URL
+      // so the next Notion push re-uploads the fresh image. Otherwise the old photo
+      // stays attached to the Notion page even though the local thumb changed.
+      delete r.notionFileUploadId;
+      delete r.photoUrl;
+      delete r._photoSyncedToNotion;
+      // Upload to imgbb for Notion image embedding (legacy path — Notion native
+      // upload happens later inside notionPushReceipt).
+      if (state.imgbbKey) {
+        r.photoUrl = await uploadToImgbb(r.photoThumb);
+      }
+    } else {
+      // Compression failed (canvas OOM / unsupported mime) — keep whatever was on
+      // the existing receipt so we don't lose the prior photo on edit.
+      console.warn('[saveModal] compressPhoto returned null — skipping photo update');
+      if (existing?.photoThumb) r.photoThumb = existing.photoThumb;
+      if (existing?.photoUrl) r.photoUrl = existing.photoUrl;
+      if (existing?.notionFileUploadId) r.notionFileUploadId = existing.notionFileUploadId;
     }
   } else if (existing?.photoThumb) {
     r.photoThumb = existing.photoThumb; // preserve on edit
     if (existing?.photoUrl) r.photoUrl = existing.photoUrl;
+    // Preserve already-uploaded references so we don't re-upload unchanged photos.
+    if (existing?.notionFileUploadId) r.notionFileUploadId = existing.notionFileUploadId;
+    if (existing?._photoSyncedToNotion) r._photoSyncedToNotion = true;
   }
 
   if (editingId) {
@@ -6906,6 +7005,11 @@ function closeModal() {
     lastScanMime = 'image/jpeg';
     lastScanResult = null;
     lastScanWarnings = [];
+    // Also clear the "pending" photo — used when saving. If user opens the
+    // modal with photo-A, cancels, opens again for an unrelated receipt,
+    // pendingPhotoBase64 would leak and the save would attach photo-A.
+    pendingPhotoBase64 = null;
+    pendingPhotoMime = 'image/jpeg';
   });
 }
 
@@ -7211,6 +7315,12 @@ function switchTab(name) {
 
   const bs = $('budgetSection');
   if (bs) bs.style.display = (name === 'history' || name === 'dashboard') ? '' : 'none';
+  // Cancel any pending timeline-resize update when leaving the timeline tab —
+  // otherwise the 150 ms debounce fires against stale layout after the user
+  // has already switched away, wasting a frame.
+  if (name !== 'timeline' && typeof _tlResizeTimer !== 'undefined') {
+    clearTimeout(_tlResizeTimer);
+  }
   if (name === 'dashboard') renderDashboard();
   if (name === 'weather') renderWeather();
   if (name === 'stats') renderStats();
