@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
 import {
   Home,
   ScanLine,
@@ -22,6 +23,55 @@ const TABS: { id: TabId; label: string; Icon: typeof Home }[] = [
   { id: 'settings',  label: '設定', Icon: SettingsIcon },
 ];
 
+interface Particle {
+  id: number;
+  angle: number;
+  dist: number;
+}
+
+function TabParticles({ active }: { active: boolean }) {
+  const [particles, setParticles] = useState<Particle[]>([]);
+  const prevActive = useRef(false);
+
+  useEffect(() => {
+    if (active && !prevActive.current) {
+      const ps: Particle[] = Array.from({ length: 4 }, (_, i) => ({
+        id: Date.now() + i,
+        angle: (i / 4) * 360 + Math.random() * 30,
+        dist: 14 + Math.random() * 8,
+      }));
+      setParticles(ps);
+      const t = setTimeout(() => setParticles([]), 700);
+      prevActive.current = true;
+      return () => clearTimeout(t);
+    }
+    if (!active) {
+      prevActive.current = false;
+    }
+  }, [active]);
+
+  return (
+    <AnimatePresence>
+      {particles.map((p) => {
+        const rad = (p.angle * Math.PI) / 180;
+        const tx = Math.cos(rad) * p.dist;
+        const ty = Math.sin(rad) * p.dist;
+        return (
+          <motion.span
+            key={p.id}
+            className="absolute inset-0 m-auto rounded-full bg-arsenal-400 pointer-events-none"
+            style={{ width: 4, height: 4 }}
+            initial={{ x: 0, y: 0, opacity: 0.9, scale: 1 }}
+            animate={{ x: tx, y: ty, opacity: 0, scale: 0.3 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.55, ease: 'easeOut' }}
+          />
+        );
+      })}
+    </AnimatePresence>
+  );
+}
+
 export function TabBar({
   active,
   onChange,
@@ -42,27 +92,60 @@ export function TabBar({
             const { Icon } = tab;
             const isActive = tab.id === active;
             return (
-              <button
+              <motion.button
                 key={tab.id}
                 onClick={() => onChange(tab.id)}
                 aria-label={tab.label}
+                whileTap={{ scale: 0.88 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 20 }}
                 className={cn(
-                  'relative z-10 flex flex-col items-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-medium transition-colors flex-1 min-w-0',
+                  'relative z-10 flex flex-col items-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-medium flex-1 min-w-0',
                   isActive ? 'text-white' : 'text-ink-400 hover:text-ink-200',
                 )}
               >
                 {isActive && (
                   <motion.span
                     layoutId="tab-pill"
-                    className="absolute inset-0 rounded-2xl bg-gradient-arsenal shadow-glow"
+                    className="absolute inset-0 rounded-2xl bg-gradient-arsenal shadow-glow animate-glow-pulse"
                     transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                   />
                 )}
-                <span className="relative z-10 flex flex-col items-center gap-0.5">
-                  <Icon size={18} strokeWidth={isActive ? 2.4 : 1.8} />
-                  <span className="tracking-wide">{tab.label}</span>
+
+                {/* Particle burst on tab activate */}
+                <span className="relative" style={{ isolation: 'isolate' }}>
+                  <TabParticles active={isActive} />
+
+                  {/* Icon with wiggle when tapped */}
+                  <motion.span
+                    className="relative z-10 block"
+                    animate={isActive ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 15, duration: 0.4 }}
+                  >
+                    <motion.span
+                      className="block"
+                      whileTap={{
+                        rotate: [0, -15, 15, -8, 0],
+                        scale: [1, 1.3, 1.15, 1.05, 1],
+                        transition: {
+                          type: 'keyframes',
+                          duration: 0.4,
+                          ease: 'easeInOut',
+                        },
+                      }}
+                    >
+                      <Icon size={18} strokeWidth={isActive ? 2.4 : 1.8} />
+                    </motion.span>
+                  </motion.span>
                 </span>
-              </button>
+
+                <motion.span
+                  className="relative z-10 tracking-wide"
+                  animate={isActive ? { y: 0, opacity: 1 } : { y: 2, opacity: 0.6 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 25 }}
+                >
+                  {tab.label}
+                </motion.span>
+              </motion.button>
             );
           })}
         </div>

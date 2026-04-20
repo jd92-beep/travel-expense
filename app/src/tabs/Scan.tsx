@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, PenTool, Cloud as CloudIcon, AlertTriangle } from 'lucide-react';
 import { Card, CardLabel } from '@/components/ui/Card';
 import { ScanModal } from '@/components/modals/ScanModal';
@@ -71,6 +71,7 @@ export function Scan({ state, onAddReceipt, onReplaceReceipts }: ScanTabProps) {
           color="#ef4135"
           disabled={!hasKey}
           onClick={() => setScanOpen(true)}
+          pulse
         />
         <ActionTile
           icon={<PenTool size={22} />}
@@ -86,6 +87,7 @@ export function Scan({ state, onAddReceipt, onReplaceReceipts }: ScanTabProps) {
           color="#22d3ee"
           disabled={!hasNotion || pulling}
           onClick={pullNotion}
+          loading={pulling}
         />
         <ActionTile
           icon={<span className="text-2xl">📧</span>}
@@ -102,17 +104,23 @@ export function Scan({ state, onAddReceipt, onReplaceReceipts }: ScanTabProps) {
       </div>
 
       {!hasKey && (
-        <Card className="bg-gradient-to-br from-amber-900/20 to-arsenal-900/10 border-ember-500/30">
-          <div className="flex items-start gap-3">
-            <AlertTriangle size={18} className="text-ember-400 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <div className="font-semibold text-ink-100">需要先設定 API Key</div>
-              <p className="text-xs text-ink-300 mt-1 leading-relaxed">
-                去「設定」頁面解鎖 Vault 或手動輸入 Gemini API Key，就可以用 AI 掃描。
-              </p>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Card className="bg-gradient-to-br from-amber-900/20 to-arsenal-900/10 border-ember-500/30">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={18} className="text-ember-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-semibold text-ink-100">需要先設定 API Key</div>
+                <p className="text-xs text-ink-300 mt-1 leading-relaxed">
+                  去「設定」頁面解鎖 Vault 或手動輸入 Gemini API Key，就可以用 AI 掃描。
+                </p>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </motion.div>
       )}
 
       <ScanModal
@@ -146,6 +154,8 @@ function ActionTile({
   color,
   onClick,
   disabled,
+  pulse,
+  loading,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -153,22 +163,92 @@ function ActionTile({
   color: string;
   onClick: () => void;
   disabled?: boolean;
+  pulse?: boolean;
+  loading?: boolean;
 }) {
+  const [shutter, setShutter] = useState(false);
+
+  const handleClick = () => {
+    if (disabled) return;
+    // Brief shutter flash
+    setShutter(true);
+    setTimeout(() => setShutter(false), 280);
+    onClick();
+  };
+
   return (
     <motion.button
-      whileTap={disabled ? undefined : { scale: 0.97 }}
-      whileHover={disabled ? undefined : { y: -2 }}
-      onClick={disabled ? undefined : onClick}
+      whileTap={disabled ? undefined : { scale: 0.94, y: 2 }}
+      whileHover={disabled ? undefined : { y: -3, boxShadow: `0 12px 36px -8px ${color}55` }}
+      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+      onClick={handleClick}
       disabled={disabled}
       className={`glass rounded-2xl p-4 text-left relative overflow-hidden group ${
         disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-white/15'
       }`}
     >
+      {/* Color blob */}
       <div
         aria-hidden
         className="absolute -top-6 -right-6 h-20 w-20 rounded-full blur-2xl opacity-20 group-hover:opacity-50 transition-opacity duration-500"
         style={{ background: color }}
       />
+
+      {/* Pulsing ring when idle + pulse enabled */}
+      {pulse && !disabled && (
+        <>
+          {[0, 1].map((i) => (
+            <motion.span
+              key={i}
+              className="absolute inset-0 rounded-2xl border pointer-events-none"
+              style={{ borderColor: color + '55' }}
+              animate={{ scale: [1, 1.12, 1], opacity: [0.5, 0, 0.5] }}
+              transition={{
+                duration: 2,
+                delay: i * 1,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
+            />
+          ))}
+        </>
+      )}
+
+      {/* Sonar loading rings */}
+      <AnimatePresence>
+        {loading && (
+          <>
+            {[0, 1, 2].map((i) => (
+              <motion.span
+                key={i}
+                className="absolute inset-0 rounded-2xl border pointer-events-none"
+                style={{ borderColor: color + '66' }}
+                initial={{ scale: 0.8, opacity: 0.7 }}
+                animate={{ scale: 1.4, opacity: 0 }}
+                transition={{
+                  duration: 1.2,
+                  delay: i * 0.35,
+                  repeat: Infinity,
+                  ease: 'easeOut',
+                }}
+              />
+            ))}
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Shutter flash */}
+      <AnimatePresence>
+        {shutter && (
+          <motion.span
+            className="absolute inset-0 rounded-2xl bg-white pointer-events-none"
+            initial={{ opacity: 0.6 }}
+            animate={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+          />
+        )}
+      </AnimatePresence>
+
       <div className="relative">
         <div
           className="h-11 w-11 rounded-xl grid place-items-center mb-3 border border-white/5 shadow-inner-glow"

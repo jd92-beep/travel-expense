@@ -47,7 +47,12 @@ export function History({
 
   return (
     <div className="space-y-4 pb-6">
-      <div className="flex items-end justify-between gap-3">
+      <motion.div
+        className="flex items-end justify-between gap-3"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      >
         <div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-ink-400">記錄</div>
           <div className="num text-3xl font-bold leading-tight mt-0.5">
@@ -57,10 +62,15 @@ export function History({
             </span>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Search */}
-      <div className="relative">
+      <motion.div
+        className="relative"
+        initial={{ opacity: 0, x: -12 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      >
         <Search
           className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400"
           size={16}
@@ -72,7 +82,7 @@ export function History({
           placeholder="搜尋店名 / 備註 / 品項…"
           className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-ink-900/70 border border-white/5 text-sm placeholder:text-ink-500 focus:outline-none focus:border-arsenal-500/40 focus:shadow-glow-sm transition-all"
         />
-      </div>
+      </motion.div>
 
       {/* Filter pills */}
       <div className="flex gap-1.5 overflow-x-auto -mx-5 px-5 pb-1">
@@ -113,13 +123,25 @@ export function History({
                   </span>
                 </div>
                 <div className="space-y-2">
-                  {list.map((r) => (
-                    <ReceiptCard
+                  {list.map((r, i) => (
+                    <motion.div
                       key={r.id}
-                      receipt={r}
-                      rate={state.rate}
-                      onClick={() => onOpenReceipt(r.id)}
-                    />
+                      initial={{ opacity: 0, x: i % 2 === 0 ? -20 : 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{
+                        delay: i * 0.04,
+                        type: 'spring',
+                        stiffness: 350,
+                        damping: 26,
+                      }}
+                    >
+                      <ReceiptCard
+                        receipt={r}
+                        rate={state.rate}
+                        onClick={() => onOpenReceipt(r.id)}
+                      />
+                    </motion.div>
                   ))}
                 </div>
               </motion.section>
@@ -161,15 +183,24 @@ function FilterPill({
 }) {
   return (
     <motion.button
-      whileTap={{ scale: 0.94 }}
+      whileTap={{ scale: 0.88 }}
+      whileHover={{ y: -1 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 18 }}
       onClick={onClick}
-      className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+      className={`relative shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors overflow-hidden ${
         active
           ? 'bg-gradient-arsenal text-white shadow-glow-sm'
           : 'bg-ink-900/60 text-ink-300 border border-white/5 hover:border-white/15'
       }`}
       style={active && color ? { boxShadow: `0 0 20px -4px ${color}77` } : undefined}
     >
+      {active && (
+        <motion.span
+          layoutId="history-filter"
+          className="absolute inset-0 rounded-full bg-gradient-arsenal -z-10"
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        />
+      )}
       {icon && <span>{icon}</span>}
       {label}
     </motion.button>
