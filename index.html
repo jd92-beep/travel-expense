@@ -978,7 +978,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v30</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v32</p>
     </div>
   </section>
 </main>
@@ -1632,7 +1632,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 30;
+const APP_BUILD = 32;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -1818,6 +1818,25 @@ function todayHKT() {
     const d = new Date();
     return new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000).toISOString().slice(0,10);
   }
+}
+function todayJST() {
+  // Japan Standard Time (UTC+9) — used for receipt-date matching while on-trip.
+  try {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' });
+  } catch(_) {
+    const d = new Date();
+    return new Date(d.getTime() + (d.getTimezoneOffset() + 540) * 60000).toISOString().slice(0,10);
+  }
+}
+// Return the "today" date in the timezone appropriate for the current trip phase.
+// During the Japan trip window, receipts are dated in JST (UTC+9). Using HKT
+// (UTC+8) would miss receipts scanned between JST midnight and HKT midnight.
+function todayForReceipts() {
+  const tripStart = (state.tripDateRange && state.tripDateRange.start) || '2026-04-20';
+  const tripEnd   = (state.tripDateRange && state.tripDateRange.end)   || '2026-04-25';
+  const hkt = todayHKT();
+  // Use JST when HKT is within the trip window (covers the midnight overlap too).
+  return (hkt >= tripStart && hkt <= tripEnd) ? todayJST() : hkt;
 }
 // Current local time as "HH:mm" (used as default for manual-entry mTime input)
 function nowHHMM() {
@@ -2362,7 +2381,10 @@ function renderHeader() {
 }
 
 function renderDashboard() {
-  const today = todayHKT();
+  // Use destination timezone (JST) during Japan trip so daily expense matches
+  // local receipt dates. HKT is 1h behind JST — after JST midnight the date
+  // would be wrong if we used HKT.
+  const today = todayForReceipts();
   const inclTL = !!state.statsIncludeTransportLodging;
   const todayR = state.receipts.filter(r => r.date === today);
   const todayRStats = inclTL ? todayR : todayR.filter(r => r.category !== 'flight' && r.category !== 'lodging');
@@ -2379,11 +2401,15 @@ function renderDashboard() {
 
   // Adaptive daily budget — exclude prep/post phase from "spent before today"
   // so that the per-day quota during the trip isn't squeezed by flight/hotel pre-pay.
+  // When inclTL is OFF, also exclude flight + lodging from the prep total and
+  // trip-spent-before-today so the daily budget quota is consistent with what
+  // the user sees in todaySpend / totalSpend.
   const tripStart = (state.tripDateRange && state.tripDateRange.start) || '2026-04-20';
   const tripEnd = (state.tripDateRange && state.tripDateRange.end) || '2026-04-25';
-  const prepReceipts = state.receipts.filter(r => getReceiptPhase(r) === 'prep');
+  const _phaseFilter = r => inclTL || (r.category !== 'flight' && r.category !== 'lodging');
+  const prepReceipts = state.receipts.filter(r => getReceiptPhase(r) === 'prep' && _phaseFilter(r));
   const tripSpentBeforeToday = state.receipts
-    .filter(r => r.date < today && getReceiptPhase(r) === 'trip')
+    .filter(r => r.date < today && getReceiptPhase(r) === 'trip' && _phaseFilter(r))
     .reduce((s,r) => s + (Number(r.total)||0), 0);
   const prepTotal = prepReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
   const remainingTripBudget = Math.max(0, state.budget - prepTotal - tripSpentBeforeToday);
