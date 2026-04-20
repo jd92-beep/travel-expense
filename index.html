@@ -2804,11 +2804,11 @@ function showSpotPopup(opts) {
   } else {
     editBtn.classList.add('hidden');
   }
-  // Body scroll-lock while popup is open — prevents the underlying tab content
-  // from scrolling out from under the popup on iOS (which Boss saw as
-  // "popup sometimes shows on wrong tab" — the tab content shifted behind
-  // the fixed-positioned popup, making it look like a different tab).
-  document.body.style.overflow = 'hidden';
+  // NOTE: earlier I set body.style.overflow='hidden' here thinking it
+  // was a scroll-lock helper. On Android Chrome this actually caused the
+  // underlying tab content to reflow/snap when the modal opened, making
+  // Boss report "popup appears on wrong tab". The popup is fixed-positioned
+  // z-60 which already overlays everything; no scroll lock needed.
   $('hotelPopup').classList.remove('hidden');
 }
 // Back-compat wrapper
@@ -2817,8 +2817,9 @@ function showHotelPopup(name, address) {
 }
 function closeHotelPopup() {
   $('hotelPopup').classList.add('hidden');
-  // Restore body scroll (we may have locked it in showSpotPopup for popup focus).
-  document.body.style.overflow = '';
+  // Defensive clear of any prior overflow lock in case user loaded an old
+  // cached version of showSpotPopup before this fix.
+  if (document.body.style.overflow === 'hidden') document.body.style.overflow = '';
   // Clear popup state so a subsequent show doesn't leak stale data from previous.
   _hotelPopupName = '';
   _hotelPopupAddress = '';
@@ -8368,18 +8369,24 @@ function _btnPress(el) {
 function _initAnimations() {
   document.querySelectorAll('button, [onclick], .cursor-pointer').forEach(el => {
     if (el._animInit) return;
-    // Skip external-navigation anchors — the ripple/press animation sets
-    // overflow:hidden and appends a span on pointerdown, which on iOS/Android
-    // can interfere with the native anchor-tap → map-app handoff.
-    // Covers: target="_blank" (http, maps.apple.com, etc) AND native URL
-    // schemes (geo:, mailto:, tel:, maps:) which are always external handoffs.
+    // Skip ALL <a> tags regardless of current href. The popup's address-row
+    // anchor starts with href="#" at init and is only rewritten to
+    // "geo:..." / "https://maps.apple.com/..." when showSpotPopup() opens
+    // the popup — by then _animInit is already set and the skip check
+    // (previously based on href scheme) has been bypassed.
+    //
+    // The pointerdown handler runs _spawnRipple (sets overflow:hidden,
+    // appends a ripple span) and _btnPress (forces synchronous reflow via
+    // void el.offsetWidth). Those DOM mutations happen SYNCHRONOUSLY on
+    // pointerdown, and on Android Chrome this interrupts the browser's
+    // intent-handler lookup for geo:/mailto:/tel:/etc — the native tap
+    // never reaches the OS map handler, so Google Maps doesn't open.
+    //
+    // Anchors have their own native feedback (browser-drawn tap highlight),
+    // they don't need our injected ripple. Safe to skip all of them.
     if (el.tagName === 'A') {
-      const href = el.getAttribute('href') || '';
-      const isExternalScheme = /^(geo|mailto|tel|sms|maps|comgooglemaps|intent):/i.test(href);
-      if (el.getAttribute('target') === '_blank' || isExternalScheme) {
-        el._animInit = true;
-        return;
-      }
+      el._animInit = true;
+      return;
     }
     el._animInit = true;
     el.addEventListener('pointerdown', (e) => {
