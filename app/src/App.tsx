@@ -186,7 +186,7 @@ function AppInner() {
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
           >
             {content}
           </motion.main>
@@ -206,18 +206,39 @@ function AppInner() {
 }
 
 const pageVariants = {
-  enter: (d: number) => ({ opacity: 0, x: 28 * d, filter: 'blur(6px)' }),
-  center: { opacity: 1, x: 0, filter: 'blur(0px)' },
-  exit: (d: number) => ({ opacity: 0, x: -28 * d, filter: 'blur(6px)' }),
+  enter: (d: number) => ({
+    opacity: 0,
+    x: 32 * d,
+    scale: 0.96,
+    filter: 'blur(8px)',
+  }),
+  center: {
+    opacity: 1,
+    x: 0,
+    scale: 1,
+    filter: 'blur(0px)',
+  },
+  exit: (d: number) => ({
+    opacity: 0,
+    x: -32 * d,
+    scale: 0.96,
+    filter: 'blur(8px)',
+  }),
 };
 
 function AppHeader() {
   const [time, setTime] = useState(() => nowHKTime());
+  const [spinning, setSpinning] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setTime(nowHKTime()), 30_000);
     return () => clearInterval(id);
   }, []);
+
+  const handleLogoTap = () => {
+    setSpinning(true);
+    setTimeout(() => setSpinning(false), 700);
+  };
 
   return (
     <header className="flex items-center justify-between py-5">
@@ -227,9 +248,21 @@ function AppHeader() {
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 280, damping: 20 }}
           whileHover={{ scale: 1.08, rotate: 6 }}
-          className="relative h-10 w-10 rounded-2xl bg-gradient-arsenal grid place-items-center shadow-glow overflow-hidden cursor-default"
+          whileTap={{ scale: 0.92 }}
+          onClick={handleLogoTap}
+          className="relative h-10 w-10 rounded-2xl bg-gradient-arsenal grid place-items-center shadow-glow overflow-hidden cursor-pointer"
         >
-          <span className="text-xl relative z-10">🗾</span>
+          <motion.span
+            className="text-xl relative z-10"
+            animate={spinning ? { rotate: 360 } : { rotate: 0 }}
+            transition={
+              spinning
+                ? { type: 'spring', stiffness: 200, damping: 14, duration: 0.7 }
+                : { duration: 0 }
+            }
+          >
+            🗾
+          </motion.span>
           <div
             aria-hidden
             className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/40 via-white/0 to-transparent"

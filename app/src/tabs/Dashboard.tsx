@@ -33,7 +33,6 @@ export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
   const [greeting, setGreeting] = useState(() => timeGreeting());
   const trip = useMemo(() => tripStatus(), []);
 
-  // Refresh greeting + tick every 5 minutes so the tone text matches reality.
   useEffect(() => {
     const id = setInterval(() => setGreeting(timeGreeting()), 5 * 60_000);
     return () => clearInterval(id);
@@ -55,7 +54,6 @@ export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
     };
   }, [state.receipts, today]);
 
-  // Day markers on ring. Evenly spaced, active = today, past = before today.
   const dayMarkers = useMemo(
     () =>
       ITINERARY.map((d, i) => ({
@@ -67,6 +65,7 @@ export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
   );
 
   const trendPositive = dailyTrend.some((v) => v > 0);
+  const noReceipts = state.receipts.length === 0;
 
   return (
     <div className="space-y-5 pb-6">
@@ -104,29 +103,48 @@ export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
       {/* Pre-trip countdown hero */}
       {trip.phase === 'before' && <CountdownCard daysUntil={trip.daysUntil} />}
 
-      {/* Budget Ring */}
-      <Card className="py-8 flex flex-col items-center">
-        <BudgetRing used={totalSpend} total={state.budget} dayMarkers={dayMarkers} />
-        <div className="grid grid-cols-3 gap-3 mt-6 w-full text-center">
-          <Metric label="今日" value={todaySpend} />
-          <Metric label="總開支" value={totalSpend} bordered />
-          <Metric label="日均" value={dailyAvg} />
-        </div>
-        {trendPositive && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="mt-5 w-full flex items-center justify-between px-2"
-          >
-            <div>
-              <CardLabel>6 日走勢</CardLabel>
-              <div className="text-[11px] text-ink-500 mt-0.5 num">JPY · 每日</div>
-            </div>
-            <Sparkline data={dailyTrend} color="#f97316" />
-          </motion.div>
-        )}
-      </Card>
+      {/* Budget Ring card with stagger */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <Card className="py-8 flex flex-col items-center">
+          <BudgetRing used={totalSpend} total={state.budget} dayMarkers={dayMarkers} />
+          <div className="grid grid-cols-3 gap-3 mt-6 w-full text-center">
+            {[
+              { label: '今日', value: todaySpend },
+              { label: '總開支', value: totalSpend, bordered: true },
+              { label: '日均', value: dailyAvg },
+            ].map((m, i) => (
+              <motion.div
+                key={m.label}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <Metric label={m.label} value={m.value} bordered={m.bordered} />
+              </motion.div>
+            ))}
+          </div>
+          {trendPositive && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="mt-5 w-full flex items-center justify-between px-2"
+            >
+              <div>
+                <CardLabel>6 日走勢</CardLabel>
+                <div className="text-[11px] text-ink-500 mt-0.5 num">JPY · 每日</div>
+              </div>
+              <Sparkline data={dailyTrend} color="#f97316" />
+            </motion.div>
+          )}
+        </Card>
+      </motion.div>
 
       {/* Itinerary carousel */}
       <section>
@@ -186,13 +204,20 @@ export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
           </div>
           <div className="space-y-2">
             <AnimatePresence initial={false}>
-              {todayReceipts.map((r) => (
-                <ReceiptCard
+              {todayReceipts.map((r, i) => (
+                <motion.div
                   key={r.id}
-                  receipt={r}
-                  rate={state.rate}
-                  onClick={() => onOpenReceipt(r.id)}
-                />
+                  initial={{ opacity: 0, x: i % 2 === 0 ? -16 : 16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ delay: i * 0.04, type: 'spring', stiffness: 380, damping: 28 }}
+                >
+                  <ReceiptCard
+                    receipt={r}
+                    rate={state.rate}
+                    onClick={() => onOpenReceipt(r.id)}
+                  />
+                </motion.div>
               ))}
             </AnimatePresence>
           </div>
@@ -206,12 +231,28 @@ export function Dashboard({ state, onOpenReceipt, onGoScan }: DashboardProps) {
               : '影咗收據之後會自動出現喺度'
           }
           action={
-            <Button onClick={onGoScan} size="sm">
-              <ScanLine size={14} /> 開始掃描
-            </Button>
+            <BreathingButton onClick={onGoScan} pulse={noReceipts} />
           }
         />
       )}
+    </div>
+  );
+}
+
+/** CTA button with breathing pulse when no receipts yet */
+function BreathingButton({ onClick, pulse }: { onClick: () => void; pulse: boolean }) {
+  return (
+    <div className="relative inline-flex">
+      {pulse && (
+        <motion.span
+          className="absolute inset-0 rounded-xl bg-arsenal-500/30"
+          animate={{ scale: [1, 1.18, 1], opacity: [0.6, 0, 0.6] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      )}
+      <Button onClick={onClick} size="sm">
+        <ScanLine size={14} /> 開始掃描
+      </Button>
     </div>
   );
 }

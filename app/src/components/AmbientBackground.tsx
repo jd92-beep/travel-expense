@@ -1,5 +1,5 @@
-import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /** Returns gradient config based on local hour. */
 function getTimeTheme() {
@@ -36,13 +36,37 @@ function getTimeTheme() {
   };
 }
 
+interface ClickRipple {
+  id: number;
+  x: number;
+  y: number;
+}
+
 export function AmbientBackground() {
   const [theme, setTheme] = useState(getTimeTheme);
+  const [clickRipples, setClickRipples] = useState<ClickRipple[]>([]);
+  const counterRef = useRef(0);
 
   useEffect(() => {
     const id = setInterval(() => setTheme(getTimeTheme()), 5 * 60_000);
     return () => clearInterval(id);
   }, []);
+
+  const handleWindowClick = useCallback((e: MouseEvent) => {
+    const rippleId = ++counterRef.current;
+    setClickRipples((prev) => [
+      ...prev,
+      { id: rippleId, x: e.clientX, y: e.clientY },
+    ]);
+    setTimeout(() => {
+      setClickRipples((prev) => prev.filter((r) => r.id !== rippleId));
+    }, 900);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, [handleWindowClick]);
 
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
@@ -152,6 +176,28 @@ export function AmbientBackground() {
             'radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%)',
         }}
       />
+
+      {/* Click ripple overlay */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: -1 }}>
+        <AnimatePresence>
+          {clickRipples.map((r) => (
+            <motion.span
+              key={r.id}
+              className="absolute rounded-full border border-arsenal-500/25"
+              style={{
+                left: r.x,
+                top: r.y,
+                translateX: '-50%',
+                translateY: '-50%',
+              }}
+              initial={{ width: 0, height: 0, opacity: 0.55 }}
+              animate={{ width: 180, height: 180, opacity: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.85, ease: 'easeOut' }}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
