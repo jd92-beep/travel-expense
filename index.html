@@ -2725,45 +2725,42 @@ function showSpotPopup(opts) {
   if (o.time) { timeEl.textContent = '⏰ ' + o.time; timeEl.classList.remove('hidden'); }
   else timeEl.classList.add('hidden');
   // Address row — always tappable; Maps query falls back to spot name.
-  // Set href directly on the <a> element so iOS treats the user's tap as a
-  // direct anchor activation (works in Safari PWA standalone mode where
-  // programmatic window.open / synthetic anchor clicks are blocked).
+  // Platform-aware: Android needs geo: URL to open Google Maps app from PWA,
+  // iOS needs https://maps.apple.com Universal Link, desktop just opens a new tab.
   $('hotelPopupAddressText').textContent = _hotelPopupAddress || ('用 ' + (_hotelPopupName || '名稱') + ' 搜尋地圖');
   const row = $('hotelPopupAddressRow');
   row.style.display = 'flex';
   const qParts = [_hotelPopupName, _hotelPopupAddress].filter(Boolean);
   if (qParts.length) {
     const q = encodeURIComponent(qParts.join(' '));
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    // URL priority:
-    //   - iOS: https://maps.apple.com — Universal Link, iOS auto-opens Maps app
-    //     even from PWA standalone mode (special-cased by iOS URL handler).
-    //   - Everything else: official Google Maps search URL.
-    const mapUrl = isIOS
-      ? 'https://maps.apple.com/?q=' + q
-      : 'https://www.google.com/maps/search/?api=1&query=' + q;
-    row.href = mapUrl;
-    row.target = '_blank';
-    row.rel = 'noopener noreferrer';
-    // Belt-and-suspenders: some iOS PWA versions ignore target=_blank and
-    // navigate the PWA itself. We intercept the click, stop propagation (so
-    // the backdrop's if-target-is-this close handler can't fire), and
-    // trigger navigation via location.href. For https://maps.apple.com/ URLs
-    // iOS recognizes the Universal Link and opens the Maps app directly
-    // instead of navigating the PWA.
-    row.onclick = (e) => {
-      e.stopPropagation();
-      // Let the default anchor activation happen — on desktop/Android Chrome
-      // that's the best behavior. Only force location.href on iOS standalone
-      // PWA where target="_blank" is historically broken.
-      const isStandalonePWA = window.navigator.standalone === true;
-      if (isStandalonePWA && isIOS) {
-        e.preventDefault();
-        // Direct Universal Link — iOS will intercept and open Maps app.
-        window.location.href = mapUrl;
-      }
-      // Otherwise do nothing — browser's native anchor-click handles it.
-    };
+    const ua = navigator.userAgent;
+    const isAndroid = /Android/i.test(ua);
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+    // Platform-specific href — the native URL is used DIRECTLY on the <a> so
+    // browsers hand it off to the OS map-handler without navigating the PWA:
+    //   - Android: `geo:0,0?q=X` (Android Chrome intent → Google Maps app)
+    //   - iOS:     `https://maps.apple.com/?q=X` (iOS Universal Link → Maps app)
+    //   - Desktop: Google Maps search URL (opens new tab)
+    if (isAndroid) {
+      row.href = 'geo:0,0?q=' + q;
+      // Also include a data-httpsfallback so if geo: fails (rare — e.g. user
+      // uninstalled ALL map apps) there's still a long-press / copy option.
+      row.dataset.httpsFallback = 'https://www.google.com/maps/search/?api=1&query=' + q;
+      row.removeAttribute('target'); // geo: URL — OS takes over, no new tab
+      row.removeAttribute('rel');
+    } else if (isIOS) {
+      row.href = 'https://maps.apple.com/?q=' + q;
+      row.target = '_blank';
+      row.rel = 'noopener noreferrer';
+    } else {
+      row.href = 'https://www.google.com/maps/search/?api=1&query=' + q;
+      row.target = '_blank';
+      row.rel = 'noopener noreferrer';
+    }
+    // stopPropagation prevents the backdrop's "click-outside-to-close" from
+    // firing on the same tap. Do NOT preventDefault — we want the native
+    // anchor activation to proceed so the OS handler takes over.
+    row.onclick = (e) => { e.stopPropagation(); };
   } else {
     // No data — block the default anchor navigation so we don't scroll to top.
     row.removeAttribute('href');
@@ -8371,13 +8368,18 @@ function _btnPress(el) {
 function _initAnimations() {
   document.querySelectorAll('button, [onclick], .cursor-pointer').forEach(el => {
     if (el._animInit) return;
-    // Skip external links — the ripple/press animation sets `overflow:hidden` and
-    // appends a span on pointerdown, which on iOS can interfere with the native
-    // anchor-tap → target="_blank" handoff to Safari / Maps app. Result: tapping
-    // the popup's 📍 address row did nothing. Leave external-nav anchors alone.
-    if (el.tagName === 'A' && el.getAttribute('target') === '_blank') {
-      el._animInit = true;
-      return;
+    // Skip external-navigation anchors — the ripple/press animation sets
+    // overflow:hidden and appends a span on pointerdown, which on iOS/Android
+    // can interfere with the native anchor-tap → map-app handoff.
+    // Covers: target="_blank" (http, maps.apple.com, etc) AND native URL
+    // schemes (geo:, mailto:, tel:, maps:) which are always external handoffs.
+    if (el.tagName === 'A') {
+      const href = el.getAttribute('href') || '';
+      const isExternalScheme = /^(geo|mailto|tel|sms|maps|comgooglemaps|intent):/i.test(href);
+      if (el.getAttribute('target') === '_blank' || isExternalScheme) {
+        el._animInit = true;
+        return;
+      }
     }
     el._animInit = true;
     el.addEventListener('pointerdown', (e) => {
