@@ -397,7 +397,7 @@
         <span class="text-sm font-medium" style="color:rgba(255,255,255,0.75)">≈ HKD <span id="todaySpendHKD">0</span></span>
         <span class="text-xs font-bold px-2.5 py-1 rounded-full" style="background:rgba(0,0,0,0.20);color:rgba(255,255,255,0.9)"><span id="todayCount">0</span> 筆</span>
       </div>
-      <p id="todaySpendNote" class="text-[9px] mt-1.5" style="color:rgba(255,255,255,0.45)">不含交通/住宿</p>
+      <p id="todaySpendNote" class="text-[9px] mt-1.5" style="color:rgba(255,255,255,0.45)">不含機票/住宿</p>
     </div>
 
     <!-- Daily budget alert -->
@@ -418,14 +418,14 @@
         <p class="text-2xl font-black" style="color:white">¥<span id="totalSpend">0</span></p>
         <p class="text-xs font-semibold mt-0.5" style="color:rgba(255,255,255,0.85)">≈ HKD <span id="totalSpendHKD">0</span></p>
         <p class="text-[10px] mt-1.5" style="color:rgba(255,255,255,0.50)"><span id="totalCount">0</span> 筆紀錄</p>
-        <p id="totalSpendNote" class="text-[9px] mt-1" style="color:rgba(255,255,255,0.40)">不含交通/住宿</p>
+        <p id="totalSpendNote" class="text-[9px] mt-1" style="color:rgba(255,255,255,0.40)">不含機票/住宿</p>
       </div>
       <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,#D4760F,#F5A623);box-shadow:0 8px 28px rgba(212,118,15,0.32)">
         <p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:rgba(255,255,255,0.65)">日均花費</p>
         <p class="text-2xl font-black" style="color:white">¥<span id="avgSpend">0</span></p>
         <p class="text-xs font-semibold mt-0.5" style="color:rgba(255,255,255,0.85)">≈ HKD <span id="avgSpendHKD">0</span></p>
         <p class="text-[10px] mt-1.5" style="color:rgba(255,255,255,0.55)">過去 <span id="daysElapsed">0</span> 日</p>
-        <p id="avgSpendNote" class="text-[9px] mt-1" style="color:rgba(255,255,255,0.50)">不含交通/住宿</p>
+        <p id="avgSpendNote" class="text-[9px] mt-1" style="color:rgba(255,255,255,0.50)">不含機票/住宿</p>
       </div>
     </div>
 
@@ -707,12 +707,12 @@
       <div class="flex items-center justify-between mb-1">
         <div>
           <p class="text-xs uppercase tracking-wider font-semibold" style="color:var(--n-muted)">📊 首頁統計顯示</p>
-          <p class="text-[11px] mt-1" style="color:var(--n-muted)">今日花費、總消費 & 日均花費 是否計入<span style="color:#C0281E;font-weight:600">交通</span>和<span style="color:#C0281E;font-weight:600">住宿</span>（機票/酒店）</p>
+          <p class="text-[11px] mt-1" style="color:var(--n-muted)">今日花費、總消費 & 日均花費 是否計入<span style="color:#C0281E;font-weight:600">機票</span>和<span style="color:#C0281E;font-weight:600">住宿</span>（本地交通 — 新幹線、地鐵、的士 — 永遠會計）</p>
         </div>
       </div>
       <label class="flex items-center justify-between mt-2 cursor-pointer select-none">
         <div class="flex items-center gap-2">
-          <span class="text-sm">✈️🏨 包括交通 & 住宿支出</span>
+          <span class="text-sm">✈️🏨 包括機票 & 住宿支出</span>
         </div>
         <div class="relative">
           <input type="checkbox" id="toggleStatsTransportLodging" class="sr-only">
@@ -720,7 +720,7 @@
           <div id="toggleStatsThumb" class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"></div>
         </div>
       </label>
-      <p id="statsToggleHint" class="text-[10px] mt-2" style="color:var(--n-muted)">目前：今日/總消費/日均 不計入交通/住宿</p>
+      <p id="statsToggleHint" class="text-[10px] mt-2" style="color:var(--n-muted)">目前：今日/總消費/日均 不計入機票/住宿</p>
     </div>
 
     <!-- Exchange rate with currency selector + Visa source -->
@@ -1325,6 +1325,21 @@
   </div>
 </div>
 
+<!-- ============ SCAN PROGRESS MODAL (shown while AI is processing a receipt) ============ -->
+<!-- Full-screen overlay so the user knows the AI is working — replaces the
+     previous in-page progress text that was easy to miss at the bottom of the scan tab. -->
+<div id="scanProgressModal" class="hidden fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" style="pointer-events:auto">
+  <div class="glass rounded-3xl p-8 text-center mx-4 max-w-xs w-full" style="background:var(--n-surface);border:1px solid var(--n-border);box-shadow:0 24px 64px rgba(0,0,0,0.35)">
+    <div class="relative w-16 h-16 mx-auto mb-4">
+      <div class="absolute inset-0 rounded-full opacity-25" style="background:var(--n-red);animation:pulse-ring 1.5s ease-out infinite"></div>
+      <div class="relative w-16 h-16 rounded-full flex items-center justify-center text-2xl" style="background:linear-gradient(135deg,#C0281E,#E04040)">🤖</div>
+    </div>
+    <p class="text-base font-bold mb-1" style="color:var(--n-text)">AI 正在辨識收據</p>
+    <p id="scanProgressSub" class="text-xs" style="color:var(--n-muted)">請稍候，通常 5-15 秒…</p>
+    <div class="inline-block mt-4 w-6 h-6 border-4 border-[#F5CACE] border-t-[#C0281E] rounded-full animate-spin"></div>
+  </div>
+</div>
+
 <!-- ============ SPOT POPUP (generic — works for all itinerary types) ============ -->
 <div id="hotelPopup" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeHotelPopup()">
   <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-5" style="background:var(--n-surface);border:1px solid var(--n-border)">
@@ -1410,6 +1425,7 @@
 <script>
 // ============ CONFIG ============
 const CATEGORIES = [
+  { id:'flight', name:'機票', icon:'✈️', color:'#2563eb' },
   { id:'transport', name:'交通', icon:'🚆', color:'#60a5fa' },
   { id:'food', name:'餐飲', icon:'🍱', color:'#f97316' },
   { id:'shopping', name:'購物', icon:'🛍️', color:'#a78bfa' },
@@ -2322,13 +2338,13 @@ function renderDashboard() {
   const today = todayHKT();
   const inclTL = !!state.statsIncludeTransportLodging;
   const todayR = state.receipts.filter(r => r.date === today);
-  const todayRStats = inclTL ? todayR : todayR.filter(r => r.category !== 'transport' && r.category !== 'lodging');
+  const todayRStats = inclTL ? todayR : todayR.filter(r => r.category !== 'flight' && r.category !== 'lodging');
   const todayTotal = todayRStats.reduce((s,r) => s + (Number(r.total)||0), 0);
   $('todaySpend').textContent = fmt(todayTotal);
   $('todaySpendHKD').textContent = (todayTotal / Math.max(0.1, Number(state.rate) || 20.36)).toFixed(0);
   $('todayCount').textContent = todayRStats.length;
   const todayNote = $('todaySpendNote');
-  if (todayNote) todayNote.textContent = inclTL ? '含全部類別' : '不含交通/住宿';
+  if (todayNote) todayNote.textContent = inclTL ? '含全部類別' : '不含機票/住宿';
   const cd = getCurrentDay();
   // Show 🧳 icon for prep phase, 🏠 for post, 📍 for trip
   const locIcon = cd._synthetic === 'prep' ? '🧳' : (cd._synthetic === 'post' ? '🏠' : '📍');
@@ -2390,13 +2406,13 @@ function renderDashboard() {
   const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
   const statsReceipts = inclTL
     ? state.receipts
-    : state.receipts.filter(r => r.category !== 'transport' && r.category !== 'lodging');
+    : state.receipts.filter(r => r.category !== 'flight' && r.category !== 'lodging');
   const total = statsReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
   $('totalSpend').textContent = fmt(total);
   $('totalSpendHKD').textContent = fmt(Math.round(total / safeRate));
   $('totalCount').textContent = statsReceipts.length;
   const totalNote = $('totalSpendNote');
-  if (totalNote) totalNote.textContent = inclTL ? '含全部類別' : '不含交通/住宿';
+  if (totalNote) totalNote.textContent = inclTL ? '含全部類別' : '不含機票/住宿';
 
   const dates = [...new Set(statsReceipts.map(r => r.date))];
   const days = Math.max(1, dates.length);
@@ -2405,7 +2421,7 @@ function renderDashboard() {
   $('avgSpendHKD').textContent = fmt(Math.round(avg / safeRate));
   $('daysElapsed').textContent = days;
   const avgNote = $('avgSpendNote');
-  if (avgNote) avgNote.textContent = inclTL ? '含全部類別' : '不含交通/住宿';
+  if (avgNote) avgNote.textContent = inclTL ? '含全部類別' : '不含機票/住宿';
 
   renderPersonBreakdown();
 
@@ -2719,17 +2735,40 @@ function showSpotPopup(opts) {
   if (qParts.length) {
     const q = encodeURIComponent(qParts.join(' '));
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    row.href = isIOS
+    // URL priority:
+    //   - iOS: https://maps.apple.com — Universal Link, iOS auto-opens Maps app
+    //     even from PWA standalone mode (special-cased by iOS URL handler).
+    //   - Everything else: official Google Maps search URL.
+    const mapUrl = isIOS
       ? 'https://maps.apple.com/?q=' + q
       : 'https://www.google.com/maps/search/?api=1&query=' + q;
+    row.href = mapUrl;
     row.target = '_blank';
     row.rel = 'noopener noreferrer';
-    row.onclick = null;
+    // Belt-and-suspenders: some iOS PWA versions ignore target=_blank and
+    // navigate the PWA itself. We intercept the click, stop propagation (so
+    // the backdrop's if-target-is-this close handler can't fire), and
+    // trigger navigation via location.href. For https://maps.apple.com/ URLs
+    // iOS recognizes the Universal Link and opens the Maps app directly
+    // instead of navigating the PWA.
+    row.onclick = (e) => {
+      e.stopPropagation();
+      // Let the default anchor activation happen — on desktop/Android Chrome
+      // that's the best behavior. Only force location.href on iOS standalone
+      // PWA where target="_blank" is historically broken.
+      const isStandalonePWA = window.navigator.standalone === true;
+      if (isStandalonePWA && isIOS) {
+        e.preventDefault();
+        // Direct Universal Link — iOS will intercept and open Maps app.
+        window.location.href = mapUrl;
+      }
+      // Otherwise do nothing — browser's native anchor-click handles it.
+    };
   } else {
     // No data — block the default anchor navigation so we don't scroll to top.
     row.removeAttribute('href');
     row.removeAttribute('target');
-    row.onclick = (e) => { e.preventDefault(); toast('⚠️ 冇地址或名稱'); };
+    row.onclick = (e) => { e.preventDefault(); e.stopPropagation(); toast('⚠️ 冇地址或名稱'); };
   }
   // Build a richer note row: if receipt-backed, pull live receipt details
   const noteEl = $('hotelPopupNoteRow');
@@ -2768,6 +2807,11 @@ function showSpotPopup(opts) {
   } else {
     editBtn.classList.add('hidden');
   }
+  // Body scroll-lock while popup is open — prevents the underlying tab content
+  // from scrolling out from under the popup on iOS (which Boss saw as
+  // "popup sometimes shows on wrong tab" — the tab content shifted behind
+  // the fixed-positioned popup, making it look like a different tab).
+  document.body.style.overflow = 'hidden';
   $('hotelPopup').classList.remove('hidden');
 }
 // Back-compat wrapper
@@ -2776,6 +2820,14 @@ function showHotelPopup(name, address) {
 }
 function closeHotelPopup() {
   $('hotelPopup').classList.add('hidden');
+  // Restore body scroll (we may have locked it in showSpotPopup for popup focus).
+  document.body.style.overflow = '';
+  // Clear popup state so a subsequent show doesn't leak stale data from previous.
+  _hotelPopupName = '';
+  _hotelPopupAddress = '';
+  _hotelPopupDate = '';
+  _hotelPopupIdx = -1;
+  _hotelPopupReceiptId = null;
 }
 function editFromSpotPopup() {
   // Receipt-backed spot → jump to records tab (read-only in popup, edit there)
@@ -3745,6 +3797,18 @@ function renderStats() {
 // ============ AI SCAN ============
 let lastScanBase64 = null, lastScanMime = 'image/jpeg', lastScanResult = null, lastScanWarnings = [];
 
+// Open / close the scan progress overlay. Shown to assure user the AI is working,
+// instead of the subtle previous inline text at the bottom of the scan tab.
+function _openScanProgress(subText) {
+  const el = $('scanProgressModal');
+  if (!el) return;
+  if (subText) $('scanProgressSub').textContent = subText;
+  el.classList.remove('hidden');
+}
+function _closeScanProgress() {
+  $('scanProgressModal')?.classList.add('hidden');
+}
+
 async function scanReceipt(file) {
   // Guard against double-scan races: if the user rapid-taps or iOS fires
   // the file-change event twice, the second scan would clobber lastScanBase64
@@ -3760,9 +3824,13 @@ async function scanReceipt(file) {
   if (prevImg.src && prevImg.src.startsWith('blob:')) URL.revokeObjectURL(prevImg.src);
   prevImg.src = URL.createObjectURL(file);
   lastScanResult = null; // clear previous result when new scan starts
+  // In-page inline status kept as a fallback for desktop / narrow viewports where
+  // the modal might be dismissed; it's also updated live for models-tried info.
   $('scanStatus').innerHTML = `
     <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
     <p class="text-sm mt-2" style="color:var(--n-muted)">AI 正在辨識收據…</p>`;
+  // Primary progress UX: modal overlay so the user SEES it's working.
+  _openScanProgress('請稍候，通常 5-15 秒…');
 
   try {
     const rawBase64 = await fileToBase64(file);
@@ -3775,6 +3843,8 @@ async function scanReceipt(file) {
   } catch (err) {
     console.error(err);
     showScanError(err.message);
+  } finally {
+    _closeScanProgress();
   }
 }
 
@@ -3785,6 +3855,8 @@ async function runScanWithBase64(base64, mime) {
   $('scanStatus').innerHTML = `
     <div class="inline-block w-8 h-8 border-4 border-[#CCDCF0] border-t-[#2D5A8E] rounded-full animate-spin"></div>
     <p class="text-sm mt-2" style="color:var(--n-muted)">AI 正在辨識收據…</p>`;
+  // Show progress modal for direct re-runs too (retry button, etc.).
+  _openScanProgress('請稍候，通常 5-15 秒…');
   try {
     const result = await callGemini(base64, mime || 'image/jpeg');
     const { cleaned, warnings } = normalizeScanResult(result);
@@ -3798,6 +3870,7 @@ async function runScanWithBase64(base64, mime) {
     showScanError(String(err?.message || 'unknown'));
   } finally {
     _scanInFlight = false;
+    _closeScanProgress();
   }
 }
 
@@ -4219,7 +4292,7 @@ async function parseVoiceExpense(transcript) {
 - 食物名稱用繁體中文
 
 【類別判斷】
-食物/餐廳/便利店/炸豬扒/拉麵/壽司→food；JR/地鐵/巴士/的士/船→transport；衫/紀念品/藥妝/電器→shopping；酒店/民宿→lodging；門票/景點→ticket；藥/藥房→medicine；其他→other
+食物/餐廳/便利店/炸豬扒/拉麵/壽司→food；**機票/航空公司/航班/Cathay/ANA/JAL/HK Express/國泰/日航/全日空→flight**；JR/新幹線/地鐵/巴士/的士/船/IC卡充值→transport；衫/紀念品/藥妝/電器→shopping；酒店/民宿/Airbnb→lodging；門票/景點→ticket；藥/藥房→medicine；其他→other
 
 【支付判斷】
 現金/cash→cash；卡/VISA/信用→credit；PayPay→paypay；Suica/IC→suica
@@ -4229,7 +4302,7 @@ async function parseVoiceExpense(transcript) {
   "store": "店名繁體中文（冇就null）",
   "total": 總金額JPY數字（冇就null）,
   "date": "${today}",
-  "category": "food|transport|shopping|lodging|ticket|medicine|other",
+  "category": "flight|food|transport|shopping|lodging|ticket|medicine|other",
   "payment": "cash|credit|paypay|suica",
   "items": [{"name":"品項繁體中文","name_jp":null,"price":價格數字}],
   "note": "備註（冇就null）"
@@ -4415,7 +4488,7 @@ const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。仔細睇收據
   "time": "HH:MM（24h）或 null",
   "address": "住所原文（如有印，否則 null）",
   "booking_ref": "單據號 / レシート番号 / 取引番号（如有，否則 null）",
-  "category": "transport|food|shopping|lodging|ticket|localtour|medicine|other",
+  "category": "flight|transport|food|shopping|lodging|ticket|localtour|medicine|other",
   "payment": "cash|credit|paypay|suica 或 null",
   "items": [
     { "name": "繁體中文意譯", "name_jp": "日文原文（唔准轉字）", "price": 數字 }
@@ -4631,10 +4704,11 @@ const ITINERARY_EXTRACT_PROMPT = `你係一個旅遊行程辨識 AI。仔細睇�
 目標：提取**一個主要地點 / 活動**嘅結構化資料，用於加入旅行行程表。
 
 回覆格式（JSON object，所有欄位必填，無值用 null）：
-{"name":"地點或活動名稱（日文原文優先，唔好翻譯店名）","name_zh":"繁體中文名稱或意譯（方便 Boss 睇）","type":"sightseeing|food|transport|lodging|shopping|ticket|localtour|medicine|other","time":"HH:mm 或 null","date":"YYYY-MM-DD 或 null","address":"日文地址或 null","note":"補充資訊例如預訂號、特別說明、開放時間等，或 null","confidence":"high|medium|low"}
+{"name":"地點或活動名稱（日文原文優先，唔好翻譯店名）","name_zh":"繁體中文名稱或意譯（方便 Boss 睇）","type":"sightseeing|food|flight|transport|lodging|shopping|ticket|localtour|medicine|other","time":"HH:mm 或 null","date":"YYYY-MM-DD 或 null","address":"日文地址或 null","note":"補充資訊例如預訂號、特別說明、開放時間等，或 null","confidence":"high|medium|low"}
 
 type 選擇規則：
-- transport = 機票、新幹線、巴士、交通票
+- flight = 機票、航空公司航班（Cathay、ANA、JAL、HK Express 等）
+- transport = 新幹線、JR、地鐵、巴士、的士、交通票、IC 卡（非機票）
 - lodging = 酒店、民宿、旅館
 - ticket = 景點門票、入場券、遊樂設施
 - localtour = 一日遊、導遊 tour、KKday/Klook 活動
@@ -4753,7 +4827,7 @@ itinerary_updates 欄位：{ date, time, name, type, note }（note < 80 字，�
       "original_currency": "原幣 ISO code（HKD/USD/JPY/CNY/EUR 等）",
       "original_amount": 原幣金額純數字 或 null,
       "date": "YYYY-MM-DD（service date）或 null",
-      "category": "transport|food|shopping|lodging|ticket|localtour|medicine|other",
+      "category": "flight|transport|food|shopping|lodging|ticket|localtour|medicine|other",
       "payment": "cash|credit|paypay|suica 或 null",
       "items_text": "1-2 句描述，例：「去程 CX564 HKG→NGO 經濟艙」「立山黑部 Day Tour 含午餐」",
       "note": "booking reference（必填如有）/ 其他關鍵資訊（30字以內）",
@@ -6014,6 +6088,7 @@ async function notionMigrateSchema() {
       needsMigration = true;
       if (oldName === '類別') {
         patchProps[oldName] = { name: newName, select: { options: [
+          { name: '機票',    color: 'blue' },
           { name: '交通',    color: 'blue' },
           { name: '餐飲',    color: 'orange' },
           { name: '購物',    color: 'pink' },
@@ -7405,7 +7480,7 @@ function init() {
     cb.checked = !!val;
     track.style.background = val ? '#C0281E' : '#E5E7EB';
     thumb.style.transform   = val ? 'translateX(20px)' : 'translateX(0)';
-    if (hint) hint.textContent = val ? '目前：今日/總消費/日均 計入交通/住宿' : '目前：今日/總消費/日均 不計入交通/住宿';
+    if (hint) hint.textContent = val ? '目前：今日/總消費/日均 計入機票/住宿' : '目前：今日/總消費/日均 不計入機票/住宿';
   }
   _applyStatsToggleUI(!!state.statsIncludeTransportLodging);
   $('toggleStatsTransportLodging').addEventListener('change', function() {
@@ -8296,6 +8371,14 @@ function _btnPress(el) {
 function _initAnimations() {
   document.querySelectorAll('button, [onclick], .cursor-pointer').forEach(el => {
     if (el._animInit) return;
+    // Skip external links — the ripple/press animation sets `overflow:hidden` and
+    // appends a span on pointerdown, which on iOS can interfere with the native
+    // anchor-tap → target="_blank" handoff to Safari / Maps app. Result: tapping
+    // the popup's 📍 address row did nothing. Leave external-nav anchors alone.
+    if (el.tagName === 'A' && el.getAttribute('target') === '_blank') {
+      el._animInit = true;
+      return;
+    }
     el._animInit = true;
     el.addEventListener('pointerdown', (e) => {
       _spawnRipple(el, e);
