@@ -2341,7 +2341,13 @@ function renderHeader() {
     $('dayCounter').textContent = cur.day;
   }
   // Budget — HKD primary, JPY secondary
-  const total = state.receipts.reduce((s,r) => s + (Number(r.total)||0), 0);
+  // Respect the statsIncludeTransportLodging toggle so the budget bar stays
+  // consistent with the today/total spend numbers shown on the dashboard.
+  const inclTL = !!state.statsIncludeTransportLodging;
+  const budgetReceipts = inclTL
+    ? state.receipts
+    : state.receipts.filter(r => r.category !== 'flight' && r.category !== 'lodging');
+  const total = budgetReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
   const pct = state.budget > 0 ? Math.min(100, (total / state.budget) * 100) : 0;
   const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
   const totalHKD = Math.round(total / safeRate);
@@ -7568,6 +7574,7 @@ function init() {
     state.statsIncludeTransportLodging = this.checked;
     _applyStatsToggleUI(this.checked);
     saveState();
+    renderHeader();
     renderDashboard();
   });
 
