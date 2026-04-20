@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="名古屋記帳">
 <meta name="theme-color" content="#CC2929">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232D5A8E'/><text x='12' y='85' font-size='78'>🗾</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232D5A8E'/><text x='12' y='85' font-size='78'>🗾</text></svg>">
 <script>
 // Inline PWA manifest — needed for single-file app (no server)
@@ -977,7 +978,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v28</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v29</p>
     </div>
   </section>
 </main>
@@ -1631,7 +1632,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 28;
+const APP_BUILD = 29;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -2728,6 +2729,10 @@ let _hotelPopupReceiptId = null;
 // that receipt + "去紀錄 tab 編輯" button (per user req: edits happen in Records tab).
 // If spot is pure itinerary → popup shows static spot info + "✏️ 編輯行程" button.
 function showSpotPopup(opts) {
+  if (Date.now() - _popupClosedAt < 500) {
+    console.info('[showSpotPopup] rejected — ghost click window (popup just closed)');
+    return;
+  }
   const o = opts || {};
   _hotelPopupName = o.name || '';
   _hotelPopupAddress = _isLikelyAddress(o.address) ? o.address : '';
@@ -2779,33 +2784,8 @@ function showSpotPopup(opts) {
       row.href = mapUrl;
       row.target = '_blank';
       row.rel = 'noopener noreferrer';
-      // onclick: preventDefault + window.open in the same synchronous tick as
-      // the user's tap. Browsers treat window.open during a user-gesture click
-      // handler as user-initiated — popup blockers don't apply, PWAs hand off
-      // to external browser. This is the most reliable cross-platform pattern.
       row.onclick = (e) => {
         e.stopPropagation();
-        e.preventDefault();
-        // Primary: window.open. If blocked (returns null), fall back to
-        // programmatic anchor click — which typically succeeds because it's
-        // still within the user gesture. If that also fails, last resort:
-        // navigate the current window (loses app state but guarantees Maps opens).
-        let opened = null;
-        try { opened = window.open(mapUrl, '_blank', 'noopener,noreferrer'); } catch(_) {}
-        if (!opened) {
-          try {
-            const a = document.createElement('a');
-            a.href = mapUrl;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => a.remove(), 300);
-          } catch(_) {
-            window.location.href = mapUrl;
-          }
-        }
       };
     }
   } else {
@@ -2862,7 +2842,8 @@ function showSpotPopup(opts) {
 function showHotelPopup(name, address) {
   showSpotPopup({ name, address, type: 'lodging' });
 }
-function closeHotelPopup() {
+function closeHotelPopup(opts = {}) {
+  const skipGhostGuard = !!opts.skipGhostGuard;
   $('hotelPopup').classList.add('hidden');
   if (document.body.style.overflow === 'hidden') document.body.style.overflow = '';
   // ── ANDROID GHOST-CLICK DEFENSE — dual layer ──
@@ -2878,9 +2859,9 @@ function closeHotelPopup() {
   // Layer B (JS): set _popupClosedAt timestamp. switchTab() checks this
   // timestamp and refuses to run within 500ms. Blocks ALL click sources,
   // including synthesized mobile-browser ghost clicks.
-  _popupClosedAt = Date.now();
+  if (!skipGhostGuard) _popupClosedAt = Date.now();
   const nav = document.querySelector('nav.fixed.bottom-0, nav[class*="bottom-0"]') || document.querySelector('nav');
-  if (nav) {
+  if (nav && !skipGhostGuard) {
     nav.style.pointerEvents = 'none';
     setTimeout(() => { nav.style.pointerEvents = ''; }, 500);
   }
@@ -3100,8 +3081,8 @@ function onCurrencyPairChange() {
 // Navigate to History tab and highlight a specific receipt. Used by popup / chip jumps.
 function jumpToReceipt(id) {
   closeDayReceiptsModal();
-  closeHotelPopup();
-  switchTab('history');
+  closeHotelPopup({ skipGhostGuard: true });
+  switchTab('history', { force: true });
   // Defer scroll until after render
   setTimeout(() => {
     // renderHistory uses receiptCard which wraps each with onclick=editReceipt(id); no direct id on card.
@@ -7419,13 +7400,14 @@ let _currentTab = 'scan';
 // mobile-browser click events (which are dispatched via JS, bypassing
 // CSS hit-testing). This JS-level guard is bulletproof.
 let _popupClosedAt = 0;
-function switchTab(name) {
+function switchTab(name, opts = {}) {
+  const force = !!opts.force;
   // Reject tab switches within 500ms of closing a popup. This blocks the
   // Android ghost-click-through that made Boss see scan tab after closing
   // the spot popup. Legitimate user switches within this 500ms window are
   // rare (user just closed popup, immediately wants to switch tabs) — if
   // needed they can tap again after the window.
-  if (Date.now() - _popupClosedAt < 500) {
+  if (!force && Date.now() - _popupClosedAt < 500) {
     console.info('[switchTab] rejected — ghost click window (popup just closed)');
     return;
   }
@@ -8198,7 +8180,7 @@ function init() {
   if (state.lastTab && state.lastTab !== _currentTab) {
     switchTab(state.lastTab);
   }
-  $('updateReloadBtn')?.addEventListener('click', () => location.reload());
+  $('updateReloadBtn')?.addEventListener('click', () => reloadAppFresh());
   // Ensure budget bar reflects the initial active tab (scan = hidden)
   const _initActiveTab = state.lastTab || document.querySelector('.tab-btn.tab-active')?.dataset?.tab || 'scan';
   const _bs = $('budgetSection');
@@ -8311,6 +8293,14 @@ function prefillAndOpenPasteModal(text, autoParse, toastMsg) {
 // Back-compat alias
 function handleUrlHashImport() { handleImportDeepLink(); }
 
+function reloadAppFresh() {
+  const url = new URL(location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('_reload', String(Date.now()));
+  location.replace(url.toString());
+}
+
 async function checkForAppUpdate() {
   if (_appUpdateCheckInFlight) return;
   if (!/^https?:$/i.test(location.protocol) || !navigator.onLine) return;
@@ -8364,9 +8354,20 @@ function tryAutoRefresh() {
     // Null-safe check — confirmModal could be absent during unusual DOM states.
     // `?.contains()` returns undefined if confirmModal is null, and `!undefined` = true
     // would force modalOpen permanently; the ?? false default makes that a hard false.
-    const modalOpen = $('confirmModal')?.classList.contains('hidden') === false
-                   || $('batchConfirmModal')?.classList.contains('hidden') === false
-                   || $('emailPasteModal')?.classList.contains('hidden') === false;
+    const modalIds = [
+      'confirmModal',
+      'batchConfirmModal',
+      'emailPasteModal',
+      'dayReceiptsModal',
+      'spotEditModal',
+      'scriptAgentModal',
+      'scanProgressModal',
+      'hotelPopup',
+      'currencyModal',
+      'imgLightbox',
+      'addItiModal',
+    ];
+    const modalOpen = modalIds.some(id => $(id)?.classList.contains('hidden') === false);
     const notionBusy = (window._notionInFlight || 0) > 0;
     const recentlyActive = (Date.now() - _lastActivityTs) < 2 * 60 * 1000; // 2 min
     const offline = !navigator.onLine;
@@ -8383,7 +8384,7 @@ function tryAutoRefresh() {
       console.info('[AutoRefresh] notion push in flight — skipping to avoid orphan receipts');
     } else {
       console.info('[AutoRefresh] reloading…');
-      location.reload();
+      reloadAppFresh();
       return; // no reschedule needed
     }
   } catch(e) {
