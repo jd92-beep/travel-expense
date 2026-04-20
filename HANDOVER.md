@@ -3,7 +3,7 @@
 > **Purpose of this file:** Every Claude session (desktop app OR CLI) reads this first to resume work without re-reading the whole chat history. Updated at the end of each session.
 
 **Last updated:** 2026-04-20 (HKT)
-**Latest commits:** `2bb709a` Android Maps app handoff + last-tab restore ✅ · `1f0f122` ghost-click timestamp guard · `4c07b7b` sync-hide old tab + map open hardening
+**Latest commits:** `e93b51d` Android Maps app handoff + last-tab restore ✅ · `1f0f122` ghost-click timestamp guard · `4c07b7b` sync-hide old tab + map open hardening
 
 ---
 
@@ -177,7 +177,7 @@ Credentials to inject (same `sed -i ''` pattern each time) are documented in ses
 
 | Commit | Date | Summary |
 |---|---|---|
-| `2bb709a` | 2026-04-20 | Fix homepage location flow: Android popup map link now uses direct Google Maps app intent, active tab is persisted/restored after reload, build bumped to v27 |
+| `e93b51d` | 2026-04-20 | Fix homepage location flow: Android popup map link now uses direct Google Maps app intent, active tab is persisted/restored after reload, build bumped to v27 |
 | `4bfdf29` | 2026-04-19 | Budget quick-save pill + email LLM dual-array (bookings+itinerary_updates) + applyItineraryUpdates() · **clasp deployed** |
 | `528aab9` | 2026-04-19 | Fix nav bar: grid-cols-6 → grid-cols-7 (7 tabs, 1 row) |
 | `359e757` | 2026-04-19 | Scan block swap (gallery↔email) + Weather tab (JMA via Open-Meteo, 5 slots, LIVE badge) |
