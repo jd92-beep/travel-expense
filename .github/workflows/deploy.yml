@@ -35,13 +35,23 @@ jobs:
         working-directory: app
         run: npm run build
 
-      - name: Prepare _site (legacy at root, React preview at /react/)
+      - name: Install v3 app deps
+        working-directory: app3
+        run: npm install --no-audit --no-fund
+
+      - name: Build v3 app
+        working-directory: app3
+        run: npm run build
+
+      - name: Prepare _site (legacy at root, React at /react/, v3 at /v3/)
         run: |
-          mkdir -p _site/react
-          # Legacy working app stays at root — all OCR / email / Notion / vault features live.
+          mkdir -p _site/react _site/v3
+          # Legacy working app stays at root
           cp index.html _site/index.html
-          # React UI preview (functional backend still being ported from legacy).
+          # React UI (dark theme redesign)
           cp -r app/dist/* _site/react/
+          # v3: legacy design + React + Framer Motion animations
+          cp -r app3/dist/* _site/v3/
 
       - uses: actions/configure-pages@v4
 
