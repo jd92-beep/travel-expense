@@ -1341,7 +1341,11 @@
 </div>
 
 <!-- ============ SPOT POPUP (generic — works for all itinerary types) ============ -->
-<div id="hotelPopup" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeHotelPopup()">
+<!-- NOTE: deliberately center-anchored (items-center) instead of items-end on
+     mobile. Bottom-anchored caused the popup to overlap the tab bar, and a
+     ghost-click-through to the scan tab button whenever Boss closed the
+     popup (see closeHotelPopup comments for details). -->
+<div id="hotelPopup" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this)closeHotelPopup()">
   <div class="rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-5" style="background:var(--n-surface);border:1px solid var(--n-border)">
     <div class="w-12 h-1 rounded-full mx-auto mb-4 sm:hidden" style="background:var(--n-border)"></div>
     <div class="flex items-center gap-3 mb-4">
@@ -2820,6 +2824,26 @@ function closeHotelPopup() {
   // Defensive clear of any prior overflow lock in case user loaded an old
   // cached version of showSpotPopup before this fix.
   if (document.body.style.overflow === 'hidden') document.body.style.overflow = '';
+  // ── CRITICAL ANDROID FIX: prevent ghost-click through to tab bar ──
+  // On mobile browsers (especially Android Chrome), after touchend there's a
+  // ~300ms delay before the `click` event fires. If the popup's 關閉 button
+  // is tapped and the popup immediately hides, the delayed click event falls
+  // through to the element that is NOW at that position — which, since the
+  // popup was bottom-anchored and its close button sits exactly over the
+  // bottom tab bar, ends up firing on the "掃描" (scan) tab button.
+  //
+  // Result Boss saw: tap 關閉 → popup hides → scan tab gets "clicked" by the
+  // ghost event → switchTab('scan') fires → Boss sees scan tab where he
+  // expected to stay on dashboard. That's his "popup on scan tab" report.
+  //
+  // Fix: disable pointer events on the bottom nav for ~400ms after close, so
+  // the ghost click has nowhere to land. 400ms comfortably exceeds Android's
+  // ~300ms touch-to-click delay.
+  const nav = document.querySelector('nav.fixed.bottom-0, nav[class*="bottom-0"]') || document.querySelector('nav');
+  if (nav) {
+    nav.style.pointerEvents = 'none';
+    setTimeout(() => { nav.style.pointerEvents = ''; }, 400);
+  }
   // Clear popup state so a subsequent show doesn't leak stale data from previous.
   _hotelPopupName = '';
   _hotelPopupAddress = '';
