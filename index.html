@@ -1316,7 +1316,7 @@
     <div id="agentChatLog" class="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide" style="min-height:180px"></div>
     <div class="px-4 pb-2 pt-2 flex gap-2" style="border-top:1px solid var(--n-border)">
       <button id="agentCopyCodeBtn" class="flex-1 py-2 rounded-xl text-xs font-bold hidden" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);color:#92400E;border:1px solid rgba(245,158,11,0.4)">📋 複製最新代碼</button>
-      <button onclick="window.open('https://script.google.com/home/projects/create','_blank')" class="flex-1 py-2 rounded-xl text-xs font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">🔗 開 Apps Script</button>
+      <button onclick="_openExternalUrl('https://script.google.com/home/projects/create')" class="flex-1 py-2 rounded-xl text-xs font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">🔗 開 Apps Script</button>
     </div>
     <div class="px-4 pb-4 pt-2 flex gap-2">
       <input id="agentChatInput" type="text" placeholder="例：改觸發器去 10 分鐘一次…" class="flex-1 px-3 py-2.5 rounded-xl text-sm focus:outline-none" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">
@@ -2746,13 +2746,48 @@ function editFromSpotPopup() {
   closeHotelPopup();
   if (d && i >= 0) openSpotEdit(d, i);
 }
+// iOS-PWA-safe external URL opener.
+// window.open(url, '_blank') silently fails in Safari PWA standalone mode
+// (Add-to-Home-Screen) because there's no browser chrome to show a new tab.
+// Creating a temporary <a target="_blank"> and programmatically clicking it
+// forces iOS to hand the URL off to the system default browser, which is the
+// intended behavior for map links etc.
+function _openExternalUrl(url) {
+  if (!url) return;
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    // Defer cleanup so iOS has a chance to pick up the click before the node
+    // is removed from the DOM.
+    setTimeout(() => a.remove(), 200);
+  } catch(e) {
+    // Absolute last-resort fallback: navigate current tab. Loses app state but
+    // the user asked to open the URL, so this is better than failing silently.
+    console.warn('[openExternal] fallback to location.href:', e);
+    location.href = url;
+  }
+}
+window._openExternalUrl = _openExternalUrl;
+
 function openMapsFromPopup() {
   const parts = [_hotelPopupName, _hotelPopupAddress].filter(Boolean);
-  if (!parts.length) return;
+  if (!parts.length) {
+    toast('⚠️ 冇地址同名稱，無法開地圖');
+    return;
+  }
   const q = encodeURIComponent(parts.join(' '));
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  const url = isIOS ? 'https://maps.apple.com/?q=' + q : 'https://maps.google.com/maps?q=' + q;
-  window.open(url, '_blank');
+  // Prefer universal https:// URLs — they're handled by the OS map-handler
+  // (Apple Maps on iOS / Google Maps on Android / browser tab on desktop).
+  const url = isIOS
+    ? 'https://maps.apple.com/?q=' + q
+    : 'https://www.google.com/maps/search/?api=1&query=' + q;
+  _openExternalUrl(url);
 }
 
 // ── DAY RECEIPTS MODAL — shows collapsed receipts for one trip day ──
