@@ -341,6 +341,12 @@
 
 <!-- Offline indicator -->
 <div id="offlineBar" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:45;background:#FEF3C7;color:#92400E;text-align:center;padding:6px;font-size:12px;font-weight:500">📡 離線模式 — 資料儲存喺本機</div>
+<div id="updateBar" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:46;background:#DBEAFE;color:#1D4ED8;padding:8px 12px;font-size:12px;font-weight:600;box-shadow:0 2px 12px rgba(29,78,216,0.12)">
+  <div class="flex items-center justify-between gap-3">
+    <span id="updateBarText">🚀 發現新版本，請重新載入</span>
+    <button id="updateReloadBtn" class="shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold" style="background:#1D4ED8;color:#fff">立即更新</button>
+  </div>
+</div>
 
 <!-- ============ HEADER ============ -->
 <header class="sticky top-0 z-40 px-5 pt-6 pb-4" style="background:rgba(255,250,248,0.88);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(255,180,160,0.3)">
@@ -971,7 +977,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v27</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v28</p>
     </div>
   </section>
 </main>
@@ -1625,6 +1631,8 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
+const APP_BUILD = 28;
+let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
 window.CURRENT_ITINERARY = null;
@@ -8190,6 +8198,7 @@ function init() {
   if (state.lastTab && state.lastTab !== _currentTab) {
     switchTab(state.lastTab);
   }
+  $('updateReloadBtn')?.addEventListener('click', () => location.reload());
   // Ensure budget bar reflects the initial active tab (scan = hidden)
   const _initActiveTab = state.lastTab || document.querySelector('.tab-btn.tab-active')?.dataset?.tab || 'scan';
   const _bs = $('budgetSection');
@@ -8201,10 +8210,15 @@ function init() {
   // Online/offline detection
   const updateOnline = () => {
     $('offlineBar').classList.toggle('hidden', navigator.onLine);
+    if (navigator.onLine) {
+      void checkForAppUpdate();
+    }
   };
   window.addEventListener('online', updateOnline);
   window.addEventListener('offline', updateOnline);
+  window.addEventListener('focus', () => { void checkForAppUpdate(); });
   updateOnline();
+  void checkForAppUpdate();
 
   // ── Scheduled auto-refresh: every hour on the hour between 06:00–00:00 HKT ──
   // Skips refresh if user is interacting (modal open, recently active, or offline).
@@ -8296,6 +8310,32 @@ function prefillAndOpenPasteModal(text, autoParse, toastMsg) {
 }
 // Back-compat alias
 function handleUrlHashImport() { handleImportDeepLink(); }
+
+async function checkForAppUpdate() {
+  if (_appUpdateCheckInFlight) return;
+  if (!/^https?:$/i.test(location.protocol) || !navigator.onLine) return;
+  _appUpdateCheckInFlight = true;
+  try {
+    const url = new URL(location.href);
+    url.searchParams.set('_buildcheck', String(Date.now()));
+    const res = await fetch(url.toString(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const html = await res.text();
+    const match = html.match(/APP BUILD v(\d+)/i);
+    const remoteBuild = match ? Number(match[1]) : NaN;
+    if (!Number.isFinite(remoteBuild) || remoteBuild <= APP_BUILD) return;
+    const bar = $('updateBar');
+    const text = $('updateBarText');
+    if (text) {
+      text.textContent = `🚀 發現新版本 v${remoteBuild}（你而家係 v${APP_BUILD}），撳右邊更新`;
+    }
+    bar?.classList.remove('hidden');
+  } catch (e) {
+    console.warn('[buildCheck] failed:', e);
+  } finally {
+    _appUpdateCheckInFlight = false;
+  }
+}
 
 // ============ AUTO-REFRESH SCHEDULER ============
 let _lastActivityTs = Date.now();
