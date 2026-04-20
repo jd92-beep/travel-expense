@@ -397,6 +397,7 @@
         <span class="text-sm font-medium" style="color:rgba(255,255,255,0.75)">≈ HKD <span id="todaySpendHKD">0</span></span>
         <span class="text-xs font-bold px-2.5 py-1 rounded-full" style="background:rgba(0,0,0,0.20);color:rgba(255,255,255,0.9)"><span id="todayCount">0</span> 筆</span>
       </div>
+      <p id="todaySpendNote" class="text-[9px] mt-1.5" style="color:rgba(255,255,255,0.45)">不含交通/住宿</p>
     </div>
 
     <!-- Daily budget alert -->
@@ -706,7 +707,7 @@
       <div class="flex items-center justify-between mb-1">
         <div>
           <p class="text-xs uppercase tracking-wider font-semibold" style="color:var(--n-muted)">📊 首頁統計顯示</p>
-          <p class="text-[11px] mt-1" style="color:var(--n-muted)">總消費 & 日均花費 block 是否計入<span style="color:#C0281E;font-weight:600">交通</span>和<span style="color:#C0281E;font-weight:600">住宿</span>（機票/酒店）</p>
+          <p class="text-[11px] mt-1" style="color:var(--n-muted)">今日花費、總消費 & 日均花費 是否計入<span style="color:#C0281E;font-weight:600">交通</span>和<span style="color:#C0281E;font-weight:600">住宿</span>（機票/酒店）</p>
         </div>
       </div>
       <label class="flex items-center justify-between mt-2 cursor-pointer select-none">
@@ -719,7 +720,7 @@
           <div id="toggleStatsThumb" class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"></div>
         </div>
       </label>
-      <p id="statsToggleHint" class="text-[10px] mt-2" style="color:var(--n-muted)">目前：不計入交通/住宿（顯示日常消費）</p>
+      <p id="statsToggleHint" class="text-[10px] mt-2" style="color:var(--n-muted)">目前：今日/總消費/日均 不計入交通/住宿</p>
     </div>
 
     <!-- Exchange rate with currency selector + Visa source -->
@@ -2293,11 +2294,15 @@ function renderHeader() {
 
 function renderDashboard() {
   const today = todayHKT();
+  const inclTL = !!state.statsIncludeTransportLodging;
   const todayR = state.receipts.filter(r => r.date === today);
-  const todayTotal = todayR.reduce((s,r) => s + (Number(r.total)||0), 0);
+  const todayRStats = inclTL ? todayR : todayR.filter(r => r.category !== 'transport' && r.category !== 'lodging');
+  const todayTotal = todayRStats.reduce((s,r) => s + (Number(r.total)||0), 0);
   $('todaySpend').textContent = fmt(todayTotal);
   $('todaySpendHKD').textContent = (todayTotal / Math.max(0.1, Number(state.rate) || 20.36)).toFixed(0);
-  $('todayCount').textContent = todayR.length;
+  $('todayCount').textContent = todayRStats.length;
+  const todayNote = $('todaySpendNote');
+  if (todayNote) todayNote.textContent = inclTL ? '含全部類別' : '不含交通/住宿';
   const cd = getCurrentDay();
   // Show 🧳 icon for prep phase, 🏠 for post, 📍 for trip
   const locIcon = cd._synthetic === 'prep' ? '🧳' : (cd._synthetic === 'post' ? '🏠' : '📍');
@@ -7009,7 +7014,7 @@ function init() {
     cb.checked = !!val;
     track.style.background = val ? '#C0281E' : '#E5E7EB';
     thumb.style.transform   = val ? 'translateX(20px)' : 'translateX(0)';
-    if (hint) hint.textContent = val ? '目前：計入交通/住宿（顯示全部消費）' : '目前：不計入交通/住宿（顯示日常消費）';
+    if (hint) hint.textContent = val ? '目前：今日/總消費/日均 計入交通/住宿' : '目前：今日/總消費/日均 不計入交通/住宿';
   }
   _applyStatsToggleUI(!!state.statsIncludeTransportLodging);
   $('toggleStatsTransportLodging').addEventListener('change', function() {
