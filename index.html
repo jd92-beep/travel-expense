@@ -978,7 +978,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v29</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v30</p>
     </div>
   </section>
 </main>
@@ -1632,7 +1632,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 29;
+const APP_BUILD = 30;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -2729,10 +2729,6 @@ let _hotelPopupReceiptId = null;
 // that receipt + "去紀錄 tab 編輯" button (per user req: edits happen in Records tab).
 // If spot is pure itinerary → popup shows static spot info + "✏️ 編輯行程" button.
 function showSpotPopup(opts) {
-  if (Date.now() - _popupClosedAt < 500) {
-    console.info('[showSpotPopup] rejected — ghost click window (popup just closed)');
-    return;
-  }
   const o = opts || {};
   _hotelPopupName = o.name || '';
   _hotelPopupAddress = _isLikelyAddress(o.address) ? o.address : '';
@@ -2864,6 +2860,16 @@ function closeHotelPopup(opts = {}) {
   if (nav && !skipGhostGuard) {
     nav.style.pointerEvents = 'none';
     setTimeout(() => { nav.style.pointerEvents = ''; }, 500);
+  }
+  // The same delayed synthetic click can also land on the page content under
+  // the popup (for example an itinerary row), immediately reopening the popup.
+  // Block pointer hit-testing on the main content briefly instead of globally
+  // rejecting all subsequent popup opens; that keeps legitimate next taps
+  // working once the ghost-click window has passed.
+  const appMain = document.querySelector('main');
+  if (appMain && !skipGhostGuard) {
+    appMain.style.pointerEvents = 'none';
+    setTimeout(() => { appMain.style.pointerEvents = ''; }, 350);
   }
   // Clear popup state.
   _hotelPopupName = '';
@@ -8497,6 +8503,13 @@ function _btnPress(el) {
   setTimeout(() => el.classList.remove('btn-press'), 300);
 }
 
+function _isTouchPointerEvent(e) {
+  return !!e && (
+    e.pointerType === 'touch' ||
+    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0)
+  );
+}
+
 function _initAnimations() {
   document.querySelectorAll('button, [onclick], .cursor-pointer').forEach(el => {
     if (el._animInit) return;
@@ -8521,6 +8534,12 @@ function _initAnimations() {
     }
     el._animInit = true;
     el.addEventListener('pointerdown', (e) => {
+      // On mobile/PWA, synchronous DOM work during touch pointerdown can
+      // disturb the browser's native click synthesis. That shows up as
+      // intermittent "tap did nothing" or wrong-target taps on itinerary rows,
+      // popup buttons, and tab buttons. Keep the press feedback on desktop,
+      // but let touch taps stay as close to native as possible.
+      if (_isTouchPointerEvent(e)) return;
       _spawnRipple(el, e);
       _btnPress(el);
     });
@@ -8529,7 +8548,8 @@ function _initAnimations() {
   document.querySelectorAll('.glass.rounded-2xl, .glass.rounded-3xl').forEach(el => {
     if (el._cardAnimInit) return;
     el._cardAnimInit = true;
-    el.addEventListener('pointerdown', () => {
+    el.addEventListener('pointerdown', (e) => {
+      if (_isTouchPointerEvent(e)) return;
       el.classList.remove('card-tap');
       void el.offsetWidth;
       el.classList.add('card-tap');
