@@ -978,7 +978,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v32</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v33</p>
     </div>
   </section>
 </main>
@@ -1632,7 +1632,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 32;
+const APP_BUILD = 33;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -3302,12 +3302,16 @@ function receiptCard(r) {
   const borderStyle = pending ? 'border:2px solid #F59E0B;background:linear-gradient(135deg,#FFFBEB,#FEF3C7)' : '';
   const pendingBadge = pending ? '<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold mr-1" style="background:#F59E0B;color:white">⏳ 待確認</span>' : '';
   const confirmBtn = pending ? `<button onclick="event.stopPropagation();confirmPendingReceipt('${r.id}')" class="ml-2 px-2 py-1 rounded-lg text-[10px] font-bold text-white" style="background:#00a87e">✅ 確認</button>` : '';
+  // Photo indicator — tapping opens lightbox directly (bypasses edit modal)
+  const photoBadge = r.photoThumb
+    ? `<button onclick="event.stopPropagation();openImgLightbox('data:image/jpeg;base64,${r.photoThumb}')" class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:#DBEAFE;color:#1D4ED8" title="點擊睇收據相">📷</button>`
+    : '';
   return `
     <div class="glass rounded-2xl p-3 flex items-center justify-between" style="${borderStyle}" onclick="editReceipt('${r.id}')">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style="background:${cat.color}20;color:${cat.color}">${cat.icon}</div>
         <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium truncate">${pendingBadge}${escapeHtml(displayStore(r) || '未命名')}</p>
+          <p class="text-sm font-medium truncate">${pendingBadge}${escapeHtml(displayStore(r) || '未命名')}${photoBadge}</p>
           <p class="text-[10px] text-gray-500">${cat.name} · ${pay.name}${r.region ? ' · ' + escapeHtml(r.region) : ''}</p>
         </div>
       </div>
@@ -4532,7 +4536,31 @@ const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。仔細睇收據
 - ✅ 「ローソン」→ store: "ローソン"
 - ❌ 「松屋」→ "松屋餐廳"（多嘢）
 - ✅ 「松屋」→ store: "松屋"
-- 唯一例外：items[i].name 欄位用繁體中文意譯（方便 Boss 睇），但 items[i].name_jp **100% 保留日文原文**
+- 唯一例外：items[i].name 欄位用**港式廣東話/繁體中文**（唔係普通話用詞！），items[i].name_jp **100% 保留日文原文**
+
+**紅線 1.5 — items[i].name 必須用港式廣東話用詞（唔係普通話/台式）**
+你個 output 係俾香港人睇嘅，用詞必須係港式，唔可以用普通話/台式繁體。
+港式 vs 普通話對照（★ = 必須用港式）：
+- ★ 炸雞排 → **吉列雞扒**（港式用「扒」唔用「排」）
+- ★ 豬排飯 → **豬扒飯 / 吉列豬扒飯**
+- ★ 土豆 → **薯仔**（香港唔用「土豆」）
+- ★ 番茄 → **蕃茄**（港式拼法）
+- ★ 奶茶 (milk tea) → 保留「奶茶」OK，但 cappuccino → **泡沫咖啡 / cappuccino**
+- ★ 優格 → **乳酪**（港式；yoghurt）
+- ★ 鮪魚 → **吞拿魚**
+- ★ 鮭魚 → **三文魚**
+- ★ 雞腿 → **雞髀**
+- ★ 冰淇淋 → **雪糕**
+- ★ 鳳梨 → **菠蘿**
+- ★ 芒果冰 → **芒果冰 / 芒果刨冰**
+- ★ 速食 → **快餐**
+- ★ 便利商店 → **便利店**
+- ★ 行動電源 → **尿袋 / 移動電源**
+- ★ 計程車/出租車 → **的士**
+- ★ 地鐵 → **地鐵 / 電車**（JR保留原文）
+- ★ 飯糰 → 可以直接保留「おにぎり」或寫「飯糰」（兩者都得）
+- 若日文原文本身係漢字（例：「餃子」「拉麵」「壽司」「天婦羅」），**直接用港式寫法**：餃子/拉麵/壽司/天婦羅
+- 唔肯定時：**寧願保留日文原文都好過亂譯**（寫 name = name_jp 都 OK）
 
 **紅線 2 — TOTAL 係收據最底最終嗰個「合計」嘅銀碼**
 係收據上面嘅空間位置：subtotal → tax → **合計（TOTAL 喺呢度）** → お預かり → お釣り
@@ -4572,7 +4600,7 @@ const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。仔細睇收據
   "category": "flight|transport|food|shopping|lodging|ticket|localtour|medicine|other",
   "payment": "cash|credit|paypay|suica 或 null",
   "items": [
-    { "name": "繁體中文意譯", "name_jp": "日文原文（唔准轉字）", "price": 數字 }
+    { "name": "港式廣東話意譯（見紅線 1.5 用詞表）", "name_jp": "日文原文（唔准轉字）", "price": 數字 }
   ],
   "note": "其他關鍵資訊（卡尾四碼 / 優惠 / 稅率 / 免税 / 割引 等），否則 null",
   "confidence": "high|medium|low"
@@ -6820,13 +6848,37 @@ function normalizeScanResult(raw) {
     }
   }
 
-  // ── Cross-check: total ≈ subtotal + tax (±3円 rounding) ──
-  if (total != null && subtotal != null && tax != null) {
-    const expected = subtotal + tax;
-    const diff = Math.abs(total - expected);
-    if (diff > 3) {
-      // If sum is closer to a plausible total, flag for user review
-      warnings.push(`金額對唔上：subtotal ¥${subtotal} + tax ¥${tax} = ¥${expected}，但 total = ¥${total}（差 ¥${diff}）— 請核對`);
+  // ── Cross-check: total is valid if ANY of these match (within tolerance) ──
+  //   (a) subtotal + tax ≈ total   — standard tax-exclusive layout
+  //   (b) sum(items) ≈ total       — items are 税込 (tax-included per line)
+  //   (c) sum(items) + tax ≈ total — items are 税抜, subtotal missing
+  // Tolerance: max(5 円, 2% of total) — accommodates Japanese rounding + service charges.
+  if (total != null && total > 0) {
+    const tolerance = Math.max(5, Math.round(total * 0.02));
+    const itemsSum = Array.isArray(data.items)
+      ? data.items.reduce((a, i) => a + (toNum(i.price) || 0), 0)
+      : 0;
+    let matched = false;
+    const reasons = [];
+    if (subtotal != null && tax != null) {
+      const d = Math.abs(total - (subtotal + tax));
+      if (d <= tolerance) matched = true;
+      else reasons.push(`subtotal ¥${subtotal} + tax ¥${tax} = ¥${subtotal + tax} (差 ¥${d})`);
+    }
+    if (!matched && itemsSum > 0) {
+      const dTaxIncl = Math.abs(total - itemsSum);
+      if (dTaxIncl <= tolerance) matched = true;
+      else if (tax != null) {
+        const dTaxExcl = Math.abs(total - (itemsSum + tax));
+        if (dTaxExcl <= tolerance) matched = true;
+        else reasons.push(`items 加總 ¥${itemsSum} (差 ¥${dTaxIncl})`);
+      } else {
+        reasons.push(`items 加總 ¥${itemsSum} (差 ¥${dTaxIncl})`);
+      }
+    }
+    // Only warn if ALL known cross-checks fail AND we actually had data to check with.
+    if (!matched && reasons.length > 0) {
+      warnings.push(`金額對唔上 total ¥${total}：${reasons.join('；')} — 請核對`);
     }
   }
 
@@ -7083,28 +7135,29 @@ async function _saveModalInner() {
 
   // Compress & store receipt photo thumbnail
   if (pendingPhotoBase64) {
-    const compressed = await compressPhoto(pendingPhotoBase64, pendingPhotoMime);
+    const rawBase64 = pendingPhotoBase64;
+    const rawMime = pendingPhotoMime;
+    const compressed = await compressPhoto(rawBase64, rawMime);
     pendingPhotoBase64 = null;
     if (compressed) {
       r.photoThumb = compressed;
-      // New photo — invalidate any previously-uploaded file_upload_id / external URL
-      // so the next Notion push re-uploads the fresh image. Otherwise the old photo
-      // stays attached to the Notion page even though the local thumb changed.
       delete r.notionFileUploadId;
       delete r.photoUrl;
       delete r._photoSyncedToNotion;
-      // Upload to imgbb for Notion image embedding (legacy path — Notion native
-      // upload happens later inside notionPushReceipt).
       if (state.imgbbKey) {
         r.photoUrl = await uploadToImgbb(r.photoThumb);
       }
     } else {
-      // Compression failed (canvas OOM / unsupported mime) — keep whatever was on
-      // the existing receipt so we don't lose the prior photo on edit.
-      console.warn('[saveModal] compressPhoto returned null — skipping photo update');
-      if (existing?.photoThumb) r.photoThumb = existing.photoThumb;
-      if (existing?.photoUrl) r.photoUrl = existing.photoUrl;
-      if (existing?.notionFileUploadId) r.notionFileUploadId = existing.notionFileUploadId;
+      // Compression failed (canvas OOM on low-end Android / unsupported mime).
+      // Previously we skipped photo save entirely for new receipts — that's the
+      // bug causing "cannot see the receipt image in the record tab". Instead,
+      // store the raw base64 directly so the photo is preserved. localStorage
+      // quota-pruning tier handles the size if needed.
+      console.warn('[saveModal] compressPhoto returned null — falling back to raw base64');
+      r.photoThumb = rawBase64;
+      delete r.notionFileUploadId;
+      delete r.photoUrl;
+      delete r._photoSyncedToNotion;
     }
   } else if (existing?.photoThumb) {
     r.photoThumb = existing.photoThumb; // preserve on edit
