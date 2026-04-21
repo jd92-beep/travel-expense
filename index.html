@@ -1012,7 +1012,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v37</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v38</p>
     </div>
   </section>
 </main>
@@ -1672,7 +1672,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 37;
+const APP_BUILD = 38;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -4071,7 +4071,21 @@ async function runScanWithBase64(base64, mime) {
     lastScanResult = cleaned;
     lastScanWarnings = warnings;
     const usedModel = state.lastScanModel || 'AI';
-    $('scanStatus').innerHTML = `<p class="text-sm" style="color:#059669">✅ 辨識完成 (${escapeHtml(usedModel)}) — 點擊圖片可重新確認</p>`;
+    // Fallback banner: when the user's Settings-chosen primary model failed
+    // and we fell through to another model, say so clearly. Otherwise the
+    // user sees "✅ 用咗 GLM" despite having MiniMax selected and thinks
+    // their setting was ignored. (Was the confusion for bug #2.)
+    const fb = state.lastScanFellBack;
+    if (fb && fb.used) {
+      // Push the "also failed" warning into the confirm modal's warning list
+      // so the user sees it beside the identification result.
+      warnings.unshift(`⚠️ 你揀嘅「${fb.chose}」失敗咗（${(fb.firstErr||'').slice(0,80)}）— fallback 用咗「${fb.used}」`);
+      $('scanStatus').innerHTML = `
+        <p class="text-sm" style="color:#D97706">⚠️ 「${escapeHtml(fb.chose)}」失敗，改用 ${escapeHtml(fb.used)} 成功</p>
+        <p class="text-[10px] mt-1" style="color:var(--n-muted)">詳情請睇 confirm modal 頂嘅警告</p>`;
+    } else {
+      $('scanStatus').innerHTML = `<p class="text-sm" style="color:#059669">✅ 辨識完成 (${escapeHtml(usedModel)}) — 點擊圖片可重新確認</p>`;
+    }
     // Resolve the used model name (may be an ID like 'gemini-3-flash-preview'
     // or a friendly label like 'GLM-4.6V') to a RESCAN_MODELS entry so the
     // rescan button row can highlight it as the active one.
@@ -4090,12 +4104,33 @@ async function runScanWithBase64(base64, mime) {
 }
 
 function showScanError(msg) {
+  // Per-model attempt log persisted by callGemini() — lets the user see
+  // exactly which models were tried and why each one failed, instead of a
+  // single opaque "all failed" message. Crucial on mobile PWA where the
+  // DevTools console isn't accessible.
+  const attempts = Array.isArray(state.lastScanAttempts) ? state.lastScanAttempts : [];
+  const detailsHtml = attempts.length ? `
+    <details class="mt-3 text-left rounded-xl" style="background:rgba(220,38,38,0.05);border:1px solid rgba(220,38,38,0.2)">
+      <summary class="cursor-pointer px-3 py-2 text-[11px] font-semibold" style="color:#991B1B">
+        🔍 錯誤詳情（${attempts.length} 個模型全部失敗，點開睇原因）
+      </summary>
+      <div class="px-3 pb-3 pt-1 space-y-1">
+        ${attempts.map(a => `
+          <div class="text-[10px] font-mono rounded-lg px-2 py-1" style="background:rgba(255,255,255,0.6)">
+            <span style="color:#991B1B">❌ ${escapeHtml(a.name || '?')}</span>
+            ${a.status ? `<span style="color:#6B7280"> · HTTP ${a.status}</span>` : ''}
+            ${a.ms != null ? `<span style="color:#6B7280"> · ${a.ms}ms</span>` : ''}
+            <div style="color:#374151">${escapeHtml(a.error || 'unknown')}</div>
+          </div>`).join('')}
+      </div>
+    </details>` : '';
   $('scanStatus').innerHTML = `
     <p class="text-sm font-medium mb-3" style="color:#DC2626">❌ 辨識失敗：${escapeHtml(String(msg || 'unknown'))}</p>
     <div class="flex gap-2 justify-center flex-wrap">
       ${lastScanBase64 ? `<button onclick="retryLastScan()" class="px-4 py-2 rounded-xl text-sm font-medium text-white" style="background:var(--n-blue)">🔄 重試辨識</button>` : ''}
       <button onclick="openConfirmModal({},'')" class="px-4 py-2 rounded-xl text-sm font-medium" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">✍️ 手動輸入</button>
-    </div>`;
+    </div>
+    ${detailsHtml}`;
 }
 
 function retryLastScan() {
@@ -6132,6 +6167,21 @@ async function callGemini(base64, mime) {
   const primaryModel = state.scanModel || state.model || 'gemini-3.1-flash-lite-preview';
   const flashModel = 'gemini-3.1-flash-lite-preview';
 
+  // Pre-flight key check — tell the user clearly if NO provider has a key
+  // before we waste time (and show misleading "all N models failed" errors).
+  const haveGemini  = !!geminiKey;
+  const haveGLM     = !!VAULT_ZAI_KEY;
+  const haveMiniMax = !!(state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY);
+  if (!haveGemini && !haveGLM && !haveMiniMax) {
+    // Record for later display
+    state.lastScanAttempts = [{ name: '(系統)', error: '冇任何 API key — 去設定 → 🔑 API Keys 填至少一條' }];
+    state.lastScanFellBack = null;
+    saveState();
+    throw new Error('冇 API key — 去設定 → 🔑 API Keys 填至少一條（Gemini 免費，最易攞）');
+  }
+  // Fresh scan — clear stale fallback banner from previous attempt
+  state.lastScanFellBack = null;
+
   // Determine user's primary model type so we can de-dup the fallback chain
   const primaryIsGLM     = primaryModel.startsWith('glm-');
   const primaryIsMiniMax = primaryModel === 'minimax';
@@ -6175,29 +6225,56 @@ async function callGemini(base64, mime) {
       ...geminiChain,
     ];
   }
+  // Structured log of every attempt. Persisted to state so the user can
+  // review failures on a mobile PWA where DevTools console is inaccessible.
   const attempts = [];
   let lastErr;
+  const userPrimaryLabel = (function () {
+    // Resolve user's Settings-chosen model to a human label for the fallback banner.
+    if (primaryIsMiniMax) return 'MiniMax VLM';
+    if (primaryIsGLM)     return 'GLM-4.6V';
+    // Gemini — use the RESCAN_MODELS label if known, otherwise the raw id
+    const m = RESCAN_MODELS.find(x => x.id === primaryModel);
+    return m ? m.label : primaryModel;
+  })();
   for (const { name, fn } of chain) {
+    const t0 = performance.now();
     try {
       const result = await fn();
-      console.info(`[OCR] ✅ ${name} 成功`);
-      // Record which model succeeded
+      const ms = Math.round(performance.now() - t0);
+      console.info(`[OCR] ✅ ${name} 成功 (${ms}ms)`);
       state.lastScanModel = name;
+      state.lastScanAttempts = attempts.concat([{ name, ok: true, ms }]);
+      // Fallback banner: when the model that actually succeeded isn't the
+      // user's chosen primary, remember the primary label so scanStatus
+      // can render a "⚠️ primary 失敗 → 用 fallback" notice in the UI.
+      state.lastScanFellBack = (name !== userPrimaryLabel && name !== primaryModel)
+        ? { chose: userPrimaryLabel, used: name, firstErr: attempts[0]?.error || '' }
+        : null;
       saveState();
       renderModelCards();
       return result;
     } catch (err) {
-      const summary = `${name}: ${(err.message || 'unknown').slice(0, 60)}`;
+      const ms = Math.round(performance.now() - t0);
+      const rawMsg = (err?.message || 'unknown');
+      const summary = { name, ok: false, ms, error: rawMsg.slice(0, 200), status: err?.status || null };
       attempts.push(summary);
-      console.warn(`[OCR] ❌ ${summary}`);
+      console.warn(`[OCR] ❌ ${name} (${ms}ms): ${rawMsg.slice(0, 100)}`);
       lastErr = err;
     }
   }
-  // Build a helpful error summary so user knows which models failed and why
-  const rateLimited = attempts.filter(a => /429|quota|rate/i.test(a)).length;
-  const blocked = attempts.some(a => /blocked|safety|filter/i.test(a));
+  // Persist the full failure log so the user can tap "錯誤詳情" to see why.
+  state.lastScanAttempts = attempts;
+  state.lastScanFellBack = null;
+  saveState();
+  // Build a helpful error summary so user knows roughly why
+  const rateLimited = attempts.filter(a => /429|quota|rate/i.test(a.error)).length;
+  const blocked = attempts.some(a => /blocked|safety|filter/i.test(a.error));
+  const missingKey = attempts.filter(a => /key 未設定|key not set|key not available|API key/i.test(a.error)).length;
   let hint = '';
   if (blocked) hint = '（內容被 safety filter 攔截）';
+  else if (missingKey === attempts.length) hint = '（全部模型都冇 key — 去設定 → 🔑 API Keys）';
+  else if (missingKey > 0) hint = `（${missingKey}/${attempts.length} 個冇 key）`;
   else if (rateLimited === attempts.length) hint = '（全部模型被 rate-limit — 試等 1 分鐘）';
   else if (rateLimited > 0) hint = `（${rateLimited}/${attempts.length} 個 rate-limit）`;
   throw new Error(`所有 ${attempts.length} 個 OCR 模型都失敗 ${hint}：${lastErr?.message || ''}`.slice(0, 200));
