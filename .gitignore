@@ -12,3 +12,8 @@ smoke_test.jpg
 *.tmp
 .tmp/
 test_receipts/
+
+# Local dev secrets — NEVER commit. Contains live API keys for desktop
+# testing only. On deployed GitHub Pages this file doesn't exist and
+# the app falls back to Settings → 🔑 API Keys user input path.
+secrets.local.js

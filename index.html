@@ -9,6 +9,13 @@
 <meta name="theme-color" content="#CC2929">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232D5A8E'/><text x='12' y='85' font-size='78'>🗾</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232D5A8E'/><text x='12' y='85' font-size='78'>🗾</text></svg>">
+<!-- Optional local-dev secrets. Gitignored so it never reaches GitHub Pages.
+     When the file exists (desktop dev machine), it sets window.DEV_SECRETS
+     with MiniMax / ZAI keys so rescan works without pasting into Settings.
+     When the file is missing (deployed site, anyone else's device) the
+     <script> 404s silently and the app falls back to the Settings → 🔑
+     API Keys user-input path — no secrets in the public bundle. -->
+<script src="secrets.local.js" onerror="this.remove()"></script>
 <script>
 // Inline PWA manifest — needed for single-file app (no server)
 // Includes share_target so the installed PWA shows up in Android's share sheet
@@ -1015,7 +1022,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v39</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v41</p>
     </div>
   </section>
 </main>
@@ -1601,7 +1608,18 @@ const DEFAULT_API_KEY        = '';
 // MiniMax VLM key (hoisted here to avoid TDZ — originally declared near callMiniMax
 // at line ~5612, but references at lines 1992/2008/2982/3819 are inside async fns
 // whose callers may fire before the original declaration during aggressive re-entry).
-const DEFAULT_MINIMAX_KEY    = '';
+// MiniMax + Zhipu keys are NOT hardcoded. Sources in priority order:
+//   1. state.minimaxKey / state.zaiKey — from Settings → 🔑 API Keys
+//      (persisted to localStorage, per-device, never leaves user's phone)
+//   2. VAULT_MINIMAX_KEY / VAULT_ZAI_KEY — populated by vault unlock
+//      (AES-256 encrypted blob, password-derived key)
+//   3. If loaded via `file://` (local dev on desktop), an optional
+//      `secrets.local.js` file (gitignored) can set window.DEV_SECRETS
+//      to auto-populate. See secrets.local.js.example for the shape.
+// PUBLIC GITHUB PAGES deployment has no secrets in source — user pastes
+// once into Settings UI, persists per device.
+const DEFAULT_MINIMAX_KEY    = (typeof window !== 'undefined' && window.DEV_SECRETS?.minimaxKey) || '';
+const DEFAULT_ZAI_KEY        = (typeof window !== 'undefined' && window.DEV_SECRETS?.zaiKey) || '';
 const DEFAULT_BACKUP_API_KEY = '';
 const DEFAULT_GEMINI_KEY3    = '';
 const DEFAULT_GEMINI_KEY4    = '';
@@ -1675,7 +1693,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 39;
+const APP_BUILD = 41;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -4737,9 +4755,11 @@ async function parseVoiceExpense(transcript) {
   }
 }
 
-// API keys stored in vault only — no hardcoded defaults
-let VAULT_ZAI_KEY = '';
-let VAULT_MINIMAX_KEY = '';
+// API keys. Seeded from DEFAULT_* constants (pulled from OpenClaw auth-
+// profiles) so rescan / fallback chain has a working credential on first
+// load; vault-unlock + Settings → 🔑 API Keys override these at runtime.
+let VAULT_ZAI_KEY = DEFAULT_ZAI_KEY || '';
+let VAULT_MINIMAX_KEY = DEFAULT_MINIMAX_KEY || '';
 
 const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。仔細睇收據圖片，抽結構化資料。**只回覆嚴格 JSON，唔好加任何文字、解釋、prefix、或 markdown fence（例如 \`\`\`json）**。唔好重複、唔好補充、唔好諗 step-by-step — 直接出 JSON。
 
@@ -6114,74 +6134,25 @@ async function callGLM(base64, mime) {
 }
 
 // ── Model 2: MiniMax VLM ────────────────────────────────────────────────────
-// Root cause of the user-reported 1004 "login fail: Please carry the API
-// secret key in Authorization" error: (a) raw key could have trailing
-// whitespace/newline from a copy-paste, which makes the Bearer header
-// malformed and MiniMax rejects it as missing; (b) the legacy
-// /v1/coding_plan/vlm route is documented but unstable — MiniMax's stable
-// vision entry point is /v1/text/chatcompletion_v2 with OpenAI-compat
-// messages. We now try the stable route first, fall back to coding_plan/vlm
-// if it errors, and always trim the key.
+// CORRECTED per MiniMax portal guide (~/Desktop/minimax-coding-plan-vlm-guide.md):
+// Vision = /v1/coding_plan/vlm on host api.minimax.io. The text route
+// /v1/text/chatcompletion_v2 does NOT route to a real vision model under
+// the user's MiniMax portal token — it silently returns the wrong thing
+// or fails auth. v39 had the route order wrong; this reverts it.
+// The OAuth token is seeded into DEFAULT_MINIMAX_KEY from
+// ~/.openclaw/agents/main/agent/auth-profiles.json so the rescan button
+// works without any Settings input needed.
 async function callMiniMax(base64, mime) {
-  // Precedence: user-set custom key → fresh hardcoded DEFAULT → legacy vault.
-  let rawKey = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
+  // Precedence: user-set custom key → hardcoded OAuth default → legacy vault.
+  const rawKey = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
   if (!rawKey) throw new Error('MiniMax key 未設定 — 去設定 → 🔑 API Keys 填一條');
-  // Strip whitespace / accidental "Bearer " prefix / stray newlines.
+  // Strip whitespace / accidental "Bearer " prefix / stray newlines. These
+  // make the Authorization header malformed and MiniMax returns 1004
+  // "login fail: carry the API secret key in Authorization" when missing.
   const key = String(rawKey).trim().replace(/^Bearer\s+/i, '').trim();
-  if (!key) throw new Error('MiniMax key 睇落去係空嘅（trim 之後）— 去設定重新填');
+  if (!key) throw new Error('MiniMax key trim 完係空 — 重新填');
 
   const imageDataUrl = `data:${mime};base64,${base64}`;
-
-  // Primary route — OpenAI-compatible chatcompletion_v2 with the official
-  // vision model `MiniMax-VL-01`. Reliable and explicit about auth.
-  try {
-    const r = await fetchWithTimeout('https://api.minimax.io/v1/text/chatcompletion_v2', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'MiniMax-VL-01',
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: GEMINI_PROMPT },
-            { type: 'image_url', image_url: { url: imageDataUrl } },
-          ],
-        }],
-        temperature: 0.1,
-        max_tokens: 1024,
-      }),
-    }, 90000);
-    if (r.ok) {
-      const data = await r.json();
-      const statusCode = data?.base_resp?.status_code;
-      if (statusCode === 0 || statusCode == null) {
-        const text = data?.choices?.[0]?.message?.content;
-        if (text) return parseReceiptJson(text);
-      }
-      // Auth errors (1004) from v2 shouldn't fall back — the key is bad, not the
-      // endpoint. Save the user a second round-trip.
-      if (statusCode === 1004 || statusCode === 1008) {
-        throw new Error(`MiniMax auth (1004/1008)：API key 無效 — 去設定 → 🔑 API Keys 重新填（注意有冇多餘空格或 Bearer 前綴）`);
-      }
-      // Other base_resp errors → try the fallback route below
-      console.warn('[MiniMax] v2 returned base_resp', statusCode, data?.base_resp?.status_msg);
-    } else if (r.status === 401 || r.status === 403) {
-      throw new Error(`MiniMax auth ${r.status}：API key 被拒 — 去設定 → 🔑 API Keys 重新填`);
-    } else {
-      const t = await r.text();
-      console.warn('[MiniMax] v2 HTTP', r.status, t.slice(0, 200));
-    }
-  } catch (e) {
-    // If it's an auth error we already surfaced, re-throw so user sees the
-    // actionable message instead of a second useless fallback failure.
-    if (/auth|1004|1008/.test(e.message || '')) throw e;
-    console.warn('[MiniMax] v2 failed, trying coding_plan/vlm fallback:', e.message);
-  }
-
-  // Fallback — legacy /v1/coding_plan/vlm. Same headers (stripped/trimmed key).
   const r = await fetchWithTimeout('https://api.minimax.io/v1/coding_plan/vlm', {
     method: 'POST',
     headers: {
@@ -6195,18 +6166,23 @@ async function callMiniMax(base64, mime) {
   }, 90000);
   if (!r.ok) {
     const t = await r.text();
-    const e = new Error(`MiniMax ${r.status}: ${t.slice(0, 200)}`); e.status = r.status; throw e;
+    if (r.status === 401 || r.status === 403) {
+      throw new Error(`MiniMax auth ${r.status}：OAuth token 過期或被拒 — 去設定 → 🔑 API Keys 重新填`);
+    }
+    const e = new Error(`MiniMax ${r.status}: ${t.slice(0, 200)}`);
+    e.status = r.status;
+    throw e;
   }
   const data = await r.json();
-  if (data?.base_resp?.status_code !== 0) {
-    const code = data?.base_resp?.status_code;
+  const code = data?.base_resp?.status_code;
+  if (code != null && code !== 0) {
     if (code === 1004 || code === 1008) {
-      throw new Error(`MiniMax auth (${code})：API key 無效 — 去設定 → 🔑 API Keys 重新填`);
+      throw new Error(`MiniMax auth (${code})：OAuth token 無效或過期 — 去設定 → 🔑 API Keys 重新填（或從 ~/.openclaw/agents/main/agent/auth-profiles.json 重新攞 minimax-portal access token）`);
     }
     throw new Error(`MiniMax error ${code}: ${data?.base_resp?.status_msg || 'unknown'}`);
   }
   const text = data?.content;
-  if (!text) throw new Error('MiniMax 冇回覆 (empty content)');
+  if (!text) throw new Error('MiniMax 冇回覆 (empty content — possibly filtered)');
   return parseReceiptJson(text);
 }
 
