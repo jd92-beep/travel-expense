@@ -1022,7 +1022,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v42</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v43</p>
     </div>
   </section>
 </main>
@@ -1608,18 +1608,20 @@ const DEFAULT_API_KEY        = '';
 // MiniMax VLM key (hoisted here to avoid TDZ — originally declared near callMiniMax
 // at line ~5612, but references at lines 1992/2008/2982/3819 are inside async fns
 // whose callers may fire before the original declaration during aggressive re-entry).
-// MiniMax + Zhipu keys are NOT hardcoded. Sources in priority order:
-//   1. state.minimaxKey / state.zaiKey — from Settings → 🔑 API Keys
-//      (persisted to localStorage, per-device, never leaves user's phone)
-//   2. VAULT_MINIMAX_KEY / VAULT_ZAI_KEY — populated by vault unlock
-//      (AES-256 encrypted blob, password-derived key)
-//   3. If loaded via `file://` (local dev on desktop), an optional
-//      `secrets.local.js` file (gitignored) can set window.DEV_SECRETS
-//      to auto-populate. See secrets.local.js.example for the shape.
-// PUBLIC GITHUB PAGES deployment has no secrets in source — user pastes
-// once into Settings UI, persists per device.
-const DEFAULT_MINIMAX_KEY    = (typeof window !== 'undefined' && window.DEV_SECRETS?.minimaxKey) || '';
-const DEFAULT_ZAI_KEY        = (typeof window !== 'undefined' && window.DEV_SECRETS?.zaiKey) || '';
+// ⚠️ Hardcoded per the user's explicit, repeated instruction: they want the
+//    deployed PWA on GitHub Pages to work immediately when opened from the
+//    phone — no Settings paste, no seed URL. These exact tokens were already
+//    exposed in a prior commit before force-push, so re-embedding does not
+//    add new exposure. User has been warned in-chat and accepts the tradeoff.
+// Runtime override order:
+//   1. secrets.local.js → window.DEV_SECRETS (gitignored dev override)
+//   2. Settings → 🔑 API Keys (state.minimaxKey / state.zaiKey in localStorage)
+//   3. VAULT_* vars from vault unlock
+//   4. These hardcoded defaults (last resort for fresh installs)
+const DEFAULT_MINIMAX_KEY    = (typeof window !== 'undefined' && window.DEV_SECRETS?.minimaxKey)
+  || 'sk-cp-TGwktAohjI1gTQvoZpXTidpPxYAeeoeCYvrlQGVio7spgX1--X8cm5XYpH1PmB_reFNdk1iSkdm6uHnIsIlZQU2t1M4MCS-BJk5Uf6OiW-fb4yImvsuvkw8';
+const DEFAULT_ZAI_KEY        = (typeof window !== 'undefined' && window.DEV_SECRETS?.zaiKey)
+  || '9aa15d2d26de4fe6801f983e55f9d427.x29QxJDvPga6VP55';
 const DEFAULT_BACKUP_API_KEY = '';
 const DEFAULT_GEMINI_KEY3    = '';
 const DEFAULT_GEMINI_KEY4    = '';
@@ -1693,7 +1695,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 42;
+const APP_BUILD = 43;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
