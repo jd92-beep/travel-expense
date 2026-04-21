@@ -836,6 +836,39 @@
       </div>
     </details>
 
+    <!-- API keys — user-supplied fallback when vault is empty / locked -->
+    <details class="glass rounded-2xl mb-3 overflow-hidden">
+      <summary class="flex items-center justify-between p-4 cursor-pointer select-none list-none">
+        <label class="text-xs text-gray-400 uppercase tracking-wider cursor-pointer">🔑 API Keys (切換 model 用)</label>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#FEF3C7;color:#92400E">要填先切到</span>
+      </summary>
+      <div class="px-4 pb-4 space-y-3">
+        <p class="text-[10px]" style="color:var(--n-muted)">
+          填自己嘅 key 先可以切換 rescan model。留空會試 vault 入面嘅 key（如有）。<br>
+          <span style="color:#C0281E">🔒 key 儲喺你部機 localStorage</span> — 只有你本地睇到。
+        </p>
+        <div>
+          <label class="text-[10px] font-semibold" style="color:var(--n-text)">Gemini API Key <span style="color:#6B7280">(AIzaSy...)</span></label>
+          <input id="setGeminiKey" type="password" autocomplete="off" spellcheck="false" class="w-full mt-1 px-3 py-2 rounded-xl text-xs font-mono" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)" placeholder="aistudio.google.com 拎 free key">
+          <p class="text-[9px] mt-1" style="color:var(--n-muted)">Gemini 3.1 Flash / 3 Flash / 2.5 Flash / 3 Pro 都用呢條 key</p>
+        </div>
+        <div>
+          <label class="text-[10px] font-semibold" style="color:var(--n-text)">GLM / 智譜 (ZAI) Key <span style="color:#6B7280">(非免費但便宜)</span></label>
+          <input id="setZaiKey" type="password" autocomplete="off" spellcheck="false" class="w-full mt-1 px-3 py-2 rounded-xl text-xs font-mono" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)" placeholder="open.bigmodel.cn 拎 key">
+          <p class="text-[9px] mt-1" style="color:var(--n-muted)">GLM-4.6V (vision) + GLM-5 家族共用</p>
+        </div>
+        <div>
+          <label class="text-[10px] font-semibold" style="color:var(--n-text)">MiniMax Key <span style="color:#6B7280">(VLM 最快)</span></label>
+          <input id="setMinimaxKey" type="password" autocomplete="off" spellcheck="false" class="w-full mt-1 px-3 py-2 rounded-xl text-xs font-mono" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)" placeholder="api.minimax.io 拎 key">
+        </div>
+        <div>
+          <label class="text-[10px] font-semibold" style="color:var(--n-text)">OpenRouter Key <span style="color:#6B7280">(🐘 Elephant)</span></label>
+          <input id="setOpenrouterKey" type="password" autocomplete="off" spellcheck="false" class="w-full mt-1 px-3 py-2 rounded-xl text-xs font-mono" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)" placeholder="sk-or-v1-... (openrouter.ai)">
+        </div>
+        <div id="keyStatusLine" class="text-[10px] mt-2 font-mono" style="color:#059669"></div>
+      </div>
+    </details>
+
     <!-- ══════ SECTION D: 自動化 & 同步 ══════ -->
     <div class="mt-5 mb-2 px-1 flex items-center gap-2">
       <span class="text-xs font-bold uppercase tracking-widest" style="color:#059669">☁️ 自動化 & 同步</span>
@@ -978,7 +1011,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v35</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v36</p>
     </div>
   </section>
 </main>
@@ -1632,7 +1665,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 35;
+const APP_BUILD = 36;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -1661,6 +1694,11 @@ function loadState() {
       const parsed = JSON.parse(s);
       if (typeof parsed !== 'object' || parsed === null) throw new Error('corrupt');
       state = { ...state, ...parsed };
+      // Hydrate runtime VAULT_* variables from persisted user-supplied keys
+      // so every existing "if (!VAULT_ZAI_KEY) throw ..." path just works
+      // after a reload — even when the encrypted vault didn't carry that key.
+      if (state.zaiKey && !VAULT_ZAI_KEY) VAULT_ZAI_KEY = state.zaiKey;
+      if (state.minimaxKey && !VAULT_MINIMAX_KEY) VAULT_MINIMAX_KEY = state.minimaxKey;
       // Activate custom itinerary if user imported one and it validates
       if (state.customItinerary) {
         const err = validateItinerary(state.customItinerary);
@@ -1747,8 +1785,12 @@ function loadState() {
   }
 }
 function saveState() {
-  // Strip sensitive credentials before persisting — they live in memory only
-  const { apiKey, notionToken, ...safeState } = state;
+  // Credentials: notionToken still stripped (more sensitive — workspace access).
+  // apiKey IS now persisted so the user's Gemini key from Settings survives a
+  // reload (previously only vault unlock populated it, and the vault-token
+  // auto-unlock isn't 100% reliable on PWA reloads — resulting in rescan
+  // buttons throwing "key not available" even after the user saved one).
+  const { notionToken, ...safeState } = state;
   const jsonPayload = JSON.stringify(safeState);
   try {
     localStorage.setItem('boss-japan-tracker', jsonPayload);
@@ -4441,7 +4483,7 @@ async function parseVoiceExpense(transcript) {
 
   // Strategy 1: GLM (text call — glm-4-flash or glm-4.6v, both support text)
   async function tryGLM(prompt, modelId = 'glm-4-flash') {
-    if (!VAULT_ZAI_KEY) throw new Error('GLM key not available (vault locked)');
+    if (!VAULT_ZAI_KEY) throw new Error('GLM key 未設定 — 去設定 → 🔑 API Keys 填一條');
     console.info(`[Voice] 嘗試 ${modelId}…`);
     const r = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
       method: 'POST',
@@ -5924,7 +5966,7 @@ async function callGLM(base64, mime) {
     max_tokens: 1024,
     stream: false
   };
-  if (!VAULT_ZAI_KEY) throw new Error('GLM key not available (vault locked)');
+  if (!VAULT_ZAI_KEY) throw new Error('GLM key 未設定 — 去設定 → 🔑 API Keys 填一條');
   const r = await fetchWithTimeout(url, { method: 'POST', headers: { 'Authorization': `Bearer ${VAULT_ZAI_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, 60000);
   if (!r.ok) { const e = new Error(`GLM ${r.status}`); e.status = r.status; throw e; }
   const data = await r.json();
@@ -7864,6 +7906,17 @@ function init() {
       state.budget = Math.max(1, Number($('setBudget').value) || 101800);
     }
     state.autoSync = $('setAutoSync').checked;
+    // ── API keys (user-supplied, persisted) ──
+    // For each key: only overwrite if user actually typed something, so
+    // clearing the field doesn't wipe a vault-provided key by accident.
+    const gk = ($('setGeminiKey')?.value || '').trim();
+    if (gk) state.apiKey = gk;
+    const zk = ($('setZaiKey')?.value || '').trim();
+    if (zk) { state.zaiKey = zk; VAULT_ZAI_KEY = zk; }
+    const mk = ($('setMinimaxKey')?.value || '').trim();
+    if (mk) { state.minimaxKey = mk; VAULT_MINIMAX_KEY = mk; }
+    const ok = ($('setOpenrouterKey')?.value || '').trim();
+    if (ok) state.openrouterKey = ok;
     // Settlement share ratios (populated by renderSettlementRatios below)
     const ratios = {};
     (state.persons || []).forEach(p => {
@@ -7873,8 +7926,35 @@ function init() {
     if (Object.keys(ratios).length) state.shareRatios = ratios;
     saveState();
     refresh();
+    // Clear the key inputs (so they don't keep plaintext visible), then
+    // update the status line below with a "✅ have key / ❌ missing" readout.
+    ['setGeminiKey','setZaiKey','setMinimaxKey','setOpenrouterKey'].forEach(id => {
+      const el = $(id);
+      if (el) el.value = '';
+    });
+    _renderKeyStatus();
     toast('✅ 設定已儲存');
   });
+
+  // Live status line under the key inputs — shows which keys are currently
+  // available (either from state, vault, or DEFAULT_* constants). Helps the
+  // user verify their rescan buttons will actually work before they try.
+  function _renderKeyStatus() {
+    const line = $('keyStatusLine');
+    if (!line) return;
+    const hasGemini   = !!(state.apiKey || DEFAULT_API_KEY);
+    const hasZai      = !!(state.zaiKey || VAULT_ZAI_KEY);
+    const hasMinimax  = !!(state.minimaxKey || VAULT_MINIMAX_KEY || DEFAULT_MINIMAX_KEY);
+    const hasOR       = !!(state.openrouterKey || DEFAULT_OPENROUTER_KEY);
+    const tag = (ok, label) => `<span style="color:${ok ? '#059669' : '#C0281E'}">${ok ? '✅' : '❌'} ${label}</span>`;
+    line.innerHTML = [
+      tag(hasGemini,  'Gemini'),
+      tag(hasZai,     'GLM'),
+      tag(hasMinimax, 'MiniMax'),
+      tag(hasOR,      'OpenRouter'),
+    ].join(' · ');
+  }
+  _renderKeyStatus();
 
   // ── Trip itinerary import/export/reset ──
   $('setTripName').value = state.tripName || '名古屋 2026';
