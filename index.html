@@ -978,7 +978,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v34</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v35</p>
     </div>
   </section>
 </main>
@@ -1632,7 +1632,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 34;
+const APP_BUILD = 35;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -3949,7 +3949,14 @@ async function runScanWithBase64(base64, mime) {
     lastScanWarnings = warnings;
     const usedModel = state.lastScanModel || 'AI';
     $('scanStatus').innerHTML = `<p class="text-sm" style="color:#059669">✅ 辨識完成 (${escapeHtml(usedModel)}) — 點擊圖片可重新確認</p>`;
-    openConfirmModal(cleaned, base64, warnings);
+    // Resolve the used model name (may be an ID like 'gemini-3-flash-preview'
+    // or a friendly label like 'GLM-4.6V') to a RESCAN_MODELS entry so the
+    // rescan button row can highlight it as the active one.
+    const resolved = RESCAN_MODELS.find(m =>
+      m.id.toLowerCase() === usedModel.toLowerCase() ||
+      m.label.toLowerCase() === usedModel.toLowerCase()
+    );
+    openConfirmModal(cleaned, base64, warnings, resolved?.id || null);
   } catch (err) {
     console.error(err);
     showScanError(String(err?.message || 'unknown'));
@@ -4242,25 +4249,46 @@ const RESCAN_MODELS = [
   { id: 'gemini-3-pro-preview',           label: 'G 3 Pro',      color: '#2D5A8E' },
 ];
 
-function renderRescanButtons(loadingId = null) {
+function renderRescanButtons(loadingId = null, activeId = null) {
   const row = $('modalRescanRow');
   if (!row) return;
+  // activeId = model id used for the currently-displayed result (gets highlighted
+  // with filled background + checkmark so user can see which model's output
+  // they're looking at). loadingId = model being fetched right now (spinner).
   row.innerHTML = RESCAN_MODELS.map(m => {
     const isLoading = m.id === loadingId;
+    const isActive = !isLoading && m.id === activeId;
+    // Active = filled background + bold border + ✅ checkmark
+    // Inactive = tinted background + thin border + ▶ arrow
+    const bg = isActive ? m.color : `${m.color}11`;
+    const fg = isActive ? '#ffffff' : m.color;
+    const border = isActive ? m.color : `${m.color}22`;
+    const borderWidth = isActive ? '2px' : '1px';
+    const shadow = isActive ? `box-shadow:0 2px 8px ${m.color}55;` : '';
+    const icon = isLoading ? '⏳' : (isActive ? '✅' : '▶');
     return `<button onclick="rescanWithModel('${m.id}')"
-      style="font-size:11px;padding:5px 10px;border-radius:999px;border:1px solid ${m.color}22;
-             background:${m.color}11;color:${m.color};font-weight:600;
-             opacity:${isLoading ? 0.5 : 1};pointer-events:${isLoading ? 'none' : 'auto'}"
-    >${isLoading ? '⏳' : '▶'} ${m.label}</button>`;
+      style="font-size:11px;padding:5px 10px;border-radius:999px;border:${borderWidth} solid ${border};
+             background:${bg};color:${fg};font-weight:600;${shadow}
+             opacity:${isLoading ? 0.5 : 1};pointer-events:${isLoading ? 'none' : 'auto'};
+             transition:all 0.2s"
+    >${icon} ${m.label}</button>`;
   }).join('');
 }
 window.renderRescanButtons = renderRescanButtons;
 
 async function rescanWithModel(modelId) {
   if (!lastScanBase64) { toast('⚠️ 冇可用圖片，請重新上傳收據'); return; }
+  const label = RESCAN_MODELS.find(m=>m.id===modelId)?.label || modelId;
+  console.info(`[rescan] ▶ switching to ${modelId} (${label})`);
   renderRescanButtons(modelId); // show loading state on clicked button
+  // Briefly blank the store field so the user sees visual proof that data is
+  // being refreshed (otherwise identical outputs look like "nothing happened").
+  const storeEl = $('mStore');
+  const oldStore = storeEl ? storeEl.value : '';
+  if (storeEl) storeEl.value = '⏳ ' + label + ' 辨識中…';
   try {
     let result;
+    const t0 = performance.now();
     const geminiKey = state.apiKey || DEFAULT_API_KEY;
     if (modelId === 'glm-4.6v') {
       result = await callGLM(lastScanBase64, lastScanMime);
@@ -4269,15 +4297,27 @@ async function rescanWithModel(modelId) {
     } else {
       result = await callGeminiWithModel(lastScanBase64, lastScanMime, modelId, geminiKey);
     }
+    const ms = Math.round(performance.now() - t0);
+    console.info(`[rescan] ✅ ${modelId} responded in ${ms}ms, raw result:`, result);
     const { cleaned, warnings } = normalizeScanResult(result);
     lastScanResult = cleaned;
     lastScanWarnings = warnings;
-    openConfirmModal(cleaned, lastScanBase64, warnings);
-    toast(`✅ ${RESCAN_MODELS.find(m=>m.id===modelId)?.label || modelId} 辨識完成`);
+    // Update lastScanModel so the modal header + scanStatus reflect the new model.
+    // Previously only callGemini()'s fallback chain updated this — rescan was a
+    // silent no-op for the model indicator. That made the switch feel invisible.
+    state.lastScanModel = label;
+    saveState();
+    openConfirmModal(cleaned, lastScanBase64, warnings, modelId);
+    // Also update the scan-tab status line so refocusing the tab shows the swap.
+    const ss = $('scanStatus');
+    if (ss) ss.innerHTML = `<p class="text-sm" style="color:#059669">✅ 辨識完成 (${escapeHtml(label)} · ${ms}ms)</p>`;
+    toast(`✅ ${label} 辨識完成 (${ms}ms)`);
   } catch(e) {
-    console.error('[rescan]', e);
+    console.error('[rescan] ❌', modelId, e);
+    // Restore the store field so the user's context isn't lost on failure.
+    if (storeEl) storeEl.value = oldStore;
     toast('❌ ' + (e.message || '辨識失敗').slice(0, 80), 'error');
-    renderRescanButtons(); // restore buttons
+    renderRescanButtons();
   }
 }
 window.rescanWithModel = rescanWithModel;
@@ -7063,11 +7103,18 @@ function normalizeScanResult(raw) {
   return { cleaned: data, warnings };
 }
 
-function openConfirmModal(data, base64, warnings) {
+function openConfirmModal(data, base64, warnings, usedModelId) {
   editingId = null;
   selectedPersonId = getPersons()[0].id;
   $('modalDelete').classList.add('hidden');
-  $('modalSubtitle').textContent = '請核對 AI 識別嘅資料';
+  // Show which AI model produced this result so the user can verify that
+  // switching models actually changed the backend call.
+  const usedLabel = usedModelId
+    ? (RESCAN_MODELS.find(m => m.id === usedModelId)?.label || usedModelId)
+    : (state.lastScanModel || '');
+  $('modalSubtitle').innerHTML = usedLabel
+    ? `請核對 AI 識別嘅資料 · <span style="color:#4f46e5;font-weight:600">✨ 用緊：${escapeHtml(usedLabel)}</span>`
+    : '請核對 AI 識別嘅資料';
   // Render warning banner (or hide it) — warnings come from normalizeScanResult()
   const warnBox = $('scanWarnings');
   if (warnBox) {
@@ -7131,7 +7178,8 @@ function openConfirmModal(data, base64, warnings) {
   // Show rescan buttons only when coming from a real scan (has image)
   if (base64 && lastScanBase64) {
     $('modalRescanWrap').classList.remove('hidden');
-    renderRescanButtons();
+    // Highlight the just-used model button so user sees which one produced this.
+    renderRescanButtons(null, usedModelId || null);
   } else {
     $('modalRescanWrap').classList.add('hidden');
   }
