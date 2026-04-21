@@ -1022,7 +1022,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v41</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v42</p>
     </div>
   </section>
 </main>
@@ -1693,7 +1693,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 41;
+const APP_BUILD = 42;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -8791,6 +8791,38 @@ function _padBase64(encoded) {
 function handleImportDeepLink() {
   // Process hash OR query — always clear BOTH after success to avoid stale re-trigger
   const clearUrl = () => { try { history.replaceState(null, '', location.pathname); } catch(_) {} };
+
+  // 0. One-time API key seeding — #keys=<base64-url JSON>. Lets the user open
+  //    a privately-generated link once on their phone to install MiniMax /
+  //    ZAI / Gemini keys without having to type them into Settings. Hash
+  //    fragments never hit servers, and the URL is stripped immediately so
+  //    browser history doesn't hold the tokens across reloads.
+  if (location.hash && location.hash.includes('keys=')) {
+    try {
+      const hashRaw = location.hash.slice(1);
+      const m = hashRaw.match(/(^|&)keys=([^&]*)/);
+      if (m && m[2]) {
+        const b64 = _padBase64(decodeURIComponent(m[2]).replace(/-/g, '+').replace(/_/g, '/'));
+        const payload = JSON.parse(_b64ToUtf8(b64));
+        let applied = [];
+        if (payload.minimaxKey) { state.minimaxKey = String(payload.minimaxKey).trim(); VAULT_MINIMAX_KEY = state.minimaxKey; applied.push('MiniMax'); }
+        if (payload.zaiKey)     { state.zaiKey     = String(payload.zaiKey).trim();     VAULT_ZAI_KEY     = state.zaiKey;     applied.push('GLM/ZAI'); }
+        if (payload.geminiKey)  { state.apiKey     = String(payload.geminiKey).trim();                                         applied.push('Gemini'); }
+        if (payload.openrouterKey) { state.openrouterKey = String(payload.openrouterKey).trim();                               applied.push('OpenRouter'); }
+        if (applied.length) {
+          saveState();
+          clearUrl();
+          toast(`🔑 已安裝 key：${applied.join(' · ')} ✅`);
+          return;
+        }
+      }
+    } catch(e) {
+      console.warn('[deepLink:keys] decode failed:', e);
+      clearUrl();
+      toast('❌ Key 連結解碼失敗，格式唔啱');
+      return;
+    }
+  }
 
   // 1. iOS Shortcut path (base64 in hash) — takes priority when both present
   if (location.hash && location.hash.includes('email=')) {
