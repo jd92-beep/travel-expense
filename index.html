@@ -714,12 +714,15 @@
       <div class="flex items-center justify-between mb-1">
         <div>
           <p class="text-xs uppercase tracking-wider font-semibold" style="color:var(--n-muted)">📊 首頁統計顯示</p>
-          <p class="text-[11px] mt-1" style="color:var(--n-muted)">今日花費、總消費 & 日均花費 是否計入<span style="color:#C0281E;font-weight:600">機票</span>和<span style="color:#C0281E;font-weight:600">住宿</span>（本地交通 — 新幹線、地鐵、的士 — 永遠會計）</p>
+          <p class="text-[11px] mt-1" style="color:var(--n-muted)">
+            預設：<span style="color:#059669;font-weight:600">總消費包含</span> 機票/住宿；<span style="color:#C0281E;font-weight:600">今日/日均唔包含</span> 機票/住宿（只計旅程日常消費）。<br>
+            開 toggle = 反轉兩邊預設（總消費 -FL，今日/日均 +FL）。
+          </p>
         </div>
       </div>
       <label class="flex items-center justify-between mt-2 cursor-pointer select-none">
         <div class="flex items-center gap-2">
-          <span class="text-sm">✈️🏨 包括機票 & 住宿支出</span>
+          <span class="text-sm">🔀 反轉預設</span>
         </div>
         <div class="relative">
           <input type="checkbox" id="toggleStatsTransportLodging" class="sr-only">
@@ -727,7 +730,7 @@
           <div id="toggleStatsThumb" class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"></div>
         </div>
       </label>
-      <p id="statsToggleHint" class="text-[10px] mt-2" style="color:var(--n-muted)">目前：今日/總消費/日均 不計入機票/住宿</p>
+      <p id="statsToggleHint" class="text-[10px] mt-2" style="color:var(--n-muted)">目前：總消費 ✅ 含機票/住宿；今日/日均 ❌ 不含機票/住宿（預設）</p>
     </div>
 
     <!-- Exchange rate with currency selector + Visa source -->
@@ -1012,7 +1015,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v38</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v39</p>
     </div>
   </section>
 </main>
@@ -1672,7 +1675,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 38;
+const APP_BUILD = 39;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -2436,10 +2439,13 @@ function renderHeader() {
     $('dayCounter').textContent = cur.day;
   }
   // Budget — HKD primary, JPY secondary
-  // Respect the statsIncludeTransportLodging toggle so the budget bar stays
-  // consistent with the today/total spend numbers shown on the dashboard.
-  const inclTL = !!state.statsIncludeTransportLodging;
-  const budgetReceipts = inclTL
+  // Bar tracks "總消費", which BY DEFAULT includes flight + lodging. The
+  // Settings toggle (`statsIncludeTransportLodging`) now flips defaults:
+  //   toggle off (default)  → total INCLUDES flight+lodging  / daily EXCLUDES
+  //   toggle on             → total EXCLUDES flight+lodging  / daily INCLUDES
+  const flipped = !!state.statsIncludeTransportLodging;
+  const totalIncludeFL = !flipped;   // default: true (include)
+  const budgetReceipts = totalIncludeFL
     ? state.receipts
     : state.receipts.filter(r => r.category !== 'flight' && r.category !== 'lodging');
   const total = budgetReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
@@ -2461,15 +2467,22 @@ function renderDashboard() {
   // local receipt dates. HKT is 1h behind JST — after JST midnight the date
   // would be wrong if we used HKT.
   const today = todayForReceipts();
-  const inclTL = !!state.statsIncludeTransportLodging;
+  // Split semantics — SINGLE toggle flips defaults for two different things:
+  //   toggle OFF (default)  → total INCLUDES flight+lodging / daily EXCLUDES
+  //   toggle ON             → total EXCLUDES flight+lodging / daily INCLUDES
+  // "Daily" bucket covers: today's spend + daily average + per-day budget.
+  const flipped = !!state.statsIncludeTransportLodging;
+  const totalIncludeFL = !flipped;  // default include for 總消費
+  const dailyIncludeFL = flipped;   // default exclude for 今日 + 日均
+  const inclTL = dailyIncludeFL;    // legacy name kept for existing call-sites below
   const todayR = state.receipts.filter(r => r.date === today);
-  const todayRStats = inclTL ? todayR : todayR.filter(r => r.category !== 'flight' && r.category !== 'lodging');
+  const todayRStats = dailyIncludeFL ? todayR : todayR.filter(r => r.category !== 'flight' && r.category !== 'lodging');
   const todayTotal = todayRStats.reduce((s,r) => s + (Number(r.total)||0), 0);
   $('todaySpend').textContent = fmt(todayTotal);
   $('todaySpendHKD').textContent = (todayTotal / Math.max(0.1, Number(state.rate) || 20.36)).toFixed(0);
   $('todayCount').textContent = todayRStats.length;
   const todayNote = $('todaySpendNote');
-  if (todayNote) todayNote.textContent = inclTL ? '含全部類別' : '不含機票/住宿';
+  if (todayNote) todayNote.textContent = dailyIncludeFL ? '含全部類別' : '不含機票/住宿';
   const cd = getCurrentDay();
   // Show 🧳 icon for prep phase, 🏠 for post, 📍 for trip
   const locIcon = cd._synthetic === 'prep' ? '🧳' : (cd._synthetic === 'post' ? '🏠' : '📍');
@@ -2533,24 +2546,30 @@ function renderDashboard() {
   }
 
   const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
-  const statsReceipts = inclTL
+  // 總消費 (Total) — default INCLUDE flight+lodging; toggle flips to exclude.
+  const totalReceipts = totalIncludeFL
     ? state.receipts
     : state.receipts.filter(r => r.category !== 'flight' && r.category !== 'lodging');
-  const total = statsReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
+  const total = totalReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
   $('totalSpend').textContent = fmt(total);
   $('totalSpendHKD').textContent = fmt(Math.round(total / safeRate));
-  $('totalCount').textContent = statsReceipts.length;
+  $('totalCount').textContent = totalReceipts.length;
   const totalNote = $('totalSpendNote');
-  if (totalNote) totalNote.textContent = inclTL ? '含全部類別' : '不含機票/住宿';
+  if (totalNote) totalNote.textContent = totalIncludeFL ? '含全部類別' : '不含機票/住宿';
 
-  const dates = [...new Set(statsReceipts.map(r => r.date))];
+  // 日均 (Daily average) — default EXCLUDE flight+lodging; toggle flips to include.
+  const dailyReceipts = dailyIncludeFL
+    ? state.receipts
+    : state.receipts.filter(r => r.category !== 'flight' && r.category !== 'lodging');
+  const dailyTotal = dailyReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
+  const dates = [...new Set(dailyReceipts.map(r => r.date))];
   const days = Math.max(1, dates.length);
-  const avg = total / days;
+  const avg = dailyTotal / days;
   $('avgSpend').textContent = fmt(avg);
   $('avgSpendHKD').textContent = fmt(Math.round(avg / safeRate));
   $('daysElapsed').textContent = days;
   const avgNote = $('avgSpendNote');
-  if (avgNote) avgNote.textContent = inclTL ? '含全部類別' : '不含機票/住宿';
+  if (avgNote) avgNote.textContent = dailyIncludeFL ? '含全部類別' : '不含機票/住宿';
 
   renderPersonBreakdown();
 
@@ -5613,9 +5632,12 @@ async function callGLM5Text(content, modelId) {
 // and the browser reports "Failed to fetch" before the request ever leaves.
 async function callMiniMaxText(content) {
   // Precedence: user-set custom key → fresh hardcoded DEFAULT → legacy vault (last).
-// Vault may contain a STALE MiniMax key from a previous build; DEFAULT is always current.
-const key = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
-  if (!key) throw new Error('MiniMax key 未設定');
+  const rawKey = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
+  if (!rawKey) throw new Error('MiniMax key 未設定');
+  // Same trim/strip-prefix logic as the vision path — the same 1004 error
+  // can hit the text call for identical reasons.
+  const key = String(rawKey).trim().replace(/^Bearer\s+/i, '').trim();
+  if (!key) throw new Error('MiniMax key 空 — 重新填');
   const r = await fetchWithTimeout('https://api.minimax.io/anthropic/v1/messages', {
     method: 'POST',
     headers: {
@@ -6091,21 +6113,75 @@ async function callGLM(base64, mime) {
   return parseReceiptJson(text);
 }
 
-// ── Model 2: MiniMax VLM — coding_plan/vlm endpoint ─────────────────────────
-// Correct endpoint per minimax-coding-plan-vlm-guide.md:
-//   POST /v1/coding_plan/vlm  payload: { prompt, image_url }
-//   MiniMax-M2.7 messages API does NOT support image input — wrong route
-// NOTE: DEFAULT_MINIMAX_KEY is declared near the top of the script with other
-// DEFAULT_*_KEY constants to avoid temporal-dead-zone errors.
+// ── Model 2: MiniMax VLM ────────────────────────────────────────────────────
+// Root cause of the user-reported 1004 "login fail: Please carry the API
+// secret key in Authorization" error: (a) raw key could have trailing
+// whitespace/newline from a copy-paste, which makes the Bearer header
+// malformed and MiniMax rejects it as missing; (b) the legacy
+// /v1/coding_plan/vlm route is documented but unstable — MiniMax's stable
+// vision entry point is /v1/text/chatcompletion_v2 with OpenAI-compat
+// messages. We now try the stable route first, fall back to coding_plan/vlm
+// if it errors, and always trim the key.
 async function callMiniMax(base64, mime) {
-  // Precedence: user-set custom key → fresh hardcoded DEFAULT → legacy vault (last).
-// Vault may contain a STALE MiniMax key from a previous build; DEFAULT is always current.
-const key = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
-  if (!key) throw new Error('MiniMax key 未設定');
-  // NOTE: MM-API-Source header is NOT in MiniMax's CORS allow-list, so we can't
-  // send it from a browser. Server-side Python clients can, but Access-Control-
-  // Allow-Headers from api.minimax.io only includes: Authorization, Content-Type,
-  // Origin, Accept, etc. Sending MM-API-Source causes CORS preflight to fail.
+  // Precedence: user-set custom key → fresh hardcoded DEFAULT → legacy vault.
+  let rawKey = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
+  if (!rawKey) throw new Error('MiniMax key 未設定 — 去設定 → 🔑 API Keys 填一條');
+  // Strip whitespace / accidental "Bearer " prefix / stray newlines.
+  const key = String(rawKey).trim().replace(/^Bearer\s+/i, '').trim();
+  if (!key) throw new Error('MiniMax key 睇落去係空嘅（trim 之後）— 去設定重新填');
+
+  const imageDataUrl = `data:${mime};base64,${base64}`;
+
+  // Primary route — OpenAI-compatible chatcompletion_v2 with the official
+  // vision model `MiniMax-VL-01`. Reliable and explicit about auth.
+  try {
+    const r = await fetchWithTimeout('https://api.minimax.io/v1/text/chatcompletion_v2', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'MiniMax-VL-01',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: GEMINI_PROMPT },
+            { type: 'image_url', image_url: { url: imageDataUrl } },
+          ],
+        }],
+        temperature: 0.1,
+        max_tokens: 1024,
+      }),
+    }, 90000);
+    if (r.ok) {
+      const data = await r.json();
+      const statusCode = data?.base_resp?.status_code;
+      if (statusCode === 0 || statusCode == null) {
+        const text = data?.choices?.[0]?.message?.content;
+        if (text) return parseReceiptJson(text);
+      }
+      // Auth errors (1004) from v2 shouldn't fall back — the key is bad, not the
+      // endpoint. Save the user a second round-trip.
+      if (statusCode === 1004 || statusCode === 1008) {
+        throw new Error(`MiniMax auth (1004/1008)：API key 無效 — 去設定 → 🔑 API Keys 重新填（注意有冇多餘空格或 Bearer 前綴）`);
+      }
+      // Other base_resp errors → try the fallback route below
+      console.warn('[MiniMax] v2 returned base_resp', statusCode, data?.base_resp?.status_msg);
+    } else if (r.status === 401 || r.status === 403) {
+      throw new Error(`MiniMax auth ${r.status}：API key 被拒 — 去設定 → 🔑 API Keys 重新填`);
+    } else {
+      const t = await r.text();
+      console.warn('[MiniMax] v2 HTTP', r.status, t.slice(0, 200));
+    }
+  } catch (e) {
+    // If it's an auth error we already surfaced, re-throw so user sees the
+    // actionable message instead of a second useless fallback failure.
+    if (/auth|1004|1008/.test(e.message || '')) throw e;
+    console.warn('[MiniMax] v2 failed, trying coding_plan/vlm fallback:', e.message);
+  }
+
+  // Fallback — legacy /v1/coding_plan/vlm. Same headers (stripped/trimmed key).
   const r = await fetchWithTimeout('https://api.minimax.io/v1/coding_plan/vlm', {
     method: 'POST',
     headers: {
@@ -6114,7 +6190,7 @@ const key = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
     },
     body: JSON.stringify({
       prompt: GEMINI_PROMPT,
-      image_url: `data:${mime};base64,${base64}`,
+      image_url: imageDataUrl,
     }),
   }, 90000);
   if (!r.ok) {
@@ -6123,7 +6199,11 @@ const key = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
   }
   const data = await r.json();
   if (data?.base_resp?.status_code !== 0) {
-    throw new Error(`MiniMax error ${data?.base_resp?.status_code}: ${data?.base_resp?.status_msg || 'unknown'}`);
+    const code = data?.base_resp?.status_code;
+    if (code === 1004 || code === 1008) {
+      throw new Error(`MiniMax auth (${code})：API key 無效 — 去設定 → 🔑 API Keys 重新填`);
+    }
+    throw new Error(`MiniMax error ${code}: ${data?.base_resp?.status_msg || 'unknown'}`);
   }
   const text = data?.content;
   if (!text) throw new Error('MiniMax 冇回覆 (empty content)');
@@ -8016,7 +8096,9 @@ function init() {
     cb.checked = !!val;
     track.style.background = val ? '#C0281E' : '#E5E7EB';
     thumb.style.transform   = val ? 'translateX(20px)' : 'translateX(0)';
-    if (hint) hint.textContent = val ? '目前：今日/總消費/日均 計入機票/住宿' : '目前：今日/總消費/日均 不計入機票/住宿';
+    if (hint) hint.textContent = val
+      ? '目前：🔀 已反轉 — 總消費 ❌ 不含機票/住宿；今日/日均 ✅ 含機票/住宿'
+      : '目前：總消費 ✅ 含機票/住宿；今日/日均 ❌ 不含機票/住宿（預設）';
   }
   _applyStatsToggleUI(!!state.statsIncludeTransportLodging);
   $('toggleStatsTransportLodging').addEventListener('change', function() {
