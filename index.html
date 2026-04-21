@@ -787,7 +787,8 @@
 
     <div class="glass rounded-2xl p-4 mb-3">
       <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">⚖️ 分帳比例</label>
-      <p class="text-[11px] mt-1 mb-2" style="color:var(--n-muted)">每人承擔嘅百分比（%）。加/減旅伴後自動重算。</p>
+      <p class="text-[11px] mt-1" style="color:var(--n-muted)">每人承擔嘅百分比（%）。加/減旅伴後自動重算。</p>
+      <p class="text-[10px] mt-1 mb-2 font-semibold" style="color:#4f46e5">ℹ️ 比例只適用於 <span style="color:#2D5A8E">👫 Shared</span> 支出；<span style="color:#6B7280">🔒 私人</span> 支出由付款人全額承擔，唔會入呢個分帳計算。</p>
       <div id="shareRatiosWrap"></div>
     </div>
 
@@ -1011,7 +1012,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v36</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v37</p>
     </div>
   </section>
 </main>
@@ -1086,8 +1087,14 @@
         <p class="text-[10px] text-center mt-1" style="color:var(--n-muted)">👆 點擊放大 · 兩指縮放</p>
       </div>
       <div id="mPersonWrap">
-        <label class="text-[10px] uppercase tracking-wider" style="color:var(--n-muted)">消費人</label>
+        <label class="text-[10px] uppercase tracking-wider" style="color:var(--n-muted)">付款人</label>
         <div id="mPersonRow" class="flex gap-2 mt-2 flex-wrap"></div>
+      </div>
+      <!-- Split mode: shared across trip-mates vs private (buyer-only) -->
+      <div id="mSplitWrap" class="mt-1">
+        <label class="text-[10px] uppercase tracking-wider" style="color:var(--n-muted)">分帳模式</label>
+        <div id="mSplitRow" class="flex gap-2 mt-2"></div>
+        <p class="text-[9px] mt-1.5" style="color:var(--n-muted)">Shared = 按設定比例分帳；私人 = 只有付款人承擔，唔入分帳計算</p>
       </div>
       <div>
         <label class="text-[10px] uppercase tracking-wider text-gray-400">店名</label>
@@ -1665,7 +1672,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 36;
+const APP_BUILD = 37;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -1987,6 +1994,10 @@ function toast(msg, type) {
 
 // ============ PERSONS ============
 let selectedPersonId = null;
+// Split mode for the receipt currently being edited/confirmed.
+// 'shared' → split via state.shareRatios (legacy behaviour for all old receipts).
+// 'private' → only the payer bears the cost; excluded from settlement math.
+let selectedSplitMode = 'shared';
 let selectedNewEmoji = '🧔';
 
 function getPersons() {
@@ -2020,6 +2031,29 @@ function renderPersonRow() {
   }).join('');
 }
 window.selectPerson = function(id) { selectedPersonId = id; renderPersonRow(); };
+
+// Render the Shared/Private toggle inside the confirm/edit modal.
+// Visually mirrors the payer pill style for consistency.
+function renderSplitRow() {
+  const row = document.getElementById('mSplitRow');
+  if (!row) return;
+  const modes = [
+    { id: 'shared',  label: '👫 Shared', color: '#2D5A8E', desc: '按比例分帳' },
+    { id: 'private', label: '🔒 私人',   color: '#6B7280', desc: '自己承擔' },
+  ];
+  row.innerHTML = modes.map(m => {
+    const on = selectedSplitMode === m.id;
+    return `<button type="button" onclick="selectSplit('${m.id}')"
+      class="flex flex-col items-center gap-0.5 flex-1 py-2.5 rounded-2xl transition-all"
+      style="${on
+        ? `background:${m.color}18;outline:3px solid ${m.color};transform:scale(1.02)`
+        : 'background:var(--n-bg);outline:2px solid var(--n-border)'}">
+      <span class="text-base font-bold" style="color:${on ? m.color : 'var(--n-muted)'}">${m.label}</span>
+      <span class="text-[10px]" style="color:${on ? m.color : 'var(--n-muted)'};opacity:0.8">${m.desc}</span>
+    </button>`;
+  }).join('');
+}
+window.selectSplit = function(mode) { selectedSplitMode = mode === 'private' ? 'private' : 'shared'; renderSplitRow(); };
 
 function renderPersonBreakdown() {
   const persons = getPersons();
@@ -3341,8 +3375,17 @@ function receiptCard(r) {
   const persons = getPersons();
   const person = persons.find(p => p.id === r.personId) || persons[0];
   const pending = isPendingReceipt(r);
-  const borderStyle = pending ? 'border:2px solid #F59E0B;background:linear-gradient(135deg,#FFFBEB,#FEF3C7)' : '';
+  const isPrivate = r.splitMode === 'private';
+  // Private receipts get a muted grey border + dashed styling to visually
+  // separate them from the shared default. Pending badge overrides both.
+  let borderStyle = '';
+  if (pending) {
+    borderStyle = 'border:2px solid #F59E0B;background:linear-gradient(135deg,#FFFBEB,#FEF3C7)';
+  } else if (isPrivate) {
+    borderStyle = 'border:1.5px dashed #9CA3AF;background:rgba(156,163,175,0.06)';
+  }
   const pendingBadge = pending ? '<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold mr-1" style="background:#F59E0B;color:white">⏳ 待確認</span>' : '';
+  const privateBadge = isPrivate ? '<span class="inline-block mr-1 text-xs" title="私人支出 · 唔入分帳">🔒</span>' : '';
   const confirmBtn = pending ? `<button onclick="event.stopPropagation();confirmPendingReceipt('${r.id}')" class="ml-2 px-2 py-1 rounded-lg text-[10px] font-bold text-white" style="background:#00a87e">✅ 確認</button>` : '';
   // Photo indicator — tapping opens lightbox directly (bypasses edit modal)
   const photoBadge = r.photoThumb
@@ -3353,7 +3396,7 @@ function receiptCard(r) {
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style="background:${cat.color}20;color:${cat.color}">${cat.icon}</div>
         <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium truncate">${pendingBadge}${escapeHtml(displayStore(r) || '未命名')}${photoBadge}</p>
+          <p class="text-sm font-medium truncate">${privateBadge}${pendingBadge}${escapeHtml(displayStore(r) || '未命名')}${photoBadge}</p>
           <p class="text-[10px] text-gray-500">${cat.name} · ${pay.name}${r.region ? ' · ' + escapeHtml(r.region) : ''}</p>
         </div>
       </div>
@@ -3586,12 +3629,32 @@ function computeSettlements(persons, personTotals, shareRatios) {
   return transfers;
 }
 
-function renderSettlementHtml(persons, personTotals, grandTotal, settlements) {
+function renderSettlementHtml(persons, personTotals, grandTotal, settlements, privateTotals) {
+  const _private = Array.isArray(privateTotals) ? privateTotals : persons.map(() => 0);
+  const privateGrand = _private.reduce((a, b) => a + b, 0);
+  // Dual-track header: always shown when any private receipts exist, even
+  // if shared is empty (user still wants to see "我私人花咗幾多").
+  const safeRate0 = Math.max(0.1, Number(state.rate) || 20.36);
+  let privateHeader = '';
+  if (privateGrand > 0) {
+    const parts = persons.map((p, i) => {
+      if (!_private[i]) return '';
+      return `<span style="color:${p.color};font-weight:600">${p.emoji} ${escapeHtml(p.name)} ¥${fmt(_private[i])}</span>`;
+    }).filter(Boolean).join('　');
+    privateHeader = `
+      <div class="mb-3 p-2.5 rounded-xl text-[11px]" style="background:rgba(156,163,175,0.08);border:1px dashed #9CA3AF">
+        <div class="flex items-baseline justify-between mb-1">
+          <span class="font-bold" style="color:#6B7280">🔒 私人支出 (唔入分帳)</span>
+          <span class="font-black" style="color:#6B7280">¥${fmt(privateGrand)} <span class="text-[9px] font-normal">≈ HK$${fmt(Math.round(privateGrand/safeRate0))}</span></span>
+        </div>
+        <div style="line-height:1.6">${parts}</div>
+      </div>`;
+  }
   if (persons.length < 2) {
-    return '<p class="text-sm text-center" style="color:var(--n-muted)">需要至少兩位旅伴先計算分帳</p>';
+    return privateHeader + '<p class="text-sm text-center" style="color:var(--n-muted)">需要至少兩位旅伴先計算分帳</p>';
   }
   if (grandTotal === 0) {
-    return '<p class="text-sm text-center" style="color:var(--n-muted)">未有記帳資料</p>';
+    return privateHeader + '<p class="text-sm text-center" style="color:var(--n-muted)">未有 👫 Shared 記帳資料</p>';
   }
   const allZeroRatios = persons.every(p => !(Number((state.shareRatios||{})[p.id]) > 0));
   if (allZeroRatios) {
@@ -3622,7 +3685,7 @@ function renderSettlementHtml(persons, personTotals, grandTotal, settlements) {
   const ratioSum = persons.reduce((s,p) => s + ratios[p.id], 0);
   const headerHTML = `
     <div class="flex justify-between items-baseline mb-3 pb-2" style="border-bottom:1px dashed rgba(204,41,41,0.25)">
-      <span class="text-[10px] font-semibold" style="color:var(--n-muted)">總花費</span>
+      <span class="text-[10px] font-semibold" style="color:var(--n-muted)">👫 Shared 總花費</span>
       <div class="text-right">
         <span class="text-lg font-black" style="color:var(--n-text)">¥${fmt(grandTotal)}</span>
         <span class="text-[11px] ml-1" style="color:var(--n-muted)">≈ HK$${fmt(Math.round(grandTotal/safeRate))}</span>
@@ -3671,7 +3734,7 @@ function renderSettlementHtml(persons, personTotals, grandTotal, settlements) {
         </div>`).join('') + '</div>';
   }
 
-  return zeroShareBanner + headerHTML + '<div class="mb-2">' + rows + '</div>' + transfersHTML;
+  return privateHeader + zeroShareBanner + headerHTML + '<div class="mb-2">' + rows + '</div>' + transfersHTML;
 }
 
 function renderStats() {
@@ -3683,13 +3746,27 @@ function renderStats() {
   });
 
   // ── Person split chart + settlement ──────────────────────────
+  // Receipts are bucketed into two tracks:
+  //   shared  → count toward settlement math (split by state.shareRatios)
+  //   private → per-person pocket spend (never split, payer bears full cost)
+  // Legacy receipts without r.splitMode default to 'shared' to preserve old
+  // settlement results exactly.
   const persons = getPersons();
   const firstId = persons[0].id;
-  const personTotals = persons.map(p =>
+  const isPrivate = r => r.splitMode === 'private';
+  const sharedPersonTotals = persons.map(p =>
     state.receipts
-      .filter(r => (r.personId || firstId) === p.id)
+      .filter(r => (r.personId || firstId) === p.id && !isPrivate(r))
       .reduce((s, r) => s + (Number(r.total)||0), 0)
   );
+  const privatePersonTotals = persons.map(p =>
+    state.receipts
+      .filter(r => (r.personId || firstId) === p.id && isPrivate(r))
+      .reduce((s, r) => s + (Number(r.total)||0), 0)
+  );
+  // Combined totals (paid by) — keeps the bar chart honest about who spent
+  // how much in absolute terms.
+  const personTotals = sharedPersonTotals.map((v, i) => v + privatePersonTotals[i]);
   const personCounts = persons.map(p =>
     state.receipts.filter(r => (r.personId || firstId) === p.id).length
   );
@@ -3717,10 +3794,14 @@ function renderStats() {
   });
 
   // ── N-person settlement with configurable share ratios ──
+  // Only SHARED receipts are split; private ones stay in their own bucket
+  // (shown separately in the header, excluded from greedy transfer math).
   const settle = $('settlementCard');
-  const grandTotal = personTotals.reduce((a, b) => a + b, 0);
-  const settlements = computeSettlements(persons, personTotals, state.shareRatios || {});
-  settle.innerHTML = renderSettlementHtml(persons, personTotals, grandTotal, settlements);
+  const sharedGrandTotal = sharedPersonTotals.reduce((a, b) => a + b, 0);
+  const settlements = computeSettlements(persons, sharedPersonTotals, state.shareRatios || {});
+  settle.innerHTML = renderSettlementHtml(
+    persons, sharedPersonTotals, sharedGrandTotal, settlements, privatePersonTotals
+  );
   // ─────────────────────────────────────────────────────────────
 
   const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
@@ -6145,6 +6226,7 @@ const N = {
   tax:      ['💸 稅金 ¥', '稅金'],
   subtotal: ['🧮 小計 ¥', '小計'],
   photo:    ['📷 收據相片', '收據相片'],  // Files & media — image URL (from imgbb)
+  split:    ['🔒 類型',     '類型'],       // Select: 共同 / 私人 — shared vs private
 };
 
 // ── Schema cache ──────────────────────────────────────────────────────────────
@@ -6173,6 +6255,23 @@ async function notionEnsureSchema() {
       console.log('[notion] auto-created 📷 收據相片 property');
     } catch(e) {
       console.warn('[notion] could not auto-create 📷 收據相片 (will use body image blocks):', e.message);
+    }
+  }
+  // Auto-create 🔒 類型 Select property for shared/private split tracking.
+  const hasSplit = !!(existing[N.split[0]] || existing[N.split[1]]);
+  if (!hasSplit) {
+    try {
+      const r = await notionFetch(`/databases/${state.notionDb}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ properties: { [N.split[0]]: { select: { options: [
+          { name: '👫 共同', color: 'blue' },
+          { name: '🔒 私人', color: 'gray' },
+        ] } } } })
+      });
+      existing = r.properties || existing;
+      console.log('[notion] auto-created 🔒 類型 property');
+    } catch(e) {
+      console.warn('[notion] could not auto-create 🔒 類型:', e.message);
     }
   }
 
@@ -6222,6 +6321,10 @@ function buildNotionProps(r, schemaMap) {
   if (r.hkd != null)      props[nm('hkd')]      = { number: Number(r.hkd) };
   if (r.tax != null)      props[nm('tax')]       = { number: Number(r.tax) };
   if (r.subtotal != null) props[nm('subtotal')]  = { number: Number(r.subtotal) };
+  // Split-mode Select — defaults to 共同 for any receipt lacking splitMode so
+  // legacy data lands in the same bucket as the existing settlement behaviour.
+  const splitLabel = r.splitMode === 'private' ? '🔒 私人' : '👫 共同';
+  if (nm('split')) props[nm('split')] = { select: { name: splitLabel } };
   // Receipt photo (Files & media property) — attach native Notion file_upload
   // preferentially, or fall back to imgbb external URL. This enables gallery
   // view in Notion regardless of whether the user set up an image host.
@@ -6688,6 +6791,7 @@ async function notionPullAll(silent = false) {
         itemsText: nGet(p,'items')?.rich_text?.[0]?.plain_text || '',
         note: noteClean,
         personId: matchedPerson?.id || getPersons()[0].id,
+        splitMode: (nGet(p,'split')?.select?.name || '').includes('私人') ? 'private' : 'shared',
         notionPageId: page.id,
         createdAt: new Date(page.created_time).getTime(),
       };
@@ -6711,6 +6815,10 @@ async function notionPullAll(silent = false) {
         //   - notionFileUploadId, photoThumb: local-only, never come from pull.
         if (local.createdAt) r.createdAt = local.createdAt;
         if (local.personId && !r.personId_fromNotion) r.personId = local.personId;
+        // Preserve local splitMode if it differs from what Notion returned —
+        // a user may have just flipped this locally and the sync would
+        // otherwise revert it. We always keep local.splitMode if present.
+        if (local.splitMode) r.splitMode = local.splitMode;
         if (local.notionFileUploadId) r.notionFileUploadId = local.notionFileUploadId;
         if (local.photoThumb) r.photoThumb = local.photoThumb;
         // (we tag r.personId with _fromNotion only when 旅伴 explicitly matched — see below)
@@ -7148,6 +7256,9 @@ function normalizeScanResult(raw) {
 function openConfirmModal(data, base64, warnings, usedModelId) {
   editingId = null;
   selectedPersonId = getPersons()[0].id;
+  // New scans default to Shared (the common case for a couples trip).
+  // AI may also pre-set data.splitMode (e.g., from email import hints).
+  selectedSplitMode = (data && data.splitMode === 'private') ? 'private' : 'shared';
   $('modalDelete').classList.add('hidden');
   // Show which AI model produced this result so the user can verify that
   // switching models actually changed the backend call.
@@ -7233,6 +7344,7 @@ function openConfirmModal(data, base64, warnings, usedModelId) {
   }
   _openModalOverlay('confirmModal');
   renderPersonRow();
+  renderSplitRow();
 }
 
 function editReceipt(id) {
@@ -7240,6 +7352,10 @@ function editReceipt(id) {
   if (!r) return;
   editingId = id;
   selectedPersonId = r.personId || getPersons()[0].id;
+  // Legacy receipts without splitMode default to 'shared' (the app behaved as
+  // if all receipts were shared before this feature landed). Preserves sanity
+  // of existing settlement math on already-entered trips.
+  selectedSplitMode = r.splitMode === 'private' ? 'private' : 'shared';
   pendingPhotoBase64 = null;
   $('modalDelete').classList.remove('hidden');
   $('modalRescanWrap').classList.add('hidden'); // rescan not available in edit mode
@@ -7267,6 +7383,7 @@ function editReceipt(id) {
   }
   _openModalOverlay('confirmModal');
   renderPersonRow();
+  renderSplitRow();
 }
 window.editReceipt = editReceipt;
 
@@ -7304,6 +7421,7 @@ async function _saveModalInner() {
     itemsText: $('mItems').value,
     note: $('mNote').value,
     personId: selectedPersonId || getPersons()[0].id,
+    splitMode: selectedSplitMode === 'private' ? 'private' : 'shared',
     createdAt: existing?.createdAt || Date.now(),
   };
   if (r.total <= 0) { toast('⚠️ 金額必須大過 0'); return; }
