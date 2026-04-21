@@ -978,7 +978,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v33</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v34</p>
     </div>
   </section>
 </main>
@@ -1632,7 +1632,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 33;
+const APP_BUILD = 34;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -6336,6 +6336,55 @@ async function notionPushReceipt(r) {
         method: 'PATCH',
         body: JSON.stringify({ properties: props })
       });
+      // ── Ensure the receipt photo appears IN-PAGE on Notion (not just in the
+      //    Files property). PATCH /pages can only update properties. So the
+      //    page body block is only ever written by the CREATE path. For any
+      //    existing page without that block (created pre-v33, or first upload
+      //    failed), append one here. Use a FRESH upload — the r.notionFileUploadId
+      //    is already attached to the Files property by the PATCH above, and
+      //    Notion rejects attaching the same upload id to a second location
+      //    across separate requests. Flag on receipt prevents duplicates on
+      //    later updates. Fixes: "cannot see receipt images in Notion app". ──
+      if (r.photoThumb && !r._photoBodyBlockAdded) {
+        try {
+          const baseName = (r.store || 'receipt').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
+          const fileName = `${baseName}_${r.date || 'nodate'}_page.jpg`;
+          const bodyUp = await notionUploadFile(r.photoThumb, 'image/jpeg', fileName);
+          if (bodyUp?.fileUploadId) {
+            await notionFetch(`/blocks/${r.notionPageId}/children`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                children: [{
+                  object: 'block', type: 'image',
+                  image: { type: 'file_upload', file_upload: { id: bodyUp.fileUploadId } }
+                }]
+              })
+            });
+            r._photoBodyBlockAdded = true;
+            saveState();
+          }
+        } catch(e) {
+          console.warn('[notion] could not append photo block to page body:', e.message);
+        }
+      } else if (r.photoUrl && !r._photoBodyBlockAdded) {
+        // Legacy external URL path — external URLs can be referenced repeatedly
+        // without restriction, so re-use the same URL for the body block.
+        try {
+          await notionFetch(`/blocks/${r.notionPageId}/children`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              children: [{
+                object: 'block', type: 'image',
+                image: { type: 'external', external: { url: r.photoUrl } }
+              }]
+            })
+          });
+          r._photoBodyBlockAdded = true;
+          saveState();
+        } catch(e) {
+          console.warn('[notion] could not append external photo block:', e.message);
+        }
+      }
       return;
     } catch(e) {
       const msg = String(e?.message || '');
@@ -6346,6 +6395,7 @@ async function notionPushReceipt(r) {
         // Reusing one when we recreate the page risks a 400. Re-upload on next push.
         delete r.notionFileUploadId;
         delete r._photoSyncedToNotion;
+        delete r._photoBodyBlockAdded;
       } else {
         throw e;
       }
@@ -6371,10 +6421,13 @@ async function notionPushReceipt(r) {
       children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content: r.note.slice(0,2000) } }], icon:{ emoji:'📝' } } });
     }
     // Receipt photo — prefer native Notion file_upload → fall back to external URL → else note.
+    let photoBlockAdded = false;
     if (r.notionFileUploadId) {
       children.unshift({ object:'block', type:'image', image:{ type:'file_upload', file_upload:{ id: r.notionFileUploadId } } });
+      photoBlockAdded = true;
     } else if (r.photoUrl) {
       children.unshift({ object:'block', type:'image', image:{ type:'external', external:{ url: r.photoUrl } } });
+      photoBlockAdded = true;
     } else if (r.photoThumb) {
       // Photo exists locally but upload pending / failed — leave a note so user
       // knows a photo exists and can trigger a manual re-push.
@@ -6384,6 +6437,7 @@ async function notionPushReceipt(r) {
     if (children.length) body.children = children;
     const data = await notionFetch('/pages', { method: 'POST', body: JSON.stringify(body) });
     r.notionPageId = data.id;
+    if (photoBlockAdded) r._photoBodyBlockAdded = true;
     saveState();
   }
 }
@@ -6927,6 +6981,32 @@ function normalizeScanResult(raw) {
     // Leave as empty string — modal sanitises downstream
   }
 
+  // ── Items translation sanitization ──
+  // Weak VLMs (GLM, MiniMax fallbacks) sometimes return name as null/empty/
+  // literal "null"/"undefined", or a duplicate of name_jp (no translation).
+  // Without this, mItems textarea shows broken rows like "null (おにぎり) ¥150"
+  // or duplicated "おにぎり (おにぎり) ¥150". Fall back to name_jp in those
+  // cases so the user at least sees the Japanese original. Flag untranslated
+  // rows so the user knows to check.
+  if (Array.isArray(data.items)) {
+    let untranslatedCount = 0;
+    data.items = data.items.map(i => {
+      if (!i || typeof i !== 'object') return i;
+      const jp = (i.name_jp == null ? '' : String(i.name_jp)).trim();
+      let nm = (i.name == null ? '' : String(i.name)).trim();
+      // Literal "null"/"undefined"/"n/a" string (seen from MiniMax occasionally)
+      if (/^(null|undefined|n\/?a)$/i.test(nm)) nm = '';
+      // If name missing or same as Japanese original, fall back to name_jp
+      if (!nm || nm === jp) {
+        if (jp) { nm = jp; untranslatedCount++; }
+      }
+      return { ...i, name: nm, name_jp: jp };
+    });
+    if (untranslatedCount > 0) {
+      warnings.push(`${untranslatedCount} 項未翻譯（AI 返咗原文），請喺「品項」欄手動修正`);
+    }
+  }
+
   // ── Store name: strip parentheses with translations (e.g. "ローソン（LAWSON）" → "ローソン") ──
   if (typeof data.store === 'string') {
     const stripped = data.store.replace(/\s*[（(][^)）]*[)）]\s*/g, '').trim();
@@ -7026,9 +7106,14 @@ function openConfirmModal(data, base64, warnings) {
     $('mPay').value = '';
   }
   $('mItems').value = (data.items||[]).map(i => {
-    const jp = i.name_jp ? ` (${i.name_jp})` : '';
-    const hkd = (state.rate > 0 && i.price) ? ` ≈HKD${Math.round(i.price / state.rate)}` : '';
-    return `${i.name}${jp} ¥${i.price || '?'}${hkd}`;
+    const name = (i?.name || '').toString().trim();
+    const jp = (i?.name_jp || '').toString().trim();
+    // Only show "(jp)" suffix when we actually have a translation to disambiguate —
+    // skip when name is empty, or identical to name_jp (fallback path).
+    const showJp = jp && name && name !== jp;
+    const display = name || jp || '(未識別)';
+    const hkd = (state.rate > 0 && i?.price) ? ` ≈HKD${Math.round(i.price / state.rate)}` : '';
+    return `${display}${showJp ? ` (${jp})` : ''} ¥${i?.price || '?'}${hkd}`;
   }).join('\n');
   $('mNote').value = data.note || '';
   pendingTax = data.tax || null;
