@@ -1040,7 +1040,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v45</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v46</p>
     </div>
   </section>
 </main>
@@ -1720,7 +1720,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 45;
+const APP_BUILD = 46;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -2206,12 +2206,21 @@ window.removePerson = function(id) {
   if (!state.persons || state.persons.length <= 1) { toast('⚠️ 最少保留一位旅伴'); return; }
   state.persons = state.persons.filter(p => p.id !== id);
   const firstId = state.persons[0].id;
-  state.receipts.forEach(r => { if (r.personId === id) r.personId = firstId; });
+  state.receipts.forEach(r => {
+    if (r.personId === id) r.personId = firstId;
+    // Orphan cleanup: if someone was marked as beneficiary of a cross-private
+    // receipt and then got removed, clear the dangling reference. Otherwise
+    // computeSettlements silently skips that receipt (idxOf → -1) and the
+    // transfer math is quietly wrong.
+    if (r.beneficiaryId === id) r.beneficiaryId = null;
+  });
   // Prune share ratio for removed person
   if (state.shareRatios) delete state.shareRatios[id];
   saveState();
+  notionPushSettingsIfReady();
   renderPersonList();
   if (typeof window.renderShareRatios === 'function') window.renderShareRatios();
+  if (typeof window.renderSettlePanel === 'function') window.renderSettlePanel();
   if (!$('tab-stats').classList.contains('hidden')) renderStats();
   toast('已移除');
 };
@@ -7059,7 +7068,12 @@ const META_SETTINGS_ID = '__meta_settings__';
 const META_SETTINGS_TITLE = '⚙️ App Settings（請勿刪除）';
 
 function buildSettingsPayload() {
-  return {
+  // Start with small / mandatory fields; only then test whether the full
+  // payload fits inside the 2000-char Notion rich_text limit. If adding
+  // customItinerary blows that budget, drop it from the sync (the flag
+  // `customItineraryTooLarge: true` tells other devices the author has a
+  // local custom itinerary that couldn't be synced here).
+  const base = {
     v: 1,
     budget: state.budget,
     rate: state.rate,
@@ -7069,9 +7083,16 @@ function buildSettingsPayload() {
     shareRatios: state.shareRatios,
     statsIncludeTransportLodging: !!state.statsIncludeTransportLodging,
     autoSync: !!state.autoSync,
-    customItinerary: state.customItinerary || null,
     updatedAt: Date.now(),
   };
+  if (state.customItinerary) {
+    const withItin = { ...base, customItinerary: state.customItinerary };
+    // Leave ~100 chars headroom (Notion hard limit is 2000 — mid-JSON truncation
+    // would make the remote copy unparseable and wipe settings on every pull).
+    if (JSON.stringify(withItin).length <= 1900) return withItin;
+    return { ...base, customItineraryTooLarge: true };
+  }
+  return base;
 }
 
 // Merge a settings payload from Notion into local state. Only overwrites
@@ -7327,6 +7348,9 @@ async function notionPullAll(silent = false) {
       };
       // Strip the 🎁 為 ... prefix from itemsText and resolve beneficiaryId.
       // Format written by buildNotionProps: first line = "🎁 為 <emoji> <name>".
+      // Only strip/consume the prefix if (a) splitMode is private AND (b) the
+      // hinted name resolves to a known non-payer person — this prevents a
+      // user-typed "🎁 為 某某" line in items being mistakenly eaten.
       if (r.splitMode === 'private' && r.itemsText) {
         const firstNl = r.itemsText.indexOf('\n');
         const firstLine = firstNl >= 0 ? r.itemsText.slice(0, firstNl) : r.itemsText;
@@ -7336,8 +7360,9 @@ async function notionPullAll(silent = false) {
           const matchBen = getPersons().find(pe => nameHint.includes(pe.name));
           if (matchBen && matchBen.id !== r.personId) {
             r.beneficiaryId = matchBen.id;
+            r.itemsText = firstNl >= 0 ? r.itemsText.slice(firstNl + 1) : '';
           }
-          r.itemsText = firstNl >= 0 ? r.itemsText.slice(firstNl + 1) : '';
+          // else: leave the line in place — treating it as user content.
         }
       }
       // Tag whether personId came from an actual Notion match — merge logic uses this
@@ -7365,8 +7390,10 @@ async function notionPullAll(silent = false) {
         // otherwise revert it. We always keep local.splitMode if present.
         if (local.splitMode) r.splitMode = local.splitMode;
         // Same for beneficiaryId: locally-set beneficiary wins over whatever
-        // got parsed from the Notion items-prefix (which may lag behind).
-        if (local.beneficiaryId !== undefined) r.beneficiaryId = local.beneficiaryId;
+        // got parsed from the Notion items-prefix. Truthy-only so a local
+        // null/undefined (older record or explicit clear) doesn't overwrite
+        // a fresh remote assignment made on another device.
+        if (local.beneficiaryId) r.beneficiaryId = local.beneficiaryId;
         if (local.notionFileUploadId) r.notionFileUploadId = local.notionFileUploadId;
         if (local.photoThumb) r.photoThumb = local.photoThumb;
         // (we tag r.personId with _fromNotion only when 旅伴 explicitly matched — see below)
@@ -8041,6 +8068,10 @@ async function _saveModalInner() {
   saveState();
   closeModal();
   refresh();
+  // Settlement badge in Settings tracks state.receipts; refresh if the
+  // panel has been initialized, so a save made from Scan/History tab
+  // doesn't leave the Settings summary badge out of date.
+  if (typeof window.renderSettlePanel === 'function') window.renderSettlePanel();
   $('previewArea').classList.add('hidden');
   $('receiptInput').value = '';
 
@@ -8109,6 +8140,7 @@ async function deleteReceipt() {
   saveState();
   closeModal();
   refresh();
+  if (typeof window.renderSettlePanel === 'function') window.renderSettlePanel();
   toast('🗑️ 已刪除');
 
   // Archive in Notion (best-effort — notionDeletedIds prevents it coming back even if this fails)
@@ -8437,7 +8469,12 @@ function switchTab(name, opts = {}) {
     }
   }
   if (name === 'timeline') renderTimeline();
-  if (name === 'settings') renderModelCards();
+  if (name === 'settings') {
+    renderModelCards();
+    // Refresh the 💸 分帳結算 summary badge + panel — receipts may have
+    // changed in other tabs since the Settings init ran.
+    if (typeof window.renderSettlePanel === 'function') window.renderSettlePanel();
+  }
 }
 window.switchTab = switchTab;
 
@@ -8837,8 +8874,10 @@ function init() {
     state.shareRatios = state.shareRatios || {};
     state.shareRatios[newId] = 1; // default equal share for new person
     saveState();
+    notionPushSettingsIfReady();
     renderPersonList();
     if (typeof window.renderShareRatios === 'function') window.renderShareRatios();
+    if (typeof window.renderSettlePanel === 'function') window.renderSettlePanel();
     if (!$('tab-stats').classList.contains('hidden')) renderStats();
     $('addPersonForm').classList.add('hidden');
     $('newPersonName').value = '';
