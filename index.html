@@ -1022,7 +1022,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v43</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v44</p>
     </div>
   </section>
 </main>
@@ -1695,7 +1695,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 43;
+const APP_BUILD = 44;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -1805,10 +1805,13 @@ function loadState() {
       { id: 'p_xinxin', name: '欣欣', emoji: '👧', color: '#FF91A4' },
     ];
   }
-  // Drop receipts missing mandatory fields — prevents downstream renders from crashing
+  // Drop receipts missing mandatory fields — prevents downstream renders from crashing.
+  // Also evict any __meta_* rows that may have leaked into state.receipts from an
+  // older pre-v44 pull (the new pull loop skips them, but existing caches may still carry).
   const before = state.receipts.length;
   state.receipts = state.receipts.filter(r =>
     r && typeof r === 'object' && r.id && typeof r.store !== 'undefined'
+    && !(typeof r.id === 'string' && r.id.startsWith('__meta_'))
   );
   if (state.receipts.length !== before) {
     console.warn('[loadState] dropped', before - state.receipts.length, 'malformed receipts');
@@ -6649,12 +6652,15 @@ async function notionPushReceipt(r) {
     } catch(e) { console.warn('[notionPush] photo upload failed:', e.message); }
   }
   const props = buildNotionProps(r, schemaMap);
+  // Category emoji used for both the page icon and header callout below.
+  const cat = CATEGORIES.find(c => c.id === r.category);
+  const catIcon = cat?.icon || '📦';
   if (r.notionPageId) {
     // Update existing — but recover from 404 (page was deleted/archived in Notion)
     try {
       await notionFetch(`/pages/${r.notionPageId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ properties: props })
+        body: JSON.stringify({ properties: props, icon: { emoji: catIcon } })
       });
       // ── Ensure the receipt photo appears IN-PAGE on Notion (not just in the
       //    Files property). PATCH /pages can only update properties. So the
@@ -6722,38 +6728,62 @@ async function notionPushReceipt(r) {
     }
   }
   if (!r.notionPageId) {
-    // Create new — add structured content blocks
+    // Create new — structured page body with header / photo / details / notes.
     const children = [];
-    // Items breakdown
+    let photoBlockAdded = false;
+
+    // ── 1. Header callout: at-a-glance dashboard line ──
+    const catName = cat?.name || '其他';
+    const amountStr = `¥${(Number(r.total)||0).toLocaleString()}`;
+    const parts = [catName, amountStr];
+    if (r.date) parts.push(r.date);
+    if (r.region) parts.push(r.region);
+    if (r.splitMode === 'private') parts.push('🔒 私人');
+    children.push({
+      object:'block', type:'callout',
+      callout: {
+        rich_text: [{ text: { content: parts.join(' · ') } }],
+        icon: { emoji: catIcon },
+        color: 'gray_background',
+      }
+    });
+
+    // ── 2. Receipt photo (prefer native file_upload → external URL → pending note) ──
+    if (r.notionFileUploadId) {
+      children.push({ object:'block', type:'image', image:{ type:'file_upload', file_upload:{ id: r.notionFileUploadId } } });
+      photoBlockAdded = true;
+    } else if (r.photoUrl) {
+      children.push({ object:'block', type:'image', image:{ type:'external', external:{ url: r.photoUrl } } });
+      photoBlockAdded = true;
+    } else if (r.photoThumb) {
+      children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content:'📷 收據相片儲存喺裝置本機；下次同步會上傳' } }], icon:{ emoji:'📷' }, color:'blue_background' } });
+    }
+
+    // ── 3. Items breakdown ──
     if (r.itemsText && r.itemsText.trim()) {
-      children.push({ object:'block', type:'heading_3', heading_3:{ rich_text:[{ text:{ content:'品項明細' } }] } });
+      children.push({ object:'block', type:'heading_3', heading_3:{ rich_text:[{ text:{ content:'🧾 品項明細' } }] } });
       r.itemsText.trim().split('\n').filter(Boolean).forEach(line => {
         children.push({ object:'block', type:'bulleted_list_item', bulleted_list_item:{ rich_text:[{ text:{ content: line.slice(0,2000) } }] } });
       });
     }
-    // Tax / subtotal
+
+    // ── 4. Tax / subtotal line ──
     if (r.subtotal || r.tax) {
       const taxLine = [r.subtotal ? `小計: ¥${r.subtotal}` : '', r.tax ? `稅金: ¥${r.tax}` : ''].filter(Boolean).join('　');
       children.push({ object:'block', type:'paragraph', paragraph:{ rich_text:[{ text:{ content: taxLine }, annotations:{ color:'gray' } }] } });
     }
-    // Note
+
+    // ── 5. User note ──
     if (r.note && r.note.trim()) {
-      children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content: r.note.slice(0,2000) } }], icon:{ emoji:'📝' } } });
+      children.push({ object:'block', type:'heading_3', heading_3:{ rich_text:[{ text:{ content:'📝 備註' } }] } });
+      children.push({ object:'block', type:'paragraph', paragraph:{ rich_text:[{ text:{ content: r.note.slice(0,2000) } }] } });
     }
-    // Receipt photo — prefer native Notion file_upload → fall back to external URL → else note.
-    let photoBlockAdded = false;
-    if (r.notionFileUploadId) {
-      children.unshift({ object:'block', type:'image', image:{ type:'file_upload', file_upload:{ id: r.notionFileUploadId } } });
-      photoBlockAdded = true;
-    } else if (r.photoUrl) {
-      children.unshift({ object:'block', type:'image', image:{ type:'external', external:{ url: r.photoUrl } } });
-      photoBlockAdded = true;
-    } else if (r.photoThumb) {
-      // Photo exists locally but upload pending / failed — leave a note so user
-      // knows a photo exists and can trigger a manual re-push.
-      children.push({ object:'block', type:'callout', callout:{ rich_text:[{ text:{ content:'📷 收據相片儲存喺裝置本機；下次同步會上傳' } }], icon:{ emoji:'📷' }, color:'blue_background' } });
-    }
-    const body = { parent: { database_id: state.notionDb }, properties: props };
+
+    const body = {
+      parent: { database_id: state.notionDb },
+      icon: { emoji: catIcon },
+      properties: props,
+    };
     if (children.length) body.children = children;
     const data = await notionFetch('/pages', { method: 'POST', body: JSON.stringify(body) });
     r.notionPageId = data.id;
@@ -6804,6 +6834,136 @@ async function notionPushAll() {
   }
 }
 
+// ============ META-SETTINGS SYNC ============
+// ONE dedicated row in the SAME Notion DB (SourceID=__meta_settings__) stores
+// app-wide settings (budget, rate, tripDateRange, persons, shareRatios, etc.)
+// as JSON inside the 備註 field. This fixes the "budget resets when I unlock
+// on another browser" bug — without it, each browser kept its own localStorage
+// budget and fell back to the default (¥101,800 ≈ HKD 5,005) on fresh unlock.
+// Credentials (tokens/keys) are NEVER stored here — only non-sensitive config.
+const META_SETTINGS_ID = '__meta_settings__';
+const META_SETTINGS_TITLE = '⚙️ App Settings（請勿刪除）';
+
+function buildSettingsPayload() {
+  return {
+    v: 1,
+    budget: state.budget,
+    rate: state.rate,
+    tripName: state.tripName,
+    tripDateRange: state.tripDateRange,
+    persons: state.persons,
+    shareRatios: state.shareRatios,
+    statsIncludeTransportLodging: !!state.statsIncludeTransportLodging,
+    autoSync: !!state.autoSync,
+    customItinerary: state.customItinerary || null,
+    updatedAt: Date.now(),
+  };
+}
+
+// Merge a settings payload from Notion into local state. Only overwrites
+// fields where the remote value is clearly present+valid, so a malformed
+// remote row can't wipe local values. Returns true if anything changed.
+function applySettingsPayload(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  let changed = false;
+  if (typeof payload.budget === 'number' && payload.budget > 0 && payload.budget !== state.budget) {
+    state.budget = payload.budget; changed = true;
+  }
+  if (typeof payload.rate === 'number' && payload.rate > 0 && payload.rate !== state.rate) {
+    state.rate = payload.rate; changed = true;
+  }
+  if (typeof payload.tripName === 'string' && payload.tripName && payload.tripName !== state.tripName) {
+    state.tripName = payload.tripName; changed = true;
+  }
+  if (payload.tripDateRange && payload.tripDateRange.start && payload.tripDateRange.end) {
+    if (JSON.stringify(payload.tripDateRange) !== JSON.stringify(state.tripDateRange)) {
+      state.tripDateRange = payload.tripDateRange; changed = true;
+    }
+  }
+  if (Array.isArray(payload.persons) && payload.persons.length) {
+    if (JSON.stringify(payload.persons) !== JSON.stringify(state.persons)) {
+      state.persons = payload.persons; changed = true;
+    }
+  }
+  if (payload.shareRatios && typeof payload.shareRatios === 'object') {
+    if (JSON.stringify(payload.shareRatios) !== JSON.stringify(state.shareRatios)) {
+      state.shareRatios = payload.shareRatios; changed = true;
+    }
+  }
+  if (typeof payload.statsIncludeTransportLodging === 'boolean') {
+    if (payload.statsIncludeTransportLodging !== !!state.statsIncludeTransportLodging) {
+      state.statsIncludeTransportLodging = payload.statsIncludeTransportLodging; changed = true;
+    }
+  }
+  if (payload.customItinerary !== undefined) {
+    const sameRef = JSON.stringify(payload.customItinerary) === JSON.stringify(state.customItinerary);
+    if (!sameRef) {
+      if (payload.customItinerary) {
+        const err = validateItinerary(payload.customItinerary);
+        if (err) { console.warn('[meta] remote customItinerary invalid, ignoring:', err); }
+        else { state.customItinerary = payload.customItinerary; window.CURRENT_ITINERARY = state.customItinerary; changed = true; }
+      } else {
+        state.customItinerary = null; window.CURRENT_ITINERARY = null; changed = true;
+      }
+    }
+  }
+  state.settingsUpdatedAt = payload.updatedAt || Date.now();
+  return changed;
+}
+
+async function notionPushSettings() {
+  if (!state.notionToken || !state.notionDb) return;
+  const schemaMap = await notionEnsureSchema();
+  const nm = key => (schemaMap && schemaMap[key]) ? schemaMap[key] : N[key][0];
+  const payload = buildSettingsPayload();
+  state.settingsUpdatedAt = payload.updatedAt;
+  const jsonStr = JSON.stringify(payload);
+  const props = {
+    [nm('store')]:    { title: [{ text: { content: META_SETTINGS_TITLE } }] },
+    [nm('amount')]:   { number: 0 },
+    [nm('date')]:     { date: { start: todayHKT() } },
+    [nm('cat')]:      { select: { name: '其他' } },
+    [nm('pay')]:      { select: { name: '現金' } },
+    [nm('region')]:   { rich_text: [{ text: { content: '__meta__' } }] },
+    [nm('items')]:    { rich_text: [{ text: { content: '（此行由 app 自動維護。請勿刪除或手動編輯——下次 sync 會覆蓋。）' } }] },
+    [nm('note')]:     { rich_text: [{ text: { content: jsonStr.slice(0, 2000) } }] },
+    [nm('person')]:   { rich_text: [{ text: { content: '' } }] },
+    [nm('sourceId')]: { rich_text: [{ text: { content: META_SETTINGS_ID } }] },
+  };
+  const iconPayload = { icon: { emoji: '⚙️' } };
+  if (state.metaSettingsPageId) {
+    try {
+      await notionFetch(`/pages/${state.metaSettingsPageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ properties: props, ...iconPayload })
+      });
+      saveState();
+      return;
+    } catch(e) {
+      if (/Notion\s+40[04]/.test(String(e?.message))) {
+        console.warn('[meta] settings page gone — recreating');
+        state.metaSettingsPageId = null;
+      } else { throw e; }
+    }
+  }
+  const data = await notionFetch('/pages', {
+    method: 'POST',
+    body: JSON.stringify({ parent: { database_id: state.notionDb }, ...iconPayload, properties: props })
+  });
+  state.metaSettingsPageId = data.id;
+  saveState();
+}
+
+// Debounced auto-push — used by saveBudget / saveSettings handlers so the
+// user can adjust a slider rapidly without spamming Notion with 10 PATCHes.
+function notionPushSettingsIfReady() {
+  if (!state.autoSync || !state.notionToken || !state.notionDb) return;
+  clearTimeout(notionPushSettingsIfReady._t);
+  notionPushSettingsIfReady._t = setTimeout(() => {
+    notionPushSettings().catch(e => console.warn('[notionPushSettings]', e.message));
+  }, 800);
+}
+
 async function notionPullAll(silent = false) {
   if (!state.notionToken || !state.notionDb) {
     if (!silent) toast('⚠️ 請先設定 Notion');
@@ -6844,6 +7004,27 @@ async function notionPullAll(silent = false) {
       const sourceId = nGet(p,'sourceId')?.rich_text?.[0]?.plain_text;
       // Skip if this SourceID was deleted locally (survives Apps Script re-creation)
       if (sourceId && deletedSourceIds.has(sourceId)) continue;
+      // ── Settings meta row ─────────────────────────────────────────────
+      // SourceID=__meta_settings__ is the one special row that carries app
+      // config (budget, rate, etc.) as JSON in 備註. Hydrate state from it
+      // if the remote copy is newer than ours, then skip — it's not a receipt.
+      if (sourceId === META_SETTINGS_ID) {
+        state.metaSettingsPageId = page.id;
+        try {
+          const rawNote = nGet(p,'note')?.rich_text?.[0]?.plain_text || '';
+          if (rawNote && rawNote.trim().startsWith('{')) {
+            const payload = JSON.parse(rawNote);
+            const remoteTs = Number(payload.updatedAt) || 0;
+            const localTs = Number(state.settingsUpdatedAt) || 0;
+            if (remoteTs > localTs) {
+              if (applySettingsPayload(payload)) {
+                console.log('[meta] hydrated settings from Notion (remote newer)');
+              }
+            }
+          }
+        } catch(e) { console.warn('[meta] settings parse failed:', e.message); }
+        continue;
+      }
       const id = sourceId || ('r_notion_' + page.id.slice(0, 8));
       const catName = nGet(p,'cat')?.select?.name || '';
       const cat = CATEGORIES.find(c => c.name === catName)?.id || 'other';
@@ -8083,6 +8264,7 @@ function init() {
     state.statsIncludeTransportLodging = this.checked;
     _applyStatsToggleUI(this.checked);
     saveState();
+    notionPushSettingsIfReady();
     renderHeader();
     renderDashboard();
   });
@@ -8123,6 +8305,7 @@ function init() {
       state.budget = Math.max(1, Number($('setBudget').value) || 101800);
     }
     saveState();
+    notionPushSettingsIfReady();
     refresh();
     // Visual feedback on the button itself
     const btn = $('saveBudgetBtn');
@@ -8180,6 +8363,7 @@ function init() {
     });
     if (Object.keys(ratios).length) state.shareRatios = ratios;
     saveState();
+    notionPushSettingsIfReady();
     refresh();
     // Clear the key inputs (so they don't keep plaintext visible), then
     // update the status line below with a "✅ have key / ❌ missing" readout.
