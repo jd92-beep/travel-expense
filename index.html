@@ -1040,7 +1040,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v46</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v47</p>
     </div>
   </section>
 </main>
@@ -1720,7 +1720,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 46;
+const APP_BUILD = 47;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -3528,9 +3528,19 @@ function receiptCard(r) {
         : '<span class="inline-block mr-1 text-xs" title="私人支出 · 唔入分帳">🔒</span>')
     : '';
   const confirmBtn = pending ? `<button onclick="event.stopPropagation();confirmPendingReceipt('${r.id}')" class="ml-2 px-2 py-1 rounded-lg text-[10px] font-bold text-white" style="background:#00a87e">✅ 確認</button>` : '';
-  // Photo indicator — tapping opens lightbox directly (bypasses edit modal)
-  const photoBadge = r.photoThumb
-    ? `<button onclick="event.stopPropagation();openImgLightbox('data:image/jpeg;base64,${r.photoThumb}')" class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:#DBEAFE;color:#1D4ED8" title="點擊睇收據相">📷</button>`
+  // Photo indicator — tapping opens lightbox directly (bypasses edit modal).
+  // Prefer local thumb (instant, offline) → fall back to photoUrl (Notion
+  // file-upload signed URL or imgbb external). This matters because
+  // localStorage quota pruning (saveState tier-1/2) proactively deletes
+  // photoThumb for receipts already synced to Notion — and the canonical
+  // copy still lives in Notion's Files column, which the pull populates
+  // into r.photoUrl. Without this fallback, old receipts' 📷 badge just
+  // disappears after the first quota event.
+  const photoSrc = r.photoThumb
+    ? `data:image/jpeg;base64,${r.photoThumb}`
+    : (r.photoUrl || '');
+  const photoBadge = photoSrc
+    ? `<button onclick="event.stopPropagation();openImgLightbox('${photoSrc.replace(/'/g,'%27')}')" class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:#DBEAFE;color:#1D4ED8" title="點擊睇收據相${r.photoThumb ? '' : '（從 Notion）'}">📷</button>`
     : '';
   return `
     <div class="glass rounded-2xl p-3 flex items-center justify-between" style="${borderStyle}" onclick="editReceipt('${r.id}')">
@@ -7955,9 +7965,15 @@ function editReceipt(id) {
   $('mPay').value = r.payment;
   $('mItems').value = r.itemsText || '';
   $('mNote').value = r.note || '';
-  // Show stored receipt photo if available
+  // Show stored receipt photo if available.
+  // Fall back to r.photoUrl (Notion signed URL or imgbb) when the local
+  // thumb has been pruned by the localStorage quota guard — otherwise the
+  // edit modal shows no photo even though Notion has the canonical copy.
   if (r.photoThumb) {
     $('mPhotoThumb').src = `data:image/jpeg;base64,${r.photoThumb}`;
+    $('mPhotoWrap').classList.remove('hidden');
+  } else if (r.photoUrl) {
+    $('mPhotoThumb').src = r.photoUrl;
     $('mPhotoWrap').classList.remove('hidden');
   } else {
     $('mPhotoWrap').classList.add('hidden');
