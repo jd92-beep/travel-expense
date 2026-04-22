@@ -798,9 +798,27 @@
     <div class="glass rounded-2xl p-4 mb-3">
       <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">⚖️ 分帳比例</label>
       <p class="text-[11px] mt-1" style="color:var(--n-muted)">每人承擔嘅百分比（%）。加/減旅伴後自動重算。</p>
-      <p class="text-[10px] mt-1 mb-2 font-semibold" style="color:#4f46e5">ℹ️ 比例只適用於 <span style="color:#2D5A8E">👫 Shared</span> 支出；<span style="color:#6B7280">🔒 私人</span> 支出由付款人全額承擔，唔會入呢個分帳計算。</p>
+      <p class="text-[10px] mt-1 mb-2 font-semibold" style="color:#4f46e5">ℹ️ 比例只適用於 <span style="color:#2D5A8E">👫 Shared</span> 支出；<span style="color:#6B7280">🔒 私人</span> 支出由付款人全額承擔（除非代付俾其他人）。</p>
       <div id="shareRatiosWrap"></div>
     </div>
+
+    <!-- Expandable full settlement card: who pays back whom, including
+         shared-by-ratio math + cross-private direct debts + private per-
+         person totals. Live — refreshes every time this details element
+         is opened. -->
+    <details id="settleDetails" class="glass rounded-2xl mb-3 overflow-hidden">
+      <summary class="flex items-center justify-between p-4 cursor-pointer select-none list-none">
+        <div class="flex items-center gap-2">
+          <label class="text-xs uppercase tracking-wider cursor-pointer" style="color:var(--n-muted)">💸 分帳結算</label>
+          <span id="settleSummaryBadge" class="text-[10px] px-2 py-0.5 rounded-full font-semibold hidden" style="background:#FEF3C7;color:#92400E"></span>
+        </div>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">展開睇</span>
+      </summary>
+      <div class="px-4 pb-4">
+        <p class="text-[10px] mb-3" style="color:var(--n-muted)">按比例 share 嘅 + 代人買私人嘢（🎁）嘅 — 全部合埋計，畀你最少轉帳次數。</p>
+        <div id="settlePanel"></div>
+      </div>
+    </details>
 
     <!-- ══════ SECTION C: AI 模型（全部收起） ══════ -->
     <div class="mt-5 mb-2 px-1 flex items-center gap-2">
@@ -1022,7 +1040,7 @@
       <!-- Version marker so we can tell if the PWA cache is stale. If Boss sees
            a different number here vs what was just deployed, he needs to force
            reload or reinstall the home-screen PWA. -->
-      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v44</p>
+      <p class="mt-2 font-mono" style="color:#C0281E;font-weight:600">APP BUILD v45</p>
     </div>
   </section>
 </main>
@@ -1104,7 +1122,14 @@
       <div id="mSplitWrap" class="mt-1">
         <label class="text-[10px] uppercase tracking-wider" style="color:var(--n-muted)">分帳模式</label>
         <div id="mSplitRow" class="flex gap-2 mt-2"></div>
-        <p class="text-[9px] mt-1.5" style="color:var(--n-muted)">Shared = 按設定比例分帳；私人 = 只有付款人承擔，唔入分帳計算</p>
+        <p class="text-[9px] mt-1.5" style="color:var(--n-muted)">Shared = 按設定比例分帳；私人 = 只有受惠人承擔，唔入 shared 分帳</p>
+      </div>
+      <!-- Beneficiary picker (only shown for 🔒 私人 + ≥2 persons):
+           lets the payer mark "I paid but it's for someone else's personal item" -->
+      <div id="mBeneficiaryWrap" class="mt-1 hidden">
+        <label class="text-[10px] uppercase tracking-wider" style="color:var(--n-muted)">🎁 為邊個買</label>
+        <div id="mBeneficiaryRow" class="flex gap-2 mt-2 flex-wrap"></div>
+        <p class="text-[9px] mt-1.5" style="color:var(--n-muted)">如果係代人買私人嘢，揀受惠人 — 佢會喺分帳裡面全額還番俾付款人</p>
       </div>
       <div>
         <label class="text-[10px] uppercase tracking-wider text-gray-400">店名</label>
@@ -1695,7 +1720,7 @@ let state = {
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
   lastTab: 'scan',
 };
-const APP_BUILD = 44;
+const APP_BUILD = 45;
 let _appUpdateCheckInFlight = false;
 
 // Runtime reference to the effective itinerary; assigned in loadState()
@@ -2022,8 +2047,13 @@ function toast(msg, type) {
 let selectedPersonId = null;
 // Split mode for the receipt currently being edited/confirmed.
 // 'shared' → split via state.shareRatios (legacy behaviour for all old receipts).
-// 'private' → only the payer bears the cost; excluded from settlement math.
+// 'private' → only the PAYER bears the cost (when beneficiary == payer, current
+//             default), OR — when `selectedBeneficiaryId` is set to a different
+//             person — beneficiary owes payer the full amount (cross-private).
 let selectedSplitMode = 'shared';
+// Null means "same as payer" (self-private). Only meaningful when
+// selectedSplitMode === 'private'.
+let selectedBeneficiaryId = null;
 let selectedNewEmoji = '🧔';
 
 function getPersons() {
@@ -2056,7 +2086,14 @@ function renderPersonRow() {
     </button>`;
   }).join('');
 }
-window.selectPerson = function(id) { selectedPersonId = id; renderPersonRow(); };
+window.selectPerson = function(id) {
+  selectedPersonId = id;
+  // If the freshly-chosen payer IS the current beneficiary, clear beneficiary
+  // (beneficiary should never equal payer — that's "self" and we encode with null).
+  if (selectedBeneficiaryId === id) selectedBeneficiaryId = null;
+  renderPersonRow();
+  renderBeneficiaryRow();
+};
 
 // Render the Shared/Private toggle inside the confirm/edit modal.
 // Visually mirrors the payer pill style for consistency.
@@ -2079,7 +2116,52 @@ function renderSplitRow() {
     </button>`;
   }).join('');
 }
-window.selectSplit = function(mode) { selectedSplitMode = mode === 'private' ? 'private' : 'shared'; renderSplitRow(); };
+window.selectSplit = function(mode) {
+  selectedSplitMode = mode === 'private' ? 'private' : 'shared';
+  // Leaving private → drop any lingering beneficiary selection so saving a
+  // freshly-switched-to-shared receipt doesn't accidentally carry it over.
+  if (selectedSplitMode !== 'private') selectedBeneficiaryId = null;
+  renderSplitRow();
+  renderBeneficiaryRow();
+};
+
+// Beneficiary picker: shown only when splitMode=private AND ≥2 persons.
+// "Self" option (= same as payer) is the default and means the receipt
+// behaves like legacy private (no settlement effect).
+function renderBeneficiaryRow() {
+  const wrap = document.getElementById('mBeneficiaryWrap');
+  const row = document.getElementById('mBeneficiaryRow');
+  if (!wrap || !row) return;
+  const persons = getPersons();
+  if (selectedSplitMode !== 'private' || persons.length < 2) {
+    wrap.classList.add('hidden');
+    return;
+  }
+  wrap.classList.remove('hidden');
+  // Build options: "自己" (= payer) + every OTHER person
+  const payerId = selectedPersonId || persons[0].id;
+  const options = [
+    { id: '__self__', label: '自己', emoji: '🙋', color: '#6B7280' },
+    ...persons.filter(p => p.id !== payerId).map(p => ({ id: p.id, label: p.name, emoji: p.emoji, color: p.color })),
+  ];
+  const activeId = (!selectedBeneficiaryId || selectedBeneficiaryId === payerId) ? '__self__' : selectedBeneficiaryId;
+  row.innerHTML = options.map(o => {
+    const on = activeId === o.id;
+    return `<button type="button" onclick="selectBeneficiary('${o.id}')"
+      class="flex items-center gap-1.5 py-2 px-3 rounded-2xl transition-all"
+      style="${on
+        ? `background:${o.color}18;outline:3px solid ${o.color};transform:scale(1.03)`
+        : 'background:var(--n-bg);outline:2px solid var(--n-border)'}">
+      <span class="text-xl">${o.emoji}</span>
+      <span class="text-xs font-bold" style="color:${on ? o.color : 'var(--n-muted)'}">${escapeHtml(o.label)}</span>
+    </button>`;
+  }).join('');
+}
+window.selectBeneficiary = function(id) {
+  if (id === '__self__') { selectedBeneficiaryId = null; }
+  else { selectedBeneficiaryId = id; }
+  renderBeneficiaryRow();
+};
 
 function renderPersonBreakdown() {
   const persons = getPersons();
@@ -3427,7 +3509,15 @@ function receiptCard(r) {
     borderStyle = 'border:1.5px dashed #9CA3AF;background:rgba(156,163,175,0.06)';
   }
   const pendingBadge = pending ? '<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold mr-1" style="background:#F59E0B;color:white">⏳ 待確認</span>' : '';
-  const privateBadge = isPrivate ? '<span class="inline-block mr-1 text-xs" title="私人支出 · 唔入分帳">🔒</span>' : '';
+  // Private badge: 🔒 for self-private (payer bears cost),
+  // 🎁 for cross-private (payer paid FOR someone else, beneficiary owes back).
+  const beneficiary = (isPrivate && r.beneficiaryId && r.beneficiaryId !== r.personId)
+    ? persons.find(p => p.id === r.beneficiaryId) : null;
+  const privateBadge = isPrivate
+    ? (beneficiary
+        ? `<span class="inline-block mr-1 text-xs" title="代墊 · ${escapeHtml(beneficiary.name)} 還款">🎁</span>`
+        : '<span class="inline-block mr-1 text-xs" title="私人支出 · 唔入分帳">🔒</span>')
+    : '';
   const confirmBtn = pending ? `<button onclick="event.stopPropagation();confirmPendingReceipt('${r.id}')" class="ml-2 px-2 py-1 rounded-lg text-[10px] font-bold text-white" style="background:#00a87e">✅ 確認</button>` : '';
   // Photo indicator — tapping opens lightbox directly (bypasses edit modal)
   const photoBadge = r.photoThumb
@@ -3624,42 +3714,102 @@ setInterval(() => {
 let charts = {};
 
 // ============ N-PERSON BILL SETTLEMENT ============
-// Given persons array, each person's paid amount, and share ratio map,
-// compute who pays whom how much. Uses greedy creditor↔debtor matching which
-// gives a provably-minimal number of transfers (≤ N-1).
-function computeSettlements(persons, personTotals, shareRatios) {
-  if (persons.length < 2) return [];
+// Takes the raw receipts + persons + ratios and returns a full settlement
+// snapshot in one shot:
+//   - sharedTotal        : sum of all 👫 shared receipts
+//   - sharedByPayer[i]   : how much person i put up for shared expenses
+//   - privateByOwner[i]  : total personal spend charged to person i (cost basis)
+//   - crossPrivate[]     : cases where X paid FOR Y's personal item
+//                          (Y will owe X the full amount)
+//   - balances[i]        : net ledger per person (+ = creditor, − = debtor)
+//                          = paidShared − shouldPayShared
+//                            + Σ(cross-private where payer=i)
+//                            − Σ(cross-private where beneficiary=i)
+//   - transfers[]        : minimal-count "X → Y ¥N" list (greedy match)
+//
+// SEMANTICS:
+//   r.splitMode='shared'          → split by state.shareRatios (everyone owes a share)
+//   r.splitMode='private',
+//     r.beneficiaryId empty/==payer → payer bears 100% (no settlement effect)
+//     r.beneficiaryId ≠ payer       → beneficiary owes payer the full amount
+//                                     (treated as a direct debt in the ledger)
+function computeSettlements(persons, receipts, shareRatios) {
+  const empty = { transfers: [], balances: [], sharedTotal: 0, sharedByPayer: [], privateByOwner: [], crossPrivate: [] };
+  if (!persons || persons.length < 2) return empty;
+
   const ratios = persons.map(p => {
     const v = Number(shareRatios?.[p.id]);
-    return (isFinite(v) && v >= 0) ? v : 1; // default equal share
+    return (isFinite(v) && v >= 0) ? v : 1;
   });
   const sumRatio = ratios.reduce((a,b) => a+b, 0);
-  if (sumRatio === 0) return []; // all zero = no-one owes anyone
-  const grandTotal = personTotals.reduce((a,b) => a+b, 0);
-  if (grandTotal === 0) return [];
+  const firstId = persons[0].id;
+  const idxOf = id => persons.findIndex(p => p.id === id);
 
-  // balance[i] = what person i paid − what person i should have paid (fair share)
-  // Positive → creditor (others owe them); negative → debtor (owes others).
+  const sharedByPayer = persons.map(() => 0);
+  const privateByOwner = persons.map(() => 0);
+  const crossPrivate = [];
+  let sharedTotal = 0;
+
+  for (const r of (receipts || [])) {
+    const amount = Number(r.total) || 0;
+    if (amount <= 0) continue;
+    const payerId = r.personId || firstId;
+    const payerIdx = idxOf(payerId);
+    if (payerIdx < 0) continue;
+
+    if (r.splitMode === 'private') {
+      const beneficiaryId = r.beneficiaryId || payerId;
+      const benIdx = idxOf(beneficiaryId);
+      if (benIdx < 0 || benIdx === payerIdx) {
+        // Self-private — payer bears cost, no settlement effect
+        privateByOwner[payerIdx] += amount;
+      } else {
+        // Cross-private — beneficiary OWES payer full amount.
+        // We count the expense on the beneficiary's personal tally (it's THEIR item)
+        // and add a direct-debt entry the ledger will consume below.
+        privateByOwner[benIdx] += amount;
+        crossPrivate.push({
+          payerIdx, benIdx, amount,
+          payer: persons[payerIdx], beneficiary: persons[benIdx],
+          store: r.store || '', date: r.date || '',
+          id: r.id,
+        });
+      }
+    } else {
+      // 'shared' (including legacy receipts without splitMode)
+      sharedByPayer[payerIdx] += amount;
+      sharedTotal += amount;
+    }
+  }
+
+  // Build ledger balances
   const balances = persons.map((p, i) => {
-    const shouldPay = grandTotal * (ratios[i] / sumRatio);
-    return { id: p.id, name: p.name, emoji: p.emoji, color: p.color, balance: personTotals[i] - shouldPay };
+    const shouldPayShared = sumRatio > 0 ? sharedTotal * (ratios[i] / sumRatio) : 0;
+    let bal = sharedByPayer[i] - shouldPayShared;
+    for (const cp of crossPrivate) {
+      if (cp.payerIdx === i) bal += cp.amount;
+      if (cp.benIdx   === i) bal -= cp.amount;
+    }
+    return {
+      id: p.id, name: p.name, emoji: p.emoji, color: p.color,
+      balance: bal,
+      paidShared: sharedByPayer[i],
+      shouldPayShared,
+    };
   });
 
   // Greedy match: biggest debtor pays biggest creditor until settled.
-  // Work on a copy, sorted each iteration.
   const transfers = [];
   const work = balances.map(b => ({ ...b }));
-  const MIN = 0.5; // sub-half-yen residual — below this we call it balanced
+  const MIN = 0.5;
   for (let safety = 0; safety < 100; safety++) {
-    work.sort((a, b) => a.balance - b.balance); // most negative first
+    work.sort((a, b) => a.balance - b.balance);
     const debtor = work[0];
     const creditor = work[work.length - 1];
     if (!debtor || !creditor) break;
     if (Math.abs(debtor.balance) < MIN || Math.abs(creditor.balance) < MIN) break;
     if (debtor.balance >= 0 || creditor.balance <= 0) break;
     const amount = Math.min(-debtor.balance, creditor.balance);
-    // Keep the exact float amount while ledgering to avoid ±1 ¥ drift;
-    // round only for the user-facing display.
     debtor.balance += amount;
     creditor.balance -= amount;
     transfers.push({
@@ -3668,39 +3818,83 @@ function computeSettlements(persons, personTotals, shareRatios) {
       amount: Math.round(amount),
     });
   }
-  return transfers;
+
+  return { transfers, balances, sharedTotal, sharedByPayer, privateByOwner, crossPrivate };
 }
 
-function renderSettlementHtml(persons, personTotals, grandTotal, settlements, privateTotals) {
+// Render the full settlement panel from a computeSettlements() snapshot.
+// `snap` has shape { transfers, balances, sharedTotal, sharedByPayer,
+// privateByOwner, crossPrivate }. Back-compat: if called with the legacy
+// positional signature (persons, personTotals, grandTotal, settlements,
+// privateTotals), it adapts by rebuilding a fake snapshot.
+function renderSettlementHtml(persons, snapOrPersonTotals, maybeGrandTotal, maybeSettlements, maybePrivateTotals) {
+  // Legacy call shape → adapt
+  let snap;
+  if (Array.isArray(snapOrPersonTotals)) {
+    const personTotals = snapOrPersonTotals;
+    snap = {
+      transfers: maybeSettlements || [],
+      balances: persons.map((p, i) => ({
+        id: p.id, name: p.name, emoji: p.emoji, color: p.color,
+        balance: 0, paidShared: personTotals[i] || 0, shouldPayShared: 0,
+      })),
+      sharedTotal: maybeGrandTotal || 0,
+      sharedByPayer: personTotals,
+      privateByOwner: maybePrivateTotals || persons.map(() => 0),
+      crossPrivate: [],
+    };
+  } else {
+    snap = snapOrPersonTotals || { transfers: [], balances: [], sharedTotal: 0, sharedByPayer: [], privateByOwner: [], crossPrivate: [] };
+  }
+  const { transfers: settlements, sharedTotal: grandTotal, sharedByPayer: personTotals, privateByOwner: privateTotals, crossPrivate } = snap;
   const _private = Array.isArray(privateTotals) ? privateTotals : persons.map(() => 0);
   const privateGrand = _private.reduce((a, b) => a + b, 0);
   // Dual-track header: always shown when any private receipts exist, even
   // if shared is empty (user still wants to see "我私人花咗幾多").
   const safeRate0 = Math.max(0.1, Number(state.rate) || 20.36);
+  const crossList = Array.isArray(crossPrivate) ? crossPrivate : [];
   let privateHeader = '';
-  if (privateGrand > 0) {
+  if (privateGrand > 0 || crossList.length > 0) {
     const parts = persons.map((p, i) => {
       if (!_private[i]) return '';
       return `<span style="color:${p.color};font-weight:600">${p.emoji} ${escapeHtml(p.name)} ¥${fmt(_private[i])}</span>`;
     }).filter(Boolean).join('　');
+    let crossHtml = '';
+    if (crossList.length > 0) {
+      crossHtml = `
+        <div class="mt-2 pt-2" style="border-top:1px dashed #D1D5DB">
+          <p class="text-[10px] font-semibold mb-1" style="color:#6B7280">🎁 代墊私人支出 (${crossList.length} 筆) — 受惠人需全額還款：</p>
+          ${crossList.map(cp => `
+            <div class="flex items-center gap-1.5 text-[10.5px] py-0.5" style="color:#4B5563">
+              <span class="text-sm">${cp.payer.emoji}</span>
+              <span style="color:${cp.payer.color};font-weight:600">${escapeHtml(cp.payer.name)}</span>
+              <span style="color:#9CA3AF">代付</span>
+              <span class="text-sm">${cp.beneficiary.emoji}</span>
+              <span style="color:${cp.beneficiary.color};font-weight:600">${escapeHtml(cp.beneficiary.name)}</span>
+              <span class="ml-auto font-bold" style="color:#374151">¥${fmt(cp.amount)}</span>
+              ${cp.store ? `<span class="text-[9px] truncate max-w-[80px]" style="color:#9CA3AF">${escapeHtml(cp.store)}</span>` : ''}
+            </div>`).join('')}
+        </div>`;
+    }
     privateHeader = `
       <div class="mb-3 p-2.5 rounded-xl text-[11px]" style="background:rgba(156,163,175,0.08);border:1px dashed #9CA3AF">
         <div class="flex items-baseline justify-between mb-1">
-          <span class="font-bold" style="color:#6B7280">🔒 私人支出 (唔入分帳)</span>
+          <span class="font-bold" style="color:#6B7280">🔒 私人支出</span>
           <span class="font-black" style="color:#6B7280">¥${fmt(privateGrand)} <span class="text-[9px] font-normal">≈ HK$${fmt(Math.round(privateGrand/safeRate0))}</span></span>
         </div>
-        <div style="line-height:1.6">${parts}</div>
+        ${parts ? `<div style="line-height:1.6">${parts}</div>` : ''}
+        ${crossHtml}
       </div>`;
   }
   if (persons.length < 2) {
     return privateHeader + '<p class="text-sm text-center" style="color:var(--n-muted)">需要至少兩位旅伴先計算分帳</p>';
   }
-  if (grandTotal === 0) {
-    return privateHeader + '<p class="text-sm text-center" style="color:var(--n-muted)">未有 👫 Shared 記帳資料</p>';
+  if (grandTotal === 0 && settlements.length === 0 && crossList.length === 0) {
+    return privateHeader + '<p class="text-sm text-center" style="color:var(--n-muted)">未有 👫 Shared 或 🎁 代墊記帳資料</p>';
   }
   const allZeroRatios = persons.every(p => !(Number((state.shareRatios||{})[p.id]) > 0));
-  if (allZeroRatios) {
-    return '<p class="text-xs text-center py-3" style="color:#DC2626">⚠️ 所有旅伴分擔比例為 0，無法計算分帳。請到設定 → 分帳比例調整。</p>';
+  if (allZeroRatios && grandTotal > 0) {
+    return privateHeader + '<p class="text-xs text-center py-3" style="color:#DC2626">⚠️ 所有旅伴分擔比例為 0，無法計算 shared 分帳。請到設定 → 分帳比例調整。</p>';
   }
   // Warn if any person has ratio=0 but has paid money — the math is correct
   // but the UX is confusing (they end up as a pure creditor who paid their
@@ -3734,12 +3928,16 @@ function renderSettlementHtml(persons, personTotals, grandTotal, settlements, pr
       </div>
     </div>`;
 
-  // Per-person breakdown: paid vs. fair-share
+  // Per-person breakdown: paid vs. fair-share. `bal` uses the FULL ledger
+  // (shared delta + cross-private creditor/debtor entries) so it stays
+  // consistent with the transfer list below.
+  const snapBalances = Array.isArray(snap.balances) ? snap.balances : [];
   const rows = persons.map((p, i) => {
     const paid = personTotals[i];
     const ratio = ratios[p.id];
     const shouldPay = ratioSum > 0 ? grandTotal * (ratio / ratioSum) : 0;
-    const bal = paid - shouldPay;
+    const fullBal = snapBalances[i]?.balance;
+    const bal = typeof fullBal === 'number' ? fullBal : (paid - shouldPay);
     const balColor = bal > 0 ? '#059669' : (bal < 0 ? '#DC2626' : 'var(--n-muted)');
     const balSign = bal > 0 ? '+' : '';
     return `
@@ -3836,13 +4034,13 @@ function renderStats() {
   });
 
   // ── N-person settlement with configurable share ratios ──
-  // Only SHARED receipts are split; private ones stay in their own bucket
-  // (shown separately in the header, excluded from greedy transfer math).
+  // Composes shared-split math + cross-private direct debts ("I paid for
+  // your personal item") into a single per-person ledger, then greedy-
+  // matches for minimal transfers.
   const settle = $('settlementCard');
-  const sharedGrandTotal = sharedPersonTotals.reduce((a, b) => a + b, 0);
-  const settlements = computeSettlements(persons, sharedPersonTotals, state.shareRatios || {});
+  const settleSnap = computeSettlements(persons, state.receipts || [], state.shareRatios || {});
   settle.innerHTML = renderSettlementHtml(
-    persons, sharedPersonTotals, sharedGrandTotal, settlements, privatePersonTotals
+    persons, settleSnap, null, null, null
   );
   // ─────────────────────────────────────────────────────────────
 
@@ -6444,6 +6642,18 @@ function buildNotionProps(r, schemaMap) {
   const pay = PAYMENTS.find(p => p.id === r.payment);
   const person = (state.persons || []).find(p => p.id === r.personId);
   const personLabel = person ? `${person.emoji} ${person.name}` : '';
+  // Encode beneficiary in the items field as a first-line prefix marker:
+  //   "🎁 為 <emoji> <name>\n...original items..."
+  // Done here (not in a new column) to avoid Notion schema migration. The
+  // pull side strips this prefix back out when hydrating r.beneficiaryId.
+  const beneficiary = (r.splitMode === 'private' && r.beneficiaryId && r.beneficiaryId !== r.personId)
+    ? (state.persons || []).find(p => p.id === r.beneficiaryId)
+    : null;
+  let itemsOut = r.itemsText || '';
+  if (beneficiary) {
+    const prefix = `🎁 為 ${beneficiary.emoji} ${beneficiary.name}`;
+    itemsOut = prefix + (itemsOut ? '\n' + itemsOut : '');
+  }
   const props = {
     [nm('store')]:    { title: [{ text: { content: (r.store || '未命名').slice(0, 200) } }] },
     [nm('amount')]:   { number: Number(r.total) || 0 },
@@ -6451,7 +6661,7 @@ function buildNotionProps(r, schemaMap) {
     [nm('cat')]:      { select: { name: cat ? cat.name : '其他' } },
     [nm('pay')]:      { select: { name: pay ? pay.name : '現金' } },
     [nm('region')]:   { rich_text: [{ text: { content: (r.region || '').slice(0, 2000) } }] },
-    [nm('items')]:    { rich_text: [{ text: { content: (r.itemsText || '').slice(0, 2000) } }] },
+    [nm('items')]:    { rich_text: [{ text: { content: itemsOut.slice(0, 2000) } }] },
     [nm('note')]:     { rich_text: [{ text: { content: (r.note || '').slice(0, 2000) } }] },
     [nm('person')]:   { rich_text: [{ text: { content: personLabel } }] },
     [nm('sourceId')]: { rich_text: [{ text: { content: r.id } }] },
@@ -6738,7 +6948,11 @@ async function notionPushReceipt(r) {
     const parts = [catName, amountStr];
     if (r.date) parts.push(r.date);
     if (r.region) parts.push(r.region);
-    if (r.splitMode === 'private') parts.push('🔒 私人');
+    if (r.splitMode === 'private') {
+      const ben = (r.beneficiaryId && r.beneficiaryId !== r.personId)
+        ? (state.persons || []).find(p => p.id === r.beneficiaryId) : null;
+      parts.push(ben ? `🎁 為 ${ben.emoji} ${ben.name}` : '🔒 私人');
+    }
     children.push({
       object:'block', type:'callout',
       callout: {
@@ -7111,6 +7325,21 @@ async function notionPullAll(silent = false) {
         notionPageId: page.id,
         createdAt: new Date(page.created_time).getTime(),
       };
+      // Strip the 🎁 為 ... prefix from itemsText and resolve beneficiaryId.
+      // Format written by buildNotionProps: first line = "🎁 為 <emoji> <name>".
+      if (r.splitMode === 'private' && r.itemsText) {
+        const firstNl = r.itemsText.indexOf('\n');
+        const firstLine = firstNl >= 0 ? r.itemsText.slice(0, firstNl) : r.itemsText;
+        const m = firstLine.match(/^🎁\s*為\s*(.+)$/);
+        if (m) {
+          const nameHint = m[1].trim();
+          const matchBen = getPersons().find(pe => nameHint.includes(pe.name));
+          if (matchBen && matchBen.id !== r.personId) {
+            r.beneficiaryId = matchBen.id;
+          }
+          r.itemsText = firstNl >= 0 ? r.itemsText.slice(firstNl + 1) : '';
+        }
+      }
       // Tag whether personId came from an actual Notion match — merge logic uses this
       // to decide whether to trust Notion's 旅伴 column or preserve the local assignment.
       if (matchedPerson) r.personId_fromNotion = true;
@@ -7135,6 +7364,9 @@ async function notionPullAll(silent = false) {
         // a user may have just flipped this locally and the sync would
         // otherwise revert it. We always keep local.splitMode if present.
         if (local.splitMode) r.splitMode = local.splitMode;
+        // Same for beneficiaryId: locally-set beneficiary wins over whatever
+        // got parsed from the Notion items-prefix (which may lag behind).
+        if (local.beneficiaryId !== undefined) r.beneficiaryId = local.beneficiaryId;
         if (local.notionFileUploadId) r.notionFileUploadId = local.notionFileUploadId;
         if (local.photoThumb) r.photoThumb = local.photoThumb;
         // (we tag r.personId with _fromNotion only when 旅伴 explicitly matched — see below)
@@ -7575,6 +7807,7 @@ function openConfirmModal(data, base64, warnings, usedModelId) {
   // New scans default to Shared (the common case for a couples trip).
   // AI may also pre-set data.splitMode (e.g., from email import hints).
   selectedSplitMode = (data && data.splitMode === 'private') ? 'private' : 'shared';
+  selectedBeneficiaryId = null; // fresh scan defaults to self-beneficiary
   $('modalDelete').classList.add('hidden');
   // Show which AI model produced this result so the user can verify that
   // switching models actually changed the backend call.
@@ -7661,6 +7894,7 @@ function openConfirmModal(data, base64, warnings, usedModelId) {
   _openModalOverlay('confirmModal');
   renderPersonRow();
   renderSplitRow();
+  renderBeneficiaryRow();
 }
 
 function editReceipt(id) {
@@ -7672,6 +7906,10 @@ function editReceipt(id) {
   // if all receipts were shared before this feature landed). Preserves sanity
   // of existing settlement math on already-entered trips.
   selectedSplitMode = r.splitMode === 'private' ? 'private' : 'shared';
+  // Beneficiary: only meaningful when private AND differs from payer.
+  selectedBeneficiaryId = (selectedSplitMode === 'private' && r.beneficiaryId && r.beneficiaryId !== (r.personId || getPersons()[0].id))
+    ? r.beneficiaryId
+    : null;
   pendingPhotoBase64 = null;
   $('modalDelete').classList.remove('hidden');
   $('modalRescanWrap').classList.add('hidden'); // rescan not available in edit mode
@@ -7700,6 +7938,7 @@ function editReceipt(id) {
   _openModalOverlay('confirmModal');
   renderPersonRow();
   renderSplitRow();
+  renderBeneficiaryRow();
 }
 window.editReceipt = editReceipt;
 
@@ -7738,6 +7977,11 @@ async function _saveModalInner() {
     note: $('mNote').value,
     personId: selectedPersonId || getPersons()[0].id,
     splitMode: selectedSplitMode === 'private' ? 'private' : 'shared',
+    // Persist beneficiary only when it's meaningful (private + different person).
+    beneficiaryId: (selectedSplitMode === 'private'
+      && selectedBeneficiaryId
+      && selectedBeneficiaryId !== (selectedPersonId || getPersons()[0].id))
+        ? selectedBeneficiaryId : null,
     createdAt: existing?.createdAt || Date.now(),
   };
   if (r.total <= 0) { toast('⚠️ 金額必須大過 0'); return; }
@@ -8519,6 +8763,9 @@ function init() {
       state.shareRatios = ratios;
       saveState();
       if (!$('tab-stats').classList.contains('hidden')) renderStats();
+      // Also refresh the expandable settlement panel if it's currently open
+      const sd = document.getElementById('settleDetails');
+      if (sd && sd.open && typeof window.renderSettlePanel === 'function') window.renderSettlePanel();
     };
     persons.forEach(p => document.getElementById('ratio_' + p.id).addEventListener('input', recompute));
     document.getElementById('ratioResetEqual').addEventListener('click', () => {
@@ -8529,6 +8776,36 @@ function init() {
     });
     recompute();
   };
+
+  // Live settlement panel inside the Settings expandable.
+  // Re-renders on open and when share ratios / receipts change.
+  window.renderSettlePanel = function() {
+    const panel = document.getElementById('settlePanel');
+    if (!panel) return;
+    const persons = getPersons();
+    const snap = computeSettlements(persons, state.receipts || [], state.shareRatios || {});
+    panel.innerHTML = renderSettlementHtml(persons, snap, null, null, null);
+    // Badge in the summary row: show a short "N 筆轉帳" hint so user knows
+    // there's work waiting even before expanding.
+    const badge = document.getElementById('settleSummaryBadge');
+    if (badge) {
+      const n = snap.transfers.length;
+      if (n > 0) {
+        badge.textContent = `${n} 筆轉帳`;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+  };
+  const settleDetails = document.getElementById('settleDetails');
+  if (settleDetails) {
+    settleDetails.addEventListener('toggle', () => {
+      if (settleDetails.open) window.renderSettlePanel();
+    });
+    // Initial badge render so the summary line is informative before first expand
+    window.renderSettlePanel();
+  }
 
   // Person management
   renderPersonList();
