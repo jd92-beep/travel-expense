@@ -2952,6 +2952,49 @@ function _isLikelyAddress(s) {
   if (/原價|HKD|USD|JPY|¥|預訂已|已付款|卡號|信用卡|payment|visa|master|paid|尾數/i.test(t)) return false;
   return true;
 }
+// Strip common OCR noise from scanned addresses — receipts often print
+// TEL/FAX/URL on the same line and the AI merges them into the address.
+// We keep the address part and drop everything after the phone/fax marker.
+function _cleanReceiptAddress(s) {
+  if (!s) return '';
+  let t = String(s).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // Strip trailing "TEL xxx" / "電話 xxx" / "FAX xxx" / "URL ..." segments
+  t = t.replace(/[\s,，、]*(TEL|Tel|tel|電話|ＴＥＬ|FAX|Fax|ＦＡＸ|URL|https?:\/\/).*$/i, '');
+  // Strip trailing phone-icon + number
+  t = t.replace(/[\s,，、]*[☎📞][\s\d\-().]+$/, '');
+  // Trim trailing punctuation
+  t = t.replace(/[\s,，、。.]+$/, '');
+  return t.trim();
+}
+// If the AI couldn't read the address off this receipt, look for the same
+// store in our existing receipts (most recent first). Addresses there were
+// themselves read off past receipts, so this still satisfies the rule that
+// 地址 = 收據上面嘅地址 — just from an earlier visit to the same place.
+function _priorAddressForStore(store) {
+  if (!store) return '';
+  const norm = String(store).trim().toLowerCase();
+  if (!norm) return '';
+  const rs = Array.isArray(state.receipts) ? state.receipts : [];
+  for (let i = rs.length - 1; i >= 0; i--) {
+    const r = rs[i];
+    const addr = r && r.address && String(r.address).trim();
+    if (!addr) continue;
+    const rStore = (r.store || '').trim().toLowerCase();
+    if (rStore && rStore === norm) return addr;
+  }
+  return '';
+}
+// Final entry point used by the scan-confirm modal. Pure receipt-sourced:
+// 1) cleaned AI value if plausible; 2) prior scan of same store; 3) blank.
+// NEVER falls back to itinerary region — that was the old behaviour Boss
+// explicitly rejected.
+function resolveReceiptAddress(aiAddress, store) {
+  const cleaned = _cleanReceiptAddress(aiAddress);
+  if (cleaned && _isLikelyAddress(cleaned)) return cleaned;
+  const prior = _priorAddressForStore(store);
+  if (prior) return prior;
+  return cleaned; // may be '' — that's fine, user fills it in
+}
 // Per-type label + icon + background colour for the popup header
 const SPOT_POPUP_STYLES = {
   lodging:   { label: '今晚住宿',  icon: '🏨', bg: 'rgba(52,211,153,0.15)', fg: '#34d399' },
@@ -7886,11 +7929,11 @@ function openConfirmModal(data, base64, warnings, usedModelId) {
   $('mDate').value = cleanDate;
   // Default time: use AI-extracted time, else fall back to current local time (HH:mm)
   if ($('mTime')) $('mTime').value = data.time || nowHHMM();
-  // Address cascade: AI → store name → ITINERARY region for date
-  // Address = ONLY what AI read off the receipt. Do NOT fall back to the
-  // itinerary region — a receipt's address should reflect the actual
-  // store location, not where the user happens to be that day.
-  if ($('mAddress')) $('mAddress').value = (data.address || '').toString().trim();
+  // Address = what's on the receipt. Resolver cleans AI noise (strips TEL/FAX
+  // trailing junk) and falls back to the same store's prior scanned address
+  // if AI couldn't read it — both paths are receipt-sourced. Never falls
+  // back to itinerary region.
+  if ($('mAddress')) $('mAddress').value = resolveReceiptAddress(data.address, data.store);
   if ($('mBookingRef')) $('mBookingRef').value = data.booking_ref || data.bookingRef || '';
   // Whitelist AI-returned category/payment — unknown category → 'other', unknown payment → placeholder
   const validCats = CATEGORIES.map(c => c.id);
@@ -8507,8 +8550,55 @@ function switchTab(name, opts = {}) {
     // changed in other tabs since the Settings init ran.
     if (typeof window.renderSettlePanel === 'function') window.renderSettlePanel();
   }
+  // Gently auto-shrink the active tab if its content overflows the viewport
+  // on the current device. Runs after any render() calls above so the
+  // measurement reflects the real laid-out height.
+  autoFitTab(name);
 }
 window.switchTab = switchTab;
+
+// ============ VIEWPORT AUTO-FIT ============
+// Some phones (small iPhone SE, landscape, text-size-adjusted) can't fit a
+// whole tab without scrolling. Rather than redesign each tab, we apply a
+// slight CSS `zoom` factor to the active section so everything visible fits
+// between the sticky header and the fixed bottom nav.
+//
+// Rules:
+//  - Only shrinks (never magnifies).
+//  - Clamped to a minimum of 0.80 so text stays readable.
+//  - If content already fits, zoom stays at 1 (native size).
+//  - Does NOT modify layout, markup, or functionality — purely a scale hint.
+function autoFitTab(name) {
+  const section = document.getElementById('tab-' + (name || _currentTab));
+  if (!section) return;
+  // Reset before measuring so we get the natural (unscaled) size
+  section.style.zoom = '';
+  // Double-RAF: wait for tab-switch class changes + browser layout pass
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    try {
+      const header = document.querySelector('header.sticky');
+      const nav = document.querySelector('nav.fixed');
+      const headerH = header ? header.getBoundingClientRect().height : 0;
+      const navH = nav ? nav.getBoundingClientRect().height : 0;
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      const avail = vh - headerH - navH - 12; // 12px breathing room
+      if (avail <= 0) return;
+      const needed = section.scrollHeight;
+      if (!needed || needed <= avail) { section.style.zoom = ''; return; }
+      let factor = avail / needed;
+      if (factor >= 0.995) { section.style.zoom = ''; return; }
+      if (factor < 0.80) factor = 0.80; // readability floor
+      section.style.zoom = factor.toFixed(3);
+    } catch (e) { /* never break tab switch over cosmetic scaling */ }
+  }));
+}
+window.autoFitTab = autoFitTab;
+// Re-fit when the window changes size (rotate, keyboard open/close, etc.)
+let _autoFitResizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_autoFitResizeTimer);
+  _autoFitResizeTimer = setTimeout(() => autoFitTab(_currentTab), 150);
+});
 
 // ============ EXPORT / RESET ============
 function exportCSV() {
@@ -9260,6 +9350,10 @@ function init() {
   refresh();
   if (state.lastTab && state.lastTab !== _currentTab) {
     switchTab(state.lastTab);
+  } else {
+    // Same-tab "switch" short-circuits in switchTab(), so fire the
+    // viewport fit manually on first paint for the default tab.
+    if (typeof autoFitTab === 'function') autoFitTab(_currentTab);
   }
   $('updateReloadBtn')?.addEventListener('click', () => reloadAppFresh());
   // Ensure budget bar reflects the initial active tab (scan = hidden)
