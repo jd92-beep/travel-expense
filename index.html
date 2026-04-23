@@ -7887,7 +7887,10 @@ function openConfirmModal(data, base64, warnings, usedModelId) {
   // Default time: use AI-extracted time, else fall back to current local time (HH:mm)
   if ($('mTime')) $('mTime').value = data.time || nowHHMM();
   // Address cascade: AI → store name → ITINERARY region for date
-  if ($('mAddress')) $('mAddress').value = resolveAddressCascade(data.address, data.store, cleanDate);
+  // Address = ONLY what AI read off the receipt. Do NOT fall back to the
+  // itinerary region — a receipt's address should reflect the actual
+  // store location, not where the user happens to be that day.
+  if ($('mAddress')) $('mAddress').value = (data.address || '').toString().trim();
   if ($('mBookingRef')) $('mBookingRef').value = data.booking_ref || data.bookingRef || '';
   // Whitelist AI-returned category/payment — unknown category → 'other', unknown payment → placeholder
   const validCats = CATEGORIES.map(c => c.id);
@@ -9211,20 +9214,9 @@ function init() {
     }, '');
   });
 
-  // When user changes the date inside the modal, auto-update the address hint
-  // using the same cascade logic — but only if the current value looks like a
-  // stale auto-suggestion (ITINERARY region name), not a user's manual entry.
-  $('mDate')?.addEventListener('change', () => {
-    const d = sanitizeDate($('mDate').value);
-    const addrEl = $('mAddress');
-    if (!addrEl) return;
-    const current = addrEl.value || '';
-    const itineraryRegions = getItinerary().map(i => i.region);
-    const staleAutoValues = ['', '—', '名古屋', '準備階段', '返程後', ...itineraryRegions];
-    if (staleAutoValues.includes(current)) {
-      addrEl.value = resolveAddressCascade(null, $('mStore').value, d);
-    }
-  });
+  // Intentionally NOT auto-filling address when the date changes: the address
+  // belongs to the store on the receipt, not the itinerary region for that
+  // day. User edits address directly.
 
   // Modal
   $('modalCancel').addEventListener('click', closeModal);
