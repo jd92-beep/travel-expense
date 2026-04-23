@@ -7794,6 +7794,11 @@ function normalizeScanResult(raw) {
   // ── Date normalisation + fallback warning (smoke-test finding: real receipts often
   // have old dates 2016-2019 that silently fall back to today with no visible signal).
   // Surface when this happens so user knows to manually fix.
+  //
+  // NOTE: downstream sanitizeDate() silently overrides any valid-ISO-but-far-
+  // from-today value with today. The warning wording here MUST reflect that
+  // override (else banner says "2024" while the date field shows today → looks
+  // like a bug). Align both: flag the OCR read + tell user we used today.
   if (data.date) {
     const raw = String(data.date).trim();
     const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : (typeof parseDateFallback === 'function' ? parseDateFallback(raw) : null);
@@ -7801,9 +7806,9 @@ function normalizeScanResult(raw) {
     if (iso) {
       const diffDays = Math.abs((new Date(iso) - new Date(today)) / 86400000);
       if (diffDays > 60) {
-        // Far-future/past date — keep parsed ISO but flag it. Don't silently today-override.
-        warnings.push(`日期「${iso}」離今日 ${Math.round(diffDays)} 日，可能係舊收據或誤讀，請核對`);
-        data.date = iso; // still pass normalized form so user can see + edit in modal
+        // Far-future/past date — sanitizeDate will substitute today. Warn accordingly.
+        warnings.push(`AI 讀到日期「${iso}」，離今日 ${Math.round(diffDays)} 日 — 可能係舊收據或 OCR 誤讀，已預設今日，請核對`);
+        data.date = today; // match sanitizeDate's behaviour so banner + field agree
       } else {
         data.date = iso; // pass normalised form downstream
       }
