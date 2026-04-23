@@ -7637,9 +7637,15 @@ function sanitizeDate(aiDate) {
   let iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
   if (!iso && typeof parseDateFallback === 'function') iso = parseDateFallback(raw);
   if (!iso) return today;
-  const diffDays = Math.abs((new Date(iso) - new Date(today)) / 86400000);
-  if (diffDays > 60) {
-    console.warn(`[scan] date ${iso} is ${Math.round(diffDays)}d from today — likely OCR error, using today`);
+  // Year-based sanity check. User scans mostly TODAY's receipts but sometimes
+  // a few days old — always in the current year. A wrong year almost always
+  // means Japanese-era OCR failure (e.g. 令和6年 read as 2024 when actually 2026).
+  // Accept any month/day within the current year; substitute today when the
+  // year is off.
+  const todayYear = Number(today.slice(0, 4));
+  const isoYear = Number(iso.slice(0, 4));
+  if (isoYear !== todayYear) {
+    console.warn(`[scan] date ${iso} year ≠ ${todayYear} — likely OCR/era error, using today`);
     return today;
   }
   return iso;
@@ -7804,13 +7810,15 @@ function normalizeScanResult(raw) {
     const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : (typeof parseDateFallback === 'function' ? parseDateFallback(raw) : null);
     const today = (typeof todayHKT === 'function') ? todayHKT() : new Date().toISOString().slice(0, 10);
     if (iso) {
-      const diffDays = Math.abs((new Date(iso) - new Date(today)) / 86400000);
-      if (diffDays > 60) {
-        // Far-future/past date — sanitizeDate will substitute today. Warn accordingly.
-        warnings.push(`AI 讀到日期「${iso}」，離今日 ${Math.round(diffDays)} 日 — 可能係舊收據或 OCR 誤讀，已預設今日，請核對`);
+      const todayYear = Number(today.slice(0, 4));
+      const isoYear = Number(iso.slice(0, 4));
+      if (isoYear !== todayYear) {
+        // Wrong year — almost always Japanese-era OCR mis-read (令和6年→2024).
+        // sanitizeDate will substitute today; warn accordingly.
+        warnings.push(`AI 讀到年份「${isoYear}」，但今年係 ${todayYear} — 可能係 OCR 誤讀日本年號，已預設今日，請核對`);
         data.date = today; // match sanitizeDate's behaviour so banner + field agree
       } else {
-        data.date = iso; // pass normalised form downstream
+        data.date = iso; // same year — trust AI (could be a few days old receipt)
       }
     } else {
       // Can't parse the date at all — explicitly fall back to today.
