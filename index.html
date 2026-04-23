@@ -7418,8 +7418,9 @@ async function notionPushSettings() {
   saveState();
 }
 
-// Debounced auto-push — used by saveBudget / saveSettings handlers so the
-// user can adjust a slider rapidly without spamming Notion with 10 PATCHes.
+// Debounced implicit push — used by passive/background state changes (toggles,
+// auto-sync flag, etc.). Respects user's autoSync preference so silent writes
+// don't happen when they've opted out.
 function notionPushSettingsIfReady() {
   if (!state.autoSync || !state.notionToken || !state.notionDb) return;
   clearTimeout(notionPushSettingsIfReady._t);
@@ -7427,6 +7428,37 @@ function notionPushSettingsIfReady() {
     notionPushSettings().catch(e => console.warn('[notionPushSettings]', e.message));
   }, 800);
 }
+// Explicit push — for "💾 儲存" buttons where the user's click means
+// "make this the source of truth for all my devices". Ignores autoSync
+// because the click IS the consent. Returns a promise so callers can await
+// completion and show feedback. Silently no-ops if Notion isn't configured.
+async function notionPushSettingsNow() {
+  if (!state.notionToken || !state.notionDb) return;
+  try {
+    await notionPushSettings();
+  } catch (e) {
+    console.warn('[notionPushSettingsNow]', e.message);
+    throw e;
+  }
+}
+// Re-populate Settings-tab form inputs + top budget bar from current state.
+// Call this after notionPullAll() so a freshly-hydrated budget actually
+// appears in the UI (applySettingsPayload only mutates state, not DOM).
+function refreshSettingsInputsFromState() {
+  try {
+    const sb = document.getElementById('setBudget');
+    const sh = document.getElementById('setBudgetHKDInput');
+    const sr = document.getElementById('setRate');
+    // Don't clobber an input the user is currently typing into
+    const active = document.activeElement;
+    if (sb && active !== sb) sb.value = state.budget;
+    if (sh && active !== sh && state.rate > 0) sh.value = Math.round(state.budget / state.rate);
+    if (sr && active !== sr && state.rate > 0) sr.value = (100 / state.rate).toFixed(4);
+    if (typeof renderHeader === 'function') renderHeader();
+    if (typeof refresh === 'function') refresh();
+  } catch (e) { console.warn('[refreshSettingsInputsFromState]', e.message); }
+}
+window.refreshSettingsInputsFromState = refreshSettingsInputsFromState;
 
 async function notionPullAll(silent = false) {
   if (!state.notionToken || !state.notionDb) {
@@ -8712,6 +8744,10 @@ function switchTab(name, opts = {}) {
         notionPullAll(true).then(() => {
           if (syncBadge) { syncBadge.textContent = '✅ 已同步'; setTimeout(() => syncBadge.classList.add('hidden'), 2000); }
           renderHistory();
+          // Meta-row may have updated state.budget/rate — push to DOM
+          if (typeof refreshSettingsInputsFromState === 'function') {
+            refreshSettingsInputsFromState();
+          }
         }).catch(e => {
           console.warn('[autoSync]', e.message);
           if (syncBadge) { syncBadge.textContent = '⚠️ 同步失敗'; setTimeout(() => syncBadge.classList.add('hidden'), 3000); }
@@ -8725,6 +8761,11 @@ function switchTab(name, opts = {}) {
     // Refresh the 💸 分帳結算 summary badge + panel — receipts may have
     // changed in other tabs since the Settings init ran.
     if (typeof window.renderSettlePanel === 'function') window.renderSettlePanel();
+    // Ensure budget/rate/HKD inputs reflect current state (may have been
+    // hydrated by a background pull since init).
+    if (typeof refreshSettingsInputsFromState === 'function') {
+      refreshSettingsInputsFromState();
+    }
   }
   // Gently auto-shrink the active tab if its content overflows the viewport
   // on the current device. Runs after any render() calls above so the
@@ -8884,7 +8925,13 @@ function init() {
       state.budget = Math.max(1, Number($('setBudget').value) || 101800);
     }
     saveState();
-    notionPushSettingsIfReady();
+    // Explicit Save click = push to Notion immediately, regardless of
+    // autoSync. The click IS the consent. Otherwise Yanyan's browser
+    // will pull an outdated budget on next launch.
+    notionPushSettingsNow().catch(e => {
+      console.warn('[saveBudget] push failed:', e.message);
+      toast('⚠️ 本地已儲存，但同步 Notion 失敗：' + (e.message || '').slice(0, 60));
+    });
     refresh();
     // Visual feedback on the button itself
     const btn = $('saveBudgetBtn');
@@ -8942,7 +8989,11 @@ function init() {
     });
     if (Object.keys(ratios).length) state.shareRatios = ratios;
     saveState();
-    notionPushSettingsIfReady();
+    // Explicit Save = unconditional push (see saveBudgetBtn handler)
+    notionPushSettingsNow().catch(e => {
+      console.warn('[saveSettings] push failed:', e.message);
+      toast('⚠️ 本地已儲存，但同步 Notion 失敗：' + (e.message || '').slice(0, 60));
+    });
     refresh();
     // Clear the key inputs (so they don't keep plaintext visible), then
     // update the status line below with a "✅ have key / ❌ missing" readout.
@@ -9530,6 +9581,29 @@ function init() {
     // Same-tab "switch" short-circuits in switchTab(), so fire the
     // viewport fit manually on first paint for the default tab.
     if (typeof autoFitTab === 'function') autoFitTab(_currentTab);
+  }
+
+  // ── Startup meta-settings sync ───────────────────────────────────────────
+  // Fresh browsers (Yanyan opening the app on a new device) start with
+  // localStorage defaults (budget = ¥101,800 ≈ HKD 5,002). Without this
+  // auto-pull, Settings shows the default until the user navigates to
+  // History tab — which is where they'd notice the wrong budget isn't
+  // being synced. Pulling the __meta_settings__ row here hydrates budget,
+  // rate, persons, shareRatios, etc. from Notion BEFORE the user sees them.
+  if (state.notionToken && state.notionDb) {
+    setTimeout(() => {
+      notionPullAll(true)
+        .then(() => {
+          // Re-populate Settings inputs + re-render budget bar so the
+          // hydrated state.budget actually becomes visible in the UI.
+          // applySettingsPayload() only mutates state; the DOM was
+          // initialised earlier with the stale default.
+          if (typeof refreshSettingsInputsFromState === 'function') {
+            refreshSettingsInputsFromState();
+          }
+        })
+        .catch(e => console.warn('[startup-pull]', e.message));
+    }, 300); // small delay: don't block first paint
   }
   $('updateReloadBtn')?.addEventListener('click', () => reloadAppFresh());
   // Ensure budget bar reflects the initial active tab (scan = hidden)
