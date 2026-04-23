@@ -7637,9 +7637,15 @@ function sanitizeDate(aiDate) {
   let iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
   if (!iso && typeof parseDateFallback === 'function') iso = parseDateFallback(raw);
   if (!iso) return today;
-  const diffDays = Math.abs((new Date(iso) - new Date(today)) / 86400000);
-  if (diffDays > 60) {
-    console.warn(`[scan] date ${iso} is ${Math.round(diffDays)}d from today — likely OCR error, using today`);
+  // Year-based sanity check. User scans mostly TODAY's receipts but sometimes
+  // a few days old — always in the current year. A wrong year almost always
+  // means Japanese-era OCR failure (e.g. 令和6年 read as 2024 when actually 2026).
+  // Accept any month/day within the current year; substitute today when the
+  // year is off.
+  const todayYear = Number(today.slice(0, 4));
+  const isoYear = Number(iso.slice(0, 4));
+  if (isoYear !== todayYear) {
+    console.warn(`[scan] date ${iso} year ≠ ${todayYear} — likely OCR/era error, using today`);
     return today;
   }
   return iso;
@@ -7794,18 +7800,25 @@ function normalizeScanResult(raw) {
   // ── Date normalisation + fallback warning (smoke-test finding: real receipts often
   // have old dates 2016-2019 that silently fall back to today with no visible signal).
   // Surface when this happens so user knows to manually fix.
+  //
+  // NOTE: downstream sanitizeDate() silently overrides any valid-ISO-but-far-
+  // from-today value with today. The warning wording here MUST reflect that
+  // override (else banner says "2024" while the date field shows today → looks
+  // like a bug). Align both: flag the OCR read + tell user we used today.
   if (data.date) {
     const raw = String(data.date).trim();
     const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : (typeof parseDateFallback === 'function' ? parseDateFallback(raw) : null);
     const today = (typeof todayHKT === 'function') ? todayHKT() : new Date().toISOString().slice(0, 10);
     if (iso) {
-      const diffDays = Math.abs((new Date(iso) - new Date(today)) / 86400000);
-      if (diffDays > 60) {
-        // Far-future/past date — keep parsed ISO but flag it. Don't silently today-override.
-        warnings.push(`日期「${iso}」離今日 ${Math.round(diffDays)} 日，可能係舊收據或誤讀，請核對`);
-        data.date = iso; // still pass normalized form so user can see + edit in modal
+      const todayYear = Number(today.slice(0, 4));
+      const isoYear = Number(iso.slice(0, 4));
+      if (isoYear !== todayYear) {
+        // Wrong year — almost always Japanese-era OCR mis-read (令和6年→2024).
+        // sanitizeDate will substitute today; warn accordingly.
+        warnings.push(`AI 讀到年份「${isoYear}」，但今年係 ${todayYear} — 可能係 OCR 誤讀日本年號，已預設今日，請核對`);
+        data.date = today; // match sanitizeDate's behaviour so banner + field agree
       } else {
-        data.date = iso; // pass normalised form downstream
+        data.date = iso; // same year — trust AI (could be a few days old receipt)
       }
     } else {
       // Can't parse the date at all — explicitly fall back to today.
@@ -7874,7 +7887,10 @@ function openConfirmModal(data, base64, warnings, usedModelId) {
   // Default time: use AI-extracted time, else fall back to current local time (HH:mm)
   if ($('mTime')) $('mTime').value = data.time || nowHHMM();
   // Address cascade: AI → store name → ITINERARY region for date
-  if ($('mAddress')) $('mAddress').value = resolveAddressCascade(data.address, data.store, cleanDate);
+  // Address = ONLY what AI read off the receipt. Do NOT fall back to the
+  // itinerary region — a receipt's address should reflect the actual
+  // store location, not where the user happens to be that day.
+  if ($('mAddress')) $('mAddress').value = (data.address || '').toString().trim();
   if ($('mBookingRef')) $('mBookingRef').value = data.booking_ref || data.bookingRef || '';
   // Whitelist AI-returned category/payment — unknown category → 'other', unknown payment → placeholder
   const validCats = CATEGORIES.map(c => c.id);
@@ -9198,20 +9214,9 @@ function init() {
     }, '');
   });
 
-  // When user changes the date inside the modal, auto-update the address hint
-  // using the same cascade logic — but only if the current value looks like a
-  // stale auto-suggestion (ITINERARY region name), not a user's manual entry.
-  $('mDate')?.addEventListener('change', () => {
-    const d = sanitizeDate($('mDate').value);
-    const addrEl = $('mAddress');
-    if (!addrEl) return;
-    const current = addrEl.value || '';
-    const itineraryRegions = getItinerary().map(i => i.region);
-    const staleAutoValues = ['', '—', '名古屋', '準備階段', '返程後', ...itineraryRegions];
-    if (staleAutoValues.includes(current)) {
-      addrEl.value = resolveAddressCascade(null, $('mStore').value, d);
-    }
-  });
+  // Intentionally NOT auto-filling address when the date changes: the address
+  // belongs to the store on the receipt, not the itinerary region for that
+  // day. User edits address directly.
 
   // Modal
   $('modalCancel').addEventListener('click', closeModal);
