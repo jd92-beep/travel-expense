@@ -6040,14 +6040,51 @@ function parseDateFallback(s) {
     const mo = MONTHS[m[1].toLowerCase()];
     if (mo) return `${m[3]}-${String(mo).padStart(2,'0')}-${m[2].padStart(2,'0')}`;
   }
-  // Numeric DD/MM/YYYY (common in HK/UK)
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  // Numeric DD/MM/YYYY (common in HK/UK) — also handles "-" and "." separators
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
   if (m) {
     // Heuristic: if first number > 12, it must be day
     const [d, mo, yr] = Number(m[1]) > 12
       ? [m[1], m[2], m[3]]   // DD/MM/YYYY
       : [m[2], m[1], m[3]];  // MM/DD/YYYY (US) — less likely but handle it
     return `${yr}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  // Numeric YYYY/MM/DD (Japanese + ISO-ish; also handles "-" and "." separators).
+  // Japanese receipts frequently print "2026/04/23" or "2026.4.23".
+  m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if (m) {
+    const mo = Number(m[2]), d = Number(m[3]);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return `${m[1]}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    }
+  }
+  // Numeric YY/MM/DD — Japanese short form "26/04/23" means 2026-04-23.
+  // 2-digit year: 00–69 → 2000s, 70–99 → 1900s (covers receipts reprinted
+  // from old systems; modern JP receipts are always in the 20s).
+  m = s.match(/^(\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if (m) {
+    const yy = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      const yr = yy >= 70 ? 1900 + yy : 2000 + yy;
+      return `${yr}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    }
+  }
+  // Numeric DD/MM/YY (HK short form "23/04/26" = 2026-04-23).
+  // Disambiguated from YY/MM/DD above by the month/day plausibility checks:
+  // the YY matcher already accepts anything where pos-2 is 1-12; we reach
+  // here only if that failed, i.e. pos-2 was > 12 → must be a day, so this
+  // is DD/MM/YY. Example: "23/04/26" → pos-2=04 ≤ 12 → taken as YY/MM/DD
+  //          (2023-04-26). That's the right call for JP receipts but wrong
+  // for HK receipts dated pre-trip; we accept that ambiguity because the
+  // trip context is JP.
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})$/);
+  if (m) {
+    const a = Number(m[1]), b = Number(m[2]), yy = Number(m[3]);
+    // Only commit when first > 12 (unambiguously a day)
+    if (a > 12 && b >= 1 && b <= 12) {
+      const yr = yy >= 70 ? 1900 + yy : 2000 + yy;
+      return `${yr}-${String(b).padStart(2,'0')}-${String(a).padStart(2,'0')}`;
+    }
   }
   return null;
 }
