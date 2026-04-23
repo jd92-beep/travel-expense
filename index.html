@@ -1648,6 +1648,71 @@ function renderHistory() {
   }).join('');
 }
 
+// ============ ITINERARY OVERRIDES ============
+// Per-spot overrides stored in state.itineraryOverrides: { "YYYY-MM-DD:idx": {...fields} }
+function _getItineraryOverride(dateYMD, spotIdx) {
+  const key = `${dateYMD}:${spotIdx}`;
+  return (state.itineraryOverrides || {})[key] || null;
+}
+
+// Apply an array of itinerary_updates (from AI email parse) to the current itinerary.
+// Returns count of spots actually updated.
+function applyItineraryUpdates(updates) {
+  if (!Array.isArray(updates) || updates.length === 0) return 0;
+  if (!state.itineraryOverrides) state.itineraryOverrides = {};
+  const iti = window.CURRENT_ITINERARY || ITINERARY;
+  let count = 0;
+
+  updates.forEach(u => {
+    if (!u.date) return;
+    const day = iti.find(d => d.date === u.date);
+    if (!day || !Array.isArray(day.spots)) return;
+    const type = u.type;
+
+    const sameTypeIdxs = day.spots.reduce((acc, s, i) => { if (s.type === type) acc.push(i); return acc; }, []);
+    let idx = -1;
+    if (sameTypeIdxs.length === 1) {
+      idx = sameTypeIdxs[0];
+    } else if (sameTypeIdxs.length > 1 && u.time) {
+      // Multiple same-type spots on same day (e.g. departure + arrival) → use time proximity
+      const uMin = (Number(u.time.slice(0,2))||0)*60 + (Number(u.time.slice(3,5))||0);
+      let bestDiff = Infinity;
+      sameTypeIdxs.forEach(i => {
+        if (!day.spots[i].time) return;
+        const sMin = (Number(day.spots[i].time.slice(0,2))||0)*60 + (Number(day.spots[i].time.slice(3,5))||0);
+        const d = Math.abs(sMin - uMin);
+        if (d < bestDiff) { bestDiff = d; idx = i; }
+      });
+    }
+    // If still no match, fall back to closest-time spot overall
+    if (idx < 0 && u.time) {
+      const uMin = (Number(u.time.slice(0,2))||0)*60 + (Number(u.time.slice(3,5))||0);
+      let bestDiff = Infinity;
+      day.spots.forEach((s, i) => {
+        if (!s.time) return;
+        const sMin = (Number(s.time.slice(0,2))||0)*60 + (Number(s.time.slice(3,5))||0);
+        const d = Math.abs(sMin - uMin);
+        if (d < bestDiff) { bestDiff = d; idx = i; }
+      });
+    }
+    // If still no match and no time info, use first spot of the day
+    if (idx < 0) idx = 0;
+    if (idx < 0 || idx >= day.spots.length) return;
+
+    const key = `${u.date}:${idx}`;
+    const fields = {};
+    if (u.time)     fields.time = u.time;
+    if (u.name)     fields.name = u.name;
+    if (u.note)     fields.note = u.note;
+    if (u.timezone) fields.timezone = u.timezone;
+    state.itineraryOverrides[key] = Object.assign(state.itineraryOverrides[key] || {}, fields);
+    count++;
+  });
+
+  if (count > 0) saveState();
+  return count;
+}
+
 // ============ TIMELINE ============
 // Helper: derive a comparable "datetime" string for sorting/positioning
 // Receipt items use their createdAt time; planned items use their `time` field.
@@ -1655,111 +1720,53 @@ function _tlKey(dateYMD, hhmm) {
   return `${dateYMD} ${(hhmm || '99:99')}`;
 }
 
+// Timeline-tab version of getEffectiveSpots: applies itineraryOverrides only.
+// Does NOT overlay lodging/transport receipts — the 行程 tab is a pure schedule view.
+function getScheduleSpots(it) {
+  return (it.spots || []).map((s, i) => {
+    const ov = typeof _getItineraryOverride === 'function' ? _getItineraryOverride(it.date, i) : null;
+    return Object.assign({ _spotIdx: i }, s, ov || {});
+  });
+}
+
 function renderTimeline() {
   const container = $('timelineList');
   if (!container) return;
   const today = todayHKT();
-  // Live HKT clock — used to position the metro-station "you are here" marker
   const nowHKT = new Date().toLocaleString('en-GB', {
     timeZone: 'Asia/Hong_Kong', year:'numeric', month:'2-digit', day:'2-digit',
     hour:'2-digit', minute:'2-digit', hour12:false
-  }); // "DD/MM/YYYY, HH:MM"
-  // Convert "DD/MM/YYYY, HH:MM" → "YYYY-MM-DD HH:MM"
+  });
   const m = nowHKT.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s+(\d{2}):(\d{2})/);
   const nowKey = m ? `${m[3]}-${m[2]}-${m[1]} ${m[4]}:${m[5]}` : `${today} 00:00`;
 
   const iti = window.CURRENT_ITINERARY || ITINERARY;
-  const safeRate = Math.max(0.1, Number(state.rate) || 20.36);
   let html = '';
 
-  // Helper: render a group of actual receipts (used by prep / per-day / post)
-  const renderActualGroup = (receipts, groupStartSide = 0) => {
-    const items = receipts.slice().sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
-    let out = '';
-    items.forEach((r, i) => {
-      const side = (i + groupStartSide) % 2 === 0 ? 'left' : 'right';
-      const t = new Date(r.createdAt || Date.now());
-      const time = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
-      const tlKey = _tlKey(r.date, time);
+  iti.forEach(day => {
+    const isToday = day.date === today;
+    html += `<div class="tl-day-header" data-day-header="${day.date}">Day ${day.day} · ${day.date.slice(5)} · ${escapeHtml(day.region)}${isToday ? ' · 今日 📍' : ''}</div>`;
+
+    const spots = getScheduleSpots(day);
+    spots.forEach((spot, i) => {
+      const side = i % 2 === 0 ? 'left' : 'right';
+      const tlKey = _tlKey(day.date, spot.time);
       const passed = tlKey <= nowKey ? ' passed' : '';
-      const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[6];
-      const hkd = `<span class="tl-amount-hkd"> · HKD ${Math.round(r.total/safeRate)}</span>`;
-      out += `<div class="tl-item actual${passed}" data-side="${side}" data-tl-key="${tlKey}" onclick="editReceipt('${r.id}')" style="cursor:pointer">
+      const cat = CATEGORIES.find(c => c.id === spot.type) || CATEGORIES.find(c=>c.id==='other') || CATEGORIES[CATEGORIES.length-1];
+      const hasOverride = typeof spot._spotIdx === 'number' && spot._spotIdx >= 0 && typeof _getItineraryOverride === 'function' && !!_getItineraryOverride(day.date, spot._spotIdx);
+      const overrideBadge = hasOverride ? '<span style="background:#6366f1;color:white;padding:1px 4px;border-radius:3px;font-size:8px;font-weight:700;margin-left:4px">✏️</span>' : '';
+      const tzBadge = spot.timezone ? `<span style="font-size:8px;font-weight:600;color:#6366f1;margin-left:3px">${escapeHtml(spot.timezone)}</span>` : '';
+      const spotIdx = typeof spot._spotIdx === 'number' ? spot._spotIdx : -1;
+      const editJs = spotIdx >= 0 && typeof openSpotEditModal === 'function' ? `onclick="openSpotEditModal('${day.date}',${spotIdx})" style="cursor:pointer"` : '';
+      html += `<div class="tl-item planned${passed}" data-side="${side}" data-tl-key="${tlKey}" ${editJs}>
         <div class="tl-card">
-          <div class="tl-time">${r.date} ${time}</div>
-          <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(r.store || '未命名')}</div>
-          <div class="tl-amount">¥${fmt(r.total)}${hkd}</div>
+          <div class="tl-time">${spot.time || ''}${tzBadge}</div>
+          <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(spot.name)}${overrideBadge}</div>
+          ${spot.note ? `<div class="tl-note">${escapeHtml(String(spot.note).slice(0,120))}</div>` : ''}
         </div>
       </div>`;
     });
-    return out;
-  };
-
-  // ── PREP PHASE section (before Day 1) ──
-  const prepReceipts = state.receipts.filter(r => getTripPhase(r.date) === 'prep');
-  if (prepReceipts.length > 0) {
-    const prepTotal = prepReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
-    html += `<div class="tl-day-header" style="background:linear-gradient(135deg,#F59E0B,#FCD34D);box-shadow:0 4px 12px rgba(245,158,11,0.30)">🧳 Day 0 · 準備階段 · ¥${fmt(prepTotal)} (HK$${fmt(Math.round(prepTotal/safeRate))})</div>`;
-    html += renderActualGroup(prepReceipts, 0);
-  }
-
-  // ── TRIP DAYS ──
-  iti.forEach(day => {
-    const isToday = day.date === today;
-    const dayReceipts = state.receipts
-      .filter(r => r.date === day.date)
-      .slice()
-      .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
-    const dayTotal = dayReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
-    const dayHKD = Math.round(dayTotal / safeRate);
-
-    html += `<div class="tl-day-header" data-day-header="${day.date}">Day ${day.day} · ${day.date.slice(5)} · ${escapeHtml(day.region)}${isToday ? ' · 今日' : ''}${dayTotal > 0 ? ' · ¥' + fmt(dayTotal) + ' (HK$' + fmt(dayHKD) + ')' : ''}</div>`;
-
-    const items = [];
-    (day.spots || []).forEach(sp => {
-      items.push({ kind: 'planned', time: sp.time, name: sp.name, type: sp.type, note: sp.note, tlKey: _tlKey(day.date, sp.time) });
-    });
-    dayReceipts.forEach(r => {
-      const t = new Date(r.createdAt || Date.now());
-      const time = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
-      items.push({ kind: 'actual', time, receipt: r, tlKey: _tlKey(day.date, time) });
-    });
-    items.sort((a,b) => a.tlKey.localeCompare(b.tlKey));
-
-    items.forEach((item, i) => {
-      const side = i % 2 === 0 ? 'left' : 'right';
-      const passed = item.tlKey <= nowKey ? ' passed' : '';
-      if (item.kind === 'planned') {
-        const cat = CATEGORIES.find(c => c.id === item.type) || CATEGORIES[6];
-        html += `<div class="tl-item planned${passed}" data-side="${side}" data-tl-key="${item.tlKey}">
-          <div class="tl-card">
-            <div class="tl-time">${item.time || ''}</div>
-            <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(item.name)}</div>
-            ${item.note ? `<div class="tl-note">${escapeHtml(item.note)}</div>` : ''}
-          </div>
-        </div>`;
-      } else {
-        const r = item.receipt;
-        const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[6];
-        const hkd = `<span class="tl-amount-hkd"> · HKD ${Math.round(r.total/safeRate)}</span>`;
-        html += `<div class="tl-item actual${passed}" data-side="${side}" data-tl-key="${item.tlKey}" onclick="editReceipt('${r.id}')" style="cursor:pointer">
-          <div class="tl-card">
-            <div class="tl-time">${item.time}</div>
-            <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(r.store || '未命名')}</div>
-            <div class="tl-amount">¥${fmt(r.total)}${hkd}</div>
-          </div>
-        </div>`;
-      }
-    });
   });
-
-  // ── POST PHASE section (after last day) ──
-  const postReceipts = state.receipts.filter(r => getTripPhase(r.date) === 'post');
-  if (postReceipts.length > 0) {
-    const postTotal = postReceipts.reduce((s,r) => s + (Number(r.total)||0), 0);
-    html += `<div class="tl-day-header" style="background:linear-gradient(135deg,#64748B,#94A3B8);box-shadow:0 4px 12px rgba(100,116,139,0.30)">🏠 返程後 · ¥${fmt(postTotal)} (HK$${fmt(Math.round(postTotal/safeRate))})</div>`;
-    html += renderActualGroup(postReceipts, 0);
-  }
 
   container.innerHTML = html;
   updateTimelineProgress();
@@ -2617,6 +2624,7 @@ const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。�
 
 \`\`\`json
 {
+  "email_type": "expense_only|itinerary_only|both|neither",
   "source": "klook|kkday|agoda|booking|expedia|hotels|cathay|ana|jal|airasia|hkexpress|tripcom|other",
   "bookings": [
     {
@@ -2648,6 +2656,28 @@ const MULTI_BOOKING_PROMPT = `你係一個專業旅遊預訂 email 解析 AI。�
 - 「Klook Booking Confirmation」→ store: "Klook 立山黑部"，items_text: activity 名
 - 「Agoda Booking」→ store: "Agoda 名古屋 XX Hotel"，date: check-in date, total: 全程總額
 - 「KKday 三日團」→ 如果一個 booking 包 3 日分開 activity，就返 3 筆；如果係一 package，就返一筆
+
+5. **行程更新 (itinerary_updates)**：如果 email 包含航班、活動、接送等有具體時間嘅資訊，**同時**填寫 \`itinerary_updates\` array：
+
+5.5 - ✈️ **機票** → 必建 **2 條**（去程）或 **2 條**（回程）各：
+  - 出發：date=起飛日，time=起飛時間，name=「✈️ {flight_no} 離港 {orig}→{dest}」，type=transport
+  - 抵達：date=抵達日，time=抵達時間，name=「✈️ {flight_no} 抵達 {dest}」，type=transport
+  - timezone 欄位：出發地用出發地時區（例 HKT/JST），抵達地用抵達地時區
+
+\`itinerary_updates\` 格式（每條）：
+\`{"date":"YYYY-MM-DD","time":"HH:MM","name":"景點/交通名","type":"transport|food|ticket|lodging|other","note":"備註","timezone":"HKT|JST 等（可選）"}\`
+
+**Example 8** — Hong Kong Express 來回機票 UO690/UO691：
+\`\`\`json
+{"email_type":"itinerary_only","source":"hkexpress","bookings":[
+  {"store":"HK Express UO690","total":4400,"original_currency":"HKD","original_amount":220,"date":"2026-04-20","category":"transport","payment":"credit","items_text":"HKG→NGO 去程 經濟艙","note":"TD87QN","confidence":"high"},
+  {"store":"HK Express UO691","total":4400,"original_currency":"HKD","original_amount":220,"date":"2026-04-25","category":"transport","payment":"credit","items_text":"NGO→HKG 回程 經濟艙","note":"TD87QN","confidence":"high"}
+],"itinerary_updates":[
+  {"date":"2026-04-20","time":"10:50","name":"✈️ UO690 離港 HKG→NGO","type":"transport","note":"TD87QN · HKT"},
+  {"date":"2026-04-20","time":"15:50","name":"✈️ UO690 抵達名古屋 NGO","type":"transport","note":"TD87QN · JST"},
+  {"date":"2026-04-25","time":"16:45","name":"✈️ UO691 離港 NGO→HKG","type":"transport","note":"TD87QN · JST"},
+  {"date":"2026-04-25","time":"20:00","name":"✈️ UO691 抵達香港 HKG","type":"transport","note":"TD87QN · HKT"}
+]}\`\`\`
 
 如果 email 完全無法解析（例如唔係 booking confirmation），返 \`{"source": "other", "bookings": []}\`。`;
 
@@ -2694,7 +2724,9 @@ async function parseEmailInput({ text = '', images = [] }) {
       if (!parsed || !Array.isArray(parsed.bookings)) {
         throw new Error('JSON 缺少 bookings 陣列');
       }
-      return { source: parsed.source || 'other', bookings: parsed.bookings, modelUsed: name };
+      const itineraryUpdates = parsed.itinerary_updates || [];
+      const emailType = parsed.email_type || (parsed.bookings?.length > 0 && itineraryUpdates.length > 0 ? 'both' : parsed.bookings?.length > 0 ? 'expense_only' : itineraryUpdates.length > 0 ? 'itinerary_only' : 'neither');
+      return { source: parsed.source || 'other', bookings: parsed.bookings, itinerary_updates: itineraryUpdates, email_type: emailType, modelUsed: name };
     } catch(e) {
       console.warn(`[emailParse] ${name} failed: ${e.message}`);
       lastErr = e;
@@ -4352,15 +4384,28 @@ function init() {
     $('emailParseBtn').disabled = true;
     try {
       const result = await parseEmailInput({ text, images });
-      if (!result.bookings || result.bookings.length === 0) {
-        status.innerHTML = '<span style="color:#DC2626">❌ 解析唔到任何 booking。確認係否 booking confirmation？</span>';
+      const itiCount = typeof applyItineraryUpdates === 'function' ? applyItineraryUpdates(result.itinerary_updates || []) : 0;
+      $('emailPasteModal').classList.add('hidden');
+      const emailType = result.email_type || 'both';
+      const hasExpenses = result.bookings && result.bookings.length > 0;
+      const hasItiUpdates = itiCount > 0;
+
+      if (emailType === 'itinerary_only' || (!hasExpenses && hasItiUpdates)) {
+        // Pure schedule update — no expense modal, just update timeline
+        toast(`🗓 行程已自動更新 ${itiCount} 項（無消費記錄）`);
+        if (hasItiUpdates) { try { renderTimeline(); } catch(_) {} }
+        refresh();
+      } else if (hasExpenses) {
+        // Has expense records — show batch confirm modal
+        openBatchConfirmModal(result.bookings, result.source, result.modelUsed, { text, images });
+        const itiNote = hasItiUpdates ? ` + 行程更新 ${itiCount} 項` : '';
+        toast(`🤖 解析到 ${result.bookings.length} 筆消費${itiNote}`);
+      } else {
+        toast(`⚠️ 解析唔到任何消費或行程`, 'warning');
         $('emailParseBtn').disabled = false;
+        $('emailPasteModal').classList.remove('hidden');
         return;
       }
-      $('emailPasteModal').classList.add('hidden');
-      // Preserve the original input so "retry with stronger model" can re-parse
-      openBatchConfirmModal(result.bookings, result.source, result.modelUsed, { text, images });
-      toast(`🤖 解析到 ${result.bookings.length} 筆 booking`);
       // Clear staged images after successful parse
       _emailImageQueue = [];
       renderEmailImagePreview();
@@ -4465,6 +4510,9 @@ function init() {
   //   Android PWA share: ?shared_text=<raw>&shared_title=...
   // Both routes flow into the same paste-modal-prefilled UX.
   handleImportDeepLink();
+
+  // Default landing tab after unlock: Scan (quickest action = snap a receipt)
+  switchTab('scan');
 }
 
 // UTF-8 safe base64 decode — handles emoji, kanji, non-BMP chars.
