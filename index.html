@@ -2952,6 +2952,49 @@ function _isLikelyAddress(s) {
   if (/原價|HKD|USD|JPY|¥|預訂已|已付款|卡號|信用卡|payment|visa|master|paid|尾數/i.test(t)) return false;
   return true;
 }
+// Strip common OCR noise from scanned addresses — receipts often print
+// TEL/FAX/URL on the same line and the AI merges them into the address.
+// We keep the address part and drop everything after the phone/fax marker.
+function _cleanReceiptAddress(s) {
+  if (!s) return '';
+  let t = String(s).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // Strip trailing "TEL xxx" / "電話 xxx" / "FAX xxx" / "URL ..." segments
+  t = t.replace(/[\s,，、]*(TEL|Tel|tel|電話|ＴＥＬ|FAX|Fax|ＦＡＸ|URL|https?:\/\/).*$/i, '');
+  // Strip trailing phone-icon + number
+  t = t.replace(/[\s,，、]*[☎📞][\s\d\-().]+$/, '');
+  // Trim trailing punctuation
+  t = t.replace(/[\s,，、。.]+$/, '');
+  return t.trim();
+}
+// If the AI couldn't read the address off this receipt, look for the same
+// store in our existing receipts (most recent first). Addresses there were
+// themselves read off past receipts, so this still satisfies the rule that
+// 地址 = 收據上面嘅地址 — just from an earlier visit to the same place.
+function _priorAddressForStore(store) {
+  if (!store) return '';
+  const norm = String(store).trim().toLowerCase();
+  if (!norm) return '';
+  const rs = Array.isArray(state.receipts) ? state.receipts : [];
+  for (let i = rs.length - 1; i >= 0; i--) {
+    const r = rs[i];
+    const addr = r && r.address && String(r.address).trim();
+    if (!addr) continue;
+    const rStore = (r.store || '').trim().toLowerCase();
+    if (rStore && rStore === norm) return addr;
+  }
+  return '';
+}
+// Final entry point used by the scan-confirm modal. Pure receipt-sourced:
+// 1) cleaned AI value if plausible; 2) prior scan of same store; 3) blank.
+// NEVER falls back to itinerary region — that was the old behaviour Boss
+// explicitly rejected.
+function resolveReceiptAddress(aiAddress, store) {
+  const cleaned = _cleanReceiptAddress(aiAddress);
+  if (cleaned && _isLikelyAddress(cleaned)) return cleaned;
+  const prior = _priorAddressForStore(store);
+  if (prior) return prior;
+  return cleaned; // may be '' — that's fine, user fills it in
+}
 // Per-type label + icon + background colour for the popup header
 const SPOT_POPUP_STYLES = {
   lodging:   { label: '今晚住宿',  icon: '🏨', bg: 'rgba(52,211,153,0.15)', fg: '#34d399' },
@@ -5076,13 +5119,71 @@ const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。仔細睇收據
 - \`税込¥1800\` → 1800（税込 = 含稅，即 total）
 - \`税抜¥1800\` → 1800（税抜 = 不含稅，呢個可能係 subtotal）
 
-**規則 2 — 日期轉 YYYY-MM-DD**：支援多種原文
-- \`2026/04/23\` / \`2026-04-23\` / \`2026.04.23\` → \`2026-04-23\`
-- \`26/04/23\` / \`26.04.23\` → \`2026-04-23\`（2 位數年預設 20XX）
-- \`令和8年4月23日\` → \`2026-04-23\`（令和元年=2019，即 2018+X）
-- \`令和6年\` → 2024，\`平成X年\` → 1988+X
-- \`2026年4月23日（木）\` → \`2026-04-23\`（去掉曜日）
-- 若估算日期同今日差超過 60 日，confidence: low
+**規則 2 — 日期轉 YYYY-MM-DD（世界通用，唔只日本）**
+收據上日期格式因國家而異。你一定要**用收據嘅其他線索**去決定 D/M/Y 次序（貨幣、語言、店名、地區、電話國碼、稅名），唔係靠估。
+
+**🌍 各國主流格式：**
+- **ISO 8601（國際標準）**：\`2026-04-23\`
+- **YMD 年首**（日本🇯🇵 / 韓國🇰🇷 / 中國🇨🇳 / 台灣🇹🇼 / 匈牙利 / 伊朗 / 蒙古）：
+  \`2026/04/23\` / \`2026.04.23\` / \`2026-04-23\`
+  2 位數年：\`26/04/23\` → \`2026-04-23\`
+- **DMY 日首**（英國🇬🇧 / 香港🇭🇰 / 澳洲 / 紐西蘭 / 大部份歐洲 / 印度 / 南美 / 非洲）：
+  \`23/04/2026\` / \`23-04-2026\` / \`23.04.2026\`（德國、俄國常用點）
+  2 位數年：\`23/04/26\` → \`2026-04-23\`
+- **MDY 月首**（美國🇺🇸 / 菲律賓 / 加拿大部份地區 / 伯利茲）：
+  \`04/23/2026\` / \`4-23-26\`
+  2 位數年：\`04/23/26\` → \`2026-04-23\`
+- **英文月名**（國際通用，但 D/M 次序仍按國家）：
+  \`23 Apr 2026\` / \`April 23, 2026\` / \`APR 23 2026\` / \`23-APR-26\`
+
+**🗓️ 亞洲本地曆法（必記）：**
+- **日文年號**：\`令和X年M月D日\` → 2018+X；\`平成X年\` → 1988+X；\`昭和X年\` → 1925+X
+  例：\`令和8年4月23日\` = 2026-04-23
+  縮寫：\`R8.04.23\` = 令和8年，\`H31.04.30\` = 平成31年（2019）
+- **中文年月日**：\`2026年4月23日（木）\` → 剝走曜日 → \`2026-04-23\`
+- **台灣民國年（ROC）**：\`民國115年4月23日\` / \`115/04/23\` → +1911 = 2026-04-23
+- **韓文**：\`2026년 4월 23일\` → \`2026-04-23\`
+- **泰國佛曆（BE）**：\`พ.ศ. 2569\` 或 \`2569/04/23\` → -543 = 2026-04-23（佛曆 = 西曆+543）
+
+**🔍 D/M 次序消歧步驟（重要）**：
+1. 若任何位置 > 31 → 必係年份；其餘兩位靠剩餘位置判斷
+2. 若第一位 > 12 → 必係日（DMY 或 YMD 短式）
+3. 若最後一位 > 31 → 必係年份（YMD 或 MDY）
+4. 若全部 ≤ 12（完全歧義，例：\`04/05/06\`）→ 用**收據語境**：
+   - 貨幣 JPY / KRW / CNY / TWD → **YMD**（\`04-05-06\` = 2004-05-06）
+   - 貨幣 USD + 英文 → **MDY**（= 2006-05-04，即 May 4 2006）
+   - 貨幣 GBP / EUR / HKD / AUD / INR → **DMY**（= 2006-05-04，即 4 May 2006）
+   - 語言德文/法文/西文 → **DMY**
+   - 完全無線索 → 用 DMY（全球最普遍）
+5. 2 位數年號：70–99 → 19XX；00–69 → 20XX
+
+**📛 貨幣 → 國家 → 格式偏好（快速查表）**：
+| 貨幣符號 | 國家 | 日期偏好 |
+|---|---|---|
+| ¥ / JPY / 円 | 日本 | YMD |
+| ₩ / KRW / 원 | 韓國 | YMD |
+| ¥ / CNY / 元 | 中國 | YMD |
+| NT$ / TWD | 台灣 | YMD（有時民國年） |
+| $ / USD | 美國 | MDY |
+| £ / GBP | 英國 | DMY |
+| € / EUR | 歐洲 | DMY（德/俄用點） |
+| HK$ / HKD | 香港 | DMY |
+| A$ / AUD | 澳洲 | DMY |
+| S$ / SGD | 新加坡 | DMY |
+| ฿ / THB | 泰國 | DMY（有時佛曆） |
+| ₹ / INR | 印度 | DMY |
+| C$ / CAD | 加拿大 | 混合（看省份） |
+
+**⚠️ 特殊情境**：
+- 收據過午夜（例：凌晨 1 點結帳）：印出嘅日期 = **結帳日**，直接用（唔好調返上一日）
+- 多個日期（例：訂房日 + 入住日）：用**交易日**（最底嘅付款日期）
+- 只印月/日無年（例：\`04/23\`）：用今日嘅年份填補
+- 完全讀唔到日期：返 \`null\`（唔好估）
+
+**📅 合理性檢查**：
+- 最終 YYYY 必須喺 1990–2050 之間，否則肯定 parse 錯咗 → 重試或 null
+- 若最終日期同「今日」差超過 90 日 → confidence: low（可能係舊收據或 OCR 錯）
+- 自己 parse 完之後，**最後心算一次**：呢個日期 match 唔 match 收據語境（貨幣/語言）？唔 match 就改返
 
 **規則 3 — 時間**：印上嘅 HH:MM（24h），無就 null
 
@@ -5208,8 +5309,9 @@ const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。仔細睇收據
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. total ≈ subtotal + tax？如果差太遠，重新睇啱 total
 2. store 同 items[].name_jp 係咪全部保留日文原文（無翻譯成中文）？
-3. date 係咪 YYYY-MM-DD 格式？
-4. confidence 合理？清圖 high / 模糊 low
+3. date 係咪 YYYY-MM-DD 格式？**年份合理（1990-2050）**？D/M 次序有冇 match 收據貨幣/語言？
+4. 年號/曆法轉換啱唔啱？令和+2018、平成+1988、民國+1911、佛曆-543、2 位數年 <70 = 20XX
+5. confidence 合理？清圖 high / 模糊 low
 
 再講多次：**只回覆 JSON，一個字都唔好多**。`;
 
@@ -5977,11 +6079,49 @@ function inferCategoryFromFields({ store = '', itemsText = '' }) {
 
 // Parse non-ISO date strings that AI might slip through (Japanese / English long-short)
 // Returns "YYYY-MM-DD" string or null if unparseable.
+// Safety-net parser: converts free-form receipt date strings to YYYY-MM-DD.
+// The Gemini prompt (see GEMINI_PROMPT §規則2) is the primary defence — it
+// uses receipt context (currency, language, country) to disambiguate D/M order
+// and returns ISO. This parser only runs when the AI echoes raw text, and
+// covers the formats we can disambiguate without context.
 function parseDateFallback(s) {
   if (!s || typeof s !== 'string') return null;
-  // Japanese: "2026年4月23日" or "2026年4月23日（木）"
-  let m = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
-  if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  const iso = s => {
+    const y = String(s[0]).padStart(4, '0');
+    const mo = String(s[1]).padStart(2, '0');
+    const d = String(s[2]).padStart(2, '0');
+    return `${y}-${mo}-${d}`;
+  };
+  // ── Asian localized calendars (highest priority, unambiguous) ──
+  // Japanese Reiwa: 令和8年4月23日 = 2018+8 = 2026-04-23
+  let m = s.match(/令和\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);
+  if (m) return iso([2018 + Number(m[1]), m[2], m[3]]);
+  // Japanese Heisei: 平成X年 = 1988+X (Heisei 1=1989)
+  m = s.match(/平成\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);
+  if (m) return iso([1988 + Number(m[1]), m[2], m[3]]);
+  // Japanese Shōwa: 昭和X年 = 1925+X (Shōwa 1=1926)
+  m = s.match(/昭和\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);
+  if (m) return iso([1925 + Number(m[1]), m[2], m[3]]);
+  // Japanese era abbreviations: R8.04.23, H31.4.30, S64.1.7
+  m = s.match(/^([RHS])\.?\s*(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/i);
+  if (m) {
+    const base = { R: 2018, H: 1988, S: 1925 }[m[1].toUpperCase()];
+    return iso([base + Number(m[2]), m[3], m[4]]);
+  }
+  // Taiwan ROC (民國): 民國115年4月23日 = 1911+115 = 2026-04-23
+  m = s.match(/民國\s*(\d{2,3})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);
+  if (m) return iso([1911 + Number(m[1]), m[2], m[3]]);
+  // Korean: 2026년 4월 23일
+  m = s.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?/);
+  if (m) return iso([m[1], m[2], m[3]]);
+  // Chinese/Japanese with full Gregorian year: "2026年4月23日" or "2026年4月23日（木）"
+  m = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  if (m) return iso([m[1], m[2], m[3]]);
+  // Thai Buddhist Era (BE): พ.ศ. 2569/04/23 or just 2569/04/23 where year >> 2100
+  m = s.match(/^(?:พ\.?ศ\.?\s*)?(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if (m && Number(m[1]) >= 2400 && Number(m[1]) <= 2600) {
+    return iso([Number(m[1]) - 543, m[2], m[3]]);
+  }
   const MONTHS = {january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,
     september:9,october:10,november:11,december:12,
     jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
@@ -5997,8 +6137,8 @@ function parseDateFallback(s) {
     const mo = MONTHS[m[1].toLowerCase()];
     if (mo) return `${m[3]}-${String(mo).padStart(2,'0')}-${m[2].padStart(2,'0')}`;
   }
-  // Numeric DD/MM/YYYY (common in HK/UK)
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  // Numeric DD/MM/YYYY (common in HK/UK) — also handles "-" and "." separators
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
   if (m) {
     // Heuristic: if first number > 12, it must be day
     const [d, mo, yr] = Number(m[1]) > 12
@@ -6006,6 +6146,85 @@ function parseDateFallback(s) {
       : [m[2], m[1], m[3]];  // MM/DD/YYYY (US) — less likely but handle it
     return `${yr}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
   }
+  // Numeric YYYY/MM/DD (Japanese + ISO-ish; also handles "-" and "." separators).
+  // Japanese receipts frequently print "2026/04/23" or "2026.4.23".
+  m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if (m) {
+    const mo = Number(m[2]), d = Number(m[3]);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return `${m[1]}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    }
+  }
+  // Numeric YY/MM/DD — Japanese short form "26/04/23" means 2026-04-23.
+  // 2-digit year: 00–69 → 2000s, 70–99 → 1900s (covers receipts reprinted
+  // from old systems; modern JP receipts are always in the 20s).
+  // Guard: reject if the YY-resolved year is more than 1 year in the future,
+  // since receipts are always in the past/present. That tie-breaks cases
+  // like "30/04/26" (YY/MM/DD → 2030 is too far → fall through to DMY).
+  m = s.match(/^(\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if (m) {
+    const yy = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      const yr = yy >= 70 ? 1900 + yy : 2000 + yy;
+      const thisYear = new Date().getFullYear();
+      if (yr <= thisYear + 1) {
+        return `${yr}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      }
+    }
+  }
+  // Numeric DD/MM/YY (HK short form "23/04/26" = 2026-04-23).
+  // Disambiguated from YY/MM/DD above by the month/day plausibility checks:
+  // the YY matcher already accepts anything where pos-2 is 1-12; we reach
+  // here only if that failed, i.e. pos-2 was > 12 → must be a day, so this
+  // is DD/MM/YY. Example: "23/04/26" → pos-2=04 ≤ 12 → taken as YY/MM/DD
+  //          (2023-04-26). That's the right call for JP receipts but wrong
+  // for HK receipts dated pre-trip; we accept that ambiguity because the
+  // trip context is JP.
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})$/);
+  if (m) {
+    const a = Number(m[1]), b = Number(m[2]), yy = Number(m[3]);
+    const yr = yy >= 70 ? 1900 + yy : 2000 + yy;
+    // Case A: first > 12 → unambiguously a day → DD/MM/YY
+    if (a > 12 && b >= 1 && b <= 12) {
+      return `${yr}-${String(b).padStart(2,'0')}-${String(a).padStart(2,'0')}`;
+    }
+    // Case B: all three ≤ 12 but YY/MM/DD branch above rejected (year too
+    // far future). Fall back: if middle is a valid month, assume DMY (most
+    // common globally). Example: "05/04/30" after YMD rejected (2030 future)
+    // → DMY = 2030-04-05… but YY=30 was also rejected, so we wouldn't get
+    // here. This branch mostly catches corrupt edge cases.
+  }
+  // English "23-APR-26" / "23 Apr 2026" / "23/Apr/26" — numeric-month-alpha-year
+  m = s.match(/^(\d{1,2})[\s\-\/.]+([A-Za-zА-я\u00C0-\u024F]+)[\s\-\/.]+(\d{2}|\d{4})$/);
+  if (m) {
+    const mo = MONTHS[m[2].toLowerCase()];
+    if (mo) {
+      let yr = Number(m[3]);
+      if (yr < 100) yr = yr >= 70 ? 1900 + yr : 2000 + yr;
+      return iso([yr, mo, m[1]]);
+    }
+  }
+  // English "APR-23-26" / "Apr 23 2026" — alpha-numeric-numeric (US short)
+  m = s.match(/^([A-Za-z]+)[\s\-\/.]+(\d{1,2})[\s\-\/.,]+(\d{2}|\d{4})$/);
+  if (m) {
+    const mo = MONTHS[m[1].toLowerCase()];
+    if (mo) {
+      let yr = Number(m[3]);
+      if (yr < 100) yr = yr >= 70 ? 1900 + yr : 2000 + yr;
+      return iso([yr, mo, m[2]]);
+    }
+  }
+  // Last-ditch: browser's Date parser (catches weird locale variants we missed).
+  // Only trust it if result year is sane — Date() is famously lenient.
+  try {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const yr = d.getFullYear();
+      if (yr >= 1990 && yr <= 2050) {
+        return iso([yr, d.getMonth() + 1, d.getDate()]);
+      }
+    }
+  } catch (_) {}
   return null;
 }
 
@@ -7199,8 +7418,9 @@ async function notionPushSettings() {
   saveState();
 }
 
-// Debounced auto-push — used by saveBudget / saveSettings handlers so the
-// user can adjust a slider rapidly without spamming Notion with 10 PATCHes.
+// Debounced implicit push — used by passive/background state changes (toggles,
+// auto-sync flag, etc.). Respects user's autoSync preference so silent writes
+// don't happen when they've opted out.
 function notionPushSettingsIfReady() {
   if (!state.autoSync || !state.notionToken || !state.notionDb) return;
   clearTimeout(notionPushSettingsIfReady._t);
@@ -7208,6 +7428,37 @@ function notionPushSettingsIfReady() {
     notionPushSettings().catch(e => console.warn('[notionPushSettings]', e.message));
   }, 800);
 }
+// Explicit push — for "💾 儲存" buttons where the user's click means
+// "make this the source of truth for all my devices". Ignores autoSync
+// because the click IS the consent. Returns a promise so callers can await
+// completion and show feedback. Silently no-ops if Notion isn't configured.
+async function notionPushSettingsNow() {
+  if (!state.notionToken || !state.notionDb) return;
+  try {
+    await notionPushSettings();
+  } catch (e) {
+    console.warn('[notionPushSettingsNow]', e.message);
+    throw e;
+  }
+}
+// Re-populate Settings-tab form inputs + top budget bar from current state.
+// Call this after notionPullAll() so a freshly-hydrated budget actually
+// appears in the UI (applySettingsPayload only mutates state, not DOM).
+function refreshSettingsInputsFromState() {
+  try {
+    const sb = document.getElementById('setBudget');
+    const sh = document.getElementById('setBudgetHKDInput');
+    const sr = document.getElementById('setRate');
+    // Don't clobber an input the user is currently typing into
+    const active = document.activeElement;
+    if (sb && active !== sb) sb.value = state.budget;
+    if (sh && active !== sh && state.rate > 0) sh.value = Math.round(state.budget / state.rate);
+    if (sr && active !== sr && state.rate > 0) sr.value = (100 / state.rate).toFixed(4);
+    if (typeof renderHeader === 'function') renderHeader();
+    if (typeof refresh === 'function') refresh();
+  } catch (e) { console.warn('[refreshSettingsInputsFromState]', e.message); }
+}
+window.refreshSettingsInputsFromState = refreshSettingsInputsFromState;
 
 async function notionPullAll(silent = false) {
   if (!state.notionToken || !state.notionDb) {
@@ -7886,11 +8137,11 @@ function openConfirmModal(data, base64, warnings, usedModelId) {
   $('mDate').value = cleanDate;
   // Default time: use AI-extracted time, else fall back to current local time (HH:mm)
   if ($('mTime')) $('mTime').value = data.time || nowHHMM();
-  // Address cascade: AI → store name → ITINERARY region for date
-  // Address = ONLY what AI read off the receipt. Do NOT fall back to the
-  // itinerary region — a receipt's address should reflect the actual
-  // store location, not where the user happens to be that day.
-  if ($('mAddress')) $('mAddress').value = (data.address || '').toString().trim();
+  // Address = what's on the receipt. Resolver cleans AI noise (strips TEL/FAX
+  // trailing junk) and falls back to the same store's prior scanned address
+  // if AI couldn't read it — both paths are receipt-sourced. Never falls
+  // back to itinerary region.
+  if ($('mAddress')) $('mAddress').value = resolveReceiptAddress(data.address, data.store);
   if ($('mBookingRef')) $('mBookingRef').value = data.booking_ref || data.bookingRef || '';
   // Whitelist AI-returned category/payment — unknown category → 'other', unknown payment → placeholder
   const validCats = CATEGORIES.map(c => c.id);
@@ -8493,6 +8744,10 @@ function switchTab(name, opts = {}) {
         notionPullAll(true).then(() => {
           if (syncBadge) { syncBadge.textContent = '✅ 已同步'; setTimeout(() => syncBadge.classList.add('hidden'), 2000); }
           renderHistory();
+          // Meta-row may have updated state.budget/rate — push to DOM
+          if (typeof refreshSettingsInputsFromState === 'function') {
+            refreshSettingsInputsFromState();
+          }
         }).catch(e => {
           console.warn('[autoSync]', e.message);
           if (syncBadge) { syncBadge.textContent = '⚠️ 同步失敗'; setTimeout(() => syncBadge.classList.add('hidden'), 3000); }
@@ -8506,9 +8761,61 @@ function switchTab(name, opts = {}) {
     // Refresh the 💸 分帳結算 summary badge + panel — receipts may have
     // changed in other tabs since the Settings init ran.
     if (typeof window.renderSettlePanel === 'function') window.renderSettlePanel();
+    // Ensure budget/rate/HKD inputs reflect current state (may have been
+    // hydrated by a background pull since init).
+    if (typeof refreshSettingsInputsFromState === 'function') {
+      refreshSettingsInputsFromState();
+    }
   }
+  // Gently auto-shrink the active tab if its content overflows the viewport
+  // on the current device. Runs after any render() calls above so the
+  // measurement reflects the real laid-out height.
+  autoFitTab(name);
 }
 window.switchTab = switchTab;
+
+// ============ VIEWPORT AUTO-FIT ============
+// Some phones (small iPhone SE, landscape, text-size-adjusted) can't fit a
+// whole tab without scrolling. Rather than redesign each tab, we apply a
+// slight CSS `zoom` factor to the active section so everything visible fits
+// between the sticky header and the fixed bottom nav.
+//
+// Rules:
+//  - Only shrinks (never magnifies).
+//  - Clamped to a minimum of 0.80 so text stays readable.
+//  - If content already fits, zoom stays at 1 (native size).
+//  - Does NOT modify layout, markup, or functionality — purely a scale hint.
+function autoFitTab(name) {
+  const section = document.getElementById('tab-' + (name || _currentTab));
+  if (!section) return;
+  // Reset before measuring so we get the natural (unscaled) size
+  section.style.zoom = '';
+  // Double-RAF: wait for tab-switch class changes + browser layout pass
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    try {
+      const header = document.querySelector('header.sticky');
+      const nav = document.querySelector('nav.fixed');
+      const headerH = header ? header.getBoundingClientRect().height : 0;
+      const navH = nav ? nav.getBoundingClientRect().height : 0;
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      const avail = vh - headerH - navH - 12; // 12px breathing room
+      if (avail <= 0) return;
+      const needed = section.scrollHeight;
+      if (!needed || needed <= avail) { section.style.zoom = ''; return; }
+      let factor = avail / needed;
+      if (factor >= 0.995) { section.style.zoom = ''; return; }
+      if (factor < 0.80) factor = 0.80; // readability floor
+      section.style.zoom = factor.toFixed(3);
+    } catch (e) { /* never break tab switch over cosmetic scaling */ }
+  }));
+}
+window.autoFitTab = autoFitTab;
+// Re-fit when the window changes size (rotate, keyboard open/close, etc.)
+let _autoFitResizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_autoFitResizeTimer);
+  _autoFitResizeTimer = setTimeout(() => autoFitTab(_currentTab), 150);
+});
 
 // ============ EXPORT / RESET ============
 function exportCSV() {
@@ -8618,7 +8925,13 @@ function init() {
       state.budget = Math.max(1, Number($('setBudget').value) || 101800);
     }
     saveState();
-    notionPushSettingsIfReady();
+    // Explicit Save click = push to Notion immediately, regardless of
+    // autoSync. The click IS the consent. Otherwise Yanyan's browser
+    // will pull an outdated budget on next launch.
+    notionPushSettingsNow().catch(e => {
+      console.warn('[saveBudget] push failed:', e.message);
+      toast('⚠️ 本地已儲存，但同步 Notion 失敗：' + (e.message || '').slice(0, 60));
+    });
     refresh();
     // Visual feedback on the button itself
     const btn = $('saveBudgetBtn');
@@ -8676,7 +8989,11 @@ function init() {
     });
     if (Object.keys(ratios).length) state.shareRatios = ratios;
     saveState();
-    notionPushSettingsIfReady();
+    // Explicit Save = unconditional push (see saveBudgetBtn handler)
+    notionPushSettingsNow().catch(e => {
+      console.warn('[saveSettings] push failed:', e.message);
+      toast('⚠️ 本地已儲存，但同步 Notion 失敗：' + (e.message || '').slice(0, 60));
+    });
     refresh();
     // Clear the key inputs (so they don't keep plaintext visible), then
     // update the status line below with a "✅ have key / ❌ missing" readout.
@@ -9260,6 +9577,33 @@ function init() {
   refresh();
   if (state.lastTab && state.lastTab !== _currentTab) {
     switchTab(state.lastTab);
+  } else {
+    // Same-tab "switch" short-circuits in switchTab(), so fire the
+    // viewport fit manually on first paint for the default tab.
+    if (typeof autoFitTab === 'function') autoFitTab(_currentTab);
+  }
+
+  // ── Startup meta-settings sync ───────────────────────────────────────────
+  // Fresh browsers (Yanyan opening the app on a new device) start with
+  // localStorage defaults (budget = ¥101,800 ≈ HKD 5,002). Without this
+  // auto-pull, Settings shows the default until the user navigates to
+  // History tab — which is where they'd notice the wrong budget isn't
+  // being synced. Pulling the __meta_settings__ row here hydrates budget,
+  // rate, persons, shareRatios, etc. from Notion BEFORE the user sees them.
+  if (state.notionToken && state.notionDb) {
+    setTimeout(() => {
+      notionPullAll(true)
+        .then(() => {
+          // Re-populate Settings inputs + re-render budget bar so the
+          // hydrated state.budget actually becomes visible in the UI.
+          // applySettingsPayload() only mutates state; the DOM was
+          // initialised earlier with the stale default.
+          if (typeof refreshSettingsInputsFromState === 'function') {
+            refreshSettingsInputsFromState();
+          }
+        })
+        .catch(e => console.warn('[startup-pull]', e.message));
+    }, 300); // small delay: don't block first paint
   }
   $('updateReloadBtn')?.addEventListener('click', () => reloadAppFresh());
   // Ensure budget bar reflects the initial active tab (scan = hidden)
