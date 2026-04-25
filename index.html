@@ -8957,18 +8957,16 @@ function init() {
     renderDashboard();
   });
 
-  // TOP 10 list toggle — include/exclude flight (transport) + hotel (lodging)
+  // TOP 10 list toggle — include/exclude flight (transport) + hotel (lodging).
+  // The <label> already wraps both the checkbox and the visual track, so the
+  // browser handles tapping → checkbox toggles → 'change' fires. (An earlier
+  // explicit track-click handler caused a DOUBLE toggle because the label-bubble
+  // and the track listener both flipped the state — making the toggle look broken.)
   $('top10IncludeBigItems')?.addEventListener('change', function() {
     state.top10IncludeBigItems = this.checked;
     saveState();
     try { notionPushSettingsIfReady && notionPushSettingsIfReady(); } catch(_) {}
     if (typeof renderStats === 'function') renderStats();
-  });
-  $('top10ToggleTrack')?.addEventListener('click', () => {
-    const cb = $('top10IncludeBigItems');
-    if (!cb) return;
-    cb.checked = !cb.checked;
-    cb.dispatchEvent(new Event('change'));
   });
 
   function hkdPer100jpy() { return parseFloat($('setRate').value) || 4.91; }
