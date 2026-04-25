@@ -180,6 +180,21 @@ git push origin main
 - Commit message 用 conventional commits（feat/fix/refactor/docs）
 - Push 失敗要 report，唔好靜靜雞唔出聲
 
+### Always merge to main (sticky rule, confirmed Apr 25, 2026)
+
+如果係喺 feature branch / worktree 改嘢：commit 之後**自動** merge 入 main + push origin main，唔使再問。
+Boss 一次 confirm = 永久 standing order。
+
+```bash
+# Feature branch flow
+git commit ...                       # on feature branch
+git checkout main
+git merge --no-ff <feature-branch>   # if histories diverged unrelated → fall back to applying diff to main directly
+git push origin main
+git checkout <feature-branch>        # back to working branch
+git reset --hard main                # keep feature branch in sync (avoids future unrelated-history pain)
+```
+
 ---
 
 ## Development Notes
