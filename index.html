@@ -642,7 +642,16 @@
 
     <!-- TOP 10 -->
     <div class="glass rounded-2xl p-4 mb-4">
-      <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-3">TOP 10 消費</h3>
+      <div class="flex items-center justify-between mb-3 gap-2">
+        <h3 class="text-xs uppercase tracking-widest text-gray-400">TOP 10 消費</h3>
+        <label class="flex items-center gap-2 cursor-pointer select-none" title="包含機票同酒店">
+          <span class="text-[10px]" style="color:var(--n-muted)">含機票/酒店</span>
+          <input id="top10IncludeBigItems" type="checkbox" class="sr-only">
+          <span id="top10ToggleTrack" class="relative inline-block w-9 h-5 rounded-full transition" style="background:var(--n-border)">
+            <span id="top10ToggleThumb" class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition" style="box-shadow:0 1px 2px rgba(0,0,0,0.2)"></span>
+          </span>
+        </label>
+      </div>
       <div id="topList" class="space-y-2"><p class="text-xs text-gray-500 text-center py-4">未有紀錄</p></div>
     </div>
   </section>
@@ -779,28 +788,38 @@
       <span class="flex-1 h-px" style="background:var(--n-border)"></span>
     </div>
 
-    <div class="glass rounded-2xl p-4 mb-3">
-      <div class="flex items-center justify-between mb-3">
-        <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">旅伴管理</label>
-        <button id="addPersonBtn" class="text-xs px-3 py-1.5 rounded-full text-white font-medium" style="background:var(--n-blue)">+ 新增旅伴</button>
-      </div>
-      <div id="personList" class="space-y-2"></div>
-      <div id="addPersonForm" class="hidden pt-3 mt-3" style="border-top:1px solid var(--n-border)">
-        <input id="newPersonName" type="text" placeholder="旅伴名字" class="w-full bg-transparent text-sm focus:outline-none mb-3" style="border-bottom:1px solid var(--n-border);padding-bottom:6px;color:var(--n-text)">
-        <div id="emojiPicker" class="flex flex-wrap gap-2 mb-3"></div>
-        <div class="flex gap-2">
-          <button id="confirmAddPerson" class="text-xs px-4 py-1.5 rounded-full text-white font-medium" style="background:var(--n-blue)">確認</button>
-          <button id="cancelAddPerson" class="text-xs px-4 py-1.5 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
+    <details class="glass rounded-2xl mb-3 overflow-hidden">
+      <summary class="flex items-center justify-between p-4 cursor-pointer select-none list-none">
+        <label class="text-xs uppercase tracking-wider cursor-pointer" style="color:var(--n-muted)">👥 旅伴管理</label>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">展開 ▾</span>
+      </summary>
+      <div class="px-4 pb-4">
+        <div class="flex justify-end mb-3">
+          <button id="addPersonBtn" class="text-xs px-3 py-1.5 rounded-full text-white font-medium" style="background:var(--n-blue)">+ 新增旅伴</button>
+        </div>
+        <div id="personList" class="space-y-2"></div>
+        <div id="addPersonForm" class="hidden pt-3 mt-3" style="border-top:1px solid var(--n-border)">
+          <input id="newPersonName" type="text" placeholder="旅伴名字" class="w-full bg-transparent text-sm focus:outline-none mb-3" style="border-bottom:1px solid var(--n-border);padding-bottom:6px;color:var(--n-text)">
+          <div id="emojiPicker" class="flex flex-wrap gap-2 mb-3"></div>
+          <div class="flex gap-2">
+            <button id="confirmAddPerson" class="text-xs px-4 py-1.5 rounded-full text-white font-medium" style="background:var(--n-blue)">確認</button>
+            <button id="cancelAddPerson" class="text-xs px-4 py-1.5 rounded-full" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)">取消</button>
+          </div>
         </div>
       </div>
-    </div>
+    </details>
 
-    <div class="glass rounded-2xl p-4 mb-3">
-      <label class="text-xs uppercase tracking-wider" style="color:var(--n-muted)">⚖️ 分帳比例</label>
-      <p class="text-[11px] mt-1" style="color:var(--n-muted)">每人承擔嘅百分比（%）。加/減旅伴後自動重算。</p>
-      <p class="text-[10px] mt-1 mb-2 font-semibold" style="color:#4f46e5">ℹ️ 比例只適用於 <span style="color:#2D5A8E">👫 Shared</span> 支出；<span style="color:#6B7280">🔒 私人</span> 支出由付款人全額承擔（除非代付俾其他人）。</p>
-      <div id="shareRatiosWrap"></div>
-    </div>
+    <details class="glass rounded-2xl mb-3 overflow-hidden">
+      <summary class="flex items-center justify-between p-4 cursor-pointer select-none list-none">
+        <label class="text-xs uppercase tracking-wider cursor-pointer" style="color:var(--n-muted)">⚖️ 分帳比例</label>
+        <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">展開 ▾</span>
+      </summary>
+      <div class="px-4 pb-4">
+        <p class="text-[11px]" style="color:var(--n-muted)">每人承擔嘅百分比（%）。加/減旅伴後自動重算。</p>
+        <p class="text-[10px] mt-1 mb-2 font-semibold" style="color:#4f46e5">ℹ️ 比例只適用於 <span style="color:#2D5A8E">👫 Shared</span> 支出；<span style="color:#6B7280">🔒 私人</span> 支出由付款人全額承擔（除非代付俾其他人）。</p>
+        <div id="shareRatiosWrap"></div>
+      </div>
+    </details>
 
     <!-- Expandable full settlement card: who pays back whom, including
          shared-by-ratio math + cross-private direct debts + private per-
@@ -1718,6 +1737,7 @@ let state = {
   tripName: '名古屋 2026',
   tripDateRange: { start: '2026-04-20', end: '2026-04-25' },
   statsIncludeTransportLodging: false,  // 總消費/日均 default 不含交通+住宿
+  top10IncludeBigItems: true,           // TOP 10 list — include flight (transport) + hotel (lodging)
   lastTab: 'scan',
 };
 const APP_BUILD = 47;
@@ -4285,8 +4305,19 @@ function renderStats() {
     }
   });
 
-  // Top 10
-  const top = state.receipts.slice().sort((a,b) => Number(b.total||0) - Number(a.total||0)).slice(0, 10);
+  // Top 10 — optionally exclude flight (transport) + hotel (lodging) so big-ticket items don't dominate
+  const top10Source = state.top10IncludeBigItems
+    ? state.receipts
+    : state.receipts.filter(r => r.category !== 'transport' && r.category !== 'lodging');
+  const top = top10Source.slice().sort((a,b) => Number(b.total||0) - Number(a.total||0)).slice(0, 10);
+  // Sync TOP 10 toggle UI
+  const _top10Cb = $('top10IncludeBigItems');
+  if (_top10Cb) {
+    _top10Cb.checked = !!state.top10IncludeBigItems;
+    const _track = $('top10ToggleTrack'), _thumb = $('top10ToggleThumb');
+    if (_track) _track.style.background = state.top10IncludeBigItems ? 'var(--n-blue)' : 'var(--n-border)';
+    if (_thumb) _thumb.style.transform  = state.top10IncludeBigItems ? 'translateX(16px)' : 'translateX(0)';
+  }
   $('topList').innerHTML = top.length === 0
     ? '<p class="text-xs text-gray-500 text-center py-4">未有紀錄</p>'
     : top.map((r,i) => {
@@ -7311,6 +7342,7 @@ function buildSettingsPayload() {
     persons: state.persons,
     shareRatios: state.shareRatios,
     statsIncludeTransportLodging: !!state.statsIncludeTransportLodging,
+    top10IncludeBigItems: !!state.top10IncludeBigItems,
     autoSync: !!state.autoSync,
     updatedAt: Date.now(),
   };
@@ -7357,6 +7389,11 @@ function applySettingsPayload(payload) {
   if (typeof payload.statsIncludeTransportLodging === 'boolean') {
     if (payload.statsIncludeTransportLodging !== !!state.statsIncludeTransportLodging) {
       state.statsIncludeTransportLodging = payload.statsIncludeTransportLodging; changed = true;
+    }
+  }
+  if (typeof payload.top10IncludeBigItems === 'boolean') {
+    if (payload.top10IncludeBigItems !== !!state.top10IncludeBigItems) {
+      state.top10IncludeBigItems = payload.top10IncludeBigItems; changed = true;
     }
   }
   if (payload.customItinerary !== undefined) {
@@ -8887,6 +8924,20 @@ function init() {
     notionPushSettingsIfReady();
     renderHeader();
     renderDashboard();
+  });
+
+  // TOP 10 list toggle — include/exclude flight (transport) + hotel (lodging)
+  $('top10IncludeBigItems')?.addEventListener('change', function() {
+    state.top10IncludeBigItems = this.checked;
+    saveState();
+    try { notionPushSettingsIfReady && notionPushSettingsIfReady(); } catch(_) {}
+    if (typeof renderStats === 'function') renderStats();
+  });
+  $('top10ToggleTrack')?.addEventListener('click', () => {
+    const cb = $('top10IncludeBigItems');
+    if (!cb) return;
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change'));
   });
 
   function hkdPer100jpy() { return parseFloat($('setRate').value) || 4.91; }
