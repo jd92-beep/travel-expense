@@ -815,8 +815,39 @@
         <span class="text-[10px] px-2 py-0.5 rounded-full" style="background:#EEF3FA;color:#2D5A8E">展開 ▾</span>
       </summary>
       <div class="px-4 pb-4">
-        <p class="text-[11px]" style="color:var(--n-muted)">每人承擔嘅百分比（%）。加/減旅伴後自動重算。</p>
-        <p class="text-[10px] mt-1 mb-2 font-semibold" style="color:#4f46e5">ℹ️ 比例只適用於 <span style="color:#2D5A8E">👫 Shared</span> 支出；<span style="color:#6B7280">🔒 私人</span> 支出由付款人全額承擔（除非代付俾其他人）。</p>
+        <p class="text-[11px] mb-3" style="color:var(--n-muted)">每人承擔嘅百分比（%）。加/減旅伴後自動重算。</p>
+
+        <!-- Plain-language explainer of split semantics -->
+        <div class="rounded-xl p-3 mb-3 text-[11px]" style="background:#F8FAFC;border:1px solid var(--n-border);line-height:1.55">
+          <p class="font-bold mb-2" style="color:#0F172A">🤔 點解有兩種分帳？睇住例子就明：</p>
+
+          <!-- Shared example -->
+          <div class="rounded-lg p-2.5 mb-2" style="background:#EEF3FA;border-left:3px solid #2D5A8E">
+            <p class="font-bold mb-1" style="color:#2D5A8E">👫 Shared（一齊使）</p>
+            <p style="color:#1E3A5F">大家一齊嘆嘅嘢，<strong>按下面比例攤分</strong>。</p>
+            <p class="mt-1" style="color:#475569">例：晚飯 ¥6,000 你 paid → 50/50 分 → 對方欠你 ¥3,000<br>例：酒店 ¥20,000 你 paid → 對方還你佢嗰份</p>
+          </div>
+
+          <!-- Private (self) example -->
+          <div class="rounded-lg p-2.5 mb-2" style="background:#F1F5F9;border-left:3px solid #6B7280">
+            <p class="font-bold mb-1" style="color:#374151">🔒 私人（自己嘅嘢）</p>
+            <p style="color:#1F2937">只係自己用嘅嘢，<strong>付款人自己全包，唔入分帳</strong>。</p>
+            <p class="mt-1" style="color:#475569">例：你買咗對波鞋 ¥15,000 → 100% 你自己嘅，欣欣唔使還</p>
+          </div>
+
+          <!-- Private gift example -->
+          <div class="rounded-lg p-2.5" style="background:#FEF3C7;border-left:3px solid #D97706">
+            <p class="font-bold mb-1" style="color:#92400E">🎁 代付私人（你幫人買私人嘢）</p>
+            <p style="color:#78350F"><strong>受惠人全額還番俾你</strong>，唔受比例影響。</p>
+            <p class="mt-1" style="color:#92400E">例：你幫欣欣買藥 ¥800 →「私人」+ 受惠人選欣欣 → 欣欣還你 ¥800</p>
+          </div>
+
+          <p class="mt-3 pt-2 font-semibold" style="color:#0F172A;border-top:1px solid var(--n-border)">
+            ⚖️ 下面個比例 <strong>淨係影響 👫 Shared</strong> 嘅嘢。私人/代付係付款 ↔ 受惠人之間直接結算。
+          </p>
+          <p class="mt-1.5 text-[10px]" style="color:var(--n-muted)">💸 想睇全部嘅最終轉帳金額？撳下面「分帳結算」就 list 晒。</p>
+        </div>
+
         <div id="shareRatiosWrap"></div>
       </div>
     </details>
@@ -1141,7 +1172,7 @@
       <div id="mSplitWrap" class="mt-1">
         <label class="text-[10px] uppercase tracking-wider" style="color:var(--n-muted)">分帳模式</label>
         <div id="mSplitRow" class="flex gap-2 mt-2"></div>
-        <p class="text-[9px] mt-1.5" style="color:var(--n-muted)">Shared = 按設定比例分帳；私人 = 只有受惠人承擔，唔入 shared 分帳</p>
+        <p class="text-[9px] mt-1.5" style="color:var(--n-muted)"><strong style="color:#2D5A8E">👫 Shared</strong>＝大家一齊使，按比例分帳；<strong style="color:#374151">🔒 私人</strong>＝自己用嘅嘢，<u>唔入分帳</u>（除非選受惠人代付）</p>
       </div>
       <!-- Beneficiary picker (only shown for 🔒 私人 + ≥2 persons):
            lets the payer mark "I paid but it's for someone else's personal item" -->
@@ -2121,8 +2152,8 @@ function renderSplitRow() {
   const row = document.getElementById('mSplitRow');
   if (!row) return;
   const modes = [
-    { id: 'shared',  label: '👫 Shared', color: '#2D5A8E', desc: '按比例分帳' },
-    { id: 'private', label: '🔒 私人',   color: '#6B7280', desc: '自己承擔' },
+    { id: 'shared',  label: '👫 Shared', color: '#2D5A8E', desc: '一齊使 · 按比例攤' },
+    { id: 'private', label: '🔒 私人',   color: '#6B7280', desc: '自己嘢 · 唔分帳' },
   ];
   row.innerHTML = modes.map(m => {
     const on = selectedSplitMode === m.id;
