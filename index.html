@@ -1773,7 +1773,7 @@ let state = {
   autoSync: true,
   imgbbKey: '',
   kimiKey: DEFAULT_KIMI_KEY,      // Kimi for Coding API key (sk-kimi-...)
-  kimiProxy: '',                  // URL of Cloudflare Worker proxy for Kimi (see kimi-proxy.js)
+  kimiProxy: 'https://rare-duck-29.jd92-beep.deno.net', // Deno Deploy proxy (non-CF IPs → bypasses Kimi's CF WAF)
   notionDeletedIds: [],   // Notion page IDs deleted locally — skip on pull
   persons: [
     { id: 'p_boss', name: 'Tony', emoji: '👦', color: '#CC2929' },
@@ -6767,8 +6767,7 @@ async function callKimiText(prompt) {
       model: KIMI_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
-      max_tokens: 600,
-      chat_template_kwargs: { thinking: false }, // instant mode — direct output, no reasoning tokens
+      max_tokens: 2000,
     }),
   }, 30000);
   if (!r.ok) {
@@ -9033,6 +9032,8 @@ function init() {
   $('setBudgetHKDInput').value = Math.round(state.budget / state.rate);
   renderModelCards();
   $('setAutoSync').checked = !!state.autoSync;
+  // Pre-populate Kimi proxy URL so user can see / edit the current value
+  if ($('setKimiProxy')) $('setKimiProxy').value = state.kimiProxy || '';
 
   // Stats transport/lodging toggle — init from state + wire up
   function _applyStatsToggleUI(val) {
@@ -9164,8 +9165,8 @@ function init() {
     if (ok) state.openrouterKey = ok;
     const kk = ($('setKimiKey')?.value || '').trim();
     if (kk) { state.kimiKey = kk; VAULT_KIMI_KEY = kk; }
-    const kp = ($('setKimiProxy')?.value || '').trim();
-    if (kp) state.kimiProxy = kp;
+    const kp = ($('setKimiProxy')?.value ?? '').trim();
+    state.kimiProxy = kp; // allow clearing to empty string
     // Settlement share ratios (populated by renderSettlementRatios below)
     const ratios = {};
     (state.persons || []).forEach(p => {
@@ -9208,7 +9209,8 @@ function init() {
       tag(hasZai,     'GLM'),
       tag(hasMinimax, 'MiniMax'),
       tag(hasOR,      'OpenRouter'),
-      tag(hasKimi && hasKimiPx, 'Kimi K2.6'),
+      // Kimi: key required; proxy shows warning but doesn't block (has default)
+      tag(hasKimi, hasKimiPx ? 'Kimi K2.6' : 'Kimi K2.6 (no proxy)'),
     ].join(' · ');
   }
   _renderKeyStatus();
