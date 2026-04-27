@@ -944,6 +944,16 @@
           <label class="text-[10px] font-semibold" style="color:var(--n-text)">OpenRouter Key <span style="color:#6B7280">(🐘 Elephant)</span></label>
           <input id="setOpenrouterKey" type="password" autocomplete="off" spellcheck="false" class="w-full mt-1 px-3 py-2 rounded-xl text-xs font-mono" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)" placeholder="sk-or-v1-... (openrouter.ai)">
         </div>
+        <div>
+          <label class="text-[10px] font-semibold" style="color:var(--n-text)">Kimi K2.6 Key <span style="color:#6B7280">(🌙 sk-kimi-...)</span></label>
+          <input id="setKimiKey" type="password" autocomplete="off" spellcheck="false" class="w-full mt-1 px-3 py-2 rounded-xl text-xs font-mono" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)" placeholder="sk-kimi-... (platform.kimi.ai)">
+          <p class="text-[9px] mt-1" style="color:var(--n-muted)">視覺 + 文字 + Email 共用。需配合下面 Kimi Proxy URL。</p>
+        </div>
+        <div>
+          <label class="text-[10px] font-semibold" style="color:var(--n-text)">Kimi Proxy URL <span style="color:#6B7280">(kimi-proxy Worker)</span></label>
+          <input id="setKimiProxy" type="url" autocomplete="off" spellcheck="false" class="w-full mt-1 px-3 py-2 rounded-xl text-xs font-mono" style="background:var(--n-bg);border:1px solid var(--n-border);color:var(--n-text)" placeholder="https://kimi-proxy.你.workers.dev">
+          <p class="text-[9px] mt-1" style="color:var(--n-muted)">部署 kimi-proxy.js 到 Cloudflare Workers（免費）後填入。詳見 <code>kimi-proxy.js</code>。</p>
+        </div>
         <div id="keyStatusLine" class="text-[10px] mt-2 font-mono" style="color:#059669"></div>
       </div>
     </details>
@@ -1587,6 +1597,7 @@ const PAYMENTS = [
 const PERSON_EMOJIS = ['🧔','👨','👩','🧑','👦','👧','👴','👵','🤴','👸','🧙','🕵️','😎','🌟','🐼','🦊','🐯','🐻'];
 const SCAN_MODELS = [
   // Vision-capable models (can read receipt images)
+  { id: 'kimi-k2.6',                      name: 'Kimi K2.6',             sub: 'Kimi for Coding · 視覺 · 需 Proxy', tag: '🌙', color: '#6366F1' },
   { id: 'minimax',                        name: 'MiniMax VLM',           sub: 'MiniMax · 視覺 · 預設 ✅',   tag: '🔷', color: '#0EA5E9' },
   { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 視覺旗艦',           tag: '🟣', color: '#7C3AED' },
   { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', sub: '輕量 · 5 key rotation ✅',  tag: '🔴', color: '#CC2929' },
@@ -1596,6 +1607,7 @@ const SCAN_MODELS = [
   { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 文字輔助',           tag: '🟣', color: '#7C3AED' },
 ];
 const VOICE_MODELS = [
+  { id: 'kimi-k2.6',                     name: 'Kimi K2.6',             sub: 'Kimi for Coding · 即時 · 需 Proxy', tag: '🌙', color: '#6366F1' },
   { id: 'minimax',                       name: 'MiniMax VLM',           sub: 'MiniMax · 預設 ✅',          tag: '🔷', color: '#0284C7' },
   { id: 'glm-4-flash',                   name: 'GLM-4-Flash',           sub: '智譜 · 廣東話首選 · 免費',  tag: '🟣', color: '#7C3AED' },
   { id: 'glm-4.6v',                      name: 'GLM-4.6V',              sub: '智譜 · 旗艦',               tag: '🔮', color: '#6D28D9' },
@@ -1614,6 +1626,7 @@ const VOICE_MODELS = [
 // Email extraction models — text-only (same universe as voice).
 // User chooses which model runs FIRST for email parsing; fallback chain handles rate limits.
 const EMAIL_MODELS = [
+  { id: 'kimi-k2.6',                     name: 'Kimi K2.6',             sub: 'Kimi for Coding · 即時 · 需 Proxy', tag: '🌙', color: '#6366F1' },
   { id: 'glm-5.1',                       name: 'GLM-5.1',               sub: '智譜 · 升級版 · 預設 ✅',    tag: '🟪', color: '#4C1D95' },
   { id: 'glm-5-turbo',                   name: 'GLM-5-turbo',           sub: '智譜 · 快 · 免費',           tag: '🟪', color: '#6B21A8' },
   { id: 'glm-5',                         name: 'GLM-5',                 sub: '智譜 · 最強文字',            tag: '🟪', color: '#581C87' },
@@ -1697,6 +1710,7 @@ const DEFAULT_MINIMAX_KEY    = (typeof window !== 'undefined' && window.DEV_SECR
   || 'sk-cp-TGwktAohjI1gTQvoZpXTidpPxYAeeoeCYvrlQGVio7spgX1--X8cm5XYpH1PmB_reFNdk1iSkdm6uHnIsIlZQU2t1M4MCS-BJk5Uf6OiW-fb4yImvsuvkw8';
 const DEFAULT_ZAI_KEY        = (typeof window !== 'undefined' && window.DEV_SECRETS?.zaiKey)
   || '9aa15d2d26de4fe6801f983e55f9d427.x29QxJDvPga6VP55';
+const DEFAULT_KIMI_KEY       = (typeof window !== 'undefined' && window.DEV_SECRETS?.kimiKey) || '';
 const DEFAULT_BACKUP_API_KEY = '';
 const DEFAULT_GEMINI_KEY3    = '';
 const DEFAULT_GEMINI_KEY4    = '';
@@ -1750,14 +1764,16 @@ let state = {
   rate: 20.36,
   apiKey: DEFAULT_API_KEY,
   model: 'gemini-3.1-flash-lite-preview',
-  scanModel: 'minimax',           // default receipt vision = MiniMax VLM
-  voiceModel: 'minimax',          // default voice parsing = MiniMax VLM (handles text too)
-  emailModel: 'glm-5.1',          // default email parsing = GLM-5.1
+  scanModel: 'kimi-k2.6',         // default receipt vision = Kimi K2.6 (needs kimiProxy set)
+  voiceModel: 'kimi-k2.6',        // default voice parsing = Kimi K2.6 (needs kimiProxy set)
+  emailModel: 'kimi-k2.6',        // default email parsing = Kimi K2.6 (needs kimiProxy set)
   notionToken: DEFAULT_NOTION_TOKEN,
   notionDb: DEFAULT_NOTION_DB,
   proxy: 'https://notion-proxy.ftjdfr.workers.dev/?',
   autoSync: true,
   imgbbKey: '',
+  kimiKey: DEFAULT_KIMI_KEY,      // Kimi for Coding API key (sk-kimi-...)
+  kimiProxy: '',                  // URL of Cloudflare Worker proxy for Kimi (see kimi-proxy.js)
   notionDeletedIds: [],   // Notion page IDs deleted locally — skip on pull
   persons: [
     { id: 'p_boss', name: 'Tony', emoji: '👦', color: '#CC2929' },
@@ -1806,6 +1822,7 @@ function loadState() {
       if (state.zaiKey && !VAULT_ZAI_KEY) VAULT_ZAI_KEY = state.zaiKey;
       if (state.minimaxKey && !VAULT_MINIMAX_KEY) VAULT_MINIMAX_KEY = state.minimaxKey;
       if (state.apiKey && !VAULT_GEMINI_KEY) VAULT_GEMINI_KEY = state.apiKey;
+      if (state.kimiKey && !VAULT_KIMI_KEY) VAULT_KIMI_KEY = state.kimiKey;
       // Activate custom itinerary if user imported one and it validates
       if (state.customItinerary) {
         const err = validateItinerary(state.customItinerary);
@@ -5093,6 +5110,11 @@ async function parseVoiceExpense(transcript) {
 let VAULT_ZAI_KEY = DEFAULT_ZAI_KEY || '';
 let VAULT_MINIMAX_KEY = DEFAULT_MINIMAX_KEY || '';
 let VAULT_GEMINI_KEY = DEFAULT_API_KEY || '';   // mirrors ZAI/MiniMax pattern for consistency
+let VAULT_KIMI_KEY = DEFAULT_KIMI_KEY || '';    // Kimi for Coding key (sk-kimi-...)
+// Kimi for Coding API — requires User-Agent spoofing via proxy (browser cannot set UA directly)
+const KIMI_BASE_URL = 'https://api.kimi.com/coding/v1';
+const KIMI_MODEL    = 'kimi-for-coding';
+const KIMI_UA       = 'claude-code/0.1.0';
 
 const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。仔細睇收據圖片，抽結構化資料。**只回覆嚴格 JSON，唔好加任何文字、解釋、prefix、或 markdown fence（例如 \`\`\`json）**。唔好重複、唔好補充、唔好諗 step-by-step — 直接出 JSON。
 
@@ -6090,6 +6112,7 @@ const GEMINI_TEXT_MODELS = new Set([
 // Returns raw string; caller must parseReceiptJson(). Throws on unknown modelId.
 async function callAnyTextModel(modelId, prompt) {
   const apiKey = state.apiKey || DEFAULT_API_KEY;
+  if (modelId === 'kimi-k2.6') return callKimiText(prompt);
   if (modelId === OPENROUTER_MODEL || (typeof modelId === 'string' && modelId.startsWith('openrouter/'))) {
     return callOpenRouterText(prompt);
   }
@@ -6695,6 +6718,67 @@ async function callMiniMax(base64, mime) {
   return parseReceiptJson(text);
 }
 
+// ── Kimi K2.6 (kimi-for-coding) — requires Cloudflare Worker proxy to inject UA ──
+// Vision (receipt scanning) — thinking ON for accurate OCR, max_tokens 2000
+async function callKimiVision(base64, mime) {
+  const key = state.kimiKey || VAULT_KIMI_KEY;
+  const proxy = state.kimiProxy;
+  if (!key)   throw new Error('Kimi key 未設定 — 去 Settings → 🔑 API Keys 填入');
+  if (!proxy) throw new Error('Kimi Proxy URL 未設定 — 去 Settings → 🔑 API Keys 填入');
+  const url = proxy.replace(/\/?$/, '') + '/chat/completions';
+  const r = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: KIMI_MODEL,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text',      text: GEMINI_PROMPT },
+          { type: 'image_url', image_url: { url: `data:${mime || 'image/jpeg'};base64,${base64}` } },
+        ],
+      }],
+      temperature: 0.1,
+      max_tokens: 2000,
+      // thinking ON: Kimi needs reasoning for accurate OCR; content field will be populated
+    }),
+  }, 60000);
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    throw new Error(`Kimi Vision ${r.status}: ${e?.error?.message || r.statusText}`);
+  }
+  const data = await r.json();
+  const text = data?.choices?.[0]?.message?.content || '';
+  if (!text) throw new Error('Kimi Vision: empty response (check kimiProxy + key)');
+  return parseReceiptJson(text);
+}
+
+// Text (voice / email parsing) — instant mode (thinking OFF), fast
+async function callKimiText(prompt) {
+  const key = state.kimiKey || VAULT_KIMI_KEY;
+  const proxy = state.kimiProxy;
+  if (!key)   throw new Error('Kimi key 未設定 — 去 Settings → 🔑 API Keys 填入');
+  if (!proxy) throw new Error('Kimi Proxy URL 未設定 — 去 Settings → 🔑 API Keys 填入');
+  const url = proxy.replace(/\/?$/, '') + '/chat/completions';
+  const r = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: KIMI_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 600,
+      chat_template_kwargs: { thinking: false }, // instant mode — direct output, no reasoning tokens
+    }),
+  }, 30000);
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    throw new Error(`Kimi Text ${r.status}: ${e?.error?.message || r.statusText}`);
+  }
+  const data = await r.json();
+  return data?.choices?.[0]?.message?.content || '';
+}
+
 // ── Model 3 & 4: Gemini (fallback 2 & 3) — tries all 5 keys before giving up ────
 async function callGeminiWithModel(base64, mime, model, apiKey) {
   const keys = getGeminiKeys(apiKey);
@@ -6737,7 +6821,8 @@ async function callGemini(base64, mime) {
   const haveGemini  = !!geminiKey;
   const haveGLM     = !!VAULT_ZAI_KEY;
   const haveMiniMax = !!(state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY);
-  if (!haveGemini && !haveGLM && !haveMiniMax) {
+  const haveKimi    = !!(state.kimiKey || VAULT_KIMI_KEY) && !!state.kimiProxy;
+  if (!haveGemini && !haveGLM && !haveMiniMax && !haveKimi) {
     // Record for later display
     state.lastScanAttempts = [{ name: '(系統)', error: '冇任何 API key — 去設定 → 🔑 API Keys 填至少一條' }];
     state.lastScanFellBack = null;
@@ -6748,9 +6833,10 @@ async function callGemini(base64, mime) {
   state.lastScanFellBack = null;
 
   // Determine user's primary model type so we can de-dup the fallback chain
-  const primaryIsGLM     = primaryModel.startsWith('glm-');
-  const primaryIsMiniMax = primaryModel === 'minimax';
-  const primaryIsGemini  = !primaryIsGLM && !primaryIsMiniMax;
+  const primaryIsKimi    = primaryModel === 'kimi-k2.6';
+  const primaryIsGLM     = !primaryIsKimi && primaryModel.startsWith('glm-');
+  const primaryIsMiniMax = !primaryIsKimi && primaryModel === 'minimax';
+  const primaryIsGemini  = !primaryIsKimi && !primaryIsGLM && !primaryIsMiniMax;
 
   // All Gemini vision-capable models in fallback order (text-only Gemma models excluded)
   const GEMINI_VISION_MODELS = [
@@ -6768,9 +6854,16 @@ async function callGemini(base64, mime) {
       ]
     : GEMINI_VISION_MODELS.map(m => ({ name: m, fn: () => callGeminiWithModel(base64, mime, m, geminiKey) }));
 
-  // Full chain: put user's chosen model first if it's GLM or MiniMax, else use the standard order
+  // Full chain: put user's chosen model first, then fallbacks
   let chain;
-  if (primaryIsGLM) {
+  if (primaryIsKimi) {
+    chain = [
+      { name: 'Kimi K2.6',   fn: () => callKimiVision(base64, mime) },
+      { name: 'MiniMax VLM', fn: () => callMiniMax(base64, mime) },
+      { name: 'GLM-4.6V',    fn: () => callGLM(base64, mime) },
+      ...geminiChain,
+    ];
+  } else if (primaryIsGLM) {
     chain = [
       { name: primaryModel, fn: () => callGLM(base64, mime) },
       { name: 'MiniMax VLM', fn: () => callMiniMax(base64, mime) },
@@ -6796,6 +6889,7 @@ async function callGemini(base64, mime) {
   let lastErr;
   const userPrimaryLabel = (function () {
     // Resolve user's Settings-chosen model to a human label for the fallback banner.
+    if (primaryIsKimi)    return 'Kimi K2.6';
     if (primaryIsMiniMax) return 'MiniMax VLM';
     if (primaryIsGLM)     return 'GLM-4.6V';
     // Gemini — use the RESCAN_MODELS label if known, otherwise the raw id
@@ -9068,6 +9162,10 @@ function init() {
     if (mk) { state.minimaxKey = mk; VAULT_MINIMAX_KEY = mk; }
     const ok = ($('setOpenrouterKey')?.value || '').trim();
     if (ok) state.openrouterKey = ok;
+    const kk = ($('setKimiKey')?.value || '').trim();
+    if (kk) { state.kimiKey = kk; VAULT_KIMI_KEY = kk; }
+    const kp = ($('setKimiProxy')?.value || '').trim();
+    if (kp) state.kimiProxy = kp;
     // Settlement share ratios (populated by renderSettlementRatios below)
     const ratios = {};
     (state.persons || []).forEach(p => {
@@ -9084,7 +9182,7 @@ function init() {
     refresh();
     // Clear the key inputs (so they don't keep plaintext visible), then
     // update the status line below with a "✅ have key / ❌ missing" readout.
-    ['setGeminiKey','setZaiKey','setMinimaxKey','setOpenrouterKey'].forEach(id => {
+    ['setGeminiKey','setZaiKey','setMinimaxKey','setOpenrouterKey','setKimiKey'].forEach(id => {
       const el = $(id);
       if (el) el.value = '';
     });
@@ -9102,12 +9200,15 @@ function init() {
     const hasZai      = !!(state.zaiKey || VAULT_ZAI_KEY);
     const hasMinimax  = !!(state.minimaxKey || VAULT_MINIMAX_KEY || DEFAULT_MINIMAX_KEY);
     const hasOR       = !!(state.openrouterKey || DEFAULT_OPENROUTER_KEY);
+    const hasKimi     = !!(state.kimiKey || VAULT_KIMI_KEY);
+    const hasKimiPx   = !!state.kimiProxy;
     const tag = (ok, label) => `<span style="color:${ok ? '#059669' : '#C0281E'}">${ok ? '✅' : '❌'} ${label}</span>`;
     line.innerHTML = [
       tag(hasGemini,  'Gemini'),
       tag(hasZai,     'GLM'),
       tag(hasMinimax, 'MiniMax'),
       tag(hasOR,      'OpenRouter'),
+      tag(hasKimi && hasKimiPx, 'Kimi K2.6'),
     ].join(' · ');
   }
   _renderKeyStatus();
