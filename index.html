@@ -1705,7 +1705,7 @@ const DEFAULT_GEMINI_KEY5    = '';
 const GEMINI_DEFAULT_KEYS = [DEFAULT_API_KEY, DEFAULT_BACKUP_API_KEY, DEFAULT_GEMINI_KEY3, DEFAULT_GEMINI_KEY4, DEFAULT_GEMINI_KEY5].filter(Boolean);
 // Returns the full ordered key list: user key (explicit or from vault) first, then defaults (deduped)
 function getGeminiKeys(userKey) {
-  const firstKey = userKey !== undefined ? userKey : state?.apiKey;
+  const firstKey = userKey !== undefined ? userKey : (VAULT_GEMINI_KEY || state?.apiKey);
   return [firstKey, ...GEMINI_DEFAULT_KEYS].filter((k, i, a) => k && a.indexOf(k) === i);
 }
 const DEFAULT_NOTION_TOKEN = '';
@@ -1805,6 +1805,7 @@ function loadState() {
       // after a reload — even when the encrypted vault didn't carry that key.
       if (state.zaiKey && !VAULT_ZAI_KEY) VAULT_ZAI_KEY = state.zaiKey;
       if (state.minimaxKey && !VAULT_MINIMAX_KEY) VAULT_MINIMAX_KEY = state.minimaxKey;
+      if (state.apiKey && !VAULT_GEMINI_KEY) VAULT_GEMINI_KEY = state.apiKey;
       // Activate custom itinerary if user imported one and it validates
       if (state.customItinerary) {
         const err = validateItinerary(state.customItinerary);
@@ -3741,12 +3742,16 @@ function _tlKey(dateYMD, hhmm) {
 function renderTimeline() {
   const container = $('timelineList');
   if (!container) return;
-  const today = todayHKT();
-  const nowHKT = new Date().toLocaleString('en-GB', {
-    timeZone: 'Asia/Hong_Kong', year:'numeric', month:'2-digit', day:'2-digit',
+  // Use trip-aware date: JST during Japan trip window, HKT outside it —
+  // same logic as todayForReceipts() so Timeline "passed" marks agree with
+  // Dashboard's today and History's date grouping.
+  const today = todayForReceipts();
+  const nowTZ = (today === todayJST()) ? 'Asia/Tokyo' : 'Asia/Hong_Kong';
+  const nowLocale = new Date().toLocaleString('en-GB', {
+    timeZone: nowTZ, year:'numeric', month:'2-digit', day:'2-digit',
     hour:'2-digit', minute:'2-digit', hour12:false
   });
-  const m = nowHKT.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s+(\d{2}):(\d{2})/);
+  const m = nowLocale.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s+(\d{2}):(\d{2})/);
   const nowKey = m ? `${m[3]}-${m[2]}-${m[1]} ${m[4]}:${m[5]}` : `${today} 00:00`;
 
   const iti = window.CURRENT_ITINERARY || ITINERARY;
@@ -5087,6 +5092,7 @@ async function parseVoiceExpense(transcript) {
 // load; vault-unlock + Settings → 🔑 API Keys override these at runtime.
 let VAULT_ZAI_KEY = DEFAULT_ZAI_KEY || '';
 let VAULT_MINIMAX_KEY = DEFAULT_MINIMAX_KEY || '';
+let VAULT_GEMINI_KEY = DEFAULT_API_KEY || '';   // mirrors ZAI/MiniMax pattern for consistency
 
 const GEMINI_PROMPT = `你係一個專業日本收據辨識 AI。仔細睇收據圖片，抽結構化資料。**只回覆嚴格 JSON，唔好加任何文字、解釋、prefix、或 markdown fence（例如 \`\`\`json）**。唔好重複、唔好補充、唔好諗 step-by-step — 直接出 JSON。
 
@@ -8547,7 +8553,7 @@ const WEATHER_REGION_COORDS = [
   { keywords: ['東京', 'tokyo'],
     name: '東京', en: 'Tokyo', lat: 35.6762, lon: 139.6503 },
 ];
-const WEATHER_DEFAULT_COORD = { name: '日本', en: 'Japan', lat: 35.6762, lon: 139.6503 };
+const WEATHER_DEFAULT_COORD = { name: '名古屋', en: 'Nagoya', lat: 35.1815, lon: 136.9066 }; // trip base city; was Tokyo placeholder
 const WEATHER_SLOT_HOURS = [9, 12, 15, 18, 21];
 const WEATHER_CACHE_TTL_MS = 3600 * 1000; // 1 hour
 
@@ -8914,6 +8920,7 @@ function refresh() {
   if (!$('tab-history').classList.contains('hidden')) renderHistory();
   if (!$('tab-stats').classList.contains('hidden')) renderStats();
   if (!$('tab-timeline').classList.contains('hidden')) renderTimeline();
+  if (!$('tab-weather').classList.contains('hidden')) renderWeather();
 }
 
 function init() {

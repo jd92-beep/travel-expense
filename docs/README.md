@@ -29,7 +29,7 @@ Single global `state` object (line 1747) persisted to `localStorage` under key `
 - `state.scanModel` / `state.voiceModel` / `state.emailModel` — selected LLM per use-case
 - `state.apiKey` (Gemini), `state.zaiKey` (GLM/智譜), `state.minimaxKey`, `state.openrouterKey`
 - `state.notionToken`, `state.notionDb`, `state.proxy` (Cloudflare Worker URL), `state.autoSync`
-- `state.top10IncludeBigItems`, `state.statsTransportLodgingFlipped` — UI toggles
+- `state.top10IncludeBigItems`, `state.statsIncludeTransportLodging` — UI toggles (Stats tab)
 - `state.customItinerary` — overrides the built-in `ITINERARY` constant when non-null
 - `state.lastTab` — restored on next load
 
@@ -42,7 +42,7 @@ Single global `state` object (line 1747) persisted to `localStorage` under key `
 - `VOICE_MODELS` — line 1598 (text models for Cantonese voice parsing)
 - `EMAIL_MODELS` — line 1616 (text models for email-import parsing)
 - `ITINERARY` — line 1630 (built-in 6-day Nagoya itinerary)
-- `OPENROUTER_URL`, `OPENROUTER_MODEL` — line 1716
+- `OPENROUTER_URL`, `OPENROUTER_MODEL` — line 1716 (`openrouter/elephant-alpha`; active fallback in voice + email parse chains; requires `state.openrouterKey`)
 - `APPS_SCRIPT_URL` — line 1712 (Gmail-side email parser)
 
 ### Global helpers (used by every tab)
