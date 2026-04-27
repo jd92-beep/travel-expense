@@ -143,6 +143,21 @@ state = {
 
 收據 prompt 處理多國日期格式（Reiwa/Heisei/Showa、民國、Buddhist Era、年月日、DMY/MDY/YMD），`parseDateFallback` (line ~6087) 做 safety net。
 
+### Kimi for Coding API
+
+- Base URL: `https://api.kimi.com/coding/v1` — **CORS blocked**，需要 server-side proxy
+- Model constant: `KIMI_MODEL = 'kimi-for-coding'`
+- Required header: `User-Agent: claude-code/0.1.0` (由 proxy 注入)
+- **Proxy deployed**: `https://rare-duck-29.jd92-beep.deno.net` (Deno Deploy, free tier, Apr 27 2026)
+  - 點解唔用 CF Worker：Kimi 自身受 CF 保護，CF WAF 阻塞 CF Worker IP 段 (`2a06:98c0::/32`)。Deno Deploy 跑喺 GCP IP → 唔被阻
+  - CF Worker backup: `kimi-proxy.js` → `kimi-proxy.ftjdfr.workers.dev`（blocked，留作 reference）
+  - Deno source: `kimi-proxy-deno.ts`
+- **Thinking mode 陷阱**：`thinking:false` 下 reasoning_content **仍然消耗** `max_tokens`（唔係淨 content）→ 低 token limit 會返空內容。用 default（thinking ON）+ `max_tokens: 2000`
+- Vision: `callKimiVision()` — base64 圖片 → JSON
+- Text: `callKimiText()` — 語音 / email 解析
+- Key: `state.kimiKey` / `VAULT_KIMI_KEY` — Settings → 🔑 API Keys
+- Proxy URL: `state.kimiProxy` — 預設指向上面 Deno Deploy URL
+
 ### Notion sync
 
 - Endpoint: `https://api.notion.com/v1/...` 經 `state.proxy`（預設自家 Cloudflare Worker，唔再用 corsproxy.io）
