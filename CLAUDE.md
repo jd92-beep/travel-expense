@@ -135,11 +135,11 @@ state = {
 | 行程 / 票券辨識 | `state.model` | `gemini-3.1-flash-lite-preview` | Settings → AI 模型 → Gemini |
 
 模型清單寫死喺：
-- `SCAN_MODELS` (line 1588) — GLM-4.6V、MiniMax、Gemini 3.1/3 系列、GLM-4-Flash
+- `SCAN_MODELS` (line 1588) — Kimi K2.6、MiniMax、GLM-4.6V、Gemini 3.1/3/2.5 系列
 - `VOICE_MODELS` (line 1598)
 - `EMAIL_MODELS` (line 1616)
 
-**Gemini endpoint：** `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}` — 直接 browser call，無 CORS 問題。其他 provider（GLM、MiniMax）經自家 Cloudflare Worker proxy 中轉。
+**Gemini endpoint：** `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}` — 直接 browser call，無 CORS 問題。GLM/MiniMax/Kimi 各自用其 provider endpoint/proxy。
 
 收據 prompt 處理多國日期格式（Reiwa/Heisei/Showa、民國、Buddhist Era、年月日、DMY/MDY/YMD），`parseDateFallback` (line ~6087) 做 safety net。
 
@@ -155,8 +155,9 @@ state = {
 - **Thinking mode 陷阱**：`thinking:false` 下 reasoning_content **仍然消耗** `max_tokens`（唔係淨 content）→ 低 token limit 會返空內容。用 default（thinking ON）+ `max_tokens: 2000`
 - Vision: `callKimiVision()` — base64 圖片 → JSON
 - Text: `callKimiText()` — 語音 / email 解析
-- Key: `state.kimiKey` / `VAULT_KIMI_KEY` — Settings → 🔑 API Keys
+- Key: `state.kimiKey` / `VAULT_KIMI_KEY` — Settings → 🔑 API Keys 或 gitignored `secrets.local.js`
 - Proxy URL: `state.kimiProxy` — 預設指向上面 Deno Deploy URL
+- **Security:** repo 同 GitHub Pages HTML 都係 public；Kimi key/token 不可 commit、不可寫入 docs、不可由 workflow inject 入 `_site/index.html`。`deploy.yml` 只處理 MiniMax/ZAI placeholders；Kimi 只可本機/裝置輸入。
 
 ### Notion sync
 

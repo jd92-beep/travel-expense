@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="名古屋記帳">
@@ -21,11 +22,12 @@
 // Includes share_target so the installed PWA shows up in Android's share sheet
 // when the user shares email text from Gmail/Mail/any app.
 (function(){
+  var appUrl = new URL('./', location.href).href;
   var m = {
     name:'Boss 名古屋記帳',
     short_name:'名古屋記帳',
-    start_url:'./',
-    scope:'./',
+    start_url: appUrl,
+    scope: appUrl,
     display:'standalone',
     background_color:'#F4F4EF',
     theme_color:'#2D5A8E',
@@ -33,7 +35,7 @@
     // Web Share Target Level 2 — Android Chrome/Edge/Samsung register this
     // after the PWA is installed via "Add to Home Screen".
     share_target: {
-      action: './',
+      action: appUrl,
       method: 'GET',
       enctype: 'application/x-www-form-urlencoded',
       params: {
@@ -1690,8 +1692,14 @@ const ITINERARY = [
     { time:'20:00', name:'✈️ UO691 抵達香港 HKG', type:'transport', note:'HKG T1 · TD87QN', timezone:'HKT' },
   ]},
 ];
-// Keys are stored in the encrypted vault only — never hardcoded in source.
-// Unlock the vault at startup to activate all AI and sync features.
+// Keys are stored in the encrypted vault / local dev override only — never
+// hardcoded in source. Build-time placeholders must not count as real keys,
+// otherwise a public checkout reports "key present" while sending
+// Authorization: Bearer __PLACEHOLDER__.
+function cleanSecretValue(v) {
+  const s = (v == null ? '' : String(v)).trim();
+  return /^__[\w-]+__$/.test(s) ? '' : s;
+}
 const DEFAULT_API_KEY        = '';
 // MiniMax VLM key (hoisted here to avoid TDZ — originally declared near callMiniMax
 // at line ~5612, but references at lines 1992/2008/2982/3819 are inside async fns
@@ -1703,11 +1711,11 @@ const DEFAULT_API_KEY        = '';
 //   3. Settings → 🔑 API Keys (state.minimaxKey / state.zaiKey in localStorage)
 //   4. VAULT_* vars from vault unlock
 //   5. Empty string — user must enter key in Settings
-const DEFAULT_MINIMAX_KEY    = (typeof window !== 'undefined' && window.DEV_SECRETS?.minimaxKey)
-  || '__MINIMAX_KEY__';
-const DEFAULT_ZAI_KEY        = (typeof window !== 'undefined' && window.DEV_SECRETS?.zaiKey)
-  || '__ZAI_KEY__';
-const DEFAULT_KIMI_KEY       = (typeof window !== 'undefined' && window.DEV_SECRETS?.kimiKey) || '';
+const DEFAULT_MINIMAX_KEY    = cleanSecretValue((typeof window !== 'undefined' && window.DEV_SECRETS?.minimaxKey) || '__MINIMAX_KEY__');
+const DEFAULT_ZAI_KEY        = cleanSecretValue((typeof window !== 'undefined' && window.DEV_SECRETS?.zaiKey) || '__ZAI_KEY__');
+// Kimi is intentionally not injected by GitHub Actions because the generated
+// GitHub Pages HTML is public. Use secrets.local.js or Settings on-device.
+const DEFAULT_KIMI_KEY       = cleanSecretValue(typeof window !== 'undefined' && window.DEV_SECRETS?.kimiKey);
 const DEFAULT_BACKUP_API_KEY = '';
 const DEFAULT_GEMINI_KEY3    = '';
 const DEFAULT_GEMINI_KEY4    = '';
@@ -1813,6 +1821,9 @@ function loadState() {
       const parsed = JSON.parse(s);
       if (typeof parsed !== 'object' || parsed === null) throw new Error('corrupt');
       state = { ...state, ...parsed };
+      ['apiKey', 'zaiKey', 'minimaxKey', 'kimiKey', 'openrouterKey'].forEach((k) => {
+        state[k] = cleanSecretValue(state[k]);
+      });
       // Hydrate runtime VAULT_* variables from persisted user-supplied keys
       // so every existing "if (!VAULT_ZAI_KEY) throw ..." path just works
       // after a reload — even when the encrypted vault didn't carry that key.
@@ -2373,6 +2384,25 @@ const key = state.minimaxKey || DEFAULT_MINIMAX_KEY || VAULT_MINIMAX_KEY;
           model: modelId, max_tokens: 5,
           messages: [{ role: 'user', content: 'hi' }],
         })
+      }, 15000);
+      return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
+    }
+    // Kimi for Coding — browser must go through the configured proxy because
+    // api.kimi.com requires a User-Agent header that browsers cannot set.
+    if (modelId === 'kimi-k2.6') {
+      const key = state.kimiKey || VAULT_KIMI_KEY;
+      const proxy = state.kimiProxy;
+      if (!key) return { ok: false, msg: 'Kimi key 未設定' };
+      if (!proxy) return { ok: false, msg: 'Kimi proxy 未設定' };
+      const r = await fetchWithTimeout(proxy.replace(/\/?$/, '') + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'kimi-for-coding',
+          max_tokens: 80,
+          temperature: 0,
+          messages: [{ role: 'user', content: 'reply OK' }],
+        }),
       }, 15000);
       return { ok: r.ok, msg: r.ok ? '✅ 連線正常' : `❌ HTTP ${r.status}` };
     }
@@ -8815,7 +8845,7 @@ async function renderWeather() {
   </p>`;
 }
 
-const TAB_ORDER = ['dashboard','scan','history','weather','stats','timeline','settings'];
+const TAB_ORDER = ['dashboard','scan','timeline','history','weather','stats','settings'];
 let _currentTab = 'scan';
 // Timestamp of the last popup close — used by switchTab to reject ghost
 // clicks that fire ~200-400ms after closeHotelPopup() hides the popup.

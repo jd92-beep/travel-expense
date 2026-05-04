@@ -118,3 +118,22 @@ To support a non-Japan trip, extend `WEATHER_REGION_COORDS` with new keyword ent
 - **Live window ±1.5 h** — `isLiveSlot` (line 8636) uses an `en-US` `toLocaleString` to extract Tokyo wall-clock, then matches by date + hour. The ±1.5 h half-window means at most one slot is "live" at any time across the 09/12/15/18/21 grid.
 - **WMO weather codes** — `weatherCodeIcon` (line 8569) maps the standard WMO codes to emoji + 廣東話 label. Add new ranges by extending the if-chain.
 - **No `Promise.all` over coords** — by design (cache reuse). Adding parallel for non-overlapping days would be a small UX win.
+
+## 12. Detailed Function Responsibilities
+
+| Function / helper | What it owns | Inputs | Outputs / side effects |
+|---|---|---|---|
+| `renderWeather()` | Full async weather tab render | `getItinerary()`, weather cache, public APIs | Writes loading/error/day cards into `#weatherContent` |
+| `weatherCoordsForDay(day)` | City/region detection | Day region + spot name/address/note + overrides | Returns up to two coordinate entries; defaults to Nagoya |
+| `fetchWeather(coord)` | Data fetch/cache | Coordinate object | Reads/writes `localStorage wx_*`; tries JMA first, fallback Open-Meteo |
+| `weatherSlotValue(data, date, hour)` | Forecast lookup | API hourly arrays + date/hour | Returns temp/code/rain tuple or null placeholder |
+| `weatherCodeIcon(code)` | WMO display mapping | Numeric WMO code | Returns icon + Cantonese label |
+| `isLiveSlot(date, hour)` | Current-slot highlight | Tokyo wall clock | Adds red live state for the nearest 9/12/15/18/21 slot |
+| `fetchWithTimeout(url, opts, ms)` | Network guard | API request | Aborts slow calls so fallback can run |
+| `weatherRefreshBtn` listener | Manual refresh | User tap | Clears in-memory flow and re-renders; cached data may still serve until TTL expires |
+
+### Data and privacy
+
+- Weather uses public Open-Meteo endpoints only; no API key, no user data, no Notion.
+- Cache is per-device localStorage and keyed by rounded coordinates, not by personal trip data.
+- For non-Japan trips, update `WEATHER_REGION_COORDS` and timezone assumptions before trusting live badges.

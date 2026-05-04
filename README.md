@@ -24,9 +24,9 @@
 | Frontend | Single `index.html` — Tailwind CDN + Chart.js CDN + Vanilla JS |
 | State | `localStorage` (key: `boss-japan-tracker`) |
 | Secrets | AES-256-GCM encrypted vault, unlocked with password at startup |
-| Receipt OCR | MiniMax VLM → GLM-4.6V → Gemini (vision fallback chain) |
-| Email parsing | GLM-5.1 → GLM-5 → MiniMax M2.7 → OpenRouter → Gemini × 5 keys → GLM-4-Flash |
-| Backend | Google Apps Script (5-min cron) — no server required |
+| Receipt OCR | Kimi K2.6 → MiniMax VLM → GLM-4.6V → Gemini (vision fallback chain) |
+| Email parsing | Kimi K2.6 → GLM-5.1 → GLM-5 → MiniMax M2.7 → OpenRouter → Gemini × 5 keys → GLM-4-Flash |
+| Backend | Google Apps Script (2-hour cron) — no server required |
 | Database | Notion API (via CORS proxy) |
 | Weather | Open-Meteo `jma_seamless` model — official JMA data, free, no key |
 | Deploy | GitHub Pages (auto from `main`) |
@@ -37,9 +37,10 @@
 
 ```
 travel-expense/
-├── index.html          # Entire frontend (~7,300 lines)
+├── index.html          # Entire frontend (~10,000 lines)
 ├── email-to-notion.gs  # Google Apps Script backend (~1,200 lines)
 ├── HANDOVER.md         # Session context for Claude (read this first)
+├── docs/               # Per-tab technical docs
 └── README.md           # This file
 ```
 
@@ -49,7 +50,7 @@ travel-expense/
 
 ```
 Forward email → Gmail label "travel-expense"
-  → Apps Script (5-min cron) parses with AI
+  → Apps Script (2-hour cron) parses with AI
   → Writes "⏳ 待確認" entry to Notion (dedup by SourceID)
   → App pulls from Notion when you open History tab
   → Tap ✅ to confirm → strips ⏳, syncs back to Notion
@@ -89,17 +90,24 @@ Forward address: `ftjdfr+expense@gmail.com`
 ## AI providers
 
 ### Receipt scan (vision)
-1. MiniMax VLM (primary)
-2. GLM-4.6V
-3. Gemini (5 keys × 5 models)
+1. Kimi K2.6 / `kimi-for-coding` (primary when key + proxy are configured)
+2. MiniMax VLM
+3. GLM-4.6V
+4. Gemini vision fallback
 
 ### Email parsing (text)
-1. GLM-5.1 (primary)
-2. GLM-5 / GLM-5-turbo
+1. Kimi K2.6 / `kimi-for-coding` (primary when key + proxy are configured)
+2. GLM-5.1 / GLM-5 / GLM-5-turbo
 3. MiniMax M2.7
 4. OpenRouter / Elephant-Alpha
-5. Gemini (5 keys × 5 models)
+5. Gemini / Gemma fallback
 6. GLM-4-Flash (last resort)
+
+## Security
+
+- Repo is public; never commit real API keys, OAuth tokens, Notion tokens, or generated deploy artifacts with injected secrets.
+- Kimi key is intentionally not injected into GitHub Pages HTML because the deployed page source is public. Use local `secrets.local.js` (gitignored) or Settings on the device.
+- `secrets.local.js.example` contains placeholders only; copy it to `secrets.local.js` for local testing.
 
 ---
 

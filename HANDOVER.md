@@ -55,7 +55,7 @@ GitHub Pages rebuilds within 1–2 minutes.
 ### Data flow
 ```
 Forward email → Gmail label travel-expense
-  → [5-min] Apps Script parses with AI
+  → [2-hour] Apps Script parses with AI
   → Creates ⏳ pending entry in Notion (dedup by SourceID)
   → Client pulls from Notion when opening History tab
   → User taps ✅ to confirm (strips ⏳ prefix)

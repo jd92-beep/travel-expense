@@ -33,7 +33,7 @@
  *   3. Run `setup()` once (grant permissions)
  *   4. Gmail filter: Subject contains "#expense" → label "travel-expense"
  *      OR forward to your_address+expense@gmail.com
- *   5. Forward any confirmation email → wait up to 5 min
+ *   5. Forward any confirmation email → wait up to 2 hours
  *
  * COST: 100% free.
  * ============================================================
@@ -99,8 +99,8 @@ function processExpenseEmails() {
     return t.getHandlerFunction() === 'processExpenseEmails';
   });
   if (!existingTriggers.length) {
-    ScriptApp.newTrigger('processExpenseEmails').timeBased().everyMinutes(5).create();
-    console.log('⏱ Time trigger created (every 5 min)');
+    ScriptApp.newTrigger('processExpenseEmails').timeBased().everyHours(2).create();
+    console.log('⏱ Time trigger created (every 2 hours)');
   }
   // ── End self-install ──────────────────────────────────────────────
 
@@ -714,7 +714,7 @@ function setup() {
   ScriptApp.getProjectTriggers().forEach(t => {
     if (t.getHandlerFunction() === 'processExpenseEmails') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('processExpenseEmails').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('processExpenseEmails').timeBased().everyHours(2).create();
 
   const dbResp = UrlFetchApp.fetch('https://api.notion.com/v1/databases/' + NOTION_DB, {
     headers: { 'Authorization': 'Bearer ' + NOTION_TOKEN, 'Notion-Version': '2022-06-28' },
@@ -728,7 +728,7 @@ function setup() {
   console.log('✅ Setup complete!');
   console.log('📬 Forward emails to: ' + alias);
   console.log('🤖 AI chain (' + providers.length + '): ' + providers.join(' → '));
-  console.log('⏱  Trigger: every 5 min');
+  console.log('⏱  Trigger: every 2 hours');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   return '✅ ' + alias + ' — AI chain: ' + providers.join(' → ');
 }

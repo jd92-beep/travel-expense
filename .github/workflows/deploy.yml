@@ -47,17 +47,17 @@ jobs:
         env:
           MINIMAX_KEY: ${{ secrets.MINIMAX_KEY }}
           ZAI_KEY: ${{ secrets.ZAI_KEY }}
-          KIMI_KEY: ${{ secrets.KIMI_KEY }}
         run: |
           mkdir -p _site/react _site/v3
           # Legacy working app — inject API keys from GitHub repository secrets.
-          # Source has __MINIMAX_KEY__ / __ZAI_KEY__ / __KIMI_KEY__ placeholders;
+          # Source has __MINIMAX_KEY__ / __ZAI_KEY__ placeholders;
           # sed replaces them here so live keys never appear in git history.
+          # Do NOT inject Kimi here: the Pages HTML is public. Kimi keys must
+          # come from local secrets.local.js or the Settings UI on the device.
           # If a secret is unset the placeholder stays (app falls back to Settings input).
           sed \
             -e "s|__MINIMAX_KEY__|${MINIMAX_KEY}|g" \
             -e "s|__ZAI_KEY__|${ZAI_KEY}|g" \
-            -e "s|__KIMI_KEY__|${KIMI_KEY}|g" \
             index.html > _site/index.html
           # React UI (dark theme redesign)
           cp -r app/dist/* _site/react/

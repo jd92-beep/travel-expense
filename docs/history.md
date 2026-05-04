@@ -113,3 +113,24 @@ Internal constants:
 - **`receiptCard` reuse** — same builder runs on Dashboard, History, day-receipts modal, spot popups. Any visual change to receipt presentation lives there.
 - **No virtualization** — full DOM render every keystroke. Fine for hundreds of receipts; would matter at 10 k+.
 - **`refreshSettingsInputsFromState()`** is fired after a successful pull (line 8816) — this is what propagates Notion-pulled `budget` / `rate` / `tripDateRange` updates to the Settings inputs without a manual refresh.
+
+## 12. Detailed Function Responsibilities
+
+| Function / helper | What it owns | Inputs | Outputs / side effects |
+|---|---|---|---|
+| `renderHistory()` | History list render | `state.receipts`, `#filterCat`, `#historySearch` | Filters, groups by date, writes `#historyList`, re-arms animations |
+| `receiptCard(r)` | Shared receipt row/card UI | Receipt object | Returns HTML with amount, payer, split badge, pending/confirm/photo controls |
+| `displayStore(r)` | Store label cleanup | Receipt store | Strips `⏳ ` for display while preserving pending state in data |
+| `isPendingReceipt(r)` | Pending detector | Receipt store/source fields | Drives yellow cards, pending banner, confirm button |
+| `confirmPendingReceipt(id)` | One-tap email confirm | Receipt id | Removes pending prefix, saves, pushes Notion if configured |
+| `editReceipt(id)` | Edit entry | Receipt id from card | Opens shared confirm modal with existing values |
+| `openConfirmModal(r, photo, warnings)` | Edit modal | Existing receipt | Save path rewrites matching receipt and may sync Notion |
+| `notionPullAll(silent)` | Cloud refresh | Notion token/DB/proxy | Replaces/merges local receipts, applies meta settings, updates deletion guards |
+| `notionPushReceipt(r)` | Cloud write after edit | Edited receipt | Upserts page; preserves `notionPageId`; handles missing page recreation |
+| `notionDeletedIds` handling | Delete resurrection guard | Deleted page ids | Prevents archived/deleted Notion records from reappearing on pull |
+
+### Search/filter details
+
+- Search covers `store`, `note`, `itemsText`, and `region` via lowercased substring matching.
+- Category filter uses `CATEGORIES`; `all` means no category predicate.
+- Date grouping is descending because `state.receipts.slice().reverse()` starts from newest local insertion order.

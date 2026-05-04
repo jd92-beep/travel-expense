@@ -221,13 +221,14 @@ Internal constants worth knowing:
 - `EMAIL_MODELS` — line 1616
 - `ITINERARY` — line 1630
 - `OPENROUTER_URL` / `OPENROUTER_MODEL` — line 1716
-- `APPS_SCRIPT_URL` — line 1712
+- `APPS_SCRIPT_URL` — raw GitHub copy of `email-to-notion.gs`, used by the Apps Script helper/editor, not by the email sync button
 - `NOTION_VERSION` — `'2022-06-28'`
 
 Default keys (when vault and user keys both empty):
 
-- `DEFAULT_API_KEY` — Boss's Gemini key (hardcoded, see CLAUDE.md security note)
-- `DEFAULT_MINIMAX_KEY`, `DEFAULT_OPENROUTER_KEY`
+- `DEFAULT_API_KEY` / `DEFAULT_OPENROUTER_KEY` — empty in public source
+- `DEFAULT_MINIMAX_KEY` / `DEFAULT_ZAI_KEY` — may be build-injected for the Pages artifact; unreplaced placeholders are sanitized to empty by `cleanSecretValue`
+- `DEFAULT_KIMI_KEY` — local `secrets.local.js` only. Kimi is deliberately not injected into public GitHub Pages HTML.
 
 Vault keys: encrypted in HTML, decrypted by `unlockVault(password)` at boot.
 
@@ -255,3 +256,32 @@ Vault keys: encrypted in HTML, decrypted by `unlockVault(password)` at boot.
 - **Notion proxy** — `state.proxy` defaults to `notion-proxy.ftjdfr.workers.dev` (Cloudflare Worker, owned). Fallback was `corsproxy.io` (third-party, less ideal because Boss's token would route through them).
 - **Vault unlock** — `unlockVault(password)` (line 1736) does AES-256-GCM decrypt; on success populates `VAULT_ZAI_KEY` and `VAULT_MINIMAX_KEY` so all sub-tabs immediately have keys without user input.
 - **Idempotency guard in `init()`** (line 8929) — `gateAndInit` can call `init()` twice during auto-unlock; without the guard duplicate listeners and `setInterval`s would fire.
+
+## 12. Detailed Function Responsibilities
+
+| Function / helper | What it owns | Inputs | Outputs / side effects |
+|---|---|---|---|
+| `init()` | All listener wiring | DOM, loaded state | Idempotently binds buttons, inputs, tab nav, scan inputs, settings controls |
+| `refreshSettingsInputsFromState()` | Settings DOM hydration | Current state after load/pull | Updates budget/rate/trip/date/key proxy controls without exposing plaintext keys |
+| `saveSettings` handler | Master settings commit | Inputs across sections A-F | Writes state, clears key inputs, pushes settings meta row, refreshes visible tabs |
+| `saveBudgetBtn` handler | Budget/rate quick save | HKD anchor, rate, trip currency | Updates `state.budget`/`state.rate`, pushes meta row |
+| `fetchLiveRate(force)` | FX refresh | `state.tripCurrency`, Visa/Open-ER APIs | Updates rate/source/timestamp and UI labels |
+| `renderPersonList()` | Traveler list | `state.persons` | Renders edit/remove rows; protects required persons |
+| `renderShareRatios()` | Ratio editor | Persons + `state.shareRatios` | Normalizes display percentages and writes changes on input |
+| `renderSettlePanel()` | Live settlement panel | `computeSettlements` snapshot | Shows transfers and summary badge inside Settings |
+| `renderModelCards()` | Scan/voice/email pickers | Model arrays + selected ids + test status | Rebuilds model cards and last-used badges |
+| `testModelConnection(id)` | Model auth/reachability test | Selected model id + relevant key/proxy | Tests GLM, MiniMax, OpenRouter, Kimi proxy, or Gemini branch |
+| `notionTestBtn` handler | DB/schema test | Notion token/DB/proxy | Calls `notionEnsureSchema`, shows emoji/plain schema status |
+| `notionMigrateSchema()` | Schema polish | Notion DB write permission | Adds/renames emoji property names and clears schema cache |
+| `notionPushAll()` / `notionPullAll()` | Manual sync | Receipts + Notion config | Bulk push/pull; pull also refreshes Settings inputs |
+| Itinerary import/export/reset handlers | Trip template reuse | JSON file or built-in `ITINERARY` | Validates custom itinerary, updates `window.CURRENT_ITINERARY`, syncs meta |
+| `exportCSV()` | Local data export | `state.receipts` | Downloads UTF-8 BOM CSV for Excel |
+| `resetBtn` handler | Local wipe | User confirmation | Clears localStorage and reloads; no undo |
+| `lockDeviceBtn` handler | Vault trust reset | Device trust flag | Removes remembered unlock so next launch asks password |
+
+### Security notes for Settings
+
+- Empty key fields on save do not wipe existing saved/vault keys.
+- Key inputs are cleared after save so screen sharing does not reveal plaintext.
+- `notionToken` is not persisted in `boss-japan-tracker`; it must come from vault/session.
+- Kimi key must not be placed in repo, workflow logs, docs, or deployed public HTML. Use local device Settings or gitignored `secrets.local.js`.

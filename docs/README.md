@@ -43,7 +43,7 @@ Single global `state` object (line 1747) persisted to `localStorage` under key `
 - `EMAIL_MODELS` — line 1616 (text models for email-import parsing)
 - `ITINERARY` — line 1630 (built-in 6-day Nagoya itinerary)
 - `OPENROUTER_URL`, `OPENROUTER_MODEL` — line 1716 (`openrouter/elephant-alpha`; active fallback in voice + email parse chains; requires `state.openrouterKey`)
-- `APPS_SCRIPT_URL` — line 1712 (Gmail-side email parser)
+- `APPS_SCRIPT_URL` — raw GitHub copy of `email-to-notion.gs`, used by the in-app Apps Script helper/editor only; email import itself is Gmail → Apps Script → Notion → app pull.
 
 ### Global helpers (used by every tab)
 
@@ -67,7 +67,7 @@ Single global `state` object (line 1747) persisted to `localStorage` under key `
 ### LLM call routers
 - `callGemini(base64, mime)` — hub for receipt scanning; routes to MiniMax / GLM-4.6V / Gemini family with automatic fallback chain (referenced from `scanReceipt` line 4384).
 - `callMiniMax*`, `callGLM*` — per-provider helpers near line 5500–6200.
-- Gemini key rotation: `getGeminiKeys(userKey)` line 1707 — tries vault key, then up to 5 hardcoded backup keys.
+- Gemini key rotation: `getGeminiKeys(userKey)` — tries user/vault key first, then any configured backup constants. Public source ships those defaults empty.
 
 ### Sync architecture
 - Notion REST API is CORS-blocked, so all calls go through `state.proxy` (default: `notion-proxy.ftjdfr.workers.dev`, a Cloudflare Worker). The legacy fallback was `corsproxy.io`.
@@ -75,8 +75,30 @@ Single global `state` object (line 1747) persisted to `localStorage` under key `
 - `state.autoSync` toggles per-mutation push.
 - Email-import path is async via Gmail label + Apps Script (`email-to-notion.gs`) → Notion → app pulls on Settings's "📬 即時同步" or History tab open.
 
+### Security model
+- The repo is public. Never commit real API keys, OAuth tokens, Notion tokens, or generated `_site/index.html` with injected secrets.
+- `secrets.local.js` is gitignored and is the only supported plaintext local-dev override.
+- GitHub Pages HTML is public too. Do not inject Kimi keys into the Pages artifact; Kimi keys must come from `secrets.local.js` or the Settings UI on the user's device.
+- `cleanSecretValue()` treats unreplaced placeholders such as `__MINIMAX_KEY__` as empty, so a public checkout does not report fake keys as usable.
+- `saveState()` strips `notionToken` before writing `boss-japan-tracker`; user-entered model keys may persist in localStorage on that device so mobile reloads keep working.
+
 ### Tab order
 Defined by `TAB_ORDER` (search for it in source — used by `switchTab` to compute slide direction). Bottom nav order is: dashboard, scan, timeline, history, weather, stats, settings.
 
 ### Build version
 The visible string `APP BUILD v47` near line 1093 is the cache-bust marker. Bump it whenever you ship a deploy that needs to override a stale PWA install.
+
+## Cross-tab function map
+
+| User action | Entry function | Main side effects |
+|---|---|---|
+| Switch tabs | `switchTab(name, opts)` | Updates `_currentTab`, `state.lastTab`, tab button state, calls per-tab render, optionally pulls Notion on History |
+| Save a receipt | `saveModal()` | Normalizes modal fields, updates/inserts `state.receipts`, compresses photo, calls `notionPushReceipt` if auto-sync |
+| Edit a receipt | `editReceipt(id)` → `openConfirmModal` | Loads receipt into modal; save path rewrites matching `state.receipts[]` item |
+| Confirm pending email item | `confirmPendingReceipt(id)` | Strips `⏳ ` prefix, saves, pushes Notion if configured |
+| Push/pull all Notion data | `notionPushAll()` / `notionPullAll()` | Bulk syncs receipts plus meta settings row; pull also applies remote settings |
+| Push settings | `notionPushSettings()` / `notionPushSettingsIfReady()` | Writes budget, rate, persons, split ratios, model choices, toggles, itinerary overrides to `__meta_settings__` |
+| Import custom itinerary | Settings import handler → `validateItinerary` | Replaces `state.customItinerary`, sets `window.CURRENT_ITINERARY`, re-renders dependent tabs |
+| Open spot popup | `showSpotPopup(opts)` | Fills generic `#hotelPopup`, prepares Maps link/edit action, blocks ghost tab switches on close |
+| Open Maps | `openMapsFromPopup()` / `_openExternalUrl()` | Android intent, iOS Apple Maps, desktop Google Maps web fallback |
+| Check app update | `checkForNewBuild()` | Fetches deployed root HTML, compares `APP_BUILD`, shows update bar |

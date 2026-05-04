@@ -135,7 +135,7 @@ Read:
 
 - `state.scanModel`, `state.voiceModel`, `state.emailModel`
 - `state.apiKey` (Gemini), `state.zaiKey` (GLM), `state.minimaxKey`, `state.openrouterKey`
-- Vault-decrypted keys: `VAULT_ZAI_KEY`, `VAULT_MINIMAX_KEY`, `DEFAULT_API_KEY`, `DEFAULT_MINIMAX_KEY`
+- Vault/local keys: `VAULT_ZAI_KEY`, `VAULT_MINIMAX_KEY`, `VAULT_KIMI_KEY`, `DEFAULT_MINIMAX_KEY`, `DEFAULT_ZAI_KEY`; public placeholders are sanitized to empty.
 
 Written (during scan):
 
@@ -170,7 +170,7 @@ Internal constants:
 - `EMAIL_MODELS` — line 1616
 - `RESCAN_MODELS` — search source (subset surfaced in confirm modal)
 - `OPENROUTER_URL`, `OPENROUTER_MODEL` — line 1716
-- `APPS_SCRIPT_URL` — line 1712 (Gmail-side parser deployment)
+- `APPS_SCRIPT_URL` — raw GitHub copy of `email-to-notion.gs`, used by the Apps Script helper/editor. The red email-sync card does not call Apps Script directly; it pulls Notion after the Gmail trigger has written pending rows.
 
 ## 10. Edge Cases & Known Limitations
 
@@ -191,3 +191,30 @@ Internal constants:
 - **Per-model attempt log** — `state.lastScanAttempts` is populated inside `callGemini` so `showScanError` can render a collapsible diagnostic block. Crucial on mobile PWA where DevTools is unreachable.
 - **Pre-resize before OCR** — MiniMax server-side downscales above 2016 px, blurring thermal-paper text. `prepareForOCR` does the resize client-side at high-quality JPEG so OCR sees crisp glyphs.
 - **Receipt schema** — saved object includes `splitMode: 'shared'|'private'`, `personId`, `beneficiaryId` (for 🎁 代付). Set in confirm modal, consumed by Stats `computeSettlements` (line 3849).
+
+## 12. Detailed Function Responsibilities
+
+| Function / helper | Flow stage | Inputs | Outputs / side effects |
+|---|---|---|---|
+| `scanReceipt(file)` | Camera/gallery entry | Browser `File` | Blocks double-fire via `_scanInFlight`, flashes shutter, previews photo, runs OCR, opens confirm modal |
+| `prepareForOCR(base64, mime)` | Image preprocessing | Raw base64 | Returns resized image for OCR; falls back to original on canvas errors |
+| `runScanWithBase64(base64, mime)` | Retry/reopen route | Cached image | Re-runs same OCR pipeline without touching file inputs |
+| `callGemini(base64, mime)` | OCR router despite legacy name | Image + selected `state.scanModel` | Tries Kimi/MiniMax/GLM/Gemini chain, records `state.lastScanAttempts`, returns parsed receipt JSON |
+| `callKimiVision()` | Kimi vision provider | Kimi key + proxy + image | Sends `kimi-for-coding` request through proxy; never relies on public Pages injection |
+| `callMiniMax()` / `callGLM()` / `callGeminiWithModel()` | Provider-specific OCR | Keys + image | Throws provider-specific errors used by the attempt log |
+| `normalizeScanResult(raw)` | OCR cleanup | Raw provider JSON | Enforces category/payment/date/total defaults and warnings before modal |
+| `parseDateFallback(s)` | Date safety net | Any date-like string | Converts era/ROC/Thai/Korean/Chinese/English date forms to ISO |
+| `openConfirmModal(receipt, photo, warnings, model)` | Review/save UI | Draft receipt and optional photo | Lets user edit fields, split mode, person, beneficiary, category/payment |
+| `saveModal()` | Commit record | Modal DOM fields | Inserts/updates `state.receipts`, compresses photo, saves, syncs Notion if enabled |
+| `startVoiceInput()` / `stopVoiceInput()` | Voice entry | Browser speech API transcript | Opens overlay, times out after 60s, sends final transcript to parser |
+| `parseVoiceExpense(transcript)` | Voice parser | Cantonese/free-form text | Calls `callAnyTextModel`, normalizes draft, opens confirm modal |
+| `parseEmailInput({text, images})` | Email paste/import parser | Email text and optional screenshots | Runs text/vision model chain, opens batch confirm modal |
+| `openBatchConfirmModal()` / `saveBatchBookings()` | Multi-booking review | Parsed bookings array | Lets user select/edit multiple bookings, saves selected drafts, pushes Notion in background |
+| `startAddToItinerary()` | Non-expense image route | Last scanned image | Uses itinerary extraction prompt and opens add-itinerary modal |
+| `openCurrencyModal()` | Utility tool | `state.rate`, trip currency | Shows HKD/trip-currency converter; no receipt side effect |
+
+### Provider key rules
+
+- Kimi key must come from `secrets.local.js` or Settings on the device. It must not be injected into public GitHub Pages HTML.
+- MiniMax/ZAI placeholders are cleaned by `cleanSecretValue()` when a public checkout has not been injected.
+- Model cards call `testModelConnection(id)`; Kimi uses the configured proxy branch, while Gemini/Gemma use the Google endpoint, GLM uses ZAI, and MiniMax uses its own endpoint.

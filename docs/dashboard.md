@@ -142,3 +142,20 @@ Internal constants:
 - **Adaptive daily budget** — trip-day prep receipts are subtracted from `state.budget` before dividing, so flight/hotel pre-pay don't compress the on-the-ground daily quota.
 - **Auto-fit via CSS `zoom`** — `autoFitTab('dashboard')` (line 8856) measures section height after a double-RAF and sets `section.style.zoom` ∈ [0.80, 1.00]. Purely a scale hint — no layout changes.
 - **Itinerary card emits inline JS** — `onclick="showSpotPopup({name:'...',address:'...',...})"` is built by string-escaping every field through `replace(/'/g,"\\'")`. Read `escapeHtml` (line 3695) for the user-facing display path.
+
+## 12. Detailed Function Responsibilities
+
+| Function / helper | What it calculates | Inputs | Outputs / side effects |
+|---|---|---|---|
+| `renderDashboard()` | All headline spend numbers, budget progress, prep card, itinerary day cards, today receipt list | `state.receipts`, `state.budget`, `state.rate`, `getItinerary()` | Writes DOM for the whole tab; calls `renderPersonBreakdown`; wires inline spot/day receipt actions |
+| `todayForReceipts()` | Destination-aligned receipt day | `state.tripDateRange`, current clock | Returns `YYYY-MM-DD`; avoids HKT/JST midnight mismatch |
+| `getCurrentDay()` | Current trip day or synthetic prep/post row | Current date, `state.tripDateRange`, itinerary | Feeds `#todayLocation`, day counter, dashboard phase copy |
+| `getReceiptPhase(r)` | Prep/trip/post bucket | Receipt `date`, `createdAt`, categories, trip dates | Controls prep summary and budget math |
+| `renderPersonBreakdown()` | Per-person paid/owed tiles | `state.persons`, `state.receipts`, split fields | Populates `#personBreakdown`; hides wrapper in solo mode |
+| `getEffectiveSpots(day)` | Dashboard itinerary spots with receipt overlays | Static/custom itinerary, lodging/transport receipts, overrides | Returns spot objects used by cards and `showSpotPopup` |
+| `getDayReceiptsNotInSpots(date)` | Receipts not represented by itinerary overlay | Receipts for date, effective spot receipt IDs | Feeds the amber `N 筆消費` day chip |
+| `openDayReceiptsModal(date)` | Full list for a day's uncovered receipts | Date string | Opens modal; each row can jump to History/edit |
+| `showSpotPopup(opts)` | Generic spot/hotel/transport detail popup | Spot name, address, type, receipt id, date/index | Fills `#hotelPopup`, prepares Maps/edit buttons |
+| `jumpToReceipt(id)` | Navigate from dashboard modal to editable record | Receipt id | Closes modal, switches to History, highlights/edit target |
+
+Dashboard is intentionally read-heavy. Direct writes only happen through shared modals opened from this tab: manual add, receipt edit, spot edit, and day receipt jumps.

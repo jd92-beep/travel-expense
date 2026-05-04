@@ -107,3 +107,20 @@ Internal constants:
 - **HKT-derived `nowKey`** — uses `toLocaleString('en-GB', { timeZone: 'Asia/Hong_Kong', ... })` and parses the `DD/MM/YYYY, HH:MM` regex. Note this uses HKT, not JST — slightly inconsistent with Dashboard's `todayForReceipts()` which uses JST. In practice Boss is in JST during the trip, so the 1-hour discrepancy means Timeline marks items "passed" 1 hour earlier than Dashboard's "today" rolls over. Flag for future fix.
 - **`document.hidden` check** in the `setInterval` (line 3823) saves battery — a Page-Visibility–API-aware tick prevents background re-renders.
 - **Animation tip** — when `_currentTab === 'timeline'`, the `setInterval` re-runs `renderTimeline()` not `updateTimelineProgress()` — full DOM rebuild every 5 min. Cheap given small DOM size, but `updateTimelineProgress()` alone would suffice if `time` and overrides haven't changed.
+
+## 12. Detailed Function Responsibilities
+
+| Function / helper | What it owns | Inputs | Outputs / side effects |
+|---|---|---|---|
+| `renderTimeline()` | Full metro-style schedule DOM | `getItinerary()`, current HKT/Tokyo clock, overrides | Rebuilds `#timelineList`, marks passed/future spots, schedules progress update |
+| `_tlKey(date, hhmm)` | Sortable schedule comparison key | Date + time | Returns `YYYY-MM-DD HH:MM`; missing time sorts to end |
+| `getScheduleSpots(day)` | Pure schedule spots | Itinerary day + overrides | Returns planned spots only; no receipt overlays |
+| `_getItineraryOverride(date, idx)` | Override lookup | Day date and spot index | Returns saved patch from `state.itineraryOverrides` |
+| `openSpotEditModal(date, idx)` / `openSpotEdit()` | Edit entry | Date/index from timeline card | Opens shared spot edit modal |
+| `saveSpotEdit()` | Commit itinerary edit | Modal fields | Writes override via `_setItineraryOverride`, saves local state, syncs settings meta row if ready |
+| `resetSpotEdit()` | Restore built-in value | Current modal target | Deletes override for that spot, re-renders timeline/dashboard |
+| `updateTimelineProgress()` | Progress line/dot placement | Rendered `.tl-item` geometry + clock | Sets CSS `--progress`; inserts/moves `tl-you-are-here` marker |
+| Resize listener | Layout maintenance | Window resize | Debounced progress recalculation; canceled when leaving Timeline |
+| 5-minute interval | Clock maintenance | Page visibility and current tab | Re-renders when Timeline is visible and app is foregrounded |
+
+Timeline is deliberately schedule-only. Actual spend overlays live on Dashboard and History, so this tab stays useful even before Notion/receipts are configured.

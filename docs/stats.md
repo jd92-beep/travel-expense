@@ -125,3 +125,23 @@ Internal constants:
 - **Cross-private semantics** (line 3873–3890) — `splitMode='private'` with a different `beneficiaryId` adds a `crossPrivate[]` entry. The beneficiary's `privateByOwner` increments (it's their item even though they didn't pay) and the ledger gains a direct debt edge.
 - **Doughnut-center overlay** — `.doughnut-center` is a CSS-positioned absolute overlay, not a Chart.js plugin. Its content is set by `innerHTML` (lines 4203, 4265).
 - **Trend-bar colors** — amber `#F59E0B` for prep, slate `#64748B` for post, navy `#2D5A8E` for normal trip, red `#E04040` when over per-day cap. Phase resolved by `getTripPhase(date)`.
+
+## 12. Detailed Function Responsibilities
+
+| Function / helper | What it owns | Inputs | Outputs / side effects |
+|---|---|---|---|
+| `renderStats()` | Full analytics render | Receipts, persons, ratios, rate, budget, toggles | Builds/destroys Chart.js charts, legends, settlement and TOP 10 list |
+| `computeSettlements(persons, receipts, ratios)` | Split-bill truth source | Payers, beneficiaries, shared/private receipts | Returns balances, transfers, shared totals, cross-private edges |
+| `renderSettlementHtml(...)` | Settlement UI | Settlement snapshot | Returns transfer list + per-person ledger HTML |
+| `getPersons()` | Person fallback | `state.persons` | Ensures at least Tony exists for charts and settlement |
+| `getTripPhase(date)` | Trend phase | Date and trip range | Colors trend rows as prep/trip/post |
+| Chart destroy/recreate blocks | Canvas lifecycle | `charts` module object | Prevents duplicate listeners and stale datasets |
+| TOP 10 toggle handler | Big-item visibility | `#top10IncludeBigItems` | Updates `state.top10IncludeBigItems`, saves, pushes settings meta row |
+| Tooltip callbacks | Chart detail UX | Chart dataset values | Shows JPY/HKD/percent without mutating state |
+
+### Settlement semantics
+
+- `shared`: amount is split according to `state.shareRatios`.
+- `private` with no different `beneficiaryId`: payer owns the item; it does not create a debt.
+- `private` with another `beneficiaryId`: full amount is direct payer → beneficiary debt, independent of share ratio.
+- Greedy matching reduces final transfers to a minimal practical set while tolerating rounding under ¥0.5.
