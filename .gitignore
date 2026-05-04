@@ -13,6 +13,9 @@ smoke_test.jpg
 .tmp/
 test_receipts/
 
+# Local graphify output - keep app knowledge graph on this machine only.
+graphify-out/
+
 # Local dev secrets — NEVER commit. Contains live API keys for desktop
 # testing only. On deployed GitHub Pages this file doesn't exist and
 # the app falls back to Settings → 🔑 API Keys user input path.
