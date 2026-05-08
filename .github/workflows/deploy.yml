@@ -27,42 +27,41 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install React app deps
-        working-directory: app
-        run: npm install --no-audit --no-fund
+      - name: Install fresh React app deps
+        working-directory: app-react
+        run: npm ci --no-audit --no-fund
 
-      - name: Build React app
-        working-directory: app
+      - name: Security scan source
+        working-directory: app-react
+        run: npm run security:scan
+
+      - name: Verify credential broker
+        working-directory: workers/credential-broker
+        run: npm run check && npm run self-test
+
+      - name: Verify tab parity
+        working-directory: app-react
+        run: npm run parity:tabs
+
+      - name: Build fresh React app
+        working-directory: app-react
         run: npm run build
 
-      - name: Install v3 app deps
-        working-directory: app3
-        run: npm install --no-audit --no-fund
-
-      - name: Build v3 app
-        working-directory: app3
-        run: npm run build
-
-      - name: Prepare _site (legacy at root, React at /react/, v3 at /v3/)
-        env:
-          MINIMAX_KEY: ${{ secrets.MINIMAX_KEY }}
-          ZAI_KEY: ${{ secrets.ZAI_KEY }}
+      - name: Prepare _site (legacy at root, fresh React at /react/)
         run: |
-          mkdir -p _site/react _site/v3
-          # Legacy working app — inject API keys from GitHub repository secrets.
-          # Source has __MINIMAX_KEY__ / __ZAI_KEY__ placeholders;
-          # sed replaces them here so live keys never appear in git history.
-          # Do NOT inject Kimi here: the Pages HTML is public. Kimi keys must
-          # come from local secrets.local.js or the Settings UI on the device.
-          # If a secret is unset the placeholder stays (app falls back to Settings input).
-          sed \
-            -e "s|__MINIMAX_KEY__|${MINIMAX_KEY}|g" \
-            -e "s|__ZAI_KEY__|${ZAI_KEY}|g" \
-            index.html > _site/index.html
-          # React UI (dark theme redesign)
-          cp -r app/dist/* _site/react/
-          # v3: legacy design + React + Framer Motion animations
-          cp -r app3/dist/* _site/v3/
+          mkdir -p _site/react
+          # Legacy working app stays at root. Do not inject provider keys into
+          # GitHub Pages output: Pages HTML is public, so credentials must come
+          # from local-only settings on the device.
+          cp index.html _site/index.html
+          # Fresh React UI. This intentionally does not deploy the previous
+          # app/ or app3/ implementations because their feature parity was
+          # unreliable. The stable legacy app remains at the root.
+          cp -r app-react/dist/* _site/react/
+
+      - name: Security scan Pages output
+        working-directory: app-react
+        run: npm run security:scan
 
       - uses: actions/configure-pages@v4
 

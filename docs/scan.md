@@ -134,8 +134,7 @@ The scan tab is the heaviest LLM consumer in the app.
 Read:
 
 - `state.scanModel`, `state.voiceModel`, `state.emailModel`
-- `state.apiKey` (Gemini), `state.zaiKey` (GLM), `state.minimaxKey`, `state.openrouterKey`
-- Vault/local keys: `VAULT_ZAI_KEY`, `VAULT_MINIMAX_KEY`, `VAULT_KIMI_KEY`, `DEFAULT_MINIMAX_KEY`, `DEFAULT_ZAI_KEY`; public placeholders are sanitized to empty.
+- React `/react/` reads `state.credentialBrokerUrl` and a short-lived broker session for Kimi/Google AI calls. Legacy root docs may still reference vault/local keys, but the React browser state does not persist provider secrets.
 
 Written (during scan):
 
@@ -149,7 +148,7 @@ Written on save (in confirm modal, not the tab itself):
 
 ## 8. Sync Behavior
 
-- **On receipt save** (from confirm modal): `notionPushReceipt(r)` (line 7139) is called if `state.autoSync && state.notionToken && state.notionDb`.
+- **On receipt save** (from confirm modal): legacy pushes when Notion is configured; React `/react/` queues/pushes only when `state.autoSync`, `state.notionDb`, and a valid Credential Broker session are present.
 - **Pending pull**: `#checkEmailNowBtn` calls `notionPullAll(true)` to fast-forward Apps Script imports — useful when the 2-hour cron hasn't fired yet.
 - **No autoSync = local only** until the user hits "⬆️ 推送" in Settings (`notionPushAll`).
 
@@ -158,7 +157,7 @@ Written on save (in confirm modal, not the tab itself):
 User-tunable (Settings):
 
 - 🤖 AI 模型 → 📸 / 🎤 / 📧 model picker (cards) → `state.scanModel` / `state.voiceModel` / `state.emailModel`
-- 🔑 API Keys → Gemini / GLM / MiniMax / OpenRouter → `state.apiKey` / `.zaiKey` / `.minimaxKey` / `.openrouterKey`
+- React `/react/` no longer stores provider API keys in browser state. Settings exposes broker status plus admin-only credential rotation for Notion, Kimi, and Google backup.
 - (No vault key) → falls back to bundled vault keys (line 1736 `unlockVault`)
 
 Internal constants:
@@ -218,3 +217,63 @@ Internal constants:
 - Kimi key must come from `secrets.local.js` or Settings on the device. It must not be injected into public GitHub Pages HTML.
 - MiniMax/ZAI placeholders are cleaned by `cleanSecretValue()` when a public checkout has not been injected.
 - Model cards call `testModelConnection(id)`; Kimi uses the configured proxy branch, while Gemini/Gemma use the Google endpoint, GLM uses ZAI, and MiniMax uses its own endpoint.
+
+## 13. Architecture & Logic Deep Dive
+
+Scan is the main write path for receipt data. It contains several user entry points, but they all converge on the same review/commit boundary: `openConfirmModal(...)` followed by `saveModal()`. This convergence is the main architectural safety net: camera OCR, gallery OCR, voice parse, email paste, batch booking import, and manual entry should all produce the same receipt schema before persistence.
+
+### Capture-to-persistence flow
+
+```mermaid
+flowchart TD
+  camera["Camera input"] --> scanReceipt
+  gallery["Gallery input"] --> scanReceipt
+  voice["Voice transcript"] --> parseVoice["parseVoiceExpense"]
+  email["Email paste / batch"] --> parseEmail["email parse / batch modal"]
+  manual["Manual button"] --> confirm["openConfirmModal"]
+  scanReceipt --> prep["fileToBase64 + prepareForOCR"]
+  prep --> router["callGemini router"]
+  router --> normalize["normalizeScanResult + parseDateFallback"]
+  parseVoice --> confirm
+  parseEmail --> confirm
+  normalize --> confirm
+  confirm --> save["saveModal"]
+  save --> local["state.receipts + saveState"]
+  save --> refresh["refresh visible tabs"]
+  save --> notion["optional notionPushReceipt"]
+```
+
+### Provider routing model
+
+| Route | Input type | Primary selector | Fallback behavior | Output contract |
+|---|---|---|---|---|
+| Receipt OCR | image | `state.scanModel` | MiniMax / GLM / Gemini family, with attempt log | Strict receipt JSON normalized before modal |
+| Rescan | cached image | clicked `RESCAN_MODELS` id | Direct provider call; no automatic broad chain | Replaces modal fields and active model badge |
+| Add to itinerary | cached image | current scan model | same vision fallback idea, different prompt | itinerary spot draft, not receipt |
+| Voice | Cantonese transcript | `state.voiceModel` | GLM/OpenRouter/MiniMax/Gemini/Gemma text chain | receipt draft or fallback manual modal |
+| Email paste | text + optional images | `state.emailModel` | text/vision model chain | one or more booking/receipt drafts |
+
+### State and race guards
+
+- `_scanInFlight` prevents double `change` events from creating mismatched image/data pairs.
+- `lastScanBase64`, `lastScanMime`, `lastScanResult`, and `lastScanWarnings` are short-lived retry buffers; `closeModal()` clears them to avoid attaching stale photos to unrelated receipts.
+- `pendingPhotoBase64` is separate from preview state because save can happen long after OCR finished.
+- `state.lastScanAttempts`, `state.lastScanModel`, and `state.lastScanFellBack` are diagnostic/UX fields, not receipt data.
+
+### Why the confirm modal is the boundary
+
+The app deliberately does not save raw model output. Every route must pass through the modal because it:
+
+- normalizes category/payment/person/split fields into the shared receipt schema;
+- lets the user repair OCR mistakes before local or Notion persistence;
+- attaches/compresses photo data consistently;
+- preserves `notionPageId` and file-upload ids on edits;
+- triggers `refresh()` so Dashboard, History, Stats, and Settings settlement all see the same mutation.
+
+### Debug checklist
+
+1. OCR says "all failed": inspect `state.lastScanAttempts` in the error details, then test the selected model card in Settings.
+2. Wrong photo on saved receipt: inspect `lastScanBase64`, `pendingPhotoBase64`, and whether `closeModal()` ran.
+3. Model selection looks ignored: check `state.lastScanFellBack`; the UI may have succeeded through fallback.
+4. Voice produces weak JSON: inspect `VOICE_FALLBACK` ordering and whether `callAnyTextModel` supports the selected id.
+5. Email imports duplicate: check `SourceID`, pending prefix, Apps Script path, and Notion resurrection guards.

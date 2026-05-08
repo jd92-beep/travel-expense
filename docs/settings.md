@@ -132,7 +132,7 @@ Save flow (`#saveSettings`, line 9036):
 1. Clamp rate to `[2.0, 10.0]` HKD-per-100-JPY; fall back to `4.91`.
 2. Convert HKD anchor → canonical JPY budget.
 3. Read `setAutoSync`.
-4. For each key input: only overwrite `state.{apiKey,zaiKey,minimaxKey,openrouterKey}` if user typed something — empty input doesn't wipe vault key.
+4. React `/react/` does not keep provider API keys in browser state. Its expandable `Credentials & Connection` card tests broker status and rotates Notion/Kimi/Google credentials server-side.
 5. Read share-ratio inputs (`#ratio_${id}`).
 6. `saveState()` → `notionPushSettingsNow()` → `refresh()`.
 7. Clear key inputs (no plaintext visible after save).
@@ -180,7 +180,7 @@ This tab does not invoke LLMs *itself*. It is the **configuration surface** that
 - **Notion test / migrate** are HTTP-only, no LLM.
 - **`runModelTest(id, rerender)`** — sends a tiny dry call to the picked model to verify auth + reachability; result rendered as ✅ / ⚠️ on the card.
 
-The 🔑 API Keys panel is where Boss can override vault keys with his own (Gemini / GLM / MiniMax / OpenRouter). Keys clear from the input on save (so plaintext isn't visible), but persist in `state` and `localStorage`.
+React `/react/` replaces the old API Keys panel with a broker-only `Credentials & Connection` card. Rotation values live only in the password input until submitted to the Credential Broker, then the Worker tests and encrypts them in the server-side vault.
 
 ## 7. State Fields Touched
 
@@ -189,8 +189,8 @@ Read & written:
 - `state.budget`, `state.rate`, `state.tripCurrency`, `state.tripDateRange`
 - `state.persons[]`, `state.shareRatios{}`
 - `state.scanModel`, `state.voiceModel`, `state.emailModel`
-- `state.apiKey`, `state.zaiKey`, `state.minimaxKey`, `state.openrouterKey`
-- `state.notionToken`, `state.notionDb`, `state.proxy`, `state.autoSync`
+- `state.credentialBrokerUrl`, `state.credentialSession`, `state.credentialSessionExpiresAt`
+- `state.notionDb`, `state.proxy`, `state.autoSync`
 - `state.statsIncludeTransportLodging`, `state.top10IncludeBigItems`
 - `state.customItinerary`, `state.itineraryOverrides{}`
 - `state.lastScanModel`, `state.lastEmailModel` (badges)
@@ -251,7 +251,7 @@ Vault keys: encrypted in HTML, decrypted by `unlockVault(password)` at boot.
 - **Receipt schema fields driving 分帳** — `splitMode: 'shared'|'private'`, `personId` (payer), `beneficiaryId` (only meaningful for `private`). `computeSettlements` (line 3849) is the truth-source for the math.
 - **Live settlement panel** — `#settleDetails`'s `toggle` event runs `renderSettlePanel()` on each open (line ~9234), so receipts added since the last open are reflected.
 - **HKD-anchor budget** — saving derives `state.budget = round(hkd * rate)`. This is the cross-device fix (`f4e4478`): previously the JPY value was canonical and rate changes would drift the displayed HKD value.
-- **Key clear on save** — security UX. Keys persist in state/localStorage but the visible input clears so a screen-share doesn't leak plaintext.
+- **Credential rotation** — security UX. Provider keys do not persist in React state/localStorage; the visible input clears immediately after the broker request.
 - **Stats toggle dual flip** — toggle off (default): 總消費 ✅ includes flight/lodging, 今日/日均 ❌ excludes. Toggle on flips both. The hint string `#statsToggleHint` describes the *current* state, not what tapping will do.
 - **Notion proxy** — `state.proxy` defaults to `notion-proxy.ftjdfr.workers.dev` (Cloudflare Worker, owned). Fallback was `corsproxy.io` (third-party, less ideal because Boss's token would route through them).
 - **Vault unlock** — `unlockVault(password)` (line 1736) does AES-256-GCM decrypt; on success populates `VAULT_ZAI_KEY` and `VAULT_MINIMAX_KEY` so all sub-tabs immediately have keys without user input.
@@ -283,5 +283,67 @@ Vault keys: encrypted in HTML, decrypted by `unlockVault(password)` at boot.
 
 - Empty key fields on save do not wipe existing saved/vault keys.
 - Key inputs are cleared after save so screen sharing does not reveal plaintext.
-- `notionToken` is not persisted in `boss-japan-tracker`; it must come from vault/session.
+- React `/react/` does not persist a Notion token in `boss-japan-tracker`; Notion auth must come from the server-side Credential Broker vault/session.
 - Kimi key must not be placed in repo, workflow logs, docs, or deployed public HTML. Use local device Settings or gitignored `secrets.local.js`.
+
+## 13. Architecture & Logic Deep Dive
+
+Settings is the control plane for the whole app. Most tabs are projections of state; Settings is where the user changes the state model, integration configuration, model routing, itinerary, split-bill rules, and local data lifecycle.
+
+### Control-plane map
+
+```mermaid
+flowchart TD
+  settings["Settings UI"] --> trip["tripDateRange / customItinerary"]
+  settings --> budget["budget / rate / currency"]
+  settings --> people["persons / shareRatios"]
+  settings --> models["scanModel / voiceModel / emailModel"]
+  settings --> keys["API keys / vault-derived keys"]
+  settings --> notion["Notion token / DB / proxy / autoSync"]
+  settings --> toggles["stats toggles / top10"]
+  trip --> meta["Notion __meta_settings__"]
+  budget --> meta
+  people --> meta
+  models --> meta
+  toggles --> meta
+  keys --> local["local state / vault only"]
+  notion --> sync["notionPushAll / notionPullAll / schema"]
+```
+
+### Settings save semantics
+
+| Setting type | Persistence path | Notes |
+|---|---|---|
+| Budget/rate/trip/person/model/toggle settings | `saveState()` + Notion meta row if configured | Safe to sync between devices |
+| Notion token | Local/vault/session only | `saveState()` strips the token from the main storage payload |
+| Gemini/GLM/MiniMax/OpenRouter keys | Local state or vault-derived globals | Inputs clear after save; empty input does not wipe existing key |
+| Kimi key | `secrets.local.js` or local device setting only | Must not be injected into public GitHub Pages |
+| Itinerary JSON | `state.customItinerary` | Affects Dashboard, Timeline, Weather, budget day count |
+| Deletion guards | local state arrays | Prevent Notion/email resurrection after local delete |
+
+### Listener architecture
+
+`init()` is intentionally idempotent because vault unlock and boot flow can call initialization more than once. Any new Settings control should follow the existing pattern:
+
+1. hydrate DOM from state in `refreshSettingsInputsFromState()` or a render helper;
+2. bind exactly one listener in `init()`;
+3. write to `state`;
+4. call `saveState()`;
+5. push `notionPushSettingsIfReady()` or `notionPushSettingsNow()` if it is a synced preference;
+6. call `refresh()` or the relevant render helper if visible UI depends on it.
+
+### Integration boundaries
+
+- Model cards do not perform production OCR or parsing; they select/test routes consumed by Scan.
+- Notion schema functions manage DB shape, not app state shape. Keep receipt schema migration separate from Notion property-name polish.
+- `fetchLiveRate()` updates rate and UI, but budget remains HKD-anchored.
+- Settlement panel must call the shared `computeSettlements` used by Stats.
+- Itinerary import must validate enough structure for Dashboard/Timeline/Weather to survive missing fields.
+
+### Debug checklist
+
+1. Saved key disappeared from input: expected; check key status line, not the empty field.
+2. Other device did not receive setting: check Notion meta row push/pull, not receipt sync.
+3. Budget changed after rate refresh: verify HKD anchor and rate clamp logic.
+4. Duplicate event behavior: confirm `init()` guard and avoid binding listeners inside render functions.
+5. Notion schema migration failed: distinguish auth/share permission, proxy failure, and missing DB properties.

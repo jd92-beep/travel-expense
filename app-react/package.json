@@ -1,0 +1,37 @@
+{
+  "name": "travel-expense-react-fresh",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 8902",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4174",
+    "typecheck": "tsc --noEmit",
+    "parity:tabs": "node ../scripts/tab-parity.mjs",
+    "security:scan": "node ../scripts/security-scan.mjs",
+    "smoke:history": "playwright test tests/history-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:dashboard": "playwright test tests/dashboard-parity-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:scan": "playwright test tests/scan-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:timeline": "playwright test tests/timeline-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:weather": "playwright test tests/weather-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:stats": "playwright test tests/stats-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:settings": "playwright test tests/settings-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:security": "playwright test tests/security-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:final-nav": "playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line"
+  },
+  "dependencies": {
+    "lucide-react": "^1.14.0",
+    "motion": "^12.38.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.11"
+  }
+}

@@ -49,7 +49,7 @@ CSS lives at module top — `.timeline`, `.tl-item`, etc. — uses CSS variables
 | `setInterval(...)` | 3822 | Re-renders every 5 min while tab visible — `if (document.hidden) return; if (!tab-timeline.hidden) renderTimeline()` |
 | `window.addEventListener('resize', ...)` | 3813 | 150 ms debounce → `updateTimelineProgress()` |
 
-`nowKey` derivation (lines 3744–3750): formats current Asia/Hong-Kong time as `YYYY-MM-DD HH:MM` so it sorts correctly against `_tlKey(date, time)` strings.
+`nowKey` derivation (inside `renderTimeline`): uses the same trip-aware date decision as `todayForReceipts()`. During the Japan trip window it formats Asia/Tokyo time; outside the trip it falls back to Asia/Hong-Kong. The result is a sortable `YYYY-MM-DD HH:MM` string compared against `_tlKey(date, time)`.
 
 ## 5. Button → Function Map
 
@@ -104,7 +104,7 @@ Internal constants:
 
 - **Metro-station progress bar via CSS variable** — `container.style.setProperty('--progress', '${px}px')`. CSS uses `--progress` to size a vertical gradient/line. Single source of truth, no per-item DOM math.
 - **`_tlKey` sort safety** — when a spot has no `time`, falls back to `'99:99'` so it sorts to the end of the day. Won't be marked passed prematurely.
-- **HKT-derived `nowKey`** — uses `toLocaleString('en-GB', { timeZone: 'Asia/Hong_Kong', ... })` and parses the `DD/MM/YYYY, HH:MM` regex. Note this uses HKT, not JST — slightly inconsistent with Dashboard's `todayForReceipts()` which uses JST. In practice Boss is in JST during the trip, so the 1-hour discrepancy means Timeline marks items "passed" 1 hour earlier than Dashboard's "today" rolls over. Flag for future fix.
+- **Trip-aware `nowKey`** — Timeline now mirrors Dashboard's trip-aware date logic: Japan trip days use `Asia/Tokyo`, outside-trip dates use `Asia/Hong_Kong`. This avoids the old 1-hour mismatch where Dashboard and Timeline could disagree around JST midnight.
 - **`document.hidden` check** in the `setInterval` (line 3823) saves battery — a Page-Visibility–API-aware tick prevents background re-renders.
 - **Animation tip** — when `_currentTab === 'timeline'`, the `setInterval` re-runs `renderTimeline()` not `updateTimelineProgress()` — full DOM rebuild every 5 min. Cheap given small DOM size, but `updateTimelineProgress()` alone would suffice if `time` and overrides haven't changed.
 
@@ -124,3 +124,55 @@ Internal constants:
 | 5-minute interval | Clock maintenance | Page visibility and current tab | Re-renders when Timeline is visible and app is foregrounded |
 
 Timeline is deliberately schedule-only. Actual spend overlays live on Dashboard and History, so this tab stays useful even before Notion/receipts are configured.
+
+## 13. Architecture & Logic Deep Dive
+
+Timeline is a pure schedule projection. Its main job is temporal orientation, not expense reporting, so it deliberately avoids `state.receipts[]` overlays even though Dashboard uses them heavily.
+
+### Data flow
+
+```mermaid
+flowchart TD
+  itinerary["getItinerary / CURRENT_ITINERARY"] --> schedule["getScheduleSpots"]
+  overrides["state.itineraryOverrides"] --> schedule
+  schedule --> render["renderTimeline"]
+  clock["Tokyo or Hong Kong clock"] --> nowKey["nowKey"]
+  render --> cards["tl-item cards"]
+  nowKey --> passed["passed class"]
+  cards --> progress["updateTimelineProgress"]
+  progress --> css["CSS --progress + you-are-here marker"]
+  cards --> edit["openSpotEditModal"]
+  edit --> overrides
+```
+
+### Why there are two itinerary helpers
+
+| Helper | Used by | Includes receipt overlays? | Purpose |
+|---|---|---:|---|
+| `getEffectiveSpots(day)` | Dashboard | Yes: lodging/transport receipts can replace or insert spots | Mixed itinerary + actual spend context |
+| `getScheduleSpots(day)` | Timeline | No | Stable planned schedule view with user edits only |
+
+Keeping these separate prevents a scanned hotel receipt or flight ticket from unexpectedly reshaping the metro timeline. If future design wants "actual spend events" in Timeline, add it as a separate layer, not by switching to `getEffectiveSpots()`.
+
+### Rendering model
+
+- `renderTimeline()` rebuilds the full list from itinerary data.
+- `_tlKey(date, time)` converts each spot into a sortable key; missing times become `99:99`.
+- Passed state is computed by string comparison against `nowKey`.
+- `updateTimelineProgress()` measures rendered DOM geometry and sets one CSS variable instead of updating every line segment.
+- Resize and the 5-minute interval are maintenance paths, not data mutation paths.
+
+### Cross-tab contracts
+
+- Settings owns itinerary import/export and spot edits.
+- Dashboard owns receipt-overlaid day cards.
+- Weather consumes itinerary regions/spots for coordinate lookup, but does not share Timeline's progress logic.
+- History/Scan receipt changes should not affect Timeline unless they also update itinerary overrides.
+
+### Debug checklist
+
+1. Wrong item marked passed: inspect `todayForReceipts()`, trip date range, timezone branch, and `_tlKey` output.
+2. Progress marker misplaced: call `updateTimelineProgress()` after layout/resize; check hidden tab measurement.
+3. Edited spot not visible: inspect `_getItineraryOverride(date, idx)` and whether the spot has a stable `_spotIdx`.
+4. Receipts missing from Timeline: expected by design; check Dashboard instead.
+5. Battery/performance issue: replace the 5-minute full re-render with `updateTimelineProgress()` if itinerary data is unchanged.

@@ -15,7 +15,7 @@ The audit + edit surface. Lists every receipt grouped by date, newest first, wit
 - **Delete** — inside the confirm modal.
 - **Live sync badge** (`#historySyncBadge`) — appears top-right when a Notion pull is in flight.
 
-Pull from Notion happens automatically on tab switch if `state.notionToken && state.notionDb` and the last pull was > 30 s ago (debounced via `_lastNotionPull`, line 8806).
+Legacy pulls from Notion on tab switch when its local Notion config exists. React `/react/` pulls only through the Credential Broker, so provider tokens are never stored in the browser.
 
 ## 3. UI Anatomy
 
@@ -134,3 +134,59 @@ Internal constants:
 - Search covers `store`, `note`, `itemsText`, and `region` via lowercased substring matching.
 - Category filter uses `CATEGORIES`; `all` means no category predicate.
 - Date grouping is descending because `state.receipts.slice().reverse()` starts from newest local insertion order.
+
+## 13. Architecture & Logic Deep Dive
+
+History is the app's audit log and cloud-refresh gateway. The render function itself is simple, but the tab is architecturally important because `switchTab('history')` is the only automatic Notion pull path in normal navigation.
+
+### Data flow
+
+```mermaid
+flowchart TD
+  nav["switchTab('history')"] --> pullCheck["Notion configured + 30s debounce"]
+  pullCheck --> pull["notionPullAll(true)"]
+  pull --> merge["merge receipts + meta settings"]
+  merge --> state["state.receipts / settings"]
+  state --> render["renderHistory"]
+  filters["filterCat + historySearch"] --> render
+  render --> cards["receiptCard grouped by date"]
+  cards --> modal["openConfirmModal edit mode"]
+  modal --> save["saveModal / deleteReceipt"]
+  save --> local["saveState + refresh"]
+  save --> push["optional notionPushReceipt / archive page"]
+```
+
+### Responsibilities split
+
+| Concern | Owned by | Notes |
+|---|---|---|
+| List filtering | `renderHistory()` | Pure in-memory filter/search/group; no cloud calls inside the function |
+| Fresh cloud data | `switchTab()` wrapper around History | 30 s debounce avoids repeated Notion API hits |
+| Row UI | `receiptCard(r)` | Shared with Dashboard and day-receipt modal, so card changes are cross-tab changes |
+| Edit/save | Confirm modal + `saveModal()` | History is not a form; it opens the shared receipt editor |
+| Delete | `deleteReceipt()` | Tracks Notion page ids and email `SourceID`s to avoid resurrection |
+| Settings refresh | `refreshSettingsInputsFromState()` after pull | Pull can update budget/rate/person/model settings through meta row |
+
+### Pending email lifecycle
+
+1. Gmail label + Apps Script parse an email and write a Notion row.
+2. Pending records use `store` prefix `⏳ `.
+3. History pull hydrates them into `state.receipts`.
+4. Dashboard shows the pending banner; History shows pending cards.
+5. User opens the card, reviews fields, saves; the pending prefix is removed.
+6. `notionPushReceipt` persists the confirmed state when auto-sync is configured.
+
+### Consistency risks
+
+- Last-write-wins is intentional but risky: two devices can edit the same receipt between pulls.
+- Search/filter output is derived from local state only. If Notion pull fails, History still shows stale local data.
+- Deletion is two-stage: local removal is immediate; Notion archive is best-effort. The resurrection guard is what keeps a failed archive from reappearing on next pull.
+- `receiptCard` must escape user-facing strings because model output and email text can contain arbitrary characters.
+
+### Debug checklist
+
+1. New email import missing: check Notion token/DB/proxy, then force History tab pull or Settings "即時同步".
+2. Deleted email import came back: inspect `state.notionDeletedSourceIds` and whether the row has the same `SourceID`.
+3. Edited receipt did not sync: check `state.autoSync`, `notionPageId`, and the `notionPushReceipt` error toast.
+4. Settings changed after opening History: expected if Notion meta row was newer; verify `__meta_settings__`.
+5. Slow typing in search: full DOM render happens on every input; virtualization would be needed only at very high receipt counts.

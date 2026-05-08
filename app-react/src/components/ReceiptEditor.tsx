@@ -1,0 +1,190 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CATEGORIES, PAYMENTS } from '../lib/constants';
+import { SUPPORTED_CURRENCIES } from '../lib/currency';
+import { getPersons, safePhotoUrl, todayForReceipts } from '../lib/domain';
+import type { AppState, CategoryId, PaymentId, Receipt, SplitMode } from '../lib/types';
+
+const newId = () => `manual_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+export function ReceiptEditor({
+  state,
+  receipt,
+  onCancel,
+  onSave,
+  onDelete,
+  onAddToItinerary,
+}: {
+  state: AppState;
+  receipt?: Receipt | null;
+  onCancel: () => void;
+  onSave: (receipt: Receipt) => void;
+  onDelete?: (receipt: Receipt) => void;
+  onAddToItinerary?: (receipt: Receipt) => void;
+}) {
+  const persons = useMemo(() => getPersons(state), [state]);
+  const first = persons[0];
+  const photoRef = useRef<HTMLInputElement | null>(null);
+  const [draft, setDraft] = useState<Receipt>(() => receipt || {
+    id: newId(),
+    store: '',
+    total: 0,
+    date: todayForReceipts(state),
+    category: 'food',
+    payment: 'cash',
+    personId: first.id,
+    splitMode: 'shared',
+    createdAt: Date.now(),
+  });
+
+  useEffect(() => {
+    setDraft(receipt || {
+      id: newId(),
+      store: '',
+      total: 0,
+      date: todayForReceipts(state),
+      category: 'food',
+      payment: 'cash',
+      personId: first.id,
+      splitMode: 'shared',
+      createdAt: Date.now(),
+    });
+  }, [receipt, state, first.id]);
+
+  const set = <K extends keyof Receipt>(key: K, value: Receipt[K]) => setDraft((d) => ({ ...d, [key]: value }));
+
+  async function attachPhoto(file?: File) {
+    if (!file) return;
+    if (file.size > 900_000) {
+      window.alert('相片太大，請先裁剪或壓縮後再加入。');
+      if (photoRef.current) photoRef.current.value = '';
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('讀取相片失敗'));
+      reader.readAsDataURL(file);
+    });
+    setDraft((d) => ({ ...d, photoThumb: dataUrl.replace(/^data:image\/[^;]+;base64,/, '') }));
+    if (photoRef.current) photoRef.current.value = '';
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <form
+        className="modal sheet"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave({
+            ...draft,
+            store: draft.store.trim() || '未命名',
+            total: Number(draft.total) || 0,
+            originalAmount: Number(draft.originalAmount ?? draft.total) || 0,
+            originalCurrency: draft.originalCurrency || draft.currency || state.tripCurrency,
+            currency: draft.currency || draft.originalCurrency || state.tripCurrency,
+            personId: draft.personId || first.id,
+            splitMode: draft.splitMode || 'shared',
+          });
+        }}
+      >
+        <div className="modal-head">
+          <h2>{receipt ? '編輯紀錄' : '手動記一筆'}</h2>
+          <button type="button" className="icon-btn" onClick={onCancel}>×</button>
+        </div>
+
+        <label>店名 / 項目
+          <input value={draft.store} onChange={(e) => set('store', e.target.value)} autoFocus />
+        </label>
+        <div className="form-grid">
+          <label>日期
+            <input type="date" value={draft.date} onChange={(e) => set('date', e.target.value)} />
+          </label>
+          <label>時間
+            <input type="time" value={draft.time || ''} onChange={(e) => set('time', e.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>金額（legacy total）
+            <input type="text" inputMode="decimal" value={draft.total || ''} onChange={(e) => set('total', Number(e.target.value))} />
+          </label>
+          <label>原貨幣
+            <select value={draft.originalCurrency || draft.currency || state.tripCurrency} onChange={(e) => {
+              set('originalCurrency', e.target.value);
+              set('currency', e.target.value);
+            }}>
+              {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>原金額
+            <input type="text" inputMode="decimal" value={draft.originalAmount ?? draft.total ?? ''} onChange={(e) => set('originalAmount', Number(e.target.value))} />
+          </label>
+          <label>Booking Ref
+            <input value={draft.bookingRef || ''} onChange={(e) => set('bookingRef', e.target.value)} placeholder="KNR358047 / booking id" />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>類別
+            <select value={draft.category} onChange={(e) => set('category', e.target.value as CategoryId)}>
+              {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+            </select>
+          </label>
+          <label>支付
+            <select value={draft.payment} onChange={(e) => set('payment', e.target.value as PaymentId)}>
+              {PAYMENTS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>付款人
+            <select value={draft.personId || first.id} onChange={(e) => set('personId', e.target.value)}>
+              {persons.map((p) => <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>)}
+            </select>
+          </label>
+          <label>分帳
+            <select value={draft.splitMode || 'shared'} onChange={(e) => set('splitMode', e.target.value as SplitMode)}>
+              <option value="shared">Shared</option>
+              <option value="private">私人 / 代付</option>
+            </select>
+          </label>
+        </div>
+        {draft.splitMode === 'private' && (
+          <label>受惠人
+            <select value={draft.beneficiaryId || draft.personId || first.id} onChange={(e) => set('beneficiaryId', e.target.value)}>
+              {persons.map((p) => <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>)}
+            </select>
+          </label>
+        )}
+        <label>地址 / 地圖搜尋
+          <input value={draft.address || ''} onChange={(e) => set('address', e.target.value)} placeholder="例：名古屋市中村区名駅4-6-25" />
+        </label>
+        <label>品項
+          <textarea value={draft.itemsText || ''} onChange={(e) => set('itemsText', e.target.value)} rows={3} />
+        </label>
+        <label>備註
+          <textarea value={draft.note || ''} onChange={(e) => set('note', e.target.value)} rows={3} />
+        </label>
+        <input ref={photoRef} hidden type="file" accept="image/*" onChange={(e) => attachPhoto(e.target.files?.[0])} />
+        <div className="photo-tools">
+          {(draft.photoThumb || safePhotoUrl(draft.photoUrl)) && (
+            <button className="photo-thumb" type="button" onClick={() => window.open(safePhotoUrl(draft.photoUrl, `data:image/jpeg;base64,${draft.photoThumb}`), '_blank', 'noopener,noreferrer')}>
+              <img src={safePhotoUrl(draft.photoUrl, `data:image/jpeg;base64,${draft.photoThumb}`)} alt="receipt" />
+            </button>
+          )}
+          <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>
+          {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>移除相片</button>}
+        </div>
+
+        <div className="modal-actions">
+          {receipt && onDelete ? <button type="button" className="danger" onClick={() => onDelete(receipt)}>刪除</button> : <span />}
+          <div className="action-row">
+            <button type="button" className="secondary" onClick={onCancel}>取消</button>
+            {onAddToItinerary && <button type="button" className="secondary" onClick={() => onAddToItinerary({ ...draft, store: draft.store.trim() || '未命名', total: Number(draft.total) || 0 })}>加入行程</button>}
+            <button type="submit" className="primary">儲存</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}

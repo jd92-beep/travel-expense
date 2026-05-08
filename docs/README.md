@@ -27,8 +27,8 @@ Single global `state` object (line 1747) persisted to `localStorage` under key `
 - `state.budget` (JPY), `state.rate` (HKD per 100 JPY), `state.tripCurrency`
 - `state.persons[]`, `state.shareRatios{}` — split-bill setup
 - `state.scanModel` / `state.voiceModel` / `state.emailModel` — selected LLM per use-case
-- `state.apiKey` (Gemini), `state.zaiKey` (GLM/智譜), `state.minimaxKey`, `state.openrouterKey`
-- `state.notionToken`, `state.notionDb`, `state.proxy` (Cloudflare Worker URL), `state.autoSync`
+- Legacy root app still has local key fields, but React `/react/` uses `state.credentialBrokerUrl`, `state.credentialSession`, and broker-routed Kimi/Google/Notion calls instead of browser-held provider keys.
+- `state.notionDb`, `state.proxy` (legacy proxy URL), `state.autoSync`
 - `state.top10IncludeBigItems`, `state.statsIncludeTransportLodging` — UI toggles (Stats tab)
 - `state.customItinerary` — overrides the built-in `ITINERARY` constant when non-null
 - `state.lastTab` — restored on next load
@@ -42,7 +42,7 @@ Single global `state` object (line 1747) persisted to `localStorage` under key `
 - `VOICE_MODELS` — line 1598 (text models for Cantonese voice parsing)
 - `EMAIL_MODELS` — line 1616 (text models for email-import parsing)
 - `ITINERARY` — line 1630 (built-in 6-day Nagoya itinerary)
-- `OPENROUTER_URL`, `OPENROUTER_MODEL` — line 1716 (`openrouter/elephant-alpha`; active fallback in voice + email parse chains; requires `state.openrouterKey`)
+- Deprecated React providers such as MiniMax, GLM/ZAI, and OpenRouter are not shown in the new React model picker.
 - `APPS_SCRIPT_URL` — raw GitHub copy of `email-to-notion.gs`, used by the in-app Apps Script helper/editor only; email import itself is Gmail → Apps Script → Notion → app pull.
 
 ### Global helpers (used by every tab)
@@ -70,7 +70,7 @@ Single global `state` object (line 1747) persisted to `localStorage` under key `
 - Gemini key rotation: `getGeminiKeys(userKey)` — tries user/vault key first, then any configured backup constants. Public source ships those defaults empty.
 
 ### Sync architecture
-- Notion REST API is CORS-blocked, so all calls go through `state.proxy` (default: `notion-proxy.ftjdfr.workers.dev`, a Cloudflare Worker). The legacy fallback was `corsproxy.io`.
+- Legacy Notion REST calls use `state.proxy`; React `/react/` sends Notion requests to the Credential Broker, which injects the Notion token server-side.
 - Notion DB schema is enforced by `notionEnsureSchema()` (line 6876); `buildNotionProps(r, schemaMap)` (line 6938) maps a receipt onto Notion property payloads.
 - `state.autoSync` toggles per-mutation push.
 - Email-import path is async via Gmail label + Apps Script (`email-to-notion.gs`) → Notion → app pulls on Settings's "📬 即時同步" or History tab open.
@@ -80,7 +80,7 @@ Single global `state` object (line 1747) persisted to `localStorage` under key `
 - `secrets.local.js` is gitignored and is the only supported plaintext local-dev override.
 - GitHub Pages HTML is public too. Do not inject Kimi keys into the Pages artifact; Kimi keys must come from `secrets.local.js` or the Settings UI on the user's device.
 - `cleanSecretValue()` treats unreplaced placeholders such as `__MINIMAX_KEY__` as empty, so a public checkout does not report fake keys as usable.
-- `saveState()` strips `notionToken` before writing `boss-japan-tracker`; user-entered model keys may persist in localStorage on that device so mobile reloads keep working.
+- React `saveState()` strips old provider key fields and broker sessions before writing the shared `boss-japan-tracker` snapshot.
 
 ### Tab order
 Defined by `TAB_ORDER` (search for it in source — used by `switchTab` to compute slide direction). Bottom nav order is: dashboard, scan, timeline, history, weather, stats, settings.
@@ -102,3 +102,58 @@ The visible string `APP BUILD v47` near line 1093 is the cache-bust marker. Bump
 | Open spot popup | `showSpotPopup(opts)` | Fills generic `#hotelPopup`, prepares Maps link/edit action, blocks ghost tab switches on close |
 | Open Maps | `openMapsFromPopup()` / `_openExternalUrl()` | Android intent, iOS Apple Maps, desktop Google Maps web fallback |
 | Check app update | `checkForNewBuild()` | Fetches deployed root HTML, compares `APP_BUILD`, shows update bar |
+
+## Runtime architecture map
+
+The legacy app is best understood as a small client-side state machine wrapped in seven tab renderers. `index.html` owns the whole runtime: static DOM sections, global constants, global `state`, render functions, modal functions, and provider/sync helpers. The tab docs below describe each tab, but these are the cross-cutting layers every tab depends on:
+
+```mermaid
+flowchart TD
+  boot["Boot: loadState + init"] --> state["Global state: boss-japan-tracker"]
+  state --> router["switchTab(name)"]
+  router --> dashboard["Dashboard render"]
+  router --> scan["Scan input + confirm modal"]
+  router --> history["History render + Notion pull"]
+  router --> timeline["Timeline render"]
+  router --> weather["Weather render + wx cache"]
+  router --> stats["Stats render + Chart.js"]
+  router --> settings["Settings controls"]
+  scan --> modal["openConfirmModal / saveModal"]
+  history --> modal
+  dashboard --> spot["showSpotPopup / spot edit"]
+  timeline --> spot
+  modal --> state
+  modal --> notion["Notion push/pull via proxy"]
+  settings --> notion
+  notion --> state
+```
+
+### Core dependency contracts
+
+| Contract | Owner | Consumers | Why it matters |
+|---|---|---|---|
+| `state.receipts[]` schema | Scan confirm modal + Notion pull | Dashboard, History, Stats, Timeline spot overlays, CSV export | A receipt field rename breaks almost every tab. Preserve `id`, `date`, `store`, `total`, `category`, `payment`, `SourceID`/`id`, split fields, and Notion ids. |
+| `boss-japan-tracker` storage key | `loadState()` / `saveState()` | Legacy app, `app/`, `app3/` | React renovations share this key. Any migration needs a versioned adapter, not a direct rename. |
+| `ITINERARY` / `state.customItinerary` | Settings import/reset | Dashboard, Timeline, Weather, budget/day logic | It controls schedule display, day labels, region lookup, and phase behavior. |
+| `state.statsIncludeTransportLodging` | Settings toggle | Dashboard + Stats | One flag intentionally flips two defaults: total spend vs daily spend. |
+| `state.persons[]` + `state.shareRatios{}` | Settings | Dashboard person breakdown, Stats settlement, confirm modal split controls | Split-bill math is centralized in `computeSettlements`; UI must not reimplement it differently. |
+| Notion meta row `SourceID=__meta_settings__` | Settings sync | All tabs after pull | Carries non-secret settings between devices. Credentials stay local/vault-only. |
+| Pending email prefix `⏳ ` | Apps Script / Notion pull | Dashboard banner, History confirmation | Prefix is both user-visible status and lightweight workflow state. |
+
+### Render and mutation model
+
+- Read-only tabs: Dashboard, History, Timeline, Weather, Stats mostly rebuild their DOM from `state`.
+- Mutation surfaces: Scan, Settings, and shared modals (`openConfirmModal`, itinerary edit, spot popup actions).
+- Persistence: every accepted mutation calls `saveState()`. Cloud sync is extra and best-effort.
+- Refresh strategy: `refresh()` updates header + visible tabs, while `switchTab()` triggers tab-specific expensive work such as `renderWeather()` or Notion pull.
+- Security boundary: local/vault/API-key state must not become static public HTML. Public GitHub Pages should work with empty placeholders.
+
+### Where to look when changing behavior
+
+| Goal | Start here | Then inspect |
+|---|---|---|
+| Change receipt fields | `openConfirmModal`, `saveModal`, `buildNotionProps` | `receiptCard`, `renderStats`, `computeSettlements`, CSV export |
+| Change tab navigation | `TAB_ORDER`, `switchTab`, bottom nav markup | `autoFitTab`, popup ghost-click guard |
+| Change itinerary display | `getItinerary`, `getEffectiveSpots`, `getScheduleSpots` | Dashboard, Timeline, Weather docs |
+| Change Notion sync | `notionEnsureSchema`, `notionPushReceipt`, `notionPullAll`, `notionPushSettings` | History auto-pull, Settings buttons |
+| Change AI/provider routing | `callGemini`, `callAnyTextModel`, model constants | Scan docs, Settings model cards |

@@ -1,0 +1,106 @@
+const { test, expect } = require('@playwright/test');
+
+test.use({ channel: 'chrome', viewport: { width: 390, height: 844 } });
+
+const receipts = [
+  {
+    id: 'm7_food',
+    store: 'M7 Coffee',
+    total: 111,
+    date: '2026-04-20',
+    time: '08:15',
+    category: 'food',
+    payment: 'cash',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    createdAt: 1,
+  },
+  {
+    id: 'm7_train',
+    store: 'M7 Train',
+    total: 222,
+    date: '2026-04-21',
+    category: 'transport',
+    payment: 'suica',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    createdAt: 2,
+  },
+  {
+    id: 'm7_pending',
+    sourceId: 'email_m7_pending',
+    store: '⏳ M7 Pending',
+    total: 333,
+    date: '2026-04-22',
+    category: 'food',
+    payment: 'credit',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    createdAt: 3,
+  },
+];
+
+test('History search, filter, pending, edit, delete, and safe pull', async ({ page }) => {
+  await page.addInitScript((seedReceipts) => {
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts }));
+  }, receipts);
+
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await page.getByRole('button', { name: 'Pull Notion' }).click();
+  await expect(page.getByText('Credential Broker 未連線')).toBeVisible();
+
+  await page.getByPlaceholder('搜尋店名 / 備註 / 地區').fill('Coffee');
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toHaveCount(1);
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(0);
+  await page.getByPlaceholder('搜尋店名 / 備註 / 地區').fill('');
+
+  await page.locator('.history-filters select').selectOption('food');
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toHaveCount(1);
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(0);
+  await page.locator('.history-filters select').selectOption('all');
+
+  await page.getByRole('button', { name: '確認' }).click();
+  await expect(page.getByText('Email 待確認')).toBeHidden();
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Pending' })).toHaveCount(1);
+
+  await page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' }).click();
+  await page.getByLabel('金額（legacy total）').fill('444');
+  await page.getByRole('button', { name: '儲存' }).click();
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toContainText('¥444');
+
+  await page.locator('.receipt-row').filter({ hasText: 'M7 Train' }).click();
+  await page.getByRole('button', { name: '刪除' }).click();
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(0);
+});
+
+test('History auto pulls through broker session on tab enter', async ({ page }) => {
+  let notionRequests = 0;
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/notion/request', async (route) => {
+    notionRequests += 1;
+    const payload = route.request().postDataJSON();
+    const data = String(payload.path || '').endsWith('/query')
+      ? { results: [], has_more: false }
+      : { properties: {} };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data }),
+    });
+  });
+
+  await page.addInitScript(() => {
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'test-session',
+      credentialSessionExpiresAt: Date.now() + 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: [] }));
+  });
+
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await expect(page.getByText(/已自動從 Notion 合併/)).toBeVisible();
+  await expect.poll(() => notionRequests).toBeGreaterThan(0);
+});

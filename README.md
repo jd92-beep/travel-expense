@@ -38,6 +38,7 @@
 ```
 travel-expense/
 ├── index.html          # Entire frontend (~10,000 lines)
+├── app-react/          # Fresh React renovation, deployed under /react/
 ├── email-to-notion.gs  # Google Apps Script backend (~1,200 lines)
 ├── HANDOVER.md         # Session context for Claude (read this first)
 ├── docs/               # Per-tab technical docs
@@ -90,23 +91,20 @@ Forward address: `ftjdfr+expense@gmail.com`
 ## AI providers
 
 ### Receipt scan (vision)
-1. Kimi K2.6 / `kimi-for-coding` (primary when key + proxy are configured)
-2. MiniMax VLM
-3. GLM-4.6V
-4. Gemini vision fallback
+1. Kimi / `kimi-for-coding` through the server-side Credential Broker
+2. Google Gemma backup through the same broker
+3. Local heuristic parser when the broker or provider is unavailable
 
 ### Email parsing (text)
-1. Kimi K2.6 / `kimi-for-coding` (primary when key + proxy are configured)
-2. GLM-5.1 / GLM-5 / GLM-5-turbo
-3. MiniMax M2.7
-4. OpenRouter / Elephant-Alpha
-5. Gemini / Gemma fallback
-6. GLM-4-Flash (last resort)
+1. Kimi / `kimi-for-coding` through the server-side Credential Broker
+2. Google Gemma backup through the same broker
+3. Local heuristic parser when AI JSON cannot be produced
 
 ## Security
 
 - Repo is public; never commit real API keys, OAuth tokens, Notion tokens, or generated deploy artifacts with injected secrets.
-- Kimi key is intentionally not injected into GitHub Pages HTML because the deployed page source is public. Use local `secrets.local.js` (gitignored) or Settings on the device.
+- React `/react/` never receives Notion, Kimi, or Google provider credentials. It uses a short-lived Credential Broker session after app unlock.
+- Expired provider credentials are rotated from Settings through the broker; the typed value is sent once over HTTPS and is not written to localStorage, IndexedDB, backup JSON, Notion, docs, or Pages output.
 - `secrets.local.js.example` contains placeholders only; copy it to `secrets.local.js` for local testing.
 
 ---
@@ -148,6 +146,39 @@ JSON.parse(localStorage.getItem('boss-japan-tracker'))
 // Reset everything
 localStorage.removeItem('boss-japan-tracker'); location.reload()
 ```
+
+## Fresh React renovation
+
+The stable legacy app stays at the GitHub Pages root. The fresh React app is a new implementation under `app-react/` and deploys to `/react/`. It does not reuse the older `app/` or `app3/` implementations.
+
+```bash
+cd app-react
+npm install
+npm run dev
+npm run build
+```
+
+React Fresh shares the same `boss-japan-tracker` storage key and now has standalone React entry points for Dashboard, manual receipt add/edit/delete, receipt time/address/booking-ref/photo fields, receipt-to-itinerary save, separate camera/gallery OCR, voice/text parsing, email paste import with batch confirmation, email screenshot parsing, Scan-tab Notion pull for pending email records, Gmail address copy, History search/filter + pending confirm, editable Timeline spots with Maps links and per-day receipt modals, live Weather via Open-Meteo/JMA, Stats settlement/top-10/trend views, expandable Settings cards, broker-backed credential rotation, Notion sync/schema migration, Shortcut helper, multi-currency conversion, CSV export, full JSON backup/restore, offline notices, and update prompts. The React AI router uses `kimi/kimi-code` / `kimi-for-coding` through the Credential Broker first, then Google Gemma backup through the broker, then local fallback parsing. The legacy app remains available at the root as the stable baseline, but React controls no longer route feature buttons back to it.
+
+## Credential Broker
+
+The broker lives in `workers/credential-broker/` and is deployed separately from GitHub Pages. Its source is safe to commit because provider credentials are not stored in code or config.
+
+Required secret setup happens in Cloudflare only:
+
+```bash
+cd workers/credential-broker
+node --check src/index.js
+npm run self-test
+wrangler secret put APP_UNLOCK_HASH
+wrangler secret put APP_SESSION_SECRET
+wrangler secret put ADMIN_ROTATION_HASH
+wrangler secret put CREDENTIALS_KEK
+wrangler kv namespace create CREDENTIALS_VAULT
+npm run seed:vault # optional admin-only encrypted provider credential seed
+```
+
+The React app stores only `credentialBrokerUrl`, `credentialSession`, and `credentialSessionExpiresAt`; provider keys are kept encrypted in Worker KV.
 
 ---
 

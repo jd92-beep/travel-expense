@@ -1695,7 +1695,7 @@ const ITINERARY = [
 // Keys are stored in the encrypted vault / local dev override only — never
 // hardcoded in source. Build-time placeholders must not count as real keys,
 // otherwise a public checkout reports "key present" while sending
-// Authorization: Bearer __PLACEHOLDER__.
+// an auth header with a placeholder value.
 function cleanSecretValue(v) {
   const s = (v == null ? '' : String(v)).trim();
   return /^__[\w-]+__$/.test(s) ? '' : s;

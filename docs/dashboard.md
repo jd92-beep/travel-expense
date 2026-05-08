@@ -159,3 +159,50 @@ Internal constants:
 | `jumpToReceipt(id)` | Navigate from dashboard modal to editable record | Receipt id | Closes modal, switches to History, highlights/edit target |
 
 Dashboard is intentionally read-heavy. Direct writes only happen through shared modals opened from this tab: manual add, receipt edit, spot edit, and day receipt jumps.
+
+## 13. Architecture & Logic Deep Dive
+
+Dashboard is the app's "state projection" tab: it does not own receipt creation, cloud sync, or model routing; it turns the current `state` snapshot into a trip-control view. That matters because almost every Dashboard number can be wrong if an upstream state contract drifts.
+
+### Data flow
+
+```mermaid
+flowchart TD
+  receipts["state.receipts[]"] --> phase["getReceiptPhase"]
+  receipts --> today["todayForReceipts filter"]
+  receipts --> overlays["getEffectiveSpots overlays"]
+  trip["state.tripDateRange + getItinerary"] --> phase
+  trip --> budget["adaptive daily budget"]
+  settings["budget, rate, statsIncludeTransportLodging"] --> budget
+  settings --> totals["today / total / average cards"]
+  people["persons + split fields"] --> breakdown["renderPersonBreakdown"]
+  phase --> prep["prep/post summary rows"]
+  today --> totals
+  overlays --> itinerary["itineraryList day cards"]
+  itinerary --> popup["showSpotPopup / openDayReceiptsModal"]
+```
+
+### Logic layers
+
+| Layer | Responsibility | Failure mode if changed carelessly |
+|---|---|---|
+| Date layer | `todayForReceipts()` aligns receipts to the trip timezone, while `getCurrentDay()` decides prep/trip/post display | Today spend, location chip, and trip day can disagree around midnight |
+| Category filter layer | `statsIncludeTransportLodging` flips total vs daily inclusion defaults | Dashboard and Stats totals appear inconsistent |
+| Budget layer | subtracts prep spend and past trip spend before computing today's remaining quota | Flight/hotel prepay can incorrectly crush daily budget |
+| Itinerary overlay layer | lodging/transport receipts become visible schedule spots; food/shopping collapse into the amber receipt chip | Dashboard becomes cluttered or hides important transport/hotel events |
+| Popup layer | generated inline `showSpotPopup({...})` bridges day cards to maps/edit flows | Bad escaping can break the whole day-card HTML |
+
+### Cross-tab contracts
+
+- History owns fresh cloud hydration; Dashboard trusts `state.receipts` and only reflects whatever was last pulled.
+- Scan/manual modal owns receipt creation; Dashboard's quick-add button is only a shortcut into that shared modal.
+- Timeline intentionally uses `getScheduleSpots`, not `getEffectiveSpots`; do not expect Timeline to show Dashboard's receipt overlays.
+- Settings owns budget, rate, itinerary, people, and the flight/lodging toggle. Dashboard should not duplicate those controls.
+
+### Debug checklist
+
+1. Wrong total: check `state.statsIncludeTransportLodging`, receipt categories, and whether the number is "total" or "daily".
+2. Wrong day/location: compare `todayForReceipts()`, `getCurrentDay()`, and `state.tripDateRange`.
+3. Missing hotel/flight in itinerary card: inspect `getEffectiveSpots()` and whether the receipt category/date/time matches.
+4. Pending email banner missing: confirm History/Settings successfully ran `notionPullAll()` and that stores still start with `⏳ `.
+5. Popup opens on wrong tab: inspect `switchTab()` ghost-click guard and `closeHotelPopup()` timing before changing Dashboard markup.

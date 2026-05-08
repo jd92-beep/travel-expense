@@ -145,3 +145,57 @@ Internal constants:
 - `private` with no different `beneficiaryId`: payer owns the item; it does not create a debt.
 - `private` with another `beneficiaryId`: full amount is direct payer → beneficiary debt, independent of share ratio.
 - Greedy matching reduces final transfers to a minimal practical set while tolerating rounding under ¥0.5.
+
+## 13. Architecture & Logic Deep Dive
+
+Stats is the analytical projection of `state.receipts[]`. It is read-heavy like Dashboard, but it owns the most complex pure computation in the app: N-person settlement.
+
+### Data flow
+
+```mermaid
+flowchart TD
+  receipts["state.receipts[]"] --> buckets["category / payment / daily buckets"]
+  receipts --> split["computeSettlements"]
+  people["state.persons[]"] --> split
+  ratios["state.shareRatios{}"] --> split
+  buckets --> charts["Chart.js charts"]
+  split --> settlement["renderSettlementHtml"]
+  receipts --> top10["Top 10 list"]
+  toggle["state.top10IncludeBigItems"] --> top10
+  budget["state.budget + itinerary length"] --> trend["daily trend colors"]
+  trend --> charts
+```
+
+### Settlement algorithm
+
+| Step | What happens | Why |
+|---|---|---|
+| Normalize people | `getPersons()` guarantees at least Tony | Legacy receipts without `personId` still have an owner |
+| Split receipts | shared vs private vs cross-private | Separates ratio-based expenses from personal spending |
+| Build ledger | `paidShared - shouldPayShared ± crossPrivate` per person | One balance can represent all obligations |
+| Match transfers | biggest debtor pays biggest creditor until within ¥0.5 | Produces a small practical transfer list |
+| Render explanation | `renderSettlementHtml` shows shared, private, and cross-private tracks | Prevents "why do I owe this?" confusion |
+
+### Chart lifecycle
+
+Stats always destroys old Chart.js instances before recreating them. This is important because:
+
+- canvases keep listeners internally;
+- dataset shape changes when categories/payment methods appear or disappear;
+- hidden-tab rendering can otherwise leave stale hover/tooltip state;
+- full recreate is simpler than mutating each chart in place.
+
+### Cross-tab contracts
+
+- Settings uses the same `computeSettlements` via its live settlement panel. Do not fork settlement math for Settings.
+- Dashboard's budget logic is adaptive and prep-aware; Stats trend threshold is intentionally simpler (`budget / itinerary length`).
+- Scan/History control whether a receipt is `shared`, `private`, or cross-private. Stats only interprets those fields.
+- The TOP 10 toggle is a settings-like preference because it syncs through the Notion meta row.
+
+### Debug checklist
+
+1. Settlement looks wrong: inspect `splitMode`, `personId`, `beneficiaryId`, and `state.shareRatios`.
+2. Person chart differs from settlement: chart shows "paid by" totals; settlement shows "owes/owed" ledger.
+3. TOP 10 toggle not sticking: check the native checkbox `change` handler and `notionPushSettingsIfReady()`.
+4. Chart duplicated or tooltips weird: confirm every existing `charts.*` instance is destroyed before recreation.
+5. Dashboard and Stats budget differ: expected for adaptive daily budget vs retrospective trend threshold.
