@@ -1,13 +1,13 @@
-import { BarChart3, CalendarDays, CloudSun, Home, List, PlusCircle, Settings } from 'lucide-react';
+import { BarChart3, CalendarDays, CloudSun, Home, List, ScanLine, Settings } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TAB_MANIFEST } from '../lib/tabs';
 import type { TabId } from '../lib/types';
-import { BottomDock, StatusPill } from './ui';
+import { BottomDock, StatusPill, WindmillTransition } from './ui';
 
 const icons: Record<TabId, ReactNode> = {
   dashboard: <Home size={20} />,
-  scan: <PlusCircle size={20} />,
+  scan: <ScanLine size={20} />,
   timeline: <CalendarDays size={20} />,
   history: <List size={20} />,
   weather: <CloudSun size={20} />,
@@ -26,6 +26,7 @@ export function Shell({
 }) {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
+  const raf = useRef<number | null>(null);
 
   useEffect(() => {
     const onOnline = () => setOnline(true);
@@ -38,6 +39,29 @@ export function Shell({
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const update = () => {
+      raf.current = null;
+      const max = Math.max(1, document.body.scrollHeight - window.innerHeight);
+      const y = Math.max(0, window.scrollY);
+      root.style.setProperty('--scroll-y', `${y.toFixed(0)}px`);
+      root.style.setProperty('--scroll-progress', `${Math.min(1, y / max).toFixed(4)}`);
+    };
+    const onScroll = () => {
+      if (raf.current != null) return;
+      raf.current = window.requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (raf.current != null) window.cancelAnimationFrame(raf.current);
     };
   }, []);
 
@@ -58,6 +82,7 @@ export function Shell({
         <StatusPill tone="ok">Broker-ready</StatusPill>
       </header>
       <main className="content">{children}</main>
+      <WindmillTransition activeKey={active} />
       <BottomDock
         active={active}
         ariaLabel="主要分頁"

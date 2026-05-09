@@ -29,7 +29,7 @@
 | Backend | Google Apps Script (2-hour cron) — no server required |
 | Database | Notion API (via CORS proxy) |
 | Weather | Open-Meteo `jma_seamless` model — official JMA data, free, no key |
-| Deploy | GitHub Pages (auto from `main`) |
+| Deploy | GitHub Pages (auto from `main`) + optional Vercel Hobby for React previews |
 
 ---
 
@@ -179,6 +179,25 @@ npm run seed:vault # optional admin-only encrypted provider credential seed
 ```
 
 The React app stores only `credentialBrokerUrl`, `credentialSession`, and `credentialSessionExpiresAt`; provider keys are kept encrypted in Worker KV.
+
+## Vercel React deployment
+
+The React app can also be imported into Vercel Hobby as a Git-connected Vite project.
+
+Recommended Vercel project settings:
+
+- Repository: `jd92-beep/travel-expense`
+- Root Directory: `app-react`
+- Framework Preset: `Vite`
+- Install Command: `npm ci`
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Production Branch: `main`
+- Node.js: `22`
+
+GitHub Pages keeps serving the legacy app at the root and React at `/travel-expense/react/`. Vercel serves the React app at `/`; `vite.config.ts` chooses `/` on Vercel, `VITE_BASE_PATH` when explicitly set, and `/travel-expense/react/` for local/GitHub Pages.
+
+Do not add Notion, Kimi, Google, or app unlock secrets to Vercel frontend environment variables. The browser app must keep using the Cloudflare Credential Broker.
 
 ---
 

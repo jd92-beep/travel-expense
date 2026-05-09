@@ -21,10 +21,15 @@
     "smoke:final-nav": "playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.2.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
     "motion": "^12.38.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

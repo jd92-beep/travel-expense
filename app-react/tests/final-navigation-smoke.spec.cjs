@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 test.use({ channel: 'chrome' });
 
 const tabs = [
-  ['主頁', '預算進度'],
+  ['主頁', 'Total Budget'],
   ['記帳', '快速記帳'],
   ['行程', '行程時間線'],
   ['紀錄', '紀錄中心'],
@@ -30,8 +30,9 @@ for (const [name, viewport] of [
     const page = await context.newPage();
     await installTrust(page);
     await page.goto('http://localhost:8902/travel-expense/react/');
+    const nav = page.getByLabel('主要分頁');
     for (const [tabLabel, expectedText] of tabs) {
-      await page.getByRole('button', { name: new RegExp(tabLabel) }).click();
+      await nav.getByRole('button', { name: tabLabel, exact: true }).click();
       await expect(page.getByText(expectedText).first()).toBeVisible();
     }
     await context.close();

@@ -12,6 +12,15 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.getByText('快速記帳')).toBeVisible();
   await expect(page.getByRole('button', { name: '相機' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '相簿' }).first()).toBeVisible();
+  await expect(page.locator('#scan-camera-input')).toHaveAttribute('capture', 'environment');
+  await page.locator('#scan-camera-input').setInputFiles({
+    name: 'm5-camera-receipt.jpg',
+    mimeType: 'image/jpeg',
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+  });
+  await expect(page.getByText('編輯紀錄')).toBeVisible();
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('m5-camera-receipt');
+  await page.getByRole('button', { name: '取消' }).click();
 
   await page.getByRole('button', { name: '手動記一筆' }).click();
   await page.getByLabel('店名 / 項目').fill('M5 手動測試');

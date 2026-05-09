@@ -127,7 +127,7 @@ export function ReceiptEditor({
         <div className="form-grid">
           <label>類別
             <select value={draft.category} onChange={(e) => set('category', e.target.value as CategoryId)}>
-              {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+              {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
           <label>支付
@@ -139,7 +139,7 @@ export function ReceiptEditor({
         <div className="form-grid">
           <label>付款人
             <select value={draft.personId || first.id} onChange={(e) => set('personId', e.target.value)}>
-              {persons.map((p) => <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>)}
+              {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
           <label>分帳
@@ -152,7 +152,7 @@ export function ReceiptEditor({
         {draft.splitMode === 'private' && (
           <label>受惠人
             <select value={draft.beneficiaryId || draft.personId || first.id} onChange={(e) => set('beneficiaryId', e.target.value)}>
-              {persons.map((p) => <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>)}
+              {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
         )}

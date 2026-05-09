@@ -61,7 +61,7 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(0);
   await page.locator('.history-filters select').selectOption('all');
 
-  await page.getByRole('button', { name: '確認' }).click();
+  await page.getByRole('button', { name: '確認', exact: true }).click();
   await expect(page.getByText('Email 待確認')).toBeHidden();
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Pending' })).toHaveCount(1);
 

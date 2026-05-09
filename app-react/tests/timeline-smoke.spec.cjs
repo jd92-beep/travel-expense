@@ -15,14 +15,21 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
   await expect(firstMap).toBeVisible();
   await expect(firstMap).toHaveAttribute('href', /maps|maps\.apple/);
 
-  await page.getByRole('button', { name: '編輯' }).first().click();
+  const firstEditableEvent = page.locator('.timeline-event').filter({ has: page.getByRole('button', { name: '編輯' }) }).first();
+  const stableSpotKey = await firstEditableEvent.getAttribute('data-spot-key');
+  expect(stableSpotKey).toBeTruthy();
+  await firstEditableEvent.getByRole('button', { name: '編輯' }).click();
   await expect(page.getByText('編輯行程點')).toBeVisible();
   await page.getByLabel('名稱').fill('M6 Edited Spot');
   await page.getByRole('button', { name: '儲存' }).click();
-  await expect(page.getByText('M6 Edited Spot')).toBeVisible();
+  const editedEvent = page.locator('.timeline-event').filter({ hasText: 'M6 Edited Spot' });
+  await expect(editedEvent).toBeVisible();
+  await expect(editedEvent).toHaveAttribute('data-spot-key', stableSpotKey || '');
   await page.reload();
-  await expect(page.getByText('M6 Edited Spot')).toBeVisible();
-  await page.locator('.timeline-event').filter({ hasText: 'M6 Edited Spot' }).getByRole('button', { name: '編輯' }).click();
+  const reloadedEditedEvent = page.locator('.timeline-event').filter({ hasText: 'M6 Edited Spot' });
+  await expect(reloadedEditedEvent).toBeVisible();
+  await expect(reloadedEditedEvent).toHaveAttribute('data-spot-key', stableSpotKey || '');
+  await reloadedEditedEvent.getByRole('button', { name: '編輯' }).click();
   await page.getByRole('button', { name: '還原' }).click();
   await expect(page.getByText('M6 Edited Spot')).toBeHidden();
 

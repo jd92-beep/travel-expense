@@ -1,9 +1,15 @@
+import type { ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { BarChart3, HandCoins, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip } from '../domain/trip/normalize';
 import { categoryById, computeSettlements, displayStore, fmt, getPersons, hkd } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
-import { EmptyState, GlassCard, MetricCard, ProgressRing, StatusPill } from '../components/ui';
+import { EmptyState, GlassCard, StatusPill } from '../components/ui';
+import { AvatarBadge } from '../components/AvatarBadge';
+import { VisualIcon } from '../components/VisualIcon';
+import { categoryIconId } from '../lib/iconManifest';
+import '../styles/stats.css';
 
 export function Stats({ state, updateState }: { state: AppState; updateState: (patch: Partial<AppState>) => void }) {
   const trip = activeTrip(state);
@@ -17,6 +23,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   const transferTotal = settlement.transfers.reduce((s, t) => s + t.amount, 0);
   const privateTotal = settlement.privateByOwner.reduce((s, n) => s + n, 0);
   const maxPersonTotal = Math.max(1, ...persons.map((_, i) => settlement.sharedByPayer[i] + settlement.privateByOwner[i]));
+  const scopeRatio = Math.min(100, scopedState.receipts.length ? analysisReceipts.length / scopedState.receipts.length * 100 : 0);
   const topReceipts = scopedState.receipts
     .filter((r) => state.top10IncludeBigItems || !isBigTripItem(r))
     .slice()
@@ -28,10 +35,10 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   }, {})).sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <section className="stack stats-tab">
-      <GlassCard className="stats-command">
-        <div>
-          <small className="eyebrow">SETTLEMENT / INSIGHTS</small>
+    <section className="stack stats-tab stats-cockpit">
+      <GlassCard className="stats-command stats-glass">
+        <div className="stats-command-copy">
+          <small className="eyebrow">旅費管制盤 / INSIGHTS</small>
           <h2>分帳統計中心</h2>
           <p>按 active trip 計算分帳、類別、支付方式、Top 10 同每日趨勢。</p>
           <div className="stats-status-row">
@@ -41,95 +48,182 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
             </StatusPill>
           </div>
         </div>
-        <ProgressRing value={Math.min(100, scopedState.receipts.length ? analysisReceipts.length / scopedState.receipts.length * 100 : 0)} label="統計範圍" />
+        <ScopeDial value={scopeRatio} receipts={analysisReceipts.length} transfers={settlement.transfers.length} />
       </GlassCard>
 
       <div className="metric-grid stats-metrics">
-        <MetricCard label="統計總額" value={`¥${fmt(analysisTotal)}`} detail={`HK$ ${fmt(hkd(analysisTotal, state))}`} tone="accent" />
-        <MetricCard label="共同支出" value={`¥${fmt(settlement.sharedTotal)}`} detail={`${persons.length} 人分帳`} />
-        <MetricCard label="私人/代付" value={`¥${fmt(privateTotal)}`} detail={`${settlement.crossPrivate.length} 筆跨私人代付`} tone="success" />
-        <MetricCard label="待轉帳" value={`¥${fmt(transferTotal)}`} detail={settlement.transfers.length ? '需要結算' : '暫時不用轉帳'} tone={settlement.transfers.length ? 'danger' : 'success'} />
+        <CockpitMetric label="統計總額" value={`¥${fmt(analysisTotal)}`} detail={`HK$ ${fmt(hkd(analysisTotal, state))}`} tone="accent" />
+        <CockpitMetric label="共同支出" value={`¥${fmt(settlement.sharedTotal)}`} detail={`${persons.length} 人分帳`} />
+        <CockpitMetric label="私人/代付" value={`¥${fmt(privateTotal)}`} detail={`${settlement.crossPrivate.length} 筆跨私人代付`} tone="success" />
+        <CockpitMetric label="待轉帳" value={`¥${fmt(transferTotal)}`} detail={settlement.transfers.length ? '需要結算' : '暫時不用轉帳'} tone={settlement.transfers.length ? 'danger' : 'success'} />
       </div>
 
-      <GlassCard className="stats-controls">
+      <GlassCard className="stats-controls stats-glass" tone="control">
         <div>
           <h2>統計口徑</h2>
           <p>此開關同 Dashboard/Settings 使用同一個設定；分帳結算仍保留全數 receipts，避免漏計真正欠款。</p>
         </div>
         <div className="stats-toggle-row">
-          <label className="check-row inline-check">
+          <label className="check-row inline-check stats-switch">
             <input type="checkbox" checked={state.statsIncludeTransportLodging} onChange={(e) => updateState({ statsIncludeTransportLodging: e.target.checked })} />
-            包括交通/住宿於統計圖表
+            <span className="switch-track" aria-hidden="true" />
+            <span>包括交通/住宿於統計圖表</span>
           </label>
-          <label className="check-row inline-check">
+          <label className="check-row inline-check stats-switch">
             <input type="checkbox" checked={state.top10IncludeBigItems} onChange={(e) => updateState({ top10IncludeBigItems: e.target.checked })} />
-            TOP 10 包括交通/住宿
+            <span className="switch-track" aria-hidden="true" />
+            <span>TOP 10 包括交通/住宿</span>
           </label>
         </div>
       </GlassCard>
 
-      <GlassCard className="settlement-card">
-        <div className="section-head">
-          <h2><Users size={19} /> 分帳結算</h2>
-          <StatusPill tone={settlement.transfers.length ? 'warning' : 'ok'}>{settlement.transfers.length ? '需要結算' : '不用轉帳'}</StatusPill>
-        </div>
+      <DataPanel
+        className="settlement-card"
+        icon={<Users size={19} />}
+        title="分帳結算"
+        status={<StatusPill tone={settlement.transfers.length ? 'warning' : 'ok'}>{settlement.transfers.length ? '需要結算' : '不用轉帳'}</StatusPill>}
+      >
         {settlement.transfers.length ? settlement.transfers.map((t) => (
-          <div className="transfer transfer-modern" key={`${t.from.id}-${t.to.id}-${t.amount}`}>
-            <span>{t.from.emoji} {t.from.name}</span><b>→</b><span>{t.to.emoji} {t.to.name}</span><strong>¥{fmt(t.amount)}</strong>
-          </div>
+          <motion.div
+            className="transfer transfer-modern stats-transfer"
+            key={`${t.from.id}-${t.to.id}-${t.amount}`}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.24, ease: 'easeOut' }}
+          >
+            <span><AvatarBadge person={t.from} size="sm" /> {t.from.name}</span><b>→</b><span><AvatarBadge person={t.to} size="sm" /> {t.to.name}</span><strong>¥{fmt(t.amount)}</strong>
+          </motion.div>
         )) : <EmptyState title="暫時唔需要互相轉帳" description="所有共同支出與代付已經平衡。" />}
-      </GlassCard>
+      </DataPanel>
 
-      <GlassCard>
-        <div className="section-head">
-          <h2><WalletCards size={19} /> 付款人</h2>
-          <StatusPill tone="neutral">全 receipts</StatusPill>
-        </div>
+      <DataPanel icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全 receipts</StatusPill>}>
         {persons.map((p, i) => (
-          <Bar key={p.id} label={`${p.emoji} ${p.name}`} value={settlement.sharedByPayer[i] + settlement.privateByOwner[i]} max={maxPersonTotal} state={scopedState} color={p.color} />
+          <Bar key={p.id} label={p.name} leading={<AvatarBadge person={p} size="sm" />} value={settlement.sharedByPayer[i] + settlement.privateByOwner[i]} max={maxPersonTotal} state={scopedState} color={p.color} />
         ))}
         {settlement.crossPrivate.length > 0 && (
           <div className="mini-list">
             {settlement.crossPrivate.map((cp) => <span key={cp.id}>代付：{cp.payer.name} 代 {cp.beneficiary.name} 付 ¥{fmt(cp.amount)} · {cp.store}</span>)}
           </div>
         )}
-      </GlassCard>
+      </DataPanel>
 
-      <GlassCard>
-        <div className="section-head">
-          <h2><PieChart size={19} /> 類別</h2>
-          <StatusPill tone="neutral">{state.statsIncludeTransportLodging ? '包含大額' : '日常支出'}</StatusPill>
-        </div>
-        {catTotals.length ? catTotals.map((c) => <Bar key={c.id} label={`${c.icon} ${c.name}`} value={c.total} state={{ ...scopedState, receipts: analysisReceipts }} color={c.color} />) : <EmptyState title="未有紀錄" description="新增 receipt 後會自動顯示類別分佈。" />}
-      </GlassCard>
+      <DataPanel icon={<PieChart size={19} />} title="類別" status={<StatusPill tone="neutral">{state.statsIncludeTransportLodging ? '包含大額' : '日常支出'}</StatusPill>}>
+        {catTotals.length ? catTotals.map((c) => <Bar key={c.id} label={c.name} leading={<VisualIcon id={categoryIconId(c.id)} label={c.name} size="sm" />} value={c.total} state={{ ...scopedState, receipts: analysisReceipts }} color={c.color} />) : <EmptyState title="未有紀錄" description="新增 receipt 後會自動顯示類別分佈。" />}
+      </DataPanel>
 
-      <GlassCard>
-        <div className="section-head">
-          <h2><BarChart3 size={19} /> 支付方式</h2>
-          <StatusPill tone="neutral">{payTotals.length} 種方式</StatusPill>
-        </div>
+      <DataPanel icon={<BarChart3 size={19} />} title="支付方式" status={<StatusPill tone="neutral">{payTotals.length} 種方式</StatusPill>}>
         {payTotals.length ? payTotals.map((p) => <Bar key={p.id} label={p.name} value={p.total} state={{ ...scopedState, receipts: analysisReceipts }} color={p.color} />) : <EmptyState title="未有紀錄" description="現金、信用卡、PayPay、Suica 會分開統計。" />}
-      </GlassCard>
+      </DataPanel>
 
-      <GlassCard>
-        <div className="section-head">
-          <h2><Trophy size={19} /> TOP 10 支出</h2>
-          <StatusPill tone="info">{state.top10IncludeBigItems ? '全項目' : '排除大額'}</StatusPill>
-        </div>
+      <DataPanel icon={<Trophy size={19} />} title="TOP 10 支出" status={<StatusPill tone="info">{state.top10IncludeBigItems ? '全項目' : '排除大額'}</StatusPill>}>
         {topReceipts.length ? topReceipts.map((r, idx) => {
           const cat = categoryById(r.category);
-          return <div className="rank-row rank-modern" key={r.id}><b>{idx + 1}</b><span>{cat.icon} {displayStore(r)}</span><strong>¥{fmt(r.total)}</strong></div>;
+          return (
+            <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
+              <b>{idx + 1}</b>
+              <span><VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {displayStore(r)}</span>
+              <strong>¥{fmt(r.total)}</strong>
+            </motion.div>
+          );
         }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
-      </GlassCard>
+      </DataPanel>
 
-      <GlassCard>
-        <div className="section-head">
-          <h2><TrendingUp size={19} /> 每日趨勢</h2>
-          <StatusPill tone="neutral">{trend.length} 日</StatusPill>
-        </div>
+      <DataPanel
+        className="trend-panel"
+        icon={<TrendingUp size={19} />}
+        title="每日趨勢"
+        status={<StatusPill tone="neutral">{trend.length} 日</StatusPill>}
+      >
+        {trend.length ? <TrendLine trend={trend} /> : null}
         {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color="#2d5a8e" />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
-      </GlassCard>
+      </DataPanel>
     </section>
+  );
+}
+
+function ScopeDial({ value, receipts, transfers }: { value: number; receipts: number; transfers: number }) {
+  const dash = Math.max(0, Math.min(100, value));
+  return (
+    <div className="stats-orbit" aria-label={`統計範圍 ${dash.toFixed(0)}%`}>
+      <svg viewBox="0 0 180 180" role="img">
+        <defs>
+          <linearGradient id="stats-scope-stroke" x1="18" y1="20" x2="150" y2="164" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#d94132" />
+            <stop offset="0.52" stopColor="#d39a29" />
+            <stop offset="1" stopColor="#173a60" />
+          </linearGradient>
+        </defs>
+        <circle cx="90" cy="90" r="72" className="orbit-rail" />
+        <motion.circle
+          cx="90"
+          cy="90"
+          r="72"
+          className="orbit-progress"
+          pathLength="100"
+          strokeDasharray={`${dash} 100`}
+          initial={{ strokeDasharray: '0 100' }}
+          animate={{ strokeDasharray: `${dash} 100` }}
+          transition={{ duration: 0.55, ease: 'easeOut' }}
+        />
+        <path className="orbit-grid" d="M32 90h116M90 32v116M49 49l82 82M131 49l-82 82" />
+        <circle cx="90" cy="90" r="36" className="orbit-core" />
+      </svg>
+      <div className="orbit-copy">
+        <strong>{dash.toFixed(0)}%</strong>
+        <span>統計範圍</span>
+        <small>{receipts} 筆分析 · {transfers} 筆轉帳</small>
+      </div>
+    </div>
+  );
+}
+
+function CockpitMetric({ label, value, detail, tone = 'neutral' }: { label: string; value: ReactNode; detail?: ReactNode; tone?: 'neutral' | 'accent' | 'danger' | 'success' }) {
+  return (
+    <motion.article
+      className={`metric-card stats-metric ${tone}`}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.26, ease: 'easeOut' }}
+    >
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {detail && <small>{detail}</small>}
+      <i aria-hidden="true" />
+    </motion.article>
+  );
+}
+
+function DataPanel({ icon, title, status, children, className = '' }: { icon: ReactNode; title: string; status: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <GlassCard className={`stats-panel stats-glass ${className}`.trim()}>
+      <div className="section-head">
+        <h2>{icon} {title}</h2>
+        {status}
+      </div>
+      {children}
+    </GlassCard>
+  );
+}
+
+function TrendLine({ trend }: { trend: Array<[string, number]> }) {
+  const max = Math.max(1, ...trend.map(([, total]) => total));
+  const points = trend.map(([, total], idx) => {
+    const x = trend.length === 1 ? 50 : idx / (trend.length - 1) * 100;
+    const y = 78 - total / max * 58;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg className="trend-line" viewBox="0 0 100 88" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="stats-trend-fill" x1="0" x2="0" y1="0" y2="1">
+          <stop stopColor="#d94132" stopOpacity=".34" />
+          <stop offset="1" stopColor="#fff7e8" stopOpacity=".08" />
+        </linearGradient>
+      </defs>
+      <polyline points={`0,82 ${points} 100,82`} className="trend-fill" />
+      <motion.polyline points={points} className="trend-stroke" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.62, ease: 'easeOut' }} />
+    </svg>
   );
 }
 
@@ -151,13 +245,20 @@ function paymentTotals(receipts: Receipt[]) {
   return unknownTotal > 0 ? [...totals, { id: 'unknown', name: '其他方式', color: '#6b7280', total: unknownTotal }] : totals;
 }
 
-function Bar({ label, value, state, color, max }: { label: string; value: number; state: AppState; color: string; max?: number }) {
+function Bar({ label, leading, value, state, color, max }: { label: string; leading?: ReactNode; value: number; state: AppState; color: string; max?: number }) {
   const total = max || Math.max(1, state.receipts.reduce((s, r) => s + r.total, 0));
   const summary = `${label}: ¥${fmt(value)} / HK$ ${fmt(hkd(value, state))}`;
   return (
     <div className="bar-row" title={summary} aria-label={summary}>
-      <div><span>{label}</span><b>¥{fmt(value)} · HK$ {fmt(hkd(value, state))}</b></div>
-      <div className="bar-track"><i style={{ width: `${Math.min(100, value / total * 100)}%`, background: color }} /></div>
+      <div><span>{leading}{label}</span><b>¥{fmt(value)} · HK$ {fmt(hkd(value, state))}</b></div>
+      <div className="bar-track">
+        <motion.i
+          style={{ width: `${Math.min(100, value / total * 100)}%`, background: color }}
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.min(100, value / total * 100)}%` }}
+          transition={{ duration: 0.38, ease: 'easeOut' }}
+        />
+      </div>
     </div>
   );
 }

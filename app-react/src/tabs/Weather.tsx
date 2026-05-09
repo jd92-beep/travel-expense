@@ -1,4 +1,4 @@
-import { CloudSun, RefreshCw } from 'lucide-react';
+import { CloudRain, CloudSun, RefreshCw, Sun, Umbrella, Wind } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { GlassCard, LoadingState, StatusPill, Toast } from '../components/ui';
 import { getItinerary } from '../lib/domain';
@@ -83,14 +83,24 @@ export function Weather({ state }: { state: AppState }) {
                 <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
                   {dayRows.length > 1 && <h3>{weather.coord.label}</h3>}
                   {emptyForecast && <p className="notice">旅程日期超出目前預報範圍，會顯示佔位資料；稍後刷新會自動更新。</p>}
-                  <div className="weather-grid">
+                  <div className="weather-grid weather-grid-detailed">
                     {(weather.slots || []).map((slot) => {
                       const live = liveHour === slot.hour;
                       return (
-                        <div className={`weather-slot ${live ? 'is-live' : ''}`} key={slot.hour}>
-                          <span>{slot.hour}:00 {live && <b className="live-badge">LIVE</b>}</span>
+                        <div className={`weather-slot weather-slot-detailed ${live ? 'is-live' : ''}`} key={slot.hour}>
+                          <div className="weather-slot-top">
+                            <span>{formatHour(slot.hour)} {live && <b className="live-badge">LIVE</b>}</span>
+                            <b>{weatherLabel(slot.code)}</b>
+                          </div>
                           <strong>{slot.temp == null ? '—' : `${Math.round(slot.temp)}°C`}</strong>
-                          <small>{weatherLabel(slot.code)} · {slot.rain == null ? '—' : `${slot.rain}%`}</small>
+                          <small>體感 {slot.feelsLike == null ? '—' : `${Math.round(slot.feelsLike)}°C`}</small>
+                          <div className="weather-metrics">
+                            <span><CloudRain size={14} /> {slot.rain == null ? '—' : `${slot.rain}%`} · {formatNumber(slot.precipMm, 'mm')}</span>
+                            <span><Wind size={14} /> {formatNumber(slot.windSpeed, 'km/h')} · 陣 {formatNumber(slot.windGust, 'km/h')}</span>
+                            <span><Umbrella size={14} /> 濕度 {formatNumber(slot.humidity, '%')}</span>
+                            <span><Sun size={14} /> UV {formatNumber(slot.uvIndex, '')} · 雲 {formatNumber(slot.cloudCover, '%')}</span>
+                          </div>
+                          <p className="weather-hint">{weatherHint(slot)}</p>
                         </div>
                       );
                     })}
@@ -103,6 +113,24 @@ export function Weather({ state }: { state: AppState }) {
       })}
     </section>
   );
+}
+
+function formatNumber(value?: number, suffix = ''): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  const n = suffix === 'mm' ? Number(value.toFixed(1)) : Math.round(value);
+  return `${n}${suffix}`;
+}
+
+function formatHour(hour: number): string {
+  return `${String(hour).padStart(2, '0')}:00`;
+}
+
+function weatherHint(slot: { rain?: number; precipMm?: number; windSpeed?: number; windGust?: number; uvIndex?: number; temp?: number; feelsLike?: number }) {
+  if ((slot.rain || 0) >= 60 || (slot.precipMm || 0) >= 1) return '帶遮，行程之間預多少少轉場時間。';
+  if ((slot.windGust || 0) >= 35 || (slot.windSpeed || 0) >= 25) return '風勢較強，留意戶外景點同交通。';
+  if ((slot.uvIndex || 0) >= 6) return 'UV 偏高，防曬同補水要跟身。';
+  if ((slot.feelsLike ?? slot.temp ?? 99) <= 12) return '體感偏涼，晚上活動加件外套會舒服啲。';
+  return '天氣條件穩定，適合按原定行程走。';
 }
 
 function liveSlotHour(date: string, timezone: string): number | null {

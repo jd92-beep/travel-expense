@@ -7,6 +7,9 @@ import { pullAll } from '../lib/notion';
 import type { AppState, Receipt } from '../lib/types';
 
 type ScanMode = 'scan' | 'voice' | 'email' | 'currency';
+const CAMERA_INPUT_ID = 'scan-camera-input';
+const GALLERY_INPUT_ID = 'scan-gallery-input';
+const EMAIL_IMAGE_INPUT_ID = 'scan-email-image-input';
 
 export function Scan({
   onManual,
@@ -47,7 +50,10 @@ export function Scan({
   }
 
   async function handleImage(file?: File, retry = false) {
-    if (!file) return;
+    if (!file) {
+      setStatus('未收到圖片。相機無彈出時，請試相簿或手動記一筆。');
+      return;
+    }
     if (!retry) setLastScanFile(file);
     setBusy('ocr');
     setStatus('讀取收據圖片…');
@@ -188,9 +194,9 @@ export function Scan({
 
   return (
     <section className="stack">
-      <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => handleImage(e.target.files?.[0])} />
-      <input ref={galleryRef} hidden type="file" accept="image/*" onChange={(e) => handleImage(e.target.files?.[0])} />
-      <input ref={emailImageRef} hidden type="file" accept="image/*" multiple onChange={(e) => handleEmailImages(e.target.files)} />
+      <input id={CAMERA_INPUT_ID} ref={cameraRef} className="visually-hidden-file" type="file" accept="image/*" capture="environment" onChange={(e) => handleImage(e.target.files?.[0])} />
+      <input id={GALLERY_INPUT_ID} ref={galleryRef} className="visually-hidden-file" type="file" accept="image/*" onChange={(e) => handleImage(e.target.files?.[0])} />
+      <input id={EMAIL_IMAGE_INPUT_ID} ref={emailImageRef} className="visually-hidden-file" type="file" accept="image/*" multiple onChange={(e) => handleEmailImages(e.target.files)} />
 
       <GlassCard className="scan-hero">
         <div className="section-head">
@@ -202,12 +208,12 @@ export function Scan({
           <StatusPill tone={busy ? 'warning' : 'ok'} icon={busy ? <RefreshCw size={14} className="spin" /> : <CheckCircle2 size={14} />}>{busy || 'ready'}</StatusPill>
         </div>
         <ActionSheet>
-          <button className="primary" type="button" disabled={busy === 'ocr'} onClick={() => cameraRef.current?.click()}>
+          <label className={`primary button-like scan-picker-label ${busy === 'ocr' ? 'is-disabled' : ''}`} htmlFor={busy === 'ocr' ? undefined : CAMERA_INPUT_ID} role="button" tabIndex={busy === 'ocr' ? -1 : 0} aria-disabled={busy === 'ocr'}>
             {busy === 'ocr' ? <RefreshCw size={18} className="spin" /> : <Camera size={18} />} 相機
-          </button>
-          <button className="secondary" type="button" disabled={busy === 'ocr'} onClick={() => galleryRef.current?.click()}>
+          </label>
+          <label className={`secondary button-like scan-picker-label ${busy === 'ocr' ? 'is-disabled' : ''}`} htmlFor={busy === 'ocr' ? undefined : GALLERY_INPUT_ID} role="button" tabIndex={busy === 'ocr' ? -1 : 0} aria-disabled={busy === 'ocr'}>
             <FileImage size={18} /> 相簿
-          </button>
+          </label>
           <button className="secondary" type="button" onClick={onManual}>
             <PlusCircle size={18} /> 手動記一筆
           </button>
@@ -232,13 +238,14 @@ export function Scan({
         </div>
         <p className="muted">可直接喺 React 用相機或相簿。Kimi 係 primary OCR；broker 未連線或 AI 失敗時會開確認表手動補資料，Google backup 只經 broker 使用。</p>
         <div className="action-row wrap">
-          <button className="primary" type="button" disabled={busy === 'ocr'} onClick={() => cameraRef.current?.click()}>
+          <label className={`primary button-like scan-picker-label ${busy === 'ocr' ? 'is-disabled' : ''}`} htmlFor={busy === 'ocr' ? undefined : CAMERA_INPUT_ID} role="button" tabIndex={busy === 'ocr' ? -1 : 0} aria-disabled={busy === 'ocr'}>
             {busy === 'ocr' ? <RefreshCw size={18} className="spin" /> : <Camera size={18} />} 相機
-          </button>
-          <button className="secondary" type="button" disabled={busy === 'ocr'} onClick={() => galleryRef.current?.click()}>
+          </label>
+          <label className={`secondary button-like scan-picker-label ${busy === 'ocr' ? 'is-disabled' : ''}`} htmlFor={busy === 'ocr' ? undefined : GALLERY_INPUT_ID} role="button" tabIndex={busy === 'ocr' ? -1 : 0} aria-disabled={busy === 'ocr'}>
             <FileText size={18} /> 相簿
-          </button>
+          </label>
         </div>
+        <p className="scan-diagnostic">相機 picker 用 native label 開啟；如手機權限或 in-app browser 阻擋，請用相簿或手動記一筆。Secure context: {window.isSecureContext ? 'yes' : 'local/dev'}</p>
         <div className="action-row wrap">
           <button className="secondary" type="button" disabled={!lastScanFile || busy === 'ocr'} onClick={() => handleImage(lastScanFile || undefined, true)}>
             <RefreshCw size={18} /> 重試上一張
@@ -283,9 +290,9 @@ export function Scan({
           <button className="primary" type="button" disabled={!emailText.trim() || busy === 'email'} onClick={handleEmailParse}>
             <Mail size={18} /> 解析成待確認紀錄
           </button>
-          <button className="secondary" type="button" disabled={busy === 'email-image'} onClick={() => emailImageRef.current?.click()}>
+          <label className={`secondary button-like scan-picker-label ${busy === 'email-image' ? 'is-disabled' : ''}`} htmlFor={busy === 'email-image' ? undefined : EMAIL_IMAGE_INPUT_ID} role="button" tabIndex={busy === 'email-image' ? -1 : 0} aria-disabled={busy === 'email-image'}>
             <FileImage size={18} /> 揀 email 截圖
-          </button>
+          </label>
         </div>
       </div>}
 

@@ -77,6 +77,9 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await page.getByPlaceholder('旅伴名字').fill('M10 Friend');
   await page.getByRole('button', { name: /新增/ }).click();
   await expect(page.getByText(/已新增旅伴|M10 Friend/).first()).toBeVisible();
+  await expect(page.getByText(/比例總和/)).toBeVisible();
+  await page.getByRole('button', { name: '重設為均分' }).click();
+  await expect(page.getByText('已重設為均分比例')).toBeVisible();
 
   await setAccordion(page, 'Credentials & Connection');
   await page.getByLabel('New credential').fill('rotate-placeholder');
@@ -94,6 +97,10 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(modelOptions.join(' ')).not.toMatch(/MiniMax|OpenRouter|GLM|ZAI/);
 
   await setAccordion(page, 'Notion Sync');
+  await page.getByRole('button', { name: 'Save Local Settings' }).click();
+  await expect(page.getByText(/本機設定已保存/)).toBeVisible();
+  await page.getByRole('button', { name: 'Save & Push Settings' }).click();
+  await expect(page.getByText(/Save & Push Settings 已安全暫停/)).toBeVisible();
   await page.getByRole('button', { name: '測試' }).click();
   await expect(page.getByText(/測試 Notion 已安全暫停/)).toBeVisible();
 
@@ -118,6 +125,8 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(storageAfterRestore).not.toContain('restore-google-key-should-not-survive');
 
   await setAccordion(page, 'Email');
+  await page.getByRole('button', { name: /Pull pending email/ }).click();
+  await expect(page.getByText(/Pull pending email 已安全暫停/)).toBeVisible();
   await page.getByRole('button', { name: /複製 Shortcut URL/ }).click();
   await expect(page.getByText(/shortcuts:\/\/|已複製 Shortcut URL/)).toBeVisible();
 

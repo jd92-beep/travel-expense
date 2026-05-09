@@ -52,7 +52,7 @@ export function downloadJson(filename: string, value: unknown): void {
   a.href = URL.createObjectURL(blob);
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(a.href);
+  window.setTimeout(() => URL.revokeObjectURL(a.href), 1500);
 }
 
 export function todayYmd(timeZone = 'Asia/Hong_Kong'): string {

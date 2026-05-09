@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, Plane, Pl
 import type { Dispatch, SetStateAction } from 'react';
 import { useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
+import { AvatarBadge } from '../components/AvatarBadge';
 import { parseTripParagraph, testGoogleBackupConnection, testKimiConnection } from '../lib/ai';
 import { activeTrip, migrateAppState } from '../domain/trip/normalize';
 import { AI_MODELS, ITINERARY } from '../lib/constants';
@@ -17,14 +18,13 @@ import {
   type ProviderStatus,
 } from '../lib/credentialBroker';
 import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
-import { computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, validateItinerary } from '../lib/domain';
+import { computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
 import { migrateNotionSchema, pullAll, pullTrips, pushAll, pushSettingsMeta, pushTripPage, testNotion } from '../lib/notion';
 import type { AppState, Person, TripDraft, TripProfile } from '../lib/types';
-import { clearCredentialSession, stripSensitiveState } from '../lib/storage';
+import { clearCredentialSession, saveState, stripSensitiveState } from '../lib/storage';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { GlassCard, StatusPill, Toast } from '../components/ui';
 
-const EMOJIS = ['👦', '👧', '👩', '👨', '🧑', '👵', '👴', '🧒', '🧳', '⭐'];
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
 
 export function Settings({
@@ -45,10 +45,11 @@ export function Settings({
     ...state,
     receipts: state.receipts.filter((receipt) => !receipt.tripId || receipt.tripId === currentTrip.id),
   };
+  const settlement = computeSettlements(activeTripSettlementState);
+  const ratioTotal = persons.reduce((sum, person) => sum + Math.max(0, Number(state.shareRatios[person.id]) || 0), 0);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState('');
   const [newPersonName, setNewPersonName] = useState('');
-  const [newPersonEmoji, setNewPersonEmoji] = useState(EMOJIS[0]);
   const [tripParagraph, setTripParagraph] = useState('');
   const [tripDraft, setTripDraft] = useState<TripDraft | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
@@ -148,12 +149,12 @@ export function Settings({
     const next: Person = {
       id: `p_${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 6)}`,
       name,
-      emoji: newPersonEmoji,
+      emoji: '旅',
       color: COLORS[persons.length % COLORS.length],
     };
     updateState({ persons: [...persons, next], shareRatios: { ...state.shareRatios, [next.id]: 1 } });
     setNewPersonName('');
-    setStatus(`已新增旅伴：${next.emoji} ${next.name}`);
+    setStatus(`已新增旅伴：${next.name}`);
   }
 
   function removePerson(id: string) {
@@ -175,6 +176,32 @@ export function Settings({
       })),
     }));
     setStatus('已移除旅伴，相關 receipt 已轉到第一位旅伴');
+  }
+
+  function resetShareRatios() {
+    updateState({ shareRatios: Object.fromEntries(persons.map((person) => [person.id, 1])) });
+    setStatus('已重設為均分比例');
+  }
+
+  function saveLocalSettingsNow() {
+    saveState(migrateAppState(state));
+    setStatus('本機設定已保存；provider credentials/session 已自動排除。');
+  }
+
+  async function pullPendingEmail() {
+    if (!requireBroker('Pull pending email')) return;
+    await run('Pull pending email', async () => {
+      const pulled = await pullAll(state);
+      const pending = pulled.filter(isPendingReceipt);
+      if (pending.length) {
+        setState((prev) => {
+          const map = new Map(prev.receipts.map((receipt) => [receipt.id, receipt]));
+          for (const receipt of pending) map.set(receipt.id, { ...map.get(receipt.id), ...receipt });
+          return migrateAppState({ ...prev, receipts: [...map.values()] });
+        });
+      }
+      return pending.length ? `已拉取 ${pending.length} 筆待確認 email 紀錄` : `已同步檢查 ${pulled.length} 筆，暫時無待確認 email`;
+    });
   }
 
   function selectTrip(tripId: string) {
@@ -456,7 +483,7 @@ export function Settings({
       <AccordionCard id="settings-people" title="旅伴 / 分帳比例" meta={<span className="pill">{persons.length} 人</span>}>
         {persons.map((p) => (
           <div className="person-edit" key={p.id}>
-            <input value={p.emoji} onChange={(e) => updatePerson(p.id, { emoji: e.target.value.slice(0, 4) || p.emoji })} aria-label={`${p.name} emoji`} />
+            <AvatarBadge person={p} />
             <input value={p.name} onChange={(e) => updatePerson(p.id, { name: e.target.value })} aria-label={`${p.name} name`} />
             <input type="color" value={p.color} onChange={(e) => updatePerson(p.id, { color: e.target.value })} aria-label={`${p.name} color`} />
             <input type="number" min={0} value={state.shareRatios[p.id] ?? 1} onChange={(e) => updateState({ shareRatios: { ...state.shareRatios, [p.id]: Number(e.target.value) } })} aria-label={`${p.name} ratio`} />
@@ -464,15 +491,18 @@ export function Settings({
           </div>
         ))}
         <div className="person-add">
-          <select value={newPersonEmoji} onChange={(e) => setNewPersonEmoji(e.target.value)}>
-            {EMOJIS.map((emoji) => <option key={emoji} value={emoji}>{emoji}</option>)}
-          </select>
           <input value={newPersonName} onChange={(e) => setNewPersonName(e.target.value)} placeholder="旅伴名字" />
           <button className="primary" type="button" onClick={addPerson}><Plus size={18} /> 新增</button>
         </div>
         <div className="mini-list">
-          {computeSettlements(activeTripSettlementState).transfers.map((t) => <span key={`${t.from.id}-${t.to.id}`}>{t.from.emoji} {t.from.name} → {t.to.emoji} {t.to.name} ¥{Math.round(t.amount).toLocaleString()}</span>)}
-          {!computeSettlements(activeTripSettlementState).transfers.length && <span>暫時唔需要互相轉帳</span>}
+          <span>比例總和：{ratioTotal || 0} · Shared ¥{Math.round(settlement.sharedTotal).toLocaleString()}</span>
+          {settlement.transfers.map((t) => <span key={`${t.from.id}-${t.to.id}`}>{t.from.name} → {t.to.name} ¥{Math.round(t.amount).toLocaleString()}</span>)}
+          {!settlement.transfers.length && <span>暫時唔需要互相轉帳</span>}
+          {settlement.balances.map((b) => <span key={b.id}>{b.name}: 已付 shared ¥{Math.round(b.paidShared).toLocaleString()} · 應付 ¥{Math.round(b.shouldPayShared).toLocaleString()}</span>)}
+          {settlement.crossPrivate.map((item) => <span key={item.id}>私人代付：{item.payer.name} 幫 {item.beneficiary.name} 付 ¥{Math.round(item.amount).toLocaleString()} · {item.store}</span>)}
+        </div>
+        <div className="action-row wrap">
+          <button className="secondary" type="button" onClick={resetShareRatios}>重設為均分</button>
         </div>
       </AccordionCard>
 
@@ -563,6 +593,7 @@ export function Settings({
           儲存 receipt 後自動同步
         </label>
         <div className="action-row wrap">
+          <button className="secondary" type="button" disabled={!!busy} onClick={saveLocalSettingsNow}>Save Local Settings</button>
           <button className="secondary" type="button" disabled={!!busy} onClick={() => {
             if (!requireBroker('測試 Notion')) return;
             void run('測試 Notion', async () => `連線正常：${await testNotion(state)}`);
@@ -588,12 +619,13 @@ export function Settings({
             <Upload size={18} /> Push All
           </button>
           <button className="secondary" type="button" disabled={!!busy} onClick={() => {
-            if (!requireBroker('Push Settings')) return;
-            void run('Push Settings', async () => {
+            saveLocalSettingsNow();
+            if (!requireBroker('Save & Push Settings')) return;
+            void run('Save & Push Settings', async () => {
             await pushSettingsMeta(state);
             return '已推送 non-secret settings meta row';
             });
-          }}>Push Settings</button>
+          }}>Save & Push Settings</button>
           <button className="secondary" type="button" disabled={!!busy} onClick={() => {
             if (!requireBroker('Schema migrate')) return;
             void run('Schema', async () => migrateNotionSchema(state));
@@ -604,6 +636,7 @@ export function Settings({
       <AccordionCard id="settings-email" title="Email / Shortcut" icon={<Copy />}>
         <p className="muted">Forward email 去 ftjdfr+expense@gmail.com；或者用 Shortcut URL 將文字送入同一流程。</p>
         <div className="action-row wrap">
+          <button className="secondary" type="button" disabled={!!busy} onClick={() => void pullPendingEmail()}><Download size={18} /> Pull pending email</button>
           <button className="secondary" type="button" onClick={copyShortcutUrl}><Copy size={18} /> 複製 Shortcut URL</button>
           <button className="secondary" type="button" onClick={() => copyText('ftjdfr+expense@gmail.com', '已複製 Gmail 地址')}><Copy size={18} /> 複製 Gmail</button>
         </div>

@@ -110,7 +110,7 @@ export function History({
         </label>
         <select value={category} onChange={(e) => setCategory(e.target.value as 'all' | CategoryId)}>
           <option value="all">全部類別</option>
-          {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+          {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
       {Object.keys(groups).length === 0 && <p className="empty card">未有紀錄</p>}

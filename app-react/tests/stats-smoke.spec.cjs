@@ -33,17 +33,17 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await page.goto('http://localhost:8902/travel-expense/react/');
   await expect(page.getByText('分帳統計中心')).toBeVisible();
   await expect(page.getByText('6 筆紀錄')).toBeVisible();
-  await expect(page.getByText('X Xinxin').first()).toBeVisible();
-  await expect(page.getByText('T Tony').first()).toBeVisible();
+  await expect(page.getByText('Xinxin').first()).toBeVisible();
+  await expect(page.getByText('Tony').first()).toBeVisible();
   await expect(page.locator('.transfer-modern')).toContainText('¥2,850');
   await expect(page.getByText('代付：Tony 代 Xinxin 付 ¥300 · M9 Gift')).toBeVisible();
 
   await expect(page.getByText('M9 Hotel')).toBeVisible();
   await expect(page.getByText('日常支出')).toBeVisible();
-  await expect(page.getByText('🏨 住宿')).toHaveCount(0);
+  await expect(page.locator('.bar-row').filter({ hasText: '住宿' })).toHaveCount(0);
   await page.getByLabel('包括交通/住宿於統計圖表').check();
-  await expect(page.getByText('🏨 住宿')).toBeVisible();
-  await expect(page.locator('.bar-row').filter({ hasText: '🏨 住宿' })).toHaveAttribute('title', /住宿: ¥5,000/);
+  await expect(page.locator('.bar-row').filter({ hasText: '住宿' })).toBeVisible();
+  await expect(page.locator('.bar-row').filter({ hasText: '住宿' })).toHaveAttribute('title', /住宿: ¥5,000/);
   await expect(page.getByText('Suica')).toBeVisible();
 
   await page.getByLabel('TOP 10 包括交通/住宿').uncheck();

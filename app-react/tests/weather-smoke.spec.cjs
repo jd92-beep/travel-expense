@@ -11,20 +11,36 @@ function trustAndState(state) {
 
 function weatherFixture() {
   const dates = ['2026-04-20', '2026-04-21', '2026-04-22', '2026-04-23', '2026-04-24', '2026-04-25'];
-  const hours = [9, 12, 15, 18, 21];
+  const hours = [9, 12, 16, 21];
   const time = [];
   const temperature_2m = [];
+  const apparent_temperature = [];
   const weather_code = [];
   const precipitation_probability = [];
+  const precipitation = [];
+  const relative_humidity_2m = [];
+  const wind_speed_10m = [];
+  const wind_direction_10m = [];
+  const wind_gusts_10m = [];
+  const cloud_cover = [];
+  const uv_index = [];
   for (const date of dates) {
     for (const hour of hours) {
       time.push(`${date}T${String(hour).padStart(2, '0')}:00`);
       temperature_2m.push(21);
+      apparent_temperature.push(20);
       weather_code.push(1);
       precipitation_probability.push(18);
+      precipitation.push(0.2);
+      relative_humidity_2m.push(62);
+      wind_speed_10m.push(13);
+      wind_direction_10m.push(240);
+      wind_gusts_10m.push(24);
+      cloud_cover.push(35);
+      uv_index.push(hour === 12 ? 6 : 2);
     }
   }
-  return { hourly: { time, temperature_2m, weather_code, precipitation_probability } };
+  return { hourly: { time, temperature_2m, apparent_temperature, weather_code, precipitation_probability, precipitation, relative_humidity_2m, wind_speed_10m, wind_direction_10m, wind_gusts_10m, cloud_cover, uv_index } };
 }
 
 async function installState(page, state) {
@@ -46,6 +62,13 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
   await expect(page.getByText('天氣預報')).toBeVisible();
   await expect(page.getByText(/Day 1 · JMA/)).toBeVisible();
   await expect(page.getByText('21°C').first()).toBeVisible();
+  await expect(page.getByText('09:00').first()).toBeVisible();
+  await expect(page.getByText('12:00').first()).toBeVisible();
+  await expect(page.getByText('16:00').first()).toBeVisible();
+  await expect(page.getByText('21:00').first()).toBeVisible();
+  await expect(page.getByText(/體感 20°C/).first()).toBeVisible();
+  await expect(page.getByText(/濕度 62%/).first()).toBeVisible();
+  await expect(page.getByText(/UV 6|UV 2/).first()).toBeVisible();
   expect(urls.some((url) => url.includes('models=jma_seamless'))).toBe(true);
 });
 

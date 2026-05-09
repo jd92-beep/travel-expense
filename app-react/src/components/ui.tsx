@@ -1,17 +1,62 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { cn } from '../lib/cn';
+
+const glassSurface = cva('glass-card liquid-surface', {
+  variants: {
+    tone: {
+      default: '',
+      strong: 'liquid-surface-strong',
+      control: 'liquid-surface-control',
+    },
+  },
+  defaultVariants: {
+    tone: 'default',
+  },
+});
 
 export function GlassCard({
   as: Component = 'section',
   className = '',
+  tone = 'default',
   children,
 }: {
   as?: 'section' | 'article' | 'div';
   className?: string;
+  tone?: VariantProps<typeof glassSurface>['tone'];
   children: ReactNode;
 }) {
-  return <Component className={`glass-card ${className}`.trim()}>{children}</Component>;
+  return <Component className={cn(glassSurface({ tone }), className)}>{children}</Component>;
+}
+
+export function LiquidGlassSurface({
+  as = 'div',
+  tone = 'default',
+  className,
+  children,
+}: {
+  as?: 'section' | 'article' | 'div';
+  tone?: VariantProps<typeof glassSurface>['tone'];
+  className?: string;
+  children: ReactNode;
+}) {
+  return <GlassCard as={as} tone={tone} className={className}>{children}</GlassCard>;
+}
+
+export function AnimatedNumber({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
+  return (
+    <motion.span
+      className="animated-number"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: 'easeOut' }}
+    >
+      {prefix}{Math.round(value).toLocaleString()}{suffix}
+    </motion.span>
+  );
 }
 
 export function StatusPill({
@@ -77,7 +122,7 @@ export function BottomDock<T extends string>({
       {items.map((item) => (
         <button
           key={item.id}
-          className={active === item.id ? 'active' : ''}
+          className={`${active === item.id ? 'active' : ''} dock-item-${item.id}`.trim()}
           type="button"
           onClick={() => onSelect(item.id)}
         >
@@ -87,6 +132,28 @@ export function BottomDock<T extends string>({
         </button>
       ))}
     </nav>
+  );
+}
+
+export function WindmillTransition({ activeKey }: { activeKey: string }) {
+  const [spinning, setSpinning] = useState(false);
+  const previous = useRef(activeKey);
+
+  useEffect(() => {
+    if (previous.current === activeKey) return;
+    previous.current = activeKey;
+    setSpinning(true);
+    const timer = window.setTimeout(() => setSpinning(false), 520);
+    return () => window.clearTimeout(timer);
+  }, [activeKey]);
+
+  return (
+    <div className={`windmill-transition ${spinning ? 'spinning' : ''}`} aria-hidden="true">
+      <i />
+      <i />
+      <i />
+      <i />
+    </div>
   );
 }
 

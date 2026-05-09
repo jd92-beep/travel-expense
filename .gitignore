@@ -8,6 +8,7 @@ app-react/dist/
 .env*
 .dev.vars*
 .wrangler/
+.vercel/
 secrets.local.*
 credential-seed*.json
 credential-vault*.json

@@ -1,0 +1,30 @@
+.dashboard-metrics {
+  margin-top: -2px;
+}
+
+.dashboard-metrics .metric-card {
+  min-height: 104px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.8), rgba(255,248,236,.54)),
+    rgba(255,255,255,.52);
+}
+
+.dashboard-metrics .metric-card strong {
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.person-card {
+  min-height: 116px;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.72), rgba(255,248,236,.54)),
+    rgba(255,255,255,.42);
+}
+
+.person-card b {
+  color: var(--blue);
+  font-variant-numeric: tabular-nums;
+}

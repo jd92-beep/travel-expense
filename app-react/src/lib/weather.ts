@@ -1,6 +1,6 @@
 import type { ItineraryDay } from './types';
 
-export const WEATHER_SLOTS = [9, 12, 15, 18, 21];
+export const WEATHER_SLOTS = [9, 12, 16, 21];
 
 export interface WeatherCoord {
   label: string;
@@ -12,8 +12,16 @@ export interface WeatherCoord {
 export interface WeatherSlot {
   hour: number;
   temp?: number;
+  feelsLike?: number;
   code?: number;
   rain?: number;
+  precipMm?: number;
+  humidity?: number;
+  windSpeed?: number;
+  windDirection?: number;
+  windGust?: number;
+  cloudCover?: number;
+  uvIndex?: number;
 }
 
 export interface DayWeather {
@@ -74,7 +82,7 @@ export function coordForDay(day: ItineraryDay): WeatherCoord {
 }
 
 function weatherCacheKey(coord: WeatherCoord) {
-  return `wx_react_${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`;
+  return `wx_react_v2_${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`;
 }
 
 async function fetchJson(url: string, timeoutMs = 10000) {
@@ -99,7 +107,20 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJm
     // Ignore corrupt cache.
   }
 
-  const base = `https://api.open-meteo.com/v1/forecast?latitude=${coord.lat}&longitude=${coord.lon}&hourly=temperature_2m,weather_code,precipitation_probability&current=temperature_2m,weather_code&timezone=${encodeURIComponent(timezone || 'auto')}&forecast_days=7`;
+  const hourly = [
+    'temperature_2m',
+    'apparent_temperature',
+    'weather_code',
+    'precipitation_probability',
+    'precipitation',
+    'relative_humidity_2m',
+    'wind_speed_10m',
+    'wind_direction_10m',
+    'wind_gusts_10m',
+    'cloud_cover',
+    'uv_index',
+  ].join(',');
+  const base = `https://api.open-meteo.com/v1/forecast?latitude=${coord.lat}&longitude=${coord.lon}&hourly=${hourly}&current=temperature_2m,weather_code&timezone=${encodeURIComponent(timezone || 'auto')}&forecast_days=7`;
   const candidates = [
     ...(useJma ? [{ url: `${base}&models=jma_seamless`, source: 'JMA' }] : []),
     { url: base, source: 'Open-Meteo' },
@@ -117,15 +138,36 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJm
   throw lastError instanceof Error ? lastError : new Error('天氣拉取失敗');
 }
 
-export function slotsForDate(data: { hourly?: { time?: string[]; temperature_2m?: number[]; weather_code?: number[]; precipitation_probability?: number[] } }, date: string): WeatherSlot[] {
+export function slotsForDate(data: { hourly?: {
+  time?: string[];
+  temperature_2m?: number[];
+  apparent_temperature?: number[];
+  weather_code?: number[];
+  precipitation_probability?: number[];
+  precipitation?: number[];
+  relative_humidity_2m?: number[];
+  wind_speed_10m?: number[];
+  wind_direction_10m?: number[];
+  wind_gusts_10m?: number[];
+  cloud_cover?: number[];
+  uv_index?: number[];
+} }, date: string): WeatherSlot[] {
   const time = data.hourly?.time || [];
   return WEATHER_SLOTS.map((hour) => {
     const idx = time.indexOf(`${date}T${String(hour).padStart(2, '0')}:00`);
     return {
       hour,
       temp: idx >= 0 ? data.hourly?.temperature_2m?.[idx] : undefined,
+      feelsLike: idx >= 0 ? data.hourly?.apparent_temperature?.[idx] : undefined,
       code: idx >= 0 ? data.hourly?.weather_code?.[idx] : undefined,
       rain: idx >= 0 ? data.hourly?.precipitation_probability?.[idx] : undefined,
+      precipMm: idx >= 0 ? data.hourly?.precipitation?.[idx] : undefined,
+      humidity: idx >= 0 ? data.hourly?.relative_humidity_2m?.[idx] : undefined,
+      windSpeed: idx >= 0 ? data.hourly?.wind_speed_10m?.[idx] : undefined,
+      windDirection: idx >= 0 ? data.hourly?.wind_direction_10m?.[idx] : undefined,
+      windGust: idx >= 0 ? data.hourly?.wind_gusts_10m?.[idx] : undefined,
+      cloudCover: idx >= 0 ? data.hourly?.cloud_cover?.[idx] : undefined,
+      uvIndex: idx >= 0 ? data.hourly?.uv_index?.[idx] : undefined,
     };
   });
 }

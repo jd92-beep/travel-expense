@@ -53,6 +53,23 @@ Mobile Chrome URL
 - Settings includes an expandable `Credentials & Connection` card for broker status and admin credential rotation.
 - Offline work remains local; sync queue only starts when the broker session is active.
 
+## UI And Mobile Interaction Layer
+
+- Tailwind CSS v4 is present only as an additive theme/utility layer. The app avoids Tailwind preflight so existing custom Liquid Glass CSS remains the source of truth.
+- `ui.tsx` owns local primitives such as `GlassCard`, `LiquidGlassSurface`, `BottomDock`, `ProgressRing`, `AnimatedNumber`, `SegmentedControl`, and receipt/timeline rows.
+- The app shell uses a warm parchment background, subtle animated light, scroll-linked paper/parallax motion, a short windmill tab transition, Liquid Glass surfaces, and reduced-motion fallbacks.
+- Visual emoji are progressively replaced in UI by code-native generated SVG icons and non-realistic illustrated avatars. The legacy `emoji` data field remains for compatibility and Notion text snapshots.
+- Scan camera/gallery/email screenshot inputs use accessible native labels connected to visually hidden file inputs. This keeps mobile Chrome picker activation inside the browser's trusted input path.
+- Weather forecast fetches detailed Open-Meteo hourly variables and renders fixed daily slots at 09:00, 12:00, 16:00, and 21:00. Japan trips may use JMA model candidates; non-Japan trips stay on Open-Meteo.
+- Settings parity additions remain broker-safe: split settlement details, equal split reset, local settings save, server-side settings push, and pending-email pull never store raw provider credentials in React state.
+
+## Deployment Targets
+
+- GitHub Pages remains the canonical public legacy deployment. Root `index.html` stays at `/travel-expense/`; the React build is copied to `/travel-expense/react/`.
+- Vercel Hobby can host the standalone React app from `app-react/` at `/` with `vercel.json`.
+- `vite.config.ts` resolves base path in this order: `VITE_BASE_PATH`, then Vercel `/`, then the GitHub Pages/local `/travel-expense/react/` default.
+- Vercel Preview Deployments should be Git-connected branch/PR previews only. Provider credentials do not belong in Vercel frontend env vars; live Notion/Kimi/Google access still goes through the Credential Broker.
+
 ## Credential Broker Flow
 
 ```text

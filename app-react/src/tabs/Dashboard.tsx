@@ -1,13 +1,38 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, MapPin, Plus, ReceiptText, WalletCards, X } from 'lucide-react';
-import { ActionSheet, GlassCard, MetricCard, ProgressRing, StatusPill } from '../components/ui';
+import { CalendarDays, ChevronDown, ChevronRight, CloudSun, MapPin, Plus, X } from 'lucide-react';
+import { AvatarBadge } from '../components/AvatarBadge';
+import { ActionSheet, GlassCard, MetricCard, ProgressRing } from '../components/ui';
+import { VisualIcon } from '../components/VisualIcon';
 import { categoryById, displayStore, fmt, getItinerary, getReceiptPhase, getPersons, hkd, isPendingReceipt, mapsUrl, receiptRegion, safeExternalUrl, todayForReceipts } from '../lib/domain';
+import { categoryIconId } from '../lib/iconManifest';
 import { activeTrip } from '../domain/trip/normalize';
 import type { AppState, ItinerarySpot, Receipt, TabId } from '../lib/types';
 
 type DashboardSheet =
   | { kind: 'day-receipts' }
   | { kind: 'spot'; spot: ItinerarySpot };
+
+function displayDateRange(startDate: string, endDate: string) {
+  const fmtDate = (date: string) => {
+    const parsed = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return date;
+    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+  };
+  return `${fmtDate(startDate)} – ${fmtDate(endDate)}`;
+}
+
+function weekdayLabel(date: string) {
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(parsed);
+}
+
+function tripLength(startDate: string, endDate: string, fallback: number) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return Math.max(1, fallback);
+  return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+}
 
 export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState; onOpen: (receipt: Receipt) => void; onTab: (tab: TabId) => void; onManual: () => void }) {
   const [sheet, setSheet] = useState<DashboardSheet | null>(null);
@@ -37,51 +62,102 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
   const postTotal = postReceipts.reduce((s, r) => s + r.total, 0);
   const dailyAverage = Math.round(totalForBudget / Math.max(1, itinerary.length));
   const spendDays = new Set(totalReceipts.map((r) => r.date)).size;
+  const recentReceipts = tripReceipts.slice().sort((a, b) => `${b.date} ${b.time || ''}`.localeCompare(`${a.date} ${a.time || ''}`));
+  const length = tripLength(trip.startDate, trip.endDate, itinerary.length);
+  const daySpots = (day?.spots || []).slice(0, 4);
+  const tripCurrency = trip.currencies[0] || state.tripCurrency || 'JPY';
 
   return (
-    <section className="stack">
+    <section className="stack dashboard-screen">
       {pending.length > 0 && <button className="notice notice-button" type="button" onClick={() => onTab('history')}>有 {pending.length} 筆 email 待確認，tap 去紀錄 tab 處理。</button>}
-      <GlassCard className="dashboard-hero">
-        <div>
-          <p className="eyebrow">Active Trip</p>
-          <h2>{trip.name}</h2>
-          <p className="muted">{trip.destinationSummary}</p>
+      <section className="trip-portrait" aria-label="旅程總覽">
+        <div className="trip-title-row">
+          <div>
+            <button className="trip-title-button" type="button" onClick={() => onTab('settings')}>
+              <span>{trip.name}</span>
+              <ChevronDown size={20} />
+            </button>
+            <p>{displayDateRange(trip.startDate, trip.endDate)} ({length} days)</p>
+          </div>
+          <button className="calendar-float" type="button" aria-label="開啟行程" onClick={() => onTab('timeline')}>
+            <CalendarDays size={22} />
+          </button>
         </div>
-        <div className="dashboard-hero-meta">
-          <StatusPill tone="info" icon={<CalendarDays size={14} />}>{trip.startDate} → {trip.endDate}</StatusPill>
-          <StatusPill tone={flipped ? 'ok' : 'warning'} icon={<WalletCards size={14} />}>{flipped ? '包括交通住宿' : '日常支出模式'}</StatusPill>
+
+        <GlassCard className="budget-panorama dashboard-budget">
+          <div className="budget-stat">
+            <span>Total Budget</span>
+            <strong>¥{fmt(state.budget)}</strong>
+            <small>HK$ {fmt(hkd(state.budget, state))}</small>
+          </div>
+          <div className="budget-divider" />
+          <ProgressRing value={budgetPct} label="spent" size={116} />
+          <div className="budget-divider" />
+          <div className="budget-stat align-right">
+            <span>Spent</span>
+            <strong>¥{fmt(totalForBudget)}</strong>
+            <small>HK$ {fmt(hkd(totalForBudget, state))}</small>
+          </div>
+        </GlassCard>
+        <div className="hero-handle" aria-hidden="true" />
+      </section>
+
+      <div className="metric-grid dashboard-metrics">
+        <MetricCard label="今日" value={`¥${fmt(todayTotal)}`} detail={`HK$ ${fmt(hkd(todayTotal, state))} · ${dailyReceipts.length} 筆`} tone={overDaily ? 'danger' : 'accent'} />
+        <MetricCard label="總消費" value={`¥${fmt(total)}`} detail={`HK$ ${fmt(hkd(total, state))} · ${totalReceipts.length} 筆`} />
+        <MetricCard label="日均" value={`¥${fmt(dailyAverage)}`} detail={`${spendDays} 個有消費日 · 上限 ¥${fmt(dailyBudget)}`} tone={overDaily ? 'danger' : 'neutral'} />
+        <MetricCard label="準備階段" value={`¥${fmt(prepTotal)}`} detail={`${prepReceipts.length} 筆行前支出 · ${tripCurrency}`} tone="success" />
+      </div>
+
+      <GlassCard className="today-itinerary-card">
+        <div className="section-head today-head">
+          <div>
+            <p className="eyebrow">今日行程</p>
+            <h2>Today · {weekdayLabel(today)}</h2>
+          </div>
+          <span className="weather-chip"><CloudSun size={22} /> 行程天氣</span>
         </div>
-        <ActionSheet>
-          <button className="secondary" type="button" onClick={onManual}><Plus size={18} /> 手動記一筆</button>
-          <button className="secondary" type="button" onClick={() => setSheet({ kind: 'day-receipts' })}><ReceiptText size={18} /> 今日紀錄</button>
-          <button className="secondary" type="button" onClick={() => onTab('timeline')}><CalendarDays size={18} /> 行程</button>
-        </ActionSheet>
+        <div className="today-rail">
+          {daySpots.length ? daySpots.map((spot) => {
+            const cat = categoryById(spot.type);
+            const matchedReceipt = dailyReceipts.find((r) => displayStore(r).toLowerCase().includes(spot.name.toLowerCase()) || spot.name.toLowerCase().includes(displayStore(r).toLowerCase()));
+            return (
+              <button className="today-line-item" type="button" key={`${spot.time}-${spot.name}`} onClick={() => setSheet({ kind: 'spot', spot })}>
+                <span className="line-time">{spot.time || '--:--'}</span>
+                <i className="line-dot" aria-hidden="true" />
+                <span className="line-card">
+                  <VisualIcon id={categoryIconId(spot.type)} label={cat.name} className="line-icon" size="lg" />
+                  <span className="line-copy">
+                    <strong>{spot.name}</strong>
+                    <small>{spot.note || spot.address || cat.name}</small>
+                  </span>
+                  {matchedReceipt ? <b>¥{fmt(matchedReceipt.total)}</b> : <ChevronRight size={20} />}
+                </span>
+              </button>
+            );
+          }) : <p className="empty">今日未有行程。你可以喺設定加入 Trip Update。</p>}
+        </div>
+        <button className="view-itinerary" type="button" onClick={() => onTab('timeline')}>
+          View full itinerary <ChevronDown size={18} />
+        </button>
       </GlassCard>
 
-      <GlassCard className="budget-card dashboard-budget">
-        <div className="section-head">
-          <div>
-            <p className="eyebrow">Budget</p>
-            <h2>預算進度</h2>
-          </div>
-          <ProgressRing value={budgetPct} label="已用" />
+      <GlassCard className="recent-expenses-card">
+        <div className="section-head recent-head">
+          <h2>Recent Expenses</h2>
+          <button className="link-button" type="button" onClick={() => onTab('history')}>View all</button>
         </div>
-        <div className="bar-track tall"><i style={{ width: `${budgetPct}%`, background: budgetPct > 90 ? '#dc2626' : '#cc2929' }} /></div>
-        <p className="muted">
-          HK$ {fmt(hkd(totalForBudget, state))} / {fmt(hkd(state.budget, state))} · 餘 ¥{fmt(Math.max(0, state.budget - totalForBudget))}
-        </p>
+        <div className="recent-list">
+          {recentReceipts.length ? recentReceipts.slice(0, 3).map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} />) : <p className="empty">暫時未有支出紀錄。</p>}
+        </div>
+        <button className="add-expense-wide" type="button" onClick={onManual}><Plus size={24} /> Add Expense</button>
       </GlassCard>
+
       {overDaily && (
         <div className="notice">
           今日已超過日均上限：¥{fmt(todayTotal)} / ¥{fmt(dailyBudget)}
         </div>
       )}
-      <div className="metric-grid">
-        <MetricCard label="今日" value={`¥${fmt(todayTotal)}`} detail={`HK$ ${fmt(hkd(todayTotal, state))} · ${dailyReceipts.length} 筆`} tone={overDaily ? 'danger' : 'accent'} />
-        <MetricCard label="總消費" value={`¥${fmt(total)}`} detail={`HK$ ${fmt(hkd(total, state))} · ${totalReceipts.length} 筆`} />
-        <MetricCard label="日均" value={`¥${fmt(dailyAverage)}`} detail={`${spendDays} 個有消費日 · 上限 ¥${fmt(dailyBudget)}`} tone={overDaily ? 'danger' : 'neutral'} />
-        <MetricCard label="準備階段" value={`¥${fmt(prepTotal)}`} detail={`${prepReceipts.length} 筆行前支出`} tone="success" />
-      </div>
       {prepReceipts.length > 0 && (
         <div className="card prep-card">
           <div className="section-head">
@@ -106,34 +182,13 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
           {postReceipts.slice(-3).reverse().map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} />)}
         </div>
       )}
-      <div className="card">
-        <div className="section-head">
-          <div>
-            <p className="eyebrow">今日行程</p>
-            <h2>{day?.region || '未設定'}</h2>
-          </div>
-          <span className="pill">{today}</span>
-        </div>
-        <div className="timeline-mini">
-          {(day?.spots || []).map((spot) => (
-            <button className="timeline-mini-row" type="button" key={`${spot.time}-${spot.name}`} onClick={() => setSheet({ kind: 'spot', spot })}>
-              <span>{spot.time}</span>
-              <strong>
-                {spot.name}
-                <small>{spot.address || spot.note || 'Tap 查看詳情'}</small>
-              </strong>
-              <em>{categoryById(spot.type).icon}</em>
-            </button>
-          ))}
-        </div>
-      </div>
       {persons.length > 1 && (
         <div className="card">
           <h2>付款人概覽</h2>
           <div className="person-grid">
             {persons.map((p) => {
               const paid = tripReceipts.filter((r) => (r.personId || persons[0].id) === p.id).reduce((s, r) => s + r.total, 0);
-              return <div key={p.id} className="person-card"><span>{p.emoji}</span><strong>{p.name}</strong><b>¥{fmt(paid)}</b></div>;
+              return <div key={p.id} className="person-card"><AvatarBadge person={p} showName /><b>¥{fmt(paid)}</b></div>;
             })}
           </div>
         </div>
@@ -155,7 +210,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
             {sheet.kind === 'spot' ? (
               <div className="stack">
                 <div className="spot-detail">
-                  <span className="cat">{categoryById(sheet.spot.type).icon}</span>
+                  <VisualIcon id={categoryIconId(sheet.spot.type)} label={categoryById(sheet.spot.type).name} />
                   <div>
                     <p className="eyebrow">{sheet.spot.time || '未設定時間'}</p>
                     <h3>{sheet.spot.name}</h3>
@@ -193,16 +248,17 @@ export function ReceiptRow({ state, receipt, onOpen }: { state: AppState; receip
   const photoSrc = receipt.photoUrl || (receipt.photoThumb ? `data:image/jpeg;base64,${receipt.photoThumb}` : '');
   return (
     <div className="receipt-row" role="button" tabIndex={0} onClick={() => onOpen(receipt)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(receipt); }}>
-      <span className="cat" style={{ background: `${cat.color}22`, color: cat.color }}>{cat.icon}</span>
+      <VisualIcon id={categoryIconId(receipt.category)} label={cat.name} className="cat" />
       <span className="receipt-main">
         <strong>
-          {isPendingReceipt(receipt) ? '⏳ ' : ''}
-          {beneficiary ? '🎁 ' : receipt.splitMode === 'private' ? '🔒 ' : ''}
+          {isPendingReceipt(receipt) && <VisualIcon id="pending" size="sm" className="inline-visual-icon" />}
+          {beneficiary && <VisualIcon id="gift" size="sm" className="inline-visual-icon" />}
+          {!beneficiary && receipt.splitMode === 'private' && <VisualIcon id="private" size="sm" className="inline-visual-icon" />}
           {displayStore(receipt)}
-          {photoSrc && <i className="row-badge">📷</i>}
+          {photoSrc && <VisualIcon id="photo" size="sm" className="inline-visual-icon row-badge" />}
         </strong>
         <small>
-          {[receipt.time, cat.name, receiptRegion(state, receipt), `${person.emoji} ${person.name}`, beneficiary ? `代 ${beneficiary.name}` : '', receipt.bookingRef ? `編號 ${receipt.bookingRef}` : ''].filter(Boolean).join(' · ')}
+          {[receipt.time, cat.name, receiptRegion(state, receipt), person.name, beneficiary ? `代 ${beneficiary.name}` : '', receipt.bookingRef ? `編號 ${receipt.bookingRef}` : ''].filter(Boolean).join(' · ')}
         </small>
         {receipt.address && <a className="map-link" href={mapsUrl(displayStore(receipt), receipt.address)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>地圖：{receipt.address}</a>}
       </span>
