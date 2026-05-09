@@ -42,7 +42,7 @@ export function useSyncEngine(
 ) {
   const stateRef = useRef(state);
   const processingRef = useRef(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceRef = useRef<number | null>(null);
   const lastPushSucceededRef = useRef(true);
 
   stateRef.current = state;

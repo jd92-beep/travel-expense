@@ -7,6 +7,8 @@ import { BlurFade } from '../components/ui/blur-fade';
 import { MagicCard } from '../components/ui/magic-card';
 import { NumberTicker } from '../components/ui/number-ticker';
 import { RippleButton } from '../components/ui/ripple-button';
+import { TextAnimate } from '../components/ui/text-animate';
+import { ShimmerButton } from '../components/ui/shimmer-button';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryById, displayStore, fmt, getItinerary, getReceiptPhase, getPersons, hkd, isPendingReceipt, mapsUrl, receiptRegion, safeExternalUrl, todayForReceipts } from '../lib/domain';
 import { categoryIconId } from '../lib/iconManifest';
@@ -152,7 +154,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
 
       <GlassCard className="recent-expenses-card">
         <div className="section-head recent-head">
-          <h2>Recent Expenses</h2>
+          <h2><TextAnimate animation="blurInUp" by="character" duration={0.6} delay={0.1}>Recent Expenses</TextAnimate></h2>
           <button className="link-button" type="button" onClick={() => onTab('history')}>View all</button>
         </div>
         <div className="recent-list">
@@ -162,7 +164,20 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
             </BlurFade>
           )) : <p className="empty">暫時未有支出紀錄。</p>}
         </div>
-        <RippleButton className="add-expense-wide" onClick={onManual}><Plus size={24} /> Add Expense</RippleButton>
+        <ShimmerButton
+          shimmerColor="#d39a29"
+          shimmerSize="0.15em"
+          shimmerDuration="2s"
+          borderRadius="16px"
+          background="linear-gradient(145deg, #d94132, #c43024)"
+          className="add-expense-wide shimmer-washi"
+          onClick={onManual}
+        >
+          <span className="flex items-center gap-2">
+            <Plus size={24} />
+            Add Expense
+          </span>
+        </ShimmerButton>
       </GlassCard>
 
       {overDaily && (

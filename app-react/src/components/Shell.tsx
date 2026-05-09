@@ -1,11 +1,15 @@
 import { BarChart3, CalendarDays, CloudSun, Home, List, ScanLine, Settings } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { useReducedMotion } from 'motion/react';
 import { TAB_MANIFEST } from '../lib/tabs';
 import type { SyncEngineState, TabId } from '../lib/types';
-import { StatusPill, WindmillTransition } from './ui';
+import { StatusPill } from './ui';
+import { WindmillTransition } from './WindmillTransition';
 import { FloatingDock } from './ui/floating-dock';
 import { NoiseTexture } from './ui/noise-texture';
+import { Particles } from './ui/particles';
+import { AuroraText } from './ui/aurora-text';
 import { SyncStatusIndicator } from './SyncStatusIndicator';
 
 const icons: Record<TabId, ReactNode> = {
@@ -32,6 +36,7 @@ export function Shell({
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
   const raf = useRef<number | null>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     const onOnline = () => setOnline(true);
@@ -72,7 +77,23 @@ export function Shell({
 
   return (
     <div className="app-shell">
-      <NoiseTexture aria-hidden="true" focusable="false" className="pointer-events-none fixed inset-0 -z-20 opacity-[0.11] mix-blend-soft-light" />
+      {/* Japanese particle background — sakura petals floating */}
+      {!prefersReducedMotion && (
+        <Particles
+          className="pointer-events-none fixed inset-0 -z-20"
+          quantity={35}
+          ease={80}
+          color="#d4a574"
+          staticity={40}
+          size={0.6}
+          aria-hidden="true"
+        />
+      )}
+      <NoiseTexture
+        aria-hidden="true"
+        focusable="false"
+        className="pointer-events-none fixed inset-0 -z-10 opacity-[0.08] mix-blend-soft-light"
+      />
       {!online && <div className="top-notice offline">離線模式：資料會繼續保存在本機</div>}
       {updateReady && (
         <div className="top-notice update">
@@ -83,22 +104,26 @@ export function Shell({
       <header className="topbar">
         <div>
           <p className="eyebrow">Secure React · mobile web</p>
-          <h1>Trip Command Center</h1>
+          <h1><AuroraText colors={['#18395c', '#d94132', '#d39a29', '#18395c']} speed={1.2}>Trip Command Center</AuroraText></h1>
         </div>
         {syncState ? <SyncStatusIndicator state={syncState} /> : <StatusPill tone="ok">Broker-ready</StatusPill>}
       </header>
       <main className="content">{children}</main>
       <WindmillTransition activeKey={active} />
-      <FloatingDock
-        desktopClassName="app-floating-dock-desktop"
-        mobileClassName="app-floating-dock-mobile"
-        items={TAB_MANIFEST.map((tab) => ({
-          title: tab.label,
-          icon: icons[tab.id],
-          active: active === tab.id,
-          onSelect: () => onTab(tab.id),
-        }))}
-      />
+
+      {/* Fixed bottom tab bar — never scrolls away */}
+      <div className="fixed-tab-bar">
+        <FloatingDock
+          desktopClassName="app-floating-dock-desktop"
+          mobileClassName="app-floating-dock-mobile"
+          items={TAB_MANIFEST.map((tab) => ({
+            title: tab.label,
+            icon: icons[tab.id],
+            active: active === tab.id,
+            onSelect: () => onTab(tab.id),
+          }))}
+        />
+      </div>
     </div>
   );
 }

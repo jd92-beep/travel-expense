@@ -225,7 +225,7 @@ export function BottomDock<T extends string>({
   );
 }
 
-export function WindmillTransition({ activeKey }: { activeKey: string }) {
+export function WindmillTransitionCSS({ activeKey }: { activeKey: string }) {
   const [spinning, setSpinning] = useState(false);
   const previous = useRef(activeKey);
 
@@ -238,7 +238,7 @@ export function WindmillTransition({ activeKey }: { activeKey: string }) {
   }, [activeKey]);
 
   return (
-    <div className={`windmill-transition ${spinning ? 'spinning' : ''}`} aria-hidden="true">
+    <div className={`windmill-transition ${spinning ? 'spinning' : ''}`} aria-hidden="true" data-legacy-css="true">
       <i />
       <i />
       <i />
@@ -384,3 +384,10 @@ export function Toast({
 }) {
   return <div className={`toast ${tone}`} role="status">{children}</div>;
 }
+
+// Re-export Magic UI text components
+export { TextAnimate } from './ui/text-animate';
+export { AuroraText } from './ui/aurora-text';
+export { HyperText } from './ui/hyper-text';
+export { SparklesText } from './ui/sparkles-text';
+export { AnimatedGradientText } from './ui/animated-gradient-text';
