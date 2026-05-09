@@ -178,6 +178,7 @@ export function weatherLabel(code?: number) {
   if ([1, 2, 3].includes(code)) return '多雲';
   if ([45, 48].includes(code)) return '霧';
   if (code >= 51 && code <= 67) return '雨';
+  if (code >= 80 && code <= 82) return '陣雨';
   if (code >= 71 && code <= 86) return '雪';
   if (code >= 95) return '雷雨';
   return '天氣';

@@ -38,6 +38,13 @@ export function GlassCard({
   const strong = tone === 'strong' || /budget|command|hero|stats|weather|scan/i.test(className);
   return (
     <Component className={cn(glassSurface({ tone }), className)}>
+      <BorderBeam
+          size={strong ? 80 : 56}
+          duration={strong ? 10 : 14}
+          borderWidth={strong ? 1 : 1}
+          colorFrom={strong ? '#d8503d' : 'rgba(216, 80, 61, 0.55)'}
+          colorTo={strong ? '#d9a441' : 'rgba(211, 154, 41, 0.45)'}
+        />
       <MagicCard
         className="glass-magic-layer"
         gradientFrom="#d8503d"
@@ -45,15 +52,6 @@ export function GlassCard({
         gradientColor="rgba(255, 247, 230, 0.5)"
         gradientOpacity={0.14}
       >
-        {strong && (
-          <BorderBeam
-            size={80}
-            duration={10}
-            borderWidth={1}
-            colorFrom="#d8503d"
-            colorTo="#d9a441"
-          />
-        )}
         <div className="glass-magic-content">{children}</div>
       </MagicCard>
     </Component>

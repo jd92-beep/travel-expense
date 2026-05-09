@@ -1,6 +1,8 @@
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 
 export function WindmillTransition({ activeKey }: { activeKey: string }) {
+  const reducedMotion = useReducedMotion();
+  if (reducedMotion) return null;
   return (
     <AnimatePresence mode="wait">
       <motion.div

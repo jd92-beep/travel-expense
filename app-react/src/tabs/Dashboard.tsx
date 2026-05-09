@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronDown, ChevronRight, CloudSun, MapPin, Plus, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AvatarBadge } from '../components/AvatarBadge';
@@ -52,6 +52,20 @@ function tripLength(startDate: string, endDate: string, fallback: number) {
 
 export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState; onOpen: (receipt: Receipt) => void; onTab: (tab: TabId) => void; onManual: () => void }) {
   const [sheet, setSheet] = useState<DashboardSheet | null>(null);
+  const [titleStuck, setTitleStuck] = useState(false);
+  const titleSentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = titleSentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setTitleStuck(!entry.isIntersecting),
+      { rootMargin: '-1px 0px 0px 0px', threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const trip = activeTrip(state);
   const itinerary = getItinerary(state);
   const tripReceipts = useMemo(() => state.receipts.filter((r) => !r.tripId || r.tripId === trip.id), [state.receipts, trip.id]);
@@ -89,7 +103,8 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
     <section className="stack dashboard-screen">
       {pending.length > 0 && <button className="notice notice-button" type="button" onClick={() => onTab('history')}>有 {pending.length} 筆 email 待確認，tap 去紀錄 tab 處理。</button>}
       <section className="trip-portrait" aria-label="旅程總覽">
-        <div className="trip-title-row">
+        <div ref={titleSentinelRef} style={{ height: '1px', marginTop: '-1px' }} aria-hidden="true" />
+        <div className={`trip-title-row${titleStuck ? ' is-stuck' : ''}`}>
           <div>
             <button className="trip-title-button" type="button" onClick={() => onTab('settings')}>
               <span>{trip.name}</span>
@@ -121,7 +136,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
               value={budgetPct}
               gaugePrimaryColor={budgetColors.primary}
               gaugeSecondaryColor={budgetColors.secondary}
-              className="size-[140px]"
+              className="size-[104px] sm:size-[140px]"
             >
               <span className="font-mono text-[28px] font-bold leading-none" style={{ color: budgetColors.primary }}>
                 {Math.round(rawBudgetPct)}%

@@ -22,6 +22,7 @@ const Settings = lazy(() => import('./tabs/Settings').then((module) => ({ defaul
 export function App() {
   const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal } = useAppState();
   const syncEngine = useSyncEngine(state, setState);
+  const { pull, sync } = syncEngine;
   const [tab, setTab] = useState<TabId>(state.lastTab || 'dashboard');
   const [editing, setEditing] = useState<Receipt | null | undefined>(undefined);
   const bootSyncInitiated = useRef(false);
@@ -41,17 +42,17 @@ export function App() {
 
     bootSyncInitiated.current = true;
 
-    window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       if (receiptCountRef.current === 0) {
         console.log('[App] Boot pull — no local receipts, fetching from Notion');
-        void syncEngine.pull();
+        void pull();
       } else {
         console.log('[App] Boot sync — existing local data');
-        void syncEngine.sync();
+        void sync();
       }
     }, 800);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.credentialSession, state.credentialSessionExpiresAt]);
+    return () => window.clearTimeout(timer);
+  }, [state.credentialSession, state.credentialSessionExpiresAt, pull, sync]);
 
   const changeTab = (next: TabId) => {
     setTab(next);
@@ -81,7 +82,15 @@ export function App() {
         changeTab('dashboard');
         if (!bootSyncInitiated.current) {
           bootSyncInitiated.current = true;
-          window.setTimeout(() => void syncEngine.sync(), 500);
+          window.setTimeout(() => {
+            if (receiptCountRef.current === 0) {
+              console.log('[App] Boot pull (unlocked) — no local receipts, fetching from Notion');
+              void pull();
+            } else {
+              console.log('[App] Boot sync (unlocked) — existing local data');
+              void syncEngine.sync();
+            }
+          }, 500);
         }
       }}
     >

@@ -24,7 +24,7 @@
   --glass-strong: rgba(255, 253, 247, .82);
   --ink: #14120f;
   --navy: #18395c;
-  --muted: #756c62;
+  --muted: #5e544a;
   --line: rgba(255, 255, 255, .76);
   --hairline: rgba(121, 89, 55, .18);
   --red: #d94132;
@@ -46,8 +46,7 @@ body {
     radial-gradient(ellipse at 50% 95%, rgba(211, 154, 41, 0.08) 0%, transparent 40%),
     radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.45), transparent 55%),
     radial-gradient(circle at 10% -5%, rgba(255, 229, 189, 0.55), transparent 30%),
-    linear-gradient(180deg, #fdf5e4 0%, #f5ead8 35%, #f0e5d2 70%, #ebe0cc 100%),
-    url('/travel-expense/react/images/sakura-bg.webp') center/cover no-repeat;
+    linear-gradient(180deg, rgba(253, 245, 228, 0.82) 0%, rgba(245, 234, 216, 0.78) 35%, rgba(240, 229, 210, 0.76) 70%, rgba(235, 224, 204, 0.82) 100%);
   color: var(--ink);
   overflow-x: hidden;
 }
@@ -76,8 +75,34 @@ body::after {
     linear-gradient(78deg, transparent 0 58%, rgba(211,154,41,.13) 68%, transparent 78%);
   animation: travel-light-sweep 18s ease-in-out infinite alternate;
 }
+/* Video background layer */
+body .sakura-video-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -35;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  body .sakura-video-bg {
+    display: none;
+  }
+}
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
+
+/* ========== GLOBAL FOCUS VISIBLE ========== */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(24, 57, 92, .35);
+  outline-offset: 2px;
+}
 
 /* ========== FIXED BOTTOM TAB BAR ========== */
 .fixed-tab-bar {
@@ -172,14 +197,10 @@ button { cursor: pointer; }
 .top-notice.update { background: #dbeafe; color: #1d4ed8; }
 .top-notice button { border: 0; border-radius: 999px; padding: 5px 10px; background: #1d4ed8; color: white; font-weight: 900; }
 .topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 8px 0 12px;
-  backdrop-filter: blur(18px);
 }
 h1, h2, p { margin: 0; }
 h1 { font-size: 24px; letter-spacing: 0; color: var(--navy); font-family: "Noto Serif JP", Georgia, "Times New Roman", serif; font-weight: 700; }
@@ -267,22 +288,40 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   backdrop-filter: blur(18px) saturate(1.15);
 }
 .card {
-  padding: 16px;
+  padding: 18px;
   border: 1px solid rgba(255,255,255,0.40);
   box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255,255,255,0.45);
   backdrop-filter: blur(22px) saturate(1.18);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+}
+.card:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-soft), 0 0 0 1px rgba(255,255,255,0.55), inset 0 1px 0 rgba(255,255,255,0.55);
 }
 .glass-card {
   position: relative;
-  overflow: clip;
-  padding: 16px;
+  overflow: visible;
+  padding: 18px;
   border: 1px solid rgba(255,255,255,0.35);
   border-radius: 26px;
   background:
     linear-gradient(135deg, rgba(255,255,255,.74), rgba(255,248,239,.48)),
     var(--glass);
-  box-shadow: var(--shadow-glass), inset 0 1px 2px rgba(255,255,255,0.4);
-  backdrop-filter: blur(28px) saturate(1.25);
+  box-shadow:
+    var(--shadow-glass),
+    inset 0 1px 2px rgba(255,255,255,0.4),
+    inset 0 -1px 1px rgba(121, 89, 55, 0.06);
+  backdrop-filter: blur(32px) saturate(1.45);
+  -webkit-backdrop-filter: blur(32px) saturate(1.45);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+}
+.glass-card:hover {
+  transform: scale(1.02);
+  box-shadow:
+    0 28px 72px rgba(59, 43, 26, .20),
+    inset 0 1px 2px rgba(255,255,255,0.55),
+    inset 0 -1px 1px rgba(121, 89, 55, 0.08),
+    inset 0 0 24px rgba(255,255,255,0.18);
 }
 .glass-card::before {
   content: '';
@@ -290,7 +329,14 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  background: linear-gradient(110deg, rgba(255,255,255,0.6), transparent 44%, rgba(255,255,255,.2));
+  background:
+    linear-gradient(110deg, rgba(255,255,255,0.65), transparent 42%, rgba(255,255,255,.18)),
+    linear-gradient(180deg, rgba(255,255,255,.28) 0%, transparent 38%);
+  opacity: .85;
+}
+.glass-card > * {
+  position: relative;
+  z-index: 1;
 }
 .liquid-surface::after {
   content: '';
@@ -299,9 +345,10 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   pointer-events: none;
   border-radius: inherit;
   background:
-    linear-gradient(135deg, rgba(255,255,255,.42), transparent 28%),
-    linear-gradient(315deg, rgba(255,255,255,.20), transparent 34%);
-  opacity: .62;
+    linear-gradient(135deg, rgba(255,255,255,.48), transparent 26%),
+    linear-gradient(315deg, rgba(255,255,255,.24), transparent 32%),
+    linear-gradient(180deg, rgba(255,255,255,.18) 0%, transparent 45%);
+  opacity: .72;
   mix-blend-mode: screen;
 }
 .liquid-surface > * { position: relative; z-index: 1; }
@@ -324,13 +371,15 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   background:
     linear-gradient(135deg, rgba(255,255,255,.82), rgba(255,248,239,.58)),
     rgba(255, 253, 247, .78);
-  backdrop-filter: blur(28px) saturate(1.22);
+  backdrop-filter: blur(32px) saturate(1.45);
+  -webkit-backdrop-filter: blur(32px) saturate(1.45);
 }
 .liquid-surface-control {
   background:
     linear-gradient(135deg, rgba(255,255,255,.76), rgba(255,248,239,.52)),
     rgba(255, 255, 255, .66);
-  backdrop-filter: blur(18px) saturate(1.18);
+  backdrop-filter: blur(22px) saturate(1.35);
+  -webkit-backdrop-filter: blur(22px) saturate(1.35);
 }
 .animated-number {
   display: inline-block;
@@ -483,11 +532,15 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   padding-top: 6px;
 }
 .trip-title-row {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
   padding: 4px 14px 0;
+  transition: padding 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease, border-radius 0.3s ease;
 }
 .trip-title-button {
   display: inline-flex;
@@ -502,11 +555,13 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   line-height: 1.02;
   font-weight: 700;
   text-align: left;
+  transition: font-size 0.3s ease;
 }
 .trip-title-row p {
   margin-top: 8px;
   color: rgba(33, 28, 24, .62);
   font-size: clamp(15px, 3.8vw, 20px);
+  transition: font-size 0.3s ease, margin-top 0.3s ease;
 }
 .calendar-float {
   flex: 0 0 auto;
@@ -520,11 +575,13 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   color: var(--blue);
   box-shadow: 0 14px 28px rgba(58, 43, 30, .14), inset 0 1px 0 rgba(255,255,255,.9);
   backdrop-filter: blur(18px) saturate(1.2);
+  transition: width 0.3s ease, height 0.3s ease, border-radius 0.3s ease;
 }
 .budget-panorama {
   min-height: 164px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 1px auto 1px minmax(0, 1fr);
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
   align-items: center;
   gap: clamp(10px, 3vw, 22px);
   padding: clamp(18px, 4vw, 26px);
@@ -558,6 +615,27 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
 .budget-stat small {
   color: rgba(33, 28, 24, .58);
   font-size: 16px;
+}
+.trip-title-row.is-stuck {
+  align-items: center;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, rgba(255,253,247,.92), rgba(255,252,245,.88));
+  backdrop-filter: blur(24px) saturate(1.2);
+  border-bottom: 1px solid rgba(255,255,255,.48);
+  border-radius: 0 0 16px 16px;
+  box-shadow: 0 4px 20px rgba(59, 43, 26, .08);
+}
+.trip-title-row.is-stuck .trip-title-button {
+  font-size: 24px;
+}
+.trip-title-row.is-stuck p {
+  font-size: 13px;
+  margin-top: 2px;
+}
+.trip-title-row.is-stuck .calendar-float {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
 }
 .budget-divider {
   width: 1px;
@@ -648,9 +726,10 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   grid-template-columns: 56px minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: 1px solid rgba(255,255,255,.72);
   border-radius: 18px;
+  overflow: visible;
   background: rgba(255,255,255,.58);
   box-shadow: 0 8px 22px rgba(73, 53, 34, .10), inset 0 1px 0 rgba(255,255,255,.88);
   backdrop-filter: blur(18px) saturate(1.1);
@@ -672,7 +751,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
 }
 .line-copy strong {
   font-size: clamp(19px, 4.8vw, 24px);
-  line-height: 1.08;
+  line-height: 1.18;
   overflow-wrap: anywhere;
 }
 .line-copy small {
@@ -728,7 +807,8 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   border: 1px solid rgba(121, 89, 55, .28);
   border-radius: 16px;
   background: rgba(255, 249, 241, .42);
-  color: var(--red);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.25);
   font-family: "Noto Serif JP", Georgia, "Times New Roman", serif;
   font-size: 23px;
   font-weight: 700;
@@ -849,12 +929,17 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   display: grid;
   gap: 5px;
   min-width: 0;
-  padding: 14px;
+  padding: 16px;
   border: 1px solid rgba(255,255,255,0.40);
   border-radius: 20px;
   background: rgba(255,255,255,.56);
   box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255,255,255,0.42);
   backdrop-filter: blur(20px) saturate(1.16);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+}
+.metric-card:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-soft), 0 0 0 1px rgba(255,255,255,0.55), inset 0 1px 0 rgba(255,255,255,0.55);
 }
 .metric-card span, .metric-card small { color: var(--muted); }
 .metric-card strong { font-size: 24px; line-height: 1.1; overflow-wrap: anywhere; }
@@ -914,9 +999,10 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   gap: 14px;
   align-items: center;
   min-height: 74px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: 1px solid rgba(255,255,255,.66);
   border-radius: 17px;
+  overflow: visible;
   background: rgba(255,255,255,.56);
   box-shadow: 0 8px 22px rgba(73, 53, 34, .09), inset 0 1px 0 rgba(255,255,255,.88);
   color: var(--ink);
@@ -926,13 +1012,22 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
 }
 .receipt-row + .receipt-row { margin-top: 0; }
 .receipt-row.static { cursor: default; }
+.receipt-row,
+.line-card {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+}
+.receipt-row:hover,
+.line-card:hover {
+  transform: scale(1.01);
+  box-shadow: var(--shadow-soft), 0 0 0 1px rgba(255,255,255,0.55);
+}
 .cat { width: 48px; height: 48px; border-radius: 999px; display: grid; place-items: center; font-size: 21px; }
 .receipt-main strong, .receipt-main small, .amount, .amount small { display: block; }
 .row-badge { display: inline-flex; margin-left: 6px; font-style: normal; font-size: 11px; }
 .receipt-main small, .amount small, .muted, .empty { color: var(--muted); }
 .receipt-main strong {
   font-size: 19px;
-  line-height: 1.15;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 .receipt-main small {
@@ -969,7 +1064,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: 44px;
   border-radius: 8px;
   border: 1px solid var(--line);
   padding: 9px 12px;
@@ -1491,7 +1586,7 @@ input, select, textarea {
   align-items: center;
   gap: 12px;
 }
-.icon-btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: white; }
+.icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: white; display: grid; place-items: center; }
 ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
 
 .stats-tab .section-head h2 {
@@ -1552,8 +1647,9 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
   .topbar { display: none; }
   .trip-title-row { padding-inline: 4px; }
   .calendar-float { width: 58px; height: 58px; border-radius: 20px; }
+  .trip-title-row.is-stuck { padding-inline: 4px; }
+  .trip-title-row.is-stuck .calendar-float { width: 36px; height: 36px; border-radius: 12px; }
   .budget-panorama {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     gap: 10px;
     min-height: 138px;
     padding: 16px 14px;
@@ -1574,7 +1670,7 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
   .line-card {
     grid-template-columns: 48px minmax(0, 1fr) auto;
     gap: 10px;
-    padding: 9px 10px;
+    padding: 10px 12px;
   }
   .line-icon { width: 42px; height: 42px; font-size: 19px; }
   .line-card b { font-size: 15px; }
@@ -1588,7 +1684,7 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
   .tabbar button { min-height: 58px; gap: 2px; }
   .tabbar button span { font-size: 10px; }
   .tabbar button.dock-item-scan { min-height: 58px; margin-top: 0; }
-  .receipt-row { grid-template-columns: 46px minmax(0, 1fr) auto; gap: 10px; padding: 9px 10px; }
+  .receipt-row { grid-template-columns: 46px minmax(0, 1fr) auto; gap: 10px; padding: 10px 12px; }
   .receipt-row .cat { width: 42px; height: 42px; }
   .receipt-main strong, .amount { font-size: 16px; }
   .receipt-main small, .amount small { font-size: 12px; }
@@ -1609,16 +1705,20 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: .001ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: .001ms !important;
-  }
   .windmill-transition,
   .app-shell::before,
   body::after {
     transform: none !important;
+  }
+  body {
+    background:
+      radial-gradient(ellipse at 85% 10%, rgba(216, 64, 48, 0.10) 0%, transparent 45%),
+      radial-gradient(ellipse at 5% 40%, rgba(24, 57, 92, 0.07) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 95%, rgba(211, 154, 41, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.45), transparent 55%),
+      radial-gradient(circle at 10% -5%, rgba(255, 229, 189, 0.55), transparent 30%),
+      linear-gradient(180deg, #fdf5e4 0%, #f5ead8 35%, #f0e5d2 70%, #ebe0cc 100%),
+      url('/travel-expense/react/images/sakura-bg.webp') center/cover no-repeat;
   }
 }
 
@@ -1757,164 +1857,7 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
     }
   }}
 
-/* ========== JAPANESE ART EFFECTS (和風美術) ========== */
-
-/* ---- Byobu (屏風) folding screen card effect ---- */
-.byobu-card {
-  position: relative;
-  background:
-    linear-gradient(90deg,
-      rgba(250, 246, 238, 0.95) 0%,
-      rgba(245, 238, 225, 0.92) 48%,
-      rgba(238, 230, 216, 0.88) 49%,
-      rgba(235, 226, 210, 0.82) 50%,
-      rgba(238, 230, 216, 0.88) 51%,
-      rgba(245, 238, 225, 0.92) 52%,
-      rgba(250, 246, 238, 0.95) 100%
-    );
-  border: 1px solid rgba(180, 160, 130, 0.28);
-  border-radius: 20px;
-  box-shadow:
-    0 12px 32px rgba(84, 57, 30, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.64);
-  overflow: hidden;
-}
-.byobu-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2px;
-  height: 100%;
-  background: linear-gradient(
-    transparent 5%,
-    rgba(211, 154, 41, 0.35) 20%,
-    rgba(211, 154, 41, 0.55) 50%,
-    rgba(211, 154, 41, 0.35) 80%,
-    transparent 95%
-  );
-}
-
-/* ---- Washi paper texture overlay ---- */
-.washi-texture {
-  position: relative;
-}
-.washi-texture::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  opacity: 0.18;
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(139, 115, 85, 0.04) 2px,
-      rgba(139, 115, 85, 0.04) 4px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 3px,
-      rgba(139, 115, 85, 0.03) 3px,
-      rgba(139, 115, 85, 0.03) 7px
-    );
-  mix-blend-mode: multiply;
-}
-
-/* ---- Origami crane floating animation ---- */
-@keyframes origami-float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  25% { transform: translateY(-6px) rotate(2deg); }
-  50% { transform: translateY(-3px) rotate(-1deg); }
-  75% { transform: translateY(-8px) rotate(1.5deg); }
-}
-.origami-float {
-  animation: origami-float 4s ease-in-out infinite;
-}
-
-/* ---- Sakura (cherry blossom) petal fall ---- */
-@keyframes petal-fall {
-  0% {
-    transform: translateY(-10%) rotate(0deg) translateX(0);
-    opacity: 0.7;
-  }
-  25% {
-    transform: translateY(25%) rotate(90deg) translateX(20px);
-    opacity: 0.5;
-  }
-  50% {
-    transform: translateY(50%) rotate(180deg) translateX(-15px);
-    opacity: 0.6;
-  }
-  75% {
-    transform: translateY(75%) rotate(270deg) translateX(10px);
-    opacity: 0.4;
-  }
-  100% {
-    transform: translateY(110%) rotate(360deg) translateX(0);
-    opacity: 0;
-  }
-}
-.petal {
-  position: fixed;
-  top: -20px;
-  width: 12px;
-  height: 12px;
-  background: radial-gradient(circle at 30% 30%, #ffd1dc, #ffb7c5);
-  border-radius: 150% 0 150% 0;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 1;
-  animation: petal-fall linear infinite;
-}
-
-/* ---- Ink wash (sumi-e) divider ---- */
-.sumi-divider {
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(24, 57, 92, 0.25) 20%,
-    rgba(24, 57, 92, 0.45) 50%,
-    rgba(24, 57, 92, 0.25) 80%,
-    transparent 100%
-  );
-  border-radius: 1px;
-  margin: 16px 0;
-}
-
-/* ---- Japanese pattern: Seigaiha (青海波) wave pattern ---- */
-.seigaiha-bg {
-  background-image:
-    radial-gradient(circle at 100% 150%, transparent 40%, rgba(173, 146, 112, 0.06) 41%, rgba(173, 146, 112, 0.06) 43%, transparent 44%),
-    radial-gradient(circle at 0% 150%, transparent 40%, rgba(173, 146, 112, 0.06) 41%, rgba(173, 146, 112, 0.06) 43%, transparent 44%),
-    radial-gradient(circle at 50% 100%, transparent 35%, rgba(173, 146, 112, 0.06) 36%, rgba(173, 146, 112, 0.06) 38%, transparent 39%);
-  background-size: 40px 35px;
-}
-
 /* ========== CARD EFFECT WRAPPERS ========== */
-.dashboard-hero-card {
-  border-radius: 24px;
-  background: var(--glass);
-  backdrop-filter: blur(18px) saturate(1.15);
-}
-.metric-card-glow {
-  border-radius: 20px;
-  padding: 14px;
-  transition: transform 0.2s ease;
-}
-.metric-card-glow:hover {
-  transform: translateY(-2px) scale(1.01);
-}
-.glass-magic-card {
-  border-radius: 24px;
-  padding: 16px;
-}
-
 /* ========== PLAYFUL MICRO-INTERACTIONS ========== */
 .emoji-bounce {
   display: inline-block;

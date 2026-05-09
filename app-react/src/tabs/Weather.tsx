@@ -1,16 +1,59 @@
-import { CloudRain, CloudSun, RefreshCw, Sun, Umbrella, Wind } from 'lucide-react';
+import { Cloud, CloudLightning, CloudRain, CloudSun, RefreshCw, Snowflake, Sun, Umbrella, Wind } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { GlassCard, LoadingState, StatusPill, Toast } from '../components/ui';
-import { getItinerary } from '../lib/domain';
+import { getItinerary, todayYmd } from '../lib/domain';
+import { activeTrip } from '../domain/trip/normalize';
 import { coordForDay, coordsForDay, fetchWeather, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather } from '../lib/weather';
-import type { AppState } from '../lib/types';
+import type { AppState, ItineraryDay } from '../lib/types';
+
+function WeatherIcon({ code, size = 18 }: { code?: number; size?: number }) {
+  if (code == null) return <CloudSun size={size} />;
+  if (code === 0) return <Sun size={size} />;
+  if ([1, 2, 3].includes(code)) return <CloudSun size={size} />;
+  if ([45, 48].includes(code)) return <Cloud size={size} />;
+  if (code >= 51 && code <= 67) return <CloudRain size={size} />;
+  if (code >= 71 && code <= 86) return <Snowflake size={size} />;
+  if (code >= 95) return <CloudLightning size={size} />;
+  return <CloudSun size={size} />;
+}
 
 export function Weather({ state }: { state: AppState }) {
   const [rows, setRows] = useState<Record<string, DayWeather[]>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const trip = activeTrip(state);
   const itinerary = useMemo(() => getItinerary(state), [state]);
-  const itineraryKey = itinerary.map((day) => {
+  const today = todayYmd(trip.timezones?.[0] || 'Asia/Hong_Kong');
+  const hasEnded = trip.endDate ? today > trip.endDate : false;
+
+  const displayItinerary = useMemo<ItineraryDay[]>(() => {
+    if (!hasEnded) return itinerary;
+    const allCoords = itinerary.flatMap((day) => coordsForDay(day, 2));
+    const seen = new Set<string>();
+    const uniqueCoords = allCoords.filter((c) => {
+      const key = `${c.lat.toFixed(3)}:${c.lon.toFixed(3)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return [{
+      date: today,
+      day: 0,
+      region: trip.name || '目前位置',
+      city: '',
+      country: '',
+      timezone: trip.timezones?.[0] || 'Asia/Hong_Kong',
+      spots: uniqueCoords.map((c) => ({
+        name: c.label,
+        time: '',
+        type: 'other' as const,
+        lat: c.lat,
+        lon: c.lon,
+      })),
+    }];
+  }, [itinerary, hasEnded, today, trip]);
+
+  const itineraryKey = displayItinerary.map((day) => {
     const coords = coordsForDay(day).map((coord) => `${coord.label}:${coord.lat}:${coord.lon}`).join(',');
     return `${day.date}:${day.region}:${day.country || ''}:${coords}`;
   }).join('|');
@@ -20,7 +63,7 @@ export function Weather({ state }: { state: AppState }) {
     setError('');
     try {
       const next: Record<string, DayWeather[]> = {};
-      for (const day of itinerary) {
+      for (const day of displayItinerary) {
         next[day.date] = [];
         for (const coord of coordsForDay(day)) {
           try {
@@ -50,29 +93,29 @@ export function Weather({ state }: { state: AppState }) {
       <GlassCard className="weather-command">
         <div className="section-head">
           <div>
-            <p className="eyebrow">JMA / Open-Meteo</p>
+            <p className="eyebrow">Open-Meteo · 全球天氣</p>
             <h2>天氣預報</h2>
-            <p className="muted">跟 active trip 每日地點同座標更新；非日本地點不使用 JMA fallback。</p>
+            <p className="muted">{hasEnded ? '旅程已結束，顯示今日天氣。' : '跟 active trip 每日地點同座標更新；日本地點使用 JMA fallback。'}</p>
           </div>
           <button className="secondary" type="button" disabled={busy} onClick={load}>
             <RefreshCw size={18} className={busy ? 'spin' : ''} /> 刷新
           </button>
         </div>
         <div className="weather-targets">
-          {itinerary.flatMap((day) => coordsForDay(day).map((coord) => (
-            <StatusPill key={`${day.date}-${coord.label}`} tone={coord.missing ? 'warning' : 'info'}>{day.day}. {coord.label}</StatusPill>
+          {displayItinerary.flatMap((day) => coordsForDay(day).map((coord) => (
+            <StatusPill key={`${day.date}-${coord.label}`} tone={coord.missing ? 'warning' : 'info'}>{day.day > 0 ? `Day ${day.day}` : 'Today'}. {coord.label}</StatusPill>
           )))}
         </div>
         {busy && <LoadingState label="更新天氣中" />}
         {error && <Toast tone="warning">天氣拉取失敗：{error}</Toast>}
       </GlassCard>
-      {itinerary.map((day) => {
+      {displayItinerary.map((day) => {
         const dayRows = rows[day.date] || [];
         const missingAll = dayRows.length > 0 && dayRows.every((weather) => !weather.slots?.length);
         return (
           <GlassCard className="weather-day" key={day.date}>
             <div className="section-head">
-              <div><p className="eyebrow">Day {day.day} · {dayRows.map((weather) => weather.source).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
+              <div><p className="eyebrow">{hasEnded ? `Today · ${today}` : `Day ${day.day}`} · {dayRows.map((weather) => weather.source).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
               <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{coordsForDay(day).map((coord) => coord.label).join(' / ') || coordForDay(day).label}</StatusPill>
             </div>
             {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
@@ -90,7 +133,7 @@ export function Weather({ state }: { state: AppState }) {
                         <div className={`weather-slot weather-slot-detailed ${live ? 'is-live' : ''}`} key={slot.hour}>
                           <div className="weather-slot-top">
                             <span>{formatHour(slot.hour)} {live && <b className="live-badge">LIVE</b>}</span>
-                            <b>{weatherLabel(slot.code)}</b>
+                            <span className="inline-flex items-center gap-1"><WeatherIcon code={slot.code} size={14} /> <b>{weatherLabel(slot.code)}</b></span>
                           </div>
                           <strong>{slot.temp == null ? '—' : `${Math.round(slot.temp)}°C`}</strong>
                           <small>體感 {slot.feelsLike == null ? '—' : `${Math.round(slot.feelsLike)}°C`}</small>

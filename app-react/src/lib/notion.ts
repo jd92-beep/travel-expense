@@ -1,4 +1,4 @@
-import { CATEGORIES, PAYMENTS } from './constants';
+import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS } from './constants';
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { brokerNotionRequest, hasCredentialBrokerSession } from './credentialBroker';
 import { displayStore, getPersons, hkd, receiptRegion } from './domain';
@@ -54,6 +54,26 @@ function makeProxyUrl(proxy: string, target: string) {
 async function notionFetch<T>(state: AppState, path: string, init: RequestInit = {}): Promise<T> {
   void NOTION_VERSION;
   void makeProxyUrl;
+  const directToken = typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '';
+  if (directToken && !hasCredentialBrokerSession(state)) {
+    if (!state.notionDb?.trim()) throw new Error('未設定 Notion DB ID');
+    const url = `https://api.notion.com/v1${path}`;
+    const response = await fetch(url, {
+      method: init.method || 'GET',
+      headers: {
+        Authorization: `Bearer ${directToken}`,
+        'Notion-Version': NOTION_VERSION,
+        'Content-Type': 'application/json',
+        ...(init.headers || {}),
+      },
+      body: init.body,
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data?.message || `${response.status} ${response.statusText}`);
+    }
+    return response.json() as Promise<T>;
+  }
   if (!hasCredentialBrokerSession(state)) throw new Error('Credential Broker session 未連線，Notion token 只可留喺 server-side vault');
   if (!state.notionDb?.trim()) throw new Error('未設定 Notion DB ID');
   return brokerNotionRequest<T>(state, path, init);
@@ -243,6 +263,29 @@ export async function testNotion(state: AppState) {
   schemaCache = null;
   const schema = await ensureSchema(state);
   return Object.values(schema).join(', ');
+}
+
+export async function testDirectNotion(state: AppState): Promise<{ ok: boolean; count: number; firstTitle?: string; error?: string }> {
+  const token = typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '';
+  if (!token) return { ok: false, count: 0, error: 'No direct token in window.DEV_SECRETS' };
+  const dbId = state.notionDb || DEFAULT_NOTION_DB;
+  try {
+    const res = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Notion-Version': NOTION_VERSION,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ page_size: 1 }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, count: 0, error: data?.message || `${res.status} ${res.statusText}` };
+    const firstTitle = data.results?.[0]?.properties?.['店名']?.title?.[0]?.plain_text;
+    return { ok: true, count: data.results?.length ?? 0, firstTitle };
+  } catch (err) {
+    return { ok: false, count: 0, error: String(err) };
+  }
 }
 
 export async function migrateNotionSchema(state: AppState): Promise<string> {

@@ -1,1 +1,3 @@
 .vercel
+secrets.local.js
+secrets.local.*

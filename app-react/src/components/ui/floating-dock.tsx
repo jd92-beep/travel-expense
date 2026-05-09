@@ -49,7 +49,7 @@ const FloatingDockMobile = ({
     <motion.nav
       aria-label="主要分頁"
       className={cn(
-        "mx-auto grid w-full grid-cols-7 gap-1 rounded-[26px] border border-[rgba(255,255,255,.68)] bg-[rgba(255,252,245,.92)] px-2 py-2 shadow-[0_24px_54px_rgba(67,46,24,.14)] backdrop-blur-xl md:hidden",
+        "mx-auto grid w-full grid-cols-7 gap-1 justify-items-center rounded-[26px] border border-[rgba(255,255,255,.68)] bg-[rgba(255,252,245,.92)] px-2 py-2 shadow-[0_24px_54px_rgba(67,46,24,.14)] backdrop-blur-xl md:hidden",
         className,
       )}
     >
@@ -76,7 +76,7 @@ const FloatingDockDesktop = ({
       onMouseMove={reducedMotion ? undefined : (e) => mouseX.set(e.pageX)}
       onMouseLeave={reducedMotion ? undefined : () => mouseX.set(Infinity)}
       className={cn(
-        "mx-auto hidden h-[72px] items-end gap-3 rounded-[28px] border border-[rgba(255,255,255,.68)] bg-[rgba(255,252,245,.9)] px-3 pb-2 shadow-[0_26px_60px_rgba(67,46,24,.16)] backdrop-blur-xl md:flex",
+        "mx-auto hidden h-[72px] items-end justify-center gap-3 rounded-[28px] border border-[rgba(255,255,255,.68)] bg-[rgba(255,252,245,.9)] px-3 pb-2 shadow-[0_26px_60px_rgba(67,46,24,.16)] backdrop-blur-xl md:flex",
         className,
       )}
     >
