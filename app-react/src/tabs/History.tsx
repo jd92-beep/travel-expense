@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
 import { GlassCard, StatusPill, Toast } from '../components/ui';
 import { activeTrip } from '../domain/trip/normalize';
 import { hasCredentialBrokerSession } from '../lib/credentialBroker';
 import { CATEGORIES } from '../lib/constants';
 import { fmt } from '../lib/domain';
-import { pullAll, pullTrips } from '../lib/notion';
 import type { AppState, CategoryId, Receipt, TripProfile } from '../lib/types';
 import { ReceiptRow } from './Dashboard';
 
@@ -15,18 +14,19 @@ export function History({
   onHydrate,
   onOpen,
   onConfirmPending,
+  onPull,
 }: {
   state: AppState;
   onImport: (receipts: Receipt[]) => void;
   onHydrate?: (receipts: Receipt[], trips: TripProfile[]) => void;
   onOpen: (receipt: Receipt) => void;
   onConfirmPending: (receipt: Receipt) => void;
+  onPull?: () => Promise<void>;
 }) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<'all' | CategoryId>('all');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
-  const autoPullKeyRef = useRef('');
   const trip = activeTrip(state);
   const receipts = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -51,29 +51,16 @@ export function History({
     }
     setBusy(true);
     try {
-      const [pulledTrips, pulled] = await Promise.all([
-        pullTrips(state).catch(() => []),
-        pullAll(state),
-      ]);
-      if (onHydrate) onHydrate(pulled, pulledTrips);
-      else onImport(pulled);
-      setStatus(`${mode === 'auto' ? '已自動' : '已'}從 Notion 合併 ${pulled.length} 筆紀錄${pulledTrips.length ? ` / ${pulledTrips.length} 個旅程` : ''}。`);
+      if (onPull) {
+        await onPull();
+        setStatus(`${mode === 'auto' ? '已自動' : '已'}從 Notion 同步。`);
+      }
     } catch (error) {
       setStatus(`Notion pull 失敗：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setBusy(false);
     }
   }
-
-  useEffect(() => {
-    if (!hasCredentialBrokerSession(state)) return;
-    const key = `${state.credentialSessionExpiresAt || 0}:${state.notionDb || ''}:${state.activeTripId || ''}`;
-    if (autoPullKeyRef.current === key) return;
-    autoPullKeyRef.current = key;
-    void handlePull('auto');
-    // History only mounts when the tab is active, so this is the tab-enter sync.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.credentialSessionExpiresAt, state.notionDb, state.activeTripId]);
 
   return (
     <section className="stack">

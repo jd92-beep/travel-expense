@@ -2,6 +2,11 @@ import { useMemo, useState } from 'react';
 import { CalendarDays, ChevronDown, ChevronRight, CloudSun, MapPin, Plus, X } from 'lucide-react';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { ActionSheet, GlassCard, MetricCard, ProgressRing } from '../components/ui';
+import { BorderBeam } from '../components/ui/border-beam';
+import { BlurFade } from '../components/ui/blur-fade';
+import { MagicCard } from '../components/ui/magic-card';
+import { NumberTicker } from '../components/ui/number-ticker';
+import { RippleButton } from '../components/ui/ripple-button';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryById, displayStore, fmt, getItinerary, getReceiptPhase, getPersons, hkd, isPendingReceipt, mapsUrl, receiptRegion, safeExternalUrl, todayForReceipts } from '../lib/domain';
 import { categoryIconId } from '../lib/iconManifest';
@@ -84,10 +89,11 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
           </button>
         </div>
 
-        <GlassCard className="budget-panorama dashboard-budget">
+        <MagicCard className="budget-panorama dashboard-budget">
+          <BorderBeam borderWidth={1} colorFrom="#d94132" colorTo="#d39a29" className="opacity-70" />
           <div className="budget-stat">
             <span>Total Budget</span>
-            <strong>¥{fmt(state.budget)}</strong>
+            <strong><NumberTicker value={state.budget} prefix="¥" className="text-[clamp(28px,7vw,44px)] font-[700] text-[color:var(--navy)]" /></strong>
             <small>HK$ {fmt(hkd(state.budget, state))}</small>
           </div>
           <div className="budget-divider" />
@@ -95,10 +101,10 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
           <div className="budget-divider" />
           <div className="budget-stat align-right">
             <span>Spent</span>
-            <strong>¥{fmt(totalForBudget)}</strong>
+            <strong><NumberTicker value={totalForBudget} prefix="¥" className="text-[clamp(28px,7vw,44px)] font-[700] text-[color:var(--navy)]" /></strong>
             <small>HK$ {fmt(hkd(totalForBudget, state))}</small>
           </div>
-        </GlassCard>
+        </MagicCard>
         <div className="hero-handle" aria-hidden="true" />
       </section>
 
@@ -122,18 +128,20 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
             const cat = categoryById(spot.type);
             const matchedReceipt = dailyReceipts.find((r) => displayStore(r).toLowerCase().includes(spot.name.toLowerCase()) || spot.name.toLowerCase().includes(displayStore(r).toLowerCase()));
             return (
-              <button className="today-line-item" type="button" key={`${spot.time}-${spot.name}`} onClick={() => setSheet({ kind: 'spot', spot })}>
-                <span className="line-time">{spot.time || '--:--'}</span>
-                <i className="line-dot" aria-hidden="true" />
-                <span className="line-card">
-                  <VisualIcon id={categoryIconId(spot.type)} label={cat.name} className="line-icon" size="lg" />
-                  <span className="line-copy">
-                    <strong>{spot.name}</strong>
-                    <small>{spot.note || spot.address || cat.name}</small>
+              <BlurFade key={`${spot.time}-${spot.name}`} delay={0.02} duration={0.28} inView>
+                <button className="today-line-item" type="button" onClick={() => setSheet({ kind: 'spot', spot })}>
+                  <span className="line-time">{spot.time || '--:--'}</span>
+                  <i className="line-dot" aria-hidden="true" />
+                  <span className="line-card">
+                    <VisualIcon id={categoryIconId(spot.type)} label={cat.name} className="line-icon" size="lg" />
+                    <span className="line-copy">
+                      <strong>{spot.name}</strong>
+                      <small>{spot.note || spot.address || cat.name}</small>
+                    </span>
+                    {matchedReceipt ? <b>¥{fmt(matchedReceipt.total)}</b> : <ChevronRight size={20} />}
                   </span>
-                  {matchedReceipt ? <b>¥{fmt(matchedReceipt.total)}</b> : <ChevronRight size={20} />}
-                </span>
-              </button>
+                </button>
+              </BlurFade>
             );
           }) : <p className="empty">今日未有行程。你可以喺設定加入 Trip Update。</p>}
         </div>
@@ -148,9 +156,13 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
           <button className="link-button" type="button" onClick={() => onTab('history')}>View all</button>
         </div>
         <div className="recent-list">
-          {recentReceipts.length ? recentReceipts.slice(0, 3).map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} />) : <p className="empty">暫時未有支出紀錄。</p>}
+          {recentReceipts.length ? recentReceipts.slice(0, 3).map((r, index) => (
+            <BlurFade key={r.id} delay={index * 0.04} duration={0.26} inView>
+              <ReceiptRow state={state} receipt={r} onOpen={onOpen} />
+            </BlurFade>
+          )) : <p className="empty">暫時未有支出紀錄。</p>}
         </div>
-        <button className="add-expense-wide" type="button" onClick={onManual}><Plus size={24} /> Add Expense</button>
+        <RippleButton className="add-expense-wide" onClick={onManual}><Plus size={24} /> Add Expense</RippleButton>
       </GlassCard>
 
       {overDaily && (

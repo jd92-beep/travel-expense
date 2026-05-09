@@ -6,7 +6,7 @@ import { loadState, saveState } from './storage';
 import { clearIndexedState, loadIndexedState } from '../storage/indexedDb';
 import type { AppState, Receipt, SyncQueueItem } from './types';
 
-function queueItem(type: SyncQueueItem['type'], entityId: string, op: SyncQueueItem['op']): SyncQueueItem {
+function queueItem(type: SyncQueueItem['type'], entityId: string, op: SyncQueueItem['op'], payload?: SyncQueueItem['payload']): SyncQueueItem {
   const now = Date.now();
   return {
     id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
@@ -17,7 +17,15 @@ function queueItem(type: SyncQueueItem['type'], entityId: string, op: SyncQueueI
     attempts: 0,
     createdAt: now,
     updatedAt: now,
+    payload,
   };
+}
+
+function enqueueSyncItem(queue: SyncQueueItem[] | undefined, item: SyncQueueItem) {
+  return [
+    ...(queue || []).filter((queued) => queued.type !== item.type || queued.entityId !== item.entityId),
+    item,
+  ].slice(-500);
 }
 
 export function useAppState() {
@@ -52,7 +60,11 @@ export function useAppState() {
       });
       const idx = prev.receipts.findIndex((r) => r.id === receipt.id);
       const syncQueue = prev.autoSync && hasCredentialBrokerSession(prev)
-        ? [...(prev.syncQueue || []), queueItem('receipt', stamped.id, idx < 0 ? 'create' : 'update')].slice(-500)
+        ? enqueueSyncItem(prev.syncQueue, queueItem('receipt', stamped.id, idx < 0 ? 'create' : 'update', {
+            notionPageId: stamped.notionPageId,
+            sourceId: stamped.sourceId || stamped.id,
+            updatedAt: stamped.updatedAt,
+          }))
         : prev.syncQueue;
       if (idx < 0) return { ...prev, receipts: [...prev.receipts, stamped], syncQueue };
       const next = prev.receipts.slice();
@@ -62,17 +74,22 @@ export function useAppState() {
   }, []);
 
   const deleteReceipt = useCallback((receipt: Receipt) => {
+    const sourceId = receipt.sourceId || receipt.id;
     setState((prev) => ({
       ...prev,
       receipts: prev.receipts.filter((r) => r.id !== receipt.id),
       notionDeletedIds: receipt.notionPageId
         ? [...(prev.notionDeletedIds || []), receipt.notionPageId].slice(-500)
         : prev.notionDeletedIds,
-      notionDeletedSourceIds: receipt.id.startsWith('email_')
-        ? [...(prev.notionDeletedSourceIds || []), receipt.id].slice(-500)
+      notionDeletedSourceIds: sourceId
+        ? [...(prev.notionDeletedSourceIds || []), sourceId].slice(-500)
         : prev.notionDeletedSourceIds,
       syncQueue: prev.autoSync && hasCredentialBrokerSession(prev)
-        ? [...(prev.syncQueue || []), queueItem('delete-receipt', receipt.id, 'delete')].slice(-500)
+        ? enqueueSyncItem(prev.syncQueue, queueItem('delete-receipt', receipt.id, 'delete', {
+            notionPageId: receipt.notionPageId,
+            sourceId,
+            updatedAt: receipt.updatedAt,
+          }))
         : prev.syncQueue,
     }));
   }, []);

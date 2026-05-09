@@ -19,11 +19,11 @@ import {
 } from '../lib/credentialBroker';
 import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
 import { computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
-import { migrateNotionSchema, pullAll, pullTrips, pushAll, pushSettingsMeta, pushTripPage, testNotion } from '../lib/notion';
-import type { AppState, Person, TripDraft, TripProfile } from '../lib/types';
+import { migrateNotionSchema, pullAll, pushSettingsMeta, pushTripPage, testNotion } from '../lib/notion';
+import type { AppState, Person, SyncEngineState, TripDraft, TripProfile } from '../lib/types';
 import { clearCredentialSession, saveState, stripSensitiveState } from '../lib/storage';
 import { clearDeviceTrust } from '../security/deviceTrust';
-import { GlassCard, StatusPill, Toast } from '../components/ui';
+import { GlassCard, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
 
@@ -32,11 +32,17 @@ export function Settings({
   setState,
   updateState,
   onReset,
+  syncState,
+  onPull,
+  onPush,
 }: {
   state: AppState;
   setState: Dispatch<SetStateAction<AppState>>;
   updateState: (patch: Partial<AppState>) => void;
   onReset: () => void;
+  syncState?: SyncEngineState;
+  onPull?: () => Promise<void>;
+  onPush?: () => Promise<void>;
 }) {
   const persons = getPersons(state);
   const currentTrip = activeTrip(state);
@@ -357,6 +363,7 @@ export function Settings({
           <div className="stats-status-row">
             <StatusPill tone="info"><Plane size={14} /> {trips.length} 個旅程</StatusPill>
             <StatusPill tone={brokerReady ? 'ok' : 'warning'}><Server size={14} /> Broker {brokerReady ? 'session active' : 'session missing'}</StatusPill>
+            {syncState && <StatusPill tone={syncState.status === 'error' ? 'danger' : syncState.pendingCount ? 'warning' : 'ok'}><Cloud size={14} /> Sync {syncState.status}{syncState.pendingCount ? ` · ${syncState.pendingCount}` : ''}</StatusPill>}
             <StatusPill tone="neutral"><ShieldCheck size={14} /> {buildLabel}</StatusPill>
           </div>
         </div>
@@ -598,26 +605,22 @@ export function Settings({
             if (!requireBroker('測試 Notion')) return;
             void run('測試 Notion', async () => `連線正常：${await testNotion(state)}`);
           }}>測試</button>
-          <button className="secondary" type="button" disabled={!!busy} onClick={() => {
+          <StatefulActionButton className="secondary" type="button" disabled={!!busy} onClick={() => {
             if (!requireBroker('Pull')) return;
             void run('Pull', async () => {
-            const [pulledTrips, pulled] = await Promise.all([pullTrips(state), pullAll(state)]);
-            setState((prev) => {
-              const tripMap = new Map((prev.trips || []).map((trip) => [trip.id, trip]));
-              for (const trip of pulledTrips) tripMap.set(trip.id, { ...tripMap.get(trip.id), ...trip });
-              const map = new Map(prev.receipts.map((r) => [r.id, r]));
-              for (const r of pulled) map.set(r.id, { ...map.get(r.id), ...r });
-              return migrateAppState({ ...prev, trips: [...tripMap.values()], receipts: [...map.values()] });
+            await onPull?.();
+            return '已透過 Sync Engine 拉取 Notion 資料';
             });
-            return `已拉取 ${pulledTrips.length} 個旅程、${pulled.length} 筆紀錄`;
-            });
-          }}><Download size={18} /> Pull</button>
-          <button className="primary" type="button" disabled={!!busy} onClick={() => {
+          }}><Download size={18} /> Pull</StatefulActionButton>
+          <StatefulActionButton className="primary" type="button" disabled={!!busy} onClick={() => {
             if (!requireBroker('Push')) return;
-            void run('Push', async () => `已推送 ${await pushAll(state)} 筆`);
+            void run('Push', async () => {
+              await onPush?.();
+              return '已透過 Sync Engine 推送 pending queue';
+            });
           }}>
             <Upload size={18} /> Push All
-          </button>
+          </StatefulActionButton>
           <button className="secondary" type="button" disabled={!!busy} onClick={() => {
             saveLocalSettingsNow();
             if (!requireBroker('Save & Push Settings')) return;

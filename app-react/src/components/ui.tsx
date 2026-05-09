@@ -1,9 +1,15 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/cn';
+import { BlurFade } from './ui/blur-fade';
+import { BorderBeam } from './ui/border-beam';
+import { MagicCard } from './ui/magic-card';
+import { NumberTicker } from './ui/number-ticker';
+import { RippleButton } from './ui/ripple-button';
+import { Button as StatefulButtonBase } from './ui/stateful-button';
 
 const glassSurface = cva('glass-card liquid-surface', {
   variants: {
@@ -29,7 +35,29 @@ export function GlassCard({
   tone?: VariantProps<typeof glassSurface>['tone'];
   children: ReactNode;
 }) {
-  return <Component className={cn(glassSurface({ tone }), className)}>{children}</Component>;
+  const strong = tone === 'strong' || /budget|command|hero|stats|weather|scan/i.test(className);
+  return (
+    <Component className={cn(glassSurface({ tone }), className)}>
+      <MagicCard
+        className="glass-magic-layer"
+        gradientFrom="#d8503d"
+        gradientTo="#315e8e"
+        gradientColor="rgba(255, 247, 230, 0.5)"
+        gradientOpacity={0.14}
+      >
+        {strong && (
+          <BorderBeam
+            size={80}
+            duration={10}
+            borderWidth={1}
+            colorFrom="#d8503d"
+            colorTo="#d9a441"
+          />
+        )}
+        <div className="glass-magic-content">{children}</div>
+      </MagicCard>
+    </Component>
+  );
 }
 
 export function LiquidGlassSurface({
@@ -48,14 +76,76 @@ export function LiquidGlassSurface({
 
 export function AnimatedNumber({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
   return (
-    <motion.span
-      className="animated-number"
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28, ease: 'easeOut' }}
+    <span className="animated-number">
+      {prefix}<NumberTicker value={Math.round(value)} className="animated-number-value" />{suffix}
+    </span>
+  );
+}
+
+export function MagicGlassFrame({
+  className,
+  children,
+  beam = false,
+}: {
+  className?: string;
+  children: ReactNode;
+  beam?: boolean;
+}) {
+  return (
+    <MagicCard
+      className={cn('magic-glass-frame', className)}
+      gradientFrom="#d8503d"
+      gradientTo="#315e8e"
+      gradientColor="rgba(255, 247, 230, 0.58)"
+      gradientOpacity={0.18}
     >
-      {prefix}{Math.round(value).toLocaleString()}{suffix}
-    </motion.span>
+      {beam && (
+        <BorderBeam
+          size={96}
+          duration={9}
+          borderWidth={1}
+          colorFrom="#d8503d"
+          colorTo="#d9a441"
+        />
+      )}
+      {children}
+    </MagicCard>
+  );
+}
+
+export function Reveal({
+  children,
+  className,
+  delay = 0,
+}: {
+  children: ReactNode;
+  className?: string;
+  delay?: number;
+}) {
+  return <BlurFade className={className} delay={delay} inView>{children}</BlurFade>;
+}
+
+export function ActionRippleButton({
+  className,
+  children,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <RippleButton className={cn('magic-ripple-button', className)} rippleColor="rgba(255,255,255,.74)" {...props}>
+      {children}
+    </RippleButton>
+  );
+}
+
+export function StatefulActionButton({
+  className,
+  children,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <StatefulButtonBase className={cn('stateful-action-button', className)} {...props}>
+      {children}
+    </StatefulButtonBase>
   );
 }
 

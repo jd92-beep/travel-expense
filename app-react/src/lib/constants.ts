@@ -122,4 +122,8 @@ export const DEFAULT_STATE: AppState = {
   notionDeletedIds: [],
   notionDeletedSourceIds: [],
   syncQueue: [],
+  lastSyncedAt: 0,
+  globalSyncStatus: 'idle',
+  syncError: '',
+  settingsPulledAt: 0,
 };

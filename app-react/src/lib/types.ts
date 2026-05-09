@@ -13,6 +13,7 @@ export type PaymentId = 'cash' | 'credit' | 'paypay' | 'suica';
 export type SplitMode = 'shared' | 'private';
 export type TripPhase = 'prep' | 'trip' | 'post';
 export type SyncStatus = 'local' | 'queued' | 'syncing' | 'synced' | 'error';
+export type GlobalSyncStatus = 'idle' | 'queued' | 'pushing' | 'pulling' | 'synced' | 'error' | 'offline';
 
 export interface Person {
   id: string;
@@ -145,6 +146,18 @@ export interface SyncQueueItem {
   error?: string;
   createdAt: number;
   updatedAt: number;
+  payload?: {
+    notionPageId?: string;
+    sourceId?: string;
+    updatedAt?: number;
+  };
+}
+
+export interface SyncEngineState {
+  status: GlobalSyncStatus;
+  lastSyncedAt: number;
+  pendingCount: number;
+  error?: string;
 }
 
 export interface AppState {
@@ -180,6 +193,10 @@ export interface AppState {
   notionDeletedSourceIds?: string[];
   syncQueue?: SyncQueueItem[];
   settingsUpdatedAt?: number;
+  lastSyncedAt?: number;
+  globalSyncStatus?: GlobalSyncStatus;
+  syncError?: string;
+  settingsPulledAt?: number;
 }
 
 export type TabId = 'dashboard' | 'scan' | 'timeline' | 'history' | 'weather' | 'stats' | 'settings';

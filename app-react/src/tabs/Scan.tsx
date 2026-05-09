@@ -1,6 +1,6 @@
 import { Camera, CheckCircle2, FileImage, FileText, Mail, Mic, PlusCircle, RefreshCw, Repeat2 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
-import { ActionSheet, GlassCard, SegmentedControl, StatusPill, Toast } from '../components/ui';
+import { ActionRippleButton, ActionSheet, GlassCard, SegmentedControl, StatusPill, Toast } from '../components/ui';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
 import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
 import { pullAll } from '../lib/notion';
@@ -214,9 +214,9 @@ export function Scan({
           <label className={`secondary button-like scan-picker-label ${busy === 'ocr' ? 'is-disabled' : ''}`} htmlFor={busy === 'ocr' ? undefined : GALLERY_INPUT_ID} role="button" tabIndex={busy === 'ocr' ? -1 : 0} aria-disabled={busy === 'ocr'}>
             <FileImage size={18} /> 相簿
           </label>
-          <button className="secondary" type="button" onClick={onManual}>
+          <ActionRippleButton className="secondary" type="button" onClick={onManual}>
             <PlusCircle size={18} /> 手動記一筆
-          </button>
+          </ActionRippleButton>
         </ActionSheet>
         <SegmentedControl
           value={mode}
@@ -247,12 +247,12 @@ export function Scan({
         </div>
         <p className="scan-diagnostic">相機 picker 用 native label 開啟；如手機權限或 in-app browser 阻擋，請用相簿或手動記一筆。Secure context: {window.isSecureContext ? 'yes' : 'local/dev'}</p>
         <div className="action-row wrap">
-          <button className="secondary" type="button" disabled={!lastScanFile || busy === 'ocr'} onClick={() => handleImage(lastScanFile || undefined, true)}>
+          <ActionRippleButton className="secondary" type="button" disabled={!lastScanFile || busy === 'ocr'} onClick={() => handleImage(lastScanFile || undefined, true)}>
             <RefreshCw size={18} /> 重試上一張
-          </button>
-          <button className="secondary" type="button" disabled={!lastDraft} onClick={() => lastDraft && openDraft(lastDraft)}>
+          </ActionRippleButton>
+          <ActionRippleButton className="secondary" type="button" disabled={!lastDraft} onClick={() => lastDraft && openDraft(lastDraft)}>
             <Repeat2 size={18} /> 重開上次草稿
-          </button>
+          </ActionRippleButton>
         </div>
         <div className="mini-list">
           <span>Last scan: {lastScanFile ? lastScanFile.name : '未有'}</span>

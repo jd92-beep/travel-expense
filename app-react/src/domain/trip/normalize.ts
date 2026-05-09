@@ -70,7 +70,7 @@ export function activeTrip(state: AppState): TripProfile {
     || trips[0];
 }
 
-export function stampReceiptForTrip(state: AppState, receipt: Receipt): Receipt {
+export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: { preserveUpdatedAt?: boolean } = {}): Receipt {
   const trip = activeTrip(state);
   const day = trip.itinerary.find((item) => item.date === receipt.date);
   const region = receipt.regionSnapshot || receipt.region || day?.region || '';
@@ -88,7 +88,7 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt): Receipt 
     hkdAmount: Number(receipt.hkdAmount) || Math.round((Number(receipt.total) || 0) / rate),
     regionSnapshot: region,
     mapUrl: receipt.mapUrl || '',
-    updatedAt: Date.now(),
+    updatedAt: options.preserveUpdatedAt ? receipt.updatedAt : Date.now(),
   };
 }
 
@@ -123,10 +123,14 @@ export function migrateAppState(input: unknown): AppState {
     },
     customItinerary: parsed.customItinerary || null,
     syncQueue: Array.isArray(parsed.syncQueue) ? parsed.syncQueue : [],
+    lastSyncedAt: Number(parsed.lastSyncedAt) || 0,
+    globalSyncStatus: parsed.globalSyncStatus || 'idle',
+    syncError: typeof parsed.syncError === 'string' ? parsed.syncError : '',
+    settingsPulledAt: Number(parsed.settingsPulledAt) || 0,
   } as AppState;
   base.receipts = (Array.isArray(parsed.receipts) ? parsed.receipts : [])
     .filter((r): r is Receipt => !!(r && r.id && r.store !== undefined))
     .filter((r) => !(typeof r.id === 'string' && r.id.startsWith('__meta_')))
-    .map((receipt) => stampReceiptForTrip(base, receipt));
+    .map((receipt) => stampReceiptForTrip(base, receipt, { preserveUpdatedAt: true }));
   return base;
 }

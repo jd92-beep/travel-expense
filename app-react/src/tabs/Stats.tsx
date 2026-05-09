@@ -7,6 +7,9 @@ import { categoryById, computeSettlements, displayStore, fmt, getPersons, hkd } 
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { EmptyState, GlassCard, StatusPill } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
+import { BorderBeam } from '../components/ui/border-beam';
+import { MagicCard } from '../components/ui/magic-card';
+import { NumberTicker } from '../components/ui/number-ticker';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryIconId } from '../lib/iconManifest';
 import '../styles/stats.css';

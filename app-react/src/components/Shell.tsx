@@ -2,8 +2,11 @@ import { BarChart3, CalendarDays, CloudSun, Home, List, ScanLine, Settings } fro
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { TAB_MANIFEST } from '../lib/tabs';
-import type { TabId } from '../lib/types';
-import { BottomDock, StatusPill, WindmillTransition } from './ui';
+import type { SyncEngineState, TabId } from '../lib/types';
+import { StatusPill, WindmillTransition } from './ui';
+import { FloatingDock } from './ui/floating-dock';
+import { NoiseTexture } from './ui/noise-texture';
+import { SyncStatusIndicator } from './SyncStatusIndicator';
 
 const icons: Record<TabId, ReactNode> = {
   dashboard: <Home size={20} />,
@@ -19,10 +22,12 @@ export function Shell({
   active,
   onTab,
   children,
+  syncState,
 }: {
   active: TabId;
   onTab: (tab: TabId) => void;
   children: ReactNode;
+  syncState?: SyncEngineState;
 }) {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
@@ -67,6 +72,7 @@ export function Shell({
 
   return (
     <div className="app-shell">
+      <NoiseTexture aria-hidden="true" focusable="false" className="pointer-events-none fixed inset-0 -z-20 opacity-[0.11] mix-blend-soft-light" />
       {!online && <div className="top-notice offline">離線模式：資料會繼續保存在本機</div>}
       {updateReady && (
         <div className="top-notice update">
@@ -79,15 +85,19 @@ export function Shell({
           <p className="eyebrow">Secure React · mobile web</p>
           <h1>Trip Command Center</h1>
         </div>
-        <StatusPill tone="ok">Broker-ready</StatusPill>
+        {syncState ? <SyncStatusIndicator state={syncState} /> : <StatusPill tone="ok">Broker-ready</StatusPill>}
       </header>
       <main className="content">{children}</main>
       <WindmillTransition activeKey={active} />
-      <BottomDock
-        active={active}
-        ariaLabel="主要分頁"
-        items={TAB_MANIFEST.map((tab) => ({ ...tab, icon: icons[tab.id] }))}
-        onSelect={onTab}
+      <FloatingDock
+        desktopClassName="app-floating-dock-desktop"
+        mobileClassName="app-floating-dock-mobile"
+        items={TAB_MANIFEST.map((tab) => ({
+          title: tab.label,
+          icon: icons[tab.id],
+          active: active === tab.id,
+          onSelect: () => onTab(tab.id),
+        }))}
       />
     </div>
   );

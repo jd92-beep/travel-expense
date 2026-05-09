@@ -75,7 +75,7 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(0);
 });
 
-test('History auto pulls through broker session on tab enter', async ({ page }) => {
+test('History manual pull routes through global sync engine when broker session exists', async ({ page }) => {
   let notionRequests = 0;
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/notion/request', async (route) => {
     notionRequests += 1;
@@ -101,6 +101,7 @@ test('History auto pulls through broker session on tab enter', async ({ page }) 
 
   await page.goto('http://localhost:8902/travel-expense/react/');
   await expect(page.getByText('紀錄中心')).toBeVisible();
-  await expect(page.getByText(/已自動從 Notion 合併/)).toBeVisible();
+  await page.getByRole('button', { name: 'Pull Notion' }).click();
+  await expect(page.getByText(/已從 Notion 同步/)).toBeVisible();
   await expect.poll(() => notionRequests).toBeGreaterThan(0);
 });

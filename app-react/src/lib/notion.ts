@@ -188,6 +188,7 @@ function receiptFromPage(state: AppState, page: any): Receipt | null {
     splitMode: String(readProp(props, 'split')?.select?.name || '').includes('私人') ? 'private' as const : 'shared' as const,
     source: 'notion',
     createdAt: page.created_time ? new Date(page.created_time).getTime() : Date.now(),
+    updatedAt: page.last_edited_time ? new Date(page.last_edited_time).getTime() : undefined,
     tripId: readText(readProp(props, 'tripId'), 'rich_text') || state.activeTripId,
     tripVersion: Number(readProp(props, 'tripVersion')?.number) || undefined,
     originalAmount: Number(readProp(props, 'originalAmount')?.number) || undefined,
@@ -196,7 +197,7 @@ function receiptFromPage(state: AppState, page: any): Receipt | null {
     hkdAmount: Number(readProp(props, 'hkd')?.number) || undefined,
     mapUrl: readProp(props, 'mapUrl')?.url || '',
   };
-  return stampReceiptForTrip(state, receipt);
+  return stampReceiptForTrip(state, receipt, { preserveUpdatedAt: true });
 }
 
 function tripFromPage(page: any): TripProfile | null {
@@ -208,13 +209,14 @@ function tripFromPage(page: any): TripProfile | null {
   const raw = readAllText(readProp(props, 'tripJson'), 'rich_text');
   try {
     const parsed = JSON.parse(raw) as TripProfile;
-    return {
-      ...parsed,
-      notionPageId: page.id,
-      sourceId: sourceId || parsed.sourceId || `trip_${parsed.id}`,
-      active: !!readProp(props, 'active')?.checkbox,
-      version: Number(readProp(props, 'tripVersion')?.number) || parsed.version || 1,
-    };
+      return {
+        ...parsed,
+        notionPageId: page.id,
+        sourceId: sourceId || parsed.sourceId || `trip_${parsed.id}`,
+        active: !!readProp(props, 'active')?.checkbox,
+        version: Number(readProp(props, 'tripVersion')?.number) || parsed.version || 1,
+        updatedAt: page.last_edited_time ? new Date(page.last_edited_time).getTime() : parsed.updatedAt,
+      };
   } catch {
     const id = readText(readProp(props, 'tripId'), 'rich_text') || sourceId.replace(/^trip_/, '') || `trip_${page.id}`;
     return {
@@ -368,8 +370,11 @@ export async function pushSettingsMeta(state: AppState): Promise<void> {
 }
 
 export async function archiveReceipt(state: AppState, receipt: Receipt) {
-  if (!hasCredentialBrokerSession(state) || !state.notionDb || !receipt.notionPageId) return;
-  await notionFetch(state, `/pages/${receipt.notionPageId}`, { method: 'PATCH', body: JSON.stringify({ archived: true }) });
+  if (!hasCredentialBrokerSession(state) || !state.notionDb) return;
+  const schema = await ensureWritableSchema(state);
+  const pageId = receipt.notionPageId || await findPageBySourceId(state, schema, receipt.sourceId || receipt.id).catch(() => null);
+  if (!pageId) return;
+  await notionFetch(state, `/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ archived: true }) });
 }
 
 export async function pushAll(state: AppState) {
@@ -396,7 +401,11 @@ export async function pullAll(state: AppState): Promise<Receipt[]> {
     });
     for (const item of page.results || []) {
       const receipt = receiptFromPage(state, item);
-      if (receipt) rows.push(receipt);
+      if (
+        receipt
+        && !state.notionDeletedIds?.includes(receipt.notionPageId || '')
+        && !state.notionDeletedSourceIds?.includes(receipt.sourceId || receipt.id)
+      ) rows.push(receipt);
     }
     if (!page.has_more) break;
     cursor = page.next_cursor;
