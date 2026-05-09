@@ -76,7 +76,7 @@ const FloatingDockDesktop = ({
       onMouseMove={reducedMotion ? undefined : (e) => mouseX.set(e.pageX)}
       onMouseLeave={reducedMotion ? undefined : () => mouseX.set(Infinity)}
       className={cn(
-        "mx-auto hidden h-16 items-end gap-3 rounded-[28px] border border-[rgba(255,255,255,.68)] bg-[rgba(255,252,245,.9)] px-3 pb-3 shadow-[0_26px_60px_rgba(67,46,24,.16)] backdrop-blur-xl md:flex",
+        "mx-auto hidden h-[72px] items-end gap-3 rounded-[28px] border border-[rgba(255,255,255,.68)] bg-[rgba(255,252,245,.9)] px-3 pb-2 shadow-[0_26px_60px_rgba(67,46,24,.16)] backdrop-blur-xl md:flex",
         className,
       )}
     >
@@ -133,7 +133,7 @@ function DockItemButton({
       aria-current={item.active ? "page" : undefined}
       className={cn(
         "relative flex min-w-0 items-center justify-center rounded-full border border-transparent text-[color:var(--navy)] outline-none transition duration-200 focus-visible:ring-2 focus-visible:ring-[rgba(211,154,41,.42)]",
-        mobile ? "flex-col gap-1 px-1 py-2" : "aspect-square",
+        "flex-col gap-0.5 px-1 py-1.5",
         item.active &&
           "border-[rgba(217,65,50,.18)] bg-[linear-gradient(180deg,rgba(217,65,50,.14),rgba(211,154,41,.12))] shadow-[inset_0_1px_0_rgba(255,255,255,.84)]",
       )}
@@ -146,18 +146,7 @@ function DockItemButton({
             }
       }
     >
-      <AnimatePresence>
-        {!mobile && hovered && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, x: "-50%" }}
-            animate={{ opacity: 1, y: 0, x: "-50%" }}
-            exit={{ opacity: 0, y: 2, x: "-50%" }}
-            className="absolute -top-8 left-1/2 w-max rounded-full border border-[rgba(255,255,255,.82)] bg-[rgba(255,252,245,.94)] px-2.5 py-1 text-[11px] font-bold text-[color:var(--navy)] shadow-[0_8px_18px_rgba(67,46,24,.12)]"
-          >
-            {item.title}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Persistent label rendered below; hover tooltip removed */}
       <motion.div
         style={mobile || reducedMotion ? undefined : { width: widthIcon, height: heightIcon }}
         className="relative flex items-center justify-center"
@@ -172,9 +161,8 @@ function DockItemButton({
       </motion.div>
       <span
         className={cn(
-          "mt-1 text-[10px] font-bold leading-none",
-          item.active ? "text-[color:var(--red)]" : "text-[color:var(--navy)]",
-          mobile ? "max-w-full truncate" : "sr-only",
+          "max-w-full truncate text-[10px] font-bold leading-none",
+          item.active ? "text-[#D94132]" : "text-[#9A8E83]",
         )}
       >
         {item.title}

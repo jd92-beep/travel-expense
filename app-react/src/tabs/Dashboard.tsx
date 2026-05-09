@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, ChevronDown, ChevronRight, CloudSun, MapPin, Plus, X } from 'lucide-react';
+import { motion } from 'motion/react';
 import { AvatarBadge } from '../components/AvatarBadge';
-import { ActionSheet, GlassCard, MetricCard, ProgressRing } from '../components/ui';
+import { ActionSheet, GlassCard, MetricCard } from '../components/ui';
+import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
 import { BorderBeam } from '../components/ui/border-beam';
 import { BlurFade } from '../components/ui/blur-fade';
 import { MagicCard } from '../components/ui/magic-card';
@@ -34,6 +36,13 @@ function weekdayLabel(date: string) {
   return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(parsed);
 }
 
+function getBudgetRingColors(pct: number) {
+  if (pct > 100) return { primary: '#B85450', secondary: '#E8AAA5' };
+  if (pct >= 80) return { primary: '#D94132', secondary: '#F5C0B8' };
+  if (pct >= 50) return { primary: '#C18A26', secondary: '#EDD8A8' };
+  return { primary: '#7A9A6A', secondary: '#C8D8BE' };
+}
+
 function tripLength(startDate: string, endDate: string, fallback: number) {
   const start = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T00:00:00`);
@@ -64,7 +73,9 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
   const dailyBudget = Math.round((Number(state.budget) || 0) / Math.max(1, itinerary.length));
   const overDaily = dailyBudget > 0 && todayTotal > dailyBudget;
   const totalForBudget = total;
-  const budgetPct = state.budget > 0 ? Math.min(100, totalForBudget / state.budget * 100) : 0;
+  const rawBudgetPct = state.budget > 0 ? totalForBudget / state.budget * 100 : 0;
+  const budgetPct = Math.min(100, rawBudgetPct);
+  const budgetColors = getBudgetRingColors(rawBudgetPct);
   const prepTotal = prepReceipts.reduce((s, r) => s + r.total, 0);
   const postTotal = postReceipts.reduce((s, r) => s + r.total, 0);
   const dailyAverage = Math.round(totalForBudget / Math.max(1, itinerary.length));
@@ -99,7 +110,25 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
             <small>HK$ {fmt(hkd(state.budget, state))}</small>
           </div>
           <div className="budget-divider" />
-          <ProgressRing value={budgetPct} label="spent" size={116} />
+          <motion.div
+            whileTap={{ scale: 0.92 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+            className="cursor-pointer"
+            role="img"
+            aria-label={`spent ${Math.round(rawBudgetPct)}%`}
+          >
+            <AnimatedCircularProgressBar
+              value={budgetPct}
+              gaugePrimaryColor={budgetColors.primary}
+              gaugeSecondaryColor={budgetColors.secondary}
+              className="size-[140px]"
+            >
+              <span className="font-mono text-[28px] font-bold leading-none" style={{ color: budgetColors.primary }}>
+                {Math.round(rawBudgetPct)}%
+              </span>
+              <span className="text-[13px] font-semibold text-[var(--ink)] mt-1">spent</span>
+            </AnimatedCircularProgressBar>
+          </motion.div>
           <div className="budget-divider" />
           <div className="budget-stat align-right">
             <span>Spent</span>

@@ -44,6 +44,7 @@ export function useSyncEngine(
   const processingRef = useRef(false);
   const debounceRef = useRef<number | null>(null);
   const lastPushSucceededRef = useRef(true);
+  const syncingRef = useRef(false);
 
   stateRef.current = state;
 
@@ -166,18 +167,22 @@ export function useSyncEngine(
   }, [applyReceiptSyncResult, applyTripSyncResult, setState]);
 
   const push = useCallback(async () => {
+    console.log('[SyncEngine] push() started');
     if (processingRef.current) {
       lastPushSucceededRef.current = false;
+      console.log('[SyncEngine] push() skipped — already processing');
       return;
     }
     if (!navigator.onLine) {
       lastPushSucceededRef.current = false;
       persistEngine({ status: 'offline', pendingCount: pendingCount(stateRef.current.syncQueue), error: undefined });
+      console.log('[SyncEngine] push() skipped — offline');
       return;
     }
     if (!hasCredentialBrokerSession(stateRef.current)) {
       lastPushSucceededRef.current = false;
       persistEngine({ status: pendingCount(stateRef.current.syncQueue) ? 'queued' : 'idle', pendingCount: pendingCount(stateRef.current.syncQueue), error: undefined });
+      console.log('[SyncEngine] push() skipped — no broker session');
       return;
     }
     processingRef.current = true;
@@ -201,6 +206,7 @@ export function useSyncEngine(
         syncQueue: dedupeQueue(current.syncQueue || []).slice(-500),
       }));
       await yieldToStateFlush();
+      console.log(`[SyncEngine] push() complete — failures: ${failures}, pending: ${pendingCount(stateRef.current.syncQueue)}`);
       settlePushStatus(failures, lastError || undefined);
     } finally {
       processingRef.current = false;
@@ -208,12 +214,15 @@ export function useSyncEngine(
   }, [markQueueItem, persistEngine, processItem, removeQueueItem, settlePushStatus]);
 
   const pull = useCallback(async () => {
+    console.log('[SyncEngine] pull() started');
     if (!navigator.onLine) {
       persistEngine({ status: 'offline', pendingCount: pendingCount(stateRef.current.syncQueue), error: undefined });
+      console.log('[SyncEngine] pull() skipped — offline');
       return;
     }
     if (!hasCredentialBrokerSession(stateRef.current)) {
       persistEngine({ status: pendingCount(stateRef.current.syncQueue) ? 'queued' : 'idle', pendingCount: pendingCount(stateRef.current.syncQueue), error: undefined });
+      console.log('[SyncEngine] pull() skipped — no broker session');
       return;
     }
     persistEngine({ status: 'pulling', error: undefined });
@@ -242,17 +251,36 @@ export function useSyncEngine(
         pendingCount: pending,
         error: pullErrors.join(' | ') || undefined,
       });
+      console.log(`[SyncEngine] pull() complete — trips: ${trips.length}, receipts: ${receipts.length}, errors: ${pullErrors.length}`);
     } catch (error) {
       const message = redactError(error);
+      console.log('[SyncEngine] pull() error:', message);
       persistEngine({ status: 'error', pendingCount: pendingCount(stateRef.current.syncQueue), error: message });
     }
   }, [persistEngine, setState]);
 
   const sync = useCallback(async () => {
-    await push();
-    await yieldToStateFlush();
-    if (lastPushSucceededRef.current) {
+    if (syncingRef.current) {
+      console.log('[SyncEngine] sync() skipped — already syncing');
+      return;
+    }
+    syncingRef.current = true;
+    console.log('[SyncEngine] sync() started');
+    try {
+      await push();
+      await yieldToStateFlush();
+      if (!navigator.onLine) {
+        console.log('[SyncEngine] Offline — skipping pull');
+        return;
+      }
+      if (!hasCredentialBrokerSession(stateRef.current)) {
+        console.log('[SyncEngine] No broker session — skipping pull');
+        return;
+      }
+      console.log('[SyncEngine] Running pull()...');
       await pull();
+    } finally {
+      syncingRef.current = false;
     }
   }, [pull, push, yieldToStateFlush]);
 

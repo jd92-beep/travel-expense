@@ -9,6 +9,7 @@
 
 @theme {
   --font-travel-display: "Noto Serif JP", Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --color-travel-red: #d94132;
   --color-travel-navy: #18395c;
   --color-travel-gold: #d39a29;
@@ -45,7 +46,8 @@ body {
     radial-gradient(ellipse at 50% 95%, rgba(211, 154, 41, 0.08) 0%, transparent 40%),
     radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.45), transparent 55%),
     radial-gradient(circle at 10% -5%, rgba(255, 229, 189, 0.55), transparent 30%),
-    linear-gradient(180deg, #fdf5e4 0%, #f5ead8 35%, #f0e5d2 70%, #ebe0cc 100%);
+    linear-gradient(180deg, #fdf5e4 0%, #f5ead8 35%, #f0e5d2 70%, #ebe0cc 100%),
+    url('/travel-expense/react/images/sakura-bg.webp') center/cover no-repeat;
   color: var(--ink);
   overflow-x: hidden;
 }
@@ -264,18 +266,23 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(18px) saturate(1.15);
 }
-.card { padding: 16px; }
+.card {
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,0.40);
+  box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255,255,255,0.45);
+  backdrop-filter: blur(22px) saturate(1.18);
+}
 .glass-card {
   position: relative;
   overflow: clip;
   padding: 16px;
-  border: 1px solid rgba(255, 255, 255, .72);
+  border: 1px solid rgba(255,255,255,0.35);
   border-radius: 26px;
   background:
     linear-gradient(135deg, rgba(255,255,255,.74), rgba(255,248,239,.48)),
     var(--glass);
-  box-shadow: var(--shadow-glass);
-  backdrop-filter: blur(24px) saturate(1.22);
+  box-shadow: var(--shadow-glass), inset 0 1px 2px rgba(255,255,255,0.4);
+  backdrop-filter: blur(28px) saturate(1.25);
 }
 .glass-card::before {
   content: '';
@@ -283,7 +290,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  background: linear-gradient(110deg, rgba(255,255,255,.38), transparent 44%, rgba(255,255,255,.2));
+  background: linear-gradient(110deg, rgba(255,255,255,0.6), transparent 44%, rgba(255,255,255,.2));
 }
 .liquid-surface::after {
   content: '';
@@ -521,6 +528,13 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   align-items: center;
   gap: clamp(10px, 3vw, 22px);
   padding: clamp(18px, 4vw, 26px);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.85), rgba(255,248,239,.60)),
+    rgba(255, 253, 247, .78);
+  border: 1px solid rgba(255,255,255,0.48);
+  border-radius: 26px;
+  box-shadow: 0 24px 64px rgba(59, 43, 26, .16), inset 0 1px 1px rgba(255,255,255,.84);
+  backdrop-filter: blur(32px) saturate(1.28);
 }
 .budget-stat {
   display: grid;
@@ -836,11 +850,11 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   gap: 5px;
   min-width: 0;
   padding: 14px;
-  border: 1px solid rgba(255,255,255,.68);
+  border: 1px solid rgba(255,255,255,0.40);
   border-radius: 20px;
   background: rgba(255,255,255,.56);
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(16px) saturate(1.12);
+  box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255,255,255,0.42);
+  backdrop-filter: blur(20px) saturate(1.16);
 }
 .metric-card span, .metric-card small { color: var(--muted); }
 .metric-card strong { font-size: 24px; line-height: 1.1; overflow-wrap: anywhere; }
@@ -1588,6 +1602,10 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
   .person-edit, .person-add { grid-template-columns: 1fr; }
   .accordion-summary { align-items: flex-start; }
   .accordion-meta { justify-content: flex-start; }
+}
+
+@media (prefers-contrast: more) {
+  body { background: linear-gradient(180deg, #fdf5e4 0%, #f5ead8 100%); }
 }
 
 @media (prefers-reduced-motion: reduce) {

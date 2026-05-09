@@ -369,7 +369,7 @@ export function Settings({
         </div>
       </GlassCard>
 
-      <AccordionCard id="settings-trip" eyebrow="Active Trip" title="旅程設定" meta={<span className="pill">v{currentTrip.version}</span>} defaultOpen>
+      <AccordionCard id="settings-trip" eyebrow="Active Trip" title="旅程設定" meta={<span className="pill">v{currentTrip.version}</span>}>
         <label>切換旅程
           <select value={currentTrip.id} onChange={(e) => selectTrip(e.target.value)}>
             {trips.map((trip) => <option key={trip.id} value={trip.id}>{trip.archived ? '封存 · ' : ''}{trip.name} · {trip.startDate}</option>)}
@@ -429,7 +429,7 @@ export function Settings({
         </label>
       </AccordionCard>
 
-      <AccordionCard id="settings-trip-update" eyebrow="Kimi Trip Update" title="行程更新卡片" icon={<Sparkles />} defaultOpen>
+      <AccordionCard id="settings-trip-update" eyebrow="Kimi Trip Update" title="行程更新卡片" icon={<Sparkles />}>
         <p className="muted">貼入新旅程或補充行程 paragraph，AI 會先產生 preview；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
         <textarea
           rows={6}
@@ -513,7 +513,7 @@ export function Settings({
         </div>
       </AccordionCard>
 
-      <AccordionCard id="settings-credentials" eyebrow="Server-side vault" title="Credentials & Connection" icon={<KeyRound />} defaultOpen>
+      <AccordionCard id="settings-credentials" eyebrow="Server-side vault" title="Credentials & Connection" icon={<KeyRound />}>
         <p className="muted">Notion、Kimi、Google keys 只喺 Credential Broker vault 入面。React 只保存短期 session；rotation input 唔會寫入 localStorage、IndexedDB、backup 或 Notion。</p>
         <label>Credential Broker URL
           <input value={isAllowedCredentialBrokerUrl(state.credentialBrokerUrl) ? state.credentialBrokerUrl || '' : ''} readOnly aria-readonly="true" />
@@ -591,7 +591,7 @@ export function Settings({
         </label>
       </AccordionCard>
 
-      <AccordionCard id="settings-notion" title="Notion Sync" icon={<Cloud />} defaultOpen>
+      <AccordionCard id="settings-notion" title="Notion Sync" icon={<Cloud />}>
         <label>Database ID
           <input value={state.notionDb} onChange={(e) => updateState({ notionDb: e.target.value })} />
         </label>

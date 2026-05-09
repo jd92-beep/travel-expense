@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ErrorBoundary } from './app/ErrorBoundary';
 import { ReceiptEditor } from './components/ReceiptEditor';
 import { Shell } from './components/Shell';
@@ -24,12 +24,34 @@ export function App() {
   const syncEngine = useSyncEngine(state, setState);
   const [tab, setTab] = useState<TabId>(state.lastTab || 'dashboard');
   const [editing, setEditing] = useState<Receipt | null | undefined>(undefined);
+  const bootSyncInitiated = useRef(false);
+  const receiptCountRef = useRef(state.receipts.length);
+  receiptCountRef.current = state.receipts.length;
 
   useEffect(() => {
     if (state.lastTab && state.lastTab !== tab) setTab(state.lastTab);
     // We only want hydration to restore the last tab once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.lastTab]);
+
+  useEffect(() => {
+    if (bootSyncInitiated.current) return;
+    if (!navigator.onLine) return;
+    if (!hasCredentialBrokerSession(state)) return;
+
+    bootSyncInitiated.current = true;
+
+    window.setTimeout(() => {
+      if (receiptCountRef.current === 0) {
+        console.log('[App] Boot pull — no local receipts, fetching from Notion');
+        void syncEngine.pull();
+      } else {
+        console.log('[App] Boot sync — existing local data');
+        void syncEngine.sync();
+      }
+    }, 800);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.credentialSession, state.credentialSessionExpiresAt]);
 
   const changeTab = (next: TabId) => {
     setTab(next);
@@ -57,7 +79,10 @@ export function App() {
       onBrokerSession={(session) => updateState(session)}
       onUnlocked={() => {
         changeTab('dashboard');
-        window.setTimeout(() => void syncEngine.sync(), 500);
+        if (!bootSyncInitiated.current) {
+          bootSyncInitiated.current = true;
+          window.setTimeout(() => void syncEngine.sync(), 500);
+        }
       }}
     >
       <Shell active={tab} onTab={changeTab} syncState={syncEngine.engineState}>
