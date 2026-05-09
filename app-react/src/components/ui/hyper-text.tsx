@@ -96,17 +96,19 @@ export function HyperText({
 
   // Handle animation start based on view or delay
   useEffect(() => {
+    let startTimeout: ReturnType<typeof setTimeout> | null = null
+
     if (!startOnView) {
-      const startTimeout = setTimeout(() => {
+      startTimeout = setTimeout(() => {
         setIsAnimating(true)
       }, delay)
-      return () => clearTimeout(startTimeout)
+      return () => { if (startTimeout) clearTimeout(startTimeout) }
     }
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setTimeout(() => {
+          startTimeout = setTimeout(() => {
             setIsAnimating(true)
           }, delay)
           observer.disconnect()
@@ -119,7 +121,10 @@ export function HyperText({
       observer.observe(elementRef.current)
     }
 
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      if (startTimeout) clearTimeout(startTimeout)
+    }
   }, [delay, startOnView])
 
   // Handle scramble animation

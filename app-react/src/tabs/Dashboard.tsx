@@ -8,7 +8,7 @@ import { BorderBeam } from '../components/ui/border-beam';
 import { BlurFade } from '../components/ui/blur-fade';
 import { MagicCard } from '../components/ui/magic-card';
 import { NumberTicker } from '../components/ui/number-ticker';
-import { RippleButton } from '../components/ui/ripple-button';
+
 import { TextAnimate } from '../components/ui/text-animate';
 import { ShimmerButton } from '../components/ui/shimmer-button';
 import { VisualIcon } from '../components/VisualIcon';

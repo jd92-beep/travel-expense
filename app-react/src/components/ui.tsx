@@ -2,7 +2,6 @@ import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
-import { motion } from 'motion/react';
 import { cn } from '../lib/cn';
 import { BlurFade } from './ui/blur-fade';
 import { BorderBeam } from './ui/border-beam';
@@ -58,56 +57,11 @@ export function GlassCard({
   );
 }
 
-export function LiquidGlassSurface({
-  as = 'div',
-  tone = 'default',
-  className,
-  children,
-}: {
-  as?: 'section' | 'article' | 'div';
-  tone?: VariantProps<typeof glassSurface>['tone'];
-  className?: string;
-  children: ReactNode;
-}) {
-  return <GlassCard as={as} tone={tone} className={className}>{children}</GlassCard>;
-}
-
 export function AnimatedNumber({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
   return (
     <span className="animated-number">
       {prefix}<NumberTicker value={Math.round(value)} className="animated-number-value" />{suffix}
     </span>
-  );
-}
-
-export function MagicGlassFrame({
-  className,
-  children,
-  beam = false,
-}: {
-  className?: string;
-  children: ReactNode;
-  beam?: boolean;
-}) {
-  return (
-    <MagicCard
-      className={cn('magic-glass-frame', className)}
-      gradientFrom="#d8503d"
-      gradientTo="#315e8e"
-      gradientColor="rgba(255, 247, 230, 0.58)"
-      gradientOpacity={0.18}
-    >
-      {beam && (
-        <BorderBeam
-          size={96}
-          duration={9}
-          borderWidth={1}
-          colorFrom="#d8503d"
-          colorTo="#d9a441"
-        />
-      )}
-      {children}
-    </MagicCard>
   );
 }
 
@@ -194,57 +148,6 @@ export function SegmentedControl<T extends string>({
   );
 }
 
-export function BottomDock<T extends string>({
-  items,
-  active,
-  onSelect,
-  ariaLabel,
-}: {
-  items: Array<{ id: T; label: string; icon: ReactNode }>;
-  active: T;
-  onSelect: (id: T) => void;
-  ariaLabel: string;
-}) {
-  return (
-    <nav className="tabbar bottom-dock" aria-label={ariaLabel}>
-      {items.map((item) => (
-        <button
-          key={item.id}
-          className={`${active === item.id ? 'active' : ''} dock-item-${item.id}`.trim()}
-          type="button"
-          onClick={() => onSelect(item.id)}
-        >
-          {active === item.id && <motion.i className="dock-indicator" layoutId="dock-indicator" />}
-          {item.icon}
-          <span>{item.label}</span>
-        </button>
-      ))}
-    </nav>
-  );
-}
-
-export function WindmillTransitionCSS({ activeKey }: { activeKey: string }) {
-  const [spinning, setSpinning] = useState(false);
-  const previous = useRef(activeKey);
-
-  useEffect(() => {
-    if (previous.current === activeKey) return;
-    previous.current = activeKey;
-    setSpinning(true);
-    const timer = window.setTimeout(() => setSpinning(false), 520);
-    return () => window.clearTimeout(timer);
-  }, [activeKey]);
-
-  return (
-    <div className={`windmill-transition ${spinning ? 'spinning' : ''}`} aria-hidden="true" data-legacy-css="true">
-      <i />
-      <i />
-      <i />
-      <i />
-    </div>
-  );
-}
-
 export function MetricCard({
   label,
   value,
@@ -262,29 +165,6 @@ export function MetricCard({
       <strong>{value}</strong>
       {detail && <small>{detail}</small>}
     </article>
-  );
-}
-
-export function ProgressRing({
-  value,
-  label,
-  size = 88,
-}: {
-  value: number;
-  label: string;
-  size?: number;
-}) {
-  const clamped = Math.max(0, Math.min(100, value));
-  return (
-    <div
-      className="progress-ring"
-      style={{ '--progress': `${clamped}%`, '--ring-size': `${size}px` } as CSSProperties}
-      aria-label={`${label} ${clamped.toFixed(0)}%`}
-      role="img"
-    >
-      <strong>{clamped.toFixed(0)}%</strong>
-      <span>{label}</span>
-    </div>
   );
 }
 
@@ -309,36 +189,6 @@ export function ModalSheet({
       </header>
       {children}
     </section>
-  );
-}
-
-export function ReceiptRow({
-  icon,
-  title,
-  meta,
-  amount,
-  onClick,
-}: {
-  icon: ReactNode;
-  title: ReactNode;
-  meta?: ReactNode;
-  amount: ReactNode;
-  onClick?: () => void;
-}) {
-  const content = (
-    <>
-      <span className="cat">{icon}</span>
-      <span className="receipt-main">
-        <strong>{title}</strong>
-        {meta && <small>{meta}</small>}
-      </span>
-      <span className="amount">{amount}</span>
-    </>
-  );
-  return onClick ? (
-    <button className="receipt-row" type="button" onClick={onClick}>{content}</button>
-  ) : (
-    <div className="receipt-row static">{content}</div>
   );
 }
 

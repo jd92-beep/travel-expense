@@ -84,12 +84,19 @@ async function brokerFetch<T>(
   if (requireSession && !session) throw new Error('Credential Broker session 未連線或已過期');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (session) headers[SESSION_HEADER] = session.credentialSession;
-  const response = await fetch(`${brokerUrl(state)}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  return parseBrokerResponse<T>(response);
+  try {
+    const response = await fetch(`${brokerUrl(state)}${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return parseBrokerResponse<T>(response);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`Network error: ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 export async function unlockCredentialBroker(

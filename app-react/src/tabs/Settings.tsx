@@ -302,6 +302,7 @@ export function Settings({
       const parsed = JSON.parse(await file.text());
       const result = validateItinerary(parsed);
       if (!result.ok) throw new Error(result.error);
+      if (!result.itinerary.length) throw new Error('行程為空');
       const nextTrip = {
         ...currentTrip,
         itinerary: result.itinerary,
@@ -393,7 +394,7 @@ export function Settings({
         </div>
         <div className="form-grid">
           <label>匯率（1 HKD = JPY）
-            <input type="number" value={state.rate} onChange={(e) => updateState({ rate: Number(e.target.value) || 20.36 })} />
+            <input type="number" min="0.01" step="0.01" value={state.rate} onChange={(e) => updateState({ rate: Math.max(0.01, Number(e.target.value) || 20.36) })} />
           </label>
           <label>目的地貨幣
             <select value={state.tripCurrency} onChange={(e) => updateCurrentTrip({ currencies: Array.from(new Set(['HKD', e.target.value])) })}>
@@ -414,10 +415,10 @@ export function Settings({
           </label>
         </div>
         <label>預算 JPY
-          <input type="number" value={state.budget} onChange={(e) => updateState({ budget: Number(e.target.value) || 0 })} />
+          <input type="number" min="0" step="1" value={state.budget} onChange={(e) => updateState({ budget: Math.max(0, Number(e.target.value) || 0) })} />
         </label>
         <label>預算 HKD
-          <input type="number" value={Math.round((Number(state.budget) || 0) / Math.max(0.1, Number(state.rate) || 20.36))} onChange={(e) => updateState({ budget: Math.round((Number(e.target.value) || 0) * Math.max(0.1, Number(state.rate) || 20.36)) })} />
+          <input type="number" min="0" step="1" value={Math.round((Number(state.budget) || 0) / Math.max(0.1, Number(state.rate) || 20.36))} onChange={(e) => updateState({ budget: Math.max(0, Math.round((Number(e.target.value) || 0) * Math.max(0.1, Number(state.rate) || 20.36))) })} />
         </label>
         <label className="check-row">
           <input type="checkbox" checked={state.statsIncludeTransportLodging} onChange={(e) => updateState({ statsIncludeTransportLodging: e.target.checked })} />

@@ -26,14 +26,14 @@ function queueKey(item: SyncQueueItem) {
 function dedupeQueue(queue: SyncQueueItem[]) {
   const latest = new Map<string, SyncQueueItem>();
   for (const item of queue) {
-    if (item.status === 'synced' || item.attempts >= MAX_RETRY_ATTEMPTS) continue;
+    if (item.status === 'synced') continue;
     latest.set(queueKey(item), item);
   }
   return [...latest.values()].sort((a, b) => a.createdAt - b.createdAt);
 }
 
 function pendingCount(queue: SyncQueueItem[] = []) {
-  return queue.filter((item) => item.status !== 'synced' && item.attempts < MAX_RETRY_ATTEMPTS).length;
+  return queue.filter((item) => item.status !== 'synced' && item.status !== 'failed').length;
 }
 
 export function useSyncEngine(
@@ -191,6 +191,7 @@ export function useSyncEngine(
       let failures = 0;
       let lastError = '';
       for (const item of dedupeQueue(stateRef.current.syncQueue || [])) {
+        if (item.status === 'failed' || item.attempts >= MAX_RETRY_ATTEMPTS) continue;
         markQueueItem(item, { status: 'syncing' });
         try {
           await processItem(item);
@@ -198,7 +199,12 @@ export function useSyncEngine(
         } catch (error) {
           failures += 1;
           lastError = redactError(error);
-          markQueueItem(item, { status: 'error', attempts: item.attempts + 1, error: lastError });
+          const nextAttempts = item.attempts + 1;
+          markQueueItem(item, {
+            status: nextAttempts >= MAX_RETRY_ATTEMPTS ? 'failed' : 'error',
+            attempts: nextAttempts,
+            error: lastError,
+          });
         }
       }
       setState((current) => ({
@@ -291,13 +297,16 @@ export function useSyncEngine(
       status: state.globalSyncStatus ?? prev.status,
       error: state.syncError ?? '',
     }));
+  }, [state.syncQueue, state.globalSyncStatus, state.syncError]);
+
+  useEffect(() => {
     if (!state.autoSync || !pendingCount(state.syncQueue) || !hasCredentialBrokerSession(state)) return;
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => void push(), DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [push, state.autoSync, state.credentialSession, state.credentialSessionExpiresAt, state.globalSyncStatus, state.syncError, state.syncQueue]);
+  }, [push, state.autoSync, state.credentialSession, state.credentialSessionExpiresAt]);
 
   useEffect(() => {
     const onOnline = () => {

@@ -52,6 +52,19 @@ async function installState(page, state) {
 }
 
 test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
+  const fixed = new Date('2026-04-20T10:00:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+  }, fixed);
   const urls = [];
   await page.route('https://api.open-meteo.com/**', async (route) => {
     urls.push(route.request().url());
@@ -73,6 +86,19 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
 });
 
 test('Non-Japan trip uses Open-Meteo without JMA', async ({ page }) => {
+  const fixed = new Date('2026-04-20T10:00:00-07:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+  }, fixed);
   const urls = [];
   await page.route('https://api.open-meteo.com/**', async (route) => {
     urls.push(route.request().url());

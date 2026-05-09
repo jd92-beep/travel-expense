@@ -12,7 +12,7 @@ export type CategoryId =
 export type PaymentId = 'cash' | 'credit' | 'paypay' | 'suica';
 export type SplitMode = 'shared' | 'private';
 export type TripPhase = 'prep' | 'trip' | 'post';
-export type SyncStatus = 'local' | 'queued' | 'syncing' | 'synced' | 'error';
+export type SyncStatus = 'local' | 'queued' | 'syncing' | 'synced' | 'error' | 'failed';
 export type GlobalSyncStatus = 'idle' | 'queued' | 'pushing' | 'pulling' | 'synced' | 'error' | 'offline';
 
 export interface Person {

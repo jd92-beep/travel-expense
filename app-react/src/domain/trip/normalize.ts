@@ -15,6 +15,13 @@ export function stableSpotId(tripId: string, date: string, idx: number, spot: Pi
   return `${stableDayId(tripId, date)}_spot_${String(idx + 1).padStart(2, '0')}_${slug(`${spot.time}_${spot.name}`) || 'item'}`;
 }
 
+function normalizeZone(value?: string): string {
+  const zone = String(value || '').trim();
+  if (zone === 'JST') return 'Asia/Tokyo';
+  if (zone === 'HKT') return 'Asia/Hong_Kong';
+  return zone;
+}
+
 export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fallbackCurrency = 'JPY'): ItineraryDay[] {
   return itinerary.map((day, dayIdx) => {
     const dayId = day.dayId || day.id || stableDayId(tripId, day.date);
@@ -23,7 +30,7 @@ export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fa
       id: dayId,
       dayId,
       day: Number(day.day) || dayIdx + 1,
-      timezone: day.timezone || day.spots?.find((spot) => spot.timezone)?.timezone || 'Asia/Tokyo',
+      timezone: normalizeZone(day.timezone || day.spots?.find((spot) => spot.timezone)?.timezone) || 'Asia/Tokyo',
       currency: day.currency || fallbackCurrency,
       spots: (day.spots || []).map((spot, spotIdx) => ({
         ...spot,
