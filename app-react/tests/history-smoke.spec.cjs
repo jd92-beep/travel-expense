@@ -49,7 +49,7 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   await page.goto('http://localhost:8902/travel-expense/react/');
   await expect(page.getByText('紀錄中心')).toBeVisible();
   await page.getByRole('button', { name: 'Pull Notion' }).click();
-  await expect(page.getByText('Credential Broker 未連線')).toBeVisible();
+  await expect(page.getByText('未連線：請到 Settings')).toBeVisible();
 
   await page.getByPlaceholder('搜尋店名 / 備註 / 地區').fill('Coffee');
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toHaveCount(1);

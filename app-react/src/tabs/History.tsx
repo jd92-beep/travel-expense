@@ -47,7 +47,7 @@ export function History({
 
   async function handlePull(mode: 'manual' | 'auto' = 'manual') {
     if (!hasCredentialBrokerSession(state) && !hasDirectNotionToken()) {
-      if (mode === 'manual') setStatus('Credential Broker 未連線且無 direct Notion token；已保留本機紀錄，未向 Notion 發送 request。');
+      if (mode === 'manual') setStatus('未連線：請到 Settings → Notion Sync 輸入 Notion Integration Token，或連接 Credential Broker。');
       return;
     }
     setBusy(true);

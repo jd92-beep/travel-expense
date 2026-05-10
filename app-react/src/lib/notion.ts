@@ -2,9 +2,12 @@ import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS } from './constants';
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { brokerNotionRequest, hasCredentialBrokerSession } from './credentialBroker';
 import { displayStore, getPersons, hkd, receiptRegion } from './domain';
+import { getDirectNotionToken } from './storage';
 
 export function hasDirectNotionToken(): boolean {
-  return !!(typeof window !== 'undefined' && (window as any).DEV_SECRETS?.notionToken);
+  return !!(typeof window !== 'undefined' && (
+    (window as any).DEV_SECRETS?.notionToken || getDirectNotionToken()
+  ));
 }
 import type { AppState, CategoryId, PaymentId, Receipt, TripProfile } from './types';
 
@@ -57,7 +60,7 @@ function makeProxyUrl(proxy: string, target: string) {
 }
 
 async function notionFetch<T>(state: AppState, path: string, init: RequestInit = {}): Promise<T> {
-  const directToken = typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '';
+  const directToken = (typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '') || getDirectNotionToken();
   if (directToken && !hasCredentialBrokerSession(state)) {
     if (!state.notionDb?.trim()) throw new Error('未設定 Notion DB ID');
     const targetUrl = `https://api.notion.com/v1${path}`;
@@ -275,7 +278,7 @@ export async function testNotion(state: AppState) {
 }
 
 export async function testDirectNotion(state: AppState): Promise<{ ok: boolean; count: number; firstTitle?: string; error?: string }> {
-  const token = typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '';
+  const token = ((typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '') || getDirectNotionToken());
   if (!token) return { ok: false, count: 0, error: 'No direct token in window.DEV_SECRETS' };
   const dbId = state.notionDb || DEFAULT_NOTION_DB;
   try {

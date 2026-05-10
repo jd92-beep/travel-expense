@@ -21,7 +21,7 @@ import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency
 import { computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
 import { hasDirectNotionToken, migrateNotionSchema, pullAll, pushSettingsMeta, pushTripPage, testNotion } from '../lib/notion';
 import type { AppState, Person, SyncEngineState, TripDraft, TripProfile } from '../lib/types';
-import { clearCredentialSession, saveState, stripSensitiveState } from '../lib/storage';
+import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripSensitiveState } from '../lib/storage';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { GlassCard, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 
@@ -63,6 +63,7 @@ export function Settings({
   const [rotationSecret, setRotationSecret] = useState('');
   const [rotationAdmin, setRotationAdmin] = useState('');
   const [rotationDb, setRotationDb] = useState(state.notionDb || '');
+  const [directNotionToken, setDirectNotionToken] = useState(getDirectNotionToken);
   const itineraryInput = useRef<HTMLInputElement | null>(null);
   const backupInput = useRef<HTMLInputElement | null>(null);
   const brokerReady = hasCredentialBrokerSession(state);
@@ -521,6 +522,7 @@ export function Settings({
         </label>
         <div className="credential-status-grid">
           <span className={`pill ${brokerReady ? 'ok' : 'hot'}`}><Server size={14} /> Session: {brokerReady ? 'active' : 'missing'}</span>
+          <span className={`pill ${hasDirectNotionToken() ? 'ok' : 'hot'}`}><KeyRound size={14} /> Direct token: {hasDirectNotionToken() ? 'active' : 'missing'}</span>
           {statusPill('notion')}
           {statusPill('kimi')}
           {statusPill('google')}
@@ -596,6 +598,19 @@ export function Settings({
         <label>Database ID
           <input value={state.notionDb} onChange={(e) => updateState({ notionDb: e.target.value })} />
         </label>
+        <label>Notion Integration Token (direct API)
+          <input
+            type="password"
+            value={directNotionToken}
+            onChange={(e) => {
+              setDirectNotionToken(e.target.value);
+              saveDirectNotionToken(e.target.value);
+            }}
+            placeholder="ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            autoComplete="off"
+          />
+        </label>
+        <p className="muted">直接輸入 Notion integration token，無須 Credential Broker。Token 會保存在本機 browser，不會包含在 backup 或同步資料中。</p>
         <label className="check-row">
           <input type="checkbox" checked={state.autoSync} onChange={(e) => updateState({ autoSync: e.target.checked })} />
           儲存 receipt 後自動同步

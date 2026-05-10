@@ -5,6 +5,7 @@ import type { AppCredentials, AppState } from './types';
 
 const CREDENTIALS_KEY = `${STORAGE_KEY}:react-credentials`;
 const BROKER_SESSION_KEY = `${STORAGE_KEY}:credential-session:v1`;
+const DIRECT_NOTION_TOKEN_KEY = `${STORAGE_KEY}:direct-notion-token`;
 const STALE_BROKER_URLS = new Set(['https://travel-expense-credential-broker.jd92-beep.workers.dev']);
 const STALE_GOOGLE_BACKUP_MODELS = new Set(['gemma-3-27b-it', 'gemma-4-31b-it', 'gemma-4-26b-a4b-it']);
 
@@ -141,6 +142,20 @@ export function saveCredentials(state: Partial<AppCredentials>): void {
     credentialBrokerUrl: normalizeCredentialBrokerUrl(state.credentialBrokerUrl),
   };
   localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(credentials));
+}
+
+export function saveDirectNotionToken(token: string): void {
+  const cleaned = cleanSecretValue(token);
+  if (cleaned) localStorage.setItem(DIRECT_NOTION_TOKEN_KEY, cleaned);
+  else localStorage.removeItem(DIRECT_NOTION_TOKEN_KEY);
+}
+
+export function getDirectNotionToken(): string {
+  try {
+    return cleanSecretValue(localStorage.getItem(DIRECT_NOTION_TOKEN_KEY)) || '';
+  } catch {
+    return '';
+  }
 }
 
 export function loadCredentialSession(): AppCredentials {
