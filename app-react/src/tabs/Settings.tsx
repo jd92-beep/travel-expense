@@ -607,7 +607,7 @@ export function Settings({
               setDirectNotionToken(e.target.value);
               saveDirectNotionToken(e.target.value);
             }}
-            placeholder="ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            placeholder="ntn_abc123..."
             autoComplete="off"
           />
         </label>

@@ -262,11 +262,46 @@ function readAllText(prop: any, type: 'title' | 'rich_text') {
 }
 
 function readProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap) {
-  const names = schema ? [schema[key], ...N[key]] : N[key];
+  const names = schema ? [schema[key], ...N[key]] : [...N[key]];
+  // Deduplicate candidate names while preserving order
+  const seen = new Set<string>();
+  const unique: string[] = [];
   for (const name of names) {
-    if (name && name in props) return props[name];
+    if (name && !seen.has(name)) { seen.add(name); unique.push(name); }
   }
-  return undefined;
+  // Collect ALL matches — prefer the one that has actual content
+  let firstMatch: any = undefined;
+  for (const name of unique) {
+    if (!(name in props)) continue;
+    const prop = props[name];
+    if (!firstMatch) firstMatch = prop;
+    // Check if this prop has non-empty content
+    if (propHasContent(prop)) return prop;
+  }
+  return firstMatch;
+}
+
+/** Check whether a Notion property object has non-empty / non-zero payload */
+function propHasContent(prop: any): boolean {
+  if (!prop) return false;
+  switch (prop.type) {
+    case 'number': return typeof prop.number === 'number' && prop.number !== 0;
+    case 'url': return !!prop.url;
+    case 'files': return Array.isArray(prop.files) && prop.files.length > 0;
+    case 'select': return !!prop.select?.name;
+    case 'multi_select': return Array.isArray(prop.multi_select) && prop.multi_select.length > 0;
+    case 'date': return !!prop.date?.start;
+    case 'checkbox': return true; // checkbox always has a value
+    case 'formula':
+      return typeof prop.formula?.number === 'number' || !!prop.formula?.string;
+    case 'rollup':
+      return typeof prop.rollup?.number === 'number';
+    case 'rich_text':
+      return (prop.rich_text || []).some((t: any) => (t?.plain_text || t?.text?.content || '').length > 0);
+    case 'title':
+      return (prop.title || []).some((t: any) => (t?.plain_text || t?.text?.content || '').length > 0);
+    default: return false;
+  }
 }
 
 function readNumberProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap): number | undefined {
@@ -275,7 +310,7 @@ function readNumberProp(props: Record<string, any>, key: keyof typeof N, schema?
     if (typeof prop.number === 'number') return prop.number;
     if (prop.formula?.type === 'number' && typeof prop.formula.number === 'number') return prop.formula.number;
     if (prop.rollup?.type === 'number' && typeof prop.rollup.number === 'number') return prop.rollup.number;
-    const text = prop.rich_text?.[0]?.plain_text || prop.title?.[0]?.plain_text || '';
+    const text = readAllText(prop, 'rich_text') || readAllText(prop, 'title') || '';
     const parsed = parseFloat(text.replace(/[^0-9.-]/g, ''));
     if (Number.isFinite(parsed)) return parsed;
   }
@@ -320,7 +355,8 @@ function readNumberProp(props: Record<string, any>, key: keyof typeof N, schema?
 
 function readUrlProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap): string {
   const prop = readProp(props, key, schema);
-  if (prop?.url) return prop.url;
+  if (prop?.type === 'url' && prop.url) return prop.url;
+  if (prop?.type === 'files' && prop.files?.[0]) return prop.files[0].external?.url || prop.files[0].file?.url || '';
   // ULTRA FALLBACK
   if (key === 'photoUrl' || key === 'mapUrl') {
     for (const [name, p] of Object.entries(props)) {
@@ -348,7 +384,7 @@ function readUrlProp(props: Record<string, any>, key: keyof typeof N, schema?: S
 function readRichTextProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap): string {
   const prop = readProp(props, key, schema);
   if (prop) {
-    const text = prop.rich_text?.[0]?.plain_text || prop.title?.[0]?.plain_text || '';
+    const text = readAllText(prop, 'rich_text') || readAllText(prop, 'title') || '';
     if (text) return text;
   }
   const patterns: Record<string, RegExp[]> = {
@@ -366,10 +402,12 @@ function readRichTextProp(props: Record<string, any>, key: keyof typeof N, schem
   };
   if (patterns[key]) {
     for (const [name, p] of Object.entries(props)) {
-      if ((p?.type === 'rich_text' || p?.type === 'title') && (p.rich_text?.[0]?.plain_text || p.title?.[0]?.plain_text)) {
-        const text = p.rich_text?.[0]?.plain_text || p.title?.[0]?.plain_text || '';
-        for (const pattern of patterns[key]) {
-          if (pattern.test(name)) return text;
+      if ((p?.type === 'rich_text' || p?.type === 'title')) {
+        const text = readAllText(p, p.type) || '';
+        if (text) {
+          for (const pattern of patterns[key]) {
+            if (pattern.test(name)) return text;
+          }
         }
       }
     }
