@@ -58,8 +58,8 @@ export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
       : true;
     if (!localTrip || remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
       byId.set(remoteTrip.id, { ...localTrip, ...remoteTrip });
+      if (remoteTrip.active && !remoteTrip.archived) activeTripId = remoteTrip.id;
     }
-    if (remoteTrip.active && !remoteTrip.archived) activeTripId = remoteTrip.id;
   }
   return {
     trips: [...byId.values()],

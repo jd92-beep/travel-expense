@@ -39,7 +39,7 @@ export async function fetchLiveCurrencySnapshot(): Promise<CurrencySnapshot> {
   if (!response.ok) throw new Error(`FX ${response.status}: ${(await response.text()).slice(0, 160)}`);
   const data = await response.json();
   const rates = data?.rates || {};
-  if (data?.result !== 'success' || !Number(rates.JPY)) throw new Error('FX 回覆缺少 JPY rate');
+  if (data?.result !== 'success' || !Number.isFinite(rates.JPY)) throw new Error('FX 回覆缺少有效 JPY rate');
   const snapshot: CurrencySnapshot = {
     base: 'HKD',
     rates: { ...rates, HKD: 1 },
@@ -52,7 +52,7 @@ export async function fetchLiveCurrencySnapshot(): Promise<CurrencySnapshot> {
 
 export function usableSnapshot(snapshot: CurrencySnapshot | null): CurrencySnapshot | null {
   if (!snapshot) return null;
-  return Date.now() - snapshot.fetchedAt < MAX_AGE ? snapshot : snapshot;
+  return Date.now() - snapshot.fetchedAt < MAX_AGE ? snapshot : null;
 }
 
 export function convertAmount(amount: number, from: string, to: string, state: AppState, snapshot: CurrencySnapshot | null): number | null {
@@ -62,7 +62,7 @@ export function convertAmount(amount: number, from: string, to: string, state: A
   if (from === 'JPY' && to === 'HKD') return n / rate;
   if (from === 'HKD' && to === 'JPY') return n * rate;
   const rates = usableSnapshot(snapshot)?.rates;
-  if (!rates || !Number(rates[from]) || !Number(rates[to])) return null;
+  if (!rates || !Number.isFinite(rates[from]) || !Number.isFinite(rates[to]) || rates[from] === 0 || rates[to] === 0) return null;
   const hkd = n / Number(rates[from]);
   return hkd * Number(rates[to]);
 }

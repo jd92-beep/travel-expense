@@ -54,7 +54,7 @@ function ymdFromText(text: string, fallback: string): string {
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
   const md = text.match(/(\d{1,2})\s*[月/]\s*(\d{1,2})\s*(?:日)?/);
-  if (md) return `${fallback.slice(0, 4)}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`;
+  if (md) return `${(fallback || '').slice(0, 4)}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`;
   return fallback;
 }
 
@@ -109,7 +109,7 @@ export function heuristicReceiptFromText(text: string, state: AppState): Receipt
     bookingRef: bookingMatch?.[1] || '',
     category,
     payment: /card|credit|visa|信用|master/i.test(text) ? 'credit' : /suica|ic/i.test(text) ? 'suica' : /paypay/i.test(text) ? 'paypay' : 'cash',
-    personId: state.persons[0]?.id,
+    personId: state.persons?.[0]?.id || '',
     splitMode: 'shared',
     note: text.slice(0, 500),
     source: 'react-text',
@@ -210,7 +210,7 @@ Use ${state.tripDateRange.start} if the year is missing.`;
     payment: validPayment(parsed.payment),
     itemsText: String(parsed.itemsText || ''),
     note: String(parsed.note || ''),
-    personId: state.persons[0]?.id,
+    personId: state.persons?.[0]?.id || '',
     splitMode: 'shared',
     source: 'react-ocr',
     createdAt: Date.now(),
@@ -247,7 +247,7 @@ ${text.slice(0, 12000)}`;
       payment: validPayment(r.payment),
       itemsText: String(r.itemsText || ''),
       note: String(r.note || ''),
-      personId: state.persons[0]?.id,
+      personId: state.persons?.[0]?.id || '',
       splitMode: 'shared',
       source,
       createdAt: Date.now(),

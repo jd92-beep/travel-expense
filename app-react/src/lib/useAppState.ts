@@ -55,9 +55,10 @@ export function useAppState() {
 
   const upsertReceipt = useCallback((receipt: Receipt) => {
     setState((prev) => {
+      const shouldQueue = prev.autoSync && (hasCredentialBrokerSession(prev) || hasDirectNotionToken());
       const stamped = stampReceiptForTrip(prev, {
         ...receipt,
-        syncStatus: receipt.syncStatus || (prev.autoSync && (hasCredentialBrokerSession(prev) || hasDirectNotionToken()) ? 'queued' : 'local'),
+        syncStatus: shouldQueue ? 'queued' : 'local',
       });
       const idx = prev.receipts.findIndex((r) => r.id === receipt.id);
       const syncQueue = prev.autoSync && (hasCredentialBrokerSession(prev) || hasDirectNotionToken())

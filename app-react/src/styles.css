@@ -1151,13 +1151,20 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
 .check-row { display: flex; align-items: center; gap: 8px; }
 .check-row input { width: auto; }
 label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 800; margin-top: 10px; }
+.modal-head + label { margin-top: 6px; }
 input, select, textarea {
   width: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid #D9CFC2;
   border-radius: 8px;
   background: #FFFDF7;
   color: var(--ink);
   padding: 10px 11px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.04);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(30, 77, 107, .12), inset 0 1px 2px rgba(0,0,0,.04);
 }
 .bar-row { display: grid; gap: 6px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .bar-row:last-child { border-bottom: 0; }
@@ -1277,7 +1284,7 @@ input, select, textarea {
 .person-edit input[type="color"] { min-height: 42px; padding: 4px; }
 .person-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }
 .photo-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
-.photo-thumb { width: 92px; height: 68px; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #f9f4ed; }
+.photo-thumb { width: 92px; height: 68px; padding: 0; border: 1px solid #D9CFC2; border-radius: 8px; overflow: hidden; background: #f9f4ed; box-shadow: 0 2px 6px rgba(0,0,0,.06); }
 .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .batch-list { display: grid; gap: 10px; margin-top: 12px; }
 .batch-item { padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fbf6ef; }
@@ -1582,9 +1589,10 @@ input, select, textarea {
   max-height: min(90svh, 760px);
   overflow: auto;
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: 1px solid rgba(139, 115, 85, .18);
+  border-radius: 12px;
   padding: 16px;
+  box-shadow: 0 24px 64px rgba(42, 30, 18, .18), 0 0 0 1px rgba(139, 115, 85, .06);
 }
 .dashboard-sheet { display: grid; gap: 12px; }
 .spot-detail {
@@ -1604,7 +1612,12 @@ input, select, textarea {
   align-items: center;
   gap: 12px;
 }
-.icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: white; display: grid; place-items: center; }
+.modal-actions {
+  border-top: 1px solid #E8DDD0;
+  padding-top: 14px;
+  margin-top: 8px;
+}
+.icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid #D9CFC2; background: white; display: grid; place-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
 
 .stats-tab .section-head h2 {

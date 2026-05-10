@@ -1,5 +1,5 @@
 import { Cloud, CloudLightning, CloudRain, CloudSun, RefreshCw, Snowflake, Sun, Umbrella, Wind } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GlassCard, LoadingState, StatusPill, Toast } from '../components/ui';
 import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
@@ -58,34 +58,41 @@ export function Weather({ state }: { state: AppState }) {
     return `${day.date}:${day.region}:${day.country || ''}:${coords}`;
   }).join('|');
 
-  async function load() {
-    setBusy(true);
-    setError('');
-    try {
-      const next: Record<string, DayWeather[]> = {};
-      for (const day of displayItinerary) {
-        next[day.date] = [];
-        for (const coord of coordsForDay(day)) {
-          try {
-            const isJapan = /日本|Japan|JP|名古屋|金澤|長野|高山|白川|常滑|上高地|立山|東京|京都|大阪/.test(`${day.country || ''} ${day.region || ''} ${coord.label}`);
-            const { data, source } = await fetchWeather(coord, normalizedTimezone(day.timezone) || 'auto', isJapan);
-            next[day.date].push({ coord, source, slots: slotsForDate(data, day.date) });
-          } catch {
-            next[day.date].push({ coord, source: '缺少座標', slots: [] });
-          }
-        }
-      }
-      setRows(next);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const loadRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setBusy(true);
+      setError('');
+      try {
+        const next: Record<string, DayWeather[]> = {};
+        for (const day of displayItinerary) {
+          next[day.date] = [];
+          for (const coord of coordsForDay(day)) {
+            try {
+              const isJapan = /日本|Japan|JP|名古屋|金澤|長野|高山|白川|常滑|上高地|立山|東京|京都|大阪/.test(`${day.country || ''} ${day.region || ''} ${coord.label}`);
+              const { data, source } = await fetchWeather(coord, normalizedTimezone(day.timezone) || 'auto', isJapan);
+              if (cancelled) return;
+              next[day.date].push({ coord, source, slots: slotsForDate(data, day.date) });
+            } catch {
+              if (cancelled) return;
+              next[day.date].push({ coord, source: '缺少座標', slots: [] });
+            }
+          }
+        }
+        if (cancelled) return;
+        setRows(next);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    }
+    loadRef.current = load;
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { cancelled = true; };
   }, [itineraryKey]);
 
   return (
@@ -97,7 +104,7 @@ export function Weather({ state }: { state: AppState }) {
             <h2>天氣預報</h2>
             <p className="muted">{hasEnded ? '旅程已結束，顯示今日天氣。' : '跟 active trip 每日地點同座標更新；日本地點使用 JMA fallback。'}</p>
           </div>
-          <button className="secondary" type="button" disabled={busy} onClick={load}>
+          <button className="secondary" type="button" disabled={busy} onClick={() => loadRef.current()}>
             <RefreshCw size={18} className={busy ? 'spin' : ''} /> 刷新
           </button>
         </div>

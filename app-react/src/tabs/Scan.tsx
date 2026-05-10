@@ -30,6 +30,7 @@ export function Scan({
   const [voiceText, setVoiceText] = useState('');
   const [emailText, setEmailText] = useState('');
   const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
+  const [savingBatch, setSavingBatch] = useState(false);
   const [mode, setMode] = useState<ScanMode>('scan');
   const [lastScanFile, setLastScanFile] = useState<File | null>(null);
   const [lastDraft, setLastDraft] = useState<Receipt | null>(null);
@@ -52,6 +53,10 @@ export function Scan({
   async function handleImage(file?: File, retry = false) {
     if (!file) {
       setStatus('未收到圖片。相機無彈出時，請試相簿或手動記一筆。');
+      return;
+    }
+    if (file.size > 5_000_000) {
+      setStatus('圖片太大（超過 5MB），請先壓縮。');
       return;
     }
     if (!retry) setLastScanFile(file);
@@ -82,6 +87,10 @@ export function Scan({
     setBusy('voice');
     try {
       const receipts = await parseTextWithAi(voiceText, state, 'react-voice');
+      if (!receipts?.length) {
+        setStatus('解析不到任何收據');
+        return;
+      }
       openDraft(receipts[0]);
       setStatus('語音文字已解析，請確認欄位。');
     } catch (error) {
@@ -111,6 +120,10 @@ export function Scan({
     setBusy('email');
     try {
       const receipts = await parseTextWithAi(emailText, state, 'react-email');
+      if (!receipts?.length) {
+        setStatus('解析不到任何收據');
+        return;
+      }
       setBatch(receipts.map((r) => ({ ...r, store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
       setStatus(`已解析 ${receipts.length} 筆，請喺 batch confirm 核對。`);
     } catch (error) {
@@ -127,7 +140,29 @@ export function Scan({
     setStatus(`解析 ${list.length} 張 email 截圖…`);
     try {
       const receipts: Receipt[] = [];
-      for (const file of list) receipts.push(await scanReceiptImage(file, { ...state, scanModel: state.emailModel || state.scanModel }));
+      for (const file of list) {
+        if (file.size > 5_000_000) {
+          setStatus('圖片太大（超過 5MB），請先壓縮。');
+          continue;
+        }
+        try {
+          receipts.push(await scanReceiptImage(file, { ...state, scanModel: state.emailModel || state.scanModel }));
+        } catch (error) {
+          receipts.push({
+            id: `email_img_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            store: `⏳ 截圖解析失敗: ${file.name}`,
+            total: 0,
+            date: '',
+            category: 'other',
+            payment: 'cash',
+            personId: '',
+            splitMode: 'shared',
+            note: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            source: 'react-email-image',
+            createdAt: Date.now(),
+          } as Receipt);
+        }
+      }
       setBatch(receipts.map((r) => ({ ...r, source: 'react-email-image', store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
       setStatus(`已解析 ${receipts.length} 筆截圖，請核對後保存。`);
     } catch (error) {
@@ -143,11 +178,14 @@ export function Scan({
   }
 
   function saveBatch() {
+    if (savingBatch) return;
+    setSavingBatch(true);
     const selected = batch.filter((row) => row.selected !== false).map(({ selected: _selected, ...receipt }) => receipt);
     onImport(selected);
     setBatch([]);
     setEmailText('');
     setStatus(`已儲存 ${selected.length} 筆 email 待確認紀錄。`);
+    setSavingBatch(false);
   }
 
   async function handlePullPending() {
@@ -350,7 +388,7 @@ export function Scan({
             </div>
             <div className="modal-actions">
               <button className="secondary" type="button" onClick={() => setBatch([])}>取消</button>
-              <button className="primary" type="button" onClick={saveBatch}>全部儲存 ({batch.filter((row) => row.selected !== false).length})</button>
+              <button className="primary" type="button" disabled={savingBatch} onClick={saveBatch}>全部儲存 ({batch.filter((row) => row.selected !== false).length})</button>
             </div>
           </div>
         </div>

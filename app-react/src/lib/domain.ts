@@ -150,7 +150,7 @@ export function setItineraryOverride(state: AppState, date: string, idx: number,
 export function getScheduleSpots(state: AppState, day: ItineraryDay): Array<ItinerarySpot & { _spotIdx: number; receiptId?: string }> {
   const trip = activeTrip(state);
   const tripReceipts = state.receipts.filter((r) => !r.tripId || r.tripId === trip.id);
-  const base = day.spots.map((spot, idx) => ({
+  const base = (day.spots || []).map((spot, idx) => ({
     ...spot,
     ...(state.itineraryOverrides?.[spot.spotId || spot.id || overrideKey(day.date, idx)] || state.itineraryOverrides?.[overrideKey(day.date, idx)] || {}),
     _spotIdx: idx,
@@ -188,7 +188,7 @@ export function getScheduleSpots(state: AppState, day: ItineraryDay): Array<Itin
 export function dayLooseReceipts(state: AppState, day: ItineraryDay): Receipt[] {
   const trip = activeTrip(state);
   const spotIds = new Set(getScheduleSpots(state, day).map((s) => s.receiptId).filter(Boolean));
-  return state.receipts.filter((r) => (!r.tripId || r.tripId === trip.id) && r.date === day.date && !spotIds.has(r.id));
+  return (state.receipts || []).filter((r) => (!r.tripId || r.tripId === trip.id) && r.date === day.date && !spotIds.has(r.id));
 }
 
 export function mapsUrl(name: string, address?: string): string {

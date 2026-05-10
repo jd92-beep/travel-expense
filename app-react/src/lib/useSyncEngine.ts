@@ -243,10 +243,24 @@ export function useSyncEngine(
         .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
         .map((result) => redactError(result.reason));
       const mergedAt = Date.now();
-      const pending = pendingCount(stateRef.current.syncQueue);
+      const overwrittenIds = new Set<string>();
+      for (const remote of receipts) {
+        const local = stateRef.current.receipts.find((r) => r.id === remote.id);
+        if (!local) continue;
+        const localUpdated = Number(local.updatedAt || local.createdAt || 0);
+        const remoteUpdated = Number(remote.updatedAt || remote.createdAt || 0);
+        const remoteHasMissingLink = (!local.notionPageId && !!remote.notionPageId) || (!local.sourceId && !!remote.sourceId);
+        if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
+          overwrittenIds.add(remote.id);
+        }
+      }
+      const prePullQueue = stateRef.current.syncQueue || [];
+      const filteredQueue = prePullQueue.filter((item) => !overwrittenIds.has(item.entityId));
+      const pending = pendingCount(filteredQueue);
       const nextSyncedAt = pullErrors.length ? stateRef.current.lastSyncedAt || 0 : mergedAt;
       setState((current) => ({
         ...mergePulledData(current, receipts, trips),
+        syncQueue: (current.syncQueue || []).filter((item) => !overwrittenIds.has(item.entityId)),
         globalSyncStatus: pullErrors.length ? 'error' : (pending ? 'queued' : 'synced'),
         lastSyncedAt: nextSyncedAt,
         syncError: pullErrors.join(' | '),
@@ -306,7 +320,7 @@ export function useSyncEngine(
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [push, state.autoSync, state.credentialSession, state.credentialSessionExpiresAt]);
+  }, [push, state.autoSync, state.credentialSession, state.credentialSessionExpiresAt, state.syncQueue]);
 
   useEffect(() => {
     const onOnline = () => {

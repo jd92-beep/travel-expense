@@ -8,8 +8,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.warn('Travel Expense tab error', { message: error.message, componentStack: info.componentStack });
+  componentDidCatch(error: any, info: ErrorInfo) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn('Travel Expense tab error', { message: msg, componentStack: info.componentStack });
   }
 
   render() {

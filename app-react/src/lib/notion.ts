@@ -43,12 +43,13 @@ const N = {
   currency: ['Currency', 'Currency'],
   originalAmount: ['Original Amount', 'Original Amount'],
   mapUrl: ['Map URL', 'Map URL'],
+  exchangeRate: ['Exchange Rate', '匯率'],
 } as const;
 
 type SchemaMap = Record<keyof typeof N, string>;
 
-let schemaCache: SchemaMap | null = null;
-let schemaMigrated = false;
+let schemaCache: { db: string; map: SchemaMap } | null = null;
+let lastMigratedDb: string | null = null;
 
 function makeProxyUrl(proxy: string, target: string) {
   if (proxy.endsWith('=')) return proxy + encodeURIComponent(target);
@@ -56,12 +57,11 @@ function makeProxyUrl(proxy: string, target: string) {
 }
 
 async function notionFetch<T>(state: AppState, path: string, init: RequestInit = {}): Promise<T> {
-  void NOTION_VERSION;
-  void makeProxyUrl;
   const directToken = typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '';
   if (directToken && !hasCredentialBrokerSession(state)) {
     if (!state.notionDb?.trim()) throw new Error('未設定 Notion DB ID');
-    const url = `https://api.notion.com/v1${path}`;
+    const targetUrl = `https://api.notion.com/v1${path}`;
+    const url = state.proxy?.trim() ? makeProxyUrl(state.proxy.trim(), targetUrl) : targetUrl;
     const response = await fetch(url, {
       method: init.method || 'GET',
       headers: {
@@ -84,13 +84,16 @@ async function notionFetch<T>(state: AppState, path: string, init: RequestInit =
 }
 
 async function ensureSchema(state: AppState): Promise<SchemaMap> {
-  if (schemaCache) return schemaCache;
+  if (schemaCache?.db === state.notionDb) return schemaCache.map;
   const db = await notionFetch<{ properties?: Record<string, unknown> }>(state, `/databases/${state.notionDb}`, { method: 'GET' });
   const props = db.properties || {};
-  schemaCache = Object.fromEntries(
-    Object.entries(N).map(([key, names]) => [key, props[names[0]] ? names[0] : props[names[1]] ? names[1] : names[0]]),
-  ) as SchemaMap;
-  return schemaCache;
+  schemaCache = {
+    db: state.notionDb,
+    map: Object.fromEntries(
+      Object.entries(N).map(([key, names]) => [key, props[names[0]] ? names[0] : props[names[1]] ? names[1] : names[0]]),
+    ) as SchemaMap,
+  };
+  return schemaCache.map;
 }
 
 function propName(schema: SchemaMap, key: keyof typeof N) {
@@ -131,6 +134,7 @@ function buildProps(state: AppState, receipt: Receipt, schema: SchemaMap) {
     [propName(schema, 'currency')]: { select: { name: receipt.currency || receipt.originalCurrency || state.tripCurrency || 'JPY' } },
     [propName(schema, 'originalAmount')]: { number: Number(receipt.originalAmount ?? receipt.total) || 0 },
     [propName(schema, 'mapUrl')]: { url: receipt.mapUrl || null },
+    [propName(schema, 'exchangeRate')]: { number: Number(receipt.exchangeRate) || 0 },
   };
 }
 
@@ -220,6 +224,7 @@ function receiptFromPage(state: AppState, page: any): Receipt | null {
     currency: readProp(props, 'currency')?.select?.name || undefined,
     hkdAmount: Number(readProp(props, 'hkd')?.number) || undefined,
     mapUrl: readProp(props, 'mapUrl')?.url || '',
+    exchangeRate: Number(readProp(props, 'exchangeRate')?.number) || undefined,
   };
   return stampReceiptForTrip(state, receipt, { preserveUpdatedAt: true });
 }
@@ -274,7 +279,9 @@ export async function testDirectNotion(state: AppState): Promise<{ ok: boolean; 
   if (!token) return { ok: false, count: 0, error: 'No direct token in window.DEV_SECRETS' };
   const dbId = state.notionDb || DEFAULT_NOTION_DB;
   try {
-    const res = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+    const targetUrl = `https://api.notion.com/v1/databases/${dbId}/query`;
+    const url = state.proxy?.trim() ? makeProxyUrl(state.proxy.trim(), targetUrl) : targetUrl;
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -328,25 +335,26 @@ export async function migrateNotionSchema(state: AppState): Promise<string> {
     [N.currency[0]]: { select: { options: ['JPY', 'HKD', 'USD', 'KRW', 'TWD', 'CNY', 'EUR', 'GBP', 'AUD', 'SGD', 'THB', 'MYR', 'VND'].map((name) => ({ name, color: 'default' })) } },
     [N.originalAmount[0]]: { number: { format: 'number' } },
     [N.mapUrl[0]]: { url: {} },
+    [N.exchangeRate[0]]: { number: { format: 'number' } },
   };
   const missing = Object.fromEntries(Object.entries(desired).filter(([name]) => !props[name]));
   if (!Object.keys(missing).length) {
-    schemaMigrated = true;
+    lastMigratedDb = state.notionDb;
     return 'Notion schema 已齊全';
   }
   await notionFetch(state, `/databases/${state.notionDb}`, { method: 'PATCH', body: JSON.stringify({ properties: missing }) });
   schemaCache = null;
-  schemaMigrated = true;
+  lastMigratedDb = state.notionDb;
   return `已新增 ${Object.keys(missing).length} 個欄位`;
 }
 
 async function ensureWritableSchema(state: AppState): Promise<SchemaMap> {
-  if (!schemaMigrated) {
+  if (lastMigratedDb !== state.notionDb) {
     await migrateNotionSchema(state).catch(() => {
       // If schema migration is not permitted, the caller will still get a clear
       // Notion error from the actual write path.
     });
-    schemaMigrated = true;
+    lastMigratedDb = state.notionDb;
   }
   return ensureSchema(state);
 }
@@ -356,7 +364,17 @@ export async function pushReceipt(state: AppState, receipt: Receipt): Promise<Re
   const schema = await ensureWritableSchema(state);
   const properties = buildProps(state, receipt, schema);
   const sourceId = receipt.sourceId || receipt.id;
-  const pageId = receipt.notionPageId || await findPageBySourceId(state, schema, sourceId).catch(() => null);
+  let pageId: string | null | undefined = receipt.notionPageId;
+  if (pageId) {
+    try {
+      await notionFetch(state, `/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ properties }) });
+      return { ...receipt, notionPageId: pageId };
+    } catch (err: any) {
+      if (!/404|Could not find page|invalid_request_url/.test(err.message || '')) throw err;
+      pageId = null; // stale ID, fall through
+    }
+  }
+  if (!pageId) pageId = await findPageBySourceId(state, schema, sourceId).catch(() => null);
   if (pageId) {
     await notionFetch(state, `/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ properties }) });
     return { ...receipt, notionPageId: pageId };
@@ -373,7 +391,17 @@ export async function pushTripPage(state: AppState, trip: TripProfile): Promise<
   const schema = await ensureWritableSchema(state);
   const properties = buildTripProps(trip, schema);
   const sourceId = trip.sourceId || `trip_${trip.id}`;
-  const pageId = trip.notionPageId || await findPageBySourceId(state, schema, sourceId).catch(() => null);
+  let pageId: string | null | undefined = trip.notionPageId;
+  if (pageId) {
+    try {
+      await notionFetch(state, `/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ properties }) });
+      return { ...trip, notionPageId: pageId };
+    } catch (err: any) {
+      if (!/404|Could not find page|invalid_request_url/.test(err.message || '')) throw err;
+      pageId = null; // stale ID, fall through
+    }
+  }
+  if (!pageId) pageId = await findPageBySourceId(state, schema, sourceId).catch(() => null);
   if (pageId) {
     await notionFetch(state, `/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ properties }) });
     return { ...trip, notionPageId: pageId };

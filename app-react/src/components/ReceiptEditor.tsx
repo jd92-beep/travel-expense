@@ -22,7 +22,7 @@ export function ReceiptEditor({
   onAddToItinerary?: (receipt: Receipt) => void;
 }) {
   const persons = useMemo(() => getPersons(state), [state]);
-  const first = persons[0];
+  const first = persons[0] || { id: '', name: '' };
   const photoRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<Receipt>(() => receipt || {
     id: newId(),
@@ -31,7 +31,7 @@ export function ReceiptEditor({
     date: todayForReceipts(state),
     category: 'food',
     payment: 'cash',
-    personId: first.id,
+    personId: first?.id || '',
     splitMode: 'shared',
     createdAt: Date.now(),
   });
@@ -44,11 +44,13 @@ export function ReceiptEditor({
       date: todayForReceipts(state),
       category: 'food',
       payment: 'cash',
-      personId: first.id,
+      personId: first?.id || '',
       splitMode: 'shared',
       createdAt: Date.now(),
     });
-  }, [receipt, state, first.id]);
+    // Only reset when the receipt being edited changes, not on every AppState update
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [receipt]);
 
   const set = <K extends keyof Receipt>(key: K, value: Receipt[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
@@ -75,6 +77,10 @@ export function ReceiptEditor({
         className="modal sheet"
         onSubmit={(event) => {
           event.preventDefault();
+          if (!Number.isFinite(Number(draft.total))) {
+            alert('金額必須係有效數字');
+            return;
+          }
           onSave({
             ...draft,
             store: draft.store.trim() || '未命名',
@@ -82,7 +88,7 @@ export function ReceiptEditor({
             originalAmount: Number(draft.originalAmount ?? draft.total) || 0,
             originalCurrency: draft.originalCurrency || draft.currency || state.tripCurrency,
             currency: draft.currency || draft.originalCurrency || state.tripCurrency,
-            personId: draft.personId || first.id,
+            personId: draft.personId || first?.id || '',
             splitMode: draft.splitMode || 'shared',
           });
         }}
@@ -105,7 +111,7 @@ export function ReceiptEditor({
         </div>
         <div className="form-grid">
           <label>金額（legacy total）
-            <input type="text" inputMode="decimal" value={draft.total || ''} onChange={(e) => set('total', Number(e.target.value))} />
+            <input type="text" inputMode="decimal" value={draft.total || ''} onChange={(e) => set('total', Number(e.target.value) || 0)} />
           </label>
           <label>原貨幣
             <select value={draft.originalCurrency || draft.currency || state.tripCurrency} onChange={(e) => {
@@ -118,7 +124,7 @@ export function ReceiptEditor({
         </div>
         <div className="form-grid">
           <label>原金額
-            <input type="text" inputMode="decimal" value={draft.originalAmount ?? draft.total ?? ''} onChange={(e) => set('originalAmount', Number(e.target.value))} />
+            <input type="text" inputMode="decimal" value={draft.originalAmount ?? draft.total ?? ''} onChange={(e) => set('originalAmount', Number(e.target.value) || 0)} />
           </label>
           <label>Booking Ref
             <input value={draft.bookingRef || ''} onChange={(e) => set('bookingRef', e.target.value)} placeholder="KNR358047 / booking id" />
@@ -138,7 +144,7 @@ export function ReceiptEditor({
         </div>
         <div className="form-grid">
           <label>付款人
-            <select value={draft.personId || first.id} onChange={(e) => set('personId', e.target.value)}>
+            <select value={draft.personId || first?.id || ''} onChange={(e) => set('personId', e.target.value)}>
               {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
@@ -151,7 +157,7 @@ export function ReceiptEditor({
         </div>
         {draft.splitMode === 'private' && (
           <label>受惠人
-            <select value={draft.beneficiaryId || draft.personId || first.id} onChange={(e) => set('beneficiaryId', e.target.value)}>
+            <select value={draft.beneficiaryId || draft.personId || first?.id || ''} onChange={(e) => set('beneficiaryId', e.target.value)}>
               {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
