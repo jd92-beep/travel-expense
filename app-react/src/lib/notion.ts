@@ -14,39 +14,39 @@ import type { AppState, CategoryId, PaymentId, Receipt, TripProfile } from './ty
 const NOTION_VERSION = '2022-06-28';
 
 const N = {
-  store: ['🏪 店名', '店名'],
-  amount: ['💴 金額 ¥', '金額'],
-  date: ['📅 日期', '日期'],
-  time: ['⏰ 時間', '時間'],
-  cat: ['🗂 類別', '類別'],
-  pay: ['💳 支付', '支付'],
-  region: ['📍 地區', '地區'],
-  address: ['🗺️ 地址', '地址'],
-  bookingRef: ['🎫 Booking Ref', 'Booking Ref'],
-  items: ['🧾 品項', '品項'],
-  note: ['📝 備註', '備註'],
-  photoUrl: ['📷 相片 URL', '相片 URL'],
-  person: ['👥 旅伴', '旅伴'],
-  sourceId: ['🔑 SourceID', 'SourceID'],
-  hkd: ['💵 HKD', 'HKD'],
-  split: ['🔒 類型', '類型'],
-  objectType: ['Object Type', '物件類型'],
-  tripId: ['TripID', 'TripID'],
-  tripName: ['Trip Name', 'Trip Name'],
-  destination: ['Destination Summary', 'Destination Summary'],
-  startDate: ['Start Date', 'Start Date'],
-  endDate: ['End Date', 'End Date'],
-  homeCurrency: ['Home Currency', 'Home Currency'],
-  tripCurrencies: ['Trip Currencies', 'Trip Currencies'],
-  timezones: ['Timezone List', 'Timezone List'],
-  tripVersion: ['Trip Version', 'Trip Version'],
-  updatedAt: ['Updated At', 'Updated At'],
+  store: ['🏪 店名', '店名', 'Store', 'Name', 'Title'],
+  amount: ['💴 金額 ¥', '金額', 'Amount', 'Price', 'Cost', 'Total', 'Money', '💰 金額', '💴 Amount'],
+  date: ['📅 日期', '日期', 'Date', '📅 Date'],
+  time: ['⏰ 時間', '時間', 'Time', '⏰ Time'],
+  cat: ['🗂 類別', '類別', 'Category', '類型', 'Type'],
+  pay: ['💳 支付', '支付', 'Payment', 'Pay', '💳 Payment'],
+  region: ['📍 地區', '地區', 'Region', 'Area', 'Location', '📍 Region'],
+  address: ['🗺️ 地址', '地址', 'Address', '🗺️ Address'],
+  bookingRef: ['🎫 Booking Ref', 'Booking Ref', 'Booking Reference', 'Booking'],
+  items: ['🧾 品項', '品項', 'Items', 'Order', '🧾 Items'],
+  note: ['📝 備註', '備註', 'Note', 'Notes', 'Memo', '📝 Note'],
+  photoUrl: ['📷 相片 URL', '相片 URL', 'Photo URL', 'Photo', 'Image', '📷 Photo URL'],
+  person: ['👥 旅伴', '旅伴', 'Person', 'People', 'Companion', '👥 Person'],
+  sourceId: ['🔑 SourceID', 'SourceID', 'Source ID', 'ID'],
+  hkd: ['💵 HKD', 'HKD', 'HKD Amount', 'Amount (HKD)'],
+  split: ['🔒 類型', '類型', 'Split', 'Type', 'Sharing'],
+  objectType: ['Object Type', '物件類型', 'Type'],
+  tripId: ['TripID', 'TripID', 'Trip ID'],
+  tripName: ['Trip Name', 'Trip Name', 'Trip'],
+  destination: ['Destination Summary', 'Destination Summary', 'Destination', 'Location'],
+  startDate: ['Start Date', 'Start Date', 'Start', 'From'],
+  endDate: ['End Date', 'End Date', 'End', 'To'],
+  homeCurrency: ['Home Currency', 'Home Currency', 'Home', 'Base Currency'],
+  tripCurrencies: ['Trip Currencies', 'Trip Currencies', 'Currencies'],
+  timezones: ['Timezone List', 'Timezone List', 'Timezones', 'Zones'],
+  tripVersion: ['Trip Version', 'Trip Version', 'Version'],
+  updatedAt: ['Updated At', 'Updated At', 'Updated', 'Last Updated'],
   active: ['Active', 'Active'],
-  tripJson: ['Trip JSON', 'Trip JSON'],
-  currency: ['Currency', 'Currency'],
-  originalAmount: ['Original Amount', 'Original Amount'],
-  mapUrl: ['Map URL', 'Map URL'],
-  exchangeRate: ['Exchange Rate', '匯率'],
+  tripJson: ['Trip JSON', 'Trip JSON', 'JSON'],
+  currency: ['Currency', 'Currency', '幣種'],
+  originalAmount: ['Original Amount', 'Original Amount', 'Original'],
+  mapUrl: ['Map URL', 'Map URL', 'Map', 'Map Link'],
+  exchangeRate: ['Exchange Rate', '匯率', 'Rate', 'FX Rate'],
 } as const;
 
 type SchemaMap = Record<keyof typeof N, string>;
@@ -86,16 +86,70 @@ async function notionFetch<T>(state: AppState, path: string, init: RequestInit =
   return brokerNotionRequest<T>(state, path, init);
 }
 
+function findPropByNames(props: Record<string, any>, names: readonly string[]): string | undefined {
+  for (const name of names) {
+    if (name in props) return name;
+  }
+  return undefined;
+}
+
+function findPropByTypeAndPattern(
+  props: Record<string, any>,
+  types: string[],
+  patterns: RegExp[],
+): string | undefined {
+  for (const [name, prop] of Object.entries(props)) {
+    if (types.includes(prop?.type)) {
+      for (const pattern of patterns) {
+        if (pattern.test(name)) return name;
+      }
+    }
+  }
+  return undefined;
+}
+
 async function ensureSchema(state: AppState): Promise<SchemaMap> {
   if (schemaCache?.db === state.notionDb) return schemaCache.map;
-  const db = await notionFetch<{ properties?: Record<string, unknown> }>(state, `/databases/${state.notionDb}`, { method: 'GET' });
+  const db = await notionFetch<{ properties?: Record<string, any> }>(state, `/databases/${state.notionDb}`, { method: 'GET' });
   const props = db.properties || {};
-  schemaCache = {
-    db: state.notionDb,
-    map: Object.fromEntries(
-      Object.entries(N).map(([key, names]) => [key, props[names[0]] ? names[0] : props[names[1]] ? names[1] : names[0]]),
-    ) as SchemaMap,
-  };
+  const map: Partial<SchemaMap> = {};
+
+  for (const [key, names] of Object.entries(N)) {
+    const k = key as keyof typeof N;
+    // 1. Exact name match (check all candidates)
+    let found = findPropByNames(props, names);
+    // 2. Type-based fallback for critical fields
+    if (!found) {
+      if (k === 'store') {
+        const titleProp = Object.entries(props).find(([, p]) => p?.type === 'title');
+        found = titleProp?.[0];
+      } else if (k === 'amount') {
+        found = findPropByTypeAndPattern(props, ['number', 'formula'],
+          [/金額|amount|price|cost|total|money|¥|💰|💴/i]);
+      } else if (k === 'date') {
+        found = findPropByTypeAndPattern(props, ['date'],
+          [/日期|date|📅/i]);
+      } else if (k === 'hkd') {
+        found = findPropByTypeAndPattern(props, ['number', 'formula'],
+          [/hkd|港幣|hk\s*\$/i]);
+      } else if (k === 'originalAmount') {
+        found = findPropByTypeAndPattern(props, ['number', 'formula'],
+          [/original|原價|原價格|original amount/i]);
+      } else if (k === 'exchangeRate') {
+        found = findPropByTypeAndPattern(props, ['number', 'formula'],
+          [/exchange|rate|匯率|汇率/i]);
+      } else if (k === 'tripVersion') {
+        found = findPropByTypeAndPattern(props, ['number', 'formula'],
+          [/version|版本/i]);
+      } else if (k === 'active') {
+        found = findPropByTypeAndPattern(props, ['checkbox'],
+          [/active|啟用|启用/i]);
+      }
+    }
+    map[k] = found || names[0];
+  }
+
+  schemaCache = { db: state.notionDb, map: map as SchemaMap };
   return schemaCache.map;
 }
 
@@ -184,84 +238,103 @@ function readAllText(prop: any, type: 'title' | 'rich_text') {
   return (prop?.[type] || []).map((item: any) => item?.plain_text || item?.text?.content || '').join('');
 }
 
-function readProp(props: Record<string, any>, key: keyof typeof N) {
-  return props[N[key][0]] || props[N[key][1]];
+function readProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap) {
+  const names = schema ? [schema[key], ...N[key]] : N[key];
+  for (const name of names) {
+    if (name && name in props) return props[name];
+  }
+  return undefined;
 }
 
-function receiptFromPage(state: AppState, page: any): Receipt | null {
+function readNumberProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap): number | undefined {
+  const prop = readProp(props, key, schema);
+  if (!prop) return undefined;
+  // Direct number property
+  if (typeof prop.number === 'number') return prop.number;
+  // Formula that returns number
+  if (prop.formula?.type === 'number' && typeof prop.formula.number === 'number') return prop.formula.number;
+  // Rollup that returns number
+  if (prop.rollup?.type === 'number' && typeof prop.rollup.number === 'number') return prop.rollup.number;
+  // Text fallback: try to parse from rich_text or title
+  const text = prop.rich_text?.[0]?.plain_text || prop.title?.[0]?.plain_text || '';
+  const parsed = parseFloat(text.replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt | null {
   if (page.archived || page.in_trash) return null;
   const props = page.properties || {};
-  const sourceId = readText(readProp(props, 'sourceId'), 'rich_text');
+  const sourceId = readText(readProp(props, 'sourceId', schema), 'rich_text');
   if (sourceId === '__meta_settings__') return null;
-  const objectType = readProp(props, 'objectType')?.select?.name || '';
+  const objectType = readProp(props, 'objectType', schema)?.select?.name || '';
   if (objectType === 'trip') return null;
-  const catName = readProp(props, 'cat')?.select?.name || '';
-  const payName = readProp(props, 'pay')?.select?.name || '';
-  const personText = readText(readProp(props, 'person'), 'rich_text');
+  const catName = readProp(props, 'cat', schema)?.select?.name || '';
+  const payName = readProp(props, 'pay', schema)?.select?.name || '';
+  const personText = readText(readProp(props, 'person', schema), 'rich_text');
   const persons = getPersons(state);
   const receipt: Receipt = {
     id: sourceId || `notion_${page.id}`,
     notionPageId: page.id,
     sourceId,
-    store: readText(readProp(props, 'store'), 'title') || 'Notion 匯入',
-    total: Number(readProp(props, 'amount')?.number) || 0,
-    date: readProp(props, 'date')?.date?.start || state.tripDateRange.start,
-    time: readText(readProp(props, 'time'), 'rich_text'),
+    store: readText(readProp(props, 'store', schema), 'title') || 'Notion 匯入',
+    total: readNumberProp(props, 'amount', schema) ?? 0,
+    date: readProp(props, 'date', schema)?.date?.start || state.tripDateRange.start,
+    time: readText(readProp(props, 'time', schema), 'rich_text'),
     category: (CATEGORIES.find((c) => c.name === catName)?.id || 'other') as CategoryId,
     payment: (PAYMENTS.find((p) => p.name === payName)?.id || 'cash') as PaymentId,
-    region: readText(readProp(props, 'region'), 'rich_text'),
-    address: readText(readProp(props, 'address'), 'rich_text'),
-    bookingRef: readText(readProp(props, 'bookingRef'), 'rich_text'),
-    itemsText: readText(readProp(props, 'items'), 'rich_text'),
-    note: readText(readProp(props, 'note'), 'rich_text'),
-    photoUrl: readProp(props, 'photoUrl')?.url || '',
+    region: readText(readProp(props, 'region', schema), 'rich_text'),
+    address: readText(readProp(props, 'address', schema), 'rich_text'),
+    bookingRef: readText(readProp(props, 'bookingRef', schema), 'rich_text'),
+    itemsText: readText(readProp(props, 'items', schema), 'rich_text'),
+    note: readText(readProp(props, 'note', schema), 'rich_text'),
+    photoUrl: readProp(props, 'photoUrl', schema)?.url || '',
     personId: persons.find((p) => personText.includes(p.name))?.id || persons[0]?.id,
-    splitMode: String(readProp(props, 'split')?.select?.name || '').includes('私人') ? 'private' as const : 'shared' as const,
+    splitMode: String(readProp(props, 'split', schema)?.select?.name || '').includes('私人') ? 'private' as const : 'shared' as const,
     source: 'notion',
     createdAt: page.created_time ? new Date(page.created_time).getTime() : Date.now(),
     updatedAt: page.last_edited_time ? new Date(page.last_edited_time).getTime() : undefined,
-    tripId: readText(readProp(props, 'tripId'), 'rich_text') || state.activeTripId,
-    tripVersion: Number(readProp(props, 'tripVersion')?.number) || undefined,
-    originalAmount: Number(readProp(props, 'originalAmount')?.number) || undefined,
-    originalCurrency: readProp(props, 'currency')?.select?.name || undefined,
-    currency: readProp(props, 'currency')?.select?.name || undefined,
-    hkdAmount: Number(readProp(props, 'hkd')?.number) || undefined,
-    mapUrl: readProp(props, 'mapUrl')?.url || '',
-    exchangeRate: Number(readProp(props, 'exchangeRate')?.number) || undefined,
+    tripId: readText(readProp(props, 'tripId', schema), 'rich_text') || state.activeTripId,
+    tripVersion: readNumberProp(props, 'tripVersion', schema),
+    originalAmount: readNumberProp(props, 'originalAmount', schema),
+    originalCurrency: readProp(props, 'currency', schema)?.select?.name || undefined,
+    currency: readProp(props, 'currency', schema)?.select?.name || undefined,
+    hkdAmount: readNumberProp(props, 'hkd', schema),
+    mapUrl: readProp(props, 'mapUrl', schema)?.url || '',
+    exchangeRate: readNumberProp(props, 'exchangeRate', schema),
   };
   return stampReceiptForTrip(state, receipt, { preserveUpdatedAt: true });
 }
 
-function tripFromPage(page: any): TripProfile | null {
+function tripFromPage(page: any, schema: SchemaMap): TripProfile | null {
   if (page.archived || page.in_trash) return null;
   const props = page.properties || {};
-  const objectType = readProp(props, 'objectType')?.select?.name || '';
-  const sourceId = readText(readProp(props, 'sourceId'), 'rich_text');
+  const objectType = readProp(props, 'objectType', schema)?.select?.name || '';
+  const sourceId = readText(readProp(props, 'sourceId', schema), 'rich_text');
   if (objectType !== 'trip' && !sourceId.startsWith('trip_')) return null;
-  const raw = readAllText(readProp(props, 'tripJson'), 'rich_text');
+  const raw = readAllText(readProp(props, 'tripJson', schema), 'rich_text');
   try {
     const parsed = JSON.parse(raw) as TripProfile;
       return {
         ...parsed,
         notionPageId: page.id,
         sourceId: sourceId || parsed.sourceId || `trip_${parsed.id}`,
-        active: !!readProp(props, 'active')?.checkbox,
-        version: Number(readProp(props, 'tripVersion')?.number) || parsed.version || 1,
+        active: !!readProp(props, 'active', schema)?.checkbox,
+        version: readNumberProp(props, 'tripVersion', schema) || parsed.version || 1,
         updatedAt: page.last_edited_time ? new Date(page.last_edited_time).getTime() : parsed.updatedAt,
       };
   } catch {
-    const id = readText(readProp(props, 'tripId'), 'rich_text') || sourceId.replace(/^trip_/, '') || `trip_${page.id}`;
+    const id = readText(readProp(props, 'tripId', schema), 'rich_text') || sourceId.replace(/^trip_/, '') || `trip_${page.id}`;
     return {
       id,
-      name: readText(readProp(props, 'tripName'), 'rich_text') || readText(readProp(props, 'store'), 'title') || 'Notion Trip',
-      destinationSummary: readText(readProp(props, 'destination'), 'rich_text'),
-      startDate: readProp(props, 'startDate')?.date?.start || '',
-      endDate: readProp(props, 'endDate')?.date?.start || '',
-      homeCurrency: readProp(props, 'homeCurrency')?.select?.name || 'HKD',
-      currencies: readText(readProp(props, 'tripCurrencies'), 'rich_text').split(',').map((s: string) => s.trim()).filter(Boolean),
-      timezones: readText(readProp(props, 'timezones'), 'rich_text').split(',').map((s: string) => s.trim()).filter(Boolean),
-      version: Number(readProp(props, 'tripVersion')?.number) || 1,
-      active: !!readProp(props, 'active')?.checkbox,
+      name: readText(readProp(props, 'tripName', schema), 'rich_text') || readText(readProp(props, 'store', schema), 'title') || 'Notion Trip',
+      destinationSummary: readText(readProp(props, 'destination', schema), 'rich_text'),
+      startDate: readProp(props, 'startDate', schema)?.date?.start || '',
+      endDate: readProp(props, 'endDate', schema)?.date?.start || '',
+      homeCurrency: readProp(props, 'homeCurrency', schema)?.select?.name || 'HKD',
+      currencies: readText(readProp(props, 'tripCurrencies', schema), 'rich_text').split(',').map((s: string) => s.trim()).filter(Boolean),
+      timezones: readText(readProp(props, 'timezones', schema), 'rich_text').split(',').map((s: string) => s.trim()).filter(Boolean),
+      version: readNumberProp(props, 'tripVersion', schema) || 1,
+      active: !!readProp(props, 'active', schema)?.checkbox,
       itinerary: [],
       notionPageId: page.id,
       sourceId: sourceId || `trip_${id}`,
@@ -469,7 +542,7 @@ export async function pushAll(state: AppState) {
 }
 
 export async function pullAll(state: AppState): Promise<Receipt[]> {
-  await ensureSchema(state);
+  const schema = await ensureSchema(state);
   const rows: Receipt[] = [];
   let cursor: string | undefined;
   for (let i = 0; i < 20; i += 1) {
@@ -478,7 +551,7 @@ export async function pullAll(state: AppState): Promise<Receipt[]> {
       body: JSON.stringify(cursor ? { page_size: 100, start_cursor: cursor } : { page_size: 100 }),
     });
     for (const item of page.results || []) {
-      const receipt = receiptFromPage(state, item);
+      const receipt = receiptFromPage(state, item, schema);
       if (
         receipt
         && !state.notionDeletedIds?.includes(receipt.notionPageId || '')
@@ -492,7 +565,7 @@ export async function pullAll(state: AppState): Promise<Receipt[]> {
 }
 
 export async function pullTrips(state: AppState): Promise<TripProfile[]> {
-  await ensureSchema(state);
+  const schema = await ensureSchema(state);
   const rows: TripProfile[] = [];
   let cursor: string | undefined;
   for (let i = 0; i < 20; i += 1) {
@@ -501,7 +574,7 @@ export async function pullTrips(state: AppState): Promise<TripProfile[]> {
       body: JSON.stringify(cursor ? { page_size: 100, start_cursor: cursor } : { page_size: 100 }),
     });
     for (const item of page.results || []) {
-      const trip = tripFromPage(item);
+      const trip = tripFromPage(item, schema);
       if (trip) rows.push(trip);
     }
     if (!page.has_more) break;
