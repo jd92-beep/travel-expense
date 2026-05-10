@@ -2,6 +2,10 @@ import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS } from './constants';
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { brokerNotionRequest, hasCredentialBrokerSession } from './credentialBroker';
 import { displayStore, getPersons, hkd, receiptRegion } from './domain';
+
+export function hasDirectNotionToken(): boolean {
+  return !!(typeof window !== 'undefined' && (window as any).DEV_SECRETS?.notionToken);
+}
 import type { AppState, CategoryId, PaymentId, Receipt, TripProfile } from './types';
 
 const NOTION_VERSION = '2022-06-28';
@@ -348,7 +352,7 @@ async function ensureWritableSchema(state: AppState): Promise<SchemaMap> {
 }
 
 export async function pushReceipt(state: AppState, receipt: Receipt): Promise<Receipt> {
-  if (!hasCredentialBrokerSession(state) || !state.notionDb) return receipt;
+  if (!state.notionDb) return receipt;
   const schema = await ensureWritableSchema(state);
   const properties = buildProps(state, receipt, schema);
   const sourceId = receipt.sourceId || receipt.id;
@@ -365,7 +369,7 @@ export async function pushReceipt(state: AppState, receipt: Receipt): Promise<Re
 }
 
 export async function pushTripPage(state: AppState, trip: TripProfile): Promise<TripProfile> {
-  if (!hasCredentialBrokerSession(state) || !state.notionDb) return trip;
+  if (!state.notionDb) return trip;
   const schema = await ensureWritableSchema(state);
   const properties = buildTripProps(trip, schema);
   const sourceId = trip.sourceId || `trip_${trip.id}`;
@@ -382,7 +386,7 @@ export async function pushTripPage(state: AppState, trip: TripProfile): Promise<
 }
 
 export async function pushSettingsMeta(state: AppState): Promise<void> {
-  if (!hasCredentialBrokerSession(state) || !state.notionDb) return;
+  if (!state.notionDb) return;
   const schema = await ensureWritableSchema(state);
   const payload = {
     budget: state.budget,
@@ -413,7 +417,7 @@ export async function pushSettingsMeta(state: AppState): Promise<void> {
 }
 
 export async function archiveReceipt(state: AppState, receipt: Receipt) {
-  if (!hasCredentialBrokerSession(state) || !state.notionDb) return;
+  if (!state.notionDb) return;
   const schema = await ensureWritableSchema(state);
   const pageId = receipt.notionPageId || await findPageBySourceId(state, schema, receipt.sourceId || receipt.id).catch(() => null);
   if (!pageId) return;

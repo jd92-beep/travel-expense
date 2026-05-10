@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { activeTrip } from '../domain/trip/normalize';
-import { archiveReceipt, pullAll, pullTrips, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
+import { archiveReceipt, hasDirectNotionToken, pullAll, pullTrips, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { hasCredentialBrokerSession } from './credentialBroker';
 import { mergePulledData } from './syncMerge';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
@@ -179,10 +179,10 @@ export function useSyncEngine(
       console.log('[SyncEngine] push() skipped — offline');
       return;
     }
-    if (!hasCredentialBrokerSession(stateRef.current)) {
+    if (!hasCredentialBrokerSession(stateRef.current) && !hasDirectNotionToken()) {
       lastPushSucceededRef.current = false;
       persistEngine({ status: pendingCount(stateRef.current.syncQueue) ? 'queued' : 'idle', pendingCount: pendingCount(stateRef.current.syncQueue), error: undefined });
-      console.log('[SyncEngine] push() skipped — no broker session');
+      console.log('[SyncEngine] push() skipped — no broker session and no direct token');
       return;
     }
     processingRef.current = true;
@@ -226,9 +226,9 @@ export function useSyncEngine(
       console.log('[SyncEngine] pull() skipped — offline');
       return;
     }
-    if (!hasCredentialBrokerSession(stateRef.current)) {
+    if (!hasCredentialBrokerSession(stateRef.current) && !hasDirectNotionToken()) {
       persistEngine({ status: pendingCount(stateRef.current.syncQueue) ? 'queued' : 'idle', pendingCount: pendingCount(stateRef.current.syncQueue), error: undefined });
-      console.log('[SyncEngine] pull() skipped — no broker session');
+      console.log('[SyncEngine] pull() skipped — no broker session and no direct token');
       return;
     }
     persistEngine({ status: 'pulling', error: undefined });
@@ -279,8 +279,8 @@ export function useSyncEngine(
         console.log('[SyncEngine] Offline — skipping pull');
         return;
       }
-      if (!hasCredentialBrokerSession(stateRef.current)) {
-        console.log('[SyncEngine] No broker session — skipping pull');
+      if (!hasCredentialBrokerSession(stateRef.current) && !hasDirectNotionToken()) {
+        console.log('[SyncEngine] No broker session and no direct token — skipping pull');
         return;
       }
       console.log('[SyncEngine] Running pull()...');
@@ -300,7 +300,7 @@ export function useSyncEngine(
   }, [state.syncQueue, state.globalSyncStatus, state.syncError]);
 
   useEffect(() => {
-    if (!state.autoSync || !pendingCount(state.syncQueue) || !hasCredentialBrokerSession(state)) return;
+    if (!state.autoSync || !pendingCount(state.syncQueue) || (!hasCredentialBrokerSession(state) && !hasDirectNotionToken())) return;
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => void push(), DEBOUNCE_MS);
     return () => {

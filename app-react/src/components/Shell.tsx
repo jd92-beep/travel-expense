@@ -77,20 +77,7 @@ export function Shell({
 
   return (
     <div className="app-shell">
-      {/* Cherry blossom video background — soft petal drift loop */}
-      {!prefersReducedMotion && (
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="none"
-          className="sakura-video-bg"
-          src={`${import.meta.env.BASE_URL}images/sakura-bg.mp4`}
-          aria-hidden="true"
-        />
-      )}
-      {/* Japanese particle background — sakura petals floating */}
+      {/* Japanese particle background — washi paper warmth with floating motes */}
       {!prefersReducedMotion && (
         <Particles
           className="pointer-events-none fixed inset-0 -z-20"

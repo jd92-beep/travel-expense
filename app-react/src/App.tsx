@@ -5,6 +5,7 @@ import { Shell } from './components/Shell';
 import { LoadingState } from './components/ui';
 import { activeTrip, stampReceiptForTrip, stableSpotId } from './domain/trip/normalize';
 import { hasCredentialBrokerSession } from './lib/credentialBroker';
+import { hasDirectNotionToken } from './lib/notion';
 import { mergePulledData } from './lib/syncMerge';
 import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
@@ -38,7 +39,7 @@ export function App() {
   useEffect(() => {
     if (bootSyncInitiated.current) return;
     if (!navigator.onLine) return;
-    if (!hasCredentialBrokerSession(state)) return;
+    if (!hasCredentialBrokerSession(state) && !hasDirectNotionToken()) return;
 
     bootSyncInitiated.current = true;
 
@@ -114,7 +115,7 @@ export function App() {
                 onImport={importReceipts}
                 onHydrate={importRemoteData}
                 onConfirmPending={(receipt) => {
-                  const next = stampReceiptForTrip(state, { ...receipt, store: receipt.store.replace(/^⏳\s*/, ''), syncStatus: hasCredentialBrokerSession(state) ? 'queued' : 'local' });
+                  const next = stampReceiptForTrip(state, { ...receipt, store: receipt.store.replace(/^⏳\s*/, ''), syncStatus: (hasCredentialBrokerSession(state) || hasDirectNotionToken()) ? 'queued' : 'local' });
                   upsertReceipt(next);
                 }}
                 onPull={syncEngine.pull}

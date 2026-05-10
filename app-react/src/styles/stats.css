@@ -1,6 +1,6 @@
 .stats-tab.stats-cockpit {
   gap: 16px;
-  color: #16120d;
+  color: #2A2119;
 }
 
 .stats-tab.stats-cockpit .stats-glass {
@@ -31,7 +31,7 @@
   background:
     linear-gradient(135deg, rgba(255,255,255,.92), rgba(255,248,236,.88)),
     repeating-linear-gradient(135deg, rgba(211,154,41,.07) 0 1px, transparent 1px 22px),
-    #fff8ec;
+    #FAF7F0;
 }
 
 .stats-tab.stats-cockpit .stats-command::before {
@@ -63,7 +63,7 @@
   border: 1px solid rgba(217,65,50,.22);
   border-radius: 999px;
   background: rgba(255,255,255,.48);
-  color: #9c332b;
+  color: #A83030;
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0;
@@ -71,7 +71,7 @@
 
 .stats-tab.stats-cockpit .stats-command h2 {
   margin: 0;
-  color: #13100c;
+  color: #2A2119;
   font-family: var(--font-travel-display);
   font-size: clamp(34px, 8vw, 56px);
   line-height: .98;
@@ -82,7 +82,7 @@
 .stats-tab.stats-cockpit .stats-controls p {
   max-width: 42rem;
   margin: 0;
-  color: #64584b;
+  color: #7A7068;
   font-size: 14px;
   line-height: 1.65;
 }
@@ -157,21 +157,21 @@
 }
 
 .stats-tab.stats-cockpit .orbit-copy strong {
-  color: #173a60;
+  color: #1E4D6B;
   font-size: clamp(34px, 8vw, 48px);
   font-weight: 800;
   line-height: 1;
 }
 
 .stats-tab.stats-cockpit .orbit-copy span {
-  color: #16120d;
+  color: #2A2119;
   font-size: 13px;
   font-weight: 900;
 }
 
 .stats-tab.stats-cockpit .orbit-copy small {
   max-width: 126px;
-  color: #756c62;
+  color: #7A7068;
   font-size: 11px;
   font-weight: 800;
   line-height: 1.35;
@@ -207,13 +207,13 @@
 
 .stats-tab.stats-cockpit .stats-metric span,
 .stats-tab.stats-cockpit .stats-metric small {
-  color: #6f6256;
+  color: #7A7068;
   font-weight: 900;
 }
 
 .stats-tab.stats-cockpit .stats-metric strong {
   margin-top: 2px;
-  color: #14120f;
+  color: #2A2119;
   font-family: var(--font-travel-display);
   font-size: clamp(25px, 4vw, 34px);
   font-weight: 800;
@@ -229,9 +229,9 @@
   background: linear-gradient(90deg, rgba(24,57,92,.2), rgba(217,65,50,.58), rgba(211,154,41,.46));
 }
 
-.stats-tab.stats-cockpit .stats-metric.accent i { background: linear-gradient(90deg, #173a60, #2d5a8e); }
-.stats-tab.stats-cockpit .stats-metric.success i { background: linear-gradient(90deg, #0f766e, #d39a29); }
-.stats-tab.stats-cockpit .stats-metric.danger i { background: linear-gradient(90deg, #d94132, #d39a29); }
+.stats-tab.stats-cockpit .stats-metric.accent i { background: linear-gradient(90deg, #1E4D6B, #2d5a8e); }
+.stats-tab.stats-cockpit .stats-metric.success i { background: linear-gradient(90deg, #0f766e, #D4A843); }
+.stats-tab.stats-cockpit .stats-metric.danger i { background: linear-gradient(90deg, #C23B5E, #D4A843); }
 
 .stats-tab.stats-cockpit .stats-controls {
   display: grid;
@@ -294,13 +294,13 @@
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: #fffdf8;
+  background: #FFFDF7;
   box-shadow: 0 5px 12px rgba(59,43,26,.18);
   transition: transform .18s ease;
 }
 
 .stats-tab.stats-cockpit .stats-switch input:checked + .switch-track {
-  background: linear-gradient(135deg, #d94132, #d39a29);
+  background: linear-gradient(135deg, #C23B5E, #D4A843);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), 0 8px 18px rgba(217,65,50,.18);
 }
 
@@ -327,7 +327,7 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: #16120d;
+  color: #2A2119;
   font-size: 18px;
   line-height: 1.2;
 }
@@ -349,11 +349,11 @@
 }
 
 .stats-tab.stats-cockpit .stats-transfer b {
-  color: #d94132;
+  color: #C23B5E;
 }
 
 .stats-tab.stats-cockpit .stats-transfer strong {
-  color: #173a60;
+  color: #1E4D6B;
   font-size: 17px;
 }
 
@@ -372,13 +372,13 @@
 
 .stats-tab.stats-cockpit .bar-row span {
   min-width: 0;
-  color: #282018;
+  color: #3A3229;
   font-weight: 900;
   overflow-wrap: anywhere;
 }
 
 .stats-tab.stats-cockpit .bar-row b {
-  color: #6f6256;
+  color: #7A7068;
   font-size: 12px;
   white-space: nowrap;
 }
@@ -409,7 +409,7 @@
   border-radius: 14px;
   border: 1px solid rgba(211,154,41,.22);
   background: rgba(255,248,237,.58);
-  color: #665849;
+  color: #7A7068;
   font-weight: 800;
 }
 
@@ -432,20 +432,20 @@
   height: 32px;
   border: 1px solid rgba(211,154,41,.32);
   border-radius: 999px;
-  background: linear-gradient(135deg, #fff7e8, #fffdf8);
-  color: #9a4b13;
+  background: linear-gradient(135deg, #FAF7F0, #FFFDF7);
+  color: #8B6914;
   box-shadow: inset 0 1px 1px rgba(255,255,255,.86);
 }
 
 .stats-tab.stats-cockpit .rank-row span {
   min-width: 0;
-  color: #261f18;
+  color: #2A2119;
   font-weight: 900;
   overflow-wrap: anywhere;
 }
 
 .stats-tab.stats-cockpit .rank-row strong {
-  color: #173a60;
+  color: #1E4D6B;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -473,7 +473,7 @@
 
 .stats-tab.stats-cockpit .trend-stroke {
   fill: none;
-  stroke: #d94132;
+  stroke: #C23B5E;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 3.5;

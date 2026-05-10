@@ -130,6 +130,7 @@ function DockItemButton({
       onClick={item.onSelect}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      aria-label={item.title}
       aria-current={item.active ? "page" : undefined}
       className={cn(
         "relative flex min-w-0 items-center justify-center rounded-full border border-transparent text-[color:var(--navy)] outline-none transition duration-200 focus-visible:ring-2 focus-visible:ring-[rgba(211,154,41,.42)]",
@@ -146,7 +147,6 @@ function DockItemButton({
             }
       }
     >
-      {/* Persistent label rendered below; hover tooltip removed */}
       <motion.div
         style={mobile || reducedMotion ? undefined : { width: widthIcon, height: heightIcon }}
         className="relative flex items-center justify-center"
@@ -159,17 +159,19 @@ function DockItemButton({
         )}
         <span className="relative z-10 inline-flex items-center justify-center">{item.icon}</span>
       </motion.div>
-      <span
-        className={cn(
-          "max-w-full truncate text-[10px] font-bold leading-none",
-          item.active ? "text-[#D94132]" : "text-[#9A8E83]",
+      {/* Hover tooltip label */}
+      <AnimatePresence>
+        {hovered && (
+          <motion.span
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            className="absolute -top-7 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-md bg-[rgba(42,33,25,.82)] px-2 py-1 text-[11px] font-bold text-[#F5F0E8] shadow-lg"
+          >
+            {item.title}
+          </motion.span>
         )}
-      >
-        {item.title}
-      </span>
-      {mobile && item.badge ? (
-        <span className="mt-0.5 text-[10px] text-[color:var(--muted)]">{item.badge}</span>
-      ) : null}
+      </AnimatePresence>
     </motion.button>
   );
 }

@@ -15,7 +15,7 @@ export function stableSpotId(tripId: string, date: string, idx: number, spot: Pi
   return `${stableDayId(tripId, date)}_spot_${String(idx + 1).padStart(2, '0')}_${slug(`${spot.time}_${spot.name}`) || 'item'}`;
 }
 
-function normalizeZone(value?: string): string {
+export function normalizeZone(value?: string): string {
   const zone = String(value || '').trim();
   if (zone === 'JST') return 'Asia/Tokyo';
   if (zone === 'HKT') return 'Asia/Hong_Kong';
@@ -115,6 +115,9 @@ export function migrateAppState(input: unknown): AppState {
         ...item,
         active: item.id === nextActiveId && !item.archived || (!nextActiveId && !parsed.activeTripId && idx === 0),
         itinerary: normalizeItinerary(item.itinerary || [], item.id, parsed.tripCurrency || 'JPY'),
+        timezones: Array.isArray(item.timezones)
+          ? Array.from(new Set(item.timezones.map(normalizeZone).filter(Boolean)))
+          : trip.timezones,
       }))
     : [trip];
   const base = {

@@ -3,6 +3,7 @@ import { RefreshCw, Search } from 'lucide-react';
 import { GlassCard, StatusPill, Toast } from '../components/ui';
 import { activeTrip } from '../domain/trip/normalize';
 import { hasCredentialBrokerSession } from '../lib/credentialBroker';
+import { hasDirectNotionToken } from '../lib/notion';
 import { CATEGORIES } from '../lib/constants';
 import { fmt } from '../lib/domain';
 import type { AppState, CategoryId, Receipt, TripProfile } from '../lib/types';
@@ -45,8 +46,8 @@ export function History({
   const total = receipts.reduce((sum, receipt) => sum + receipt.total, 0);
 
   async function handlePull(mode: 'manual' | 'auto' = 'manual') {
-    if (!hasCredentialBrokerSession(state)) {
-      if (mode === 'manual') setStatus('Credential Broker 未連線；已保留本機紀錄，未向 Notion 發送 request。');
+    if (!hasCredentialBrokerSession(state) && !hasDirectNotionToken()) {
+      if (mode === 'manual') setStatus('Credential Broker 未連線且無 direct Notion token；已保留本機紀錄，未向 Notion 發送 request。');
       return;
     }
     setBusy(true);

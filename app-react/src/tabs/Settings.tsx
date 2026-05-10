@@ -19,7 +19,7 @@ import {
 } from '../lib/credentialBroker';
 import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
 import { computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
-import { migrateNotionSchema, pullAll, pushSettingsMeta, pushTripPage, testNotion } from '../lib/notion';
+import { hasDirectNotionToken, migrateNotionSchema, pullAll, pushSettingsMeta, pushTripPage, testNotion } from '../lib/notion';
 import type { AppState, Person, SyncEngineState, TripDraft, TripProfile } from '../lib/types';
 import { clearCredentialSession, saveState, stripSensitiveState } from '../lib/storage';
 import { clearDeviceTrust } from '../security/deviceTrust';
@@ -137,7 +137,7 @@ export function Settings({
   }
 
   function requireBroker(label: string) {
-    if (brokerReady) return true;
+    if (brokerReady || hasDirectNotionToken()) return true;
     setStatus(`${label} 已安全暫停：Credential Broker session 未連線；未送出任何 provider key/token。`);
     return false;
   }

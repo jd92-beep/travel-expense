@@ -1,11 +1,11 @@
 .timeline-screen {
   --timeline-cream: rgba(255, 249, 238, .78);
   --timeline-rice: rgba(255, 253, 247, .9);
-  --timeline-ink: #1f1a14;
-  --timeline-sumi: #173a60;
-  --timeline-vermilion: #d94132;
-  --timeline-matcha: #4c6b4f;
-  --timeline-gold: #d39a29;
+  --timeline-ink: #2A2119;
+  --timeline-sumi: #1E4D6B;
+  --timeline-vermilion: #C23B5E;
+  --timeline-matcha: #2D6E48;
+  --timeline-gold: #D4A843;
   --timeline-line: rgba(137, 92, 47, .2);
   --timeline-glass-border: rgba(255, 255, 255, .78);
   gap: 16px;
@@ -108,7 +108,7 @@
   border-radius: 15px;
   background:
     linear-gradient(180deg, rgba(217,65,50,.95), rgba(174, 42, 32, .95)),
-    #d94132;
+    #C23B5E;
   color: rgba(255, 248, 235, .96);
   font-family: Georgia, "Times New Roman", "Noto Serif TC", serif;
   font-size: 28px;
@@ -396,7 +396,7 @@
   place-items: center;
   border-radius: 14px;
   background: rgba(211,154,41,.16);
-  color: #9d681c;
+  color: #8B6914;
 }
 
 .timeline-loose-copy {

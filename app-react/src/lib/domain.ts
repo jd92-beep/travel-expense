@@ -1,5 +1,5 @@
 import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
-import { activeTrip, normalizeItinerary } from '../domain/trip/normalize';
+import { activeTrip, normalizeItinerary, normalizeZone } from '../domain/trip/normalize';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, TripPhase } from './types';
 
 export const fmt = (n: number | string | undefined) =>
@@ -56,8 +56,15 @@ export function downloadJson(filename: string, value: unknown): void {
 }
 
 export function todayYmd(timeZone = 'Asia/Hong_Kong'): string {
+  const zone = normalizeZone(timeZone) || 'Asia/Hong_Kong';
+  let safeZone = zone;
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: safeZone }).format(new Date());
+  } catch {
+    safeZone = 'Asia/Hong_Kong';
+  }
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
+    timeZone: safeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

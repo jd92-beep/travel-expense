@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { migrateAppState, stampReceiptForTrip } from '../domain/trip/normalize';
 import { DEFAULT_STATE } from './constants';
 import { hasCredentialBrokerSession } from './credentialBroker';
+import { hasDirectNotionToken } from './notion';
 import { loadState, saveState } from './storage';
 import { clearIndexedState, loadIndexedState } from '../storage/indexedDb';
 import type { AppState, Receipt, SyncQueueItem } from './types';
@@ -56,10 +57,10 @@ export function useAppState() {
     setState((prev) => {
       const stamped = stampReceiptForTrip(prev, {
         ...receipt,
-        syncStatus: receipt.syncStatus || (prev.autoSync && hasCredentialBrokerSession(prev) ? 'queued' : 'local'),
+        syncStatus: receipt.syncStatus || (prev.autoSync && (hasCredentialBrokerSession(prev) || hasDirectNotionToken()) ? 'queued' : 'local'),
       });
       const idx = prev.receipts.findIndex((r) => r.id === receipt.id);
-      const syncQueue = prev.autoSync && hasCredentialBrokerSession(prev)
+      const syncQueue = prev.autoSync && (hasCredentialBrokerSession(prev) || hasDirectNotionToken())
         ? enqueueSyncItem(prev.syncQueue, queueItem('receipt', stamped.id, idx < 0 ? 'create' : 'update', {
             notionPageId: stamped.notionPageId,
             sourceId: stamped.sourceId || stamped.id,
@@ -84,7 +85,7 @@ export function useAppState() {
       notionDeletedSourceIds: sourceId
         ? [...(prev.notionDeletedSourceIds || []), sourceId].slice(-500)
         : prev.notionDeletedSourceIds,
-      syncQueue: prev.autoSync && hasCredentialBrokerSession(prev)
+      syncQueue: prev.autoSync && (hasCredentialBrokerSession(prev) || hasDirectNotionToken())
         ? enqueueSyncItem(prev.syncQueue, queueItem('delete-receipt', receipt.id, 'delete', {
             notionPageId: receipt.notionPageId,
             sourceId,

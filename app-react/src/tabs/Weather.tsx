@@ -23,7 +23,7 @@ export function Weather({ state }: { state: AppState }) {
   const [error, setError] = useState('');
   const trip = activeTrip(state);
   const itinerary = useMemo(() => getItinerary(state), [state]);
-  const today = todayYmd(trip.timezones?.[0] || 'Asia/Hong_Kong');
+  const today = todayYmd(normalizedTimezone(trip.timezones?.[0]) || 'Asia/Hong_Kong');
   const hasEnded = trip.endDate ? today > trip.endDate : false;
 
   const displayItinerary = useMemo<ItineraryDay[]>(() => {

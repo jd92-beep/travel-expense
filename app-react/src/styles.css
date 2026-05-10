@@ -10,43 +10,54 @@
 @theme {
   --font-travel-display: "Noto Serif JP", Georgia, "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --color-travel-red: #d94132;
-  --color-travel-navy: #18395c;
-  --color-travel-gold: #d39a29;
+  --color-travel-red: #C23B5E;
+  --color-travel-navy: #1E4D6B;
+  --color-travel-gold: #D4A843;
 }
 
 :root {
   color-scheme: light;
-  --bg: #f5ead8;
-  --surface: #fff8ec;
-  --card: #fffdf7;
-  --glass: rgba(255, 255, 255, .56);
-  --glass-strong: rgba(255, 253, 247, .82);
-  --ink: #14120f;
-  --navy: #18395c;
-  --muted: #5e544a;
-  --line: rgba(255, 255, 255, .76);
-  --hairline: rgba(121, 89, 55, .18);
-  --red: #d94132;
-  --blue: #173a60;
-  --gold: #d39a29;
-  --cream-shadow: rgba(84, 57, 30, .16);
-  --shadow-soft: 0 14px 34px rgba(84, 57, 30, .10);
-  --shadow-glass: 0 24px 64px rgba(59, 43, 26, .16), inset 0 1px 1px rgba(255,255,255,.84);
-  font-family: "Noto Sans JP", "Avenir Next", "SF Pro Rounded", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
+  /* Japanese Traditional Colors (NIPPON COLORS) */
+  --bg: #F5F0E8;                 /* Shironeri 白練 — washi paper white */
+  --surface: #FAF7F0;            /* Kinari 生成 — natural silk */
+  --card: #FFFDF7;               /* warm white */
+  --glass: rgba(255, 253, 247, .62);
+  --glass-strong: rgba(255, 252, 245, .88);
+  --ink: #2A2119;                /* Sumi 墨 — warm ink black */
+  --navy: #1E4D6B;               /* Aiiro 藍色 — indigo */
+  --muted: #7A7068;              /* Sunezumi 素鼠 — warm gray */
+  --line: rgba(255, 255, 255, .78);
+  --hairline: rgba(139, 115, 85, .16);
+  --red: #C23B5E;                /* Koubai 紅梅 — red plum */
+  --blue: #1E4D6B;               /* Aiiro 藍色 — indigo */
+  --gold: #D4A843;               /* Yamabukiiro 山吹色 — golden yellow */
+  --green: #2D6E48;              /* Tokiwairo 常磐色 — evergreen */
+  --pink: #FDEFF2;               /* Sakurairo 櫻色 — cherry blossom */
+  --brown: #8B7355;              /* Kuchibairo 朽葉色 — decayed leaf */
+  --cream-shadow: rgba(107, 82, 52, .12);
+  --shadow-soft: 0 12px 32px rgba(84, 65, 42, .08);
+  --shadow-glass: 0 20px 56px rgba(66, 50, 32, .12), inset 0 1px 1px rgba(255,255,255,.88);
+  font-family: "Noto Sans JP", "Avenir Next", "SF Pro Rounded", ui-sans-serif, system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
 body {
   margin: 0;
   min-height: 100svh;
+  /* Washi paper warmth — layered Japanese traditional tones */
   background:
-    radial-gradient(ellipse at 85% 10%, rgba(216, 64, 48, 0.10) 0%, transparent 45%),
-    radial-gradient(ellipse at 5% 40%, rgba(24, 57, 92, 0.07) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 95%, rgba(211, 154, 41, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.45), transparent 55%),
-    radial-gradient(circle at 10% -5%, rgba(255, 229, 189, 0.55), transparent 30%),
-    linear-gradient(180deg, rgba(253, 245, 228, 0.82) 0%, rgba(245, 234, 216, 0.78) 35%, rgba(240, 229, 210, 0.76) 70%, rgba(235, 224, 204, 0.82) 100%);
+    /* Soft sakura pink glow — top right */
+    radial-gradient(ellipse at 88% 8%, rgba(253, 239, 242, 0.55) 0%, transparent 50%),
+    /* Gentle indigo wash — top left */
+    radial-gradient(ellipse at 5% 35%, rgba(30, 77, 107, 0.05) 0%, transparent 55%),
+    /* Warm gold shimmer — bottom center */
+    radial-gradient(ellipse at 50% 96%, rgba(212, 168, 67, 0.07) 0%, transparent 42%),
+    /* Soft cream spotlight — center */
+    radial-gradient(circle at 50% 30%, rgba(255, 253, 247, 0.55), transparent 60%),
+    /* Warm sunrise glow — top left corner */
+    radial-gradient(circle at 8% -5%, rgba(250, 237, 210, 0.50), transparent 32%),
+    /* Base washi paper gradient */
+    linear-gradient(180deg, #F5F0E8 0%, #F0EBDF 35%, #EBE5D8 70%, #E8E2D4 100%);
   color: var(--ink);
   overflow-x: hidden;
 }
@@ -56,12 +67,13 @@ body::before {
   inset: 0;
   z-index: -2;
   pointer-events: none;
-  opacity: 0.35;
+  opacity: 0.28;
+  /* Washi paper fiber texture — warm brown dots */
   background-image:
-    radial-gradient(ellipse at 20% 30%, rgba(139, 115, 85, 0.10) 0 1px, transparent 2px),
-    radial-gradient(ellipse at 76% 46%, rgba(139, 115, 85, 0.08) 0 1px, transparent 2px),
-    radial-gradient(ellipse at 45% 72%, rgba(139, 115, 85, 0.06) 0 1px, transparent 2px);
-  background-size: 52px 48px, 38px 42px, 64px 56px;
+    radial-gradient(ellipse at 22% 28%, rgba(139, 115, 85, 0.08) 0 1px, transparent 2px),
+    radial-gradient(ellipse at 74% 48%, rgba(139, 115, 85, 0.06) 0 1px, transparent 2px),
+    radial-gradient(ellipse at 46% 74%, rgba(139, 115, 85, 0.05) 0 1px, transparent 2px);
+  background-size: 56px 52px, 42px 46px, 68px 60px;
 }
 body::after {
   content: '';
@@ -69,26 +81,32 @@ body::after {
   inset: -20% -10%;
   z-index: -3;
   pointer-events: none;
-  opacity: .32;
+  opacity: .22;
+  /* Gentle washi light sweep — warm cream and soft gold */
   background:
-    linear-gradient(115deg, transparent 0 36%, rgba(255,255,255,.34) 47%, transparent 58%),
-    linear-gradient(78deg, transparent 0 58%, rgba(211,154,41,.13) 68%, transparent 78%);
+    linear-gradient(115deg, transparent 0 36%, rgba(255,253,247,.40) 47%, transparent 58%),
+    linear-gradient(78deg, transparent 0 58%, rgba(212,168,67,.10) 68%, transparent 78%);
   animation: travel-light-sweep 18s ease-in-out infinite alternate;
 }
-/* Video background layer */
-body .sakura-video-bg {
+/* Japanese traditional background layers */
+.app-shell::before {
+  content: '';
   position: fixed;
-  inset: 0;
-  z-index: -35;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  left: 50%;
+  top: 34px;
+  z-index: -1;
+  width: min(820px, 100vw);
+  height: 260px;
+  transform: translateX(-50%);
   pointer-events: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  body .sakura-video-bg {
-    display: none;
-  }
+  opacity: calc(.28 + (var(--scroll-progress, 0) * .14));
+  background:
+    linear-gradient(118deg, transparent 74%, rgba(107, 82, 52, .22) 74.2% 74.7%, transparent 75%),
+    linear-gradient(104deg, transparent 79%, rgba(107, 82, 52, .14) 79.2% 79.7%, transparent 80%),
+    radial-gradient(circle at 83% 18%, rgba(194, 59, 94, .18) 0 4px, transparent 5px),
+    radial-gradient(circle at 88% 35%, rgba(194, 59, 94, .14) 0 3px, transparent 4px),
+    radial-gradient(circle at 81% 42%, rgba(194, 59, 94, .12) 0 3px, transparent 4px);
+  transform: translateX(-50%) translateY(calc(var(--scroll-y, 0px) * .035));
 }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
@@ -143,11 +161,11 @@ textarea:focus-visible {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  background: #eaf3ff;
+  background: #F0EDE6;
   color: var(--blue);
 }
 .lock-error {
-  color: #b91c1c;
+  color: #A83030;
   font-weight: 800;
   font-size: 13px;
 }
@@ -193,9 +211,9 @@ textarea:focus-visible {
   font-size: 12px;
   font-weight: 900;
 }
-.top-notice.offline { background: #fef3c7; color: #92400e; }
-.top-notice.update { background: #dbeafe; color: #1d4ed8; }
-.top-notice button { border: 0; border-radius: 999px; padding: 5px 10px; background: #1d4ed8; color: white; font-weight: 900; }
+.top-notice.offline { background: #FDF5D7; color: #8B6914; }
+.top-notice.update { background: #E8F0F5; color: #1E4D6B; }
+.top-notice button { border: 0; border-radius: 999px; padding: 5px 10px; background: #1E4D6B; color: white; font-weight: 900; }
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -216,8 +234,8 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   text-decoration: none;
   font-size: 12px;
 }
-.pill.hot { background: #ffe8e8; color: var(--red); border-color: #f4b5b5; }
-.pill.ok { background: #eafaf1; color: #047857; border-color: #a7f3d0; }
+.pill.hot { background: #FDE8E8; color: var(--red); border-color: #E8B8B8; }
+.pill.ok { background: #EDF5F0; color: #2D6E48; border-color: #A8D4C0; }
 .pill { display: inline-flex; align-items: center; gap: 5px; }
 .status-pill {
   display: inline-flex;
@@ -235,10 +253,10 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   line-height: 1.1;
   text-decoration: none;
 }
-.status-pill.ok { background: #eafaf1; color: #047857; border-color: #a7f3d0; }
-.status-pill.warning { background: #fff7dc; color: #a16207; border-color: #f3d987; }
-.status-pill.danger { background: #fff1f1; color: #b91c1c; border-color: #efb4b4; }
-.status-pill.info { background: #edf6ff; color: var(--blue); border-color: #bad5f4; }
+.status-pill.ok { background: #EDF5F0; color: #2D6E48; border-color: #A8D4C0; }
+.status-pill.warning { background: #FDF8E8; color: #8B6914; border-color: #E8D8A0; }
+.status-pill.danger { background: #FDF0F0; color: #A83030; border-color: #E8B8B8; }
+.status-pill.info { background: #E8F0F5; color: var(--blue); border-color: #B8C8D8; }
 .sync-status-indicator {
   display: inline-flex;
   align-items: center;
@@ -267,14 +285,14 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   height: 18px;
   place-items: center;
   border-radius: 999px;
-  background: #d94132;
+  background: #C23B5E;
   color: white;
   font-size: 11px;
 }
-.sync-status-indicator.ok { color: #166534; }
-.sync-status-indicator.info { color: #17496f; }
-.sync-status-indicator.warning { color: #92400e; }
-.sync-status-indicator.danger { color: #8b1d1d; }
+.sync-status-indicator.ok { color: #2D6E48; }
+.sync-status-indicator.info { color: #1E4D6B; }
+.sync-status-indicator.warning { color: #8B6914; }
+.sync-status-indicator.danger { color: #8B3030; }
 .content { min-height: calc(100svh - 180px); padding-bottom: 16px; }
 .content > .stack {
   animation: page-rise .34s ease-out both;
@@ -394,7 +412,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   min-height: 44px;
   border-radius: 18px;
   border: 1px solid rgba(255,255,255,.72);
-  background: linear-gradient(135deg, var(--red), #d8503d);
+  background: linear-gradient(135deg, var(--red), #C45A5A);
   color: #fff;
   box-shadow: 0 14px 28px rgba(216, 80, 61, .22), inset 0 1px 0 rgba(255,255,255,.34);
 }
@@ -478,7 +496,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
 }
 .washi-btn-primary {
   background:
-    linear-gradient(145deg, #e85a4a 0%, #d94132 50%, #c43024 100%);
+    linear-gradient(145deg, #D4566E 0%, #C23B5E 50%, #A83030 100%);
   color: #fff;
   border-color: rgba(160, 50, 30, 0.32);
   box-shadow:
@@ -506,7 +524,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   border-radius: 16px !important;
   font-family: "Noto Serif JP", Georgia, "Times New Roman", serif !important;
 }
-.notice { padding: 12px 14px; color: #8a4b00; background: #fff3d6; border-color: #f4cd75; font-weight: 700; }
+.notice { padding: 12px 14px; color: #8B6914; background: #FDF5D7; border-color: #E8D8A0; font-weight: 700; }
 .dashboard-hero {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -854,8 +872,8 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   color: #fff;
   box-shadow: 0 10px 20px rgba(68, 48, 28, .14), inset 0 1px 0 rgba(255,255,255,.32);
 }
-.control-icon.blue { background: linear-gradient(135deg, #173a60, #315e8e); }
-.control-icon.red { background: linear-gradient(135deg, #d94132, #ea6b54); }
+.control-icon.blue { background: linear-gradient(135deg, #1E4D6B, #3A6B8C); }
+.control-icon.red { background: linear-gradient(135deg, #C23B5E, #D47070); }
 .scan-hero {
   display: grid;
   gap: 12px;
@@ -914,7 +932,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   font-weight: 900;
 }
 .segmented-control button.active {
-  background: #ffe9e5;
+  background: #FDE8E8;
   color: var(--red);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
 }
@@ -923,7 +941,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
 .metric { padding: 14px; min-width: 0; }
 .metric span, .metric small { display: block; color: var(--muted); }
 .metric strong { display: block; margin: 6px 0 3px; font-size: 24px; white-space: nowrap; }
-.metric.red { background: linear-gradient(135deg, #cf2f2f, #f46f50); color: white; }
+.metric.red { background: linear-gradient(135deg, #C23B5E, #D47070); color: white; }
 .metric.red span, .metric.red small { color: rgba(255,255,255,.82); }
 .metric-card {
   display: grid;
@@ -943,9 +961,9 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
 }
 .metric-card span, .metric-card small { color: var(--muted); }
 .metric-card strong { font-size: 24px; line-height: 1.1; overflow-wrap: anywhere; }
-.metric-card.accent { border-color: #b8d3f0; background: #f4f9ff; }
-.metric-card.success { border-color: #a7f3d0; background: #effcf5; }
-.metric-card.danger { border-color: #f6b6b6; background: #fff4f1; }
+.metric-card.accent { border-color: #B8C8D8; background: #F4F7F0; }
+.metric-card.success { border-color: #A8D4C0; background: #EDF5F0; }
+.metric-card.danger { border-color: #E8B8B8; background: #FDF0F0; }
 .progress-ring {
   --ring-size: 88px;
   --progress: 0%;
@@ -1053,7 +1071,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   gap: 8px;
   padding: 20px;
   border: 0;
-  background: linear-gradient(135deg, var(--blue), #4c83ba);
+  background: linear-gradient(135deg, var(--blue), #3A6B8C);
   color: white;
 }
 .big-action span { font-size: 20px; font-weight: 900; }
@@ -1071,7 +1089,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   text-decoration: none;
   font-weight: 800;
 }
-.action-list a, .secondary { color: var(--blue); background: #f8fbff; }
+.action-list a, .secondary { color: var(--blue); background: #F8F6F0; }
 .button-like { user-select: none; cursor: pointer; }
 .button-like.is-disabled {
   opacity: .55;
@@ -1080,7 +1098,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
 }
 .secondary.compact { min-height: 34px; padding: 6px 10px; }
 .primary { background: var(--red); color: white; border-color: var(--red); }
-.danger { background: #fff1f1; color: #b91c1c; border-color: #efb4b4; }
+.danger { background: #FDF0F0; color: #A83030; border-color: #E8B8B8; }
 .primary:disabled, .secondary:disabled { opacity: .55; cursor: progress; }
 .visually-hidden-file {
   position: fixed;
@@ -1137,7 +1155,7 @@ input, select, textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fffdfa;
+  background: #FFFDF7;
   color: var(--ink);
   padding: 10px 11px;
 }
@@ -1166,7 +1184,7 @@ input, select, textarea {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fbff;
+  background: #F8F6F0;
 }
 .trip-preview h3 {
   margin: 0;
@@ -1306,7 +1324,7 @@ input, select, textarea {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fbff;
+  background: #F8F6F0;
   text-align: center;
 }
 .weather-slot-detailed {
@@ -1358,7 +1376,7 @@ input, select, textarea {
 .live-badge {
   display: inline-flex;
   margin-left: 4px;
-  color: #cc2929;
+  color: #C23B5E;
   font-size: 10px;
   font-weight: 900;
 }
@@ -1387,7 +1405,7 @@ input, select, textarea {
   gap: 12px;
 }
 .timeline-command h2 { margin: 0 0 4px; }
-.timeline-day.today { border-color: #f4b4a8; }
+.timeline-day.today { border-color: #E8B8B8; }
 .timeline-event {
   position: relative;
   display: grid;
@@ -1408,7 +1426,7 @@ input, select, textarea {
   box-shadow: 0 12px 26px rgba(204, 41, 41, 0.12);
 }
 .timeline-event.is-live .timeline-time {
-  color: #cc2929;
+  color: #C23B5E;
   font-weight: 900;
 }
 .timeline-now {
@@ -1417,7 +1435,7 @@ input, select, textarea {
   margin-left: 6px;
   padding: 2px 6px;
   border-radius: 999px;
-  background: #cc2929;
+  background: #C23B5E;
   color: #fff;
   font-size: 10px;
   font-style: normal;
@@ -1485,9 +1503,9 @@ input, select, textarea {
   text-align: left;
   font-weight: 800;
 }
-.toast.success { background: #effcf5; color: #047857; border-color: #a7f3d0; }
-.toast.warning { background: #fff7dc; color: #92400e; border-color: #f3d987; }
-.toast.danger { background: #fff1f1; color: #b91c1c; border-color: #efb4b4; }
+.toast.success { background: #EDF5F0; color: #2D6E48; border-color: #A8D4C0; }
+.toast.warning { background: #FDF8E8; color: #8B6914; border-color: #E8D8A0; }
+.toast.danger { background: #FDF0F0; color: #A83030; border-color: #E8B8B8; }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .tabbar {
@@ -1712,13 +1730,12 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
   }
   body {
     background:
-      radial-gradient(ellipse at 85% 10%, rgba(216, 64, 48, 0.10) 0%, transparent 45%),
-      radial-gradient(ellipse at 5% 40%, rgba(24, 57, 92, 0.07) 0%, transparent 50%),
-      radial-gradient(ellipse at 50% 95%, rgba(211, 154, 41, 0.08) 0%, transparent 40%),
-      radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.45), transparent 55%),
-      radial-gradient(circle at 10% -5%, rgba(255, 229, 189, 0.55), transparent 30%),
-      linear-gradient(180deg, #fdf5e4 0%, #f5ead8 35%, #f0e5d2 70%, #ebe0cc 100%),
-      url('/travel-expense/react/images/sakura-bg.webp') center/cover no-repeat;
+      radial-gradient(ellipse at 88% 8%, rgba(253, 239, 242, 0.40) 0%, transparent 50%),
+      radial-gradient(ellipse at 5% 35%, rgba(30, 77, 107, 0.04) 0%, transparent 55%),
+      radial-gradient(ellipse at 50% 96%, rgba(212, 168, 67, 0.05) 0%, transparent 42%),
+      radial-gradient(circle at 50% 30%, rgba(255, 253, 247, 0.45), transparent 60%),
+      radial-gradient(circle at 8% -5%, rgba(250, 237, 210, 0.40), transparent 32%),
+      linear-gradient(180deg, #F5F0E8 0%, #F0EBDF 35%, #EBE5D8 70%, #E8E2D4 100%);
   }
 }
 
@@ -1918,7 +1935,7 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
   min-height: 52px;
   padding: 12px 28px;
   border-radius: 18px;
-  background: linear-gradient(145deg, #18395c, #2a5580);
+  background: linear-gradient(145deg, #1E4D6B, #35667A);
   color: #fff;
   font-weight: 800;
   font-size: 16px;
