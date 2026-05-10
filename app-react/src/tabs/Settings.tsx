@@ -19,7 +19,7 @@ import {
 } from '../lib/credentialBroker';
 import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
 import { computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
-import { hasDirectNotionToken, migrateNotionSchema, pullAll, pushSettingsMeta, pushTripPage, testNotion } from '../lib/notion';
+import { diagnoseNotionSchema, hasDirectNotionToken, migrateNotionSchema, pullAll, pushSettingsMeta, pushTripPage, testNotion } from '../lib/notion';
 import type { AppState, Person, SyncEngineState, TripDraft, TripProfile } from '../lib/types';
 import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripSensitiveState } from '../lib/storage';
 import { clearDeviceTrust } from '../security/deviceTrust';
@@ -64,6 +64,7 @@ export function Settings({
   const [rotationAdmin, setRotationAdmin] = useState('');
   const [rotationDb, setRotationDb] = useState(state.notionDb || '');
   const [directNotionToken, setDirectNotionToken] = useState(getDirectNotionToken);
+  const [schemaDiag, setSchemaDiag] = useState<Array<{ name: string; type: string; mapped: string | null }> | null>(null);
   const itineraryInput = useRef<HTMLInputElement | null>(null);
   const backupInput = useRef<HTMLInputElement | null>(null);
   const brokerReady = hasCredentialBrokerSession(state);
@@ -615,6 +616,55 @@ export function Settings({
           <input type="checkbox" checked={state.autoSync} onChange={(e) => updateState({ autoSync: e.target.checked })} />
           儲存 receipt 後自動同步
         </label>
+        <div className="action-row wrap">
+          <button
+            className="secondary"
+            type="button"
+            disabled={!!busy}
+            onClick={() => {
+              if (!hasCredentialBrokerSession(state) && !hasDirectNotionToken()) {
+                setStatus('請先輸入 Notion Token 或連接 Credential Broker');
+                return;
+              }
+              void run('診斷 Notion 資料庫', async () => {
+                const diag = await diagnoseNotionSchema(state);
+                setSchemaDiag(diag);
+                const unmapped = diag.filter((d) => !d.mapped);
+                return `發現 ${diag.length} 個欄位，${unmapped.length} 個未映射`;
+              });
+            }}
+          >
+            診斷資料庫結構
+          </button>
+        </div>
+        {schemaDiag && (
+          <div style={{ marginTop: 12, overflow: 'auto' }}>
+            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #D9CFC2' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Property</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Type</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Mapped</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schemaDiag.map((d) => (
+                  <tr key={d.name} style={{ borderBottom: '1px solid #E8DDD0' }}>
+                    <td style={{ padding: '4px 8px' }}>{d.name}</td>
+                    <td style={{ padding: '4px 8px' }}>{d.type}</td>
+                    <td style={{ padding: '4px 8px' }}>
+                      {d.mapped ? (
+                        <span style={{ color: '#2D6E48' }}>✅ {d.mapped}</span>
+                      ) : (
+                        <span style={{ color: '#C23B5E' }}>❌ (not mapped)</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="action-row wrap">
           <button className="secondary" type="button" disabled={!!busy} onClick={saveLocalSettingsNow}>Save Local Settings</button>
           <button className="secondary" type="button" disabled={!!busy} onClick={() => {

@@ -146,6 +146,29 @@ async function ensureSchema(state: AppState): Promise<SchemaMap> {
           [/active|啟用|启用/i]);
       }
     }
+    // 3. First-of-type fallback for critical properties
+    if (!found) {
+      if (k === 'photoUrl' || k === 'mapUrl') {
+        const urlProp = Object.entries(props).find(([, p]) => p?.type === 'url');
+        found = urlProp?.[0];
+        if (!found) {
+          const filesProp = Object.entries(props).find(([, p]) => p?.type === 'files');
+          found = filesProp?.[0];
+        }
+      } else if (k === 'address' || k === 'region' || k === 'bookingRef' || k === 'items' || k === 'note' || k === 'person' || k === 'time') {
+        const rtProp = Object.entries(props).find(([, p]) => p?.type === 'rich_text');
+        found = rtProp?.[0];
+      } else if (k === 'cat' || k === 'pay' || k === 'split' || k === 'currency' || k === 'homeCurrency') {
+        const selProp = Object.entries(props).find(([, p]) => p?.type === 'select');
+        found = selProp?.[0];
+      } else if (k === 'tripName' || k === 'destination' || k === 'tripCurrencies' || k === 'timezones' || k === 'sourceId' || k === 'tripId') {
+        const rtProp = Object.entries(props).find(([, p]) => p?.type === 'rich_text');
+        found = rtProp?.[0];
+      } else if (k === 'startDate' || k === 'endDate' || k === 'updatedAt') {
+        const dateProp = Object.entries(props).find(([, p]) => p?.type === 'date');
+        found = dateProp?.[0];
+      }
+    }
     map[k] = found || names[0];
   }
 
@@ -248,58 +271,206 @@ function readProp(props: Record<string, any>, key: keyof typeof N, schema?: Sche
 
 function readNumberProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap): number | undefined {
   const prop = readProp(props, key, schema);
-  if (!prop) return undefined;
-  // Direct number property
-  if (typeof prop.number === 'number') return prop.number;
-  // Formula that returns number
-  if (prop.formula?.type === 'number' && typeof prop.formula.number === 'number') return prop.formula.number;
-  // Rollup that returns number
-  if (prop.rollup?.type === 'number' && typeof prop.rollup.number === 'number') return prop.rollup.number;
-  // Text fallback: try to parse from rich_text or title
-  const text = prop.rich_text?.[0]?.plain_text || prop.title?.[0]?.plain_text || '';
-  const parsed = parseFloat(text.replace(/[^0-9.-]/g, ''));
-  return Number.isFinite(parsed) ? parsed : undefined;
+  if (prop) {
+    if (typeof prop.number === 'number') return prop.number;
+    if (prop.formula?.type === 'number' && typeof prop.formula.number === 'number') return prop.formula.number;
+    if (prop.rollup?.type === 'number' && typeof prop.rollup.number === 'number') return prop.rollup.number;
+    const text = prop.rich_text?.[0]?.plain_text || prop.title?.[0]?.plain_text || '';
+    const parsed = parseFloat(text.replace(/[^0-9.-]/g, ''));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  // ULTRA FALLBACK: scan ALL properties when mapped property fails
+  const isAmountLike = key === 'amount' || key === 'originalAmount';
+  const isHkdLike = key === 'hkd';
+  const isRateLike = key === 'exchangeRate';
+  const isVersionLike = key === 'tripVersion';
+
+  if (isAmountLike) {
+    // Find any number/formula property with amount-related name
+    for (const [name, p] of Object.entries(props)) {
+      const val = p?.number ?? p?.formula?.number ?? p?.rollup?.number;
+      if (typeof val === 'number' && val > 0 && /amount|金額|price|cost|total|money|¥|💰|💴/i.test(name)) return val;
+    }
+    // Last resort: first positive number property of any name
+    for (const [, p] of Object.entries(props)) {
+      const val = p?.number ?? p?.formula?.number ?? p?.rollup?.number;
+      if (typeof val === 'number' && val > 0) return val;
+    }
+  }
+  if (isHkdLike) {
+    for (const [name, p] of Object.entries(props)) {
+      const val = p?.number ?? p?.formula?.number ?? p?.rollup?.number;
+      if (typeof val === 'number' && /hkd|港幣|hk\s*\$/i.test(name)) return val;
+    }
+  }
+  if (isRateLike) {
+    for (const [name, p] of Object.entries(props)) {
+      const val = p?.number ?? p?.formula?.number ?? p?.rollup?.number;
+      if (typeof val === 'number' && /exchange|rate|匯率|汇率/i.test(name)) return val;
+    }
+  }
+  if (isVersionLike) {
+    for (const [, p] of Object.entries(props)) {
+      const val = p?.number ?? p?.formula?.number ?? p?.rollup?.number;
+      if (typeof val === 'number') return val;
+    }
+  }
+  return undefined;
+}
+
+function readUrlProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap): string {
+  const prop = readProp(props, key, schema);
+  if (prop?.url) return prop.url;
+  // ULTRA FALLBACK
+  if (key === 'photoUrl' || key === 'mapUrl') {
+    for (const [name, p] of Object.entries(props)) {
+      if (p?.type === 'url' && p?.url) {
+        if (key === 'photoUrl' && /photo|image|pic|相片|照片|img/i.test(name)) return p.url;
+        if (key === 'mapUrl' && /map|地圖|地图/i.test(name)) return p.url;
+      }
+    }
+    if (key === 'photoUrl') {
+      // Last resort: any url property
+      for (const [, p] of Object.entries(props)) {
+        if (p?.type === 'url' && p?.url) return p.url;
+      }
+      // Files property fallback
+      for (const [, p] of Object.entries(props)) {
+        if (p?.type === 'files' && p?.files?.[0]) {
+          return p.files[0].external?.url || p.files[0].file?.url || '';
+        }
+      }
+    }
+  }
+  return '';
+}
+
+function readRichTextProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap): string {
+  const prop = readProp(props, key, schema);
+  if (prop) {
+    const text = prop.rich_text?.[0]?.plain_text || prop.title?.[0]?.plain_text || '';
+    if (text) return text;
+  }
+  const patterns: Record<string, RegExp[]> = {
+    address: [/address|地址|地點|地点|location|addr|street/i],
+    region: [/region|地區|地区|area|zone|district|city|城市/i],
+    bookingRef: [/booking|預訂|预订|ref|reference|訂單|订单|reservation/i],
+    items: [/items|品項|项目|order|details|明细|products/i],
+    note: [/note|備註|备注|memo|comment|说明|remarks/i],
+    person: [/person|旅伴|people|companion|partner|member|who/i],
+    time: [/time|時間|时间|hour|clock/i],
+    tripName: [/trip|name|名稱|名称|title/i],
+    destination: [/destination|地點|地点|location|place|去哪|summary/i],
+    tripCurrencies: [/currency|幣種|币种|money|currencies/i],
+    timezones: [/timezone|time.*zone|時區|时区|zones/i],
+  };
+  if (patterns[key]) {
+    for (const [name, p] of Object.entries(props)) {
+      if ((p?.type === 'rich_text' || p?.type === 'title') && (p.rich_text?.[0]?.plain_text || p.title?.[0]?.plain_text)) {
+        const text = p.rich_text?.[0]?.plain_text || p.title?.[0]?.plain_text || '';
+        for (const pattern of patterns[key]) {
+          if (pattern.test(name)) return text;
+        }
+      }
+    }
+  }
+  return '';
+}
+
+function readTitleProp(props: Record<string, any>, schema?: SchemaMap): string {
+  const prop = readProp(props, 'store', schema);
+  if (prop?.title?.[0]?.plain_text) return prop.title[0].plain_text;
+  // Ultra fallback: find any title property
+  for (const [, p] of Object.entries(props)) {
+    if (p?.type === 'title' && p?.title?.[0]?.plain_text) {
+      return p.title[0].plain_text;
+    }
+  }
+  return '';
+}
+
+function readDateProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap): string | undefined {
+  const prop = readProp(props, key, schema);
+  if (prop?.date?.start) return prop.date.start;
+  if (key === 'date' || key === 'startDate' || key === 'endDate' || key === 'updatedAt') {
+    for (const [name, p] of Object.entries(props)) {
+      if (p?.type === 'date' && p?.date?.start) {
+        if (key === 'date' && /date|日期|📅/i.test(name)) return p.date.start;
+        if (key === 'startDate' && /start|開始|开始|from/i.test(name)) return p.date.start;
+        if (key === 'endDate' && /end|結束|结束|to/i.test(name)) return p.date.start;
+        if (key === 'updatedAt' && /update|更新|modified/i.test(name)) return p.date.start;
+      }
+    }
+    // Last resort: first date property
+    for (const [, p] of Object.entries(props)) {
+      if (p?.type === 'date' && p?.date?.start) return p.date.start;
+    }
+  }
+  return undefined;
+}
+
+function readSelectProp(props: Record<string, any>, key: keyof typeof N, schema?: SchemaMap): string | undefined {
+  const prop = readProp(props, key, schema);
+  if (prop?.select?.name) return prop.select.name;
+  const patterns: Record<string, RegExp[]> = {
+    cat: [/cat|類別|类别|type|kind|分類|分类|種類|种类/i],
+    pay: [/pay|支付|付款|payment|method|方式/i],
+    split: [/split|類型|类型|type|sharing|share|共享/i],
+    currency: [/currency|幣種|币种|money|幣别|币种/i],
+    homeCurrency: [/home|base|currency|幣種|币种/i],
+    objectType: [/type|類型|类型|kind|object/i],
+  };
+  if (patterns[key]) {
+    for (const [name, p] of Object.entries(props)) {
+      if (p?.type === 'select' && p?.select?.name) {
+        for (const pattern of patterns[key]) {
+          if (pattern.test(name)) return p.select.name;
+        }
+      }
+    }
+  }
+  return undefined;
 }
 
 function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt | null {
   if (page.archived || page.in_trash) return null;
   const props = page.properties || {};
-  const sourceId = readText(readProp(props, 'sourceId', schema), 'rich_text');
+  const sourceId = readRichTextProp(props, 'sourceId', schema) || readRichTextProp(props, 'tripId', schema);
   if (sourceId === '__meta_settings__') return null;
-  const objectType = readProp(props, 'objectType', schema)?.select?.name || '';
+  const objectType = readSelectProp(props, 'objectType', schema) || '';
   if (objectType === 'trip') return null;
-  const catName = readProp(props, 'cat', schema)?.select?.name || '';
-  const payName = readProp(props, 'pay', schema)?.select?.name || '';
-  const personText = readText(readProp(props, 'person', schema), 'rich_text');
+  const catName = readSelectProp(props, 'cat', schema) || '';
+  const payName = readSelectProp(props, 'pay', schema) || '';
+  const personText = readRichTextProp(props, 'person', schema);
   const persons = getPersons(state);
   const receipt: Receipt = {
     id: sourceId || `notion_${page.id}`,
     notionPageId: page.id,
     sourceId,
-    store: readText(readProp(props, 'store', schema), 'title') || 'Notion 匯入',
+    store: readTitleProp(props, schema) || 'Notion 匯入',
     total: readNumberProp(props, 'amount', schema) ?? 0,
-    date: readProp(props, 'date', schema)?.date?.start || state.tripDateRange.start,
-    time: readText(readProp(props, 'time', schema), 'rich_text'),
+    date: readDateProp(props, 'date', schema) || state.tripDateRange.start,
+    time: readRichTextProp(props, 'time', schema),
     category: (CATEGORIES.find((c) => c.name === catName)?.id || 'other') as CategoryId,
     payment: (PAYMENTS.find((p) => p.name === payName)?.id || 'cash') as PaymentId,
-    region: readText(readProp(props, 'region', schema), 'rich_text'),
-    address: readText(readProp(props, 'address', schema), 'rich_text'),
-    bookingRef: readText(readProp(props, 'bookingRef', schema), 'rich_text'),
-    itemsText: readText(readProp(props, 'items', schema), 'rich_text'),
-    note: readText(readProp(props, 'note', schema), 'rich_text'),
-    photoUrl: readProp(props, 'photoUrl', schema)?.url || '',
+    region: readRichTextProp(props, 'region', schema),
+    address: readRichTextProp(props, 'address', schema),
+    bookingRef: readRichTextProp(props, 'bookingRef', schema),
+    itemsText: readRichTextProp(props, 'items', schema),
+    note: readRichTextProp(props, 'note', schema),
+    photoUrl: readUrlProp(props, 'photoUrl', schema),
     personId: persons.find((p) => personText.includes(p.name))?.id || persons[0]?.id,
-    splitMode: String(readProp(props, 'split', schema)?.select?.name || '').includes('私人') ? 'private' as const : 'shared' as const,
+    splitMode: String(readSelectProp(props, 'split', schema) || '').includes('私人') ? 'private' as const : 'shared' as const,
     source: 'notion',
     createdAt: page.created_time ? new Date(page.created_time).getTime() : Date.now(),
     updatedAt: page.last_edited_time ? new Date(page.last_edited_time).getTime() : undefined,
-    tripId: readText(readProp(props, 'tripId', schema), 'rich_text') || state.activeTripId,
+    tripId: readRichTextProp(props, 'tripId', schema) || state.activeTripId,
     tripVersion: readNumberProp(props, 'tripVersion', schema),
     originalAmount: readNumberProp(props, 'originalAmount', schema),
-    originalCurrency: readProp(props, 'currency', schema)?.select?.name || undefined,
-    currency: readProp(props, 'currency', schema)?.select?.name || undefined,
+    originalCurrency: readSelectProp(props, 'currency', schema) || undefined,
+    currency: readSelectProp(props, 'currency', schema) || undefined,
     hkdAmount: readNumberProp(props, 'hkd', schema),
-    mapUrl: readProp(props, 'mapUrl', schema)?.url || '',
+    mapUrl: readUrlProp(props, 'mapUrl', schema),
     exchangeRate: readNumberProp(props, 'exchangeRate', schema),
   };
   return stampReceiptForTrip(state, receipt, { preserveUpdatedAt: true });
@@ -344,6 +515,21 @@ function tripFromPage(page: any, schema: SchemaMap): TripProfile | null {
   }
 }
 
+export async function diagnoseNotionSchema(state: AppState): Promise<Array<{ name: string; type: string; mapped: string | null }>> {
+  const db = await notionFetch<{ properties?: Record<string, { type: string }> }>(state, `/databases/${state.notionDb}`, { method: 'GET' });
+  const props = db.properties || {};
+  const schema = await ensureSchema(state);
+  const reverseMap = new Map<string, string>();
+  for (const [key, name] of Object.entries(schema)) {
+    reverseMap.set(name, key);
+  }
+  return Object.entries(props).map(([name, prop]) => ({
+    name,
+    type: prop.type,
+    mapped: reverseMap.get(name) || null,
+  }));
+}
+
 export async function testNotion(state: AppState) {
   schemaCache = null;
   const schema = await ensureSchema(state);
@@ -368,7 +554,9 @@ export async function testDirectNotion(state: AppState): Promise<{ ok: boolean; 
     });
     const data = await res.json();
     if (!res.ok) return { ok: false, count: 0, error: data?.message || `${res.status} ${res.statusText}` };
-    const firstTitle = data.results?.[0]?.properties?.['店名']?.title?.[0]?.plain_text;
+    const schema = await ensureSchema(state);
+    const firstTitleProp = data.results?.[0]?.properties?.[propName(schema, 'store')];
+    const firstTitle = firstTitleProp?.title?.[0]?.plain_text;
     return { ok: true, count: data.results?.length ?? 0, firstTitle };
   } catch (err) {
     return { ok: false, count: 0, error: String(err) };
