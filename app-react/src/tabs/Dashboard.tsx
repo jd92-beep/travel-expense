@@ -118,47 +118,57 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
           </button>
         </div>
 
-        <MagicCard className="budget-panorama-vertical dashboard-budget p-0 overflow-hidden w-full relative rounded-[36px] border border-white/50 shadow-[0_20px_60px_-15px_rgba(30,77,107,0.3)]">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#1E4D6B] via-[#C23B5E] to-[#D4A843] opacity-[0.95] mix-blend-multiply" />
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-30 mix-blend-overlay" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-white/10" />
-          <BorderBeam borderWidth={3} colorFrom="#4A90E2" colorTo="#D4A843" className="opacity-90" />
+        <MagicCard className="dashboard-budget p-0 overflow-hidden w-full relative rounded-[40px] border border-white/20 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)]">
+          {/* Futuristic Cyberpunk / Glassmorphism Background */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0B0F19] via-[#1A1025] to-[#0A1929] opacity-95" />
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 mix-blend-color-dodge" />
           
-          <div className="relative z-10 flex flex-col justify-between min-h-[460px] w-full">
-            <div className="budget-top-row relative z-10 w-full px-8 pt-8 flex justify-between items-start">
-              <div className="budget-stat text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
-                <span className="text-white/90 font-bold uppercase tracking-[0.2em] text-[11px] drop-shadow-sm">Total Budget</span>
-                <strong><NumberTicker value={state.budget} prefix="¥" className="text-[clamp(36px,9vw,56px)] font-[900] text-white tracking-tight" /></strong>
-                <small className="text-white/80 font-medium tracking-wide">HK$ {fmt(hkd(state.budget, state))}</small>
+          {/* Glowing Orbs */}
+          <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] rounded-full bg-blue-500/20 blur-[80px] mix-blend-screen" />
+          <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[70%] rounded-full bg-purple-500/20 blur-[80px] mix-blend-screen" />
 
+          <BorderBeam borderWidth={2} colorFrom="#38BDF8" colorTo="#C084FC" duration={10} className="opacity-80" />
+
+          <div className="relative z-10 flex flex-col justify-between min-h-[500px] w-full p-6 sm:p-8">
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col gap-1">
+                <span className="text-blue-300 font-bold uppercase tracking-[0.25em] text-[10px] sm:text-[12px] bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 w-max shadow-[0_0_10px_rgba(56,189,248,0.2)]">Total Budget</span>
+                <strong className="text-white drop-shadow-[0_0_15px_rgba(56,189,248,0.6)] mt-2">
+                  <NumberTicker value={state.budget} prefix="¥" className="text-[32px] sm:text-[44px] font-black tracking-tighter" />
+                </strong>
+                <small className="text-blue-200/60 font-medium tracking-wider">HK$ {fmt(hkd(state.budget, state))}</small>
               </div>
               
-              <div className="budget-stat align-right text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] text-right">
-                <span className="text-white/90 font-bold uppercase tracking-[0.2em] text-[11px] drop-shadow-sm">Spent</span>
-                <strong><NumberTicker value={totalForBudget} prefix="¥" className="text-[clamp(36px,9vw,56px)] font-[900] text-white tracking-tight" /></strong>
-                <small className="text-white/80 font-medium tracking-wide">HK$ {fmt(hkd(totalForBudget, state))}</small>
+              <div className="flex flex-col gap-1 items-end">
+                <span className="text-purple-300 font-bold uppercase tracking-[0.25em] text-[10px] sm:text-[12px] bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20 w-max shadow-[0_0_10px_rgba(192,132,252,0.2)]">Spent</span>
+                <strong className="text-white drop-shadow-[0_0_15px_rgba(192,132,252,0.6)] mt-2">
+                  <NumberTicker value={totalForBudget} prefix="¥" className="text-[32px] sm:text-[44px] font-black tracking-tighter" />
+                </strong>
+                <small className="text-purple-200/60 font-medium tracking-wider">HK$ {fmt(hkd(totalForBudget, state))}</small>
               </div>
             </div>
 
             <motion.div
               whileTap={{ scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-              className="cursor-pointer budget-circle-wrapper relative z-10 flex-1 flex items-center justify-center mt-8 mb-10 w-full"
+              className="cursor-pointer relative z-10 flex-1 flex items-center justify-center mt-8 mb-4 w-full"
               role="img"
               aria-label={`spent ${Math.round(rawBudgetPct)}%`}
             >
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] h-[280px] sm:w-[360px] sm:h-[360px] rounded-full blur-[40px] opacity-60 mix-blend-screen" style={{ background: budgetColors.primary }} />
+              {/* Massive Outer Glow matching the primary color */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] max-w-[500px] rounded-full blur-[70px] opacity-30 mix-blend-plus-lighter" style={{ background: budgetColors.primary }} />
+              
               <AnimatedCircularProgressBar
                 value={budgetPct}
-                gaugePrimaryColor="#ffffff"
-                gaugeSecondaryColor="rgba(255,255,255,0.15)"
-                className="size-[280px] sm:size-[360px] drop-shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+                gaugePrimaryColor={budgetColors.primary}
+                gaugeSecondaryColor="rgba(255,255,255,0.05)"
+                className="w-[90%] sm:w-[85%] max-w-[400px] aspect-square drop-shadow-[0_0_40px_rgba(0,0,0,0.8)]"
               >
-                <div className="flex flex-col items-center justify-center">
-                  <span className="font-mono text-[72px] sm:text-[84px] font-[900] leading-none text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] tracking-tighter">
-                    {Math.round(rawBudgetPct)}<span className="text-[40px] sm:text-[48px]">%</span>
+                <div className="flex flex-col items-center justify-center bg-black/30 backdrop-blur-xl rounded-full w-[82%] h-[82%] border border-white/10 shadow-[inset_0_0_30px_rgba(255,255,255,0.05)]">
+                  <span className="font-mono text-[76px] sm:text-[96px] font-black leading-none text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50 drop-shadow-2xl tracking-tighter">
+                    {Math.round(rawBudgetPct)}<span className="text-[36px] sm:text-[46px] text-white/70">%</span>
                   </span>
-                  <span className="text-[18px] sm:text-[20px] font-bold text-white/95 mt-1 tracking-[0.3em] uppercase drop-shadow-sm">spent</span>
+                  <span className="text-[14px] sm:text-[18px] font-bold text-white/60 mt-3 tracking-[0.5em] uppercase">Used</span>
                 </div>
               </AnimatedCircularProgressBar>
             </motion.div>
