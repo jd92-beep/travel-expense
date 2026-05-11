@@ -14,6 +14,7 @@ import { cn } from "@/lib/cn"
 interface MagicCardBaseProps {
   children?: React.ReactNode
   className?: string
+  as?: React.ElementType
   gradientSize?: number
   gradientFrom?: string
   gradientTo?: string
@@ -58,6 +59,7 @@ export function MagicCard(props: MagicCardProps) {
   const {
     children,
     className,
+    as: Component = "div",
     gradientSize = 200,
     gradientColor = "rgba(255,255,255,.16)",
     gradientOpacity = 0.56,
@@ -172,8 +174,10 @@ export function MagicCard(props: MagicCardProps) {
     }
   }, [reset, reducedMotion])
 
+  const MotionComponent = (motion as any)[Component as string] || motion.div
+
   return (
-    <motion.div
+    <MotionComponent
       className={cn(
         "group relative isolate overflow-hidden rounded-[inherit] border border-transparent",
         className,
@@ -193,14 +197,14 @@ export function MagicCard(props: MagicCardProps) {
       }}
     >
       <div
-        className="absolute inset-px z-20 rounded-[inherit]"
+        className="absolute inset-px -z-20 rounded-[inherit]"
         style={{ backgroundColor: "var(--surface)" }}
       />
 
       {mode === "gradient" && (
         <motion.div
           suppressHydrationWarning
-          className="pointer-events-none absolute inset-px z-30 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+          className="pointer-events-none absolute inset-px -z-10 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
           style={{
             background: useMotionTemplate`
               radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
@@ -217,7 +221,7 @@ export function MagicCard(props: MagicCardProps) {
         <motion.div
           suppressHydrationWarning
           aria-hidden="true"
-          className="pointer-events-none absolute z-30"
+          className="pointer-events-none absolute -z-10"
           style={{
             width: glowSize,
             height: glowSize,
@@ -235,7 +239,9 @@ export function MagicCard(props: MagicCardProps) {
         />
       )}
 
-      <div className="relative z-40 h-full w-full rounded-[inherit] overflow-hidden">{children}</div>
-    </motion.div>
+      <div className="relative z-40 flex flex-col flex-1 h-full w-full">
+        {children}
+      </div>
+    </MotionComponent>
   )
 }

@@ -35,20 +35,6 @@
   opacity: .78;
 }
 
-/* Liquid Glass refraction edge — inner rim light */
-.glass-card .glass-magic-layer::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  box-shadow:
-    inset 0 1.5px 1px rgba(255,255,255,.82),
-    inset 0 -1px 1px rgba(121, 89, 55, .08),
-    inset 1px 0 1px rgba(255,255,255,.35),
-    inset -1px 0 1px rgba(255,255,255,.22);
-  z-index: 5;
-}
 
 .card,
 .metric-card,

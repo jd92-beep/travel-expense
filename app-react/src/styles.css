@@ -352,10 +352,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
     linear-gradient(180deg, rgba(255,255,255,.28) 0%, transparent 38%);
   opacity: .85;
 }
-.glass-card > * {
-  position: relative;
-  z-index: 1;
-}
+
 .liquid-surface::after {
   content: '';
   position: absolute;
@@ -369,22 +366,7 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   opacity: .72;
   mix-blend-mode: screen;
 }
-.liquid-surface > * { position: relative; z-index: 1; }
-.glass-magic-layer {
-  min-height: 100%;
-  border-radius: inherit;
-}
-.glass-magic-layer > .absolute {
-  border-radius: inherit;
-}
-.glass-magic-layer .bg-background {
-  background: transparent;
-}
-.glass-magic-content {
-  position: relative;
-  z-index: 2;
-  border-radius: inherit;
-}
+
 .liquid-surface-strong {
   background:
     linear-gradient(135deg, rgba(255,255,255,.82), rgba(255,248,239,.58)),

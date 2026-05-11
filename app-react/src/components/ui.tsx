@@ -25,7 +25,7 @@ const glassSurface = cva('glass-card liquid-surface', {
 });
 
 export function GlassCard({
-  as: Component = 'section',
+  as = 'section',
   className = '',
   tone = 'default',
   children,
@@ -37,22 +37,21 @@ export function GlassCard({
 }) {
   const strong = tone === 'strong' || /budget|command|hero|stats|weather|scan/i.test(className);
   return (
-    <Component className={cn(glassSurface({ tone }), className, "relative overflow-hidden")}>
+    <MagicCard
+      as={as}
+      className={cn(glassSurface({ tone }), className, "relative overflow-hidden")}
+      gradientFrom="#d8503d"
+      gradientTo="#315e8e"
+      gradientColor="rgba(255, 247, 230, 0.5)"
+      gradientOpacity={0.14}
+    >
       <ShineBorder 
-        className="opacity-70" 
+        className="opacity-70 -z-10" 
         shineColor={strong ? ['#d8503d', '#d9a441'] : ['rgba(216, 80, 61, 0.4)', 'rgba(211, 154, 41, 0.3)']} 
         borderWidth={strong ? 2 : 1}
       />
-      <MagicCard
-        className="glass-magic-layer"
-        gradientFrom="#d8503d"
-        gradientTo="#315e8e"
-        gradientColor="rgba(255, 247, 230, 0.5)"
-        gradientOpacity={0.14}
-      >
-        <div className="glass-magic-content">{children}</div>
-      </MagicCard>
-    </Component>
+      {children}
+    </MagicCard>
   );
 }
 
