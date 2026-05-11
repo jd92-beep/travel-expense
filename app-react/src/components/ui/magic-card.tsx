@@ -175,7 +175,7 @@ export function MagicCard(props: MagicCardProps) {
   return (
     <motion.div
       className={cn(
-        "group relative isolate flex flex-col overflow-hidden rounded-[inherit] border border-transparent",
+        "group relative isolate overflow-hidden rounded-[inherit] border border-transparent",
         className,
       )}
       onPointerMove={reducedMotion ? undefined : handlePointerMove}
@@ -235,7 +235,7 @@ export function MagicCard(props: MagicCardProps) {
         />
       )}
 
-      <div className="relative z-40 flex flex-col flex-1 w-full rounded-[inherit] overflow-hidden">{children}</div>
+      <div className="relative z-40 h-full w-full rounded-[inherit] overflow-hidden">{children}</div>
     </motion.div>
   )
 }

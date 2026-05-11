@@ -920,13 +920,9 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
 }
 .scan-hero .section-head { margin-bottom: 0; }
 .history-command {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: start;
+  /* Inherit layout from Tailwind classes inside component */
 }
 .history-command h2 { margin: 0 0 4px; }
-.history-command > button { grid-column: 1 / -1; justify-self: start; }
 .history-filters {
   position: sticky;
   top: 8px;
@@ -1446,10 +1442,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   background: linear-gradient(var(--red), var(--gold), var(--blue));
 }
 .timeline-command {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+  /* Inherit layout from Tailwind classes inside component */
 }
 .timeline-command h2 { margin: 0 0 4px; }
 .timeline-day.today { border-color: #E8B8B8; }
@@ -1666,10 +1659,7 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
   gap: 8px;
 }
 .stats-command {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
+  /* Inherit layout from Tailwind classes inside component */
 }
 .stats-command h2 { margin: 4px 0 6px; font-size: clamp(22px, 6vw, 30px); }
 .stats-command p,
@@ -1761,10 +1751,7 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
   .receipt-main small, .amount small { font-size: 12px; }
   .timeline-mini div, .timeline-mini-row { grid-template-columns: 54px 1fr 24px; }
   .timeline-mini .mini { grid-column: 2 / -1; }
-  .timeline-command { display: grid; }
   .timeline-event { grid-template-columns: 52px 38px minmax(0, 1fr); }
-  .history-command { grid-template-columns: 1fr; }
-  .stats-command { grid-template-columns: 1fr; }
   .stats-command .progress-ring { justify-self: start; }
   .person-edit, .person-add { grid-template-columns: 1fr; }
   .accordion-summary { align-items: flex-start; }
