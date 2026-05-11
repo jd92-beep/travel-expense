@@ -9,6 +9,7 @@ import { MagicCard } from './ui/magic-card';
 import { NumberTicker } from './ui/number-ticker';
 import { RippleButton } from './ui/ripple-button';
 import { Button as StatefulButtonBase } from './ui/stateful-button';
+import { ShineBorder } from './ui/shine-border';
 
 const glassSurface = cva('glass-card liquid-surface', {
   variants: {
@@ -36,14 +37,12 @@ export function GlassCard({
 }) {
   const strong = tone === 'strong' || /budget|command|hero|stats|weather|scan/i.test(className);
   return (
-    <Component className={cn(glassSurface({ tone }), className)}>
-      <BorderBeam
-          size={strong ? 80 : 56}
-          duration={strong ? 10 : 14}
-          borderWidth={strong ? 1 : 1}
-          colorFrom={strong ? '#d8503d' : 'rgba(216, 80, 61, 0.55)'}
-          colorTo={strong ? '#d9a441' : 'rgba(211, 154, 41, 0.45)'}
-        />
+    <Component className={cn(glassSurface({ tone }), className, "relative overflow-hidden")}>
+      <ShineBorder 
+        className="opacity-70" 
+        shineColor={strong ? ['#d8503d', '#d9a441'] : ['rgba(216, 80, 61, 0.4)', 'rgba(211, 154, 41, 0.3)']} 
+        borderWidth={strong ? 2 : 1}
+      />
       <MagicCard
         className="glass-magic-layer"
         gradientFrom="#d8503d"

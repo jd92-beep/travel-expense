@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { CalendarDays, Clock3, Home, MapPin, PencilLine, ReceiptText, RotateCcw } from 'lucide-react';
 import { ActionSheet, GlassCard, StatusPill, TimelineRail } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
-import { BorderBeam } from '../components/ui/border-beam';
+import { ShineBorder } from '../components/ui/shine-border';
 import { categoryById, dayLooseReceipts, fmt, getItinerary, getScheduleSpots, hkd, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts } from '../lib/domain';
 import type { AppState, ItinerarySpot, Receipt } from '../lib/types';
 import { ReceiptRow } from './Dashboard';
@@ -45,10 +45,10 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   return (
     <section className="stack timeline-screen">
       <MagicCard className="timeline-command p-0 rounded-[32px] overflow-hidden relative w-full border border-white/50 shadow-[0_20px_60px_-15px_rgba(45,110,72,0.25)]">
+        <ShineBorder className="opacity-80" shineColor={['#2D6E48', '#D4A843']} borderWidth={3} />
         <div className="absolute inset-0 bg-gradient-to-br from-[#2D6E48] via-[#D4A843] to-[#C23B5E] opacity-[0.25] mix-blend-multiply" />
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 mix-blend-overlay" />
         <div className="absolute inset-0 bg-gradient-to-t from-white/40 via-transparent to-white/10" />
-        <BorderBeam borderWidth={3} colorFrom="#2D6E48" colorTo="#D4A843" className="opacity-80" />
         
         <div className="relative z-10 w-full p-6 sm:p-8 flex flex-col gap-5">
           <div className="flex justify-between items-start w-full">

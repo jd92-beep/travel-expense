@@ -12,6 +12,7 @@ import { useSyncEngine } from './lib/useSyncEngine';
 import type { Receipt, SyncQueueItem, TabId, TripProfile } from './lib/types';
 import { AuthGate } from './security/AuthGate';
 import { HyperframeBackground } from './components/HyperframeBackground';
+import { fetchLiveCurrencySnapshot } from './lib/currency';
 
 const Dashboard = lazy(() => import('./tabs/Dashboard').then((module) => ({ default: module.Dashboard })));
 const Scan = lazy(() => import('./tabs/Scan').then((module) => ({ default: module.Scan })));
@@ -36,6 +37,17 @@ export function App() {
     // We only want hydration to restore the last tab once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.lastTab]);
+
+  useEffect(() => {
+    fetchLiveCurrencySnapshot().then(snapshot => {
+      if (snapshot.rates.JPY) {
+        updateState({ rate: Number(snapshot.rates.JPY.toFixed(4)) });
+        console.log('[App] Auto-updated live exchange rate:', snapshot.rates.JPY, 'from', snapshot.source);
+      }
+    }).catch(err => {
+      console.warn('[App] Failed to auto-fetch live rate on boot', err);
+    });
+  }, [updateState]);
 
   useEffect(() => {
     if (bootSyncInitiated.current) return;

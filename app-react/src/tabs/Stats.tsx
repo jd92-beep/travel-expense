@@ -7,7 +7,7 @@ import { categoryById, computeSettlements, displayStore, fmt, getPersons, hkd } 
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { EmptyState, GlassCard, StatusPill } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
-import { BorderBeam } from '../components/ui/border-beam';
+import { ShineBorder } from '../components/ui/shine-border';
 import { MagicCard } from '../components/ui/magic-card';
 import { NumberTicker } from '../components/ui/number-ticker';
 import { VisualIcon } from '../components/VisualIcon';
@@ -40,9 +40,9 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   return (
     <section className="stack stats-tab stats-cockpit">
       <MagicCard className="stats-command p-0 rounded-[24px] overflow-hidden relative border border-white/40 shadow-xl w-full">
+        <ShineBorder className="opacity-70" shineColor={['#C23B5E', '#1E4D6B']} borderWidth={2} />
         <div className="absolute inset-0 bg-gradient-to-br from-[#C23B5E] via-[#D4A843] to-[#1E4D6B] opacity-[0.15] mix-blend-multiply pointer-events-none" />
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none" />
-        <BorderBeam borderWidth={2} colorFrom="#C23B5E" colorTo="#1E4D6B" className="opacity-60" />
         <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 p-6 h-full w-full">
           <div className="flex-1">
             <small className="eyebrow text-red-800/70">旅費管制盤 / INSIGHTS</small>

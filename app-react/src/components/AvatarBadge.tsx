@@ -38,7 +38,6 @@ export function AvatarBadge({
           <circle cx="26" cy="33" r="2" className="avatar-eye" />
           <circle cx="38" cy="33" r="2" className="avatar-eye" />
         </svg>
-        <b>{initials(person.name)}</b>
       </span>
       {showName && <span className="avatar-name">{person.name}</span>}
     </span>

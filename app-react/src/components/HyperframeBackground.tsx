@@ -37,11 +37,12 @@ export function HyperframeBackground() {
         <motion.img
           key={currentIndex}
           src={`${import.meta.env.BASE_URL}${WALLPAPERS[currentIndex]}`}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          initial={{ opacity: 0, scale: 1.0 }}
+          animate={{ opacity: 1, scale: 1.15 }}
+          exit={{ opacity: 0, scale: 1.2 }}
           transition={{ 
-            opacity: { duration: 2.5, ease: 'easeInOut' }
+            opacity: { duration: 2.5, ease: 'easeInOut' },
+            scale: { duration: 20, ease: 'linear' }
           }}
           style={{
             position: 'absolute',
@@ -50,7 +51,7 @@ export function HyperframeBackground() {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            willChange: 'opacity'
+            willChange: 'opacity, transform'
           }}
           alt="Hyperframe Background"
         />

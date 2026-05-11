@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { RefreshCw, Search, X } from 'lucide-react';
 import { GlassCard, StatusPill, Toast } from '../components/ui';
 import { activeTrip } from '../domain/trip/normalize';
@@ -8,7 +8,7 @@ import { CATEGORIES } from '../lib/constants';
 import { fmt } from '../lib/domain';
 import type { AppState, CategoryId, Receipt, TripProfile } from '../lib/types';
 import { MagicCard } from '../components/ui/magic-card';
-import { BorderBeam } from '../components/ui/border-beam';
+import { ShineBorder } from '../components/ui/shine-border';
 import { ReceiptRow } from './Dashboard';
 
 export function History({
@@ -74,12 +74,16 @@ export function History({
     }
   }
 
+  useEffect(() => {
+    handlePull('auto');
+  }, []);
+
   return (
     <section className="stack">
       <MagicCard className="history-command p-0 rounded-[24px] overflow-hidden w-full relative border border-white/40 shadow-xl">
+        <ShineBorder className="opacity-70" shineColor={['#4A90E2', '#D4A843']} borderWidth={2} />
         <div className="absolute inset-0 bg-gradient-to-br from-[#1E4D6B] via-[#4A90E2] to-[#D4A843] opacity-[0.15] mix-blend-multiply pointer-events-none" />
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none" />
-        <BorderBeam borderWidth={2} colorFrom="#4A90E2" colorTo="#D4A843" className="opacity-60" />
         <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-6 h-full w-full">
           <div>
             <p className="eyebrow text-blue-800/70">Record</p>

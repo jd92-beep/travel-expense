@@ -12,7 +12,7 @@ export interface CurrencySnapshot {
 }
 
 const CACHE_KEY = 'boss-japan-tracker:react-currency';
-const MAX_AGE = 60 * 60 * 1000;
+const MAX_AGE = 60 * 60 * 1000; // 1 hour cache
 
 function jpyPerHkd(state: AppState): number {
   return Math.max(0.1, Number(state.rate) || 20.36);
@@ -35,6 +35,40 @@ export function loadCurrencySnapshot(): CurrencySnapshot | null {
 }
 
 export async function fetchLiveCurrencySnapshot(): Promise<CurrencySnapshot> {
+  // 嘗試 Visa 官方匯率 (需要透過 CORS proxy，因為 Visa 阻擋跨域)
+  try {
+    const d = new Date();
+    const datePart = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+    const visaUrl = `https://www.visa.com.tw/cmsapi/fx/rates?amount=1&fee=0&utcConvertedDate=${encodeURIComponent(datePart)}&exchangedate=${encodeURIComponent(datePart)}&fromCurr=HKD&toCurr=JPY&_t=${Date.now()}`;
+    
+    // 使用 corsproxy.io 作為代理
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(visaUrl)}`;
+    const visaResponse = await fetch(proxyUrl, {
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+    
+    if (visaResponse.ok) {
+      const visaData = await visaResponse.json();
+      const rate = parseFloat(visaData.convertedAmount || visaData.fxRateVisa);
+      
+      if (rate && rate > 0 && Number.isFinite(rate)) {
+        const snapshot: CurrencySnapshot = {
+          base: 'HKD',
+          rates: { HKD: 1, JPY: rate },
+          fetchedAt: Date.now(),
+          source: 'Visa (官方即時)',
+        };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(snapshot));
+        return snapshot;
+      }
+    }
+  } catch (err) {
+    console.warn('Visa rate fetch failed:', err);
+  }
+
+  // Fallback to open.er-api.com
   const response = await fetch('https://open.er-api.com/v6/latest/HKD');
   if (!response.ok) throw new Error(`FX ${response.status}: ${(await response.text()).slice(0, 160)}`);
   const data = await response.json();
