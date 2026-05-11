@@ -105,18 +105,18 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
       {pending.length > 0 && <button className="notice notice-button" type="button" onClick={() => onTab('history')}>有 {pending.length} 筆 email 待確認，tap 去紀錄 tab 處理。</button>}
       <section className="trip-portrait" aria-label="旅程總覽">
         <div ref={titleSentinelRef} style={{ height: '1px', marginTop: '-1px' }} aria-hidden="true" />
-        <div className={`trip-title-row${titleStuck ? ' is-stuck' : ''}`}>
-          <div>
-            <button className="trip-title-button" type="button" onClick={() => onTab('settings')}>
-              <span>{trip.name}</span>
+        <motion.div layout className={`trip-title-row${titleStuck ? ' is-stuck' : ''}`}>
+          <motion.div layout style={{ originX: 0, originY: 0 }}>
+            <motion.button layout className="trip-title-button" type="button" onClick={() => onTab('settings')}>
+              <motion.span layout>{trip.name}</motion.span>
               <ChevronDown size={20} />
-            </button>
-            <p>{displayDateRange(trip.startDate, trip.endDate)} ({length} days)</p>
-          </div>
-          <button className="calendar-float" type="button" aria-label="開啟行程" onClick={() => onTab('timeline')}>
+            </motion.button>
+            <motion.p layout>{displayDateRange(trip.startDate, trip.endDate)} ({length} days)</motion.p>
+          </motion.div>
+          <motion.button layout className="calendar-float" type="button" aria-label="開啟行程" onClick={() => onTab('timeline')}>
             <CalendarDays size={22} />
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
 
         <MagicCard className="dashboard-budget p-0 overflow-hidden w-full relative rounded-[40px] border border-white/20 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)]">
           {/* Futuristic Cyberpunk / Glassmorphism Background */}
