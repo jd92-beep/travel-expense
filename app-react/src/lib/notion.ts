@@ -605,41 +605,55 @@ export async function migrateNotionSchema(state: AppState): Promise<string> {
   schemaCache = null;
   const db = await notionFetch<{ properties?: Record<string, unknown> }>(state, `/databases/${state.notionDb}`, { method: 'GET' });
   const props = db.properties || {};
-  const desired: Record<string, unknown> = {
-    [N.amount[0]]: { number: { format: 'yen' } },
-    [N.date[0]]: { date: {} },
-    [N.time[0]]: { rich_text: {} },
-    [N.cat[0]]: { select: { options: CATEGORIES.map((c) => ({ name: c.name, color: 'default' })) } },
-    [N.pay[0]]: { select: { options: PAYMENTS.map((p) => ({ name: p.name, color: 'default' })) } },
-    [N.region[0]]: { rich_text: {} },
-    [N.address[0]]: { rich_text: {} },
-    [N.bookingRef[0]]: { rich_text: {} },
-    [N.items[0]]: { rich_text: {} },
-    [N.note[0]]: { rich_text: {} },
-    [N.photoUrl[0]]: { url: {} },
-    [N.person[0]]: { rich_text: {} },
-    [N.sourceId[0]]: { rich_text: {} },
-    [N.hkd[0]]: { number: { format: 'hong_kong_dollar' } },
-    [N.split[0]]: { select: { options: [{ name: '👫 共同', color: 'blue' }, { name: '🔒 私人', color: 'red' }] } },
-    [N.objectType[0]]: { select: { options: [{ name: 'receipt', color: 'blue' }, { name: 'trip', color: 'green' }, { name: 'settings', color: 'gray' }] } },
-    [N.tripId[0]]: { rich_text: {} },
-    [N.tripName[0]]: { rich_text: {} },
-    [N.destination[0]]: { rich_text: {} },
-    [N.startDate[0]]: { date: {} },
-    [N.endDate[0]]: { date: {} },
-    [N.homeCurrency[0]]: { select: { options: [{ name: 'HKD', color: 'green' }] } },
-    [N.tripCurrencies[0]]: { rich_text: {} },
-    [N.timezones[0]]: { rich_text: {} },
-    [N.tripVersion[0]]: { number: { format: 'number' } },
-    [N.updatedAt[0]]: { date: {} },
-    [N.active[0]]: { checkbox: {} },
-    [N.tripJson[0]]: { rich_text: {} },
-    [N.currency[0]]: { select: { options: ['JPY', 'HKD', 'USD', 'KRW', 'TWD', 'CNY', 'EUR', 'GBP', 'AUD', 'SGD', 'THB', 'MYR', 'VND'].map((name) => ({ name, color: 'default' })) } },
-    [N.originalAmount[0]]: { number: { format: 'number' } },
-    [N.mapUrl[0]]: { url: {} },
-    [N.exchangeRate[0]]: { number: { format: 'number' } },
+  
+  const schema = await ensureSchema(state);
+  const missing: Record<string, unknown> = {};
+  
+  const specs: Record<keyof typeof N, any> = {
+    amount: { number: { format: 'yen' } },
+    date: { date: {} },
+    time: { rich_text: {} },
+    cat: { select: { options: CATEGORIES.map((c) => ({ name: c.name, color: 'default' })) } },
+    pay: { select: { options: PAYMENTS.map((p) => ({ name: p.name, color: 'default' })) } },
+    region: { rich_text: {} },
+    address: { rich_text: {} },
+    bookingRef: { rich_text: {} },
+    items: { rich_text: {} },
+    note: { rich_text: {} },
+    photoUrl: { url: {} },
+    person: { rich_text: {} },
+    sourceId: { rich_text: {} },
+    hkd: { number: { format: 'hong_kong_dollar' } },
+    split: { select: { options: [{ name: '👫 共同', color: 'blue' }, { name: '🔒 私人', color: 'red' }] } },
+    objectType: { select: { options: [{ name: 'receipt', color: 'blue' }, { name: 'trip', color: 'green' }, { name: 'settings', color: 'gray' }] } },
+    tripId: { rich_text: {} },
+    tripName: { rich_text: {} },
+    destination: { rich_text: {} },
+    startDate: { date: {} },
+    endDate: { date: {} },
+    homeCurrency: { select: { options: [{ name: 'HKD', color: 'green' }] } },
+    tripCurrencies: { rich_text: {} },
+    timezones: { rich_text: {} },
+    tripVersion: { number: { format: 'number' } },
+    updatedAt: { date: {} },
+    active: { checkbox: {} },
+    tripJson: { rich_text: {} },
+    currency: { select: { options: ['JPY', 'HKD', 'USD', 'KRW', 'TWD', 'CNY', 'EUR', 'GBP', 'AUD', 'SGD', 'THB', 'MYR', 'VND'].map((name) => ({ name, color: 'default' })) } },
+    originalAmount: { number: { format: 'number' } },
+    mapUrl: { url: {} },
+    exchangeRate: { number: { format: 'number' } },
+    store: null, // Title property cannot be created, DB always has one
   };
-  const missing = Object.fromEntries(Object.entries(desired).filter(([name]) => !props[name]));
+
+  for (const [key, spec] of Object.entries(specs)) {
+    if (!spec) continue;
+    const k = key as keyof typeof N;
+    const mappedName = schema[k];
+    if (!props[mappedName]) {
+      missing[N[k][0]] = spec;
+    }
+  }
+
   if (!Object.keys(missing).length) {
     lastMigratedDb = state.notionDb;
     return 'Notion schema 已齊全';

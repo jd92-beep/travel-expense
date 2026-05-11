@@ -37,10 +37,10 @@ function weekdayLabel(date: string) {
 }
 
 function getBudgetRingColors(pct: number) {
-  if (pct > 100) return { primary: '#B85450', secondary: '#E8AAA5' };
-  if (pct >= 80) return { primary: '#D94132', secondary: '#F5C0B8' };
-  if (pct >= 50) return { primary: '#C18A26', secondary: '#EDD8A8' };
-  return { primary: '#7A9A6A', secondary: '#C8D8BE' };
+  if (pct > 100) return { primary: '#FF453A', secondary: '#FF453A40' };
+  if (pct >= 80) return { primary: '#FF9F0A', secondary: '#FF9F0A40' };
+  if (pct >= 50) return { primary: '#32ADE6', secondary: '#32ADE640' };
+  return { primary: '#34C759', secondary: '#34C75940' };
 }
 
 function tripLength(startDate: string, endDate: string, fallback: number) {
@@ -53,6 +53,7 @@ function tripLength(startDate: string, endDate: string, fallback: number) {
 export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState; onOpen: (receipt: Receipt) => void; onTab: (tab: TabId) => void; onManual: () => void }) {
   const [sheet, setSheet] = useState<DashboardSheet | null>(null);
   const [titleStuck, setTitleStuck] = useState(false);
+  const [viewPhoto, setViewPhoto] = useState<string | null>(null);
   const titleSentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -117,38 +118,50 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
           </button>
         </div>
 
-        <MagicCard className="budget-panorama dashboard-budget">
-          <BorderBeam borderWidth={1} colorFrom="#d94132" colorTo="#d39a29" className="opacity-70" />
-          <div className="budget-stat">
-            <span>Total Budget</span>
-            <strong><NumberTicker value={state.budget} prefix="¥" className="text-[clamp(28px,7vw,44px)] font-[700] text-[color:var(--navy)]" /></strong>
-            <small>HK$ {fmt(hkd(state.budget, state))}</small>
-          </div>
-          <div className="budget-divider" />
-          <motion.div
-            whileTap={{ scale: 0.92 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-            className="cursor-pointer"
-            role="img"
-            aria-label={`spent ${Math.round(rawBudgetPct)}%`}
-          >
-            <AnimatedCircularProgressBar
-              value={budgetPct}
-              gaugePrimaryColor={budgetColors.primary}
-              gaugeSecondaryColor={budgetColors.secondary}
-              className="size-[104px] sm:size-[140px]"
+        <MagicCard className="budget-panorama-vertical dashboard-budget p-0 overflow-hidden w-full relative rounded-[36px] border border-white/50 shadow-[0_20px_60px_-15px_rgba(30,77,107,0.3)]">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#1E4D6B] via-[#C23B5E] to-[#D4A843] opacity-[0.95] mix-blend-multiply" />
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-30 mix-blend-overlay" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-white/10" />
+          <BorderBeam borderWidth={3} colorFrom="#4A90E2" colorTo="#D4A843" className="opacity-90" />
+          
+          <div className="relative z-10 flex flex-col justify-between min-h-[460px] w-full">
+            <div className="budget-top-row relative z-10 w-full px-8 pt-8 flex justify-between items-start">
+              <div className="budget-stat text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                <span className="text-white/90 font-bold uppercase tracking-[0.2em] text-[11px] drop-shadow-sm">Total Budget</span>
+                <strong><NumberTicker value={state.budget} prefix="¥" className="text-[clamp(36px,9vw,56px)] font-[900] text-white tracking-tight" /></strong>
+                <small className="text-white/80 font-medium tracking-wide">HK$ {fmt(hkd(state.budget, state))}</small>
+
+              </div>
+              
+              <div className="budget-stat align-right text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] text-right">
+                <span className="text-white/90 font-bold uppercase tracking-[0.2em] text-[11px] drop-shadow-sm">Spent</span>
+                <strong><NumberTicker value={totalForBudget} prefix="¥" className="text-[clamp(36px,9vw,56px)] font-[900] text-white tracking-tight" /></strong>
+                <small className="text-white/80 font-medium tracking-wide">HK$ {fmt(hkd(totalForBudget, state))}</small>
+              </div>
+            </div>
+
+            <motion.div
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+              className="cursor-pointer budget-circle-wrapper relative z-10 flex-1 flex items-center justify-center mt-8 mb-10 w-full"
+              role="img"
+              aria-label={`spent ${Math.round(rawBudgetPct)}%`}
             >
-              <span className="font-mono text-[28px] font-bold leading-none" style={{ color: budgetColors.primary }}>
-                {Math.round(rawBudgetPct)}%
-              </span>
-              <span className="text-[13px] font-semibold text-[var(--ink)] mt-1">spent</span>
-            </AnimatedCircularProgressBar>
-          </motion.div>
-          <div className="budget-divider" />
-          <div className="budget-stat align-right">
-            <span>Spent</span>
-            <strong><NumberTicker value={totalForBudget} prefix="¥" className="text-[clamp(28px,7vw,44px)] font-[700] text-[color:var(--navy)]" /></strong>
-            <small>HK$ {fmt(hkd(totalForBudget, state))}</small>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] h-[280px] sm:w-[360px] sm:h-[360px] rounded-full blur-[40px] opacity-60 mix-blend-screen" style={{ background: budgetColors.primary }} />
+              <AnimatedCircularProgressBar
+                value={budgetPct}
+                gaugePrimaryColor="#ffffff"
+                gaugeSecondaryColor="rgba(255,255,255,0.15)"
+                className="size-[280px] sm:size-[360px] drop-shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+              >
+                <div className="flex flex-col items-center justify-center">
+                  <span className="font-mono text-[72px] sm:text-[84px] font-[900] leading-none text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] tracking-tighter">
+                    {Math.round(rawBudgetPct)}<span className="text-[40px] sm:text-[48px]">%</span>
+                  </span>
+                  <span className="text-[18px] sm:text-[20px] font-bold text-white/95 mt-1 tracking-[0.3em] uppercase drop-shadow-sm">spent</span>
+                </div>
+              </AnimatedCircularProgressBar>
+            </motion.div>
           </div>
         </MagicCard>
         <div className="hero-handle" aria-hidden="true" />
@@ -204,7 +217,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
         <div className="recent-list">
           {recentReceipts.length ? recentReceipts.slice(0, 3).map((r, index) => (
             <BlurFade key={r.id} delay={index * 0.04} duration={0.26} inView>
-              <ReceiptRow state={state} receipt={r} onOpen={onOpen} />
+              <ReceiptRow state={state} receipt={r} onOpen={onOpen} onViewPhoto={setViewPhoto} />
             </BlurFade>
           )) : <p className="empty">暫時未有支出紀錄。</p>}
         </div>
@@ -238,7 +251,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
             </div>
             <button className="secondary" type="button" onClick={onManual}>+ 手動記一筆</button>
           </div>
-          {prepReceipts.slice(-3).reverse().map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} />)}
+          {prepReceipts.slice(-3).reverse().map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} onViewPhoto={setViewPhoto} />)}
         </div>
       )}
       {postReceipts.length > 0 && (
@@ -250,7 +263,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
             </div>
             <span className="pill">{postReceipts.length} 筆</span>
           </div>
-          {postReceipts.slice(-3).reverse().map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} />)}
+          {postReceipts.slice(-3).reverse().map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} onViewPhoto={setViewPhoto} />)}
         </div>
       )}
       {persons.length > 1 && (
@@ -269,7 +282,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
           <h2>今日紀錄</h2>
           <button className="secondary compact" type="button" onClick={() => setSheet({ kind: 'day-receipts' })}>{dailyReceipts.length} 筆</button>
         </div>
-        {dailyReceipts.length ? dailyReceipts.slice().reverse().map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} />) : <p className="empty">今日仲未有紀錄。</p>}
+        {dailyReceipts.length ? dailyReceipts.slice().reverse().map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} onViewPhoto={setViewPhoto} />) : <p className="empty">今日仲未有紀錄。</p>}
       </div>
       {sheet && (
         <div className="modal-backdrop" role="presentation" onClick={() => setSheet(null)}>
@@ -297,7 +310,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
             ) : (
               <div className="stack">
                 {dailyReceipts.length ? dailyReceipts.slice().reverse().map((r) => (
-                  <ReceiptRow key={r.id} state={state} receipt={r} onOpen={(receipt) => { setSheet(null); onOpen(receipt); }} />
+                  <ReceiptRow key={r.id} state={state} receipt={r} onOpen={(receipt) => { setSheet(null); onOpen(receipt); }} onViewPhoto={(url) => { setSheet(null); setViewPhoto(url); }} />
                 )) : <p className="empty">今日仲未有紀錄。</p>}
                 <button className="primary" type="button" onClick={() => { setSheet(null); onManual(); }}><Plus size={18} /> 新增今日紀錄</button>
               </div>
@@ -305,11 +318,27 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
           </section>
         </div>
       )}
+      {viewPhoto && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setViewPhoto(null)} style={{ zIndex: 9999 }}>
+          <div className="modal flex justify-center items-center p-2 bg-transparent shadow-none" onClick={(e) => e.stopPropagation()}>
+            <div className="relative max-w-full max-h-[90vh]">
+              <img src={viewPhoto} alt="Receipt" className="max-w-full max-h-[85vh] rounded-xl object-contain shadow-2xl" />
+              <button 
+                className="icon-btn absolute -top-4 -right-4 bg-black/50 text-white hover:bg-black/70 transition-colors" 
+                type="button" 
+                onClick={() => setViewPhoto(null)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
 
-export function ReceiptRow({ state, receipt, onOpen }: { state: AppState; receipt: Receipt; onOpen: (receipt: Receipt) => void }) {
+export function ReceiptRow({ state, receipt, onOpen, onViewPhoto }: { state: AppState; receipt: Receipt; onOpen: (receipt: Receipt) => void; onViewPhoto?: (url: string) => void }) {
   const cat = categoryById(receipt.category);
   const persons = getPersons(state);
   const person = persons.find((p) => p.id === (receipt.personId || persons[0].id)) || persons[0];
@@ -326,7 +355,11 @@ export function ReceiptRow({ state, receipt, onOpen }: { state: AppState; receip
           {beneficiary && <VisualIcon id="gift" size="sm" className="inline-visual-icon" />}
           {!beneficiary && receipt.splitMode === 'private' && <VisualIcon id="private" size="sm" className="inline-visual-icon" />}
           {displayStore(receipt)}
-          {photoSrc && <VisualIcon id="photo" size="sm" className="inline-visual-icon row-badge" />}
+          {photoSrc && (
+            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onViewPhoto ? onViewPhoto(photoSrc) : window.open(photoSrc, '_blank', 'noopener,noreferrer'); }} style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0, margin: 0 }}>
+              <VisualIcon id="photo" size="sm" className="inline-visual-icon row-badge" />
+            </button>
+          )}
         </strong>
         <small>
           {[receipt.time, cat.name, receiptRegion(state, receipt), person.name, beneficiary ? `代 ${beneficiary.name}` : '', receipt.bookingRef ? `編號 ${receipt.bookingRef}` : ''].filter(Boolean).join(' · ')}

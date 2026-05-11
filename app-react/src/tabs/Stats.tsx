@@ -39,20 +39,27 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
 
   return (
     <section className="stack stats-tab stats-cockpit">
-      <GlassCard className="stats-command stats-glass">
-        <div className="stats-command-copy">
-          <small className="eyebrow">旅費管制盤 / INSIGHTS</small>
-          <h2>分帳統計中心</h2>
-          <p>按 active trip 計算分帳、類別、支付方式、Top 10 同每日趨勢。</p>
-          <div className="stats-status-row">
-            <StatusPill tone="info" icon={<ReceiptText size={14} />}>{scopedState.receipts.length} 筆紀錄</StatusPill>
-            <StatusPill tone={settlement.transfers.length ? 'warning' : 'ok'} icon={<HandCoins size={14} />}>
-              {settlement.transfers.length ? `${settlement.transfers.length} 筆轉帳` : '已平衡'}
-            </StatusPill>
+      <MagicCard className="stats-command p-0 rounded-[24px] overflow-hidden relative border border-white/40 shadow-xl w-full">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#C23B5E] via-[#D4A843] to-[#1E4D6B] opacity-[0.15] mix-blend-multiply pointer-events-none" />
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none" />
+        <BorderBeam borderWidth={2} colorFrom="#C23B5E" colorTo="#1E4D6B" className="opacity-60" />
+        <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 p-6 h-full w-full">
+          <div className="flex-1">
+            <small className="eyebrow text-red-800/70">旅費管制盤 / INSIGHTS</small>
+            <h2 className="text-2xl font-bold text-red-900 mb-1">分帳統計中心</h2>
+            <p className="muted text-sm mb-4">按 active trip 計算分帳、類別、支付方式、Top 10 同每日趨勢。</p>
+            <div className="flex flex-wrap gap-2">
+              <StatusPill tone="info" icon={<ReceiptText size={14} />}>{scopedState.receipts.length} 筆紀錄</StatusPill>
+              <StatusPill tone={settlement.transfers.length ? 'warning' : 'ok'} icon={<HandCoins size={14} />}>
+                {settlement.transfers.length ? `${settlement.transfers.length} 筆轉帳` : '已平衡'}
+              </StatusPill>
+            </div>
+          </div>
+          <div className="flex-shrink-0 self-center">
+            <ScopeDial value={scopeRatio} receipts={analysisReceipts.length} transfers={settlement.transfers.length} />
           </div>
         </div>
-        <ScopeDial value={scopeRatio} receipts={analysisReceipts.length} transfers={settlement.transfers.length} />
-      </GlassCard>
+      </MagicCard>
 
       <div className="metric-grid stats-metrics">
         <CockpitMetric label="統計總額" value={`¥${fmt(analysisTotal)}`} detail={`HK$ ${fmt(hkd(analysisTotal, state))}`} tone="accent" />
@@ -88,13 +95,18 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
       >
         {settlement.transfers.length ? settlement.transfers.map((t) => (
           <motion.div
-            className="transfer transfer-modern stats-transfer"
+            className="transfer transfer-modern stats-transfer flex items-center justify-between gap-2 p-2 rounded-lg bg-white/40 mb-2 border border-white/60 shadow-sm overflow-hidden"
             key={`${t.from.id}-${t.to.id}-${t.amount}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.24, ease: 'easeOut' }}
           >
-            <span><AvatarBadge person={t.from} size="sm" /> {t.from.name}</span><b>→</b><span><AvatarBadge person={t.to} size="sm" /> {t.to.name}</span><strong>¥{fmt(t.amount)}</strong>
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <span className="flex items-center gap-1.5 min-w-0 overflow-hidden"><AvatarBadge person={t.from} size="sm" /> <span className="truncate">{t.from.name}</span></span>
+              <b className="text-gray-400 shrink-0">→</b>
+              <span className="flex items-center gap-1.5 min-w-0 overflow-hidden"><AvatarBadge person={t.to} size="sm" /> <span className="truncate">{t.to.name}</span></span>
+            </div>
+            <strong className="text-lg text-blue-900 shrink-0">¥{fmt(t.amount)}</strong>
           </motion.div>
         )) : <EmptyState title="暫時唔需要互相轉帳" description="所有共同支出與代付已經平衡。" />}
       </DataPanel>

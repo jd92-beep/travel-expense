@@ -2,6 +2,8 @@ import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { useEffect, useState } from 'react';
 import { CalendarDays, Clock3, Home, MapPin, PencilLine, ReceiptText, RotateCcw } from 'lucide-react';
 import { ActionSheet, GlassCard, StatusPill, TimelineRail } from '../components/ui';
+import { MagicCard } from '../components/ui/magic-card';
+import { BorderBeam } from '../components/ui/border-beam';
 import { categoryById, dayLooseReceipts, fmt, getItinerary, getScheduleSpots, hkd, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts } from '../lib/domain';
 import type { AppState, ItinerarySpot, Receipt } from '../lib/types';
 import { ReceiptRow } from './Dashboard';
@@ -42,20 +44,34 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
 
   return (
     <section className="stack timeline-screen">
-      <GlassCard className="timeline-command">
-        <div className="timeline-command-copy">
-          <span className="timeline-seal" aria-hidden="true">旅</span>
-          <div>
-            <p className="eyebrow">Timeline</p>
-            <h2>行程時間線</h2>
-            <p className="muted">所有點、住宿、交通同額外消費都跟 active trip 更新。</p>
+      <MagicCard className="timeline-command p-0 rounded-[32px] overflow-hidden relative w-full border border-white/50 shadow-[0_20px_60px_-15px_rgba(45,110,72,0.25)]">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#2D6E48] via-[#D4A843] to-[#C23B5E] opacity-[0.25] mix-blend-multiply" />
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 mix-blend-overlay" />
+        <div className="absolute inset-0 bg-gradient-to-t from-white/40 via-transparent to-white/10" />
+        <BorderBeam borderWidth={3} colorFrom="#2D6E48" colorTo="#D4A843" className="opacity-80" />
+        
+        <div className="relative z-10 w-full p-6 sm:p-8 flex flex-col gap-5">
+          <div className="flex justify-between items-start w-full">
+            <div className="flex gap-5 items-center w-full">
+              <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-[#2D6E48] to-[#1a422b] rounded-2xl flex items-center justify-center shadow-lg border border-white/30 text-white font-serif text-2xl font-bold">
+                旅
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="uppercase tracking-[0.2em] text-[11px] font-bold text-green-900/60 mb-1">Timeline</p>
+                <h2 className="text-[28px] leading-tight font-extrabold text-green-950 mb-1.5 drop-shadow-sm">行程時間線</h2>
+                <p className="text-green-900/80 text-[14px] leading-snug break-words pr-2">
+                  所有點、住宿、交通同額外消費都跟 active trip 更新。
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="timeline-command-meta">
+          
+          <div className="flex flex-wrap gap-3 items-center mt-1 pt-4 border-t border-green-900/10">
           <StatusPill tone="info" icon={<CalendarDays size={14} />}>{itinerary.length} 日</StatusPill>
-          <span><Clock3 size={14} /> 日本の旅 · Liquid Glass</span>
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-green-900/80 bg-white/40 px-3 py-1.5 rounded-full border border-white/60 shadow-sm"><Clock3 size={14} /> 日本の旅 · Liquid Glass</span>
         </div>
-      </GlassCard>
+        </div>
+      </MagicCard>
 
       {itinerary.map((day) => {
         const spots = getScheduleSpots(state, day);
