@@ -11,6 +11,7 @@ import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
 import type { Receipt, SyncQueueItem, TabId, TripProfile } from './lib/types';
 import { AuthGate } from './security/AuthGate';
+import { HyperframeBackground } from './components/HyperframeBackground';
 
 const Dashboard = lazy(() => import('./tabs/Dashboard').then((module) => ({ default: module.Dashboard })));
 const Scan = lazy(() => import('./tabs/Scan').then((module) => ({ default: module.Scan })));
@@ -95,25 +96,7 @@ export function App() {
         }
       }}
     >
-      <video 
-        autoPlay 
-        loop 
-        muted 
-        playsInline 
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          zIndex: -1,
-          opacity: 0.6,
-          pointerEvents: 'none'
-        }}
-      >
-        <source src={`${import.meta.env.BASE_URL}bg-loop.mp4`} type="video/mp4" />
-      </video>
+      <HyperframeBackground />
       <Shell active={tab} onTab={changeTab} syncState={syncEngine.engineState}>
         <ErrorBoundary>
           <Suspense fallback={<LoadingState label="載入分頁" />}>

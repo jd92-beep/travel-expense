@@ -105,72 +105,54 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
       {pending.length > 0 && <button className="notice notice-button" type="button" onClick={() => onTab('history')}>有 {pending.length} 筆 email 待確認，tap 去紀錄 tab 處理。</button>}
       <section className="trip-portrait" aria-label="旅程總覽">
         <div ref={titleSentinelRef} style={{ height: '1px', marginTop: '-1px' }} aria-hidden="true" />
-        <motion.div layout className={`trip-title-row${titleStuck ? ' is-stuck' : ''}`}>
-          <motion.div layout style={{ originX: 0, originY: 0 }}>
-            <motion.button layout className="trip-title-button" type="button" onClick={() => onTab('settings')}>
-              <motion.span layout>{trip.name}</motion.span>
+        <div className={`trip-title-row${titleStuck ? ' is-stuck' : ''}`} style={{ transition: 'all 0.3s ease' }}>
+          <div>
+            <button className="trip-title-button" type="button" onClick={() => onTab('settings')}>
+              <span>{trip.name}</span>
               <ChevronDown size={20} />
-            </motion.button>
-            <motion.p layout>{displayDateRange(trip.startDate, trip.endDate)} ({length} days)</motion.p>
-          </motion.div>
-          <motion.button layout className="calendar-float" type="button" aria-label="開啟行程" onClick={() => onTab('timeline')}>
+            </button>
+            <p>{displayDateRange(trip.startDate, trip.endDate)} ({length} days)</p>
+          </div>
+          <button className="calendar-float" type="button" aria-label="開啟行程" onClick={() => onTab('timeline')}>
             <CalendarDays size={22} />
-          </motion.button>
-        </motion.div>
+          </button>
+        </div>
 
-        <MagicCard className="dashboard-budget p-0 overflow-hidden w-full relative rounded-[40px] border border-white/20 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)]">
-          {/* Futuristic Cyberpunk / Glassmorphism Background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-[#0B0F19] via-[#1A1025] to-[#0A1929] opacity-95" />
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 mix-blend-color-dodge" />
+        <MagicCard className="dashboard-budget p-0 overflow-hidden w-full relative rounded-[40px] border-[2px] border-white shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1),inset_0_0_30px_rgba(255,255,255,0.9)] bg-white/40 backdrop-blur-3xl">
+          {/* Apple Liquid Glass Background */}
+          <div className="absolute inset-0 bg-[url('/react/budget-card-bg-light.png')] bg-cover bg-center opacity-90 mix-blend-normal" />
+          <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-white/40 to-transparent backdrop-blur-[4px]" />
+          <div className="absolute inset-0 bg-white/30 opacity-70 mix-blend-overlay rounded-[40px] shadow-[inset_0_0_20px_rgba(255,255,255,0.8)] pointer-events-none" />
           
-          {/* Glowing Orbs */}
-          <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] rounded-full bg-blue-500/20 blur-[80px] mix-blend-screen" />
-          <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[70%] rounded-full bg-purple-500/20 blur-[80px] mix-blend-screen" />
-
-          <BorderBeam borderWidth={2} colorFrom="#38BDF8" colorTo="#C084FC" duration={10} className="opacity-80" />
-
-          <div className="relative z-10 flex flex-col justify-between min-h-[500px] w-full p-6 sm:p-8">
+          <div className="relative z-10 flex flex-col justify-between min-h-[400px] w-full p-6 sm:p-8">
             <div className="flex justify-between items-start">
               <div className="flex flex-col gap-1">
-                <span className="text-blue-300 font-bold uppercase tracking-[0.25em] text-[10px] sm:text-[12px] bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 w-max shadow-[0_0_10px_rgba(56,189,248,0.2)]">Total Budget</span>
-                <strong className="text-white drop-shadow-[0_0_15px_rgba(56,189,248,0.6)] mt-2">
+                <span className="text-blue-800 font-bold uppercase tracking-[0.25em] text-[10px] sm:text-[12px] bg-white/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/80 w-max shadow-sm">Total Budget</span>
+                <strong className="text-slate-900 drop-shadow-sm mt-2">
                   <NumberTicker value={state.budget} prefix="¥" className="text-[32px] sm:text-[44px] font-black tracking-tighter" />
                 </strong>
-                <small className="text-blue-200/60 font-medium tracking-wider">HK$ {fmt(hkd(state.budget, state))}</small>
+                <small className="text-slate-600 font-medium tracking-wider">HK$ {fmt(hkd(state.budget, state))}</small>
               </div>
               
               <div className="flex flex-col gap-1 items-end">
-                <span className="text-purple-300 font-bold uppercase tracking-[0.25em] text-[10px] sm:text-[12px] bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20 w-max shadow-[0_0_10px_rgba(192,132,252,0.2)]">Spent</span>
-                <strong className="text-white drop-shadow-[0_0_15px_rgba(192,132,252,0.6)] mt-2">
+                <span className="text-purple-800 font-bold uppercase tracking-[0.25em] text-[10px] sm:text-[12px] bg-white/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/80 w-max shadow-sm">Spent</span>
+                <strong className="text-slate-900 drop-shadow-sm mt-2">
                   <NumberTicker value={totalForBudget} prefix="¥" className="text-[32px] sm:text-[44px] font-black tracking-tighter" />
                 </strong>
-                <small className="text-purple-200/60 font-medium tracking-wider">HK$ {fmt(hkd(totalForBudget, state))}</small>
+                <small className="text-slate-600 font-medium tracking-wider">HK$ {fmt(hkd(totalForBudget, state))}</small>
               </div>
             </div>
 
             <motion.div
-              whileTap={{ scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-              className="cursor-pointer relative z-10 flex-1 flex items-center justify-center mt-8 mb-4 w-full"
-              role="img"
-              aria-label={`spent ${Math.round(rawBudgetPct)}%`}
+              whileTap={{ scale: 0.98 }}
+              className="relative z-10 flex flex-col items-center justify-center mt-12 mb-4 w-full"
             >
-              {/* Massive Outer Glow matching the primary color */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] max-w-[500px] rounded-full blur-[70px] opacity-30 mix-blend-plus-lighter" style={{ background: budgetColors.primary }} />
-              
-              <AnimatedCircularProgressBar
-                value={budgetPct}
-                gaugePrimaryColor={budgetColors.primary}
-                gaugeSecondaryColor="rgba(255,255,255,0.05)"
-                className="w-[90%] sm:w-[85%] max-w-[400px] aspect-square drop-shadow-[0_0_40px_rgba(0,0,0,0.8)]"
-              >
-                <div className="flex flex-col items-center justify-center bg-black/30 backdrop-blur-xl rounded-full w-[82%] h-[82%] border border-white/10 shadow-[inset_0_0_30px_rgba(255,255,255,0.05)]">
-                  <span className="font-mono text-[76px] sm:text-[96px] font-black leading-none text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50 drop-shadow-2xl tracking-tighter">
-                    {Math.round(rawBudgetPct)}<span className="text-[36px] sm:text-[46px] text-white/70">%</span>
-                  </span>
-                  <span className="text-[14px] sm:text-[18px] font-bold text-white/60 mt-3 tracking-[0.5em] uppercase">Used</span>
-                </div>
-              </AnimatedCircularProgressBar>
+              <div className="flex flex-col items-center justify-center bg-white/30 backdrop-blur-2xl rounded-[32px] p-8 border border-white/70 shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
+                <span className="font-mono text-[76px] sm:text-[96px] font-black leading-none text-transparent bg-clip-text bg-gradient-to-b from-slate-900 to-slate-600 tracking-tighter">
+                  {Math.round(rawBudgetPct)}<span className="text-[36px] sm:text-[46px] text-slate-700">%</span>
+                </span>
+                <span className="text-[14px] sm:text-[18px] font-bold text-slate-500 mt-3 tracking-[0.5em] uppercase">Used</span>
+              </div>
             </motion.div>
           </div>
         </MagicCard>

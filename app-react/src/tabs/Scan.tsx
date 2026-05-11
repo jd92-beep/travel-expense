@@ -236,127 +236,156 @@ export function Scan({
       <input id={GALLERY_INPUT_ID} ref={galleryRef} className="visually-hidden-file" type="file" accept="image/*" onChange={(e) => handleImage(e.target.files?.[0])} />
       <input id={EMAIL_IMAGE_INPUT_ID} ref={emailImageRef} className="visually-hidden-file" type="file" accept="image/*" multiple onChange={(e) => handleEmailImages(e.target.files)} />
 
-      <GlassCard className="scan-hero">
-        <div className="section-head">
-          <div>
-            <p className="eyebrow">Scan Command</p>
-            <h2>快速記帳</h2>
-            <p className="muted">相機優先；AI 或權限失敗時會即刻落返手動確認表。</p>
-          </div>
-          <StatusPill tone={busy ? 'warning' : 'ok'} icon={busy ? <RefreshCw size={14} className="spin" /> : <CheckCircle2 size={14} />}>{busy || 'ready'}</StatusPill>
+      <GlassCard className="relative overflow-hidden p-6 sm:p-8 rounded-[40px] border-[2px] border-white shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15),inset_0_0_40px_rgba(255,255,255,1)] bg-white/50 backdrop-blur-3xl mb-6">
+        <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-white/50 to-transparent backdrop-blur-lg" />
+        <div className="absolute inset-0 bg-white/50 opacity-90 mix-blend-overlay rounded-[40px] shadow-[inset_0_0_30px_rgba(255,255,255,1)] pointer-events-none" />
+        
+        <div className="relative z-10 flex justify-between items-center mb-6">
+          <h2 className="text-3xl font-black text-black tracking-tight flex items-center gap-3 drop-shadow-sm">
+            <Camera size={32} className="text-blue-600" />
+            掃描收據
+          </h2>
+          <StatusPill tone={busy ? 'warning' : 'ok'} icon={busy ? <RefreshCw size={14} className="spin text-slate-800" /> : <CheckCircle2 size={14} className="text-slate-800" />}>
+            {busy || 'ready'}
+          </StatusPill>
         </div>
-        <ActionSheet>
-          <label className={`primary button-like scan-picker-label ${busy === 'ocr' ? 'is-disabled' : ''}`} htmlFor={busy === 'ocr' ? undefined : CAMERA_INPUT_ID} role="button" tabIndex={busy === 'ocr' ? -1 : 0} aria-disabled={busy === 'ocr'}>
-            {busy === 'ocr' ? <RefreshCw size={18} className="spin" /> : <Camera size={18} />} 相機
+        
+        <p className="relative z-10 text-slate-900 font-bold mb-8 leading-relaxed">
+          請選擇記帳方式。系統優先使用相機與 AI 辨識，如辨識失敗會開啟手動確認表供您修改。
+        </p>
+
+        <div className="relative z-10 grid grid-cols-3 gap-3 sm:gap-4 mb-6">
+          <label 
+            htmlFor={busy === 'ocr' ? undefined : CAMERA_INPUT_ID} 
+            className={`flex flex-col items-center justify-center gap-2 p-4 rounded-3xl bg-white/60 backdrop-blur-xl border border-white/90 shadow-sm hover:bg-white/90 transition-all cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-95 ${busy === 'ocr' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={() => setMode('scan')}
+          >
+            {busy === 'ocr' ? <RefreshCw size={26} className="spin text-blue-600" /> : <Camera size={26} className="text-blue-600" />}
+            <span className="text-black font-bold text-sm">相機</span>
           </label>
-          <label className={`secondary button-like scan-picker-label ${busy === 'ocr' ? 'is-disabled' : ''}`} htmlFor={busy === 'ocr' ? undefined : GALLERY_INPUT_ID} role="button" tabIndex={busy === 'ocr' ? -1 : 0} aria-disabled={busy === 'ocr'}>
-            <FileImage size={18} /> 相簿
+          
+          <label 
+            htmlFor={busy === 'ocr' ? undefined : GALLERY_INPUT_ID} 
+            className={`flex flex-col items-center justify-center gap-2 p-4 rounded-3xl bg-white/60 backdrop-blur-xl border border-white/90 shadow-sm hover:bg-white/90 transition-all cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-95 ${busy === 'ocr' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={() => setMode('scan')}
+          >
+            <FileImage size={26} className="text-purple-600" />
+            <span className="text-black font-bold text-sm">相簿</span>
           </label>
-          <ActionRippleButton className="secondary" type="button" onClick={onManual}>
-            <PlusCircle size={18} /> 手動記一筆
-          </ActionRippleButton>
-        </ActionSheet>
-        <SegmentedControl
-          value={mode}
-          ariaLabel="記帳模式"
-          onChange={setMode}
-          options={[
-            { value: 'scan', label: '掃描', icon: <Camera size={16} /> },
-            { value: 'voice', label: '語音', icon: <Mic size={16} /> },
-            { value: 'email', label: 'Email', icon: <Mail size={16} /> },
-            { value: 'currency', label: '匯率', icon: <Repeat2 size={16} /> },
-          ]}
-        />
+
+          <button 
+            type="button"
+            onClick={onManual}
+            className="flex flex-col items-center justify-center gap-2 p-4 rounded-3xl bg-white/60 backdrop-blur-xl border border-white/90 shadow-sm hover:bg-white/90 transition-all cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-95"
+          >
+            <PlusCircle size={26} className="text-green-600" />
+            <span className="text-black font-bold text-sm">手動</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setMode('voice')}
+            className={`flex flex-col items-center justify-center gap-2 p-4 rounded-3xl bg-white/60 backdrop-blur-xl border border-white/90 shadow-sm hover:bg-white/90 transition-all cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-95 ${mode === 'voice' ? 'ring-2 ring-blue-500 bg-white/90 shadow-md' : ''}`}
+          >
+            <Mic size={26} className="text-amber-600" />
+            <span className="text-black font-bold text-sm">語音</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setMode('email')}
+            className={`flex flex-col items-center justify-center gap-2 p-4 rounded-3xl bg-white/60 backdrop-blur-xl border border-white/90 shadow-sm hover:bg-white/90 transition-all cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-95 ${mode === 'email' ? 'ring-2 ring-blue-500 bg-white/90 shadow-md' : ''}`}
+          >
+            <Mail size={26} className="text-rose-600" />
+            <span className="text-black font-bold text-sm">Email</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setMode('currency')}
+            className={`flex flex-col items-center justify-center gap-2 p-4 rounded-3xl bg-white/60 backdrop-blur-xl border border-white/90 shadow-sm hover:bg-white/90 transition-all cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-95 ${mode === 'currency' ? 'ring-2 ring-blue-500 bg-white/90 shadow-md' : ''}`}
+          >
+            <Repeat2 size={26} className="text-teal-600" />
+            <span className="text-black font-bold text-sm">匯率</span>
+          </button>
+        </div>
+
+        {/* Embedded Workspaces */}
+        <div className="relative z-10 w-full overflow-hidden transition-all duration-300">
+          {mode === 'scan' && (lastScanFile || lastDraft) && (
+            <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm">
+              <div className="flex gap-2 flex-wrap mb-2">
+                <ActionRippleButton className="secondary bg-white text-black" type="button" disabled={!lastScanFile || busy === 'ocr'} onClick={() => handleImage(lastScanFile || undefined, true)}>
+                  <RefreshCw size={16} /> 重試上一張
+                </ActionRippleButton>
+                <ActionRippleButton className="secondary bg-white text-black" type="button" disabled={!lastDraft} onClick={() => lastDraft && openDraft(lastDraft)}>
+                  <Repeat2 size={16} /> 重開上次草稿
+                </ActionRippleButton>
+              </div>
+              <div className="text-xs text-slate-600 flex flex-col gap-1">
+                <span>Last scan: {lastScanFile ? lastScanFile.name : '未有'}</span>
+                <span>Last draft: {lastDraft ? lastDraft.store || '未命名' : '未有'}</span>
+              </div>
+            </div>
+          )}
+
+          {mode === 'voice' && (
+            <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm flex flex-col gap-3">
+              <div className="flex gap-2">
+                <button className="secondary bg-white text-black flex-1 font-bold" type="button" onClick={startSpeech}><Mic size={18} /> 開始聽</button>
+                <button className="primary flex-1 font-bold shadow-md" type="button" disabled={!voiceText.trim() || busy === 'voice'} onClick={handleVoiceParse}>解析</button>
+              </div>
+              <textarea className="bg-white/80 border-white/60 rounded-xl p-3 text-black font-medium" value={voiceText} onChange={(e) => setVoiceText(e.target.value)} rows={3} placeholder="例：喺全家買飯糰同飲品 580 yen，用 Suica" />
+            </div>
+          )}
+
+          {mode === 'email' && (
+            <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm flex flex-col gap-3">
+              <div className="flex gap-2">
+                <button className="secondary bg-white text-black flex-1 font-bold" type="button" disabled={busy === 'notion'} onClick={handlePullPending}>
+                  <RefreshCw size={18} className={busy === 'notion' ? 'spin' : ''} /> 即時同步
+                </button>
+                <button className="secondary bg-white text-black flex-1 font-bold" type="button" onClick={handleCopyGmail}>
+                  <Mail size={18} /> 複製 Gmail
+                </button>
+              </div>
+              <textarea className="bg-white/80 border-white/60 rounded-xl p-3 text-black font-medium" value={emailText} onChange={(e) => setEmailText(e.target.value)} rows={4} placeholder="貼 booking confirmation / email 文字" />
+              <div className="flex gap-2">
+                <button className="primary flex-1 font-bold shadow-md" type="button" disabled={!emailText.trim() || busy === 'email'} onClick={handleEmailParse}>
+                  解析文字
+                </button>
+                <label className={`secondary bg-white text-black button-like scan-picker-label flex-1 text-center font-bold shadow-sm ${busy === 'email-image' ? 'opacity-50' : ''}`} htmlFor={busy === 'email-image' ? undefined : EMAIL_IMAGE_INPUT_ID}>
+                  揀 email 截圖
+                </label>
+              </div>
+            </div>
+          )}
+
+          {mode === 'currency' && (
+            <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <select className="bg-white rounded-lg p-2 font-bold text-black border border-white/60" value={from} onChange={(e) => setFrom(e.target.value)}>
+                  {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
+                </select>
+                <input className="flex-1 bg-white rounded-lg p-2 font-bold text-black border border-white/60 text-right" type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <button className="icon-btn bg-white hover:bg-slate-100 p-2 rounded-lg" type="button" onClick={() => { setFrom(to); setTo(from); }}><Repeat2 size={18} /></button>
+                <select className="bg-white rounded-lg p-2 font-bold text-black border border-white/60" value={to} onChange={(e) => setTo(e.target.value)}>
+                  {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
+                </select>
+              </div>
+              <div className="text-center font-black text-2xl text-slate-900 bg-white/40 p-3 rounded-xl border border-white/50">
+                {Number(amount) || 0} {from} = <span className="text-blue-600">{converted == null ? '需要更新匯率' : converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} {to}</span>
+              </div>
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-xs font-bold text-slate-600 bg-white/60 px-3 py-1.5 rounded-full">1 HKD = {rate.toFixed(2)} JPY</span>
+                <button className="secondary bg-white text-black font-bold px-4 py-1.5 rounded-full" type="button" disabled={busy === 'fx'} onClick={handleFxRefresh}>
+                  <RefreshCw size={14} className={busy === 'fx' ? 'spin' : ''} /> 更新
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </GlassCard>
-
-      {mode === 'scan' && <div className="card">
-        <div className="section-head">
-          <h2>掃描收據</h2>
-          <Camera />
-        </div>
-        <p className="muted">可直接喺 React 用相機或相簿。Kimi 係 primary OCR；broker 未連線或 AI 失敗時會開確認表手動補資料，Google backup 只經 broker 使用。</p>
-        <div className="action-row wrap">
-          <label className={`primary button-like scan-picker-label ${busy === 'ocr' ? 'is-disabled' : ''}`} htmlFor={busy === 'ocr' ? undefined : CAMERA_INPUT_ID} role="button" tabIndex={busy === 'ocr' ? -1 : 0} aria-disabled={busy === 'ocr'}>
-            {busy === 'ocr' ? <RefreshCw size={18} className="spin" /> : <Camera size={18} />} 相機
-          </label>
-          <label className={`secondary button-like scan-picker-label ${busy === 'ocr' ? 'is-disabled' : ''}`} htmlFor={busy === 'ocr' ? undefined : GALLERY_INPUT_ID} role="button" tabIndex={busy === 'ocr' ? -1 : 0} aria-disabled={busy === 'ocr'}>
-            <FileText size={18} /> 相簿
-          </label>
-        </div>
-        <p className="scan-diagnostic">相機 picker 用 native label 開啟；如手機權限或 in-app browser 阻擋，請用相簿或手動記一筆。Secure context: {window.isSecureContext ? 'yes' : 'local/dev'}</p>
-        <div className="action-row wrap">
-          <ActionRippleButton className="secondary" type="button" disabled={!lastScanFile || busy === 'ocr'} onClick={() => handleImage(lastScanFile || undefined, true)}>
-            <RefreshCw size={18} /> 重試上一張
-          </ActionRippleButton>
-          <ActionRippleButton className="secondary" type="button" disabled={!lastDraft} onClick={() => lastDraft && openDraft(lastDraft)}>
-            <Repeat2 size={18} /> 重開上次草稿
-          </ActionRippleButton>
-        </div>
-        <div className="mini-list">
-          <span>Last scan: {lastScanFile ? lastScanFile.name : '未有'}</span>
-          <span>Last draft: {lastDraft ? lastDraft.store || '未命名' : '未有'}</span>
-        </div>
-      </div>}
-
-      {mode === 'voice' && <div className="card">
-        <div className="section-head">
-          <h2>語音記帳</h2>
-          <Mic />
-        </div>
-        <div className="action-row wrap">
-          <button className="secondary" type="button" onClick={startSpeech}><Mic size={18} /> 開始聽</button>
-          <button className="primary" type="button" disabled={!voiceText.trim() || busy === 'voice'} onClick={handleVoiceParse}>解析</button>
-        </div>
-        <textarea value={voiceText} onChange={(e) => setVoiceText(e.target.value)} rows={3} placeholder="例：喺全家買飯糰同飲品 580 yen，用 Suica" />
-      </div>}
-
-      {mode === 'email' && <div className="card">
-        <div className="section-head">
-          <h2>Email 匯入</h2>
-          <Mail />
-        </div>
-        <div className="action-row wrap">
-          <button className="secondary" type="button" disabled={busy === 'notion'} onClick={handlePullPending}>
-            {busy === 'notion' ? <RefreshCw size={18} className="spin" /> : <RefreshCw size={18} />} 即時同步
-          </button>
-          <button className="secondary" type="button" onClick={handleCopyGmail}>
-            <Mail size={18} /> 複製 Gmail
-          </button>
-        </div>
-        <textarea value={emailText} onChange={(e) => setEmailText(e.target.value)} rows={5} placeholder="貼 booking confirmation / email 文字" />
-        <div className="action-row wrap">
-          <button className="primary" type="button" disabled={!emailText.trim() || busy === 'email'} onClick={handleEmailParse}>
-            <Mail size={18} /> 解析成待確認紀錄
-          </button>
-          <label className={`secondary button-like scan-picker-label ${busy === 'email-image' ? 'is-disabled' : ''}`} htmlFor={busy === 'email-image' ? undefined : EMAIL_IMAGE_INPUT_ID} role="button" tabIndex={busy === 'email-image' ? -1 : 0} aria-disabled={busy === 'email-image'}>
-            <FileImage size={18} /> 揀 email 截圖
-          </label>
-        </div>
-      </div>}
-
-      {mode === 'currency' && <div className="card">
-        <div className="section-head">
-          <h2>匯率工具</h2>
-          <FileText />
-        </div>
-        <div className="currency-tool">
-          <select value={from} onChange={(e) => setFrom(e.target.value)}>
-            {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
-          </select>
-          <input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <button className="icon-btn" type="button" onClick={() => { setFrom(to); setTo(from); }}><Repeat2 size={18} /></button>
-          <select value={to} onChange={(e) => setTo(e.target.value)}>
-            {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
-          </select>
-        </div>
-        <p className="result-line">{Number(amount) || 0} {from} = {converted == null ? '需要更新匯率' : converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} {to}</p>
-        <div className="action-row wrap">
-          <button className="secondary" type="button" disabled={busy === 'fx'} onClick={handleFxRefresh}>
-            {busy === 'fx' ? <RefreshCw size={18} className="spin" /> : <RefreshCw size={18} />} 更新匯率
-          </button>
-          <span className="muted">1 HKD = {rate.toFixed(2)} JPY{fx ? ` · ${new Date(fx.fetchedAt).toLocaleTimeString()}` : ''}</span>
-        </div>
-      </div>}
 
       {status && <Toast tone={/失敗|未能|error/i.test(status) ? 'warning' : 'info'}>{status}</Toast>}
       {batch.length > 0 && (
