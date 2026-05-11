@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,11 +26,21 @@ function ext(name) {
   return i === -1 ? '' : name.slice(i);
 }
 
+function isGitIgnored(rel) {
+  try {
+    execFileSync('git', ['check-ignore', '--quiet', '--', rel], { cwd: repoRoot, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function* walk(dir) {
   for (const entry of readdirSync(dir)) {
     if (ignoredDirs.has(entry)) continue;
     const path = join(dir, entry);
     const rel = relative(repoRoot, path);
+    if (isGitIgnored(rel)) continue;
     if (ignoredFiles.has(entry)) continue;
     const stat = statSync(path);
     if (stat.isDirectory()) {

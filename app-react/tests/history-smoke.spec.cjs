@@ -41,7 +41,14 @@ const receipts = [
 ];
 
 test('History search, filter, pending, edit, delete, and safe pull', async ({ page }) => {
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
   await page.addInitScript((seedReceipts) => {
+    localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts }));
   }, receipts);

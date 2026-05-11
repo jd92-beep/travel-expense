@@ -104,30 +104,33 @@ export function Settings({
   }
 
   async function rotateCredential() {
-    if (!requireBroker('Rotate credential')) return;
-    if (!rotationSecret.trim() || !rotationAdmin.trim()) {
-      setStatus('請輸入新 credential 同 admin maintenance passphrase');
-      return;
-    }
-    await run(`Rotate ${rotationProvider}`, async () => {
-      const statusResult = await rotateProviderCredential(
-        state,
-        rotationProvider,
-        rotationSecret,
-        rotationAdmin,
-        rotationProvider === 'notion' ? { databaseId: rotationDb.trim() || state.notionDb } : {},
-      );
+    try {
+      if (!requireBroker('Rotate credential')) return;
+      if (!rotationSecret.trim() || !rotationAdmin.trim()) {
+        setStatus('請輸入新 credential 同 admin maintenance passphrase');
+        return;
+      }
+      await run(`Rotate ${rotationProvider}`, async () => {
+        const statusResult = await rotateProviderCredential(
+          state,
+          rotationProvider,
+          rotationSecret,
+          rotationAdmin,
+          rotationProvider === 'notion' ? { databaseId: rotationDb.trim() || state.notionDb } : {},
+        );
+        setConnectionStatus((prev) => ({
+          broker: prev?.broker || 'online',
+          providers: [
+            ...(prev?.providers || []).filter((item) => item.provider !== rotationProvider),
+            statusResult,
+          ],
+        }));
+        return `${rotationProvider} 已安全更新：${statusResult.status}`;
+      });
+    } finally {
       setRotationSecret('');
       setRotationAdmin('');
-      setConnectionStatus((prev) => ({
-        broker: prev?.broker || 'online',
-        providers: [
-          ...(prev?.providers || []).filter((item) => item.provider !== rotationProvider),
-          statusResult,
-        ],
-      }));
-      return `${rotationProvider} 已安全更新：${statusResult.status}`;
-    });
+    }
   }
 
   async function refreshRate() {

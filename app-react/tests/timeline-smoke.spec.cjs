@@ -34,7 +34,7 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
   await expect(page.getByText('M6 Edited Spot')).toBeHidden();
 
   await nav.getByRole('button', { name: '記帳' }).click();
-  await page.getByRole('button', { name: '手動記一筆' }).click();
+  await page.getByRole('button', { name: '手動', exact: true }).click();
   await page.getByLabel('店名 / 項目').fill('M6 Loose Receipt');
   await page.getByLabel('日期').fill('2026-04-20');
   await page.getByLabel('金額（legacy total）').fill('321');

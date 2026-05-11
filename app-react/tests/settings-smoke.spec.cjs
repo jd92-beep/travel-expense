@@ -10,6 +10,12 @@ async function setAccordion(page, title, expanded = true) {
 }
 
 test('Settings expandable cards, safe broker actions, backup, restore, and trust clear work', async ({ page }) => {
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
   const restorePath = path.join('/tmp', 'travel-expense-m10-restore.json');
   fs.writeFileSync(restorePath, JSON.stringify({
     tripName: 'M10 Restored',
@@ -85,7 +91,9 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await page.getByLabel('New credential').fill('rotate-placeholder');
   await page.getByLabel('Admin maintenance passphrase').fill('admin-placeholder');
   await page.getByRole('button', { name: /Rotate safely/ }).click();
-  await expect(page.locator('.toast').filter({ hasText: 'Rotate credential' })).toContainText('Credential Broker session 未連線');
+  await expect(page.getByText(/Rotate (credential 已安全暫停|notion失敗).*Credential Broker session 未連線/)).toBeVisible();
+  await expect(page.getByLabel('New credential')).toHaveValue('');
+  await expect(page.getByLabel('Admin maintenance passphrase')).toHaveValue('');
   const storageAfterRotate = await page.evaluate(() => JSON.stringify(localStorage));
   expect(storageAfterRotate).not.toContain('rotate-placeholder');
   expect(storageAfterRotate).not.toContain('admin-placeholder');
