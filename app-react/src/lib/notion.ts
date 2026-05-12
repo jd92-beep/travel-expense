@@ -52,6 +52,7 @@ const N = {
 type SchemaMap = Record<keyof typeof N, string>;
 
 let schemaCache: { db: string; map: SchemaMap } | null = null;
+let schemaPromise: { db: string; promise: Promise<SchemaMap> } | null = null;
 let lastMigratedDb: string | null = null;
 
 function makeProxyUrl(proxy: string, target: string) {
@@ -110,70 +111,79 @@ function findPropByTypeAndPattern(
 
 async function ensureSchema(state: AppState): Promise<SchemaMap> {
   if (schemaCache?.db === state.notionDb) return schemaCache.map;
-  const db = await notionFetch<{ properties?: Record<string, any> }>(state, `/databases/${state.notionDb}`, { method: 'GET' });
-  const props = db.properties || {};
-  const map: Partial<SchemaMap> = {};
+  if (schemaPromise?.db === state.notionDb) return schemaPromise.promise;
+  const promise = (async () => {
+    const db = await notionFetch<{ properties?: Record<string, any> }>(state, `/databases/${state.notionDb}`, { method: 'GET' });
+    const props = db.properties || {};
+    const map: Partial<SchemaMap> = {};
 
-  for (const [key, names] of Object.entries(N)) {
-    const k = key as keyof typeof N;
-    // 1. Exact name match (check all candidates)
-    let found = findPropByNames(props, names);
-    // 2. Type-based fallback for critical fields
-    if (!found) {
-      if (k === 'store') {
-        const titleProp = Object.entries(props).find(([, p]) => p?.type === 'title');
-        found = titleProp?.[0];
-      } else if (k === 'amount') {
-        found = findPropByTypeAndPattern(props, ['number', 'formula'],
-          [/金額|amount|price|cost|total|money|¥|💰|💴/i]);
-      } else if (k === 'date') {
-        found = findPropByTypeAndPattern(props, ['date'],
-          [/日期|date|📅/i]);
-      } else if (k === 'hkd') {
-        found = findPropByTypeAndPattern(props, ['number', 'formula'],
-          [/hkd|港幣|hk\s*\$/i]);
-      } else if (k === 'originalAmount') {
-        found = findPropByTypeAndPattern(props, ['number', 'formula'],
-          [/original|原價|原價格|original amount/i]);
-      } else if (k === 'exchangeRate') {
-        found = findPropByTypeAndPattern(props, ['number', 'formula'],
-          [/exchange|rate|匯率|汇率/i]);
-      } else if (k === 'tripVersion') {
-        found = findPropByTypeAndPattern(props, ['number', 'formula'],
-          [/version|版本/i]);
-      } else if (k === 'active') {
-        found = findPropByTypeAndPattern(props, ['checkbox'],
-          [/active|啟用|启用/i]);
-      }
-    }
-    // 3. First-of-type fallback for critical properties
-    if (!found) {
-      if (k === 'photoUrl' || k === 'mapUrl') {
-        const urlProp = Object.entries(props).find(([, p]) => p?.type === 'url');
-        found = urlProp?.[0];
-        if (!found) {
-          const filesProp = Object.entries(props).find(([, p]) => p?.type === 'files');
-          found = filesProp?.[0];
+    for (const [key, names] of Object.entries(N)) {
+      const k = key as keyof typeof N;
+      // 1. Exact name match (check all candidates)
+      let found = findPropByNames(props, names);
+      // 2. Type-based fallback for critical fields
+      if (!found) {
+        if (k === 'store') {
+          const titleProp = Object.entries(props).find(([, p]) => p?.type === 'title');
+          found = titleProp?.[0];
+        } else if (k === 'amount') {
+          found = findPropByTypeAndPattern(props, ['number', 'formula'],
+            [/金額|amount|price|cost|total|money|¥|💰|💴/i]);
+        } else if (k === 'date') {
+          found = findPropByTypeAndPattern(props, ['date'],
+            [/日期|date|📅/i]);
+        } else if (k === 'hkd') {
+          found = findPropByTypeAndPattern(props, ['number', 'formula'],
+            [/hkd|港幣|hk\s*\$/i]);
+        } else if (k === 'originalAmount') {
+          found = findPropByTypeAndPattern(props, ['number', 'formula'],
+            [/original|原價|原價格|original amount/i]);
+        } else if (k === 'exchangeRate') {
+          found = findPropByTypeAndPattern(props, ['number', 'formula'],
+            [/exchange|rate|匯率|汇率/i]);
+        } else if (k === 'tripVersion') {
+          found = findPropByTypeAndPattern(props, ['number', 'formula'],
+            [/version|版本/i]);
+        } else if (k === 'active') {
+          found = findPropByTypeAndPattern(props, ['checkbox'],
+            [/active|啟用|启用/i]);
         }
-      } else if (k === 'address' || k === 'region' || k === 'bookingRef' || k === 'items' || k === 'note' || k === 'person' || k === 'time') {
-        const rtProp = Object.entries(props).find(([, p]) => p?.type === 'rich_text');
-        found = rtProp?.[0];
-      } else if (k === 'cat' || k === 'pay' || k === 'split' || k === 'currency' || k === 'homeCurrency') {
-        const selProp = Object.entries(props).find(([, p]) => p?.type === 'select');
-        found = selProp?.[0];
-      } else if (k === 'tripName' || k === 'destination' || k === 'tripCurrencies' || k === 'timezones' || k === 'sourceId' || k === 'tripId') {
-        const rtProp = Object.entries(props).find(([, p]) => p?.type === 'rich_text');
-        found = rtProp?.[0];
-      } else if (k === 'startDate' || k === 'endDate' || k === 'updatedAt') {
-        const dateProp = Object.entries(props).find(([, p]) => p?.type === 'date');
-        found = dateProp?.[0];
       }
+      // 3. First-of-type fallback for critical properties
+      if (!found) {
+        if (k === 'photoUrl' || k === 'mapUrl') {
+          const urlProp = Object.entries(props).find(([, p]) => p?.type === 'url');
+          found = urlProp?.[0];
+          if (!found) {
+            const filesProp = Object.entries(props).find(([, p]) => p?.type === 'files');
+            found = filesProp?.[0];
+          }
+        } else if (k === 'address' || k === 'region' || k === 'bookingRef' || k === 'items' || k === 'note' || k === 'person' || k === 'time') {
+          const rtProp = Object.entries(props).find(([, p]) => p?.type === 'rich_text');
+          found = rtProp?.[0];
+        } else if (k === 'cat' || k === 'pay' || k === 'split' || k === 'currency' || k === 'homeCurrency') {
+          const selProp = Object.entries(props).find(([, p]) => p?.type === 'select');
+          found = selProp?.[0];
+        } else if (k === 'tripName' || k === 'destination' || k === 'tripCurrencies' || k === 'timezones' || k === 'sourceId' || k === 'tripId') {
+          const rtProp = Object.entries(props).find(([, p]) => p?.type === 'rich_text');
+          found = rtProp?.[0];
+        } else if (k === 'startDate' || k === 'endDate' || k === 'updatedAt') {
+          const dateProp = Object.entries(props).find(([, p]) => p?.type === 'date');
+          found = dateProp?.[0];
+        }
+      }
+      map[k] = found || names[0];
     }
-    map[k] = found || names[0];
-  }
 
-  schemaCache = { db: state.notionDb, map: map as SchemaMap };
-  return schemaCache.map;
+    schemaCache = { db: state.notionDb, map: map as SchemaMap };
+    return schemaCache.map;
+  })();
+  schemaPromise = { db: state.notionDb, promise };
+  try {
+    return await promise;
+  } finally {
+    if (schemaPromise?.promise === promise) schemaPromise = null;
+  }
 }
 
 function propName(schema: SchemaMap, key: keyof typeof N) {

@@ -11,6 +11,15 @@ export interface CurrencySnapshot {
   source: string;
 }
 
+interface FetchCurrencyOptions {
+  /**
+   * Manual refresh can still prefer Visa first, but app boot should avoid the
+   * public CORS proxy path because it frequently returns 403 and pollutes the
+   * mobile console on every launch.
+   */
+  officialFirst?: boolean;
+}
+
 const CACHE_KEY = 'boss-japan-tracker:react-currency';
 const MAX_AGE = 60 * 60 * 1000; // 1 hour cache
 
@@ -42,7 +51,30 @@ export function clearCurrencyCache(): void {
   }
 }
 
-export async function fetchLiveCurrencySnapshot(): Promise<CurrencySnapshot> {
+function persistCurrencySnapshot(snapshot: CurrencySnapshot): CurrencySnapshot {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Currency cache is opportunistic; conversion still works with in-memory data.
+  }
+  return snapshot;
+}
+
+async function fetchExchangeRateSnapshot(): Promise<CurrencySnapshot> {
+  const response = await fetch('https://open.er-api.com/v6/latest/HKD');
+  if (!response.ok) throw new Error(`FX ${response.status}: ${(await response.text()).slice(0, 160)}`);
+  const data = await response.json();
+  const rates = data?.rates || {};
+  if (data?.result !== 'success' || !Number.isFinite(rates.JPY)) throw new Error('FX 回覆缺少有效 JPY rate');
+  return persistCurrencySnapshot({
+    base: 'HKD',
+    rates: { ...rates, HKD: 1 },
+    fetchedAt: Date.now(),
+    source: data?.provider || 'open.er-api.com',
+  });
+}
+
+async function fetchVisaSnapshot(): Promise<CurrencySnapshot | null> {
   // 嘗試 Visa 官方匯率 (需要透過 CORS proxy，因為 Visa 阻擋跨域)
   try {
     const d = new Date();
@@ -62,34 +94,23 @@ export async function fetchLiveCurrencySnapshot(): Promise<CurrencySnapshot> {
       const rate = parseFloat(visaData.convertedAmount || visaData.fxRateVisa);
       
       if (rate && rate > 0 && Number.isFinite(rate)) {
-        const snapshot: CurrencySnapshot = {
+        return persistCurrencySnapshot({
           base: 'HKD',
           rates: { HKD: 1, JPY: rate },
           fetchedAt: Date.now(),
           source: 'Visa (官方即時)',
-        };
-        localStorage.setItem(CACHE_KEY, JSON.stringify(snapshot));
-        return snapshot;
+        });
       }
     }
   } catch (err) {
     console.warn('Visa rate fetch failed:', err);
   }
+  return null;
+}
 
-  // Fallback to open.er-api.com
-  const response = await fetch('https://open.er-api.com/v6/latest/HKD');
-  if (!response.ok) throw new Error(`FX ${response.status}: ${(await response.text()).slice(0, 160)}`);
-  const data = await response.json();
-  const rates = data?.rates || {};
-  if (data?.result !== 'success' || !Number.isFinite(rates.JPY)) throw new Error('FX 回覆缺少有效 JPY rate');
-  const snapshot: CurrencySnapshot = {
-    base: 'HKD',
-    rates: { ...rates, HKD: 1 },
-    fetchedAt: Date.now(),
-    source: data?.provider || 'open.er-api.com',
-  };
-  localStorage.setItem(CACHE_KEY, JSON.stringify(snapshot));
-  return snapshot;
+export async function fetchLiveCurrencySnapshot(options: FetchCurrencyOptions = {}): Promise<CurrencySnapshot> {
+  if (!options.officialFirst) return fetchExchangeRateSnapshot();
+  return (await fetchVisaSnapshot()) || fetchExchangeRateSnapshot();
 }
 
 export function usableSnapshot(snapshot: CurrencySnapshot | null): CurrencySnapshot | null {

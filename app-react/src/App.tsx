@@ -13,7 +13,7 @@ import type { Receipt, SyncQueueItem, TabId, TripProfile } from './lib/types';
 import { TAB_MANIFEST } from './lib/tabs';
 import { AuthGate } from './security/AuthGate';
 import { HyperframeBackground } from './components/HyperframeBackground';
-import { fetchLiveCurrencySnapshot } from './lib/currency';
+import { fetchLiveCurrencySnapshot, loadCurrencySnapshot, usableSnapshot, type CurrencySnapshot } from './lib/currency';
 
 const Dashboard = lazy(() => import('./tabs/Dashboard').then((module) => ({ default: module.Dashboard })));
 const Scan = lazy(() => import('./tabs/Scan').then((module) => ({ default: module.Scan })));
@@ -24,9 +24,20 @@ const Stats = lazy(() => import('./tabs/Stats').then((module) => ({ default: mod
 const Settings = lazy(() => import('./tabs/Settings').then((module) => ({ default: module.Settings })));
 
 const VALID_TABS = new Set<TabId>(TAB_MANIFEST.map((item) => item.id));
+const bootSyncKeys = new Set<string>();
+let bootCurrencyPromise: Promise<CurrencySnapshot> | null = null;
 
 function safeTabId(value: unknown): TabId {
   return typeof value === 'string' && VALID_TABS.has(value as TabId) ? value as TabId : 'dashboard';
+}
+
+function fetchBootCurrencySnapshot(): Promise<CurrencySnapshot> {
+  const cached = usableSnapshot(loadCurrencySnapshot());
+  if (cached) return Promise.resolve(cached);
+  bootCurrencyPromise ||= fetchLiveCurrencySnapshot().finally(() => {
+    bootCurrencyPromise = null;
+  });
+  return bootCurrencyPromise;
 }
 
 export function App() {
@@ -35,7 +46,7 @@ export function App() {
   const { pull, sync } = syncEngine;
   const [tab, setTab] = useState<TabId>(() => safeTabId((typeof window !== 'undefined' && window.location.hash.slice(1)) || state.lastTab));
   const [editing, setEditing] = useState<Receipt | null | undefined>(undefined);
-  const bootSyncInitiated = useRef(false);
+  const bootSyncScheduledKey = useRef('');
   const lastTabHydrated = useRef(false);
   const receiptCountRef = useRef(state.receipts.length);
   receiptCountRef.current = state.receipts.length;
@@ -58,24 +69,37 @@ export function App() {
   }, [safeTab, state.lastTab]);
 
   useEffect(() => {
-    fetchLiveCurrencySnapshot().then(snapshot => {
+    let alive = true;
+    fetchBootCurrencySnapshot().then(snapshot => {
+      if (!alive) return;
       if (snapshot.rates.JPY) {
         updateState({ rate: Number(snapshot.rates.JPY.toFixed(4)) });
         console.log('[App] Auto-updated live exchange rate:', snapshot.rates.JPY, 'from', snapshot.source);
       }
-    }).catch(err => {
-      console.warn('[App] Failed to auto-fetch live rate on boot', err);
+    }).catch(() => {
+      // Background rate refresh is best-effort; Settings/Scan expose explicit
+      // refresh errors when the user asks for a live rate.
     });
+    return () => {
+      alive = false;
+    };
   }, [updateState]);
 
   useEffect(() => {
-    if (bootSyncInitiated.current) return;
     if (!navigator.onLine) return;
     if (!hasCredentialBrokerSession(state) && !hasDirectNotionToken()) return;
 
-    bootSyncInitiated.current = true;
+    const bootSyncKey = [
+      hasCredentialBrokerSession(state) ? `broker:${state.credentialSessionExpiresAt || 0}` : 'direct-token',
+      receiptCountRef.current === 0 ? 'pull' : 'sync',
+    ].join(':');
+    if (bootSyncKeys.has(bootSyncKey) || bootSyncScheduledKey.current === bootSyncKey) return;
+    bootSyncScheduledKey.current = bootSyncKey;
 
     const timer = window.setTimeout(() => {
+      bootSyncScheduledKey.current = '';
+      if (bootSyncKeys.has(bootSyncKey)) return;
+      bootSyncKeys.add(bootSyncKey);
       if (receiptCountRef.current === 0) {
         console.log('[App] Boot pull — no local receipts, fetching from Notion');
         void pull();
@@ -84,7 +108,10 @@ export function App() {
         void sync();
       }
     }, 800);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      if (!bootSyncKeys.has(bootSyncKey)) bootSyncScheduledKey.current = '';
+    };
   }, [state.credentialSession, state.credentialSessionExpiresAt, pull, sync]);
 
   const changeTab = (next: TabId) => {

@@ -48,3 +48,46 @@ test('Final lock gate smoke without trusted device', async ({ page }) => {
   await page.goto('http://localhost:8902/travel-expense/react/');
   await expect(page.getByText('先解鎖再使用')).toBeVisible();
 });
+
+test('Boot currency and sync effects run once without noisy mobile 403s', async ({ page }) => {
+  const consoleEvents = [];
+  const notionPaths = [];
+  page.on('console', (msg) => consoleEvents.push(`${msg.type()}:${msg.text()}`));
+  page.on('response', (response) => {
+    if (response.status() >= 400) consoleEvents.push(`response:${response.status()}:${response.url()}`);
+  });
+  await page.route('**/secrets.local.js', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS={};',
+  }));
+  await page.route('https://open.er-api.com/**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ result: 'success', provider: 'qa-rate', rates: { HKD: 1, JPY: 20.5, USD: 0.13 } }),
+  }));
+  await page.route('**/notion/request', async (route) => {
+    const payload = route.request().postDataJSON();
+    notionPaths.push(`${payload.method || 'GET'} ${payload.path}`);
+    if (payload.method === 'GET') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { properties: {} } }) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { results: [], has_more: false } }) });
+  });
+  await page.addInitScript(() => {
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'qa-session',
+      credentialSessionExpiresAt: Date.now() + 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'dashboard', receipts: [], autoSync: true }));
+  });
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  await expect(page.getByLabel('旅程總覽')).toBeVisible();
+  await expect.poll(() => notionPaths.filter((path) => path.includes('/query')).length).toBe(2);
+  await page.waitForTimeout(1200);
+  expect(notionPaths.filter((path) => path.includes('/query'))).toHaveLength(2);
+  expect(consoleEvents.filter((event) => event.includes('Auto-updated live exchange rate'))).toHaveLength(1);
+  expect(consoleEvents.filter((event) => event.includes('corsproxy.io') || event.includes('403'))).toHaveLength(0);
+});
