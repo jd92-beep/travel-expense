@@ -20,12 +20,34 @@ import {
 import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
 import { computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
 import { diagnoseNotionSchema, hasDirectNotionToken, migrateNotionSchema, pullAll, pushSettingsMeta, pushTripPage, testNotion } from '../lib/notion';
-import type { AppState, Person, SyncEngineState, TripDraft, TripProfile } from '../lib/types';
+import type { AppState, Person, Receipt, SyncEngineState, TripDraft, TripProfile } from '../lib/types';
 import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripSensitiveState } from '../lib/storage';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { GlassCard, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
+const MAX_SAFE_AMOUNT = 1_000_000_000;
+
+function clampFinite(value: unknown, fallback: number, min = 0, max = MAX_SAFE_AMOUNT): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function sanitizeImportedReceipts(input: unknown, fallbackDate: string): Receipt[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter((receipt): receipt is Partial<Receipt> => !!receipt && typeof receipt === 'object')
+    .filter((receipt) => typeof receipt.id === 'string' && typeof receipt.store === 'string')
+    .map((receipt) => ({
+      ...receipt,
+      total: clampFinite(receipt.total, 0),
+      originalAmount: clampFinite(receipt.originalAmount ?? receipt.total, clampFinite(receipt.total, 0)),
+      date: typeof receipt.date === 'string' && receipt.date ? receipt.date : fallbackDate,
+      createdAt: Number.isFinite(Number(receipt.createdAt)) ? Number(receipt.createdAt) : Date.now(),
+      updatedAt: Number.isFinite(Number(receipt.updatedAt)) ? Number(receipt.updatedAt) : undefined,
+    } as Receipt));
+}
 
 export function Settings({
   state,
@@ -350,8 +372,9 @@ export function Settings({
     try {
       const payload = JSON.parse(await file.text()) as Partial<AppState>;
       const { credentialBrokerUrl: _credentialBrokerUrl, ...safePayload } = stripSensitiveState(payload) as Partial<AppState> & { credentialBrokerUrl?: unknown };
-      setState((prev) => migrateAppState({ ...prev, ...safePayload, receipts: Array.isArray(safePayload.receipts) ? safePayload.receipts : prev.receipts }));
-      setStatus(`已匯入 backup：${Array.isArray(safePayload.receipts) ? safePayload.receipts.length : state.receipts.length} 筆`);
+      const receipts = sanitizeImportedReceipts(safePayload.receipts, currentTrip.startDate || state.tripDateRange.start);
+      setState((prev) => migrateAppState({ ...prev, ...safePayload, receipts: receipts.length ? receipts : prev.receipts }));
+      setStatus(`已匯入 backup：${receipts.length || state.receipts.length} 筆`);
     } catch (error) {
       setStatus(`Backup 匯入失敗：${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -399,7 +422,7 @@ export function Settings({
         </div>
         <div className="form-grid">
           <label>匯率（1 HKD = JPY）
-            <input type="number" min="0.01" step="0.01" value={state.rate} onChange={(e) => updateState({ rate: Math.max(0.01, Number(e.target.value) || 20.36) })} />
+            <input type="number" min="0.01" step="0.01" value={state.rate} onChange={(e) => updateState({ rate: clampFinite(e.target.value, 20.36, 0.01, 1_000_000) })} />
           </label>
           <label>目的地貨幣
             <select value={state.tripCurrency} onChange={(e) => updateCurrentTrip({ currencies: Array.from(new Set(['HKD', e.target.value])) })}>
@@ -420,10 +443,10 @@ export function Settings({
           </label>
         </div>
         <label>預算 JPY
-          <input type="number" min="0" step="1" value={state.budget} onChange={(e) => updateState({ budget: Math.max(0, Number(e.target.value) || 0) })} />
+          <input type="number" min="0" step="1" value={state.budget} onChange={(e) => updateState({ budget: clampFinite(e.target.value, 0) })} />
         </label>
         <label>預算 HKD
-          <input type="number" min="0" step="1" value={Math.round((Number(state.budget) || 0) / Math.max(0.1, Number(state.rate) || 20.36))} onChange={(e) => updateState({ budget: Math.max(0, Math.round((Number(e.target.value) || 0) * Math.max(0.1, Number(state.rate) || 20.36))) })} />
+          <input type="number" min="0" step="1" value={Math.round((Number(state.budget) || 0) / Math.max(0.1, Number(state.rate) || 20.36))} onChange={(e) => updateState({ budget: Math.round(clampFinite(e.target.value, 0) * Math.max(0.1, Number(state.rate) || 20.36)) })} />
         </label>
         <label className="check-row">
           <input type="checkbox" checked={state.statsIncludeTransportLodging} onChange={(e) => updateState({ statsIncludeTransportLodging: e.target.checked })} />
@@ -499,7 +522,7 @@ export function Settings({
             <AvatarBadge person={p} />
             <input value={p.name} onChange={(e) => updatePerson(p.id, { name: e.target.value })} aria-label={`${p.name} name`} />
             <input type="color" value={p.color} onChange={(e) => updatePerson(p.id, { color: e.target.value })} aria-label={`${p.name} color`} />
-            <input type="number" min={0} value={state.shareRatios[p.id] ?? 1} onChange={(e) => updateState({ shareRatios: { ...state.shareRatios, [p.id]: Number(e.target.value) } })} aria-label={`${p.name} ratio`} />
+            <input type="number" min={0} value={state.shareRatios[p.id] ?? 1} onChange={(e) => updateState({ shareRatios: { ...state.shareRatios, [p.id]: clampFinite(e.target.value, 1, 0, 1000) } })} aria-label={`${p.name} ratio`} />
             <button className="icon-btn" type="button" onClick={() => removePerson(p.id)} aria-label={`remove ${p.name}`}><Trash2 size={16} /></button>
           </div>
         ))}
@@ -722,7 +745,15 @@ export function Settings({
           <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup JSON</button>
           <button className="danger" type="button" onClick={() => { clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); }}><KeyRound size={18} /> 清除 broker session</button>
           <button className="danger" type="button" onClick={() => { clearDeviceTrust(); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
-          <button className="danger" type="button" onClick={() => window.confirm('確定清除 React 本地紀錄？') && onReset()}><RotateCcw size={18} /> 清除本地資料</button>
+          <button className="danger" type="button" onClick={() => {
+            if (!window.confirm('確定清除 React 本地紀錄？')) return;
+            try {
+              onReset();
+              setStatus('已清除 React 本地紀錄、broker session、裝置信任同快取。');
+            } catch (error) {
+              setStatus(`清除失敗：${redactedError(error)}`);
+            }
+          }}><RotateCcw size={18} /> 清除本地資料</button>
         </div>
         <div className="mini-list">
           <span>Build: {buildLabel}</span>

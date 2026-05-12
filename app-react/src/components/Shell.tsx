@@ -22,6 +22,11 @@ const icons: Record<TabId, ReactNode> = {
   settings: <Settings size={20} />,
 };
 
+function prefersStableMobileEffects() {
+  if (typeof window === 'undefined') return true;
+  return window.matchMedia('(max-width: 700px), (pointer: coarse), (prefers-reduced-motion: reduce)').matches;
+}
+
 export function Shell({
   active,
   onTab,
@@ -35,8 +40,10 @@ export function Shell({
 }) {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
+  const [stableMobileEffects, setStableMobileEffects] = useState(prefersStableMobileEffects);
   const raf = useRef<number | null>(null);
   const prefersReducedMotion = useReducedMotion();
+  const richVisualEffects = !prefersReducedMotion && !stableMobileEffects;
 
   useEffect(() => {
     const onOnline = () => setOnline(true);
@@ -53,7 +60,26 @@ export function Shell({
   }, []);
 
   useEffect(() => {
+    const queries = [
+      window.matchMedia('(max-width: 700px)'),
+      window.matchMedia('(pointer: coarse)'),
+      window.matchMedia('(prefers-reduced-motion: reduce)'),
+    ];
+    const updateEffectsMode = () => setStableMobileEffects(prefersStableMobileEffects());
+    for (const query of queries) query.addEventListener('change', updateEffectsMode);
+    updateEffectsMode();
+    return () => {
+      for (const query of queries) query.removeEventListener('change', updateEffectsMode);
+    };
+  }, []);
+
+  useEffect(() => {
     const root = document.documentElement;
+    if (prefersReducedMotion) {
+      root.style.setProperty('--scroll-y', '0px');
+      root.style.setProperty('--scroll-progress', '0');
+      return undefined;
+    }
     const update = () => {
       raf.current = null;
       const max = Math.max(1, document.body.scrollHeight - window.innerHeight);
@@ -73,12 +99,12 @@ export function Shell({
       window.removeEventListener('resize', onScroll);
       if (raf.current != null) window.cancelAnimationFrame(raf.current);
     };
-  }, []);
+  }, [prefersReducedMotion]);
 
   return (
     <div className="app-shell">
       {/* Japanese particle background — washi paper warmth with floating motes */}
-      {!prefersReducedMotion && (
+      {richVisualEffects && (
         <Particles
           className="pointer-events-none fixed inset-0 -z-20"
           quantity={35}
@@ -89,11 +115,13 @@ export function Shell({
           aria-hidden="true"
         />
       )}
-      <NoiseTexture
-        aria-hidden="true"
-        focusable="false"
-        className="pointer-events-none fixed inset-0 -z-10 opacity-[0.08] mix-blend-soft-light"
-      />
+      {richVisualEffects && (
+        <NoiseTexture
+          aria-hidden="true"
+          focusable="false"
+          className="pointer-events-none fixed inset-0 -z-10 opacity-[0.08] mix-blend-soft-light"
+        />
+      )}
       {!online && <div className="top-notice offline">離線模式：資料會繼續保存在本機</div>}
       {updateReady && (
         <div className="top-notice update">
@@ -104,7 +132,11 @@ export function Shell({
       <header className="topbar">
         <div>
           <p className="eyebrow">Secure React · mobile web</p>
-          <h1><AuroraText colors={['#18395c', '#d94132', '#d39a29', '#18395c']} speed={1.2}>Trip Command Center</AuroraText></h1>
+          <h1>
+            {richVisualEffects
+              ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#18395c']} speed={1.2}>Trip Command Center</AuroraText>
+              : 'Trip Command Center'}
+          </h1>
         </div>
         {syncState ? <SyncStatusIndicator state={syncState} /> : <StatusPill tone="ok">Broker-ready</StatusPill>}
       </header>

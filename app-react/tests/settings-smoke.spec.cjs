@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
 
-test.use({ channel: 'chrome', viewport: { width: 390, height: 844 } });
+test.use({ viewport: { width: 390, height: 844 } });
 
 async function setAccordion(page, title, expanded = true) {
   const button = page.getByRole('button', { name: new RegExp(title) });

@@ -1,8 +1,28 @@
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+
+function shouldUseStableTransition() {
+  if (typeof window === 'undefined') return true;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 export function WindmillTransition({ activeKey }: { activeKey: string }) {
   const reducedMotion = useReducedMotion();
-  if (reducedMotion) return null;
+  const [stableTransition, setStableTransition] = useState(shouldUseStableTransition);
+
+  useEffect(() => {
+    const queries = [
+      window.matchMedia('(prefers-reduced-motion: reduce)'),
+    ];
+    const updateTransitionMode = () => setStableTransition(shouldUseStableTransition());
+    for (const query of queries) query.addEventListener('change', updateTransitionMode);
+    updateTransitionMode();
+    return () => {
+      for (const query of queries) query.removeEventListener('change', updateTransitionMode);
+    };
+  }, []);
+
+  if (reducedMotion || stableTransition) return null;
   return (
     <AnimatePresence mode="wait">
       <motion.div

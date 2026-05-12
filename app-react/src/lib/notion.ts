@@ -470,6 +470,76 @@ function readSelectProp(props: Record<string, any>, key: keyof typeof N, schema?
   return undefined;
 }
 
+function normalizeSelectName(value: string): string {
+  return String(value || '')
+    .normalize('NFKC')
+    .replace(/[^\p{Letter}\p{Number}]+/gu, '')
+    .toLowerCase();
+}
+
+function categoryIdFromName(name: string): CategoryId {
+  const normalized = normalizeSelectName(name);
+  const aliases: Record<string, CategoryId> = {
+    food: 'food',
+    dining: 'food',
+    restaurant: 'food',
+    餐飲: 'food',
+    餐饮: 'food',
+    transport: 'transport',
+    transit: 'transport',
+    train: 'transport',
+    交通: 'transport',
+    shopping: 'shopping',
+    購物: 'shopping',
+    购物: 'shopping',
+    lodging: 'lodging',
+    hotel: 'lodging',
+    accommodation: 'lodging',
+    住宿: 'lodging',
+    ticket: 'ticket',
+    tickets: 'ticket',
+    門票: 'ticket',
+    门票: 'ticket',
+    medicine: 'medicine',
+    pharmacy: 'medicine',
+    藥品: 'medicine',
+    药品: 'medicine',
+    localtour: 'localtour',
+    tour: 'localtour',
+    當地旅遊: 'localtour',
+    当地旅游: 'localtour',
+  };
+  return CATEGORIES.find((c) => normalizeSelectName(c.name) === normalized || c.id === name)?.id
+    || aliases[normalized]
+    || 'other';
+}
+
+function paymentIdFromName(name: string): PaymentId {
+  const normalized = normalizeSelectName(name);
+  const aliases: Record<string, PaymentId> = {
+    cash: 'cash',
+    現金: 'cash',
+    现金: 'cash',
+    card: 'credit',
+    credit: 'credit',
+    creditcard: 'credit',
+    信用卡: 'credit',
+    paypay: 'paypay',
+    suica: 'suica',
+    iccard: 'suica',
+  };
+  return PAYMENTS.find((p) => normalizeSelectName(p.name) === normalized || p.id === name)?.id
+    || aliases[normalized]
+    || 'cash';
+}
+
+function personIdFromText(personText: string, persons: ReturnType<typeof getPersons>): string | undefined {
+  const clean = personText.replace(/\p{Extended_Pictographic}/gu, '').normalize('NFKC').trim();
+  return persons.find((p) => clean === p.name || clean === p.id)?.id
+    || persons.find((p) => clean.includes(p.name))?.id
+    || persons[0]?.id;
+}
+
 function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt | null {
   if (page.archived || page.in_trash) return null;
   const props = page.properties || {};
@@ -489,15 +559,15 @@ function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt
     total: readNumberProp(props, 'amount', schema) ?? 0,
     date: readDateProp(props, 'date', schema) || state.tripDateRange.start,
     time: readRichTextProp(props, 'time', schema),
-    category: (CATEGORIES.find((c) => c.name === catName)?.id || 'other') as CategoryId,
-    payment: (PAYMENTS.find((p) => p.name === payName)?.id || 'cash') as PaymentId,
+    category: categoryIdFromName(catName),
+    payment: paymentIdFromName(payName),
     region: readRichTextProp(props, 'region', schema),
     address: readRichTextProp(props, 'address', schema),
     bookingRef: readRichTextProp(props, 'bookingRef', schema),
     itemsText: readRichTextProp(props, 'items', schema),
     note: readRichTextProp(props, 'note', schema),
     photoUrl: readUrlProp(props, 'photoUrl', schema),
-    personId: persons.find((p) => personText.includes(p.name))?.id || persons[0]?.id,
+    personId: personIdFromText(personText, persons),
     splitMode: String(readSelectProp(props, 'split', schema) || '').includes('私人') ? 'private' as const : 'shared' as const,
     source: 'notion',
     createdAt: page.created_time ? new Date(page.created_time).getTime() : Date.now(),

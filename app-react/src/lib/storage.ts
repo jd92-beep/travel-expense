@@ -46,6 +46,16 @@ function trimSlash(value: string) {
   return value.replace(/\/+$/, '');
 }
 
+function safeLocalStorageSet(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    console.warn('[storage] localStorage write skipped:', error instanceof Error ? error.name : 'unknown');
+    return false;
+  }
+}
+
 function normalizeCredentialBrokerUrl(value: unknown): string {
   const url = trimSlash(cleanSecretValue(value));
   return url && !STALE_BROKER_URLS.has(url) && ALLOWED_CREDENTIAL_BROKER_URLS.includes(url as typeof ALLOWED_CREDENTIAL_BROKER_URLS[number])
@@ -89,15 +99,17 @@ export function loadState(): AppState {
     const credentials = loadCredentials();
     return normalizeState({ ...(raw ? JSON.parse(raw) : null), ...credentials });
   } catch {
-    return { ...DEFAULT_STATE, ...loadCredentials() };
+    return normalizeState({ ...DEFAULT_STATE, ...loadCredentials() });
   }
 }
 
 export function saveState(state: AppState): void {
   saveCredentials(state);
   const safeState = stripSensitiveState(state);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(safeState));
-  void saveIndexedState(safeState);
+  safeLocalStorageSet(STORAGE_KEY, JSON.stringify(safeState));
+  void saveIndexedState(safeState).catch((error) => {
+    console.warn('[storage] IndexedDB snapshot write failed:', error instanceof Error ? error.message : String(error));
+  });
 }
 
 export function stripSensitiveState<T extends Partial<AppState>>(state: T): T {
@@ -126,7 +138,7 @@ export function loadCredentials(): AppCredentials {
     const credentials = {
       credentialBrokerUrl: normalizeCredentialBrokerUrl((parsed as AppCredentials).credentialBrokerUrl),
     };
-    localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(credentials));
+    safeLocalStorageSet(CREDENTIALS_KEY, JSON.stringify(credentials));
     return {
       ...credentials,
       credentialSession: session.credentialSession,
@@ -141,7 +153,7 @@ export function saveCredentials(state: Partial<AppCredentials>): void {
   const credentials: AppCredentials = {
     credentialBrokerUrl: normalizeCredentialBrokerUrl(state.credentialBrokerUrl),
   };
-  localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(credentials));
+  safeLocalStorageSet(CREDENTIALS_KEY, JSON.stringify(credentials));
 }
 
 export function saveDirectNotionToken(token: string): void {
@@ -187,4 +199,14 @@ export function saveCredentialSession(session: AppCredentials): void {
 
 export function clearCredentialSession(): void {
   localStorage.removeItem(BROKER_SESSION_KEY);
+}
+
+export function clearStoredCredentials(): void {
+  try {
+    localStorage.removeItem(CREDENTIALS_KEY);
+    localStorage.removeItem(DIRECT_NOTION_TOKEN_KEY);
+    clearCredentialSession();
+  } catch {
+    // Best effort only.
+  }
 }

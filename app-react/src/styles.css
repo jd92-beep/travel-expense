@@ -88,6 +88,101 @@ body::after {
     linear-gradient(78deg, transparent 0 58%, rgba(212,168,67,.10) 68%, transparent 78%);
   animation: travel-light-sweep 18s ease-in-out infinite alternate;
 }
+
+.hyperframe-background {
+  position: fixed;
+  inset: 0;
+  z-index: -30;
+  pointer-events: none;
+  overflow: hidden;
+  contain: paint;
+  background:
+    radial-gradient(circle at 84% 10%, rgba(217, 65, 50, .16), transparent 32%),
+    radial-gradient(circle at 12% 18%, rgba(212, 168, 67, .12), transparent 36%),
+    linear-gradient(180deg, #f7efe1 0%, #efe5d5 100%);
+  transform: translateZ(0);
+}
+
+.hyperframe-layer,
+.hyperframe-light-field {
+  position: absolute;
+  pointer-events: none;
+}
+
+.hyperframe-layer {
+  inset: -8%;
+  background-image: var(--hyperframe-image);
+  background-size: cover;
+  background-position: center;
+  opacity: var(--hf-opacity, .16);
+  filter: saturate(var(--hf-saturation, .82)) contrast(var(--hf-contrast, .92)) brightness(var(--hf-brightness, 1.08));
+  mix-blend-mode: var(--hf-blend, normal);
+  transform:
+    translate3d(
+      calc(var(--scroll-progress, 0) * var(--hf-scroll-x, 0px)),
+      calc(var(--scroll-y, 0px) * var(--hf-scroll-y, .018)),
+      0
+    )
+    scale(var(--hf-scale, 1.08));
+  animation: hyperframe-breathe var(--hf-duration, 18s) ease-in-out infinite alternate;
+  will-change: opacity, transform;
+}
+
+.hyperframe-layer--base {
+  --hf-opacity: .22;
+  --hf-opacity-low: .18;
+  --hf-opacity-high: .24;
+  --hf-scale: 1.08;
+  --hf-scroll-x: -18px;
+  --hf-scroll-y: .012;
+  --hf-duration: 21s;
+}
+
+.hyperframe-layer--sun {
+  --hf-opacity: .16;
+  --hf-opacity-low: .12;
+  --hf-opacity-high: .18;
+  --hf-scale: 1.13;
+  --hf-scroll-x: 26px;
+  --hf-scroll-y: .022;
+  --hf-blend: soft-light;
+  --hf-saturation: .94;
+  --hf-brightness: 1.12;
+  --hf-duration: 24s;
+}
+
+.hyperframe-layer--route {
+  --hf-opacity: .12;
+  --hf-opacity-low: .09;
+  --hf-opacity-high: .14;
+  --hf-scale: 1.18;
+  --hf-scroll-x: 34px;
+  --hf-scroll-y: -.016;
+  --hf-blend: multiply;
+  --hf-contrast: .86;
+  --hf-duration: 28s;
+}
+
+.hyperframe-layer--paper {
+  --hf-opacity: .10;
+  --hf-opacity-low: .07;
+  --hf-opacity-high: .12;
+  --hf-scale: 1.06;
+  --hf-scroll-x: -28px;
+  --hf-scroll-y: .028;
+  --hf-blend: screen;
+  --hf-saturation: .68;
+  --hf-duration: 32s;
+}
+
+.hyperframe-light-field {
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 24%, rgba(255,253,247,.46), transparent 44%),
+    radial-gradient(circle at 86% 10%, rgba(217,65,50,.08), transparent 28%),
+    linear-gradient(180deg, rgba(245,240,232,.18), rgba(245,240,232,.72));
+}
+
 /* Japanese traditional background layers */
 .app-shell::before {
   content: '';
@@ -1746,8 +1841,10 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
 
 @media (prefers-reduced-motion: reduce) {
   .windmill-transition,
+  .hyperframe-layer,
   .app-shell::before,
   body::after {
+    animation: none !important;
     transform: none !important;
   }
   body {
@@ -1759,6 +1856,44 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
       radial-gradient(circle at 8% -5%, rgba(250, 237, 210, 0.40), transparent 32%),
       linear-gradient(180deg, #F5F0E8 0%, #F0EBDF 35%, #EBE5D8 70%, #E8E2D4 100%);
   }
+}
+
+@media (max-width: 700px), (pointer: coarse) {
+  body::after {
+    animation: none !important;
+    opacity: .12;
+  }
+
+  .app-shell::before {
+    opacity: .16;
+    transform: translateX(-50%) !important;
+  }
+
+  .content > .stack {
+    animation: none;
+  }
+
+  .hyperframe-background {
+    transform: none;
+  }
+
+  .hyperframe-layer {
+    animation: none;
+    opacity: var(--hf-opacity, .14);
+    will-change: transform;
+  }
+
+  .liquid-glass-enhanced,
+  .epic-glass-field,
+  .lock-panel {
+    backdrop-filter: blur(12px) saturate(1.05);
+    -webkit-backdrop-filter: blur(12px) saturate(1.05);
+  }
+}
+
+@keyframes hyperframe-breathe {
+  from { opacity: var(--hf-opacity-low, .12); }
+  to { opacity: var(--hf-opacity-high, .18); }
 }
 
 @keyframes travel-light-sweep {

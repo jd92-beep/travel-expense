@@ -205,7 +205,25 @@ function liveSlotHour(date: string, timezone: string): number | null {
 
 function normalizedTimezone(value?: string): string {
   const zone = String(value || '').trim();
-  if (zone === 'JST') return 'Asia/Tokyo';
-  if (zone === 'HKT') return 'Asia/Hong_Kong';
-  return zone;
+  const aliases: Record<string, string> = {
+    JST: 'Asia/Tokyo',
+    HKT: 'Asia/Hong_Kong',
+    KST: 'Asia/Seoul',
+    CST: 'Asia/Shanghai',
+    SGT: 'Asia/Singapore',
+    PST: 'America/Los_Angeles',
+    PDT: 'America/Los_Angeles',
+    EST: 'America/New_York',
+    EDT: 'America/New_York',
+    GMT: 'Etc/GMT',
+    UTC: 'UTC',
+  };
+  const candidate = aliases[zone] || zone || 'auto';
+  if (candidate === 'auto') return candidate;
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: candidate }).format(new Date());
+    return candidate;
+  } catch {
+    return 'auto';
+  }
 }

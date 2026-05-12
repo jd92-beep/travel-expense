@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test.use({ channel: 'chrome', viewport: { width: 390, height: 844 } });
+test.use({ viewport: { width: 390, height: 844 } });
 
 const persons = [
   { id: 'p_boss', name: 'Tony', emoji: 'T', color: '#cc2929' },

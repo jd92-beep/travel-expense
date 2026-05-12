@@ -82,7 +82,33 @@ export function coordForDay(day: ItineraryDay): WeatherCoord {
 }
 
 function weatherCacheKey(coord: WeatherCoord) {
+  if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) return null;
   return `wx_react_v2_${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`;
+}
+
+function normalizeWeatherTimezone(value?: string): string {
+  const zone = String(value || '').trim();
+  const aliases: Record<string, string> = {
+    JST: 'Asia/Tokyo',
+    HKT: 'Asia/Hong_Kong',
+    KST: 'Asia/Seoul',
+    CST: 'Asia/Shanghai',
+    SGT: 'Asia/Singapore',
+    PST: 'America/Los_Angeles',
+    PDT: 'America/Los_Angeles',
+    EST: 'America/New_York',
+    EDT: 'America/New_York',
+    GMT: 'Etc/GMT',
+    UTC: 'UTC',
+  };
+  const candidate = aliases[zone] || zone || 'auto';
+  if (candidate === 'auto') return candidate;
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: candidate }).format(new Date());
+    return candidate;
+  } catch {
+    return 'auto';
+  }
 }
 
 async function fetchJson(url: string, timeoutMs = 10000) {
@@ -100,8 +126,9 @@ async function fetchJson(url: string, timeoutMs = 10000) {
 export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJma = false) {
   if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) throw new Error(`${coord.label} 缺少 lat/lon，請喺行程 spot 加座標或用 Kimi 更新行程。`);
   const cacheKey = weatherCacheKey(coord);
+  const safeTimezone = normalizeWeatherTimezone(timezone);
   try {
-    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+    const cached = cacheKey ? JSON.parse(localStorage.getItem(cacheKey) || 'null') : null;
     if (cached && Date.now() - cached.ts < 60 * 60 * 1000) return { data: cached.data, source: `${cached.source} cache` };
   } catch {
     // Ignore corrupt cache.
@@ -120,7 +147,7 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJm
     'cloud_cover',
     'uv_index',
   ].join(',');
-  const base = `https://api.open-meteo.com/v1/forecast?latitude=${coord.lat}&longitude=${coord.lon}&hourly=${hourly}&current=temperature_2m,weather_code&timezone=${encodeURIComponent(timezone || 'auto')}&forecast_days=7`;
+  const base = `https://api.open-meteo.com/v1/forecast?latitude=${coord.lat}&longitude=${coord.lon}&hourly=${hourly}&current=temperature_2m,weather_code&timezone=${encodeURIComponent(safeTimezone)}&forecast_days=7`;
   const candidates = [
     ...(useJma ? [{ url: `${base}&models=jma_seamless`, source: 'JMA' }] : []),
     { url: base, source: 'Open-Meteo' },
@@ -129,7 +156,7 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJm
   for (const c of candidates) {
     try {
       const data = await fetchJson(c.url);
-      localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: c.source }));
+      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: c.source }));
       return { data, source: c.source };
     } catch (error) {
       lastError = error;

@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test.use({ channel: 'chrome', viewport: { width: 390, height: 844 } });
+test.use({ viewport: { width: 390, height: 844 } });
 
 test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page }) => {
   await page.addInitScript(() => {

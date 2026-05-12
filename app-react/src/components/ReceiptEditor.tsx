@@ -5,6 +5,13 @@ import { getPersons, safePhotoUrl, todayForReceipts } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt, SplitMode } from '../lib/types';
 
 const newId = () => `manual_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+const MAX_RECEIPT_AMOUNT = 1_000_000_000;
+
+function validAmount(value: unknown): number | null {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0 || amount > MAX_RECEIPT_AMOUNT) return null;
+  return amount;
+}
 
 export function ReceiptEditor({
   state,
@@ -24,6 +31,7 @@ export function ReceiptEditor({
   const persons = useMemo(() => getPersons(state), [state]);
   const first = persons[0] || { id: '', name: '' };
   const photoRef = useRef<HTMLInputElement | null>(null);
+  const mountedRef = useRef(true);
   const [draft, setDraft] = useState<Receipt>(() => receipt || {
     id: newId(),
     store: '',
@@ -35,6 +43,13 @@ export function ReceiptEditor({
     splitMode: 'shared',
     createdAt: Date.now(),
   });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     setDraft(receipt || {
@@ -67,6 +82,7 @@ export function ReceiptEditor({
       reader.onerror = () => reject(reader.error || new Error('讀取相片失敗'));
       reader.readAsDataURL(file);
     });
+    if (!mountedRef.current) return;
     setDraft((d) => ({ ...d, photoThumb: dataUrl.replace(/^data:image\/[^;]+;base64,/, '') }));
     if (photoRef.current) photoRef.current.value = '';
   }
@@ -77,15 +93,17 @@ export function ReceiptEditor({
         className="modal sheet"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!Number.isFinite(Number(draft.total))) {
-            alert('金額必須係有效數字');
+          const total = validAmount(draft.total);
+          const originalAmount = validAmount(draft.originalAmount ?? draft.total);
+          if (total == null || originalAmount == null) {
+            alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
             return;
           }
           onSave({
             ...draft,
             store: draft.store.trim() || '未命名',
-            total: Number(draft.total) || 0,
-            originalAmount: Number(draft.originalAmount ?? draft.total) || 0,
+            total,
+            originalAmount,
             originalCurrency: draft.originalCurrency || draft.currency || state.tripCurrency,
             currency: draft.currency || draft.originalCurrency || state.tripCurrency,
             personId: draft.personId || first?.id || '',
@@ -186,7 +204,14 @@ export function ReceiptEditor({
           {receipt && onDelete ? <button type="button" className="danger" onClick={() => onDelete(receipt)}>刪除</button> : <span />}
           <div className="action-row">
             <button type="button" className="secondary" onClick={onCancel}>取消</button>
-            {onAddToItinerary && <button type="button" className="secondary" onClick={() => onAddToItinerary({ ...draft, store: draft.store.trim() || '未命名', total: Number(draft.total) || 0 })}>加入行程</button>}
+            {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
+              const total = validAmount(draft.total);
+              if (total == null) {
+                alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
+                return;
+              }
+              onAddToItinerary({ ...draft, store: draft.store.trim() || '未命名', total });
+            }}>加入行程</button>}
             <button type="submit" className="primary">儲存</button>
           </div>
         </div>

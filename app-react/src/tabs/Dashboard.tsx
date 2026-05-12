@@ -99,6 +99,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
   const length = tripLength(trip.startDate, trip.endDate, itinerary.length);
   const daySpots = (day?.spots || []).slice(0, 4);
   const tripCurrency = trip.currencies[0] || state.tripCurrency || 'JPY';
+  const budgetCardBackground = `${import.meta.env.BASE_URL}budget-card-bg-light.png`;
 
   return (
     <section className="stack dashboard-screen">
@@ -120,7 +121,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
 
         <MagicCard className="dashboard-budget p-0 overflow-hidden w-full relative rounded-[40px] border-[2px] border-white shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1),inset_0_0_30px_rgba(255,255,255,0.9)] bg-white/40 backdrop-blur-3xl">
           {/* Apple Liquid Glass Background */}
-          <div className="absolute inset-0 bg-[url('/react/budget-card-bg-light.png')] bg-cover bg-center opacity-90 mix-blend-normal" />
+          <div className="absolute inset-0 bg-cover bg-center opacity-90 mix-blend-normal" style={{ backgroundImage: `url("${budgetCardBackground}")` }} />
           <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-white/40 to-transparent backdrop-blur-[4px]" />
           <div className="absolute inset-0 bg-white/30 opacity-70 mix-blend-overlay rounded-[40px] shadow-[inset_0_0_20px_rgba(255,255,255,0.8)] pointer-events-none" />
           

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LockKeyhole, ShieldCheck } from 'lucide-react';
 import type { BrokerSession } from '../lib/credentialBroker';
 import { redactedError, unlockCredentialBroker } from '../lib/credentialBroker';
@@ -22,12 +22,23 @@ export function AuthGate({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'travel-expense-react:device-trust:v1' && !hasDeviceTrust()) {
+        setUnlocked(false);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   async function submit() {
     if (!password.trim()) return;
     setBusy(true);
     setError('');
     try {
       await unlockWithPassword(password);
+      setDeviceTrust();
       try {
         const brokerSession = await unlockCredentialBroker(password, { credentialBrokerUrl });
         onBrokerSession?.(brokerSession);
@@ -36,7 +47,6 @@ export function AuthGate({
         // safe status in Settings if the broker is not deployed/configured yet.
         console.info('Credential Broker unlock skipped:', redactedError(brokerError));
       }
-      setDeviceTrust();
       setUnlocked(true);
       setPassword('');
       onUnlocked?.();

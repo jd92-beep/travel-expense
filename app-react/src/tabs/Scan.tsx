@@ -1,5 +1,5 @@
 import { Camera, CheckCircle2, FileImage, FileText, Mail, Mic, PlusCircle, RefreshCw, Repeat2 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActionRippleButton, ActionSheet, GlassCard, SegmentedControl, StatusPill, Toast } from '../components/ui';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
 import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
@@ -10,6 +10,15 @@ type ScanMode = 'scan' | 'voice' | 'email' | 'currency';
 const CAMERA_INPUT_ID = 'scan-camera-input';
 const GALLERY_INPUT_ID = 'scan-gallery-input';
 const EMAIL_IMAGE_INPUT_ID = 'scan-email-image-input';
+
+function safeFileStem(file: File): string {
+  return file.name
+    .replace(/\.[^.]+$/, '')
+    .replace(/[<>&"'`]/g, '')
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .trim()
+    .slice(0, 120) || '掃描收據';
+}
 
 export function Scan({
   onManual,
@@ -25,6 +34,7 @@ export function Scan({
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const galleryRef = useRef<HTMLInputElement | null>(null);
   const emailImageRef = useRef<HTMLInputElement | null>(null);
+  const speechRef = useRef<any>(null);
   const [busy, setBusy] = useState('');
   const [status, setStatus] = useState('');
   const [voiceText, setVoiceText] = useState('');
@@ -39,6 +49,11 @@ export function Scan({
   const [amount, setAmount] = useState('1000');
   const [fx, setFx] = useState<CurrencySnapshot | null>(() => loadCurrencySnapshot());
   const rate = Math.max(0.1, Number(state.rate) || 20.36);
+
+  useEffect(() => () => {
+    speechRef.current?.abort();
+    speechRef.current = null;
+  }, []);
 
   const converted = useMemo(() => {
     const n = Number(amount) || 0;
@@ -69,7 +84,7 @@ export function Scan({
     } catch (error) {
       const draft = {
         ...heuristicReceiptFromText(file.name, state),
-        store: file.name.replace(/\.[^.]+$/, '') || '掃描收據',
+        store: safeFileStem(file),
         note: `OCR 未完成：${error instanceof Error ? error.message : String(error)}`,
         source: 'react-ocr-manual',
       };
@@ -106,12 +121,17 @@ export function Scan({
       setStatus('呢個瀏覽器唔支援 Web Speech API，可以直接貼語音文字。');
       return;
     }
+    speechRef.current?.abort();
     const rec = new SpeechRecognition();
     rec.lang = 'yue-Hant-HK';
     rec.continuous = false;
     rec.interimResults = false;
     rec.onresult = (event: any) => setVoiceText(event.results?.[0]?.[0]?.transcript || '');
     rec.onerror = (event: any) => setStatus(`語音失敗：${event.error || 'unknown'}`);
+    rec.onend = () => {
+      if (speechRef.current === rec) speechRef.current = null;
+    };
+    speechRef.current = rec;
     rec.start();
   }
 
@@ -150,7 +170,7 @@ export function Scan({
         } catch (error) {
           receipts.push({
             id: `email_img_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-            store: `⏳ 截圖解析失敗: ${file.name}`,
+            store: `⏳ 截圖解析失敗: ${safeFileStem(file)}`,
             total: 0,
             date: '',
             category: 'other',
@@ -189,6 +209,10 @@ export function Scan({
   }
 
   async function handlePullPending() {
+    if (!navigator.onLine) {
+      setStatus('離線模式，無法拉取 Notion。');
+      return;
+    }
     setBusy('notion');
     setStatus('從 Notion 拉取 email 待確認紀錄…');
     try {

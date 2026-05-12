@@ -34,6 +34,14 @@ export function loadCurrencySnapshot(): CurrencySnapshot | null {
   }
 }
 
+export function clearCurrencyCache(): void {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch {
+    // Best effort only.
+  }
+}
+
 export async function fetchLiveCurrencySnapshot(): Promise<CurrencySnapshot> {
   // 嘗試 Visa 官方匯率 (需要透過 CORS proxy，因為 Visa 阻擋跨域)
   try {
@@ -100,4 +108,3 @@ export function convertAmount(amount: number, from: string, to: string, state: A
   const hkd = n / Number(rates[from]);
   return hkd * Number(rates[to]);
 }
-

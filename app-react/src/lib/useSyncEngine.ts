@@ -94,6 +94,7 @@ export function useSyncEngine(
             ...candidate,
             notionPageId: receipt.notionPageId || candidate.notionPageId,
             sourceId: receipt.sourceId || candidate.sourceId,
+            syncStatus: hasCredentialBrokerSession(current) || hasDirectNotionToken() ? 'queued' : 'local',
           };
         }
         return { ...candidate, ...receipt, syncStatus: 'synced' };

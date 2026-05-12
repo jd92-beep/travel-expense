@@ -21,11 +21,22 @@ export function isReceiptTombstoned(state: Pick<AppState, 'notionDeletedIds' | '
 
 export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]): Receipt[] {
   const byId = new Map(state.receipts.map((receipt) => [receipt.id, receipt]));
+  const idByPageId = new Map(
+    state.receipts
+      .filter((receipt) => receipt.notionPageId)
+      .map((receipt) => [receipt.notionPageId as string, receipt.id]),
+  );
   for (const remoteReceipt of pulledReceipts) {
     if (isReceiptTombstoned(state, remoteReceipt)) continue;
-    const localReceipt = byId.get(remoteReceipt.id);
+    const matchedId = byId.has(remoteReceipt.id)
+      ? remoteReceipt.id
+      : remoteReceipt.notionPageId
+        ? idByPageId.get(remoteReceipt.notionPageId)
+        : undefined;
+    const localReceipt = matchedId ? byId.get(matchedId) : undefined;
     if (!localReceipt) {
       byId.set(remoteReceipt.id, stampForRemote(state, { ...remoteReceipt, syncStatus: 'synced' }));
+      if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, remoteReceipt.id);
       continue;
     }
     const localUpdated = receiptUpdatedAt(localReceipt);
@@ -33,9 +44,10 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
     const remoteHasMissingLink = !localReceipt.notionPageId && !!remoteReceipt.notionPageId
       || !localReceipt.sourceId && !!remoteReceipt.sourceId;
     if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
-      byId.set(remoteReceipt.id, stampForRemote(state, {
+      byId.set(localReceipt.id, stampForRemote(state, {
         ...localReceipt,
         ...remoteReceipt,
+        id: localReceipt.id,
         photoThumb: localReceipt.photoThumb || remoteReceipt.photoThumb,
         photoUrl: localReceipt.photoUrl || remoteReceipt.photoUrl,
         syncStatus: 'synced',
@@ -57,7 +69,11 @@ export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
       ? (!localTrip.notionPageId && !!remoteTrip.notionPageId) || (!localTrip.sourceId && !!remoteTrip.sourceId)
       : true;
     if (!localTrip || remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
-      byId.set(remoteTrip.id, { ...localTrip, ...remoteTrip });
+      byId.set(remoteTrip.id, {
+        ...localTrip,
+        ...remoteTrip,
+        itinerary: remoteTrip.itinerary?.length ? remoteTrip.itinerary : localTrip?.itinerary || remoteTrip.itinerary || [],
+      });
       if (remoteTrip.active && !remoteTrip.archived) activeTripId = remoteTrip.id;
     }
   }

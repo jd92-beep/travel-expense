@@ -3,8 +3,10 @@ import { migrateAppState, stampReceiptForTrip } from '../domain/trip/normalize';
 import { DEFAULT_STATE } from './constants';
 import { hasCredentialBrokerSession } from './credentialBroker';
 import { hasDirectNotionToken } from './notion';
-import { loadState, saveState } from './storage';
+import { clearStoredCredentials, loadState, saveState } from './storage';
 import { clearIndexedState, loadIndexedState } from '../storage/indexedDb';
+import { clearDeviceTrust } from '../security/deviceTrust';
+import { clearCurrencyCache } from './currency';
 import type { AppState, Receipt, SyncQueueItem } from './types';
 
 function queueItem(type: SyncQueueItem['type'], entityId: string, op: SyncQueueItem['op'], payload?: SyncQueueItem['payload']): SyncQueueItem {
@@ -29,6 +31,17 @@ function enqueueSyncItem(queue: SyncQueueItem[] | undefined, item: SyncQueueItem
   ].slice(-500);
 }
 
+function stateFreshness(state: Partial<AppState>): number {
+  const receiptFreshness = Array.isArray(state.receipts)
+    ? Math.max(0, ...state.receipts.map((receipt) => Number(receipt.updatedAt || receipt.createdAt || 0)))
+    : 0;
+  return Math.max(
+    Number(state.settingsUpdatedAt || 0),
+    Number(state.lastSyncedAt || 0),
+    receiptFreshness,
+  );
+}
+
 export function useAppState() {
   const [state, setState] = useState<AppState>(() => loadState());
 
@@ -36,7 +49,10 @@ export function useAppState() {
     let alive = true;
     loadIndexedState().then((indexed) => {
       if (!alive || !indexed) return;
-      setState((prev) => migrateAppState({ ...indexed, ...prev }));
+      setState((prev) => {
+        const indexedWins = stateFreshness(indexed) > stateFreshness(prev);
+        return migrateAppState(indexedWins ? { ...prev, ...indexed } : { ...indexed, ...prev });
+      });
     }).catch(() => {
       // localStorage remains the compatibility fallback.
     });
@@ -46,7 +62,11 @@ export function useAppState() {
   }, []);
 
   useEffect(() => {
-    saveState(migrateAppState(state));
+    try {
+      saveState(migrateAppState(state));
+    } catch (error) {
+      console.warn('[useAppState] Persist failed:', error instanceof Error ? error.message : String(error));
+    }
   }, [state]);
 
   const updateState = useCallback((patch: Partial<AppState>) => {
@@ -98,6 +118,9 @@ export function useAppState() {
 
   const resetLocal = useCallback(() => {
     void clearIndexedState();
+    clearStoredCredentials();
+    clearDeviceTrust();
+    clearCurrencyCache();
     setState({ ...DEFAULT_STATE, receipts: [] });
   }, []);
 

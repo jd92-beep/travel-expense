@@ -82,7 +82,13 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   const day = trip.itinerary.find((item) => item.date === receipt.date);
   const region = receipt.regionSnapshot || receipt.region || day?.region || '';
   const currency = receipt.currency || receipt.originalCurrency || day?.currency || state.tripCurrency || 'JPY';
-  const rate = Math.max(0.1, Number(receipt.exchangeRate || state.rate) || 20.36);
+  const rate = Math.max(
+    0.1,
+    Number(receipt.exchangeRate)
+      || Number(state.rateTable?.[currency]?.perHkd)
+      || Number(state.rate)
+      || 20.36,
+  );
   return {
     ...receipt,
     tripId: receipt.tripId || trip.id,
@@ -114,7 +120,11 @@ export function migrateAppState(input: unknown): AppState {
     ? parsed.trips.map((item, idx) => ({
         ...item,
         active: item.id === nextActiveId && !item.archived || (!nextActiveId && !parsed.activeTripId && idx === 0),
-        itinerary: normalizeItinerary(item.itinerary || [], item.id, parsed.tripCurrency || 'JPY'),
+        itinerary: normalizeItinerary(
+          item.itinerary?.length ? item.itinerary : Array.isArray(parsed.customItinerary) ? parsed.customItinerary : [],
+          item.id,
+          parsed.tripCurrency || 'JPY',
+        ),
         timezones: Array.isArray(item.timezones)
           ? Array.from(new Set(item.timezones.map(normalizeZone).filter(Boolean)))
           : trip.timezones,

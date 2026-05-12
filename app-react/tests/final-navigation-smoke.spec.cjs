@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test.use({ channel: 'chrome' });
+
 
 const tabs = [
   ['主頁', 'Total Budget'],
@@ -30,6 +30,10 @@ for (const [name, viewport] of [
     const page = await context.newPage();
     await installTrust(page);
     await page.goto('http://localhost:8902/travel-expense/react/');
+    if (viewport.width <= 390) {
+      await expect(page.locator('.hyperframe-layer')).toHaveCount(4);
+      await expect(page.locator('canvas')).toHaveCount(0);
+    }
     const nav = page.getByLabel('主要分頁');
     for (const [tabLabel, expectedText] of tabs) {
       await nav.getByRole('button', { name: tabLabel, exact: true }).click();

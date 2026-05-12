@@ -10,6 +10,7 @@ import { mergePulledData } from './lib/syncMerge';
 import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
 import type { Receipt, SyncQueueItem, TabId, TripProfile } from './lib/types';
+import { TAB_MANIFEST } from './lib/tabs';
 import { AuthGate } from './security/AuthGate';
 import { HyperframeBackground } from './components/HyperframeBackground';
 import { fetchLiveCurrencySnapshot } from './lib/currency';
@@ -22,21 +23,39 @@ const Weather = lazy(() => import('./tabs/Weather').then((module) => ({ default:
 const Stats = lazy(() => import('./tabs/Stats').then((module) => ({ default: module.Stats })));
 const Settings = lazy(() => import('./tabs/Settings').then((module) => ({ default: module.Settings })));
 
+const VALID_TABS = new Set<TabId>(TAB_MANIFEST.map((item) => item.id));
+
+function safeTabId(value: unknown): TabId {
+  return typeof value === 'string' && VALID_TABS.has(value as TabId) ? value as TabId : 'dashboard';
+}
+
 export function App() {
   const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal } = useAppState();
   const syncEngine = useSyncEngine(state, setState);
   const { pull, sync } = syncEngine;
-  const [tab, setTab] = useState<TabId>(state.lastTab || 'dashboard');
+  const [tab, setTab] = useState<TabId>(() => safeTabId((typeof window !== 'undefined' && window.location.hash.slice(1)) || state.lastTab));
   const [editing, setEditing] = useState<Receipt | null | undefined>(undefined);
   const bootSyncInitiated = useRef(false);
+  const lastTabHydrated = useRef(false);
   const receiptCountRef = useRef(state.receipts.length);
   receiptCountRef.current = state.receipts.length;
+  const safeTab = safeTabId(tab);
 
   useEffect(() => {
-    if (state.lastTab && state.lastTab !== tab) setTab(state.lastTab);
-    // We only want hydration to restore the last tab once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.lastTab]);
+    const onHash = () => {
+      const next = safeTabId(window.location.hash.slice(1));
+      setTab(next);
+      updateState({ lastTab: next });
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, [updateState]);
+
+  useEffect(() => {
+    if (lastTabHydrated.current || window.location.hash.slice(1)) return;
+    lastTabHydrated.current = true;
+    if (state.lastTab && state.lastTab !== safeTab) setTab(safeTabId(state.lastTab));
+  }, [safeTab, state.lastTab]);
 
   useEffect(() => {
     fetchLiveCurrencySnapshot().then(snapshot => {
@@ -69,8 +88,13 @@ export function App() {
   }, [state.credentialSession, state.credentialSessionExpiresAt, pull, sync]);
 
   const changeTab = (next: TabId) => {
-    setTab(next);
-    updateState({ lastTab: next });
+    const normalized = safeTabId(next);
+    setTab(normalized);
+    updateState({ lastTab: normalized });
+    const hash = `#${normalized}`;
+    if (typeof window !== 'undefined' && window.location.hash !== hash) {
+      window.history.pushState(null, '', hash);
+    }
   };
 
   const importReceipts = (receipts: Receipt[]) => {
@@ -94,26 +118,14 @@ export function App() {
       onBrokerSession={(session) => updateState(session)}
       onUnlocked={() => {
         changeTab('dashboard');
-        if (!bootSyncInitiated.current) {
-          bootSyncInitiated.current = true;
-          window.setTimeout(() => {
-            if (receiptCountRef.current === 0) {
-              console.log('[App] Boot pull (unlocked) — no local receipts, fetching from Notion');
-              void pull();
-            } else {
-              console.log('[App] Boot sync (unlocked) — existing local data');
-              void syncEngine.sync();
-            }
-          }, 500);
-        }
       }}
     >
       <HyperframeBackground />
-      <Shell active={tab} onTab={changeTab} syncState={syncEngine.engineState}>
+      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState}>
         <ErrorBoundary>
           <Suspense fallback={<LoadingState label="載入分頁" />}>
-            {tab === 'dashboard' && <Dashboard state={state} onOpen={setEditing} onTab={changeTab} onManual={() => setEditing(null)} />}
-            {tab === 'scan' && (
+            {safeTab === 'dashboard' && <Dashboard state={state} onOpen={setEditing} onTab={changeTab} onManual={() => setEditing(null)} />}
+            {safeTab === 'scan' && (
               <Scan
                 state={state}
                 onManual={() => setEditing(null)}
@@ -121,8 +133,8 @@ export function App() {
                 onImport={importReceipts}
               />
             )}
-            {tab === 'timeline' && <Timeline state={state} setState={setState} onOpen={setEditing} />}
-            {tab === 'history' && (
+            {safeTab === 'timeline' && <Timeline state={state} setState={setState} onOpen={setEditing} />}
+            {safeTab === 'history' && (
               <History
                 state={state}
                 onOpen={setEditing}
@@ -135,9 +147,9 @@ export function App() {
                 onPull={syncEngine.pull}
               />
             )}
-            {tab === 'weather' && <Weather state={state} />}
-            {tab === 'stats' && <Stats state={state} updateState={updateState} />}
-            {tab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} />}
+            {safeTab === 'weather' && <Weather state={state} />}
+            {safeTab === 'stats' && <Stats state={state} updateState={updateState} />}
+            {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} />}
           </Suspense>
           {editing !== undefined && (
         <ReceiptEditor
