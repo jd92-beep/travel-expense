@@ -1778,7 +1778,7 @@ let state = {
   autoSync: true,
   imgbbKey: '',
   kimiKey: DEFAULT_KIMI_KEY,      // Kimi for Coding API key (sk-kimi-...)
-  kimiProxy: 'https://rare-duck-29.jd92-beep.deno.net', // Deno Deploy proxy (non-CF IPs → bypasses Kimi's CF WAF)
+  kimiProxy: '', // 必須由用戶自行設定可信任代理，避免默認經第三方轉發憑證
   notionDeletedIds: [],   // Notion page IDs deleted locally — skip on pull
   persons: [
     { id: 'p_boss', name: 'Tony', emoji: '👦', color: '#CC2929' },
@@ -9236,8 +9236,8 @@ function init() {
       tag(hasZai,     'GLM'),
       tag(hasMinimax, 'MiniMax'),
       tag(hasOR,      'OpenRouter'),
-      // Kimi: key required; proxy shows warning but doesn't block (has default)
-      tag(hasKimi, hasKimiPx ? 'Kimi K2.6' : 'Kimi K2.6 (no proxy)'),
+      // Kimi: key + proxy are both required
+      tag(hasKimi && hasKimiPx, 'Kimi K2.6'),
     ].join(' · ');
   }
   _renderKeyStatus();
