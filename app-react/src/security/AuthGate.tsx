@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { LockKeyhole, ShieldCheck } from 'lucide-react';
 import type { BrokerSession } from '../lib/credentialBroker';
 import { redactedError, unlockCredentialBroker } from '../lib/credentialBroker';
-import { unlockWithPassword } from './cryptoUnlock';
 import { hasDeviceTrust, setDeviceTrust } from './deviceTrust';
 
 export function AuthGate({
@@ -37,20 +36,14 @@ export function AuthGate({
     setBusy(true);
     setError('');
     try {
-      await unlockWithPassword(password);
+      const brokerSession = await unlockCredentialBroker(password, { credentialBrokerUrl });
+      onBrokerSession?.(brokerSession);
       setDeviceTrust();
-      try {
-        const brokerSession = await unlockCredentialBroker(password, { credentialBrokerUrl });
-        onBrokerSession?.(brokerSession);
-      } catch (brokerError) {
-        // Local unlock remains valid; provider-backed features surface their own
-        // safe status in Settings if the broker is not deployed/configured yet.
-        console.info('Credential Broker unlock skipped:', redactedError(brokerError));
-      }
       setUnlocked(true);
       setPassword('');
       onUnlocked?.();
-    } catch {
+    } catch (error) {
+      console.info('Credential Broker unlock failed:', redactedError(error));
       setError('密碼唔正確，請再試一次。');
     } finally {
       setBusy(false);
