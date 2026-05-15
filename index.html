@@ -3678,8 +3678,9 @@ function receiptCard(r) {
   const photoSrc = r.photoThumb
     ? `data:image/jpeg;base64,${r.photoThumb}`
     : (r.photoUrl || '');
+  const photoBadgeSrc = encodeURIComponent(photoSrc);
   const photoBadge = photoSrc
-    ? `<button onclick="event.stopPropagation();openImgLightbox('${photoSrc.replace(/'/g,'%27')}')" class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:#DBEAFE;color:#1D4ED8" title="點擊睇收據相${r.photoThumb ? '' : '（從 Notion）'}">📷</button>`
+    ? `<button class="js-photo-badge ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold" data-photo-src="${photoBadgeSrc}" style="background:#DBEAFE;color:#1D4ED8" title="點擊睇收據相${r.photoThumb ? '' : '（從 Notion）'}">📷</button>`
     : '';
   return `
     <div class="glass rounded-2xl p-3 flex items-center justify-between" style="${borderStyle}" onclick="editReceipt('${r.id}')">
@@ -4581,6 +4582,16 @@ function closeImgLightbox() {
 }
 window.openImgLightbox  = openImgLightbox;
 window.closeImgLightbox = closeImgLightbox;
+
+// Handle receipt photo badge click without inline JS to avoid XSS via URL context.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.js-photo-badge');
+  if (!btn) return;
+  e.stopPropagation();
+  const encoded = btn.getAttribute('data-photo-src') || '';
+  if (!encoded) return;
+  openImgLightbox(decodeURIComponent(encoded));
+});
 
 // Pinch-to-zoom state
 let _lbScale = 1, _lbLastDist = null;
