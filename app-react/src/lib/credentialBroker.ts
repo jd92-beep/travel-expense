@@ -87,6 +87,7 @@ async function brokerFetch<T>(
   try {
     const response = await fetch(`${brokerUrl(state)}${path}`, {
       method: body === undefined ? 'GET' : 'POST',
+      credentials: 'include',
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -117,6 +118,20 @@ export async function unlockCredentialBroker(
 export async function brokerHealth(state: Pick<AppState, 'credentialBrokerUrl'>): Promise<string> {
   const data = await brokerFetch<{ ok: boolean; service: string; version: string }>(state, '/health', undefined, false);
   return `${data.service || 'Credential Broker'} ${data.version || ''}`.trim();
+}
+
+export async function restoreCredentialBrokerSession(
+  state?: Pick<AppState, 'credentialBrokerUrl'>,
+): Promise<BrokerSession> {
+  const data = await brokerFetch<{ ok: boolean; session: string; expiresAt: number }>(
+    state || {},
+    '/session/restore',
+    {},
+    false,
+  );
+  const session = { credentialSession: data.session, credentialSessionExpiresAt: Number(data.expiresAt) || 0 };
+  saveCredentialSession(session);
+  return session;
 }
 
 export async function getConnectionStatus(

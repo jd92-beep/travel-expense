@@ -66,6 +66,7 @@ function bearer(value) {
 function request(path, { method = 'GET', session, body, origin = ORIGIN } = {}) {
   const headers = new Headers();
   if (origin) headers.set('Origin', origin);
+  headers.set('User-Agent', 'travel-expense-self-test');
   if (session) headers.set('X-Travel-Session', session);
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   return new Request(`https://broker.test${path}`, {
@@ -76,7 +77,9 @@ function request(path, { method = 'GET', session, body, origin = ORIGIN } = {}) 
 }
 
 async function jsonFetch(env, path, options) {
-  const response = await worker.fetch(request(path, options), env, {});
+  const req = request(path, options);
+  if (options?.cookie) req.headers.set('Cookie', options.cookie);
+  const response = await worker.fetch(req, env, {});
   const text = await response.text();
   const data = text ? JSON.parse(text) : {};
   return { response, data };
@@ -180,6 +183,16 @@ async function run() {
     assert.equal(unlocked.response.status, 200);
     assert.equal(typeof unlocked.data.session, 'string');
     const session = unlocked.data.session;
+    const trustedCookie = (unlocked.response.headers.get('Set-Cookie') || '').split(';')[0];
+    assert.match(trustedCookie, /te_trusted_device=/);
+
+    const restored = await jsonFetch(env, '/session/restore', {
+      method: 'POST',
+      origin: 'http://127.0.0.1:8902',
+      cookie: trustedCookie,
+    });
+    assert.equal(restored.response.status, 200);
+    assert.equal(typeof restored.data.session, 'string');
 
     const initialStatus = await jsonFetch(env, '/credentials/status', { session });
     assert.equal(initialStatus.response.status, 200);

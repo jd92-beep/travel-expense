@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { LockKeyhole, ShieldCheck } from 'lucide-react';
 import type { BrokerSession } from '../lib/credentialBroker';
-import { redactedError, unlockCredentialBroker } from '../lib/credentialBroker';
+import { redactedError, restoreCredentialBrokerSession, unlockCredentialBroker } from '../lib/credentialBroker';
 import { unlockWithPassword } from './cryptoUnlock';
 import { hasDeviceTrust, setDeviceTrust } from './deviceTrust';
 
@@ -31,6 +31,21 @@ export function AuthGate({
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
+
+  useEffect(() => {
+    if (!unlocked) return;
+    if (!onBrokerSession) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const restored = await restoreCredentialBrokerSession({ credentialBrokerUrl });
+        if (!cancelled) onBrokerSession(restored);
+      } catch (error) {
+        console.info('Credential Broker restore skipped:', redactedError(error));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [credentialBrokerUrl, onBrokerSession, unlocked]);
 
   async function submit() {
     if (!password.trim()) return;

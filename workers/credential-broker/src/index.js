@@ -2,6 +2,8 @@ const SERVICE = 'travel-expense-credential-broker';
 const VERSION = '2026.05.08';
 const SESSION_HEADER = 'X-Travel-Session';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
+const TRUSTED_DEVICE_COOKIE = 'te_trusted_device';
+const TRUSTED_DEVICE_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const MAX_JSON_BYTES = 900000;
 const PROVIDERS = ['notion', 'kimi', 'google'];
 const NOTION_VERSION = '2022-06-28';
@@ -51,6 +53,7 @@ function corsHeaders(request, env) {
     'Vary': 'Origin',
   };
   if (matched) headers['Access-Control-Allow-Origin'] = origin;
+  if (matched) headers['Access-Control-Allow-Credentials'] = 'true';
   return headers;
 }
 
@@ -71,6 +74,28 @@ function redact(value) {
     .replace(/secret_[A-Za-z0-9]{12,}/g, '[redacted-token]')
     .replace(/AIza[0-9A-Za-z_-]{12,}/g, '[redacted-key]')
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
+}
+
+function parseCookieValue(request, name) {
+  const source = request.headers.get('Cookie') || '';
+  if (!source) return '';
+  const parts = source.split(';').map((item) => item.trim());
+  for (const part of parts) {
+    const [key, ...rest] = part.split('=');
+    if (key === name) return decodeURIComponent(rest.join('=') || '');
+  }
+  return '';
+}
+
+function trustedCookie(value, maxAgeSec) {
+  return [
+    `${TRUSTED_DEVICE_COOKIE}=${encodeURIComponent(String(value || ''))}`,
+    'Path=/',
+    'HttpOnly',
+    'Secure',
+    'SameSite=None',
+    `Max-Age=${Math.max(0, Number(maxAgeSec) || 0)}`,
+  ].join('; ');
 }
 
 function b64ToBytes(value) {
@@ -132,6 +157,20 @@ async function verifySession(token, env) {
     if (error instanceof HttpError) throw error;
     throw new HttpError('Session invalid', 401);
   }
+}
+
+async function signTrustedDevice(env, userAgent) {
+  const expiresAt = Date.now() + TRUSTED_DEVICE_TTL_MS;
+  const token = await signSession({ sub: 'travel-expense-device', ua: await sha256Id(userAgent || ''), exp: expiresAt, iat: Date.now() }, env);
+  return { token, expiresAt };
+}
+
+async function verifyTrustedDeviceCookie(request, env) {
+  const token = parseCookieValue(request, TRUSTED_DEVICE_COOKIE);
+  if (!token) throw new HttpError('Trusted device missing', 401);
+  const payload = await verifySession(token, env);
+  if (payload?.sub !== 'travel-expense-device') throw new HttpError('Trusted device invalid', 401);
+  return payload;
 }
 
 async function verifyPassword(password, hashSpec) {
@@ -468,7 +507,25 @@ async function handleRequest(request, env) {
       await clearFailedAttempts(env, rateKey);
       const expiresAt = Date.now() + SESSION_TTL_MS;
       const session = await signSession({ sub: 'travel-expense', exp: expiresAt, iat: Date.now() }, env);
+      const trusted = await signTrustedDevice(env, request.headers.get('User-Agent') || '');
+      return json({ ok: true, session, expiresAt, trustedDeviceExpiresAt: trusted.expiresAt }, 200, {
+        ...cors,
+        'Set-Cookie': trustedCookie(trusted.token, TRUSTED_DEVICE_TTL_MS / 1000),
+      });
+    }
+
+    if (url.pathname === '/session/restore') {
+      await verifyTrustedDeviceCookie(request, env);
+      const expiresAt = Date.now() + SESSION_TTL_MS;
+      const session = await signSession({ sub: 'travel-expense', exp: expiresAt, iat: Date.now() }, env);
       return json({ ok: true, session, expiresAt }, 200, cors);
+    }
+
+    if (url.pathname === '/session/logout') {
+      return json({ ok: true }, 200, {
+        ...cors,
+        'Set-Cookie': trustedCookie('', 0),
+      });
     }
 
     await verifySession(request.headers.get(SESSION_HEADER), env);
