@@ -64,8 +64,7 @@ async function notionFetch<T>(state: AppState, path: string, init: RequestInit =
   const directToken = (typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '') || getDirectNotionToken();
   if (directToken && !hasCredentialBrokerSession(state)) {
     if (!state.notionDb?.trim()) throw new Error('未設定 Notion DB ID');
-    const targetUrl = `https://api.notion.com/v1${path}`;
-    const url = state.proxy?.trim() ? makeProxyUrl(state.proxy.trim(), targetUrl) : targetUrl;
+    const url = `https://api.notion.com/v1${path}`;
     const response = await fetch(url, {
       method: init.method || 'GET',
       headers: {
@@ -659,8 +658,7 @@ export async function testDirectNotion(state: AppState): Promise<{ ok: boolean; 
   if (!token) return { ok: false, count: 0, error: 'No direct token in window.DEV_SECRETS' };
   const dbId = state.notionDb || DEFAULT_NOTION_DB;
   try {
-    const targetUrl = `https://api.notion.com/v1/databases/${dbId}/query`;
-    const url = state.proxy?.trim() ? makeProxyUrl(state.proxy.trim(), targetUrl) : targetUrl;
+    const url = `https://api.notion.com/v1/databases/${dbId}/query`;
     const res = await fetch(url, {
       method: 'POST',
       headers: {
