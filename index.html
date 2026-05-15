@@ -2827,14 +2827,14 @@ function renderDashboard() {
       const cat = CATEGORIES.find(c => c.id === spot.type) || CATEGORIES.find(c=>c.id==='other') || CATEGORIES[CATEGORIES.length-1];
       const isHotel = spot.type === 'lodging' && (spot.receiptId || spot.address);
       const spotIdx = (typeof spot._spotIdx === 'number') ? spot._spotIdx : -1;
-      const safeNameJs = (spot.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      const safeAddrJs = (spot.address||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const safeNameJs = escapeJsSingleQuoted(spot.name||'');
+      const safeAddrJs = escapeJsSingleQuoted(spot.address||'');
       // Tap → unified spot popup (name + address + Maps + Edit button)
       const hasOverride = spotIdx >= 0 && !!_getItineraryOverride(it.date, spotIdx);
-      const safeTimeJs = (spot.time||'').replace(/'/g,"\\'");
-      const safeTypeJs = (spot.type||'other').replace(/'/g,"\\'");
-      const safeNoteJs = (spot.note||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ');
-      const rid = spot.receiptId ? `'${String(spot.receiptId).replace(/'/g,"\\'")}'` : 'null';
+      const safeTimeJs = escapeJsSingleQuoted(spot.time||'');
+      const safeTypeJs = escapeJsSingleQuoted(spot.type||'other');
+      const safeNoteJs = escapeJsSingleQuoted(spot.note||'');
+      const rid = spot.receiptId ? `'${escapeJsSingleQuoted(String(spot.receiptId))}'` : 'null';
       const onTap = `showSpotPopup({name:'${safeNameJs}',address:'${safeAddrJs}',date:'${it.date}',spotIdx:${spotIdx},type:'${safeTypeJs}',time:'${safeTimeJs}',note:'${safeNoteJs}',receiptId:${rid}})`;
       const bg = isHotel
         ? 'background:rgba(52,211,153,0.10);border:1px solid rgba(52,211,153,0.30);'
@@ -2845,7 +2845,7 @@ function renderDashboard() {
       const rightIcon = `<span class="text-xs flex-shrink-0" style="color:${isHotel?'#10b981':(hasOverride?'#6366f1':'#9CA3AF')}">📍›</span>`;
       return `<div class="flex items-center gap-2 py-1" ${tapAttrs}>
         <span class="flex-shrink-0 text-sm" style="width:18px;text-align:center">${cat.icon}</span>
-        <span class="flex-shrink-0 font-medium" style="color:var(--n-muted);min-width:2.5rem;font-size:11px;line-height:1.2">${spot.time}${spot.timezone ? `<span style="font-size:8px;font-weight:600;letter-spacing:0.02em;opacity:0.75;display:block;margin-top:1px;color:#6366f1">${spot.timezone}</span>` : ''}</span>
+        <span class="flex-shrink-0 font-medium" style="color:var(--n-muted);min-width:2.5rem;font-size:11px;line-height:1.2">${escapeHtml(spot.time)}${spot.timezone ? `<span style="font-size:8px;font-weight:600;letter-spacing:0.02em;opacity:0.75;display:block;margin-top:1px;color:#6366f1">${escapeHtml(spot.timezone)}</span>` : ''}</span>
         <span class="text-xs flex-1 truncate" style="color:var(--n-text)">${escapeHtml(spot.name)}</span>
         ${rightIcon}
       </div>`;
@@ -3740,6 +3740,9 @@ window.confirmPendingReceipt = confirmPendingReceipt;
 function escapeHtml(s) {
   return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
+function escapeJsSingleQuoted(s) {
+  return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,' ');
+}
 
 function renderHistory() {
   const filter = $('filterCat').value;
@@ -3820,7 +3823,7 @@ function renderTimeline() {
         ? `onclick="openSpotEditModal('${day.date}',${spotIdx})" style="cursor:pointer"` : '';
       html += `<div class="tl-item planned${passed}" data-side="${side}" data-tl-key="${tlKey}" ${editAttr}>
         <div class="tl-card">
-          <div class="tl-time">${spot.time || ''}${tzBadge}</div>
+          <div class="tl-time">${escapeHtml(spot.time || '')}${tzBadge}</div>
           <div class="tl-name"><span class="tl-icon">${cat.icon}</span>${escapeHtml(spot.name)}${overrideBadge}</div>
           ${spot.note ? `<div class="tl-note">${escapeHtml(String(spot.note).slice(0,120))}</div>` : ''}
         </div>
