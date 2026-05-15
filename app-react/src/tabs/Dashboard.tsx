@@ -12,7 +12,7 @@ import { NumberTicker } from '../components/ui/number-ticker';
 import { TextAnimate } from '../components/ui/text-animate';
 import { ShimmerButton } from '../components/ui/shimmer-button';
 import { VisualIcon } from '../components/VisualIcon';
-import { categoryById, displayStore, fmt, getItinerary, getReceiptPhase, getPersons, hkd, isPendingReceipt, mapsUrl, receiptRegion, safeExternalUrl, todayForReceipts } from '../lib/domain';
+import { categoryById, displayStore, fmt, getItinerary, getReceiptPhase, getPersons, hkd, isPendingReceipt, mapsUrl, receiptRegion, safeExternalUrl, safePhotoUrl, todayForReceipts } from '../lib/domain';
 import { categoryIconId } from '../lib/iconManifest';
 import { activeTrip } from '../domain/trip/normalize';
 import type { AppState, ItinerarySpot, Receipt, TabId } from '../lib/types';
@@ -315,7 +315,7 @@ export function Dashboard({ state, onOpen, onTab, onManual }: { state: AppState;
         <div className="modal-backdrop" role="presentation" onClick={() => setViewPhoto(null)} style={{ zIndex: 9999 }}>
           <div className="modal flex justify-center items-center p-2 bg-transparent shadow-none" onClick={(e) => e.stopPropagation()}>
             <div className="relative max-w-full max-h-[90vh]">
-              <img src={viewPhoto} alt="Receipt" className="max-w-full max-h-[85vh] rounded-xl object-contain shadow-2xl" />
+              <img src={safePhotoUrl(viewPhoto)} alt="Receipt" className="max-w-full max-h-[85vh] rounded-xl object-contain shadow-2xl" />
               <button 
                 className="icon-btn absolute -top-4 -right-4 bg-black/50 text-white hover:bg-black/70 transition-colors" 
                 type="button" 
@@ -338,7 +338,7 @@ export function ReceiptRow({ state, receipt, onOpen, onViewPhoto }: { state: App
   const beneficiary = receipt.splitMode === 'private' && receipt.beneficiaryId && receipt.beneficiaryId !== receipt.personId
     ? persons.find((p) => p.id === receipt.beneficiaryId)
     : null;
-  const photoSrc = receipt.photoUrl || (receipt.photoThumb ? `data:image/jpeg;base64,${receipt.photoThumb}` : '');
+  const photoSrc = safePhotoUrl(receipt.photoUrl, receipt.photoThumb ? `data:image/jpeg;base64,${receipt.photoThumb}` : '');
   return (
     <div className="receipt-row" role="button" tabIndex={0} onClick={() => onOpen(receipt)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(receipt); }}>
       <VisualIcon id={categoryIconId(receipt.category)} label={cat.name} className="cat" />
@@ -348,8 +348,8 @@ export function ReceiptRow({ state, receipt, onOpen, onViewPhoto }: { state: App
           {beneficiary && <VisualIcon id="gift" size="sm" className="inline-visual-icon" />}
           {!beneficiary && receipt.splitMode === 'private' && <VisualIcon id="private" size="sm" className="inline-visual-icon" />}
           {displayStore(receipt)}
-          {photoSrc && (
-            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onViewPhoto ? onViewPhoto(photoSrc) : window.open(photoSrc, '_blank', 'noopener,noreferrer'); }} style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0, margin: 0 }}>
+          {photoSrc && onViewPhoto && (
+            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onViewPhoto(photoSrc); }} style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0, margin: 0 }}>
               <VisualIcon id="photo" size="sm" className="inline-visual-icon row-badge" />
             </button>
           )}
