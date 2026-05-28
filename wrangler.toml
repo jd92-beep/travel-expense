@@ -1,0 +1,6 @@
+# Deprecated legacy Kimi proxy config. Do not deploy this for the public React app.
+# Use workers/credential-broker/wrangler.jsonc for production broker deploys.
+name = "kimi-proxy"
+main = "kimi-proxy.js"
+compatibility_date = "2024-01-01"
+workers_dev = true

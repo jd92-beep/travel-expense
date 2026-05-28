@@ -1,0 +1,12 @@
+{
+  "name": "travel-expense-credential-broker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/index.js && node --check scripts/seed-vault.mjs && node --check test/self-test.mjs",
+    "seed:vault": "node scripts/seed-vault.mjs",
+    "self-test": "node test/self-test.mjs"
+  },
+  "devDependencies": {}
+}

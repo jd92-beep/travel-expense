@@ -1,0 +1,63 @@
+{
+  "name": "travel-expense-react-fresh",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 8902",
+    "build": "tsc -b && vite build",
+    "build:pages": "VITE_BASE_PATH=/travel-expense/react/ npm run build",
+    "build:root": "VITE_BASE_PATH=/ npm run build",
+    "preview": "vite preview --host 0.0.0.0 --port 4174",
+    "typecheck": "tsc --noEmit",
+    "parity:tabs": "node ../scripts/tab-parity.mjs",
+    "security:scan": "node ../scripts/security-scan.mjs",
+    "db:policy:scan": "node ../scripts/verify-supabase-migrations.mjs",
+    "db:rls:smoke": "node ../scripts/run-rls-smoke.mjs",
+    "smoke:ai-routing": "playwright test tests/ai-routing-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:auth-broker": "playwright test tests/auth-broker-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:history": "playwright test tests/history-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:dashboard": "playwright test tests/dashboard-parity-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:scan": "playwright test tests/scan-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:timeline": "playwright test tests/timeline-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:weather": "playwright test tests/weather-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:stats": "playwright test tests/stats-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:settings": "playwright test tests/settings-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:security": "playwright test tests/security-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:supabase-notion-mirror": "playwright test tests/supabase-notion-mirror-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:mobile-layout": "playwright test tests/mobile-layout-stability-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:final-nav": "playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line"
+  },
+  "dependencies": {
+    "@radix-ui/react-icons": "^1.3.2",
+    "@supabase/supabase-js": "^2.106.2",
+    "@tabler/icons-react": "^3.44.0",
+    "@tailwindcss/vite": "^4.2.4",
+    "@types/canvas-confetti": "^1.9.0",
+    "canvas-confetti": "^1.9.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.14.0",
+    "motion": "^12.38.0",
+    "next-themes": "^0.4.6",
+    "radix-ui": "^1.4.3",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-dropzone": "^15.0.0",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.4",
+    "vaul": "^1.1.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^5.8.0",
+    "vite": "^8.0.11"
+  }
+}

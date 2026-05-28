@@ -1,0 +1,387 @@
+
+Running 19 tests using 5 workers
+
+  ✘   1 tests/final-navigation-smoke.spec.cjs:28:3 › Final navigation smoke on mobile 390x844 (375ms)
+  ✘   2 tests/dashboard-parity-smoke.spec.cjs:58:1 › Dashboard spending toggle matches legacy total/daily semantics (509ms)
+  ✘   3 tests/history-smoke.spec.cjs:43:1 › History search, filter, pending, edit, delete, and safe pull (590ms)
+  ✘   4 tests/scan-smoke.spec.cjs:5:1 › Scan tab manual, voice, email, currency, and cleanup flows (516ms)
+  ✘   5 tests/security-smoke.spec.cjs:5:1 › Sensitive legacy fields are stripped from localStorage, IndexedDB, and service workers (462ms)
+  ✘   9 tests/stats-smoke.spec.cjs:19:1 › Stats settlement, filters, top expenses, and trend are usable (603ms)
+  ✘  10 tests/timeline-smoke.spec.cjs:5:1 › Timeline edit, reset, maps, and loose receipt flows (658ms)
+  ✘   8 tests/history-smoke.spec.cjs:78:1 › History manual pull routes through global sync engine when broker session exists (630ms)
+  ✘   7 tests/settings-smoke.spec.cjs:12:1 › Settings expandable cards, safe broker actions, backup, restore, and trust clear work (600ms)
+  ✘   6 tests/final-navigation-smoke.spec.cjs:28:3 › Final navigation smoke on mobile 360x780 (612ms)
+  ✘  12 tests/timeline-smoke.spec.cjs:50:1 › Timeline map links reject unsafe imported URLs and use Android intent fallback (368ms)
+  ✘  13 tests/settings-smoke.spec.cjs:139:1 › Settings protects broker URL and does not keep archived trip active (471ms)
+  ✘  11 tests/weather-smoke.spec.cjs:54:1 › Japan weather uses JMA candidate and renders slots (472ms)
+  ✘  14 tests/final-navigation-smoke.spec.cjs:28:3 › Final navigation smoke on desktop 1280x900 (352ms)
+  ✘  15 tests/timeline-smoke.spec.cjs:84:1 › Timeline highlights live, passed, and future itinerary spots (409ms)
+  ✘  16 tests/weather-smoke.spec.cjs:88:1 › Non-Japan trip uses Open-Meteo without JMA (456ms)
+  ✘  17 tests/final-navigation-smoke.spec.cjs:42:1 › Final lock gate smoke without trusted device (477ms)
+  ✘  18 tests/weather-smoke.spec.cjs:129:1 › Missing coordinates show warning and do not crash (288ms)
+  ✘  19 tests/weather-smoke.spec.cjs:153:1 › Multi-city day renders two forecast locations and live slot (313ms)
+
+
+  1) tests/dashboard-parity-smoke.spec.cjs:58:1 › Dashboard spending toggle matches legacy total/daily semantics 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      48 |     }));
+      49 |   }, statsIncludeTransportLodging);
+    > 50 |   await page.goto('http://localhost:8902/travel-expense/react/');
+         |              ^
+      51 |   await expect(page.getByLabel('旅程總覽')).toBeVisible();
+      52 |   await expect(page.locator('.today-itinerary-card').getByText('今日行程')).toHaveCount(1);
+      53 |   await expect(page.getByText('Budget Settings')).toHaveCount(0);
+        at openDashboard (/Users/tommy/Documents/New project/travel-expense/app-react/tests/dashboard-parity-smoke.spec.cjs:50:14)
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/dashboard-parity-smoke.spec.cjs:61:3
+
+    Error Context: test-results/tests-dashboard-parity-smo-789d2-egacy-total-daily-semantics/error-context.md
+
+  2) tests/final-navigation-smoke.spec.cjs:28:3 › Final navigation smoke on mobile 390x844 ─────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      30 |     const page = await context.newPage();
+      31 |     await installTrust(page);
+    > 32 |     await page.goto('http://localhost:8902/travel-expense/react/');
+         |                ^
+      33 |     const nav = page.getByLabel('主要分頁');
+      34 |     for (const [tabLabel, expectedText] of tabs) {
+      35 |       await nav.getByRole('button', { name: tabLabel, exact: true }).click();
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/final-navigation-smoke.spec.cjs:32:16
+
+    Error Context: test-results/tests-final-navigation-smo-0afc7-ion-smoke-on-mobile-390x844/error-context.md
+
+  3) tests/final-navigation-smoke.spec.cjs:28:3 › Final navigation smoke on mobile 360x780 ─────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      30 |     const page = await context.newPage();
+      31 |     await installTrust(page);
+    > 32 |     await page.goto('http://localhost:8902/travel-expense/react/');
+         |                ^
+      33 |     const nav = page.getByLabel('主要分頁');
+      34 |     for (const [tabLabel, expectedText] of tabs) {
+      35 |       await nav.getByRole('button', { name: tabLabel, exact: true }).click();
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/final-navigation-smoke.spec.cjs:32:16
+
+    Error Context: test-results/tests-final-navigation-smo-29c59-ion-smoke-on-mobile-360x780/error-context.md
+
+  4) tests/final-navigation-smoke.spec.cjs:28:3 › Final navigation smoke on desktop 1280x900 ───────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      30 |     const page = await context.newPage();
+      31 |     await installTrust(page);
+    > 32 |     await page.goto('http://localhost:8902/travel-expense/react/');
+         |                ^
+      33 |     const nav = page.getByLabel('主要分頁');
+      34 |     for (const [tabLabel, expectedText] of tabs) {
+      35 |       await nav.getByRole('button', { name: tabLabel, exact: true }).click();
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/final-navigation-smoke.spec.cjs:32:16
+
+    Error Context: test-results/tests-final-navigation-smo-05616-n-smoke-on-desktop-1280x900/error-context.md
+
+  5) tests/final-navigation-smoke.spec.cjs:42:1 › Final lock gate smoke without trusted device ─────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      42 | test('Final lock gate smoke without trusted device', async ({ page }) => {
+      43 |   await page.addInitScript(() => localStorage.clear());
+    > 44 |   await page.goto('http://localhost:8902/travel-expense/react/');
+         |              ^
+      45 |   await expect(page.getByText('先解鎖再使用')).toBeVisible();
+      46 | });
+      47 |
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/final-navigation-smoke.spec.cjs:44:14
+
+    Error Context: test-results/tests-final-navigation-smo-83b1b-moke-without-trusted-device/error-context.md
+
+  6) tests/history-smoke.spec.cjs:43:1 › History search, filter, pending, edit, delete, and safe pull 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      47 |   }, receipts);
+      48 |
+    > 49 |   await page.goto('http://localhost:8902/travel-expense/react/');
+         |              ^
+      50 |   await expect(page.getByText('紀錄中心')).toBeVisible();
+      51 |   await page.getByRole('button', { name: 'Pull Notion' }).click();
+      52 |   await expect(page.getByText('未連線：請到 Settings')).toBeVisible();
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/history-smoke.spec.cjs:49:14
+
+    Error Context: test-results/tests-history-smoke-Histor-c2e77-g-edit-delete-and-safe-pull/error-context.md
+
+  7) tests/history-smoke.spec.cjs:78:1 › History manual pull routes through global sync engine when broker session exists 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      100 |   });
+      101 |
+    > 102 |   await page.goto('http://localhost:8902/travel-expense/react/');
+          |              ^
+      103 |   await expect(page.getByText('紀錄中心')).toBeVisible();
+      104 |   await page.getByRole('button', { name: 'Pull Notion' }).click();
+      105 |   await expect(page.getByText(/已從 Notion 同步/)).toBeVisible();
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/history-smoke.spec.cjs:102:14
+
+    Error Context: test-results/tests-history-smoke-Histor-a66d8--when-broker-session-exists/error-context.md
+
+  8) tests/scan-smoke.spec.cjs:5:1 › Scan tab manual, voice, email, currency, and cleanup flows ────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+       8 |   });
+       9 |
+    > 10 |   await page.goto('http://localhost:8902/travel-expense/react/');
+         |              ^
+      11 |   await page.getByRole('button', { name: '記帳' }).click();
+      12 |   await expect(page.getByText('快速記帳')).toBeVisible();
+      13 |   await expect(page.getByRole('button', { name: '相機' }).first()).toBeVisible();
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/scan-smoke.spec.cjs:10:14
+
+    Error Context: test-results/tests-scan-smoke-Scan-tab--7e6b9--currency-and-cleanup-flows/error-context.md
+
+  9) tests/security-smoke.spec.cjs:5:1 › Sensitive legacy fields are stripped from localStorage, IndexedDB, and service workers 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      20 |   });
+      21 |
+    > 22 |   await page.goto('http://localhost:8902/travel-expense/react/');
+         |              ^
+      23 |   await expect(page.getByText('設定控制中心')).toBeVisible();
+      24 |   await page.waitForTimeout(500);
+      25 |
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/security-smoke.spec.cjs:22:14
+
+    Error Context: test-results/tests-security-smoke-Sensi-fa04b-dexedDB-and-service-workers/error-context.md
+
+  10) tests/settings-smoke.spec.cjs:12:1 › Settings expandable cards, safe broker actions, backup, restore, and trust clear work 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      47 |   });
+      48 |
+    > 49 |   await page.goto('http://localhost:8902/travel-expense/react/');
+         |              ^
+      50 |   await expect(page.getByText('設定控制中心')).toBeVisible();
+      51 |
+      52 |   const summaries = page.locator('.accordion-summary');
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/settings-smoke.spec.cjs:49:14
+
+    Error Context: test-results/tests-settings-smoke-Setti-01c82-estore-and-trust-clear-work/error-context.md
+
+  11) tests/settings-smoke.spec.cjs:139:1 › Settings protects broker URL and does not keep archived trip active 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      186 |   }, trips);
+      187 |
+    > 188 |   await page.goto('http://localhost:8902/travel-expense/react/');
+          |              ^
+      189 |   await expect(page.getByText('設定控制中心')).toBeVisible();
+      190 |
+      191 |   await setAccordion(page, 'Credentials & Connection');
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/settings-smoke.spec.cjs:188:14
+
+    Error Context: test-results/tests-settings-smoke-Setti-93e6f-t-keep-archived-trip-active/error-context.md
+
+  12) tests/stats-smoke.spec.cjs:19:1 › Stats settlement, filters, top expenses, and trend are usable 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      31 |   });
+      32 |
+    > 33 |   await page.goto('http://localhost:8902/travel-expense/react/');
+         |              ^
+      34 |   await expect(page.getByText('分帳統計中心')).toBeVisible();
+      35 |   await expect(page.getByText('6 筆紀錄')).toBeVisible();
+      36 |   await expect(page.getByText('Xinxin').first()).toBeVisible();
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/stats-smoke.spec.cjs:33:14
+
+    Error Context: test-results/tests-stats-smoke-Stats-se-bf08a-penses-and-trend-are-usable/error-context.md
+
+  13) tests/timeline-smoke.spec.cjs:5:1 › Timeline edit, reset, maps, and loose receipt flows ──────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+       8 |   });
+       9 |
+    > 10 |   await page.goto('http://localhost:8902/travel-expense/react/');
+         |              ^
+      11 |   const nav = page.getByLabel('主要分頁');
+      12 |   await nav.getByRole('button', { name: '行程' }).click();
+      13 |   await expect(page.getByText('行程時間線')).toBeVisible();
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/timeline-smoke.spec.cjs:10:14
+
+    Error Context: test-results/tests-timeline-smoke-Timel-5629f-aps-and-loose-receipt-flows/error-context.md
+
+  14) tests/timeline-smoke.spec.cjs:50:1 › Timeline map links reject unsafe imported URLs and use Android intent fallback 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      73 |     }));
+      74 |   });
+    > 75 |   await page.goto('http://localhost:8902/travel-expense/react/');
+         |              ^
+      76 |   await expect(page.getByText('行程時間線')).toBeVisible();
+      77 |   const hrefs = await page.getByRole('link', { name: '地圖' }).evaluateAll((links) => links.map((link) => link.getAttribute('href') || ''));
+      78 |   expect(hrefs.join(' ')).not.toMatch(/javascript:|evil\.example/i);
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/timeline-smoke.spec.cjs:75:14
+
+    Error Context: test-results/tests-timeline-smoke-Timel-e8748-use-Android-intent-fallback/error-context.md
+
+  15) tests/timeline-smoke.spec.cjs:84:1 › Timeline highlights live, passed, and future itinerary spots 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      114 |     }));
+      115 |   }, fixed);
+    > 116 |   await page.goto('http://localhost:8902/travel-expense/react/');
+          |              ^
+      117 |   await expect(page.getByText('行程時間線')).toBeVisible();
+      118 |   await expect(page.locator('.timeline-event.is-passed')).toContainText('Breakfast Stop');
+      119 |   await expect(page.locator('.timeline-event.is-live')).toContainText('Lunch Stop');
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/timeline-smoke.spec.cjs:116:14
+
+    Error Context: test-results/tests-timeline-smoke-Timel-cec53--and-future-itinerary-spots/error-context.md
+
+  16) tests/weather-smoke.spec.cjs:54:1 › Japan weather uses JMA candidate and renders slots ───────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      72 |   });
+      73 |   await installState(page, {});
+    > 74 |   await page.goto('http://localhost:8902/travel-expense/react/');
+         |              ^
+      75 |   await expect(page.getByText('天氣預報')).toBeVisible();
+      76 |   await expect(page.getByText(/Day 1 · JMA/)).toBeVisible();
+      77 |   await expect(page.getByText('21°C').first()).toBeVisible();
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/weather-smoke.spec.cjs:74:14
+
+    Error Context: test-results/tests-weather-smoke-Japan--8fff2-candidate-and-renders-slots/error-context.md
+
+  17) tests/weather-smoke.spec.cjs:88:1 › Non-Japan trip uses Open-Meteo without JMA ───────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      120 |     }],
+      121 |   });
+    > 122 |   await page.goto('http://localhost:8902/travel-expense/react/');
+          |              ^
+      123 |   await expect(page.getByText('San Francisco').first()).toBeVisible();
+      124 |   await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
+      125 |   expect(urls.length).toBeGreaterThan(0);
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/weather-smoke.spec.cjs:122:14
+
+    Error Context: test-results/tests-weather-smoke-Non-Ja-86418-uses-Open-Meteo-without-JMA/error-context.md
+
+  18) tests/weather-smoke.spec.cjs:129:1 › Missing coordinates show warning and do not crash ───────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      146 |     }],
+      147 |   });
+    > 148 |   await page.goto('http://localhost:8902/travel-expense/react/');
+          |              ^
+      149 |   await expect(page.getByText('未有座標')).toBeVisible();
+      150 |   expect(requestCount).toBe(0);
+      151 | });
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/weather-smoke.spec.cjs:148:14
+
+    Error Context: test-results/tests-weather-smoke-Missin-d11ae-ow-warning-and-do-not-crash/error-context.md
+
+  19) tests/weather-smoke.spec.cjs:153:1 › Multi-city day renders two forecast locations and live slot 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8902/travel-expense/react/
+    Call log:
+    [2m  - navigating to "http://localhost:8902/travel-expense/react/", waiting until "load"[22m
+
+
+      186 |     }],
+      187 |   });
+    > 188 |   await page.goto('http://localhost:8902/travel-expense/react/');
+          |              ^
+      189 |   await expect(page.getByText('天氣預報')).toBeVisible();
+      190 |   await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉']);
+      191 |   await expect(page.locator('.live-badge')).toHaveCount(2);
+        at /Users/tommy/Documents/New project/travel-expense/app-react/tests/weather-smoke.spec.cjs:188:14
+
+    Error Context: test-results/tests-weather-smoke-Multi--3faf2-ast-locations-and-live-slot/error-context.md
+
+  19 failed
+    tests/dashboard-parity-smoke.spec.cjs:58:1 › Dashboard spending toggle matches legacy total/daily semantics 
+    tests/final-navigation-smoke.spec.cjs:28:3 › Final navigation smoke on mobile 390x844 ──────────
+    tests/final-navigation-smoke.spec.cjs:28:3 › Final navigation smoke on mobile 360x780 ──────────
+    tests/final-navigation-smoke.spec.cjs:28:3 › Final navigation smoke on desktop 1280x900 ────────
+    tests/final-navigation-smoke.spec.cjs:42:1 › Final lock gate smoke without trusted device ──────
+    tests/history-smoke.spec.cjs:43:1 › History search, filter, pending, edit, delete, and safe pull 
+    tests/history-smoke.spec.cjs:78:1 › History manual pull routes through global sync engine when broker session exists 
+    tests/scan-smoke.spec.cjs:5:1 › Scan tab manual, voice, email, currency, and cleanup flows ─────
+    tests/security-smoke.spec.cjs:5:1 › Sensitive legacy fields are stripped from localStorage, IndexedDB, and service workers 
+    tests/settings-smoke.spec.cjs:12:1 › Settings expandable cards, safe broker actions, backup, restore, and trust clear work 
+    tests/settings-smoke.spec.cjs:139:1 › Settings protects broker URL and does not keep archived trip active 
+    tests/stats-smoke.spec.cjs:19:1 › Stats settlement, filters, top expenses, and trend are usable 
+    tests/timeline-smoke.spec.cjs:5:1 › Timeline edit, reset, maps, and loose receipt flows ────────
+    tests/timeline-smoke.spec.cjs:50:1 › Timeline map links reject unsafe imported URLs and use Android intent fallback 
+    tests/timeline-smoke.spec.cjs:84:1 › Timeline highlights live, passed, and future itinerary spots 
+    tests/weather-smoke.spec.cjs:54:1 › Japan weather uses JMA candidate and renders slots ─────────
+    tests/weather-smoke.spec.cjs:88:1 › Non-Japan trip uses Open-Meteo without JMA ─────────────────
+    tests/weather-smoke.spec.cjs:129:1 › Missing coordinates show warning and do not crash ─────────
+    tests/weather-smoke.spec.cjs:153:1 › Multi-city day renders two forecast locations and live slot 

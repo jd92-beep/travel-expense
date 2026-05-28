@@ -1,0 +1,77 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install fresh React app deps
+        working-directory: app-react
+        run: npm ci --no-audit --no-fund
+
+      - name: Security scan source
+        working-directory: app-react
+        run: npm run security:scan && npm run db:policy:scan
+
+      - name: Verify credential broker
+        working-directory: workers/credential-broker
+        run: npm run check && npm run self-test
+
+      - name: Verify tab parity
+        working-directory: app-react
+        run: npm run parity:tabs
+
+      - name: Build fresh React app
+        working-directory: app-react
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build:pages
+
+      - name: Prepare _site (legacy at root, fresh React at /react/)
+        run: |
+          mkdir -p _site/react
+          # Legacy working app stays at root. Do not inject provider keys into
+          # GitHub Pages output: Pages HTML is public, so credentials must come
+          # from local-only settings on the device.
+          cp index.html _site/index.html
+          # Fresh React UI. This intentionally does not deploy the previous
+          # app/ or app3/ implementations because their feature parity was
+          # unreliable. The stable legacy app remains at the root.
+          cp -r app-react/dist/* _site/react/
+
+      - name: Security scan Pages output
+        working-directory: app-react
+        run: npm run security:scan && npm run db:policy:scan
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: '_site'
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

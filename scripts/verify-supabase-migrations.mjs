@@ -1,0 +1,76 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const repoRoot = join(import.meta.dirname, '..');
+const files = [
+  'supabase/migrations/20260526071500_enforce_user_isolation_rls.sql',
+  'supabase/migrations/20260526075811_revoke_anon_private_table_grants.sql',
+  'supabase/migrations/20260526093000_scope_receipt_owner_updates.sql',
+  'supabase/migrations/20260526094500_keep_notion_scope_private.sql',
+  'supabase/migrations/20260526101000_tighten_shared_private_rows.sql',
+];
+
+const sql = files
+  .map((file) => readFileSync(join(repoRoot, file), 'utf8'))
+  .join('\n\n');
+
+const requiredPatterns = [
+  {
+    name: 'receipts update policy keeps row ownership with the signed-in user',
+    re: /create policy receipts_update_trip_editors[\s\S]*?using\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)[\s\S]*?with check\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
+  },
+  {
+    name: 'receipts delete policy keeps row ownership with the signed-in user',
+    re: /create policy receipts_delete_trip_editors[\s\S]*?using\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
+  },
+  {
+    name: 'receipt sync job updates keep row ownership with the signed-in user',
+    re: /create policy receipt_sync_jobs_update_trip_editors[\s\S]*?using\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)[\s\S]*?with check\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
+  },
+  {
+    name: 'public tables force RLS',
+    re: /alter table public\.receipts force row level security/i,
+  },
+  {
+    name: 'anon direct table grants are revoked',
+    re: /revoke all privileges on table public\.receipts from anon/i,
+  },
+  {
+    name: 'trip writes scrub shared-row Notion page and database identifiers',
+    re: /new\.notion_page_id\s*:=\s*null[\s\S]*?new\.notion_database_id\s*:=\s*null[\s\S]*?create trigger enforce_trip_private_fields_before_write[\s\S]*?before insert or update on public\.trips/i,
+  },
+  {
+    name: 'receipt writes scrub shared-row Notion page and database identifiers',
+    re: /create trigger enforce_receipt_private_fields_before_write[\s\S]*?before insert or update on public\.receipts/i,
+  },
+  {
+    name: 'receipt item inserts require the parent receipt to belong to the signed-in user',
+    re: /create policy receipt_items_insert_trip_editors[\s\S]*?r\.owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
+  },
+  {
+    name: 'receipt sync job inserts require matching receipt trip and owner',
+    re: /create policy receipt_sync_jobs_insert_trip_editors[\s\S]*?r\.trip_id\s*=\s*receipt_sync_jobs\.trip_id[\s\S]*?r\.owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
+  },
+  {
+    name: 'receipt item select is owner-only',
+    re: /create policy receipt_items_select_own[\s\S]*?using\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)\s*\)/i,
+  },
+  {
+    name: 'receipt photo select is owner-only',
+    re: /create policy receipt_photos_select_own[\s\S]*?using\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)\s*\)/i,
+  },
+  {
+    name: 'receipt sync job select is owner-only',
+    re: /create policy receipt_sync_jobs_select_own[\s\S]*?using\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)\s*\)/i,
+  },
+];
+
+const findings = requiredPatterns.filter((item) => !item.re.test(sql));
+
+if (findings.length) {
+  console.error('Supabase migration policy scan failed:');
+  for (const item of findings) console.error(`- ${item.name}`);
+  process.exit(1);
+}
+
+console.log('Supabase migration policy scan passed');

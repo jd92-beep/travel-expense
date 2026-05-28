@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  --n-bg: #FDF5EF;
+  --n-surface: #FFFFFF;
+  --n-border: rgba(255,220,210,0.60);
+  --n-text: #1A1A2E;
+  --n-muted: #6B7285;
+  --n-red: #CC2929;
+  --n-red-dim: #FCEAEA;
+  --n-shadow: rgba(204,41,41,0.10);
+  --sakura: #FF91A4;
+  --gold: #F5A623;
+}
+
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Hiragino Sans", sans-serif; background: #FDF5EF; color: #1A1A2E; -webkit-font-smoothing: antialiased; }
+
+/* Dot grid background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(circle, rgba(204,41,41,0.055) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.glass {
+  background: rgba(255,255,255,0.80);
+  border: 1px solid rgba(255,220,210,0.60);
+  box-shadow: 0 8px 32px rgba(204,41,41,0.07), 0 1px 4px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.95);
+  backdrop-filter: blur(28px) saturate(220%);
+  -webkit-backdrop-filter: blur(28px) saturate(220%);
+}
+
+.num { font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+input, button, textarea, select {
+  font-family: inherit;
+  -webkit-appearance: none;
+}
+
+input[type='text'], input[type='number'], input[type='email'], input[type='password'],
+input[type='date'], input[type='time'], textarea, select { font-size: 16px; }
+
+::-webkit-scrollbar { width: 0px; }
+
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }

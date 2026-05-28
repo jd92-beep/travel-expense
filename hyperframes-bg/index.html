@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+    }
+    #bg-composition {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    .bg-img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transform-origin: center center;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+</head>
+<body>
+  <div id="bg-composition" data-composition-id="bg-loop" data-width="1080" data-height="1920" data-duration="28">
+    <img class="bg-img" id="img1" src="assets/bg1.png" data-start="0" data-duration="5" data-track-index="1" />
+    <img class="bg-img" id="img2" src="assets/bg2.png" data-start="3" data-duration="5" data-track-index="2" />
+    <img class="bg-img" id="img3" src="assets/bg3.png" data-start="7" data-duration="5" data-track-index="3" />
+    <img class="bg-img" id="img4" src="assets/bg4.png" data-start="11" data-duration="5" data-track-index="4" />
+    <img class="bg-img" id="img5" src="assets/bg5.png" data-start="15" data-duration="5" data-track-index="5" />
+    <img class="bg-img" id="img6" src="assets/bg6.png" data-start="19" data-duration="5" data-track-index="6" />
+    <img class="bg-img" id="img7" src="assets/bg7.png" data-start="23" data-duration="5" data-track-index="7" />
+    <!-- Duplicate img1 at the end to create a seamless loop back to start -->
+    <img class="bg-img" id="img8" src="assets/bg1.png" data-start="27" data-duration="1" data-track-index="8" />
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      
+      const scenes = [
+        { id: '#img1', start: 0, dur: 5 },
+        { id: '#img2', start: 3, dur: 5 },
+        { id: '#img3', start: 7, dur: 5 },
+        { id: '#img4', start: 11, dur: 5 },
+        { id: '#img5', start: 15, dur: 5 },
+        { id: '#img6', start: 19, dur: 5 },
+        { id: '#img7', start: 23, dur: 5 },
+        { id: '#img8', start: 27, dur: 1 }
+      ];
+
+      scenes.forEach((s, i) => {
+        // Fade in (crossfade with previous image)
+        if (i > 0) {
+          tl.fromTo(s.id, { opacity: 0 }, { opacity: 1, duration: 1, ease: 'none' }, s.start);
+        } else {
+          tl.set(s.id, { opacity: 1 }, 0);
+        }
+        
+        // Slow pan / zoom (Ken Burns effect)
+        // Alternate zoom directions for dynamic feel
+        const isZoomIn = i % 2 === 0;
+        if (isZoomIn) {
+          tl.fromTo(s.id, { scale: 1.0 }, { scale: 1.08, duration: s.dur, ease: 'none' }, s.start);
+        } else {
+          tl.fromTo(s.id, { scale: 1.08 }, { scale: 1.0, duration: s.dur, ease: 'none' }, s.start);
+        }
+      });
+
+      window.__timelines['bg-loop'] = tl;
+    </script>
+  </div>
+</body>
+</html>

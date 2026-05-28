@@ -1,0 +1,11 @@
+# Ledger Atelier
+
+Ledger Atelier treats travel money as a field notebook: precise, calm, and quietly cinematic. Space is arranged like a desk before departure, with a route card, a receipt tray, a weather window, and a secure vault each given its own visual gravity. Forms should feel placed by hand, not poured into a template. The final work must look meticulously crafted, as if every alignment and pause was labored over with master-level execution.
+
+Color behaves like itinerary evidence. Indigo carries trust and navigation, vermilion marks decisions and pending attention, soft gold records value, green signals movement through places, and mist-blue opens the weather layer. The palette must feel calibrated through painstaking attention rather than automatically themed. Texture is present as paper fiber, stamped ledger marks, thin map coordinates, and transparent layers that reward close looking without hiding the controls.
+
+Scale and rhythm should change by task. Dashboard is a composed command table; Scan is a camera bench with strong capture actions; Timeline is a vertical route; History is an archive drawer; Weather is an atmospheric forecast grid; Stats is a measured accounting cockpit; Settings is a secure instrument room. Each screen has a distinct composition, but all share the same level of expert craft, with details that suggest countless hours of refinement.
+
+Typography is sparse and functional, used as labels, stamps, route tags, and totals rather than paragraphs. Information lives in cards, rails, markers, and spatial grouping. Text must never become decoration that competes with forms, but every label should feel deliberately set. The result should look like the product of deep expertise: a working app dressed with the care of a museum-grade travel ledger.
+
+The subtle reference is a Japan trip seen through receipts, train routes, weather slots, and Notion synchronization. It should not announce itself as tourism artwork. It should feel like the quiet DNA of the interface: a red stamp beside a pending receipt, a rail-line beside the itinerary, a vault mark beside credentials, a folded-paper route behind the app shell. The app remains a tool first, but the tool carries a visual memory.

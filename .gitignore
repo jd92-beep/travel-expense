@@ -1,0 +1,36 @@
+.DS_Store
+*.log
+*.tsbuildinfo
+node_modules/
+dist/
+app-react/dist/
+.env
+.env*
+.dev.vars*
+.wrangler/
+.vercel/
+secrets.local.*
+credential-seed*.json
+credential-vault*.json
+workers/**/.dev.vars*
+
+# Claude Code internal
+.claude/
+.playwright-mcp/
+
+# Test/temp artifacts
+smoke_test.jpg
+*.tmp
+.tmp/
+test_receipts/
+test-results/
+playwright-report/
+
+# Local graphify output - keep app knowledge graph on this machine only.
+graphify-out/
+
+# Local dev secrets — NEVER commit. Contains live API keys for desktop
+# testing only. On deployed GitHub Pages this file doesn't exist and
+# React uses the server-side Credential Broker instead of browser keys.
+secrets.local.js
+.gitnexus

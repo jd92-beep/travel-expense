@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "travel-expense-credential-broker",
+  "main": "src/index.js",
+  "compatibility_date": "2026-05-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:8902,https://jd92-beep.github.io,https://travel-expense-react.vercel.app,https://travel-expense-react.netlify.app",
+    "KIMI_PROXY_URL": "https://rare-duck-29.jd92-beep.deno.net",
+    "SUPABASE_URL": "https://fbnnjoahvtdrnigevrtw.supabase.co",
+    "SUPABASE_AI_DAILY_LIMIT": "50"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CREDENTIALS_VAULT",
+      "id": "f49c27e59b1648a3a3e79d4973cac768"
+    }
+  ]
+}
