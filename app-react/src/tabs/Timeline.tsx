@@ -83,7 +83,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       {itinerary.map((day) => {
         const spots = getScheduleSpots(state, day);
         const loose = dayLooseReceipts(state, day);
-        const rail = timelineRailMetrics(day.date, day.timezone, nowTick);
+        const rail = timelineRailMetrics(day.date, day.timezone, spots, nowTick);
         return (
         <Reveal key={day.date} className="timeline-day-reveal" delay={Math.min(0.18, day.day * 0.018)}>
         <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`}>
@@ -234,13 +234,28 @@ function timelineProgress(date: string, timezone: string | undefined, spots: Arr
   return 'is-passed';
 }
 
-function timelineRailMetrics(date: string, timezone: string | undefined, nowMs: number): { isToday: boolean; progress: number; label: string } {
+function timelineRailMetrics(date: string, timezone: string | undefined, spots: Array<ItinerarySpot & { _spotIdx: number }>, nowMs: number): { isToday: boolean; progress: number; label: string } {
   const current = datePartsForZone(nowMs, normalizeTimelineTimezone(timezone));
   if (!current) return { isToday: false, progress: 0, label: '' };
-  const progress = Math.max(0, Math.min(100, (current.minutes / (24 * 60 - 1)) * 100));
   if (date < current.date) return { isToday: false, progress: 100, label: '' };
   if (date > current.date) return { isToday: false, progress: 0, label: '' };
+  const progress = timelineSpotProgress(current.minutes, spots);
   return { isToday: true, progress, label: formatTimelineMinutes(current.minutes) };
+}
+
+function timelineSpotProgress(currentMinutes: number, spots: Array<ItinerarySpot & { _spotIdx: number }>): number {
+  if (!spots.length) return 0;
+  let currentIdx = -1;
+  for (let idx = 0; idx < spots.length; idx += 1) {
+    const start = minutesForTime(spots[idx]?.time);
+    if (!Number.isFinite(start) || currentMinutes < start) break;
+    currentIdx = idx;
+    const next = minutesForTime(spots[idx + 1]?.time);
+    if (currentMinutes < next) break;
+  }
+  if (currentIdx < 0) return 0;
+  if (spots.length === 1) return 50;
+  return Math.max(0, Math.min(100, (currentIdx / (spots.length - 1)) * 100));
 }
 
 function timelineRailStyle(metrics: { progress: number }): CSSProperties {

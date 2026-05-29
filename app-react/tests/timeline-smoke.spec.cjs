@@ -187,3 +187,72 @@ test('Timeline mobile rail shines independently without covering compact itinera
   expect(geometry.firstMain.left).toBeGreaterThan(geometry.firstEvent.left + 74);
   expect(Math.max(...geometry.eventHeights), JSON.stringify(geometry, null, 2)).toBeLessThanOrEqual(76);
 });
+
+test('Timeline rail progress follows the current itinerary spot instead of the whole day clock', async ({ page }) => {
+  const fixed = new Date('2026-05-09T09:30:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'timeline',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-09' },
+      customItinerary: [
+        {
+          date: '2026-05-08',
+          day: 1,
+          region: 'Past Day',
+          timezone: 'Asia/Tokyo',
+          spots: [{ time: '10:00', name: 'Past Stop', type: 'ticket' }],
+        },
+        {
+          date: '2026-05-09',
+          day: 2,
+          region: 'Current Day',
+          timezone: 'Asia/Tokyo',
+          spots: [
+            { time: '08:00', name: 'Hotel Breakfast', type: 'food' },
+            { time: '09:00', name: 'Temple Gate', type: 'ticket' },
+            { time: '23:00', name: 'Night Market', type: 'shopping' },
+            { time: '23:30', name: 'Hotel Return', type: 'lodging' },
+          ],
+        },
+      ],
+      receipts: [],
+    }));
+  }, fixed);
+
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  await expect(page.getByText('Current Day')).toBeVisible();
+  const todayRail = page.locator('.timeline-rail.is-today');
+  await expect(todayRail.locator('.timeline-now-marker')).toContainText('09:30');
+  await expect(page.locator('.timeline-event.is-live')).toContainText('Temple Gate');
+
+  const railMetrics = await todayRail.evaluate((rail) => {
+    const style = getComputedStyle(rail);
+    const marker = rail.querySelector('.timeline-now-marker')?.getBoundingClientRect();
+    const events = Array.from(rail.querySelectorAll('.timeline-event')).map((node) => node.getBoundingClientRect());
+    const live = rail.querySelector('.timeline-event.is-live')?.getBoundingClientRect();
+    return {
+      progress: Number(style.getPropertyValue('--timeline-progress')),
+      markerCenterY: marker ? marker.top + marker.height / 2 : null,
+      liveCenterY: live ? live.top + live.height / 2 : null,
+      eventCount: events.length,
+    };
+  });
+
+  expect(railMetrics.eventCount).toBe(4);
+  expect(railMetrics.progress, JSON.stringify(railMetrics, null, 2)).toBeGreaterThan(0.31);
+  expect(railMetrics.progress, JSON.stringify(railMetrics, null, 2)).toBeLessThan(0.36);
+  expect(Math.abs((railMetrics.markerCenterY || 0) - (railMetrics.liveCenterY || 0)), JSON.stringify(railMetrics, null, 2)).toBeLessThan(10);
+});
