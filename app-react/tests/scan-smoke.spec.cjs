@@ -20,10 +20,17 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.getByRole('button', { name: '相機' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '相簿' }).first()).toBeVisible();
   await expect(page.locator('.scan-function-art')).toHaveCount(6);
+  await expect(page.locator('.scan-function-art svg, .scan-function-art img')).toHaveCount(0);
+  const heroCard = await page.locator('.scan-hero-card').boundingBox();
+  const heroButton = await page.locator('.scan-hero-button').boundingBox();
   const heroCopy = await page.locator('.scan-hero-copy').boundingBox();
   const heroVisual = await page.locator('.scan-banana-visual').boundingBox();
+  expect(heroCard).toBeTruthy();
+  expect(heroButton).toBeTruthy();
   expect(heroCopy).toBeTruthy();
   expect(heroVisual).toBeTruthy();
+  expect(heroCard.width).toBeGreaterThanOrEqual(356);
+  expect(heroButton.width).toBeGreaterThanOrEqual(330);
   const overlapX = Math.max(0, Math.min(heroCopy.x + heroCopy.width, heroVisual.x + heroVisual.width) - Math.max(heroCopy.x, heroVisual.x));
   const overlapY = Math.max(0, Math.min(heroCopy.y + heroCopy.height, heroVisual.y + heroVisual.height) - Math.max(heroCopy.y, heroVisual.y));
   expect(overlapX * overlapY).toBe(0);

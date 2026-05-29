@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, FileImage, FileText, Mail, Mic, RefreshCw, Repeat2 } from 'lucide-react';
+import { Camera, CheckCircle2, Mail, Mic, RefreshCw, Repeat2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { ActionRippleButton, GlassCard, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 import { ShimmerButton } from '../components/ui/shimmer-button';
@@ -6,7 +6,6 @@ import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../
 import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
 import { compressPhoto } from '../lib/domain';
 import type { AppState, Receipt } from '../lib/types';
-import nanoBanana2Image from '../assets/nano_banana_2.png';
 import scanMasterpieceSuite from '../assets/scan/scan-masterpiece-suite.png';
 
 type ScanMode = 'scan' | 'voice' | 'email' | 'currency';
@@ -418,9 +417,6 @@ export function Scan({
               <p className="text-[11px] text-blue-100/90 mt-1 font-medium leading-snug">打開相機直接拍攝收據，AI 自動為你讀取金額、店名與明細。</p>
             </div>
             <div className="scan-banana-visual scan-function-art scan-function-art--camera" style={scanSuiteStyle} aria-hidden="true">
-              <span className="scan-banana-orbit">
-                <img src={nanoBanana2Image} alt="" className="w-full h-full object-contain p-1" />
-              </span>
             </div>
           </ShimmerButton>
 
@@ -431,9 +427,7 @@ export function Scan({
             className={`scan-secondary-button col-span-1 flex flex-col items-center justify-center gap-3 p-5 min-h-[140px] rounded-[28px] bg-white/70 backdrop-blur-xl border border-white/90 shadow-lg hover:bg-white/90 hover:scale-[1.01] active:scale-98 transition-all cursor-pointer ${busy === 'ocr' ? 'opacity-50 cursor-not-allowed' : ''}`}
             onClick={triggerGallery}
           >
-            <span className="scan-function-art scan-function-art--gallery" style={scanSuiteStyle} aria-hidden="true">
-              <FileImage size={24} />
-            </span>
+            <span className="scan-function-art scan-function-art--gallery" style={scanSuiteStyle} aria-hidden="true" />
             <div className="flex flex-col items-center">
               <strong className="text-base font-black text-slate-800">相簿匯入 🖼️</strong>
               <span className="text-[11px] text-slate-400 font-medium mt-0.5">從手機相簿選取收據圖片</span>
@@ -449,9 +443,7 @@ export function Scan({
             aria-label="手動"
             className="scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer"
           >
-            <span className="scan-function-art scan-function-art--manual" style={scanSuiteStyle} aria-hidden="true">
-              <FileText size={18} />
-            </span>
+            <span className="scan-function-art scan-function-art--manual" style={scanSuiteStyle} aria-hidden="true" />
             <div className="scan-utility-copy flex flex-col items-start text-left">
               <strong className="text-xs font-black text-slate-800">手動記帳</strong>
               <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Manual</span>
@@ -464,9 +456,7 @@ export function Scan({
             aria-label="語音"
             className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'voice' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
           >
-            <span className="scan-function-art scan-function-art--voice" style={scanSuiteStyle} aria-hidden="true">
-              <Mic size={18} />
-            </span>
+            <span className="scan-function-art scan-function-art--voice" style={scanSuiteStyle} aria-hidden="true" />
             <div className="scan-utility-copy flex flex-col items-start text-left">
               <strong className="text-xs font-black text-slate-800">語音記帳</strong>
               <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Voice</span>
@@ -479,9 +469,7 @@ export function Scan({
             aria-label="Email"
             className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'email' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
           >
-            <span className="scan-function-art scan-function-art--email" style={scanSuiteStyle} aria-hidden="true">
-              <Mail size={18} />
-            </span>
+            <span className="scan-function-art scan-function-art--email" style={scanSuiteStyle} aria-hidden="true" />
             <div className="scan-utility-copy flex flex-col items-start text-left">
               <strong className="text-xs font-black text-slate-800">Email 匯入</strong>
               <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Email</span>
@@ -494,9 +482,7 @@ export function Scan({
             aria-label="匯率"
             className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'currency' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
           >
-            <span className="scan-function-art scan-function-art--currency" style={scanSuiteStyle} aria-hidden="true">
-              <Repeat2 size={18} />
-            </span>
+            <span className="scan-function-art scan-function-art--currency" style={scanSuiteStyle} aria-hidden="true" />
             <div className="scan-utility-copy flex flex-col items-start text-left">
               <strong className="text-xs font-black text-slate-800">匯率工具</strong>
               <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Fx Tool</span>

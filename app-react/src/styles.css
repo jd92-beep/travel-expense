@@ -2803,7 +2803,7 @@ body {
 .scan-hero-button {
   --bg: linear-gradient(110deg,#2563eb,#4f46e5,#312e81);
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) clamp(96px, 24%, 136px);
+  grid-template-columns: minmax(0, 1fr) clamp(112px, 25%, 148px);
   align-items: center;
   justify-content: stretch;
   gap: 18px;
@@ -2822,8 +2822,8 @@ body {
   position: relative;
   z-index: 1;
   display: inline-flex;
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -2833,7 +2833,6 @@ body {
   background-color: rgba(255,255,255,.72);
   background-repeat: no-repeat;
   background-size: 300% 200%;
-  color: rgba(255,255,255,.96);
   box-shadow:
     0 16px 30px rgba(20,32,55,.18),
     inset 0 1px 0 rgba(255,255,255,.82);
@@ -2848,54 +2847,32 @@ body {
     linear-gradient(0deg, rgba(0,0,0,.16), transparent 54%);
   pointer-events: none;
 }
-.scan-function-art > svg,
-.scan-banana-orbit {
-  position: relative;
-  z-index: 1;
-}
-.scan-function-art > svg {
-  filter: drop-shadow(0 3px 8px rgba(0,0,0,.35));
-  stroke-width: 2.35;
-}
 .scan-function-art--camera {
-  width: clamp(92px, 22vw, 132px);
+  width: clamp(108px, 24vw, 148px);
   height: auto;
   aspect-ratio: 1;
   justify-self: end;
   border-radius: 28px;
   background-position: left top;
 }
-.scan-function-art--gallery { background-position: center top; color: #f8f5ff; }
-.scan-function-art--manual { background-position: right top; color: #fff8e8; }
-.scan-function-art--voice { background-position: left bottom; color: #fff3e8; }
-.scan-function-art--email { background-position: center bottom; color: #fffdf6; }
-.scan-function-art--currency { background-position: right bottom; color: #fff8d8; }
-.scan-banana-orbit {
-  display: flex;
-  width: 64%;
-  height: 64%;
-  align-items: center;
-  justify-content: center;
-  border-radius: 24px;
-  background: rgba(255,255,255,.28);
-  box-shadow:
-    0 10px 26px rgba(13,27,49,.22),
-    inset 0 1px 0 rgba(255,255,255,.62);
-  transform: translate(12%, 10%) rotate(-5deg);
-}
+.scan-function-art--gallery { background-position: center top; }
+.scan-function-art--manual { background-position: right top; }
+.scan-function-art--voice { background-position: left bottom; }
+.scan-function-art--email { background-position: center bottom; }
+.scan-function-art--currency { background-position: right bottom; }
 .scan-utility-button {
   min-width: 0;
   overflow: hidden;
 }
 .scan-utility-button .scan-function-art {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
 }
 .scan-secondary-button .scan-function-art {
-  width: 68px;
-  height: 68px;
-  border-radius: 22px;
+  width: 86px;
+  height: 86px;
+  border-radius: 24px;
 }
 .settings-status-tooltips > span,
 .settings-status-tooltips [data-slot="tooltip-trigger"] {
@@ -3046,6 +3023,10 @@ textarea {
   .app-shell {
     padding-inline: 12px;
   }
+  .scan-screen {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
   .content > .stack {
     padding-bottom: 92px;
   }
@@ -3062,29 +3043,26 @@ textarea {
     margin-bottom: 16px;
   }
   .scan-screen .scan-hero-card {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
     padding-bottom: 24px;
   }
   .scan-screen .scan-hero-button {
-    grid-template-columns: minmax(0, 1fr) 82px;
-    gap: 10px;
-    min-height: 128px;
-    padding: 14px !important;
+    grid-template-columns: minmax(0, 1fr) 88px;
+    gap: 12px;
+    min-height: 144px;
+    padding: 16px !important;
   }
   .scan-screen .scan-hero-copy strong {
-    font-size: 1rem;
+    font-size: 1.08rem;
   }
   .scan-screen .scan-hero-copy p {
-    font-size: 10px;
+    font-size: 10.5px;
     line-height: 1.35;
   }
   .scan-screen .scan-function-art--camera {
-    width: 82px;
-    border-radius: 22px;
-  }
-  .scan-screen .scan-banana-orbit {
-    width: 66%;
-    height: 66%;
-    border-radius: 18px;
+    width: 88px;
+    border-radius: 24px;
   }
   .scan-screen .scan-mode-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3101,22 +3079,23 @@ textarea {
     height: 22px;
   }
   .scan-screen .scan-secondary-button {
-    min-height: 118px;
-    padding: 14px !important;
+    min-height: 132px;
+    padding: 16px !important;
   }
   .scan-screen .scan-secondary-button .scan-function-art {
-    width: 56px;
-    height: 56px;
-    border-radius: 18px;
+    width: 74px;
+    height: 74px;
+    border-radius: 22px;
   }
   .scan-screen .scan-utility-button {
-    gap: 8px;
-    padding: 10px !important;
+    gap: 10px;
+    min-height: 70px;
+    padding: 10px 12px !important;
   }
   .scan-screen .scan-utility-button .scan-function-art {
-    width: 38px;
-    height: 38px;
-    border-radius: 13px;
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
   }
   .topbar-canva {
     gap: 8px;

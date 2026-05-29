@@ -69,7 +69,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
-- Scan tab visual polish on 2026-05-30 HKT: generated a six-panel masterpiece-style visual suite for camera scan, gallery import, manual entry, voice capture, email import, and currency exchange. The React Scan tab now crops that shared artwork into each function card, overlays solid Lucide icons for clarity, and keeps the banana receipt-scanner art in a reserved grid column so it no longer covers the hero card words on mobile.
+- Scan tab visual polish on 2026-05-30 HKT: generated a six-panel masterpiece-style visual suite for camera scan, gallery import, manual entry, voice capture, email import, and currency exchange. The React Scan tab now crops that shared artwork into each function card without extra icon or banana overlays, keeps the artwork in its own reserved grid column, and enlarges the mobile Scan background/action cards so more card copy fits on one line.
 - Latest itinerary mobile polish on 2026-05-29 HKT: the Timeline rail now renders an independent Magic UI `BorderBeam`-backed beam layer with an animated vertical sweep, live progress fill, and a compact now marker. Itinerary cards now use an explicit compact grid layout, smaller mobile icons/time/action controls, and a right-side action column so more cards fit on phone screens while the rail stays separated from card text.
 - Follow-up itinerary rail fix on 2026-05-29 HKT: today's rail progress now follows the current itinerary spot index instead of the 24-hour clock percentage, so the dark animated fill and now marker stop near the live scenic spot for the active day.
 - Follow-up itinerary inactive-date polish on 2026-05-30 HKT: when the current date is outside the trip's itinerary date window, all Timeline rails keep the itinerary red/gold/green palette but render it dimmed, hide the live marker, and pause the bright sweep so past/future trips do not look actively in progress.
@@ -80,7 +80,7 @@ Latest UI polish in this handover update:
 
 Latest UI verification from this pass:
 
-- `npm run smoke:scan` - passed, including Scan tab manual/voice/email/currency flows, six generated function visuals, and mobile banana/text non-overlap regression coverage.
+- `npm run smoke:scan` - passed, including Scan tab manual/voice/email/currency flows, six generated function visuals, zero generated-art overlay elements, enlarged mobile card geometry, and mobile artwork/text non-overlap regression coverage.
 - `npm run typecheck` - passed.
 - `npm run build` - passed.
 - `npm run smoke:timeline` - 6 passed, covering edit/reset/maps/loose receipts, safe map URLs, live/passed/future state, mobile rail geometry, spot-index progress, and dimmed out-of-trip rails.
