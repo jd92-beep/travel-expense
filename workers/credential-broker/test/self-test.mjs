@@ -120,6 +120,7 @@ function installProviderFetchStub() {
   const integrations = [];
   const kimiModels = [];
   const googleModels = [];
+  const weatherQueries = [];
   let notionCalls = 0;
   globalThis.fetch = async (url, init = {}) => {
     const href = String(url);
@@ -184,6 +185,36 @@ function installProviderFetchStub() {
       return Response.json({ candidates: [{ content: { parts: [{ text: '{"ok":true,"provider":"google"}' }] } }] });
     }
 
+    if (href.startsWith('https://api.weatherapi.com/v1/current.json')) {
+      const params = new URL(href).searchParams;
+      assert.equal(params.get('key'), 'weatherapi-secret-for-test');
+      assert.equal(params.get('q'), 'Jeju');
+      return Response.json({ location: { name: 'Jeju' }, current: { temp_c: 22, feelslike_c: 24, condition: { code: 1000 } } });
+    }
+
+    if (href.startsWith('https://api.weatherapi.com/v1/forecast.json')) {
+      const params = new URL(href).searchParams;
+      assert.equal(params.get('key'), 'weatherapi-secret-for-test');
+      assert.equal(params.get('q'), '33.50972,126.52194');
+      assert.equal(params.get('days'), '3');
+      assert.equal(params.get('aqi'), 'no');
+      assert.equal(params.get('alerts'), 'no');
+      weatherQueries.push(params.get('q'));
+      return Response.json({
+        location: { name: 'Jeju', region: 'Jeju-do', country: 'South Korea', tz_id: 'Asia/Seoul' },
+        current: { temp_c: 22, feelslike_c: 24, condition: { code: 1000 }, humidity: 78, wind_kph: 10 },
+        forecast: {
+          forecastday: [{
+            date: '2026-05-29',
+            hour: [
+              { time: '2026-05-29 09:00', temp_c: 21, feelslike_c: 23, condition: { code: 1003 }, chance_of_rain: 20, precip_mm: 0.1, humidity: 72, wind_kph: 12, wind_degree: 180, gust_kph: 18, cloud: 30, uv: 3 },
+              { time: '2026-05-29 12:00', temp_c: 24, feelslike_c: 27, condition: { code: 1183 }, chance_of_rain: 55, precip_mm: 1.2, humidity: 70, wind_kph: 14, wind_degree: 190, gust_kph: 22, cloud: 68, uv: 6 },
+            ],
+          }],
+        },
+      });
+    }
+
     return Response.json({ error: { message: 'Unexpected provider call' } }, { status: 500 });
   };
   const restore = () => {
@@ -192,6 +223,7 @@ function installProviderFetchStub() {
   restore.notionCalls = () => notionCalls;
   restore.kimiModels = () => kimiModels.slice();
   restore.googleModels = () => googleModels.slice();
+  restore.weatherQueries = () => weatherQueries.slice();
   return restore;
 }
 
@@ -300,7 +332,7 @@ async function run() {
 
     const initialStatus = await jsonFetch(env, '/credentials/status', { session });
     assert.equal(initialStatus.response.status, 200);
-    assert.deepEqual(initialStatus.data.providers.map((item) => item.status), ['missing', 'missing', 'missing']);
+    assert.deepEqual(initialStatus.data.providers.map((item) => item.status), ['missing', 'missing', 'missing', 'missing']);
 
     const adminRotateBlockedOrigin = await jsonFetch(env, '/credentials/admin-rotate', {
       method: 'POST',
@@ -483,6 +515,7 @@ async function run() {
     assert.equal(vaultDump.includes('notion-secret-for-test'), false);
     assert.equal(vaultDump.includes('kimi-secret-for-test'), false);
     assert.equal(vaultDump.includes('google-secret-for-test'), false);
+    assert.equal(vaultDump.includes('weatherapi-secret-for-test'), false);
 
     const statusAfterRotate = await jsonFetch(env, '/credentials/status', { session });
     assert.equal(typeof statusAfterRotate.data.providers.find((item) => item.provider === 'google')?.lastTestedAt, 'number');
@@ -504,6 +537,27 @@ async function run() {
     assert.equal(supabaseGoogle.response.status, 200);
     assert.equal(supabaseGoogle.data.data.provider, 'google');
     assert.equal(restoreFetch.googleModels().at(-1), 'gemma-4-31b');
+
+    const weatherApiRotate = await jsonFetch(env, '/credentials/rotate', {
+      method: 'POST',
+      session,
+      body: { provider: 'weatherapi', secret: 'weatherapi-secret-for-test', adminPassphrase: ADMIN_PASSWORD },
+    });
+    assert.equal(weatherApiRotate.response.status, 200);
+    assert.equal(weatherApiRotate.data.status.status, 'connected');
+    assert.equal(JSON.stringify([...env.CREDENTIALS_VAULT.values.values()]).includes('weatherapi-secret-for-test'), false);
+
+    const weather = await jsonFetch(env, '/weather/forecast', {
+      method: 'POST',
+      session,
+      body: { lat: 33.50972, lon: 126.52194, days: 3 },
+    });
+    assert.equal(weather.response.status, 200);
+    assert.equal(weather.data.data.source, 'WeatherAPI.com');
+    assert.deepEqual(weather.data.data.hourly.time, ['2026-05-29T09:00', '2026-05-29T12:00']);
+    assert.deepEqual(weather.data.data.hourly.temperature_2m, [21, 24]);
+    assert.deepEqual(weather.data.data.hourly.apparent_temperature, [23, 27]);
+    assert.equal(restoreFetch.weatherQueries().at(-1), '33.50972,126.52194');
 
     const tooLarge = await worker.fetch(new Request('https://broker.test/session/unlock', {
       method: 'POST',

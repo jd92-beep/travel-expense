@@ -1,7 +1,7 @@
 import type { CSSProperties, Dispatch, FormEvent, SetStateAction } from 'react';
 import { useEffect, useState } from 'react';
 import { CalendarDays, Home, MapPin, PencilLine, ReceiptText, RotateCcw } from 'lucide-react';
-import { ActionSheet, GlassCard, StatusPill, TimelineRail } from '../components/ui';
+import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
 import { ShineBorder } from '../components/ui/shine-border';
 import { categoryById, dayLooseReceipts, fmt, getItinerary, getScheduleSpots, hkd, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts } from '../lib/domain';
@@ -85,7 +85,8 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
         const loose = dayLooseReceipts(state, day);
         const rail = timelineRailMetrics(day.date, day.timezone, nowTick);
         return (
-        <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`} key={day.date}>
+        <Reveal key={day.date} className="timeline-day-reveal" delay={Math.min(0.18, day.day * 0.018)}>
+        <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`}>
           <div className="section-head timeline-day-head">
             <div className="timeline-day-title">
               <span className="timeline-day-number">Day {day.day}</span>
@@ -158,6 +159,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
             </span>
           </button>
         </GlassCard>
+        </Reveal>
       );})}
       </div>
     </section>

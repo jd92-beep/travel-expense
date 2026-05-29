@@ -1,4 +1,6 @@
 import type { ItineraryDay } from './types';
+import { brokerWeatherForecast } from './credentialBroker';
+import type { AppState } from './types';
 
 export const WEATHER_SLOTS = [9, 12, 16, 21];
 
@@ -6,6 +8,7 @@ export interface WeatherCoord {
   label: string;
   lat: number;
   lon: number;
+  timezone?: string;
   missing?: boolean;
 }
 
@@ -74,16 +77,89 @@ export function coordsForDay(day: ItineraryDay, limit = 2): WeatherCoord[] {
     if (coords.length >= limit) break;
   }
   if (coords.length) return coords.slice(0, limit);
-  return [{ label: day.city || day.region || '未設定座標', lat: Number.NaN, lon: Number.NaN, missing: true }];
+  return [{ label: weatherLocationLabel(day), lat: Number.NaN, lon: Number.NaN, missing: true }];
 }
 
 export function coordForDay(day: ItineraryDay): WeatherCoord {
   return coordsForDay(day, 1)[0];
 }
 
+export async function resolveCoordsForDay(day: ItineraryDay, limit = 2): Promise<WeatherCoord[]> {
+  const coords = coordsForDay(day, limit);
+  if (coords.some((coord) => !coord.missing)) return coords;
+  const queries = weatherLocationQueries(day);
+  if (!queries.length) return coords;
+  const geocoded = await geocodeWeatherLocations(queries, day.country, limit);
+  return geocoded.length ? geocoded : coords;
+}
+
 function weatherCacheKey(coord: WeatherCoord) {
   if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) return null;
-  return `wx_react_v2_${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`;
+  return `wx_react_v3_${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`;
+}
+
+function weatherLocationLabel(day: ItineraryDay): string {
+  return [day.city, day.region, day.country].map((part) => String(part || '').trim()).find(Boolean) || '未設定座標';
+}
+
+function weatherLocationQueries(day: ItineraryDay): string[] {
+  const city = String(day.city || '').trim();
+  const region = String(day.region || '').trim();
+  const country = String(day.country || '').trim();
+  const candidates = [
+    [city, country].filter(Boolean).join(' '),
+    [region, country].filter(Boolean).join(' '),
+    city,
+    region,
+  ].filter(Boolean);
+  return Array.from(new Set(candidates));
+}
+
+function geocodeCacheKey(query: string, country?: string) {
+  const scopedQuery = [query, country].map((part) => String(part || '').trim()).filter(Boolean).join('_');
+  return `wx_geocode_v1_${scopedQuery.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 72)}`;
+}
+
+function countryMatches(result: Record<string, unknown>, country?: string): boolean {
+  const wanted = String(country || '').trim().toLowerCase();
+  if (!wanted) return true;
+  const code = String(result.country_code || '').toLowerCase();
+  const name = String(result.country || '').toLowerCase();
+  return code === wanted || name === wanted || name.includes(wanted) || wanted.includes(name);
+}
+
+async function geocodeWeatherLocations(queries: string[], country?: string, limit = 2): Promise<WeatherCoord[]> {
+  for (const query of queries) {
+    const coords = await geocodeWeatherLocation(query, country, limit);
+    if (coords.length) return coords;
+  }
+  return [];
+}
+
+async function geocodeWeatherLocation(query: string, country?: string, limit = 2): Promise<WeatherCoord[]> {
+  const cacheKey = geocodeCacheKey(query, country);
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+    if (cached && Date.now() - cached.ts < 7 * 24 * 60 * 60 * 1000 && Array.isArray(cached.coords)) return cached.coords;
+  } catch {
+    // Ignore corrupt cache.
+  }
+  const searchCount = String(country || '').trim() ? 10 : Math.max(1, Math.min(10, limit));
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=${searchCount}&language=en&format=json`;
+  const data = await fetchJson(url);
+  const results = Array.isArray(data?.results) ? data.results as Record<string, unknown>[] : [];
+  const validResults = results.filter((result) => Number.isFinite(Number(result.latitude)) && Number.isFinite(Number(result.longitude)));
+  const scopedResults = String(country || '').trim() ? validResults.filter((result) => countryMatches(result, country)) : validResults;
+  const coords = scopedResults
+    .slice(0, limit)
+    .map((result) => ({
+      label: String(result.name || query),
+      lat: Number(result.latitude),
+      lon: Number(result.longitude),
+      timezone: typeof result.timezone === 'string' ? result.timezone : undefined,
+    }));
+  localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), coords }));
+  return coords;
 }
 
 function normalizeWeatherTimezone(value?: string): string {
@@ -123,7 +199,9 @@ async function fetchJson(url: string, timeoutMs = 10000) {
   }
 }
 
-export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJma = false) {
+type WeatherBrokerState = Pick<AppState, 'credentialBrokerUrl' | 'credentialSession' | 'credentialSessionExpiresAt'>;
+
+export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJma = false, state?: WeatherBrokerState) {
   if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) throw new Error(`${coord.label} 缺少 lat/lon，請喺行程 spot 加座標或用 Kimi 更新行程。`);
   const cacheKey = weatherCacheKey(coord);
   const safeTimezone = normalizeWeatherTimezone(timezone);
@@ -132,6 +210,18 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJm
     if (cached && Date.now() - cached.ts < 60 * 60 * 1000) return { data: cached.data, source: `${cached.source} cache` };
   } catch {
     // Ignore corrupt cache.
+  }
+
+  if (state) {
+    try {
+      const data = await brokerWeatherForecast(state, { lat: coord.lat, lon: coord.lon, days: 3 });
+      if (data && typeof data === 'object') {
+        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: 'WeatherAPI.com' }));
+        return { data, source: 'WeatherAPI.com' };
+      }
+    } catch {
+      // WeatherAPI.com is a private broker-backed enhancement; fall back to public providers if unavailable.
+    }
   }
 
   const hourly = [

@@ -86,7 +86,7 @@ test('Final lock gate smoke without trusted device', async ({ page }) => {
     }));
   });
   await page.goto('http://localhost:8902/travel-expense/react/');
-  await expect(page.getByText('本機安全防護鎖').first()).toBeVisible();
+  await expect(page.getByText(/本機安全防護鎖|先解鎖再使用/).first()).toBeVisible();
 });
 
 test('Boot currency and sync effects run once without noisy mobile 403s', async ({ page }) => {

@@ -69,10 +69,10 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
       </MagicCard>
 
       <div className="metric-grid stats-metrics">
-        <CockpitMetric label="統計總額" value={`¥${fmt(analysisTotal)}`} detail={`HK$ ${fmt(hkd(analysisTotal, state))}`} tone="accent" />
-        <CockpitMetric label="共同支出" value={`¥${fmt(settlement.sharedTotal)}`} detail={`${persons.length} 人分帳`} />
-        <CockpitMetric label="私人/代付" value={`¥${fmt(privateTotal)}`} detail={`${settlement.crossPrivate.length} 筆跨私人代付`} tone="success" />
-        <CockpitMetric label="待轉帳" value={`¥${fmt(transferTotal)}`} detail={settlement.transfers.length ? '需要結算' : '暫時不用轉帳'} tone={settlement.transfers.length ? 'danger' : 'success'} />
+        <CockpitMetric label="統計總額" value={<NumberTicker value={analysisTotal} prefix="¥" />} detail={`HK$ ${fmt(hkd(analysisTotal, state))}`} tone="accent" />
+        <CockpitMetric label="共同支出" value={<NumberTicker value={settlement.sharedTotal} prefix="¥" delay={0.04} />} detail={`${persons.length} 人分帳`} />
+        <CockpitMetric label="私人/代付" value={<NumberTicker value={privateTotal} prefix="¥" delay={0.08} />} detail={`${settlement.crossPrivate.length} 筆跨私人代付`} tone="success" />
+        <CockpitMetric label="待轉帳" value={<NumberTicker value={transferTotal} prefix="¥" delay={0.12} />} detail={settlement.transfers.length ? '需要結算' : '暫時不用轉帳'} tone={settlement.transfers.length ? 'danger' : 'success'} />
       </div>
 
       <GlassCard className="stats-controls stats-glass" tone="control">

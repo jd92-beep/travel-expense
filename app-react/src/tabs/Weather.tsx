@@ -1,12 +1,12 @@
 import { Cloud, CloudLightning, CloudRain, CloudSun, RefreshCw, Snowflake, Sun, Umbrella, Wind } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { GlassCard, LoadingState, StatusPill, Toast } from '../components/ui';
+import { GlassCard, LoadingState, Reveal, StatusPill, Toast } from '../components/ui';
 import { Meteors } from '../components/ui/meteors';
 import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import { coordForDay, coordsForDay, fetchWeather, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather } from '../lib/weather';
+import { coordForDay, coordsForDay, fetchWeather, resolveCoordsForDay, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather } from '../lib/weather';
 import type { AppState, ItineraryDay } from '../lib/types';
 
 function WeatherIcon({ code, size = 18 }: { code?: number; size?: number }) {
@@ -15,6 +15,7 @@ function WeatherIcon({ code, size = 18 }: { code?: number; size?: number }) {
   if ([1, 2, 3].includes(code)) return <CloudSun size={size} />;
   if ([45, 48].includes(code)) return <Cloud size={size} />;
   if (code >= 51 && code <= 67) return <CloudRain size={size} />;
+  if (code >= 80 && code <= 82) return <CloudRain size={size} />;
   if (code >= 71 && code <= 86) return <Snowflake size={size} />;
   if (code >= 95) return <CloudLightning size={size} />;
   return <CloudSun size={size} />;
@@ -72,14 +73,14 @@ export function Weather({ state }: { state: AppState }) {
         const next: Record<string, DayWeather[]> = {};
         for (const day of displayItinerary) {
           next[day.date] = [];
-          for (const coord of coordsForDay(day)) {
+          for (const coord of await resolveCoordsForDay(day)) {
             try {
               if (coord.missing) {
                 next[day.date].push({ coord, source: '缺少座標', slots: [] });
                 continue;
               }
               const isJapan = /日本|Japan|JP|名古屋|金澤|長野|高山|白川|常滑|上高地|立山|東京|京都|大阪/.test(`${day.country || ''} ${day.region || ''} ${coord.label}`);
-              const { data, source } = await fetchWeather(coord, normalizedTimezone(day.timezone) || 'auto', isJapan);
+              const { data, source } = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', isJapan, state);
               if (cancelled) return;
               next[day.date].push({ coord, source, slots: slotsForDate(data, day.date) });
             } catch (innerErr) {
@@ -131,7 +132,8 @@ export function Weather({ state }: { state: AppState }) {
         const dayRows = rows[day.date] || [];
         const missingAll = dayRows.length > 0 && dayRows.every((weather) => !weather.slots?.length);
         return (
-          <GlassCard className="weather-day" key={day.date}>
+          <Reveal key={day.date} className="weather-day-reveal" delay={Math.min(0.14, day.day * 0.02)}>
+          <GlassCard className="weather-day">
             <div className="section-head">
               <div><p className="eyebrow">{hasEnded ? `Today · ${today}` : `Day ${day.day}`} · {dayRows.map((weather) => weather.source).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
               <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{coordsForDay(day).map((coord) => coord.label).join(' / ') || coordForDay(day).label}</StatusPill>
@@ -238,6 +240,7 @@ export function Weather({ state }: { state: AppState }) {
               );
             })}
           </GlassCard>
+          </Reveal>
         );
       })}
       </div>

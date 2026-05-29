@@ -6,7 +6,7 @@ const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const TRUSTED_DEVICE_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const SESSION_CHALLENGE_TTL_MS = 1000 * 60 * 5;
 const MAX_JSON_BYTES = 900000;
-const PROVIDERS = ['notion', 'kimi', 'google'];
+const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi'];
 const NOTION_VERSION = '2022-06-28';
 const KIMI_DEFAULT_BASE = 'https://api.kimi.com/coding/v1';
 const GOOGLE_DEFAULT_MODEL = 'gemma-4-31b';
@@ -74,6 +74,7 @@ function redact(value) {
     .replace(/ntn_[A-Za-z0-9]{12,}/g, '[redacted-token]')
     .replace(/secret_[A-Za-z0-9]{12,}/g, '[redacted-token]')
     .replace(/AIza[0-9A-Za-z_-]{12,}/g, '[redacted-key]')
+    .replace(/([?&]key=)[^&\s]+/gi, '$1[redacted-key]')
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
 }
 
@@ -379,6 +380,12 @@ async function readCredential(env, provider) {
   return decryptVaultValue(env, raw);
 }
 
+async function readWeatherApiCredential(env) {
+  const envSecret = String(env.WEATHERAPI_KEY || '').trim();
+  if (envSecret) return { provider: 'weatherapi', secret: envSecret, extra: { source: 'env' }, status: 'connected' };
+  return readCredential(env, 'weatherapi');
+}
+
 async function readUserCredential(env, provider, userId) {
   const raw = await env.CREDENTIALS_VAULT.get(await userVaultId(provider, userId), 'json');
   if (!raw) return null;
@@ -510,6 +517,9 @@ async function consumeSupabaseAiQuota(env, user, provider) {
 }
 
 async function providerStatus(env, provider) {
+  if (provider === 'weatherapi' && String(env.WEATHERAPI_KEY || '').trim()) {
+    return { provider, status: 'connected', updatedAt: Date.now() };
+  }
   const raw = await env.CREDENTIALS_VAULT.get(vaultId(provider), 'json');
   if (!raw) return { provider, status: 'missing' };
   const data = await decryptVaultValue(env, raw);
@@ -852,6 +862,79 @@ async function googleJson(env, prompt, _kind, image, requestedModel) {
   return extractJson(data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
 }
 
+function weatherApiCodeToWmo(code) {
+  const n = Number(code);
+  if (n === 1000) return 0;
+  if (n === 1003) return 1;
+  if (n === 1006) return 2;
+  if (n === 1009) return 3;
+  if ([1030, 1135, 1147].includes(n)) return 45;
+  if ([1066, 1069, 1072, 1114, 1117, 1204, 1207, 1210, 1213, 1216, 1219, 1222, 1225, 1237, 1255, 1258, 1261, 1264].includes(n)) return 71;
+  if ([1273, 1276, 1279, 1282].includes(n)) return 95;
+  if ([1189, 1192, 1195, 1243, 1246].includes(n)) return 63;
+  if ([1198, 1201].includes(n)) return 65;
+  if ([1063, 1150, 1153, 1168, 1171, 1180, 1183, 1186, 1240].includes(n)) return 80;
+  return 3;
+}
+
+function weatherApiToForecastShape(data) {
+  const hourly = {
+    time: [],
+    temperature_2m: [],
+    apparent_temperature: [],
+    weather_code: [],
+    precipitation_probability: [],
+    precipitation: [],
+    relative_humidity_2m: [],
+    wind_speed_10m: [],
+    wind_direction_10m: [],
+    wind_gusts_10m: [],
+    cloud_cover: [],
+    uv_index: [],
+  };
+  for (const day of data?.forecast?.forecastday || []) {
+    for (const hour of day?.hour || []) {
+      hourly.time.push(String(hour.time || '').replace(' ', 'T').slice(0, 16));
+      hourly.temperature_2m.push(Number(hour.temp_c));
+      hourly.apparent_temperature.push(Number(hour.feelslike_c));
+      hourly.weather_code.push(weatherApiCodeToWmo(hour.condition?.code));
+      hourly.precipitation_probability.push(Number(hour.chance_of_rain ?? 0));
+      hourly.precipitation.push(Number(hour.precip_mm ?? 0));
+      hourly.relative_humidity_2m.push(Number(hour.humidity ?? 0));
+      hourly.wind_speed_10m.push(Number(hour.wind_kph ?? 0));
+      hourly.wind_direction_10m.push(Number(hour.wind_degree ?? 0));
+      hourly.wind_gusts_10m.push(Number(hour.gust_kph ?? 0));
+      hourly.cloud_cover.push(Number(hour.cloud ?? 0));
+      hourly.uv_index.push(Number(hour.uv ?? 0));
+    }
+  }
+  return {
+    source: 'WeatherAPI.com',
+    location: data?.location || null,
+    current: data?.current || null,
+    hourly,
+  };
+}
+
+async function weatherApiForecast(env, body) {
+  const credential = await readWeatherApiCredential(env);
+  if (!credential?.secret) throw new Error('WeatherAPI credential missing');
+  const lat = Number(body.lat);
+  const lon = Number(body.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new HttpError('Weather location missing', 400);
+  const days = Math.max(1, Math.min(3, Number(body.days) || 3));
+  const url = new URL('https://api.weatherapi.com/v1/forecast.json');
+  url.searchParams.set('key', credential.secret);
+  url.searchParams.set('q', `${lat},${lon}`);
+  url.searchParams.set('days', String(days));
+  url.searchParams.set('aqi', 'no');
+  url.searchParams.set('alerts', 'no');
+  const data = await parseProviderJson(await fetch(url.toString(), {
+    headers: { Accept: 'application/json' },
+  }));
+  return weatherApiToForecastShape(data);
+}
+
 function extractJson(text) {
   const cleaned = String(text || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
   try {
@@ -866,16 +949,29 @@ function extractJson(text) {
 async function testProvider(env, provider, candidateSecret, extra = {}) {
   const credential = candidateSecret
     ? { secret: candidateSecret, extra }
-    : await readCredential(env, provider);
+    : provider === 'weatherapi' ? await readWeatherApiCredential(env) : await readCredential(env, provider);
   if (!credential?.secret) return { provider, status: 'missing' };
   try {
     if (provider === 'notion') await testNotion(env, credential);
     if (provider === 'kimi') await kimiJsonWithCredential(env, credential);
     if (provider === 'google') await googleModelsList(credential.secret);
+    if (provider === 'weatherapi') await testWeatherApi(credential.secret);
     return { provider, status: 'connected', lastTestedAt: Date.now() };
   } catch (error) {
     return { provider, status: 'invalid', lastTestedAt: Date.now(), message: redact(error?.message || error) };
   }
+}
+
+async function testWeatherApi(secret) {
+  const url = new URL('https://api.weatherapi.com/v1/current.json');
+  url.searchParams.set('key', secret);
+  url.searchParams.set('q', 'Jeju');
+  url.searchParams.set('aqi', 'no');
+  const data = await parseProviderJson(await fetch(url.toString(), {
+    headers: { Accept: 'application/json' },
+  }));
+  if (!data?.current) throw new Error('WeatherAPI current weather unavailable');
+  return data.current;
 }
 
 async function kimiJsonWithCredential(env, credential) {
@@ -988,6 +1084,12 @@ async function handleRequest(request, env) {
       const body = await readJson(request);
       await consumeSupabaseAiQuota(env, user, 'google');
       return json({ ok: true, data: await googleJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
+    }
+    if (url.pathname === '/weather/forecast') {
+      const user = await optionalSupabaseUser(request, env);
+      if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
+      const body = await readJson(request);
+      return json({ ok: true, data: await weatherApiForecast(env, body) }, 200, cors);
     }
 
     const user = await optionalSupabaseUser(request, env);

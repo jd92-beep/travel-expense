@@ -41,6 +41,7 @@ import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, sa
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { GlassCard, StatefulActionButton, StatusPill, Toast } from '../components/ui';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
@@ -1042,12 +1043,36 @@ export function Settings({
       <GlassCard className="settings-command">
         <div>
           <h2>設定控制中心 ⚙️</h2>
-          <div className="stats-status-row">
-            <StatusPill tone="info"><Plane size={14} /> {trips.length} 個旅程</StatusPill>
-            <StatusPill tone={brokerReady ? 'ok' : 'warning'}><Server size={14} /> Broker {brokerReady ? 'session active' : 'session missing'}</StatusPill>
-            {syncState && <StatusPill tone={syncState.status === 'error' ? 'danger' : syncState.pendingCount ? 'warning' : 'ok'}><Cloud size={14} /> Sync {syncState.status}{syncState.pendingCount ? ` · ${syncState.pendingCount}` : ''}</StatusPill>}
-            <StatusPill tone="neutral"><ShieldCheck size={14} /> {buildLabel}</StatusPill>
-          </div>
+          <TooltipProvider>
+            <div className="stats-status-row settings-status-tooltips">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span><StatusPill tone="info"><Plane size={14} /> {trips.length} 個旅程</StatusPill></span>
+                </TooltipTrigger>
+                <TooltipContent>目前保存在此帳號/裝置嘅旅程數量</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span><StatusPill tone={brokerReady ? 'ok' : 'warning'}><Server size={14} /> Broker {brokerReady ? 'session active' : 'session missing'}</StatusPill></span>
+                </TooltipTrigger>
+                <TooltipContent>Credential Broker unlock/session 狀態</TooltipContent>
+              </Tooltip>
+              {syncState && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span><StatusPill tone={syncState.status === 'error' ? 'danger' : syncState.pendingCount ? 'warning' : 'ok'}><Cloud size={14} /> Sync {syncState.status}{syncState.pendingCount ? ` · ${syncState.pendingCount}` : ''}</StatusPill></span>
+                  </TooltipTrigger>
+                  <TooltipContent>雲端同步狀態與等待上傳隊列</TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span><StatusPill tone="neutral"><ShieldCheck size={14} /> {buildLabel}</StatusPill></span>
+                </TooltipTrigger>
+                <TooltipContent>目前前端 build / security marker</TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </div>
       </GlassCard>
 
@@ -1329,7 +1354,7 @@ export function Settings({
       </AccordionCard>
 
       <AccordionCard id="settings-credentials" eyebrow="Server-side vault" title="Credentials & Connection" icon={<KeyRound />}>
-        <p className="muted">Notion、Kimi、Google keys 只喺 Credential Broker vault 入面。React 只保存短期 session；rotation input 唔會寫入 localStorage、IndexedDB、backup 或 Notion。</p>
+        <p className="muted">Notion、Kimi、Google、WeatherAPI keys 只喺 Credential Broker vault 入面。React 只保存短期 session；rotation input 唔會寫入 localStorage、IndexedDB、backup 或 Notion。</p>
         <label>Credential Broker URL
           <input value={isAllowedCredentialBrokerUrl(state.credentialBrokerUrl) ? state.credentialBrokerUrl || '' : ''} readOnly aria-readonly="true" />
         </label>
@@ -1344,6 +1369,7 @@ export function Settings({
           {statusPill('notion')}
           {statusPill('kimi')}
           {statusPill('google')}
+          {statusPill('weatherapi')}
         </div>
         {!brokerReady && !cloudSyncAvailable && (
           <div className="form-grid">
@@ -1386,6 +1412,7 @@ export function Settings({
                 <option value="notion">Notion token</option>
                 <option value="kimi">Kimi key</option>
                 <option value="google">Google backup key</option>
+                <option value="weatherapi">WeatherAPI.com key</option>
               </select>
             </label>
             <label>Admin maintenance passphrase

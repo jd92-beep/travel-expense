@@ -20,6 +20,9 @@ import {
 } from 'lucide-react';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
+import { AnimatedNumber, GlassCard, Reveal } from '../components/ui';
+import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
+import { Switch } from '../components/ui/switch';
 import { 
   categoryById, 
   displayStore, 
@@ -459,7 +462,8 @@ export function Dashboard({
       </div>
 
       {/* 2. 預算毛玻璃卡片 (含圓形進度條與 Today Spent / Daily Avg Spending Pct) */}
-      <div className="washi-budget-card relative p-4 min-[375px]:p-6 rounded-[28px] overflow-hidden mb-6 z-10">
+      <Reveal className="dashboard-reveal">
+      <GlassCard as="div" className="washi-budget-card dashboard-magic-budget relative p-4 min-[375px]:p-6 rounded-[28px] overflow-hidden mb-6 z-10">
         <div className="grid grid-cols-[1fr_auto] items-center gap-4 sm:flex sm:justify-between sm:items-center">
           {/* 左側：預算資訊堆疊 (手機端垂直堆疊，sm 平版端水平並列) */}
           <div className="flex flex-col gap-4 min-w-0 sm:flex-row sm:gap-10 sm:items-center flex-grow">
@@ -467,7 +471,7 @@ export function Dashboard({
             <div className="flex flex-col min-w-0">
               <span className="text-[10px] min-[375px]:text-[11px] font-bold text-[#8C7864] uppercase tracking-wider leading-none">Total Budget</span>
               <strong className="text-[18px] min-[375px]:text-[22px] sm:text-[24px] font-black text-slate-800 tracking-tight mt-1 truncate">
-                HK$ {fmt(budgetHkd)}
+                <AnimatedNumber value={budgetHkd} prefix="HK$ " />
               </strong>
               <span className="text-[9px] min-[375px]:text-[10px] text-slate-500 mt-0.5 leading-none">
                 ~{tripCurrencySymbol}{fmt(state.budget)}
@@ -478,7 +482,7 @@ export function Dashboard({
             <div className="flex flex-col min-w-0">
               <span className="text-[10px] min-[375px]:text-[11px] font-bold text-[#8C7864] uppercase tracking-wider leading-none">Spent</span>
               <strong className="text-[18px] min-[375px]:text-[22px] sm:text-[24px] font-black text-[#D94132] tracking-tight mt-1 truncate">
-                HK$ {fmt(spentHkd)}
+                <AnimatedNumber value={spentHkd} prefix="HK$ " />
               </strong>
               <span className="text-[9px] min-[375px]:text-[10px] text-slate-500 mt-0.5 leading-none">
                 ~{tripCurrencySymbol}{fmt(totalForBudget)}
@@ -487,32 +491,26 @@ export function Dashboard({
           </div>
 
           {/* 右側/中間：圓形進度條 */}
-          <div className="relative w-16 h-16 min-[375px]:w-20 min-[375px]:h-20 sm:w-22 sm:h-22 flex items-center justify-center shrink-0">
-            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="40" stroke="rgba(115, 96, 76, 0.1)" strokeWidth="8" fill="transparent" />
-              <circle 
-                cx="50" 
-                cy="50" 
-                r="40" 
-                stroke="#D94132" 
-                strokeWidth="8" 
-                fill="transparent" 
-                strokeDasharray="251.2" 
-                strokeDashoffset={251.2 - (251.2 * budgetPct) / 100}
-                strokeLinecap="round"
-                className="transition-all duration-1000 ease-out"
-              />
-            </svg>
-            <div className="absolute flex flex-col items-center justify-center">
+          <div className="relative w-16 h-16 min-[375px]:w-20 min-[375px]:h-20 sm:w-22 sm:h-22 flex items-center justify-center shrink-0 dashboard-budget-ring">
+            <AnimatedCircularProgressBar
+              value={budgetPct}
+              gaugePrimaryColor="#D94132"
+              gaugeSecondaryColor="rgba(115, 96, 76, 0.12)"
+              className="size-full"
+            >
+              <div className="absolute flex flex-col items-center justify-center">
               <span className="text-sm min-[375px]:text-base font-extrabold text-slate-900 leading-none">{Math.round(rawBudgetPct)}%</span>
               <span className="text-[7px] min-[375px]:text-[8px] font-bold text-[#8C7864] uppercase tracking-wider mt-0.5 leading-none">spent</span>
-            </div>
+              </div>
+            </AnimatedCircularProgressBar>
           </div>
         </div>
-      </div>
+      </GlassCard>
+      </Reveal>
 
       {/* 2.5 今日開支獨立 Washi 卡片 */}
-      <div className="washi-today-stats-card relative p-5 rounded-[28px] overflow-hidden mb-6 z-10">
+      <Reveal className="dashboard-reveal" delay={0.04}>
+      <GlassCard as="div" className="washi-today-stats-card dashboard-magic-today relative p-5 rounded-[28px] overflow-hidden mb-6 z-10">
         <div className="flex flex-col mb-3">
           <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">Today's Performance</span>
           <h3 className="text-[15px] font-bold text-slate-800 mt-0.5">今日開支與日均統計 📊</h3>
@@ -522,7 +520,7 @@ export function Dashboard({
           <div className="washi-stat-block bg-white/30 border border-white/50 rounded-2xl p-3 flex flex-col">
             <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">Today Spent</span>
             <strong className="text-[18px] font-extrabold text-slate-900 tracking-tight mt-0.5">
-              HK$ {fmt(Math.round(hkd(todayTotal, state)))}
+              <AnimatedNumber value={Math.round(hkd(todayTotal, state))} prefix="HK$ " />
             </strong>
             <span className="text-[10px] text-slate-500 font-medium">
               ~{tripCurrencySymbol}{fmt(todayTotal)} · {dailyReceipts.length} 筆
@@ -533,17 +531,19 @@ export function Dashboard({
           <div className="washi-stat-block bg-white/30 border border-white/50 rounded-2xl p-3 flex flex-col">
             <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">Daily Budget Used</span>
             <strong className="text-[18px] font-extrabold text-[#18395C] tracking-tight mt-0.5">
-              {Math.round(todayBudgetPct)}%
+              <AnimatedNumber value={todayBudgetPct} suffix="%" />
             </strong>
             <span className="text-[10px] text-slate-500 font-medium">
               {tripCurrencySymbol}{fmt(todayTotal)} / {tripCurrencySymbol}{fmt(dailyBudget)} limit
             </span>
           </div>
         </div>
-      </div>
+      </GlassCard>
+      </Reveal>
 
       {/* 3. Today 行程時間軸 */}
-      <div className="today-itinerary-card washi-timeline-container p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
+      <Reveal className="dashboard-reveal" delay={0.08}>
+      <GlassCard as="div" className="today-itinerary-card washi-timeline-container p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
         <div className="flex justify-between items-center mb-4">
           <div className="flex flex-col">
             <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">今日行程</span>
@@ -627,10 +627,12 @@ export function Dashboard({
           <span>查看完整行程</span>
           <ChevronDown size={14} />
         </button>
-      </div>
+      </GlassCard>
+      </Reveal>
 
       {/* 4. 最近花費 */}
-      <div className="washi-recent-card p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
+      <Reveal className="dashboard-reveal" delay={0.12}>
+      <GlassCard as="div" className="washi-recent-card dashboard-magic-records p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-slate-800">Recent Expenses</h3>
           <button 
@@ -698,7 +700,8 @@ export function Dashboard({
           <Plus size={18} />
           <span>Add Expense</span>
         </button>
-      </div>
+      </GlassCard>
+      </Reveal>
 
       {/* 5. Budget Settings 折疊 Accordion */}
       <div className="bg-white/50 backdrop-blur-md border border-white/60 rounded-[24px] overflow-hidden mb-3 shadow-sm z-10 relative">
@@ -762,20 +765,14 @@ export function Dashboard({
                 <span className="text-xs font-bold text-slate-700">每日記帳提醒</span>
                 <span className="text-[10px] text-slate-400">每日提示你補齊旅費紀錄</span>
               </div>
-              <label className="washi-switch shrink-0">
-                <input type="checkbox" checked={dailyReminder} onChange={(e) => setDailyReminder(e.target.checked)} />
-                <span className="washi-slider"></span>
-              </label>
+              <Switch className="dashboard-switch" checked={dailyReminder} onCheckedChange={setDailyReminder} aria-label="每日記帳提醒" />
             </div>
             <div className="flex justify-between items-center">
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-700">低預算提示</span>
                 <span className="text-[10px] text-slate-400">預算餘額低於 20% 時提醒</span>
               </div>
-              <label className="washi-switch shrink-0">
-                <input type="checkbox" checked={lowBudgetAlert} onChange={(e) => setLowBudgetAlert(e.target.checked)} />
-                <span className="washi-slider"></span>
-              </label>
+              <Switch className="dashboard-switch" checked={lowBudgetAlert} onCheckedChange={setLowBudgetAlert} aria-label="低預算提示" />
             </div>
           </div>
         )}

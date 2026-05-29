@@ -3,7 +3,7 @@ import { loadCredentialSession, saveCredentialSession } from './storage';
 import { currentSupabaseAccessToken } from './supabase';
 import type { AppState } from './types';
 
-export type CredentialProvider = 'notion' | 'kimi' | 'google';
+export type CredentialProvider = 'notion' | 'kimi' | 'google' | 'weatherapi';
 
 export interface BrokerSession {
   credentialSession: string;
@@ -58,6 +58,7 @@ export function redactedError(error: unknown): string {
     .replace(/ntn_[A-Za-z0-9]+/g, '[redacted-token]')
     .replace(/secret_[A-Za-z0-9]+/g, '[redacted-token]')
     .replace(/AIza[0-9A-Za-z_-]+/g, '[redacted-key]')
+    .replace(/([?&]key=)[^&\s]+/gi, '$1[redacted-key]')
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
 }
 
@@ -294,6 +295,15 @@ export async function brokerNotionRequest<T>(state: AppState, path: string, init
     body,
     databaseId: state.notionDb || undefined,
   });
+  return data.data;
+}
+
+export async function brokerWeatherForecast(
+  state: Pick<AppState, 'credentialBrokerUrl' | 'credentialSession' | 'credentialSessionExpiresAt'>,
+  payload: { lat: number; lon: number; days?: number },
+): Promise<unknown> {
+  const stored = state.credentialSession ? {} : loadCredentialSession();
+  const data = await brokerFetch<{ ok: boolean; data: unknown }>({ ...state, ...stored }, '/weather/forecast', payload);
   return data.data;
 }
 

@@ -1,6 +1,7 @@
 import { Camera, CheckCircle2, FileImage, FileText, Mail, Mic, PlusCircle, RefreshCw, Repeat2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { ActionRippleButton, ActionSheet, GlassCard, SegmentedControl, StatusPill, Toast } from '../components/ui';
+import { ActionRippleButton, GlassCard, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
+import { ShimmerButton } from '../components/ui/shimmer-button';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
 import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
 import { compressPhoto } from '../lib/domain';
@@ -381,6 +382,7 @@ export function Scan({
       <input key={`gallery-${inputKey}`} id={GALLERY_INPUT_ID} ref={galleryRef} className="visually-hidden-file" type="file" accept="image/*" onChange={handleGalleryChange} />
       <input key={`email-${inputKey}`} id={EMAIL_IMAGE_INPUT_ID} ref={emailImageRef} className="visually-hidden-file" type="file" accept="image/*" multiple onChange={handleEmailImagesChange} />
 
+      <Reveal className="scan-reveal">
       <GlassCard className="scan-hero-card relative overflow-hidden p-6 sm:p-8 rounded-[40px] border-[2px] border-white shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15),inset_0_0_40px_rgba(255,255,255,1)] bg-white/50 backdrop-blur-3xl mb-6">
         <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-white/50 to-transparent backdrop-blur-lg" />
         <div className="absolute inset-0 bg-white/50 opacity-90 mix-blend-overlay rounded-[40px] shadow-[inset_0_0_30px_rgba(255,255,255,1)] pointer-events-none" />
@@ -388,7 +390,7 @@ export function Scan({
         <div className="relative z-10 flex justify-between items-center mb-6">
           <h2 className="text-3xl font-black text-black tracking-tight flex items-center gap-3 drop-shadow-sm">
             <Camera size={32} className="text-blue-600" />
-            智能記帳 📸
+            掃描收據 📸
           </h2>
           <StatusPill tone={busy ? 'warning' : 'ok'} icon={busy ? <RefreshCw size={14} className="spin text-slate-800" /> : <CheckCircle2 size={14} className="text-slate-800" />}>
             {busy || 'ready'}
@@ -398,11 +400,14 @@ export function Scan({
         {/* MAIN SCAN MODES GRID */}
         <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {/* CAMERA HERO BUTTON - Large & Prominent */}
-          <button
+          <ShimmerButton
             type="button"
             disabled={busy === 'ocr'}
             className={`scan-hero-button col-span-1 sm:col-span-2 relative overflow-hidden flex flex-row items-center justify-between p-5 min-h-[140px] rounded-[28px] bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 text-white shadow-xl hover:shadow-2xl hover:scale-[1.01] active:scale-98 transition-all cursor-pointer ${busy === 'ocr' ? 'opacity-50 cursor-not-allowed' : ''}`}
             onClick={triggerCamera}
+            background="linear-gradient(110deg,#2563eb,#4f46e5,#312e81)"
+            borderRadius="28px"
+            shimmerDuration="3.8s"
           >
             <div className="absolute inset-0 bg-white/10 opacity-30 pointer-events-none" />
             <div className="flex flex-col gap-1 items-start text-left relative z-10 flex-1 min-w-0 pr-4">
@@ -413,7 +418,7 @@ export function Scan({
             <div className="flex-shrink-0 flex items-center justify-center relative z-10 w-24 h-24 bg-white/15 backdrop-blur-md rounded-2xl border border-white/20 shadow-md">
               <img src={nanoBanana2Image} alt="Banana Camera" className="w-full h-full object-contain p-1" />
             </div>
-          </button>
+          </ShimmerButton>
 
           {/* GALLERY SECONDARY BUTTON - Medium & Elegant */}
           <button
@@ -518,7 +523,7 @@ export function Scan({
             <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm flex flex-col gap-3">
               <div className="flex gap-2">
                 <button className="secondary bg-white text-black flex-1 font-bold" type="button" onClick={startSpeech}><Mic size={18} /> 開始聽</button>
-                <button className="primary flex-1 font-bold shadow-md" type="button" disabled={!voiceText.trim() || busy === 'voice'} onClick={handleVoiceParse}>解析</button>
+                <StatefulActionButton className="primary flex-1 font-bold shadow-md" type="button" disabled={!voiceText.trim() || busy === 'voice'} onClick={handleVoiceParse}>解析</StatefulActionButton>
               </div>
               <textarea className="bg-white/80 border-white/60 rounded-xl p-3 text-black font-medium" value={voiceText} onChange={(e) => setVoiceText(e.target.value)} rows={3} placeholder="例：喺全家買飯糰同飲品 580 yen，用 Suica" />
             </div>
@@ -541,9 +546,9 @@ export function Scan({
               )}
               <textarea className="bg-white/80 border-white/60 rounded-xl p-3 text-black font-medium" value={emailText} onChange={(e) => setEmailText(e.target.value)} rows={4} placeholder="貼 booking confirmation / email 文字" />
               <div className="flex gap-2">
-                <button className="primary flex-1 font-bold shadow-md" type="button" disabled={!emailText.trim() || busy === 'email'} onClick={handleEmailParse}>
+                <StatefulActionButton className="primary flex-1 font-bold shadow-md" type="button" disabled={!emailText.trim() || busy === 'email'} onClick={handleEmailParse}>
                   解析文字
-                </button>
+                </StatefulActionButton>
                 <button className={`secondary bg-white text-black button-like scan-picker-label flex-1 text-center font-bold shadow-sm ${busy === 'email-image' ? 'opacity-50' : ''}`} type="button" disabled={busy === 'email-image'} onClick={triggerEmailImages}>
                   揀 email 截圖
                 </button>
@@ -576,6 +581,7 @@ export function Scan({
           )}
         </div>
       </GlassCard>
+      </Reveal>
 
       {status && <Toast tone={/失敗|未能|error/i.test(status) ? 'warning' : 'info'}>{status}</Toast>}
       {batch.length > 0 && (
@@ -607,7 +613,7 @@ export function Scan({
             </div>
             <div className="modal-actions">
               <button className="secondary" type="button" onClick={() => setBatch([])}>取消</button>
-              <button className="primary" type="button" disabled={savingBatch} onClick={saveBatch}>全部儲存 ({batch.filter((row) => row.selected !== false).length})</button>
+              <StatefulActionButton className="primary" type="button" disabled={savingBatch} onClick={saveBatch}>全部儲存 ({batch.filter((row) => row.selected !== false).length})</StatefulActionButton>
             </div>
           </div>
         </div>

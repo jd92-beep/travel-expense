@@ -1611,7 +1611,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .time-text {
   font-weight: 800;
   font-size: 13px;
-  color: var(--text);
+  color: var(--ink);
   letter-spacing: 0.3px;
 }
 .live-pulse-badge {
@@ -1668,7 +1668,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .weather-temp-block {
   display: flex;
   flex-direction: column;
-  color: var(--text);
+  color: var(--ink);
   position: relative;
   padding-top: 14px;
 }
@@ -1684,18 +1684,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   letter-spacing: 0.5px;
 }
 .temp-num {
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 900;
   line-height: 1.2;
   letter-spacing: 0;
-  background: linear-gradient(135deg, var(--text) 30%, var(--blue) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--ink);
+  -webkit-text-fill-color: currentColor;
 }
 .temp-num.feels-num {
-  background: linear-gradient(135deg, var(--text) 30%, var(--weather-accent, var(--blue)) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--weather-accent, var(--blue));
+  -webkit-text-fill-color: currentColor;
 }
 .temp-num.temp-missing {
   background: none;
@@ -2707,6 +2705,42 @@ body {
     linear-gradient(135deg, rgba(255,255,255,.82), rgba(250,240,232,.6)),
     rgba(255,255,255,.5);
 }
+.history-expandable-group {
+  padding: 0;
+}
+.history-expandable-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 16px 18px 12px;
+  margin: 0;
+}
+.history-expandable-summary::-webkit-details-marker {
+  display: none;
+}
+.history-expandable-summary::after {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid rgba(30, 77, 107, .52);
+  border-bottom: 2px solid rgba(30, 77, 107, .52);
+  transform: rotate(45deg);
+  transition: transform .2s ease;
+}
+.history-expandable-group[open] .history-expandable-summary::after {
+  transform: rotate(225deg) translate(-2px, -2px);
+}
+.history-record-stack {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 14px;
+}
+.history-record-glare {
+  width: 100%;
+  border-radius: 18px;
+}
+.history-record-glare .receipt-row {
+  margin: 0;
+}
 .history-screen .receipt-row {
   min-width: 0;
   max-width: 100%;
@@ -2731,6 +2765,47 @@ body {
 .history-screen .receipt-row .amount small {
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.dashboard-magic-budget,
+.dashboard-magic-today,
+.dashboard-magic-records,
+.today-itinerary-card {
+  isolation: isolate;
+}
+.dashboard-budget-ring [data-current-value],
+.dashboard-budget-ring .animated-number {
+  letter-spacing: 0;
+}
+.dashboard-switch {
+  --primary: #D94132;
+  --input: rgba(140, 120, 100, .18);
+  --background: #fffaf2;
+  box-shadow: 0 6px 16px rgba(67, 46, 24, .12);
+}
+.scan-reveal,
+.dashboard-reveal,
+.timeline-day-reveal,
+.weather-day-reveal,
+.history-date-reveal {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.timeline-screen .stack > *,
+.timeline-screen .timeline-command,
+.timeline-screen .timeline-day,
+.timeline-screen .timeline-rail,
+.timeline-screen .timeline-event {
+  min-width: 0;
+  max-width: 100%;
+}
+.scan-hero-button {
+  --bg: linear-gradient(110deg,#2563eb,#4f46e5,#312e81);
+}
+.settings-status-tooltips > span,
+.settings-status-tooltips [data-slot="tooltip-trigger"] {
+  display: inline-flex;
 }
 
 .weather-screen .weather-command-fancy {

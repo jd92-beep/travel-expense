@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, RefreshCw, Search, X } from 'lucide-react';
-import { GlassCard, StatusPill, Toast } from '../components/ui';
+import { Reveal, StatusPill, Toast } from '../components/ui';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { hasCredentialBrokerSession } from '../lib/credentialBroker';
 import { hasDirectNotionToken } from '../lib/notion';
@@ -8,6 +8,7 @@ import { CATEGORIES } from '../lib/constants';
 import type { AppState, CategoryId, Receipt, TripProfile } from '../lib/types';
 import { MagicCard } from '../components/ui/magic-card';
 import { ShineBorder } from '../components/ui/shine-border';
+import { GlareHover } from '../components/ui/glare-hover';
 import { ReceiptRow } from './Dashboard';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 
@@ -241,14 +242,30 @@ export function History({
         </select>
       </div>
       {Object.keys(groups).length === 0 && <p className="empty card">未有紀錄</p>}
-      {Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([date, items]) => (
-        <div className="card" key={date}>
-          <div className="section-head">
+      {Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([date, items], groupIdx) => (
+        <Reveal key={date} className="history-date-reveal" delay={Math.min(0.16, groupIdx * 0.018)}>
+        <details className="card history-expandable-group" open>
+          <summary className="section-head history-expandable-summary">
             <h2>{date}</h2>
             <span className="pill">{items.length} 筆</span>
+          </summary>
+          <div className="history-record-stack">
+            {items.map((r) => (
+              <GlareHover
+                key={r.id}
+                className="history-record-glare"
+                background="transparent"
+                color="#D4A843"
+                opacity={0.12}
+                width="100%"
+                playOnce
+              >
+                <ReceiptRow state={state} receipt={r} onOpen={onOpen} onViewPhoto={setViewPhoto} />
+              </GlareHover>
+            ))}
           </div>
-          {items.map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} onViewPhoto={setViewPhoto} />)}
-        </div>
+        </details>
+        </Reveal>
       ))}
       </div>
       {viewPhoto && <ReceiptPhotoModal receipt={viewPhoto} onClose={() => setViewPhoto(null)} />}
