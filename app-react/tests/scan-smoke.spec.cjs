@@ -19,6 +19,14 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.getByText('掃描收據')).toBeVisible();
   await expect(page.getByRole('button', { name: '相機' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '相簿' }).first()).toBeVisible();
+  await expect(page.locator('.scan-card-copy').first()).toHaveText(['相機', 'Camera'].join(''));
+  await expect(page.locator('.scan-card-copy').nth(1)).toHaveText(['相簿', 'Gallery'].join(''));
+  await expect(page.locator('.scan-card-copy').nth(2)).toHaveText(['手動記帳', 'Manual Entry'].join(''));
+  await expect(page.locator('.scan-card-copy').nth(3)).toHaveText(['語音', 'Voice'].join(''));
+  await expect(page.locator('.scan-card-copy').nth(4)).toHaveText(['Email', 'Email'].join(''));
+  await expect(page.locator('.scan-card-copy').nth(5)).toHaveText(['匯率', 'Exchange Rate'].join(''));
+  await expect(page.locator('.scan-hero-card')).not.toContainText('智能辨識');
+  await expect(page.locator('.scan-hero-card')).not.toContainText('從手機相簿選取');
   await expect(page.locator('.scan-function-art')).toHaveCount(6);
   await expect(page.locator('.scan-function-art svg, .scan-function-art img')).toHaveCount(0);
   const heroCard = await page.locator('.scan-hero-card').boundingBox();

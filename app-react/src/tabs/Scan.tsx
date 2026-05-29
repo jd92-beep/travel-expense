@@ -411,10 +411,9 @@ export function Scan({
             shimmerDuration="3.8s"
           >
             <div className="absolute inset-0 bg-white/10 opacity-30 pointer-events-none" />
-            <div className="scan-hero-copy flex flex-col gap-1 items-start text-left relative z-10 min-w-0">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Receipt Scanner</span>
-              <strong className="text-xl sm:text-2xl font-black tracking-tight leading-tight mt-0.5">相機智能辨識收據 📸</strong>
-              <p className="text-[11px] text-blue-100/90 mt-1 font-medium leading-snug">打開相機直接拍攝收據，AI 自動為你讀取金額、店名與明細。</p>
+            <div className="scan-hero-copy scan-card-copy flex flex-col gap-1 items-start text-left relative z-10 min-w-0">
+              <strong className="text-xl sm:text-2xl font-black tracking-tight leading-tight mt-0.5">相機</strong>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Camera</span>
             </div>
             <div className="scan-banana-visual scan-function-art scan-function-art--camera" style={scanSuiteStyle} aria-hidden="true">
             </div>
@@ -428,9 +427,9 @@ export function Scan({
             onClick={triggerGallery}
           >
             <span className="scan-function-art scan-function-art--gallery" style={scanSuiteStyle} aria-hidden="true" />
-            <div className="flex flex-col items-center">
-              <strong className="text-base font-black text-slate-800">相簿匯入 🖼️</strong>
-              <span className="text-[11px] text-slate-400 font-medium mt-0.5">從手機相簿選取收據圖片</span>
+            <div className="scan-card-copy flex flex-col items-center">
+              <strong className="text-base font-black text-slate-800">相簿</strong>
+              <span className="text-[11px] text-slate-400 font-medium mt-0.5">Gallery</span>
             </div>
           </button>
         </div>
@@ -444,9 +443,9 @@ export function Scan({
             className="scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer"
           >
             <span className="scan-function-art scan-function-art--manual" style={scanSuiteStyle} aria-hidden="true" />
-            <div className="scan-utility-copy flex flex-col items-start text-left">
+            <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
               <strong className="text-xs font-black text-slate-800">手動記帳</strong>
-              <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Manual</span>
+              <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Manual Entry</span>
             </div>
           </button>
 
@@ -457,8 +456,8 @@ export function Scan({
             className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'voice' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
           >
             <span className="scan-function-art scan-function-art--voice" style={scanSuiteStyle} aria-hidden="true" />
-            <div className="scan-utility-copy flex flex-col items-start text-left">
-              <strong className="text-xs font-black text-slate-800">語音記帳</strong>
+            <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
+              <strong className="text-xs font-black text-slate-800">語音</strong>
               <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Voice</span>
             </div>
           </button>
@@ -470,8 +469,8 @@ export function Scan({
             className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'email' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
           >
             <span className="scan-function-art scan-function-art--email" style={scanSuiteStyle} aria-hidden="true" />
-            <div className="scan-utility-copy flex flex-col items-start text-left">
-              <strong className="text-xs font-black text-slate-800">Email 匯入</strong>
+            <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
+              <strong className="text-xs font-black text-slate-800">Email</strong>
               <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Email</span>
             </div>
           </button>
@@ -483,9 +482,9 @@ export function Scan({
             className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'currency' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
           >
             <span className="scan-function-art scan-function-art--currency" style={scanSuiteStyle} aria-hidden="true" />
-            <div className="scan-utility-copy flex flex-col items-start text-left">
-              <strong className="text-xs font-black text-slate-800">匯率工具</strong>
-              <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Fx Tool</span>
+            <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
+              <strong className="text-xs font-black text-slate-800">匯率</strong>
+              <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Exchange Rate</span>
             </div>
           </button>
         </div>

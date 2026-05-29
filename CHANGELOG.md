@@ -11,6 +11,7 @@ All notable project changes should be recorded here.
 - Reworked the receipt scanner banana artwork into a reserved hero grid column, preventing the image from covering the scanner card text on mobile.
 - Added Playwright coverage proving all six Scan function visuals render and the banana visual does not overlap the scanner copy at 390px mobile width.
 - Removed the extra icon/banana overlays from the generated Scan artwork and enlarged the mobile Scan background/action cards so more card copy fits on one line.
+- Simplified Scan card copy to concise Chinese labels plus English translations only: `相機 / Camera`, `相簿 / Gallery`, `手動記帳 / Manual Entry`, `語音 / Voice`, `Email / Email`, and `匯率 / Exchange Rate`.
 
 ### React Itinerary Timeline rail polish
 
