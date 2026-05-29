@@ -91,7 +91,7 @@ Status labels:
 | G01-G13 Dashboard | 已驗證 | Active-trip totals, budget, pending banner, person overview, today itinerary, map links, rows. |
 | H01-H18 Scan | 已實作 | Manual, edit/delete, camera/gallery OCR, voice/email parse, batch confirm, Gmail copy, currency tool, photo/booking fields. |
 | I01-I09 History | 已實作 | Search/filter/group/pending confirm/edit/delete/pull/merge by active trip. |
-| J01-J09 Timeline | 已實作 | Planned spots, lodging/transport overlays, loose receipts, spot edit/reset, maps, trip marker flow. |
+| J01-J09 Timeline | 已驗證 | Planned spots, lodging/transport overlays, loose receipts, spot edit/reset, safe maps, Magic UI rail beam, spot-index progress, compact mobile cards, dimmed coloured rails outside trip dates. |
 | K01-K06 Weather | 已實作 | Open-Meteo by trip coordinates, Japan-only JMA attempt, missing coord warning/cache/horizon handling. |
 | L01-L09 Stats | 已實作 | Settlement, private/cross-private, person/category/payment totals, top 10, trend, toggle mirror. |
 | M01-M25 Settings | 已實作 | All Settings cards are expandable; trip selector/update, currency, persons, broker credential rotation, Notion controls, export/import/reset/trust/version status remain available. |
@@ -105,7 +105,7 @@ Status labels:
 |---|---|---|
 | Q01 | 已驗證 | GitNexus impact checked before major symbol edits. |
 | Q02 | 已驗證 | `npx gitnexus analyze` reported index already up to date. |
-| Q03 | 已驗證 | GitNexus detect changes returned low risk for tracked diff. |
+| Q03 | 已驗證 | GitNexus detect changes returned low risk for the final tracked docs/CSS/test diff after the timeline rail polish. |
 | Q04 | 已驗證 | Graphify refreshed `app-react/src` code graph. |
 | Q05-Q07 | 已實作 | `ARCHITECTURE.md` and this checklist document added. |
 

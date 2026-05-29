@@ -1,9 +1,14 @@
 # Travel Expense App - Agent Handover
 
-Last updated: 2026-05-27 HKT
+Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- `3465484` Dim itinerary rails outside trip dates
+- `420d009` Align itinerary rail progress to live spot
+- `92ed9cd` Polish itinerary timeline mobile layout
+- `a7fd8d0` Bump credential broker version
+- `201ac85` Add WeatherAPI broker forecast support
 - `fca5ddc` Fix Kimi and Gemma automatic connection under Supabase mode and edge status access
 - `702bf83` Pass userEmail to canUseNotionMirror across App and Settings to restore Nagoya trip pull for Boss
 - `a662116` Harden Playwright integration test environment and fix all test compatibility issues (100% green Playwright suite)
@@ -51,22 +56,22 @@ Before changing code:
 
 ## Current Status Snapshot
 
-Current production-readiness status as of 2026-05-27 HKT:
+Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch has been pushed after the live Supabase RLS proof; run `git log --oneline -1` for the exact latest hash.
+- Main branch contains the latest itinerary rail commits through `3465484`; current unpushed documentation/CSS test polish should be committed and pushed before handing off.
 - React public app is the primary app under `app-react/`.
-- Vercel primary URL returned `200` after the latest code push with `last-modified: Tue, 26 May 2026 13:49:24 GMT`; `07ded58` is docs-only.
-- GitHub Pages workflow run `26452416283` for `07ded58` completed successfully, and the Pages React URL returned `200` with `last-modified: Tue, 26 May 2026 13:54:42 GMT`.
+- Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
+- GitHub Pages workflows were recently failing in `actions/configure-pages@v5` with `Get Pages site failed / Not Found`; treat Pages as needing fresh CI verification after each push.
 - Netlify URL previously returned `503 usage_exceeded`; treat Netlify as not production-ready until the account/usage gate is resolved with fresh evidence.
 - GitNexus was refreshed after the latest commits. Run `npx gitnexus status` for the exact indexed/current hash; it should be up to date unless new work has landed.
 - Graphify code graph was refreshed after the latest code/docs changes. Last observed `graphify update .` output: `804 nodes, 1201 edges, 149 communities`.
-- `AGENTS.md` and `CLAUDE.md` may have unrelated GitNexus count-only dirty diffs. Do not stage them unless Boss explicitly asks.
+- `AGENTS.md` and `CLAUDE.md` have GitNexus count-only metadata updates from analysis. Boss asked to update all markdown files, so include those metadata updates in the docs commit.
 
 Latest UI polish in this handover update:
 
 - Latest itinerary mobile polish on 2026-05-29 HKT: the Timeline rail now renders an independent Magic UI `BorderBeam`-backed beam layer with an animated vertical sweep, live progress fill, and a compact now marker. Itinerary cards now use an explicit compact grid layout, smaller mobile icons/time/action controls, and a right-side action column so more cards fit on phone screens while the rail stays separated from card text.
 - Follow-up itinerary rail fix on 2026-05-29 HKT: today's rail progress now follows the current itinerary spot index instead of the 24-hour clock percentage, so the dark animated fill and now marker stop near the live scenic spot for the active day.
-- Follow-up itinerary inactive-date polish on 2026-05-29 HKT: when the current date is outside the trip's itinerary date window, all Timeline rails use a lighter inactive colour, hide the live marker, and pause the bright sweep so past/future trips do not look actively in progress.
+- Follow-up itinerary inactive-date polish on 2026-05-30 HKT: when the current date is outside the trip's itinerary date window, all Timeline rails keep the itinerary red/gold/green palette but render it dimmed, hide the live marker, and pause the bright sweep so past/future trips do not look actively in progress.
 - Timeline tab now has an animated independent left rail gutter with a dynamic day-progress fill and live "now" marker based on the itinerary day timezone. The rail has enough spacing so itinerary cards no longer cover or overlay it.
 - Weather tab now shows both actual temperature (`實溫`) and feels-like temperature (`體感`) for each forecast slot. Weather cards have inner breathing room, one-column mobile layout, and a dynamic accent line per slot.
 - Top command cards across the React tabs no longer show the small eyebrow/helper sentences such as `Forecast window · Live travel weather`, keeping the headers cleaner.
@@ -76,7 +81,7 @@ Latest UI verification from this pass:
 
 - `npm run typecheck` - passed.
 - `npm run build` - passed.
-- `npm run smoke:timeline` - 3 passed.
+- `npm run smoke:timeline` - 6 passed, covering edit/reset/maps/loose receipts, safe map URLs, live/passed/future state, mobile rail geometry, spot-index progress, and dimmed out-of-trip rails.
 - `npm run smoke:weather` - 4 passed.
 - `npm run smoke:history` - 3 passed.
 - `npm run smoke:mobile-layout` - 1 passed.

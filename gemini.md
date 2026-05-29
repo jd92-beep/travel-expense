@@ -33,7 +33,13 @@
 
 ---
 
-## 🛠️ 核心架構與最新升級 (2026-05-20)
+## 🛠️ 核心架構與最新升級 (2026-05-30)
+
+### 0. 📍 React Itinerary Timeline 最新狀態
+- **Spot-index progress**：React `/react/` Itinerary rail 依家跟「目前時間所屬嘅景點位置」推進，而唔係用 24 小時比例硬拉條線。
+- **Magic UI rail beam**：Timeline 左側 rail 用 `BorderBeam` 加獨立 beam layer、上下 shine、dynamic fill，同手機 compact card 排版，避免 rail 遮住文字。
+- **Out-of-trip dimmed colour**：如果今日唔喺 trip 日期範圍內，rail 會保留紅/金/綠 itinerary palette，但變暗、隱藏 live marker、暫停 bright sweep，代表係過去/未來行程。
+- **Smoke coverage**：`npm run smoke:timeline` 已覆蓋 live spot progress、mobile rail geometry、outside-trip dimmed palette。
 
 ### 1. 🧹 Zhipu (GLM-5) 徹底剔除，全面擁抱 Kimi (Moonshot)
 - **Kimi 首選**：不論在前端 AI (React/Legacy) 還是 Apps Script 後端 (`email-to-notion.gs`)，Zhipu 已完全被清空，首選模型全部升級為 Kimi (`kimi-8k` / `kimi-32k` / `kimi-k2.6`)。

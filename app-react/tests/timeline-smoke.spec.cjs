@@ -304,15 +304,22 @@ test('Timeline rail uses a lighter inactive colour when today is outside the tri
 
   const inactiveRail = await page.locator('.timeline-rail.is-outside-trip').first().evaluate((rail) => {
     const fill = rail.querySelector('.timeline-rail-fill');
+    const track = rail.querySelector('.timeline-rail-track');
     const sweep = rail.querySelector('.timeline-rail-sweep');
     return {
       progress: Number(getComputedStyle(rail).getPropertyValue('--timeline-progress')),
+      fillBackground: fill ? getComputedStyle(fill).backgroundImage : '',
       fillOpacity: fill ? Number(getComputedStyle(fill).opacity) : 1,
+      trackBackground: track ? getComputedStyle(track).backgroundImage : '',
       sweepOpacity: sweep ? Number(getComputedStyle(sweep).opacity) : 1,
     };
   });
 
   expect(inactiveRail.progress).toBe(1);
+  expect(inactiveRail.fillBackground).toMatch(/194,\s*59,\s*94/);
+  expect(inactiveRail.fillBackground).toMatch(/212,\s*168,\s*67/);
+  expect(inactiveRail.fillBackground).toMatch(/45,\s*110,\s*72/);
+  expect(inactiveRail.trackBackground).toMatch(/194,\s*59,\s*94/);
   expect(inactiveRail.fillOpacity).toBeLessThan(0.4);
   expect(inactiveRail.sweepOpacity).toBeLessThan(0.2);
 });

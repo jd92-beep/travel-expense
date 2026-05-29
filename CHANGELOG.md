@@ -2,6 +2,21 @@
 
 All notable project changes should be recorded here.
 
+## 2026-05-30
+
+### React Itinerary Timeline rail polish
+
+- Updated the React Itinerary tab timeline rail so live progress follows the current itinerary spot instead of the whole-day clock percentage.
+- Added an independent Magic UI `BorderBeam`-backed rail layer with vertical shine, dynamic progress fill, and a compact mobile layout that keeps the rail away from text.
+- Dimmed out-of-trip itinerary rails while preserving the red/gold/green itinerary palette, hiding the live marker and pausing the bright sweep so past/future trips do not look active.
+- Added Playwright regression coverage for mobile rail geometry, live-spot progress, and out-of-trip dimmed-colour behavior.
+- Verified `npm run smoke:timeline`, `npm run smoke:mobile-layout`, `npm run typecheck`, `npm run build`, `git diff --check`, and GitNexus change detection during the timeline polish pass.
+
+### WeatherAPI broker support
+
+- Added WeatherAPI.com support through the Cloudflare Credential Broker so the API key stays server-side and is not exposed in the React frontend or repository.
+- Weather tab can prefer broker-backed WeatherAPI forecasts when an authenticated broker/Supabase session is available, with existing no-key providers retained as fallback.
+
 ## 2026-05-27
 
 ### 生產就緒大升級與 Playwright Parity 全綠通過 (Antigravity pass 🫡🏆✈️港幣主導雙向過濾)

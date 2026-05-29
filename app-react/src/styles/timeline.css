@@ -334,22 +334,22 @@
 .timeline-rail.is-outside-trip .timeline-rail-beam {
   background:
     linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.36)),
-    linear-gradient(180deg, rgba(148,137,125,.14), rgba(211,196,172,.18), rgba(115,142,128,.12));
+    linear-gradient(180deg, rgba(194,59,94,.12), rgba(212,168,67,.15), rgba(45,110,72,.1));
   box-shadow:
     0 0 0 4px rgba(255,255,255,.3),
-    0 10px 20px rgba(86,56,24,.06),
+    0 10px 20px rgba(86,56,24,.07),
     inset 0 0 0 1px rgba(255,255,255,.7);
 }
 
 .timeline-rail.is-outside-trip .timeline-rail-track {
-  background: linear-gradient(180deg, rgba(148,137,125,.2), rgba(211,196,172,.24), rgba(115,142,128,.18));
-  opacity: .5;
+  background: linear-gradient(180deg, rgba(194,59,94,.18), rgba(212,168,67,.2), rgba(45,110,72,.16));
+  opacity: .62;
 }
 
 .timeline-rail.is-outside-trip .timeline-rail-fill {
-  background: linear-gradient(180deg, rgba(148,137,125,.76), rgba(211,196,172,.72), rgba(115,142,128,.58));
-  box-shadow: none;
-  opacity: .28;
+  background: linear-gradient(180deg, rgba(194,59,94,.72), rgba(212,168,67,.66), rgba(45,110,72,.54));
+  box-shadow: 0 0 10px rgba(194,59,94,.08);
+  opacity: .34;
 }
 
 .timeline-rail.is-outside-trip .timeline-rail-sweep {
@@ -358,12 +358,12 @@
 }
 
 .timeline-rail.is-outside-trip .timeline-rail-border-beam {
-  opacity: .18;
+  opacity: .24;
 }
 
 .timeline-rail.is-outside-trip .timeline-event::before {
-  background: rgba(148,137,125,.46);
-  box-shadow: 0 0 0 3px rgba(148,137,125,.1);
+  background: rgba(194,59,94,.36);
+  box-shadow: 0 0 0 3px rgba(212,168,67,.1);
 }
 
 .timeline-now-marker {

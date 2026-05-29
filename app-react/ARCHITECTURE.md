@@ -30,6 +30,13 @@ Mobile Chrome URL
 - `customItinerary` is kept as a legacy compatibility mirror.
 - Settings meta sync is non-secret only: budget, currency, active trip, persons, share ratios, and timestamps.
 
+## Timeline Orientation
+
+- The React Itinerary tab is schedule-first: it renders planned spots, loose receipts, edit/reset actions, and safe map links without turning receipt events into timeline stops.
+- The animated rail progress is based on the current itinerary spot index, not the whole 24-hour clock percentage.
+- If the current date is outside the itinerary date window, rails use `.is-outside-trip`: the same red/gold/green palette is dimmed, live marker is hidden, and the bright sweep is paused.
+- Mobile layout keeps the rail in its own gutter and uses compact card columns so the beam does not cover event text.
+
 ## AI Flow
 
 - Google `gemma-4-31b` is primary for receipt image OCR and voice parsing.

@@ -2,6 +2,8 @@
 
 DOM section: `#tab-timeline` (line 660). Render fn: `renderTimeline()` (line 3741).
 
+> React public app note (2026-05-30): the primary `/react/` Itinerary tab now uses `app-react/src/tabs/Timeline.tsx` plus `app-react/src/styles/timeline.css`. Its left rail is an independent Magic UI `BorderBeam`-backed layer. When today's date is inside the trip window, progress follows the current itinerary spot position rather than the whole 24-hour clock percentage. When today's date is outside the trip window, rails stay red/gold/green but render dimmed, hide the live marker, and pause the bright sweep.
+
 ## 1. Introduction
 
 A metro-station-style schedule view of the trip. Every itinerary day's spots are laid out vertically with a "you are here" progress dot that advances through the schedule based on Asia/Hong-Kong wall-clock time. Items in the past are styled `.passed` (filled dot, faded card); items in the future are open circles. Built so Boss can glance at the tab and see "next stop in 30 minutes is 兼六園" without reading anything.
@@ -96,6 +98,7 @@ Internal constants:
 - **No spots in a day** — day header renders with no items.
 - **Pre-trip** — every spot is in the future; `passed.length === 0` → progress bar stays at 0; no "you are here" marker inserted (line 3796).
 - **Post-trip** — every spot is `.passed`; "you are here" sits at the bottom.
+- **React out-of-trip view** — the React Itinerary rail uses `.is-outside-trip` to show dimmed itinerary colours instead of active progress when the current date is before or after the trip dates.
 - **Window resize during tab-hidden** — `_tlResizeTimer` fires but `updateTimelineProgress` skips if the section is hidden (line 3815).
 - **No real-time receipt overlay** — Timeline does not show consumption events. (Could be added by interleaving `state.receipts` items between schedule items, but the current view is intentionally schedule-only — that's what the legend's "計劃中 / 實際消費" anticipates is for *future* expansion, not current behavior.)
 - **5-minute tick + active tab assumption** — works in browser; PWA in iOS background may pause `setInterval` until foregrounded. The first foreground tick catches up.
@@ -176,3 +179,4 @@ Keeping these separate prevents a scanned hotel receipt or flight ticket from un
 3. Edited spot not visible: inspect `_getItineraryOverride(date, idx)` and whether the spot has a stable `_spotIdx`.
 4. Receipts missing from Timeline: expected by design; check Dashboard instead.
 5. Battery/performance issue: replace the 5-minute full re-render with `updateTimelineProgress()` if itinerary data is unchanged.
+6. React rail looks active for an old/future trip: inspect `timelineTripWindow()`, `timelineRailMetrics()`, and whether `.timeline-rail.is-outside-trip` is present.

@@ -76,6 +76,15 @@ interactive glass, not every card.
 - Disable drift under `prefers-reduced-motion`.
 - Never place glint behind label text or icons with fine strokes.
 
+## Timeline Rail Motion
+
+The Itinerary rail uses motion as orientation, not decoration.
+
+- Active trip dates: the rail can use a brighter red/gold/green fill and a subtle vertical sweep to show where the current time has reached in the planned spot list.
+- Outside trip dates: keep the same red/gold/green identity, but dim it. Do not make the rail colourless or grey; it should read as the same trip line at rest.
+- The live marker appears only when the current date matches an itinerary day.
+- The rail must live in its own gutter and never overlap event title, note, address, or action buttons on mobile.
+
 ## Cream And Japanese Tokens
 
 Keep the palette warm and Japanese-inspired, but not one-note cream. Pair paper
