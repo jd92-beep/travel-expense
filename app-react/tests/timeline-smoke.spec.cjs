@@ -256,3 +256,63 @@ test('Timeline rail progress follows the current itinerary spot instead of the w
   expect(railMetrics.progress, JSON.stringify(railMetrics, null, 2)).toBeLessThan(0.36);
   expect(Math.abs((railMetrics.markerCenterY || 0) - (railMetrics.liveCenterY || 0)), JSON.stringify(railMetrics, null, 2)).toBeLessThan(10);
 });
+
+test('Timeline rail uses a lighter inactive colour when today is outside the trip dates', async ({ page }) => {
+  const fixed = new Date('2026-05-12T09:30:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'timeline',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-09' },
+      customItinerary: [
+        {
+          date: '2026-05-08',
+          day: 1,
+          region: 'Past Day',
+          timezone: 'Asia/Tokyo',
+          spots: [{ time: '10:00', name: 'Past Stop', type: 'ticket' }],
+        },
+        {
+          date: '2026-05-09',
+          day: 2,
+          region: 'Past Day Two',
+          timezone: 'Asia/Tokyo',
+          spots: [{ time: '12:00', name: 'Past Lunch', type: 'food' }],
+        },
+      ],
+      receipts: [],
+    }));
+  }, fixed);
+
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  await expect(page.getByText('Past Day Two')).toBeVisible();
+  await expect(page.locator('.timeline-rail.is-today')).toHaveCount(0);
+  await expect(page.locator('.timeline-now-marker')).toHaveCount(0);
+  await expect(page.locator('.timeline-rail.is-outside-trip')).toHaveCount(2);
+
+  const inactiveRail = await page.locator('.timeline-rail.is-outside-trip').first().evaluate((rail) => {
+    const fill = rail.querySelector('.timeline-rail-fill');
+    const sweep = rail.querySelector('.timeline-rail-sweep');
+    return {
+      progress: Number(getComputedStyle(rail).getPropertyValue('--timeline-progress')),
+      fillOpacity: fill ? Number(getComputedStyle(fill).opacity) : 1,
+      sweepOpacity: sweep ? Number(getComputedStyle(sweep).opacity) : 1,
+    };
+  });
+
+  expect(inactiveRail.progress).toBe(1);
+  expect(inactiveRail.fillOpacity).toBeLessThan(0.4);
+  expect(inactiveRail.sweepOpacity).toBeLessThan(0.2);
+});

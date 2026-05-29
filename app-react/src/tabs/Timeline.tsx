@@ -21,6 +21,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   const [dayReceipts, setDayReceipts] = useState<string | null>(null);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
   const itinerary = getItinerary(state);
+  const tripWindow = timelineTripWindow(itinerary);
   const activeDay = dayReceipts ? itinerary.find((day) => day.date === dayReceipts) : null;
   const looseReceipts = activeDay ? dayLooseReceipts(state, activeDay) : [];
   const hasOpenModal = Boolean(editing || activeDay || viewPhoto);
@@ -83,7 +84,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       {itinerary.map((day) => {
         const spots = getScheduleSpots(state, day);
         const loose = dayLooseReceipts(state, day);
-        const rail = timelineRailMetrics(day.date, day.timezone, spots, nowTick);
+        const rail = timelineRailMetrics(day.date, day.timezone, spots, nowTick, tripWindow);
         return (
         <Reveal key={day.date} className="timeline-day-reveal" delay={Math.min(0.18, day.day * 0.018)}>
         <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`}>
@@ -101,7 +102,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
               <span>{spots.length} 個點</span>
             </div>
           </div>
-          <TimelineRail className={rail.isToday ? 'is-today' : ''} style={timelineRailStyle(rail)}>
+          <TimelineRail className={[rail.isToday ? 'is-today' : '', rail.isOutsideTrip ? 'is-outside-trip' : ''].filter(Boolean).join(' ')} style={timelineRailStyle(rail)}>
             {rail.isToday && (
               <span className="timeline-now-marker" aria-hidden="true">
                 <span>{rail.label}</span>
@@ -234,13 +235,23 @@ function timelineProgress(date: string, timezone: string | undefined, spots: Arr
   return 'is-passed';
 }
 
-function timelineRailMetrics(date: string, timezone: string | undefined, spots: Array<ItinerarySpot & { _spotIdx: number }>, nowMs: number): { isToday: boolean; progress: number; label: string } {
+function timelineRailMetrics(date: string, timezone: string | undefined, spots: Array<ItinerarySpot & { _spotIdx: number }>, nowMs: number, tripWindow?: { start: string; end: string } | null): { isToday: boolean; isOutsideTrip: boolean; progress: number; label: string } {
   const current = datePartsForZone(nowMs, normalizeTimelineTimezone(timezone));
-  if (!current) return { isToday: false, progress: 0, label: '' };
-  if (date < current.date) return { isToday: false, progress: 100, label: '' };
-  if (date > current.date) return { isToday: false, progress: 0, label: '' };
+  if (!current) return { isToday: false, isOutsideTrip: false, progress: 0, label: '' };
+  const isOutsideTrip = Boolean(tripWindow && (current.date < tripWindow.start || current.date > tripWindow.end));
+  if (isOutsideTrip) {
+    return { isToday: false, isOutsideTrip: true, progress: current.date > (tripWindow?.end || date) ? 100 : 0, label: '' };
+  }
+  if (date < current.date) return { isToday: false, isOutsideTrip: false, progress: 100, label: '' };
+  if (date > current.date) return { isToday: false, isOutsideTrip: false, progress: 0, label: '' };
   const progress = timelineSpotProgress(current.minutes, spots);
-  return { isToday: true, progress, label: formatTimelineMinutes(current.minutes) };
+  return { isToday: true, isOutsideTrip: false, progress, label: formatTimelineMinutes(current.minutes) };
+}
+
+function timelineTripWindow(itinerary: Array<{ date: string }>): { start: string; end: string } | null {
+  const dates = itinerary.map((day) => day.date).filter(Boolean).sort();
+  if (!dates.length) return null;
+  return { start: dates[0], end: dates[dates.length - 1] };
 }
 
 function timelineSpotProgress(currentMinutes: number, spots: Array<ItinerarySpot & { _spotIdx: number }>): number {
