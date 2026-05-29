@@ -1,5 +1,5 @@
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.05.26';
+const VERSION = '2026.05.29';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
