@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, FileImage, FileText, Mail, Mic, PlusCircle, RefreshCw, Repeat2 } from 'lucide-react';
+import { Camera, CheckCircle2, FileImage, FileText, Mail, Mic, RefreshCw, Repeat2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { ActionRippleButton, GlassCard, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 import { ShimmerButton } from '../components/ui/shimmer-button';
@@ -7,11 +7,13 @@ import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORT
 import { compressPhoto } from '../lib/domain';
 import type { AppState, Receipt } from '../lib/types';
 import nanoBanana2Image from '../assets/nano_banana_2.png';
+import scanMasterpieceSuite from '../assets/scan/scan-masterpiece-suite.png';
 
 type ScanMode = 'scan' | 'voice' | 'email' | 'currency';
 const CAMERA_INPUT_ID = 'scan-camera-input';
 const GALLERY_INPUT_ID = 'scan-gallery-input';
 const EMAIL_IMAGE_INPUT_ID = 'scan-email-image-input';
+const scanSuiteStyle = { backgroundImage: `url(${scanMasterpieceSuite})` };
 
 function safeFileStem(file: File): string {
   return file.name
@@ -403,20 +405,22 @@ export function Scan({
           <ShimmerButton
             type="button"
             disabled={busy === 'ocr'}
-            className={`scan-hero-button col-span-1 sm:col-span-2 relative overflow-hidden flex flex-row items-center justify-between p-5 min-h-[140px] rounded-[28px] bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 text-white shadow-xl hover:shadow-2xl hover:scale-[1.01] active:scale-98 transition-all cursor-pointer ${busy === 'ocr' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`scan-hero-button col-span-1 sm:col-span-2 relative overflow-hidden p-5 min-h-[140px] rounded-[28px] bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 text-white shadow-xl hover:shadow-2xl hover:scale-[1.01] active:scale-98 transition-all cursor-pointer whitespace-normal ${busy === 'ocr' ? 'opacity-50 cursor-not-allowed' : ''}`}
             onClick={triggerCamera}
             background="linear-gradient(110deg,#2563eb,#4f46e5,#312e81)"
             borderRadius="28px"
             shimmerDuration="3.8s"
           >
             <div className="absolute inset-0 bg-white/10 opacity-30 pointer-events-none" />
-            <div className="flex flex-col gap-1 items-start text-left relative z-10 flex-1 min-w-0 pr-4">
+            <div className="scan-hero-copy flex flex-col gap-1 items-start text-left relative z-10 min-w-0">
               <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Receipt Scanner</span>
               <strong className="text-xl sm:text-2xl font-black tracking-tight leading-tight mt-0.5">相機智能辨識收據 📸</strong>
               <p className="text-[11px] text-blue-100/90 mt-1 font-medium leading-snug">打開相機直接拍攝收據，AI 自動為你讀取金額、店名與明細。</p>
             </div>
-            <div className="flex-shrink-0 flex items-center justify-center relative z-10 w-24 h-24 bg-white/15 backdrop-blur-md rounded-2xl border border-white/20 shadow-md">
-              <img src={nanoBanana2Image} alt="Banana Camera" className="w-full h-full object-contain p-1" />
+            <div className="scan-banana-visual scan-function-art scan-function-art--camera" style={scanSuiteStyle} aria-hidden="true">
+              <span className="scan-banana-orbit">
+                <img src={nanoBanana2Image} alt="" className="w-full h-full object-contain p-1" />
+              </span>
             </div>
           </ShimmerButton>
 
@@ -427,9 +431,9 @@ export function Scan({
             className={`scan-secondary-button col-span-1 flex flex-col items-center justify-center gap-3 p-5 min-h-[140px] rounded-[28px] bg-white/70 backdrop-blur-xl border border-white/90 shadow-lg hover:bg-white/90 hover:scale-[1.01] active:scale-98 transition-all cursor-pointer ${busy === 'ocr' ? 'opacity-50 cursor-not-allowed' : ''}`}
             onClick={triggerGallery}
           >
-            <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center shadow-sm border border-purple-100">
-              <FileImage size={28} className="text-purple-600" />
-            </div>
+            <span className="scan-function-art scan-function-art--gallery" style={scanSuiteStyle} aria-hidden="true">
+              <FileImage size={24} />
+            </span>
             <div className="flex flex-col items-center">
               <strong className="text-base font-black text-slate-800">相簿匯入 🖼️</strong>
               <span className="text-[11px] text-slate-400 font-medium mt-0.5">從手機相簿選取收據圖片</span>
@@ -443,12 +447,12 @@ export function Scan({
             type="button"
             onClick={onManual}
             aria-label="手動"
-            className="flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer"
+            className="scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer"
           >
-            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center shrink-0 shadow-inner">
-              <PlusCircle size={20} className="text-green-600" />
-            </div>
-            <div className="flex flex-col items-start text-left">
+            <span className="scan-function-art scan-function-art--manual" style={scanSuiteStyle} aria-hidden="true">
+              <FileText size={18} />
+            </span>
+            <div className="scan-utility-copy flex flex-col items-start text-left">
               <strong className="text-xs font-black text-slate-800">手動記帳</strong>
               <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Manual</span>
             </div>
@@ -458,12 +462,12 @@ export function Scan({
             type="button"
             onClick={() => setMode('voice')}
             aria-label="語音"
-            className={`flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'voice' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
+            className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'voice' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
           >
-            <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center shrink-0 shadow-inner">
-              <Mic size={20} className="text-amber-600" />
-            </div>
-            <div className="flex flex-col items-start text-left">
+            <span className="scan-function-art scan-function-art--voice" style={scanSuiteStyle} aria-hidden="true">
+              <Mic size={18} />
+            </span>
+            <div className="scan-utility-copy flex flex-col items-start text-left">
               <strong className="text-xs font-black text-slate-800">語音記帳</strong>
               <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Voice</span>
             </div>
@@ -473,12 +477,12 @@ export function Scan({
             type="button"
             onClick={() => setMode('email')}
             aria-label="Email"
-            className={`flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'email' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
+            className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'email' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
           >
-            <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center shrink-0 shadow-inner">
-              <Mail size={20} className="text-rose-600" />
-            </div>
-            <div className="flex flex-col items-start text-left">
+            <span className="scan-function-art scan-function-art--email" style={scanSuiteStyle} aria-hidden="true">
+              <Mail size={18} />
+            </span>
+            <div className="scan-utility-copy flex flex-col items-start text-left">
               <strong className="text-xs font-black text-slate-800">Email 匯入</strong>
               <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Email</span>
             </div>
@@ -488,12 +492,12 @@ export function Scan({
             type="button"
             onClick={() => setMode('currency')}
             aria-label="匯率"
-            className={`flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'currency' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
+            className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'currency' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
           >
-            <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center shrink-0 shadow-inner">
-              <Repeat2 size={20} className="text-teal-600" />
-            </div>
-            <div className="flex flex-col items-start text-left">
+            <span className="scan-function-art scan-function-art--currency" style={scanSuiteStyle} aria-hidden="true">
+              <Repeat2 size={18} />
+            </span>
+            <div className="scan-utility-copy flex flex-col items-start text-left">
               <strong className="text-xs font-black text-slate-800">匯率工具</strong>
               <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Fx Tool</span>
             </div>

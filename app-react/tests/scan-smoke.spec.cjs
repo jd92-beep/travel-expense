@@ -19,6 +19,14 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.getByText('掃描收據')).toBeVisible();
   await expect(page.getByRole('button', { name: '相機' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '相簿' }).first()).toBeVisible();
+  await expect(page.locator('.scan-function-art')).toHaveCount(6);
+  const heroCopy = await page.locator('.scan-hero-copy').boundingBox();
+  const heroVisual = await page.locator('.scan-banana-visual').boundingBox();
+  expect(heroCopy).toBeTruthy();
+  expect(heroVisual).toBeTruthy();
+  const overlapX = Math.max(0, Math.min(heroCopy.x + heroCopy.width, heroVisual.x + heroVisual.width) - Math.max(heroCopy.x, heroVisual.x));
+  const overlapY = Math.max(0, Math.min(heroCopy.y + heroCopy.height, heroVisual.y + heroVisual.height) - Math.max(heroCopy.y, heroVisual.y));
+  expect(overlapX * overlapY).toBe(0);
   await expect(page.locator('#scan-camera-input')).toHaveAttribute('capture', 'environment');
   await page.locator('#scan-camera-input').setInputFiles({
     name: 'm5-camera-receipt.jpg',

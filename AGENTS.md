@@ -151,6 +151,7 @@ npm run self-test
 ## Editing Rules
 
 - Preserve the public-repo security model. Do not commit `secrets.local.js`, real credentials, `.env`, generated Pages artifacts, `node_modules/`, `dist/`, `.gitnexus/`, or `graphify-out/`.
+- After completing requested work in this repo, commit and push the verified changes to `origin main` automatically unless Boss explicitly says not to.
 - Keep `graphify-out/` on disk but local-only unless the user explicitly asks to publish it.
 - Avoid broad rewrites of `index.html`; it has many cross-tab dependencies.
 - Keep legacy, `app/`, and `app3/` behavior aligned only when the user asks for parity. Do not silently port features between them.

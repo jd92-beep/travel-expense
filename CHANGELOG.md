@@ -4,6 +4,13 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### React Scan tab masterpiece visual polish
+
+- Added a generated six-panel Scan visual suite for camera scan, gallery import, manual entry, voice capture, email import, and currency exchange cards.
+- Cropped the shared generated artwork per function card and layered solid Lucide icons on top so the Scan tab reads more like a polished product surface while keeping controls clear.
+- Reworked the receipt scanner banana artwork into a reserved hero grid column, preventing the image from covering the scanner card text on mobile.
+- Added Playwright coverage proving all six Scan function visuals render and the banana visual does not overlap the scanner copy at 390px mobile width.
+
 ### React Itinerary Timeline rail polish
 
 - Updated the React Itinerary tab timeline rail so live progress follows the current itinerary spot instead of the whole-day clock percentage.
