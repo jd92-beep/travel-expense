@@ -64,6 +64,7 @@ Current production-readiness status as of 2026-05-27 HKT:
 
 Latest UI polish in this handover update:
 
+- Latest itinerary mobile polish on 2026-05-29 HKT: the Timeline rail now renders an independent Magic UI `BorderBeam`-backed beam layer with an animated vertical sweep, live progress fill, and a compact now marker. Itinerary cards now use an explicit compact grid layout, smaller mobile icons/time/action controls, and a right-side action column so more cards fit on phone screens while the rail stays separated from card text.
 - Timeline tab now has an animated independent left rail gutter with a dynamic day-progress fill and live "now" marker based on the itinerary day timezone. The rail has enough spacing so itinerary cards no longer cover or overlay it.
 - Weather tab now shows both actual temperature (`實溫`) and feels-like temperature (`體感`) for each forecast slot. Weather cards have inner breathing room, one-column mobile layout, and a dynamic accent line per slot.
 - Top command cards across the React tabs no longer show the small eyebrow/helper sentences such as `Forecast window · Live travel weather`, keeping the headers cleaner.

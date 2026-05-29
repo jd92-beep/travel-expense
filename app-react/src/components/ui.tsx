@@ -199,7 +199,24 @@ export function TimelineRail({
   className?: string;
   style?: CSSProperties;
 }) {
-  return <div className={cn('timeline-rail', className)} style={style}>{children}</div>;
+  return (
+    <div className={cn('timeline-rail', className)} style={style}>
+      <div className="timeline-rail-beam" aria-hidden="true">
+        <span className="timeline-rail-track" />
+        <span className="timeline-rail-fill" />
+        <span className="timeline-rail-sweep" />
+        <BorderBeam
+          className="timeline-rail-border-beam"
+          size={58}
+          duration={5.8}
+          colorFrom="#C23B5E"
+          colorTo="#D4A843"
+          borderWidth={2}
+        />
+      </div>
+      {children}
+    </div>
+  );
 }
 
 export function LoadingState({ label = '載入中' }: { label?: string }) {

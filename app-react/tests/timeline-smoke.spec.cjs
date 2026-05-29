@@ -123,3 +123,67 @@ test('Timeline highlights live, passed, and future itinerary spots', async ({ pa
   await expect(page.locator('.timeline-event.is-live')).toContainText('Now');
   await expect(page.locator('.timeline-event.is-future')).toContainText('Dinner Stop');
 });
+
+test('Timeline mobile rail shines independently without covering compact itinerary cards', async ({ page }) => {
+  const fixed = new Date('2026-05-08T12:30:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'timeline',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-08' },
+      customItinerary: [{
+        date: '2026-05-08',
+        day: 1,
+        region: 'Compact Rail City',
+        timezone: 'Asia/Tokyo',
+        spots: [
+          { time: '09:00', name: 'Morning Market', type: 'food' },
+          { time: '12:00', name: 'Museum Visit', type: 'ticket' },
+          { time: '15:30', name: 'Coffee Stop', type: 'food' },
+          { time: '18:00', name: 'Dinner', type: 'food' },
+        ],
+      }],
+      receipts: [],
+    }));
+  }, fixed);
+
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  await expect(page.getByText('行程時間線')).toBeVisible();
+  await expect(page.locator('.timeline-rail-beam')).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const railBeam = document.querySelector('.timeline-rail-beam')?.getBoundingClientRect();
+    const marker = document.querySelector('.timeline-now-marker')?.getBoundingClientRect();
+    const firstEvent = document.querySelector('.timeline-event')?.getBoundingClientRect();
+    const firstMain = document.querySelector('.timeline-main')?.getBoundingClientRect();
+    const eventHeights = Array.from(document.querySelectorAll('.timeline-event')).map((node) => Math.round(node.getBoundingClientRect().height));
+    return {
+      railBeam: railBeam && { right: railBeam.right },
+      marker: marker && { right: marker.right },
+      firstEvent: firstEvent && { left: firstEvent.left },
+      firstMain: firstMain && { left: firstMain.left },
+      eventHeights,
+    };
+  });
+
+  expect(geometry.railBeam).toBeTruthy();
+  expect(geometry.marker).toBeTruthy();
+  expect(geometry.firstEvent).toBeTruthy();
+  expect(geometry.firstMain).toBeTruthy();
+  expect(geometry.railBeam.right).toBeLessThanOrEqual(geometry.firstEvent.left - 8);
+  expect(geometry.marker.right).toBeLessThanOrEqual(geometry.firstEvent.left - 4);
+  expect(geometry.firstMain.left).toBeGreaterThan(geometry.firstEvent.left + 74);
+  expect(Math.max(...geometry.eventHeights), JSON.stringify(geometry, null, 2)).toBeLessThanOrEqual(76);
+});
