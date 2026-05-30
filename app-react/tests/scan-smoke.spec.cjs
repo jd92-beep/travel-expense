@@ -29,6 +29,10 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.locator('.scan-hero-card')).not.toContainText('從手機相簿選取');
   await expect(page.locator('.scan-function-art')).toHaveCount(6);
   await expect(page.locator('.scan-function-art svg, .scan-function-art img')).toHaveCount(0);
+  const scanAtmosphere = await page.locator('.scan-hero-card').evaluate((node) => getComputedStyle(node, '::before').backgroundImage);
+  const scanBeam = await page.locator('.scan-hero-button').evaluate((node) => getComputedStyle(node, '::after').animationName);
+  expect(scanAtmosphere).toContain('travel-ai-atlas');
+  expect(scanBeam).toContain('scan-beam-y');
   const heroCard = await page.locator('.scan-hero-card').boundingBox();
   const heroButton = await page.locator('.scan-hero-button').boundingBox();
   const heroCopy = await page.locator('.scan-hero-copy').boundingBox();

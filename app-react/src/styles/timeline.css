@@ -14,6 +14,23 @@
   overscroll-behavior-y: contain;
 }
 
+.timeline-screen::before {
+  content: '';
+  position: fixed;
+  inset: 58px auto auto 0;
+  z-index: 0;
+  width: min(70vw, 620px);
+  height: 420px;
+  background-image: var(--travel-ai-atlas);
+  background-repeat: no-repeat;
+  background-size: 300% 100%;
+  background-position: center center;
+  opacity: .12;
+  filter: saturate(1.05) contrast(1.02);
+  mask-image: radial-gradient(ellipse at 22% 22%, #000 0 34%, transparent 72%);
+  pointer-events: none;
+}
+
 .timeline-screen .timeline-command,
 .timeline-screen .timeline-day,
 .timeline-edit-sheet,
@@ -46,6 +63,13 @@
   display: grid;
   align-items: center;
   overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.92), rgba(255,247,232,.62)),
+    var(--travel-ai-atlas),
+    linear-gradient(135deg, rgba(255,255,255,.88), rgba(255,247,234,.68)) !important;
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 300% 100%, auto;
+  background-position: center, center center, center;
 }
 
 .timeline-command::after {
@@ -246,6 +270,13 @@
   50% { transform: translateY(-4px); }
 }
 
+@keyframes route-glint {
+  0% { transform: translateX(-120%) rotate(8deg); opacity: 0; }
+  25% { opacity: .55; }
+  55% { opacity: .28; }
+  100% { transform: translateX(130%) rotate(8deg); opacity: 0; }
+}
+
 .timeline-rail::before {
   display: none;
   left: 26px;
@@ -401,6 +432,18 @@
   -webkit-backdrop-filter: blur(18px) saturate(1.16);
   transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
   z-index: 2;
+  overflow: hidden;
+}
+
+.timeline-event::after {
+  content: '';
+  position: absolute;
+  inset: -40% auto -40% -30%;
+  width: 42%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.72), transparent);
+  transform: translateX(-120%) rotate(8deg);
+  pointer-events: none;
+  opacity: 0;
 }
 
 .timeline-event:hover {
@@ -437,6 +480,10 @@
     linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,241,232,.86)),
     rgba(255, 250, 245, .95);
   animation: active-glow 3s ease-in-out infinite, active-float 4s ease-in-out infinite;
+}
+
+.timeline-event.is-live::after {
+  animation: route-glint 4.8s ease-in-out infinite;
 }
 
 .timeline-event.is-live::before {
@@ -781,6 +828,11 @@
     isolation: isolate;
   }
 
+  .timeline-screen::before {
+    opacity: .06;
+    filter: saturate(.96);
+  }
+
   .timeline-screen .japanese-sun-decor,
   .timeline-screen .japanese-sakura-decor,
   .timeline-screen .timeline-command-shine,
@@ -836,6 +888,7 @@
     box-shadow:
       0 10px 22px rgba(217, 65, 50, .1),
       inset 0 1px 0 rgba(255,255,255,.92);
+    animation: none;
   }
 
   .timeline-event.is-live::before {
@@ -851,6 +904,12 @@
   .timeline-screen * {
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-event.is-live::after {
+    animation: none !important;
   }
 }
 

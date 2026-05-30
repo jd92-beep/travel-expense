@@ -4,6 +4,7 @@ Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- Current commit: Add premium travel AI visual atlas
 - Current commit: Compact Stats tab command header
 - Current commit: Compact itinerary command spacing
 - Current commit: Compact Record tab command header
@@ -71,7 +72,7 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch contains the latest Stats tab command-header compaction in the current commit once pushed. Before this pass, latest pushed commit was `130232f`. Verify with `git status --short --branch` and `git log -1 --oneline`.
+- Main branch contains the latest premium travel AI visual atlas pass in the current commit once pushed. Before this pass, latest pushed commit was `20052e4`. Verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
 - GitHub Pages failure root cause on 2026-05-30 HKT: the repository Pages API returned `404` / `has_pages:false`, while the workflow called `actions/configure-pages@v5` with default `enablement:false`. The repo Pages site was enabled via GitHub API with `build_type=workflow`, and `.github/workflows/deploy.yml` now passes `enablement: true`. Fresh CI verification is still required after the repair commit is pushed.
@@ -82,6 +83,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- Premium travel control desk visual pass on 2026-05-30 HKT: Boss chose `高級旅行控制台 + 和風手帳 + 少少 AI magic`; a GPT Imagine 2 generated three-panel atlas was saved as `app-react/src/assets/atmosphere/travel-ai-atlas.webp` and shared across Scan, Timeline, and Weather. Scan now has a receipt-desk background with a scanning beam, Timeline has itinerary notebook/map atmosphere plus a live-card route glint, and Weather has a travel-weather command background plus ambient forecast drift.
 - Stats tab command-header polish on 2026-05-30 HKT: `分帳統計中心` now stays on one compact line with the receipt-count pill, the unneeded transfer-count pill/icon is removed from the top card, and mobile styling keeps the row aligned at 390px without overflow.
 - Itinerary spacing polish on 2026-05-30 HKT: reduced the mobile gap above and below the `行程時間線` command card by lowering Timeline top padding, removing the command-card mobile margin-bottom, and tightening the Timeline stack gap. Timeline smoke now verifies top gap, lower gap, first-day position, compact header height, and date de-duplication.
 - GitHub Pages deploy repair on 2026-05-30 HKT: fixed the failing Pages workflow that stopped at `actions/configure-pages@v5` with `Get Pages site failed / Not Found`. The repo is now enabled for Pages workflow deployment and the workflow can auto-enable Pages if it is missing.
@@ -102,6 +104,13 @@ Latest UI polish in this handover update:
 
 Latest UI verification from this pass:
 
+- `npm run typecheck` - passed after the premium visual atlas pass.
+- `npm run build` - passed after the premium visual atlas pass; the atlas builds as a 140KB WebP asset.
+- `npm run smoke:scan` - 1 passed, including the new Scan atlas background and scanning-beam regression.
+- `npm run smoke:timeline` - 7 passed, including the Timeline atlas command background and live-card route-glint regression.
+- `npm run smoke:weather` - 7 passed, including the Weather atlas command background and forecast-card ambient drift regression.
+- `npm run smoke:mobile-layout` - 1 passed after the premium visual atlas pass.
+- Local Playwright visual/geometry sweep at 390px captured Scan, Timeline, and Weather screenshots under `/tmp/travel-expense-*-ai-magic.png`; scroll width stayed 390px and console errors were empty.
 - `npm run typecheck` - passed after the Stats command-header compaction.
 - `npm run build` - passed after the Stats command-header compaction.
 - `npm run smoke:stats` - 1 passed, including the new one-line title/count alignment, no transfer pill in the title row, compact row height, and mobile overflow regression.

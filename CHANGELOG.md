@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### Premium travel control desk visual pass
+
+- Added a GPT Imagine 2 generated `travel-ai-atlas.webp` asset for the chosen `高級旅行控制台 + 和風手帳 + 少少 AI magic` direction, compressed from the generated source into a 140KB WebP project asset.
+- Integrated the atlas into Scan, Timeline, and Weather as a shared visual language: Scan gets a receipt-desk atmosphere and scanning beam, Timeline gets an itinerary notebook/map command-card background and live-card route glint, and Weather gets a weather-kit command background plus ambient forecast-card drift.
+- Added smoke coverage proving the generated atlas and new animations are actually wired into the rendered UI, while preserving mobile no-overflow checks.
+
 ### React Stats tab command header compaction
 
 - Kept `分帳統計中心` on one mobile-safe line with the receipt-count status pill, so the header reads cleanly beside `78 筆紀錄` style counts.

@@ -8,6 +8,7 @@ import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
 import { coordForDay, coordsForDay, fetchWeather, resolveCoordsForDay, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather } from '../lib/weather';
 import type { AppState, ItineraryDay } from '../lib/types';
+import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
 function WeatherIcon({ code, size = 18 }: { code?: number; size?: number }) {
   if (code == null) return <CloudSun size={size} />;
@@ -29,6 +30,7 @@ export function Weather({ state }: { state: AppState }) {
   const itinerary = useMemo(() => getItinerary(state), [state]);
   const today = todayYmd(normalizedTimezone(trip.timezones?.[0]) || 'Asia/Hong_Kong');
   const hasEnded = trip.endDate ? today > trip.endDate : false;
+  const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
 
   const displayItinerary = useMemo<ItineraryDay[]>(() => {
     if (!hasEnded) return itinerary;
@@ -105,7 +107,7 @@ export function Weather({ state }: { state: AppState }) {
   }, [itineraryKey]);
 
   return (
-    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto weather-screen">
+    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto weather-screen" style={travelAtlasStyle}>
       <div className="japanese-sun-decor" />
       <div className="japanese-sakura-decor" />
       <div className="stack w-full relative z-10">

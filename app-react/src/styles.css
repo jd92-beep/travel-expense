@@ -1311,6 +1311,68 @@ button.sync-status-indicator:focus-visible {
     repeating-linear-gradient(90deg, rgba(211,154,41,.08) 0 1px, transparent 1px 28px);
   pointer-events: none;
 }
+
+.scan-screen .scan-hero-card::before {
+  inset: 0;
+  z-index: 0;
+  border: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.9) 0%, rgba(255,255,255,.62) 48%, rgba(255,255,255,.3) 100%),
+    linear-gradient(180deg, rgba(255,248,236,.28), rgba(255,255,255,.2)),
+    var(--travel-ai-atlas);
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 100% 100%, 300% 100%;
+  background-position: center, center, left center;
+  opacity: .88;
+  filter: saturate(1.05) contrast(1.02);
+}
+
+.scan-screen .scan-hero-card::after {
+  z-index: 0;
+  background:
+    linear-gradient(90deg, rgba(30,77,107,.11) 0 1px, transparent 1px 30px),
+    linear-gradient(0deg, rgba(212,168,67,.10) 0 1px, transparent 1px 30px),
+    radial-gradient(circle at 18% 12%, rgba(37,99,235,.13), transparent 36%);
+}
+
+@keyframes scan-beam-y {
+  0%, 100% { transform: translateY(-130%); opacity: 0; }
+  18%, 58% { opacity: .85; }
+  72% { transform: translateY(130%); opacity: 0; }
+}
+
+@keyframes scan-orbit-breathe {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -2px, 0) scale(1.015); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-hero-button::after,
+  .scan-function-art,
+  .weather-slot-detailed::after {
+    animation: none !important;
+  }
+}
+
+.scan-hero-button::after {
+  content: '';
+  position: absolute;
+  inset-inline: 14px;
+  top: 0;
+  height: 42%;
+  z-index: 2;
+  border-radius: 999px;
+  background: linear-gradient(180deg, transparent, rgba(255,255,255,.7), rgba(111,188,255,.62), transparent);
+  mix-blend-mode: screen;
+  filter: blur(.5px);
+  pointer-events: none;
+  animation: scan-beam-y 3.8s ease-in-out infinite;
+}
+
+.scan-function-art {
+  animation: scan-orbit-breathe 5.2s ease-in-out infinite;
+}
 .scan-helper-copy {
   max-width: 38rem;
 }
@@ -1580,6 +1642,29 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     repeating-linear-gradient(0deg, rgba(211,154,41,.045) 0 1px, transparent 1px 24px);
   pointer-events: none;
 }
+
+.weather-screen::before {
+  content: '';
+  position: fixed;
+  inset: 72px 0 auto auto;
+  z-index: 0;
+  width: min(62vw, 560px);
+  height: 360px;
+  background-image: var(--travel-ai-atlas);
+  background-repeat: no-repeat;
+  background-size: 300% 100%;
+  background-position: right center;
+  opacity: .17;
+  filter: saturate(1.08) blur(.15px);
+  mask-image: radial-gradient(ellipse at 72% 28%, #000 0 36%, transparent 72%);
+  pointer-events: none;
+}
+
+@keyframes weather-sky-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); opacity: .52; }
+  50% { transform: translate3d(-10px, 6px, 0); opacity: .74; }
+}
+
 .weather-meteor {
   z-index: 1;
   background: #D39A29;
@@ -1630,6 +1715,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   backdrop-filter: blur(20px) saturate(1.2);
   box-shadow: 0 4px 16px rgba(30,77,107,.04);
   transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
 .weather-slot-detailed::before {
   content: '';
@@ -1641,6 +1727,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   border-radius: 999px;
   background: linear-gradient(90deg, var(--weather-accent), color-mix(in srgb, var(--weather-accent) 38%, white));
   z-index: 1;
+}
+.weather-slot-detailed::after {
+  content: '';
+  position: absolute;
+  inset: 18px -18px auto auto;
+  width: 92px;
+  height: 92px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--weather-accent) 20%, white) 0 8%, transparent 52%),
+    conic-gradient(from 180deg, transparent, color-mix(in srgb, var(--weather-accent) 22%, transparent), transparent);
+  opacity: .52;
+  pointer-events: none;
+  animation: weather-sky-drift 7s ease-in-out infinite;
 }
 .weather-slot-detailed:hover {
   transform: translateY(-3px) scale(1.01);
@@ -2785,9 +2885,14 @@ body {
 
 .timeline-screen .timeline-command {
   background:
+    linear-gradient(90deg, rgba(255,255,255,.92), rgba(255,247,232,.62)),
+    var(--travel-ai-atlas),
     radial-gradient(circle at 18% 16%, rgba(45,110,72,.22), transparent 30%),
     radial-gradient(circle at 90% 18%, rgba(194,59,94,.12), transparent 30%),
     rgba(255,255,255,.62) !important;
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 300% 100%, auto, auto, auto;
+  background-position: center, center center, center, center, center;
 }
 .timeline-screen .timeline-day {
   background:
@@ -2986,9 +3091,14 @@ body {
 
 .weather-screen .weather-command-fancy {
   background:
+    linear-gradient(90deg, rgba(255,255,255,.9), rgba(255,255,255,.58)),
+    var(--travel-ai-atlas),
     radial-gradient(circle at 12% 12%, rgba(30,109,134,.2), transparent 32%),
     radial-gradient(circle at 86% 8%, rgba(212,168,67,.13), transparent 30%),
     linear-gradient(135deg, rgba(255,255,255,.88), rgba(235,248,250,.68)) !important;
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 300% 100%, auto, auto, auto;
+  background-position: center, right center, center, center, center;
 }
 .weather-screen .weather-day {
   background:
@@ -3190,6 +3300,10 @@ textarea {
   .scan-screen .scan-function-art--camera {
     width: 88px;
     border-radius: 24px;
+  }
+  .scan-hero-button::after {
+    inset-inline: 10px;
+    height: 34%;
   }
   .scan-screen .scan-mode-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

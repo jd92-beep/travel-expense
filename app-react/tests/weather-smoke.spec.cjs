@@ -82,6 +82,10 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
   await page.goto('http://localhost:8902/travel-expense/react/');
   await expect(page.getByText('天氣預報')).toBeVisible();
   await expect(page.getByText(/Day 1 · JMA/)).toBeVisible();
+  const weatherAtmosphere = await page.locator('.weather-command-fancy').evaluate((node) => getComputedStyle(node).backgroundImage);
+  const weatherDrift = await page.locator('.weather-slot-detailed').first().evaluate((node) => getComputedStyle(node, '::after').animationName);
+  expect(weatherAtmosphere).toContain('travel-ai-atlas');
+  expect(weatherDrift).toContain('weather-sky-drift');
   await expect(page.getByText('21°C').first()).toBeVisible();
   await expect(page.locator('.temp-num').first()).not.toHaveCSS('-webkit-text-fill-color', 'rgba(0, 0, 0, 0)');
   await expect(page.getByText('09:00').first()).toBeVisible();

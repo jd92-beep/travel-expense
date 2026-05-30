@@ -122,6 +122,8 @@ test('Timeline highlights live, passed, and future itinerary spots', async ({ pa
   await expect(page.locator('.timeline-event.is-live')).toContainText('Lunch Stop');
   await expect(page.locator('.timeline-event.is-live')).toContainText('Now');
   await expect(page.locator('.timeline-event.is-future')).toContainText('Dinner Stop');
+  const liveGlint = await page.locator('.timeline-event.is-live').evaluate((node) => getComputedStyle(node, '::after').animationName);
+  expect(liveGlint).toContain('route-glint');
 });
 
 test('Timeline command card stays compact and day header shows one date', async ({ page }) => {
@@ -159,6 +161,8 @@ test('Timeline command card stays compact and day header shows one date', async 
   await expect(command).not.toContainText('📍');
   await expect(page.locator('.timeline-command-title-row')).toBeVisible();
   await expect(page.locator('.timeline-trip-days')).toHaveText('6日');
+  const commandAtmosphere = await command.evaluate((node) => getComputedStyle(node).backgroundImage);
+  expect(commandAtmosphere).toContain('travel-ai-atlas');
   const commandMetrics = await page.evaluate(() => {
     const card = document.querySelector('.timeline-command')?.getBoundingClientRect();
     const firstDay = document.querySelector('.timeline-day')?.getBoundingClientRect();

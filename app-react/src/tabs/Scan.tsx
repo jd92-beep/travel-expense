@@ -1,5 +1,5 @@
 import { Camera, CheckCircle2, Mail, Mic, RefreshCw, Repeat2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
 import { ActionRippleButton, GlassCard, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 import { ShimmerButton } from '../components/ui/shimmer-button';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
@@ -7,12 +7,14 @@ import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORT
 import { compressPhoto } from '../lib/domain';
 import type { AppState, Receipt } from '../lib/types';
 import scanMasterpieceSuite from '../assets/scan/scan-masterpiece-suite.png';
+import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
 type ScanMode = 'scan' | 'voice' | 'email' | 'currency';
 const CAMERA_INPUT_ID = 'scan-camera-input';
 const GALLERY_INPUT_ID = 'scan-gallery-input';
 const EMAIL_IMAGE_INPUT_ID = 'scan-email-image-input';
 const scanSuiteStyle = { backgroundImage: `url(${scanMasterpieceSuite})` };
+const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
 
 function safeFileStem(file: File): string {
   return file.name
@@ -375,7 +377,7 @@ export function Scan({
   }
 
   return (
-    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto scan-screen">
+    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto scan-screen" style={travelAtlasStyle}>
       <div className="japanese-sun-decor" />
       <div className="japanese-sakura-decor" />
       <div className="stack w-full relative z-10">

@@ -10,6 +10,7 @@ import { ReceiptRow } from './Dashboard';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryIconId } from '../lib/iconManifest';
+import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 import '../styles/timeline.css';
 
 type ScheduleSpot = ItinerarySpot & { _spotIdx: number; receiptId?: string };
@@ -25,6 +26,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   const activeDay = dayReceipts ? itinerary.find((day) => day.date === dayReceipts) : null;
   const looseReceipts = activeDay ? dayLooseReceipts(state, activeDay) : [];
   const hasOpenModal = Boolean(editing || activeDay || viewPhoto);
+  const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowTick(Date.now()), 60 * 1000);
@@ -53,7 +55,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
 
   return (
     <>
-      <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative timeline-screen">
+      <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative timeline-screen" style={travelAtlasStyle}>
       <div className="japanese-sun-decor" />
       <div className="japanese-sakura-decor" />
       <div className="stack w-full relative z-10">
