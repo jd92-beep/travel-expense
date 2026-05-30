@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, LogOut, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
@@ -161,6 +161,8 @@ export function Settings({
   changeTab,
   updatePassword,
   userEmail = null,
+  onSignOut,
+  onClearDeviceData,
 }: {
   state: AppState;
   setState: Dispatch<SetStateAction<AppState>>;
@@ -175,6 +177,8 @@ export function Settings({
   changeTab?: (tabId: any) => void;
   updatePassword?: (password: string) => Promise<void>;
   userEmail?: string | null;
+  onSignOut?: () => Promise<void> | void;
+  onClearDeviceData?: () => Promise<void> | void;
 }) {
   const persons = getPersons(state);
   const currentTrip = activeTrip(state);
@@ -204,6 +208,7 @@ export function Settings({
   const [mappingDiag, setMappingDiag] = useState<ReactMappingDiagnostics | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -215,6 +220,34 @@ export function Settings({
       setNewPasswordInput('');
     } catch (err) {
       setStatus(`設定密碼失敗：${redactedError(err)}`);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleSupabaseSignOut = async () => {
+    if (!onSignOut) return;
+    setBusy('登出 Supabase');
+    setStatus('');
+    try {
+      await onSignOut();
+    } catch (err) {
+      setStatus(`登出失敗：${redactedError(err)}`);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleClearDeviceAndSignOut = async () => {
+    if (!onClearDeviceData || !onSignOut) return;
+    setBusy('清除裝置資料');
+    setStatus('');
+    try {
+      await onClearDeviceData();
+      await onSignOut();
+      setShowClearDeviceConfirm(false);
+    } catch (err) {
+      setStatus(`清除裝置資料失敗：${redactedError(err)}`);
     } finally {
       setBusy('');
     }
@@ -1684,6 +1717,25 @@ export function Settings({
           <p className="muted">
             你可以為目前嘅帳號設定或修改密碼。設定密碼後，你喺其他裝置登入時，除咗用 Email 連結之外，亦可以直接輸入 Email 同密碼登入！
           </p>
+          <GlassCard className="settings-account-card">
+            <div className="settings-account-copy">
+              <span className="eyebrow">目前帳號</span>
+              <strong>{userEmail || 'Supabase 帳號'}</strong>
+              <small>帳號操作集中喺 Settings，避免主畫面右上角阻住 app 操作。</small>
+            </div>
+            <div className="action-row wrap">
+              {onSignOut && (
+                <button className="secondary" type="button" disabled={!!busy} onClick={() => void handleSupabaseSignOut()} aria-label="登出 Supabase">
+                  <LogOut size={18} /> 登出
+                </button>
+              )}
+              {onClearDeviceData && onSignOut && (
+                <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
+                  <Trash2 size={18} /> 清除此裝置資料
+                </button>
+              )}
+            </div>
+          </GlassCard>
           <div style={{ display: 'grid', gap: '12px', maxWidth: '380px', marginTop: '12px' }}>
             <label style={{ display: 'grid', gap: '4px', fontSize: '12px', fontWeight: 800, color: '#374151' }}>
               設定新密碼 (最少 6 位)
@@ -1795,6 +1847,37 @@ export function Settings({
             <span>網絡狀態代理：{stressLatency ? '延遲 (5s) ⏳' : '正常 ⚡'} · {stressFault ? '伺服器故障模擬中 (500) ⚠️' : '連線正常 ✅'}</span>
           </div>
         </AccordionCard>
+      )}
+
+      {showClearDeviceConfirm && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="清除此裝置資料"
+          style={{ placeItems: 'center', zIndex: 9999, padding: '20px 20px max(110px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="modal settings-clear-device-modal">
+            <div className="settings-warning-icon">
+              <AlertTriangle size={30} />
+            </div>
+            <h2>清除此裝置資料？</h2>
+            <p>
+              會清除此帳號喺本機嘅快取資料、裝置信任同 IndexedDB snapshot，然後登出 Supabase。
+            </p>
+            <p className="muted">
+              雲端 Supabase / Notion 資料不會刪除；下次登入會重新由雲端同步。
+            </p>
+            <div className="modal-actions">
+              <button className="secondary" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(false)}>
+                取消
+              </button>
+              <button className="danger" type="button" disabled={!!busy} onClick={() => void handleClearDeviceAndSignOut()}>
+                <Trash2 size={18} /> 確認清除並登出
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showDeleteConfirm && (() => {

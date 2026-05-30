@@ -2694,6 +2694,57 @@ body {
   background: rgba(255,253,247,.92);
 }
 
+.settings-account-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 18px;
+}
+.settings-account-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.settings-account-copy strong {
+  color: var(--navy);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.settings-account-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.settings-clear-device-modal {
+  width: min(430px, calc(100vw - 32px));
+  display: grid;
+  gap: 12px;
+  border-radius: 22px;
+  border: 1px solid rgba(194, 59, 94, .24);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.94), rgba(255,246,238,.88)),
+    rgba(255,255,255,.86);
+  box-shadow: 0 26px 70px rgba(70, 37, 24, .22);
+}
+.settings-clear-device-modal h2,
+.settings-clear-device-modal p {
+  margin: 0;
+}
+.settings-clear-device-modal p {
+  color: var(--ink);
+  line-height: 1.48;
+}
+.settings-warning-icon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: rgba(194,59,94,.12);
+  color: #A83030;
+}
+
 .timeline-screen .timeline-command {
   background:
     radial-gradient(circle at 18% 16%, rgba(45,110,72,.22), transparent 30%),
@@ -3507,74 +3558,6 @@ input:checked + .washi-slider {
 
 input:checked + .washi-slider:before {
   transform: translateX(20px);
-}
-
-.supabase-session-actions {
-  position: fixed;
-  top: 14px;
-  right: 14px;
-  z-index: 70;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.supabase-signout,
-.supabase-clear-device {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 36px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(24, 57, 92, 0.16);
-  background: rgba(255, 255, 255, 0.82);
-  color: #18395c;
-  box-shadow: 0 12px 28px rgba(24, 57, 92, 0.12);
-  backdrop-filter: blur(14px);
-  font-size: 12px;
-  font-weight: 750;
-}
-
-.supabase-signout {
-  max-width: min(260px, calc(100vw - 76px));
-}
-
-.supabase-clear-device {
-  width: 36px;
-  padding: 8px;
-  color: #8f2c22;
-}
-
-.supabase-signout:disabled,
-.supabase-clear-device:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
-
-.supabase-signout span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.supabase-session-error {
-  position: fixed;
-  top: 58px;
-  right: 14px;
-  z-index: 70;
-  max-width: min(320px, calc(100vw - 28px));
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid rgba(143, 44, 34, 0.22);
-  border-radius: 12px;
-  background: rgba(255, 246, 242, 0.92);
-  color: #8f2c22;
-  box-shadow: 0 12px 28px rgba(143, 44, 34, 0.12);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .supabase-login-panel {

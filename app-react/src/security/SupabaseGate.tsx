@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { LogOut, Mail, ShieldCheck, Trash2 } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import type { useSupabaseAuth } from '../lib/supabase';
 import nanoBananaImage from '../assets/nano_banana.png';
 
@@ -9,10 +9,9 @@ type SupabaseAuth = ReturnType<typeof useSupabaseAuth>;
 type SupabaseGateProps = {
   auth: SupabaseAuth;
   children: ReactNode;
-  onClearDeviceData?: () => Promise<void> | void;
 };
 
-export function SupabaseGate({ auth, children, onClearDeviceData }: SupabaseGateProps) {
+export function SupabaseGate({ auth, children }: SupabaseGateProps) {
   const [activeTab, setActiveTab] = useState<'signin' | 'signup' | 'magiclink'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,23 +42,6 @@ export function SupabaseGate({ auth, children, onClearDeviceData }: SupabaseGate
     }
   }
 
-  async function clearDeviceAndSignOut() {
-    if (typeof window !== 'undefined') {
-      const confirmed = window.confirm('會清除此帳號在本機的快取資料，雲端 Supabase / Notion 資料不會刪除。要繼續嗎？');
-      if (!confirmed) return;
-    }
-    setBusy(true);
-    setStatus('');
-    try {
-      await onClearDeviceData?.();
-      await auth.signOut();
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Supabase sign out failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (!auth.configured) return <>{children}</>;
 
   if (auth.loading) {
@@ -75,25 +57,7 @@ export function SupabaseGate({ auth, children, onClearDeviceData }: SupabaseGate
     );
   }
 
-  if (auth.session) {
-    return (
-      <>
-        <div className="supabase-session-actions" aria-label="Supabase session controls">
-          <button className="supabase-signout" type="button" disabled={busy} onClick={() => void auth.signOut()} aria-label="登出 Supabase">
-            <LogOut size={16} />
-            <span>{auth.user?.email || 'Supabase'}</span>
-          </button>
-          {onClearDeviceData && (
-            <button className="supabase-clear-device" type="button" disabled={busy} onClick={() => void clearDeviceAndSignOut()} aria-label="清除此裝置資料並登出 Supabase" title="清除此裝置資料並登出">
-              <Trash2 size={15} />
-            </button>
-          )}
-        </div>
-        {status && <p className="supabase-session-error">{status}</p>}
-        {children}
-      </>
-    );
-  }
+  if (auth.session) return <>{children}</>;
 
   return (
     <main className="lock-screen welcome-guide-backdrop" style={{ display: 'grid', placeItems: 'center', background: 'rgba(23, 18, 12, 0.4)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', width: '100vw', height: '100vh', position: 'fixed', inset: 0 }}>

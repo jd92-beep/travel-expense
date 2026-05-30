@@ -25,6 +25,12 @@ All notable project changes should be recorded here.
 - Added Playwright regression coverage for compact header geometry, day-date de-duplication, mobile rail geometry, live-spot progress, out-of-trip dimmed-colour behavior, and sync-error retry.
 - Verified `npm run typecheck`, `npm run build`, `npm run smoke:timeline`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `git diff --check`, and local Playwright geometry/screenshot checks during the timeline polish pass.
 
+### React Supabase account controls
+
+- Moved the Supabase account and clear-device controls out of the app's top-right corner and into the Settings tab's cloud account section.
+- Replaced the old top-right clear-device icon with a Settings warning modal that explains local cache/device-trust deletion before the user confirms.
+- Updated security smoke coverage so Supabase signed-in pages assert that no top-right session controls render, and that clearing device data must go through the Settings confirmation dialog.
+
 ### WeatherAPI broker support
 
 - Added WeatherAPI.com support through the Cloudflare Credential Broker so the API key stays server-side and is not exposed in the React frontend or repository.

@@ -141,7 +141,8 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
   page.on('dialog', (dialog) => dialog.accept());
 
   await page.goto('http://localhost:8902/travel-expense/react/');
-  await expect(page.getByText('device-clear@example.com').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Travel Ledger' })).toBeVisible();
+  await expect(page.locator('.supabase-session-actions')).toHaveCount(0);
 
   await page.evaluate(async ({ scopedStorageKey, scopedIndexedKey }) => {
     localStorage.setItem(scopedStorageKey, JSON.stringify({ receipts: [{ id: 'private-receipt', store: 'Private shop' }] }));
@@ -162,8 +163,14 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
     db.close();
   }, { scopedStorageKey, scopedIndexedKey });
 
+  await page.getByLabel('主要分頁').getByRole('button', { name: '設定' }).click();
+  await page.getByRole('button', { name: /雲端帳號與密碼設定/ }).click();
+  await expect(page.getByText('device-clear@example.com').first()).toBeVisible();
   await page.getByRole('button', { name: '清除此裝置資料並登出 Supabase' }).click();
-  await expect(page.getByText('用密碼登入 🔑')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '清除此裝置資料' })).toBeVisible();
+  await expect(page.getByText(/雲端 Supabase \/ Notion 資料不會刪除/)).toBeVisible();
+  await page.getByRole('button', { name: '確認清除並登出' }).click();
+  await expect(page.getByText('密碼登入 🔑')).toBeVisible();
 
   const remaining = await page.evaluate(async ({ scopedStorageKey, scopedIndexedKey }) => {
     const localValue = localStorage.getItem(scopedStorageKey);
@@ -297,7 +304,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
   }, { userB, keyA, indexedKeyA, indexedKeyB });
 
   await page.goto('http://localhost:8902/travel-expense/react/#history');
-  await expect(page.getByText('user-b@example.com').first()).toBeVisible();
+  await expect(page.getByText('紀錄中心')).toBeVisible();
 
   await expect.poll(async () => page.evaluate((keyB) => {
     const raw = localStorage.getItem(keyB);

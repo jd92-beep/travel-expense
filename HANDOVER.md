@@ -74,6 +74,7 @@ Latest UI polish in this handover update:
 - Home dashboard reminder polish on 2026-05-30 HKT: the `旅程提醒` panel now has useful visible behavior instead of local-only switches. It shows today's record count and spend, and exposes `立即記帳` plus `查看紀錄` actions so the panel can directly start entry or jump to Records.
 - Itinerary compact-header polish on 2026-05-30 HKT: the React Timeline top card is now a short single-row command card, removes the trailing `📍` icon, keeps the day count beside `行程時間線`, and stops duplicating the day date in the right status area.
 - Sync retry polish on 2026-05-30 HKT: the topbar `Sync error` indicator now renders as a clickable retry button. Clicking it resets failed/error queue items and runs the sync engine again, so stale sync-error states are no longer passive.
+- Supabase account-control polish on 2026-05-30 HKT: signed-in account and clear-device controls no longer render at the app's top-right corner. They now live inside Settings -> `雲端帳號與密碼設定`, with a warning modal before local device data is cleared and the user is signed out.
 - Latest itinerary mobile polish on 2026-05-29 HKT: the Timeline rail now renders an independent Magic UI `BorderBeam`-backed beam layer with an animated vertical sweep, live progress fill, and a compact now marker. Itinerary cards now use an explicit compact grid layout, smaller mobile icons/time/action controls, and a right-side action column so more cards fit on phone screens while the rail stays separated from card text.
 - Follow-up itinerary rail fix on 2026-05-29 HKT: today's rail progress now follows the current itinerary spot index instead of the 24-hour clock percentage, so the dark animated fill and now marker stop near the live scenic spot for the active day.
 - Follow-up itinerary inactive-date polish on 2026-05-30 HKT: when the current date is outside the trip's itinerary date window, all Timeline rails keep the itinerary red/gold/green palette but render it dimmed, hide the live marker, and pause the bright sweep so past/future trips do not look actively in progress.
@@ -88,12 +89,13 @@ Latest UI verification from this pass:
 - `npm run smoke:dashboard` - passed, including the Home `旅程提醒` useful-action regression and the spending parity assertions.
 - `npm run typecheck` - passed.
 - `npm run build` - passed.
+- `SUPABASE_REDIRECT_SMOKE=1 npm run smoke:security` - 3 passed, 1 skipped in Supabase fake-env mode. This includes the Settings-only account/clear-device regression and scoped IndexedDB cleanup proof.
 - `npm run smoke:timeline` - 7 passed, covering edit/reset/maps/loose receipts, safe map URLs, live/passed/future state, compact command-card geometry, day-date de-duplication, mobile rail geometry, spot-index progress, and dimmed out-of-trip rails.
 - `npm run smoke:weather` - 4 passed.
 - `npm run smoke:history` - 3 passed.
 - `npm run smoke:mobile-layout` - 1 passed.
 - `npm run smoke:final-nav` - 6 passed, including the clickable sync-error retry regression.
-- Local Playwright visual/geometry smoke at `http://localhost:8902/travel-expense/react/` verified: 390px viewport scroll width stayed at 390px, the compact itinerary command card measured about 64px tall in the one-day seeded view, the duplicate day-status date was absent, timeline rail gap and now marker remained visible, records text/icons stayed solid, and no mobile horizontal overflow was observed.
+- Local Playwright visual/geometry smoke at `http://localhost:8902/travel-expense/react/` verified: 390px viewport scroll width stayed at 390px, the compact itinerary command card measured about 64px tall in the one-day seeded view, the duplicate day-status date was absent, timeline rail gap and now marker remained visible, records text/icons stayed solid, Settings account controls had no top-right session action, and the clear-device modal confirm button sat well above the fixed bottom nav.
 
 Latest app behavior fixed in `0efb380`:
 
