@@ -4,6 +4,7 @@ Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- `0506dd0` Compact itinerary header and retry sync errors
 - `3465484` Dim itinerary rails outside trip dates
 - `420d009` Align itinerary rail progress to live spot
 - `92ed9cd` Polish itinerary timeline mobile layout
@@ -58,7 +59,7 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch should contain the latest itinerary compact-header and sync-error retry work after this pass is committed and pushed; verify with `git status --short --branch` and `git log -1 --oneline`.
+- Main branch contains the latest itinerary compact-header and sync-error retry work through `0506dd0` once pushed. Verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
 - GitHub Pages workflows were recently failing in `actions/configure-pages@v5` with `Get Pages site failed / Not Found`; treat Pages as needing fresh CI verification after each push.
