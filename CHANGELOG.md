@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### Stats chart readability refinements
+
+- Changed the top pie chart center text to the clearer `類別佔比` concept, with the highest category percentage in the donut center.
+- Let the highest-category legend and settlement transfer names wrap naturally instead of truncating into `...`.
+- Kept the four Stats metric cards in a mobile 2x2 layout, moved `統一口徑` to the bottom of the page, and replaced the TOP 10 status pill with a two-option `全項目` / `除了機票和酒店` toggle.
+
 ### Stats meaningful chart redesign
 
 - Replaced the Stats tab top-card scope dial with a `支出方向盤` spending compass that shows category share, daily average spend, and the highest spending category.

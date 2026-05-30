@@ -3,8 +3,8 @@ const { test, expect } = require('@playwright/test');
 test.use({ viewport: { width: 390, height: 844 } });
 
 const persons = [
-  { id: 'p_boss', name: 'Tony', emoji: 'T', color: '#cc2929' },
-  { id: 'p_xinxin', name: 'Xinxin', emoji: 'X', color: '#2d5a8e' },
+  { id: 'p_boss', name: 'Tony Cheung', emoji: 'T', color: '#cc2929' },
+  { id: 'p_xinxin', name: 'Xinxin Wong', emoji: 'X', color: '#2d5a8e' },
 ];
 
 const receipts = [
@@ -57,7 +57,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   expect(commandHeaderMetrics.scrollWidth).toBeLessThanOrEqual(390);
   const compass = page.locator('.spending-compass');
   await expect(compass).toBeVisible();
-  await expect(compass).toContainText('支出方向盤');
+  await expect(compass).toContainText('類別佔比');
   await expect(compass).toContainText('日均');
   await expect(compass).toContainText('餐飲');
   await expect(compass).toContainText('最高');
@@ -76,7 +76,19 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(page.getByText('Xinxin').first()).toBeVisible();
   await expect(page.getByText('Tony').first()).toBeVisible();
   await expect(page.locator('.transfer-modern')).toContainText('¥2,850');
-  await expect(page.getByText('代付：Tony 代 Xinxin 付 ¥300 · M9 Gift')).toBeVisible();
+  await expect(page.locator('.transfer-modern')).toContainText('Tony Cheung');
+  await expect(page.locator('.transfer-modern')).toContainText('Xinxin Wong');
+  const transferTextOverflow = await page.locator('.stats-transfer-person span:last-child').evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).textOverflow));
+  expect(transferTextOverflow).not.toContain('ellipsis');
+  await expect(page.getByText('代付：Tony Cheung 代 Xinxin Wong 付 ¥300 · M9 Gift')).toBeVisible();
+  const metricMetrics = await page.locator('.stats-metric').evaluateAll((nodes) => nodes.map((node) => {
+    const rect = node.getBoundingClientRect();
+    return { top: Math.round(rect.top), left: Math.round(rect.left), width: Math.round(rect.width) };
+  }));
+  expect(metricMetrics).toHaveLength(4);
+  expect(metricMetrics[0].top).toBe(metricMetrics[1].top);
+  expect(metricMetrics[2].top).toBe(metricMetrics[3].top);
+  expect(metricMetrics[2].top).toBeGreaterThan(metricMetrics[0].top);
   await expect(page.getByText('每日 Budget Pace')).toBeVisible();
   await expect(page.locator('.trend-panel')).toContainText('超支');
   await expect(page.locator('.budget-pace')).toContainText('預算線');
@@ -90,11 +102,20 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(page.locator('.bar-row').filter({ hasText: '住宿' })).toHaveAttribute('title', /住宿: ¥5,000/);
   await expect(page.getByText('Suica')).toBeVisible();
 
-  await page.getByLabel('TOP 10 包括交通/住宿').uncheck();
+  await expect(page.getByRole('group', { name: 'TOP 10 支出篩選' })).toBeVisible();
+  await page.getByRole('button', { name: '除了機票和酒店' }).click();
   await expect(page.getByText('M9 Hotel')).toHaveCount(0);
+  await expect(page.locator('.rank-row').filter({ hasText: 'M9 Train' })).toBeVisible();
   await expect(page.getByText('M9 Sushi')).toBeVisible();
 
   await expect(page.locator('.bar-row').filter({ hasText: '2026-04-20' })).toBeVisible();
   await expect(page.locator('.bar-row').filter({ hasText: '2026-04-21' })).toBeVisible();
   await expect(page.locator('.bar-row').filter({ hasText: '2026-04-22' })).toBeVisible();
+  await expect(page.getByText('統一口徑')).toBeVisible();
+  const controlsPosition = await page.evaluate(() => {
+    const trend = document.querySelector('.trend-panel')?.getBoundingClientRect();
+    const controls = document.querySelector('.stats-controls')?.getBoundingClientRect();
+    return { trendBottom: trend?.bottom || 0, controlsTop: controls?.top || 0 };
+  });
+  expect(controlsPosition.controlsTop).toBeGreaterThan(controlsPosition.trendBottom);
 });

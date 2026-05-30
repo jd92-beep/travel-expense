@@ -33,7 +33,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   const privateTotal = settlement.privateByOwner.reduce((s, n) => s + n, 0);
   const maxPersonTotal = Math.max(1, ...persons.map((_, i) => settlement.sharedByPayer[i] + settlement.privateByOwner[i]));
   const topReceipts = scopedState.receipts
-    .filter((r) => state.top10IncludeBigItems || !isBigTripItem(r))
+    .filter((r) => state.top10IncludeBigItems || !isFlightOrHotelItem(r))
     .slice()
     .sort((a, b) => b.total - a.total)
     .slice(0, 10);
@@ -80,25 +80,6 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
         <CockpitMetric label="待轉帳" value={<NumberTicker value={transferTotal} prefix="¥" delay={0.12} />} detail={settlement.transfers.length ? '需要結算' : '暫時不用轉帳'} tone={settlement.transfers.length ? 'danger' : 'success'} />
       </div>
 
-      <GlassCard className="stats-controls stats-glass" tone="control">
-        <div>
-          <h2>統計口徑</h2>
-          <p>此開關同 Dashboard/Settings 使用同一個設定；分帳結算仍保留全數 receipts，避免漏計真正欠款。</p>
-        </div>
-        <div className="stats-toggle-row">
-          <label className="check-row inline-check stats-switch">
-            <input type="checkbox" checked={state.statsIncludeTransportLodging} onChange={(e) => updateState({ statsIncludeTransportLodging: e.target.checked })} />
-            <span className="switch-track" aria-hidden="true" />
-            <span>包括交通/住宿於統計圖表</span>
-          </label>
-          <label className="check-row inline-check stats-switch">
-            <input type="checkbox" checked={state.top10IncludeBigItems} onChange={(e) => updateState({ top10IncludeBigItems: e.target.checked })} />
-            <span className="switch-track" aria-hidden="true" />
-            <span>TOP 10 包括交通/住宿</span>
-          </label>
-        </div>
-      </GlassCard>
-
       <DataPanel
         className="settlement-card"
         icon={<Users size={19} />}
@@ -114,9 +95,9 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
             transition={{ duration: 0.24, ease: 'easeOut' }}
           >
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <span className="flex items-center gap-1.5 min-w-0 overflow-hidden"><AvatarBadge person={t.from} size="sm" /> <span className="truncate">{t.from.name}</span></span>
+              <span className="stats-transfer-person"><AvatarBadge person={t.from} size="sm" /> <span>{t.from.name}</span></span>
               <b className="text-gray-400 shrink-0">→</b>
-              <span className="flex items-center gap-1.5 min-w-0 overflow-hidden"><AvatarBadge person={t.to} size="sm" /> <span className="truncate">{t.to.name}</span></span>
+              <span className="stats-transfer-person"><AvatarBadge person={t.to} size="sm" /> <span>{t.to.name}</span></span>
             </div>
             <strong className="text-lg text-blue-900 shrink-0">¥{fmt(t.amount)}</strong>
           </motion.div>
@@ -142,7 +123,11 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
         {payTotals.length ? payTotals.map((p) => <Bar key={p.id} label={p.name} value={p.total} state={{ ...scopedState, receipts: analysisReceipts }} color={p.color} />) : <EmptyState title="未有紀錄" description="現金、信用卡、PayPay、Suica 會分開統計。" />}
       </DataPanel>
 
-      <DataPanel icon={<Trophy size={19} />} title="TOP 10 支出" status={<StatusPill tone="info">{state.top10IncludeBigItems ? '全項目' : '排除大額'}</StatusPill>}>
+      <DataPanel
+        icon={<Trophy size={19} />}
+        title="TOP 10 支出"
+        status={<TopTenToggle includeBigItems={state.top10IncludeBigItems} onChange={(value) => updateState({ top10IncludeBigItems: value })} />}
+      >
         {topReceipts.length ? topReceipts.map((r, idx) => {
           const cat = categoryById(r.category);
           return (
@@ -164,6 +149,20 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
         {trend.length ? <BudgetPaceChart trend={trend} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} /> : null}
         {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
       </DataPanel>
+
+      <GlassCard className="stats-controls stats-glass" tone="control">
+        <div>
+          <h2>統一口徑</h2>
+          <p>此開關同 Dashboard/Settings 使用同一個設定；分帳結算仍保留全數 receipts，避免漏計真正欠款。</p>
+        </div>
+        <div className="stats-toggle-row">
+          <label className="check-row inline-check stats-switch">
+            <input type="checkbox" checked={state.statsIncludeTransportLodging} onChange={(e) => updateState({ statsIncludeTransportLodging: e.target.checked })} />
+            <span className="switch-track" aria-hidden="true" />
+            <span>包括交通/住宿於統計圖表</span>
+          </label>
+        </div>
+      </GlassCard>
       </div>
     </section>
   );
@@ -172,16 +171,17 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
 function SpendingCompass({ categories, total, dailyAverage, state }: { categories: StatBucket[]; total: number; dailyAverage: number; state: AppState }) {
   const slices = categorySlices(categories, total);
   const top = slices[0];
+  const topPercent = top && total > 0 ? Math.round(top.total / total * 100) : 0;
   const ring = categoryRingGradient(slices, total);
   return (
     <div className="spending-compass" aria-label={`支出方向盤，日均 ¥${fmt(dailyAverage)}，最高支出 ${top ? top.name : '未有紀錄'}`} style={{ '--compass-ring': ring } as CSSProperties}>
       <div className="spending-compass-ring" aria-hidden="true">
         <motion.i initial={{ rotate: -20, scale: 0.92 }} animate={{ rotate: 0, scale: 1 }} transition={{ duration: 0.5, ease: 'easeOut' }} />
-      </div>
-      <div className="spending-compass-copy">
-        <span>支出方向盤</span>
-        <strong>¥{fmt(dailyAverage)}</strong>
-        <small>日均 · HK$ {fmt(hkd(dailyAverage, state))}</small>
+        <div className="spending-compass-copy">
+          <span>類別佔比</span>
+          <strong>{topPercent}%</strong>
+          <small>{top ? `${top.name}最高` : '未有紀錄'}</small>
+        </div>
       </div>
       <div className="spending-compass-legend">
         {slices.length ? slices.map((item) => (
@@ -192,9 +192,20 @@ function SpendingCompass({ categories, total, dailyAverage, state }: { categorie
         )) : <span className="spending-compass-slice is-empty">未有分類</span>}
       </div>
       <div className="spending-compass-top">
+        <span>日均</span>
+        <b>¥{fmt(dailyAverage)} · HK$ {fmt(hkd(dailyAverage, state))}</b>
         <span>最高</span>
         <b>{top ? `${top.name} · ¥${fmt(top.total)}` : '未有紀錄'}</b>
       </div>
+    </div>
+  );
+}
+
+function TopTenToggle({ includeBigItems, onChange }: { includeBigItems: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <div className="top10-toggle" role="group" aria-label="TOP 10 支出篩選">
+      <button type="button" className={includeBigItems ? 'active' : ''} aria-pressed={includeBigItems} onClick={() => onChange(true)}>全項目</button>
+      <button type="button" className={!includeBigItems ? 'active' : ''} aria-pressed={!includeBigItems} onClick={() => onChange(false)}>除了機票和酒店</button>
     </div>
   );
 }
@@ -269,6 +280,10 @@ function BudgetPaceChart({ trend, dailyBudget, dailyAverage, state }: { trend: A
 
 function isBigTripItem(receipt: Receipt): boolean {
   return receipt.category === 'flight' || receipt.category === 'lodging' || receipt.category === 'transport';
+}
+
+function isFlightOrHotelItem(receipt: Receipt): boolean {
+  return receipt.category === 'flight' || receipt.category === 'lodging';
 }
 
 function categoryTotals(receipts: Receipt[]): StatBucket[] {

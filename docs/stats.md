@@ -6,16 +6,17 @@ DOM section: `#tab-stats` (line 607). Render fn: `renderStats()` (line 4093).
 
 The analytics surface. Five visual blocks: per-person spend bar + settlement card, category doughnut, payment doughnut, daily-trend bar, TOP 10 list. Built for end-of-trip reckoning ("who owes whom what") and mid-trip pattern checks ("am I overspending on shopping again"). Companion 欣欣 is first-class: every chart respects `state.persons[]` and `state.shareRatios{}`.
 
-React update, 2026-05-30: the public React Stats tab now uses a meaningful top-card `支出方向盤` instead of the old scope/coverage dial. It summarizes category share, daily average spend, and highest spending category. The daily trend card is now `每日 Budget Pace`, comparing each spending day against `state.budget / getItinerary(state).length` with a dashed budget line and red/gold over-budget bars.
+React update, 2026-05-30: the public React Stats tab now uses a meaningful top-card category pie instead of the old scope/coverage dial. The donut center reads `類別佔比`, shows the highest category percentage, and keeps the highest-category amount readable without ellipsis. The daily trend card is now `每日 Budget Pace`, comparing each spending day against `state.budget / getItinerary(state).length` with a dashed budget line and red/gold over-budget bars.
 
 The settlement card is the killer feature — a greedy minimal-transfer ledger combining shared splits and 🎁 cross-private debts (when one person paid for another's personal item).
 
 ## 2. How to Use
 
 - **Read the charts** — all auto-build from `state.receipts`. No filters.
-- **Read `支出方向盤`** — top card shows where the trip money went, the daily average, and the highest spending category.
+- **Read `類別佔比`** — top card shows where the trip money went, the daily average, and the highest spending category.
 - **Read `每日 Budget Pace`** — daily bars compare each day's spend against the trip daily budget line; over-budget days are highlighted.
-- **Toggle "含機票/酒店"** on TOP 10 (right of the section header) — flips `state.top10IncludeBigItems`. Off (default = on for big items per state init line 1771) hides flight + hotel so day-to-day shopping/food rises to the surface. Wait — the *initial* state has it on; toggling OFF excludes them.
+- **Toggle TOP 10** — use the segmented control `全項目` / `除了機票和酒店`. Off hides flight and hotel from TOP 10 so day-to-day shopping/food rises to the surface.
+- **Adjust `統一口徑` at the bottom** — controls whether transport/lodging are included in the charts and Budget Pace; settlement still uses all receipts.
 - **Read settlement card** — under the person bar chart. Lists "X → Y ¥N" transfers + a per-person ledger.
 - **Tap a doughnut slice / bar** — Chart.js native tooltip shows ¥, HK$, percent.
 
