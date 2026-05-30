@@ -4,6 +4,7 @@ Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- Current commit: Repair GitHub Pages deployment enablement
 - Current commit: Polish Record tab command controls
 - `6d0ff7b` Record Supabase account controls handover
 - `27f2886` Move Supabase account controls into settings
@@ -67,10 +68,10 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch contains the latest Record tab command polish in the current commit once pushed. Before this pass, latest pushed commit was `6d0ff7b`. Verify with `git status --short --branch` and `git log -1 --oneline`.
+- Main branch contains the latest GitHub Pages deployment enablement repair in the current commit once pushed. Before this pass, latest pushed commit was `b1c20ea`. Verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
-- GitHub Pages workflows were recently failing in `actions/configure-pages@v5` with `Get Pages site failed / Not Found`; treat Pages as needing fresh CI verification after each push.
+- GitHub Pages failure root cause on 2026-05-30 HKT: the repository Pages API returned `404` / `has_pages:false`, while the workflow called `actions/configure-pages@v5` with default `enablement:false`. The repo Pages site was enabled via GitHub API with `build_type=workflow`, and `.github/workflows/deploy.yml` now passes `enablement: true`. Fresh CI verification is still required after the repair commit is pushed.
 - Netlify URL previously returned `503 usage_exceeded`; treat Netlify as not production-ready until the account/usage gate is resolved with fresh evidence.
 - GitNexus was refreshed after the latest commits. Latest observed index after this pass: 5,546 nodes, 9,633 edges, 127 clusters, 300 flows. Run `npx gitnexus status` for the exact indexed/current hash; it should be up to date unless new work has landed.
 - Graphify code graph was refreshed after the latest code/docs changes. Last observed `graphify update .` output: `804 nodes, 1201 edges, 149 communities`.
@@ -78,6 +79,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- GitHub Pages deploy repair on 2026-05-30 HKT: fixed the failing Pages workflow that stopped at `actions/configure-pages@v5` with `Get Pages site failed / Not Found`. The repo is now enabled for Pages workflow deployment and the workflow can auto-enable Pages if it is missing.
 - Scan tab visual polish on 2026-05-30 HKT: generated a six-panel masterpiece-style visual suite for camera scan, gallery import, manual entry, voice capture, email import, and currency exchange. The React Scan tab now crops that shared artwork into each function card without extra icon or banana overlays, keeps the artwork in its own reserved grid column, centers the camera label between the card edge and artwork, enlarges the mobile Scan background/action cards, and limits each action card to a concise Chinese label plus English translation only.
 - Home dashboard reminder polish on 2026-05-30 HKT: the `旅程提醒` panel now has useful visible behavior instead of local-only switches. It shows today's record count and spend, and exposes `立即記帳` plus `查看紀錄` actions so the panel can directly start entry or jump to Records.
 - Itinerary compact-header polish on 2026-05-30 HKT: the React Timeline top card is now a short single-row command card, removes the trailing `📍` icon, keeps the day count beside `行程時間線`, and stops duplicating the day date in the right status area.

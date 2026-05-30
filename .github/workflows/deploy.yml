@@ -68,6 +68,8 @@ jobs:
         run: npm run security:scan && npm run db:policy:scan
 
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v4
         with:

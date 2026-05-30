@@ -4,6 +4,11 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### GitHub Pages deployment repair
+
+- Enabled the repository's GitHub Pages site in workflow mode after confirming the Pages API returned `404` and `has_pages:false`.
+- Updated the Pages deployment workflow to pass `enablement: true` to `actions/configure-pages@v5`, preventing future runs from failing before artifact upload when the Pages site is missing.
+
 ### React Record tab command polish
 
 - Renamed the React Record tab top shell title from `Expense Archive` to `Expense Record`.
