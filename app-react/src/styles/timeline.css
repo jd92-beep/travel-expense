@@ -619,12 +619,21 @@
 }
 
 @media (max-width: 620px) {
+  .timeline-screen {
+    padding-top: 14px !important;
+  }
+
+  .timeline-screen > .stack {
+    gap: 8px;
+  }
+
   .timeline-command {
     min-height: 0;
+    margin-bottom: 0 !important;
   }
 
   .timeline-command-inner {
-    padding: 14px;
+    padding: 12px 14px;
   }
 
   .timeline-command-title-row {

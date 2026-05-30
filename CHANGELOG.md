@@ -4,6 +4,11 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### React Itinerary spacing compaction
+
+- Reduced the mobile Itinerary tab gap above and below the `行程時間線` command card so the first day card starts higher and more trip information is visible on phone screens.
+- Added Timeline smoke coverage for compact command-card top gap, lower gap, and first-day position while preserving the existing compact header and day-date de-duplication checks.
+
 ### GitNexus and Graphify usage guidelines
 
 - Reviewed recent tool usage and narrowed the guidelines so GitNexus is used for shared-symbol impact, unfamiliar flows, and risky refactors instead of every small UI/docs/config task.

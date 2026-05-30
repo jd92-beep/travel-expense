@@ -4,6 +4,7 @@ Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- Current commit: Compact itinerary command spacing
 - Current commit: Compact Record tab command header
 - Current commit: Repair GitHub Pages deployment enablement
 - Current commit: Polish Record tab command controls
@@ -69,7 +70,7 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch contains the latest Record tab command header compaction in the current commit once pushed. Before this pass, latest pushed commit was `5d8de49`. Verify with `git status --short --branch` and `git log -1 --oneline`.
+- Main branch contains the latest Itinerary command spacing compaction in the current commit once pushed. Before this pass, latest pushed commit was `130232f`. Verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
 - GitHub Pages failure root cause on 2026-05-30 HKT: the repository Pages API returned `404` / `has_pages:false`, while the workflow called `actions/configure-pages@v5` with default `enablement:false`. The repo Pages site was enabled via GitHub API with `build_type=workflow`, and `.github/workflows/deploy.yml` now passes `enablement: true`. Fresh CI verification is still required after the repair commit is pushed.
@@ -80,6 +81,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- Itinerary spacing polish on 2026-05-30 HKT: reduced the mobile gap above and below the `行程時間線` command card by lowering Timeline top padding, removing the command-card mobile margin-bottom, and tightening the Timeline stack gap. Timeline smoke now verifies top gap, lower gap, first-day position, compact header height, and date de-duplication.
 - GitHub Pages deploy repair on 2026-05-30 HKT: fixed the failing Pages workflow that stopped at `actions/configure-pages@v5` with `Get Pages site failed / Not Found`. The repo is now enabled for Pages workflow deployment and the workflow can auto-enable Pages if it is missing.
 - Record tab compact command polish on 2026-05-30 HKT: `紀錄中心`, `切換旅程`, and the reload icon now stay on one compact row at 390px mobile width. The command card has a smaller touch-safe height, and History smoke now verifies the row alignment and reduced card height.
 - Scan tab visual polish on 2026-05-30 HKT: generated a six-panel masterpiece-style visual suite for camera scan, gallery import, manual entry, voice capture, email import, and currency exchange. The React Scan tab now crops that shared artwork into each function card without extra icon or banana overlays, keeps the artwork in its own reserved grid column, centers the camera label between the card edge and artwork, enlarges the mobile Scan background/action cards, and limits each action card to a concise Chinese label plus English translation only.
@@ -102,6 +104,8 @@ Latest UI verification from this pass:
 - `npm run smoke:dashboard` - passed, including the Home `旅程提醒` useful-action regression and the spending parity assertions.
 - `npm run typecheck` - passed.
 - `npm run build` - passed.
+- `npm run smoke:timeline` - 7 passed after the Itinerary spacing compaction, including the new command-card top/lower gap checks.
+- `npm run smoke:mobile-layout` - 1 passed after the Itinerary spacing compaction.
 - `npm run smoke:history` - 4 passed after the Record command card compaction, including the new same-row geometry and max-height regression.
 - `npm run smoke:mobile-layout` - 1 passed after the Record command card compaction.
 - `npm run smoke:history` - 4 passed, including Record tab command cleanup, icon-only reload button, mobile search/category same-row geometry, and the desktop `Expense Record` shell title.

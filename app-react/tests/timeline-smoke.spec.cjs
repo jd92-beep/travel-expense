@@ -161,10 +161,15 @@ test('Timeline command card stays compact and day header shows one date', async 
   await expect(page.locator('.timeline-trip-days')).toHaveText('6日');
   const commandMetrics = await page.evaluate(() => {
     const card = document.querySelector('.timeline-command')?.getBoundingClientRect();
+    const firstDay = document.querySelector('.timeline-day')?.getBoundingClientRect();
+    const screen = document.querySelector('.timeline-screen')?.getBoundingClientRect();
     const title = document.querySelector('.timeline-command-title')?.getBoundingClientRect();
     const days = document.querySelector('.timeline-trip-days')?.getBoundingClientRect();
     return {
       height: card?.height || 0,
+      topGap: card && screen ? card.top - screen.top : 0,
+      lowerGap: card && firstDay ? firstDay.top - card.bottom : 0,
+      firstDayTop: firstDay?.top || 0,
       titleCenter: title ? title.top + title.height / 2 : 0,
       daysCenter: days ? days.top + days.height / 2 : 0,
       titleRight: title?.right || 0,
@@ -172,6 +177,9 @@ test('Timeline command card stays compact and day header shows one date', async 
     };
   });
   expect(commandMetrics.height, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(104);
+  expect(commandMetrics.topGap, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(18);
+  expect(commandMetrics.lowerGap, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(10);
+  expect(commandMetrics.firstDayTop, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(190);
   expect(Math.abs(commandMetrics.titleCenter - commandMetrics.daysCenter), JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(7);
   expect(commandMetrics.daysLeft, JSON.stringify(commandMetrics, null, 2)).toBeGreaterThan(commandMetrics.titleRight);
 
