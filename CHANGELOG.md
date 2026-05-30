@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### GitNexus and Graphify usage guidelines
+
+- Reviewed recent tool usage and narrowed the guidelines so GitNexus is used for shared-symbol impact, unfamiliar flows, and risky refactors instead of every small UI/docs/config task.
+- Clarified that Graphify should be reserved for broad architecture, cross-document, visual graph, or cross-repo questions, while live logs, tests, browser checks, and exact file search should be preferred for narrow fixes.
+- Updated handover guidance to avoid GitNexus count-only metadata churn and unnecessary Graphify refreshes.
+
 ### GitHub Pages deployment repair
 
 - Enabled the repository's GitHub Pages site in workflow mode after confirming the Pages API returned `404` and `has_pages:false`.

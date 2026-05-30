@@ -27,8 +27,8 @@
 - Read `README.md` for current product and deploy overview.
 - Read `HANDOVER.md` for current technical handover, recent commits, known risks, Supabase/Notion contracts, and where to pick up.
 - Read `CHANGELOG.md` before summarizing recent user-visible or production-readiness changes.
-- Read `graphify-out/GRAPH_REPORT.md` for the local knowledge graph. Treat embedded old source paths as historical if they point outside this folder. `graphify-out/` is local-only and ignored by git.
-- For broader app/agent architecture lookups, read `/Users/tommy/Documents/Graphify and Gitnexus/README.md` and `/Users/tommy/Documents/Graphify and Gitnexus/GRAPH_REGISTRY.json` before using external snapshots.
+- Read `graphify-out/GRAPH_REPORT.md` only when the task is broad architecture, cross-file concept mapping, or handover-level reasoning. Treat embedded old source paths as historical if they point outside this folder. `graphify-out/` is local-only and ignored by git.
+- For broader app/agent architecture lookups, read `/Users/tommy/Documents/Graphify and Gitnexus/README.md` and `/Users/tommy/Documents/Graphify and Gitnexus/GRAPH_REGISTRY.json` before using external snapshots. Skip this for ordinary UI fixes, CI/deploy failures, exact file edits, tests, or live runtime checks.
 - For legacy single-file tab work, read `docs/README.md` and the relevant `docs/<tab>.md`.
 - For GitNexus work, run `npx gitnexus status` first. If stale or missing, run `npx gitnexus analyze`.
 
@@ -112,8 +112,10 @@ npm run self-test
 
 - This checkout is indexed by GitNexus at `/Users/tommy/Documents/Codex/travel-expense`.
 - There are other checkouts with the same repo name, so when using GitNexus MCP tools, pass `repo: "/Users/tommy/Documents/Codex/travel-expense"`.
-- Before editing a function, class, method, or shared module, run GitNexus impact analysis on the target symbol and report the blast radius if risk is HIGH or CRITICAL.
-- Before committing, run GitNexus change detection and verify only expected symbols and execution flows are affected.
+- Use GitNexus when it will answer a code-intelligence question better than normal repo tools: shared function/class/module edits, unfamiliar execution flows, call graph impact, risky refactors, symbol renames, or "what breaks if I change X?"
+- Do not use GitNexus for every task. Skip it for pure docs, CSS-only spacing, copy changes, single-file config edits, CI/deploy log triage, exact text search, or when tests/browser/runtime evidence is the direct proof.
+- Before editing a function, class, method, or shared module with unclear blast radius, run GitNexus impact analysis on the target symbol and report the blast radius if risk is HIGH or CRITICAL.
+- Before committing, run GitNexus change detection only when code symbols, shared modules, or execution flows changed. For docs/config/style-only work, prefer `git diff --check`, targeted tests/builds, and live deploy checks.
 - Prefer GitNexus query/context tools for unfamiliar execution flows; use `rg` for exact text/file search.
 
 ## Graphs And Indexes
@@ -121,8 +123,8 @@ npm run self-test
 - Keep GitNexus and Graphify separate in explanations and file paths:
   - GitNexus is the code intelligence / call graph / symbol impact index. It lives in `.gitnexus/` or in the external snapshot `.gitnexus/` folders.
   - Graphify is the cross-document knowledge graph. Its main artifacts are `graphify-out/GRAPH_REPORT.md`, `graphify-out/graph.json`, and `graphify-out/graph.html`.
-- Use this repo's local GitNexus first for `travel-expense` code questions, symbol impact, call graphs, execution flows, and commit-time change detection.
-- Use this repo's local Graphify output first for broad `travel-expense` architecture, cross-file relationships, docs/code concept mapping, and "what is connected to what" questions.
+- Use this repo's local GitNexus first for `travel-expense` code questions where symbol impact, call graphs, or execution flows are actually needed.
+- Use this repo's local Graphify output first only for broad `travel-expense` architecture, cross-file relationships, docs/code concept mapping, and "what is connected to what" questions.
 - Use external Graphify/GitNexus snapshots when the task is about another app or AI agent stack, or when comparing this app with those stacks. The local registry root is `/Users/tommy/Documents/Graphify and Gitnexus`.
 - External snapshot registry files:
   - `/Users/tommy/Documents/Graphify and Gitnexus/README.md`
@@ -142,9 +144,9 @@ npm run self-test
 - Use GitNexus when the question is code-level, symbol-level, flow-level, or change-impact related. For external snapshots, use their registered aliases, for example `npx gitnexus cypher -r local-codex-app-mac 'MATCH (n) RETURN count(n) AS nodes LIMIT 1'`.
 - Do not use Graphify or GitNexus when a direct file search, runtime log, browser smoke test, unit test, or simple config read gives fresher and more exact evidence. Graphs are snapshots; live runtime truth wins for bugs, deploys, credentials, provider failures, and UI verification.
 - Do not answer secrets, credentials, tokens, or account-state questions from graphs. Inspect the live configured environment only when the user explicitly asks and it is safe to do so.
-- After meaningful architecture, module, flow, or docs changes, update indexes when practical:
-  - For this repo's GitNexus: run `npx gitnexus analyze` from `/Users/tommy/Documents/Codex/travel-expense`.
-  - For this repo's Graphify: use `graphify update .`; keep `graphify-out/` local-only and ignored.
+- Refresh indexes only when their consumers benefit:
+  - For this repo's GitNexus: run `npx gitnexus analyze` after meaningful symbol/module/flow changes or before a task that will rely on a fresh index. Do not refresh just because a small docs/style/config change happened.
+  - For this repo's Graphify: use `graphify update .` after meaningful architecture or cross-document changes. Do not run it for ordinary UI tweaks, deploy checks, or narrow bug fixes.
   - For external snapshots: update only the target folder that matches the app/agent being changed, verify `SNAPSHOT_SOURCE.txt`, preserve `.graphifyignore` / `.gitnexusignore`, and refresh `/Users/tommy/Documents/Graphify and Gitnexus/GRAPH_REGISTRY.json` if counts or paths changed.
 - Never merge GitNexus databases with Graphify JSON files. If a shared lookup is needed, update the registry/reference docs instead of combining artifact formats.
 
@@ -194,20 +196,20 @@ This project is indexed by GitNexus as **travel-expense** (5546 symbols, 9691 re
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
-## Always Do
+## Use When Helpful
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- Run impact analysis before changing a shared function, class, method, or module when the caller graph is not obvious from local files.
+- Run `gitnexus_detect_changes()` before committing code changes that may affect symbols or execution flows.
+- Warn the user if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
 - When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
 
-## Never Do
+## Skip When Not Useful
 
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+- Skip GitNexus for pure docs, CSS-only spacing, text copy, exact file search, simple workflow/config edits, and live deployment or browser verification where direct evidence is fresher.
+- Do not ignore HIGH or CRITICAL risk warnings from impact analysis.
+- Do not rename exported/shared symbols with find-and-replace; use `gitnexus_rename` or a language-aware refactor.
+- Do not chase GitNexus count-only metadata churn. If only generated counts changed, leave them unstaged unless the user asked to refresh metadata.
 
 ## Resources
 

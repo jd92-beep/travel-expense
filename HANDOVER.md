@@ -405,6 +405,7 @@ npm run self-test
 GitNexus and Graphify:
 
 ```bash
+# Only when the current task benefits from graph/index evidence.
 npx gitnexus status
 npx gitnexus analyze
 graphify update .
@@ -412,13 +413,33 @@ graphify update .
 
 ## How To Use GitNexus And Graphify
 
-Use these tools to reduce token use before asking another agent to re-read the whole repo.
+Use these tools when they reduce real uncertainty. Do not use them automatically for every task.
+
+Recent review, 2026-05-30 HKT:
+
+- GitNexus was useful for checking `History` component blast radius before UI changes, but repeated `status/analyze/detect-changes` on tiny CSS, copy, docs, and deploy-config tasks added overhead and caused count-only metadata churn in `AGENTS.md` / `CLAUDE.md`.
+- Graphify was not useful in the recent narrow UI/deploy tasks. It should stay reserved for broad architecture, cross-document, or cross-repo questions.
+- For this app, direct evidence is usually better for bugs and UI work: `rg`, file reads, targeted Playwright smoke tests, browser snapshots, GitHub Actions logs, Vercel/GitHub Pages checks, and `curl` status.
 
 ### GitNexus: code-level map
 
 Use GitNexus for code symbols, call graphs, impact, execution flows, and commit safety.
 
-Start every serious code task with:
+Use GitNexus when:
+
+- Editing shared functions/classes/modules where callers are not obvious.
+- Tracing an unfamiliar execution flow across files.
+- Renaming/extracting symbols or doing riskier refactors.
+- Answering "what breaks if I change this?"
+- A previous direct search/test leaves uncertainty about code impact.
+
+Skip GitNexus when:
+
+- The task is pure docs, copy, CSS-only spacing, or a simple workflow/config edit.
+- The right proof is a live log, unit/smoke test, browser viewport check, deploy status, or `curl`.
+- You already know the exact file and the change is local with no shared symbol behavior change.
+
+For useful code-impact tasks, start with:
 
 ```bash
 cd /Users/tommy/Documents/Codex/travel-expense
@@ -431,13 +452,13 @@ If stale:
 npx gitnexus analyze
 ```
 
-Before editing a function, class, method, or shared module:
+Before editing a function, class, method, or shared module with unclear blast radius:
 
 ```bash
 npx gitnexus impact <symbol-or-function-name> --repo /Users/tommy/Documents/Codex/travel-expense
 ```
 
-Before committing:
+Before committing code changes that may affect symbols or execution flows:
 
 ```bash
 npx gitnexus detect-changes --scope staged --repo /Users/tommy/Documents/Codex/travel-expense
@@ -453,11 +474,17 @@ Useful targets and why:
 - `useAppState` / `loadState` / `saveState` - localStorage/IndexedDB user scope and secret stripping.
 - `SupabaseGate` - public login, sign out, and clear-device-data UX.
 
-Do not chase GitNexus count-only metadata churn. `npx gitnexus analyze` can update `AGENTS.md` or `CLAUDE.md` counts; if only the counts changed, prefer leaving unrelated dirty files unstaged. The authoritative freshness check is `npx gitnexus status`.
+Do not chase GitNexus count-only metadata churn. `npx gitnexus analyze` can update `AGENTS.md` or `CLAUDE.md` counts; if only the counts changed, leave unrelated dirty files unstaged unless Boss explicitly asked to refresh metadata. The authoritative freshness check is `npx gitnexus status`.
 
 ### Graphify: architecture and cross-document map
 
-Use Graphify for broad app understanding, cross-file relationships, and agent handoff context.
+Use Graphify only for broad app understanding, cross-file relationships, visual graph navigation, cross-document concept mapping, or agent handoff context.
+
+Skip Graphify when:
+
+- Fixing a known file, UI detail, test failure, deploy failure, credential/provider issue, or any runtime bug where live logs/tests are fresher.
+- The answer can be found with `rg`, `git diff`, a specific source file, or a smoke test.
+- The user asks for current status, latest deployment, account state, secrets, or provider behavior. Graphify is a snapshot and should not be trusted for those.
 
 Local artifacts:
 
@@ -465,14 +492,14 @@ Local artifacts:
 - `graphify-out/graph.html` - open for visual navigation when trying to understand unfamiliar areas.
 - `graphify-out/graph.json` - use only when precise nodes/edges are needed.
 
-Fast path for a new agent:
+Fast path for a new agent only when the task is broad/architectural:
 
 1. Read `HANDOVER.md` current snapshot and future plan.
 2. Read `graphify-out/GRAPH_REPORT.md` for architecture communities.
 3. Use `rg` for exact file text.
 4. Use GitNexus for symbols and impact before edits.
 
-Refresh Graphify after meaningful architecture/code/docs changes:
+Refresh Graphify after meaningful architecture or cross-document changes, not after narrow UI/deploy fixes:
 
 ```bash
 graphify update .
@@ -497,7 +524,7 @@ For other app or agent stacks, do not mix their graphs into this repo. Start fro
 - `/Users/tommy/Documents/Graphify and Gitnexus/README.md`
 - `/Users/tommy/Documents/Graphify and Gitnexus/GRAPH_REGISTRY.json`
 
-Use this repo's local GitNexus/Graphify first for travel-expense. Use external snapshots only for cross-app comparison or when Boss asks about another agent/app stack.
+Use this repo's local GitNexus/Graphify first for broad `travel-expense` architecture. Use external snapshots only for cross-app comparison or when Boss asks about another agent/app stack.
 
 Deploy:
 
