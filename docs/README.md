@@ -20,7 +20,7 @@ The bottom navigation tab bar is at lines 1098–1130.
 
 ## React public app notes
 
-The primary public UI is now the React app under `app-react/`, deployed at `/react/` on GitHub Pages and at the Vercel root. The legacy tab docs in this folder still describe `index.html`; when React behavior differs, the tab file should call that out explicitly. As of 2026-05-30, `timeline.md` includes the React Itinerary rail behavior: Magic UI rail beam, spot-index progress, and dimmed-but-coloured rails outside the trip date window.
+The primary public UI is now the React app under `app-react/`, deployed at `/react/` on GitHub Pages and at the Vercel root. The legacy tab docs in this folder still describe `index.html`; when React behavior differs, the tab file should call that out explicitly. As of 2026-05-30, `timeline.md` includes the React Itinerary rail behavior: compact header, single date display, Magic UI rail beam, spot-index progress, and dimmed-but-coloured rails outside the trip date window.
 
 ## Shared concepts referenced from tab docs
 

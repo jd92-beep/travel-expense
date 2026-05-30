@@ -241,6 +241,13 @@ export function App() {
     setState((prev) => mergePulledData(prev, receipts, trips));
   };
 
+  const handleSyncRetry = () => {
+    syncEngine.retryFailedItems();
+    window.setTimeout(() => {
+      void syncEngine.sync();
+    }, 150);
+  };
+
   const disableHeavy = shouldDisableHeavyEffects();
 
   const slideVariants = {
@@ -268,7 +275,7 @@ export function App() {
           onSkip={handleSkipGuide}
         />
       )}
-      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={syncEngine.retryFailedItems}>
+      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry}>
         <ErrorBoundary key={safeTab}>
           <Suspense fallback={<LoadingState label="載入分頁" />}>
             {disableHeavy ? (

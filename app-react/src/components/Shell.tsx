@@ -193,7 +193,7 @@ export function Shell({
               : activeCopy.title}
           </h1>
         </div>
-        {syncState ? <SyncStatusIndicator state={syncState} /> : <StatusPill tone="ok">Broker-ready</StatusPill>}
+        {syncState ? <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} /> : <StatusPill tone="ok">Broker-ready</StatusPill>}
       </header>
       <main className="content">{children}</main>
       <WindmillTransition activeKey={active} />

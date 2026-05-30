@@ -124,6 +124,63 @@ test('Timeline highlights live, passed, and future itinerary spots', async ({ pa
   await expect(page.locator('.timeline-event.is-future')).toContainText('Dinner Stop');
 });
 
+test('Timeline command card stays compact and day header shows one date', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'timeline',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-13' },
+      customItinerary: [
+        {
+          date: '2026-05-08',
+          day: 1,
+          region: '名古屋市區',
+          timezone: 'Asia/Tokyo',
+          spots: [
+            { time: '09:00', name: '名古屋站', type: 'transport' },
+            { time: '12:00', name: '午餐', type: 'food' },
+          ],
+        },
+        { date: '2026-05-09', day: 2, region: '犬山', timezone: 'Asia/Tokyo', spots: [{ time: '10:00', name: '犬山城', type: 'ticket' }] },
+        { date: '2026-05-10', day: 3, region: '高山', timezone: 'Asia/Tokyo', spots: [{ time: '10:00', name: '古い町並', type: 'ticket' }] },
+        { date: '2026-05-11', day: 4, region: '白川鄉', timezone: 'Asia/Tokyo', spots: [{ time: '10:00', name: '合掌村', type: 'ticket' }] },
+        { date: '2026-05-12', day: 5, region: '金澤', timezone: 'Asia/Tokyo', spots: [{ time: '10:00', name: '兼六園', type: 'ticket' }] },
+        { date: '2026-05-13', day: 6, region: '名古屋機場', timezone: 'Asia/Tokyo', spots: [{ time: '10:00', name: '中部國際機場', type: 'transport' }] },
+      ],
+      receipts: [],
+    }));
+  });
+
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  await expect(page.getByText('行程時間線')).toBeVisible();
+  const command = page.locator('.timeline-command');
+  await expect(command).not.toContainText('📍');
+  await expect(page.locator('.timeline-command-title-row')).toBeVisible();
+  await expect(page.locator('.timeline-trip-days')).toHaveText('6日');
+  const commandMetrics = await page.evaluate(() => {
+    const card = document.querySelector('.timeline-command')?.getBoundingClientRect();
+    const title = document.querySelector('.timeline-command-title')?.getBoundingClientRect();
+    const days = document.querySelector('.timeline-trip-days')?.getBoundingClientRect();
+    return {
+      height: card?.height || 0,
+      titleCenter: title ? title.top + title.height / 2 : 0,
+      daysCenter: days ? days.top + days.height / 2 : 0,
+      titleRight: title?.right || 0,
+      daysLeft: days?.left || 0,
+    };
+  });
+  expect(commandMetrics.height, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(104);
+  expect(Math.abs(commandMetrics.titleCenter - commandMetrics.daysCenter), JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(7);
+  expect(commandMetrics.daysLeft, JSON.stringify(commandMetrics, null, 2)).toBeGreaterThan(commandMetrics.titleRight);
+
+  const firstDay = page.locator('.timeline-day').first();
+  await expect(firstDay.locator('.timeline-day-date-primary')).toHaveCount(1);
+  await expect(firstDay.locator('.timeline-day-status .status-pill')).toHaveCount(0);
+  await expect(firstDay.locator('.timeline-day-status')).not.toContainText('2026-05-08');
+});
+
 test('Timeline mobile rail shines independently without covering compact itinerary cards', async ({ page }) => {
   const fixed = new Date('2026-05-08T12:30:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {

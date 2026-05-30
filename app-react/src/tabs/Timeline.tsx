@@ -63,21 +63,15 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 mix-blend-overlay timeline-command-texture" />
         <div className="absolute inset-0 bg-gradient-to-t from-white/40 via-transparent to-white/10 timeline-command-wash" />
         
-        <div className="relative z-10 w-full p-6 sm:p-8 flex flex-col gap-5">
-          <div className="flex justify-between items-start w-full">
-            <div className="flex gap-5 items-center w-full">
-              <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-[#2D6E48] to-[#1a422b] rounded-2xl flex items-center justify-center shadow-lg border border-white/30 text-white font-serif text-2xl font-bold">
-                旅
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-[28px] leading-tight font-extrabold text-green-950 mb-0 drop-shadow-sm">行程時間線 📍</h2>
-              </div>
-            </div>
+        <div className="relative z-10 w-full timeline-command-inner">
+          <div className="timeline-command-title-row">
+            <span className="timeline-command-seal" aria-hidden="true">旅</span>
+            <h2 className="timeline-command-title">行程時間線</h2>
+            <span className="timeline-trip-days" aria-label={`${itinerary.length}日行程`}>
+              <CalendarDays size={14} />
+              {itinerary.length}日
+            </span>
           </div>
-          
-          <div className="flex flex-wrap gap-3 items-center mt-1 pt-4 border-t border-green-900/10">
-          <StatusPill tone="info" icon={<CalendarDays size={14} />}>{itinerary.length} 日</StatusPill>
-        </div>
         </div>
       </MagicCard>
 
@@ -92,13 +86,13 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
             <div className="timeline-day-title">
               <span className="timeline-day-number">Day {day.day}</span>
               <div>
-                <p className="eyebrow">{day.date}</p>
+                <p className="eyebrow timeline-day-date-primary">{day.date}</p>
                 <h2>{day.region}</h2>
                 {day.lodging?.name && <p className="muted timeline-lodging"><Home size={13} /> 住宿：{day.lodging.name}</p>}
               </div>
             </div>
             <div className="timeline-day-status">
-              <StatusPill tone={day.date === today ? 'danger' : 'neutral'}>{day.date === today ? 'Today' : day.date}</StatusPill>
+              {day.date === today && <StatusPill tone="danger">Today</StatusPill>}
               <span>{spots.length} 個點</span>
             </div>
           </div>

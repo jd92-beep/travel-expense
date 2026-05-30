@@ -58,7 +58,7 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch contains the latest itinerary rail commits through `3465484`; current unpushed documentation/CSS test polish should be committed and pushed before handing off.
+- Main branch should contain the latest itinerary compact-header and sync-error retry work after this pass is committed and pushed; verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
 - GitHub Pages workflows were recently failing in `actions/configure-pages@v5` with `Get Pages site failed / Not Found`; treat Pages as needing fresh CI verification after each push.
@@ -71,6 +71,8 @@ Latest UI polish in this handover update:
 
 - Scan tab visual polish on 2026-05-30 HKT: generated a six-panel masterpiece-style visual suite for camera scan, gallery import, manual entry, voice capture, email import, and currency exchange. The React Scan tab now crops that shared artwork into each function card without extra icon or banana overlays, keeps the artwork in its own reserved grid column, centers the camera label between the card edge and artwork, enlarges the mobile Scan background/action cards, and limits each action card to a concise Chinese label plus English translation only.
 - Home dashboard reminder polish on 2026-05-30 HKT: the `旅程提醒` panel now has useful visible behavior instead of local-only switches. It shows today's record count and spend, and exposes `立即記帳` plus `查看紀錄` actions so the panel can directly start entry or jump to Records.
+- Itinerary compact-header polish on 2026-05-30 HKT: the React Timeline top card is now a short single-row command card, removes the trailing `📍` icon, keeps the day count beside `行程時間線`, and stops duplicating the day date in the right status area.
+- Sync retry polish on 2026-05-30 HKT: the topbar `Sync error` indicator now renders as a clickable retry button. Clicking it resets failed/error queue items and runs the sync engine again, so stale sync-error states are no longer passive.
 - Latest itinerary mobile polish on 2026-05-29 HKT: the Timeline rail now renders an independent Magic UI `BorderBeam`-backed beam layer with an animated vertical sweep, live progress fill, and a compact now marker. Itinerary cards now use an explicit compact grid layout, smaller mobile icons/time/action controls, and a right-side action column so more cards fit on phone screens while the rail stays separated from card text.
 - Follow-up itinerary rail fix on 2026-05-29 HKT: today's rail progress now follows the current itinerary spot index instead of the 24-hour clock percentage, so the dark animated fill and now marker stop near the live scenic spot for the active day.
 - Follow-up itinerary inactive-date polish on 2026-05-30 HKT: when the current date is outside the trip's itinerary date window, all Timeline rails keep the itinerary red/gold/green palette but render it dimmed, hide the live marker, and pause the bright sweep so past/future trips do not look actively in progress.
@@ -85,11 +87,12 @@ Latest UI verification from this pass:
 - `npm run smoke:dashboard` - passed, including the Home `旅程提醒` useful-action regression and the spending parity assertions.
 - `npm run typecheck` - passed.
 - `npm run build` - passed.
-- `npm run smoke:timeline` - 6 passed, covering edit/reset/maps/loose receipts, safe map URLs, live/passed/future state, mobile rail geometry, spot-index progress, and dimmed out-of-trip rails.
+- `npm run smoke:timeline` - 7 passed, covering edit/reset/maps/loose receipts, safe map URLs, live/passed/future state, compact command-card geometry, day-date de-duplication, mobile rail geometry, spot-index progress, and dimmed out-of-trip rails.
 - `npm run smoke:weather` - 4 passed.
 - `npm run smoke:history` - 3 passed.
 - `npm run smoke:mobile-layout` - 1 passed.
-- Local Playwright visual/geometry smoke at `http://localhost:8902/travel-expense/react/` verified: no console errors, no topbar eyebrow labels on timeline/weather/history, weather cards inset from edges with `實溫`/`體感`, timeline rail gap and now marker visible, records text/icons solid, and no mobile horizontal overflow.
+- `npm run smoke:final-nav` - 6 passed, including the clickable sync-error retry regression.
+- Local Playwright visual/geometry smoke at `http://localhost:8902/travel-expense/react/` verified: 390px viewport scroll width stayed at 390px, the compact itinerary command card measured about 64px tall in the one-day seeded view, the duplicate day-status date was absent, timeline rail gap and now marker remained visible, records text/icons stayed solid, and no mobile horizontal overflow was observed.
 
 Latest app behavior fixed in `0efb380`:
 

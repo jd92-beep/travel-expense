@@ -2,7 +2,7 @@
 
 DOM section: `#tab-timeline` (line 660). Render fn: `renderTimeline()` (line 3741).
 
-> React public app note (2026-05-30): the primary `/react/` Itinerary tab now uses `app-react/src/tabs/Timeline.tsx` plus `app-react/src/styles/timeline.css`. Its left rail is an independent Magic UI `BorderBeam`-backed layer. When today's date is inside the trip window, progress follows the current itinerary spot position rather than the whole 24-hour clock percentage. When today's date is outside the trip window, rails stay red/gold/green but render dimmed, hide the live marker, and pause the bright sweep.
+> React public app note (2026-05-30): the primary `/react/` Itinerary tab now uses `app-react/src/tabs/Timeline.tsx` plus `app-react/src/styles/timeline.css`. Its top command card is compact, removes the trailing pin icon, and keeps the trip day count beside `行程時間線`. Day cards show the date only once above the region name. Its left rail is an independent Magic UI `BorderBeam`-backed layer. When today's date is inside the trip window, progress follows the current itinerary spot position rather than the whole 24-hour clock percentage. When today's date is outside the trip window, rails stay red/gold/green but render dimmed, hide the live marker, and pause the bright sweep.
 
 ## 1. Introduction
 
@@ -99,6 +99,7 @@ Internal constants:
 - **Pre-trip** — every spot is in the future; `passed.length === 0` → progress bar stays at 0; no "you are here" marker inserted (line 3796).
 - **Post-trip** — every spot is `.passed`; "you are here" sits at the bottom.
 - **React out-of-trip view** — the React Itinerary rail uses `.is-outside-trip` to show dimmed itinerary colours instead of active progress when the current date is before or after the trip dates.
+- **React compact header** — `.timeline-command-title-row` keeps `行程時間線` and `.timeline-trip-days` on one row. The right-side day status no longer repeats the date, preventing the day-one duplicate date seen on mobile.
 - **Window resize during tab-hidden** — `_tlResizeTimer` fires but `updateTimelineProgress` skips if the section is hidden (line 3815).
 - **No real-time receipt overlay** — Timeline does not show consumption events. (Could be added by interleaving `state.receipts` items between schedule items, but the current view is intentionally schedule-only — that's what the legend's "計劃中 / 實際消費" anticipates is for *future* expansion, not current behavior.)
 - **5-minute tick + active tab assumption** — works in browser; PWA in iOS background may pause `setInterval` until foregrounded. The first foreground tick catches up.

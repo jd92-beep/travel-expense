@@ -16,11 +16,14 @@ All notable project changes should be recorded here.
 
 ### React Itinerary Timeline rail polish
 
+- Compacted the React Itinerary top command card: removed the trailing pin icon, placed the trip day count on the same row as `行程時間線`, and reduced the mobile card height.
+- Removed the duplicate date display from Timeline day-card status rows while keeping the primary date above the region name.
+- Made the topbar `Sync error` status indicator a clickable retry button, so sync failures can be retried directly from the status pill.
 - Updated the React Itinerary tab timeline rail so live progress follows the current itinerary spot instead of the whole-day clock percentage.
 - Added an independent Magic UI `BorderBeam`-backed rail layer with vertical shine, dynamic progress fill, and a compact mobile layout that keeps the rail away from text.
 - Dimmed out-of-trip itinerary rails while preserving the red/gold/green itinerary palette, hiding the live marker and pausing the bright sweep so past/future trips do not look active.
-- Added Playwright regression coverage for mobile rail geometry, live-spot progress, and out-of-trip dimmed-colour behavior.
-- Verified `npm run smoke:timeline`, `npm run smoke:mobile-layout`, `npm run typecheck`, `npm run build`, `git diff --check`, and GitNexus change detection during the timeline polish pass.
+- Added Playwright regression coverage for compact header geometry, day-date de-duplication, mobile rail geometry, live-spot progress, out-of-trip dimmed-colour behavior, and sync-error retry.
+- Verified `npm run typecheck`, `npm run build`, `npm run smoke:timeline`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `git diff --check`, and local Playwright geometry/screenshot checks during the timeline polish pass.
 
 ### WeatherAPI broker support
 

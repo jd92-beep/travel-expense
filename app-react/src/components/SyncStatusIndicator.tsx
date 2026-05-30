@@ -20,15 +20,33 @@ function relativeTime(value: number) {
   return `${Math.round(minutes / 60)}h 前`;
 }
 
-export function SyncStatusIndicator({ state }: { state: SyncEngineState }) {
+export function SyncStatusIndicator({ state, onRetry }: { state: SyncEngineState; onRetry?: () => void }) {
   const item = config[state.status] || config.idle;
   const Icon = item.icon;
   const title = `${item.label} · ${relativeTime(state.lastSyncedAt)}${state.pendingCount ? ` · ${state.pendingCount} pending` : ''}${state.error ? ` · ${state.error}` : ''}`;
-  return (
-    <span className={`sync-status-indicator ${item.tone}`} title={title} aria-label={title}>
+  const content = (
+    <>
       <Icon size={14} className={state.status === 'pushing' || state.status === 'pulling' ? 'spin' : ''} />
       <span>{item.label}</span>
       {state.pendingCount > 0 && <b>{state.pendingCount}</b>}
+    </>
+  );
+  if (state.status === 'error' && onRetry) {
+    return (
+      <button
+        type="button"
+        className={`sync-status-indicator ${item.tone}`}
+        title={`${title} · 按此重新同步`}
+        aria-label={`${title} · 按此重新同步`}
+        onClick={onRetry}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <span className={`sync-status-indicator ${item.tone}`} title={title} aria-label={title}>
+      {content}
     </span>
   );
 }

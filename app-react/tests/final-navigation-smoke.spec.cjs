@@ -89,6 +89,54 @@ test('Final lock gate smoke without trusted device', async ({ page }) => {
   await expect(page.getByText(/本機安全防護鎖|先解鎖再使用/).first()).toBeVisible();
 });
 
+test('Sync error indicator is clickable and retries sync', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+  });
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.evaluate(async () => {
+    const clearIndexedSnapshot = () => new Promise((resolve) => {
+      const req = indexedDB.open('travel-expense-react', 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('state')) db.createObjectStore('state');
+      };
+      req.onerror = () => resolve(undefined);
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction('state', 'readwrite');
+        tx.objectStore('state').delete('app-state');
+        tx.oncomplete = () => {
+          db.close();
+          resolve(undefined);
+        };
+        tx.onerror = () => {
+          db.close();
+          resolve(undefined);
+        };
+      };
+    });
+    await clearIndexedSnapshot();
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'dashboard',
+      receipts: [],
+      autoSync: false,
+      globalSyncStatus: 'error',
+      syncError: 'manual smoke failure',
+      syncQueue: [],
+    }));
+  });
+
+  await page.reload();
+  const retry = page.getByRole('button', { name: /Sync error/ });
+  await expect(retry).toBeVisible();
+  await retry.click();
+  await expect(retry).toBeHidden();
+  await expect(page.locator('.sync-status-indicator')).not.toContainText('Sync error');
+});
+
 test('Boot currency and sync effects run once without noisy mobile 403s', async ({ page }) => {
   const consoleEvents = [];
   const notionPaths = [];

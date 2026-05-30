@@ -374,6 +374,22 @@ h2 { font-size: 18px; letter-spacing: 0; color: var(--navy); font-family: "Noto 
   box-shadow: 0 10px 24px rgba(42,34,22,.1);
   backdrop-filter: blur(16px) saturate(1.12);
 }
+button.sync-status-indicator {
+  appearance: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+button.sync-status-indicator:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 13px 28px rgba(42,34,22,.14);
+}
+button.sync-status-indicator:active {
+  transform: translateY(0);
+}
+button.sync-status-indicator:focus-visible {
+  outline: 2px solid rgba(194, 59, 94, .55);
+  outline-offset: 3px;
+}
 .sync-status-indicator span {
   min-width: 0;
   overflow: hidden;
