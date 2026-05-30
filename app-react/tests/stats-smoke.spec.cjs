@@ -33,9 +33,9 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   });
 
   await page.goto('http://localhost:8902/travel-expense/react/');
-  await expect(page.getByText('分帳統計中心')).toBeVisible();
+  await expect(page.getByText('預算使用分析')).toBeVisible();
   await expect(page.getByText('6 筆紀錄')).toBeVisible();
-  await expect(page.locator('.stats-command-title-row')).toContainText('分帳統計中心');
+  await expect(page.locator('.stats-command-title-row')).toContainText('預算使用分析');
   await expect(page.locator('.stats-command-title-row')).not.toContainText(/筆轉帳|已平衡/);
   const commandHeaderMetrics = await page.evaluate(() => {
     const title = document.querySelector('.stats-command-title')?.getBoundingClientRect();
@@ -57,8 +57,10 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   expect(commandHeaderMetrics.scrollWidth).toBeLessThanOrEqual(390);
   const compass = page.locator('.spending-compass');
   await expect(compass).toBeVisible();
-  await expect(compass).toContainText('類別佔比');
-  await expect(compass).toContainText('日均');
+  await expect(compass).toContainText('預算使用');
+  await expect(compass).toContainText('69%');
+  await expect(compass).toContainText('已用');
+  await expect(compass).toContainText('尚餘');
   await expect(compass).toContainText('餐飲');
   await expect(compass).toContainText('最高');
   await expect(compass.locator('.spending-compass-slice')).toHaveCount(4);
@@ -73,6 +75,8 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   expect(compassMetrics.width, JSON.stringify(compassMetrics, null, 2)).toBeLessThanOrEqual(354);
   expect(compassMetrics.scrollWidth, JSON.stringify(compassMetrics, null, 2)).toBeLessThanOrEqual(390);
   expect(compassMetrics.ringBackground).toContain('conic-gradient');
+  await expect(page.getByText('圖表統計額')).toBeVisible();
+  await expect(page.getByText('共同分帳額')).toBeVisible();
   await expect(page.getByText('Xinxin').first()).toBeVisible();
   await expect(page.getByText('Tony').first()).toBeVisible();
   await expect(page.locator('.transfer-modern')).toContainText('¥2,850');

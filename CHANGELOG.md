@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### Stats budget-usage pie refinement
+
+- Changed the Stats top card from a category-share pie into a `預算使用分析` budget-usage pie, with the donut center showing the percent of the selected chart total used against `state.budget`.
+- Enlarged the Stats top visual area and narrowed the inner card border/padding so the pie, labels, and budget details have more readable space on mobile.
+- Renamed the summary metrics from the confusing `統計總額` / `共同支出` wording to `圖表統計額` / `共同分帳額`, clarifying that chart totals follow the bottom `統一口徑` filter while settlement totals still use all shared receipts.
+
 ### Stats chart readability refinements
 
 - Changed the top pie chart center text to the clearer `類別佔比` concept, with the highest category percentage in the donut center.

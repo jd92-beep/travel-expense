@@ -76,7 +76,7 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch contains the latest Stats chart readability refinements in the current commit once pushed. Before this pass, latest pushed commit was `d20a850`. Verify with `git status --short --branch` and `git log -1 --oneline`.
+- Main branch contains the latest Stats budget-usage pie refinement in the current commit once pushed. Before this pass, latest pushed commit was `af9a3f2`. Verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
 - GitHub Pages failure root cause on 2026-05-30 HKT: the repository Pages API returned `404` / `has_pages:false`, while the workflow called `actions/configure-pages@v5` with default `enablement:false`. The repo Pages site was enabled via GitHub API with `build_type=workflow`, and `.github/workflows/deploy.yml` now passes `enablement: true`. Fresh CI verification is still required after the repair commit is pushed.
@@ -87,6 +87,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- Stats budget-usage refinement on 2026-05-30 HKT: the Stats top card is now `預算使用分析`; the donut center shows `預算使用` as the selected chart total divided by `state.budget`, with used/remaining/over-budget amounts, daily average, and highest category labels. The top visual background area is larger with narrower inner card padding/border, and the confusing metric labels were renamed to `圖表統計額` and `共同分帳額` so chart-filter totals and settlement totals are separated clearly.
 - Stats readability refinement on 2026-05-30 HKT: the top pie chart center now reads `類別佔比` with the highest category percentage, the highest-category legend wraps instead of truncating to `...`, Stats metrics stay in a 2x2 mobile layout, settlement transfer names show full names without ellipsis, TOP 10 uses a `全項目` / `除了機票和酒店` segmented toggle, and `統一口徑` moved to the bottom of the Stats page.
 - Stats meaningful-chart redesign on 2026-05-30 HKT: replaced the top-card `統計範圍` dial with a `支出方向盤` spending compass showing category share, daily average spend, and the highest spending category. The old daily trend line now renders as `每日 Budget Pace` with a dashed budget line, over-budget day count, peak spending day, and red/gold bars for days above budget.
 - Weather command-card compaction on 2026-05-30 HKT: reduced the `天氣預報` top card height, moved today's active weather target into one compact pill such as `Today · 名古屋/高山`, and changed the refresh control to an icon-only button with an accessible `刷新天氣` label.
@@ -112,6 +113,12 @@ Latest UI polish in this handover update:
 
 Latest UI verification from this pass:
 
+- `npm run typecheck` - passed after the Stats budget-usage refinement.
+- `npm run build` - passed after the Stats budget-usage refinement.
+- `npm run smoke:stats` - 1 passed, covering the `預算使用` center text, `69%` budget-used calculation, metric label updates, TOP 10 segmented toggle, and bottom-positioned `統一口徑` panel.
+- `npm run smoke:mobile-layout` - 1 passed after the Stats budget-usage refinement.
+- `npm run smoke:final-nav` - 6 passed after updating the Stats navigation smoke to expect `預算使用分析`.
+- Local Playwright 390px Stats geometry proof verified scroll width `390`, command card height `312`, spending compass width `296`, donut ring width `152`, title/pill center delta `0`, and visible budget text `預算使用69%`.
 - `npm run typecheck` - passed after the Stats readability refinement.
 - `npm run build` - passed after the Stats readability refinement.
 - `npm run smoke:stats` - 1 passed, covering the `類別佔比` center text, 2x2 metric geometry, full settlement names, TOP 10 segmented toggle, and bottom-positioned `統一口徑` panel.

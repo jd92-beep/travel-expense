@@ -60,7 +60,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
           <div className="stats-command-copy flex-1 min-w-0">
             <div className="stats-command-title-row">
               <h2 className="stats-command-title text-2xl font-bold text-red-900">
-                <AnimatedGradientText colorFrom="#C23B5E" colorTo="#1E4D6B" speed={1.1}>分帳統計中心</AnimatedGradientText>
+                <AnimatedGradientText colorFrom="#C23B5E" colorTo="#1E4D6B" speed={1.1}>預算使用分析</AnimatedGradientText>
               </h2>
               <span className="stats-record-pill">
                 <StatusPill tone="info" icon={<ReceiptText size={14} />}>{scopedState.receipts.length} 筆紀錄</StatusPill>
@@ -68,14 +68,14 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
             </div>
           </div>
           <div className="stats-command-visual">
-            <SpendingCompass categories={catTotals} total={analysisTotal} dailyAverage={dailyAverage} state={state} />
+            <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyAverage={dailyAverage} state={state} />
           </div>
         </div>
       </MagicCard>
 
       <div className="metric-grid stats-metrics">
-        <CockpitMetric label="統計總額" value={<NumberTicker value={analysisTotal} prefix="¥" />} detail={`HK$ ${fmt(hkd(analysisTotal, state))}`} tone="accent" />
-        <CockpitMetric label="共同支出" value={<NumberTicker value={settlement.sharedTotal} prefix="¥" delay={0.04} />} detail={`${persons.length} 人分帳`} />
+        <CockpitMetric label="圖表統計額" value={<NumberTicker value={analysisTotal} prefix="¥" />} detail={`圖表口徑 · HK$ ${fmt(hkd(analysisTotal, state))}`} tone="accent" />
+        <CockpitMetric label="共同分帳額" value={<NumberTicker value={settlement.sharedTotal} prefix="¥" delay={0.04} />} detail={`全 receipts · ${persons.length} 人`} />
         <CockpitMetric label="私人/代付" value={<NumberTicker value={privateTotal} prefix="¥" delay={0.08} />} detail={`${settlement.crossPrivate.length} 筆跨私人代付`} tone="success" />
         <CockpitMetric label="待轉帳" value={<NumberTicker value={transferTotal} prefix="¥" delay={0.12} />} detail={settlement.transfers.length ? '需要結算' : '暫時不用轉帳'} tone={settlement.transfers.length ? 'danger' : 'success'} />
       </div>
@@ -168,34 +168,36 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   );
 }
 
-function SpendingCompass({ categories, total, dailyAverage, state }: { categories: StatBucket[]; total: number; dailyAverage: number; state: AppState }) {
+function SpendingCompass({ categories, total, budget, dailyAverage, state }: { categories: StatBucket[]; total: number; budget: number; dailyAverage: number; state: AppState }) {
   const slices = categorySlices(categories, total);
   const top = slices[0];
-  const topPercent = top && total > 0 ? Math.round(top.total / total * 100) : 0;
-  const ring = categoryRingGradient(slices, total);
+  const safeBudget = Math.max(0, Number(budget) || 0);
+  const usedPercent = safeBudget > 0 ? Math.round(total / safeBudget * 100) : 0;
+  const shownPercent = safeBudget > 0 ? `${usedPercent}%` : '--';
+  const remaining = Math.max(0, safeBudget - total);
+  const overBudget = safeBudget > 0 && total > safeBudget;
+  const ring = budgetRingGradient(usedPercent);
   return (
-    <div className="spending-compass" aria-label={`支出方向盤，日均 ¥${fmt(dailyAverage)}，最高支出 ${top ? top.name : '未有紀錄'}`} style={{ '--compass-ring': ring } as CSSProperties}>
+    <div className={`spending-compass ${overBudget ? 'is-over-budget' : ''}`.trim()} aria-label={`預算使用分析，已用 ${shownPercent}，支出 ¥${fmt(total)}，預算 ¥${fmt(safeBudget)}`} style={{ '--compass-ring': ring } as CSSProperties}>
       <div className="spending-compass-ring" aria-hidden="true">
         <motion.i initial={{ rotate: -20, scale: 0.92 }} animate={{ rotate: 0, scale: 1 }} transition={{ duration: 0.5, ease: 'easeOut' }} />
         <div className="spending-compass-copy">
-          <span>類別佔比</span>
-          <strong>{topPercent}%</strong>
-          <small>{top ? `${top.name}最高` : '未有紀錄'}</small>
+          <span>預算使用</span>
+          <strong>{shownPercent}</strong>
+          <small>{safeBudget > 0 ? (overBudget ? '已超預算' : '已用預算') : '未設定預算'}</small>
         </div>
       </div>
       <div className="spending-compass-legend">
-        {slices.length ? slices.map((item) => (
-          <span className="spending-compass-slice" key={item.id} style={{ '--slice-color': item.color } as CSSProperties}>
-            <i aria-hidden="true" />
-            {item.name} {total > 0 ? Math.round(item.total / total * 100) : 0}%
-          </span>
-        )) : <span className="spending-compass-slice is-empty">未有分類</span>}
+        <span className="spending-compass-slice" style={{ '--slice-color': '#C23B5E' } as CSSProperties}><i aria-hidden="true" />已用 ¥{fmt(total)}</span>
+        <span className="spending-compass-slice" style={{ '--slice-color': '#D4A843' } as CSSProperties}><i aria-hidden="true" />{overBudget ? '超出' : '尚餘'} ¥{fmt(overBudget ? total - safeBudget : remaining)}</span>
+        <span className="spending-compass-slice" style={{ '--slice-color': top ? top.color : '#8b7d6d' } as CSSProperties}><i aria-hidden="true" />最高 {top ? top.name : '未有分類'}</span>
+        <span className="spending-compass-slice" style={{ '--slice-color': '#1E4D6B' } as CSSProperties}><i aria-hidden="true" />日均 ¥{fmt(dailyAverage)}</span>
       </div>
       <div className="spending-compass-top">
-        <span>日均</span>
-        <b>¥{fmt(dailyAverage)} · HK$ {fmt(hkd(dailyAverage, state))}</b>
-        <span>最高</span>
-        <b>{top ? `${top.name} · ¥${fmt(top.total)}` : '未有紀錄'}</b>
+        <span>預算</span>
+        <b>{safeBudget > 0 ? `¥${fmt(safeBudget)} · HK$ ${fmt(hkd(safeBudget, state))}` : '未設定'}</b>
+        <span>{overBudget ? '超出' : '尚餘'}</span>
+        <b>{safeBudget > 0 ? `¥${fmt(overBudget ? total - safeBudget : remaining)} · HK$ ${fmt(hkd(overBudget ? total - safeBudget : remaining, state))}` : '設定後顯示'}</b>
       </div>
     </div>
   );
@@ -308,17 +310,12 @@ function categorySlices(categories: StatBucket[], total: number): StatBucket[] {
   return rest > 0 ? [...visible, { id: 'other-categories', name: '其他類別', color: '#8b7d6d', total: rest }] : visible;
 }
 
-function categoryRingGradient(slices: StatBucket[], total: number): string {
-  if (!slices.length || !total) return 'conic-gradient(#e8ddd0 0deg 360deg)';
-  let cursor = 0;
-  const parts = slices.map((slice) => {
-    const next = cursor + slice.total / total * 360;
-    const segment = `${slice.color} ${cursor.toFixed(1)}deg ${next.toFixed(1)}deg`;
-    cursor = next;
-    return segment;
-  });
-  if (cursor < 360) parts.push(`rgba(232,221,208,.74) ${cursor.toFixed(1)}deg 360deg`);
-  return `conic-gradient(${parts.join(', ')})`;
+function budgetRingGradient(usedPercent: number): string {
+  const used = Math.max(0, Math.min(100, usedPercent));
+  const usedDeg = used * 3.6;
+  if (used <= 0) return 'conic-gradient(rgba(232,221,208,.84) 0deg 360deg)';
+  if (used >= 100) return 'conic-gradient(#C23B5E 0deg 320deg, #D4A843 320deg 360deg)';
+  return `conic-gradient(#C23B5E 0deg ${usedDeg.toFixed(1)}deg, #D4A843 ${usedDeg.toFixed(1)}deg 360deg)`;
 }
 
 function Bar({ label, leading, value, state, color, max }: { label: string; leading?: ReactNode; value: number; state: AppState; color: string; max?: number }) {
