@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { BarChart3, HandCoins, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
+import { BarChart3, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { categoryById, computeSettlements, displayStore, fmt, getPersons, hkd } from '../lib/domain';
@@ -51,15 +51,14 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
         <div className="absolute inset-0 bg-gradient-to-br from-[#C23B5E] via-[#D4A843] to-[#1E4D6B] opacity-[0.15] mix-blend-multiply pointer-events-none" />
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none" />
         <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 p-6 h-full w-full">
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-red-900 mb-1">
-              <AnimatedGradientText colorFrom="#C23B5E" colorTo="#1E4D6B" speed={1.1}>分帳統計中心</AnimatedGradientText>
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              <StatusPill tone="info" icon={<ReceiptText size={14} />}>{scopedState.receipts.length} 筆紀錄</StatusPill>
-              <StatusPill tone={settlement.transfers.length ? 'warning' : 'ok'} icon={<HandCoins size={14} />}>
-                {settlement.transfers.length ? `${settlement.transfers.length} 筆轉帳` : '已平衡'}
-              </StatusPill>
+          <div className="stats-command-copy flex-1 min-w-0">
+            <div className="stats-command-title-row">
+              <h2 className="stats-command-title text-2xl font-bold text-red-900">
+                <AnimatedGradientText colorFrom="#C23B5E" colorTo="#1E4D6B" speed={1.1}>分帳統計中心</AnimatedGradientText>
+              </h2>
+              <span className="stats-record-pill">
+                <StatusPill tone="info" icon={<ReceiptText size={14} />}>{scopedState.receipts.length} 筆紀錄</StatusPill>
+              </span>
             </div>
           </div>
           <div className="flex-shrink-0 self-center">

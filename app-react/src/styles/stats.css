@@ -78,6 +78,25 @@
   letter-spacing: 0;
 }
 
+.stats-tab.stats-cockpit .stats-command-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.stats-tab.stats-cockpit .stats-command-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.stats-tab.stats-cockpit .stats-record-pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  white-space: nowrap;
+}
+
 .stats-tab.stats-cockpit .stats-command p,
 .stats-tab.stats-cockpit .stats-controls p {
   max-width: 42rem;
@@ -523,7 +542,19 @@
   }
 
   .stats-tab.stats-cockpit .stats-command h2 {
-    font-size: clamp(33px, 12vw, 46px);
+    font-size: clamp(24px, 7vw, 30px);
+  }
+
+  .stats-tab.stats-cockpit .stats-command-title-row {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .stats-tab.stats-cockpit .stats-record-pill .status-pill {
+    min-height: 28px;
+    padding: 5px 9px;
+    font-size: 11px;
+    line-height: 1;
   }
 
   .stats-tab.stats-cockpit .stats-orbit {

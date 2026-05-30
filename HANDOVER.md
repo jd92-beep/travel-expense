@@ -4,6 +4,7 @@ Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- Current commit: Compact Stats tab command header
 - Current commit: Compact itinerary command spacing
 - Current commit: Compact Record tab command header
 - Current commit: Repair GitHub Pages deployment enablement
@@ -70,7 +71,7 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch contains the latest Itinerary command spacing compaction in the current commit once pushed. Before this pass, latest pushed commit was `130232f`. Verify with `git status --short --branch` and `git log -1 --oneline`.
+- Main branch contains the latest Stats tab command-header compaction in the current commit once pushed. Before this pass, latest pushed commit was `130232f`. Verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
 - GitHub Pages failure root cause on 2026-05-30 HKT: the repository Pages API returned `404` / `has_pages:false`, while the workflow called `actions/configure-pages@v5` with default `enablement:false`. The repo Pages site was enabled via GitHub API with `build_type=workflow`, and `.github/workflows/deploy.yml` now passes `enablement: true`. Fresh CI verification is still required after the repair commit is pushed.
@@ -81,6 +82,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- Stats tab command-header polish on 2026-05-30 HKT: `分帳統計中心` now stays on one compact line with the receipt-count pill, the unneeded transfer-count pill/icon is removed from the top card, and mobile styling keeps the row aligned at 390px without overflow.
 - Itinerary spacing polish on 2026-05-30 HKT: reduced the mobile gap above and below the `行程時間線` command card by lowering Timeline top padding, removing the command-card mobile margin-bottom, and tightening the Timeline stack gap. Timeline smoke now verifies top gap, lower gap, first-day position, compact header height, and date de-duplication.
 - GitHub Pages deploy repair on 2026-05-30 HKT: fixed the failing Pages workflow that stopped at `actions/configure-pages@v5` with `Get Pages site failed / Not Found`. The repo is now enabled for Pages workflow deployment and the workflow can auto-enable Pages if it is missing.
 - Record tab compact command polish on 2026-05-30 HKT: `紀錄中心`, `切換旅程`, and the reload icon now stay on one compact row at 390px mobile width. The command card has a smaller touch-safe height, and History smoke now verifies the row alignment and reduced card height.
@@ -100,6 +102,11 @@ Latest UI polish in this handover update:
 
 Latest UI verification from this pass:
 
+- `npm run typecheck` - passed after the Stats command-header compaction.
+- `npm run build` - passed after the Stats command-header compaction.
+- `npm run smoke:stats` - 1 passed, including the new one-line title/count alignment, no transfer pill in the title row, compact row height, and mobile overflow regression.
+- `npm run smoke:mobile-layout` - 1 passed after the Stats command-header compaction.
+- Local Playwright geometry smoke at `http://localhost:8902/travel-expense/react/` verified the 390px Stats header: `分帳統計中心` and `6 筆紀錄` shared the same center line, row height was 28px, scroll width stayed 390px, and console errors were empty.
 - `npm run smoke:scan` - passed, including Scan tab manual/voice/email/currency flows, six generated function visuals, zero generated-art overlay elements, enlarged mobile card geometry, and mobile artwork/text non-overlap regression coverage.
 - `npm run smoke:dashboard` - passed, including the Home `旅程提醒` useful-action regression and the spending parity assertions.
 - `npm run typecheck` - passed.

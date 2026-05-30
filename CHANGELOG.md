@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### React Stats tab command header compaction
+
+- Kept `分帳統計中心` on one mobile-safe line with the receipt-count status pill, so the header reads cleanly beside `78 筆紀錄` style counts.
+- Removed the unneeded transfer-count status pill/icon from the Stats top command card while leaving the detailed settlement/analysis sections intact.
+- Added Stats smoke coverage for one-line title/count alignment, no transfer pill in the title row, compact row height, and no 390px mobile horizontal overflow.
+
 ### React Itinerary spacing compaction
 
 - Reduced the mobile Itinerary tab gap above and below the `行程時間線` command card so the first day card starts higher and more trip information is visible on phone screens.

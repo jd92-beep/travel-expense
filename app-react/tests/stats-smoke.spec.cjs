@@ -34,6 +34,26 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await page.goto('http://localhost:8902/travel-expense/react/');
   await expect(page.getByText('分帳統計中心')).toBeVisible();
   await expect(page.getByText('6 筆紀錄')).toBeVisible();
+  await expect(page.locator('.stats-command-title-row')).toContainText('分帳統計中心');
+  await expect(page.locator('.stats-command-title-row')).not.toContainText(/筆轉帳|已平衡/);
+  const commandHeaderMetrics = await page.evaluate(() => {
+    const title = document.querySelector('.stats-command-title')?.getBoundingClientRect();
+    const pill = document.querySelector('.stats-record-pill')?.getBoundingClientRect();
+    const row = document.querySelector('.stats-command-title-row')?.getBoundingClientRect();
+    if (!title || !pill || !row) throw new Error('Stats command header elements missing');
+    return {
+      titleCenter: title.top + title.height / 2,
+      titleRight: title.right,
+      pillCenter: pill.top + pill.height / 2,
+      pillLeft: pill.left,
+      rowHeight: row.height,
+      scrollWidth: document.documentElement.scrollWidth,
+    };
+  });
+  expect(Math.abs(commandHeaderMetrics.titleCenter - commandHeaderMetrics.pillCenter)).toBeLessThanOrEqual(6);
+  expect(commandHeaderMetrics.pillLeft).toBeGreaterThan(commandHeaderMetrics.titleRight);
+  expect(commandHeaderMetrics.rowHeight).toBeLessThanOrEqual(44);
+  expect(commandHeaderMetrics.scrollWidth).toBeLessThanOrEqual(390);
   await expect(page.getByText('Xinxin').first()).toBeVisible();
   await expect(page.getByText('Tony').first()).toBeVisible();
   await expect(page.locator('.transfer-modern')).toContainText('¥2,850');
