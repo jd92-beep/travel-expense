@@ -17,10 +17,11 @@
 ## 打開 App
 
 - 主要公開 app: https://travel-expense-react.vercel.app
+- Compact app: https://travel-expense-compact.vercel.app
 - GitHub Pages React app: https://jd92-beep.github.io/travel-expense/react/
 - 舊版備用 app: https://jd92-beep.github.io/travel-expense/
 
-請優先使用主要公開 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。Netlify project 也存在，但 `https://travel-expense-react.netlify.app` 目前顯示 `usage_exceeded`，暫時不是平常使用的入口。
+請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。Netlify project 也存在，但 `https://travel-expense-react.netlify.app` 目前顯示 `usage_exceeded`，暫時不是平常使用的入口。
 
 ## 第一次使用
 

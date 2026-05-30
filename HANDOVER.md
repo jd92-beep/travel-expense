@@ -201,7 +201,16 @@ Latest verification from this pass:
 - GitHub Pages root legacy app: `https://jd92-beep.github.io/travel-expense/`
 - GitHub Pages React app: `https://jd92-beep.github.io/travel-expense/react/`
 - Vercel React app: `https://travel-expense-react.vercel.app`
+- Vercel Compact app: `https://travel-expense-compact.vercel.app`
 - Netlify React app: `https://travel-expense-react.netlify.app`
+
+Current compact live check on 2026-05-30:
+
+- `app-compact/` is an independent React/Vite app copied from the React baseline, with its own package name, local port `8903`, Vite default base `/travel-expense/compact/`, compact mobile scroll CSS, and centered circular Scan dock.
+- Vercel project `travel-expense-compact` deployed production successfully and aliases `https://travel-expense-compact.vercel.app`.
+- `curl -I https://travel-expense-compact.vercel.app` returned `HTTP/2 200`, Vercel inspect reported `Ready`, and the in-app browser loaded title `旅費 Compact` with no console errors or warnings.
+- Compact production has `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` configured in Vercel production env. Values are encrypted in Vercel and are not tracked in git.
+- Credential Broker CORS config now includes `http://localhost:8903` and `https://travel-expense-compact.vercel.app` so broker-backed AI/session calls can work from the compact app. Worker deploy succeeded with version `9213426f-0695-4dcf-9806-73b7984d12e9`, and a live OPTIONS probe from the compact origin returned `204` with `Access-Control-Allow-Origin: https://travel-expense-compact.vercel.app`.
 
 Current live check on 2026-05-26:
 
@@ -237,6 +246,20 @@ Important files:
 - `app-react/src/security/AuthGate.tsx` - local broker unlock flow when Supabase is not configured.
 - `app-react/src/tabs/*.tsx` - Dashboard, Scan, Timeline, History, Weather, Stats, Settings.
 
+### Compact App
+
+Path: `app-compact/`
+
+This is the independent compact version. It should stay separate from `app-react/` and the legacy root app. It uses the same React 19 + Vite + TypeScript feature baseline, but has its own package name, Vercel project, local port, Vite base path, compact visual overrides, scrollable mobile tab contract, and centered circular Scan dock.
+
+Important files:
+
+- `app-compact/src/styles/compact.css` - compact-only visual shell, mobile scrolling, and centered Scan dock.
+- `app-compact/src/components/ui/floating-dock.tsx` - compact dock item id support for Scan styling.
+- `app-compact/src/lib/supabase.ts` - compact public redirect base path.
+- `app-compact/vercel.json` - Vercel static deployment config for the compact project.
+- `app-compact/README.md` - compact local/deploy entrypoint.
+
 ### Legacy App
 
 Paths:
@@ -267,7 +290,7 @@ Default broker URL in React:
 https://travel-expense-credential-broker.ftjdfr.workers.dev
 ```
 
-The Worker CORS allowlist currently covers local dev, GitHub Pages, Vercel React, and Netlify React. Do not add unknown domains without verifying ownership.
+The Worker CORS allowlist currently covers local React dev, local compact dev, GitHub Pages, Vercel React, Vercel Compact, and Netlify React. Do not add unknown domains without verifying ownership.
 
 Supabase public-mode AI calls use the shared server-side Kimi/Google credentials but are metered by user and provider through `SUPABASE_AI_DAILY_LIMIT` in the Worker KV. `workers/credential-broker/test/self-test.mjs` covers:
 

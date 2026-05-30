@@ -1,0 +1,1178 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  CloudSun,
+  MapPin,
+  Plus,
+  X,
+  Castle,
+  Utensils,
+  ShoppingBag,
+  Bath,
+  Settings as GearIcon,
+  Bell,
+  Compass,
+  BarChart3,
+  MoreHorizontal,
+  Camera
+} from 'lucide-react';
+import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
+import { VisualIcon } from '../components/VisualIcon';
+import { AnimatedNumber, GlassCard, Reveal } from '../components/ui';
+import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
+import { Switch } from '../components/ui/switch';
+import {
+  categoryById,
+  displayStore,
+  fmt,
+  getItinerary,
+  getPersons,
+  hkd,
+  isPendingReceipt,
+  mapsUrl,
+  openMapExternal,
+  safeExternalUrl,
+  todayForReceipts,
+  safePhotoUrl
+} from '../lib/domain';
+import { activeTrip, createTripProfile, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import type { AppState, ItinerarySpot, Receipt, SyncQueueItem, TabId } from '../lib/types';
+
+function displayDateRange(startDate: string, endDate: string) {
+  const fmtDate = (date: string) => {
+    const parsed = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return date;
+    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+  };
+  return `${fmtDate(startDate)} – ${fmtDate(endDate)}`;
+}
+
+function weekdayLabel(date: string) {
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(parsed);
+}
+
+function tripLength(startDate: string, endDate: string, fallback: number) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return Math.max(1, fallback);
+  return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+}
+
+// 根據景點屬性或名字，智能配對和風 icon 及顏色
+function getSpotIconDetails(type: string, name: string) {
+  const t = type.toLowerCase();
+  const n = name.toLowerCase();
+  if (t === 'food' || n.includes('lunch') || n.includes('dinner') || n.includes('eat') || n.includes('hitsumabushi') || n.includes('restaurant')) {
+    return {
+      bgClass: 'washi-icon-red',
+      icon: <Utensils size={18} className="text-white" />
+    };
+  }
+  if (t === 'shopping' || n.includes('shop') || n.includes('market') || n.includes('osu') || n.includes('souvenir')) {
+    return {
+      bgClass: 'washi-icon-blue',
+      icon: <ShoppingBag size={18} className="text-white" />
+    };
+  }
+  if (t === 'onsen' || n.includes('onsen') || n.includes('spa') || n.includes('bath') || n.includes('hot spring') || n.includes('relax')) {
+    return {
+      bgClass: 'washi-icon-blue',
+      icon: <Bath size={18} className="text-white" />
+    };
+  }
+  if (n.includes('castle') || n.includes('temple') || n.includes('shrine') || t === 'sightseeing' || n.includes('landmark')) {
+    return {
+      bgClass: 'washi-icon-blue',
+      icon: <Castle size={18} className="text-white" />
+    };
+  }
+  return {
+    bgClass: 'washi-icon-blue',
+    icon: <MapPin size={18} className="text-white" />
+  };
+}
+
+export function Dashboard({
+  state,
+  setState,
+  updateState,
+  onOpen,
+  onTab,
+  onManual
+}: {
+  state: AppState;
+  setState: React.Dispatch<React.SetStateAction<AppState>>;
+  updateState: (patch: Partial<AppState>) => void;
+  onOpen: (receipt: Receipt) => void;
+  onTab: (tab: TabId) => void;
+  onManual: () => void
+}) {
+  const [sheet, setSheet] = useState<{ kind: 'day-receipts' } | { kind: 'spot'; spot: ItinerarySpot } | null>(null);
+  const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
+  const [isBudgetSettingsOpen, setIsBudgetSettingsOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  // iOS 開關狀態
+  const [dailyReminder, setDailyReminder] = useState(true);
+  const [lowBudgetAlert, setLowBudgetAlert] = useState(true);
+
+  // Dropdown & Wizard States
+  const [isTripDropdownOpen, setIsTripDropdownOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+
+  // Wizard Fields
+  const [newTripName, setNewTripName] = useState('');
+  const [newTripDestination, setNewTripDestination] = useState('');
+  const [newTripStartDate, setNewTripStartDate] = useState('');
+  const [newTripEndDate, setNewTripEndDate] = useState('');
+  const [newTripBudget, setNewTripBudget] = useState('');
+  const [newTripCurrency, setNewTripCurrency] = useState('JPY');
+  const [newTripDetails, setNewTripDetails] = useState('');
+
+  // Date duration auto-calc
+  const calculatedDuration = useMemo(() => {
+    if (!newTripStartDate || !newTripEndDate) return 0;
+    const start = new Date(`${newTripStartDate}T00:00:00`);
+    const end = new Date(`${newTripEndDate}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+    const diff = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+    return diff;
+  }, [newTripStartDate, newTripEndDate]);
+
+  const handleSwitchTrip = (tripId: string) => {
+    const target = state.trips?.find((t) => t.id === tripId && !t.archived);
+    if (!target) return;
+
+    setState((prev) => ({
+      ...prev,
+      activeTripId: tripId,
+      trips: (prev.trips || []).map((item) => ({ ...item, active: item.id === tripId && !item.archived })),
+      tripName: target.name,
+      budget: target.budget ?? prev.budget,
+      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || prev.tripCurrency,
+      customItinerary: target.itinerary || [],
+      tripDateRange: { start: target.startDate, end: target.endDate }
+    }));
+  };
+
+  const handleCreateTrip = (overrideName?: string) => {
+    const finalName = (overrideName || newTripName).trim();
+    if (!finalName) return;
+
+    const now = Date.now();
+    const newTrip = createTripProfile({
+      name: finalName,
+      destinationSummary: newTripDestination || 'Japan',
+      startDate: newTripStartDate,
+      endDate: newTripEndDate,
+      budget: newTripBudget.trim() ? Number(newTripBudget) : 150000,
+      currency: newTripCurrency || 'JPY',
+      now,
+    });
+
+    const queueItem: SyncQueueItem = {
+      id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+      type: 'trip',
+      entityId: newTrip.id,
+      op: 'create',
+      status: 'queued',
+      attempts: 0,
+      createdAt: now,
+      updatedAt: now,
+      payload: {
+        sourceId: newTrip.sourceId,
+        updatedAt: now
+      }
+    };
+
+    setState((prev) => {
+      const trips = [...(prev.trips || []).map((item) => ({ ...item, active: false })), newTrip];
+      const nextQueue = [...(prev.syncQueue || []), queueItem];
+
+      const latest = new Map<string, SyncQueueItem>();
+      for (const item of nextQueue) {
+        if (item.status === 'synced') continue;
+        latest.set(`${item.type}:${item.entityId}`, item);
+      }
+      return {
+        ...prev,
+        trips,
+        activeTripId: newTrip.id,
+        budget: newTrip.budget || 0,
+        tripCurrency: newTrip.currencies.find((currency) => currency !== 'HKD') || 'JPY',
+        customItinerary: newTrip.itinerary,
+        tripDateRange: { start: newTrip.startDate, end: newTrip.endDate },
+        syncQueue: [...latest.values()].slice(-500)
+      };
+    });
+
+    setIsWizardOpen(false);
+    setWizardStep(1);
+    setNewTripName('');
+    setNewTripDestination('');
+    setNewTripStartDate('');
+    setNewTripEndDate('');
+    setNewTripBudget('');
+    setNewTripCurrency('JPY');
+    setNewTripDetails('');
+  };
+
+  const trip = activeTrip(state);
+  const itinerary = getItinerary(state);
+  const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip), [state, trip]);
+  const today = todayForReceipts(state);
+
+  // 精確轉換單筆 Receipt 到港幣 (HKD)
+  const getReceiptHkdAmount = (r: Receipt): number => {
+    if (typeof r.hkdAmount === 'number' && r.hkdAmount > 0) {
+      return r.hkdAmount;
+    }
+    const cur = r.currency || 'JPY';
+    if (cur === 'HKD') {
+      return Number(r.total) || 0;
+    }
+    const rate = Math.max(
+      0.1,
+      Number(r.exchangeRate) ||
+      Number(state.rateTable?.[cur]?.perHkd) ||
+      (cur === 'JPY' ? Number(state.rate) : undefined) ||
+      20.36
+    );
+    return (Number(r.total) || 0) / rate;
+  };
+
+  // Resolved Local Currency other than HKD
+  const resolvedTripCurrency = (() => {
+    if (trip.currencies && trip.currencies.length > 0) {
+      const cur = trip.currencies.find((c) => c !== 'HKD');
+      if (cur) return cur;
+    }
+    if (state.tripCurrency) return state.tripCurrency;
+
+    const text = `${trip.destinationSummary || ''} ${trip.name || ''}`.toLowerCase();
+    if (text.includes('日本') || text.includes('japan') || text.includes('nagoya') || text.includes('tokyo') || text.includes('osaka') || text.includes('kyoto') || text.includes('kanazawa') || text.includes('takayama') || text.includes('toyama')) return 'JPY';
+    if (text.includes('韓國') || text.includes('korea') || text.includes('seoul') || text.includes('busan')) return 'KRW';
+    if (text.includes('台灣') || text.includes('taiwan') || text.includes('taipei')) return 'TWD';
+    if (text.includes('歐洲') || text.includes('europe') || text.includes('歐元') || text.includes('france') || text.includes('germany') || text.includes('italy')) return 'EUR';
+    if (text.includes('英國') || text.includes('uk') || text.includes('london') || text.includes('gbp')) return 'GBP';
+    if (text.includes('美國') || text.includes('usa') || text.includes('america') || text.includes('new york')) return 'USD';
+    if (text.includes('泰國') || text.includes('thailand') || text.includes('bangkok')) return 'THB';
+    if (text.includes('中國') || text.includes('china') || text.includes('cny') || text.includes('人民幣')) return 'CNY';
+
+    return 'JPY';
+  })();
+
+  const tripCurrencySymbol = (() => {
+    switch (resolvedTripCurrency.toUpperCase()) {
+      case 'JPY': return '¥';
+      case 'HKD': return 'HK$';
+      case 'USD': return '$';
+      case 'EUR': return '€';
+      case 'TWD': return 'NT$';
+      case 'KRW': return '₩';
+      case 'GBP': return '£';
+      case 'CNY': return '¥';
+      case 'THB': return '฿';
+      default: return resolvedTripCurrency + ' ';
+    }
+  })();
+
+  // 雙向反轉過濾邏輯：
+  // state.statsIncludeTransportLodging = false
+  // -> totalIncludeFL = true (Spent 包含大額) / dailyIncludeFL = false (今日花費與日均排除大額)
+  // state.statsIncludeTransportLodging = true
+  // -> totalIncludeFL = false (Spent 排除大額) / dailyIncludeFL = true (今日花費與日均包含大額)
+  const flipped = !!state.statsIncludeTransportLodging;
+  const totalIncludeFL = !flipped;
+  const dailyIncludeFL = flipped;
+
+  const isBigTripItem = (r: Receipt) =>
+    r.category === 'flight' || r.category === 'lodging' || r.category === 'transport';
+
+  const todayReceipts = tripReceipts.filter((r) => r.date === today);
+
+  // 今日花費與總花費收據過濾
+  const dailyReceipts = todayReceipts.filter((r) => dailyIncludeFL || !isBigTripItem(r));
+  const totalReceipts = tripReceipts.filter((r) => totalIncludeFL || !isBigTripItem(r));
+
+  // 基於港幣做精準累加
+  const spentHkd = totalReceipts.reduce((s, r) => s + getReceiptHkdAmount(r), 0);
+  const todaySpentHkd = dailyReceipts.reduce((s, r) => s + getReceiptHkdAmount(r), 0);
+
+  // 目的貨幣匯率 (非港幣)
+  const activeRate = Math.max(
+    0.1,
+    Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
+    (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
+    20.36
+  );
+
+  // 精確轉換單筆 Receipt 到目的貨幣 (resolvedTripCurrency)，若是該目的貨幣則 100% 原始值返回，防止任何浮點精度損失或偏差
+  const getReceiptTripAmount = (r: Receipt): number => {
+    const cur = r.currency || 'JPY';
+    if (cur === resolvedTripCurrency) {
+      return Number(r.total) || 0;
+    }
+    const hkdAmt = getReceiptHkdAmount(r);
+    return Math.round(hkdAmt * activeRate);
+  };
+
+  // 目的貨幣等值花費 (用於輔助顯示)
+  const totalForBudget = totalReceipts.reduce((s, r) => s + getReceiptTripAmount(r), 0);
+  const todayTotal = dailyReceipts.reduce((s, r) => s + getReceiptTripAmount(r), 0);
+
+  const budgetHkd = Math.round(hkd(state.budget, state));
+  const rawBudgetPct = budgetHkd > 0 ? (spentHkd / budgetHkd) * 100 : 0;
+  const budgetPct = Math.min(100, rawBudgetPct);
+
+  const dailyBudget = Math.round((Number(state.budget) || 0) / Math.max(1, itinerary.length));
+  const dailyAverage = Math.round(totalForBudget / Math.max(1, itinerary.length));
+  const todayBudgetPct = dailyBudget > 0 ? (todayTotal / dailyBudget) * 100 : 0;
+  const day = itinerary.find((d) => d.date === today) || itinerary[0];
+  const daySpots = (day?.spots || []).slice(0, 4);
+  const length = tripLength(trip.startDate, trip.endDate, itinerary.length);
+  const recentReceipts = tripReceipts.slice().sort((a, b) => `${b.date} ${b.time || ''}`.localeCompare(`${a.date} ${a.time || ''}`));
+
+  // 名古屋經典行程 Mockup Fallback — 如果今日無行程，為 Boss 展示極致精美嘅 dummy 行程
+  const displaySpots: ItinerarySpot[] = daySpots.length > 0 ? daySpots : [
+    {
+      id: 'demo-castle',
+      spotId: 'demo-castle',
+      time: '09:00',
+      name: 'Nagoya Castle',
+      type: 'sightseeing',
+      note: 'Historic landmark',
+      address: '1-1 Honmaru, Naka Ward, Nagoya',
+      mapUrl: 'https://maps.google.com/?q=Nagoya+Castle'
+    },
+    {
+      id: 'demo-lunch',
+      spotId: 'demo-lunch',
+      time: '12:30',
+      name: 'Lunch',
+      type: 'food',
+      note: 'Hitsumabushi',
+      address: 'Nagoya Station Area',
+      mapUrl: 'https://maps.google.com/?q=Hitsumabushi+Nagoya'
+    },
+    {
+      id: 'demo-osu',
+      spotId: 'demo-osu',
+      time: '15:00',
+      name: 'Osu Shopping District',
+      type: 'shopping',
+      note: 'Shopping · Souvenirs',
+      address: 'Osu, Naka Ward, Nagoya',
+      mapUrl: 'https://maps.google.com/?q=Osu+Shopping+District'
+    },
+    {
+      id: 'demo-onsen',
+      spotId: 'demo-onsen',
+      time: '18:30',
+      name: 'Atsuta Onsen',
+      type: 'other',
+      note: 'Relax & unwind',
+      address: 'Atsuta Ward, Nagoya',
+      mapUrl: 'https://maps.google.com/?q=Atsuta+Onsen'
+    }
+  ];
+
+  return (
+    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto" aria-label="旅程總覽">
+      {/* 和風櫻花與日出背景圖案 */}
+      <div className="japanese-sun-decor" />
+      <div className="japanese-sakura-decor" />
+
+      {/* 1. Header 標題與日曆按鈕 */}
+      <div className="flex justify-between items-start mb-6 z-10 relative">
+        <div className="flex flex-col relative z-30">
+          <button
+            className="flex items-center gap-1 text-[28px] font-black text-slate-800 tracking-tight font-serif border-none bg-transparent focus:outline-none"
+            type="button"
+            onClick={() => setIsTripDropdownOpen(!isTripDropdownOpen)}
+          >
+            <span>{trip.name}</span>
+            <ChevronDown size={22} className="text-slate-500 mt-1" />
+          </button>
+          <p className="text-xs font-semibold text-slate-500 mt-1">
+            {displayDateRange(trip.startDate, trip.endDate)} ({length} days)
+          </p>
+
+          {isTripDropdownOpen && (
+            <div className="absolute top-12 left-0 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-white/80 shadow-2xl p-2 z-50 flex flex-col gap-1">
+              <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                選擇旅程 (Select Trip)
+              </div>
+              <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+                {(state.trips || []).filter((t) => !t.archived).map((t) => {
+                  const isActive = t.id === trip.id;
+                  return (
+                    <button
+                      key={t.id}
+                      className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none ${
+                        isActive
+                          ? 'bg-[#6D5643]/15 text-[#6D5643] font-bold'
+                          : 'hover:bg-slate-50 text-slate-700 bg-transparent'
+                      }`}
+                      onClick={() => {
+                        setIsTripDropdownOpen(false);
+                        handleSwitchTrip(t.id);
+                      }}
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm truncate">{t.name}</span>
+                        <span className="text-[10px] text-slate-400 truncate">
+                          {t.destinationSummary || '未設定目的地'} ({t.itinerary?.length || 0}天)
+                        </span>
+                      </div>
+                      {isActive && (
+                        <div className="w-2 h-2 rounded-full bg-[#D94132] shrink-0 ml-2" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="border-t border-slate-100 my-1" />
+              <button
+                className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-[#6D5643] hover:bg-[#5C4837] text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm border-none cursor-pointer"
+                onClick={() => {
+                  setIsTripDropdownOpen(false);
+                  setIsWizardOpen(true);
+                  setWizardStep(1);
+                }}
+              >
+                <span>➕ 建立新旅程</span>
+              </button>
+            </div>
+          )}
+        </div>
+        <button
+          className="w-11 h-11 bg-white/70 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/80 shadow-sm active:scale-95 transition-all"
+          type="button"
+          aria-label="開啟行程"
+          onClick={() => onTab('timeline')}
+        >
+          <CalendarDays size={20} className="text-[#6D5643]" />
+        </button>
+      </div>
+
+      {/* 2. 預算毛玻璃卡片 (含圓形進度條與 Today Spent / Daily Avg Spending Pct) */}
+      <Reveal className="dashboard-reveal">
+      <GlassCard as="div" className="washi-budget-card dashboard-magic-budget relative p-4 min-[375px]:p-6 rounded-[28px] overflow-hidden mb-6 z-10">
+        <div className="grid grid-cols-[1fr_auto] items-center gap-4 sm:flex sm:justify-between sm:items-center">
+          {/* 左側：預算資訊堆疊 (手機端垂直堆疊，sm 平版端水平並列) */}
+          <div className="flex flex-col gap-4 min-w-0 sm:flex-row sm:gap-10 sm:items-center flex-grow">
+            {/* 總預算 */}
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] min-[375px]:text-[11px] font-bold text-[#8C7864] uppercase tracking-wider leading-none">Total Budget</span>
+              <strong className="text-[18px] min-[375px]:text-[22px] sm:text-[24px] font-black text-slate-800 tracking-tight mt-1 truncate">
+                <AnimatedNumber value={budgetHkd} prefix="HK$ " />
+              </strong>
+              <span className="text-[9px] min-[375px]:text-[10px] text-slate-500 mt-0.5 leading-none">
+                ~{tripCurrencySymbol}{fmt(state.budget)}
+              </span>
+            </div>
+
+            {/* 已消費 */}
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] min-[375px]:text-[11px] font-bold text-[#8C7864] uppercase tracking-wider leading-none">Spent</span>
+              <strong className="text-[18px] min-[375px]:text-[22px] sm:text-[24px] font-black text-[#D94132] tracking-tight mt-1 truncate">
+                <AnimatedNumber value={spentHkd} prefix="HK$ " />
+              </strong>
+              <span className="text-[9px] min-[375px]:text-[10px] text-slate-500 mt-0.5 leading-none">
+                ~{tripCurrencySymbol}{fmt(totalForBudget)}
+              </span>
+            </div>
+          </div>
+
+          {/* 右側/中間：圓形進度條 */}
+          <div className="relative w-16 h-16 min-[375px]:w-20 min-[375px]:h-20 sm:w-22 sm:h-22 flex items-center justify-center shrink-0 dashboard-budget-ring">
+            <AnimatedCircularProgressBar
+              value={budgetPct}
+              gaugePrimaryColor="#D94132"
+              gaugeSecondaryColor="rgba(115, 96, 76, 0.12)"
+              className="size-full"
+            >
+              <div className="absolute flex flex-col items-center justify-center">
+              <span className="text-sm min-[375px]:text-base font-extrabold text-slate-900 leading-none">{Math.round(rawBudgetPct)}%</span>
+              <span className="text-[7px] min-[375px]:text-[8px] font-bold text-[#8C7864] uppercase tracking-wider mt-0.5 leading-none">spent</span>
+              </div>
+            </AnimatedCircularProgressBar>
+          </div>
+        </div>
+      </GlassCard>
+      </Reveal>
+
+      {/* 2.5 今日開支獨立 Washi 卡片 */}
+      <Reveal className="dashboard-reveal" delay={0.04}>
+      <GlassCard as="div" className="washi-today-stats-card dashboard-magic-today relative p-5 rounded-[28px] overflow-hidden mb-6 z-10">
+        <div className="flex flex-col mb-3">
+          <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">Today's Performance</span>
+          <h3 className="text-[15px] font-bold text-slate-800 mt-0.5">今日開支與日均統計 📊</h3>
+        </div>
+        <div className="washi-today-stats-panel">
+          {/* 左格：今日花費 */}
+          <div className="washi-stat-block bg-white/30 border border-white/50 rounded-2xl p-3 flex flex-col">
+            <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">Today Spent</span>
+            <strong className="text-[18px] font-extrabold text-slate-900 tracking-tight mt-0.5">
+              <AnimatedNumber value={Math.round(hkd(todayTotal, state))} prefix="HK$ " />
+            </strong>
+            <span className="text-[10px] text-slate-500 font-medium">
+              ~{tripCurrencySymbol}{fmt(todayTotal)} · {dailyReceipts.length} 筆
+            </span>
+          </div>
+
+          {/* 右格：今日預算佔比 (Daily Budget Used) */}
+          <div className="washi-stat-block bg-white/30 border border-white/50 rounded-2xl p-3 flex flex-col">
+            <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">Daily Budget Used</span>
+            <strong className="text-[18px] font-extrabold text-[#18395C] tracking-tight mt-0.5">
+              <AnimatedNumber value={todayBudgetPct} suffix="%" />
+            </strong>
+            <span className="text-[10px] text-slate-500 font-medium">
+              {tripCurrencySymbol}{fmt(todayTotal)} / {tripCurrencySymbol}{fmt(dailyBudget)} limit
+            </span>
+          </div>
+        </div>
+      </GlassCard>
+      </Reveal>
+
+      {/* 3. Today 行程時間軸 */}
+      <Reveal className="dashboard-reveal" delay={0.08}>
+      <GlassCard as="div" className="today-itinerary-card washi-timeline-container p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">今日行程</span>
+            <h3 className="text-lg font-bold text-slate-800 mt-0.5">Today · {weekdayLabel(today)}</h3>
+          </div>
+          <div className="flex items-center gap-1 px-3 py-1 bg-amber-50 border border-amber-200/60 rounded-full text-[11px] font-bold text-amber-700">
+            <CloudSun size={14} />
+            <span>8°C</span>
+          </div>
+        </div>
+
+        {/* 時間軌道 */}
+        <div className="washi-timeline relative pl-7 before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-[2px] before:bg-[#E2C08D] before:rounded-full">
+          {displaySpots.map((spot, idx) => {
+            const details = getSpotIconDetails(spot.type, spot.name);
+            const spotKey = spot.id || spot.spotId || `${today}_${spot.time || 'time'}_${spot.name || idx}_${idx}`;
+            // 嘗試配對今日的真實消費
+            const matchedReceipt = dailyReceipts.find(
+              (r) => displayStore(r).toLowerCase().includes(spot.name.toLowerCase()) ||
+                     spot.name.toLowerCase().includes(displayStore(r).toLowerCase())
+            );
+            return (
+              <div key={spotKey} className="washi-timeline-item relative mb-5 last:mb-0">
+                {/* 時間點節點 */}
+                <div className="washi-timeline-badge absolute left-[-28px] top-4 w-3.5 h-3.5 rounded-full bg-[#F8F5EE] border-[3px] border-[#E2C08D] z-10" />
+
+                <span className="washi-timeline-time block text-xs font-bold text-[#D4A359] mb-1.5 pl-3">
+                  {spot.time || '--:--'}
+                </span>
+
+                <div
+                  className="washi-timeline-card bg-white border border-amber-100/50 rounded-2xl p-3 shadow-sm hover:translate-y-[-2px] hover:border-amber-200/80 hover:shadow-md transition-all cursor-pointer"
+                  onClick={() => openMapExternal(spot.mapUrl, spot.name, spot.address)}
+                  title="點擊開啟 Google Map"
+                >
+                  {/* 1. Icon (對應 Grid Column 1: 42px) */}
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${details.bgClass}`}>
+                    {details.icon}
+                  </div>
+
+                  {/* 2. Text (對應 Grid Column 2: 1fr, 帶 min-w-0 以防 truncate 壓縮為 0px) */}
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <strong className="text-[14px] font-bold text-slate-800 truncate leading-snug">{spot.name}</strong>
+                    <span className="text-xs text-slate-400 truncate mt-0.5">
+                      {spot.note || spot.address || '日本名古屋'}
+                    </span>
+                  </div>
+
+                  {/* 3. Action (對應 Grid Column 3: auto) */}
+                  <div className="flex items-center gap-2 shrink-0 justify-end">
+                    {matchedReceipt ? (
+                      <button
+                        className="text-xs font-extrabold text-[#D94132] px-2.5 py-1 rounded-full bg-red-50 hover:bg-red-100 border border-red-200/60 hover:scale-105 active:scale-95 transition-all focus:outline-none"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpen(matchedReceipt);
+                        }}
+                        title="查看消費詳情"
+                      >
+                        ¥{fmt(matchedReceipt.total)}
+                      </button>
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-amber-50/50 flex items-center justify-center text-[#D4A359] border border-amber-100/30">
+                        <MapPin size={13} className="animate-pulse" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 展開全部按鈕 */}
+        <button
+          className="w-full text-center text-xs font-bold text-[#8C7864] flex items-center justify-center gap-1 mt-5 hover:text-slate-800 active:scale-95 transition-all border-none bg-transparent focus:outline-none"
+          type="button"
+          onClick={() => onTab('timeline')}
+        >
+          <span>查看完整行程</span>
+          <ChevronDown size={14} />
+        </button>
+      </GlassCard>
+      </Reveal>
+
+      {/* 4. 最近花費 */}
+      <Reveal className="dashboard-reveal" delay={0.12}>
+      <GlassCard as="div" className="washi-recent-card dashboard-magic-records p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-slate-800">Recent Expenses</h3>
+          <button
+            className="text-xs font-bold text-[#D94132] hover:underline border-none bg-transparent focus:outline-none"
+            type="button"
+            onClick={() => onTab('history')}
+          >
+            View all
+          </button>
+        </div>
+
+        {/* 消費列表 */}
+        <div className="flex flex-col gap-3">
+          {recentReceipts.length ? recentReceipts.slice(0, 3).map((r) => {
+            const photoSrc = safePhotoUrl(r.photoUrl, r.photoThumb);
+            return (
+              <div
+                key={r.id}
+                className="receipt-row w-full bg-white border border-slate-100 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm hover:translate-y-[-2px] transition-all cursor-pointer"
+                onClick={() => onOpen(r)}
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <VisualIcon id={r.category as any} size="md" className="shrink-0" />
+                  <div className="flex flex-col justify-center gap-0.5 min-w-0 flex-1">
+                    <strong className="flex items-center gap-1.5 min-w-0 text-slate-800 font-bold text-[14px]">
+                      <span className="truncate flex items-center gap-1 min-w-0 flex-1">
+                        <span className="truncate">{displayStore(r)}</span>
+                      </span>
+                      {photoSrc && (
+                        <button
+                          type="button"
+                          className="flex-shrink-0 flex items-center text-[#D94132]"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setViewPhoto(r); }}
+                          style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+                        >
+                          <Camera size={14} className="w-4 h-4 text-[#D94132] animate-pulse" />
+                        </button>
+                      )}
+                    </strong>
+                    <small className="text-slate-400 text-xs font-medium truncate block">
+                      {categoryById(r.category).name} · {r.date.split('-').slice(1).join('/')}
+                    </small>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[15px] font-extrabold text-slate-900">¥{fmt(r.total)}</span>
+                    <span className="text-[11px] text-slate-400 font-medium">~HK${fmt(Math.round(hkd(r.total, state)))}</span>
+                  </div>
+                  <ChevronRight size={18} className="text-slate-300" />
+                </div>
+              </div>
+            );
+          }) : (
+            <p className="text-center text-xs text-slate-400 py-6">暫時未有支出紀錄。</p>
+          )}
+        </div>
+
+        {/* 新增費用按鈕 */}
+        <button
+          className="washi-add-expense-btn flex items-center justify-center gap-1.5 w-full bg-white border border-[#D94132] text-[#D94132] font-bold py-3.5 rounded-2xl mt-4 active:scale-98 transition-all hover:bg-red-50/20 focus:outline-none"
+          type="button"
+          onClick={onManual}
+        >
+          <Plus size={18} />
+          <span>Add Expense</span>
+        </button>
+      </GlassCard>
+      </Reveal>
+
+      {/* 5. Budget Settings 折疊 Accordion */}
+      <div className="bg-white/50 backdrop-blur-md border border-white/60 rounded-[24px] overflow-hidden mb-3 shadow-sm z-10 relative">
+        <button
+          type="button"
+          className="w-full flex items-center justify-between p-4 focus:outline-none"
+          onClick={() => setIsBudgetSettingsOpen(!isBudgetSettingsOpen)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#18395C] flex items-center justify-center text-white shadow-sm shrink-0">
+              <GearIcon size={18} />
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-sm font-bold text-slate-800">預算控制</span>
+              <span className="text-xs text-slate-500">調整每日限額、匯率同提醒</span>
+            </div>
+          </div>
+          <ChevronDown size={20} className={`text-slate-400 transition-transform duration-300 ${isBudgetSettingsOpen ? 'transform rotate-180' : ''}`} />
+        </button>
+        {isBudgetSettingsOpen && (
+          <div className="px-5 pb-5 pt-2 border-t border-dashed border-slate-200/50 flex flex-col gap-3">
+            <div className="flex justify-between items-center bg-white/40 p-3 rounded-xl border border-white/40">
+              <span className="text-xs font-semibold text-[#8C7864]">每日預算上限</span>
+              <span className="text-sm font-bold text-slate-800">¥{fmt(dailyBudget)} / day</span>
+            </div>
+            <div className="flex justify-between items-center bg-white/40 p-3 rounded-xl border border-white/40">
+              <span className="text-xs font-semibold text-[#8C7864]">預計旅費</span>
+              <span className="text-sm font-bold text-slate-800">HK$ {fmt(hkd(state.budget, state))}</span>
+            </div>
+            <button
+              type="button"
+              className="w-full text-xs font-bold text-[#D94132] hover:underline text-center mt-1"
+              onClick={() => onTab('settings')}
+            >
+              前往設定調整預算 ➔
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 6. Notifications 折疊 Accordion */}
+      <div className="bg-white/50 backdrop-blur-md border border-white/60 rounded-[24px] overflow-hidden mb-6 shadow-sm z-10 relative">
+        <button
+          type="button"
+          className="w-full flex items-center justify-between p-4 focus:outline-none"
+          onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#D94132] flex items-center justify-center text-white shadow-sm shrink-0">
+              <Bell size={18} />
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-sm font-bold text-slate-800">旅程提醒</span>
+              <span className="text-xs text-slate-500">管理記帳提醒同預算提示</span>
+            </div>
+          </div>
+          <ChevronDown size={20} className={`text-slate-400 transition-transform duration-300 ${isNotificationsOpen ? 'transform rotate-180' : ''}`} />
+        </button>
+        {isNotificationsOpen && (
+          <div className="px-5 pb-5 pt-2 border-t border-dashed border-slate-200/50 flex flex-col gap-4">
+            <div className="rounded-2xl border border-white/50 bg-white/45 p-3 flex items-center justify-between gap-3">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-700">今日記帳狀態</span>
+                <span className="text-[10px] text-slate-400">今日已有 {todayReceipts.length} 筆紀錄</span>
+              </div>
+              <span className="text-xs font-black text-[#D94132]">{tripCurrencySymbol}{fmt(todayTotal)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-700">每日記帳提醒</span>
+                <span className="text-[10px] text-slate-400">每日提示你補齊旅費紀錄</span>
+              </div>
+              <Switch className="dashboard-switch" checked={dailyReminder} onCheckedChange={setDailyReminder} aria-label="每日記帳提醒" />
+            </div>
+            <div className="flex justify-between items-center">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-700">低預算提示</span>
+                <span className="text-[10px] text-slate-400">預算餘額低於 20% 時提醒</span>
+              </div>
+              <Switch className="dashboard-switch" checked={lowBudgetAlert} onCheckedChange={setLowBudgetAlert} aria-label="低預算提示" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="rounded-2xl bg-[#D94132] px-3 py-2.5 text-xs font-black text-white shadow-sm active:scale-95 transition"
+                onClick={onManual}
+              >
+                立即記帳
+              </button>
+              <button
+                type="button"
+                className="rounded-2xl border border-white/70 bg-white/70 px-3 py-2.5 text-xs font-black text-[#18395C] shadow-sm active:scale-95 transition"
+                onClick={() => onTab('history')}
+              >
+                查看紀錄
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 7. 名古屋 2026 和風 Dock Bar (懸浮底欄) */}
+      <div className="washi-floating-tabbar pointer-events-auto">
+        <button
+          className="washi-dock-item active"
+          onClick={() => onTab('dashboard')}
+        >
+          <Compass size={20} />
+          <span>Trip</span>
+        </button>
+
+        <button
+          className="washi-dock-item"
+          onClick={() => onTab('history')}
+        >
+          <BarChart3 size={20} />
+          <span>Expenses</span>
+        </button>
+
+        <div className="relative w-[60px] h-full flex items-center justify-center">
+          <button
+            className="washi-floating-add-btn"
+            onClick={onManual}
+            aria-label="Add Expense"
+          >
+            <Plus size={24} />
+          </button>
+        </div>
+
+        <button
+          className="washi-dock-item"
+          onClick={() => onTab('timeline')}
+        >
+          <CalendarDays size={20} />
+          <span>Itinerary</span>
+        </button>
+
+        <button
+          className="washi-dock-item"
+          onClick={() => onTab('settings')}
+        >
+          <MoreHorizontal size={20} />
+          <span>More</span>
+        </button>
+      </div>
+
+      {/* 行程彈窗 Sheet */}
+      {sheet && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setSheet(null)} style={{ zIndex: 99999 }}>
+          <section
+            className="modal dashboard-sheet bg-white rounded-3xl p-6 shadow-2xl max-w-[340px] w-full animate-fade-in"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+              <h2 className="text-lg font-bold text-slate-800">
+                {sheet.kind === 'spot' ? '行程詳情' : '今日紀錄'}
+              </h2>
+              <button
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"
+                type="button"
+                aria-label="關閉"
+                onClick={() => setSheet(null)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            {sheet.kind === 'spot' ? (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-[#D4A359]">
+                    <MapPin size={24} />
+                  </div>
+                  <div className="flex flex-col">
+                    <p className="text-xs font-semibold text-slate-400">{sheet.spot.time || '未設定時間'}</p>
+                    <h3 className="text-base font-bold text-slate-800">{sheet.spot.name}</h3>
+                  </div>
+                </div>
+                {sheet.spot.note && (
+                  <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    {sheet.spot.note}
+                  </p>
+                )}
+                {sheet.spot.address && (
+                  <p className="text-xs text-slate-400">
+                    地址：{sheet.spot.address}
+                  </p>
+                )}
+                <div className="flex gap-2 mt-2">
+                  <button
+                    className="flex-1 bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl text-xs text-center border border-slate-200/50 hover:bg-slate-200/50 transition-all"
+                    type="button"
+                    onClick={() => openMapExternal(sheet.spot.mapUrl, sheet.spot.name, sheet.spot.address)}
+                  >
+                    開地圖
+                  </button>
+                  <button
+                    className="flex-1 bg-[#D94132] text-white font-bold py-2.5 rounded-xl text-xs hover:bg-red-700 transition-all"
+                    type="button"
+                    onClick={() => { setSheet(null); onTab('timeline'); }}
+                  >
+                    去 Timeline 編輯
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      )}
+      {/* 建立新旅程 Wizard 彈窗 */}
+      {isWizardOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-3xl border border-white/80 shadow-2xl p-6 relative overflow-hidden flex flex-col gap-4 scale-in">
+            <div className="absolute -top-12 -right-12 w-28 h-28 bg-[#D94132]/5 rounded-full blur-xl pointer-events-none" />
+            <div className="absolute -bottom-12 -left-12 w-28 h-28 bg-[#6D5643]/5 rounded-full blur-xl pointer-events-none" />
+
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex flex-col">
+                <h3 className="text-lg font-bold text-slate-800 tracking-tight font-serif flex items-center gap-1.5">
+                  <span>⛩️</span>
+                  <span>建立新旅程</span>
+                </h3>
+                <p className="text-[10px] font-bold text-[#6D5643] tracking-widest uppercase mt-0.5">
+                  Step {wizardStep} of 4 • {wizardStep === 1 ? '基本資訊' : wizardStep === 2 ? '日期天數' : wizardStep === 3 ? '預算幣種' : '旅程詳情'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsWizardOpen(false);
+                  setWizardStep(1);
+                }}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-all border-none focus:outline-none cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex gap-1.5 h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-[#D94132] transition-all duration-300" style={{ width: `${(wizardStep / 4) * 100}%` }} />
+            </div>
+
+            <div className="flex-1 py-2 flex flex-col gap-4">
+              {wizardStep === 1 && (
+                <div className="flex flex-col gap-3.5 animate-slide-in">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500">旅程名稱 <span className="text-[#D94132]">*</span></label>
+                    <input
+                      type="text"
+                      value={newTripName}
+                      onChange={(e) => setNewTripName(e.target.value)}
+                      placeholder="例如：名古屋櫻花祭 2026"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all"
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500">目的地</label>
+                    <input
+                      type="text"
+                      value={newTripDestination}
+                      onChange={(e) => setNewTripDestination(e.target.value)}
+                      placeholder="例如：名古屋、東京、大阪"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {wizardStep === 2 && (
+                <div className="flex flex-col gap-3.5 animate-slide-in">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500">開始日期</label>
+                    <input
+                      type="date"
+                      value={newTripStartDate}
+                      onChange={(e) => setNewTripStartDate(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500">結束日期</label>
+                    <input
+                      type="date"
+                      value={newTripEndDate}
+                      onChange={(e) => setNewTripEndDate(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all"
+                    />
+                  </div>
+                  {newTripStartDate && newTripEndDate && (
+                    <div className="bg-[#6D5643]/5 border border-[#6D5643]/10 px-4 py-2.5 rounded-xl flex items-center justify-between text-xs text-[#6D5643] font-bold">
+                      <span>📅 計算天數 (Duration)</span>
+                      <span>{calculatedDuration} 天</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {wizardStep === 3 && (
+                <div className="flex flex-col gap-3.5 animate-slide-in">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500">旅程總預算 (Budget)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newTripBudget}
+                      onChange={(e) => setNewTripBudget(e.target.value)}
+                      placeholder="例如：150000"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500">主結算幣種</label>
+                    <select
+                      value={newTripCurrency}
+                      onChange={(e) => setNewTripCurrency(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all cursor-pointer"
+                    >
+                      <option value="JPY">💴 日圓 (JPY)</option>
+                      <option value="HKD">💵 港幣 (HKD)</option>
+                      <option value="USD">💵 美元 (USD)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {wizardStep === 4 && (
+                <div className="flex flex-col gap-3.5 animate-slide-in">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500">旅程詳情 (選填)</label>
+                    <textarea
+                      value={newTripDetails}
+                      onChange={(e) => setNewTripDetails(e.target.value)}
+                      placeholder="例如：名古屋城賞櫻、立山黑部雪之大谷、高山飛驒牛美食之旅..."
+                      rows={4}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all resize-none"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center border-t border-slate-100 pt-4 gap-2">
+              {wizardStep > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setWizardStep(wizardStep - 1)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all border-none focus:outline-none cursor-pointer"
+                >
+                  上一步
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaultName = `新旅程_${new Date().toLocaleDateString('zh-HK')}`;
+                    handleCreateTrip(newTripName.trim() || defaultName);
+                  }}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-all border-none focus:outline-none cursor-pointer"
+                >
+                  稍後填寫 (快速跳過)
+                </button>
+              )}
+
+              {wizardStep < 4 ? (
+                <button
+                  type="button"
+                  disabled={wizardStep === 1 && !newTripName.trim()}
+                  onClick={() => setWizardStep(wizardStep + 1)}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all border-none focus:outline-none cursor-pointer ${
+                    wizardStep === 1 && !newTripName.trim()
+                      ? 'bg-slate-300 cursor-not-allowed'
+                      : 'bg-[#6D5643] hover:bg-[#5C4837]'
+                  }`}
+                >
+                  下一步
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleCreateTrip()}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#D94132] hover:bg-red-700 transition-all border-none focus:outline-none cursor-pointer animate-pulse"
+                >
+                  完成創建 🎉
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 收據圖片大圖 Lightbox 彈窗 */}
+      {viewPhoto && <ReceiptPhotoModal receipt={viewPhoto} onClose={() => setViewPhoto(null)} />}
+    </section>
+  );
+}
+
+// 供 History.tsx 同 Timeline.tsx 共用導入的 ReceiptRow 元件 (在 Phase 27 已經 100% 修復收據圖片點擊預覽與排版擠壓)
+export function ReceiptRow({
+  state,
+  receipt,
+  onOpen,
+  onViewPhoto
+}: {
+  state: AppState;
+  receipt: Receipt;
+  onOpen: (receipt: Receipt) => void;
+  onViewPhoto?: (receipt: Receipt) => void
+}) {
+  const cat = categoryById(receipt.category);
+  const persons = getPersons(state);
+  const person = persons.find((p) => p.id === (receipt.personId || persons[0].id)) || persons[0];
+  const beneficiary = receipt.splitMode === 'private' && receipt.beneficiaryId && receipt.beneficiaryId !== receipt.personId
+    ? persons.find((p) => p.id === receipt.beneficiaryId)
+    : null;
+  const photoSrc = safePhotoUrl(receipt.photoUrl, receipt.photoThumb);
+  const mapLabel = receipt.address || receipt.regionSnapshot || receipt.region || displayStore(receipt);
+  const mapHref = (receipt.mapUrl || receipt.address)
+    ? safeExternalUrl(receipt.mapUrl, mapsUrl(displayStore(receipt), receipt.address || receipt.regionSnapshot || receipt.region))
+    : '';
+
+  return (
+    <div
+      className="receipt-row flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl mb-3 shadow-sm hover:translate-y-[-1px] transition-all cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(receipt)}
+      onKeyDown={(e) => { if (e.key === 'Enter') onOpen(receipt); }}
+    >
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <VisualIcon id={receipt.category as any} size="md" className="shrink-0" />
+        <span className="receipt-main min-w-0 flex-1 flex flex-col justify-center gap-0.5">
+          <strong className="flex items-center gap-1.5 min-w-0 text-slate-800 font-bold text-[14px] leading-snug">
+            <span className="flex items-center gap-1 min-w-0 flex-1 flex-wrap">
+              {isPendingReceipt(receipt) && <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-md shrink-0">⏳ pending</span>}
+              {beneficiary && <span className="text-[10px] bg-pink-100 text-pink-800 font-bold px-1.5 py-0.5 rounded-md shrink-0">代付</span>}
+              <span className="line-clamp-2 break-all whitespace-normal">{displayStore(receipt)}</span>
+            </span>
+            {photoSrc && (
+              <button
+                type="button"
+                className="flex-shrink-0 flex items-center text-[#D94132]"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onViewPhoto ? onViewPhoto(receipt) : window.open(photoSrc, '_blank', 'noopener,noreferrer'); }}
+                style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+              >
+                <Camera size={14} className="w-4 h-4 text-[#D94132]" />
+              </button>
+            )}
+          </strong>
+          <small className="text-slate-400 text-xs font-medium line-clamp-2 block mt-0.5 leading-tight whitespace-normal">
+            {[receipt.time, cat.name, person.name, receipt.bookingRef ? `編號 ${receipt.bookingRef}` : ''].filter(Boolean).join(' · ')}
+          </small>
+          {mapHref && (
+            <a
+              className="inline-flex w-fit items-center gap-1 text-[11px] font-bold text-[#18395C] hover:underline"
+              href={mapHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`地圖：${mapLabel}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MapPin size={12} /> 地圖：{mapLabel}
+            </a>
+          )}
+        </span>
+      </div>
+      <span className="amount flex flex-col items-end shrink-0">
+        <strong className="text-[15px] font-extrabold text-slate-900">¥{fmt(receipt.total)}</strong>
+        <small className="text-[10px] text-slate-400">HK$ {fmt(hkd(receipt.total, state))}</small>
+      </span>
+    </div>
+  );
+}

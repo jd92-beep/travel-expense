@@ -79,7 +79,7 @@ function makeEnv() {
   const appSessionSecret = ['APP', 'SESSION', 'SECRET'].join('_');
   const credentialKek = ['CREDENTIALS', 'KEK'].join('_');
   return {
-    ALLOWED_ORIGINS: ORIGIN,
+    ALLOWED_ORIGINS: `${ORIGIN},https://travel-expense-compact.vercel.app`,
     [appSessionSecret]: 'test-session-secret-with-enough-entropy',
     [credentialKek]: 'test-credential-kek-with-enough-entropy',
     CREDENTIALS_VAULT: new MemoryKv(),
@@ -260,6 +260,13 @@ async function run() {
     }), env, {});
     assert.equal(blockedOptions.status, 403);
     assert.equal(blockedOptions.headers.get('Access-Control-Allow-Origin'), null);
+
+    const compactOptions = await worker.fetch(request('/session/unlock', {
+      method: 'OPTIONS',
+      origin: 'https://travel-expense-compact.vercel.app',
+    }), env, {});
+    assert.equal(compactOptions.status, 204);
+    assert.equal(compactOptions.headers.get('Access-Control-Allow-Origin'), 'https://travel-expense-compact.vercel.app');
 
     const denied = await jsonFetch(env, '/session/unlock', {
       method: 'POST',

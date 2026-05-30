@@ -1,0 +1,1990 @@
+import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, LogOut, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload } from 'lucide-react';
+import type { Dispatch, SetStateAction } from 'react';
+import { useEffect, useRef, useState, version as reactVersion } from 'react';
+import { AccordionCard } from '../components/AccordionCard';
+import { AvatarBadge } from '../components/AvatarBadge';
+import { parseTripParagraph, testGoogleBackupConnection, testKimiConnection } from '../lib/ai';
+import { activeTrip, createTripProfile, migrateAppState, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import { AI_MODELS, DEFAULT_KIMI_PRIMARY_MODEL_ID, ITINERARY } from '../lib/constants';
+import {
+  brokerHealth,
+  disconnectPersonalNotionIntegration,
+  getPersonalNotionIntegration,
+  getConnectionStatus,
+  hasCredentialBrokerSession,
+  isAllowedCredentialBrokerUrl,
+  redactedError,
+  registerPersonalNotionIntegration,
+  rotateProviderCredential,
+  unlockCredentialBroker,
+  type CredentialProvider,
+  type ConnectionStatus,
+  type PersonalNotionStatus,
+  type ProviderStatus,
+} from '../lib/credentialBroker';
+import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
+import { computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
+import {
+  diagnoseNotionSchema,
+  diagnoseReactReceiptMapping,
+  hasDirectNotionToken,
+  migrateNotionSchema,
+  pullAll,
+  pushSettingsMeta,
+  pushTripPage,
+  testNotion,
+  type ReactMappingDiagnostics,
+} from '../lib/notion';
+import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
+import type { AppState, Person, Receipt, SyncEngineState, SyncQueueItem, TripDraft, TripProfile } from '../lib/types';
+import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
+import { clearDeviceTrust } from '../security/deviceTrust';
+import { clearTrustedDevice } from '../security/trustedDevice';
+import { GlassCard, StatefulActionButton, StatusPill, Toast } from '../components/ui';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
+import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
+
+const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
+const MAX_SAFE_AMOUNT = 1_000_000_000;
+
+function clampFinite(value: unknown, fallback: number, min = 0, max = MAX_SAFE_AMOUNT): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function validateBackupSchema(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const p = payload as Record<string, unknown>;
+
+  if (p.receipts !== undefined && !Array.isArray(p.receipts)) return false;
+  if (p.persons !== undefined) {
+    if (!Array.isArray(p.persons)) return false;
+    for (const item of p.persons) {
+      if (!item || typeof item !== 'object') return false;
+      const person = item as Record<string, unknown>;
+      if (typeof person.id !== 'string' || typeof person.name !== 'string') return false;
+    }
+  }
+  if (p.trips !== undefined) {
+    if (!Array.isArray(p.trips)) return false;
+    for (const item of p.trips) {
+      if (!item || typeof item !== 'object') return false;
+      const trip = item as Record<string, unknown>;
+      if (typeof trip.id !== 'string' || typeof trip.name !== 'string') return false;
+    }
+  }
+  if (p.shareRatios !== undefined) {
+    if (typeof p.shareRatios !== 'object' || p.shareRatios === null) return false;
+    for (const key of Object.keys(p.shareRatios)) {
+      const val = (p.shareRatios as Record<string, unknown>)[key];
+      if (val !== undefined && typeof val !== 'number') return false;
+    }
+  }
+  return true;
+}
+
+function sanitizeImportedReceipts(input: unknown, fallbackDate: string, allowedTripIds: Set<string>, fallbackTripId?: string): Receipt[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter((receipt): receipt is Partial<Receipt> => !!receipt && typeof receipt === 'object')
+    .filter((receipt) => typeof receipt.id === 'string' && typeof receipt.store === 'string')
+    .map((receipt) => {
+      const originalTripId = typeof receipt.tripId === 'string' ? receipt.tripId : '';
+      const tripIdIsAllowed = !!originalTripId && allowedTripIds.has(originalTripId);
+      const nextTripId = tripIdIsAllowed ? originalTripId : fallbackTripId;
+      const {
+        supabaseId: _supabaseId,
+        notionPageId: _notionPageId,
+        notionDb: _notionDb,
+        notionFileUploadId: _notionFileUploadId,
+        sourceId: _sourceId,
+        syncStatus: _syncStatus,
+        tripId: _tripId,
+        tripVersion: _tripVersion,
+        tripDayId: _tripDayId,
+        _photoSyncedToNotion,
+        _photoBodyBlockAdded,
+        ...localReceipt
+      } = receipt as Partial<Receipt> & { notionDb?: unknown };
+      const totalNum = Number(receipt.total);
+      const total = Number.isFinite(totalNum) && totalNum >= 0 ? Math.min(MAX_SAFE_AMOUNT, totalNum) : 0;
+
+      const origNum = receipt.originalAmount !== undefined ? Number(receipt.originalAmount) : total;
+      const originalAmount = Number.isFinite(origNum) && origNum >= 0 ? Math.min(MAX_SAFE_AMOUNT, origNum) : total;
+
+      return {
+        ...localReceipt,
+        id: String(receipt.id),
+        store: String(receipt.store),
+        total,
+        originalAmount,
+        tripId: nextTripId,
+        tripVersion: tripIdIsAllowed ? receipt.tripVersion : undefined,
+        tripDayId: tripIdIsAllowed ? receipt.tripDayId : undefined,
+        date: typeof receipt.date === 'string' && receipt.date ? receipt.date : fallbackDate,
+        createdAt: Number.isFinite(Number(receipt.createdAt)) ? Number(receipt.createdAt) : Date.now(),
+        updatedAt: Number.isFinite(Number(receipt.updatedAt)) ? Number(receipt.updatedAt) : undefined,
+      } as Receipt;
+    });
+}
+
+function sanitizeImportedTrips(input: unknown): TripProfile[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const trips = input
+    .filter((trip): trip is Partial<TripProfile> => !!trip && typeof trip === 'object')
+    .filter((trip) => typeof trip.id === 'string' && typeof trip.name === 'string')
+    .map((trip) => {
+      const {
+        supabaseId: _supabaseId,
+        notionPageId: _notionPageId,
+        sourceId: _sourceId,
+        notionDb: _notionDb,
+        ...localTrip
+      } = trip;
+      return localTrip as TripProfile;
+    });
+  return trips.length ? trips : undefined;
+}
+
+export function Settings({
+  state,
+  setState,
+  updateState,
+  onReset,
+  syncState,
+  onPull,
+  onPush,
+  onPushSettings,
+  cloudSyncAvailable = false,
+  storageScope = 'local',
+  changeTab,
+  updatePassword,
+  userEmail = null,
+  onSignOut,
+  onClearDeviceData,
+}: {
+  state: AppState;
+  setState: Dispatch<SetStateAction<AppState>>;
+  updateState: (patch: Partial<AppState>) => void;
+  onReset: () => void;
+  syncState?: SyncEngineState;
+  onPull?: () => Promise<void>;
+  onPush?: () => Promise<void>;
+  onPushSettings?: () => Promise<void>;
+  cloudSyncAvailable?: boolean;
+  storageScope?: string;
+  changeTab?: (tabId: any) => void;
+  updatePassword?: (password: string) => Promise<void>;
+  userEmail?: string | null;
+  onSignOut?: () => Promise<void> | void;
+  onClearDeviceData?: () => Promise<void> | void;
+}) {
+  const persons = getPersons(state);
+  const currentTrip = activeTrip(state);
+  const trips = state.trips?.length ? state.trips : [currentTrip];
+  const activeTripSettlementState = {
+    ...state,
+    receipts: scopedReceiptsForTrip(state, currentTrip),
+  };
+  const settlement = computeSettlements(activeTripSettlementState);
+  const ratioTotal = persons.reduce((sum, person) => sum + Math.max(0, Number(state.shareRatios[person.id]) || 0), 0);
+  const [status, setStatus] = useState('');
+  const [busy, setBusy] = useState('');
+  const [newPersonName, setNewPersonName] = useState('');
+  const [tripParagraph, setTripParagraph] = useState('');
+  const [tripDraft, setTripDraft] = useState<TripDraft | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
+  const [rotationProvider, setRotationProvider] = useState<CredentialProvider>('notion');
+  const [rotationSecret, setRotationSecret] = useState('');
+  const [rotationAdmin, setRotationAdmin] = useState('');
+  const [rotationDb, setRotationDb] = useState(state.notionDb || '');
+  const [brokerPassword, setBrokerPassword] = useState('');
+  const [directNotionToken, setDirectNotionToken] = useState(getDirectNotionToken);
+  const [personalNotionToken, setPersonalNotionToken] = useState('');
+  const [personalNotionDb, setPersonalNotionDb] = useState(state.notionDb || '');
+  const [personalNotionStatus, setPersonalNotionStatus] = useState<PersonalNotionStatus | null>(null);
+  const [schemaDiag, setSchemaDiag] = useState<Array<{ name: string; type: string; mapped: string | null }> | null>(null);
+  const [mappingDiag, setMappingDiag] = useState<ReactMappingDiagnostics | null>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);
+
+  const handleUpdatePassword = async () => {
+    if (!updatePassword || newPasswordInput.length < 6) return;
+    setBusy('設定密碼');
+    setStatus('');
+    try {
+      await updatePassword(newPasswordInput);
+      setStatus('成功喺雲端為你嘅帳號設定密碼！以後喺新裝置可以直接用呢個密碼登入 🔑');
+      setNewPasswordInput('');
+    } catch (err) {
+      setStatus(`設定密碼失敗：${redactedError(err)}`);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleSupabaseSignOut = async () => {
+    if (!onSignOut) return;
+    setBusy('登出 Supabase');
+    setStatus('');
+    try {
+      await onSignOut();
+    } catch (err) {
+      setStatus(`登出失敗：${redactedError(err)}`);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleClearDeviceAndSignOut = async () => {
+    if (!onClearDeviceData || !onSignOut) return;
+    setBusy('清除裝置資料');
+    setStatus('');
+    try {
+      await onClearDeviceData();
+      await onSignOut();
+      setShowClearDeviceConfirm(false);
+    } catch (err) {
+      setStatus(`清除裝置資料失敗：${redactedError(err)}`);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const itineraryInput = useRef<HTMLInputElement | null>(null);
+  const backupInput = useRef<HTMLInputElement | null>(null);
+  const brokerReady = hasCredentialBrokerSession(state);
+  const notionMirrorReady = canUseNotionMirror(state, cloudSyncAvailable, userEmail);
+  const userScopedNotionDb = hasUserScopedNotionDatabase(state);
+  const publicSupabaseOnly = cloudSyncAvailable && !notionMirrorReady;
+  const resolvedNotionDb = configuredNotionDatabaseId(state);
+  const notionMirrorDbLabel = notionMirrorReady ? resolvedNotionDb : 'Personal Notion 未連接';
+  const notionActionDisabled = !!busy || publicSupabaseOnly;
+  const directTokenEnabled = import.meta.env.DEV;
+  const buildLabel = `${import.meta.env.MODE} · React ${reactVersion}`;
+
+  // Local state for Trip Manager
+  const [managerTripId, setManagerTripId] = useState(currentTrip.id);
+  const managedTrip = trips.find(t => t.id === managerTripId) || currentTrip;
+
+  const [mgrName, setMgrName] = useState(managedTrip.name);
+  const [mgrDest, setMgrDest] = useState(managedTrip.destinationSummary || '');
+  const [mgrStart, setMgrStart] = useState(managedTrip.startDate || '');
+  const [mgrEnd, setMgrEnd] = useState(managedTrip.endDate || '');
+  const [mgrBudget, setMgrBudget] = useState(String(managedTrip.budget || 0));
+  const [mgrCurrency, setMgrCurrency] = useState(managedTrip.currencies.find(c => c !== 'HKD') || 'JPY');
+  const [mgrArchived, setMgrArchived] = useState(!!managedTrip.archived);
+  const managedTripVersionKey = `${managedTrip.id}:${managedTrip.updatedAt || 0}:${managedTrip.version || 0}`;
+  const [newManagedTripName, setNewManagedTripName] = useState('');
+  const [newManagedTripDest, setNewManagedTripDest] = useState('');
+  const [newManagedTripStart, setNewManagedTripStart] = useState('');
+  const [newManagedTripEnd, setNewManagedTripEnd] = useState('');
+  const [newManagedTripBudget, setNewManagedTripBudget] = useState('');
+  const [newManagedTripCurrency, setNewManagedTripCurrency] = useState('JPY');
+
+  // Sync state values when managed trip changes
+  const handleSelectManagedTrip = (tripId: string) => {
+    const target = trips.find(t => t.id === tripId);
+    if (!target) return;
+    setManagerTripId(tripId);
+    setMgrName(target.name);
+    setMgrDest(target.destinationSummary || '');
+    setMgrStart(target.startDate || '');
+    setMgrEnd(target.endDate || '');
+    setMgrBudget(String(target.budget || 0));
+    setMgrCurrency(target.currencies.find(c => c !== 'HKD') || 'JPY');
+    setMgrArchived(!!target.archived);
+  };
+
+  // Keep managed trip in sync when active trip changes
+  useEffect(() => {
+    handleSelectManagedTrip(currentTrip.id);
+  }, [currentTrip.id]);
+
+  // Keep form fields updated if the underlying trip in the list is updated
+  useEffect(() => {
+    const target = trips.find(t => t.id === managerTripId);
+    if (target) {
+      setMgrName(target.name);
+      setMgrDest(target.destinationSummary || '');
+      setMgrStart(target.startDate || '');
+      setMgrEnd(target.endDate || '');
+      setMgrBudget(String(target.budget || 0));
+      setMgrCurrency(target.currencies.find(c => c !== 'HKD') || 'JPY');
+      setMgrArchived(!!target.archived);
+    }
+  }, [managerTripId, managedTripVersionKey]);
+
+  useEffect(() => {
+    setPersonalNotionDb(state.notionDb || '');
+  }, [state.notionDb]);
+
+  const [clickCount, setClickCount] = useState(0);
+  const [showStressPanel, setShowStressPanel] = useState(() => localStorage.getItem('__stress_panel_unlocked') === 'true');
+  const [stressLatency, setStressLatency] = useState(() => localStorage.getItem('__stress_latency') === 'true');
+  const [stressFault, setStressFault] = useState(() => localStorage.getItem('__stress_fault') === 'true');
+
+  const handleVersionClick = () => {
+    setClickCount((prev) => {
+      const next = prev + 1;
+      if (next >= 5) {
+        setShowStressPanel(true);
+        localStorage.setItem('__stress_panel_unlocked', 'true');
+        setStatus('🔓 已成功解鎖「開發者極限壓力與故障測試面板」！🚀✨');
+        return 0;
+      }
+      return next;
+    });
+  };
+
+  const toggleStressLatency = (val: boolean) => {
+    localStorage.setItem('__stress_latency', String(val));
+    setStressLatency(val);
+    setStatus(val ? '⏳ 已開啟 5 秒同步網絡延遲模擬' : '⚡ 已關閉同步網絡延遲模擬');
+  };
+
+  const toggleStressFault = (val: boolean) => {
+    localStorage.setItem('__stress_fault', String(val));
+    setStressFault(val);
+    setStatus(val ? '⚠️ 已開啟 Notion 同步 500 伺服器故障模擬' : '✅ 已關閉 Notion 同步故障模擬');
+  };
+
+  const handleMassInject = () => {
+    void run('瞬間導入 1000 筆名古屋消費', async () => {
+      const mockReceipts = generateMockReceipts(1000);
+      setState((prev) => migrateAppState({
+        ...prev,
+        receipts: [...prev.receipts, ...mockReceipts],
+      }));
+      return '🎉 成功瞬間導入 1,000 筆 Nagoya 消費數據！請去 History 或 Dashboard 滾動驗收！';
+    });
+  };
+
+  const handleTabSwitchTest = () => {
+    if (!changeTab) {
+      setStatus('⚠️ changeTab prop 缺失，無法啟動切換壓力測試');
+      return new Promise<string>((resolve) => resolve('changeTab is missing'));
+    }
+    return run('自動高頻 Tab 切換壓力測試', async () => {
+      return new Promise((resolve) => {
+        simulateTabSwitching(changeTab, () => {
+          resolve('🎉 自動 Tab 極速切換壓力測試完成！WebGL 內存已強制回收，React 狀態穩定！');
+        });
+      });
+    });
+  };
+
+  async function run(label: string, fn: () => Promise<string>) {
+    setBusy(label);
+    setStatus(`${label}…`);
+    try {
+      setStatus(await fn());
+    } catch (error) {
+      setStatus(`${label}失敗：${redactedError(error)}`);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  function statusFor(provider: CredentialProvider): ProviderStatus {
+    return connectionStatus?.providers.find((item) => item.provider === provider) || { provider, status: 'unknown' };
+  }
+
+  function statusPill(provider: CredentialProvider) {
+    const item = statusFor(provider);
+    const ok = item.status === 'connected';
+    return <span className={`pill ${ok ? 'ok' : item.status === 'missing' ? '' : 'hot'}`}>{ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {provider}: {item.status}</span>;
+  }
+
+  async function refreshCredentialStatus() {
+    await run('Credential status', async () => {
+      const [health, statusResult] = await Promise.all([
+        brokerHealth(state),
+        getConnectionStatus(state),
+      ]);
+      setConnectionStatus(statusResult);
+      return `${health} · ${statusResult.providers.map((item) => `${item.provider}:${item.status}`).join(' · ')}`;
+    });
+  }
+
+  async function connectCredentialBroker() {
+    const password = brokerPassword.trim();
+    if (!password) {
+      setStatus('請輸入 Credential Broker password');
+      return;
+    }
+    try {
+      await run('Connect broker', async () => {
+        const session = await unlockCredentialBroker(
+          password,
+          { credentialBrokerUrl: state.credentialBrokerUrl },
+          undefined,
+          { persist: !cloudSyncAvailable },
+        );
+        updateState({
+          credentialSession: session.credentialSession,
+          credentialSessionExpiresAt: session.credentialSessionExpiresAt,
+        });
+        if (cloudSyncAvailable) clearCredentialSession();
+        return cloudSyncAvailable
+          ? 'Broker session 已連上；今次 Supabase session 可使用 AI，並可同步 mirror 到 Notion。'
+          : 'Broker session 已連上。';
+      });
+    } finally {
+      setBrokerPassword('');
+    }
+  }
+
+  async function rotateCredential() {
+    try {
+      if (!requireBroker('Rotate credential')) return;
+      if (!rotationSecret.trim() || !rotationAdmin.trim()) {
+        setStatus('請輸入新 credential 同 admin maintenance passphrase');
+        return;
+      }
+      await run(`Rotate ${rotationProvider}`, async () => {
+        const statusResult = await rotateProviderCredential(
+          state,
+          rotationProvider,
+          rotationSecret,
+          rotationAdmin,
+          rotationProvider === 'notion' ? { databaseId: rotationDb.trim() || state.notionDb } : {},
+        );
+        setConnectionStatus((prev) => ({
+          broker: prev?.broker || 'online',
+          providers: [
+            ...(prev?.providers || []).filter((item) => item.provider !== rotationProvider),
+            statusResult,
+          ],
+        }));
+        return `${rotationProvider} 已安全更新：${statusResult.status}`;
+      });
+    } finally {
+      setRotationSecret('');
+      setRotationAdmin('');
+    }
+  }
+
+  function applyPersonalNotionConnection(databaseId: string, connected: boolean) {
+    const cleanDb = databaseId.trim();
+    setState((prev) => {
+      const now = Date.now();
+      const trips = (prev.trips || []).map((trip) => {
+        const { notionDb: _notionDb, ...localTrip } = trip;
+        return { ...localTrip, updatedAt: trip.updatedAt };
+      });
+      const latest = new Map<string, SyncQueueItem>();
+      const settingsItem: SyncQueueItem = {
+        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+        type: 'settings',
+        entityId: 'app-settings',
+        op: 'upsert',
+        status: 'queued',
+        attempts: 0,
+        createdAt: now,
+        updatedAt: now,
+        payload: { updatedAt: now },
+      };
+      for (const item of [...(prev.syncQueue || []), settingsItem]) {
+        if (item.status === 'synced') continue;
+        latest.set(`${item.type}:${item.entityId}`, item);
+      }
+      return migrateAppState({
+        ...prev,
+        notionDb: cleanDb || prev.notionDb,
+        personalNotionConnected: connected,
+        trips,
+        settingsUpdatedAt: now,
+        syncQueue: [...latest.values()].slice(-500),
+      });
+    });
+  }
+
+  async function refreshPersonalNotion() {
+    if (!cloudSyncAvailable) {
+      setStatus('Personal Notion 需要先登入 Supabase。');
+      return;
+    }
+    await run('Personal Notion status', async () => {
+      const result = await getPersonalNotionIntegration(state);
+      setPersonalNotionStatus(result);
+      if (result.databaseId) {
+        setPersonalNotionDb(result.databaseId);
+        applyPersonalNotionConnection(result.databaseId, result.status === 'connected');
+      } else {
+        applyPersonalNotionConnection('', result.status === 'connected');
+      }
+      return result.status === 'connected'
+        ? `Personal Notion 已連接：${result.databaseId || 'database ready'}`
+        : `Personal Notion 狀態：${result.status}`;
+    });
+  }
+
+  async function connectPersonalNotion() {
+    if (!cloudSyncAvailable) {
+      setStatus('請先登入 Supabase，先可以綁定你自己嘅 Notion notebook。');
+      return;
+    }
+    const secret = personalNotionToken.trim();
+    const databaseId = personalNotionDb.trim();
+    if (!secret || !databaseId) {
+      setStatus('請輸入你自己嘅 Notion connector secret 同 database ID。');
+      return;
+    }
+    try {
+      await run('Connect Personal Notion', async () => {
+        const result = await registerPersonalNotionIntegration(state, secret, databaseId);
+        setPersonalNotionStatus(result);
+        applyPersonalNotionConnection(result.databaseId || databaseId, result.status === 'connected');
+        return `Personal Notion 已安全連接：${result.databaseId || databaseId}`;
+      });
+    } finally {
+      setPersonalNotionToken('');
+    }
+  }
+
+  async function disconnectPersonalNotion() {
+    if (!cloudSyncAvailable) {
+      setStatus('請先登入 Supabase。');
+      return;
+    }
+    await run('Disconnect Personal Notion', async () => {
+      const result = await disconnectPersonalNotionIntegration(state);
+      setPersonalNotionStatus(result);
+      applyPersonalNotionConnection('', false);
+      return '已斷開 Personal Notion mirror；Supabase 資料仍會保留。';
+    });
+  }
+
+  async function refreshRate() {
+    await run('更新匯率', async () => {
+      const snapshot = await fetchLiveCurrencySnapshot();
+      updateState({ rate: Number(snapshot.rates.JPY.toFixed(4)) });
+      return `已更新：1 HKD = ${snapshot.rates.JPY.toFixed(2)} JPY（${snapshot.source}）`;
+    });
+  }
+
+  function requireBroker(label: string, allowCloudSync = false) {
+    if (brokerReady || hasDirectNotionToken() || (allowCloudSync && cloudSyncAvailable)) return true;
+    setStatus(`${label} 已安全暫停：Credential Broker session 未連線；未送出任何 provider key/token。`);
+    return false;
+  }
+
+  function requireNotionMirror(label: string) {
+    if (notionMirrorReady) return true;
+    const message = notionMirrorGuardMessage(state, cloudSyncAvailable, userEmail);
+    setStatus(`${label} 已安全暫停：${message || 'Notion mirror 未設定。'}`);
+    return false;
+  }
+
+  function updatePerson(id: string, patch: Partial<Person>) {
+    updateState({ persons: persons.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
+  }
+
+  function addPerson() {
+    const name = newPersonName.trim();
+    if (!name) {
+      setStatus('請先輸入旅伴名字');
+      return;
+    }
+    const next: Person = {
+      id: `p_${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 6)}`,
+      name,
+      emoji: '旅',
+      color: COLORS[persons.length % COLORS.length],
+    };
+    updateState({ persons: [...persons, next], shareRatios: { ...state.shareRatios, [next.id]: 1 } });
+    setNewPersonName('');
+    setStatus(`已新增旅伴：${next.name}`);
+  }
+
+  function removePerson(id: string) {
+    if (persons.length <= 1) {
+      setStatus('最少要保留一位旅伴');
+      return;
+    }
+    const fallback = persons.find((p) => p.id !== id) || persons[0];
+    const shareRatios = { ...state.shareRatios };
+    delete shareRatios[id];
+    setState((prev) => ({
+      ...prev,
+      persons: persons.filter((p) => p.id !== id),
+      shareRatios,
+      receipts: prev.receipts.map((r) => ({
+        ...r,
+        personId: r.personId === id ? fallback.id : r.personId,
+        beneficiaryId: r.beneficiaryId === id ? undefined : r.beneficiaryId,
+      })),
+    }));
+    setStatus('已移除旅伴，相關 receipt 已轉到第一位旅伴');
+  }
+
+  function resetShareRatios() {
+    updateState({ shareRatios: Object.fromEntries(persons.map((person) => [person.id, 1])) });
+    setStatus('已重設為均分比例');
+  }
+
+  function saveLocalSettingsNow() {
+    saveState(migrateAppState(state), storageScope);
+    setStatus('本機設定已保存；provider credentials/session 已自動排除。');
+  }
+
+  async function pullPendingEmail() {
+    if (!requireNotionMirror('Pull pending email')) return;
+    await run('Pull pending email', async () => {
+      const pulled = await pullAll(state);
+      const pending = pulled.filter(isPendingReceipt);
+      if (pending.length) {
+        setState((prev) => {
+          const map = new Map(prev.receipts.map((receipt) => [receipt.id, receipt]));
+          for (const receipt of pending) map.set(receipt.id, { ...map.get(receipt.id), ...receipt });
+          return migrateAppState({ ...prev, receipts: [...map.values()] });
+        });
+      }
+      return pending.length ? `已拉取 ${pending.length} 筆待確認 email 紀錄` : `已同步檢查 ${pulled.length} 筆，暫時無待確認 email`;
+    });
+  }
+
+  function selectTrip(tripId: string) {
+    const trip = trips.find((item) => item.id === tripId);
+    if (!trip) return;
+    if (trip.archived) {
+      setStatus('呢個旅程已封存；請先改回「進行中」並儲存，然後再切換為 active。');
+      return;
+    }
+    const selectedTrip = { ...trip, archived: false, active: true, updatedAt: Date.now() };
+    updateState({
+      activeTripId: selectedTrip.id,
+      trips: trips.map((item) => item.id === selectedTrip.id ? selectedTrip : { ...item, active: false }),
+      tripName: selectedTrip.name,
+      tripDateRange: { start: selectedTrip.startDate, end: selectedTrip.endDate },
+      tripCurrency: selectedTrip.currencies.find((code) => code !== 'HKD') || state.tripCurrency,
+      budget: selectedTrip.budget ?? state.budget,
+      customItinerary: selectedTrip.itinerary,
+    });
+  }
+
+  function applyTripDraft(draft: TripDraft) {
+    setState((prev) => {
+      const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
+      const exists = prevTrips.some((trip) => trip.id === draft.trip.id);
+      const tripsNext = exists
+        ? prevTrips.map((trip) => trip.id === draft.trip.id ? { ...draft.trip, active: true, archived: false } : { ...trip, active: false })
+        : [...prevTrips.map((trip) => ({ ...trip, active: false })), { ...draft.trip, active: true, archived: false }];
+      return migrateAppState({
+        ...prev,
+        activeTripId: draft.trip.id,
+        trips: tripsNext,
+        tripName: draft.trip.name,
+        tripDateRange: { start: draft.trip.startDate, end: draft.trip.endDate },
+        tripCurrency: draft.trip.currencies.find((code) => code !== 'HKD') || prev.tripCurrency,
+        customItinerary: draft.trip.itinerary,
+        syncQueue: [...(prev.syncQueue || []), {
+          id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          type: 'trip',
+          entityId: draft.trip.id,
+          op: exists ? 'update' : 'create',
+          status: 'queued',
+          attempts: 0,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          payload: {
+            sourceId: draft.trip.sourceId || `trip_${draft.trip.id}`,
+            updatedAt: draft.trip.updatedAt,
+          },
+        }].slice(-500),
+      });
+    });
+    setTripDraft(null);
+    setStatus(`已套用旅程：${draft.trip.name}`);
+  }
+
+  function toggleArchiveTrip(trip: TripProfile) {
+    setState((prev) => {
+      const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
+      const willArchive = !trip.archived;
+      if (willArchive && prevTrips.filter((item) => item.id !== trip.id && !item.archived).length === 0) {
+        setStatus('最少要保留一個未封存旅程');
+        return prev;
+      }
+      const updated = prevTrips.map((item) => item.id === trip.id ? { ...item, archived: willArchive, active: false, updatedAt: Date.now() } : item);
+      const nextActive = willArchive
+        ? updated.find((item) => !item.archived && item.id !== trip.id) || updated.find((item) => !item.archived)
+        : updated.find((item) => item.id === trip.id);
+      const tripsNext = updated.map((item) => ({ ...item, active: item.id === nextActive?.id }));
+      if (!nextActive) return { ...prev, trips: tripsNext };
+      return {
+        ...prev,
+        trips: tripsNext,
+        activeTripId: nextActive.id,
+        tripName: nextActive.name,
+        tripDateRange: { start: nextActive.startDate, end: nextActive.endDate },
+        tripCurrency: nextActive.currencies.find((code) => code !== 'HKD') || prev.tripCurrency,
+        customItinerary: nextActive.itinerary,
+      };
+    });
+  }
+
+  function updateCurrentTrip(patch: Partial<TripProfile>) {
+    const nextTrip = { ...currentTrip, ...patch, version: currentTrip.version + 1, updatedAt: Date.now() };
+    updateState({
+      trips: trips.map((trip) => trip.id === currentTrip.id ? nextTrip : trip),
+      tripName: nextTrip.name,
+      tripDateRange: { start: nextTrip.startDate, end: nextTrip.endDate },
+      tripCurrency: nextTrip.currencies.find((code) => code !== 'HKD') || state.tripCurrency,
+      customItinerary: nextTrip.itinerary,
+    });
+  }
+
+  function handleSaveManagedTrip() {
+    const target = trips.find(t => t.id === managerTripId);
+    if (!target) return;
+
+    if (mgrArchived) {
+      const activeTripsLeft = trips.filter(t => !t.archived && t.id !== managerTripId);
+      if (activeTripsLeft.length === 0) {
+        setStatus('⚠️ 最少要保留一個未封存旅程，唔可以封存呢個唯一嘅 active 旅程！');
+        return;
+      }
+    }
+
+    const nextBudget = clampFinite(mgrBudget, 0);
+    const nextTrip: TripProfile = {
+      ...target,
+      name: mgrName.trim() || target.name,
+      destinationSummary: mgrDest.trim() || target.destinationSummary || '',
+      startDate: mgrStart || target.startDate,
+      endDate: mgrEnd || target.endDate,
+      budget: nextBudget,
+      currencies: Array.from(new Set(['HKD', mgrCurrency])),
+      archived: mgrArchived,
+      version: target.version + 1,
+      updatedAt: Date.now(),
+    };
+
+    setState((prev) => {
+      const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
+      const updatedTrips = prevTrips.map((t) => t.id === managerTripId ? nextTrip : t);
+
+      const isActive = managerTripId === prev.activeTripId;
+      const patch: Partial<AppState> = {
+        trips: updatedTrips,
+      };
+
+      if (isActive) {
+        patch.tripName = nextTrip.name;
+        patch.tripDateRange = { start: nextTrip.startDate, end: nextTrip.endDate };
+        patch.tripCurrency = mgrCurrency;
+        patch.budget = nextBudget;
+      }
+
+      // 如果封存了當前的 active trip，且還有其他非封存 trip，就切換過去
+      if (isActive && mgrArchived) {
+        const nextActive = updatedTrips.find((t) => !t.archived && t.id !== managerTripId) || updatedTrips.find((t) => !t.archived);
+        if (nextActive) {
+          patch.activeTripId = nextActive.id;
+          patch.tripName = nextActive.name;
+          patch.tripDateRange = { start: nextActive.startDate, end: nextActive.endDate };
+          patch.tripCurrency = nextActive.currencies.find((c) => c !== 'HKD') || prev.tripCurrency;
+          patch.budget = nextActive.budget || 0;
+          patch.customItinerary = nextActive.itinerary;
+          patch.trips = updatedTrips.map((t) => ({ ...t, active: t.id === nextActive.id }));
+        }
+      }
+
+      const nextSyncQueue = [
+        ...(prev.syncQueue || []),
+        {
+          id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          type: 'trip' as const,
+          entityId: managerTripId,
+          op: 'update' as const,
+          status: 'queued' as const,
+          attempts: 0,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          payload: {
+            sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
+            updatedAt: nextTrip.updatedAt,
+          },
+        }
+      ].slice(-500);
+
+      patch.syncQueue = nextSyncQueue;
+
+      return migrateAppState({
+        ...prev,
+        ...patch,
+      });
+    });
+
+    setStatus(`🎉 成功儲存旅程「${nextTrip.name}」嘅修改，並已加入 Notion 同步隊列！`);
+  }
+
+  function handleDeleteManagedTrip() {
+    const target = trips.find(t => t.id === managerTripId);
+    if (!target) return;
+
+    const remainingTrips = trips.filter(t => t.id !== managerTripId);
+    if (remainingTrips.length === 0) {
+      setStatus('⚠️ 最少要保留一個旅程，唔可以刪除唯一嘅旅程！');
+      setShowDeleteConfirm(false);
+      return;
+    }
+
+    setState((prev) => {
+      const updatedTrips = (prev.trips || []).filter((t) => t.id !== managerTripId);
+      const deletedReceipts = (prev.receipts || []).filter((r) => r.tripId === managerTripId);
+      const remainingReceipts = (prev.receipts || []).filter((r) => r.tripId !== managerTripId);
+
+      const isActive = managerTripId === prev.activeTripId;
+      const patch: Partial<AppState> = {
+        trips: updatedTrips,
+        receipts: remainingReceipts,
+      };
+
+      if (isActive) {
+        const nextActive = updatedTrips.find((t) => !t.archived) || updatedTrips[0];
+        if (nextActive) {
+          patch.activeTripId = nextActive.id;
+          patch.tripName = nextActive.name;
+          patch.tripDateRange = { start: nextActive.startDate, end: nextActive.endDate };
+          patch.tripCurrency = nextActive.currencies.find((c) => c !== 'HKD') || prev.tripCurrency;
+          patch.budget = nextActive.budget || 0;
+          patch.customItinerary = nextActive.itinerary;
+          patch.trips = updatedTrips.map((t) => ({ ...t, active: t.id === nextActive.id }));
+        }
+      }
+
+      const currentQueue = prev.syncQueue || [];
+      const deleteQueueItems = deletedReceipts.map((r) => ({
+        id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        type: 'delete-receipt' as const,
+        entityId: r.id,
+        op: 'delete' as const,
+        status: 'queued' as const,
+        attempts: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        payload: {
+          notionPageId: r.notionPageId,
+          supabaseId: r.supabaseId,
+          tripId: r.tripId,
+          sourceId: r.sourceId || r.id,
+        },
+      }));
+
+      const deleteTripQueueItem = {
+        id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        type: 'trip' as const,
+        entityId: managerTripId,
+        op: 'update' as const,
+        status: 'queued' as const,
+        attempts: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        payload: {
+          sourceId: target.sourceId || `trip_${target.id}`,
+          updatedAt: Date.now(),
+        },
+      };
+
+      patch.syncQueue = [...currentQueue, ...deleteQueueItems, deleteTripQueueItem].slice(-500);
+
+      return migrateAppState({
+        ...prev,
+        ...patch,
+      });
+    });
+
+    const nextSelectable = remainingTrips.find((t) => !t.archived) || remainingTrips[0];
+    if (nextSelectable) {
+      handleSelectManagedTrip(nextSelectable.id);
+    }
+
+    setShowDeleteConfirm(false);
+    setStatus(`🎉 成功刪除旅程「${target.name}」同佢關聯嘅所有消費紀錄，同步已排隊！`);
+  }
+
+  function createManagedTrip() {
+    const name = newManagedTripName.trim();
+    if (!name) {
+      setStatus('請先輸入新旅程名稱');
+      return;
+    }
+    const now = Date.now();
+    const newTrip = createTripProfile({
+      name,
+      destinationSummary: newManagedTripDest || 'Japan',
+      startDate: newManagedTripStart,
+      endDate: newManagedTripEnd,
+      budget: newManagedTripBudget.trim() ? Number(newManagedTripBudget) : 150000,
+      currency: newManagedTripCurrency,
+      now,
+    });
+    const queueItem: SyncQueueItem = {
+      id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+      type: 'trip',
+      entityId: newTrip.id,
+      op: 'create',
+      status: 'queued',
+      attempts: 0,
+      createdAt: now,
+      updatedAt: now,
+      payload: {
+        sourceId: newTrip.sourceId,
+        updatedAt: newTrip.updatedAt,
+      },
+    };
+    setState((prev) => {
+      const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
+      const latest = new Map<string, SyncQueueItem>();
+      for (const item of [...(prev.syncQueue || []), queueItem]) {
+        if (item.status === 'synced') continue;
+        latest.set(`${item.type}:${item.entityId}`, item);
+      }
+      return migrateAppState({
+        ...prev,
+        trips: [...prevTrips.map((trip) => ({ ...trip, active: false })), newTrip],
+        activeTripId: newTrip.id,
+        tripName: newTrip.name,
+        tripDateRange: { start: newTrip.startDate, end: newTrip.endDate },
+        tripCurrency: newTrip.currencies.find((code) => code !== 'HKD') || prev.tripCurrency,
+        budget: newTrip.budget || 0,
+        customItinerary: newTrip.itinerary,
+        syncQueue: [...latest.values()].slice(-500),
+      });
+    });
+    setManagerTripId(newTrip.id);
+    setMgrName(newTrip.name);
+    setMgrDest(newTrip.destinationSummary || '');
+    setMgrStart(newTrip.startDate || '');
+    setMgrEnd(newTrip.endDate || '');
+    setMgrBudget(String(newTrip.budget || 0));
+    setMgrCurrency(newTrip.currencies.find((c) => c !== 'HKD') || 'JPY');
+    setMgrArchived(false);
+    setNewManagedTripName('');
+    setNewManagedTripDest('');
+    setNewManagedTripStart('');
+    setNewManagedTripEnd('');
+    setNewManagedTripBudget('');
+    setNewManagedTripCurrency('JPY');
+    setStatus(`已建立並切換到新旅程：${newTrip.name}`);
+  }
+
+  function safeBackupState() {
+    return stripPortableBackupState({
+      ...state,
+      activeTripId: currentTrip.id,
+      trips: [currentTrip],
+      receipts: scopedReceiptsForTrip(state, currentTrip),
+    });
+  }
+
+  async function importItinerary(file?: File) {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const result = validateItinerary(parsed);
+      if (!result.ok) throw new Error(result.error);
+      if (!result.itinerary.length) throw new Error('行程為空');
+      const nextTrip = {
+        ...currentTrip,
+        itinerary: result.itinerary,
+        startDate: result.itinerary[0].date,
+        endDate: result.itinerary[result.itinerary.length - 1].date,
+        version: currentTrip.version + 1,
+        updatedAt: Date.now(),
+      };
+      updateState({
+        trips: trips.map((trip) => trip.id === currentTrip.id ? nextTrip : trip),
+        customItinerary: result.itinerary,
+        itineraryOverrides: {},
+        tripDateRange: { start: nextTrip.startDate, end: nextTrip.endDate },
+      });
+      setStatus(`已匯入 ${result.itinerary.length} 日行程`);
+    } catch (error) {
+      setStatus(`行程匯入失敗：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      if (itineraryInput.current) itineraryInput.current.value = '';
+    }
+  }
+
+  async function copyShortcutUrl() {
+    const url = `shortcuts://run-shortcut?name=${encodeURIComponent('Travel Expense Email')}&input=${encodeURIComponent('ftjdfr+expense@gmail.com')}`;
+    await copyText(url, '已複製 Shortcut URL 範本');
+  }
+
+  async function copyText(text: string, ok: string) {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+      setStatus(ok);
+    } catch {
+      setStatus(text);
+    }
+  }
+
+  async function importBackup(file?: File) {
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text()) as Partial<AppState>;
+      if (!validateBackupSchema(payload)) throw new Error('Backup JSON 格式無效或結構損壞');
+      const {
+        credentialBrokerUrl: _credentialBrokerUrl,
+        notionDb: _notionDb,
+        syncQueue: _syncQueue,
+        notionDeletedIds: _notionDeletedIds,
+        notionDeletedSourceIds: _notionDeletedSourceIds,
+        lastSyncedAt: _lastSyncedAt,
+        globalSyncStatus: _globalSyncStatus,
+        syncError: _syncError,
+        settingsPulledAt: _settingsPulledAt,
+        receipts: _receipts,
+        trips: _trips,
+        ...safePayload
+      } = stripSensitiveState(payload) as Partial<AppState> & { credentialBrokerUrl?: unknown };
+      const importedTrips = sanitizeImportedTrips(payload.trips);
+      const nextTrips = importedTrips || state.trips || [];
+      const allowedTripIds = new Set(nextTrips.map((trip) => trip.id).filter(Boolean));
+      const requestedActiveTripId = typeof payload.activeTripId === 'string' && allowedTripIds.has(payload.activeTripId)
+        ? payload.activeTripId
+        : undefined;
+      const fallbackTripId = requestedActiveTripId || currentTrip.id || nextTrips.find((trip) => !trip.archived)?.id || nextTrips[0]?.id;
+      const receipts = sanitizeImportedReceipts(payload.receipts, currentTrip.startDate || state.tripDateRange.start, allowedTripIds, fallbackTripId);
+      setState((prev) => migrateAppState({
+        ...prev,
+        ...safePayload,
+        trips: importedTrips || prev.trips,
+        receipts: receipts.length ? receipts : prev.receipts,
+      }));
+      setStatus(`已匯入 backup：${receipts.length || state.receipts.length} 筆`);
+    } catch (error) {
+      setStatus(`Backup 匯入失敗：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      if (backupInput.current) backupInput.current.value = '';
+    }
+  }
+
+  return (
+    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto settings-tab settings-screen">
+      <div className="japanese-sun-decor" />
+      <div className="japanese-sakura-decor" />
+      <div className="stack w-full relative z-10">
+      <GlassCard className="settings-command">
+        <div>
+          <h2>設定控制中心 ⚙️</h2>
+          <TooltipProvider>
+            <div className="stats-status-row settings-status-tooltips">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span><StatusPill tone="info"><Plane size={14} /> {trips.length} 個旅程</StatusPill></span>
+                </TooltipTrigger>
+                <TooltipContent>目前保存在此帳號/裝置嘅旅程數量</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span><StatusPill tone={brokerReady ? 'ok' : 'warning'}><Server size={14} /> Broker {brokerReady ? 'session active' : 'session missing'}</StatusPill></span>
+                </TooltipTrigger>
+                <TooltipContent>Credential Broker unlock/session 狀態</TooltipContent>
+              </Tooltip>
+              {syncState && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span><StatusPill tone={syncState.status === 'error' ? 'danger' : syncState.pendingCount ? 'warning' : 'ok'}><Cloud size={14} /> Sync {syncState.status}{syncState.pendingCount ? ` · ${syncState.pendingCount}` : ''}</StatusPill></span>
+                  </TooltipTrigger>
+                  <TooltipContent>雲端同步狀態與等待上傳隊列</TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span><StatusPill tone="neutral"><ShieldCheck size={14} /> {buildLabel}</StatusPill></span>
+                </TooltipTrigger>
+                <TooltipContent>目前前端 build / security marker</TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
+        </div>
+      </GlassCard>
+
+      <AccordionCard id="settings-trip" eyebrow="Trip Manager" title="旅程管理器 🏯🌸" meta={<span className="pill">v{managedTrip.version}</span>}>
+        <div style={{ marginBottom: '1.5rem', borderBottom: '1px dashed rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
+          <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>選擇要編輯或管理嘅旅程：</label>
+          <select
+            value={managerTripId}
+            onChange={(e) => handleSelectManagedTrip(e.target.value)}
+            style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(30,30,40,0.6)', color: '#fff', fontSize: '1rem' }}
+          >
+            {trips.map((trip) => (
+              <option key={trip.id} value={trip.id}>
+                {trip.id === currentTrip.id ? '🌟 [當前 Active] ' : ''}
+                {trip.archived ? '📁 [已封存] ' : ''}
+                {trip.name} ({trip.startDate || '未設定日期'})
+              </option>
+            ))}
+          </select>
+          {managerTripId !== currentTrip.id && (
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => selectTrip(managerTripId)}
+              style={{ marginTop: '0.75rem', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+            >
+              <Sparkles size={16} /> 切換為當前 Active 記帳旅程
+            </button>
+          )}
+        </div>
+
+        <div style={{ marginBottom: '1.5rem', borderBottom: '1px dashed rgba(255,255,255,0.1)', paddingBottom: '1.5rem' }}>
+          <div className="section-head">
+            <h2>建立新旅程</h2>
+            <span className="pill">Multi-trip</span>
+          </div>
+          <div className="form-grid">
+            <label>新旅程名
+              <input value={newManagedTripName} onChange={(e) => setNewManagedTripName(e.target.value)} placeholder="例如：首爾 2026" />
+            </label>
+            <label>目的地摘要
+              <input value={newManagedTripDest} onChange={(e) => setNewManagedTripDest(e.target.value)} placeholder="例如：首爾、釜山" />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>開始日期
+              <input type="date" value={newManagedTripStart} onChange={(e) => setNewManagedTripStart(e.target.value)} />
+            </label>
+            <label>結束日期
+              <input type="date" value={newManagedTripEnd} onChange={(e) => setNewManagedTripEnd(e.target.value)} />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>預算
+              <input type="number" min="0" step="1" value={newManagedTripBudget} onChange={(e) => setNewManagedTripBudget(e.target.value)} placeholder="例如：150000" />
+            </label>
+            <label>目的地貨幣
+              <select value={newManagedTripCurrency} onChange={(e) => setNewManagedTripCurrency(e.target.value)}>
+                {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="action-row wrap" style={{ marginTop: '0.75rem' }}>
+            <button className="primary" type="button" onClick={createManagedTrip}>
+              <Plus size={18} /> 建立並切換
+            </button>
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <label>旅程名
+            <input value={mgrName} onChange={(e) => setMgrName(e.target.value)} placeholder="例如：名古屋 2026" />
+          </label>
+          <label>目的地摘要
+            <input value={mgrDest} onChange={(e) => setMgrDest(e.target.value)} placeholder="例如：名古屋、白川鄉" />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>開始日期
+            <input type="date" value={mgrStart} onChange={(e) => setMgrStart(e.target.value)} />
+          </label>
+          <label>結束日期
+            <input type="date" value={mgrEnd} onChange={(e) => setMgrEnd(e.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>預算 (目的地貨幣)
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={mgrBudget}
+              onChange={(e) => {
+                setMgrBudget(e.target.value);
+              }}
+              placeholder="例如：200000"
+            />
+          </label>
+          <label>預算 (HKD)
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={Math.round((Number(mgrBudget) || 0) / Math.max(0.1, Number(state.rate) || 20.36))}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                const safe = Number.isFinite(val) && val >= 0 ? val : 0;
+                setMgrBudget(String(Math.round(safe * Math.max(0.1, Number(state.rate) || 20.36))));
+              }}
+            />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>目的地貨幣
+            <select value={mgrCurrency} onChange={(e) => setMgrCurrency(e.target.value)}>
+              {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
+            </select>
+          </label>
+          <label>旅程狀態
+            <select value={mgrArchived ? 'archived' : 'active'} onChange={(e) => setMgrArchived(e.target.value === 'archived')}>
+              <option value="active">🟢 進行中 (Active)</option>
+              <option value="archived">📁 已封存 (Archived)</option>
+            </select>
+          </label>
+        </div>
+
+        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <button
+            className="primary"
+            type="button"
+            onClick={handleSaveManagedTrip}
+            style={{ flex: 1, minWidth: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem' }}
+          >
+            <CheckCircle2 size={18} /> 儲存旅程修改
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            style={{
+              flex: 1,
+              minWidth: '150px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              padding: '0.75rem',
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '8px',
+              color: '#EF4444',
+              cursor: 'pointer',
+              fontWeight: 700,
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
+              e.currentTarget.style.borderColor = '#EF4444';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+            }}
+          >
+            <Trash2 size={18} /> 刪除此旅程與資料
+          </button>
+        </div>
+
+        <div style={{ marginTop: '1.5rem', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
+          <div className="form-grid">
+            <label>即時匯率（1 HKD = JPY）
+              <input type="number" min="0.01" step="0.01" value={state.rate} onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                const safe = Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : 20.36;
+                updateState({ rate: safe });
+              }} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+              <button className="secondary" type="button" disabled={!!busy} onClick={refreshRate} style={{ width: '100%', height: '42px' }}>
+                {busy === '更新匯率' ? <RotateCcw size={18} className="spin" /> : <RotateCcw size={18} />} 更新匯率
+              </button>
+            </label>
+          </div>
+        </div>
+
+        <div style={{ marginTop: '1rem' }}>
+          <label className="check-row">
+            <input type="checkbox" checked={state.statsIncludeTransportLodging} onChange={(e) => updateState({ statsIncludeTransportLodging: e.target.checked })} />
+            反轉首頁統計：總消費排除機票/住宿，今日/日均包括全部
+          </label>
+          <label className="check-row">
+            <input type="checkbox" checked={state.top10IncludeBigItems} onChange={(e) => updateState({ top10IncludeBigItems: e.target.checked })} />
+            TOP 10 包括機票/住宿/大型交通
+          </label>
+        </div>
+      </AccordionCard>
+
+      <AccordionCard id="settings-trip-update" eyebrow="Kimi Trip Update" title="行程更新卡片" icon={<Sparkles />}>
+        <p className="muted">貼入新旅程或補充行程 paragraph，AI 會先產生 preview；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
+        <textarea
+          rows={6}
+          value={tripParagraph}
+          onChange={(e) => setTripParagraph(e.target.value)}
+          placeholder="例：下次 2026-07-10 至 2026-07-15 去首爾，第一晚住弘大..."
+        />
+        <div className="action-row wrap">
+          <button
+            className="primary"
+            type="button"
+            disabled={!tripParagraph.trim() || !!busy}
+            onClick={() => run('分析行程', async () => {
+              const draft = await parseTripParagraph(tripParagraph, state);
+              setTripDraft(draft);
+              return `已產生 preview：${draft.trip.name}`;
+            })}
+          >
+            <Plane size={18} /> 用 Kimi 分析
+          </button>
+          {tripDraft && <button className="secondary" type="button" onClick={() => setTripDraft(null)}>清除 preview</button>}
+        </div>
+        {tripDraft && (
+          <div className="trip-preview">
+            <h3>{tripDraft.trip.name}</h3>
+            <p className="muted">{tripDraft.summary}</p>
+            <div className="mini-list">
+              <span>{tripDraft.trip.startDate} → {tripDraft.trip.endDate}</span>
+              <span>{tripDraft.trip.destinationSummary}</span>
+              <span>{tripDraft.trip.itinerary.length} 日 · {tripDraft.trip.currencies.join(', ')}</span>
+              {tripDraft.changes.map((change) => <span key={change}>{change}</span>)}
+              {tripDraft.warnings.map((warning) => <span key={warning}>Warning: {warning}</span>)}
+            </div>
+            <div className="action-row wrap">
+              <button className="primary" type="button" onClick={() => applyTripDraft(tripDraft)}>套用到 React</button>
+              <button className="secondary" type="button" disabled={!!busy} onClick={() => {
+                if (!requireNotionMirror('建立 Notion Trip')) return;
+                void run('建立 Notion Trip', async () => {
+                const synced = await pushTripPage(state, tripDraft.trip);
+                applyTripDraft({ ...tripDraft, trip: synced });
+                return `Notion trip note 已更新：${synced.name}`;
+                });
+              }}>套用並同步 Notion</button>
+            </div>
+          </div>
+        )}
+      </AccordionCard>
+
+      <AccordionCard id="settings-itinerary-json" title="行程 JSON" meta={<span className="pill">{getItinerary(state).length} 日</span>}>
+        <input ref={itineraryInput} hidden type="file" accept="application/json,.json" onChange={(e) => importItinerary(e.target.files?.[0])} />
+        <div className="action-row wrap">
+          <button className="secondary" type="button" onClick={() => downloadJson(`${state.tripName || 'trip'}-itinerary.json`, getItinerary(state))}><Download size={18} /> 匯出行程</button>
+          <button className="secondary" type="button" onClick={() => itineraryInput.current?.click()}><Upload size={18} /> 匯入行程</button>
+          <button className="danger" type="button" onClick={() => updateState({ customItinerary: null, itineraryOverrides: {}, tripDateRange: { start: ITINERARY[0].date, end: ITINERARY[ITINERARY.length - 1].date } })}><RotateCcw size={18} /> 還原預設</button>
+        </div>
+      </AccordionCard>
+
+      <AccordionCard id="settings-people" title="旅伴 / 分帳比例" meta={<span className="pill">{persons.length} 人</span>}>
+        {persons.map((p) => (
+          <div className="person-edit" key={p.id}>
+            <AvatarBadge person={p} />
+            <input value={p.name} onChange={(e) => updatePerson(p.id, { name: e.target.value })} aria-label={`${p.name} name`} />
+            <input type="color" value={p.color} onChange={(e) => updatePerson(p.id, { color: e.target.value })} aria-label={`${p.name} color`} />
+            <input type="number" min={0} value={state.shareRatios[p.id] ?? 1} onChange={(e) => updateState({ shareRatios: { ...state.shareRatios, [p.id]: clampFinite(e.target.value, 1, 0, 1000) } })} aria-label={`${p.name} ratio`} />
+            <button className="icon-btn" type="button" onClick={() => removePerson(p.id)} aria-label={`remove ${p.name}`}><Trash2 size={16} /></button>
+          </div>
+        ))}
+        <div className="person-add">
+          <input value={newPersonName} onChange={(e) => setNewPersonName(e.target.value)} placeholder="旅伴名字" />
+          <button className="primary" type="button" onClick={addPerson}><Plus size={18} /> 新增</button>
+        </div>
+        <div className="mini-list">
+          <span>比例總和：{ratioTotal || 0} · Shared ¥{Math.round(settlement.sharedTotal).toLocaleString()}</span>
+          {settlement.transfers.map((t) => <span key={`${t.from.id}-${t.to.id}`}>{t.from.name} → {t.to.name} ¥{Math.round(t.amount).toLocaleString()}</span>)}
+          {!settlement.transfers.length && <span>暫時唔需要互相轉帳</span>}
+          {settlement.balances.map((b) => <span key={b.id}>{b.name}: 已付 shared ¥{Math.round(b.paidShared).toLocaleString()} · 應付 ¥{Math.round(b.shouldPayShared).toLocaleString()}</span>)}
+          {settlement.crossPrivate.map((item) => <span key={item.id}>私人代付：{item.payer.name} 幫 {item.beneficiary.name} 付 ¥{Math.round(item.amount).toLocaleString()} · {item.store}</span>)}
+        </div>
+        <div className="action-row wrap">
+          <button className="secondary" type="button" onClick={resetShareRatios}>重設為均分</button>
+        </div>
+      </AccordionCard>
+
+      <AccordionCard id="settings-credentials" eyebrow="Server-side vault" title="Credentials & Connection" icon={<KeyRound />}>
+        <p className="muted">Notion、Kimi、Google、WeatherAPI keys 只喺 Credential Broker vault 入面。React 只保存短期 session；rotation input 唔會寫入 localStorage、IndexedDB、backup 或 Notion。</p>
+        <label>Credential Broker URL
+          <input value={isAllowedCredentialBrokerUrl(state.credentialBrokerUrl) ? state.credentialBrokerUrl || '' : ''} readOnly aria-readonly="true" />
+        </label>
+        <div className="credential-status-grid">
+          <span className={`pill ${brokerReady || cloudSyncAvailable ? 'ok' : 'hot'}`}>
+            <Server size={14} /> Session: {brokerReady ? 'active' : cloudSyncAvailable ? 'active (Supabase)' : 'missing'}
+          </span>
+          {directTokenEnabled && <span className={`pill ${hasDirectNotionToken() ? 'ok' : 'hot'}`}><KeyRound size={14} /> Local dev Notion: {hasDirectNotionToken() ? 'active' : 'missing'}</span>}
+          <span className={`pill ${notionMirrorReady ? 'ok' : 'hot'}`}>
+            <Cloud size={14} /> Notion mirror: {notionMirrorReady ? 'scoped' : userScopedNotionDb ? 'needs connect' : 'needs own DB'}
+          </span>
+          {statusPill('notion')}
+          {statusPill('kimi')}
+          {statusPill('google')}
+          {statusPill('weatherapi')}
+        </div>
+        {!brokerReady && !cloudSyncAvailable && (
+          <div className="form-grid">
+            <label>Broker password
+              <input
+                type="password"
+                value={brokerPassword}
+                onChange={(e) => setBrokerPassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') void connectCredentialBroker(); }}
+                autoComplete="current-password"
+                placeholder="Enable AI / Notion mirror"
+              />
+            </label>
+            <button className="primary" type="button" disabled={!!busy || !brokerPassword.trim()} onClick={() => void connectCredentialBroker()}>
+              <ShieldCheck size={18} /> Connect Broker
+            </button>
+          </div>
+        )}
+        {!brokerReady && cloudSyncAvailable && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', background: 'rgba(52, 211, 153, 0.08)', border: '1px solid rgba(52, 211, 153, 0.25)', borderRadius: '12px', color: '#047857', fontSize: '13px', fontWeight: 700, marginTop: '16px', width: '100%' }}>
+            <Sparkles size={16} className="spin-once" style={{ color: '#059669', flexShrink: 0 }} />
+            <span>已登入 Supabase 帳號，AI 智能記帳已自動激活，免輸入解鎖密碼！🔓🤖</span>
+          </div>
+        )}
+        <div className="action-row wrap">
+          <button className="secondary" type="button" disabled={!!busy} onClick={refreshCredentialStatus}>
+            Test all connections
+          </button>
+          <button className="secondary" type="button" disabled={!!busy} onClick={() => run('測試 Kimi', async () => testKimiConnection(state))}>
+            Test Kimi
+          </button>
+          <button className="secondary" type="button" disabled={!!busy} onClick={() => run('測試 Google backup', async () => testGoogleBackupConnection(state))}>
+            Test Google
+          </button>
+        </div>
+        <div className="rotation-box">
+          <div className="form-grid">
+            <label>Provider
+              <select value={rotationProvider} onChange={(e) => setRotationProvider(e.target.value as CredentialProvider)}>
+                <option value="notion">Notion token</option>
+                <option value="kimi">Kimi key</option>
+                <option value="google">Google backup key</option>
+                <option value="weatherapi">WeatherAPI.com key</option>
+              </select>
+            </label>
+            <label>Admin maintenance passphrase
+              <input type="password" value={rotationAdmin} onChange={(e) => setRotationAdmin(e.target.value)} autoComplete="off" />
+            </label>
+          </div>
+          <label>New credential
+            <input type="password" value={rotationSecret} onChange={(e) => setRotationSecret(e.target.value)} autoComplete="off" placeholder="Only sent once to Credential Broker" />
+          </label>
+          {rotationProvider === 'notion' && (
+            <label>Notion database ID（可選）
+              <input value={rotationDb} onChange={(e) => setRotationDb(e.target.value)} />
+            </label>
+          )}
+          <button className="primary" type="button" disabled={!!busy} onClick={rotateCredential}>
+            <ShieldCheck size={18} /> Rotate safely
+          </button>
+        </div>
+      </AccordionCard>
+
+      <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
+        <p className="muted">Kimi / kimi-code 係 email、trip update primary；Google Gemma 4 31B 係 scan、voice primary。Provider keys 不會進入 React state。</p>
+        <div className="form-grid">
+          <label>Scan model
+            <select value={state.scanModel} onChange={(e) => updateState({ scanModel: e.target.value })}>
+              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+            </select>
+          </label>
+          <label>Voice model
+            <select value={state.voiceModel} onChange={(e) => updateState({ voiceModel: e.target.value })}>
+              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <label>Email model
+          <select value={state.emailModel} onChange={(e) => updateState({ emailModel: e.target.value })}>
+            {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+          </select>
+        </label>
+        <label>Trip update model
+          <select value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} onChange={(e) => updateState({ tripUpdateModel: e.target.value })}>
+            {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+          </select>
+        </label>
+        <label>Google backup model
+          <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
+        </label>
+      </AccordionCard>
+
+      <AccordionCard id="settings-notion" title="Notion Sync" icon={<Cloud />}>
+        {cloudSyncAvailable && (
+          <p className="muted">Public Supabase mode 只會 mirror 到你自己設定嘅 Notion database。未設定前，app 只同步 Supabase，唔會使用預設共享 Notion notebook。</p>
+        )}
+        {cloudSyncAvailable && (
+          <div className="rotation-box">
+            <div className="section-head">
+              <h2>個人 Notion notebook</h2>
+              <span className={`pill ${personalNotionStatus?.status === 'connected' ? 'ok' : 'hot'}`}>
+                {personalNotionStatus?.status || 'not checked'}
+              </span>
+            </div>
+            <p className="muted">呢度只綁定目前 Supabase 帳號。Connector secret 會直接送去 Credential Broker 加密保存，唔會寫入 browser、backup、Supabase row 或 GitHub。</p>
+            <label>Personal Notion database ID
+              <input value={personalNotionDb} onChange={(e) => setPersonalNotionDb(e.target.value)} placeholder="你自己 Notion database ID" />
+            </label>
+            <label>Personal Notion connector secret
+              <input
+                type="password"
+                value={personalNotionToken}
+                onChange={(e) => setPersonalNotionToken(e.target.value)}
+                placeholder="貼上你自己 Notion connector secret"
+                autoComplete="off"
+              />
+            </label>
+            <div className="action-row wrap">
+              <button className="secondary" type="button" disabled={!!busy} onClick={() => void refreshPersonalNotion()}>
+                Check Personal Notion
+              </button>
+              <button className="primary" type="button" disabled={!!busy || !personalNotionToken.trim() || !personalNotionDb.trim()} onClick={() => void connectPersonalNotion()}>
+                <ShieldCheck size={18} /> Connect Personal Notion
+              </button>
+              <button className="danger" type="button" disabled={!!busy || personalNotionStatus?.status !== 'connected'} onClick={() => void disconnectPersonalNotion()}>
+                Disconnect
+              </button>
+            </div>
+          </div>
+        )}
+        {cloudSyncAvailable ? (
+          <label>Notion mirror database
+            <input value={notionMirrorDbLabel} disabled readOnly />
+          </label>
+        ) : (
+          <label>Database ID
+            <input value={state.notionDb} onChange={(e) => updateState({ notionDb: e.target.value })} />
+          </label>
+        )}
+        {directTokenEnabled && (
+          <>
+            <label>Local Notion connector secret (dev fallback)
+              <input
+                type="password"
+                value={directNotionToken}
+                onChange={(e) => {
+                  setDirectNotionToken(e.target.value);
+                  saveDirectNotionToken(e.target.value);
+                }}
+                placeholder="只供 local dev 使用"
+                autoComplete="off"
+              />
+            </label>
+            <p className="muted">呢個只係 local dev fallback。Production React app 一律經 Credential Broker，Notion token 唔會保存在 browser。</p>
+          </>
+        )}
+        <label className="check-row">
+          <input type="checkbox" checked={state.autoSync} onChange={(e) => updateState({ autoSync: e.target.checked })} />
+          儲存 receipt 後自動同步
+        </label>
+        <div className="action-row wrap">
+          <button
+            className="secondary"
+            type="button"
+            disabled={notionActionDisabled}
+            onClick={() => {
+              if (!requireNotionMirror('診斷 Notion 資料庫')) return;
+              void run('診斷 Notion 資料庫', async () => {
+                const diag = await diagnoseNotionSchema(state);
+                setSchemaDiag(diag);
+                const unmapped = diag.filter((d) => !d.mapped);
+                return `發現 ${diag.length} 個欄位，${unmapped.length} 個未映射`;
+              });
+            }}
+          >
+            診斷資料庫結構
+          </button>
+          <button
+            className="secondary"
+            type="button"
+            disabled={notionActionDisabled}
+            onClick={() => {
+              if (!requireNotionMirror('檢查 Mapping')) return;
+              void run('檢查 Mapping', async () => {
+                const diag = await diagnoseReactReceiptMapping(state);
+                setMappingDiag(diag);
+                return `已掃描 ${diag.scanned} pages；候選 receipt ${diag.receiptCandidates}；skip ${diag.skipped}；issues ${diag.issues.length}`;
+              });
+            }}
+          >
+            檢查 Mapping
+          </button>
+        </div>
+        {schemaDiag && (
+          <div style={{ marginTop: 12, overflow: 'auto' }}>
+            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #D9CFC2' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Property</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Type</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Mapped</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schemaDiag.map((d) => (
+                  <tr key={d.name} style={{ borderBottom: '1px solid #E8DDD0' }}>
+                    <td style={{ padding: '4px 8px' }}>{d.name}</td>
+                    <td style={{ padding: '4px 8px' }}>{d.type}</td>
+                    <td style={{ padding: '4px 8px' }}>
+                      {d.mapped ? (
+                        <span style={{ color: '#2D6E48' }}>✅ {d.mapped}</span>
+                      ) : (
+                        <span style={{ color: '#C23B5E' }}>❌ (not mapped)</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {mappingDiag && (
+          <div style={{ marginTop: 12, overflow: 'auto' }}>
+            <div className="action-row wrap" style={{ marginBottom: 10 }}>
+              <span className="pill">Scanned {mappingDiag.scanned}</span>
+              <span className="pill">Receipts {mappingDiag.receiptCandidates}</span>
+              <span className="pill">Skipped {mappingDiag.skipped}</span>
+              <span className={`pill ${mappingDiag.counts['conflicting-duplicate'] ? 'hot' : ''}`}>Conflicts {mappingDiag.counts['conflicting-duplicate']}</span>
+              <span className="pill">Duplicate family {mappingDiag.counts['duplicate-family']}</span>
+              <span className="pill">Meta fallback {mappingDiag.counts['meta-fallback']}</span>
+            </div>
+            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #D9CFC2' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Page</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Kind</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Field</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mappingDiag.issues.slice(0, 40).map((issue, index) => (
+                  <tr key={`${issue.pageId}-${issue.kind}-${issue.field}-${index}`} style={{ borderBottom: '1px solid #E8DDD0' }}>
+                    <td style={{ padding: '4px 8px' }}>{issue.title}</td>
+                    <td style={{ padding: '4px 8px' }}>{issue.kind}</td>
+                    <td style={{ padding: '4px 8px' }}>{issue.field}</td>
+                    <td style={{ padding: '4px 8px' }}>{issue.detail}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {mappingDiag.issues.length > 40 && <p className="muted" style={{ marginTop: 8 }}>只顯示首 40 項 issue。</p>}
+          </div>
+        )}
+        <div className="action-row wrap">
+          <button className="secondary" type="button" disabled={!!busy} onClick={saveLocalSettingsNow}>Save Local Settings</button>
+          <button className="secondary" type="button" disabled={notionActionDisabled} onClick={() => {
+            if (!requireNotionMirror('測試 Notion')) return;
+            void run('測試 Notion', async () => `連線正常：${await testNotion(state)}`);
+          }}>測試</button>
+          <StatefulActionButton className="secondary" type="button" disabled={!!busy} onClick={() => {
+            if (!requireBroker('Pull', true)) return;
+            void run('Pull', async () => {
+            await onPull?.();
+            return '已透過 Sync Engine 拉取雲端資料';
+            });
+          }}><Download size={18} /> {publicSupabaseOnly ? 'Pull Supabase' : 'Pull'}</StatefulActionButton>
+          <StatefulActionButton className="primary" type="button" disabled={!!busy} onClick={() => {
+            if (!requireBroker('Push', true)) return;
+            void run('Push', async () => {
+              await onPush?.();
+              return '已透過 Sync Engine 推送 pending queue';
+            });
+          }}>
+            <Upload size={18} /> {publicSupabaseOnly ? 'Push Supabase' : 'Push All'}
+          </StatefulActionButton>
+          <button className="secondary" type="button" disabled={!!busy} onClick={() => {
+            saveLocalSettingsNow();
+            if (!requireBroker('Save & Push Settings', true)) return;
+            void run('Save & Push Settings', async () => {
+            if (onPushSettings) await onPushSettings();
+            else await pushSettingsMeta(state);
+            return '已推送 non-secret settings meta';
+            });
+          }}>{publicSupabaseOnly ? 'Save & Push Supabase Settings' : 'Save & Push Settings'}</button>
+          <button className="secondary" type="button" disabled={notionActionDisabled} onClick={() => {
+            if (!requireNotionMirror('Schema migrate')) return;
+            void run('Schema', async () => migrateNotionSchema(state));
+          }}>美化 Schema</button>
+        </div>
+      </AccordionCard>
+
+      <AccordionCard id="settings-email" title="Email / Shortcut" icon={<Copy />}>
+        <p className="muted">
+          {cloudSyncAvailable
+            ? 'Public Supabase mode 不使用共享 Gmail inbox。請喺 Scan 貼上 email 文字或截圖；如已連接個人 Notion，可拉取你自己 notebook 入面嘅待確認紀錄。'
+            : 'Forward email 去 ftjdfr+expense@gmail.com；或者用 Shortcut URL 將文字送入同一流程。'}
+        </p>
+        <div className="action-row wrap">
+          <button className="secondary" type="button" disabled={!!busy} onClick={() => void pullPendingEmail()}><Download size={18} /> Pull pending email</button>
+          {!cloudSyncAvailable && (
+            <>
+              <button className="secondary" type="button" onClick={copyShortcutUrl}><Copy size={18} /> 複製 Shortcut URL</button>
+              <button className="secondary" type="button" onClick={() => copyText('ftjdfr+expense@gmail.com', '已複製 Gmail 地址')}><Copy size={18} /> 複製 Gmail</button>
+            </>
+          )}
+        </div>
+      </AccordionCard>
+
+      {cloudSyncAvailable && updatePassword && (
+        <AccordionCard id="settings-supabase-account" eyebrow="Supabase Auth" title="雲端帳號與密碼設定 🔐" icon={<KeyRound />}>
+          <p className="muted">
+            你可以為目前嘅帳號設定或修改密碼。設定密碼後，你喺其他裝置登入時，除咗用 Email 連結之外，亦可以直接輸入 Email 同密碼登入！
+          </p>
+          <GlassCard className="settings-account-card">
+            <div className="settings-account-copy">
+              <span className="eyebrow">目前帳號</span>
+              <strong>{userEmail || 'Supabase 帳號'}</strong>
+              <small>帳號操作集中喺 Settings，避免主畫面右上角阻住 app 操作。</small>
+            </div>
+            <div className="action-row wrap">
+              {onSignOut && (
+                <button className="secondary" type="button" disabled={!!busy} onClick={() => void handleSupabaseSignOut()} aria-label="登出 Supabase">
+                  <LogOut size={18} /> 登出
+                </button>
+              )}
+              {onClearDeviceData && onSignOut && (
+                <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
+                  <Trash2 size={18} /> 清除此裝置資料
+                </button>
+              )}
+            </div>
+          </GlassCard>
+          <div style={{ display: 'grid', gap: '12px', maxWidth: '380px', marginTop: '12px' }}>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '12px', fontWeight: 800, color: '#374151' }}>
+              設定新密碼 (最少 6 位)
+              <input
+                type="password"
+                value={newPasswordInput}
+                onChange={(e) => setNewPasswordInput(e.target.value)}
+                placeholder="請輸入新密碼"
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid rgba(139, 115, 85, 0.22)', borderRadius: '8px', fontSize: '13px', outline: 'none', background: 'white' }}
+              />
+            </label>
+            <div className="action-row">
+              <button
+                className="primary"
+                type="button"
+                disabled={!!busy || newPasswordInput.length < 6}
+                onClick={() => void handleUpdatePassword()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '9px 16px',
+                  borderRadius: '10px',
+                  border: 0,
+                  background: !!busy || newPasswordInput.length < 6 ? '#9CA3AF' : 'linear-gradient(135deg, #CC2929, #E07B39)',
+                  color: 'white',
+                  fontSize: '13px',
+                  fontWeight: 900,
+                  cursor: !!busy || newPasswordInput.length < 6 ? 'default' : 'pointer',
+                  boxShadow: '0 4px 12px rgba(204, 41, 41, 0.15)',
+                }}
+              >
+                儲存雲端登入密碼 💾
+              </button>
+            </div>
+          </div>
+        </AccordionCard>
+      )}
+
+      <AccordionCard id="settings-data" title="資料管理 / Security" icon={<ShieldCheck />}>
+        <input ref={backupInput} hidden type="file" accept="application/json,.json" onChange={(e) => importBackup(e.target.files?.[0])} />
+        <div className="action-row wrap">
+          <button className="secondary" type="button" onClick={() => exportCsv(state)}><Download size={18} /> 匯出 CSV</button>
+          <button className="secondary" type="button" onClick={() => downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup JSON（目前旅程）</button>
+          <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup JSON</button>
+          <button className="danger" type="button" onClick={() => { clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); }}><KeyRound size={18} /> 清除 broker session</button>
+          <button className="danger" type="button" onClick={() => { clearDeviceTrust(); void clearTrustedDevice(); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
+          <button className="danger" type="button" disabled={!!busy} onClick={async () => {
+            if (!window.confirm('確定清除 React 本地紀錄？')) return;
+            setBusy('清除資料');
+            try {
+              await onReset();
+              setStatus('已清除 React 本地紀錄、broker session、裝置信任同快取。');
+            } catch (error) {
+              setStatus(`清除失敗：${redactedError(error)}`);
+            } finally {
+              setBusy('');
+            }
+          }}><RotateCcw size={18} /> 清除本地資料</button>
+        </div>
+        <div className="mini-list">
+          <span onClick={handleVersionClick} style={{ cursor: 'pointer', userSelect: 'none' }}>
+            Build: {buildLabel} {clickCount > 0 ? `(${clickCount}/5)` : ''} {showStressPanel ? '🔓' : '🔒'}
+          </span>
+          <span>Backup / CSV 不包含 provider API key、Notion token、broker session 或解鎖 secret。</span>
+        </div>
+      </AccordionCard>
+
+      {showStressPanel && (
+        <AccordionCard id="settings-stress-test" eyebrow="Stress Test Portal" title="極限壓力與故障測試面板 🚀" icon={<Sparkles />}>
+          <p className="muted">呢度係專為 Boss 設計嘅 Premium 測試中心！你可以一鍵模擬高達 1,000 筆數據、網絡延遲、API 斷網故障以及 Tab 內存洩漏測試！</p>
+
+          <div className="action-row wrap" style={{ marginBottom: '1rem' }}>
+            <button className="primary" type="button" disabled={!!busy} onClick={handleMassInject}>
+              瞬間導入 1,000 筆名古屋消費 📊
+            </button>
+            <button className="secondary" type="button" disabled={!!busy} onClick={handleTabSwitchTest}>
+              高頻 Tab 切換洩漏監測 🔄
+            </button>
+            <button className="danger" type="button" onClick={() => {
+              if (window.confirm('確定清除所有壓力測試導入的模擬數據？')) {
+                setState(prev => ({
+                  ...prev,
+                  receipts: prev.receipts.filter(r => r.source !== 'mock_stress_test')
+                }));
+                setStatus('🧹 已成功清空所有壓力測試數據！');
+              }
+            }}>
+              清空壓力測試數據 🧹
+            </button>
+          </div>
+
+          <div className="stack" style={{ gap: '0.8rem', padding: '10px 0' }}>
+            <label className="check-row" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input type="checkbox" checked={stressLatency} onChange={(e) => toggleStressLatency(e.target.checked)} />
+              <span>模擬 Notion 同步 5 秒網絡延遲 ⏳</span>
+            </label>
+            <label className="check-row" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input type="checkbox" checked={stressFault} onChange={(e) => toggleStressFault(e.target.checked)} />
+              <span style={{ color: stressFault ? '#CC2929' : 'inherit' }}>
+                模擬 Notion 同步 500 伺服器故障 (Sync 容災測試) ⚠️
+              </span>
+            </label>
+          </div>
+
+          <div className="mini-list" style={{ marginTop: '0.5rem' }}>
+            <span>數據規模：當前 receipts 共 {state.receipts.length} 筆 (其中 mock 數據 {state.receipts.filter(r => r.source === 'mock_stress_test').length} 筆)。</span>
+            <span>網絡狀態代理：{stressLatency ? '延遲 (5s) ⏳' : '正常 ⚡'} · {stressFault ? '伺服器故障模擬中 (500) ⚠️' : '連線正常 ✅'}</span>
+          </div>
+        </AccordionCard>
+      )}
+
+      {showClearDeviceConfirm && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="清除此裝置資料"
+          style={{ placeItems: 'center', zIndex: 9999, padding: '20px 20px max(110px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="modal settings-clear-device-modal">
+            <div className="settings-warning-icon">
+              <AlertTriangle size={30} />
+            </div>
+            <h2>清除此裝置資料？</h2>
+            <p>
+              會清除此帳號喺本機嘅快取資料、裝置信任同 IndexedDB snapshot，然後登出 Supabase。
+            </p>
+            <p className="muted">
+              雲端 Supabase / Notion 資料不會刪除；下次登入會重新由雲端同步。
+            </p>
+            <div className="modal-actions">
+              <button className="secondary" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(false)}>
+                取消
+              </button>
+              <button className="danger" type="button" disabled={!!busy} onClick={() => void handleClearDeviceAndSignOut()}>
+                <Trash2 size={18} /> 確認清除並登出
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (() => {
+        const targetTrip = trips.find(t => t.id === managerTripId);
+        if (!targetTrip) return null;
+        const deleteCount = state.receipts.filter(r => r.tripId === managerTripId).length;
+        return (
+          <div
+            className="modal-backdrop"
+            style={{
+              display: 'grid',
+              placeItems: 'center',
+              background: 'rgba(10, 8, 8, 0.7)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              zIndex: 9999,
+            }}
+          >
+            <div
+              className="modal"
+              style={{
+                width: 'min(480px, 95vw)',
+                background: 'rgba(30, 20, 20, 0.85)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '20px',
+                padding: '24px',
+                boxShadow: '0 25px 60px rgba(239, 68, 68, 0.15), 0 0 0 1px rgba(239, 68, 68, 0.1)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                color: '#fff',
+                textAlign: 'center',
+                animation: 'page-rise 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+            >
+              {/* Alert Icon */}
+              <div style={{ display: 'inline-grid', placeItems: 'center', width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', marginBottom: '16px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                <AlertTriangle size={32} style={{ animation: 'pulse 2s infinite' }} />
+              </div>
+
+              {/* Title */}
+              <h2 style={{ margin: '0 0 12px 0', fontSize: '20px', fontWeight: 800, color: '#EF4444' }}>
+                ⚠️ 永久刪除旅程警告
+              </h2>
+
+              {/* Warning Content */}
+              <p style={{ margin: '0 0 20px 0', fontSize: '15px', color: 'rgba(255, 255, 255, 0.9)', lineHeight: 1.6, textAlign: 'left' }}>
+                Boss 🫡，你確定要永久刪除旅程<strong>「{targetTrip.name}」</strong>嗎？
+                <br />
+                <span style={{ color: '#EF4444', fontWeight: 'bold', display: 'block', marginTop: '8px' }}>
+                  ❌ 此操作將會連帶刪除該旅程下所有關聯嘅 {deleteCount} 筆消費紀錄！
+                </span>
+                <span style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '13px', display: 'block', marginTop: '4px' }}>
+                  * 此物理級連鎖刪除一旦執行就無法撤銷，並會同步推送至雲端資料庫（Supabase & Notion）！
+                </span>
+              </p>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteManagedTrip}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: '#EF4444',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = '#DC2626'}
+                  onMouseOut={(e) => e.currentTarget.style.background = '#EF4444'}
+                >
+                  確認永久刪除 🗑️
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {status && <Toast tone={/失敗|未連線|暫停|請輸入/.test(status) ? 'warning' : 'success'}>{status}</Toast>}
+      </div>
+    </section>
+  );
+}

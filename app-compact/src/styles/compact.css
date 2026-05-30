@@ -1,0 +1,204 @@
+/* Compact version overrides: independent app shell, mobile-first scrolling,
+   and a centered circular Scan action without changing app behavior. */
+
+:root {
+  --compact-ink: #201b17;
+  --compact-paper: #f7efe2;
+  --compact-surface: rgba(255, 252, 244, .82);
+  --compact-line: rgba(72, 51, 32, .14);
+  --compact-blue: #18395c;
+  --compact-red: #c23b5e;
+  --compact-gold: #d4a843;
+  --compact-green: #2d6e48;
+  --compact-shadow: 0 20px 54px rgba(64, 43, 26, .14);
+}
+
+body {
+  background:
+    linear-gradient(135deg, rgba(24, 57, 92, .10), transparent 30%),
+    linear-gradient(24deg, rgba(194, 59, 94, .11), transparent 28%),
+    radial-gradient(circle at 82% 10%, rgba(212, 168, 67, .24), transparent 27%),
+    radial-gradient(circle at 15% 84%, rgba(45, 110, 72, .13), transparent 24%),
+    linear-gradient(180deg, #f8f0e4 0%, #eee3d2 100%);
+}
+
+.app-shell {
+  max-width: 1180px;
+  padding: max(18px, env(safe-area-inset-top)) clamp(16px, 3vw, 28px) 132px;
+}
+
+.app-shell::after {
+  opacity: .86;
+}
+
+.topbar-canva {
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.74), rgba(255,248,236,.54)),
+    rgba(255, 252, 245, .66);
+  border-color: var(--compact-line);
+  box-shadow: var(--compact-shadow), inset 0 1px 0 rgba(255,255,255,.72);
+}
+
+.topbar-title-block h1 {
+  letter-spacing: 0;
+}
+
+.content {
+  min-height: auto;
+  padding-bottom: 0;
+}
+
+.content > .stack,
+.japanese-washi-bg {
+  width: 100%;
+}
+
+.card,
+.glass-card,
+.metric,
+.big-action,
+.notice,
+.liquid-surface-strong,
+.liquid-surface-control {
+  border-radius: 8px;
+}
+
+.fixed-tab-bar {
+  max-width: min(940px, calc(100vw - 20px));
+  padding: 0 10px max(12px, env(safe-area-inset-bottom));
+}
+
+.app-floating-dock-mobile,
+.app-floating-dock-desktop {
+  position: relative;
+  overflow: visible;
+  border-radius: 999px !important;
+  border-color: rgba(255, 255, 255, .74) !important;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.88), rgba(255,246,234,.78)),
+    rgba(255, 252, 245, .9) !important;
+  box-shadow: 0 24px 60px rgba(66, 44, 25, .18), inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+
+.app-floating-dock-mobile {
+  min-height: 72px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  padding: 10px 8px 8px !important;
+}
+
+.app-floating-dock-mobile button,
+.app-floating-dock-desktop button {
+  min-width: 0;
+  min-height: 52px;
+  color: var(--compact-blue);
+}
+
+.app-floating-dock-mobile button svg,
+.app-floating-dock-desktop button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.app-floating-dock-mobile .dock-item-scan,
+.app-floating-dock-desktop .dock-item-scan {
+  z-index: 3;
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  min-height: 64px;
+  margin-top: -28px;
+  border: 3px solid rgba(255,255,255,.92) !important;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255,255,255,.38), transparent 32%),
+    linear-gradient(135deg, #d94a62, #a83030) !important;
+  color: white !important;
+  box-shadow: 0 18px 36px rgba(194, 59, 94, .36), inset 0 1px 0 rgba(255,255,255,.35) !important;
+}
+
+.app-floating-dock-mobile .dock-item-scan svg,
+.app-floating-dock-desktop .dock-item-scan svg {
+  width: 28px;
+  height: 28px;
+}
+
+.app-floating-dock-mobile [aria-current="page"]:not(.dock-item-scan),
+.app-floating-dock-desktop [aria-current="page"]:not(.dock-item-scan) {
+  background: rgba(24, 57, 92, .08) !important;
+  border-color: rgba(24, 57, 92, .14) !important;
+}
+
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    overflow-y: auto;
+  }
+
+  .app-shell {
+    width: 100%;
+    max-width: 100%;
+    padding: max(14px, env(safe-area-inset-top)) 0 calc(112px + env(safe-area-inset-bottom));
+  }
+
+  .content {
+    min-height: auto;
+  }
+
+  .content > .stack,
+  .japanese-washi-bg {
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 20px 16px 132px !important;
+  }
+
+  .topbar,
+  .topbar-canva {
+    display: none !important;
+  }
+
+  .glass-card,
+  .card,
+  .metric,
+  .notice {
+    padding: 16px;
+  }
+
+  .metric strong {
+    font-size: 22px;
+  }
+
+  h1 {
+    font-size: 30px;
+  }
+
+  h2 {
+    font-size: 22px;
+  }
+
+  .fixed-tab-bar {
+    max-width: 100%;
+    padding-inline: 8px;
+  }
+
+  .app-floating-dock-mobile {
+    display: grid;
+    max-width: 100%;
+  }
+
+  .app-floating-dock-mobile button {
+    width: 100%;
+    max-width: 48px;
+    padding-inline: 0;
+  }
+
+  .app-floating-dock-mobile .dock-item-scan {
+    max-width: 64px;
+  }
+}

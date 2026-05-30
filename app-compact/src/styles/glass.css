@@ -1,0 +1,120 @@
+.glass-card,
+.card,
+.metric-card,
+.accordion-card,
+.tabbar,
+.receipt-row,
+.weather-slot-detailed {
+  border-color: rgba(255, 255, 255, .72);
+}
+
+.glass-card::after,
+.card::after,
+.metric-card::after,
+.receipt-row::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 0 0, rgba(255,255,255,.88), transparent 22%),
+    radial-gradient(circle at 100% 0, rgba(255,255,255,.52), transparent 18%),
+    linear-gradient(135deg, rgba(255,255,255,.42), transparent 36%, rgba(255,255,255,.22));
+  opacity: .72;
+  mix-blend-mode: screen;
+  z-index: 0;
+}
+
+.receipt-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+.history-screen .receipt-row,
+.history-screen .receipt-row :is(strong, small, span, a, button, svg) {
+  opacity: 1;
+  mix-blend-mode: normal;
+  text-shadow: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+/* Liquid Glass: enhanced specular highlight + refraction rim on glass cards */
+.glass-card::after {
+  background:
+    radial-gradient(circle at 0 0, rgba(255,255,255,.95), transparent 24%),
+    radial-gradient(circle at 100% 0, rgba(255,255,255,.62), transparent 20%),
+    radial-gradient(circle at 50% 0, rgba(255,255,255,.38), transparent 45%),
+    linear-gradient(135deg, rgba(255,255,255,.52), transparent 38%, rgba(255,255,255,.28));
+  opacity: .78;
+}
+
+
+.card,
+.metric-card,
+.receipt-row {
+  position: relative;
+  overflow: clip;
+}
+
+.epic-glass-field {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.78), rgba(255,247,233,.5)),
+    rgba(255, 255, 255, .48);
+  box-shadow:
+    0 18px 42px rgba(74, 48, 26, .13),
+    inset 0 1px 0 rgba(255,255,255,.86),
+    inset 1px 0 0 rgba(255,255,255,.5);
+  backdrop-filter: blur(22px) saturate(1.18);
+}
+
+/* Enhanced Liquid Glass base layer */
+.liquid-glass-enhanced {
+  position: relative;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.68), rgba(255,248,239,.42)),
+    rgba(255, 253, 247, .52);
+  border: 1px solid rgba(255,255,255,0.55);
+  box-shadow:
+    0 24px 64px rgba(59, 43, 26, .16),
+    inset 0 1px 2px rgba(255,255,255,.72),
+    inset 0 -1px 1px rgba(121, 89, 55, .06),
+    inset 0 0 20px rgba(255,255,255,.14);
+  backdrop-filter: blur(32px) saturate(1.45);
+  -webkit-backdrop-filter: blur(32px) saturate(1.45);
+}
+.liquid-glass-enhanced::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.22) 0%, transparent 42%),
+    linear-gradient(110deg, rgba(255,255,255,.48), transparent 44%, rgba(255,255,255,.14));
+}
+.liquid-glass-enhanced::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1.5px 1px rgba(255,255,255,.78),
+    inset 0 -1px 1px rgba(121, 89, 55, .06);
+}
+
+/* Mobile: reduce expensive blur + saturate for GPU perf */
+@media (max-width: 768px) {
+  .liquid-glass-enhanced {
+    backdrop-filter: blur(8px) saturate(1.1);
+    -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  }
+
+  .glass-card::after,
+  .card::after,
+  .metric-card::after,
+  .receipt-row::after {
+    opacity: .55;
+  }
+}
