@@ -4,6 +4,7 @@ Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- Current commit: Fix stale weather forecast cache
 - Current commit: Add premium travel AI visual atlas
 - Current commit: Compact Stats tab command header
 - Current commit: Compact itinerary command spacing
@@ -72,7 +73,7 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch contains the latest premium travel AI visual atlas pass in the current commit once pushed. Before this pass, latest pushed commit was `20052e4`. Verify with `git status --short --branch` and `git log -1 --oneline`.
+- Main branch contains the latest Weather stale-cache repair in the current commit once pushed. Before this pass, latest pushed commit was `6c4ec8e`. Verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
 - GitHub Pages failure root cause on 2026-05-30 HKT: the repository Pages API returned `404` / `has_pages:false`, while the workflow called `actions/configure-pages@v5` with default `enablement:false`. The repo Pages site was enabled via GitHub API with `build_type=workflow`, and `.github/workflows/deploy.yml` now passes `enablement: true`. Fresh CI verification is still required after the repair commit is pushed.
@@ -83,6 +84,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- Weather stale-cache repair on 2026-05-30 HKT: fixed the Weather tab case where an ended trip displayed `旅程日期超出目前預報範圍` because the same-coordinate weather cache was still fresh but only contained old trip dates. `fetchWeather()` now receives the target display date and only accepts cached hourly data if it includes that date; otherwise it refreshes the forecast and shows current actual/feels-like temperature.
 - Premium travel control desk visual pass on 2026-05-30 HKT: Boss chose `高級旅行控制台 + 和風手帳 + 少少 AI magic`; a GPT Imagine 2 generated three-panel atlas was saved as `app-react/src/assets/atmosphere/travel-ai-atlas.webp` and shared across Scan, Timeline, and Weather. Scan now has a receipt-desk background with a scanning beam, Timeline has itinerary notebook/map atmosphere plus a live-card route glint, and Weather has a travel-weather command background plus ambient forecast drift.
 - Stats tab command-header polish on 2026-05-30 HKT: `分帳統計中心` now stays on one compact line with the receipt-count pill, the unneeded transfer-count pill/icon is removed from the top card, and mobile styling keeps the row aligned at 390px without overflow.
 - Itinerary spacing polish on 2026-05-30 HKT: reduced the mobile gap above and below the `行程時間線` command card by lowering Timeline top padding, removing the command-card mobile margin-bottom, and tightening the Timeline stack gap. Timeline smoke now verifies top gap, lower gap, first-day position, compact header height, and date de-duplication.
@@ -104,6 +106,11 @@ Latest UI polish in this handover update:
 
 Latest UI verification from this pass:
 
+- `npm run typecheck` - passed after the Weather stale-cache repair.
+- `npm run build` - passed after the Weather stale-cache repair.
+- `npm run smoke:weather` - 8 passed, including the new ended-trip stale-cache regression that confirms the placeholder warning disappears and current actual/feels-like temperatures render.
+- `npm run smoke:mobile-layout` - 1 passed after the Weather stale-cache repair.
+- Local Playwright weather cache-fix smoke at 390px verified placeholder count `0`, current `25°C`, `體感 27°C`, scroll width `390`, and no console errors.
 - `npm run typecheck` - passed after the premium visual atlas pass.
 - `npm run build` - passed after the premium visual atlas pass; the atlas builds as a 140KB WebP asset.
 - `npm run smoke:scan` - 1 passed, including the new Scan atlas background and scanning-beam regression.

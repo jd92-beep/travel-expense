@@ -98,6 +98,12 @@ function weatherCacheKey(coord: WeatherCoord) {
   return `wx_react_v3_${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`;
 }
 
+function weatherDataIncludesDate(data: unknown, targetDate?: string): boolean {
+  if (!targetDate) return true;
+  const time = (data as { hourly?: { time?: unknown } } | null)?.hourly?.time;
+  return Array.isArray(time) && time.some((value) => String(value).startsWith(`${targetDate}T`));
+}
+
 function weatherLocationLabel(day: ItineraryDay): string {
   return [day.city, day.region, day.country].map((part) => String(part || '').trim()).find(Boolean) || '未設定座標';
 }
@@ -201,13 +207,15 @@ async function fetchJson(url: string, timeoutMs = 10000) {
 
 type WeatherBrokerState = Pick<AppState, 'credentialBrokerUrl' | 'credentialSession' | 'credentialSessionExpiresAt'>;
 
-export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJma = false, state?: WeatherBrokerState) {
+export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJma = false, state?: WeatherBrokerState, targetDate?: string) {
   if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) throw new Error(`${coord.label} 缺少 lat/lon，請喺行程 spot 加座標或用 Kimi 更新行程。`);
   const cacheKey = weatherCacheKey(coord);
   const safeTimezone = normalizeWeatherTimezone(timezone);
   try {
     const cached = cacheKey ? JSON.parse(localStorage.getItem(cacheKey) || 'null') : null;
-    if (cached && Date.now() - cached.ts < 60 * 60 * 1000) return { data: cached.data, source: `${cached.source} cache` };
+    if (cached && Date.now() - cached.ts < 60 * 60 * 1000 && weatherDataIncludesDate(cached.data, targetDate)) {
+      return { data: cached.data, source: `${cached.source} cache` };
+    }
   } catch {
     // Ignore corrupt cache.
   }

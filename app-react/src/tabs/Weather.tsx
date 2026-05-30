@@ -82,7 +82,7 @@ export function Weather({ state }: { state: AppState }) {
                 continue;
               }
               const isJapan = /日本|Japan|JP|名古屋|金澤|長野|高山|白川|常滑|上高地|立山|東京|京都|大阪/.test(`${day.country || ''} ${day.region || ''} ${coord.label}`);
-              const { data, source } = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', isJapan, state);
+              const { data, source } = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', isJapan, state, day.date);
               if (cancelled) return;
               next[day.date].push({ coord, source, slots: slotsForDate(data, day.date) });
             } catch (innerErr) {

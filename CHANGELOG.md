@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### Weather stale-cache forecast repair
+
+- Fixed Weather tab showing `旅程日期超出目前預報範圍` when an ended trip reused a fresh-but-date-mismatched cache entry for the same coordinates.
+- Weather cache hits now require the cached hourly forecast to include the target display date; otherwise the app refreshes the forecast and renders current actual/feels-like temperatures.
+- Added Weather smoke coverage for ended trips with stale same-coordinate cache, proving the placeholder warning disappears and current forecast values render.
+
 ### Premium travel control desk visual pass
 
 - Added a GPT Imagine 2 generated `travel-ai-atlas.webp` asset for the chosen `高級旅行控制台 + 和風手帳 + 少少 AI magic` direction, compressed from the generated source into a 140KB WebP project asset.

@@ -9,8 +9,10 @@ function trustAndState(state) {
   };
 }
 
-function weatherFixture() {
-  const dates = ['2026-04-20', '2026-04-21', '2026-04-22', '2026-04-23', '2026-04-24', '2026-04-25'];
+function weatherFixture(options = {}) {
+  const dates = options.dates || ['2026-04-20', '2026-04-21', '2026-04-22', '2026-04-23', '2026-04-24', '2026-04-25'];
+  const temp = options.temp ?? 21;
+  const feels = options.feels ?? 20;
   const hours = [9, 12, 16, 21];
   const time = [];
   const temperature_2m = [];
@@ -27,8 +29,8 @@ function weatherFixture() {
   for (const date of dates) {
     for (const hour of hours) {
       time.push(`${date}T${String(hour).padStart(2, '0')}:00`);
-      temperature_2m.push(21);
-      apparent_temperature.push(20);
+      temperature_2m.push(temp);
+      apparent_temperature.push(feels);
       weather_code.push(1);
       precipitation_probability.push(18);
       precipitation.push(0.2);
@@ -53,6 +55,9 @@ async function installState(page, state) {
         credentialSession: payload.credentialSession,
         credentialSessionExpiresAt: payload.credentialSessionExpiresAt,
       }));
+    }
+    for (const [key, value] of Object.entries(payload.weatherCache || {})) {
+      localStorage.setItem(key, JSON.stringify(value));
     }
     localStorage.setItem('boss-japan-tracker', JSON.stringify(payload));
   }, trustAndState(state));
@@ -150,6 +155,56 @@ test('WeatherAPI broker forecast is preferred when broker session is active', as
   expect(brokerCalls).toBeGreaterThan(0);
   expect(brokerPayloads.some((payload) => Math.abs(payload.lat - 35.1815) < 0.0001 && Math.abs(payload.lon - 136.9066) < 0.0001)).toBe(true);
   expect(openMeteoCalls).toBe(0);
+});
+
+test('Ended trip ignores stale same-coordinate cache and shows current forecast', async ({ page }) => {
+  const fixed = new Date('2026-05-30T10:00:00+09:00').valueOf();
+  let forecastCalls = 0;
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+  }, fixed);
+  await page.route('https://api.open-meteo.com/**', async (route) => {
+    forecastCalls += 1;
+    await route.fulfill({ json: weatherFixture({ dates: ['2026-05-30', '2026-05-31'], temp: 25, feels: 27 }) });
+  });
+  await installState(page, {
+    tripName: 'Nagoya 2026',
+    tripCurrency: 'JPY',
+    tripDateRange: { start: '2026-04-20', end: '2026-04-25' },
+    customItinerary: [{
+      date: '2026-04-20',
+      day: 1,
+      region: '名古屋',
+      city: 'Nagoya',
+      country: 'Japan',
+      timezone: 'Asia/Tokyo',
+      spots: [{ time: '09:00', name: '名古屋站', type: 'transport', lat: 35.1815, lon: 136.9066 }],
+    }],
+    weatherCache: {
+      'wx_react_v3_35.181_136.907': {
+        ts: fixed,
+        data: weatherFixture({ dates: ['2026-04-20'], temp: 19, feels: 18 }),
+        source: 'JMA',
+      },
+    },
+  });
+
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  await expect(page.getByText('天氣預報')).toBeVisible();
+  await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
+  await expect(page.getByText('25°C').first()).toBeVisible();
+  await expect(page.locator('[aria-label="體感 27°C"]').first()).toBeVisible();
+  expect(forecastCalls).toBeGreaterThan(0);
 });
 
 test('Non-Japan trip uses Open-Meteo without JMA', async ({ page }) => {
