@@ -28,7 +28,7 @@ const shellCopy: Record<TabId, { title: string }> = {
   dashboard: { title: 'Travel Ledger' },
   scan: { title: 'Receipt Studio' },
   timeline: { title: 'Trip Route' },
-  history: { title: 'Expense Archive' },
+  history: { title: 'Expense Record' },
   weather: { title: 'Weather Window' },
   stats: { title: 'Spend Cockpit' },
   settings: { title: 'Secure Controls' },

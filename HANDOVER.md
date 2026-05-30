@@ -4,8 +4,15 @@ Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- Current commit: Polish Record tab command controls
+- `6d0ff7b` Record Supabase account controls handover
 - `27f2886` Move Supabase account controls into settings
+- `f665b83` Record latest itinerary header handover
 - `0506dd0` Compact itinerary header and retry sync errors
+- `c8b0a98` Center scan copy and activate reminders
+- `ed95c4b` Simplify scan card copy
+- `876c8d0` Uncover scan artwork and enlarge cards
+- `fb8b029` Polish scan tab visual assets
 - `3465484` Dim itinerary rails outside trip dates
 - `420d009` Align itinerary rail progress to live spot
 - `92ed9cd` Polish itinerary timeline mobile layout
@@ -60,12 +67,12 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch contains the latest itinerary compact-header and sync-error retry work through `0506dd0` once pushed. Verify with `git status --short --branch` and `git log -1 --oneline`.
+- Main branch contains the latest Record tab command polish in the current commit once pushed. Before this pass, latest pushed commit was `6d0ff7b`. Verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
 - GitHub Pages workflows were recently failing in `actions/configure-pages@v5` with `Get Pages site failed / Not Found`; treat Pages as needing fresh CI verification after each push.
 - Netlify URL previously returned `503 usage_exceeded`; treat Netlify as not production-ready until the account/usage gate is resolved with fresh evidence.
-- GitNexus was refreshed after the latest commits. Run `npx gitnexus status` for the exact indexed/current hash; it should be up to date unless new work has landed.
+- GitNexus was refreshed after the latest commits. Latest observed index after this pass: 5,546 nodes, 9,633 edges, 127 clusters, 300 flows. Run `npx gitnexus status` for the exact indexed/current hash; it should be up to date unless new work has landed.
 - Graphify code graph was refreshed after the latest code/docs changes. Last observed `graphify update .` output: `804 nodes, 1201 edges, 149 communities`.
 - `AGENTS.md` and `CLAUDE.md` have GitNexus count-only metadata updates from analysis. Boss asked to update all markdown files, so include those metadata updates in the docs commit.
 
@@ -76,6 +83,7 @@ Latest UI polish in this handover update:
 - Itinerary compact-header polish on 2026-05-30 HKT: the React Timeline top card is now a short single-row command card, removes the trailing `📍` icon, keeps the day count beside `行程時間線`, and stops duplicating the day date in the right status area.
 - Sync retry polish on 2026-05-30 HKT: the topbar `Sync error` indicator now renders as a clickable retry button. Clicking it resets failed/error queue items and runs the sync engine again, so stale sync-error states are no longer passive.
 - Supabase account-control polish on 2026-05-30 HKT: signed-in account and clear-device controls no longer render at the app's top-right corner. They now live inside Settings -> `雲端帳號與密碼設定`, with a warning modal before local device data is cleared and the user is signed out.
+- Record tab command polish on 2026-05-30 HKT: the React shell title now reads `Expense Record`; `紀錄中心` no longer shows the `local ready` pill; `切換旅程` no longer includes an airplane icon; cloud pull is an icon-only reload button labelled `重新同步`; and the search field plus category selector stay on one compact mobile row without horizontal overflow.
 - Latest itinerary mobile polish on 2026-05-29 HKT: the Timeline rail now renders an independent Magic UI `BorderBeam`-backed beam layer with an animated vertical sweep, live progress fill, and a compact now marker. Itinerary cards now use an explicit compact grid layout, smaller mobile icons/time/action controls, and a right-side action column so more cards fit on phone screens while the rail stays separated from card text.
 - Follow-up itinerary rail fix on 2026-05-29 HKT: today's rail progress now follows the current itinerary spot index instead of the 24-hour clock percentage, so the dark animated fill and now marker stop near the live scenic spot for the active day.
 - Follow-up itinerary inactive-date polish on 2026-05-30 HKT: when the current date is outside the trip's itinerary date window, all Timeline rails keep the itinerary red/gold/green palette but render it dimmed, hide the live marker, and pause the bright sweep so past/future trips do not look actively in progress.
@@ -90,6 +98,9 @@ Latest UI verification from this pass:
 - `npm run smoke:dashboard` - passed, including the Home `旅程提醒` useful-action regression and the spending parity assertions.
 - `npm run typecheck` - passed.
 - `npm run build` - passed.
+- `npm run smoke:history` - 4 passed, including Record tab command cleanup, icon-only reload button, mobile search/category same-row geometry, and the desktop `Expense Record` shell title.
+- `npm run smoke:mobile-layout` - 1 passed after the Record tab filter-row update.
+- `SUPABASE_MIRROR_SMOKE=1 npm run smoke:supabase-notion-mirror` - 6 passed after starting Vite with fake Supabase env, covering the updated icon-only reload button locator in Supabase pull flows.
 - `SUPABASE_REDIRECT_SMOKE=1 npm run smoke:security` - 3 passed, 1 skipped in Supabase fake-env mode. This includes the Settings-only account/clear-device regression and scoped IndexedDB cleanup proof.
 - `npm run smoke:timeline` - 7 passed, covering edit/reset/maps/loose receipts, safe map URLs, live/passed/future state, compact command-card geometry, day-date de-duplication, mobile rail geometry, spot-index progress, and dimmed out-of-trip rails.
 - `npm run smoke:weather` - 4 passed.

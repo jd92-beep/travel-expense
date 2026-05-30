@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, RefreshCw, Search, X } from 'lucide-react';
-import { Reveal, StatusPill, Toast } from '../components/ui';
+import { Reveal, Toast } from '../components/ui';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { hasCredentialBrokerSession } from '../lib/credentialBroker';
 import { hasDirectNotionToken } from '../lib/notion';
@@ -159,8 +159,6 @@ export function History({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <StatusPill tone={pending.length ? 'warning' : 'ok'}>{pending.length ? `${pending.length} pending` : 'local ready'}</StatusPill>
-              
               {/* 右側切換旅程實體按鈕 */}
               <div className="relative z-30">
                 <button 
@@ -168,7 +166,7 @@ export function History({
                   type="button" 
                   onClick={() => setIsActionDropdownOpen(!isActionDropdownOpen)}
                 >
-                  <span>✈️ 切換旅程</span>
+                  <span>切換旅程</span>
                   <ChevronDown size={16} className={`text-blue-800/70 transition-transform duration-200 ${isActionDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
                 
@@ -210,8 +208,15 @@ export function History({
                 )}
               </div>
 
-              <button className="secondary bg-white/60 hover:bg-white/80 border border-white/80 backdrop-blur-md rounded-full px-4 py-2 font-semibold text-blue-900 transition-all shadow-sm" type="button" disabled={busy} onClick={() => handlePull('manual')}>
-                {busy ? <RefreshCw size={18} className="spin" /> : <RefreshCw size={18} />} Pull Cloud
+              <button
+                className="secondary history-refresh-button bg-white/60 hover:bg-white/80 border border-white/80 backdrop-blur-md rounded-full font-semibold text-blue-900 transition-all shadow-sm"
+                type="button"
+                disabled={busy}
+                onClick={() => handlePull('manual')}
+                aria-label="重新同步"
+                title="重新同步"
+              >
+                <RefreshCw size={18} className={busy ? 'spin' : undefined} />
               </button>
             </div>
           </div>

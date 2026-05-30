@@ -4,6 +4,13 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### React Record tab command polish
+
+- Renamed the React Record tab top shell title from `Expense Archive` to `Expense Record`.
+- Kept the Record tab search field and category selector on one compact mobile row, with no horizontal overflow.
+- Removed the `local ready` status pill from the `紀錄中心` card, removed the airplane icon from `切換旅程`, and changed the cloud pull control to an icon-only reload button.
+- Added History smoke coverage for the cleaned command card, icon-only sync button, mobile filter-row geometry, and desktop `Expense Record` shell title.
+
 ### React Scan tab masterpiece visual polish
 
 - Added a generated six-panel Scan visual suite for camera scan, gallery import, manual entry, voice capture, email import, and currency exchange cards.

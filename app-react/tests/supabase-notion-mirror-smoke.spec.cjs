@@ -639,7 +639,7 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
 
   await page.goto('http://localhost:8902/travel-expense/react/#history');
   await expect(page.getByText('紀錄中心')).toBeVisible();
-  await page.getByRole('button', { name: /Pull Cloud/ }).click();
+  await page.getByRole('button', { name: '重新同步' }).click();
 
   await expect.poll(() => page.evaluate((userId) => {
     const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
@@ -753,7 +753,7 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
 
   await page.goto('http://localhost:8902/travel-expense/react/#history');
   await expect(page.getByText('紀錄中心')).toBeVisible();
-  await page.getByRole('button', { name: /Pull Cloud/ }).click();
+  await page.getByRole('button', { name: '重新同步' }).click();
 
   await expect.poll(() => page.evaluate((userId) => {
     const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
