@@ -78,6 +78,26 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   const refreshButton = page.getByRole('button', { name: '重新同步' });
   await expect(refreshButton).toBeVisible();
   await expect(refreshButton).not.toContainText(/Pull Cloud/i);
+  const commandMetrics = await page.evaluate(() => {
+    const card = document.querySelector('.history-command')?.getBoundingClientRect();
+    const title = document.querySelector('.history-title-button')?.getBoundingClientRect();
+    const actions = document.querySelector('.history-command-actions')?.getBoundingClientRect();
+    const trip = document.querySelector('.history-trip-button')?.getBoundingClientRect();
+    const refresh = document.querySelector('.history-refresh-button')?.getBoundingClientRect();
+    return {
+      card: card && { height: card.height },
+      title: title && { top: title.top, right: title.right, height: title.height },
+      actions: actions && { top: actions.top, left: actions.left, height: actions.height },
+      trip: trip && { top: trip.top, height: trip.height },
+      refresh: refresh && { top: refresh.top, height: refresh.height },
+    };
+  });
+  expect(commandMetrics.card.height).toBeLessThanOrEqual(82);
+  expect(Math.abs(commandMetrics.title.top - commandMetrics.trip.top)).toBeLessThanOrEqual(6);
+  expect(Math.abs(commandMetrics.title.top - commandMetrics.refresh.top)).toBeLessThanOrEqual(6);
+  expect(Math.abs((commandMetrics.title.top + commandMetrics.title.height / 2) - (commandMetrics.actions.top + commandMetrics.actions.height / 2))).toBeLessThanOrEqual(4);
+  expect(commandMetrics.actions.left).toBeGreaterThan(commandMetrics.title.right - 8);
+
   const filterMetrics = await page.evaluate(() => {
     const filters = document.querySelector('.history-filters')?.getBoundingClientRect();
     const search = document.querySelector('.history-filters .search-field')?.getBoundingClientRect();

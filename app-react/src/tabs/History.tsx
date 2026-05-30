@@ -108,16 +108,16 @@ export function History({
             <div className="absolute inset-0 bg-gradient-to-br from-[#1E4D6B] via-[#4A90E2] to-[#D4A843] opacity-[0.15] mix-blend-multiply" />
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10" />
           </div>
-          <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-6 h-full w-full">
-            <div className="relative">
+          <div className="history-command-row relative z-10 flex flex-row justify-between items-center gap-2 p-4 sm:p-5 h-full w-full">
+            <div className="relative min-w-0 flex-1">
               <div className="relative z-30">
-                <button 
-                  className="flex items-center gap-1 text-2xl font-bold text-blue-900 mb-1 border-none bg-transparent focus:outline-none cursor-pointer hover:opacity-80 active:scale-98 transition-all p-0" 
-                  type="button" 
+                <button
+                  className="history-title-button flex items-center gap-1 text-2xl font-bold text-blue-900 border-none bg-transparent focus:outline-none cursor-pointer hover:opacity-80 active:scale-98 transition-all p-0 min-w-0"
+                  type="button"
                   onClick={() => setIsTitleDropdownOpen(!isTitleDropdownOpen)}
                 >
-                  <span>紀錄中心</span>
-                  <ChevronDown size={20} className={`text-blue-800/70 mt-0.5 transition-transform duration-200 ${isTitleDropdownOpen ? 'rotate-180' : ''}`} />
+                  <span className="truncate">紀錄中心</span>
+                  <ChevronDown size={18} className={`text-blue-800/70 mt-0.5 transition-transform duration-200 shrink-0 ${isTitleDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
                 
                 {isTitleDropdownOpen && (
@@ -158,12 +158,12 @@ export function History({
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="history-command-actions flex items-center justify-end gap-2 shrink-0">
               {/* 右側切換旅程實體按鈕 */}
               <div className="relative z-30">
-                <button 
-                  className="secondary bg-white/60 hover:bg-white/80 border border-white/80 backdrop-blur-md rounded-full px-4 py-2 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer focus:outline-none active:scale-95" 
-                  type="button" 
+                <button
+                  className="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-white/80 backdrop-blur-md rounded-full px-3 py-2 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer focus:outline-none active:scale-95"
+                  type="button"
                   onClick={() => setIsActionDropdownOpen(!isActionDropdownOpen)}
                 >
                   <span>切換旅程</span>

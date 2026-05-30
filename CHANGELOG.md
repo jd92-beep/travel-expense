@@ -11,6 +11,7 @@ All notable project changes should be recorded here.
 
 ### React Record tab command polish
 
+- Compacted the Record tab command card so `紀錄中心`, `切換旅程`, and the reload icon sit on one line on mobile, reducing the card height.
 - Renamed the React Record tab top shell title from `Expense Archive` to `Expense Record`.
 - Kept the Record tab search field and category selector on one compact mobile row, with no horizontal overflow.
 - Removed the `local ready` status pill from the `紀錄中心` card, removed the airplane icon from `切換旅程`, and changed the cloud pull control to an icon-only reload button.

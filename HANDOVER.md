@@ -4,6 +4,7 @@ Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- Current commit: Compact Record tab command header
 - Current commit: Repair GitHub Pages deployment enablement
 - Current commit: Polish Record tab command controls
 - `6d0ff7b` Record Supabase account controls handover
@@ -68,7 +69,7 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch contains the latest GitHub Pages deployment enablement repair in the current commit once pushed. Before this pass, latest pushed commit was `b1c20ea`. Verify with `git status --short --branch` and `git log -1 --oneline`.
+- Main branch contains the latest Record tab command header compaction in the current commit once pushed. Before this pass, latest pushed commit was `5d8de49`. Verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
 - GitHub Pages failure root cause on 2026-05-30 HKT: the repository Pages API returned `404` / `has_pages:false`, while the workflow called `actions/configure-pages@v5` with default `enablement:false`. The repo Pages site was enabled via GitHub API with `build_type=workflow`, and `.github/workflows/deploy.yml` now passes `enablement: true`. Fresh CI verification is still required after the repair commit is pushed.
@@ -80,6 +81,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 Latest UI polish in this handover update:
 
 - GitHub Pages deploy repair on 2026-05-30 HKT: fixed the failing Pages workflow that stopped at `actions/configure-pages@v5` with `Get Pages site failed / Not Found`. The repo is now enabled for Pages workflow deployment and the workflow can auto-enable Pages if it is missing.
+- Record tab compact command polish on 2026-05-30 HKT: `紀錄中心`, `切換旅程`, and the reload icon now stay on one compact row at 390px mobile width. The command card has a smaller touch-safe height, and History smoke now verifies the row alignment and reduced card height.
 - Scan tab visual polish on 2026-05-30 HKT: generated a six-panel masterpiece-style visual suite for camera scan, gallery import, manual entry, voice capture, email import, and currency exchange. The React Scan tab now crops that shared artwork into each function card without extra icon or banana overlays, keeps the artwork in its own reserved grid column, centers the camera label between the card edge and artwork, enlarges the mobile Scan background/action cards, and limits each action card to a concise Chinese label plus English translation only.
 - Home dashboard reminder polish on 2026-05-30 HKT: the `旅程提醒` panel now has useful visible behavior instead of local-only switches. It shows today's record count and spend, and exposes `立即記帳` plus `查看紀錄` actions so the panel can directly start entry or jump to Records.
 - Itinerary compact-header polish on 2026-05-30 HKT: the React Timeline top card is now a short single-row command card, removes the trailing `📍` icon, keeps the day count beside `行程時間線`, and stops duplicating the day date in the right status area.
@@ -100,6 +102,8 @@ Latest UI verification from this pass:
 - `npm run smoke:dashboard` - passed, including the Home `旅程提醒` useful-action regression and the spending parity assertions.
 - `npm run typecheck` - passed.
 - `npm run build` - passed.
+- `npm run smoke:history` - 4 passed after the Record command card compaction, including the new same-row geometry and max-height regression.
+- `npm run smoke:mobile-layout` - 1 passed after the Record command card compaction.
 - `npm run smoke:history` - 4 passed, including Record tab command cleanup, icon-only reload button, mobile search/category same-row geometry, and the desktop `Expense Record` shell title.
 - `npm run smoke:mobile-layout` - 1 passed after the Record tab filter-row update.
 - `SUPABASE_MIRROR_SMOKE=1 npm run smoke:supabase-notion-mirror` - 6 passed after starting Vite with fake Supabase env, covering the updated icon-only reload button locator in Supabase pull flows.

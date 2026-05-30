@@ -1022,6 +1022,19 @@ button.sync-status-indicator:focus-visible {
   /* Inherit layout from Tailwind classes inside component */
 }
 .history-command h2 { margin: 0 0 4px; }
+.history-command-row {
+  min-height: 68px;
+}
+.history-title-button span {
+  white-space: nowrap;
+}
+.history-title-button {
+  min-height: 42px;
+}
+.history-trip-button {
+  min-height: 42px;
+  white-space: nowrap;
+}
 .history-filters {
   position: sticky;
   top: 8px;
@@ -3118,6 +3131,28 @@ textarea {
   .scan-screen {
     padding-left: 4px !important;
     padding-right: 4px !important;
+  }
+  .history-command-row {
+    min-height: 62px;
+    padding: 11px 12px !important;
+  }
+  .history-title-button {
+    font-size: 1.18rem !important;
+    min-height: 40px;
+  }
+  .history-command-actions {
+    gap: 6px;
+  }
+  .history-trip-button {
+    min-height: 40px;
+    padding-inline: 11px !important;
+    font-size: .86rem;
+  }
+  .history-refresh-button {
+    inline-size: 40px;
+    min-inline-size: 40px;
+    block-size: 40px;
+    min-block-size: 40px;
   }
   .content > .stack {
     padding-bottom: 92px;
