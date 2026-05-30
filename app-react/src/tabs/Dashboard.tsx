@@ -706,6 +706,7 @@ export function Dashboard({
       {/* 5. Budget Settings 折疊 Accordion */}
       <div className="bg-white/50 backdrop-blur-md border border-white/60 rounded-[24px] overflow-hidden mb-3 shadow-sm z-10 relative">
         <button 
+          type="button"
           className="w-full flex items-center justify-between p-4 focus:outline-none"
           onClick={() => setIsBudgetSettingsOpen(!isBudgetSettingsOpen)}
         >
@@ -744,6 +745,7 @@ export function Dashboard({
       {/* 6. Notifications 折疊 Accordion */}
       <div className="bg-white/50 backdrop-blur-md border border-white/60 rounded-[24px] overflow-hidden mb-6 shadow-sm z-10 relative">
         <button 
+          type="button"
           className="w-full flex items-center justify-between p-4 focus:outline-none"
           onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
         >
@@ -760,6 +762,13 @@ export function Dashboard({
         </button>
         {isNotificationsOpen && (
           <div className="px-5 pb-5 pt-2 border-t border-dashed border-slate-200/50 flex flex-col gap-4">
+            <div className="rounded-2xl border border-white/50 bg-white/45 p-3 flex items-center justify-between gap-3">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-700">今日記帳狀態</span>
+                <span className="text-[10px] text-slate-400">今日已有 {todayReceipts.length} 筆紀錄</span>
+              </div>
+              <span className="text-xs font-black text-[#D94132]">{tripCurrencySymbol}{fmt(todayTotal)}</span>
+            </div>
             <div className="flex justify-between items-center">
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-700">每日記帳提醒</span>
@@ -773,6 +782,22 @@ export function Dashboard({
                 <span className="text-[10px] text-slate-400">預算餘額低於 20% 時提醒</span>
               </div>
               <Switch className="dashboard-switch" checked={lowBudgetAlert} onCheckedChange={setLowBudgetAlert} aria-label="低預算提示" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="rounded-2xl bg-[#D94132] px-3 py-2.5 text-xs font-black text-white shadow-sm active:scale-95 transition"
+                onClick={onManual}
+              >
+                立即記帳
+              </button>
+              <button
+                type="button"
+                className="rounded-2xl border border-white/70 bg-white/70 px-3 py-2.5 text-xs font-black text-[#18395C] shadow-sm active:scale-95 transition"
+                onClick={() => onTab('history')}
+              >
+                查看紀錄
+              </button>
             </div>
           </div>
         )}

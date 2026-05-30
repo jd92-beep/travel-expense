@@ -37,6 +37,7 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   expect(heroButton).toBeTruthy();
   expect(heroCopy).toBeTruthy();
   expect(heroVisual).toBeTruthy();
+  expect(await page.locator('.scan-hero-copy').evaluate((node) => getComputedStyle(node).textAlign)).toBe('center');
   expect(heroCard.width).toBeGreaterThanOrEqual(356);
   expect(heroButton.width).toBeGreaterThanOrEqual(330);
   const overlapX = Math.max(0, Math.min(heroCopy.x + heroCopy.width, heroVisual.x + heroVisual.width) - Math.max(heroCopy.x, heroVisual.x));

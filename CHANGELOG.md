@@ -12,6 +12,7 @@ All notable project changes should be recorded here.
 - Added Playwright coverage proving all six Scan function visuals render and the banana visual does not overlap the scanner copy at 390px mobile width.
 - Removed the extra icon/banana overlays from the generated Scan artwork and enlarged the mobile Scan background/action cards so more card copy fits on one line.
 - Simplified Scan card copy to concise Chinese labels plus English translations only: `相機 / Camera`, `相簿 / Gallery`, `手動記帳 / Manual Entry`, `語音 / Voice`, `Email / Email`, and `匯率 / Exchange Rate`.
+- Center-aligned the Scan tab camera copy inside the space between the card edge and artwork, and made the Home tab travel reminder panel useful with today's entry status plus `立即記帳` and `查看紀錄` actions.
 
 ### React Itinerary Timeline rail polish
 

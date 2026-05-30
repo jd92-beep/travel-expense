@@ -72,3 +72,15 @@ test('Dashboard spending toggle matches legacy total/daily semantics', async ({ 
   await expect(flippedPage.locator('.washi-budget-card').filter({ hasText: 'Spent' })).toContainText('¥1,000');
   await flippedContext.close();
 });
+
+test('Dashboard travel reminders expose useful actions', async ({ page }) => {
+  await openDashboard(page, false);
+  await page.getByRole('button', { name: /旅程提醒/ }).click();
+  await expect(page.getByText('今日記帳狀態')).toBeVisible();
+  await expect(page.getByText('今日已有 2 筆紀錄')).toBeVisible();
+  await page.getByRole('button', { name: '立即記帳' }).click();
+  await expect(page.getByText('手動記一筆')).toBeVisible();
+  await page.getByRole('button', { name: '取消' }).click();
+  await page.getByRole('button', { name: '查看紀錄' }).click();
+  await expect(page).toHaveURL(/#history/);
+});

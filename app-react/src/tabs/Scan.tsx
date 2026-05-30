@@ -411,7 +411,7 @@ export function Scan({
             shimmerDuration="3.8s"
           >
             <div className="absolute inset-0 bg-white/10 opacity-30 pointer-events-none" />
-            <div className="scan-hero-copy scan-card-copy flex flex-col gap-1 items-start text-left relative z-10 min-w-0">
+            <div className="scan-hero-copy scan-card-copy flex flex-col gap-1 items-center text-center relative z-10 min-w-0">
               <strong className="text-xl sm:text-2xl font-black tracking-tight leading-tight mt-0.5">相機</strong>
               <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Camera</span>
             </div>
