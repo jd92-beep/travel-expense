@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### Stats meaningful chart redesign
+
+- Replaced the Stats tab top-card scope dial with a `支出方向盤` spending compass that shows category share, daily average spend, and the highest spending category.
+- Upgraded the old daily trend area into `每日 Budget Pace`, with a dashed budget line, over-budget day count, peak spending day, and red/gold bars for days above budget.
+- Added Stats smoke coverage for the spending compass, category percentage ring, budget pace chart, over-budget day count, and mobile no-overflow geometry.
+
 ### Weather command card compaction
 
 - Reduced the Weather tab `天氣預報` command card height by moving the active weather target into the header row.

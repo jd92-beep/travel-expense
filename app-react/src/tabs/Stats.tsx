@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { BarChart3, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { categoryById, computeSettlements, displayStore, fmt, getPersons, hkd } from '../lib/domain';
+import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, hkd } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { EmptyState, GlassCard, StatusPill } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
@@ -17,11 +17,14 @@ import { VisualIcon } from '../components/VisualIcon';
 import { categoryIconId } from '../lib/iconManifest';
 import '../styles/stats.css';
 
+type StatBucket = { id: string; name: string; color: string; total: number; icon?: string };
+
 export function Stats({ state, updateState }: { state: AppState; updateState: (patch: Partial<AppState>) => void }) {
   const trip = activeTrip(state);
   const scopedState = { ...state, receipts: scopedReceiptsForTrip(state, trip) };
   const settlement = computeSettlements(scopedState);
   const persons = getPersons(state);
+  const itinerary = getItinerary(state);
   const analysisReceipts = scopedState.receipts.filter((r) => state.statsIncludeTransportLodging || !isBigTripItem(r));
   const catTotals = categoryTotals(analysisReceipts);
   const payTotals = paymentTotals(analysisReceipts);
@@ -29,7 +32,6 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   const transferTotal = settlement.transfers.reduce((s, t) => s + t.amount, 0);
   const privateTotal = settlement.privateByOwner.reduce((s, n) => s + n, 0);
   const maxPersonTotal = Math.max(1, ...persons.map((_, i) => settlement.sharedByPayer[i] + settlement.privateByOwner[i]));
-  const scopeRatio = Math.min(100, scopedState.receipts.length ? analysisReceipts.length / scopedState.receipts.length * 100 : 0);
   const topReceipts = scopedState.receipts
     .filter((r) => state.top10IncludeBigItems || !isBigTripItem(r))
     .slice()
@@ -39,6 +41,10 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
     acc[r.date] = (acc[r.date] || 0) + (Number(r.total) || 0);
     return acc;
   }, {})).sort(([a], [b]) => a.localeCompare(b));
+  const tripDayCount = Math.max(1, itinerary.length || trend.length);
+  const dailyBudget = Math.round((Number(state.budget) || 0) / tripDayCount);
+  const dailyAverage = Math.round(analysisTotal / tripDayCount);
+  const overBudgetDays = trend.filter(([, total]) => dailyBudget > 0 && total > dailyBudget).length;
 
   return (
     <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto stats-tab stats-cockpit stats-screen">
@@ -50,7 +56,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
         <RetroGrid className="stats-retro-grid" opacity={0.22} cellSize={48} angle={64} lightLineColor="rgba(30,77,107,.24)" />
         <div className="absolute inset-0 bg-gradient-to-br from-[#C23B5E] via-[#D4A843] to-[#1E4D6B] opacity-[0.15] mix-blend-multiply pointer-events-none" />
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none" />
-        <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 p-6 h-full w-full">
+        <div className="stats-command-inner relative z-10 h-full w-full">
           <div className="stats-command-copy flex-1 min-w-0">
             <div className="stats-command-title-row">
               <h2 className="stats-command-title text-2xl font-bold text-red-900">
@@ -61,8 +67,8 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
               </span>
             </div>
           </div>
-          <div className="flex-shrink-0 self-center">
-            <ScopeDial value={scopeRatio} receipts={analysisReceipts.length} transfers={settlement.transfers.length} />
+          <div className="stats-command-visual">
+            <SpendingCompass categories={catTotals} total={analysisTotal} dailyAverage={dailyAverage} state={state} />
           </div>
         </div>
       </MagicCard>
@@ -152,48 +158,42 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
       <DataPanel
         className="trend-panel"
         icon={<TrendingUp size={19} />}
-        title="每日趨勢"
-        status={<StatusPill tone="neutral">{trend.length} 日</StatusPill>}
+        title="每日 Budget Pace"
+        status={<StatusPill tone={overBudgetDays ? 'warning' : 'ok'}>{overBudgetDays ? `${overBudgetDays} 日超支` : '未超支'}</StatusPill>}
       >
-        {trend.length ? <TrendLine trend={trend} /> : null}
-        {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color="#2d5a8e" />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
+        {trend.length ? <BudgetPaceChart trend={trend} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} /> : null}
+        {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
       </DataPanel>
       </div>
     </section>
   );
 }
 
-function ScopeDial({ value, receipts, transfers }: { value: number; receipts: number; transfers: number }) {
-  const dash = Math.max(0, Math.min(100, value));
+function SpendingCompass({ categories, total, dailyAverage, state }: { categories: StatBucket[]; total: number; dailyAverage: number; state: AppState }) {
+  const slices = categorySlices(categories, total);
+  const top = slices[0];
+  const ring = categoryRingGradient(slices, total);
   return (
-    <div className="stats-orbit" aria-label={`統計範圍 ${dash.toFixed(0)}%`}>
-      <svg viewBox="0 0 180 180" role="img">
-        <defs>
-          <linearGradient id="stats-scope-stroke" x1="18" y1="20" x2="150" y2="164" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#d94132" />
-            <stop offset="0.52" stopColor="#d39a29" />
-            <stop offset="1" stopColor="#173a60" />
-          </linearGradient>
-        </defs>
-        <circle cx="90" cy="90" r="72" className="orbit-rail" />
-        <motion.circle
-          cx="90"
-          cy="90"
-          r="72"
-          className="orbit-progress"
-          pathLength="100"
-          strokeDasharray={`${dash} 100`}
-          initial={{ strokeDasharray: '0 100' }}
-          animate={{ strokeDasharray: `${dash} 100` }}
-          transition={{ duration: 0.55, ease: 'easeOut' }}
-        />
-        <path className="orbit-grid" d="M32 90h116M90 32v116M49 49l82 82M131 49l-82 82" />
-        <circle cx="90" cy="90" r="36" className="orbit-core" />
-      </svg>
-      <div className="orbit-copy">
-        <strong>{dash.toFixed(0)}%</strong>
-        <span>統計範圍</span>
-        <small>{receipts} 筆分析 · {transfers} 筆轉帳</small>
+    <div className="spending-compass" aria-label={`支出方向盤，日均 ¥${fmt(dailyAverage)}，最高支出 ${top ? top.name : '未有紀錄'}`} style={{ '--compass-ring': ring } as CSSProperties}>
+      <div className="spending-compass-ring" aria-hidden="true">
+        <motion.i initial={{ rotate: -20, scale: 0.92 }} animate={{ rotate: 0, scale: 1 }} transition={{ duration: 0.5, ease: 'easeOut' }} />
+      </div>
+      <div className="spending-compass-copy">
+        <span>支出方向盤</span>
+        <strong>¥{fmt(dailyAverage)}</strong>
+        <small>日均 · HK$ {fmt(hkd(dailyAverage, state))}</small>
+      </div>
+      <div className="spending-compass-legend">
+        {slices.length ? slices.map((item) => (
+          <span className="spending-compass-slice" key={item.id} style={{ '--slice-color': item.color } as CSSProperties}>
+            <i aria-hidden="true" />
+            {item.name} {total > 0 ? Math.round(item.total / total * 100) : 0}%
+          </span>
+        )) : <span className="spending-compass-slice is-empty">未有分類</span>}
+      </div>
+      <div className="spending-compass-top">
+        <span>最高</span>
+        <b>{top ? `${top.name} · ¥${fmt(top.total)}` : '未有紀錄'}</b>
       </div>
     </div>
   );
@@ -229,25 +229,41 @@ function DataPanel({ icon, title, status, children, className = '' }: { icon: Re
   );
 }
 
-function TrendLine({ trend }: { trend: Array<[string, number]> }) {
-  const max = Math.max(1, ...trend.map(([, total]) => total));
-  const points = trend.map(([, total], idx) => {
-    const x = trend.length === 1 ? 50 : idx / (trend.length - 1) * 100;
-    const y = 78 - total / max * 58;
-    return `${x},${y}`;
-  }).join(' ');
+function BudgetPaceChart({ trend, dailyBudget, dailyAverage, state }: { trend: Array<[string, number]>; dailyBudget: number; dailyAverage: number; state: AppState }) {
+  const max = Math.max(1, dailyBudget, ...trend.map(([, total]) => total));
+  const budgetLine = dailyBudget > 0 ? Math.max(4, Math.min(96, 100 - dailyBudget / max * 100)) : 96;
+  const overDays = trend.filter(([, total]) => dailyBudget > 0 && total > dailyBudget);
+  const peak = trend.slice().sort((a, b) => b[1] - a[1])[0];
 
   return (
-    <svg className="trend-line" viewBox="0 0 100 88" preserveAspectRatio="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="stats-trend-fill" x1="0" x2="0" y1="0" y2="1">
-          <stop stopColor="#d94132" stopOpacity=".34" />
-          <stop offset="1" stopColor="#fff7e8" stopOpacity=".08" />
-        </linearGradient>
-      </defs>
-      <polyline points={`0,82 ${points} 100,82`} className="trend-fill" />
-      <motion.polyline points={points} className="trend-stroke" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.62, ease: 'easeOut' }} />
-    </svg>
+    <div className="budget-pace" aria-label={`每日 Budget Pace，超支 ${overDays.length} 日，日均 ¥${fmt(dailyAverage)}`}>
+      <div className="budget-pace-summary">
+        <span><b>{overDays.length}</b><small>超支日</small></span>
+        <span><b>¥{fmt(dailyBudget)}</b><small>每日預算線</small></span>
+        <span><b>{peak ? peak[0] : '-'}</b><small>最高支出日</small></span>
+      </div>
+      <div className="budget-pace-chart" style={{ '--budget-line': `${budgetLine}%` } as CSSProperties}>
+        <i className="budget-pace-line" aria-hidden="true" />
+        {trend.map(([date, total], idx) => {
+          const over = dailyBudget > 0 && total > dailyBudget;
+          const height = Math.max(8, Math.min(100, total / max * 100));
+          const label = trend.length <= 7 ? `Day ${idx + 1}` : date.slice(5);
+          return (
+            <div className={`budget-pace-day ${over ? 'over' : 'ok'}`} key={date} title={`${date}: ¥${fmt(total)} / HK$ ${fmt(hkd(total, state))}`}>
+              <span className="budget-pace-bar">
+                <motion.i
+                  style={{ height: `${height}%` }}
+                  initial={{ height: 0 }}
+                  animate={{ height: `${height}%` }}
+                  transition={{ duration: 0.42, delay: idx * 0.025, ease: 'easeOut' }}
+                />
+              </span>
+              <small>{label}</small>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -255,18 +271,39 @@ function isBigTripItem(receipt: Receipt): boolean {
   return receipt.category === 'flight' || receipt.category === 'lodging' || receipt.category === 'transport';
 }
 
-function categoryTotals(receipts: Receipt[]) {
+function categoryTotals(receipts: Receipt[]): StatBucket[] {
   const known = new Set(CATEGORIES.map((c) => c.id));
   const totals = CATEGORIES.map((c) => ({ ...c, total: receipts.filter((r) => r.category === c.id).reduce((s, r) => s + (Number(r.total) || 0), 0) })).filter((x) => x.total > 0);
   const unknownTotal = receipts.filter((r) => !known.has(r.category as CategoryId)).reduce((s, r) => s + (Number(r.total) || 0), 0);
   return unknownTotal > 0 ? [...totals, { id: 'unknown', icon: '?', name: '未分類', color: '#6b7280', total: unknownTotal }] : totals;
 }
 
-function paymentTotals(receipts: Receipt[]) {
+function paymentTotals(receipts: Receipt[]): StatBucket[] {
   const known = new Set(PAYMENTS.map((p) => p.id));
   const totals = PAYMENTS.map((p) => ({ ...p, total: receipts.filter((r) => r.payment === p.id).reduce((s, r) => s + (Number(r.total) || 0), 0) })).filter((x) => x.total > 0);
   const unknownTotal = receipts.filter((r) => !known.has(r.payment as PaymentId)).reduce((s, r) => s + (Number(r.total) || 0), 0);
   return unknownTotal > 0 ? [...totals, { id: 'unknown', name: '其他方式', color: '#6b7280', total: unknownTotal }] : totals;
+}
+
+function categorySlices(categories: StatBucket[], total: number): StatBucket[] {
+  if (!total) return [];
+  const sorted = categories.slice().sort((a, b) => b.total - a.total);
+  const visible = sorted.slice(0, 4);
+  const rest = sorted.slice(4).reduce((sum, item) => sum + item.total, 0);
+  return rest > 0 ? [...visible, { id: 'other-categories', name: '其他類別', color: '#8b7d6d', total: rest }] : visible;
+}
+
+function categoryRingGradient(slices: StatBucket[], total: number): string {
+  if (!slices.length || !total) return 'conic-gradient(#e8ddd0 0deg 360deg)';
+  let cursor = 0;
+  const parts = slices.map((slice) => {
+    const next = cursor + slice.total / total * 360;
+    const segment = `${slice.color} ${cursor.toFixed(1)}deg ${next.toFixed(1)}deg`;
+    cursor = next;
+    return segment;
+  });
+  if (cursor < 360) parts.push(`rgba(232,221,208,.74) ${cursor.toFixed(1)}deg 360deg`);
+  return `conic-gradient(${parts.join(', ')})`;
 }
 
 function Bar({ label, leading, value, state, color, max }: { label: string; leading?: ReactNode; value: number; state: AppState; color: string; max?: number }) {

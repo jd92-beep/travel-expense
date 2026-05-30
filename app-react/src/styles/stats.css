@@ -53,6 +53,14 @@
   min-width: 0;
 }
 
+.stats-tab.stats-cockpit .stats-command-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px;
+}
+
 .stats-tab.stats-cockpit .stats-command .eyebrow {
   width: max-content;
   max-width: 100%;
@@ -95,6 +103,10 @@
   flex: 0 0 auto;
   display: inline-flex;
   white-space: nowrap;
+}
+
+.stats-tab.stats-cockpit .stats-command-visual {
+  width: min(100%, 260px);
 }
 
 .stats-tab.stats-cockpit .stats-command p,
@@ -194,6 +206,154 @@
   font-size: 11px;
   font-weight: 800;
   line-height: 1.35;
+}
+
+.stats-tab.stats-cockpit .spending-compass {
+  position: relative;
+  width: min(100%, 244px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  justify-self: end;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 24px;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.72), rgba(255,245,224,.44)),
+    rgba(255,255,255,.32);
+  box-shadow:
+    0 24px 52px rgba(59,43,26,.14),
+    inset 0 1px 1px rgba(255,255,255,.86);
+}
+
+.stats-tab.stats-cockpit .spending-compass-ring {
+  position: relative;
+  width: min(100%, 156px);
+  aspect-ratio: 1;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, rgba(255,253,247,.94) 0 40%, transparent 41%),
+    var(--compass-ring);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.76),
+    0 14px 32px rgba(59,43,26,.12);
+}
+
+.stats-tab.stats-cockpit .spending-compass-ring::before {
+  content: '';
+  position: absolute;
+  inset: 13px;
+  border: 1px dashed rgba(24,57,92,.18);
+  border-radius: inherit;
+}
+
+.stats-tab.stats-cockpit .spending-compass-ring i {
+  width: 56%;
+  height: 56%;
+  display: block;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.88), rgba(255,247,232,.58));
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.9);
+}
+
+.stats-tab.stats-cockpit .spending-compass-copy {
+  position: absolute;
+  top: 46px;
+  left: 50%;
+  width: 108px;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.stats-tab.stats-cockpit .spending-compass-copy span,
+.stats-tab.stats-cockpit .spending-compass-top span {
+  color: #8B6914;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.stats-tab.stats-cockpit .spending-compass-copy strong {
+  color: #1E4D6B;
+  font-family: var(--font-travel-display);
+  font-size: 23px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.stats-tab.stats-cockpit .spending-compass-copy small {
+  color: #7A7068;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.stats-tab.stats-cockpit .spending-compass-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.stats-tab.stats-cockpit .spending-compass-slice {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 5px 7px;
+  border: 1px solid rgba(255,255,255,.66);
+  border-radius: 999px;
+  background: rgba(255,255,255,.5);
+  color: #3A3229;
+  font-size: 10.5px;
+  font-weight: 950;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats-tab.stats-cockpit .spending-compass-slice i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--slice-color);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.72);
+}
+
+.stats-tab.stats-cockpit .spending-compass-slice.is-empty {
+  grid-column: 1 / -1;
+  justify-content: center;
+}
+
+.stats-tab.stats-cockpit .spending-compass-top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid rgba(211,154,41,.22);
+  border-radius: 14px;
+  background: rgba(255,248,237,.58);
+}
+
+.stats-tab.stats-cockpit .spending-compass-top b {
+  min-width: 0;
+  color: #2A2119;
+  font-size: 12px;
+  font-weight: 950;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stats-tab.stats-cockpit .stats-metrics {
@@ -515,6 +675,130 @@
   vector-effect: non-scaling-stroke;
 }
 
+.stats-tab.stats-cockpit .budget-pace {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.stats-tab.stats-cockpit .budget-pace-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stats-tab.stats-cockpit .budget-pace-summary span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  min-height: 56px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255,255,255,.66);
+  border-radius: 16px;
+  background: rgba(255,255,255,.5);
+}
+
+.stats-tab.stats-cockpit .budget-pace-summary b {
+  min-width: 0;
+  color: #1E4D6B;
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-tab.stats-cockpit .budget-pace-summary small {
+  color: #7A7068;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.stats-tab.stats-cockpit .budget-pace-chart {
+  position: relative;
+  height: 156px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(42px, 1fr);
+  align-items: end;
+  gap: 8px;
+  padding: 14px 12px 10px;
+  border: 1px solid rgba(255,255,255,.64);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.56), rgba(255,248,237,.34)),
+    repeating-linear-gradient(90deg, rgba(24,57,92,.055) 0 1px, transparent 1px 28px);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.stats-tab.stats-cockpit .budget-pace-line {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: var(--budget-line);
+  z-index: 2;
+  border-top: 2px dashed rgba(194,59,94,.62);
+  filter: drop-shadow(0 2px 4px rgba(194,59,94,.12));
+  pointer-events: none;
+}
+
+.stats-tab.stats-cockpit .budget-pace-line::after {
+  content: '預算線';
+  position: absolute;
+  right: 0;
+  top: -20px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.72);
+  color: #A83030;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.stats-tab.stats-cockpit .budget-pace-day {
+  position: relative;
+  z-index: 3;
+  min-width: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  gap: 6px;
+}
+
+.stats-tab.stats-cockpit .budget-pace-bar {
+  width: 100%;
+  max-width: 34px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.stats-tab.stats-cockpit .budget-pace-bar i {
+  width: 100%;
+  display: block;
+  min-height: 8px;
+  border-radius: 999px 999px 9px 9px;
+  background: linear-gradient(180deg, #2d5a8e, #1E4D6B);
+  box-shadow: 0 10px 18px rgba(24,57,92,.16);
+}
+
+.stats-tab.stats-cockpit .budget-pace-day.over .budget-pace-bar i {
+  background: linear-gradient(180deg, #C23B5E, #D4A843);
+  box-shadow: 0 10px 18px rgba(194,59,94,.18);
+}
+
+.stats-tab.stats-cockpit .budget-pace-day small {
+  color: #7A7068;
+  font-size: 10.5px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
 .stats-tab.stats-cockpit .empty-state {
   border-radius: 18px;
   background: rgba(255,248,237,.58);
@@ -541,6 +825,13 @@
     display: none;
   }
 
+  .stats-tab.stats-cockpit .stats-command-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+  }
+
   .stats-tab.stats-cockpit .stats-command h2 {
     font-size: clamp(24px, 7vw, 30px);
   }
@@ -557,9 +848,56 @@
     line-height: 1;
   }
 
+  .stats-tab.stats-cockpit .stats-command-visual {
+    width: 100% !important;
+    min-width: 100%;
+    align-self: stretch;
+  }
+
   .stats-tab.stats-cockpit .stats-orbit {
     width: 188px;
     justify-self: start;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass {
+    width: 100% !important;
+    max-width: none;
+    justify-self: stretch;
+    grid-template-columns: 142px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass-ring {
+    width: 142px;
+    grid-row: 1 / span 2;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass-copy {
+    top: 50px;
+    left: 81px;
+    width: 94px;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass-copy strong {
+    font-size: 20px;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass-legend {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass-slice {
+    min-height: 26px;
+    font-size: 10px;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass-top {
+    grid-column: 2;
+    min-height: 28px;
+    padding: 5px 8px;
   }
 
   .stats-tab.stats-cockpit .stats-metrics {
@@ -586,6 +924,31 @@
 
   .stats-tab.stats-cockpit .bar-row b {
     white-space: normal;
+  }
+
+  .stats-tab.stats-cockpit .budget-pace-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .stats-tab.stats-cockpit .budget-pace-summary span {
+    min-height: 52px;
+    padding: 8px 7px;
+  }
+
+  .stats-tab.stats-cockpit .budget-pace-summary b {
+    font-size: 13px;
+  }
+
+  .stats-tab.stats-cockpit .budget-pace-summary small {
+    font-size: 9.5px;
+  }
+
+  .stats-tab.stats-cockpit .budget-pace-chart {
+    height: 138px;
+    grid-auto-columns: minmax(38px, 1fr);
+    gap: 7px;
+    padding-inline: 10px;
   }
 
   .stats-tab.stats-cockpit .transfer {

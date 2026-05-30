@@ -27,6 +27,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
     persons,
     shareRatios: { p_boss: 1, p_xinxin: 1 },
     receipts,
+    budget: 2400,
     statsIncludeTransportLodging: false,
     top10IncludeBigItems: true,
   });
@@ -54,10 +55,32 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   expect(commandHeaderMetrics.pillLeft).toBeGreaterThan(commandHeaderMetrics.titleRight);
   expect(commandHeaderMetrics.rowHeight).toBeLessThanOrEqual(44);
   expect(commandHeaderMetrics.scrollWidth).toBeLessThanOrEqual(390);
+  const compass = page.locator('.spending-compass');
+  await expect(compass).toBeVisible();
+  await expect(compass).toContainText('支出方向盤');
+  await expect(compass).toContainText('日均');
+  await expect(compass).toContainText('餐飲');
+  await expect(compass).toContainText('最高');
+  await expect(compass.locator('.spending-compass-slice')).toHaveCount(4);
+  const compassMetrics = await compass.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      width: rect.width,
+      scrollWidth: document.documentElement.scrollWidth,
+      ringBackground: getComputedStyle(node).getPropertyValue('--compass-ring'),
+    };
+  });
+  expect(compassMetrics.width, JSON.stringify(compassMetrics, null, 2)).toBeLessThanOrEqual(354);
+  expect(compassMetrics.scrollWidth, JSON.stringify(compassMetrics, null, 2)).toBeLessThanOrEqual(390);
+  expect(compassMetrics.ringBackground).toContain('conic-gradient');
   await expect(page.getByText('Xinxin').first()).toBeVisible();
   await expect(page.getByText('Tony').first()).toBeVisible();
   await expect(page.locator('.transfer-modern')).toContainText('¥2,850');
   await expect(page.getByText('代付：Tony 代 Xinxin 付 ¥300 · M9 Gift')).toBeVisible();
+  await expect(page.getByText('每日 Budget Pace')).toBeVisible();
+  await expect(page.locator('.trend-panel')).toContainText('超支');
+  await expect(page.locator('.budget-pace')).toContainText('預算線');
+  await expect(page.locator('.budget-pace-day.over')).toHaveCount(2);
 
   await expect(page.getByText('M9 Hotel')).toBeVisible();
   await expect(page.getByText('日常支出')).toBeVisible();
@@ -71,7 +94,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(page.getByText('M9 Hotel')).toHaveCount(0);
   await expect(page.getByText('M9 Sushi')).toBeVisible();
 
-  await expect(page.getByText('2026-04-20')).toBeVisible();
-  await expect(page.getByText('2026-04-21')).toBeVisible();
-  await expect(page.getByText('2026-04-22')).toBeVisible();
+  await expect(page.locator('.bar-row').filter({ hasText: '2026-04-20' })).toBeVisible();
+  await expect(page.locator('.bar-row').filter({ hasText: '2026-04-21' })).toBeVisible();
+  await expect(page.locator('.bar-row').filter({ hasText: '2026-04-22' })).toBeVisible();
 });
