@@ -87,6 +87,29 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
   await page.goto('http://localhost:8902/travel-expense/react/');
   await expect(page.getByText('天氣預報')).toBeVisible();
   await expect(page.getByText(/Day 1 · JMA/)).toBeVisible();
+  const command = page.locator('.weather-command-fancy');
+  await expect(command.locator('.weather-target-pill .status-pill')).toHaveCount(1);
+  await expect(command.locator('.weather-target-pill')).toContainText('Today');
+  await expect(command).not.toContainText('刷新');
+  await expect(command.getByLabel('刷新天氣')).toBeVisible();
+  const commandMetrics = await command.evaluate((node) => {
+    const card = node.getBoundingClientRect();
+    const title = node.querySelector('.weather-command-row h2')?.getBoundingClientRect();
+    const pill = node.querySelector('.weather-target-pill')?.getBoundingClientRect();
+    const button = node.querySelector('.weather-refresh-icon')?.getBoundingClientRect();
+    return {
+      height: card.height,
+      scrollWidth: document.documentElement.scrollWidth,
+      titleRight: title?.right || 0,
+      pillLeft: pill?.left || 0,
+      buttonLeft: button?.left || 0,
+      pillRight: pill?.right || 0,
+    };
+  });
+  expect(commandMetrics.height, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(92);
+  expect(commandMetrics.scrollWidth, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(390);
+  expect(commandMetrics.pillLeft, JSON.stringify(commandMetrics, null, 2)).toBeGreaterThan(commandMetrics.titleRight);
+  expect(commandMetrics.buttonLeft, JSON.stringify(commandMetrics, null, 2)).toBeGreaterThanOrEqual(commandMetrics.pillRight);
   const weatherAtmosphere = await page.locator('.weather-command-fancy').evaluate((node) => getComputedStyle(node).backgroundImage);
   const weatherDrift = await page.locator('.weather-slot-detailed').first().evaluate((node) => getComputedStyle(node, '::after').animationName);
   expect(weatherAtmosphere).toContain('travel-ai-atlas');

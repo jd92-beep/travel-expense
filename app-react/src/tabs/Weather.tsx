@@ -63,6 +63,11 @@ export function Weather({ state }: { state: AppState }) {
     const coords = coordsForDay(day).map((coord) => `${coord.label}:${coord.lat}:${coord.lon}`).join(',');
     return `${day.date}:${day.region}:${day.country || ''}:${coords}`;
   }).join('|');
+  const targetSummary = useMemo(() => weatherTargetSummary(displayItinerary, hasEnded, today), [displayItinerary, hasEnded, today]);
+  const hasMissingTarget = useMemo(
+    () => displayItinerary.some((day) => coordsForDay(day).some((coord) => coord.missing)),
+    [displayItinerary],
+  );
 
   const loadRef = useRef<() => Promise<void>>(async () => {});
 
@@ -114,18 +119,16 @@ export function Weather({ state }: { state: AppState }) {
         <GlassCard className="weather-command weather-command-fancy">
         <Meteors number={9} minDuration={4} maxDuration={9} className="weather-meteor" />
         <ProgressiveBlur className="weather-command-blur" height="34%" position="bottom" blurLevels={[0.5, 1, 2, 4, 8, 12]} />
-        <div className="section-head relative z-10">
-          <div>
-            <h2>天氣預報 ☀️❄️</h2>
+        <div className="weather-command-row relative z-10">
+          <h2>天氣預報</h2>
+          <div className="weather-command-actions">
+            <span className="weather-target-pill">
+              <StatusPill tone={hasMissingTarget ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{targetSummary}</StatusPill>
+            </span>
+            <button className="secondary weather-refresh-icon" type="button" aria-label="刷新天氣" title="刷新天氣" disabled={busy} onClick={() => loadRef.current()}>
+              <RefreshCw size={17} className={busy ? 'spin' : ''} />
+            </button>
           </div>
-          <button className="secondary" type="button" disabled={busy} onClick={() => loadRef.current()}>
-            <RefreshCw size={18} className={busy ? 'spin' : ''} /> 刷新
-          </button>
-        </div>
-        <div className="weather-targets relative z-10">
-          {displayItinerary.flatMap((day) => coordsForDay(day).map((coord) => (
-            <StatusPill key={`${day.date}-${coord.label}`} tone={coord.missing ? 'warning' : 'info'}>{day.day > 0 ? `Day ${day.day}` : 'Today'}. {coord.label}</StatusPill>
-          )))}
         </div>
         {busy && <LoadingState label="更新天氣中" />}
         {error && <Toast tone="warning">天氣拉取失敗：{error}</Toast>}
@@ -258,6 +261,19 @@ function formatNumber(value?: number, suffix = ''): string {
 
 function formatHour(hour: number): string {
   return `${String(hour).padStart(2, '0')}:00`;
+}
+
+function weatherTargetSummary(days: ItineraryDay[], hasEnded: boolean, today: string): string {
+  const todayDay = days.find((day) => day.date === today);
+  const sourceDays = hasEnded || todayDay ? (todayDay ? [todayDay] : days) : days;
+  const labels = Array.from(new Set(sourceDays.flatMap((day) => coordsForDay(day).map((coord) => coord.label).filter(Boolean))));
+  const scope = hasEnded || Boolean(todayDay) || days.every((day) => day.day <= 0)
+    ? 'Today'
+    : days.length === 1
+      ? `Day ${days[0]?.day || 1}`
+      : `${days.length}日`;
+  const visible = labels.slice(0, 3).join('/') || '未設定地點';
+  return `${scope} · ${visible}${labels.length > 3 ? ` +${labels.length - 3}` : ''}`;
 }
 
 function weatherHint(slot: { rain?: number; precipMm?: number; windSpeed?: number; windGust?: number; uvIndex?: number; temp?: number; feelsLike?: number }) {

@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-30
 
+### Weather command card compaction
+
+- Reduced the Weather tab `天氣預報` command card height by moving the active weather target into the header row.
+- Combined today's weather locations into one compact pill such as `Today · 名古屋/高山`.
+- Changed the refresh action to an icon-only button with an accessible `刷新天氣` label, and added smoke coverage for the compact mobile geometry.
+
 ### Weather stale-cache forecast repair
 
 - Fixed Weather tab showing `旅程日期超出目前預報範圍` when an ended trip reused a fresh-but-date-mismatched cache entry for the same coordinates.

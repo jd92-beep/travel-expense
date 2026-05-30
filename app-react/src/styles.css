@@ -1621,11 +1621,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .weather-command {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 .weather-command-fancy {
   position: relative;
   overflow: hidden;
+  min-height: 76px;
+  padding: 13px 14px !important;
   border-color: rgba(255,255,255,.78);
   background:
     linear-gradient(135deg, rgba(255,255,255,.86), rgba(238,247,250,.62)),
@@ -1672,6 +1674,55 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .weather-command-blur {
   z-index: 1;
+}
+.weather-command-row,
+.weather-command-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.weather-command-row {
+  justify-content: space-between;
+  gap: 10px;
+}
+.weather-command-row h2 {
+  flex: 0 1 auto;
+  margin: 0;
+  font-size: clamp(21px, 5.7vw, 28px);
+  line-height: 1.05;
+  white-space: nowrap;
+}
+.weather-command-actions {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.weather-target-pill {
+  display: inline-flex;
+  max-width: min(54vw, 260px);
+  min-width: 0;
+}
+.weather-target-pill .status-pill {
+  max-width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  overflow: hidden;
+}
+.weather-target-pill .status-pill > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.weather-refresh-icon {
+  inline-size: 38px;
+  block-size: 38px;
+  min-inline-size: 38px;
+  min-block-size: 38px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 !important;
+  border-radius: 14px;
 }
 .weather-targets {
   display: flex;
@@ -3222,6 +3273,33 @@ textarea {
   }
   .weather-grid {
     grid-template-columns: 1fr;
+  }
+  .weather-command-fancy {
+    min-height: 64px;
+    padding: 11px 12px !important;
+  }
+  .weather-command-row {
+    gap: 8px;
+  }
+  .weather-command-row h2 {
+    font-size: 20px;
+  }
+  .weather-command-actions {
+    gap: 6px;
+  }
+  .weather-target-pill {
+    max-width: clamp(138px, calc(100vw - 218px), 172px);
+  }
+  .weather-target-pill .status-pill {
+    min-height: 32px;
+    padding-inline: 8px;
+    font-size: 11px;
+  }
+  .weather-refresh-icon {
+    inline-size: 36px;
+    block-size: 36px;
+    min-inline-size: 36px;
+    min-block-size: 36px;
   }
   .weather-slot-detailed {
     min-height: 172px;

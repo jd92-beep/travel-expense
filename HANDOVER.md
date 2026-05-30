@@ -4,6 +4,7 @@ Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- Current commit: Compact Weather command card
 - Current commit: Fix stale weather forecast cache
 - Current commit: Add premium travel AI visual atlas
 - Current commit: Compact Stats tab command header
@@ -73,7 +74,7 @@ Before changing code:
 
 Current production-readiness status as of 2026-05-30 HKT:
 
-- Main branch contains the latest Weather stale-cache repair in the current commit once pushed. Before this pass, latest pushed commit was `6c4ec8e`. Verify with `git status --short --branch` and `git log -1 --oneline`.
+- Main branch contains the latest compact Weather command-card repair in the current commit once pushed. Before this pass, latest pushed commit was `a287013`. Verify with `git status --short --branch` and `git log -1 --oneline`.
 - React public app is the primary app under `app-react/`.
 - Vercel primary URL was previously confirmed ready after the WeatherAPI broker deploy at `https://travel-expense-react.vercel.app`; verify live deployment again after the next push if Boss asks for deployment proof.
 - GitHub Pages failure root cause on 2026-05-30 HKT: the repository Pages API returned `404` / `has_pages:false`, while the workflow called `actions/configure-pages@v5` with default `enablement:false`. The repo Pages site was enabled via GitHub API with `build_type=workflow`, and `.github/workflows/deploy.yml` now passes `enablement: true`. Fresh CI verification is still required after the repair commit is pushed.
@@ -84,6 +85,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- Weather command-card compaction on 2026-05-30 HKT: reduced the `天氣預報` top card height, moved today's active weather target into one compact pill such as `Today · 名古屋/高山`, and changed the refresh control to an icon-only button with an accessible `刷新天氣` label.
 - Weather stale-cache repair on 2026-05-30 HKT: fixed the Weather tab case where an ended trip displayed `旅程日期超出目前預報範圍` because the same-coordinate weather cache was still fresh but only contained old trip dates. `fetchWeather()` now receives the target display date and only accepts cached hourly data if it includes that date; otherwise it refreshes the forecast and shows current actual/feels-like temperature.
 - Premium travel control desk visual pass on 2026-05-30 HKT: Boss chose `高級旅行控制台 + 和風手帳 + 少少 AI magic`; a GPT Imagine 2 generated three-panel atlas was saved as `app-react/src/assets/atmosphere/travel-ai-atlas.webp` and shared across Scan, Timeline, and Weather. Scan now has a receipt-desk background with a scanning beam, Timeline has itinerary notebook/map atmosphere plus a live-card route glint, and Weather has a travel-weather command background plus ambient forecast drift.
 - Stats tab command-header polish on 2026-05-30 HKT: `分帳統計中心` now stays on one compact line with the receipt-count pill, the unneeded transfer-count pill/icon is removed from the top card, and mobile styling keeps the row aligned at 390px without overflow.
@@ -106,6 +108,11 @@ Latest UI polish in this handover update:
 
 Latest UI verification from this pass:
 
+- `npm run typecheck` - passed after the Weather command-card compaction.
+- `npm run build` - passed after the Weather command-card compaction.
+- `npm run smoke:weather` - 8 passed, including compact command-card geometry, the icon-only refresh button, and the single target pill.
+- `npm run smoke:mobile-layout` - 1 passed after the Weather command-card compaction.
+- Local Playwright weather command-card geometry smoke at 390px verified card height `68`, one pill `Today · 名古屋/高山`, no visible refresh text, scroll width `390`, and no title/pill/button overlap.
 - `npm run typecheck` - passed after the Weather stale-cache repair.
 - `npm run build` - passed after the Weather stale-cache repair.
 - `npm run smoke:weather` - 8 passed, including the new ended-trip stale-cache regression that confirms the placeholder warning disappears and current actual/feels-like temperatures render.
