@@ -61,6 +61,10 @@
   padding: 14px;
 }
 
+.stats-tab.stats-cockpit .stats-command {
+  grid-template-columns: 1fr !important;
+}
+
 .stats-tab.stats-cockpit .stats-command .eyebrow {
   width: max-content;
   max-width: 100%;
@@ -1063,5 +1067,92 @@
   .stats-tab.stats-cockpit .rank-row strong {
     grid-column: 2;
     justify-self: end;
+  }
+}
+
+/* Compact preview layout: keep the generated-preview hero readable on both
+   desktop command boards and scrollable mobile pages. */
+.stats-tab.stats-cockpit .stats-command-inner {
+  display: grid !important;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
+  align-items: center !important;
+  gap: 28px;
+  padding: 22px;
+}
+
+.stats-tab.stats-cockpit .stats-command-copy {
+  overflow: hidden;
+}
+
+.stats-tab.stats-cockpit .stats-command-copy::before {
+  content: "";
+  display: block;
+  width: 150px;
+  height: 74px;
+  margin-bottom: 10px;
+  background: url("../assets/generated/compact-japan-mark.svg") left center / contain no-repeat;
+}
+
+.stats-tab.stats-cockpit .stats-command-title-row {
+  display: flex !important;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+}
+
+.stats-tab.stats-cockpit .stats-command-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  font-size: clamp(38px, 3.7vw, 54px) !important;
+  white-space: nowrap;
+}
+
+.stats-tab.stats-cockpit .stats-record-pill {
+  flex: 0 0 auto;
+}
+
+.stats-tab.stats-cockpit .stats-command-visual {
+  justify-self: end;
+  width: min(100%, 460px);
+}
+
+.stats-tab.stats-cockpit .spending-compass {
+  width: 100% !important;
+  max-width: 460px;
+}
+
+@media (max-width: 620px) {
+  .stats-tab.stats-cockpit .stats-command-inner {
+    grid-template-columns: 1fr !important;
+    gap: 18px !important;
+    padding: 8px !important;
+  }
+
+  .stats-tab.stats-cockpit .stats-command-copy::before {
+    width: 108px;
+    height: 52px;
+    margin-bottom: 6px;
+  }
+
+  .stats-tab.stats-cockpit .stats-command-title-row {
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-height: 36px;
+  }
+
+  .stats-tab.stats-cockpit .stats-command-title {
+    font-size: clamp(24px, 7vw, 30px) !important;
+  }
+
+  .stats-tab.stats-cockpit .stats-record-pill .status-pill {
+    min-height: 34px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .stats-tab.stats-cockpit .stats-command-visual {
+    justify-self: stretch;
   }
 }

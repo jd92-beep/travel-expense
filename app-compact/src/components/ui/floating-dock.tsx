@@ -174,6 +174,7 @@ function DockItemButton({
           </motion.span>
         )}
       </AnimatePresence>
+      {mobile && <span className="dock-mobile-label">{item.title}</span>}
     </motion.button>
   );
 }

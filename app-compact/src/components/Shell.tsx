@@ -12,6 +12,7 @@ import { Particles } from './ui/particles';
 import { AuroraText } from './ui/aurora-text';
 import { SyncStatusIndicator } from './SyncStatusIndicator';
 import { shouldDisableHeavyEffects } from '../lib/performance';
+import compactJapanMark from '../assets/generated/compact-japan-mark.svg';
 
 
 const icons: Record<TabId, ReactNode> = {
@@ -24,14 +25,14 @@ const icons: Record<TabId, ReactNode> = {
   settings: <Settings size={20} />,
 };
 
-const shellCopy: Record<TabId, { title: string }> = {
-  dashboard: { title: 'Travel Ledger' },
-  scan: { title: 'Receipt Studio' },
-  timeline: { title: 'Trip Route' },
-  history: { title: 'Expense Record' },
-  weather: { title: 'Weather Window' },
-  stats: { title: 'Spend Cockpit' },
-  settings: { title: 'Secure Controls' },
+const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: string; status: string }> = {
+  dashboard: { title: 'Travel Ledger', mobileTitle: '日本東京之旅', subtitle: '2025年5月10日 - 5月17日', status: '進行中' },
+  scan: { title: 'Receipt Studio', mobileTitle: '收據掃描工作室', subtitle: '掃描 · 辨識 · 記帳', status: '就緒 · 可掃描' },
+  timeline: { title: 'Trip Route', mobileTitle: '行程時間線', subtitle: '東京之旅 · 8天7夜', status: '地圖檢視' },
+  history: { title: 'Expense Record', mobileTitle: '紀錄中心', subtitle: '管理所有收據與支出', status: '可同步' },
+  weather: { title: 'Weather Window', mobileTitle: '天氣預報', subtitle: '旅程天氣 · 隨時掌握', status: '已更新' },
+  stats: { title: 'Spend Cockpit', mobileTitle: '預算使用分析', subtitle: 'Spend Cockpit', status: '統計中' },
+  settings: { title: 'Secure Controls', mobileTitle: '設定控制中心', subtitle: 'Secure Controls', status: '系統狀態' },
 };
 
 // Legacy helper kept for backwards compatibility but we rely on shouldDisableHeavyEffects now.
@@ -187,6 +188,7 @@ export function Shell({
       )}
       <header className="topbar topbar-canva">
         <div className="topbar-title-block">
+          <img className="compact-topbar-mark" src={compactJapanMark} alt="" aria-hidden="true" />
           <h1>
             {richVisualEffects
               ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeCopy.title}</AuroraText>
@@ -194,6 +196,14 @@ export function Shell({
           </h1>
         </div>
         {syncState ? <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} /> : <StatusPill tone="ok">Broker-ready</StatusPill>}
+      </header>
+      <header className="compact-mobile-header" aria-label={`${activeCopy.mobileTitle} header`}>
+        <img className="compact-mobile-mark" src={compactJapanMark} alt="" aria-hidden="true" />
+        <div className="compact-mobile-heading">
+          <h1 aria-hidden="true"><span className="compact-mobile-title-art" data-title={activeCopy.mobileTitle} /></h1>
+          <p>{activeCopy.subtitle}</p>
+        </div>
+        <span className="compact-mobile-status">{activeCopy.status}</span>
       </header>
       <main className="content">{children}</main>
       <WindmillTransition activeKey={active} />

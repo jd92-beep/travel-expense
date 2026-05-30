@@ -925,3 +925,9 @@
     }
   }
 }
+
+@media (max-width: 767px) {
+  .timeline-screen {
+    padding-top: 10px !important;
+  }
+}
