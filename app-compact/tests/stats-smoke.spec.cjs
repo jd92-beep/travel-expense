@@ -2,6 +2,14 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+test.beforeEach(async ({ page }) => {
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+});
+
 const persons = [
   { id: 'p_boss', name: 'Tony Cheung', emoji: 'T', color: '#cc2929' },
   { id: 'p_xinxin', name: 'Xinxin Wong', emoji: 'X', color: '#2d5a8e' },

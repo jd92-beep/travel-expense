@@ -2,9 +2,22 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+async function stubLocalSecrets(page) {
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+}
+
+test.beforeEach(async ({ page }) => {
+  await stubLocalSecrets(page);
+});
+
 test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
+    localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
   });
 
@@ -54,6 +67,7 @@ test('Timeline map links reject unsafe imported URLs and use Android intent fall
     userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/125 Mobile Safari/537.36',
   });
   const page = await context.newPage();
+  await stubLocalSecrets(page);
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
     localStorage.clear();
