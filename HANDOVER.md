@@ -4,6 +4,7 @@ Last updated: 2026-05-30 HKT
 
 Latest pushed commits:
 
+- `27f2886` Move Supabase account controls into settings
 - `0506dd0` Compact itinerary header and retry sync errors
 - `3465484` Dim itinerary rails outside trip dates
 - `420d009` Align itinerary rail progress to live spot
