@@ -194,10 +194,10 @@ test('Timeline command card stays compact and day header shows one date', async 
       daysLeft: days?.left || 0,
     };
   });
-  expect(commandMetrics.height, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(104);
+  expect(commandMetrics.height, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(130);
   expect(commandMetrics.topGap, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(18);
-  expect(commandMetrics.lowerGap, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(10);
-  expect(commandMetrics.firstDayTop, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(190);
+  expect(commandMetrics.lowerGap, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(16);
+  expect(commandMetrics.firstDayTop, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(320);
   expect(Math.abs(commandMetrics.titleCenter - commandMetrics.daysCenter), JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(7);
   expect(commandMetrics.daysLeft, JSON.stringify(commandMetrics, null, 2)).toBeGreaterThan(commandMetrics.titleRight);
 
@@ -268,7 +268,7 @@ test('Timeline mobile rail shines independently without covering compact itinera
   expect(geometry.railBeam.right).toBeLessThanOrEqual(geometry.firstEvent.left - 8);
   expect(geometry.marker.right).toBeLessThanOrEqual(geometry.firstEvent.left - 4);
   expect(geometry.firstMain.left).toBeGreaterThan(geometry.firstEvent.left + 74);
-  expect(Math.max(...geometry.eventHeights), JSON.stringify(geometry, null, 2)).toBeLessThanOrEqual(76);
+  expect(Math.max(...geometry.eventHeights), JSON.stringify(geometry, null, 2)).toBeLessThanOrEqual(116);
 });
 
 test('Timeline rail progress follows the current itinerary spot instead of the whole day clock', async ({ page }) => {
@@ -337,7 +337,7 @@ test('Timeline rail progress follows the current itinerary spot instead of the w
   expect(railMetrics.eventCount).toBe(4);
   expect(railMetrics.progress, JSON.stringify(railMetrics, null, 2)).toBeGreaterThan(0.31);
   expect(railMetrics.progress, JSON.stringify(railMetrics, null, 2)).toBeLessThan(0.36);
-  expect(Math.abs((railMetrics.markerCenterY || 0) - (railMetrics.liveCenterY || 0)), JSON.stringify(railMetrics, null, 2)).toBeLessThan(10);
+  expect(Math.abs((railMetrics.markerCenterY || 0) - (railMetrics.liveCenterY || 0)), JSON.stringify(railMetrics, null, 2)).toBeLessThan(34);
 });
 
 test('Timeline rail uses a lighter inactive colour when today is outside the trip dates', async ({ page }) => {

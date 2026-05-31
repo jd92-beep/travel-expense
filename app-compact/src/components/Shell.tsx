@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, CloudSun, Home, List, ScanLine, Settings } from 'lucide-react';
+import { BarChart3, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
@@ -158,6 +158,24 @@ export function Shell({
           className="pointer-events-none fixed inset-0 -z-10 opacity-[0.08] mix-blend-soft-light"
         />
       )}
+      <nav className="compact-desktop-rail" aria-label="主要分頁">
+        <img className="compact-rail-mark" src={compactJapanMark} alt="" aria-hidden="true" />
+        <div className="compact-rail-items">
+          {TAB_MANIFEST.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`compact-rail-button ${active === tab.id ? 'active' : ''}`}
+              aria-label={tab.label}
+              aria-current={active === tab.id ? 'page' : undefined}
+              onClick={() => onTab(tab.id)}
+            >
+              <span className="compact-rail-icon">{icons[tab.id]}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
       {!online && <div className="top-notice offline">離線模式：資料會繼續保存在本機</div>}
       {updateReady && (
         <div className="top-notice update">
@@ -195,7 +213,17 @@ export function Shell({
               : activeCopy.title}
           </h1>
         </div>
-        {syncState ? <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} /> : <StatusPill tone="ok">Broker-ready</StatusPill>}
+        <div className="compact-desktop-actions" aria-label="Dashboard controls">
+          <span><ReceiptText size={16} /> 142 receipts</span>
+          <button type="button"><CalendarDays size={16} /> Apr 20 - Apr 30, 2025</button>
+          <button type="button"><Users size={16} /> All travelers</button>
+          <button type="button">JPY</button>
+          <button type="button"><Download size={16} /> Export</button>
+          <button type="button" aria-label="More controls"><MoreVertical size={18} /></button>
+        </div>
+        <div className="compact-sync-slot">
+          {syncState ? <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} /> : <StatusPill tone="ok">Broker-ready</StatusPill>}
+        </div>
       </header>
       <header className="compact-mobile-header" aria-label={`${activeCopy.mobileTitle} header`}>
         <img className="compact-mobile-mark" src={compactJapanMark} alt="" aria-hidden="true" />
