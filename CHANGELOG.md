@@ -2,6 +2,15 @@
 
 All notable project changes should be recorded here.
 
+## 2026-06-01
+
+### Compact smaller-font preview pass
+
+- Tightened the independent compact mobile typography again to better match the generated app previews: shorter iOS-style headers, smaller title/status text, denser card headings, smaller metric/body text, and a more compact bottom dock.
+- Hardened compact Settings against older or preview-seeded trip state where `shareRatios` or trip `currencies` may be missing, preserving trip-manager and ratio controls instead of falling into the tab error boundary.
+- Verified `app-compact/` with `npm run build`, all seven tab smokes (`dashboard`, `scan`, `timeline`, `history`, `weather`, `stats`, `settings`), `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check`.
+- Generated a new seven-tab mobile contact sheet at `/tmp/compact-current-audit-20260601-smallfont-after2/mobile-contact-sheet.png` with no console/page errors.
+
 ## 2026-05-31
 
 ### Compact Scan first-viewport preview pass

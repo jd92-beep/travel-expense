@@ -183,12 +183,20 @@ export function Settings({
   const persons = getPersons(state);
   const currentTrip = activeTrip(state);
   const trips = state.trips?.length ? state.trips : [currentTrip];
+  const currenciesForTrip = (trip: Partial<TripProfile> | undefined) => {
+    const tripCurrencies = Array.isArray(trip?.currencies) && trip.currencies.length ? trip.currencies : [];
+    return Array.from(new Set(['HKD', state.tripCurrency || 'JPY', ...tripCurrencies]));
+  };
+  const nonHomeCurrencyForTrip = (trip: Partial<TripProfile> | undefined, fallback = 'JPY') => (
+    currenciesForTrip(trip).find((code) => code !== (trip?.homeCurrency || 'HKD')) || fallback
+  );
   const activeTripSettlementState = {
     ...state,
     receipts: scopedReceiptsForTrip(state, currentTrip),
   };
   const settlement = computeSettlements(activeTripSettlementState);
-  const ratioTotal = persons.reduce((sum, person) => sum + Math.max(0, Number(state.shareRatios[person.id]) || 0), 0);
+  const shareRatios = state.shareRatios || {};
+  const ratioTotal = persons.reduce((sum, person) => sum + Math.max(0, Number(shareRatios[person.id]) || 0), 0);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState('');
   const [newPersonName, setNewPersonName] = useState('');
@@ -274,7 +282,7 @@ export function Settings({
   const [mgrStart, setMgrStart] = useState(managedTrip.startDate || '');
   const [mgrEnd, setMgrEnd] = useState(managedTrip.endDate || '');
   const [mgrBudget, setMgrBudget] = useState(String(managedTrip.budget || 0));
-  const [mgrCurrency, setMgrCurrency] = useState(managedTrip.currencies.find(c => c !== 'HKD') || 'JPY');
+  const [mgrCurrency, setMgrCurrency] = useState(nonHomeCurrencyForTrip(managedTrip));
   const [mgrArchived, setMgrArchived] = useState(!!managedTrip.archived);
   const managedTripVersionKey = `${managedTrip.id}:${managedTrip.updatedAt || 0}:${managedTrip.version || 0}`;
   const [newManagedTripName, setNewManagedTripName] = useState('');
@@ -294,7 +302,7 @@ export function Settings({
     setMgrStart(target.startDate || '');
     setMgrEnd(target.endDate || '');
     setMgrBudget(String(target.budget || 0));
-    setMgrCurrency(target.currencies.find(c => c !== 'HKD') || 'JPY');
+    setMgrCurrency(nonHomeCurrencyForTrip(target));
     setMgrArchived(!!target.archived);
   };
 
@@ -312,7 +320,7 @@ export function Settings({
       setMgrStart(target.startDate || '');
       setMgrEnd(target.endDate || '');
       setMgrBudget(String(target.budget || 0));
-      setMgrCurrency(target.currencies.find(c => c !== 'HKD') || 'JPY');
+      setMgrCurrency(nonHomeCurrencyForTrip(target));
       setMgrArchived(!!target.archived);
     }
   }, [managerTripId, managedTripVersionKey]);
@@ -666,7 +674,7 @@ export function Settings({
       trips: trips.map((item) => item.id === selectedTrip.id ? selectedTrip : { ...item, active: false }),
       tripName: selectedTrip.name,
       tripDateRange: { start: selectedTrip.startDate, end: selectedTrip.endDate },
-      tripCurrency: selectedTrip.currencies.find((code) => code !== 'HKD') || state.tripCurrency,
+      tripCurrency: nonHomeCurrencyForTrip(selectedTrip, state.tripCurrency),
       budget: selectedTrip.budget ?? state.budget,
       customItinerary: selectedTrip.itinerary,
     });
@@ -685,7 +693,7 @@ export function Settings({
         trips: tripsNext,
         tripName: draft.trip.name,
         tripDateRange: { start: draft.trip.startDate, end: draft.trip.endDate },
-        tripCurrency: draft.trip.currencies.find((code) => code !== 'HKD') || prev.tripCurrency,
+        tripCurrency: nonHomeCurrencyForTrip(draft.trip, prev.tripCurrency),
         customItinerary: draft.trip.itinerary,
         syncQueue: [...(prev.syncQueue || []), {
           id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,
@@ -727,7 +735,7 @@ export function Settings({
         activeTripId: nextActive.id,
         tripName: nextActive.name,
         tripDateRange: { start: nextActive.startDate, end: nextActive.endDate },
-        tripCurrency: nextActive.currencies.find((code) => code !== 'HKD') || prev.tripCurrency,
+        tripCurrency: nonHomeCurrencyForTrip(nextActive, prev.tripCurrency),
         customItinerary: nextActive.itinerary,
       };
     });
@@ -739,7 +747,7 @@ export function Settings({
       trips: trips.map((trip) => trip.id === currentTrip.id ? nextTrip : trip),
       tripName: nextTrip.name,
       tripDateRange: { start: nextTrip.startDate, end: nextTrip.endDate },
-      tripCurrency: nextTrip.currencies.find((code) => code !== 'HKD') || state.tripCurrency,
+      tripCurrency: nonHomeCurrencyForTrip(nextTrip, state.tripCurrency),
       customItinerary: nextTrip.itinerary,
     });
   }
@@ -793,7 +801,7 @@ export function Settings({
           patch.activeTripId = nextActive.id;
           patch.tripName = nextActive.name;
           patch.tripDateRange = { start: nextActive.startDate, end: nextActive.endDate };
-          patch.tripCurrency = nextActive.currencies.find((c) => c !== 'HKD') || prev.tripCurrency;
+          patch.tripCurrency = nonHomeCurrencyForTrip(nextActive, prev.tripCurrency);
           patch.budget = nextActive.budget || 0;
           patch.customItinerary = nextActive.itinerary;
           patch.trips = updatedTrips.map((t) => ({ ...t, active: t.id === nextActive.id }));
@@ -857,7 +865,7 @@ export function Settings({
           patch.activeTripId = nextActive.id;
           patch.tripName = nextActive.name;
           patch.tripDateRange = { start: nextActive.startDate, end: nextActive.endDate };
-          patch.tripCurrency = nextActive.currencies.find((c) => c !== 'HKD') || prev.tripCurrency;
+          patch.tripCurrency = nonHomeCurrencyForTrip(nextActive, prev.tripCurrency);
           patch.budget = nextActive.budget || 0;
           patch.customItinerary = nextActive.itinerary;
           patch.trips = updatedTrips.map((t) => ({ ...t, active: t.id === nextActive.id }));
@@ -957,7 +965,7 @@ export function Settings({
         activeTripId: newTrip.id,
         tripName: newTrip.name,
         tripDateRange: { start: newTrip.startDate, end: newTrip.endDate },
-        tripCurrency: newTrip.currencies.find((code) => code !== 'HKD') || prev.tripCurrency,
+        tripCurrency: nonHomeCurrencyForTrip(newTrip, prev.tripCurrency),
         budget: newTrip.budget || 0,
         customItinerary: newTrip.itinerary,
         syncQueue: [...latest.values()].slice(-500),
@@ -969,7 +977,7 @@ export function Settings({
     setMgrStart(newTrip.startDate || '');
     setMgrEnd(newTrip.endDate || '');
     setMgrBudget(String(newTrip.budget || 0));
-    setMgrCurrency(newTrip.currencies.find((c) => c !== 'HKD') || 'JPY');
+    setMgrCurrency(nonHomeCurrencyForTrip(newTrip));
     setMgrArchived(false);
     setNewManagedTripName('');
     setNewManagedTripDest('');
@@ -1360,7 +1368,7 @@ export function Settings({
             <div className="mini-list">
               <span>{tripDraft.trip.startDate} → {tripDraft.trip.endDate}</span>
               <span>{tripDraft.trip.destinationSummary}</span>
-              <span>{tripDraft.trip.itinerary.length} 日 · {tripDraft.trip.currencies.join(', ')}</span>
+              <span>{tripDraft.trip.itinerary.length} 日 · {currenciesForTrip(tripDraft.trip).join(', ')}</span>
               {tripDraft.changes.map((change) => <span key={change}>{change}</span>)}
               {tripDraft.warnings.map((warning) => <span key={warning}>Warning: {warning}</span>)}
             </div>
@@ -1394,7 +1402,7 @@ export function Settings({
             <AvatarBadge person={p} />
             <input value={p.name} onChange={(e) => updatePerson(p.id, { name: e.target.value })} aria-label={`${p.name} name`} />
             <input type="color" value={p.color} onChange={(e) => updatePerson(p.id, { color: e.target.value })} aria-label={`${p.name} color`} />
-            <input type="number" min={0} value={state.shareRatios[p.id] ?? 1} onChange={(e) => updateState({ shareRatios: { ...state.shareRatios, [p.id]: clampFinite(e.target.value, 1, 0, 1000) } })} aria-label={`${p.name} ratio`} />
+            <input type="number" min={0} value={shareRatios[p.id] ?? 1} onChange={(e) => updateState({ shareRatios: { ...shareRatios, [p.id]: clampFinite(e.target.value, 1, 0, 1000) } })} aria-label={`${p.name} ratio`} />
             <button className="icon-btn" type="button" onClick={() => removePerson(p.id)} aria-label={`remove ${p.name}`}><Trash2 size={16} /></button>
           </div>
         ))}
