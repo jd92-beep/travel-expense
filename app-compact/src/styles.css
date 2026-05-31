@@ -8197,3 +8197,144 @@ textarea,
     border-top: 1px solid rgba(116, 88, 53, .14);
   }
 }
+
+/* Preview fidelity pass 10: Weather mobile card should read like the generated forecast preview. */
+@media (max-width: 767px) {
+  .app-shell--weather .weather-screen {
+    padding: 14px 10px calc(132px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .app-shell--weather .weather-command-fancy {
+    min-height: 88px !important;
+    margin: 0 0 14px !important;
+    padding: 13px 16px !important;
+    border-radius: 14px !important;
+    background:
+      linear-gradient(135deg, rgba(255,253,248,.94), rgba(246,241,232,.82)),
+      url("./assets/atmosphere/travel-ai-atlas.webp") center / cover !important;
+    box-shadow: 0 12px 30px rgba(68,45,20,.08) !important;
+  }
+
+  .app-shell--weather .weather-command-row {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) auto !important;
+    gap: 10px !important;
+    align-items: start !important;
+  }
+
+  .app-shell--weather .weather-command-row h2 {
+    font-size: 27px !important;
+    line-height: 1.02 !important;
+  }
+
+  .app-shell--weather .weather-command-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .app-shell--weather .preview-weather-current-card {
+    display: block !important;
+    grid-template-columns: none !important;
+    margin: 0 0 14px !important;
+    padding: 20px 16px 16px !important;
+    border-radius: 14px !important;
+    background: rgba(255,253,248,.95) !important;
+    border: 1px solid rgba(116,88,53,.18) !important;
+    box-shadow: 0 12px 30px rgba(68,45,20,.08) !important;
+  }
+
+  .app-shell--weather .preview-weather-current-card > .relative.z-40 {
+    display: grid !important;
+    grid-template-columns: 112px minmax(0,1fr) !important;
+    grid-template-areas:
+      "icon temp"
+      "facts facts" !important;
+    gap: 14px 18px !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+
+  .app-shell--weather .preview-weather-hero-icon {
+    grid-area: icon !important;
+    display: grid !important;
+    place-items: center !important;
+    min-width: 0 !important;
+  }
+
+  .app-shell--weather .preview-weather-hero-icon svg {
+    width: 96px !important;
+    height: 96px !important;
+  }
+
+  .app-shell--weather .preview-weather-temp {
+    grid-area: temp !important;
+    min-width: 0 !important;
+    display: grid !important;
+    gap: 7px !important;
+  }
+
+  .app-shell--weather .preview-weather-temp strong {
+    font-size: 68px !important;
+    line-height: .88 !important;
+    white-space: nowrap !important;
+  }
+
+  .app-shell--weather .preview-weather-temp span {
+    margin: 0 !important;
+    font-size: 23px !important;
+    line-height: 1.05 !important;
+    font-weight: 900 !important;
+    white-space: nowrap !important;
+  }
+
+  .app-shell--weather .preview-weather-temp small {
+    margin: 0 !important;
+    color: #4e5964 !important;
+    font-size: 13px !important;
+    line-height: 1.28 !important;
+    font-weight: 750 !important;
+    white-space: normal !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+  }
+
+  .app-shell--weather .preview-weather-facts {
+    grid-area: facts !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+    gap: 8px 0 !important;
+    padding-top: 14px !important;
+    border-top: 1px solid rgba(116,88,53,.16) !important;
+  }
+
+  .app-shell--weather .preview-weather-facts span {
+    display: flex !important;
+    align-items: baseline !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding: 2px 8px !important;
+    border-left: 1px solid rgba(116,88,53,.14) !important;
+    color: #4e463c !important;
+    font-size: 13px !important;
+    line-height: 1.15 !important;
+    font-weight: 800 !important;
+    text-align: center !important;
+  }
+
+  .app-shell--weather .preview-weather-facts span:nth-child(odd) {
+    border-left: 0 !important;
+  }
+
+  .app-shell--weather .preview-weather-facts b {
+    display: inline-block !important;
+    font-size: 18px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+  }
+
+  .app-shell--weather .weather-day {
+    border-radius: 14px !important;
+    padding: 18px 16px !important;
+  }
+}

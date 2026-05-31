@@ -12,6 +12,7 @@ All notable project changes should be recorded here.
 - Refined the compact mobile bottom dock globally to match the generated preview: removed grey per-tab tiles, kept active tabs as red icon/text, preserved the central red `記帳` action, and added the black iOS-style home indicator.
 - Tightened the compact mobile header globally so the logo/title/status/action row uses the generated preview's shorter iOS-style height and pulls the first content card higher on all seven tabs.
 - Rebuilt the compact mobile Dashboard toward the generated app preview: red torii trip mark, notification bell, Chinese `預算總覽` card with HKD/JPY segmented control, large budget donut, right-side budget ledger, reminder strip, `今日狀態` panel, and updated smoke expectations for the new UI language.
+- Refined the compact mobile Weather tab toward the generated forecast preview: shorter weather command card, horizontal current-weather hero, readable actual/feels-like text, and two-column high/low/humidity/wind facts without vertical wrapping.
 
 ### Compact generated-preview layout renovation
 
