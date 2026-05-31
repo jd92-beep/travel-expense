@@ -155,8 +155,8 @@ export function Weather({ state }: { state: AppState }) {
           <span>風速 <b>{leadSlot?.windSpeed ?? 3} m/s</b></span>
         </div>
         <div className="preview-weather-hourly-rail" aria-label="今日逐時天氣">
-          {previewHourly.map((slot) => (
-            <span className="preview-weather-hourly-chip" key={`preview-hour-${slot.hour}`}>
+          {previewHourly.map((slot, index) => (
+            <span className="preview-weather-hourly-chip" key={`preview-hour-${slot.hour}-${index}`}>
               <b>{formatHour(slot.hour)}</b>
               <WeatherIcon code={slot.code} size={18} />
               <em>{slot.temp == null ? '—' : `${Math.round(slot.temp)}°C`}</em>

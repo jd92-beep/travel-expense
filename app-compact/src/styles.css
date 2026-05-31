@@ -9728,3 +9728,97 @@ textarea,
     font-size: 9px !important;
   }
 }
+
+/* Preview fidelity pass 15: make Scan primary actions visible in the first mobile viewport. */
+@media (max-width: 767px) {
+  .app-shell--scan .scan-hero-card {
+    padding: 10px !important;
+  }
+
+  .app-shell--scan .scan-hero-card > div.relative.z-10.flex.justify-between,
+  .app-shell--scan .scan-hero-card .relative.z-10.flex.justify-between.items-center {
+    min-height: 42px !important;
+    padding: 6px 4px 5px !important;
+  }
+
+  .app-shell--scan .scan-hero-card h2 {
+    font-size: 17px !important;
+  }
+
+  .app-shell--scan .scan-hero-card h2 svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .app-shell--scan .preview-scan-ai-strip {
+    min-height: 28px !important;
+    margin: 0 0 7px !important;
+    padding: 5px 8px !important;
+    font-size: 9.5px !important;
+  }
+
+  .app-shell--scan .preview-scan-ai-strip b {
+    display: none !important;
+  }
+
+  .app-shell--scan .preview-scan-camera {
+    min-height: 232px !important;
+    margin: 0 !important;
+  }
+
+  .app-shell--scan .preview-receipt-paper {
+    width: 54% !important;
+    min-height: 188px !important;
+    padding: 20px 14px !important;
+  }
+
+  .app-shell--scan .preview-receipt-paper b {
+    font-size: 17px !important;
+  }
+
+  .app-shell--scan .preview-receipt-paper small,
+  .app-shell--scan .preview-receipt-paper span {
+    font-size: 9px !important;
+  }
+
+  .app-shell--scan .preview-receipt-paper strong {
+    font-size: 17px !important;
+  }
+
+  .app-shell--scan .preview-scan-tip {
+    min-height: 24px !important;
+    margin: 7px 0 0 !important;
+    padding: 5px 7px !important;
+    font-size: 9px !important;
+  }
+
+  .app-shell--scan .preview-scan-tip b {
+    display: none !important;
+  }
+
+  .app-shell--scan .grid.grid-cols-1 {
+    gap: 8px !important;
+    padding: 8px 0 0 !important;
+  }
+
+  .app-shell--scan .scan-hero-button,
+  .app-shell--scan .scan-secondary-button {
+    min-height: 92px !important;
+    padding: 9px !important;
+    border-radius: 10px !important;
+  }
+
+  .app-shell--scan .scan-function-art--camera {
+    width: 64px !important;
+  }
+
+  .app-shell--scan .scan-secondary-button .scan-function-art {
+    width: 54px !important;
+    height: 54px !important;
+  }
+
+  .app-shell--scan .grid.grid-cols-2 {
+    gap: 6px !important;
+    padding: 8px 0 0 !important;
+  }
+}

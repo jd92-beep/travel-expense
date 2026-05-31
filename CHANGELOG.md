@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-31
 
+### Compact Scan first-viewport preview pass
+
+- Tightened the independent compact Scan mobile first viewport so the generated-preview camera frame, red camera card, green gallery card, and utility actions read together before the bottom dock.
+- Removed the Weather preview hourly duplicate-key warning by making each hourly chip key unique, keeping visual rendering stable when multiple forecast locations share the same hour labels.
+- Verified `app-compact/` with `npm run smoke:scan`, `npm run smoke:weather`, `npm run build`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check`.
+
 ### Compact Settings mobile preview pass
 
 - Reworked the independent compact Settings mobile first screen toward the generated control-center preview with a four-tile quick-control grid for Trip, Kimi, Vault, and Security.

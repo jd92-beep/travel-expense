@@ -4,6 +4,7 @@ Last updated: 2026-05-31 HKT
 
 Latest pushed commits:
 
+- Current commit: Compact Scan first-viewport preview pass
 - Current commit: Compact Settings mobile preview pass
 - Current commit: Compact Weather mobile density pass
 - Current commit: Compact Timeline mobile preview pass
@@ -92,6 +93,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- Compact Scan first-viewport preview pass on 2026-05-31 HKT: `app-compact/` Scan mobile now shows the generated-preview camera frame and the red camera / green gallery primary action cards together in the first viewport instead of leaving the action cards mostly hidden behind the bottom dock. The Weather preview hourly chip keys were also made unique to remove the duplicate-key console warning when multiple forecast locations share the same hour slots. React and legacy versions were not changed.
 - Compact Settings mobile preview pass on 2026-05-31 HKT: `app-compact/` Settings mobile now moves closer to the generated control-center preview with a four-tile quick-control grid for Trip, Kimi, Vault, and Security, plus denser 56px accordion rows so more settings groups fit in the first viewport. The quick tiles open the existing Settings panels, so the underlying trip, credential, and data-management functions remain intact. React and legacy versions were not changed.
 - Compact Weather mobile density pass on 2026-05-31 HKT: `app-compact/` Weather mobile now follows the generated forecast preview more closely with a smaller type scale, denser current-weather card, five-slot hourly rail, and full-width readable forecast rows. The previous squeezed horizontal forecast geometry was reset to a vertical compact list. React and legacy versions were not changed.
 - Compact Timeline mobile preview pass on 2026-05-31 HKT: `app-compact/` Timeline mobile now moves closer to the generated schedule preview with a left date badge for each day, large red date number, month/weekday microcopy, and denser vertical event rows. The rail gutter was tightened so the live marker and beam stay separated from the event cards. React and legacy versions were not changed.
@@ -124,6 +126,7 @@ Latest UI polish in this handover update:
 
 Latest UI verification from this pass:
 
+- Compact Scan first-viewport verification on 2026-05-31 HKT: `npm run smoke:scan`, `npm run smoke:weather`, `npm run build`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Local Playwright mobile proof at 390px verified document/body width `390`, Scan camera frame height `232`, red camera card and green gallery card both visible from `480-608px`, bottom dock top `751`, and no console/page errors. Screenshot captured at `/tmp/compact-scan-first-viewport-pass15.png`.
 - Compact Settings mobile preview verification on 2026-05-31 HKT: `npm run build`, `npm run smoke:settings`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Local Playwright mobile proof at 390px verified document width `390`, Settings quick-control grid visible with 4 buttons, Settings command height `76`, and first six accordion rows at `56px` each. Screenshot captured at `/tmp/compact-settings-preview-grid-pass3.png`.
 - Compact Weather mobile density verification on 2026-05-31 HKT: `npm run smoke:weather`, `npm run build`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Local Playwright mobile geometry proof at 390px verified document/body width `390`, Weather title about `21.84px`, daily forecast grid width `346`, first forecast slot width `346`, and no horizontal overflow. Screenshot captured at `/tmp/compact-weather-debug-fixed.png`.
 - Compact Timeline mobile preview verification on 2026-05-31 HKT: `npm run smoke:timeline`, `npm run build`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Playwright captured the revised Timeline mobile view at `/tmp/compact-timeline-preview-date-pass.png`, with title `行程時間線`, date badge `58x72`, first event row height `65`, rail right edge `50`, and horizontal overflow `0`.
