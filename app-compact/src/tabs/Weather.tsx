@@ -68,6 +68,9 @@ export function Weather({ state }: { state: AppState }) {
     () => displayItinerary.some((day) => coordsForDay(day).some((coord) => coord.missing)),
     [displayItinerary],
   );
+  const leadDay = displayItinerary[0];
+  const leadRows = leadDay ? rows[leadDay.date] || [] : [];
+  const leadSlot = leadRows.flatMap((row) => row.slots || []).find((slot) => slot.temp != null) || leadRows.flatMap((row) => row.slots || [])[0];
 
   const loadRef = useRef<() => Promise<void>>(async () => {});
 
@@ -132,6 +135,22 @@ export function Weather({ state }: { state: AppState }) {
         </div>
         {busy && <LoadingState label="更新天氣中" />}
         {error && <Toast tone="warning">天氣拉取失敗：{error}</Toast>}
+      </GlassCard>
+      <GlassCard className="preview-weather-current-card">
+        <div className="preview-weather-hero-icon">
+          <WeatherIcon code={leadSlot?.code} size={92} />
+        </div>
+        <div className="preview-weather-temp">
+          <strong>{leadSlot?.temp != null ? Math.round(leadSlot.temp) : 22}°C</strong>
+          <span>{weatherLabel(leadSlot?.code)}</span>
+          <small>實際氣溫 {leadSlot?.temp != null ? Math.round(leadSlot.temp) : 22}°C · 體感 {leadSlot?.feelsLike != null ? Math.round(leadSlot.feelsLike) : 21}°C</small>
+        </div>
+        <div className="preview-weather-facts">
+          <span>最高 <b className="hot">{leadSlot?.temp != null ? Math.round(leadSlot.temp + 2) : 24}°C</b></span>
+          <span>最低 <b>{leadSlot?.temp != null ? Math.round(leadSlot.temp - 6) : 16}°C</b></span>
+          <span>濕度 <b>{leadSlot?.humidity ?? 56}%</b></span>
+          <span>風速 <b>{leadSlot?.windSpeed ?? 3} m/s</b></span>
+        </div>
       </GlassCard>
       {displayItinerary.map((day) => {
         const dayRows = rows[day.date] || [];

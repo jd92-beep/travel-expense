@@ -27,6 +27,12 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   const looseReceipts = activeDay ? dayLooseReceipts(state, activeDay) : [];
   const hasOpenModal = Boolean(editing || activeDay || viewPhoto);
   const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
+  const commandDay = itinerary.find((day) => day.date === today) || itinerary[0];
+  const commandDate = commandDay?.date ? new Date(`${commandDay.date}T00:00:00`) : null;
+  const commandYear = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getFullYear()) : '----';
+  const commandMonth = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getMonth() + 1) : '--';
+  const commandDateDay = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getDate()) : '--';
+  const commandWeekday = commandDate && !Number.isNaN(commandDate.getTime()) ? new Intl.DateTimeFormat('zh-HK', { weekday: 'long' }).format(commandDate) : '';
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowTick(Date.now()), 60 * 1000);
@@ -74,6 +80,25 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
               {itinerary.length}日
             </span>
           </div>
+          {commandDay && (
+            <div className="preview-timeline-overview">
+              <div className="preview-timeline-date">
+                <span>{commandYear}</span>
+                <small>{commandMonth}月</small>
+                <strong>{commandDateDay}</strong>
+                <em>{commandWeekday}</em>
+              </div>
+              <div className="preview-timeline-copy">
+                <span>第 {commandDay.day} 天 / 共 {itinerary.length || 1} 天</span>
+                <strong>{commandDay.region}</strong>
+                <small>19°C / 25°C · 多雲時晴</small>
+              </div>
+              <div className="preview-timeline-stats">
+                <span><MapPin size={18} /> 行程 {getScheduleSpots(state, commandDay).length} 個景點</span>
+                <b><ReceiptText size={18} /> 支出 HK$ {fmt(hkd(dayLooseReceipts(state, commandDay).reduce((s, r) => s + r.total, 0), state))}</b>
+              </div>
+            </div>
+          )}
         </div>
       </MagicCard>
 

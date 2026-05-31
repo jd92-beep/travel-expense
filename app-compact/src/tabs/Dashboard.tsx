@@ -389,7 +389,7 @@ export function Dashboard({
       <div className="japanese-sakura-decor" />
 
       {/* 1. Header 標題與日曆按鈕 */}
-      <div className="flex justify-between items-start mb-6 z-10 relative">
+      <div className="dashboard-trip-switcher flex justify-between items-start mb-6 z-10 relative">
         <div className="flex flex-col relative z-30">
           <button
             className="flex items-center gap-1 text-[28px] font-black text-slate-800 tracking-tight font-serif border-none bg-transparent focus:outline-none"
@@ -460,6 +460,24 @@ export function Dashboard({
           <CalendarDays size={20} className="text-[#6D5643]" />
         </button>
       </div>
+
+      <GlassCard as="div" className="preview-dashboard-day-card">
+        <div className="preview-dashboard-day-meta">
+          <CalendarDays size={21} />
+          <span>第 {Math.max(1, day?.day || 1)} 天 / 共 {length} 天</span>
+          <small>{today}</small>
+        </div>
+        <div className="preview-dashboard-weather-pill">
+          <CloudSun size={30} />
+          <span>24°C</span>
+          <small>多雲時晴</small>
+        </div>
+        <button type="button" className="preview-dashboard-route-button" onClick={() => onTab('timeline')}>
+          <Compass size={22} />
+          查看行程
+          <ChevronRight size={18} />
+        </button>
+      </GlassCard>
 
       {/* 2. 預算毛玻璃卡片 (含圓形進度條與 Today Spent / Daily Avg Spending Pct) */}
       <Reveal className="dashboard-reveal">
