@@ -4,6 +4,14 @@ All notable project changes should be recorded here.
 
 ## 2026-06-01
 
+### Compact generated-preview header and stats density pass
+
+- Restored the independent compact mobile torii/Fuji/sakura header mark from the generated previews across the seven mobile tabs instead of the temporary circular stamp treatment.
+- Reworked the compact mobile Timeline and Weather top cards toward the generated preview structure: Timeline keeps a short date overview card while staying under the compact smoke height limit, and Weather keeps the atlas-textured source strip plus the large current-weather hero.
+- Tightened the compact mobile Stats budget cockpit again with the smaller generated-preview type scale, shorter `預算使用分析` card, smaller donut/summary rows, and earlier `每日 Budget Pace` visibility in the first viewport.
+- Verified `app-compact/` with `npm run build`, `npm run smoke:dashboard`, `npm run smoke:timeline`, `npm run smoke:weather`, `npm run smoke:stats`, `npm run smoke:scan`, `npm run smoke:history`, `npm run smoke:settings`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check`.
+- Generated the final seven-tab 390px mobile contact sheet at `/tmp/compact-preview-pass19-final/mobile-contact-sheet.png` with no console/page errors and document/body width `390`.
+
 ### Compact smaller-font preview pass
 
 - Tightened the independent compact mobile typography again to better match the generated app previews: shorter iOS-style headers, smaller title/status text, denser card headings, smaller metric/body text, and a more compact bottom dock.

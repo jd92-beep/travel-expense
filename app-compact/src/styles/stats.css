@@ -1712,3 +1712,210 @@
     font-size: 17px !important;
   }
 }
+
+/* Preview fidelity pass 18: Boss requested the smaller mobile type scale used in the generated previews. */
+@media (max-width: 767px) {
+  .stats-tab.stats-cockpit.preview-stats-screen {
+    padding-inline: 12px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-stats-grid {
+    gap: 10px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-stats-budget {
+    min-height: 0 !important;
+    padding: 14px 12px 0 !important;
+    border-radius: 13px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-stats-budget .stats-command-title-row {
+    min-height: 31px !important;
+    margin-bottom: 5px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-stats-budget .stats-command-title {
+    font-size: 20px !important;
+    line-height: 1 !important;
+  }
+
+  .stats-tab.stats-cockpit .stats-record-pill .status-pill {
+    min-height: 23px !important;
+    padding: 3px 7px !important;
+    font-size: 9px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-heading {
+    min-height: 30px !important;
+    font-size: 16px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-heading svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-currency {
+    min-height: 28px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-currency span {
+    min-width: 36px !important;
+    padding-inline: 7px !important;
+    font-size: 11px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-overview {
+    grid-template-columns: minmax(128px, .82fr) minmax(0, 1fr) !important;
+    gap: 10px !important;
+    margin-top: 7px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-main {
+    gap: 6px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-ring {
+    width: clamp(116px, 34vw, 134px) !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-ring::before {
+    inset: 7px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-ring > i {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass-copy span {
+    font-size: 10px !important;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass-copy strong {
+    font-size: clamp(29px, 8vw, 34px) !important;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass-copy small {
+    font-size: 9px !important;
+  }
+
+  .stats-tab.stats-cockpit .spending-compass-copy b {
+    font-size: 10.5px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-legend {
+    gap: 5px 7px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-slice {
+    font-size: 9px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-slice i {
+    width: 8px !important;
+    height: 8px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-side {
+    gap: 0 7px !important;
+    padding-left: 10px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-total,
+  .stats-tab.stats-cockpit .preview-budget-row {
+    padding: 5px 0 !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-total span,
+  .stats-tab.stats-cockpit .preview-budget-row span {
+    margin-bottom: 2px !important;
+    font-size: 9px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-total strong,
+  .stats-tab.stats-cockpit .preview-budget-row strong {
+    font-size: 12px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-total button {
+    min-height: 23px !important;
+    margin-top: 5px !important;
+    padding-inline: 7px !important;
+    font-size: 9px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-total button svg {
+    width: 11px !important;
+    height: 11px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-stack strong + span {
+    margin-top: 5px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-stack small {
+    font-size: 9px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-reminder {
+    min-height: 35px !important;
+    margin: 8px -12px 0 !important;
+    padding: 8px 11px !important;
+    font-size: 10px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-daily-pace {
+    min-height: 420px !important;
+    padding: 14px 12px !important;
+    border-radius: 13px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-daily-pace .section-head {
+    min-height: 32px !important;
+    margin-bottom: 7px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-daily-pace .section-head h2 {
+    font-size: 18px !important;
+  }
+
+  .stats-tab.stats-cockpit .budget-pace-summary {
+    margin-bottom: 7px !important;
+  }
+
+  .stats-tab.stats-cockpit .budget-pace-summary span {
+    min-height: 45px !important;
+    padding: 5px 6px !important;
+  }
+
+  .stats-tab.stats-cockpit .budget-pace-summary b {
+    font-size: 13px !important;
+  }
+
+  .stats-tab.stats-cockpit .budget-pace-summary small {
+    font-size: 9px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-daily-pace .budget-pace-chart {
+    height: 178px !important;
+    padding: 12px 6px 0 12px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-daily-pace .budget-pace-bar {
+    width: 20px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-daily-pace .budget-pace-day small {
+    font-size: 10px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-selected-day {
+    min-height: 70px !important;
+    padding: 10px !important;
+  }
+
+  .stats-tab.stats-cockpit .preview-budget-selected-day strong {
+    font-size: 20px !important;
+  }
+}

@@ -1,9 +1,10 @@
 # Travel Expense App - Agent Handover
 
-Last updated: 2026-05-31 HKT
+Last updated: 2026-06-01 HKT
 
 Latest pushed commits:
 
+- Current commit: Compact generated-preview header and stats density pass
 - Current commit: Compact Scan first-viewport preview pass
 - Current commit: Compact Settings mobile preview pass
 - Current commit: Compact Weather mobile density pass
@@ -93,6 +94,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- Compact generated-preview header and stats density pass on 2026-06-01 HKT: `app-compact/` restored the generated torii/Fuji/sakura mobile header mark across all seven compact tabs, replacing the temporary red stamp mark while keeping the shorter iOS-style header. Timeline now keeps a short generated-preview date overview inside the top command card without breaking the compact mobile smoke height contract. Weather keeps the atlas-textured source strip and large current-weather card. Stats uses the smaller generated-preview budget cockpit density so the top budget card is shorter and `每日 Budget Pace` appears earlier in the first mobile viewport. React and legacy versions were not changed.
 - Compact Scan first-viewport preview pass on 2026-05-31 HKT: `app-compact/` Scan mobile now shows the generated-preview camera frame and the red camera / green gallery primary action cards together in the first viewport instead of leaving the action cards mostly hidden behind the bottom dock. The Weather preview hourly chip keys were also made unique to remove the duplicate-key console warning when multiple forecast locations share the same hour slots. React and legacy versions were not changed.
 - Compact Settings mobile preview pass on 2026-05-31 HKT: `app-compact/` Settings mobile now moves closer to the generated control-center preview with a four-tile quick-control grid for Trip, Kimi, Vault, and Security, plus denser 56px accordion rows so more settings groups fit in the first viewport. The quick tiles open the existing Settings panels, so the underlying trip, credential, and data-management functions remain intact. React and legacy versions were not changed.
 - Compact Weather mobile density pass on 2026-05-31 HKT: `app-compact/` Weather mobile now follows the generated forecast preview more closely with a smaller type scale, denser current-weather card, five-slot hourly rail, and full-width readable forecast rows. The previous squeezed horizontal forecast geometry was reset to a vertical compact list. React and legacy versions were not changed.
@@ -126,6 +128,7 @@ Latest UI polish in this handover update:
 
 Latest UI verification from this pass:
 
+- Compact generated-preview header and stats density verification on 2026-06-01 HKT: `npm run build`, `npm run smoke:dashboard`, `npm run smoke:timeline`, `npm run smoke:weather`, `npm run smoke:stats`, `npm run smoke:scan`, `npm run smoke:history`, `npm run smoke:settings`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Playwright generated a final seven-tab 390px mobile contact sheet at `/tmp/compact-preview-pass19-final/mobile-contact-sheet.png`; console/page errors were empty, document/body width stayed `390`, and the compact version remained independent from the React and legacy apps.
 - Compact smaller-font preview verification on 2026-06-01 HKT: `npm run build`, `npm run smoke:dashboard`, `npm run smoke:scan`, `npm run smoke:timeline`, `npm run smoke:history`, `npm run smoke:weather`, `npm run smoke:stats`, `npm run smoke:settings`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Playwright generated a seven-tab 390px mobile contact sheet at `/tmp/compact-current-audit-20260601-smallfont-after2/mobile-contact-sheet.png` with no console/page errors after tightening the compact mobile type scale and hardening Settings against missing `shareRatios` / trip `currencies`.
 - Compact Scan first-viewport verification on 2026-05-31 HKT: `npm run smoke:scan`, `npm run smoke:weather`, `npm run build`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Local Playwright mobile proof at 390px verified document/body width `390`, Scan camera frame height `232`, red camera card and green gallery card both visible from `480-608px`, bottom dock top `751`, and no console/page errors. Screenshot captured at `/tmp/compact-scan-first-viewport-pass15.png`.
 - Compact Settings mobile preview verification on 2026-05-31 HKT: `npm run build`, `npm run smoke:settings`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Local Playwright mobile proof at 390px verified document width `390`, Settings quick-control grid visible with 4 buttons, Settings command height `76`, and first six accordion rows at `56px` each. Screenshot captured at `/tmp/compact-settings-preview-grid-pass3.png`.
