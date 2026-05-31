@@ -8338,3 +8338,519 @@ textarea,
     padding: 18px 16px !important;
   }
 }
+
+/* Preview fidelity pass 11: History mobile follows the generated ledger preview. */
+@media (max-width: 767px) {
+  .app-shell--history .compact-mobile-header {
+    grid-template-columns: 78px minmax(0, 1fr) 26px !important;
+    min-height: 124px !important;
+    padding: 36px 14px 10px !important;
+    align-items: end !important;
+    pointer-events: none !important;
+  }
+
+  .app-shell--history .compact-mobile-mark {
+    width: 74px !important;
+    height: 50px !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .app-shell--history .compact-mobile-mark img {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+  }
+
+  .app-shell--history .compact-mobile-mark::before,
+  .app-shell--history .compact-mobile-mark::after,
+  .app-shell--history .compact-mobile-status,
+  .app-shell--history .compact-mobile-action {
+    display: none !important;
+  }
+
+  .app-shell--history .compact-mobile-title-art {
+    font-size: 24px !important;
+    line-height: 1 !important;
+    color: #111820 !important;
+  }
+
+  .app-shell--history .compact-mobile-heading p {
+    margin-top: 3px !important;
+    color: #333b44 !important;
+    font-size: 12px !important;
+    font-weight: 760 !important;
+  }
+
+  .app-shell--history .history-screen {
+    padding: 10px 13px calc(132px + env(safe-area-inset-bottom)) !important;
+    background:
+      linear-gradient(180deg, rgba(255,253,248,.98), rgba(248,242,231,.96)),
+      radial-gradient(circle at 16% 0%, rgba(211,154,41,.08), transparent 26%) !important;
+  }
+
+  .app-shell--history .content {
+    position: relative !important;
+    z-index: 80 !important;
+  }
+
+  .app-shell--history .fixed-tab-bar {
+    z-index: 1000 !important;
+  }
+
+  .app-shell--history:has(.modal-backdrop) .fixed-tab-bar,
+  .app-shell--history:has(.modal-backdrop) .fixed-tab-bar > * {
+    pointer-events: none !important;
+  }
+
+  .app-shell--history .history-screen > .stack {
+    gap: 12px !important;
+  }
+
+  .app-shell--history .history-command {
+    position: fixed !important;
+    top: 84px !important;
+    right: 13px !important;
+    width: min(41vw, 160px) !important;
+    height: 36px !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    z-index: 9999 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    pointer-events: auto;
+  }
+
+  .app-shell--history .history-command-row {
+    min-height: 36px !important;
+    padding: 0 !important;
+    justify-content: flex-end !important;
+    gap: 6px !important;
+  }
+
+  .app-shell--history .history-command .history-title-button,
+  .app-shell--history .history-command .relative.min-w-0.flex-1 {
+    display: none !important;
+  }
+
+  .app-shell--history .history-command-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 36px !important;
+    gap: 6px !important;
+    width: 100% !important;
+    pointer-events: auto;
+  }
+
+  .app-shell--history .history-trip-button {
+    width: 100% !important;
+    min-height: 36px !important;
+    padding: 0 9px !important;
+    border-radius: 15px !important;
+    background: rgba(255, 252, 246, .92) !important;
+    border: 1px solid rgba(116, 88, 53, .24) !important;
+    color: #121820 !important;
+    box-shadow: 0 8px 18px rgba(71, 48, 24, .08) !important;
+    font-size: 11px !important;
+    font-weight: 850 !important;
+  }
+
+  .app-shell--history .history-trip-button span {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .app-shell--history .history-refresh-button {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    border-radius: 999px !important;
+    background: rgba(255, 252, 246, .92) !important;
+    border: 1px solid rgba(116, 88, 53, .22) !important;
+    color: #111820 !important;
+    box-shadow: 0 8px 18px rgba(71, 48, 24, .08) !important;
+  }
+
+  .app-shell--history .history-filter-deck {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 18 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 84px !important;
+    gap: 8px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .app-shell--history .history-filter-deck .search-field {
+    min-height: 44px !important;
+    padding: 0 12px !important;
+    border: 1px solid var(--preview-line) !important;
+    border-radius: 12px !important;
+    background: rgba(255, 253, 248, .98) !important;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.5) !important;
+  }
+
+  .app-shell--history .history-filter-deck .search-field svg {
+    color: #111820 !important;
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .app-shell--history .history-filter-deck input {
+    min-height: 42px !important;
+    padding-left: 28px !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: #111820 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+  }
+
+  .app-shell--history .history-filter-deck input::placeholder {
+    color: rgba(29, 31, 34, .58) !important;
+  }
+
+  .app-shell--history .history-filter-button {
+    position: relative;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid var(--preview-line);
+    border-radius: 12px;
+    background: rgba(255, 253, 248, .98);
+    color: #111820;
+    font-size: 13px;
+    font-weight: 900;
+    overflow: hidden;
+  }
+
+  .app-shell--history .history-filter-button b {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: #cf2626;
+    color: #fff;
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .app-shell--history .history-filter-button select {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    opacity: 0 !important;
+    cursor: pointer;
+  }
+
+  .app-shell--history .history-chip-rail {
+    display: flex !important;
+    gap: 8px !important;
+    margin: 1px -13px 5px !important;
+    padding: 0 13px 2px !important;
+    overflow-x: auto !important;
+    scrollbar-width: none;
+  }
+
+  .app-shell--history .history-chip-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-shell--history .history-chip {
+    min-height: 38px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 13px;
+    border: 1px solid var(--preview-line);
+    border-radius: 11px;
+    background: rgba(255, 253, 248, .96);
+    color: #111820;
+    font-size: 12.5px;
+    font-weight: 850;
+    box-shadow: none;
+  }
+
+  .app-shell--history .history-chip.active {
+    border-color: var(--chip-color, #cf2626);
+    color: var(--chip-color, #cf2626);
+    background: #fffdf8;
+  }
+
+  .app-shell--history .history-chip-control {
+    color: #2b2f34;
+  }
+
+  .app-shell--history .history-pending-banner {
+    display: grid !important;
+    grid-template-columns: 38px minmax(0, 1fr) auto !important;
+    gap: 10px !important;
+    align-items: center !important;
+    padding: 13px 13px !important;
+    border: 1px solid var(--preview-line) !important;
+    border-radius: 13px !important;
+    background: rgba(255, 253, 248, .98) !important;
+    box-shadow: 0 8px 22px rgba(63,43,22,.06) !important;
+  }
+
+  .app-shell--history .history-pending-banner > svg {
+    color: #cf2626 !important;
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .app-shell--history .history-pending-banner h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .app-shell--history .history-pending-banner strong {
+    display: block;
+    color: #111820;
+    font-size: 14.5px;
+    line-height: 1.1;
+    font-weight: 920;
+  }
+
+  .app-shell--history .history-pending-banner strong::first-letter {
+    color: #cf2626;
+  }
+
+  .app-shell--history .history-pending-banner p {
+    margin: 4px 0 0;
+    color: #404852;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .app-shell--history .history-confirm-button {
+    min-height: 36px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #df302b, #bd1515);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 900;
+    box-shadow: 0 8px 16px rgba(207,38,38,.2);
+  }
+
+  .app-shell--history .history-expandable-group {
+    padding: 0 !important;
+    border: 1px solid var(--preview-line) !important;
+    border-radius: 13px !important;
+    background: rgba(255, 253, 248, .98) !important;
+    overflow: hidden !important;
+    box-shadow: 0 8px 22px rgba(63,43,22,.05) !important;
+  }
+
+  .app-shell--history .history-expandable-summary {
+    min-height: 58px !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 18px !important;
+    grid-template-areas:
+      "date arrow"
+      "total arrow" !important;
+    gap: 5px 8px !important;
+    align-items: center !important;
+    padding: 12px 13px 10px !important;
+    border-bottom: 1px solid rgba(118,97,72,.18) !important;
+  }
+
+  .app-shell--history .history-expandable-summary::after {
+    grid-area: arrow;
+    width: 10px !important;
+    height: 10px !important;
+    border-color: #111820 !important;
+  }
+
+  .app-shell--history .history-date-title {
+    grid-area: date;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .app-shell--history .history-date-title h2 {
+    margin: 0;
+    min-width: 0;
+    color: #111820;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1.08;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .app-shell--history .history-date-title .pill {
+    min-width: 32px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #f5efe5;
+    color: #3f3b35;
+    font-size: 11px;
+    font-weight: 850;
+  }
+
+  .app-shell--history .history-date-total {
+    grid-area: total;
+    color: #3f4650;
+    font-size: 11px;
+    font-weight: 760;
+    white-space: nowrap;
+    padding-left: 24px;
+  }
+
+  .app-shell--history .history-record-stack {
+    gap: 0 !important;
+    padding: 0 !important;
+  }
+
+  .app-shell--history .history-ledger-row {
+    display: grid !important;
+    grid-template-columns: 42px minmax(0, 1fr) 30px minmax(60px, auto) 11px !important;
+    gap: 6px !important;
+    align-items: center !important;
+    min-height: 61px !important;
+    padding: 8px 10px !important;
+    border: 0 !important;
+    border-bottom: 1px solid rgba(118,97,72,.15) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-align: left !important;
+  }
+
+  .app-shell--history .history-ledger-icon {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 16px !important;
+  }
+
+  .app-shell--history .history-ledger-main {
+    min-width: 0;
+    display: grid !important;
+    gap: 3px !important;
+  }
+
+  .app-shell--history .history-ledger-main strong {
+    min-width: 0;
+    display: flex !important;
+    align-items: center;
+    gap: 5px;
+    color: #111820 !important;
+    font-size: 12.2px !important;
+    line-height: 1.12 !important;
+    font-weight: 920 !important;
+    white-space: normal !important;
+    word-break: keep-all !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .app-shell--history .history-ledger-main small {
+    color: #39424c !important;
+    font-size: 10px !important;
+    line-height: 1.12 !important;
+    font-weight: 720 !important;
+  }
+
+  .app-shell--history .history-pending-mini {
+    flex: 0 0 auto;
+    padding: 2px 4px;
+    border-radius: 6px;
+    background: #fff2cf;
+    color: #8a5a00;
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 900;
+  }
+
+  .app-shell--history .history-photo-slot {
+    display: grid;
+    place-items: center;
+    color: #7c858f;
+  }
+
+  .app-shell--history .history-photo-thumb {
+    width: 27px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid rgba(118,97,72,.18);
+    border-radius: 5px;
+    background: #fff;
+    overflow: hidden;
+  }
+
+  .app-shell--history .history-photo-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .app-shell--history .history-ledger-amount {
+    align-items: flex-end !important;
+    min-width: 60px !important;
+    max-width: none !important;
+    white-space: nowrap !important;
+  }
+
+  .app-shell--history .history-ledger-amount strong {
+    color: #111820 !important;
+    font-size: 12.5px !important;
+    line-height: 1.05 !important;
+    font-weight: 930 !important;
+  }
+
+  .app-shell--history .history-ledger-amount small {
+    color: #4e5964 !important;
+    font-size: 9.5px !important;
+    line-height: 1.2 !important;
+    font-weight: 760 !important;
+  }
+
+  .app-shell--history .history-row-chevron {
+    color: #111820 !important;
+  }
+
+  .app-shell--history .history-day-subtotal {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 13px;
+    color: #111820;
+    font-size: 12.5px;
+    font-weight: 850;
+  }
+
+  .app-shell--history .history-day-subtotal strong {
+    color: #3f4650;
+    font-size: 11px;
+    font-weight: 780;
+    white-space: nowrap;
+  }
+}

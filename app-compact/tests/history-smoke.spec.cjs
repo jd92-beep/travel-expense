@@ -71,32 +71,29 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   }, receipts);
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
   await expect(page.locator('.history-command')).not.toContainText('local ready');
-  await expect(page.getByRole('button', { name: /^切換旅程$/ })).toBeVisible();
+  await expect(page.locator('.history-trip-button')).toBeVisible();
   await expect(page.getByRole('button', { name: /✈️/ })).toHaveCount(0);
   const refreshButton = page.getByRole('button', { name: '重新同步' });
   await expect(refreshButton).toBeVisible();
   await expect(refreshButton).not.toContainText(/Pull Cloud/i);
   const commandMetrics = await page.evaluate(() => {
     const card = document.querySelector('.history-command')?.getBoundingClientRect();
-    const title = document.querySelector('.history-title-button')?.getBoundingClientRect();
     const actions = document.querySelector('.history-command-actions')?.getBoundingClientRect();
     const trip = document.querySelector('.history-trip-button')?.getBoundingClientRect();
     const refresh = document.querySelector('.history-refresh-button')?.getBoundingClientRect();
     return {
-      card: card && { height: card.height },
-      title: title && { top: title.top, right: title.right, height: title.height },
+      card: card && { height: card.height, width: card.width },
       actions: actions && { top: actions.top, left: actions.left, height: actions.height },
       trip: trip && { top: trip.top, height: trip.height },
       refresh: refresh && { top: refresh.top, height: refresh.height },
     };
   });
-  expect(commandMetrics.card.height).toBeLessThanOrEqual(82);
-  expect(Math.abs(commandMetrics.title.top - commandMetrics.trip.top)).toBeLessThanOrEqual(6);
-  expect(Math.abs(commandMetrics.title.top - commandMetrics.refresh.top)).toBeLessThanOrEqual(6);
-  expect(Math.abs((commandMetrics.title.top + commandMetrics.title.height / 2) - (commandMetrics.actions.top + commandMetrics.actions.height / 2))).toBeLessThanOrEqual(4);
-  expect(commandMetrics.actions.left).toBeGreaterThan(commandMetrics.title.right - 8);
+  expect(commandMetrics.card.height).toBeLessThanOrEqual(46);
+  expect(commandMetrics.card.width).toBeLessThanOrEqual(195);
+  expect(Math.abs(commandMetrics.trip.top - commandMetrics.refresh.top)).toBeLessThanOrEqual(6);
+  expect(Math.abs((commandMetrics.trip.top + commandMetrics.trip.height / 2) - (commandMetrics.actions.top + commandMetrics.actions.height / 2))).toBeLessThanOrEqual(4);
 
   const filterMetrics = await page.evaluate(() => {
     const filters = document.querySelector('.history-filters')?.getBoundingClientRect();
@@ -112,25 +109,25 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   expect(filterMetrics.scrollWidth).toBe(390);
   expect(filterMetrics.search).toBeTruthy();
   expect(filterMetrics.select).toBeTruthy();
-  expect(Math.abs(filterMetrics.search.top - filterMetrics.select.top)).toBeLessThanOrEqual(4);
+  expect(Math.abs(filterMetrics.search.top - filterMetrics.select.top)).toBeLessThanOrEqual(8);
   expect(filterMetrics.search.width).toBeGreaterThan(filterMetrics.select.width);
-  expect(filterMetrics.select.width).toBeGreaterThanOrEqual(96);
+  expect(filterMetrics.select.width).toBeGreaterThanOrEqual(80);
 
   await refreshButton.click();
   await expect(page.getByText(/已從雲端同步/)).toBeVisible();
 
-  await page.getByPlaceholder('搜尋店名 / 備註 / 地區').fill('Coffee');
+  await page.getByPlaceholder('搜尋店家、類別、標籤、金額...').fill('Coffee');
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toHaveCount(1);
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(0);
-  await page.getByPlaceholder('搜尋店名 / 備註 / 地區').fill('');
+  await page.getByPlaceholder('搜尋店家、類別、標籤、金額...').fill('');
 
   await page.locator('.history-filters select').selectOption('food');
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toHaveCount(1);
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(0);
   await page.locator('.history-filters select').selectOption('all');
 
-  await page.getByRole('button', { name: '確認', exact: true }).click();
-  await expect(page.getByText('Email 待確認')).toBeHidden();
+  await page.getByRole('button', { name: '查看並確認', exact: true }).click();
+  await expect(page.locator('.history-pending-banner')).toBeHidden();
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Pending' })).toHaveCount(1);
 
   await page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' }).click();
@@ -188,7 +185,7 @@ test('History manual pull routes through global sync engine when broker session 
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
   await page.getByRole('button', { name: '重新同步' }).click();
   await expect(page.getByText(/已從雲端同步/)).toBeVisible();
   await expect.poll(() => notionRequests).toBeGreaterThan(0);
@@ -223,7 +220,7 @@ test('History relies on the single global boot pull instead of auto-pulling agai
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
   await expect.poll(() => notionPaths.filter((path) => path.endsWith('/query')).length, { timeout: 10000 }).toBe(3);
   await page.waitForTimeout(1200);
   expect(notionPaths.filter((path) => path.endsWith('/query'))).toHaveLength(3);

@@ -162,7 +162,7 @@ test('Mobile Records cards and Itinerary timeline stay within the viewport durin
 
   await seedMobileStressState(page);
   await page.goto('http://localhost:8903/travel-expense/compact/#history');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
   await expect(page.locator('.receipt-row').filter({ hasText: longReceiptName })).toBeVisible();
   await assertNoHorizontalOverflow(page);
 
@@ -175,7 +175,7 @@ test('Mobile Records cards and Itinerary timeline stay within the viewport durin
     await assertNoHorizontalOverflow(page);
 
     await nav.getByRole('button', { name: '紀錄', exact: true }).click();
-    await expect(page.getByText('紀錄中心')).toBeVisible();
+    await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
     await page.waitForTimeout(120);
     await assertNoHorizontalOverflow(page);
   }

@@ -58,7 +58,11 @@ for (const [name, viewport] of [
     const nav = page.getByLabel('主要分頁');
     for (const [tabLabel, expectedText] of tabs) {
       await nav.getByRole('button', { name: tabLabel, exact: true }).click();
-      await expect(page.getByText(expectedText).first()).toBeVisible();
+      if (viewport.width <= 390 && expectedText === '紀錄中心') {
+        await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+      } else {
+        await expect(page.getByText(expectedText).first()).toBeVisible();
+      }
     }
     await context.close();
   });

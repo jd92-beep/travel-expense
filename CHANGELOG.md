@@ -6,6 +6,9 @@ All notable project changes should be recorded here.
 
 ### Compact Stats preview fidelity pass
 
+- Rebuilt the compact mobile History tab around the generated ledger preview: torii/Fuji mobile header art, preview-style search/filter controls, horizontal category chips, red pending-email banner, date subtotal headers, and table-like receipt rows with category icons, photo slots, amounts, and chevrons.
+- Tightened the History mobile type scale to match the generated preview's denser ledger style, making receipt rows shorter and keeping more records readable in one scroll position.
+- Kept the History flows working after the visual renovation: search, category filter, pending email confirmation, receipt edit/delete, cloud pull, mobile tab switching, and final navigation smoke coverage were updated and verified.
 - Rebuilt the independent compact Stats budget card around the generated preview's mobile `預算羅盤` layout: large donut, HKD/JPY segmented display, two-column budget summary, bottom reminder row, and selected-day budget pace card.
 - Adjusted the compact Stats mobile shell header and scrollable reading flow so the title, status pill, budget card, and bottom dock do not overlap at 390px/360px phone widths.
 - Verified `app-compact/` with `npm run build`, `npm run smoke:stats`, `npm run smoke:final-nav`, `npm run smoke:mobile-layout`, and Playwright mobile screenshots.

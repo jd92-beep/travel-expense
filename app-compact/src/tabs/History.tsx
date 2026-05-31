@@ -1,16 +1,21 @@
-import { useMemo, useState } from 'react';
-import { ChevronDown, RefreshCw, Search, X } from 'lucide-react';
+import { useMemo, useState, type CSSProperties } from 'react';
+import { CalendarDays, Camera, ChevronDown, ChevronRight, Mail, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
 import { Reveal, Toast } from '../components/ui';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { hasCredentialBrokerSession } from '../lib/credentialBroker';
 import { hasDirectNotionToken } from '../lib/notion';
 import { CATEGORIES } from '../lib/constants';
 import type { AppState, CategoryId, Receipt, TripProfile } from '../lib/types';
-import { MagicCard } from '../components/ui/magic-card';
-import { ShineBorder } from '../components/ui/shine-border';
-import { GlareHover } from '../components/ui/glare-hover';
-import { ReceiptRow } from './Dashboard';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
+import { VisualIcon } from '../components/VisualIcon';
+import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, safePhotoUrl } from '../lib/domain';
+
+function historyDateLabel(date: string): string {
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  const weekday = ['日', '一', '二', '三', '四', '五', '六'][parsed.getDay()];
+  return `${parsed.getFullYear()}年${parsed.getMonth() + 1}月${parsed.getDate()}日（${weekday}）`;
+}
 
 export function History({
   state,
@@ -61,6 +66,13 @@ export function History({
     return acc;
   }, {});
   const pending = scopedReceiptsForTrip(state, trip).filter((r) => r.store?.startsWith('⏳ '));
+  const people = getPersons(state);
+  const categoryChips = [
+    { id: 'all' as const, name: '全部', color: '#cf2626' },
+    ...CATEGORIES.filter((item) => ['lodging', 'food', 'transport', 'shopping', 'ticket', 'other'].includes(item.id)),
+  ];
+  const filterBadge = (category !== 'all' ? 1 : 0) + pending.length;
+  const activeTripName = trip.name || state.tripName || '東京出張之旅';
   const handleSwitchTrip = (tripId: string) => {
     if (!setState) return;
     const target = state.trips?.find((t) => t.id === tripId && !t.archived);
@@ -101,14 +113,8 @@ export function History({
       <div className="japanese-sun-decor" />
       <div className="japanese-sakura-decor" />
       <div className="stack w-full relative z-10">
-        <MagicCard className="history-command p-0 rounded-[24px] w-full relative border border-white/40 shadow-xl !overflow-visible z-20">
-          {/* Background layers wrapper with overflow-hidden to keep rounded corners clipped perfectly */}
-          <div className="absolute inset-0 rounded-[24px] overflow-hidden pointer-events-none z-0">
-            <ShineBorder className="opacity-70" shineColor={['#4A90E2', '#D4A843']} borderWidth={2} />
-            <div className="absolute inset-0 bg-gradient-to-br from-[#1E4D6B] via-[#4A90E2] to-[#D4A843] opacity-[0.15] mix-blend-multiply" />
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10" />
-          </div>
-          <div className="history-command-row relative z-10 flex flex-row justify-between items-center gap-2 p-4 sm:p-5 h-full w-full">
+        <div className="history-command p-0 w-full relative z-20">
+          <div className="history-command-row relative z-10 flex flex-row justify-between items-center gap-2 h-full w-full">
             <div className="relative min-w-0 flex-1">
               <div className="relative z-30">
                 <button
@@ -159,14 +165,14 @@ export function History({
               </div>
             </div>
             <div className="history-command-actions flex items-center justify-end gap-2 shrink-0">
-              {/* 右側切換旅程實體按鈕 */}
               <div className="relative z-30">
                 <button
                   className="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-white/80 backdrop-blur-md rounded-full px-3 py-2 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer focus:outline-none active:scale-95"
                   type="button"
                   onClick={() => setIsActionDropdownOpen(!isActionDropdownOpen)}
                 >
-                  <span>切換旅程</span>
+                  <CalendarDays size={16} aria-hidden="true" />
+                  <span>{activeTripName}</span>
                   <ChevronDown size={16} className={`text-blue-800/70 transition-transform duration-200 ${isActionDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -220,54 +226,123 @@ export function History({
               </button>
             </div>
           </div>
-        </MagicCard>
-      {status && <Toast tone={/失敗|未連線/i.test(status) ? 'warning' : 'success'}>{status}</Toast>}
-      {pending.length > 0 && (
-        <div className="card">
-          <div className="section-head">
-            <h2>Email 待確認</h2>
-            <span className="pill hot">{pending.length} 筆</span>
-          </div>
-          {pending.map((r) => (
-            <div className="pending-row" key={r.id}>
-              <span>{r.store.replace(/^⏳\s*/, '')}</span>
-              <button className="secondary" type="button" onClick={() => onConfirmPending(r)}>確認</button>
-            </div>
-          ))}
         </div>
-      )}
-      <div className="filters history-filters">
+      {status && <Toast tone={/失敗|未連線/i.test(status) ? 'warning' : 'success'}>{status}</Toast>}
+      <div className="history-filter-deck history-filters">
         <label className="search-field">
           <Search size={16} />
-          <input placeholder="搜尋店名 / 備註 / 地區" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input placeholder="搜尋店家、類別、標籤、金額..." value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
-        <select value={category} onChange={(e) => setCategory(e.target.value as 'all' | CategoryId)}>
-          <option value="all">全部類別</option>
-          {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <label className="history-filter-button">
+          <SlidersHorizontal size={19} aria-hidden="true" />
+          <span>篩選</span>
+          {filterBadge > 0 && <b>{filterBadge}</b>}
+          <select aria-label="篩選類別" value={category} onChange={(e) => setCategory(e.target.value as 'all' | CategoryId)}>
+            <option value="all">全部類別</option>
+            {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
       </div>
+      <div className="history-chip-rail" aria-label="類別篩選">
+        <button
+          type="button"
+          className="history-chip history-chip-control"
+          onClick={() => setCategory('all')}
+          aria-pressed={category === 'all'}
+        >
+          <SlidersHorizontal size={17} aria-hidden="true" />
+          類別
+        </button>
+        {categoryChips.map((chip) => (
+          <button
+            key={chip.id}
+            type="button"
+            className={`history-chip ${category === chip.id ? 'active' : ''}`}
+            style={{ '--chip-color': chip.color } as CSSProperties}
+            onClick={() => setCategory(chip.id)}
+            aria-pressed={category === chip.id}
+          >
+            {chip.name}
+          </button>
+        ))}
+      </div>
+      {pending.length > 0 && (
+        <section className="history-pending-banner card" aria-label="Email 待確認">
+          <Mail size={30} aria-hidden="true" />
+          <div>
+            <h2>Email 待確認</h2>
+            <strong>待確認：{pending.length} 筆郵件收據</strong>
+            <p>已匯入，等待確認以完成記帳</p>
+          </div>
+          <button className="history-confirm-button" type="button" onClick={() => onConfirmPending(pending[0])}>
+            查看並確認
+          </button>
+        </section>
+      )}
       {Object.keys(groups).length === 0 && <p className="empty card">未有紀錄</p>}
       {Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([date, items], groupIdx) => (
         <Reveal key={date} className="history-date-reveal" delay={Math.min(0.16, groupIdx * 0.018)}>
         <details className="card history-expandable-group" open>
           <summary className="section-head history-expandable-summary">
-            <h2>{date}</h2>
-            <span className="pill">{items.length} 筆</span>
+            <div className="history-date-title">
+              <CalendarDays size={18} aria-hidden="true" />
+              <h2>{historyDateLabel(date)}</h2>
+              <span className="pill">{items.length} 筆</span>
+            </div>
+            <span className="history-date-total">JPY ¥{fmt(items.reduce((sum, item) => sum + (Number(item.total) || 0), 0))} · HKD ${fmt(items.reduce((sum, item) => sum + hkd(item.total, state), 0))}</span>
           </summary>
           <div className="history-record-stack">
-            {items.map((r) => (
-              <GlareHover
-                key={r.id}
-                className="history-record-glare"
-                background="transparent"
-                color="#D4A843"
-                opacity={0.12}
-                width="100%"
-                playOnce
-              >
-                <ReceiptRow state={state} receipt={r} onOpen={onOpen} onViewPhoto={setViewPhoto} />
-              </GlareHover>
-            ))}
+            {items.map((r) => {
+              const cat = categoryById(r.category);
+              const person = people.find((p) => p.id === r.personId) || people[0];
+              const photoSrc = safePhotoUrl(r.photoUrl, r.photoThumb);
+              return (
+                <div
+                  key={r.id}
+                  className="receipt-row history-ledger-row"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onOpen(r)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') onOpen(r); }}
+                >
+                  <VisualIcon id={r.category as CategoryId} size="md" className="history-ledger-icon" />
+                  <span className="receipt-main history-ledger-main">
+                    <strong>
+                      {isPendingReceipt(r) && <span className="history-pending-mini">pending</span>}
+                      {displayStore(r)}
+                    </strong>
+                    <small>{[cat.name, r.date.slice(5).replace('-', '/'), r.region || r.regionSnapshot, person?.name].filter(Boolean).join(' · ')}</small>
+                  </span>
+                  <span className="history-photo-slot" aria-hidden={!photoSrc}>
+                    {photoSrc ? (
+                      <button
+                        type="button"
+                        className="history-photo-thumb"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setViewPhoto(r);
+                        }}
+                        aria-label={`查看 ${displayStore(r)} 收據相片`}
+                      >
+                        <img src={photoSrc} alt="" />
+                      </button>
+                    ) : (
+                      <Camera size={24} />
+                    )}
+                  </span>
+                  <span className="amount history-ledger-amount">
+                    <strong>¥{fmt(r.total)}</strong>
+                    <small>HKD ${fmt(hkd(r.total, state))}</small>
+                  </span>
+                  <ChevronRight className="history-row-chevron" size={21} aria-hidden="true" />
+                </div>
+              );
+            })}
+            <div className="history-day-subtotal">
+              <span>當日小計</span>
+              <strong>JPY ¥{fmt(items.reduce((sum, item) => sum + (Number(item.total) || 0), 0))} · HKD ${fmt(items.reduce((sum, item) => sum + hkd(item.total, state), 0))}</strong>
+            </div>
           </div>
         </details>
         </Reveal>
