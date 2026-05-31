@@ -2,6 +2,14 @@
 
 All notable project changes should be recorded here.
 
+## 2026-05-31
+
+### Compact generated-preview layout renovation
+
+- Reworked the independent `app-compact/` Stats tab to follow the generated app-preview dashboard layout: two large top analysis panels, a four-card metric strip, settlement/category/payment panels, and a scrollable mobile reading flow.
+- Rebuilt the compact Scan tab hero around the generated preview's receipt camera frame, crop corners, flash/crop controls, red camera card, green gallery card, and supporting utility actions while keeping manual, voice, email, currency, and cleanup flows usable.
+- Deployed a fresh Vercel preview for the compact version and verified it returns `HTTP 200` with title `旅費 Compact`.
+
 ## 2026-05-30
 
 ### Stats budget-usage pie refinement

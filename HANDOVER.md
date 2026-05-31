@@ -1,9 +1,10 @@
 # Travel Expense App - Agent Handover
 
-Last updated: 2026-05-30 HKT
+Last updated: 2026-05-31 HKT
 
 Latest pushed commits:
 
+- Current commit: Compact generated-preview layout renovation
 - Current commit: Refine Stats chart readability
 - Current commit: Redesign Stats charts for spend insight
 - Current commit: Compact Weather command card
@@ -87,6 +88,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- Compact generated-preview renovation on 2026-05-31 HKT: `app-compact/` now keeps its own independent generated-preview direction instead of inheriting the main React layout. Stats follows the generated dashboard composition with two large top analysis panels, a metric strip, compact settlement/category/payment panels, and a mobile scroll reading flow. Scan follows the generated mobile receipt-scanner preview with the dark camera frame, receipt paper, crop corners, flash/crop controls, red camera card, green gallery card, and utility actions. The React and legacy versions were not changed.
 - Stats budget-usage refinement on 2026-05-30 HKT: the Stats top card is now `預算使用分析`; the donut center shows `預算使用` as the selected chart total divided by `state.budget`, with used/remaining/over-budget amounts, daily average, and highest category labels. The top visual background area is larger with narrower inner card padding/border, and the confusing metric labels were renamed to `圖表統計額` and `共同分帳額` so chart-filter totals and settlement totals are separated clearly.
 - Stats readability refinement on 2026-05-30 HKT: the top pie chart center now reads `類別佔比` with the highest category percentage, the highest-category legend wraps instead of truncating to `...`, Stats metrics stay in a 2x2 mobile layout, settlement transfer names show full names without ellipsis, TOP 10 uses a `全項目` / `除了機票和酒店` segmented toggle, and `統一口徑` moved to the bottom of the Stats page.
 - Stats meaningful-chart redesign on 2026-05-30 HKT: replaced the top-card `統計範圍` dial with a `支出方向盤` spending compass showing category share, daily average spend, and the highest spending category. The old daily trend line now renders as `每日 Budget Pace` with a dashed budget line, over-budget day count, peak spending day, and red/gold bars for days above budget.
@@ -113,6 +115,7 @@ Latest UI polish in this handover update:
 
 Latest UI verification from this pass:
 
+- Compact generated-preview renovation verification on 2026-05-31 HKT: `npm run build`, `npm run smoke:dashboard`, `npm run smoke:scan`, `npm run smoke:history`, `npm run smoke:timeline`, `npm run smoke:weather`, `npm run smoke:stats`, `npm run smoke:settings`, `npm run smoke:security`, `npm run smoke:ai-routing`, `npm run smoke:auth-broker`, `npm run smoke:supabase-notion-mirror`, `npm run smoke:mobile-layout`, and `npm run smoke:final-nav` were run against `app-compact/`. Playwright screenshots for all seven compact tabs were generated under `/tmp/compact-strict-final/`. Final compact Vercel preview was live-checked at `https://travel-expense-compact-pwis0lb62-ftjdfr-7940s-projects.vercel.app` with `HTTP 200` and title `旅費 Compact`.
 - `npm run typecheck` - passed after the Stats budget-usage refinement.
 - `npm run build` - passed after the Stats budget-usage refinement.
 - `npm run smoke:stats` - 1 passed, covering the `預算使用` center text, `69%` budget-used calculation, metric label updates, TOP 10 segmented toggle, and bottom-positioned `統一口徑` panel.

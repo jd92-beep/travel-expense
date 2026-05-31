@@ -400,6 +400,34 @@ export function Scan({
           </StatusPill>
         </div>
 
+        <div className="preview-scan-camera relative z-10" aria-label="收據取景框">
+          <div className="preview-crop-corner preview-crop-corner--tl" aria-hidden="true" />
+          <div className="preview-crop-corner preview-crop-corner--tr" aria-hidden="true" />
+          <div className="preview-crop-corner preview-crop-corner--bl" aria-hidden="true" />
+          <div className="preview-crop-corner preview-crop-corner--br" aria-hidden="true" />
+          <button className="preview-camera-tool preview-camera-tool--flash" type="button" aria-label="閃光">
+            <span>閃光</span>
+          </button>
+          <button className="preview-camera-tool preview-camera-tool--crop" type="button" aria-label="裁切">
+            <span>裁切</span>
+          </button>
+          <div className="preview-receipt-paper" aria-hidden="true">
+            <b>領 收 書</b>
+            <span>○○商店</span>
+            <small>東京都千代田區丸の內1-1-1</small>
+            <small>2025年 5月13日（火）12:45</small>
+            <i />
+            <strong><span>合計</span><span>¥3,240</span></strong>
+            <small>（內）消費稅 10%　¥294</small>
+            <small>現金　　　　　　　¥3,240</small>
+          </div>
+        </div>
+
+        <div className="preview-scan-tip relative z-10">
+          <span>將收據置於框內以獲得最佳辨識效果</span>
+          <b>自動拍攝：開啟</b>
+        </div>
+
         {/* MAIN SCAN MODES GRID */}
         <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {/* CAMERA HERO BUTTON - Large & Prominent */}

@@ -7,12 +7,8 @@ import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getP
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { EmptyState, GlassCard, StatusPill } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
-import { ShineBorder } from '../components/ui/shine-border';
-import { MagicCard } from '../components/ui/magic-card';
 import { NumberTicker } from '../components/ui/number-ticker';
-import { AnimatedGradientText } from '../components/ui/animated-gradient-text';
 import { GlareHover } from '../components/ui/glare-hover';
-import { RetroGrid } from '../components/ui/retro-grid';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryIconId } from '../lib/iconManifest';
 import '../styles/stats.css';
@@ -47,33 +43,29 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   const overBudgetDays = trend.filter(([, total]) => dailyBudget > 0 && total > dailyBudget).length;
 
   return (
-    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto stats-tab stats-cockpit stats-screen">
-      <div className="japanese-sun-decor" />
-      <div className="japanese-sakura-decor" />
-      <div className="stack w-full relative z-10">
-      <MagicCard className="stats-command p-0 rounded-[24px] overflow-hidden relative border border-white/40 shadow-xl w-full">
-        <ShineBorder className="opacity-70" shineColor={['#C23B5E', '#1E4D6B']} borderWidth={2} />
-        <RetroGrid className="stats-retro-grid" opacity={0.22} cellSize={48} angle={64} lightLineColor="rgba(30,77,107,.24)" />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#C23B5E] via-[#D4A843] to-[#1E4D6B] opacity-[0.15] mix-blend-multiply pointer-events-none" />
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none" />
-        <div className="stats-command-inner relative z-10 h-full w-full">
-          <div className="stats-command-copy flex-1 min-w-0">
-            <div className="stats-command-title-row">
-              <h2 className="stats-command-title text-2xl font-bold text-red-900">
-                <AnimatedGradientText colorFrom="#C23B5E" colorTo="#1E4D6B" speed={1.1}>預算使用分析</AnimatedGradientText>
-              </h2>
-              <span className="stats-record-pill">
-                <StatusPill tone="info" icon={<ReceiptText size={14} />}>{scopedState.receipts.length} 筆紀錄</StatusPill>
-              </span>
-            </div>
-          </div>
-          <div className="stats-command-visual">
-            <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyAverage={dailyAverage} state={state} />
-          </div>
+    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto stats-tab stats-cockpit stats-screen preview-stats-screen">
+      <div className="stack w-full relative z-10 preview-stats-grid">
+      <GlassCard className="stats-command preview-stats-budget">
+        <div className="stats-command-title-row">
+          <h2 className="stats-command-title">預算使用分析</h2>
+          <span className="stats-record-pill">
+            <StatusPill tone="info" icon={<ReceiptText size={14} />}>{scopedState.receipts.length} 筆紀錄</StatusPill>
+          </span>
         </div>
-      </MagicCard>
+        <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyAverage={dailyAverage} state={state} />
+      </GlassCard>
 
-      <div className="metric-grid stats-metrics">
+      <DataPanel
+        className="trend-panel preview-daily-pace"
+        icon={<TrendingUp size={19} />}
+        title="每日 Budget Pace"
+        status={<StatusPill tone={overBudgetDays ? 'warning' : 'ok'}>{overBudgetDays ? `${overBudgetDays} 日超支` : '未超支'}</StatusPill>}
+      >
+        {trend.length ? <BudgetPaceChart trend={trend} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} /> : null}
+        {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
+      </DataPanel>
+
+      <div className="metric-grid stats-metrics preview-stats-metrics">
         <CockpitMetric label="圖表統計額" value={<NumberTicker value={analysisTotal} prefix="¥" />} detail={`圖表口徑 · HK$ ${fmt(hkd(analysisTotal, state))}`} tone="accent" />
         <CockpitMetric label="共同分帳額" value={<NumberTicker value={settlement.sharedTotal} prefix="¥" delay={0.04} />} detail={`全 receipts · ${persons.length} 人`} />
         <CockpitMetric label="私人/代付" value={<NumberTicker value={privateTotal} prefix="¥" delay={0.08} />} detail={`${settlement.crossPrivate.length} 筆跨私人代付`} tone="success" />
@@ -104,7 +96,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
         )) : <EmptyState title="暫時唔需要互相轉帳" description="所有共同支出與代付已經平衡。" />}
       </DataPanel>
 
-      <DataPanel icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全 receipts</StatusPill>}>
+      <DataPanel className="payer-panel" icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全 receipts</StatusPill>}>
         {persons.map((p, i) => (
           <Bar key={p.id} label={p.name} leading={<AvatarBadge person={p} size="sm" />} value={settlement.sharedByPayer[i] + settlement.privateByOwner[i]} max={maxPersonTotal} state={scopedState} color={p.color} />
         ))}
@@ -115,15 +107,16 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
         )}
       </DataPanel>
 
-      <DataPanel icon={<PieChart size={19} />} title="類別" status={<StatusPill tone="neutral">{state.statsIncludeTransportLodging ? '包含大額' : '日常支出'}</StatusPill>}>
+      <DataPanel className="category-panel" icon={<PieChart size={19} />} title="類別" status={<StatusPill tone="neutral">{state.statsIncludeTransportLodging ? '包含大額' : '日常支出'}</StatusPill>}>
         {catTotals.length ? catTotals.map((c) => <Bar key={c.id} label={c.name} leading={<VisualIcon id={categoryIconId(c.id)} label={c.name} size="sm" />} value={c.total} state={{ ...scopedState, receipts: analysisReceipts }} color={c.color} />) : <EmptyState title="未有紀錄" description="新增 receipt 後會自動顯示類別分佈。" />}
       </DataPanel>
 
-      <DataPanel icon={<BarChart3 size={19} />} title="支付方式" status={<StatusPill tone="neutral">{payTotals.length} 種方式</StatusPill>}>
+      <DataPanel className="payment-panel" icon={<BarChart3 size={19} />} title="支付方式" status={<StatusPill tone="neutral">{payTotals.length} 種方式</StatusPill>}>
         {payTotals.length ? payTotals.map((p) => <Bar key={p.id} label={p.name} value={p.total} state={{ ...scopedState, receipts: analysisReceipts }} color={p.color} />) : <EmptyState title="未有紀錄" description="現金、信用卡、PayPay、Suica 會分開統計。" />}
       </DataPanel>
 
       <DataPanel
+        className="top-expenses-panel"
         icon={<Trophy size={19} />}
         title="TOP 10 支出"
         status={<TopTenToggle includeBigItems={state.top10IncludeBigItems} onChange={(value) => updateState({ top10IncludeBigItems: value })} />}
@@ -138,16 +131,6 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
             </motion.div>
           );
         }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
-      </DataPanel>
-
-      <DataPanel
-        className="trend-panel"
-        icon={<TrendingUp size={19} />}
-        title="每日 Budget Pace"
-        status={<StatusPill tone={overBudgetDays ? 'warning' : 'ok'}>{overBudgetDays ? `${overBudgetDays} 日超支` : '未超支'}</StatusPill>}
-      >
-        {trend.length ? <BudgetPaceChart trend={trend} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} /> : null}
-        {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
       </DataPanel>
 
       <GlassCard className="stats-controls stats-glass" tone="control">
