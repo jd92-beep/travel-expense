@@ -4,6 +4,13 @@ All notable project changes should be recorded here.
 
 ## 2026-05-31
 
+### Compact Settings mobile preview pass
+
+- Reworked the independent compact Settings mobile first screen toward the generated control-center preview with a four-tile quick-control grid for Trip, Kimi, Vault, and Security.
+- Tightened Settings mobile accordion rows from tall cards into denser 56px control rows so more setting groups fit in the first viewport while preserving the underlying expandable functions.
+- Updated Settings and final navigation smoke coverage for the new mobile quick-control layout.
+- Verified `app-compact/` with `npm run build`, `npm run smoke:settings`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check`.
+
 ### Compact Weather mobile density pass
 
 - Refined the independent compact Weather mobile preview toward the generated forecast screen with a denser current-weather card, smaller mobile typography, and a new five-slot hourly rail under the hero facts.

@@ -9,6 +9,12 @@ async function setAccordion(page, title, expanded = true) {
   if ((await button.getAttribute('aria-expanded')) !== String(expanded)) await button.click();
 }
 
+async function expectSettingsReady(page) {
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
+  await expect(page.locator('.settings-preview-controls')).toBeVisible();
+  await expect(page.locator('.settings-preview-controls button')).toHaveCount(4);
+}
+
 test('Settings expandable cards, safe broker actions, backup, restore, and trust clear work', async ({ page }) => {
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => route.fulfill({
     status: 500,
@@ -183,7 +189,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await expectSettingsReady(page);
 
   const summaries = page.locator('.accordion-summary');
   await expect(summaries).toHaveCount(9);
@@ -374,7 +380,7 @@ test('Settings protects broker URL and does not keep archived trip active', asyn
   }, trips);
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await expectSettingsReady(page);
 
   await setAccordion(page, 'Credentials & Connection');
   const brokerInput = page.getByLabel('Credential Broker URL');
@@ -434,7 +440,7 @@ test('Settings can connect a broker session without leaking the password into ap
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await expectSettingsReady(page);
   await setAccordion(page, 'Credentials & Connection');
 
   await page.getByLabel('Broker password').fill('broker-pass');

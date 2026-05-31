@@ -398,6 +398,12 @@ export function Settings({
     return <span className={`pill ${ok ? 'ok' : item.status === 'missing' ? '' : 'hot'}`}>{ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {provider}: {item.status}</span>;
   }
 
+  function openSettingsPanel(id: string) {
+    const trigger = document.querySelector<HTMLButtonElement>(`[aria-controls="${id}-panel"]`);
+    if (trigger && trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
+    window.setTimeout(() => trigger?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 40);
+  }
+
   async function refreshCredentialStatus() {
     await run('Credential status', async () => {
       const [health, statusResult] = await Promise.all([
@@ -1106,6 +1112,28 @@ export function Settings({
               </Tooltip>
             </div>
           </TooltipProvider>
+          <div className="settings-preview-controls" aria-label="設定快速操作">
+            <button type="button" onClick={() => openSettingsPanel('settings-trip')}>
+              <Plane size={17} />
+              <span>旅程</span>
+              <small>{trips.length} 個</small>
+            </button>
+            <button type="button" onClick={() => openSettingsPanel('settings-trip-update')}>
+              <Sparkles size={17} />
+              <span>Kimi</span>
+              <small>更新</small>
+            </button>
+            <button type="button" onClick={() => openSettingsPanel('settings-credentials')}>
+              <KeyRound size={17} />
+              <span>Vault</span>
+              <small>{brokerReady ? 'Active' : 'Lock'}</small>
+            </button>
+            <button type="button" onClick={() => openSettingsPanel('settings-data')}>
+              <ShieldCheck size={17} />
+              <span>安全</span>
+              <small>{syncState?.status || 'local'}</small>
+            </button>
+          </div>
         </div>
       </GlassCard>
 

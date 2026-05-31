@@ -60,6 +60,9 @@ for (const [name, viewport] of [
       await nav.getByRole('button', { name: tabLabel, exact: true }).click();
       if (viewport.width <= 390 && expectedText === '紀錄中心') {
         await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+      } else if (viewport.width <= 390 && expectedText === '設定控制中心') {
+        await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
+        await expect(page.locator('.settings-preview-controls')).toBeVisible();
       } else {
         await expect(page.getByText(expectedText).first()).toBeVisible();
       }
