@@ -4,6 +4,13 @@ All notable project changes should be recorded here.
 
 ## 2026-05-31
 
+### Compact mobile preview type-scale pass
+
+- Tightened the independent compact mobile typography to better match the generated app previews: shorter iOS-style headers, smaller status pills/actions, denser bottom dock labels, and reduced type inside Dashboard, Timeline, Scan, Weather, Stats, and Settings cards.
+- Re-compacted the Timeline mobile command card and itinerary rows after the type-scale change so the first day stays high on the page and the rail/card geometry remains touch-safe.
+- Updated compact smoke coverage for the current History search placeholder and Timeline day-heading selector while keeping app behavior unchanged.
+- Verified `app-compact/` with `npm run build`, `npm run smoke:dashboard`, `npm run smoke:history`, `npm run smoke:timeline`, `npm run smoke:scan`, `npm run smoke:weather`, `npm run smoke:stats`, `npm run smoke:settings`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check`.
+
 ### Compact Stats preview fidelity pass
 
 - Rebuilt the compact mobile History tab around the generated ledger preview: torii/Fuji mobile header art, preview-style search/filter controls, horizontal category chips, red pending-email banner, date subtotal headers, and table-like receipt rows with category icons, photo slots, amounts, and chevrons.

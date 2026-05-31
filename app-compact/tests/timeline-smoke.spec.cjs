@@ -316,7 +316,7 @@ test('Timeline rail progress follows the current itinerary spot instead of the w
   }, fixed);
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('Current Day')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Current Day' })).toBeVisible();
   const todayRail = page.locator('.timeline-rail.is-today');
   await expect(todayRail.locator('.timeline-now-marker')).toContainText('09:30');
   await expect(page.locator('.timeline-event.is-live')).toContainText('Temple Gate');

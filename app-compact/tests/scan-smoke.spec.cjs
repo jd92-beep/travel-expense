@@ -119,7 +119,7 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.getByText(/2000 JPY =/)).toBeVisible();
 
   await nav.getByRole('button', { name: '紀錄', exact: true }).click();
-  await page.getByPlaceholder('搜尋店名 / 備註 / 地區').fill('M5 Email');
+  await page.getByPlaceholder(/搜尋店名|搜尋店家/).fill('M5 Email');
   await page.locator('.receipt-row').filter({ hasText: 'M5 Email' }).first().click();
   await page.getByRole('button', { name: '刪除' }).click();
   await expect(page.getByText('M5 Email')).toBeHidden();
