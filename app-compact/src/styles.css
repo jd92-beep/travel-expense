@@ -7353,3 +7353,104 @@ textarea,
     height: 42px !important;
   }
 }
+
+/* Final compact preview dock: the generated mobile mockup uses an open white dock, not grey tab tiles. */
+@media (max-width: 767px) {
+  .fixed-tab-bar {
+    max-width: 430px !important;
+    padding: 0 0 max(8px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .app-floating-dock-mobile {
+    min-height: 96px !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+    padding: 12px 8px max(10px, env(safe-area-inset-bottom)) !important;
+    border-radius: 17px 17px 0 0 !important;
+    border: 1px solid rgba(122, 96, 64, .18) !important;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, .95), rgba(255, 250, 241, .93)),
+      rgba(255, 253, 248, .98) !important;
+    box-shadow: 0 -12px 30px rgba(67, 45, 24, .14) !important;
+    backdrop-filter: blur(18px) saturate(1.05) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.05) !important;
+  }
+
+  .app-floating-dock-mobile button:not(.dock-item-scan),
+  .app-floating-dock-mobile button[aria-current="page"]:not(.dock-item-scan) {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 68px !important;
+    padding: 4px 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: #40484f !important;
+    font-size: 15px !important;
+    font-weight: 780 !important;
+  }
+
+  .app-floating-dock-mobile button:not(.dock-item-scan)::before,
+  .app-floating-dock-mobile button:not(.dock-item-scan)::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  .app-floating-dock-mobile button[aria-current="page"]:not(.dock-item-scan) {
+    color: #cf2424 !important;
+    font-weight: 900 !important;
+  }
+
+  .app-floating-dock-mobile button:not(.dock-item-scan) svg {
+    width: 29px !important;
+    height: 29px !important;
+    stroke-width: 2.15 !important;
+  }
+
+  .app-floating-dock-mobile .dock-mobile-label {
+    display: block !important;
+    margin-top: 2px !important;
+    font-size: 15px !important;
+    font-weight: inherit !important;
+    line-height: 1.05 !important;
+  }
+
+  .app-floating-dock-mobile .dock-item-scan {
+    width: 86px !important;
+    height: 86px !important;
+    min-width: 86px !important;
+    min-height: 86px !important;
+    margin-top: -42px !important;
+    border: 8px solid rgba(255, 253, 248, .98) !important;
+    border-radius: 999px !important;
+    background: linear-gradient(135deg, #dd2b24, #bd171a) !important;
+    color: #fff !important;
+    box-shadow: 0 13px 28px rgba(190, 23, 26, .25), 0 0 0 1px rgba(190, 23, 26, .08) !important;
+  }
+
+  .app-floating-dock-mobile .dock-item-scan svg {
+    width: 29px !important;
+    height: 29px !important;
+  }
+
+  .app-floating-dock-mobile .dock-item-scan .dock-mobile-label {
+    color: #fff !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+  }
+
+  .fixed-tab-bar::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: max(4px, env(safe-area-inset-bottom));
+    width: 104px;
+    height: 4px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: #070707;
+    opacity: .92;
+    pointer-events: none;
+  }
+}

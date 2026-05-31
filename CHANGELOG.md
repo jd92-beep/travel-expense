@@ -9,6 +9,7 @@ All notable project changes should be recorded here.
 - Rebuilt the independent compact Stats budget card around the generated preview's mobile `預算羅盤` layout: large donut, HKD/JPY segmented display, two-column budget summary, bottom reminder row, and selected-day budget pace card.
 - Adjusted the compact Stats mobile shell header and scrollable reading flow so the title, status pill, budget card, and bottom dock do not overlap at 390px/360px phone widths.
 - Verified `app-compact/` with `npm run build`, `npm run smoke:stats`, `npm run smoke:final-nav`, `npm run smoke:mobile-layout`, and Playwright mobile screenshots.
+- Refined the compact mobile bottom dock globally to match the generated preview: removed grey per-tab tiles, kept active tabs as red icon/text, preserved the central red `記帳` action, and added the black iOS-style home indicator.
 
 ### Compact generated-preview layout renovation
 
