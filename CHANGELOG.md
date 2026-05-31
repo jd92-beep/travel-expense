@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-31
 
+### Compact Stats preview fidelity pass
+
+- Rebuilt the independent compact Stats budget card around the generated preview's mobile `預算羅盤` layout: large donut, HKD/JPY segmented display, two-column budget summary, bottom reminder row, and selected-day budget pace card.
+- Adjusted the compact Stats mobile shell header and scrollable reading flow so the title, status pill, budget card, and bottom dock do not overlap at 390px/360px phone widths.
+- Verified `app-compact/` with `npm run build`, `npm run smoke:stats`, `npm run smoke:final-nav`, `npm run smoke:mobile-layout`, and Playwright mobile screenshots.
+
 ### Compact generated-preview layout renovation
 
 - Reworked the independent `app-compact/` Stats tab to follow the generated app-preview dashboard layout: two large top analysis panels, a four-card metric strip, settlement/category/payment panels, and a scrollable mobile reading flow.

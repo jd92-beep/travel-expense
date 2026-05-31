@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { BarChart3, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
+import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, hkd } from '../lib/domain';
@@ -52,7 +52,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
             <StatusPill tone="info" icon={<ReceiptText size={14} />}>{scopedState.receipts.length} 筆紀錄</StatusPill>
           </span>
         </div>
-        <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyAverage={dailyAverage} state={state} />
+        <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} />
       </GlassCard>
 
       <DataPanel
@@ -151,7 +151,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   );
 }
 
-function SpendingCompass({ categories, total, budget, dailyAverage, state }: { categories: StatBucket[]; total: number; budget: number; dailyAverage: number; state: AppState }) {
+function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState }) {
   const slices = categorySlices(categories, total);
   const top = slices[0];
   const safeBudget = Math.max(0, Number(budget) || 0);
@@ -160,27 +160,67 @@ function SpendingCompass({ categories, total, budget, dailyAverage, state }: { c
   const remaining = Math.max(0, safeBudget - total);
   const overBudget = safeBudget > 0 && total > safeBudget;
   const ring = budgetRingGradient(usedPercent);
+  const delta = overBudget ? total - safeBudget : remaining;
+  const currencyState = state.tripCurrency || 'JPY';
   return (
     <div className={`spending-compass ${overBudget ? 'is-over-budget' : ''}`.trim()} aria-label={`預算使用分析，已用 ${shownPercent}，支出 ¥${fmt(total)}，預算 ¥${fmt(safeBudget)}`} style={{ '--compass-ring': ring } as CSSProperties}>
-      <div className="spending-compass-ring" aria-hidden="true">
-        <motion.i initial={{ rotate: -20, scale: 0.92 }} animate={{ rotate: 0, scale: 1 }} transition={{ duration: 0.5, ease: 'easeOut' }} />
-        <div className="spending-compass-copy">
-          <span>預算使用</span>
-          <strong>{shownPercent}</strong>
-          <small>{safeBudget > 0 ? (overBudget ? '已超預算' : '已用預算') : '未設定預算'}</small>
+      <div className="preview-budget-heading">
+        <span>預算羅盤</span>
+        <Info size={17} aria-hidden="true" />
+        <div className="preview-budget-currency" role="group" aria-label="顯示貨幣">
+          <span className={currencyState === 'HKD' ? 'is-active' : ''}>HKD</span>
+          <span className={currencyState === 'JPY' ? 'is-active' : ''}>JPY</span>
         </div>
       </div>
-      <div className="spending-compass-legend">
-        <span className="spending-compass-slice" style={{ '--slice-color': '#C23B5E' } as CSSProperties}><i aria-hidden="true" />已用 ¥{fmt(total)}</span>
-        <span className="spending-compass-slice" style={{ '--slice-color': '#D4A843' } as CSSProperties}><i aria-hidden="true" />{overBudget ? '超出' : '尚餘'} ¥{fmt(overBudget ? total - safeBudget : remaining)}</span>
-        <span className="spending-compass-slice" style={{ '--slice-color': top ? top.color : '#8b7d6d' } as CSSProperties}><i aria-hidden="true" />最高 {top ? top.name : '未有分類'}</span>
-        <span className="spending-compass-slice" style={{ '--slice-color': '#1E4D6B' } as CSSProperties}><i aria-hidden="true" />日均 ¥{fmt(dailyAverage)}</span>
+      <div className="preview-budget-overview">
+        <div className="preview-budget-main">
+          <div className="spending-compass-ring" aria-hidden="true">
+            <motion.i initial={{ rotate: -20, scale: 0.92 }} animate={{ rotate: 0, scale: 1 }} transition={{ duration: 0.5, ease: 'easeOut' }} />
+            <div className="spending-compass-copy">
+              <span>預算使用</span>
+              <strong>{shownPercent}</strong>
+              <small>{safeBudget > 0 ? (overBudget ? '已超預算' : '已使用') : '未設定預算'}</small>
+              <b>HK$ {fmt(hkd(total, state))}</b>
+            </div>
+          </div>
+          <div className="spending-compass-legend" aria-label="類別比例">
+            {(slices.length ? slices : [{ id: 'empty', name: '未有分類', color: '#b8aa96', total: 0 }]).map((slice) => (
+              <span className="spending-compass-slice" key={slice.id} style={{ '--slice-color': slice.color } as CSSProperties}>
+                <i aria-hidden="true" />{slice.name}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="preview-budget-side">
+          <div className="preview-budget-total">
+            <span>總預算</span>
+            <strong>{safeBudget > 0 ? `HK$ ${fmt(hkd(safeBudget, state))}` : '未設定'}</strong>
+            <button type="button" aria-label="編輯預算"><Pencil size={15} aria-hidden="true" /> 編輯</button>
+          </div>
+          <div className="preview-budget-row is-used">
+            <span>已用</span>
+            <strong>HK$ {fmt(hkd(total, state))}</strong>
+          </div>
+          <div className="preview-budget-row">
+            <span>{overBudget ? '超出預算' : '尚餘預算'}</span>
+            <strong>HK$ {fmt(hkd(delta, state))}</strong>
+          </div>
+          <div className="preview-budget-row preview-budget-stack">
+            <span>每日預算</span>
+            <strong>HK$ {fmt(hkd(dailyBudget, state))}</strong>
+            <span>日均結餘</span>
+            <strong>HK$ {fmt(hkd(Math.max(0, dailyBudget - dailyAverage), state))}</strong>
+          </div>
+          <div className="preview-budget-row preview-budget-stack">
+            <span>最高類別</span>
+            <strong>{top ? top.name : '未有分類'}</strong>
+            <small>{top ? `HK$ ${fmt(hkd(top.total, state))}` : '新增 receipt 後顯示'}</small>
+          </div>
+        </div>
       </div>
-      <div className="spending-compass-top">
-        <span>預算</span>
-        <b>{safeBudget > 0 ? `¥${fmt(safeBudget)} · HK$ ${fmt(hkd(safeBudget, state))}` : '未設定'}</b>
-        <span>{overBudget ? '超出' : '尚餘'}</span>
-        <b>{safeBudget > 0 ? `¥${fmt(overBudget ? total - safeBudget : remaining)} · HK$ ${fmt(hkd(overBudget ? total - safeBudget : remaining, state))}` : '設定後顯示'}</b>
+      <div className="preview-budget-reminder">
+        <span>預算提醒：每日平均使用需 ≤ HK$ {fmt(hkd(dailyBudget || 0, state))}</span>
+        <ChevronRight size={20} aria-hidden="true" />
       </div>
     </div>
   );
@@ -259,6 +299,20 @@ function BudgetPaceChart({ trend, dailyBudget, dailyAverage, state }: { trend: A
           );
         })}
       </div>
+      {peak && (
+        <div className={`preview-budget-selected-day ${dailyBudget > 0 && peak[1] > dailyBudget ? 'is-over' : ''}`}>
+          <span>
+            <b>{peak[0]}</b>
+            <small>最高支出日</small>
+          </span>
+          <strong>{dailyBudget > 0 ? `${Math.round(peak[1] / dailyBudget * 100)}%` : '--'}</strong>
+          <span>
+            <b>{dailyBudget > 0 && peak[1] > dailyBudget ? '超出預算' : '預算內'}</b>
+            <small>HK$ {fmt(hkd(peak[1], state))}</small>
+          </span>
+          <ChevronRight size={20} aria-hidden="true" />
+        </div>
+      )}
     </div>
   );
 }

@@ -7302,3 +7302,54 @@ textarea,
     font-size: 14px !important;
   }
 }
+
+/* Final compact Stats header override must live after shared mobile chrome rules. */
+@media (max-width: 767px) {
+  .app-shell--stats .compact-mobile-header {
+    grid-template-columns: 72px minmax(0, 1fr) 92px 30px !important;
+    min-height: 186px !important;
+    gap: 6px !important;
+    padding: 50px 16px 20px !important;
+    align-items: end !important;
+  }
+
+  .app-shell--stats .compact-mobile-mark {
+    width: 72px !important;
+    height: 58px !important;
+  }
+
+  .app-shell--stats .compact-mobile-heading {
+    min-width: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .app-shell--stats .compact-mobile-title-art {
+    max-width: 100% !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    font-size: clamp(23px, 6.35vw, 27px) !important;
+    line-height: 1.02 !important;
+  }
+
+  .app-shell--stats .compact-mobile-heading p {
+    margin-top: 5px !important;
+    font-size: 14px !important;
+    line-height: 1.12 !important;
+  }
+
+  .app-shell--stats .compact-mobile-status {
+    position: static !important;
+    min-width: 0 !important;
+    min-height: 42px !important;
+    padding: 8px 10px !important;
+    border-radius: 14px !important;
+    font-size: 13px !important;
+    white-space: nowrap !important;
+  }
+
+  .app-shell--stats .compact-mobile-action {
+    position: static !important;
+    width: 30px !important;
+    height: 42px !important;
+  }
+}
