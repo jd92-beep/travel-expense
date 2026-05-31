@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 
 
 const tabs = [
-  ['主頁', 'Total Budget'],
+  ['主頁', '預算總覽'],
   ['記帳', '掃描收據'],
   ['行程', '行程時間線'],
   ['紀錄', '紀錄中心'],

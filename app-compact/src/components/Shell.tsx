@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users } from 'lucide-react';
+import { BarChart3, Bell, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
@@ -228,14 +228,16 @@ export function Shell({
         )}
       </header>
       <header className="compact-mobile-header" aria-label={`${activeCopy.mobileTitle} header`}>
-        <img className="compact-mobile-mark" src={compactJapanMark} alt="" aria-hidden="true" />
+        <span className="compact-mobile-mark" aria-hidden="true">
+          <img src={compactJapanMark} alt="" />
+        </span>
         <div className="compact-mobile-heading">
           <h1 aria-hidden="true"><span className="compact-mobile-title-art" data-title={activeCopy.mobileTitle} /></h1>
           <p>{activeCopy.subtitle}</p>
         </div>
         <span className="compact-mobile-status">{activeCopy.status}</span>
-        <button className="compact-mobile-action" type="button" aria-label="更多操作">
-          {active === 'scan' ? <Settings size={25} /> : <MoreVertical size={25} />}
+        <button className={`compact-mobile-action ${active === 'dashboard' ? 'has-alert' : ''}`} type="button" aria-label="更多操作">
+          {active === 'dashboard' ? <Bell size={25} /> : active === 'scan' ? <Settings size={25} /> : <MoreVertical size={25} />}
         </button>
       </header>
       <main className="content">{children}</main>

@@ -10,6 +10,8 @@ All notable project changes should be recorded here.
 - Adjusted the compact Stats mobile shell header and scrollable reading flow so the title, status pill, budget card, and bottom dock do not overlap at 390px/360px phone widths.
 - Verified `app-compact/` with `npm run build`, `npm run smoke:stats`, `npm run smoke:final-nav`, `npm run smoke:mobile-layout`, and Playwright mobile screenshots.
 - Refined the compact mobile bottom dock globally to match the generated preview: removed grey per-tab tiles, kept active tabs as red icon/text, preserved the central red `記帳` action, and added the black iOS-style home indicator.
+- Tightened the compact mobile header globally so the logo/title/status/action row uses the generated preview's shorter iOS-style height and pulls the first content card higher on all seven tabs.
+- Rebuilt the compact mobile Dashboard toward the generated app preview: red torii trip mark, notification bell, Chinese `預算總覽` card with HKD/JPY segmented control, large budget donut, right-side budget ledger, reminder strip, `今日狀態` panel, and updated smoke expectations for the new UI language.
 
 ### Compact generated-preview layout renovation
 

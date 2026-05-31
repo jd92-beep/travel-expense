@@ -4,7 +4,12 @@ import {
   ChevronDown,
   ChevronRight,
   CloudSun,
+  Info,
+  Lightbulb,
   MapPin,
+  NotebookPen,
+  Pencil,
+  PieChart,
   Plus,
   X,
   Castle,
@@ -16,7 +21,8 @@ import {
   Compass,
   BarChart3,
   MoreHorizontal,
-  Camera
+  Camera,
+  Wallet
 } from 'lucide-react';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
@@ -53,6 +59,13 @@ function weekdayLabel(date: string) {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
   return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(parsed);
+}
+
+function chineseDateLabel(date: string) {
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  const weekday = ['日', '一', '二', '三', '四', '五', '六'][parsed.getDay()];
+  return `${parsed.getFullYear()}年${parsed.getMonth() + 1}月${parsed.getDate()}日（${weekday}）`;
 }
 
 function tripLength(startDate: string, endDate: string, fallback: number) {
@@ -334,8 +347,13 @@ export function Dashboard({
   const dailyAverage = Math.round(totalForBudget / Math.max(1, itinerary.length));
   const todayBudgetPct = dailyBudget > 0 ? (todayTotal / dailyBudget) * 100 : 0;
   const day = itinerary.find((d) => d.date === today) || itinerary[0];
-  const daySpots = (day?.spots || []).slice(0, 4);
   const length = tripLength(trip.startDate, trip.endDate, itinerary.length);
+  const displayDayDate = day?.date || today;
+  const remainingBudgetHkd = Math.max(0, budgetHkd - spentHkd);
+  const dayRemainingHkd = Math.max(0, Math.round(hkd(dailyBudget - todayTotal, state)));
+  const recommendedDailyHkd = Math.max(0, Math.round((budgetHkd - spentHkd) / Math.max(1, Math.max(1, length) - Math.max(1, day?.day || 1) + 1)));
+  const budgetWarning = rawBudgetPct >= 100 ? '超出預算區' : rawBudgetPct >= 80 ? '接近上限' : '狀態良好';
+  const daySpots = (day?.spots || []).slice(0, 4);
   const recentReceipts = tripReceipts.slice().sort((a, b) => `${b.date} ${b.time || ''}`.localeCompare(`${a.date} ${a.time || ''}`));
 
   // 名古屋經典行程 Mockup Fallback — 如果今日無行程，為 Boss 展示極致精美嘅 dummy 行程
@@ -465,7 +483,7 @@ export function Dashboard({
         <div className="preview-dashboard-day-meta">
           <CalendarDays size={21} />
           <span>第 {Math.max(1, day?.day || 1)} 天 / 共 {length} 天</span>
-          <small>{today}</small>
+          <small>{chineseDateLabel(displayDayDate)}</small>
         </div>
         <div className="preview-dashboard-weather-pill">
           <CloudSun size={30} />
@@ -481,80 +499,90 @@ export function Dashboard({
 
       {/* 2. 預算毛玻璃卡片 (含圓形進度條與 Today Spent / Daily Avg Spending Pct) */}
       <Reveal className="dashboard-reveal">
-      <GlassCard as="div" className="washi-budget-card dashboard-magic-budget relative p-4 min-[375px]:p-6 rounded-[28px] overflow-hidden mb-6 z-10">
-        <div className="grid grid-cols-[1fr_auto] items-center gap-4 sm:flex sm:justify-between sm:items-center">
-          {/* 左側：預算資訊堆疊 (手機端垂直堆疊，sm 平版端水平並列) */}
-          <div className="flex flex-col gap-4 min-w-0 sm:flex-row sm:gap-10 sm:items-center flex-grow">
-            {/* 總預算 */}
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] min-[375px]:text-[11px] font-bold text-[#8C7864] uppercase tracking-wider leading-none">Total Budget</span>
-              <strong className="text-[18px] min-[375px]:text-[22px] sm:text-[24px] font-black text-slate-800 tracking-tight mt-1 truncate">
-                <AnimatedNumber value={budgetHkd} prefix="HK$ " />
-              </strong>
-              <span className="text-[9px] min-[375px]:text-[10px] text-slate-500 mt-0.5 leading-none">
-                ~{tripCurrencySymbol}{fmt(state.budget)}
-              </span>
-            </div>
-
-            {/* 已消費 */}
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] min-[375px]:text-[11px] font-bold text-[#8C7864] uppercase tracking-wider leading-none">Spent</span>
-              <strong className="text-[18px] min-[375px]:text-[22px] sm:text-[24px] font-black text-[#D94132] tracking-tight mt-1 truncate">
-                <AnimatedNumber value={spentHkd} prefix="HK$ " />
-              </strong>
-              <span className="text-[9px] min-[375px]:text-[10px] text-slate-500 mt-0.5 leading-none">
-                ~{tripCurrencySymbol}{fmt(totalForBudget)}
-              </span>
-            </div>
+      <GlassCard as="div" className="washi-budget-card dashboard-magic-budget preview-dashboard-budget relative overflow-hidden z-10">
+        <div className="preview-dashboard-budget-head">
+          <h2>預算總覽 <Info size={20} aria-hidden="true" /></h2>
+          <div className="preview-dashboard-currency" role="group" aria-label="顯示貨幣">
+            <span className="is-active">HKD</span>
+            <span>JPY</span>
           </div>
+        </div>
 
-          {/* 右側/中間：圓形進度條 */}
-          <div className="relative w-16 h-16 min-[375px]:w-20 min-[375px]:h-20 sm:w-22 sm:h-22 flex items-center justify-center shrink-0 dashboard-budget-ring">
+        <div className="preview-dashboard-budget-grid">
+          <div className="preview-dashboard-ring">
             <AnimatedCircularProgressBar
               value={budgetPct}
-              gaugePrimaryColor="#D94132"
-              gaugeSecondaryColor="rgba(115, 96, 76, 0.12)"
+              gaugePrimaryColor="#E3302D"
+              gaugeSecondaryColor="rgba(122, 99, 67, 0.18)"
               className="size-full"
             >
-              <div className="absolute flex flex-col items-center justify-center">
-              <span className="text-sm min-[375px]:text-base font-extrabold text-slate-900 leading-none">{Math.round(rawBudgetPct)}%</span>
-              <span className="text-[7px] min-[375px]:text-[8px] font-bold text-[#8C7864] uppercase tracking-wider mt-0.5 leading-none">spent</span>
+              <div className="preview-dashboard-ring-copy">
+                <strong>{Math.round(rawBudgetPct)}%</strong>
+                <span>已使用</span>
+                <small>{budgetWarning}</small>
               </div>
             </AnimatedCircularProgressBar>
           </div>
+          <div className="preview-dashboard-budget-side">
+            <div className="preview-dashboard-budget-row is-total">
+              <span>總預算</span>
+              <strong>HK$ {fmt(budgetHkd)}</strong>
+              <button type="button" onClick={() => onTab('settings')}><Pencil size={16} /> 編輯</button>
+            </div>
+            <div className="preview-dashboard-budget-row is-used">
+              <span>已使用</span>
+              <strong>HK$ {fmt(spentHkd)}</strong>
+            </div>
+            <div className="preview-dashboard-budget-row is-left">
+              <span>剩餘預算</span>
+              <strong>HK$ {fmt(remainingBudgetHkd)}</strong>
+            </div>
+          </div>
         </div>
+
+        <div className="preview-dashboard-budget-strip">
+          <div><Wallet size={24} /><span>每日預算</span><strong>HK${fmt(Math.round(hkd(dailyBudget, state)))}</strong></div>
+          <div><CalendarDays size={24} /><span>日均結餘</span><strong>HK${fmt(dayRemainingHkd)}</strong></div>
+          <button type="button" onClick={() => onTab('stats')}><PieChart size={26} /><span>預算提醒</span><small>已設定</small><ChevronRight size={20} /></button>
+        </div>
+
+        <button className="preview-dashboard-budget-tip" type="button" onClick={() => onTab('stats')}>
+          <Lightbulb size={22} />
+          <span>提示：每日平均使用需 ≤ HK$ {fmt(recommendedDailyHkd || Math.round(hkd(dailyBudget, state)))}</span>
+          <ChevronRight size={18} />
+        </button>
       </GlassCard>
       </Reveal>
 
       {/* 2.5 今日開支獨立 Washi 卡片 */}
       <Reveal className="dashboard-reveal" delay={0.04}>
-      <GlassCard as="div" className="washi-today-stats-card dashboard-magic-today relative p-5 rounded-[28px] overflow-hidden mb-6 z-10">
-        <div className="flex flex-col mb-3">
-          <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">Today's Performance</span>
-          <h3 className="text-[15px] font-bold text-slate-800 mt-0.5">今日開支與日均統計 📊</h3>
+      <GlassCard as="div" className="washi-today-stats-card dashboard-magic-today preview-dashboard-today relative overflow-hidden z-10">
+        <div className="preview-dashboard-today-head">
+          <h3>今日狀態</h3>
+          <span><CalendarDays size={18} /> {chineseDateLabel(displayDayDate)}</span>
+          <div><CloudSun size={22} /> 24°C <small>多雲</small></div>
         </div>
-        <div className="washi-today-stats-panel">
-          {/* 左格：今日花費 */}
-          <div className="washi-stat-block bg-white/30 border border-white/50 rounded-2xl p-3 flex flex-col">
-            <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">Today Spent</span>
-            <strong className="text-[18px] font-extrabold text-slate-900 tracking-tight mt-0.5">
-              <AnimatedNumber value={Math.round(hkd(todayTotal, state))} prefix="HK$ " />
-            </strong>
-            <span className="text-[10px] text-slate-500 font-medium">
-              ~{tripCurrencySymbol}{fmt(todayTotal)} · {dailyReceipts.length} 筆
-            </span>
+        <div className="preview-dashboard-today-grid">
+          <div>
+            <span>今日支出</span>
+            <strong><AnimatedNumber value={Math.round(hkd(todayTotal, state))} prefix="HK$ " /></strong>
+            <small>已記 {dailyReceipts.length} 筆</small>
           </div>
-
-          {/* 右格：今日預算佔比 (Daily Budget Used) */}
-          <div className="washi-stat-block bg-white/30 border border-white/50 rounded-2xl p-3 flex flex-col">
-            <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">Daily Budget Used</span>
-            <strong className="text-[18px] font-extrabold text-[#18395C] tracking-tight mt-0.5">
-              <AnimatedNumber value={todayBudgetPct} suffix="%" />
-            </strong>
-            <span className="text-[10px] text-slate-500 font-medium">
-              {tripCurrencySymbol}{fmt(todayTotal)} / {tripCurrencySymbol}{fmt(dailyBudget)} limit
-            </span>
+          <div>
+            <span>每日預算使用</span>
+            <strong>{Math.round(todayBudgetPct)}%</strong>
+            <i><b style={{ width: `${Math.min(100, Math.round(todayBudgetPct))}%` }} /></i>
+            <small>目標：HK$ {fmt(Math.round(hkd(dailyBudget, state)))}</small>
           </div>
+          <div>
+            <span>日均結餘</span>
+            <strong>HK$ {fmt(dayRemainingHkd)}</strong>
+            <small>{dayRemainingHkd > 0 ? '狀態良好' : '需要留意'}</small>
+          </div>
+        </div>
+        <div className="preview-dashboard-today-actions">
+          <button type="button" onClick={() => onTab('stats')}><PieChart size={28} /><span>預算分析</span><small>查看支出結構</small><ChevronRight size={18} /></button>
+          <button type="button" onClick={() => onTab('timeline')}><BarChart3 size={28} /><span>行程時間線</span><small>查看每日行程與支出</small><ChevronRight size={18} /></button>
         </div>
       </GlassCard>
       </Reveal>
@@ -564,8 +592,8 @@ export function Dashboard({
       <GlassCard as="div" className="today-itinerary-card washi-timeline-container p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
         <div className="flex justify-between items-center mb-4">
           <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">今日行程</span>
-            <h3 className="text-lg font-bold text-slate-800 mt-0.5">Today · {weekdayLabel(today)}</h3>
+            <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">行程摘要</span>
+            <h3 className="text-lg font-bold text-slate-800 mt-0.5">今日行程</h3>
           </div>
           <div className="flex items-center gap-1 px-3 py-1 bg-amber-50 border border-amber-200/60 rounded-full text-[11px] font-bold text-amber-700">
             <CloudSun size={14} />
@@ -625,8 +653,9 @@ export function Dashboard({
                         ¥{fmt(matchedReceipt.total)}
                       </button>
                     ) : (
-                      <div className="w-7 h-7 rounded-full bg-amber-50/50 flex items-center justify-center text-[#D4A359] border border-amber-100/30">
-                        <MapPin size={13} className="animate-pulse" />
+                      <div className="preview-dashboard-spot-actions">
+                        <span><MapPin size={16} /> 地圖</span>
+                        <span><NotebookPen size={15} /> 記帳</span>
                       </div>
                     )}
                   </div>
