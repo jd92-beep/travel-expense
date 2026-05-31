@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-31
 
+### Compact Timeline mobile preview pass
+
+- Reworked the independent compact Timeline mobile day cards toward the generated schedule preview: added a mobile date badge with day number, large date, month, and weekday, and changed itinerary events into a denser vertical travel-list style.
+- Kept Timeline interactions intact while tightening the rail gutter and row geometry so map links, edit buttons, receipt links, live progress, and loose receipts still work without horizontal overflow.
+- Verified `app-compact/` with `npm run smoke:timeline`, `npm run build`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check`.
+
 ### Compact mobile preview type-scale pass
 
 - Tightened the independent compact mobile typography to better match the generated app previews: shorter iOS-style headers, smaller status pills/actions, denser bottom dock labels, and reduced type inside Dashboard, Timeline, Scan, Weather, Stats, and Settings cards.

@@ -106,11 +106,21 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
         const spots = getScheduleSpots(state, day);
         const loose = dayLooseReceipts(state, day);
         const rail = timelineRailMetrics(day.date, day.timezone, spots, nowTick, tripWindow);
+        const dayDate = new Date(`${day.date}T00:00:00`);
+        const dayDateValid = !Number.isNaN(dayDate.getTime());
+        const dayDateNumber = dayDateValid ? String(dayDate.getDate()) : String(day.day);
+        const dayMonth = dayDateValid ? `${dayDate.getMonth() + 1}月` : '';
+        const dayWeekday = dayDateValid ? new Intl.DateTimeFormat('zh-HK', { weekday: 'short' }).format(dayDate) : '';
         return (
         <Reveal key={day.date} className="timeline-day-reveal" delay={Math.min(0.18, day.day * 0.018)}>
         <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`}>
           <div className="section-head timeline-day-head">
             <div className="timeline-day-title">
+              <span className="timeline-preview-date-badge" aria-hidden="true">
+                <small>Day {day.day}</small>
+                <strong>{dayDateNumber}</strong>
+                <em>{dayMonth} · {dayWeekday}</em>
+              </span>
               <span className="timeline-day-number">Day {day.day}</span>
               <div>
                 <p className="eyebrow timeline-day-date-primary">{day.date}</p>

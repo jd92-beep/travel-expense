@@ -930,4 +930,14 @@
   .timeline-screen {
     padding-top: 10px !important;
   }
+
+  .timeline-rail {
+    --timeline-rail-left: 14px !important;
+    --timeline-rail-width: 11px !important;
+  }
+
+  .timeline-now-marker {
+    left: -4px !important;
+    width: 34px !important;
+  }
 }
