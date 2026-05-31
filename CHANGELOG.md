@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-05-31
 
+### Compact Weather mobile density pass
+
+- Refined the independent compact Weather mobile preview toward the generated forecast screen with a denser current-weather card, smaller mobile typography, and a new five-slot hourly rail under the hero facts.
+- Fixed the compact Weather forecast list so daily forecast slots render as full-width readable rows on mobile instead of being squeezed by the earlier horizontal rail layout.
+- Verified `app-compact/` with `npm run smoke:weather`, `npm run build`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check`.
+
 ### Compact Timeline mobile preview pass
 
 - Reworked the independent compact Timeline mobile day cards toward the generated schedule preview: added a mobile date badge with day number, large date, month, and weekday, and changed itinerary events into a denser vertical travel-list style.

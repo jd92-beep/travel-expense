@@ -9273,6 +9273,230 @@ textarea,
     font-size: 15px !important;
   }
 
+  .app-shell--weather .preview-weather-current-card {
+    padding: 13px 12px 11px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .app-shell--weather .preview-weather-current-card {
+    display: grid !important;
+    grid-template-columns: 76px minmax(0, 1fr) !important;
+    gap: 10px 12px !important;
+    align-items: center !important;
+  }
+
+  .app-shell--weather .preview-weather-hero-icon svg {
+    width: 72px !important;
+    height: 72px !important;
+  }
+
+  .app-shell--weather .preview-weather-temp {
+    gap: 3px !important;
+  }
+
+  .app-shell--weather .preview-weather-temp strong {
+    font-size: 43px !important;
+    line-height: .92 !important;
+  }
+
+  .app-shell--weather .preview-weather-temp span {
+    font-size: 14px !important;
+  }
+
+  .app-shell--weather .preview-weather-temp small {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  .app-shell--weather .preview-weather-facts {
+    grid-column: 1 / -1 !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+    padding-top: 9px !important;
+  }
+
+  .app-shell--weather .preview-weather-facts span {
+    display: grid !important;
+    justify-items: center !important;
+    gap: 2px !important;
+    padding: 0 5px !important;
+    font-size: 9.5px !important;
+    line-height: 1.12 !important;
+  }
+
+  .app-shell--weather .preview-weather-facts b {
+    font-size: 12px !important;
+  }
+
+  .app-shell--weather .preview-weather-hourly-rail {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 5px;
+    padding-top: 9px;
+    border-top: 1px solid rgba(116,88,53,.14);
+  }
+
+  .app-shell--weather .preview-weather-hourly-chip {
+    min-width: 0;
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    padding: 6px 3px;
+    border: 1px solid rgba(116,88,53,.13);
+    border-radius: 10px;
+    background: rgba(248,252,255,.72);
+    color: #18395c;
+    text-align: center;
+  }
+
+  .app-shell--weather .preview-weather-hourly-chip b,
+  .app-shell--weather .preview-weather-hourly-chip em {
+    font-style: normal;
+    font-size: 9.5px;
+    line-height: 1;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .app-shell--weather .weather-day {
+    padding: 11px 11px 12px !important;
+  }
+
+  .app-shell--weather .weather-day .section-head {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 7px !important;
+    margin-bottom: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  .app-shell--weather .weather-day .section-head h2 {
+    font-size: 15px !important;
+    line-height: 1.08 !important;
+  }
+
+  .app-shell--weather .weather-day .section-head .eyebrow,
+  .app-shell--weather .weather-day .section-head .status-pill {
+    font-size: 9.5px !important;
+  }
+
+  .app-shell--weather .weather-grid.weather-grid-detailed {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-auto-flow: row !important;
+    grid-auto-columns: unset !important;
+    gap: 6px !important;
+    overflow: visible !important;
+    padding-bottom: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .app-shell--weather .weather-location {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .app-shell--weather .weather-slot-detailed {
+    min-height: 62px !important;
+    display: grid !important;
+    grid-template-columns: 66px minmax(0, 1fr) !important;
+    grid-template-areas:
+      "head temp"
+      "metrics metrics" !important;
+    gap: 5px 8px !important;
+    align-items: center !important;
+    padding: 7px 9px !important;
+    border-radius: 11px !important;
+    overflow: hidden !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .app-shell--weather .weather-slot-header {
+    grid-area: head !important;
+    display: grid !important;
+    gap: 5px !important;
+    align-content: center !important;
+    min-width: 0 !important;
+  }
+
+  .app-shell--weather .weather-type-badge {
+    justify-content: flex-start !important;
+    gap: 3px !important;
+  }
+
+  .app-shell--weather .weather-type-badge svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .app-shell--weather .weather-temp-container {
+    grid-area: temp !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 7px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    justify-self: stretch !important;
+  }
+
+  .app-shell--weather .weather-time .time-text,
+  .app-shell--weather .weather-type-badge .type-text,
+  .app-shell--weather .weather-temp-block .temp-label,
+  .app-shell--weather .weather-metrics,
+  .app-shell--weather .weather-hint {
+    font-size: 8.5px !important;
+    line-height: 1.08 !important;
+  }
+
+  .app-shell--weather .weather-temp-block {
+    width: 100% !important;
+    min-width: 0 !important;
+    gap: 1px !important;
+  }
+
+  .app-shell--weather .weather-temp-block .temp-num {
+    font-size: 16px !important;
+    line-height: 1 !important;
+  }
+
+  .app-shell--weather .weather-temp-block .temp-unit {
+    font-size: 9px !important;
+  }
+
+  .app-shell--weather .weather-metrics {
+    grid-area: metrics !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    min-width: 0 !important;
+  }
+
+  .app-shell--weather .metric-tag {
+    min-width: 0 !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    padding: 3px 4px !important;
+    border-radius: 8px !important;
+    white-space: nowrap !important;
+  }
+
+  .app-shell--weather .metric-tag svg {
+    width: 10px !important;
+    height: 10px !important;
+  }
+
+  .app-shell--weather .weather-hint-container {
+    display: none !important;
+  }
+
   .app-shell--stats .preview-budget-heading h2 {
     font-size: 21px !important;
   }
@@ -9318,6 +9542,65 @@ textarea,
 
   .compact-mobile-heading p,
   .app-shell--stats .compact-mobile-heading p {
+    font-size: 10px !important;
+  }
+}
+
+/* Preview fidelity pass 13: denser mobile typography requested by Boss. */
+@media (max-width: 767px) {
+  body {
+    font-size: 12.5px;
+  }
+
+  .compact-mobile-header,
+  .app-shell--stats .compact-mobile-header {
+    min-height: 108px !important;
+  }
+
+  .compact-mobile-title-art,
+  .app-shell--stats .compact-mobile-title-art {
+    font-size: clamp(20px, 5.9vw, 24px) !important;
+  }
+
+  .app-shell--dashboard .compact-mobile-title-art,
+  .app-shell--history .compact-mobile-title-art,
+  .app-shell--timeline .compact-mobile-title-art,
+  .app-shell--weather .compact-mobile-title-art,
+  .app-shell--stats .compact-mobile-title-art {
+    font-size: clamp(19px, 5.6vw, 23px) !important;
+  }
+
+  .compact-mobile-heading p,
+  .app-shell--stats .compact-mobile-heading p,
+  .app-shell--dashboard .compact-mobile-heading p,
+  .app-shell--history .compact-mobile-heading p,
+  .app-shell--timeline .compact-mobile-heading p,
+  .app-shell--weather .compact-mobile-heading p {
+    font-size: 10.5px !important;
+    line-height: 1.12 !important;
+  }
+
+  .compact-mobile-status,
+  .app-shell--stats .compact-mobile-status {
+    min-height: 27px !important;
+    padding: 4px 7px !important;
+    font-size: 10.5px !important;
+  }
+
+  .dashboard-command h2,
+  .history-command-row h2,
+  .timeline-command-title-row h2,
+  .app-shell--weather .weather-command-row h2,
+  .app-shell--stats .stats-command h2,
+  .app-shell--settings .settings-command h2 {
+    font-size: 20px !important;
+  }
+
+  .receipt-main small,
+  .timeline-event p,
+  .stats-screen .eyebrow,
+  .settings-status-tooltips,
+  .weather-screen .eyebrow {
     font-size: 10px !important;
   }
 }

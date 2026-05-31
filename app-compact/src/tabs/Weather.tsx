@@ -6,7 +6,7 @@ import { Meteors } from '../components/ui/meteors';
 import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import { coordForDay, coordsForDay, fetchWeather, resolveCoordsForDay, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather } from '../lib/weather';
+import { coordForDay, coordsForDay, fetchWeather, resolveCoordsForDay, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type WeatherSlot } from '../lib/weather';
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
@@ -71,6 +71,9 @@ export function Weather({ state }: { state: AppState }) {
   const leadDay = displayItinerary[0];
   const leadRows = leadDay ? rows[leadDay.date] || [] : [];
   const leadSlot = leadRows.flatMap((row) => row.slots || []).find((slot) => slot.temp != null) || leadRows.flatMap((row) => row.slots || [])[0];
+  const previewHourlySlots = leadRows.flatMap((row) => row.slots || []).slice(0, 5);
+  const previewHourlyFallback: WeatherSlot[] = WEATHER_SLOTS.slice(0, 5).map((hour) => ({ hour, code: 2 }));
+  const previewHourly = previewHourlySlots.length ? previewHourlySlots : previewHourlyFallback;
 
   const loadRef = useRef<() => Promise<void>>(async () => {});
 
@@ -150,6 +153,15 @@ export function Weather({ state }: { state: AppState }) {
           <span>最低 <b>{leadSlot?.temp != null ? Math.round(leadSlot.temp - 6) : 16}°C</b></span>
           <span>濕度 <b>{leadSlot?.humidity ?? 56}%</b></span>
           <span>風速 <b>{leadSlot?.windSpeed ?? 3} m/s</b></span>
+        </div>
+        <div className="preview-weather-hourly-rail" aria-label="今日逐時天氣">
+          {previewHourly.map((slot) => (
+            <span className="preview-weather-hourly-chip" key={`preview-hour-${slot.hour}`}>
+              <b>{formatHour(slot.hour)}</b>
+              <WeatherIcon code={slot.code} size={18} />
+              <em>{slot.temp == null ? '—' : `${Math.round(slot.temp)}°C`}</em>
+            </span>
+          ))}
         </div>
       </GlassCard>
       {displayItinerary.map((day) => {
