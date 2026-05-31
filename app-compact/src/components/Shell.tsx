@@ -31,7 +31,7 @@ const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: s
   timeline: { title: 'Trip Route', mobileTitle: '行程時間線', subtitle: '東京之旅 · 8天7夜', status: '地圖檢視' },
   history: { title: 'Expense Record', mobileTitle: '紀錄中心', subtitle: '管理所有收據與支出', status: '可同步' },
   weather: { title: 'Weather Window', mobileTitle: '天氣預報', subtitle: '旅程天氣 · 隨時掌握', status: '已更新' },
-  stats: { title: 'Spend Cockpit', mobileTitle: '預算使用分析', subtitle: 'Spend Cockpit', status: '統計中' },
+  stats: { title: 'Spend Flight Deck', mobileTitle: '預算使用分析', subtitle: 'Spend Cockpit', status: '統計中' },
   settings: { title: 'Secure Controls', mobileTitle: '設定控制中心', subtitle: 'Secure Controls', status: '系統狀態' },
 };
 
@@ -221,9 +221,11 @@ export function Shell({
           <button type="button"><Download size={16} /> Export</button>
           <button type="button" aria-label="More controls"><MoreVertical size={18} /></button>
         </div>
-        <div className="compact-sync-slot">
-          {syncState ? <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} /> : <StatusPill tone="ok">Broker-ready</StatusPill>}
-        </div>
+        {syncState && (
+          <div className={`compact-sync-slot ${syncState.status === 'error' ? 'has-error' : 'is-quiet'}`}>
+            <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} />
+          </div>
+        )}
       </header>
       <header className="compact-mobile-header" aria-label={`${activeCopy.mobileTitle} header`}>
         <img className="compact-mobile-mark" src={compactJapanMark} alt="" aria-hidden="true" />
@@ -232,6 +234,9 @@ export function Shell({
           <p>{activeCopy.subtitle}</p>
         </div>
         <span className="compact-mobile-status">{activeCopy.status}</span>
+        <button className="compact-mobile-action" type="button" aria-label="更多操作">
+          {active === 'scan' ? <Settings size={25} /> : <MoreVertical size={25} />}
+        </button>
       </header>
       <main className="content">{children}</main>
       <WindmillTransition activeKey={active} />

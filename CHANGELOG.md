@@ -8,7 +8,9 @@ All notable project changes should be recorded here.
 
 - Reworked the independent `app-compact/` Stats tab to follow the generated app-preview dashboard layout: two large top analysis panels, a four-card metric strip, settlement/category/payment panels, and a scrollable mobile reading flow.
 - Rebuilt the compact Scan tab hero around the generated preview's receipt camera frame, crop corners, flash/crop controls, red camera card, green gallery card, and supporting utility actions while keeping manual, voice, email, currency, and cleanup flows usable.
-- Deployed a fresh Vercel preview for the compact version and verified it returns `HTTP 200` with title `旅費 Compact`.
+- Deployed a fresh Vercel preview for the compact version at `https://travel-expense-compact-6n00jx6nj-ftjdfr-7940s-projects.vercel.app` and verified it returns `HTTP 200` with title `旅費 Compact`.
+- Tightened the generated-preview pass so all seven compact tabs share the paper-ledger texture, dark rail, red/gold/green accents, desktop control strip, mobile iOS-style header, readable scrollable mobile cards, and the Stats mobile title stays on one line.
+- Regenerated desktop and mobile Playwright contact sheets for all seven compact tabs under `/tmp/compact-implementation-final/`.
 
 ## 2026-05-30
 

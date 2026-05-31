@@ -5088,6 +5088,16 @@ body {
   min-width: 0;
 }
 
+.compact-sync-slot.is-quiet {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip-path: inset(50%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 .compact-sync-slot .sync-status-indicator,
 .compact-sync-slot .status-pill {
   min-height: 34px;
@@ -6206,4 +6216,543 @@ body {
   .preview-receipt-paper { width: 54%; min-height: 242px; }
   .preview-scan-tip { font-size: 12px; }
   .scan-screen .grid.grid-cols-1 { padding-top: 0 !important; }
+}
+
+/* ========== Preview exactness pass 2: compact app contract ========== */
+:root {
+  --preview-paper: #fbf6ed;
+  --preview-paper-deep: #efe3d2;
+  --preview-panel: #fffdf8;
+  --preview-line: rgba(101, 80, 51, .24);
+  --preview-line-soft: rgba(101, 80, 51, .14);
+  --preview-ink: #101820;
+  --preview-muted: #71675d;
+  --preview-navy: #0b3454;
+  --preview-navy-2: #123a5d;
+  --preview-red: #cf2424;
+  --preview-green: #2f7046;
+  --preview-gold: #b47a21;
+  --preview-blue: #17456d;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  color: var(--preview-ink) !important;
+  font-family: "Noto Sans TC", "Noto Sans JP", "Hiragino Sans", "PingFang TC", system-ui, sans-serif !important;
+  letter-spacing: 0 !important;
+  background:
+    radial-gradient(circle at 12% 5%, rgba(255,255,255,.72), transparent 22%),
+    radial-gradient(circle at 90% 16%, rgba(180,122,33,.13), transparent 24%),
+    linear-gradient(90deg, rgba(111,87,57,.035) 0 1px, transparent 1px 56px),
+    linear-gradient(180deg, rgba(111,87,57,.03) 0 1px, transparent 1px 48px),
+    var(--preview-paper) !important;
+}
+
+.app-shell * {
+  letter-spacing: 0 !important;
+}
+
+.app-shell {
+  color: var(--preview-ink) !important;
+}
+
+.app-shell::before,
+.app-shell::after,
+.pointer-events-none.fixed.inset-0,
+.topbar-canva .aurora-text,
+.weather-meteor,
+.stats-retro-grid {
+  opacity: 0 !important;
+}
+
+.topbar-title-block h1,
+.compact-mobile-title-art,
+.stats-command-title,
+.timeline-command-title,
+.section-head h2,
+.weather-command-row h2,
+.settings-command h2 {
+  font-family: "Noto Serif TC", "Noto Serif JP", "Yu Mincho", "Songti TC", Georgia, serif !important;
+  font-weight: 900 !important;
+}
+
+.button-like,
+button,
+input,
+select,
+textarea,
+.status-pill,
+.pill {
+  font-family: "Noto Sans TC", "Noto Sans JP", "Hiragino Sans", "PingFang TC", system-ui, sans-serif !important;
+}
+
+@media (min-width: 768px) {
+  body {
+    background:
+      linear-gradient(90deg, transparent 0 83px, rgba(255,255,255,.62) 83px 84px, transparent 84px),
+      radial-gradient(circle at 82% 2%, rgba(180,122,33,.10), transparent 18%),
+      linear-gradient(90deg, rgba(111,87,57,.038) 0 1px, transparent 1px 58px),
+      linear-gradient(180deg, rgba(111,87,57,.03) 0 1px, transparent 1px 52px),
+      #fbf6ed !important;
+  }
+
+  .app-shell {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100vh;
+    padding: 0 0 36px 83px !important;
+    margin: 0 !important;
+  }
+
+  .compact-desktop-rail {
+    width: 83px !important;
+    padding: 20px 0 16px !important;
+    grid-template-rows: 72px 1fr 72px !important;
+    background:
+      linear-gradient(180deg, #062742, #0b3454 58%, #082f4f) !important;
+    box-shadow: inset -1px 0 rgba(255,255,255,.12), 14px 0 28px rgba(6,39,66,.13) !important;
+  }
+
+  .compact-rail-mark {
+    width: 48px !important;
+    height: 48px !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+    background: #fffdf8 !important;
+    box-shadow: 0 8px 18px rgba(0,0,0,.18) !important;
+  }
+
+  .compact-rail-items {
+    width: 100%;
+    align-content: start !important;
+    gap: 4px !important;
+    padding-top: 14px;
+  }
+
+  .compact-rail-button {
+    width: 100% !important;
+    min-height: 70px !important;
+    border-radius: 0 !important;
+    border-left: 3px solid transparent !important;
+    color: rgba(255,253,248,.82) !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .compact-rail-button svg {
+    width: 24px !important;
+    height: 24px !important;
+    stroke-width: 2.05 !important;
+  }
+
+  .compact-rail-button.active {
+    border-left-color: var(--preview-gold) !important;
+    background: rgba(255,253,248,.10) !important;
+    color: #f4c34a !important;
+  }
+
+  .topbar-canva {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 35 !important;
+    min-height: 79px !important;
+    display: grid !important;
+    grid-template-columns: minmax(260px, 1fr) auto !important;
+    align-items: center !important;
+    gap: 18px !important;
+    margin: 0 !important;
+    padding: 0 30px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--preview-line) !important;
+    background: rgba(255,253,248,.92) !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .topbar-canva::before,
+  .compact-topbar-mark {
+    display: none !important;
+  }
+
+  .compact-sync-slot.has-error {
+    display: block !important;
+    position: absolute;
+    left: 30px;
+    bottom: -44px;
+    z-index: 50;
+  }
+
+  .topbar-title-block h1 {
+    color: #152033 !important;
+    font-size: 32px !important;
+    line-height: 1 !important;
+  }
+
+  .compact-desktop-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+  }
+
+  .compact-desktop-actions span,
+  .compact-desktop-actions button {
+    min-height: 38px !important;
+    padding: 8px 12px !important;
+    border: 1px solid rgba(49,45,40,.34) !important;
+    border-radius: 5px !important;
+    background: rgba(255,253,248,.72) !important;
+    color: #212a34 !important;
+    box-shadow: none !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+  }
+
+  .content {
+    padding: 0 !important;
+  }
+
+  .japanese-washi-bg,
+  .content > .stack {
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .glass-card,
+  .card,
+  .metric-card,
+  .stats-panel,
+  .stats-controls,
+  .dashboard-budget,
+  .timeline-day,
+  .history-command,
+  .history-expandable-group,
+  .weather-command-fancy,
+  .weather-day,
+  .weather-slot-detailed,
+  .settings-command,
+  .settings-screen .accordion-card,
+  .scan-hero-card {
+    border-color: var(--preview-line) !important;
+    border-radius: 0 !important;
+    background: rgba(255,253,248,.72) !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .app-shell--stats .preview-stats-grid {
+    gap: 0 !important;
+    border-top: 1px solid var(--preview-line);
+    border-left: 1px solid var(--preview-line);
+  }
+
+  .app-shell--stats .preview-stats-budget,
+  .app-shell--stats .preview-daily-pace,
+  .app-shell--stats .preview-stats-metrics,
+  .app-shell--stats .stats-panel,
+  .app-shell--stats .stats-controls {
+    border-top: 0 !important;
+    border-left: 0 !important;
+  }
+
+  .app-shell--stats .preview-stats-budget,
+  .app-shell--stats .preview-daily-pace {
+    min-height: calc(100vh - 394px) !important;
+  }
+
+  .app-shell--stats .preview-stats-budget .stats-command-title {
+    font-family: "Noto Sans TC", "Noto Sans JP", system-ui, sans-serif !important;
+    font-size: 18px !important;
+    text-transform: uppercase;
+  }
+
+  .app-shell--stats .spending-compass-ring {
+    max-width: 310px !important;
+  }
+
+  .app-shell--stats .top-expenses-panel .rank-row,
+  .app-shell--stats .bar-row {
+    border-bottom: 1px solid var(--preview-line-soft) !important;
+  }
+
+  .app-shell--scan .scan-screen {
+    padding: 0 !important;
+  }
+
+  .app-shell--scan .scan-hero-card {
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+}
+
+@media (max-width: 767px) {
+  body {
+    background:
+      radial-gradient(circle at 16% 8%, rgba(255,255,255,.82), transparent 26%),
+      linear-gradient(90deg, rgba(111,87,57,.028) 0 1px, transparent 1px 44px),
+      linear-gradient(180deg, rgba(111,87,57,.025) 0 1px, transparent 1px 44px),
+      linear-gradient(180deg, #fffaf2 0%, #f6efe4 58%, #efe3d2 100%) !important;
+  }
+
+  .app-shell {
+    width: min(100%, 430px) !important;
+    max-width: 430px !important;
+    min-height: 100svh !important;
+    overflow-x: clip;
+  }
+
+  .compact-mobile-header {
+    grid-template-columns: 84px minmax(0, 1fr) auto auto !important;
+    min-height: 188px !important;
+    align-items: end !important;
+    gap: 8px !important;
+    padding: 52px 15px 18px !important;
+    background:
+      linear-gradient(180deg, rgba(255,250,242,.99), rgba(255,250,242,.96)) !important;
+  }
+
+  .compact-mobile-header::before {
+    left: 36px !important;
+    top: 18px !important;
+    font-size: 17px !important;
+    font-weight: 950 !important;
+  }
+
+  .compact-mobile-header::after {
+    right: 22px !important;
+    top: 20px !important;
+  }
+
+  .compact-mobile-mark {
+    width: 84px !important;
+    height: 64px !important;
+    align-self: end !important;
+  }
+
+  .compact-mobile-heading {
+    align-self: end !important;
+    padding-bottom: 2px;
+  }
+
+  .compact-mobile-title-art {
+    font-family: "Noto Sans TC", "Noto Sans JP", "Hiragino Sans", "PingFang TC", system-ui, sans-serif !important;
+    font-size: clamp(23px, 6.4vw, 31px) !important;
+    font-weight: 950 !important;
+    line-height: 1.02 !important;
+  }
+
+  .app-shell--dashboard .compact-mobile-title-art,
+  .app-shell--history .compact-mobile-title-art,
+  .app-shell--weather .compact-mobile-title-art,
+  .app-shell--stats .compact-mobile-title-art {
+    white-space: nowrap !important;
+  }
+
+  .compact-mobile-heading p {
+    margin-top: 8px !important;
+    color: #1f2a35 !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+  }
+
+  .compact-mobile-status {
+    align-self: center !important;
+    min-height: 42px !important;
+    padding: 9px 13px !important;
+    border-color: rgba(101,80,51,.23) !important;
+    background: rgba(255,253,248,.92) !important;
+    color: var(--preview-green) !important;
+    font-size: 13px !important;
+    box-shadow: none !important;
+  }
+
+  .compact-mobile-action {
+    align-self: center;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: #27303a;
+    padding: 0;
+  }
+
+  .app-shell:not(.app-shell--scan) .compact-mobile-action {
+    width: 26px;
+    color: #111820;
+  }
+
+  .content {
+    padding: 0 !important;
+  }
+
+  .japanese-washi-bg,
+  .content > .stack {
+    padding: 14px 14px calc(118px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .timeline-screen.japanese-washi-bg {
+    padding-top: 2px !important;
+  }
+
+  .glass-card,
+  .card,
+  .metric-card,
+  .stats-panel,
+  .stats-controls,
+  .dashboard-budget,
+  .timeline-day,
+  .history-command,
+  .history-expandable-group,
+  .weather-command-fancy,
+  .weather-day,
+  .weather-slot-detailed,
+  .settings-command,
+  .settings-screen .accordion-card,
+  .scan-hero-card,
+  .scan-workspace > div {
+    border: 1px solid var(--preview-line) !important;
+    border-radius: 10px !important;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.38), rgba(255,255,255,0)),
+      rgba(255,253,248,.96) !important;
+    box-shadow: 0 8px 18px rgba(76,51,26,.06) !important;
+  }
+
+  .section-head h2,
+  .timeline-command-title,
+  .weather-command-row h2,
+  .settings-command h2 {
+    font-family: "Noto Sans TC", "Noto Sans JP", system-ui, sans-serif !important;
+  }
+
+  .fixed-tab-bar {
+    max-width: 430px !important;
+    padding: 0 2px max(8px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .app-floating-dock-mobile {
+    min-height: 82px !important;
+    border-radius: 16px 16px 0 0 !important;
+    background: rgba(255,253,248,.98) !important;
+  }
+
+  .app-floating-dock-mobile button {
+    min-height: 60px !important;
+  }
+
+  .app-floating-dock-mobile .dock-item-scan {
+    width: 78px !important;
+    height: 78px !important;
+    min-width: 78px !important;
+    min-height: 78px !important;
+    margin-top: -38px !important;
+    border-width: 8px !important;
+  }
+
+  .preview-scan-ai-strip {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 12px 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--preview-line);
+    border-radius: 8px;
+    background: #fffaf2;
+    color: #6d4c19;
+    font-size: 12px;
+    font-weight: 850;
+  }
+
+  .preview-scan-ai-strip b {
+    color: #493b2e;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .preview-scan-camera {
+    min-height: 360px !important;
+    border-radius: 8px !important;
+  }
+
+  .preview-receipt-paper {
+    width: 52% !important;
+    min-height: 278px !important;
+    padding: 30px 20px !important;
+  }
+
+  .scan-screen .scan-hero-card > div.relative.z-10.flex.justify-between {
+    min-height: 62px !important;
+    padding: 14px 14px 8px !important;
+  }
+
+  .scan-screen .scan-hero-card h2 {
+    font-size: 22px !important;
+    font-weight: 950 !important;
+  }
+
+  .scan-screen .grid.grid-cols-1 {
+    padding-top: 12px !important;
+  }
+
+  .scan-screen .scan-hero-button,
+  .scan-screen .scan-secondary-button {
+    min-height: 186px !important;
+  }
+
+  .scan-screen .grid.grid-cols-2 {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .stats-tab.stats-cockpit .stats-command-title {
+    font-family: "Noto Sans TC", "Noto Sans JP", system-ui, sans-serif !important;
+    font-size: 24px !important;
+  }
+
+  .preview-stats-screen .spending-compass {
+    grid-template-columns: 1fr !important;
+  }
+
+  .preview-stats-screen .spending-compass-ring {
+    width: min(100%, 246px) !important;
+  }
+
+  .preview-stats-screen .spending-compass-legend {
+    grid-template-columns: 1fr !important;
+  }
+
+  .preview-stats-screen .budget-pace-chart {
+    height: 230px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .compact-mobile-header {
+    grid-template-columns: 84px minmax(0, 1fr) auto auto !important;
+    padding-inline: 12px !important;
+  }
+
+  .compact-mobile-mark {
+    width: 84px !important;
+  }
+
+  .compact-mobile-title-art {
+    font-size: clamp(23px, 7.2vw, 30px) !important;
+  }
+
+  .compact-mobile-status {
+    padding-inline: 10px !important;
+    font-size: 12px !important;
+  }
 }

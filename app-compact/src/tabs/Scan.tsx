@@ -400,6 +400,11 @@ export function Scan({
           </StatusPill>
         </div>
 
+        <div className="preview-scan-ai-strip relative z-10">
+          <span>AI 辨識中：自動擷取金額 · 店家 · 日期 · 類別</span>
+          <b>支援 18 種語言 · 多幣別</b>
+        </div>
+
         <div className="preview-scan-camera relative z-10" aria-label="收據取景框">
           <div className="preview-crop-corner preview-crop-corner--tl" aria-hidden="true" />
           <div className="preview-crop-corner preview-crop-corner--tr" aria-hidden="true" />
