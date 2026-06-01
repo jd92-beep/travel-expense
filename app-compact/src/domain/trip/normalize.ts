@@ -183,12 +183,12 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
     trip = trips.find((t) => receipt.date >= t.startDate && receipt.date <= t.endDate && !t.archived);
   }
   
-  // 增加 Prep-phase 大額預付項目智能歸位邏輯：
+  // 增加 Prep-phase 大額預付項目智能歸位邏輯（升級版：覆蓋所有行前預付類別）：
   if (!trip) {
     const active = activeTrip(state);
-    const isPrepCategory = receipt.category === 'flight' || receipt.category === 'lodging';
+    const isBeforeTripEnd = active && receipt.date && receipt.date <= active.endDate;
     const isDefaultOrEmptyTripId = !receipt.tripId || receipt.tripId === 'trip_default' || receipt.tripId === 'default' || !trips.some(t => t.id === receipt.tripId && !t.archived);
-    if (isPrepCategory && isDefaultOrEmptyTripId && active) {
+    if (isBeforeTripEnd && isDefaultOrEmptyTripId && active) {
       trip = active;
     }
   }
@@ -285,6 +285,11 @@ export function migrateAppState(input: unknown): AppState {
       : t
   );
 
+  const isOldSchema = !parsed.schemaVersion || Number(parsed.schemaVersion) < 3;
+  const statsIncludeTransportLodging = isOldSchema
+    ? true
+    : (parsed.statsIncludeTransportLodging !== undefined ? parsed.statsIncludeTransportLodging : true);
+
   const base = {
     ...DEFAULT_STATE,
     ...parsed,
@@ -298,6 +303,7 @@ export function migrateAppState(input: unknown): AppState {
       end: parsed.tripDateRange?.end || trip.endDate,
     },
     customItinerary: parsed.customItinerary || null,
+    statsIncludeTransportLodging,
     syncQueue: Array.isArray(parsed.syncQueue) ? parsed.syncQueue : [],
     lastSyncedAt: Number(parsed.lastSyncedAt) || 0,
     globalSyncStatus: parsed.globalSyncStatus || 'idle',

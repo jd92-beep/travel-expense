@@ -38,11 +38,12 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
     budget: 2400,
     statsIncludeTransportLodging: false,
     top10IncludeBigItems: true,
+    schemaVersion: 3,
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('預算使用分析')).toBeVisible();
-  await expect(page.getByText('6 筆紀錄')).toBeVisible();
+  await expect(page.getByText('預算使用分析').first()).toBeVisible();
+  await expect(page.getByText('4 筆紀錄')).toBeVisible();
   await expect(page.locator('.stats-command-title-row')).toContainText('預算使用分析');
   await expect(page.locator('.stats-command-title-row')).not.toContainText(/筆轉帳|已平衡/);
   const commandHeaderMetrics = await page.evaluate(() => {
