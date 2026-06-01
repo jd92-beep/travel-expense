@@ -22,6 +22,16 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
   const persons = getPersons(state);
   const itinerary = getItinerary(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
+  const toHkd = (amt: number) => {
+    if (resolvedTripCurrency === 'HKD') return amt;
+    const rate = Math.max(
+      0.1,
+      Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
+      (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
+      20.36
+    );
+    return Math.round(amt / rate);
+  };
   const analysisReceipts = scopedState.receipts.filter((r) => state.statsIncludeTransportLodging || !isBigTripItem(r));
   const catTotals = categoryTotals(analysisReceipts, state, resolvedTripCurrency);
   const payTotals = paymentTotals(analysisReceipts, state, resolvedTripCurrency);
@@ -68,10 +78,10 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
       </DataPanel>
 
       <div className="metric-grid stats-metrics preview-stats-metrics">
-        <CockpitMetric label="圖表統計額" value={<NumberTicker value={analysisTotal} prefix={resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '} />} detail={`圖表口徑 · HK$ ${fmt(analysisTotalHkd)}`} tone="accent" />
-        <CockpitMetric label="共同分帳額" value={<NumberTicker value={settlement.sharedTotal} prefix={resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '} delay={0.04} />} detail={`全 receipts · ${persons.length} 人`} />
-        <CockpitMetric label="私人/代付" value={<NumberTicker value={privateTotal} prefix={resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '} delay={0.08} />} detail={`${settlement.crossPrivate.length} 筆跨私人代付`} tone="success" />
-        <CockpitMetric label="待轉帳" value={<NumberTicker value={transferTotal} prefix={resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '} delay={0.12} />} detail={settlement.transfers.length ? '需要結算' : '暫時不用轉帳'} tone={settlement.transfers.length ? 'danger' : 'success'} />
+        <CockpitMetric label="圖表統計額" value={<NumberTicker value={analysisTotalHkd} prefix="HK$ " />} detail={`等值 ${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(analysisTotal)}`} tone="accent" />
+        <CockpitMetric label="共同分帳額" value={<NumberTicker value={toHkd(settlement.sharedTotal)} prefix="HK$ " delay={0.04} />} detail={`等值 ${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(settlement.sharedTotal)}`} />
+        <CockpitMetric label="私人/代付" value={<NumberTicker value={toHkd(privateTotal)} prefix="HK$ " delay={0.08} />} detail={`等值 ${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(privateTotal)}`} tone="success" />
+        <CockpitMetric label="待轉帳" value={<NumberTicker value={toHkd(transferTotal)} prefix="HK$ " delay={0.12} />} detail={`等值 ${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(transferTotal)}`} tone={settlement.transfers.length ? 'danger' : 'success'} />
       </div>
 
       <DataPanel
@@ -138,7 +148,12 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
                   <b className="text-gray-400 shrink-0">→</b>
                   <span className="stats-transfer-person"><AvatarBadge person={t.to} size="sm" /> <span>{t.to.name}</span></span>
                 </div>
-                <strong className="text-lg text-blue-900 shrink-0">{resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}{fmt(t.amount)}</strong>
+                <div className="flex flex-col items-end shrink-0 leading-none">
+                  <strong className="text-[15px] font-extrabold text-blue-900">HK$ {fmt(toHkd(t.amount))}</strong>
+                  <span className="text-[10px] text-slate-400 font-bold mt-1">
+                    {resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}{fmt(t.amount)}
+                  </span>
+                </div>
               </motion.div>
             ))}
           </>
@@ -467,7 +482,7 @@ function budgetRingGradient(usedPercent: number): string {
   const used = Math.max(0, Math.min(100, usedPercent));
   const usedDeg = used * 3.6;
   if (used <= 0) return 'conic-gradient(rgba(232,221,208,.84) 0deg 360deg)';
-  if (used >= 100) return 'conic-gradient(#C23B5E 0deg 320deg, #D4A843 320deg 360deg)';
+  if (usedPercent >= 100) return 'conic-gradient(#C23B5E 0deg 360deg)';
   return `conic-gradient(#C23B5E 0deg ${usedDeg.toFixed(1)}deg, #D4A843 ${usedDeg.toFixed(1)}deg 360deg)`;
 }
 

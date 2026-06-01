@@ -296,13 +296,13 @@ export function Dashboard({
     }
   })();
 
-  // 雙向反轉過濾邏輯：
+  // 統一口徑與過濾邏輯：
   // state.statsIncludeTransportLodging = false
-  // -> totalIncludeFL = true (Spent 包含大額) / dailyIncludeFL = false (今日花費與日均排除大額)
+  // -> totalIncludeFL = false (Spent 排除大額) / dailyIncludeFL = false (今日花費與日均排除大額)
   // state.statsIncludeTransportLodging = true
-  // -> totalIncludeFL = false (Spent 排除大額) / dailyIncludeFL = true (今日花費與日均包含大額)
+  // -> totalIncludeFL = true (Spent 包含大額) / dailyIncludeFL = true (今日花費與日均包含大額)
   const flipped = !!state.statsIncludeTransportLodging;
-  const totalIncludeFL = !flipped;
+  const totalIncludeFL = flipped;
   const dailyIncludeFL = flipped;
 
   const isBigTripItem = (r: Receipt) =>
