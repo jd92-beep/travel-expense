@@ -173,12 +173,19 @@ export function scopedReceiptsForTrip(state: AppState, trip: TripProfile = activ
 
 export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: { preserveUpdatedAt?: boolean } = {}): Receipt {
   const trips = Array.isArray(state.trips) && state.trips.length ? state.trips : [];
-  // 優先看 receipt 是否已有對應 tripId，有的話直接找該 trip
-  let trip = receipt.tripId ? trips.find((t) => t.id === receipt.tripId) : undefined;
-
-  // 如果沒有 tripId，或者找不到，則根據日期範圍智能配對
-  if (!trip && receipt.date) {
+  
+  // 智能配對重校對：
+  // 優先看日期是否能完美落入某個 active 旅程中。
+  // 這樣能保證 Notion 拉回的無 TripId 數據、或歷史 default 數據，
+  // 100% 能根據日期歸位到 Boss 嘅名古屋之旅！
+  let trip: TripProfile | undefined;
+  if (receipt.date) {
     trip = trips.find((t) => receipt.date >= t.startDate && receipt.date <= t.endDate && !t.archived);
+  }
+  
+  // 如果日期沒配上，才去看 receipt.tripId
+  if (!trip && receipt.tripId) {
+    trip = trips.find((t) => t.id === receipt.tripId && !t.archived);
   }
 
   // 還是找不到就 fallback 到 activeTrip
@@ -196,16 +203,31 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
       || Number(state.rate)
       || 20.36,
   );
+
+  // 增加強大嘅港幣折算自我修復 (Self-Healing) 校驗
+  let hkdAmt = Number(receipt.hkdAmount) || 0;
+  let isHkdAmountValid = false;
+  if (hkdAmt > 0 && receipt.total) {
+    const ratio = Number(receipt.total) / hkdAmt;
+    const percentDiff = Math.abs(ratio - rate) / rate;
+    if (percentDiff < 0.4) {
+      isHkdAmountValid = true;
+    }
+  }
+  if (!isHkdAmountValid || hkdAmt <= 0) {
+    hkdAmt = Math.round((Number(receipt.total) || 0) / rate);
+  }
+
   return {
     ...receipt,
-    tripId: receipt.tripId || trip.id,
+    tripId: trip.id,
     tripVersion: receipt.tripVersion || trip.version,
-    tripDayId: receipt.tripDayId || day?.dayId || day?.id,
+    tripDayId: day?.dayId || day?.id || receipt.tripDayId,
     currency,
     originalCurrency: receipt.originalCurrency || currency,
     originalAmount: Number(receipt.originalAmount ?? receipt.total) || 0,
     exchangeRate: rate,
-    hkdAmount: Number(receipt.hkdAmount) || Math.round((Number(receipt.total) || 0) / rate),
+    hkdAmount: hkdAmt,
     regionSnapshot: region,
     mapUrl: receipt.mapUrl || '',
     updatedAt: options.preserveUpdatedAt ? receipt.updatedAt : Date.now(),

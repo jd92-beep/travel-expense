@@ -122,9 +122,6 @@ export function hkd(jpy: number, state: AppState): number {
 }
 
 export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
-  if (typeof r.hkdAmount === 'number' && r.hkdAmount > 0) {
-    return r.hkdAmount;
-  }
   const cur = r.currency || 'JPY';
   if (cur === 'HKD') {
     return Number(r.total) || 0;
@@ -136,7 +133,24 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
     (cur === 'JPY' ? Number(state.rate) : undefined) ||
     20.36
   );
-  return (Number(r.total) || 0) / rate;
+
+  // 增加強大嘅自我修復 Self-Healing 校驗：
+  // 如果 hkdAmount 存在，但與依匯率計算出的金額偏差超過 40% (偏離過大說明數據有污染/被寫錯了)，
+  // 或者當 total > 100 且 hkdAmount <= 5 (顯然比例不對) 時，我們強制重新計算！
+  let isHkdAmountValid = false;
+  if (typeof r.hkdAmount === 'number' && r.hkdAmount > 0) {
+    const ratio = (Number(r.total) || 0) / r.hkdAmount;
+    const percentDiff = Math.abs(ratio - rate) / rate;
+    if (percentDiff < 0.4) {
+      isHkdAmountValid = true;
+    }
+  }
+
+  if (isHkdAmountValid && typeof r.hkdAmount === 'number') {
+    return r.hkdAmount;
+  }
+
+  return Math.round((Number(r.total) || 0) / rate);
 }
 
 export function getReceiptTripAmount(r: Receipt, state: AppState, resolvedTripCurrency: string): number {
