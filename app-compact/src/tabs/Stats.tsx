@@ -54,7 +54,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
             <StatusPill tone="info" icon={<ReceiptText size={14} />}>{scopedState.receipts.length} 筆紀錄</StatusPill>
           </span>
         </div>
-        <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} />
+        <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} updateState={updateState} />
       </GlassCard>
 
       <DataPanel
@@ -200,7 +200,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   );
 }
 
-function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState }) {
+function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state, updateState }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState; updateState: (patch: Partial<AppState>) => void }) {
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
   const toHkd = (amt: number) => {
@@ -223,16 +223,38 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
   const overBudget = safeBudget > 0 && total > safeBudget;
   const ring = budgetRingGradient(usedPercent);
   const delta = overBudget ? total - safeBudget : remaining;
-  const currencyState = resolvedTripCurrency;
-  const currencySymbol = resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' ';
+  const displayCurrency = state.displayCurrency || 'HKD';
+  const isJpy = displayCurrency === 'JPY';
+  const currencySymbol = isJpy ? '¥' : 'HK$ ';
+
+  const fmtValue = (amt: number) => {
+    if (isJpy) {
+      return `¥ ${fmt(amt)}`;
+    } else {
+      return `HK$ ${fmt(toHkd(amt))}`;
+    }
+  };
+
   return (
     <div className={`spending-compass ${overBudget ? 'is-over-budget' : ''}`.trim()} aria-label={`預算使用分析，已用 ${shownPercent}，支出 ${currencySymbol}${fmt(total)}，預算 ${currencySymbol}${fmt(safeBudget)}`} style={{ '--compass-ring': ring } as CSSProperties}>
       <div className="preview-budget-heading">
         <span>預算羅盤</span>
         <Info size={17} aria-hidden="true" />
         <div className="preview-budget-currency" role="group" aria-label="顯示貨幣">
-          <span className={currencyState === 'HKD' ? 'is-active' : ''}>HKD</span>
-          <span className={currencyState === 'JPY' ? 'is-active' : ''}>JPY</span>
+          <span
+            className={displayCurrency === 'HKD' ? 'is-active' : ''}
+            onClick={() => updateState({ displayCurrency: 'HKD' })}
+            style={{ cursor: 'pointer' }}
+          >
+            HKD
+          </span>
+          <span
+            className={displayCurrency === 'JPY' ? 'is-active' : ''}
+            onClick={() => updateState({ displayCurrency: 'JPY' })}
+            style={{ cursor: 'pointer' }}
+          >
+            JPY
+          </span>
         </div>
       </div>
       <div className="preview-budget-overview">
@@ -243,7 +265,7 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
               <span>預算使用</span>
               <strong>{shownPercent}</strong>
               <small>{safeBudget > 0 ? (overBudget ? '已超預算' : '已使用') : '未設定預算'}</small>
-              <b>HK$ {fmt(toHkd(total))}</b>
+              <b>{fmtValue(total)}</b>
             </div>
           </div>
           <div className="spending-compass-legend" aria-label="類別比例">
@@ -257,32 +279,32 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
         <div className="preview-budget-side">
           <div className="preview-budget-total">
             <span>總預算</span>
-            <strong>{safeBudget > 0 ? `HK$ ${fmt(toHkd(safeBudget))}` : '未設定'}</strong>
+            <strong>{safeBudget > 0 ? fmtValue(safeBudget) : '未設定'}</strong>
             <button type="button" aria-label="編輯預算"><Pencil size={15} aria-hidden="true" /> 編輯</button>
           </div>
           <div className="preview-budget-row is-used">
             <span>已用</span>
-            <strong>HK$ {fmt(toHkd(total))}</strong>
+            <strong>{fmtValue(total)}</strong>
           </div>
           <div className="preview-budget-row">
             <span>{overBudget ? '超出預算' : '尚餘預算'}</span>
-            <strong>HK$ {fmt(toHkd(delta))}</strong>
+            <strong>{fmtValue(delta)}</strong>
           </div>
           <div className="preview-budget-row preview-budget-stack">
             <span>每日預算</span>
-            <strong>HK$ {fmt(toHkd(dailyBudget))}</strong>
+            <strong>{fmtValue(dailyBudget)}</strong>
             <span>日均結餘</span>
-            <strong>HK$ {fmt(toHkd(Math.max(0, dailyBudget - dailyAverage)))}</strong>
+            <strong>{fmtValue(Math.max(0, dailyBudget - dailyAverage))}</strong>
           </div>
           <div className="preview-budget-row preview-budget-stack">
             <span>最高類別</span>
             <strong>{top ? top.name : '未有分類'}</strong>
-            <small>{top ? `HK$ ${fmt(toHkd(top.total))}` : '新增 receipt 後顯示'}</small>
+            <small>{top ? fmtValue(top.total) : '新增 receipt 後顯示'}</small>
           </div>
         </div>
       </div>
       <div className="preview-budget-reminder">
-        <span>預算提醒：每日平均使用需 ≤ HK$ {fmt(toHkd(dailyBudget || 0))}</span>
+        <span>預算提醒：每日平均使用需 ≤ {fmtValue(dailyBudget || 0)}</span>
         <ChevronRight size={20} aria-hidden="true" />
       </div>
     </div>

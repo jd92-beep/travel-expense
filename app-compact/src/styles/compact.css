@@ -82,45 +82,45 @@ body {
 }
 
 .app-floating-dock-mobile {
-  min-height: 54px !important;
+  min-height: 46px !important;
   grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
   gap: 2px !important;
-  padding: 6px 6px 6px !important;
+  padding: 4px 6px !important;
 }
 
 .app-floating-dock-mobile button,
 .app-floating-dock-desktop button {
   min-width: 0 !important;
-  min-height: 42px !important;
+  min-height: 34px !important;
   color: var(--compact-blue) !important;
 }
 
 .app-floating-dock-mobile button svg,
 .app-floating-dock-desktop button svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .app-floating-dock-mobile .dock-item-scan,
 .app-floating-dock-desktop .dock-item-scan {
   z-index: 3;
-  width: 64px;
-  height: 64px;
-  min-width: 64px;
-  min-height: 64px;
-  margin-top: -28px;
-  border: 3px solid rgba(255,255,255,.92) !important;
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+  margin-top: -20px;
+  border: 2px solid rgba(255,255,255,.92) !important;
   background:
     radial-gradient(circle at 30% 22%, rgba(255,255,255,.38), transparent 32%),
     linear-gradient(135deg, #d94a62, #a83030) !important;
   color: white !important;
-  box-shadow: 0 18px 36px rgba(194, 59, 94, .36), inset 0 1px 0 rgba(255,255,255,.35) !important;
+  box-shadow: 0 12px 24px rgba(194, 59, 94, .36), inset 0 1px 0 rgba(255,255,255,.35) !important;
 }
 
 .app-floating-dock-mobile .dock-item-scan svg,
 .app-floating-dock-desktop .dock-item-scan svg {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
 }
 
 .app-floating-dock-mobile [aria-current="page"]:not(.dock-item-scan),
@@ -191,22 +191,22 @@ body {
   .app-floating-dock-mobile {
     display: grid !important;
     max-width: 100% !important;
-    min-height: 54px !important;
+    min-height: 46px !important;
   }
 
   .app-floating-dock-mobile button {
     width: 100% !important;
-    max-width: 48px !important;
-    min-height: 42px !important;
+    max-width: 44px !important;
+    min-height: 34px !important;
     padding-inline: 0 !important;
   }
 
   .app-floating-dock-mobile .dock-item-scan {
-    max-width: 52px !important;
+    max-width: 48px !important;
   }
 
   .app-shell {
-    padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: calc(62px + env(safe-area-inset-bottom)) !important;
   }
 }
 
@@ -675,5 +675,23 @@ body {
     display: flex !important;
     flex-direction: column !important;
     gap: 12px !important;
+  }
+}
+
+/* 當有彈窗打開時，徹底隱藏底部導航欄，避免遮擋按鈕 */
+body:has(.modal-backdrop) .fixed-tab-bar {
+  display: none !important;
+}
+
+/* 隱藏 Tab 內置的重複 floating tabbar */
+.washi-floating-tabbar {
+  display: none !important;
+}
+
+/* 手機端 modal 優雅 max-height */
+@media (max-width: 767px) {
+  .modal {
+    max-height: 82svh !important;
+    overflow-y: auto !important;
   }
 }
