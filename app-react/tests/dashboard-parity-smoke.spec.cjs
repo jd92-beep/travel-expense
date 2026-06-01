@@ -71,16 +71,17 @@ test('Dashboard spending toggle matches legacy total/daily semantics', async ({ 
   const defaultPage = await defaultContext.newPage();
   await openDashboard(defaultPage, false);
   await expect(defaultPage.locator('.washi-today-stats-card').filter({ hasText: 'Today Spent' })).toContainText('¥1,000');
-  await expect(defaultPage.locator('.washi-budget-card').filter({ hasText: 'Spent' })).toContainText('¥10,000');
+  await expect(defaultPage.locator('.washi-budget-card').filter({ hasText: 'Spent' })).toContainText('¥1,000');
   await defaultContext.close();
 
   const flippedContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const flippedPage = await flippedContext.newPage();
   await openDashboard(flippedPage, true);
   await expect(flippedPage.locator('.washi-today-stats-card').filter({ hasText: 'Today Spent' })).toContainText('¥10,000');
-  await expect(flippedPage.locator('.washi-budget-card').filter({ hasText: 'Spent' })).toContainText('¥1,000');
+  await expect(flippedPage.locator('.washi-budget-card').filter({ hasText: 'Spent' })).toContainText('¥10,000');
   await flippedContext.close();
 });
+
 
 test('Dashboard travel reminders expose useful actions', async ({ page }) => {
   await openDashboard(page, false);

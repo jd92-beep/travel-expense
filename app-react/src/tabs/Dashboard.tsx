@@ -282,14 +282,13 @@ export function Dashboard({
     }
   })();
 
-  // 雙向反轉過濾邏輯：
-  // state.statsIncludeTransportLodging = false 
-  // -> totalIncludeFL = true (Spent 包含大額) / dailyIncludeFL = false (今日花費與日均排除大額)
-  // state.statsIncludeTransportLodging = true
-  // -> totalIncludeFL = false (Spent 排除大額) / dailyIncludeFL = true (今日花費與日均包含大額)
-  const flipped = !!state.statsIncludeTransportLodging;
-  const totalIncludeFL = !flipped;
-  const dailyIncludeFL = flipped;
+  // 統一口徑過濾邏輯：
+  // statsIncludeTransportLodging = true -> totalIncludeFL = true (Spent 包含大額) / dailyIncludeFL = true (今日花費包含大額)
+  // statsIncludeTransportLodging = false -> totalIncludeFL = false (Spent 排除大額) / dailyIncludeFL = false (今日花費排除大額)
+  const statsIncludeTransportLodging = !!state.statsIncludeTransportLodging;
+  const totalIncludeFL = statsIncludeTransportLodging;
+  const dailyIncludeFL = statsIncludeTransportLodging;
+
 
   const isBigTripItem = (r: Receipt) => 
     r.category === 'flight' || r.category === 'lodging' || r.category === 'transport';
