@@ -428,6 +428,7 @@ export function Dashboard({
 
 
       {/* 2. 預算毛玻璃卡片 (含圓形進度條與 Today Spent / Daily Avg Spending Pct) */}
+      <div className="stack w-full relative z-10 preview-dashboard-grid">
       <Reveal className="dashboard-reveal">
       <GlassCard as="div" className="washi-budget-card dashboard-magic-budget preview-dashboard-budget relative overflow-hidden z-10">
         <div className="preview-dashboard-budget-head">
@@ -814,6 +815,7 @@ export function Dashboard({
             </div>
           </div>
         )}
+      </div>
       </div>
 
       {/* 7. 名古屋 2026 和風 Dock Bar (懸浮底欄) */}

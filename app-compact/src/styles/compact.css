@@ -581,8 +581,99 @@ body {
   ) !important;
   box-shadow: 0 0 10px rgba(194, 59, 94, 0.4) !important;
 }
+/* ========== 🖥️ 桌機端 (Large Screen / Desktop) 極致視覺與排版硬化 ========== */
+@media (min-width: 768px) {
+  /* 1. 隱藏手機端的 Header 和底部 Dock 導航欄，絕不允許雙導航 BUG */
+  .compact-mobile-header {
+    display: none !important;
+  }
+  .fixed-tab-bar {
+    display: none !important;
+  }
 
+  /* 2. 顯示並硬化桌機左側側邊導航欄 */
+  .compact-desktop-rail {
+    display: grid !important;
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    z-index: 60 !important;
+    width: 76px !important;
+    background: #12385d !important;
+    box-shadow: 12px 0 30px rgba(18, 56, 93, .18) !important;
+  }
 
+  /* 3. 隱藏 Dashboard.tsx 自帶的重複標題 switcher，避免 Double Header 冗餘 */
+  .dashboard-trip-switcher {
+    display: none !important;
+  }
 
+  /* 4. 硬化桌機頂欄 (Topbar) 樣式，精緻化為 CanvasTORII 和風 */
+  .topbar-canva {
+    display: flex !important;
+    border-radius: 20px !important;
+    padding: 12px 24px !important;
+    margin: 0 0 24px 0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.8) !important;
+    background: rgba(255, 252, 245, 0.86) !important;
+    backdrop-filter: blur(12px) !important;
+    box-shadow: 0 16px 36px rgba(54, 39, 24, 0.08) !important;
+  }
 
+  /* 5. 桌機版 shell padding 適配 */
+  .app-shell {
+    padding: 24px 32px 42px 104px !important; /* 給側邊欄留 104px 空間 */
+  }
 
+  /* 6. 大螢幕下 Stats & Dashboard 卡片 Grid 多欄佈局優化 */
+  .preview-stats-grid,
+  .preview-dashboard-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 20px !important;
+    align-items: start !important;
+  }
+
+  /* 使某些長卡片在大螢幕下橫跨兩欄，排版更像 Dashboard */
+  .preview-stats-budget,
+  .settlement-card,
+  .trend-panel {
+    grid-column: span 2 !important;
+  }
+}
+
+/* ========== 📱 手機端 (Mobile) 極致視覺與排版硬化 ========== */
+@media (max-width: 767px) {
+  /* 1. 隱藏桌機專屬側邊導航與頂欄 */
+  .compact-desktop-rail {
+    display: none !important;
+  }
+  .topbar-canva {
+    display: none !important;
+  }
+
+  /* 2. 顯示手機端底部固定 Dock 導航與 Header */
+  .fixed-tab-bar {
+    display: block !important;
+  }
+  .compact-mobile-header {
+    display: grid !important;
+  }
+
+  /* 3. 隱藏 Dashboard.tsx 自帶的重複標題 switcher，避免 Double Header 冗餘 */
+  .dashboard-trip-switcher {
+    display: none !important;
+  }
+
+  /* 4. 手機端 shell padding 適配，底部留 76px 給 Dock */
+  .app-shell {
+    padding: 0 0 calc(76px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* 5. 手機端 Stats & Dashboard 統一單欄緊實佈局 */
+  .preview-stats-grid,
+  .preview-dashboard-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+}

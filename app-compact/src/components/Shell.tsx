@@ -250,11 +250,65 @@ export function Shell({
         )}
         <div className="topbar-title-block relative z-10">
           <img className="compact-topbar-mark" src={compactJapanMark} alt="" aria-hidden="true" />
-          <h1>
-            {richVisualEffects
-              ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeCopy.title}</AuroraText>
-              : activeCopy.title}
-          </h1>
+          {active === 'dashboard' && state ? (
+            <div className="relative">
+              <button
+                type="button"
+                className="flex items-center gap-2 text-left border-none bg-transparent p-0 focus:outline-none cursor-pointer active:scale-98 transition-all"
+                onClick={() => setIsTripDropdownOpen(!isTripDropdownOpen)}
+                style={{ fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit', fontFamily: 'inherit' }}
+              >
+                <h1>
+                  {richVisualEffects
+                    ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeTripName}</AuroraText>
+                    : activeTripName}
+                </h1>
+                <ChevronDown size={22} className="text-[#C23B5E] dark:text-[#D4A843] shrink-0 mt-1" style={{ transform: isTripDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+              </button>
+              {isTripDropdownOpen && (
+                <div className="absolute left-0 mt-2 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]">
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    切換旅程 (Switch Trip)
+                  </div>
+                  <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+                    {(state.trips || []).filter((t) => !t.archived).map((t) => {
+                      const isActive = t.id === (trip?.id || '');
+                      return (
+                        <button
+                          key={t.id}
+                          className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
+                            isActive
+                              ? 'bg-blue-50 text-blue-900 font-bold'
+                              : 'hover:bg-slate-50 text-slate-700 bg-transparent'
+                          }`}
+                          onClick={() => {
+                            setIsTripDropdownOpen(false);
+                            handleSwitchTrip(t.id);
+                          }}
+                        >
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-sm truncate">{t.name}</span>
+                            <span className="text-[10px] text-slate-400 truncate">
+                              {t.destinationSummary || '日本'} ({t.itinerary?.length || 0}天)
+                            </span>
+                          </div>
+                          {isActive && (
+                            <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <h1>
+              {richVisualEffects
+                ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeCopy.title}</AuroraText>
+                : activeCopy.title}
+            </h1>
+          )}
         </div>
         <div className="compact-desktop-actions relative z-10" aria-label="Dashboard controls">
           <span><ReceiptText size={16} /> 142 receipts</span>
