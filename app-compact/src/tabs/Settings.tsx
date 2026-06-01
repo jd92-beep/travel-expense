@@ -700,6 +700,7 @@ export function Settings({
         tripName: draft.trip.name,
         tripDateRange: { start: draft.trip.startDate, end: draft.trip.endDate },
         tripCurrency: nonHomeCurrencyForTrip(draft.trip, prev.tripCurrency),
+        budget: draft.trip.budget,
         customItinerary: draft.trip.itinerary,
         syncQueue: [...(prev.syncQueue || []), {
           id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,

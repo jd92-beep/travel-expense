@@ -370,7 +370,11 @@ export function useSyncEngine(
                 personalNotionConnected: settings.personalNotionConnected ?? finalState.personalNotionConnected,
                 autoSync: settings.autoSync ?? finalState.autoSync,
                 activeTripId,
-                trips: mergedTrips.map((trip) => ({ ...trip, active: trip.id === activeTripId && !trip.archived })),
+                trips: mergedTrips.map((trip) => ({
+                  ...trip,
+                  active: trip.id === activeTripId && !trip.archived,
+                  budget: trip.id === activeTripId && !trip.archived && settings.budget !== undefined ? settings.budget : trip.budget
+                })),
                 persons: settings.persons ?? finalState.persons,
                 shareRatios: settings.shareRatios ?? finalState.shareRatios,
                 itineraryOverrides: {

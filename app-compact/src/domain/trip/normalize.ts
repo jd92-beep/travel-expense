@@ -143,6 +143,7 @@ export function tripFromLegacyState(input: Partial<AppState>): TripProfile {
     destinationSummary: itinerary.map((day) => day.region).filter(Boolean).slice(0, 6).join(' / ') || '未設定目的地',
     startDate,
     endDate,
+    budget: Math.max(0, typeof input.budget === 'number' && !Number.isNaN(input.budget) ? input.budget : (DEFAULT_STATE.budget || 0)),
     homeCurrency: 'HKD',
     currencies: Array.from(new Set(['HKD', input.tripCurrency || DEFAULT_STATE.tripCurrency])),
     timezones: Array.from(new Set(itinerary.map((day) => day.timezone || 'Asia/Tokyo'))),
@@ -227,6 +228,9 @@ export function migrateAppState(input: unknown): AppState {
         ...item,
         active: item.id === nextActiveId && !item.archived || (!nextActiveId && !parsed.activeTripId && idx === 0),
         notionDb: item.notionDb || (item.id === 'trip_2026_04_nagoya' ? (parsed.notionDb || DEFAULT_STATE.notionDb) : undefined),
+        budget: Math.max(0, typeof item.budget === 'number' && !Number.isNaN(item.budget)
+          ? item.budget
+          : (item.id === trip.id ? (Number(parsed.budget) || DEFAULT_STATE.budget || 0) : DEFAULT_STATE.budget || 0)),
         itinerary: normalizeItinerary(
           item.itinerary?.length ? item.itinerary : Array.isArray(parsed.customItinerary) ? parsed.customItinerary : [],
           item.id,
@@ -237,12 +241,25 @@ export function migrateAppState(input: unknown): AppState {
           : trip.timezones,
       }))
     : [trip];
+
+  const currentActiveTrip = trips.find((t) => t.id === nextActiveId) || trips.find((t) => t.active) || trips[0];
+  const resolvedBudget = (parsed.budget !== undefined && parsed.budget !== null && !Number.isNaN(Number(parsed.budget)))
+    ? Math.max(0, Number(parsed.budget))
+    : (currentActiveTrip ? (Number(currentActiveTrip.budget) || DEFAULT_STATE.budget || 0) : DEFAULT_STATE.budget || 0);
+
+  const finalTrips = trips.map((t) =>
+    (t.id === nextActiveId || t.active)
+      ? { ...t, budget: resolvedBudget }
+      : t
+  );
+
   const base = {
     ...DEFAULT_STATE,
     ...parsed,
     schemaVersion: APP_SCHEMA_VERSION,
     activeTripId: nextActiveId,
-    trips,
+    trips: finalTrips,
+    budget: resolvedBudget,
     tripName: parsed.tripName || trip.name,
     tripDateRange: {
       start: parsed.tripDateRange?.start || trip.startDate,
