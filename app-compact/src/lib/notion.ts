@@ -823,7 +823,8 @@ function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt
   const appDb = String(state.notionDb || '').trim();
   if (state.personalNotionConnected === true && appDb && appDb !== DEFAULT_NOTION_DB) {
     const knownTripIds = new Set((state.trips || []).filter((trip) => !trip.archived).map((trip) => trip.id));
-    if (!tripId || !knownTripIds.has(tripId)) return null;
+    const isDefaultOrEmpty = !tripId || tripId === 'trip_default' || tripId === 'default';
+    if (!isDefaultOrEmpty && !knownTripIds.has(tripId)) return null;
   }
   const receipt: Receipt = {
     id: sourceId || `notion_${page.id}`,
