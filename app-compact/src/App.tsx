@@ -286,7 +286,7 @@ export function App() {
           onSkip={handleSkipGuide}
         />
       )}
-      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry}>
+      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState}>
         <ErrorBoundary key={safeTab}>
           <Suspense fallback={<LoadingState label="載入分頁" />}>
             {disableHeavy ? (

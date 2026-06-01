@@ -1,9 +1,9 @@
-import { BarChart3, Bell, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users } from 'lucide-react';
+import { BarChart3, Bell, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users, ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { TAB_MANIFEST } from '../lib/tabs';
-import type { SyncEngineState, TabId } from '../lib/types';
+import type { SyncEngineState, TabId, AppState } from '../lib/types';
 import { StatusPill } from './ui';
 import { WindmillTransition } from './WindmillTransition';
 import { FloatingDock } from './ui/floating-dock';
@@ -12,6 +12,7 @@ import { Particles } from './ui/particles';
 import { AuroraText } from './ui/aurora-text';
 import { SyncStatusIndicator } from './SyncStatusIndicator';
 import { shouldDisableHeavyEffects } from '../lib/performance';
+import { activeTrip } from '../domain/trip/normalize';
 import compactJapanMark from '../assets/generated/compact-japan-mark.svg';
 
 
@@ -46,12 +47,16 @@ export function Shell({
   children,
   syncState,
   onRetryFailed,
+  state,
+  setState,
 }: {
   active: TabId;
   onTab: (tab: TabId) => void;
   children: ReactNode;
   syncState?: SyncEngineState;
   onRetryFailed?: () => void;
+  state?: AppState;
+  setState?: React.Dispatch<React.SetStateAction<AppState>>;
 }) {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
@@ -60,7 +65,36 @@ export function Shell({
   const raf = useRef<number | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const richVisualEffects = !prefersReducedMotion && !stableMobileEffects;
-  const activeCopy = shellCopy[active];
+
+  const [isTripDropdownOpen, setIsTripDropdownOpen] = useState(false);
+
+  const trip = state ? activeTrip(state) : null;
+  const activeTripName = trip ? trip.name : '名古屋之旅 🏯';
+  const activeTripDates = trip ? `${trip.startDate} - ${trip.endDate}` : '2026年5月26日 - 6月5日';
+
+  const handleSwitchTrip = (tripId: string) => {
+    if (!setState || !state) return;
+    const target = state.trips?.find((t) => t.id === tripId && !t.archived);
+    if (!target) return;
+
+    setState((prev) => ({
+      ...prev,
+      activeTripId: tripId,
+      trips: (prev.trips || []).map((item) => ({ ...item, active: item.id === tripId && !item.archived })),
+      tripName: target.name,
+      budget: target.budget ?? prev.budget,
+      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || prev.tripCurrency,
+      customItinerary: target.itinerary || [],
+      tripDateRange: { start: target.startDate, end: target.endDate }
+    }));
+  };
+
+  const activeCopy = {
+    ...shellCopy[active],
+    mobileTitle: active === 'dashboard' && trip ? trip.name : shellCopy[active].mobileTitle,
+    title: active === 'dashboard' && trip ? trip.name : shellCopy[active].title,
+    subtitle: active === 'dashboard' && trip ? activeTripDates : shellCopy[active].subtitle,
+  };
 
   useEffect(() => {
     const onOnline = () => setOnline(true);
@@ -248,7 +282,57 @@ export function Shell({
           <img src={compactJapanMark} alt="" />
         </span>
         <div className="compact-mobile-heading relative z-10">
-          <h1><span className="compact-mobile-title-art" data-title={activeCopy.mobileTitle}>{isMobile ? activeCopy.mobileTitle : ''}</span></h1>
+          {active === 'dashboard' && state ? (
+            <div className="relative">
+              <button
+                type="button"
+                className="flex items-center gap-1.5 text-left border-none bg-transparent p-0 focus:outline-none cursor-pointer active:scale-98 transition-all"
+                onClick={() => setIsTripDropdownOpen(!isTripDropdownOpen)}
+                style={{ fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit', fontFamily: 'inherit' }}
+              >
+                <span className="compact-mobile-title-art" data-title={activeTripName}>{activeTripName}</span>
+                <ChevronDown size={18} className="text-[#C23B5E] dark:text-[#D4A843] shrink-0" style={{ transform: isTripDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+              </button>
+              {isTripDropdownOpen && (
+                <div className="absolute left-0 mt-2 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]">
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    切換旅程 (Switch Trip)
+                  </div>
+                  <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+                    {(state.trips || []).filter((t) => !t.archived).map((t) => {
+                      const isActive = t.id === (trip?.id || '');
+                      return (
+                        <button
+                          key={t.id}
+                          className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
+                            isActive
+                              ? 'bg-blue-50 text-blue-900 font-bold'
+                              : 'hover:bg-slate-50 text-slate-700 bg-transparent'
+                          }`}
+                          onClick={() => {
+                            setIsTripDropdownOpen(false);
+                            handleSwitchTrip(t.id);
+                          }}
+                        >
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-sm truncate">{t.name}</span>
+                            <span className="text-[10px] text-slate-400 truncate">
+                              {t.destinationSummary || '日本'} ({t.itinerary?.length || 0}天)
+                            </span>
+                          </div>
+                          {isActive && (
+                            <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <h1><span className="compact-mobile-title-art" data-title={activeCopy.mobileTitle}>{isMobile ? activeCopy.mobileTitle : ''}</span></h1>
+          )}
           <p>{activeCopy.subtitle}</p>
         </div>
         <span className="compact-mobile-status relative z-10">{activeCopy.status}</span>
