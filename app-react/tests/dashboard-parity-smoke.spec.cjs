@@ -5,6 +5,14 @@ test.use({ viewport: { width: 390, height: 844 } });
 async function openDashboard(page, statsIncludeTransportLodging) {
   await page.addInitScript((includeToggle) => {
     window.__disable_supabase_configured = true;
+    
+    // Synchronously disable IndexedDB to prevent persistent Nagoya trip database pollution
+    Object.defineProperty(window, 'indexedDB', {
+      value: undefined,
+      writable: true,
+      configurable: true
+    });
+
     const fixedNow = new Date('2026-05-08T10:00:00+08:00').valueOf();
     const RealDate = Date;
     class MockDate extends RealDate {
@@ -19,6 +27,7 @@ async function openDashboard(page, statsIncludeTransportLodging) {
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      schemaVersion: 3,
       lastTab: 'dashboard',
       budget: 20000,
       rate: 20,

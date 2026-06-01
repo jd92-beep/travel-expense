@@ -19,10 +19,20 @@ const receipts = [
 test('Stats settlement, filters, top expenses, and trend are usable', async ({ page }) => {
   await page.addInitScript((payload) => {
     window.__disable_supabase_configured = true;
+    
+    // Synchronously disable IndexedDB to enforce complete localStorage fallback 
+    // and prevent persistent Nagoya trip database from polluting offline test cases.
+    Object.defineProperty(window, 'indexedDB', {
+      value: undefined,
+      writable: true,
+      configurable: true
+    });
+
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify(payload));
   }, {
+    schemaVersion: 3,
     lastTab: 'stats',
     persons,
     shareRatios: { p_boss: 1, p_xinxin: 1 },
@@ -31,6 +41,9 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
     statsIncludeTransportLodging: false,
     top10IncludeBigItems: true,
   });
+
+
+
 
   await page.goto('http://localhost:8902/travel-expense/react/');
   await expect(page.getByText('預算使用分析')).toBeVisible();
@@ -84,7 +97,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(page.locator('.transfer-modern')).toContainText('Xinxin Wong');
   const transferTextOverflow = await page.locator('.stats-transfer-person span:last-child').evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).textOverflow));
   expect(transferTextOverflow).not.toContain('ellipsis');
-  await expect(page.getByText('代付：Tony Cheung 代 Xinxin Wong 付 ¥300 · M9 Gift')).toBeVisible();
+  await expect(page.getByText(/代付：Tony Cheung 代 Xinxin Wong 付 HK\$ 15.*¥300.*M9 Gift/)).toBeVisible();
   const metricMetrics = await page.locator('.stats-metric').evaluateAll((nodes) => nodes.map((node) => {
     const rect = node.getBoundingClientRect();
     return { top: Math.round(rect.top), left: Math.round(rect.left), width: Math.round(rect.width) };
@@ -103,8 +116,9 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(page.locator('.bar-row').filter({ hasText: '住宿' })).toHaveCount(0);
   await page.getByLabel('包括交通/住宿於統計圖表').check();
   await expect(page.locator('.bar-row').filter({ hasText: '住宿' })).toBeVisible();
-  await expect(page.locator('.bar-row').filter({ hasText: '住宿' })).toHaveAttribute('title', /住宿: ¥5,000/);
+  await expect(page.locator('.bar-row').filter({ hasText: '住宿' })).toHaveAttribute('title', /住宿: HK\$ \d+ \/ ¥5,000/);
   await expect(page.getByText('Suica')).toBeVisible();
+
 
   await expect(page.getByRole('group', { name: 'TOP 10 支出篩選' })).toBeVisible();
   await page.getByRole('button', { name: '除了機票和酒店' }).click();

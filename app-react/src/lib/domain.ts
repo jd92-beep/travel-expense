@@ -121,6 +121,59 @@ export function hkd(jpy: number, state: AppState): number {
   return Math.round((Number(jpy) || 0) / rate);
 }
 
+export function getResolvedTripCurrency(state: AppState, trip: any): string {
+  if (trip.currencies && trip.currencies.length > 0) {
+    const cur = trip.currencies.find((c: string) => c !== 'HKD');
+    if (cur) return cur;
+  }
+  return state.tripCurrency || 'JPY';
+}
+
+export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
+  const cur = r.currency || 'JPY';
+  if (cur === 'HKD') {
+    return Number(r.total) || 0;
+  }
+  const rate = Math.max(
+    0.1,
+    Number(r.exchangeRate) ||
+    Number(state.rateTable?.[cur]?.perHkd) ||
+    (cur === 'JPY' ? Number(state.rate) : undefined) ||
+    20.36
+  );
+
+  // Self-Healing validation: check if hkdAmount is clean
+  let isHkdAmountValid = false;
+  if (typeof r.hkdAmount === 'number' && r.hkdAmount > 0) {
+    const ratio = (Number(r.total) || 0) / r.hkdAmount;
+    const percentDiff = Math.abs(ratio - rate) / rate;
+    if (percentDiff < 0.4) {
+      isHkdAmountValid = true;
+    }
+  }
+
+  if (isHkdAmountValid && typeof r.hkdAmount === 'number') {
+    return r.hkdAmount;
+  }
+
+  return Math.round((Number(r.total) || 0) / rate);
+}
+
+export function getReceiptTripAmount(r: Receipt, state: AppState, resolvedTripCurrency: string): number {
+  const cur = r.currency || 'JPY';
+  if (cur === resolvedTripCurrency) {
+    return Number(r.total) || 0;
+  }
+  const hkdAmt = getReceiptHkdAmount(r, state);
+  const activeRate = Math.max(
+    0.1,
+    Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
+    (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
+    20.36
+  );
+  return Math.round(hkdAmt * activeRate);
+}
+
 export function receiptRegion(state: AppState, receipt: Receipt): string {
   if (receipt.regionSnapshot) return receipt.regionSnapshot;
   if (receipt.region) return receipt.region;
@@ -257,6 +310,9 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   const empty: SettlementSnapshot = { transfers: [], balances: [], sharedTotal: 0, sharedByPayer: [], privateByOwner: [], crossPrivate: [] };
   if (persons.length < 2) return empty;
 
+  const trip = activeTrip(state);
+  const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
+
   const ratios = persons.map((p) => {
     const v = Number(state.shareRatios?.[p.id]);
     return Number.isFinite(v) && v >= 0 ? v : 1;
@@ -270,7 +326,7 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   let sharedTotal = 0;
 
   for (const r of state.receipts) {
-    const amount = Number(r.total) || 0;
+    const amount = getReceiptTripAmount(r, state, resolvedTripCurrency);
     if (amount <= 0) continue;
     const payerIdx = idxOf(r.personId || firstId);
     if (payerIdx < 0) continue;
