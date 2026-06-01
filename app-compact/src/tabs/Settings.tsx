@@ -276,7 +276,7 @@ export function Settings({
   const resolvedNotionDb = configuredNotionDatabaseId(state);
   const notionMirrorDbLabel = notionMirrorReady ? resolvedNotionDb : 'Personal Notion 未連接';
   const notionActionDisabled = !!busy || publicSupabaseOnly;
-  const directTokenEnabled = import.meta.env.DEV;
+  const directTokenEnabled = true;
   const buildLabel = `${import.meta.env.MODE} · React ${reactVersion}`;
 
   // Local state for Trip Manager

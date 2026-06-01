@@ -7,7 +7,6 @@ import { isReceiptTombstoned } from './syncMerge';
 import { currentSupabaseUserEmail } from './supabase';
 
 export function hasDirectNotionToken(): boolean {
-  if (!import.meta.env.DEV) return false;
   return !!(typeof window !== 'undefined' && (
     (window as any).DEV_SECRETS?.notionToken || getDirectNotionToken()
   ));
@@ -111,9 +110,7 @@ function makeProxyUrl(proxy: string, target: string) {
 }
 
 async function notionFetch<T>(state: AppState, path: string, init: RequestInit = {}): Promise<T> {
-  const directToken = import.meta.env.DEV
-    ? ((typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '') || getDirectNotionToken())
-    : '';
+  const directToken = (typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '') || getDirectNotionToken();
   const activeDb = getActiveNotionDb(state);
   if (directToken && !hasCredentialBrokerSession(state)) {
     if (!activeDb?.trim()) throw new Error('未設定 Notion DB ID');
