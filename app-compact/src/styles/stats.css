@@ -1908,6 +1908,85 @@
   .app-shell--stats .settlement-card .settlement-visual-map .text-xs {
     white-space: nowrap !important;
   }
+
+  .app-shell--stats .settlement-card .settlement-visual-map > .flex {
+    gap: 8px !important;
+    justify-content: center !important;
+  }
+
+  .app-shell--stats .settlement-card .settlement-visual-map .pointer-events-none {
+    flex: 0 0 42px !important;
+    width: 42px !important;
+  }
+
+  .app-shell--stats .settlement-card .settlement-visual-map .z-10 > div {
+    min-width: max-content !important;
+  }
+
+  .app-shell--stats .settlement-card .settlement-visual-map .z-10 > div > span,
+  .app-shell--stats .settlement-card .stats-transfer-person span {
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+  }
+
+  .app-shell--stats .settlement-card .stats-transfer {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    justify-items: center !important;
+    gap: 8px !important;
+    min-height: 88px !important;
+  }
+
+  .app-shell--stats .settlement-card .stats-transfer > div:first-child {
+    flex-wrap: nowrap !important;
+    justify-content: center !important;
+    width: 100% !important;
+  }
+
+  .app-shell--stats .settlement-card .stats-transfer-person {
+    flex: 0 0 auto !important;
+  }
+
+  .app-shell--stats .settlement-card .stats-transfer > div:last-child {
+    align-items: center !important;
+    width: 100% !important;
+  }
+
+  /* Beat the older preview-wide 4-column rules without touching mobile. */
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    grid-auto-flow: row !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .preview-stats-budget,
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .preview-daily-pace {
+    grid-column: span 6 !important;
+    grid-row: auto !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .preview-stats-metrics,
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .stats-controls {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .settlement-card {
+    grid-column: span 4 !important;
+    grid-row: auto !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .top-expenses-panel {
+    grid-column: span 8 !important;
+    grid-row: auto !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .payer-panel,
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .category-panel,
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .payment-panel {
+    grid-column: span 4 !important;
+    grid-row: auto !important;
+  }
 }
 
 @media (min-width: 768px) and (max-width: 1099px) {
