@@ -699,3 +699,16 @@ body:has(.modal-backdrop) .fixed-tab-bar {
     overflow-y: auto !important;
   }
 }
+
+/* 強制頂部 Header 下拉選單具有極高層級，防止被下方卡片遮擋 */
+.topbar-title-block .absolute,
+.compact-mobile-heading .absolute {
+  z-index: 99999 !important;
+}
+
+/* 確保 Header 容器層級高於主體內容 */
+.topbar-canva,
+.compact-mobile-header {
+  position: relative !important;
+  z-index: 2000 !important;
+}
