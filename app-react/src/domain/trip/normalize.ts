@@ -172,12 +172,24 @@ export function scopedReceiptsForTrip(state: AppState, trip: TripProfile = activ
 
 export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: { preserveUpdatedAt?: boolean } = {}): Receipt {
   const trips = Array.isArray(state.trips) && state.trips.length ? state.trips : [];
-  // 優先看 receipt 是否已有對應 tripId，有的話直接找該 trip
-  let trip = receipt.tripId ? trips.find((t) => t.id === receipt.tripId) : undefined;
-  
-  // 如果沒有 tripId，或者找不到，則根據日期範圍智能配對
-  if (!trip && receipt.date) {
+  let trip: TripProfile | undefined;
+  if (receipt.date) {
     trip = trips.find((t) => receipt.date >= t.startDate && receipt.date <= t.endDate && !t.archived);
+  }
+  
+  // 增加 Prep-phase 大額預付項目智能歸位邏輯：
+  if (!trip) {
+    const active = activeTrip(state);
+    const isPrepCategory = receipt.category === 'flight' || receipt.category === 'lodging';
+    const isDefaultOrEmptyTripId = !receipt.tripId || receipt.tripId === 'trip_default' || receipt.tripId === 'default' || !trips.some(t => t.id === receipt.tripId && !t.archived);
+    if (isPrepCategory && isDefaultOrEmptyTripId && active) {
+      trip = active;
+    }
+  }
+
+  // 優先看 receipt 是否已有對應 tripId，有的話直接找該 trip
+  if (!trip && receipt.tripId) {
+    trip = trips.find((t) => t.id === receipt.tripId && !t.archived);
   }
   
   // 還是找不到就 fallback 到 activeTrip

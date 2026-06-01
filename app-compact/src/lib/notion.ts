@@ -133,7 +133,7 @@ async function notionFetch<T>(state: AppState, path: string, init: RequestInit =
     return response.json() as Promise<T>;
   }
   const userEmail = await currentSupabaseUserEmail();
-  const isBoss = userEmail === 'vc06456@gmail.com';
+  const isBoss = userEmail?.toLowerCase() === 'vc06456@gmail.com';
   if (!isBoss && !hasCredentialBrokerSession(state) && state.personalNotionConnected !== true) {
     throw new Error('Credential Broker session 未連線；請先連接 Personal Notion notebook');
   }

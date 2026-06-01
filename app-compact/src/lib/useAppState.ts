@@ -73,7 +73,7 @@ function stateFreshness(state: Partial<AppState>): number {
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
   const [state, setState] = useState<AppState>(() => {
     const rawState = loadState(storageScope);
-    if (userEmail && userEmail !== 'vc06456@gmail.com') {
+    if (userEmail && userEmail.toLowerCase() !== 'vc06456@gmail.com') {
       return {
         ...rawState,
         trips: (rawState.trips || []).filter((t) => t.id !== 'trip_2026_04_nagoya'),
@@ -90,7 +90,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     const hasPrimarySnapshot = hasStoredState(storageScope);
     const scopedState = loadState(storageScope);
     let filteredState = scopedState;
-    if (userEmail && userEmail !== 'vc06456@gmail.com') {
+    if (userEmail && userEmail.toLowerCase() !== 'vc06456@gmail.com') {
       filteredState = {
         ...scopedState,
         trips: (scopedState.trips || []).filter((t) => t.id !== 'trip_2026_04_nagoya'),
@@ -107,7 +107,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
         if (indexedWins) {
           console.log('[useAppState] Hydrated newer state from IndexedDB');
           let merged = { ...prev, ...indexed };
-          if (userEmail && userEmail !== 'vc06456@gmail.com') {
+          if (userEmail && userEmail.toLowerCase() !== 'vc06456@gmail.com') {
             merged = {
               ...merged,
               trips: (merged.trips || []).filter((t) => t.id !== 'trip_2026_04_nagoya'),

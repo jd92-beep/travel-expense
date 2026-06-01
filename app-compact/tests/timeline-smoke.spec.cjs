@@ -17,14 +17,13 @@ test.beforeEach(async ({ page }) => {
 test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
-    localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
   const nav = page.getByLabel('主要分頁');
   await nav.getByRole('button', { name: '行程' }).click();
-  await expect(page.getByText('行程時間線')).toBeVisible();
+  await expect(page.getByText('行程時間線').first()).toBeVisible();
   const firstMap = page.getByRole('link', { name: '地圖' }).first();
   await expect(firstMap).toBeVisible();
   await expect(firstMap).toHaveAttribute('href', /maps|maps\.apple/);
@@ -89,7 +88,7 @@ test('Timeline map links reject unsafe imported URLs and use Android intent fall
     }));
   });
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('行程時間線')).toBeVisible();
+  await expect(page.getByText('行程時間線').first()).toBeVisible();
   const hrefs = await page.getByRole('link', { name: '地圖' }).evaluateAll((links) => links.map((link) => link.getAttribute('href') || ''));
   expect(hrefs.join(' ')).not.toMatch(/javascript:|evil\.example/i);
   expect(hrefs).toHaveLength(3);
@@ -131,7 +130,7 @@ test('Timeline highlights live, passed, and future itinerary spots', async ({ pa
     }));
   }, fixed);
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('行程時間線')).toBeVisible();
+  await expect(page.getByText('行程時間線').first()).toBeVisible();
   await expect(page.locator('.timeline-event.is-passed')).toContainText('Breakfast Stop');
   await expect(page.locator('.timeline-event.is-live')).toContainText('Lunch Stop');
   await expect(page.locator('.timeline-event.is-live')).toContainText('Now');
@@ -170,7 +169,7 @@ test('Timeline command card stays compact and day header shows one date', async 
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('行程時間線')).toBeVisible();
+  await expect(page.getByText('行程時間線').first()).toBeVisible();
   const command = page.locator('.timeline-command');
   await expect(command).not.toContainText('📍');
   await expect(page.locator('.timeline-command-title-row')).toBeVisible();
@@ -243,7 +242,7 @@ test('Timeline mobile rail shines independently without covering compact itinera
   }, fixed);
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('行程時間線')).toBeVisible();
+  await expect(page.getByText('行程時間線').first()).toBeVisible();
   await expect(page.locator('.timeline-rail-beam')).toBeVisible();
 
   const geometry = await page.evaluate(() => {

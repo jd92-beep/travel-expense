@@ -113,7 +113,7 @@ export function App() {
 
   const showGuide =
     hasSupabaseSession(supabaseAuth.session) &&
-    userEmail !== 'vc06456@gmail.com' &&
+    userEmail?.toLowerCase() !== 'vc06456@gmail.com' &&
     (state.trips || []).length === 0 &&
     !isHydratingScope &&
     !skippedGuide;

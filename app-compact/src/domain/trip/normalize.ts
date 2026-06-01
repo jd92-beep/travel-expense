@@ -183,6 +183,16 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
     trip = trips.find((t) => receipt.date >= t.startDate && receipt.date <= t.endDate && !t.archived);
   }
   
+  // 增加 Prep-phase 大額預付項目智能歸位邏輯：
+  if (!trip) {
+    const active = activeTrip(state);
+    const isPrepCategory = receipt.category === 'flight' || receipt.category === 'lodging';
+    const isDefaultOrEmptyTripId = !receipt.tripId || receipt.tripId === 'trip_default' || receipt.tripId === 'default' || !trips.some(t => t.id === receipt.tripId && !t.archived);
+    if (isPrepCategory && isDefaultOrEmptyTripId && active) {
+      trip = active;
+    }
+  }
+
   // 如果日期沒配上，才去看 receipt.tripId
   if (!trip && receipt.tripId) {
     trip = trips.find((t) => t.id === receipt.tripId && !t.archived);

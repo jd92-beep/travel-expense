@@ -19,7 +19,7 @@ export function hasUserScopedNotionDatabase(state: AppState): boolean {
 }
 
 export function canUseNotionMirror(state: AppState, cloudSyncAvailable = false, userEmail: string | null = null): boolean {
-  if (userEmail === 'vc06456@gmail.com') {
+  if (userEmail?.toLowerCase() === 'vc06456@gmail.com') {
     return true;
   }
   if (cloudSyncAvailable) {
@@ -29,7 +29,7 @@ export function canUseNotionMirror(state: AppState, cloudSyncAvailable = false, 
 }
 
 export function notionMirrorGuardMessage(state: AppState, cloudSyncAvailable = false, userEmail: string | null = null): string {
-  if (userEmail === 'vc06456@gmail.com') return '';
+  if (userEmail?.toLowerCase() === 'vc06456@gmail.com') return '';
   if (cloudSyncAvailable && !hasUserScopedNotionDatabase(state)) {
     return 'Supabase public 帳號需要先設定自己嘅 Notion database ID；系統唔會使用預設共享 Notion notebook。';
   }
