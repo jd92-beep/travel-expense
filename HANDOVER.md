@@ -4,6 +4,8 @@ Last updated: 2026-06-01 HKT
 
 Latest pushed commits:
 
+- Current commit: Optimize header height, compact cell sizing, and fix Notion connection fallback in production
+
 - Current commit: Compact generated-preview header and stats density pass
 - Current commit: Compact Scan first-viewport preview pass
 - Current commit: Compact Settings mobile preview pass
