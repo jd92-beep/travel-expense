@@ -610,6 +610,8 @@ body {
   /* 4. 硬化桌機頂欄 (Topbar) 樣式，精緻化為 CanvasTORII 和風 */
   .topbar-canva {
     display: flex !important;
+    overflow: visible !important;
+    z-index: 100 !important;
     border-radius: 20px !important;
     padding: 12px 24px !important;
     margin: 0 0 24px 0 !important;
@@ -657,6 +659,8 @@ body {
   }
   .compact-mobile-header {
     display: grid !important;
+    overflow: visible !important;
+    z-index: 100 !important;
   }
 
   /* 3. 隱藏 Dashboard.tsx 自帶的重複標題 switcher，避免 Double Header 冗餘 */
