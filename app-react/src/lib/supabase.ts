@@ -238,8 +238,8 @@ function rowToReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupabaseId
 }
 
 function rowToPulledReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupabaseId: Map<string, TripProfile>): Receipt | null {
-  const trip = tripBySupabaseId.get(row.trip_id);
-  return trip ? rowToReceiptForTrip(row, state, trip) : null;
+  const trip = tripBySupabaseId.get(row.trip_id) || activeTrip(state);
+  return rowToReceiptForTrip(row, state, trip);
 }
 
 function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: TripProfile, localId?: string): Receipt {

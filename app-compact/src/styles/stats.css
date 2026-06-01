@@ -1713,6 +1713,219 @@
   }
 }
 
+/* Desktop-only compact Stats repair.
+   Keep the mobile composition intact while giving large screens a calmer,
+   bounded dashboard grid with charts that cannot overflow their cards. */
+@media (min-width: 768px) {
+  .app-shell--stats {
+    width: 100%;
+    max-width: none;
+    padding: 20px clamp(22px, 2vw, 36px) 44px 104px !important;
+  }
+
+  .app-shell--stats .topbar-canva,
+  .app-shell--stats .preview-stats-grid {
+    width: min(100%, 1500px);
+    margin-inline: auto !important;
+  }
+
+  .app-shell--stats .topbar-canva {
+    margin-bottom: 18px !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .app-shell--stats .preview-stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    gap: clamp(14px, 1.2vw, 18px) !important;
+    align-items: start !important;
+    border: 0 !important;
+  }
+
+  .app-shell--stats .preview-stats-budget,
+  .app-shell--stats .preview-daily-pace,
+  .app-shell--stats .preview-stats-screen .stats-panel,
+  .app-shell--stats .preview-stats-screen .stats-controls {
+    border-radius: 20px !important;
+    border: 1px solid rgba(128, 99, 63, .16) !important;
+    background: rgba(255, 253, 248, .92) !important;
+    box-shadow: 0 14px 34px rgba(67, 46, 24, .06) !important;
+  }
+
+  .app-shell--stats .preview-stats-budget,
+  .app-shell--stats .preview-daily-pace {
+    grid-column: span 6 !important;
+    min-height: 0 !important;
+    padding: clamp(20px, 1.7vw, 26px) !important;
+  }
+
+  .app-shell--stats .preview-stats-metrics {
+    grid-column: 1 / -1 !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: clamp(10px, .9vw, 14px) !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .app-shell--stats .preview-stats-metrics .stats-metric {
+    min-height: 112px !important;
+    border: 1px solid rgba(128, 99, 63, .16) !important;
+    border-radius: 18px !important;
+    background: rgba(255, 253, 248, .94) !important;
+    box-shadow: 0 10px 24px rgba(67, 46, 24, .045) !important;
+  }
+
+  .app-shell--stats .settlement-card {
+    grid-column: span 4 !important;
+  }
+
+  .app-shell--stats .top-expenses-panel {
+    grid-column: span 8 !important;
+  }
+
+  .app-shell--stats .payer-panel,
+  .app-shell--stats .category-panel,
+  .app-shell--stats .payment-panel {
+    grid-column: span 4 !important;
+  }
+
+  .app-shell--stats .stats-controls {
+    grid-column: 1 / -1 !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-stats-budget .spending-compass,
+  .app-shell--stats .preview-stats-screen .spending-compass {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-overview {
+    display: grid !important;
+    grid-template-columns: minmax(176px, 220px) minmax(0, 1fr) !important;
+    gap: clamp(16px, 1.4vw, 22px) !important;
+    align-items: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-top: 18px !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-main {
+    display: grid !important;
+    justify-items: center !important;
+    gap: 12px !important;
+    min-width: 0 !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-ring {
+    width: clamp(176px, 16vw, 220px) !important;
+    justify-self: center !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-legend {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    gap: 8px 12px !important;
+    width: 100% !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-slice {
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    white-space: nowrap !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-side {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0 clamp(12px, 1vw, 18px) !important;
+    min-width: 0 !important;
+    border-left: 1px solid rgba(128, 99, 63, .18);
+    padding-left: clamp(14px, 1.1vw, 18px);
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-total,
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-row {
+    min-width: 0 !important;
+    padding: 9px 0 !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-total {
+    grid-row: span 2;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-total strong,
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-row strong {
+    font-size: clamp(17px, 1.35vw, 21px) !important;
+    line-height: 1.14 !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-total span,
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-row span {
+    font-size: clamp(12px, .9vw, 14px) !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-reminder {
+    min-height: 52px !important;
+    margin: 18px calc(clamp(20px, 1.7vw, 26px) * -1) calc(clamp(20px, 1.7vw, 26px) * -1) !important;
+    padding: 12px clamp(20px, 1.7vw, 26px) !important;
+    font-size: 14px !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-daily-pace > .bar-row {
+    display: none !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-daily-pace .budget-pace-chart {
+    height: clamp(210px, 20vw, 260px) !important;
+    margin-top: 12px !important;
+  }
+
+  .app-shell--stats .stats-tab.stats-cockpit .preview-budget-selected-day {
+    min-height: 76px !important;
+    margin-top: 14px !important;
+    padding: 12px 14px !important;
+  }
+
+  .app-shell--stats .settlement-card .settlement-visual-map > .flex {
+    gap: clamp(12px, 1vw, 18px) !important;
+    justify-content: space-between !important;
+  }
+
+  .app-shell--stats .settlement-card .settlement-visual-map .text-xs {
+    white-space: nowrap !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  .app-shell--stats .preview-stats-budget,
+  .app-shell--stats .preview-daily-pace,
+  .app-shell--stats .settlement-card,
+  .app-shell--stats .top-expenses-panel,
+  .app-shell--stats .stats-controls {
+    grid-column: 1 / -1 !important;
+  }
+
+  .app-shell--stats .payer-panel,
+  .app-shell--stats .category-panel,
+  .app-shell--stats .payment-panel {
+    grid-column: span 6 !important;
+  }
+}
+
 /* Preview fidelity pass 18: Boss requested the smaller mobile type scale used in the generated previews. */
 @media (max-width: 767px) {
   .stats-tab.stats-cockpit.preview-stats-screen {
