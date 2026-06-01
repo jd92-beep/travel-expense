@@ -4,6 +4,7 @@ Last updated: 2026-06-01 HKT
 
 Latest pushed commits:
 
+- Current commit: Fix missing large stats and prep-phase receipts matching with case-insensitive email validation
 - Current commit: Optimize header height, compact cell sizing, and fix Notion connection fallback in production
 
 - Current commit: Compact generated-preview header and stats density pass
