@@ -53,9 +53,20 @@ function fetchBootCurrencySnapshot(): Promise<CurrencySnapshot> {
 
 export function App() {
   const supabaseAuth = useSupabaseAuth();
+  const hasLocalSupabaseSession = () => {
+    try {
+      const stored = localStorage.getItem('travel-expense:supabase-auth:v1');
+      if (!stored) return false;
+      const parsed = JSON.parse(stored);
+      return !!parsed?.access_token;
+    } catch {
+      return false;
+    }
+  };
+  const isCloudSyncActive = hasSupabaseSession(supabaseAuth.session) || hasLocalSupabaseSession();
   const userEmail = supabaseAuth.session?.user?.email || null;
   const storageScope = hasSupabaseSession(supabaseAuth.session) ? `supabase:${supabaseAuth.session.user.id}` : 'local';
-  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope } = useAppState(hasSupabaseSession(supabaseAuth.session), storageScope, userEmail);
+  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope } = useAppState(isCloudSyncActive, storageScope, userEmail);
 
   const [skippedGuide, setSkippedGuide] = useState(false);
   const [supabaseUnlocked, setSupabaseUnlocked] = useState(() => hasDeviceTrust());
@@ -288,7 +299,7 @@ export function App() {
                     onDraft={setEditing}
                     onImport={importReceipts}
                     onPull={syncEngine.pull}
-                    cloudSyncAvailable={hasSupabaseSession(supabaseAuth.session)}
+                    cloudSyncAvailable={isCloudSyncActive}
                   />
                 )}
                 {safeTab === 'timeline' && <Timeline state={state} setState={setState} onOpen={setEditing} />}
@@ -300,16 +311,16 @@ export function App() {
                     onImport={importReceipts}
                     onHydrate={importRemoteData}
                     onConfirmPending={(receipt) => {
-                      const next = stampReceiptForTrip(state, { ...receipt, store: receipt.store.replace(/^⏳\s*/, ''), syncStatus: (hasSupabaseSession(supabaseAuth.session) || canUseNotionMirror(state, false, userEmail)) ? 'queued' : 'local' });
+                      const next = stampReceiptForTrip(state, { ...receipt, store: receipt.store.replace(/^⏳\s*/, ''), syncStatus: (isCloudSyncActive || canUseNotionMirror(state, false, userEmail)) ? 'queued' : 'local' });
                       upsertReceipt(next);
                     }}
                     onPull={syncEngine.pull}
-                    cloudSyncAvailable={hasSupabaseSession(supabaseAuth.session)}
+                    cloudSyncAvailable={isCloudSyncActive}
                   />
                 )}
                 {safeTab === 'weather' && <Weather state={state} />}
                 {safeTab === 'stats' && <Stats state={state} updateState={updateState} />}
-                {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={hasSupabaseSession(supabaseAuth.session)} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
+                {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
               </div>
             ) : (
               <AnimatePresence mode="wait" initial={false}>
@@ -335,7 +346,7 @@ export function App() {
                       onDraft={setEditing}
                       onImport={importReceipts}
                       onPull={syncEngine.pull}
-                      cloudSyncAvailable={hasSupabaseSession(supabaseAuth.session)}
+                      cloudSyncAvailable={isCloudSyncActive}
                     />
                   )}
                   {safeTab === 'timeline' && <Timeline state={state} setState={setState} onOpen={setEditing} />}
@@ -347,16 +358,16 @@ export function App() {
                       onImport={importReceipts}
                       onHydrate={importRemoteData}
                       onConfirmPending={(receipt) => {
-                        const next = stampReceiptForTrip(state, { ...receipt, store: receipt.store.replace(/^⏳\s*/, ''), syncStatus: (hasSupabaseSession(supabaseAuth.session) || canUseNotionMirror(state, false, userEmail)) ? 'queued' : 'local' });
+                        const next = stampReceiptForTrip(state, { ...receipt, store: receipt.store.replace(/^⏳\s*/, ''), syncStatus: (isCloudSyncActive || canUseNotionMirror(state, false, userEmail)) ? 'queued' : 'local' });
                         upsertReceipt(next);
                       }}
                       onPull={syncEngine.pull}
-                      cloudSyncAvailable={hasSupabaseSession(supabaseAuth.session)}
+                      cloudSyncAvailable={isCloudSyncActive}
                     />
                   )}
                   {safeTab === 'weather' && <Weather state={state} />}
                   {safeTab === 'stats' && <Stats state={state} updateState={updateState} />}
-                 {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={hasSupabaseSession(supabaseAuth.session)} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
+                 {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
                 </motion.div>
               </AnimatePresence>
             )}
@@ -451,6 +462,7 @@ export function App() {
     }
     return <SupabaseGate auth={supabaseAuth}>{appContent}</SupabaseGate>;
   }
+
 
   return (
     <AuthGate

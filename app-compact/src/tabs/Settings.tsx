@@ -197,6 +197,12 @@ export function Settings({
   const settlement = computeSettlements(activeTripSettlementState);
   const shareRatios = state.shareRatios || {};
   const ratioTotal = persons.reduce((sum, person) => sum + Math.max(0, Number(shareRatios[person.id]) || 0), 0);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState('');
   const [newPersonName, setNewPersonName] = useState('');
@@ -1089,7 +1095,7 @@ export function Settings({
       <div className="stack w-full relative z-10">
       <GlassCard className="settings-command">
         <div>
-          <h2>設定控制中心 ⚙️</h2>
+          <h2>{isMobile ? '安全設定主控台' : '設定控制中心'} ⚙️</h2>
           <TooltipProvider>
             <div className="stats-status-row settings-status-tooltips">
               <Tooltip>

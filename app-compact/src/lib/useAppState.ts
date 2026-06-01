@@ -84,11 +84,9 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     return rawState;
   });
   const [hydratedScope, setHydratedScope] = useState(storageScope);
-  const skipNextSaveRef = useRef(false);
 
   useLayoutEffect(() => {
     let alive = true;
-    skipNextSaveRef.current = true;
     const hasPrimarySnapshot = hasStoredState(storageScope);
     const scopedState = loadState(storageScope);
     let filteredState = scopedState;
@@ -130,10 +128,6 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   }, [storageScope, userEmail]);
 
   useEffect(() => {
-    if (skipNextSaveRef.current) {
-      skipNextSaveRef.current = false;
-      return;
-    }
     try {
       saveState(migrateAppState(state), storageScope);
     } catch (error) {

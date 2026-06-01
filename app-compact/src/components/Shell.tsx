@@ -56,6 +56,7 @@ export function Shell({
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
   const [stableMobileEffects, setStableMobileEffects] = useState(shouldDisableHeavyEffects);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
   const raf = useRef<number | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const richVisualEffects = !prefersReducedMotion && !stableMobileEffects;
@@ -79,6 +80,7 @@ export function Shell({
     const handlePerformanceAndEffects = () => {
       const disableHeavy = shouldDisableHeavyEffects();
       setStableMobileEffects(disableHeavy);
+      setIsMobile(window.innerWidth <= 768);
 
       // Dynamically toggle class on HTML element to apply lightweight styles/animations
       if (disableHeavy) {
@@ -246,7 +248,7 @@ export function Shell({
           <img src={compactJapanMark} alt="" />
         </span>
         <div className="compact-mobile-heading relative z-10">
-          <h1 aria-hidden="true"><span className="compact-mobile-title-art" data-title={activeCopy.mobileTitle} /></h1>
+          <h1><span className="compact-mobile-title-art" data-title={activeCopy.mobileTitle}>{isMobile ? activeCopy.mobileTitle : ''}</span></h1>
           <p>{activeCopy.subtitle}</p>
         </div>
         <span className="compact-mobile-status relative z-10">{activeCopy.status}</span>

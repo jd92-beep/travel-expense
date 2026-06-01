@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { CalendarDays, Camera, ChevronDown, ChevronRight, Mail, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
 import { Reveal, Toast } from '../components/ui';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
@@ -36,6 +36,12 @@ export function History({
   onPull?: () => Promise<void>;
   cloudSyncAvailable?: boolean;
 }) {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<'all' | CategoryId>('all');
   const [busy, setBusy] = useState(false);
@@ -122,7 +128,7 @@ export function History({
                   type="button"
                   onClick={() => setIsTitleDropdownOpen(!isTitleDropdownOpen)}
                 >
-                  <span className="truncate">紀錄中心</span>
+                  <span className="truncate">{isMobile ? '歷史紀錄' : '紀錄中心'}</span>
                   <ChevronDown size={18} className={`text-blue-800/70 mt-0.5 transition-transform duration-200 shrink-0 ${isTitleDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 

@@ -10341,3 +10341,31 @@ textarea,
     display: none !important;
   }
 }
+
+.compact-mobile-title-art::before {
+  content: none !important;
+}
+
+/* 🇯🇵 Nippon Aesthetics & Compact Mobile Pixel-Perfect Refinements */
+.history-ledger-amount small {
+  color: var(--muted) !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.05em !important;
+  margin-top: -1px !important;
+}
+
+.timeline-event {
+  padding-left: 48px !important;
+  position: relative !important;
+  margin-bottom: 12px !important;
+}
+
+.timeline-event.is-passed {
+  opacity: 0.68 !important;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--red) !important;
+}
+

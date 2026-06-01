@@ -78,12 +78,15 @@ function sessionPayload() {
   };
 }
 
-test('Supabase public Notion panel clearly stays Supabase-only before Personal Notion is connected', async ({ page }) => {
-  const notionRequests = [];
-
+test.beforeEach(async ({ page }) => {
   await page.route('**/travel-expense/secrets.local.js', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/javascript', body: 'window.DEV_SECRETS = {};' });
   });
+});
+
+test('Supabase public Notion panel clearly stays Supabase-only before Personal Notion is connected', async ({ page }) => {
+  const notionRequests = [];
+
 
   await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: sessionPayload().user }) });
@@ -213,6 +216,14 @@ test('Supabase personal Notion connect persists database scope and queues active
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
   });
 
+  await page.route('**/notion/request', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data: { ok: true } }),
+    });
+  });
+
   await page.route('**/integrations/notion/connect', async (route) => {
     connectRequests.push({
       supabaseAuth: route.request().headers()['x-supabase-auth'] || '',
@@ -281,6 +292,8 @@ test('Supabase personal Notion connect persists database scope and queues active
   expect(connectRequests[0].supabaseAuth).toBe('Bearer test-access-token');
   expect(connectRequests[0].brokerSession).toBe('');
   expect(connectRequests[0].body.databaseId).toBe('db_personal_new');
+
+  console.log('DEBUG LOCALSTORAGE:', await page.evaluate(() => JSON.stringify(localStorage, null, 2)));
 
   await expect.poll(() => page.evaluate((userId) => {
     const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');

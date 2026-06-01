@@ -192,24 +192,24 @@ npm run self-test
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **travel-expense** (5546 symbols, 9691 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **travel-expense** (5633 symbols, 9730 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
-## Use When Helpful
+## Always Do
 
-- Run impact analysis before changing a shared function, class, method, or module when the caller graph is not obvious from local files.
-- Run `gitnexus_detect_changes()` before committing code changes that may affect symbols or execution flows.
-- Warn the user if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
 - When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
 
-## Skip When Not Useful
+## Never Do
 
-- Skip GitNexus for pure docs, CSS-only spacing, text copy, exact file search, simple workflow/config edits, and live deployment or browser verification where direct evidence is fresher.
-- Do not ignore HIGH or CRITICAL risk warnings from impact analysis.
-- Do not rename exported/shared symbols with find-and-replace; use `gitnexus_rename` or a language-aware refactor.
-- Do not chase GitNexus count-only metadata churn. If only generated counts changed, leave them unstaged unless the user asked to refresh metadata.
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
 
 ## Resources
 
