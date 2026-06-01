@@ -8,7 +8,7 @@ import { CATEGORIES } from '../lib/constants';
 import type { AppState, CategoryId, Receipt, TripProfile } from '../lib/types';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
-import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, safePhotoUrl } from '../lib/domain';
+import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 
 function historyDateLabel(date: string): string {
   const parsed = new Date(`${date}T00:00:00`);
@@ -51,6 +51,7 @@ export function History({
   const [isActionDropdownOpen, setIsActionDropdownOpen] = useState(false);
 
   const trip = activeTrip(state);
+  const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
   const receipts = useMemo(() => {
     const q = query.trim().toLowerCase();
     return scopedReceiptsForTrip(state, trip)
@@ -295,7 +296,7 @@ export function History({
               <h2>{historyDateLabel(date)}</h2>
               <span className="pill">{items.length} 筆</span>
             </div>
-            <span className="history-date-total">JPY ¥{fmt(items.reduce((sum, item) => sum + (Number(item.total) || 0), 0))} · HKD ${fmt(items.reduce((sum, item) => sum + hkd(item.total, state), 0))}</span>
+            <span className="history-date-total">{resolvedTripCurrency === 'JPY' ? '¥' : (resolvedTripCurrency + ' ')}{fmt(items.reduce((sum, item) => sum + getReceiptTripAmount(item, state, resolvedTripCurrency), 0))} · HKD ${fmt(items.reduce((sum, item) => sum + getReceiptHkdAmount(item, state), 0))}</span>
           </summary>
           <div className="history-record-stack">
             {items.map((r) => {
@@ -338,8 +339,8 @@ export function History({
                     )}
                   </span>
                   <span className="amount history-ledger-amount">
-                    <strong>¥{fmt(r.total)}</strong>
-                    <small>HKD ${fmt(hkd(r.total, state))}</small>
+                    <strong>{r.currency === 'HKD' ? 'HK$' : (r.currency || '¥')}{fmt(r.total)}</strong>
+                    <small>HKD ${fmt(getReceiptHkdAmount(r, state))}</small>
                   </span>
                   <ChevronRight className="history-row-chevron" size={21} aria-hidden="true" />
                 </div>
@@ -347,7 +348,7 @@ export function History({
             })}
             <div className="history-day-subtotal">
               <span>當日小計</span>
-              <strong>JPY ¥{fmt(items.reduce((sum, item) => sum + (Number(item.total) || 0), 0))} · HKD ${fmt(items.reduce((sum, item) => sum + hkd(item.total, state), 0))}</strong>
+              <strong>{resolvedTripCurrency === 'JPY' ? '¥' : (resolvedTripCurrency + ' ')}{fmt(items.reduce((sum, item) => sum + getReceiptTripAmount(item, state, resolvedTripCurrency), 0))} · HKD ${fmt(items.reduce((sum, item) => sum + getReceiptHkdAmount(item, state), 0))}</strong>
             </div>
           </div>
         </details>

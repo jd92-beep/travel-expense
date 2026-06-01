@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, hkd } from '../lib/domain';
+import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, hkd, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { EmptyState, GlassCard, StatusPill } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
@@ -21,20 +21,22 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   const settlement = computeSettlements(scopedState);
   const persons = getPersons(state);
   const itinerary = getItinerary(state);
+  const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
   const analysisReceipts = scopedState.receipts.filter((r) => state.statsIncludeTransportLodging || !isBigTripItem(r));
-  const catTotals = categoryTotals(analysisReceipts);
-  const payTotals = paymentTotals(analysisReceipts);
-  const analysisTotal = analysisReceipts.reduce((s, r) => s + (Number(r.total) || 0), 0);
+  const catTotals = categoryTotals(analysisReceipts, state, resolvedTripCurrency);
+  const payTotals = paymentTotals(analysisReceipts, state, resolvedTripCurrency);
+  const analysisTotal = analysisReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
+  const analysisTotalHkd = analysisReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
   const transferTotal = settlement.transfers.reduce((s, t) => s + t.amount, 0);
   const privateTotal = settlement.privateByOwner.reduce((s, n) => s + n, 0);
   const maxPersonTotal = Math.max(1, ...persons.map((_, i) => settlement.sharedByPayer[i] + settlement.privateByOwner[i]));
   const topReceipts = scopedState.receipts
     .filter((r) => state.top10IncludeBigItems || !isFlightOrHotelItem(r))
     .slice()
-    .sort((a, b) => b.total - a.total)
+    .sort((a, b) => getReceiptHkdAmount(b, state) - getReceiptHkdAmount(a, state))
     .slice(0, 10);
   const trend = Object.entries(analysisReceipts.reduce<Record<string, number>>((acc, r) => {
-    acc[r.date] = (acc[r.date] || 0) + (Number(r.total) || 0);
+    acc[r.date] = (acc[r.date] || 0) + getReceiptTripAmount(r, state, resolvedTripCurrency);
     return acc;
   }, {})).sort(([a], [b]) => a.localeCompare(b));
   const tripDayCount = Math.max(1, itinerary.length || trend.length);
@@ -66,10 +68,10 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
       </DataPanel>
 
       <div className="metric-grid stats-metrics preview-stats-metrics">
-        <CockpitMetric label="圖表統計額" value={<NumberTicker value={analysisTotal} prefix="¥" />} detail={`圖表口徑 · HK$ ${fmt(hkd(analysisTotal, state))}`} tone="accent" />
-        <CockpitMetric label="共同分帳額" value={<NumberTicker value={settlement.sharedTotal} prefix="¥" delay={0.04} />} detail={`全 receipts · ${persons.length} 人`} />
-        <CockpitMetric label="私人/代付" value={<NumberTicker value={privateTotal} prefix="¥" delay={0.08} />} detail={`${settlement.crossPrivate.length} 筆跨私人代付`} tone="success" />
-        <CockpitMetric label="待轉帳" value={<NumberTicker value={transferTotal} prefix="¥" delay={0.12} />} detail={settlement.transfers.length ? '需要結算' : '暫時不用轉帳'} tone={settlement.transfers.length ? 'danger' : 'success'} />
+        <CockpitMetric label="圖表統計額" value={<NumberTicker value={analysisTotal} prefix={resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '} />} detail={`圖表口徑 · HK$ ${fmt(analysisTotalHkd)}`} tone="accent" />
+        <CockpitMetric label="共同分帳額" value={<NumberTicker value={settlement.sharedTotal} prefix={resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '} delay={0.04} />} detail={`全 receipts · ${persons.length} 人`} />
+        <CockpitMetric label="私人/代付" value={<NumberTicker value={privateTotal} prefix={resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '} delay={0.08} />} detail={`${settlement.crossPrivate.length} 筆跨私人代付`} tone="success" />
+        <CockpitMetric label="待轉帳" value={<NumberTicker value={transferTotal} prefix={resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '} delay={0.12} />} detail={settlement.transfers.length ? '需要結算' : '暫時不用轉帳'} tone={settlement.transfers.length ? 'danger' : 'success'} />
       </div>
 
       <DataPanel
@@ -136,7 +138,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
                   <b className="text-gray-400 shrink-0">→</b>
                   <span className="stats-transfer-person"><AvatarBadge person={t.to} size="sm" /> <span>{t.to.name}</span></span>
                 </div>
-                <strong className="text-lg text-blue-900 shrink-0">¥{fmt(t.amount)}</strong>
+                <strong className="text-lg text-blue-900 shrink-0">{resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}{fmt(t.amount)}</strong>
               </motion.div>
             ))}
           </>
@@ -149,7 +151,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
         ))}
         {settlement.crossPrivate.length > 0 && (
           <div className="mini-list">
-            {settlement.crossPrivate.map((cp) => <span key={cp.id}>代付：{cp.payer.name} 代 {cp.beneficiary.name} 付 ¥{fmt(cp.amount)} · {cp.store}</span>)}
+            {settlement.crossPrivate.map((cp) => <span key={cp.id}>代付：{cp.payer.name} 代 {cp.beneficiary.name} 付 {resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}{fmt(cp.amount)} · {cp.store}</span>)}
           </div>
         )}
       </DataPanel>
@@ -174,7 +176,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
             <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
               <b>{idx + 1}</b>
               <span><VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {displayStore(r)}</span>
-              <strong>¥{fmt(r.total)}</strong>
+              <strong>{r.currency === 'HKD' ? 'HK$' : (r.currency || resolvedTripCurrency === 'JPY' ? '¥' : r.currency || resolvedTripCurrency + ' ')}{fmt(r.total)}</strong>
             </motion.div>
           );
         }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
@@ -199,6 +201,19 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
 }
 
 function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState }) {
+  const trip = activeTrip(state);
+  const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
+  const toHkd = (amt: number) => {
+    if (resolvedTripCurrency === 'HKD') return amt;
+    const rate = Math.max(
+      0.1,
+      Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
+      (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
+      20.36
+    );
+    return Math.round(amt / rate);
+  };
+
   const slices = categorySlices(categories, total);
   const top = slices[0];
   const safeBudget = Math.max(0, Number(budget) || 0);
@@ -208,9 +223,10 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
   const overBudget = safeBudget > 0 && total > safeBudget;
   const ring = budgetRingGradient(usedPercent);
   const delta = overBudget ? total - safeBudget : remaining;
-  const currencyState = state.tripCurrency || 'JPY';
+  const currencyState = resolvedTripCurrency;
+  const currencySymbol = resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' ';
   return (
-    <div className={`spending-compass ${overBudget ? 'is-over-budget' : ''}`.trim()} aria-label={`預算使用分析，已用 ${shownPercent}，支出 ¥${fmt(total)}，預算 ¥${fmt(safeBudget)}`} style={{ '--compass-ring': ring } as CSSProperties}>
+    <div className={`spending-compass ${overBudget ? 'is-over-budget' : ''}`.trim()} aria-label={`預算使用分析，已用 ${shownPercent}，支出 ${currencySymbol}${fmt(total)}，預算 ${currencySymbol}${fmt(safeBudget)}`} style={{ '--compass-ring': ring } as CSSProperties}>
       <div className="preview-budget-heading">
         <span>預算羅盤</span>
         <Info size={17} aria-hidden="true" />
@@ -227,7 +243,7 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
               <span>預算使用</span>
               <strong>{shownPercent}</strong>
               <small>{safeBudget > 0 ? (overBudget ? '已超預算' : '已使用') : '未設定預算'}</small>
-              <b>HK$ {fmt(hkd(total, state))}</b>
+              <b>HK$ {fmt(toHkd(total))}</b>
             </div>
           </div>
           <div className="spending-compass-legend" aria-label="類別比例">
@@ -241,32 +257,32 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
         <div className="preview-budget-side">
           <div className="preview-budget-total">
             <span>總預算</span>
-            <strong>{safeBudget > 0 ? `HK$ ${fmt(hkd(safeBudget, state))}` : '未設定'}</strong>
+            <strong>{safeBudget > 0 ? `HK$ ${fmt(toHkd(safeBudget))}` : '未設定'}</strong>
             <button type="button" aria-label="編輯預算"><Pencil size={15} aria-hidden="true" /> 編輯</button>
           </div>
           <div className="preview-budget-row is-used">
             <span>已用</span>
-            <strong>HK$ {fmt(hkd(total, state))}</strong>
+            <strong>HK$ {fmt(toHkd(total))}</strong>
           </div>
           <div className="preview-budget-row">
             <span>{overBudget ? '超出預算' : '尚餘預算'}</span>
-            <strong>HK$ {fmt(hkd(delta, state))}</strong>
+            <strong>HK$ {fmt(toHkd(delta))}</strong>
           </div>
           <div className="preview-budget-row preview-budget-stack">
             <span>每日預算</span>
-            <strong>HK$ {fmt(hkd(dailyBudget, state))}</strong>
+            <strong>HK$ {fmt(toHkd(dailyBudget))}</strong>
             <span>日均結餘</span>
-            <strong>HK$ {fmt(hkd(Math.max(0, dailyBudget - dailyAverage), state))}</strong>
+            <strong>HK$ {fmt(toHkd(Math.max(0, dailyBudget - dailyAverage)))}</strong>
           </div>
           <div className="preview-budget-row preview-budget-stack">
             <span>最高類別</span>
             <strong>{top ? top.name : '未有分類'}</strong>
-            <small>{top ? `HK$ ${fmt(hkd(top.total, state))}` : '新增 receipt 後顯示'}</small>
+            <small>{top ? `HK$ ${fmt(toHkd(top.total))}` : '新增 receipt 後顯示'}</small>
           </div>
         </div>
       </div>
       <div className="preview-budget-reminder">
-        <span>預算提醒：每日平均使用需 ≤ HK$ {fmt(hkd(dailyBudget || 0, state))}</span>
+        <span>預算提醒：每日平均使用需 ≤ HK$ {fmt(toHkd(dailyBudget || 0))}</span>
         <ChevronRight size={20} aria-hidden="true" />
       </div>
     </div>
@@ -313,16 +329,30 @@ function DataPanel({ icon, title, status, children, className = '' }: { icon: Re
 }
 
 function BudgetPaceChart({ trend, dailyBudget, dailyAverage, state }: { trend: Array<[string, number]>; dailyBudget: number; dailyAverage: number; state: AppState }) {
+  const trip = activeTrip(state);
+  const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
+  const toHkd = (amt: number) => {
+    if (resolvedTripCurrency === 'HKD') return amt;
+    const rate = Math.max(
+      0.1,
+      Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
+      (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
+      20.36
+    );
+    return Math.round(amt / rate);
+  };
+  const currencySymbol = resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' ';
+
   const max = Math.max(1, dailyBudget, ...trend.map(([, total]) => total));
   const budgetLine = dailyBudget > 0 ? Math.max(4, Math.min(96, 100 - dailyBudget / max * 100)) : 96;
   const overDays = trend.filter(([, total]) => dailyBudget > 0 && total > dailyBudget);
   const peak = trend.slice().sort((a, b) => b[1] - a[1])[0];
 
   return (
-    <div className="budget-pace" aria-label={`每日 Budget Pace，超支 ${overDays.length} 日，日均 ¥${fmt(dailyAverage)}`}>
+    <div className="budget-pace" aria-label={`每日 Budget Pace，超支 ${overDays.length} 日，日均 ${currencySymbol}${fmt(dailyAverage)}`}>
       <div className="budget-pace-summary">
         <span><b>{overDays.length}</b><small>超支日</small></span>
-        <span><b>¥{fmt(dailyBudget)}</b><small>每日預算線</small></span>
+        <span><b>{currencySymbol}{fmt(dailyBudget)}</b><small>每日預算線</small></span>
         <span><b>{peak ? peak[0] : '-'}</b><small>最高支出日</small></span>
       </div>
       <div className="budget-pace-chart" style={{ '--budget-line': `${budgetLine}%` } as CSSProperties}>
@@ -332,7 +362,7 @@ function BudgetPaceChart({ trend, dailyBudget, dailyAverage, state }: { trend: A
           const height = Math.max(8, Math.min(100, total / max * 100));
           const label = trend.length <= 7 ? `Day ${idx + 1}` : date.slice(5);
           return (
-            <div className={`budget-pace-day ${over ? 'over' : 'ok'}`} key={date} title={`${date}: ¥${fmt(total)} / HK$ ${fmt(hkd(total, state))}`}>
+            <div className={`budget-pace-day ${over ? 'over' : 'ok'}`} key={date} title={`${date}: ${currencySymbol}${fmt(total)} / HK$ ${fmt(toHkd(total))}`}>
               <span className="budget-pace-bar">
                 <motion.i
                   style={{ height: `${height}%` }}
@@ -355,7 +385,7 @@ function BudgetPaceChart({ trend, dailyBudget, dailyAverage, state }: { trend: A
           <strong>{dailyBudget > 0 ? `${Math.round(peak[1] / dailyBudget * 100)}%` : '--'}</strong>
           <span>
             <b>{dailyBudget > 0 && peak[1] > dailyBudget ? '超出預算' : '預算內'}</b>
-            <small>HK$ {fmt(hkd(peak[1], state))}</small>
+            <small>HK$ {fmt(toHkd(peak[1]))}</small>
           </span>
           <ChevronRight size={20} aria-hidden="true" />
         </div>
@@ -372,17 +402,23 @@ function isFlightOrHotelItem(receipt: Receipt): boolean {
   return receipt.category === 'flight' || receipt.category === 'lodging';
 }
 
-function categoryTotals(receipts: Receipt[]): StatBucket[] {
+function categoryTotals(receipts: Receipt[], state: AppState, currency: string): StatBucket[] {
   const known = new Set(CATEGORIES.map((c) => c.id));
-  const totals = CATEGORIES.map((c) => ({ ...c, total: receipts.filter((r) => r.category === c.id).reduce((s, r) => s + (Number(r.total) || 0), 0) })).filter((x) => x.total > 0);
-  const unknownTotal = receipts.filter((r) => !known.has(r.category as CategoryId)).reduce((s, r) => s + (Number(r.total) || 0), 0);
+  const totals = CATEGORIES.map((c) => ({
+    ...c,
+    total: receipts.filter((r) => r.category === c.id).reduce((s, r) => s + getReceiptTripAmount(r, state, currency), 0)
+  })).filter((x) => x.total > 0);
+  const unknownTotal = receipts.filter((r) => !known.has(r.category as CategoryId)).reduce((s, r) => s + getReceiptTripAmount(r, state, currency), 0);
   return unknownTotal > 0 ? [...totals, { id: 'unknown', icon: '?', name: '未分類', color: '#6b7280', total: unknownTotal }] : totals;
 }
 
-function paymentTotals(receipts: Receipt[]): StatBucket[] {
+function paymentTotals(receipts: Receipt[], state: AppState, currency: string): StatBucket[] {
   const known = new Set(PAYMENTS.map((p) => p.id));
-  const totals = PAYMENTS.map((p) => ({ ...p, total: receipts.filter((r) => r.payment === p.id).reduce((s, r) => s + (Number(r.total) || 0), 0) })).filter((x) => x.total > 0);
-  const unknownTotal = receipts.filter((r) => !known.has(r.payment as PaymentId)).reduce((s, r) => s + (Number(r.total) || 0), 0);
+  const totals = PAYMENTS.map((p) => ({
+    ...p,
+    total: receipts.filter((r) => r.payment === p.id).reduce((s, r) => s + getReceiptTripAmount(r, state, currency), 0)
+  })).filter((x) => x.total > 0);
+  const unknownTotal = receipts.filter((r) => !known.has(r.payment as PaymentId)).reduce((s, r) => s + getReceiptTripAmount(r, state, currency), 0);
   return unknownTotal > 0 ? [...totals, { id: 'unknown', name: '其他方式', color: '#6b7280', total: unknownTotal }] : totals;
 }
 
@@ -403,11 +439,29 @@ function budgetRingGradient(usedPercent: number): string {
 }
 
 function Bar({ label, leading, value, state, color, max }: { label: string; leading?: ReactNode; value: number; state: AppState; color: string; max?: number }) {
-  const total = max || Math.max(1, state.receipts.reduce((s, r) => s + r.total, 0));
-  const summary = `${label}: ¥${fmt(value)} / HK$ ${fmt(hkd(value, state))}`;
+  const trip = activeTrip(state);
+  const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
+
+  let valueHkd = 0;
+  if (resolvedTripCurrency === 'HKD') {
+    valueHkd = value;
+  } else {
+    const rate = Math.max(
+      0.1,
+      Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
+      (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
+      20.36
+    );
+    valueHkd = Math.round(value / rate);
+  }
+
+  const currencySymbol = resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' ';
+  const summary = `${label}: ${currencySymbol}${fmt(value)} / HK$ ${fmt(valueHkd)}`;
+  const total = max || Math.max(1, state.receipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0));
+
   return (
     <div className="bar-row" title={summary} aria-label={summary}>
-      <div><span>{leading}{label}</span><b>¥{fmt(value)} · HK$ {fmt(hkd(value, state))}</b></div>
+      <div><span>{leading}{label}</span><b>{currencySymbol}{fmt(value)} · HK$ {fmt(valueHkd)}</b></div>
       <div className="bar-track">
         <motion.i
           style={{ width: `${Math.min(100, value / total * 100)}%`, background: color }}
