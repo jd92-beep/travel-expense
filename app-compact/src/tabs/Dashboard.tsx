@@ -479,23 +479,7 @@ export function Dashboard({
         </button>
       </div>
 
-      <GlassCard as="div" className="preview-dashboard-day-card">
-        <div className="preview-dashboard-day-meta">
-          <CalendarDays size={21} />
-          <span>第 {Math.max(1, day?.day || 1)} 天 / 共 {length} 天</span>
-          <small>{chineseDateLabel(displayDayDate)}</small>
-        </div>
-        <div className="preview-dashboard-weather-pill">
-          <CloudSun size={30} />
-          <span>24°C</span>
-          <small>多雲時晴</small>
-        </div>
-        <button type="button" className="preview-dashboard-route-button" onClick={() => onTab('timeline')}>
-          <Compass size={22} />
-          查看行程
-          <ChevronRight size={18} />
-        </button>
-      </GlassCard>
+
 
       {/* 2. 預算毛玻璃卡片 (含圓形進度條與 Today Spent / Daily Avg Spending Pct) */}
       <Reveal className="dashboard-reveal">
@@ -532,10 +516,8 @@ export function Dashboard({
                   className="size-full"
                 >
                   <div className="preview-dashboard-ring-copy flex flex-col items-center justify-center">
-                    <span className="text-[13px] font-bold text-amber-500 leading-tight" style={{ color: 'var(--compact-gold)' }}>¥{fmt(totalForBudget)}</span>
-                    <span className="text-[9px] text-gray-500 font-semibold leading-none">/ HK${fmt(Math.round(spentHkd))}</span>
-                    <strong className="text-lg mt-1 font-bold leading-none">{Math.round(rawBudgetPct)}%</strong>
-                    <span className="text-[8px] uppercase tracking-wider text-gray-400 mt-0.5">已使用</span>
+                    <strong className="text-2xl font-bold leading-none" style={{ color: 'var(--compact-ink)', fontFamily: '"Noto Serif JP", serif' }}>{Math.round(rawBudgetPct)}%</strong>
+                    <span className="text-[10px] text-gray-400 mt-1" style={{ color: 'var(--muted)', fontWeight: 600 }}>已使用</span>
                   </div>
                 </AnimatedCircularProgressBar>
               </div>
