@@ -50,6 +50,7 @@ export function Shell({
   state,
   setState,
   onPull,
+  onOpenNewTripWizard,
 }: {
   active: TabId;
   onTab: (tab: TabId) => void;
@@ -59,6 +60,7 @@ export function Shell({
   state?: AppState;
   setState?: React.Dispatch<React.SetStateAction<AppState>>;
   onPull?: () => Promise<void>;
+  onOpenNewTripWizard?: () => void;
 }) {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
@@ -315,6 +317,21 @@ export function Shell({
                       );
                     })}
                   </div>
+                  {onOpenNewTripWizard && (
+                    <>
+                      <div className="border-t border-slate-100 my-1" />
+                      <button
+                        type="button"
+                        className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-[#C23B5E] hover:bg-[#A83030] text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm border-none cursor-pointer"
+                        onClick={() => {
+                          setIsTripDropdownOpen(false);
+                          onOpenNewTripWizard();
+                        }}
+                      >
+                        <span>➕ ⛩️ 建立新旅程</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -463,6 +480,21 @@ export function Shell({
                       );
                     })}
                   </div>
+                  {onOpenNewTripWizard && (
+                    <>
+                      <div className="border-t border-slate-100 my-1" />
+                      <button
+                        type="button"
+                        className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-[#C23B5E] hover:bg-[#A83030] text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm border-none cursor-pointer"
+                        onClick={() => {
+                          setIsTripDropdownOpen(false);
+                          onOpenNewTripWizard();
+                        }}
+                      >
+                        <span>➕ ⛩️ 建立新旅程</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

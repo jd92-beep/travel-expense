@@ -70,6 +70,7 @@ export function App() {
 
   const [skippedGuide, setSkippedGuide] = useState(false);
   const [supabaseUnlocked, setSupabaseUnlocked] = useState(() => hasDeviceTrust());
+  const [isNewTripWizardOpen, setIsNewTripWizardOpen] = useState(false);
 
   const handleSaveGuideTrip = async (trip: TripProfile) => {
     try {
@@ -286,12 +287,12 @@ export function App() {
           onSkip={handleSkipGuide}
         />
       )}
-      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} onPull={syncEngine.pull}>
+      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)}>
         <ErrorBoundary key={safeTab}>
           <Suspense fallback={<LoadingState label="載入分頁" />}>
             {disableHeavy ? (
               <div className="w-full h-full">
-                {safeTab === 'dashboard' && <Dashboard state={state} setState={setState} updateState={updateState} onOpen={setEditing} onTab={changeTab} onManual={() => setEditing(null)} />}
+                {safeTab === 'dashboard' && <Dashboard state={state} setState={setState} updateState={updateState} onOpen={setEditing} onTab={changeTab} onManual={() => setEditing(null)} isWizardOpen={isNewTripWizardOpen} setIsWizardOpen={setIsNewTripWizardOpen} />}
                 {safeTab === 'scan' && (
                   <Scan
                     state={state}
@@ -338,7 +339,7 @@ export function App() {
                   className="w-full h-full will-change-transform"
                   style={{ backfaceVisibility: 'hidden', transform: 'translate3d(0,0,0)' }}
                 >
-                  {safeTab === 'dashboard' && <Dashboard state={state} setState={setState} updateState={updateState} onOpen={setEditing} onTab={changeTab} onManual={() => setEditing(null)} />}
+                  {safeTab === 'dashboard' && <Dashboard state={state} setState={setState} updateState={updateState} onOpen={setEditing} onTab={changeTab} onManual={() => setEditing(null)} isWizardOpen={isNewTripWizardOpen} setIsWizardOpen={setIsNewTripWizardOpen} />}
                   {safeTab === 'scan' && (
                     <Scan
                       state={state}

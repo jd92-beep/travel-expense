@@ -118,14 +118,18 @@ export function Dashboard({
   updateState,
   onOpen,
   onTab,
-  onManual
+  onManual,
+  isWizardOpen,
+  setIsWizardOpen
 }: {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
   updateState: (patch: Partial<AppState>) => void;
   onOpen: (receipt: Receipt) => void;
   onTab: (tab: TabId) => void;
-  onManual: () => void
+  onManual: () => void;
+  isWizardOpen?: boolean;
+  setIsWizardOpen?: (open: boolean) => void;
 }) {
   const [sheet, setSheet] = useState<{ kind: 'day-receipts' } | { kind: 'spot'; spot: ItinerarySpot } | null>(null);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
@@ -138,7 +142,9 @@ export function Dashboard({
 
   // Dropdown & Wizard States
   const [isTripDropdownOpen, setIsTripDropdownOpen] = useState(false);
-  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [localIsWizardOpen, setLocalIsWizardOpen] = useState(false);
+  const activeIsWizardOpen = isWizardOpen !== undefined ? isWizardOpen : localIsWizardOpen;
+  const activeSetIsWizardOpen = setIsWizardOpen !== undefined ? setIsWizardOpen : setLocalIsWizardOpen;
   const [wizardStep, setWizardStep] = useState(1);
 
   // Wizard Fields
@@ -149,6 +155,37 @@ export function Dashboard({
   const [newTripBudget, setNewTripBudget] = useState('');
   const [newTripCurrency, setNewTripCurrency] = useState('JPY');
   const [newTripDetails, setNewTripDetails] = useState('');
+
+  // 1. 📅 智能預設黃金 7 天
+  useEffect(() => {
+    if (activeIsWizardOpen) {
+      if (!newTripStartDate && !newTripEndDate) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + 6); // 7天 (today + 6 days)
+        const futureStr = futureDate.toISOString().slice(0, 10);
+        setNewTripStartDate(todayStr);
+        setNewTripEndDate(futureStr);
+      }
+    }
+  }, [activeIsWizardOpen]);
+
+  // 2. 🗺️ 目的地與結算幣種「智能自動聯動」
+  useEffect(() => {
+    const dest = newTripDestination.trim().toLowerCase();
+    if (!dest) return;
+    const jpyKeywords = ['名古屋', '東京', '大阪', '京都', '北海道', '沖繩', '日本', 'japan', 'jp', 'nagoya', 'tokyo', 'osaka', 'kyoto', 'hokkaido', 'okinawa'];
+    const hkdKeywords = ['香港', 'hong kong', 'hongkong', 'hk'];
+    const usdKeywords = ['美國', 'usa', 'us', 'united states'];
+
+    if (jpyKeywords.some(kw => dest.includes(kw))) {
+      setNewTripCurrency('JPY');
+    } else if (hkdKeywords.some(kw => dest.includes(kw))) {
+      setNewTripCurrency('HKD');
+    } else if (usdKeywords.some(kw => dest.includes(kw))) {
+      setNewTripCurrency('USD');
+    }
+  }, [newTripDestination]);
 
   // Date duration auto-calc
   const calculatedDuration = useMemo(() => {
@@ -227,7 +264,7 @@ export function Dashboard({
       };
     });
 
-    setIsWizardOpen(false);
+    activeSetIsWizardOpen(false);
     setWizardStep(1);
     setNewTripName('');
     setNewTripDestination('');
@@ -406,7 +443,7 @@ export function Dashboard({
                 className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-[#6D5643] hover:bg-[#5C4837] text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm border-none cursor-pointer"
                 onClick={() => {
                   setIsTripDropdownOpen(false);
-                  setIsWizardOpen(true);
+                  activeSetIsWizardOpen(true);
                   setWizardStep(1);
                 }}
               >
@@ -928,7 +965,7 @@ export function Dashboard({
         </div>
       )}
       {/* 建立新旅程 Wizard 彈窗 */}
-      {isWizardOpen && (
+      {activeIsWizardOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-3xl border border-white/80 shadow-2xl p-6 relative overflow-hidden flex flex-col gap-4 scale-in">
             <div className="absolute -top-12 -right-12 w-28 h-28 bg-[#D94132]/5 rounded-full blur-xl pointer-events-none" />
@@ -947,7 +984,7 @@ export function Dashboard({
               <button
                 type="button"
                 onClick={() => {
-                  setIsWizardOpen(false);
+                  activeSetIsWizardOpen(false);
                   setWizardStep(1);
                 }}
                 className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-all border-none focus:outline-none cursor-pointer"
@@ -1055,6 +1092,41 @@ export function Dashboard({
                       rows={4}
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all resize-none"
                     />
+                  </div>
+                  <div className="flex flex-col gap-1.5 mt-0.5">
+                    <span className="text-[10px] font-bold text-slate-400">💡 智能行程填充靈感 (一鍵套用)：</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewTripDetails("🍱 必食蓬萊軒鰻魚飯三食、矢場ton味噌豬扒！🏮 行程包括名古屋城賞櫻、大須觀音街、熱田神宮，仲有去榮町 Shopping！🌸");
+                          if (!newTripName || newTripName.trim() === '' || newTripName.includes('新旅程')) {
+                            setNewTripName("🌸 名古屋美味賞櫻之旅 2026 🏯");
+                          }
+                          if (!newTripDestination) {
+                            setNewTripDestination("名古屋 (Nagoya)");
+                          }
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200/50 transition active:scale-95 cursor-pointer"
+                      >
+                        🌸 2026 名古屋賞櫻美食行程
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewTripDetails("🗻 箱根溫泉旅館一泊二食！🏮 行程包括富士山河口湖五合目、淺間神社看富士山、新宿 Shopping 買藥妝！🛒");
+                          if (!newTripName || newTripName.trim() === '' || newTripName.includes('新旅程')) {
+                            setNewTripName("🗻 富士箱根溫泉療癒之旅 🍁");
+                          }
+                          if (!newTripDestination) {
+                            setNewTripDestination("東京/箱根 (Tokyo/Hakone)");
+                          }
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/50 transition active:scale-95 cursor-pointer"
+                      >
+                        🗻 東京富士箱根溫泉之旅
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
