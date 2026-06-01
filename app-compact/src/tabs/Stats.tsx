@@ -15,7 +15,7 @@ import '../styles/stats.css';
 
 type StatBucket = { id: string; name: string; color: string; total: number; icon?: string };
 
-export function Stats({ state, updateState }: { state: AppState; updateState: (patch: Partial<AppState>) => void }) {
+export function Stats({ state, updateState, onTab }: { state: AppState; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
   const trip = activeTrip(state);
   const scopedState = { ...state, receipts: scopedReceiptsForTrip(state, trip) };
   const settlement = computeSettlements(scopedState);
@@ -51,10 +51,10 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
         <div className="stats-command-title-row">
           <h2 className="stats-command-title">預算使用分析</h2>
           <span className="stats-record-pill">
-            <StatusPill tone="info" icon={<ReceiptText size={14} />}>{scopedState.receipts.length} 筆紀錄</StatusPill>
+            <StatusPill tone="info" icon={<ReceiptText size={14} />}>{analysisReceipts.length} 筆紀錄</StatusPill>
           </span>
         </div>
-        <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} updateState={updateState} />
+        <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} updateState={updateState} onTab={onTab} />
       </GlassCard>
 
       <DataPanel
@@ -200,7 +200,7 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   );
 }
 
-function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state, updateState }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState; updateState: (patch: Partial<AppState>) => void }) {
+function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state, updateState, onTab }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
   const toHkd = (amt: number) => {
@@ -280,7 +280,14 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
           <div className="preview-budget-total">
             <span>總預算</span>
             <strong>{safeBudget > 0 ? fmtValue(safeBudget) : '未設定'}</strong>
-            <button type="button" aria-label="編輯預算"><Pencil size={15} aria-hidden="true" /> 編輯</button>
+            <button
+              type="button"
+              aria-label="編輯預算"
+              onClick={() => onTab?.('settings')}
+              style={{ cursor: 'pointer' }}
+            >
+              <Pencil size={15} aria-hidden="true" /> 編輯
+            </button>
           </div>
           <div className="preview-budget-row is-used">
             <span>已用</span>
@@ -303,7 +310,11 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
           </div>
         </div>
       </div>
-      <div className="preview-budget-reminder">
+      <div
+        className="preview-budget-reminder"
+        onClick={() => onTab?.('settings')}
+        style={{ cursor: 'pointer' }}
+      >
         <span>預算提醒：每日平均使用需 ≤ {fmtValue(dailyBudget || 0)}</span>
         <ChevronRight size={20} aria-hidden="true" />
       </div>
