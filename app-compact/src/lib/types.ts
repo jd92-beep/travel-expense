@@ -208,6 +208,7 @@ export interface AppState {
   globalSyncStatus?: GlobalSyncStatus;
   syncError?: string;
   settingsPulledAt?: number;
+  displayCurrency?: 'HKD' | 'JPY';
 }
 
 export type TabId = 'dashboard' | 'scan' | 'timeline' | 'history' | 'weather' | 'stats' | 'settings';

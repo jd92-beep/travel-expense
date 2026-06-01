@@ -204,8 +204,15 @@ export function Shell({
           )}
         </div>
       )}
-      <header className="topbar topbar-canva">
-        <div className="topbar-title-block">
+      <header className="topbar topbar-canva relative overflow-hidden">
+        {active === 'dashboard' && (
+          <svg className="absolute right-4 bottom-0 opacity-15 pointer-events-none h-full w-48 text-[#D4A843] dark:text-[#C23B5E] z-0" viewBox="0 0 120 40" fill="none" stroke="currentColor">
+            <path d="M10,40 Q40,12 60,5 Q80,12 110,40 Z" strokeWidth="1" />
+            <path d="M48,15 L60,5 L72,15 Z" fill="currentColor" opacity="0.3" stroke="none" />
+            <path d="M85,40 L85,25 M95,40 L95,25 M81,23 L99,23 M83,27 L97,27 M82,20 L98,20" strokeWidth="1.5" stroke="#C23B5E" />
+          </svg>
+        )}
+        <div className="topbar-title-block relative z-10">
           <img className="compact-topbar-mark" src={compactJapanMark} alt="" aria-hidden="true" />
           <h1>
             {richVisualEffects
@@ -213,7 +220,7 @@ export function Shell({
               : activeCopy.title}
           </h1>
         </div>
-        <div className="compact-desktop-actions" aria-label="Dashboard controls">
+        <div className="compact-desktop-actions relative z-10" aria-label="Dashboard controls">
           <span><ReceiptText size={16} /> 142 receipts</span>
           <button type="button"><CalendarDays size={16} /> Apr 20 - Apr 30, 2025</button>
           <button type="button"><Users size={16} /> All travelers</button>
@@ -222,21 +229,28 @@ export function Shell({
           <button type="button" aria-label="More controls"><MoreVertical size={18} /></button>
         </div>
         {syncState && (
-          <div className={`compact-sync-slot ${syncState.status === 'error' ? 'has-error' : 'is-quiet'}`}>
+          <div className={`compact-sync-slot relative z-10 ${syncState.status === 'error' ? 'has-error' : 'is-quiet'}`}>
             <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} />
           </div>
         )}
       </header>
-      <header className="compact-mobile-header" aria-label={`${activeCopy.mobileTitle} header`}>
-        <span className="compact-mobile-mark" aria-hidden="true">
+      <header className="compact-mobile-header relative overflow-hidden" aria-label={`${activeCopy.mobileTitle} header`}>
+        {active === 'dashboard' && (
+          <svg className="absolute right-12 bottom-0 opacity-15 pointer-events-none h-14 w-36 text-[#D4A843] dark:text-[#C23B5E] z-0" viewBox="0 0 100 40" fill="none" stroke="currentColor">
+            <path d="M5,40 Q30,15 50,5 Q70,15 95,40 Z" strokeWidth="1" />
+            <path d="M38,12 L50,5 L62,12 Z" fill="currentColor" opacity="0.3" stroke="none" />
+            <path d="M72,40 L72,24 M82,40 L82,24 M68,22 L86,22 M70,26 L84,26 M69,19 L85,19" strokeWidth="1.5" stroke="#C23B5E" />
+          </svg>
+        )}
+        <span className="compact-mobile-mark relative z-10" aria-hidden="true">
           <img src={compactJapanMark} alt="" />
         </span>
-        <div className="compact-mobile-heading">
+        <div className="compact-mobile-heading relative z-10">
           <h1 aria-hidden="true"><span className="compact-mobile-title-art" data-title={activeCopy.mobileTitle} /></h1>
           <p>{activeCopy.subtitle}</p>
         </div>
-        <span className="compact-mobile-status">{activeCopy.status}</span>
-        <button className={`compact-mobile-action ${active === 'dashboard' ? 'has-alert' : ''}`} type="button" aria-label="更多操作">
+        <span className="compact-mobile-status relative z-10">{activeCopy.status}</span>
+        <button className={`compact-mobile-action relative z-10 ${active === 'dashboard' ? 'has-alert' : ''}`} type="button" aria-label="更多操作">
           {active === 'dashboard' ? <Bell size={25} /> : active === 'scan' ? <Settings size={25} /> : <MoreVertical size={25} />}
         </button>
       </header>

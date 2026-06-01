@@ -503,54 +503,92 @@ export function Dashboard({
         <div className="preview-dashboard-budget-head">
           <h2>預算總覽 <Info size={20} aria-hidden="true" /></h2>
           <div className="preview-dashboard-currency" role="group" aria-label="顯示貨幣">
-            <span className="is-active">HKD</span>
-            <span>JPY</span>
-          </div>
-        </div>
-
-        <div className="preview-dashboard-budget-grid">
-          <div className="preview-dashboard-ring">
-            <AnimatedCircularProgressBar
-              value={budgetPct}
-              gaugePrimaryColor="#E3302D"
-              gaugeSecondaryColor="rgba(122, 99, 67, 0.18)"
-              className="size-full"
+            <span
+              className={(!state.displayCurrency || state.displayCurrency === 'HKD') ? 'is-active' : ''}
+              onClick={() => updateState({ displayCurrency: 'HKD' })}
+              style={{ cursor: 'pointer' }}
             >
-              <div className="preview-dashboard-ring-copy">
-                <strong>{Math.round(rawBudgetPct)}%</strong>
-                <span>已使用</span>
-                <small>{budgetWarning}</small>
+              HKD
+            </span>
+            <span
+              className={state.displayCurrency === 'JPY' ? 'is-active' : ''}
+              onClick={() => updateState({ displayCurrency: 'JPY' })}
+              style={{ cursor: 'pointer' }}
+            >
+              JPY
+            </span>
+          </div>
+        </div>
+
+        {(() => {
+          const isJpy = state.displayCurrency === 'JPY';
+          return (
+            <div className="preview-dashboard-budget-grid">
+              <div className="preview-dashboard-ring">
+                <AnimatedCircularProgressBar
+                  value={budgetPct}
+                  gaugePrimaryColor="#D4A843"
+                  gaugeSecondaryColor="rgba(122, 99, 67, 0.18)"
+                  className="size-full"
+                >
+                  <div className="preview-dashboard-ring-copy flex flex-col items-center justify-center">
+                    <span className="text-[13px] font-bold text-amber-500 leading-tight" style={{ color: 'var(--compact-gold)' }}>¥{fmt(totalForBudget)}</span>
+                    <span className="text-[9px] text-gray-500 font-semibold leading-none">/ HK${fmt(Math.round(spentHkd))}</span>
+                    <strong className="text-lg mt-1 font-bold leading-none">{Math.round(rawBudgetPct)}%</strong>
+                    <span className="text-[8px] uppercase tracking-wider text-gray-400 mt-0.5">已使用</span>
+                  </div>
+                </AnimatedCircularProgressBar>
               </div>
-            </AnimatedCircularProgressBar>
-          </div>
-          <div className="preview-dashboard-budget-side">
-            <div className="preview-dashboard-budget-row is-total">
-              <span>總預算</span>
-              <strong>HK$ {fmt(budgetHkd)}</strong>
-              <button type="button" onClick={() => onTab('settings')}><Pencil size={16} /> 編輯</button>
+              <div className="preview-dashboard-budget-side">
+                <div className="preview-dashboard-budget-row is-total">
+                  <span>總預算</span>
+                  <strong>{isJpy ? `¥ ${fmt(state.budget)}` : `HK$ ${fmt(budgetHkd)}`}</strong>
+                  <button type="button" onClick={() => onTab('settings')}><Pencil size={16} /> 編輯</button>
+                </div>
+                <div className="preview-dashboard-budget-row is-used">
+                  <span>已使用</span>
+                  <strong>{isJpy ? `¥ ${fmt(totalForBudget)}` : `HK$ ${fmt(spentHkd)}`}</strong>
+                </div>
+                <div className="preview-dashboard-budget-row is-left">
+                  <span>剩餘預算</span>
+                  <strong>{isJpy ? `¥ ${fmt(Math.max(0, state.budget - totalForBudget))}` : `HK$ ${fmt(remainingBudgetHkd)}`}</strong>
+                </div>
+              </div>
             </div>
-            <div className="preview-dashboard-budget-row is-used">
-              <span>已使用</span>
-              <strong>HK$ {fmt(spentHkd)}</strong>
-            </div>
-            <div className="preview-dashboard-budget-row is-left">
-              <span>剩餘預算</span>
-              <strong>HK$ {fmt(remainingBudgetHkd)}</strong>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
 
-        <div className="preview-dashboard-budget-strip">
-          <div><Wallet size={24} /><span>每日預算</span><strong>HK${fmt(Math.round(hkd(dailyBudget, state)))}</strong></div>
-          <div><CalendarDays size={24} /><span>日均結餘</span><strong>HK${fmt(dayRemainingHkd)}</strong></div>
-          <button type="button" onClick={() => onTab('stats')}><PieChart size={26} /><span>預算提醒</span><small>已設定</small><ChevronRight size={20} /></button>
-        </div>
+        {(() => {
+          const isJpy = state.displayCurrency === 'JPY';
+          return (
+            <>
+              <div className="preview-dashboard-budget-strip">
+                <div>
+                  <Wallet size={24} />
+                  <span>每日預算</span>
+                  <strong>{isJpy ? `¥${fmt(dailyBudget)}` : `HK$${fmt(Math.round(hkd(dailyBudget, state)))}`}</strong>
+                </div>
+                <div>
+                  <CalendarDays size={24} />
+                  <span>日均結餘</span>
+                  <strong>{isJpy ? `¥${fmt(Math.max(0, dailyBudget - todayTotal))}` : `HK$${fmt(dayRemainingHkd)}`}</strong>
+                </div>
+                <button type="button" onClick={() => onTab('stats')}>
+                  <PieChart size={26} />
+                  <span>預算提醒</span>
+                  <small>已設定</small>
+                  <ChevronRight size={20} />
+                </button>
+              </div>
 
-        <button className="preview-dashboard-budget-tip" type="button" onClick={() => onTab('stats')}>
-          <Lightbulb size={22} />
-          <span>提示：每日平均使用需 ≤ HK$ {fmt(recommendedDailyHkd || Math.round(hkd(dailyBudget, state)))}</span>
-          <ChevronRight size={18} />
-        </button>
+              <button className="preview-dashboard-budget-tip" type="button" onClick={() => onTab('stats')}>
+                <Lightbulb size={22} />
+                <span>提示：每日平均使用需 ≤ {isJpy ? `¥ ${fmt(Math.round(dailyBudget))}` : `HK$ ${fmt(recommendedDailyHkd || Math.round(hkd(dailyBudget, state)))}`}</span>
+                <ChevronRight size={18} />
+              </button>
+            </>
+          );
+        })()}
       </GlassCard>
       </Reveal>
 
@@ -740,7 +778,7 @@ export function Dashboard({
 
         {/* 新增費用按鈕 */}
         <button
-          className="washi-add-expense-btn flex items-center justify-center gap-1.5 w-full bg-white border border-[#D94132] text-[#D94132] font-bold py-3.5 rounded-2xl mt-4 active:scale-98 transition-all hover:bg-red-50/20 focus:outline-none"
+          className="washi-add-expense-btn washi-btn flex items-center justify-center gap-1.5 w-full bg-white border border-[#D94132] text-[#D94132] font-bold py-3.5 rounded-2xl mt-4 active:scale-98 transition-all hover:bg-red-50/20 focus:outline-none"
           type="button"
           onClick={onManual}
         >

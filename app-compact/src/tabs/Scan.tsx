@@ -405,7 +405,14 @@ export function Scan({
           <b>支援 18 種語言 · 多幣別</b>
         </div>
 
-        <div className="preview-scan-camera relative z-10" aria-label="收據取景框">
+        <div className="preview-scan-camera relative z-10 overflow-hidden" aria-label="收據取景框">
+          {/* Laser scanning line */}
+          <div className="scan-laser-line" />
+          
+          {/* AI bounding boxes simulated indicators */}
+          <div className="scan-bounding-box box-1" />
+          <div className="scan-bounding-box box-2" />
+
           <div className="preview-crop-corner preview-crop-corner--tl" aria-hidden="true" />
           <div className="preview-crop-corner preview-crop-corner--tr" aria-hidden="true" />
           <div className="preview-crop-corner preview-crop-corner--bl" aria-hidden="true" />
@@ -547,9 +554,20 @@ export function Scan({
             <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm flex flex-col gap-3">
               <div className="flex gap-2">
                 <button className="secondary bg-white text-black flex-1 font-bold" type="button" onClick={startSpeech}><Mic size={18} /> 開始聽</button>
-                <StatefulActionButton className="primary flex-1 font-bold shadow-md" type="button" disabled={!voiceText.trim() || busy === 'voice'} onClick={handleVoiceParse}>解析</StatefulActionButton>
+                <StatefulActionButton className="primary voice-sparkle-btn flex-1 font-bold shadow-md" type="button" disabled={!voiceText.trim() || busy === 'voice'} onClick={handleVoiceParse}>解析</StatefulActionButton>
               </div>
               <textarea className="bg-white/80 border-white/60 rounded-xl p-3 text-black font-medium" value={voiceText} onChange={(e) => setVoiceText(e.target.value)} rows={3} placeholder="例：喺全家買飯糰同飲品 580 yen，用 Suica" />
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {['Lawson 買三文治 420 yen', '名古屋城門票 1000 yen', '鰻魚飯三吃 4800 yen', '地鐵 Suica 增值 2000 yen'].map((phrase) => (
+                  <span
+                    key={phrase}
+                    onClick={() => setVoiceText(phrase)}
+                    className="text-[10px] font-semibold bg-white/60 hover:bg-white border border-white/85 rounded-full px-2.5 py-1 cursor-pointer text-slate-700 transition-all active:scale-95"
+                  >
+                    💬 {phrase}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 

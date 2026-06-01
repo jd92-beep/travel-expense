@@ -78,22 +78,69 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
         title="分帳結算"
         status={<StatusPill tone={settlement.transfers.length ? 'warning' : 'ok'}>{settlement.transfers.length ? '需要結算' : '不用轉帳'}</StatusPill>}
       >
-        {settlement.transfers.length ? settlement.transfers.map((t) => (
-          <motion.div
-            className="transfer transfer-modern stats-transfer flex items-center justify-between gap-2 p-2 rounded-lg bg-white/40 mb-2 border border-white/60 shadow-sm overflow-hidden"
-            key={`${t.from.id}-${t.to.id}-${t.amount}`}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.24, ease: 'easeOut' }}
-          >
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <span className="stats-transfer-person"><AvatarBadge person={t.from} size="sm" /> <span>{t.from.name}</span></span>
-              <b className="text-gray-400 shrink-0">→</b>
-              <span className="stats-transfer-person"><AvatarBadge person={t.to} size="sm" /> <span>{t.to.name}</span></span>
+        {settlement.transfers.length ? (
+          <>
+            <div className="settlement-visual-map py-4 px-3 bg-[#FAF7F0]/60 backdrop-blur-sm rounded-2xl border border-stone-200/50 flex flex-col items-center justify-center gap-3 mb-4">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">結算概覽連線圖</span>
+              <div className="flex items-center justify-center gap-8 w-full relative">
+                {/* Left group: Givers */}
+                <div className="flex flex-col gap-2 z-10">
+                  {Array.from(new Set(settlement.transfers.map(t => t.from.id))).map(fromId => {
+                    const person = persons.find(p => p.id === fromId) || settlement.transfers.find(t => t.from.id === fromId)?.from;
+                    if (!person) return null;
+                    return (
+                      <div key={fromId} className="flex items-center gap-1.5 bg-white border border-stone-200/60 rounded-xl px-2.5 py-1 shadow-sm">
+                        <AvatarBadge person={person} size="sm" />
+                        <span className="text-xs font-bold text-slate-700">{person.name}</span>
+                        <small className="text-[9px] text-[#C23B5E] font-extrabold ml-1 leading-none">給出</small>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Central Arrow Flow */}
+                <div className="flex flex-col items-center justify-center pointer-events-none relative w-16 h-10">
+                  <svg className="w-full h-full text-amber-500" viewBox="0 0 60 20" fill="none" stroke="currentColor">
+                    <path d="M5,10 H55" strokeWidth="2" strokeDasharray="3,3" stroke="var(--compact-gold)" />
+                    <path d="M48,5 L55,10 L48,15" strokeWidth="2" stroke="var(--compact-gold)" fill="none" />
+                  </svg>
+                </div>
+
+                {/* Right group: Receivers */}
+                <div className="flex flex-col gap-2 z-10">
+                  {Array.from(new Set(settlement.transfers.map(t => t.to.id))).map(toId => {
+                    const person = persons.find(p => p.id === toId) || settlement.transfers.find(t => t.to.id === toId)?.to;
+                    if (!person) return null;
+                    return (
+                      <div key={toId} className="flex items-center gap-1.5 bg-white border border-stone-200/60 rounded-xl px-2.5 py-1 shadow-sm">
+                        <AvatarBadge person={person} size="sm" />
+                        <span className="text-xs font-bold text-slate-700">{person.name}</span>
+                        <small className="text-[9px] text-[#2D6E48] font-extrabold ml-1 leading-none">收取</small>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-            <strong className="text-lg text-blue-900 shrink-0">¥{fmt(t.amount)}</strong>
-          </motion.div>
-        )) : <EmptyState title="暫時唔需要互相轉帳" description="所有共同支出與代付已經平衡。" />}
+
+            {settlement.transfers.map((t) => (
+              <motion.div
+                className="transfer transfer-modern stats-transfer flex items-center justify-between gap-2 p-2 rounded-lg bg-white/40 mb-2 border border-white/60 shadow-sm overflow-hidden"
+                key={`${t.from.id}-${t.to.id}-${t.amount}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, ease: 'easeOut' }}
+              >
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span className="stats-transfer-person"><AvatarBadge person={t.from} size="sm" /> <span>{t.from.name}</span></span>
+                  <b className="text-gray-400 shrink-0">→</b>
+                  <span className="stats-transfer-person"><AvatarBadge person={t.to} size="sm" /> <span>{t.to.name}</span></span>
+                </div>
+                <strong className="text-lg text-blue-900 shrink-0">¥{fmt(t.amount)}</strong>
+              </motion.div>
+            ))}
+          </>
+        ) : <EmptyState title="暫時唔需要互相轉帳" description="所有共同支出與代付已經平衡。" />}
       </DataPanel>
 
       <DataPanel className="payer-panel" icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全 receipts</StatusPill>}>

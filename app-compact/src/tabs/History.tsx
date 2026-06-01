@@ -305,7 +305,7 @@ export function History({
                   onClick={() => onOpen(r)}
                   onKeyDown={(e) => { if (e.key === 'Enter') onOpen(r); }}
                 >
-                  <VisualIcon id={r.category as CategoryId} size="md" className="history-ledger-icon" />
+                  <VisualIcon id={r.category as CategoryId} size="md" className="history-ledger-icon washi-nippon-stamp" />
                   <span className="receipt-main history-ledger-main">
                     <strong>
                       {isPendingReceipt(r) && <span className="history-pending-mini">pending</span>}
