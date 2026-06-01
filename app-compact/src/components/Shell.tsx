@@ -1,4 +1,4 @@
-import { BarChart3, Bell, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users, ChevronDown } from 'lucide-react';
+import { BarChart3, Bell, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users, ChevronDown, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
@@ -49,6 +49,7 @@ export function Shell({
   onRetryFailed,
   state,
   setState,
+  onPull,
 }: {
   active: TabId;
   onTab: (tab: TabId) => void;
@@ -57,6 +58,7 @@ export function Shell({
   onRetryFailed?: () => void;
   state?: AppState;
   setState?: React.Dispatch<React.SetStateAction<AppState>>;
+  onPull?: () => Promise<void>;
 }) {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
@@ -67,6 +69,20 @@ export function Shell({
   const richVisualEffects = !prefersReducedMotion && !stableMobileEffects;
 
   const [isTripDropdownOpen, setIsTripDropdownOpen] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const [isHeaderTripDropdownOpen, setIsHeaderTripDropdownOpen] = useState(false);
+
+  const handlePullClick = async () => {
+    if (!onPull) return;
+    setPulling(true);
+    try {
+      await onPull();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setPulling(false);
+    }
+  };
 
   const trip = state ? activeTrip(state) : null;
   const activeTripName = trip ? trip.name : '名古屋之旅 🏯';
@@ -311,12 +327,78 @@ export function Shell({
           )}
         </div>
         <div className="compact-desktop-actions relative z-10" aria-label="Dashboard controls">
-          <span><ReceiptText size={16} /> 142 receipts</span>
-          <button type="button"><CalendarDays size={16} /> Apr 20 - Apr 30, 2025</button>
-          <button type="button"><Users size={16} /> All travelers</button>
-          <button type="button">JPY</button>
-          <button type="button"><Download size={16} /> Export</button>
-          <button type="button" aria-label="More controls"><MoreVertical size={18} /></button>
+          {active === 'history' && state ? (
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  className="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full px-3 py-1.5 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer focus:outline-none active:scale-95 text-xs"
+                  type="button"
+                  onClick={() => setIsHeaderTripDropdownOpen(!isHeaderTripDropdownOpen)}
+                >
+                  <CalendarDays size={14} aria-hidden="true" />
+                  <span>{activeTripName}</span>
+                  <ChevronDown size={14} className={`text-blue-800/70 transition-transform duration-200 ${isHeaderTripDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isHeaderTripDropdownOpen && (
+                  <div className="absolute right-0 top-9 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]">
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      選擇旅程 (Select Trip)
+                    </div>
+                    <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+                      {(state.trips || []).filter((t) => !t.archived).map((t) => {
+                        const isActive = t.id === (trip?.id || '');
+                        return (
+                          <button
+                            key={t.id}
+                            className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
+                              isActive
+                                ? 'bg-blue-50 text-blue-900 font-bold'
+                                : 'hover:bg-slate-50 text-slate-700 bg-transparent'
+                            }`}
+                            onClick={() => {
+                              setIsHeaderTripDropdownOpen(false);
+                              handleSwitchTrip(t.id);
+                            }}
+                          >
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm truncate">{t.name}</span>
+                              <span className="text-[10px] text-slate-400 truncate">
+                                {t.destinationSummary || '日本'} ({t.itinerary?.length || 0}天)
+                              </span>
+                            </div>
+                            {isActive && (
+                              <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                className="secondary history-refresh-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full p-2 font-semibold text-blue-900 transition-all shadow-sm flex items-center justify-center cursor-pointer active:scale-95"
+                type="button"
+                disabled={pulling}
+                onClick={handlePullClick}
+                aria-label="重新同步"
+                title="重新同步"
+              >
+                <RefreshCw size={14} className={pulling ? 'spin' : undefined} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <span><ReceiptText size={16} /> 142 receipts</span>
+              <button type="button"><CalendarDays size={16} /> Apr 20 - Apr 30, 2025</button>
+              <button type="button"><Users size={16} /> All travelers</button>
+              <button type="button">JPY</button>
+              <button type="button"><Download size={16} /> Export</button>
+              <button type="button" aria-label="More controls"><MoreVertical size={18} /></button>
+            </>
+          )}
         </div>
         {syncState && (
           <div className={`compact-sync-slot relative z-10 ${syncState.status === 'error' ? 'has-error' : 'is-quiet'}`}>
@@ -390,9 +472,73 @@ export function Shell({
           <p>{activeCopy.subtitle}</p>
         </div>
         <span className="compact-mobile-status relative z-10">{activeCopy.status}</span>
-        <button className={`compact-mobile-action relative z-10 ${active === 'dashboard' ? 'has-alert' : ''}`} type="button" aria-label="更多操作">
-          {active === 'dashboard' ? <Bell size={25} /> : active === 'scan' ? <Settings size={25} /> : <MoreVertical size={25} />}
-        </button>
+        {active === 'history' && state ? (
+          <div className="compact-mobile-action-history flex items-center gap-1.5 relative z-20" style={{ marginRight: '4px' }}>
+            <div className="relative">
+              <button
+                className="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full px-2 py-1 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-0.5 cursor-pointer focus:outline-none active:scale-95 text-[10px]"
+                type="button"
+                onClick={() => setIsHeaderTripDropdownOpen(!isHeaderTripDropdownOpen)}
+              >
+                <CalendarDays size={11} aria-hidden="true" />
+                <span className="max-w-[55px] truncate">{activeTripName}</span>
+                <ChevronDown size={11} className={`text-blue-800/70 transition-transform duration-200 ${isHeaderTripDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isHeaderTripDropdownOpen && (
+                <div className="absolute right-0 top-8 w-56 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]">
+                  <div className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                    選擇旅程 (Select Trip)
+                  </div>
+                  <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+                    {(state.trips || []).filter((t) => !t.archived).map((t) => {
+                      const isActive = t.id === (trip?.id || '');
+                      return (
+                        <button
+                          key={t.id}
+                          className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
+                            isActive
+                              ? 'bg-blue-50 text-blue-900 font-bold'
+                              : 'hover:bg-slate-50 text-slate-700 bg-transparent'
+                          }`}
+                          onClick={() => {
+                            setIsHeaderTripDropdownOpen(false);
+                            handleSwitchTrip(t.id);
+                          }}
+                        >
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs truncate">{t.name}</span>
+                            <span className="text-[9px] text-slate-400 truncate">
+                              {t.destinationSummary || '日本'} ({t.itinerary?.length || 0}天)
+                            </span>
+                          </div>
+                          {isActive && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0 ml-1.5" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              className="secondary history-refresh-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full p-1.5 font-semibold text-blue-900 transition-all shadow-sm flex items-center justify-center cursor-pointer active:scale-95"
+              type="button"
+              disabled={pulling}
+              onClick={handlePullClick}
+              aria-label="重新同步"
+              title="重新同步"
+            >
+              <RefreshCw size={11} className={pulling ? 'spin' : undefined} />
+            </button>
+          </div>
+        ) : (
+          <button className={`compact-mobile-action relative z-10 ${active === 'dashboard' ? 'has-alert' : ''}`} type="button" aria-label="更多操作">
+            {active === 'dashboard' ? <Bell size={25} /> : active === 'scan' ? <Settings size={25} /> : <MoreVertical size={25} />}
+          </button>
+        )}
       </header>
       <main className="content">{children}</main>
       <WindmillTransition activeKey={active} />

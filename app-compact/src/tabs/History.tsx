@@ -47,8 +47,7 @@ export function History({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
-  const [isTitleDropdownOpen, setIsTitleDropdownOpen] = useState(false);
-  const [isActionDropdownOpen, setIsActionDropdownOpen] = useState(false);
+
 
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
@@ -76,7 +75,7 @@ export function History({
   const people = getPersons(state);
   const categoryChips = [
     { id: 'all' as const, name: '全部', color: '#cf2626' },
-    ...CATEGORIES.filter((item) => ['lodging', 'food', 'transport', 'shopping', 'ticket', 'other'].includes(item.id)),
+    ...CATEGORIES.filter((item) => ['flight', 'lodging', 'food', 'transport', 'shopping', 'ticket', 'other'].includes(item.id)),
   ];
   const filterBadge = (category !== 'all' ? 1 : 0) + pending.length;
   const activeTripName = trip.name || state.tripName || '東京出張之旅';
@@ -120,120 +119,7 @@ export function History({
       <div className="japanese-sun-decor" />
       <div className="japanese-sakura-decor" />
       <div className="stack w-full relative z-10">
-        <div className="history-command p-0 w-full relative z-20">
-          <div className="history-command-row relative z-10 flex flex-row justify-between items-center gap-2 h-full w-full">
-            <div className="relative min-w-0 flex-1">
-              <div className="relative z-30">
-                <button
-                  className="history-title-button flex items-center gap-1 text-2xl font-bold text-blue-900 border-none bg-transparent focus:outline-none cursor-pointer hover:opacity-80 active:scale-98 transition-all p-0 min-w-0"
-                  type="button"
-                  onClick={() => setIsTitleDropdownOpen(!isTitleDropdownOpen)}
-                >
-                  <span className="truncate">{isMobile ? '歷史紀錄' : '紀錄中心'}</span>
-                  <ChevronDown size={18} className={`text-blue-800/70 mt-0.5 transition-transform duration-200 shrink-0 ${isTitleDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
 
-                {isTitleDropdownOpen && (
-                  <div className="absolute top-8 left-0 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-white/80 shadow-2xl p-2 z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      選擇旅程 (Select Trip)
-                    </div>
-                    <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
-                      {(state.trips || []).filter((t) => !t.archived).map((t) => {
-                        const isActive = t.id === trip.id;
-                        return (
-                          <button
-                            key={t.id}
-                            className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
-                              isActive
-                                ? 'bg-blue-50 text-blue-900 font-bold'
-                                : 'hover:bg-slate-50 text-slate-700 bg-transparent'
-                            }`}
-                            onClick={() => {
-                              setIsTitleDropdownOpen(false);
-                              handleSwitchTrip(t.id);
-                            }}
-                          >
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-sm truncate">{t.name}</span>
-                              <span className="text-[10px] text-slate-400 truncate">
-                                {t.destinationSummary || '未設定目的地'} ({t.itinerary?.length || 0}天)
-                              </span>
-                            </div>
-                            {isActive && (
-                              <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="history-command-actions flex items-center justify-end gap-2 shrink-0">
-              <div className="relative z-30">
-                <button
-                  className="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-white/80 backdrop-blur-md rounded-full px-3 py-2 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer focus:outline-none active:scale-95"
-                  type="button"
-                  onClick={() => setIsActionDropdownOpen(!isActionDropdownOpen)}
-                >
-                  <CalendarDays size={16} aria-hidden="true" />
-                  <span>{activeTripName}</span>
-                  <ChevronDown size={16} className={`text-blue-800/70 transition-transform duration-200 ${isActionDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isActionDropdownOpen && (
-                  <div className="absolute right-0 top-12 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-white/80 shadow-2xl p-2 z-50 flex flex-col gap-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      選擇旅程 (Select Trip)
-                    </div>
-                    <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
-                      {(state.trips || []).filter((t) => !t.archived).map((t) => {
-                        const isActive = t.id === trip.id;
-                        return (
-                          <button
-                            key={t.id}
-                            className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
-                              isActive
-                                ? 'bg-blue-50 text-blue-900 font-bold'
-                                : 'hover:bg-slate-50 text-slate-700 bg-transparent'
-                            }`}
-                            onClick={() => {
-                              setIsActionDropdownOpen(false);
-                              handleSwitchTrip(t.id);
-                            }}
-                          >
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-sm truncate">{t.name}</span>
-                              <span className="text-[10px] text-slate-400 truncate">
-                                {t.destinationSummary || '未設定目的地'} ({t.itinerary?.length || 0}天)
-                              </span>
-                            </div>
-                            {isActive && (
-                              <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <button
-                className="secondary history-refresh-button bg-white/60 hover:bg-white/80 border border-white/80 backdrop-blur-md rounded-full font-semibold text-blue-900 transition-all shadow-sm"
-                type="button"
-                disabled={busy}
-                onClick={() => handlePull('manual')}
-                aria-label="重新同步"
-                title="重新同步"
-              >
-                <RefreshCw size={18} className={busy ? 'spin' : undefined} />
-              </button>
-            </div>
-          </div>
-        </div>
       {status && <Toast tone={/失敗|未連線/i.test(status) ? 'warning' : 'success'}>{status}</Toast>}
       <div className="history-filter-deck history-filters">
         <label className="search-field">

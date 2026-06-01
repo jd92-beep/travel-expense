@@ -145,6 +145,24 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
         ) : <EmptyState title="暫時唔需要互相轉帳" description="所有共同支出與代付已經平衡。" />}
       </DataPanel>
 
+      <DataPanel
+        className="top-expenses-panel"
+        icon={<Trophy size={19} />}
+        title="TOP 10 支出"
+        status={<TopTenToggle includeBigItems={state.top10IncludeBigItems} onChange={(value) => updateState({ top10IncludeBigItems: value })} />}
+      >
+        {topReceipts.length ? topReceipts.map((r, idx) => {
+          const cat = categoryById(r.category);
+          return (
+            <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
+              <b>{idx + 1}</b>
+              <span><VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {displayStore(r)}</span>
+              <strong>{r.currency === 'HKD' ? 'HK$' : (r.currency || resolvedTripCurrency === 'JPY' ? '¥' : r.currency || resolvedTripCurrency + ' ')}{fmt(r.total)}</strong>
+            </motion.div>
+          );
+        }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
+      </DataPanel>
+
       <DataPanel className="payer-panel" icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全 receipts</StatusPill>}>
         {persons.map((p, i) => (
           <Bar key={p.id} label={p.name} leading={<AvatarBadge person={p} size="sm" />} value={settlement.sharedByPayer[i] + settlement.privateByOwner[i]} max={maxPersonTotal} state={scopedState} color={p.color} />
@@ -162,24 +180,6 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
 
       <DataPanel className="payment-panel" icon={<BarChart3 size={19} />} title="支付方式" status={<StatusPill tone="neutral">{payTotals.length} 種方式</StatusPill>}>
         {payTotals.length ? payTotals.map((p) => <Bar key={p.id} label={p.name} value={p.total} state={{ ...scopedState, receipts: analysisReceipts }} color={p.color} />) : <EmptyState title="未有紀錄" description="現金、信用卡、PayPay、Suica 會分開統計。" />}
-      </DataPanel>
-
-      <DataPanel
-        className="top-expenses-panel"
-        icon={<Trophy size={19} />}
-        title="TOP 10 支出"
-        status={<TopTenToggle includeBigItems={state.top10IncludeBigItems} onChange={(value) => updateState({ top10IncludeBigItems: value })} />}
-      >
-        {topReceipts.length ? topReceipts.map((r, idx) => {
-          const cat = categoryById(r.category);
-          return (
-            <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
-              <b>{idx + 1}</b>
-              <span><VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {displayStore(r)}</span>
-              <strong>{r.currency === 'HKD' ? 'HK$' : (r.currency || resolvedTripCurrency === 'JPY' ? '¥' : r.currency || resolvedTripCurrency + ' ')}{fmt(r.total)}</strong>
-            </motion.div>
-          );
-        }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
       </DataPanel>
 
       <GlassCard className="stats-controls stats-glass" tone="control">
