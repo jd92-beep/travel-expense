@@ -35,7 +35,8 @@ import {
   openMapExternal, 
   safeExternalUrl,
   todayForReceipts, 
-  safePhotoUrl 
+  safePhotoUrl,
+  getReceiptHkdAmount
 } from '../lib/domain';
 import { activeTrip, createTripProfile, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import type { AppState, ItinerarySpot, Receipt, SyncQueueItem, TabId } from '../lib/types';
@@ -227,25 +228,6 @@ export function Dashboard({
   const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip), [state, trip]);
   const today = todayForReceipts(state);
 
-  // 精確轉換單筆 Receipt 到港幣 (HKD)
-  const getReceiptHkdAmount = (r: Receipt): number => {
-    if (typeof r.hkdAmount === 'number' && r.hkdAmount > 0) {
-      return r.hkdAmount;
-    }
-    const cur = r.currency || 'JPY';
-    if (cur === 'HKD') {
-      return Number(r.total) || 0;
-    }
-    const rate = Math.max(
-      0.1,
-      Number(r.exchangeRate) || 
-      Number(state.rateTable?.[cur]?.perHkd) || 
-      (cur === 'JPY' ? Number(state.rate) : undefined) || 
-      20.36
-    );
-    return (Number(r.total) || 0) / rate;
-  };
-
   // Resolved Local Currency other than HKD
   const resolvedTripCurrency = (() => {
     if (trip.currencies && trip.currencies.length > 0) {
@@ -282,7 +264,7 @@ export function Dashboard({
     }
   })();
 
-  // 統一口徑過濾邏輯：
+  // 統一口記過濾邏輯：
   // statsIncludeTransportLodging = true -> totalIncludeFL = true (Spent 包含大額) / dailyIncludeFL = true (今日花費包含大額)
   // statsIncludeTransportLodging = false -> totalIncludeFL = false (Spent 排除大額) / dailyIncludeFL = false (今日花費排除大額)
   const statsIncludeTransportLodging = !!state.statsIncludeTransportLodging;
@@ -300,8 +282,8 @@ export function Dashboard({
   const totalReceipts = tripReceipts.filter((r) => totalIncludeFL || !isBigTripItem(r));
     
   // 基於港幣做精準累加
-  const spentHkd = totalReceipts.reduce((s, r) => s + getReceiptHkdAmount(r), 0);
-  const todaySpentHkd = dailyReceipts.reduce((s, r) => s + getReceiptHkdAmount(r), 0);
+  const spentHkd = totalReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
+  const todaySpentHkd = dailyReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
 
   // 目的貨幣匯率 (非港幣)
   const activeRate = Math.max(
@@ -317,7 +299,7 @@ export function Dashboard({
     if (cur === resolvedTripCurrency) {
       return Number(r.total) || 0;
     }
-    const hkdAmt = getReceiptHkdAmount(r);
+    const hkdAmt = getReceiptHkdAmount(r, state);
     return Math.round(hkdAmt * activeRate);
   };
 

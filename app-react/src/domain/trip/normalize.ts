@@ -207,16 +207,30 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
       || Number(state.rate)
       || 20.36,
   );
+  // 增加強大嘅港幣折算自我修復 (Self-Healing) 校驗
+  let hkdAmt = Number(receipt.hkdAmount) || 0;
+  let isHkdAmountValid = false;
+  if (hkdAmt > 0 && receipt.total) {
+    const ratio = Number(receipt.total) / hkdAmt;
+    const percentDiff = Math.abs(ratio - rate) / rate;
+    if (percentDiff < 0.4) {
+      isHkdAmountValid = true;
+    }
+  }
+  if (!isHkdAmountValid || hkdAmt <= 0) {
+    hkdAmt = Math.round((Number(receipt.total) || 0) / rate);
+  }
+
   return {
     ...receipt,
-    tripId: receipt.tripId || trip.id,
+    tripId: trip.id,
     tripVersion: receipt.tripVersion || trip.version,
-    tripDayId: receipt.tripDayId || day?.dayId || day?.id,
+    tripDayId: day?.dayId || day?.id || receipt.tripDayId,
     currency,
     originalCurrency: receipt.originalCurrency || currency,
     originalAmount: Number(receipt.originalAmount ?? receipt.total) || 0,
     exchangeRate: rate,
-    hkdAmount: Number(receipt.hkdAmount) || Math.round((Number(receipt.total) || 0) / rate),
+    hkdAmount: hkdAmt,
     regionSnapshot: region,
     mapUrl: receipt.mapUrl || '',
     updatedAt: options.preserveUpdatedAt ? receipt.updatedAt : Date.now(),
