@@ -24,6 +24,7 @@ export const AI_MODELS = [
   { id: 'google/gemini-3.1-flash-lite', name: 'Google Gemini 3.1 Flash Lite' },
   { id: 'google/gemma-4-31b', name: 'Google Gemma 4 31B' },
   { id: 'google/gemma-4-26b', name: 'Google Gemma 4 26B' },
+  { id: 'mimo/mimo-v2.5', name: 'Mimo v2.5' },
 ] as const;
 
 export function normalizeAiModelSettings<T extends Partial<Pick<AppState, 'scanModel' | 'voiceModel' | 'emailModel' | 'tripUpdateModel' | 'googleBackupModel'>>>(settings: T): T {
@@ -126,8 +127,8 @@ export const DEFAULT_STATE: AppState = {
   tripUpdateModel: DEFAULT_KIMI_PRIMARY_MODEL_ID,
   googleBackupModel: DEFAULT_GOOGLE_BACKUP_MODEL,
   persons: [
-    { id: 'p_boss', name: 'Tony', emoji: '👦', color: '#CC2929' },
-    { id: 'p_xinxin', name: '欣欣', emoji: '👧', color: '#FF91A4' },
+    { id: 'p_boss', name: 'User 1', emoji: '👤', color: '#CC2929' },
+    { id: 'p_trip_2', name: 'User 2', emoji: '👤', color: '#1E4D6B' },
   ],
   shareRatios: {},
   tripName: '名古屋 2026',

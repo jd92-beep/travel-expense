@@ -152,7 +152,7 @@ async function googleModelForRequest(state: AppState): Promise<string> {
 }
 
 interface ModelAttempt {
-  provider: 'kimi' | 'google';
+  provider: 'kimi' | 'google' | 'mimo';
   model?: string;
   label: string;
 }
@@ -193,6 +193,16 @@ async function callKimiJson(
   return brokerAiJson(state, 'kimi', prompt, kind, image, overrideModel);
 }
 
+async function callMimoJson(
+  state: AppState,
+  prompt: string,
+  kind: 'scan' | 'voice' | 'email' | 'trip',
+  image?: { base64: string; mime: string },
+  overrideModel?: string
+) {
+  return brokerAiJson(state, 'mimo', prompt, kind, image, overrideModel);
+}
+
 async function callPreferredJson(
   state: AppState,
   prompt: string,
@@ -213,11 +223,11 @@ async function callPreferredJson(
   let preferredAttempt: ModelAttempt | null = null;
   if (chosenModelId) {
     const parts = chosenModelId.split('/');
-    if (parts.length === 2) {
+      if (parts.length === 2) {
       preferredAttempt = {
-        provider: parts[0] as 'kimi' | 'google',
+        provider: parts[0] as 'kimi' | 'google' | 'mimo',
         model: parts[1],
-        label: `${parts[0] === 'kimi' ? 'Kimi' : 'Google'} (${parts[1]}) [Selected]`,
+        label: `${parts[0] === 'kimi' ? 'Kimi' : parts[0] === 'mimo' ? 'Mimo' : 'Google'} (${parts[1]}) [Selected]`,
       };
     } else {
       if (/kimi/i.test(chosenModelId)) {
@@ -225,6 +235,12 @@ async function callPreferredJson(
           provider: 'kimi',
           model: chosenModelId,
           label: `Kimi (${chosenModelId}) [Selected]`,
+        };
+      } else if (/mimo/i.test(chosenModelId)) {
+        preferredAttempt = {
+          provider: 'mimo',
+          model: chosenModelId,
+          label: `Mimo (${chosenModelId}) [Selected]`,
         };
       } else {
         preferredAttempt = {
@@ -242,17 +258,19 @@ async function callPreferredJson(
   let baseAttempts: ModelAttempt[] = [];
   if (kind === 'email' || kind === 'trip') {
     baseAttempts = [
-      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (1st Fallback)' },
-      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (2nd Fallback)' },
-      { provider: 'google', model: 'gemini-3.1-flash', label: 'Google Gemini 3.1 Flash (3rd Fallback)' },
-      { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (4th Fallback)' },
+      { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
+      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (2nd Fallback)' },
+      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (3rd Fallback)' },
+      { provider: 'google', model: 'gemini-3.1-flash', label: 'Google Gemini 3.1 Flash (4th Fallback)' },
+      { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (5th Fallback)' },
     ];
   } else {
     // voice 或 scan
     baseAttempts = [
-      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (1st Fallback)' },
-      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (2nd Fallback)' },
-      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (3rd Fallback)' },
+      { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
+      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (2nd Fallback)' },
+      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (3rd Fallback)' },
+      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (4th Fallback)' },
     ];
   }
 
@@ -274,6 +292,8 @@ async function callPreferredJson(
       console.log(`[AI Routing] 正在嘗試調用: ${attempt.label}...`);
       if (attempt.provider === 'kimi') {
         return await callKimiJson(state, prompt, kind, image, attempt.model);
+      } else if (attempt.provider === 'mimo') {
+        return await callMimoJson(state, prompt, kind, image, attempt.model);
       } else {
         return await callGoogleJson(state, prompt, kind, image, attempt.model);
       }

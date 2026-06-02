@@ -103,8 +103,8 @@ export function getReceiptPhase(state: AppState, receipt: Receipt): TripPhase {
 
 export function getPersons(state: AppState): Person[] {
   return state.persons && state.persons.length ? state.persons : [
-    { id: 'p_boss', name: 'Tony', emoji: '👦', color: '#CC2929' },
-    { id: 'p_xinxin', name: '欣欣', emoji: '👧', color: '#FF91A4' },
+    { id: 'p_boss', name: 'User 1', emoji: '👦', color: '#CC2929' },
+    { id: 'p_xinxin', name: 'User 2', emoji: '👧', color: '#FF91A4' },
   ];
 }
 

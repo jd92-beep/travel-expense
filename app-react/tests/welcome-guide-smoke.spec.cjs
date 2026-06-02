@@ -46,7 +46,7 @@ test('New Supabase account guide captures trip members and split ratios', async 
 
   await page.getByLabel('人數').fill('3');
   await expect(page.getByLabel('旅伴 3 名稱')).toBeVisible();
-  await page.getByLabel('你嘅顯示名稱').fill('Tony');
+  await page.getByLabel('你嘅顯示名稱').fill('User 1');
   await page.getByLabel('旅伴 2 名稱').fill('May');
   await page.getByLabel('旅伴 3 名稱').fill('Sam');
 
@@ -66,7 +66,7 @@ test('New Supabase account guide captures trip members and split ratios', async 
     return raw ? JSON.parse(raw) : null;
   }, scopedStorageKey), { timeout: 10000 }).toMatchObject({
     persons: [
-      expect.objectContaining({ id: 'p_boss', name: 'Tony' }),
+      expect.objectContaining({ id: 'p_boss', name: 'User 1' }),
       expect.objectContaining({ id: 'p_trip_2', name: 'May' }),
       expect.objectContaining({ id: 'p_trip_3', name: 'Sam' }),
     ],

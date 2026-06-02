@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 const persons = [
-  { id: 'p_boss', name: 'Tony Cheung', emoji: 'T', color: '#cc2929' },
+  { id: 'p_boss', name: 'User 1 Cheung', emoji: 'T', color: '#cc2929' },
   { id: 'p_xinxin', name: 'Xinxin Wong', emoji: 'X', color: '#2d5a8e' },
 ];
 
@@ -87,13 +87,13 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(page.getByText('圖表統計額')).toBeVisible();
   await expect(page.getByText('共同分帳額')).toBeVisible();
   await expect(page.getByText('Xinxin').first()).toBeVisible();
-  await expect(page.getByText('Tony').first()).toBeVisible();
+  await expect(page.getByText('User 1').first()).toBeVisible();
   await expect(page.locator('.transfer-modern')).toContainText('¥2,850');
-  await expect(page.locator('.transfer-modern')).toContainText('Tony Cheung');
+  await expect(page.locator('.transfer-modern')).toContainText('User 1 Cheung');
   await expect(page.locator('.transfer-modern')).toContainText('Xinxin Wong');
   const transferTextOverflow = await page.locator('.stats-transfer-person span:last-child').evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).textOverflow));
   expect(transferTextOverflow).not.toContain('ellipsis');
-  await expect(page.getByText('代付：Tony Cheung 代 Xinxin Wong 付 ¥300 · M9 Gift')).toBeVisible();
+  await expect(page.getByText('代付：User 1 Cheung 代 Xinxin Wong 付 ¥300 · M9 Gift')).toBeVisible();
   const metricMetrics = await page.locator('.stats-metric').evaluateAll((nodes) => nodes.map((node) => {
     const rect = node.getBoundingClientRect();
     return { top: Math.round(rect.top), left: Math.round(rect.left), width: Math.round(rect.width) };

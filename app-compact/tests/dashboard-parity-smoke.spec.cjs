@@ -58,7 +58,7 @@ async function openDashboard(page, statsIncludeTransportLodging) {
   await expect(page.locator('.washi-today-stats-card .preview-dashboard-today-grid > div')).toHaveCount(3);
 }
 
-test('Dashboard spending toggle matches legacy total/daily semantics', async ({ browser }) => {
+test('Dashboard spending toggle matches legacy semantics for today stats but budget is consistent', async ({ browser }) => {
   const defaultContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const defaultPage = await defaultContext.newPage();
   await openDashboard(defaultPage, false);

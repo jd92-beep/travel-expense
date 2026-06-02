@@ -21,7 +21,7 @@ const GUIDE_EMOJIS = ['👤', '🧳', '🗺️', '🎒', '🚆', '🍱', '📷',
 
 function makeGuidePersons(count: number, current: Array<{ name: string; ratio: string }> = []) {
   return Array.from({ length: Math.max(1, Math.min(8, count)) }, (_, idx) => ({
-    name: current[idx]?.name || (idx === 0 ? '我' : `旅伴 ${idx + 1}`),
+    name: current[idx]?.name || `User ${idx + 1}`,
     ratio: current[idx]?.ratio || '1',
   }));
 }
@@ -90,7 +90,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   function buildGuideResult(trip: TripProfile): WelcomeGuideResult {
     const persons = guidePersons.map((person, idx) => ({
       id: idx === 0 ? 'p_boss' : `p_trip_${idx + 1}`,
-      name: person.name.trim() || (idx === 0 ? '我' : `旅伴 ${idx + 1}`),
+      name: person.name.trim() || `User ${idx + 1}`,
       emoji: GUIDE_EMOJIS[idx % GUIDE_EMOJIS.length],
       color: GUIDE_COLORS[idx % GUIDE_COLORS.length],
     }));
@@ -224,7 +224,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                     value={person.name}
                     onChange={(e) => updateGuidePerson(idx, { name: e.target.value })}
                     type="text"
-                    placeholder={idx === 0 ? '例如 Tony' : '例如 欣欣'}
+                    placeholder={`例如 User ${idx + 1}`}
                     style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
                   />
                 </label>

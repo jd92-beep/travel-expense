@@ -6,9 +6,10 @@ const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const TRUSTED_DEVICE_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const SESSION_CHALLENGE_TTL_MS = 1000 * 60 * 5;
 const MAX_JSON_BYTES = 900000;
-const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi'];
+const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi', 'mimo'];
 const NOTION_VERSION = '2022-06-28';
 const KIMI_DEFAULT_BASE = 'https://api.kimi.com/coding/v1';
+const MIMO_DEFAULT_BASE = 'https://token-plan-sgp.xiaomimimo.com/v1';
 const GOOGLE_DEFAULT_MODEL = 'gemma-4-31b';
 const RATE_WINDOW_MS = 1000 * 60 * 15;
 const DEFAULT_SUPABASE_AI_DAILY_LIMIT = 50;
@@ -862,6 +863,33 @@ async function kimiJson(env, prompt, kind, image, requestedModel) {
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
 }
 
+async function mimoJson(env, prompt, kind, image, requestedModel) {
+  const credential = await readCredential(env, 'mimo');
+  if (!credential?.secret) throw new Error('Mimo credential missing');
+  const base = String(env.MIMO_API_BASE || MIMO_DEFAULT_BASE).replace(/\/+$/, '');
+  const messages = [
+    { role: 'system', content: 'Return strict JSON only. No markdown.' },
+    { role: 'user', content: image ? [
+      { type: 'text', text: prompt },
+      { type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.base64}` } },
+    ] : prompt },
+  ];
+  const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${credential.secret}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      model: requestedModel || env.MIMO_MODEL || 'mimo-v2.5',
+      messages,
+      temperature: kind === 'test' ? 0 : 0.1,
+    }),
+  }));
+  return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
+}
+
 async function googleJson(env, prompt, _kind, image, requestedModel) {
   const credential = await readCredential(env, 'google');
   if (!credential?.secret) throw new Error('Google credential missing');
@@ -1068,6 +1096,7 @@ async function testProvider(env, provider, candidateSecret, extra = {}) {
   try {
     if (provider === 'notion') await testNotion(env, credential);
     if (provider === 'kimi') await kimiJsonWithCredential(env, credential);
+    if (provider === 'mimo') await mimoJsonWithCredential(env, credential);
     if (provider === 'google') await googleModelsList(credential.secret);
     if (provider === 'weatherapi') await testWeatherApi(credential.secret);
     return { provider, status: 'connected', lastTestedAt: Date.now() };
@@ -1103,6 +1132,24 @@ async function kimiJsonWithCredential(env, credential) {
       messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
       temperature: 0,
       thinking: { type: 'disabled' },
+    }),
+  }));
+  return extractJson(data?.choices?.[0]?.message?.content || '');
+}
+
+async function mimoJsonWithCredential(env, credential) {
+  const base = String(env.MIMO_API_BASE || MIMO_DEFAULT_BASE).replace(/\/+$/, '');
+  const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${credential.secret}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      model: env.MIMO_MODEL || 'mimo-v2.5',
+      messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
+      temperature: 0,
     }),
   }));
   return extractJson(data?.choices?.[0]?.message?.content || '');
@@ -1198,6 +1245,13 @@ async function handleRequest(request, env) {
       const body = await readJson(request);
       await consumeSupabaseAiQuota(env, user, 'google');
       return json({ ok: true, data: await googleJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
+    }
+    if (url.pathname === '/mimo/json') {
+      const user = await optionalSupabaseUser(request, env);
+      if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
+      const body = await readJson(request);
+      await consumeSupabaseAiQuota(env, user, 'mimo');
+      return json({ ok: true, data: await mimoJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
     }
     if (url.pathname === '/trip/intelligence') {
       const user = await optionalSupabaseUser(request, env);

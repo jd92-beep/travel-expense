@@ -82,6 +82,7 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first()).toContainText('¥789');
   await page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first().click();
   await page.getByRole('button', { name: '刪除' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '確認刪除' }).click();
   await expect(page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' })).toHaveCount(0);
 
   await nav.getByRole('button', { name: '記帳', exact: true }).click();
@@ -122,5 +123,6 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await page.getByPlaceholder(/搜尋店名|搜尋店家/).fill('M5 Email');
   await page.locator('.receipt-row').filter({ hasText: 'M5 Email' }).first().click();
   await page.getByRole('button', { name: '刪除' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '確認刪除' }).click();
   await expect(page.getByText('M5 Email')).toBeHidden();
 });
