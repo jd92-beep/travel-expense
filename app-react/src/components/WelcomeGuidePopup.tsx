@@ -43,46 +43,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
     setError('');
     setAiDraft(null);
     try {
-      // We send custom prompt instructions to Kimi directly from front-end
-      const customPrompt = `你是一個專業的旅行計畫小助手。請幫忙分析以下用戶輸入的隨性旅行描述，並提取格式化的旅行資訊。
-請務必嚴格遵循以下 JSON 結構返回結果，不要包含任何 markdown 標記（如 \`\`\`json ），只需返回合法的 JSON 字符串：
-
-{
-  "trip": {
-    "name": "旅行名稱 (例如：台北探險之旅 2026)",
-    "destinationSummary": "目的地概要 (例如：台灣台北、九份)",
-    "startDate": "YYYY-MM-DD (分析日期；如果沒指明年份，預設使用 2026 年；如果沒指明日期，請預設為今天)",
-    "endDate": "YYYY-MM-DD (分析結束日期；如果沒指明，則預設為開始日期 + 4 天，即 5 日遊)",
-    "budget": 數字 (預算總額，若沒指明請設為 50000)",
-    "currencies": ["HKD", "目的幣別 (如 JPY, TWD, USD, KRW 等，請根據目的地智能判斷，如台灣=TWD, 日本=JPY, 韓國=KRW)"],
-    "itinerary": [
-      {
-        "date": "YYYY-MM-DD",
-        "day": 1,
-        "region": "目的地地區 (如 台北市區)",
-        "timezone": "時區 (如 Asia/Taipei, Asia/Tokyo 等，請精確判斷)",
-        "currency": "目的幣別 (如 TWD)",
-        "highlight": "當天亮點摘要 (如 抵達台北 + 饒河夜市)",
-        "spots": [
-          {
-            "time": "HH:MM (如果文字沒提到具體時間，請智能分分配早中晚合適的時間，如 10:00, 14:00, 19:00)",
-            "name": "活動或景點名稱 (例如：台北101)",
-            "type": "flight|transport|food|shopping|lodging|ticket|localtour|medicine|other (分類之一)",
-            "note": "簡短備註說明"
-          }
-        ]
-      }
-    ]
-  },
-  "summary": "一句話簡短總結你的分析",
-  "warnings": ["如果日期不完整或有衝突的提示"],
-  "changes": ["偵測到的主要變更或安排"]
-}
-
-用戶描述文字：
-${tripText}`;
-
-      const result = await parseTripParagraph(customPrompt, state);
+      const result = await parseTripParagraph(tripText, state);
       if (result && result.trip) {
         setAiDraft(result.trip);
         setAiSummary(result.summary || '已成功分析您嘅行程計畫！');

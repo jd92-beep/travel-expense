@@ -47,6 +47,7 @@ const N = {
   updatedAt: ['Updated At', 'Updated', 'Last Updated'],
   active: ['Active'],
   tripJson: ['Trip JSON', 'JSON'],
+  tripIntelligence: ['Trip Intelligence', 'Trip Context'],
   currency: ['Currency', '幣種'],
   originalAmount: ['Original Amount', 'Original'],
   mapUrl: ['Map URL', 'Map', 'Map Link'],
@@ -385,7 +386,7 @@ async function findPageBySourceId(state: AppState, schema: SchemaMap, sourceId: 
 
 function buildTripProps(trip: TripProfile, schema: SchemaMap) {
   const title = trip.name || trip.destinationSummary || trip.id;
-  return {
+  const props: Record<string, any> = {
     [propName(schema, 'objectType')]: { select: { name: 'trip' } },
     [propName(schema, 'store')]: { title: [{ text: { content: title.slice(0, 120) || 'Trip' } }] },
     [propName(schema, 'sourceId')]: { rich_text: [{ text: { content: trip.sourceId || `trip_${trip.id}` } }] },
@@ -402,6 +403,10 @@ function buildTripProps(trip: TripProfile, schema: SchemaMap) {
     [propName(schema, 'active')]: { checkbox: !!trip.active && !trip.archived },
     [propName(schema, 'tripJson')]: { rich_text: richTextChunks(JSON.stringify(trip)) },
   };
+  if (schema.tripIntelligence) {
+    props[schema.tripIntelligence] = { rich_text: richTextChunks(JSON.stringify(trip.intelligence || null)) };
+  }
+  return props;
 }
 
 function readText(prop: any, type: 'title' | 'rich_text') {
@@ -824,7 +829,7 @@ function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt
   if (state.personalNotionConnected === true && appDb && appDb !== DEFAULT_NOTION_DB) {
     const knownTripIds = new Set((state.trips || []).filter((trip) => !trip.archived).map((trip) => trip.id));
     const isDefaultOrEmpty = !tripId || tripId === 'trip_default' || tripId === 'default';
-    if (!isDefaultOrEmpty && !knownTripIds.has(tripId)) return null;
+    if (isDefaultOrEmpty || !knownTripIds.has(tripId)) return null;
   }
   const receipt: Receipt = {
     id: sourceId || `notion_${page.id}`,
@@ -889,6 +894,14 @@ function tripFromPage(page: any, schema: SchemaMap): TripProfile | null {
       timezones: readText(readProp(props, 'timezones', schema), 'rich_text').split(',').map((s: string) => s.trim()).filter(Boolean),
       version: readNumberProp(props, 'tripVersion', schema) || 1,
       active: !!readProp(props, 'active', schema)?.checkbox,
+      intelligence: (() => {
+        try {
+          const raw = readAllText(readProp(props, 'tripIntelligence', schema), 'rich_text');
+          return raw ? JSON.parse(raw) : undefined;
+        } catch {
+          return undefined;
+        }
+      })(),
       itinerary: [],
       notionPageId: page.id,
       sourceId: sourceId || `trip_${id}`,
@@ -1046,6 +1059,7 @@ export async function migrateNotionSchema(state: AppState): Promise<string> {
     tripVersion: { number: { format: 'number' } },
     updatedAt: { date: {} },
     active: { checkbox: {} },
+    tripIntelligence: { rich_text: {} },
     tripJson: { rich_text: {} },
     currency: { select: { options: ['JPY', 'HKD', 'USD', 'KRW', 'TWD', 'CNY', 'EUR', 'GBP', 'AUD', 'SGD', 'THB', 'MYR', 'VND'].map((name) => ({ name, color: 'default' })) } },
     originalAmount: { number: { format: 'number' } },

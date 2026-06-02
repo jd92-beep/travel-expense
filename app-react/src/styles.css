@@ -34,10 +34,18 @@
   --green: #2D6E48;              /* Tokiwairo 常磐色 — evergreen */
   --pink: #FDEFF2;               /* Sakurairo 櫻色 — cherry blossom */
   --brown: #8B7355;              /* Kuchibairo 朽葉色 — decayed leaf */
+  --trip-bg-top: #F5F0E8;
+  --trip-bg-mid: #F0EBDF;
+  --trip-bg-bottom: #E8E2D4;
+  --trip-glow-primary: rgba(253, 239, 242, 0.55);
+  --trip-glow-secondary: rgba(30, 77, 107, 0.05);
+  --trip-glow-tertiary: rgba(212, 168, 67, 0.07);
+  --trip-font-body: "Noto Sans JP", "Avenir Next", "SF Pro Rounded", ui-sans-serif, system-ui, sans-serif;
+  --trip-font-display: "Noto Serif JP", Georgia, "Times New Roman", serif;
   --cream-shadow: rgba(107, 82, 52, .12);
   --shadow-soft: 0 12px 32px rgba(84, 65, 42, .08);
   --shadow-glass: 0 20px 56px rgba(66, 50, 32, .12), inset 0 1px 1px rgba(255,255,255,.88);
-  font-family: "Noto Sans JP", "Avenir Next", "SF Pro Rounded", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--trip-font-body);
 }
 
 * { box-sizing: border-box; }
@@ -47,17 +55,17 @@ body {
   /* Washi paper warmth — layered Japanese traditional tones */
   background:
     /* Soft sakura pink glow — top right */
-    radial-gradient(ellipse at 88% 8%, rgba(253, 239, 242, 0.55) 0%, transparent 50%),
+    radial-gradient(ellipse at 88% 8%, var(--trip-glow-primary) 0%, transparent 50%),
     /* Gentle indigo wash — top left */
-    radial-gradient(ellipse at 5% 35%, rgba(30, 77, 107, 0.05) 0%, transparent 55%),
+    radial-gradient(ellipse at 5% 35%, var(--trip-glow-secondary) 0%, transparent 55%),
     /* Warm gold shimmer — bottom center */
-    radial-gradient(ellipse at 50% 96%, rgba(212, 168, 67, 0.07) 0%, transparent 42%),
+    radial-gradient(ellipse at 50% 96%, var(--trip-glow-tertiary) 0%, transparent 42%),
     /* Soft cream spotlight — center */
     radial-gradient(circle at 50% 30%, rgba(255, 253, 247, 0.55), transparent 60%),
     /* Warm sunrise glow — top left corner */
     radial-gradient(circle at 8% -5%, rgba(250, 237, 210, 0.50), transparent 32%),
     /* Base washi paper gradient */
-    linear-gradient(180deg, #F5F0E8 0%, #F0EBDF 35%, #EBE5D8 70%, #E8E2D4 100%);
+    linear-gradient(180deg, var(--trip-bg-top) 0%, var(--trip-bg-mid) 35%, var(--surface) 70%, var(--trip-bg-bottom) 100%);
   color: var(--ink);
   overflow-x: hidden;
 }
@@ -97,9 +105,9 @@ body::after {
   overflow: hidden;
   contain: paint;
   background:
-    radial-gradient(circle at 84% 10%, rgba(217, 65, 50, .16), transparent 32%),
-    radial-gradient(circle at 12% 18%, rgba(212, 168, 67, .12), transparent 36%),
-    linear-gradient(180deg, #f7efe1 0%, #efe5d5 100%);
+    radial-gradient(circle at 84% 10%, var(--trip-glow-primary), transparent 32%),
+    radial-gradient(circle at 12% 18%, var(--trip-glow-tertiary), transparent 36%),
+    linear-gradient(180deg, var(--trip-bg-top) 0%, var(--trip-bg-bottom) 100%);
   transform: translateZ(0);
 }
 

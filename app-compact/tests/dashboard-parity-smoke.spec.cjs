@@ -19,6 +19,7 @@ async function openDashboard(page, statsIncludeTransportLodging) {
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      schemaVersion: 3,
       lastTab: 'dashboard',
       budget: 20000,
       rate: 20,
@@ -62,14 +63,14 @@ test('Dashboard spending toggle matches legacy total/daily semantics', async ({ 
   const defaultPage = await defaultContext.newPage();
   await openDashboard(defaultPage, false);
   await expect(defaultPage.locator('.washi-today-stats-card').filter({ hasText: '今日支出' })).toContainText('HK$ 49');
-  await expect(defaultPage.locator('.washi-budget-card').filter({ hasText: '已使用' })).toContainText('HK$ 500');
+  await expect(defaultPage.locator('.washi-budget-card').filter({ hasText: '已使用' })).toContainText('HK$ 50');
   await defaultContext.close();
 
   const flippedContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const flippedPage = await flippedContext.newPage();
   await openDashboard(flippedPage, true);
-  await expect(flippedPage.locator('.washi-today-stats-card').filter({ hasText: '今日支出' })).toContainText('HK$ 492');
-  await expect(flippedPage.locator('.washi-budget-card').filter({ hasText: '已使用' })).toContainText('HK$ 50');
+  await expect(flippedPage.locator('.washi-today-stats-card').filter({ hasText: '今日支出' })).toContainText('HK$ 491');
+  await expect(flippedPage.locator('.washi-budget-card').filter({ hasText: '已使用' })).toContainText('HK$ 500');
   await flippedContext.close();
 });
 

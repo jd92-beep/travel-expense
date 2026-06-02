@@ -25,6 +25,7 @@ import { upsertSupabaseTrip } from './lib/supabase';
 import { createTripProfile } from './domain/trip/normalize';
 import { SupabaseUnlockGate } from './security/SupabaseUnlockGate';
 import { hasDeviceTrust, clearDeviceTrust } from './security/deviceTrust';
+import { TripThemeProvider } from './theme/tripTheme';
 
 const Dashboard = lazy(() => import('./tabs/Dashboard').then((module) => ({ default: module.Dashboard })));
 const Scan = lazy(() => import('./tabs/Scan').then((module) => ({ default: module.Scan })));
@@ -266,7 +267,7 @@ export function App() {
   };
 
   const appContent = (
-    <>
+    <TripThemeProvider state={state}>
       <HyperframeBackground />
       {showGuide && (
         <WelcomeGuidePopup
@@ -426,7 +427,7 @@ export function App() {
       )}
         </ErrorBoundary>
       </Shell>
-    </>
+    </TripThemeProvider>
   );
 
   if (supabaseAuth.configured) {

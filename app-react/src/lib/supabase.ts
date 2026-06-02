@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
-import { activeTrip, normalizeItinerary, stampReceiptForTrip } from '../domain/trip/normalize';
+import { activeTrip, normalizeItinerary, normalizeTripIntelligence, stampReceiptForTrip } from '../domain/trip/normalize';
 import { DEFAULT_NOTION_DB, normalizeAiModelSettings } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, TripProfile } from './types';
 
@@ -223,6 +223,12 @@ function rowToTrip(row: SupabaseTripRow, state: AppState): TripProfile {
     active: row.active,
     archived: !!row.archived,
     itinerary: itinerary.length ? itinerary : current?.itinerary || [],
+    intelligence: normalizeTripIntelligence(
+      metadata.intelligence || current?.intelligence,
+      row.destination_summary || current?.destinationSummary || '未設定目的地',
+      tripCurrency,
+      Array.isArray(row.timezones) ? row.timezones[0] : current?.timezones?.[0],
+    ),
     version: Number(row.version || current?.version || 1),
     sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : current?.sourceId || `trip_${appId}`,
     notionDb: userScopedNotionDatabaseId(current?.notionDb) || undefined,
@@ -502,6 +508,12 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     app_metadata: {
       sourceId: trip.sourceId || `trip_${trip.id}`,
       localTripId: trip.id,
+      intelligence: normalizeTripIntelligence(
+        trip.intelligence,
+        trip.destinationSummary,
+        trip.currencies?.find((currency) => currency !== (trip.homeCurrency || 'HKD')) || state.tripCurrency || 'JPY',
+        trip.timezones?.[0],
+      ),
     },
     version: Math.max(1, Number(trip.version) || 1),
     archived: !!trip.archived,

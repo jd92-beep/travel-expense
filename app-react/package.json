@@ -29,7 +29,8 @@
     "smoke:security": "playwright test tests/security-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:supabase-notion-mirror": "playwright test tests/supabase-notion-mirror-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:mobile-layout": "playwright test tests/mobile-layout-stability-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
-    "smoke:final-nav": "playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line"
+    "smoke:final-nav": "playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:trip-intelligence": "playwright test tests/trip-intelligence-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line"
   },
   "dependencies": {
     "@radix-ui/react-icons": "^1.3.2",

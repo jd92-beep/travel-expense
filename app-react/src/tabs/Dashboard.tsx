@@ -36,7 +36,9 @@ import {
   safeExternalUrl,
   todayForReceipts, 
   safePhotoUrl,
-  getReceiptHkdAmount
+  getReceiptHkdAmount,
+  getReceiptTripAmount,
+  getResolvedTripCurrency
 } from '../lib/domain';
 import { activeTrip, createTripProfile, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import type { AppState, ItinerarySpot, Receipt, SyncQueueItem, TabId } from '../lib/types';
@@ -228,26 +230,7 @@ export function Dashboard({
   const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip), [state, trip]);
   const today = todayForReceipts(state);
 
-  // Resolved Local Currency other than HKD
-  const resolvedTripCurrency = (() => {
-    if (trip.currencies && trip.currencies.length > 0) {
-      const cur = trip.currencies.find((c) => c !== 'HKD');
-      if (cur) return cur;
-    }
-    if (state.tripCurrency) return state.tripCurrency;
-    
-    const text = `${trip.destinationSummary || ''} ${trip.name || ''}`.toLowerCase();
-    if (text.includes('日本') || text.includes('japan') || text.includes('nagoya') || text.includes('tokyo') || text.includes('osaka') || text.includes('kyoto') || text.includes('kanazawa') || text.includes('takayama') || text.includes('toyama')) return 'JPY';
-    if (text.includes('韓國') || text.includes('korea') || text.includes('seoul') || text.includes('busan')) return 'KRW';
-    if (text.includes('台灣') || text.includes('taiwan') || text.includes('taipei')) return 'TWD';
-    if (text.includes('歐洲') || text.includes('europe') || text.includes('歐元') || text.includes('france') || text.includes('germany') || text.includes('italy')) return 'EUR';
-    if (text.includes('英國') || text.includes('uk') || text.includes('london') || text.includes('gbp')) return 'GBP';
-    if (text.includes('美國') || text.includes('usa') || text.includes('america') || text.includes('new york')) return 'USD';
-    if (text.includes('泰國') || text.includes('thailand') || text.includes('bangkok')) return 'THB';
-    if (text.includes('中國') || text.includes('china') || text.includes('cny') || text.includes('人民幣')) return 'CNY';
-    
-    return 'JPY';
-  })();
+  const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
 
   const tripCurrencySymbol = (() => {
     switch (resolvedTripCurrency.toUpperCase()) {
@@ -285,27 +268,9 @@ export function Dashboard({
   const spentHkd = totalReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
   const todaySpentHkd = dailyReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
 
-  // 目的貨幣匯率 (非港幣)
-  const activeRate = Math.max(
-    0.1,
-    Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) || 
-    (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) || 
-    20.36
-  );
-
-  // 精確轉換單筆 Receipt 到目的貨幣 (resolvedTripCurrency)，若是該目的貨幣則 100% 原始值返回，防止任何浮點精度損失或偏差
-  const getReceiptTripAmount = (r: Receipt): number => {
-    const cur = r.currency || 'JPY';
-    if (cur === resolvedTripCurrency) {
-      return Number(r.total) || 0;
-    }
-    const hkdAmt = getReceiptHkdAmount(r, state);
-    return Math.round(hkdAmt * activeRate);
-  };
-
   // 目的貨幣等值花費 (用於輔助顯示)
-  const totalForBudget = totalReceipts.reduce((s, r) => s + getReceiptTripAmount(r), 0);
-  const todayTotal = dailyReceipts.reduce((s, r) => s + getReceiptTripAmount(r), 0);
+  const totalForBudget = totalReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
+  const todayTotal = dailyReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
 
   const budgetHkd = Math.round(hkd(state.budget, state));
   const rawBudgetPct = budgetHkd > 0 ? (spentHkd / budgetHkd) * 100 : 0;

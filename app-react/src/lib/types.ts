@@ -14,6 +14,20 @@ export type SplitMode = 'shared' | 'private';
 export type TripPhase = 'prep' | 'trip' | 'post';
 export type SyncStatus = 'local' | 'queued' | 'syncing' | 'synced' | 'error' | 'failed';
 export type GlobalSyncStatus = 'idle' | 'queued' | 'pushing' | 'pulling' | 'synced' | 'error' | 'offline';
+export type TripThemeKey = 'japan_washi' | 'korea_editorial' | 'taiwan_nightmarket' | 'europe_rail' | 'global_journal';
+
+export interface TripIntelligence {
+  countryCode: string;
+  countryName?: string;
+  primaryCurrency: string;
+  themeKey: TripThemeKey;
+  locale?: string;
+  timezone?: string;
+  weatherRegion?: string;
+  confidence?: 'low' | 'medium' | 'high';
+  source?: 'ai' | 'heuristic' | 'manual';
+  updatedAt?: number;
+}
 
 export interface Person {
   id: string;
@@ -121,6 +135,7 @@ export interface TripProfile {
   active: boolean;
   archived?: boolean;
   budget?: number;
+  intelligence?: TripIntelligence;
   itinerary: ItineraryDay[];
   notionPageId?: string;
   sourceId?: string;

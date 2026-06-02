@@ -126,6 +126,8 @@ export function getResolvedTripCurrency(state: AppState, trip: any): string {
     const cur = trip.currencies.find((c: string) => c !== 'HKD');
     if (cur) return cur;
   }
+  const intelligentCurrency = String(trip.intelligence?.primaryCurrency || '').toUpperCase();
+  if (intelligentCurrency && intelligentCurrency !== 'HKD') return intelligentCurrency;
   return state.tripCurrency || 'JPY';
 }
 

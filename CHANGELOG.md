@@ -4,6 +4,14 @@ All notable project changes should be recorded here.
 
 ## 2026-06-02
 
+### Trip Intelligence architecture foundation
+
+- Added a shared optional `TripIntelligence` contract to both React and Compact trip profiles, covering inferred country/region, primary currency, dynamic UI theme key, locale, timezone, weather region, confidence, and source.
+- Upgraded trip AI parsing so onboarding/trip-update JSON can return `intelligence` with `countryCode`, `primaryCurrency`, and `themeKey`, while keeping heuristic fallback for old trips and snake_case AI output.
+- Added a shared React/Compact `TripThemeProvider` that applies active-trip theme variables to the app shell, preserving Compact's independent UI while keeping the same data contract as the main React app.
+- Persisted trip intelligence through Supabase `app_metadata` and Notion `Trip JSON` / `Trip Intelligence`, and added a backward-compatible Supabase migration for optional trip intelligence columns.
+- Tightened personal Notion pulls in both React and Compact so rows without a known `TripID` are skipped instead of being date-fallbacked into the active trip.
+
 ### React budget-scope regression review
 
 - Reviewed the follow-up AI agent changes on `main` and found an uncommitted React budget-scope edit that made Dashboard `Spent` and Stats `預算使用` ignore the existing `statsIncludeTransportLodging` chart filter.

@@ -1,5 +1,5 @@
 import { APP_SCHEMA_VERSION, DEFAULT_STATE, ITINERARY } from '../../lib/constants';
-import type { AppState, ItineraryDay, ItinerarySpot, Receipt, TripProfile } from '../../lib/types';
+import type { AppState, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile, TripThemeKey } from '../../lib/types';
 
 const slug = (value: string) => String(value || '')
   .toLowerCase()
@@ -40,6 +40,57 @@ export function timezoneForDestination(destination = '', fallback = 'Asia/Tokyo'
   if (/美國|美国|紐約|纽约|new\s*york|usa|america/.test(value)) return 'America/New_York';
   if (/日本|東京|东京|大阪|名古屋|京都|札幌|沖繩|冲绳|japan|tokyo|osaka|nagoya|kyoto|sapporo|okinawa/.test(value)) return 'Asia/Tokyo';
   return normalizeZone(fallback) || 'Asia/Tokyo';
+}
+
+function countryContextForDestination(destination = '', currency = 'JPY'): Pick<TripIntelligence, 'countryCode' | 'countryName' | 'primaryCurrency' | 'themeKey' | 'locale'> {
+  const value = `${destination} ${currency}`.toLowerCase();
+  if (/韓國|韩国|首爾|首尔|釜山|korea|seoul|busan|krw/.test(value)) {
+    return { countryCode: 'KR', countryName: 'Korea', primaryCurrency: 'KRW', themeKey: 'korea_editorial', locale: 'ko-KR' };
+  }
+  if (/台灣|台湾|台北|taiwan|taipei|twd/.test(value)) {
+    return { countryCode: 'TW', countryName: 'Taiwan', primaryCurrency: 'TWD', themeKey: 'taiwan_nightmarket', locale: 'zh-TW' };
+  }
+  if (/歐洲|歐元|欧洲|英國|英国|倫敦|伦敦|法國|法国|巴黎|europe|eur|gbp|uk|london|france|paris|germany|italy/.test(value)) {
+    const isUk = /英國|英国|倫敦|伦敦|gbp|uk|london/.test(value);
+    return { countryCode: isUk ? 'GB' : 'EU', countryName: isUk ? 'United Kingdom' : 'Europe', primaryCurrency: isUk ? 'GBP' : 'EUR', themeKey: 'europe_rail', locale: isUk ? 'en-GB' : 'en-GB' };
+  }
+  if (/日本|東京|东京|大阪|名古屋|京都|札幌|沖繩|冲绳|japan|tokyo|osaka|nagoya|kyoto|sapporo|okinawa|jpy/.test(value)) {
+    return { countryCode: 'JP', countryName: 'Japan', primaryCurrency: 'JPY', themeKey: 'japan_washi', locale: 'ja-JP' };
+  }
+  return { countryCode: 'GLOBAL', countryName: 'Global', primaryCurrency: String(currency || 'JPY').toUpperCase(), themeKey: 'global_journal', locale: 'zh-HK' };
+}
+
+function validThemeKey(value: unknown): TripThemeKey | undefined {
+  const key = String(value || '').trim();
+  return ['japan_washi', 'korea_editorial', 'taiwan_nightmarket', 'europe_rail', 'global_journal'].includes(key)
+    ? key as TripThemeKey
+    : undefined;
+}
+
+export function normalizeTripIntelligence(
+  input: unknown,
+  destinationSummary = '',
+  currency = 'JPY',
+  timezone = timezoneForDestination(destinationSummary),
+): TripIntelligence {
+  const raw = input && typeof input === 'object' ? input as Partial<TripIntelligence> : {};
+  const aliases = raw as Partial<TripIntelligence> & Record<string, unknown>;
+  const inferredCurrency = raw.primaryCurrency || (aliases.primary_currency as string) || currency;
+  const inferred = countryContextForDestination(destinationSummary, inferredCurrency);
+  const primaryCurrency = String(raw.primaryCurrency || aliases.primary_currency || inferred.primaryCurrency || currency || 'JPY').toUpperCase();
+  const themeKey = validThemeKey(raw.themeKey || aliases.theme_key) || countryContextForDestination(destinationSummary, primaryCurrency).themeKey;
+  return {
+    countryCode: String(raw.countryCode || aliases.country_code || inferred.countryCode).toUpperCase(),
+    countryName: String(raw.countryName || aliases.country_name || inferred.countryName || ''),
+    primaryCurrency,
+    themeKey,
+    locale: String(raw.locale || inferred.locale || 'zh-HK'),
+    timezone: normalizeZone(raw.timezone || timezone) || timezone,
+    weatherRegion: String(raw.weatherRegion || aliases.weather_region || destinationSummary || inferred.countryName || ''),
+    confidence: raw.confidence === 'high' || raw.confidence === 'medium' || raw.confidence === 'low' ? raw.confidence : 'medium',
+    source: raw.source === 'ai' || raw.source === 'manual' || raw.source === 'heuristic' ? raw.source : 'heuristic',
+    updatedAt: Number(raw.updatedAt) || Date.now(),
+  };
 }
 
 export function stableDayId(tripId: string, date: string): string {
@@ -84,6 +135,7 @@ export function createTripProfile(input: {
   endDate?: string;
   budget?: number;
   currency?: string;
+  intelligence?: Partial<TripIntelligence>;
   now?: number;
 }): TripProfile {
   const now = input.now || Date.now();
@@ -92,6 +144,7 @@ export function createTripProfile(input: {
   const destinationSummary = input.destinationSummary?.trim() || 'Japan';
   const currency = String(input.currency || 'JPY').toUpperCase();
   const timezone = timezoneForDestination(destinationSummary);
+  const intelligence = normalizeTripIntelligence(input.intelligence, destinationSummary, currency, timezone);
   const id = `trip_${startDate.replace(/-/g, '')}_${slug(`${destinationSummary}_${now.toString(36)}`) || now.toString(36)}`;
   const itinerary = normalizeItinerary(
     Array.from({ length: inclusiveDays(startDate, endDate) }, (_, idx) => {
@@ -115,6 +168,7 @@ export function createTripProfile(input: {
     startDate,
     endDate,
     budget: Math.max(0, Number(input.budget) || 0),
+    intelligence,
     homeCurrency: 'HKD',
     currencies: Array.from(new Set(['HKD', currency])),
     timezones: Array.from(new Set(itinerary.map((day) => day.timezone || timezone))),
@@ -151,6 +205,7 @@ export function tripFromLegacyState(input: Partial<AppState>): TripProfile {
     itinerary,
     sourceId: `trip_${tripId}`,
     notionDb: input.notionDb || DEFAULT_STATE.notionDb,
+    intelligence: normalizeTripIntelligence(undefined, itinerary.map((day) => day.region).filter(Boolean).slice(0, 6).join(' / ') || '未設定目的地', input.tripCurrency || DEFAULT_STATE.tripCurrency),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -261,6 +316,12 @@ export function migrateAppState(input: unknown): AppState {
         timezones: Array.isArray(item.timezones)
           ? Array.from(new Set(item.timezones.map(normalizeZone).filter(Boolean)))
           : trip.timezones,
+        intelligence: normalizeTripIntelligence(
+          item.intelligence,
+          item.destinationSummary || trip.destinationSummary,
+          item.currencies?.find((currency) => currency !== 'HKD') || parsed.tripCurrency || 'JPY',
+          Array.isArray(item.timezones) ? item.timezones[0] : trip.timezones[0],
+        ),
       }))
     : [trip];
   const isOldSchema = !parsed.schemaVersion || Number(parsed.schemaVersion) < 3;

@@ -1,7 +1,7 @@
-import { activeTrip, normalizeItinerary, tripFromLegacyState } from '../domain/trip/normalize';
+import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
 import { brokerAiJson, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
 import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_KIMI_PRIMARY_MODEL_ID } from './constants';
-import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, TripDraft, TripProfile } from './types';
+import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, TripDraft, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
 import { currentSupabaseAccessToken } from './supabase';
 
@@ -373,7 +373,7 @@ ${text.slice(0, 12000)}`;
 
 function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): TripDraft {
   const current = activeTrip(state);
-  const value = raw && typeof raw === 'object' ? raw as Partial<TripDraft> & { trip?: Partial<TripProfile>; itinerary?: ItineraryDay[] } : {};
+  const value = raw && typeof raw === 'object' ? raw as Partial<TripDraft> & { trip?: Partial<TripProfile>; itinerary?: ItineraryDay[]; intelligence?: Partial<TripIntelligence> } : {};
   const tripValue: Partial<TripProfile> = value.trip || {};
   const itinerary = Array.isArray(tripValue.itinerary) && tripValue.itinerary.length
     ? tripValue.itinerary
@@ -393,6 +393,13 @@ function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): T
     state.tripCurrency || current.currencies?.[1] || 'JPY',
   ].map(String).filter(Boolean)));
   const normalizedItinerary = normalizeItinerary(itinerary, tripId, currencies.find((code) => code !== 'HKD') || state.tripCurrency || 'JPY');
+  const primaryCurrency = currencies.find((code) => code !== 'HKD') || state.tripCurrency || 'JPY';
+  const intelligence = normalizeTripIntelligence(
+    tripValue.intelligence || value.intelligence,
+    destinationSummary,
+    primaryCurrency,
+    normalizedItinerary[0]?.timezone || current.timezones?.[0] || 'Asia/Hong_Kong',
+  );
   const trip: TripProfile = {
     ...current,
     ...tripValue,
@@ -404,6 +411,7 @@ function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): T
     homeCurrency: String(tripValue.homeCurrency || current.homeCurrency || 'HKD'),
     currencies,
     timezones: Array.from(new Set(normalizedItinerary.map((day) => day.timezone || 'Asia/Hong_Kong'))),
+    intelligence: { ...intelligence, source: tripValue.intelligence || value.intelligence ? 'ai' : intelligence.source },
     version: isNewTrip ? 1 : current.version + 1,
     active: true,
     archived: false,
@@ -436,8 +444,9 @@ ${JSON.stringify({
 }).slice(0, 12000)}
 
 Return:
-{"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"highlight":string,"lodging":{"name":string,"address":string,"mapUrl":string,"checkIn":string,"checkOut":string},"spots":[{"time":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other|sightseeing","address":string,"mapUrl":string,"note":string,"timezone":string,"lat":number,"lon":number}]}]},"summary":string,"warnings":string[],"changes":string[]}
+{"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":"JP|KR|TW|GB|EU|GLOBAL","countryName":string,"primaryCurrency":string,"themeKey":"japan_washi|korea_editorial|taiwan_nightmarket|europe_rail|global_journal","locale":string,"timezone":string,"weatherRegion":string,"confidence":"low|medium|high"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"highlight":string,"lodging":{"name":string,"address":string,"mapUrl":string,"checkIn":string,"checkOut":string},"spots":[{"time":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other|sightseeing","address":string,"mapUrl":string,"note":string,"timezone":string,"lat":number,"lon":number}]}]},"summary":string,"warnings":string[],"changes":string[]}
 Include lodging, arrival times, places, Google Maps links when inferable from input. Do not invent API keys.
+Choose themeKey from destination context: Japan=japan_washi, Korea=korea_editorial, Taiwan=taiwan_nightmarket, Europe/UK=europe_rail, unknown=global_journal.
 
 USER PARAGRAPH:
 ${paragraph.slice(0, 14000)}`;
