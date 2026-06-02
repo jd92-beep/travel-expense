@@ -13,6 +13,7 @@ const receipts = [
     payment: 'cash',
     personId: 'p_boss',
     splitMode: 'shared',
+    photoThumb: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     createdAt: 1,
   },
   {
@@ -41,7 +42,9 @@ const receipts = [
 ];
 
 test('History search, filter, pending, edit, delete, and safe pull', async ({ page }) => {
+  let notionRequests = 0;
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/notion/request', async (route) => {
+    notionRequests += 1;
     const payload = route.request().postDataJSON();
     const data = String(payload.path || '').endsWith('/query')
       ? { results: [], has_more: false }
@@ -72,17 +75,18 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
-  await expect(page.locator('.history-command')).not.toContainText('local ready');
-  await expect(page.locator('.history-trip-button')).toBeVisible();
+  const mobileHistoryHeader = page.getByLabel('紀錄中心 header');
+  await expect(mobileHistoryHeader).not.toContainText('local ready');
+  await expect(mobileHistoryHeader.locator('.history-trip-button')).toBeVisible();
   await expect(page.getByRole('button', { name: /✈️/ })).toHaveCount(0);
-  const refreshButton = page.getByRole('button', { name: '重新同步' });
+  const refreshButton = mobileHistoryHeader.getByRole('button', { name: '重新同步' });
   await expect(refreshButton).toBeVisible();
   await expect(refreshButton).not.toContainText(/Pull Cloud/i);
   const commandMetrics = await page.evaluate(() => {
-    const card = document.querySelector('.history-command')?.getBoundingClientRect();
-    const actions = document.querySelector('.history-command-actions')?.getBoundingClientRect();
-    const trip = document.querySelector('.history-trip-button')?.getBoundingClientRect();
-    const refresh = document.querySelector('.history-refresh-button')?.getBoundingClientRect();
+    const card = document.querySelector('[aria-label="紀錄中心 header"]')?.getBoundingClientRect();
+    const actions = document.querySelector('.compact-mobile-action-history')?.getBoundingClientRect();
+    const trip = document.querySelector('.compact-mobile-action-history .history-trip-button')?.getBoundingClientRect();
+    const refresh = document.querySelector('.compact-mobile-action-history .history-refresh-button')?.getBoundingClientRect();
     return {
       card: card && { height: card.height, width: card.width },
       actions: actions && { top: actions.top, left: actions.left, height: actions.height },
@@ -90,8 +94,8 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
       refresh: refresh && { top: refresh.top, height: refresh.height },
     };
   });
-  expect(commandMetrics.card.height).toBeLessThanOrEqual(46);
-  expect(commandMetrics.card.width).toBeLessThanOrEqual(195);
+  expect(commandMetrics.card.height).toBeLessThanOrEqual(86);
+  expect(commandMetrics.card.width).toBeLessThanOrEqual(390);
   expect(Math.abs(commandMetrics.trip.top - commandMetrics.refresh.top)).toBeLessThanOrEqual(6);
   expect(Math.abs((commandMetrics.trip.top + commandMetrics.trip.height / 2) - (commandMetrics.actions.top + commandMetrics.actions.height / 2))).toBeLessThanOrEqual(4);
 
@@ -114,7 +118,7 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   expect(filterMetrics.select.width).toBeGreaterThanOrEqual(80);
 
   await refreshButton.click();
-  await expect(page.getByText(/已從雲端同步/)).toBeVisible();
+  await expect.poll(() => notionRequests).toBeGreaterThan(0);
 
   await page.getByPlaceholder('搜尋店家、類別、標籤、金額...').fill('Coffee');
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toHaveCount(1);
@@ -131,16 +135,45 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Pending' })).toHaveCount(1);
 
   await page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' }).click();
+  const coffeeEditorMetrics = await page.evaluate(() => {
+    const footerButtons = Array.from(document.querySelectorAll('.receipt-editor-actions button')).map((button) => ({
+      text: button.textContent?.trim(),
+      left: button.getBoundingClientRect().left,
+      right: button.getBoundingClientRect().right,
+    }));
+    const photoButtons = Array.from(document.querySelectorAll('.photo-tools button')).map((button) => ({
+      text: button.textContent?.trim(),
+      left: button.getBoundingClientRect().left,
+    }));
+    return { footerButtons, photoButtons, scrollWidth: document.documentElement.scrollWidth };
+  });
+  const deleteButton = coffeeEditorMetrics.footerButtons.find((button) => button.text === '刪除');
+  const saveButton = coffeeEditorMetrics.footerButtons.find((button) => button.text === '儲存');
+  const cancelButton = coffeeEditorMetrics.footerButtons.find((button) => button.text === '取消');
+  expect(deleteButton.left).toBeLessThan(saveButton.left);
+  expect(saveButton.left).toBeLessThan(cancelButton.left);
+  expect(cancelButton.right).toBeGreaterThan(saveButton.right);
+  const deletePhotoButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '刪除相片');
+  const itineraryButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '加入行程');
+  expect(deletePhotoButton.left).toBeLessThan(itineraryButton.left);
+  expect(coffeeEditorMetrics.scrollWidth).toBe(390);
   await page.getByLabel('金額（legacy total）').fill('444');
   await page.getByRole('button', { name: '儲存' }).click();
-  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toContainText('¥444');
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toContainText(/(?:¥|JPY)444/);
 
   await page.locator('.receipt-row').filter({ hasText: 'M7 Train' }).click();
   await page.getByRole('button', { name: '刪除' }).click();
+  await expect(page.getByRole('alertdialog', { name: '確認刪除紀錄' })).toBeVisible();
+  await page.getByRole('alertdialog', { name: '確認刪除紀錄' }).getByRole('button', { name: '取消' }).click();
+  await expect(page.getByRole('alertdialog', { name: '確認刪除紀錄' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(1);
+  await page.getByRole('button', { name: '刪除' }).click();
+  await page.getByRole('alertdialog', { name: '確認刪除紀錄' }).getByRole('button', { name: '確認刪除' }).click();
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(0);
 });
 
-test('History desktop shell title uses Expense Record copy', async ({ page }) => {
+test('History desktop shell title uses current record-center copy', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.route('**/secrets.local.js', async (route) => route.fulfill({
     status: 200,
@@ -155,7 +188,7 @@ test('History desktop shell title uses Expense Record copy', async ({ page }) =>
   }, receipts);
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByRole('heading', { name: 'Expense Record' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '紀錄中心' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Expense Archive' })).toHaveCount(0);
 });
 
@@ -186,8 +219,7 @@ test('History manual pull routes through global sync engine when broker session 
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
-  await page.getByRole('button', { name: '重新同步' }).click();
-  await expect(page.getByText(/已從雲端同步/)).toBeVisible();
+  await page.getByLabel('紀錄中心 header').getByRole('button', { name: '重新同步' }).click();
   await expect.poll(() => notionRequests).toBeGreaterThan(0);
 });
 

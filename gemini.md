@@ -19,7 +19,7 @@
 
 ### 2. 開工前必做
 - 永遠先讀 `README.md`、`HANDOVER.md` 攞最新狀態。
-- 睇吓 `graphify-out/GRAPH_REPORT.md` (架構總覽) 同埋用 `gitnexus` 查 codebase (code-level flow)。
+- 睇踩 `graphify-out/GRAPH_REPORT.md` (架構總覽) 同埋用 `gitnexus` 查 codebase (code-level flow)。
 - 對於 legacy `index.html` 嘅大改動要極度小心，唔好破壞現有嘅 PWA 結構同 `localStorage` (`boss-japan-tracker`)。
 
 ### 3. 改 Code 流程與 GitNexus
@@ -33,7 +33,7 @@
 
 ---
 
-## 🛠️ 核心架構與最新升級 (2026-05-30)
+## 🛠️ 核心架構與最新升級 (2026-06-02 HKT)
 
 ### 0. 📍 React Itinerary Timeline 最新狀態
 - **Spot-index progress**：React `/react/` Itinerary rail 依家跟「目前時間所屬嘅景點位置」推進，而唔係用 24 小時比例硬拉條線。
@@ -43,7 +43,7 @@
 
 ### 1. 🧹 Zhipu (GLM-5) 徹底剔除，全面擁抱 Kimi (Moonshot)
 - **Kimi 首選**：不論在前端 AI (React/Legacy) 還是 Apps Script 後端 (`email-to-notion.gs`)，Zhipu 已完全被清空，首選模型全部升級為 Kimi (`kimi-8k` / `kimi-32k` / `kimi-k2.6`)。
-- **邊緣 Worker 加密儲存 (零密鑰暴露)**：Kimi API Key 安全地加密儲存於 Cloudflare Worker (`credential-broker`) 的 KV 空間。React 與 HTML 前端 **絕不保存與泄露** Kimi Key，直接 commit 到 public repo 100% 安全！
+- **邊緣 Worker 加密儲存 (零密鑰暴露)**：Kimi API Key 安全地加密儲存於 Cloudflare Worker (`credential-broker`) 的 KV 空間。React 與 HTML 前端 **絕不保存與泄露** Kimi Key，直接 commit 到 public repo 100% safe！
 - **Deno Proxy 繞過 WAF**：為避免 Cloudflare Worker 請求被 Kimi 的 WAF 攔截，Worker 環境變量 `KIMI_PROXY_URL` 必須指向 Deno Proxy `https://rare-duck-29.jd92-beep.deno.net` 進行轉發。
 - **免手動輸入**：Boss 登入 App 時只需輸入 Unlock Password，即可直接與 Worker `/kimi/json` 握手，免去手動輸入 Kimi 密鑰的繁瑣步驟。
 
@@ -51,12 +51,22 @@
 - **漏洞原因**：Notion Database Query 默認不會返回已 archived (歸檔/刪除) 嘅頁面，導致 Apps Script 去重檢測失效，反覆 POST 創建重複數據。
 - **超渡策略**：
   1. 使用 **PropertiesService** 緩存 `SourceID -> page_id` 的映射關係。
-  2. 查重時，優先使用緩存的 page_id 發起直連 `GET /pages/{id}` 請求（直連請求能取得已 archived 頁面的 live 狀態）。
+  2. 查重時，優先使用緩存 the page_id 發起直連 `GET /pages/{id}` 請求（直連請求能取得已 archived 頁面的 live 狀態）。
   3. 一旦檢測到 `archived: true` 或者是 `in_trash: true`，Apps Script **100% 主動 skip** 該筆費用，徹底解決殭屍復活 Bug！
 
 ### 3. 🔄 Settings ＆ Itinerary Overrides 大容量雙向同步
 - **Itinerary Overrides 切割**：由於 Notion 屬性限制 2000 字符，用戶的手動調整 (`itineraryOverrides`) 被 JSON 化後，使用 `richTextChunks` 將其切割為多個 1800-char block 儲存在 Notion Rich Text (`__meta_settings__` row) 中，最大支持 **144 KB** 超大容量同步！
 - **合併機制**：同步拉取時，將遠端 settings 與本地 settings 進行 shallow merge，避免覆蓋 Boss 在手機端最新做的 Tweaks。
+
+### 4. 🗑️ 刪除紀錄雙重確認與版面美化 (2026-06-02 新增)
+另一位 AI Agent 幫手做咗超正嘅優化：
+- **雙重確認 Dialog**：喺 React 同 Compact 嘅 `ReceiptEditor.tsx` 入面新增咗刪除確認 Modal，防止 Boss 唔小心揈走重要嘅消費紀錄。
+- **Footer 佈局重組**：重構咗 `.receipt-editor-actions` 嘅 CSS Flex 佈局。將「刪除」擺左邊，而「儲存」同「取消」擺右邊，確保喺 390px 手機寬度下絕對唔會發生按鈕重疊或溢出，排版超級 Professional！
+- **Playwright Test 覆蓋**：`history-smoke.spec.cjs` 已經加咗對應嘅測試用例，確認雙重確認框嘅顯示、取消同確認刪除邏輯 100% 通過！
+
+### 5. 💰 Dashboard ＆ Stats 總消費額修正 (2026-06-01 新增)
+- **總消費額解耦**：修正咗 React Dashboard 嘅 `totalIncludeFL` 同 Stats 嘅 `trueTotalHkd`。以前如果熄咗「包括交通/住宿於統計圖表」，總消費額會縮水到日常開支嘅 HK$11,898，令預算環顯示有 HK$6,107 餘額。
+- **現時狀態**：總消費額 (Total Spent) 永遠包含所有項目（包括機票同住宿），以確保與總預算比較時顯示正確嘅超量狀態（>$20,000），而 Toggle 依家只會用嚟過濾圓餅圖、Top 10 同日均開支！
 
 ---
 

@@ -1602,6 +1602,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .person-edit input[type="color"] { min-height: 42px; padding: 4px; }
 .person-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }
 .photo-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.photo-secondary-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
 .photo-thumb { width: 92px; height: 68px; padding: 0; border: 1px solid #D9CFC2; border-radius: 8px; overflow: hidden; background: #f9f4ed; box-shadow: 0 2px 6px rgba(0,0,0,.06); }
 .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .batch-list { display: grid; gap: 10px; margin-top: 12px; }
@@ -2144,6 +2150,39 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   border-top: 1px solid #E8DDD0;
   padding-top: 14px;
   margin-top: 8px;
+}
+.receipt-editor-actions {
+  flex-wrap: nowrap;
+}
+.receipt-delete-slot {
+  display: flex;
+  justify-content: flex-start;
+  min-width: 64px;
+}
+.receipt-final-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+.receipt-final-actions .primary,
+.receipt-final-actions .secondary {
+  min-width: 84px;
+}
+.receipt-delete-confirm-backdrop {
+  z-index: 1200;
+  place-items: center;
+}
+.receipt-delete-confirm {
+  width: min(420px, 100%);
+  max-height: min(82svh, 420px);
+}
+.receipt-delete-confirm p {
+  margin: 12px 0 4px;
+  line-height: 1.55;
+}
+.receipt-delete-confirm-actions {
+  justify-content: flex-end;
 }
 .icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid #D9CFC2; background: white; display: grid; place-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
 ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
@@ -8381,6 +8420,17 @@ textarea,
   .app-shell--history .compact-mobile-status,
   .app-shell--history .compact-mobile-action {
     display: none !important;
+  }
+
+  .app-shell--history .compact-mobile-action-history {
+    pointer-events: auto !important;
+    z-index: 10001 !important;
+  }
+
+  .app-shell--history .compact-mobile-action-history button {
+    pointer-events: auto !important;
+    position: relative !important;
+    z-index: 10002 !important;
   }
 
   .app-shell--history .compact-mobile-title-art {

@@ -34,6 +34,7 @@ export function ReceiptEditor({
   const photoRef = useRef<HTMLInputElement | null>(null);
   const mountedRef = useRef(true);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [draft, setDraft] = useState<Receipt>(() => receipt || {
     id: newId(),
     store: '',
@@ -54,6 +55,7 @@ export function ReceiptEditor({
   }, []);
 
   useEffect(() => {
+    setShowDeleteConfirm(false);
     setDraft(receipt || {
       id: newId(),
       store: '',
@@ -92,7 +94,7 @@ export function ReceiptEditor({
 
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true">
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="receipt-editor-title">
       <form
         className="modal sheet"
         onSubmit={(event) => {
@@ -116,7 +118,7 @@ export function ReceiptEditor({
         }}
       >
         <div className="modal-head">
-          <h2>{receipt ? '編輯紀錄' : '手動記一筆'}</h2>
+          <h2 id="receipt-editor-title">{receipt ? '編輯紀錄' : '手動記一筆'}</h2>
           <button type="button" className="icon-btn" onClick={onCancel}>×</button>
         </div>
 
@@ -217,25 +219,56 @@ export function ReceiptEditor({
             </button>
           )}
           <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>
-          {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>移除相片</button>}
+          {((draft.photoThumb || draft.photoUrl) || onAddToItinerary) && (
+            <div className="photo-secondary-actions">
+              {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>刪除相片</button>}
+              {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
+                const total = validAmount(draft.total);
+                if (total == null) {
+                  alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
+                  return;
+                }
+                onAddToItinerary({ ...draft, store: draft.store.trim() || '未命名', total });
+              }}>加入行程</button>}
+            </div>
+          )}
         </div>
 
-        <div className="modal-actions">
-          {receipt && onDelete ? <button type="button" className="danger" onClick={() => onDelete(receipt)}>刪除</button> : <span />}
-          <div className="action-row">
-            <button type="button" className="secondary" onClick={onCancel}>取消</button>
-            {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
-              const total = validAmount(draft.total);
-              if (total == null) {
-                alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
-                return;
-              }
-              onAddToItinerary({ ...draft, store: draft.store.trim() || '未命名', total });
-            }}>加入行程</button>}
+        <div className="modal-actions receipt-editor-actions">
+          <div className="receipt-delete-slot">
+            {receipt && onDelete ? <button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button> : null}
+          </div>
+          <div className="receipt-final-actions">
             <button type="submit" className="primary">儲存</button>
+            <button type="button" className="secondary" onClick={onCancel}>取消</button>
           </div>
         </div>
       </form>
+      {showDeleteConfirm && receipt && onDelete && (
+        <div
+          className="modal-backdrop receipt-delete-confirm-backdrop"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="receipt-delete-confirm-title"
+          aria-describedby="receipt-delete-confirm-description"
+        >
+          <div className="modal receipt-delete-confirm">
+            <div className="modal-head">
+              <h2 id="receipt-delete-confirm-title">確認刪除紀錄</h2>
+            </div>
+            <p id="receipt-delete-confirm-description" className="muted">
+              你即將刪除「{receipt.store || '未命名'}」。確認後會移除呢筆消費紀錄；按取消會返回編輯畫面。
+            </p>
+            <div className="modal-actions receipt-delete-confirm-actions">
+              <button type="button" className="secondary" onClick={() => setShowDeleteConfirm(false)}>取消</button>
+              <button type="button" className="danger" onClick={() => {
+                setShowDeleteConfirm(false);
+                onDelete(receipt);
+              }}>確認刪除</button>
+            </div>
+          </div>
+        </div>
+      )}
       {viewPhoto && (
         <ReceiptPhotoModal receipt={viewPhoto} onClose={() => setViewPhoto(null)} />
       )}
