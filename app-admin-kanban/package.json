@@ -1,0 +1,29 @@
+{
+  "name": "travel-expense-admin-kanban",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 8904",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "smoke": "playwright test tests/admin-kanban-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
+    "@vitejs/plugin-react": "^6.0.1",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "vite": "^8.0.11"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.8.0"
+  }
+}
