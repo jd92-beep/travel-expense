@@ -4,6 +4,12 @@ All notable project changes should be recorded here.
 
 ## 2026-06-02
 
+### Receipt editor action layout
+
+- Reordered the receipt editor footer so `刪除` stays on the far left, while `儲存` sits immediately left of the far-right `取消` button.
+- Moved `加入行程` into the photo tool row beside `刪除相片`, and added a dedicated warning dialog so receipt deletion only happens after `確認刪除`.
+- Added React and Compact History smoke coverage for the button geometry, delete cancel path, delete confirm path, and mobile no-overflow behavior.
+
 ### Public-user onboarding and trip privacy hardening
 
 - Added React and Compact welcome-guide fields for trip party size, traveler names, and expense split ratios, then persisted the shared `persons` and `shareRatios` data so both app versions can read the same Supabase-backed trip state.
