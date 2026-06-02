@@ -140,6 +140,11 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
   const scopedIndexedKey = `app-state:${scope}`;
 
   await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/logout')) {
+      await route.fulfill({ status: 204 });
+      return;
+    }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
   });
 

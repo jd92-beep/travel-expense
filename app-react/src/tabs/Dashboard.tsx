@@ -248,10 +248,10 @@ export function Dashboard({
   })();
 
   // 統一口記過濾邏輯：
-  // statsIncludeTransportLodging = true -> totalIncludeFL = true (Spent 包含大額) / dailyIncludeFL = true (今日花費包含大額)
-  // statsIncludeTransportLodging = false -> totalIncludeFL = false (Spent 排除大額) / dailyIncludeFL = false (今日花費排除大額)
+  // 總消費額 (Total Spent) 永遠包含所有項目（包括機票同住宿），以確保與總預算比較時顯示正確嘅超量狀態
+  // 而 statsIncludeTransportLodging Toggle 依家只會用嚟過濾日均開支及圓餅圖！
   const statsIncludeTransportLodging = !!state.statsIncludeTransportLodging;
-  const totalIncludeFL = statsIncludeTransportLodging;
+  const totalIncludeFL = true;
   const dailyIncludeFL = statsIncludeTransportLodging;
 
 

@@ -23,8 +23,7 @@ import { clearIndexedState } from './storage/indexedDb';
 import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/WelcomeGuidePopup';
 import { upsertSupabaseTrip } from './lib/supabase';
 import { createTripProfile } from './domain/trip/normalize';
-import { SupabaseUnlockGate } from './security/SupabaseUnlockGate';
-import { hasDeviceTrust, clearDeviceTrust } from './security/deviceTrust';
+import { clearDeviceTrust } from './security/deviceTrust';
 import { TripThemeProvider } from './theme/tripTheme';
 
 const Dashboard = lazy(() => import('./tabs/Dashboard').then((module) => ({ default: module.Dashboard })));
@@ -59,7 +58,6 @@ export function App() {
   const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope } = useAppState(hasSupabaseSession(supabaseAuth.session), storageScope, userEmail);
   
   const [skippedGuide, setSkippedGuide] = useState(false);
-  const [supabaseUnlocked, setSupabaseUnlocked] = useState(() => hasDeviceTrust());
 
   const handleSaveGuideTrip = async (result: WelcomeGuideResult | TripProfile) => {
     const guide = 'trip' in result
@@ -140,7 +138,6 @@ export function App() {
     await clearIndexedState(scope);
     clearCredentialSession();
     await clearDeviceTrust();
-    setSupabaseUnlocked(false);
   };
 
   useEffect(() => {
@@ -449,22 +446,6 @@ export function App() {
   if (supabaseAuth.configured) {
     if (hasSupabaseSession(supabaseAuth.session) && isHydratingScope) {
       return <LoadingState label="載入帳號資料" />;
-    }
-    if (hasSupabaseSession(supabaseAuth.session) && !supabaseUnlocked && !hasDeviceTrust()) {
-      return (
-        <SupabaseGate auth={supabaseAuth}>
-          <SupabaseUnlockGate
-            userEmail={supabaseAuth.session.user.email || 'vc06456@gmail.com'}
-            credentialBrokerUrl={state.credentialBrokerUrl}
-            onUnlocked={() => setSupabaseUnlocked(true)}
-            onBrokerSession={(session) => updateState(session)}
-            onSignOut={async () => {
-              await clearSupabaseDeviceData();
-              await supabaseAuth.signOut();
-            }}
-          />
-        </SupabaseGate>
-      );
     }
     return <SupabaseGate auth={supabaseAuth}>{appContent}</SupabaseGate>;
   }

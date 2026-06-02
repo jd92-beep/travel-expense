@@ -45,6 +45,7 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
   await expect(page.getByText('M6 Loose Receipt')).toBeVisible();
   await page.locator('.receipt-row').filter({ hasText: 'M6 Loose Receipt' }).click();
   await page.getByRole('button', { name: '刪除' }).click();
+  await page.getByRole('button', { name: '確認刪除' }).click();
   await expect(page.getByText('M6 Loose Receipt')).toBeHidden();
 });
 

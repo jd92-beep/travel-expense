@@ -60,14 +60,22 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
     }
   })();
 
+  const isFlightOrHotelItem = (r: Pick<Receipt, 'category'>) => r.category === 'flight' || r.category === 'lodging';
+  const isBigTripItem = (r: Pick<Receipt, 'category'>) => r.category === 'flight' || r.category === 'lodging' || r.category === 'transport';
+
   const analysisReceipts = scopedState.receipts.filter((r) => state.statsIncludeTransportLodging || !isBigTripItem(r));
   
   // 基於多貨幣精確對齊計算
   const catTotals = categoryTotals(analysisReceipts, (r) => getReceiptHkdAmount(r, state), (r) => getReceiptTripAmount(r, state, resolvedTripCurrency));
   const payTotals = paymentTotals(analysisReceipts, (r) => getReceiptHkdAmount(r, state), (r) => getReceiptTripAmount(r, state, resolvedTripCurrency));
   
+  // 圖表專用
   const analysisTotal = analysisReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
   const analysisTotalHkd = analysisReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
+
+  // 總預算環專用（永遠包含所有項目）
+  const trueTotal = scopedState.receipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
+  const trueTotalHkd = scopedState.receipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
 
   const transferTotal = settlement.transfers.reduce((s, t) => s + t.amount, 0);
   const transferTotalHkd = Math.round(transferTotal / activeRate);
@@ -125,8 +133,8 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
           <div className="stats-command-visual">
             <SpendingCompass
               categories={catTotals} 
-              total={analysisTotal}
-              totalHkd={analysisTotalHkd}
+              total={trueTotal}
+              totalHkd={trueTotalHkd}
               budget={Number(state.budget) || 0} 
               budgetHkd={budgetHkd}
               dailyAverage={dailyAverage} 
