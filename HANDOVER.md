@@ -4,10 +4,9 @@ Last updated: 2026-06-02 HKT
 
 Latest pushed commits:
 
-- Current commit: Review React budget-scope regression
-- Current commit: Fix React Stats multi-currency calculation error and upgrade metrics to HKD-first layout
-- Current commit: Default statsIncludeTransportLodging to true and bump schema v3 to force include flights/lodging in budget dashboard
-- Current commit: Fix missing large stats and prep-phase receipts matching with case-insensitive email validation
+- Current commit: Integrate Mimo v2.5 as AI model option and fallback
+- `0d314d2` Review React budget-scope regression
+- `af9a3f2` Fix React Stats multi-currency calculation error and upgrade metrics to HKD-first layout
 
 - Current commit: Optimize header height, compact cell sizing, and fix Notion connection fallback in production
 
@@ -101,6 +100,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- Mimo v2.5 AI Fallback and User Naming on 2026-06-02 HKT: Integrated Mimo v2.5 (`mimo/mimo-v2.5`) as the primary automated fallback model for all AI tasks. It acts as the 1st fallback from Google Gemma 4 for receipt scans and voice inputs, and the 1st fallback from Kimi for email imports and trip intelligence parsing. The Cloudflare Credential Broker now supports the Mimo API (`https://token-plan-sgp.xiaomimimo.com/v1`) using secure server-side KV credential storage. Mimo v2.5 was also added as a selectable primary model option within the Settings tab. For default user setup naming, new public accounts on React and Compact versions now default to "User 1" and "User 2", while the Legacy app retains "Tony" and "欣欣" for backward compatibility. AI routing smoke coverage (`npm run smoke:ai-routing`) was successfully updated and verified for the new Mimo fallback chain.
 - Receipt editor action layout on 2026-06-02 HKT: React and Compact receipt edit modals now keep destructive `刪除` on the far left, keep `取消` as the far-right footer action with `儲存` immediately to its left, and move `加入行程` beside `刪除相片` in the photo tools row. Receipt deletion now opens a dedicated `確認刪除紀錄` warning dialog; cancelling returns to the editor, while `確認刪除` performs the delete.
 - Public-user onboarding and privacy hardening on 2026-06-02 HKT: React and Compact now share the same new-account guide contract for first trip creation, party size, traveler names, and split ratios. Public Supabase users who are not Boss no longer hydrate the Nagoya/demo trip from scoped legacy state or empty cloud pulls, so a fresh account starts with an empty trip list and sees the guide. The shared `persons` and `shareRatios` data is saved in the same app state contract used by both React and Compact, preserving cross-version data compatibility. Trip update parsing now tries the Credential Broker `/trip/intelligence` route first and locks that broker request to Kimi `kimi-code`; quota and rate-limit errors remain hard stops instead of falling through to another provider.
 - Trip Intelligence architecture foundation on 2026-06-02 HKT: React and Compact now share an optional `TripIntelligence` data contract on `TripProfile`, with country/region code, primary currency, theme key, locale, timezone, weather region, confidence, and source. The AI trip parser now asks for this structured trip context and accepts snake_case provider output. Active trips feed a shared `TripThemeProvider` in both app versions, so dynamic country theme variables can change the app atmosphere without forking the data model. Supabase persists the shared payload in `trips.app_metadata.intelligence`, Notion mirrors it via full `Trip JSON` plus a schema-optional `Trip Intelligence` rich text property, and migration `20260602053000_add_trip_intelligence_metadata.sql` adds optional first-class DB columns for later analytics/search. Personal Notion pulls now skip rows without a known `TripID` in both React and Compact, preventing date-fallback contamination across shared data. Compact remains UI-independent, but its data/schema/sync contract must stay compatible with React: changes in one version should sync and render correctly in the other.

@@ -4,6 +4,15 @@ All notable project changes should be recorded here.
 
 ## 2026-06-02
 
+### Mimo v2.5 AI Fallback and User Naming
+
+- Integrated Mimo v2.5 (`mimo/mimo-v2.5`) as the primary automated fallback model for all AI tasks. It acts as the 1st fallback from Google Gemma 4 for receipt scans and voice inputs, and the 1st fallback from Kimi for email imports and trip intelligence parsing.
+- Configured the Cloudflare Credential Broker to support the Mimo API (`https://token-plan-sgp.xiaomimimo.com/v1`) using secure server-side KV credential storage, preventing frontend API key exposure.
+- Added Mimo v2.5 as a selectable primary model option within the Settings tab.
+- Refined default user setup naming: new public accounts on React and Compact versions now default to "User 1" and "User 2", while the Legacy app retains "Tony" and "欣欣" for backward compatibility.
+- Added and verified AI routing smoke coverage (`npm run smoke:ai-routing`) for the new Mimo fallback chain.
+
+
 ### Receipt editor action layout
 
 - Reordered the receipt editor footer so `刪除` stays on the far left, while `儲存` sits immediately left of the far-right `取消` button.
