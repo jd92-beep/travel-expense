@@ -6,9 +6,13 @@ function apiBase(): string {
   return String(import.meta.env.VITE_ADMIN_API_URL || '').replace(/\/+$/, '');
 }
 
-function apiUrl(path: string): string {
+function adminDataUrl(path: string): string {
   const base = apiBase();
   return `${base}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+function sessionUrl(path: string): string {
+  return path.startsWith('/') ? path : `/${path}`;
 }
 
 function readStoredSession(): AdminSession | null {
@@ -54,7 +58,7 @@ export function clearSession() {
 }
 
 export async function loginAdmin(passphrase: string): Promise<AdminSession> {
-  const data = await parseJson<{ ok: boolean; session: AdminSession }>(await fetch(apiUrl('/api/session'), {
+  const data = await parseJson<{ ok: boolean; session: AdminSession }>(await fetch(sessionUrl('/api/session'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ passphrase }),
@@ -65,14 +69,14 @@ export async function loginAdmin(passphrase: string): Promise<AdminSession> {
 
 export async function fetchSnapshot(session: AdminSession, rangeDays: number): Promise<AdminKanbanSnapshot> {
   const params = new URLSearchParams({ range: `${rangeDays}d` });
-  const data = await parseJson<{ ok: boolean; snapshot: AdminKanbanSnapshot }>(await fetch(apiUrl(`/api/snapshot?${params}`), {
+  const data = await parseJson<{ ok: boolean; snapshot: AdminKanbanSnapshot }>(await fetch(adminDataUrl(`/api/snapshot?${params}`), {
     headers: { Authorization: `Bearer ${session.token}` },
   }));
   return data.snapshot;
 }
 
 export async function previewDeleteUser(session: AdminSession, userId: string): Promise<DeletePreview> {
-  const data = await parseJson<{ ok: boolean; preview: DeletePreview }>(await fetch(apiUrl('/api/delete-preview'), {
+  const data = await parseJson<{ ok: boolean; preview: DeletePreview }>(await fetch(adminDataUrl('/api/delete-preview'), {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${session.token}`,
@@ -90,7 +94,7 @@ export async function confirmDeleteUser(
   adminPassphrase: string,
 ): Promise<{ deleted: boolean; postDeleteCounts: Record<string, number> }> {
   const data = await parseJson<{ ok: boolean; result: { deleted: boolean; postDeleteCounts: Record<string, number> } }>(
-    await fetch(apiUrl('/api/delete-user'), {
+    await fetch(adminDataUrl('/api/delete-user'), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${session.token}`,

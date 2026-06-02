@@ -6,10 +6,10 @@ All notable project changes should be recorded here.
 
 ### Admin cyber KanBan foundation
 
-- Added independent `app-admin-kanban/` Vite + React app with a cyber-themed operations KanBan, server-side Vercel API routes, guarded admin login, live snapshot contract, redacted inspector, and two-step user deletion flow.
+- Added independent `app-admin-kanban/` Vite + React app with a cyber-themed operations KanBan, server-side Vercel login/session routes, a Supabase Edge live-data API, redacted inspector, and two-step user deletion flow.
 - Added Supabase admin telemetry/audit migrations for `app_usage_events`, `sync_attempt_events`, `data_quality_*`, `admin_audit_events`, and the service-role-only `admin_kanban_rls_state()` RPC; hardened the new tables after Supabase advisor review.
-- Deployed the independent Vercel project at `https://travel-expense-admin-kanban.vercel.app`; the shell returns `200`, login works with the generated local admin passphrase, and live snapshot remains blocked until `SUPABASE_SERVICE_ROLE_KEY` is added to Vercel production env.
-- Verified `app-admin-kanban/` with `npm run typecheck`, `npm run build`, `npm run smoke`, API `node --check`, `git diff --check`, Supabase live migration/RLS checks, and Supabase advisors.
+- Deployed the independent Vercel project at `https://travel-expense-admin-kanban.vercel.app` and the Supabase Edge Function `admin-kanban`; the live board renders real Supabase counts through `live-edge` without exposing service-role secrets to Vercel or the browser.
+- Verified `app-admin-kanban/` with `npm run typecheck`, `npm run build`, `npm run smoke`, API `node --check`, `git diff --check`, Supabase live migration/RLS checks, Supabase advisors, live Edge snapshot count comparison, guarded delete-preview, wrong-confirm delete rejection, and desktop/mobile Vercel UI smoke.
 
 ## 2026-06-02
 

@@ -102,16 +102,19 @@ The frontend is a cyber operations KanBan:
 
 ### Backend
 
-Add a server-side admin API. Current implementation:
+Add a server-side admin API. Current implementation is split by authority:
 
 ```text
-app-admin-kanban/api/
+app-admin-kanban/api/                  # Vercel login + session verification
+supabase/functions/admin-kanban/       # Supabase Edge live data/admin actions
 ```
 
-Reason: keep admin service-role permissions behind Vercel serverless functions
-instead of the browser. The admin API owns cross-user reads and destructive
-actions. The public Credential Broker keeps provider credentials and user-facing
-AI calls.
+Reason: keep admin service-role permissions inside Supabase Edge runtime instead
+of Vercel or the browser. Vercel owns the admin passphrase, short-lived session
+token, and `/api/verify-session`. The Supabase Edge Function validates each
+Bearer session through Vercel, then owns cross-user reads and destructive admin
+actions using Supabase runtime service-role env. The public Credential Broker
+keeps provider credentials and user-facing AI calls.
 
 A future hardening pass can move the same API contract to a separate
 `workers/admin-kanban-api/` Cloudflare Worker if we want an even clearer runtime
@@ -119,34 +122,43 @@ boundary.
 
 Admin API responsibilities:
 
-- Verify admin identity and issue a short-lived admin session.
-- Read aggregate and detail data from Supabase with a service-role secret.
+- Verify admin identity and issue a short-lived admin session in Vercel.
+- Verify the session from Supabase Edge before any cross-user read.
+- Read aggregate and detail data from Supabase with Edge service-role env.
 - Query Auth admin user data through Supabase Admin API.
 - Read provider health from the Credential Broker.
 - Optionally request a provider test run through the Credential Broker.
 - Create audit records for every admin action.
 - Perform two-step user deletion.
 
-The admin API needs these server-only secrets:
+The Vercel session API needs these server-only secrets:
+
+```text
+ADMIN_KANBAN_SESSION_SECRET
+ADMIN_KANBAN_HASH
+ADMIN_KANBAN_SUBJECT
+```
+
+The Supabase Edge Function reads Supabase runtime env and optional URLs:
 
 ```text
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
-ADMIN_KANBAN_SESSION_SECRET
-ADMIN_KANBAN_HASH
 CREDENTIAL_BROKER_URL
-CREDENTIAL_BROKER_ADMIN_HASH or dedicated broker admin token
+ADMIN_KANBAN_VERIFY_URL
+ADMIN_KANBAN_LOGIN_URL
 ```
 
-The Vercel frontend stores no service-role secrets. It can optionally store an
-API base URL override:
+The Vercel frontend stores no service-role secrets. It stores the public Edge API
+base URL:
 
 ```text
 VITE_ADMIN_API_URL
 ```
 
-When `VITE_ADMIN_API_URL` is not set, the app uses the same-origin Vercel
-serverless routes under `/api/*`.
+When `VITE_ADMIN_API_URL` is not set, the app can still use the same-origin
+Vercel serverless routes under `/api/*` as a fallback, but production uses the
+Supabase Edge Function.
 
 ### Supabase Additions
 
