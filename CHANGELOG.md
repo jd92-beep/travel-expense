@@ -2,6 +2,14 @@
 
 All notable project changes should be recorded here.
 
+## 2026-06-02
+
+### React budget-scope regression review
+
+- Reviewed the follow-up AI agent changes on `main` and found an uncommitted React budget-scope edit that made Dashboard `Spent` and Stats `預算使用` ignore the existing `statsIncludeTransportLodging` chart filter.
+- Restored the local React Dashboard/Stats working tree to the verified chart-filter contract: chart totals and budget usage follow the stats filter, while settlement totals still use all receipts.
+- Verified `app-react/` with `npm run build`, `npm run smoke:dashboard`, `npm run smoke:stats`, `npm run smoke:mobile-layout`, and `git diff --check`.
+
 ## 2026-06-01
 
 ### Compact generated-preview header and stats density pass

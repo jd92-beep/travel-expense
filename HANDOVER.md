@@ -1,9 +1,10 @@
 # Travel Expense App - Agent Handover
 
-Last updated: 2026-06-01 HKT
+Last updated: 2026-06-02 HKT
 
 Latest pushed commits:
 
+- Current commit: Review React budget-scope regression
 - Current commit: Fix React Stats multi-currency calculation error and upgrade metrics to HKD-first layout
 - Current commit: Default statsIncludeTransportLodging to true and bump schema v3 to force include flights/lodging in budget dashboard
 - Current commit: Fix missing large stats and prep-phase receipts matching with case-insensitive email validation
@@ -100,6 +101,7 @@ Current production-readiness status as of 2026-05-30 HKT:
 
 Latest UI polish in this handover update:
 
+- React budget-scope regression review on 2026-06-02 HKT: follow-up AI agent changes were checked against the current local working tree. An uncommitted React Dashboard/Stats edit made Dashboard `Spent` and Stats `預算使用` ignore `statsIncludeTransportLodging`, which broke the verified chart-filter contract (`69%` budget usage and filtered Dashboard `Spent`). The local React Dashboard/Stats tree was restored to the existing contract: chart totals and budget usage follow the stats filter, while settlement totals still use all receipts. Compact, legacy, Supabase, and Notion flows were not changed.
 - Compact generated-preview header and stats density pass on 2026-06-01 HKT: `app-compact/` restored the generated torii/Fuji/sakura mobile header mark across all seven compact tabs, replacing the temporary red stamp mark while keeping the shorter iOS-style header. Timeline now keeps a short generated-preview date overview inside the top command card without breaking the compact mobile smoke height contract. Weather keeps the atlas-textured source strip and large current-weather card. Stats uses the smaller generated-preview budget cockpit density so the top budget card is shorter and `每日 Budget Pace` appears earlier in the first mobile viewport. React and legacy versions were not changed.
 - Compact Scan first-viewport preview pass on 2026-05-31 HKT: `app-compact/` Scan mobile now shows the generated-preview camera frame and the red camera / green gallery primary action cards together in the first viewport instead of leaving the action cards mostly hidden behind the bottom dock. The Weather preview hourly chip keys were also made unique to remove the duplicate-key console warning when multiple forecast locations share the same hour slots. React and legacy versions were not changed.
 - Compact Settings mobile preview pass on 2026-05-31 HKT: `app-compact/` Settings mobile now moves closer to the generated control-center preview with a four-tile quick-control grid for Trip, Kimi, Vault, and Security, plus denser 56px accordion rows so more settings groups fit in the first viewport. The quick tiles open the existing Settings panels, so the underlying trip, credential, and data-management functions remain intact. React and legacy versions were not changed.
@@ -134,6 +136,7 @@ Latest UI polish in this handover update:
 
 Latest UI verification from this pass:
 
+- React budget-scope regression verification on 2026-06-02 HKT: `npm run build`, `npm run smoke:dashboard`, `npm run smoke:stats`, `npm run smoke:mobile-layout`, and `git diff --check` passed from `app-react/` after rejecting the uncommitted all-receipts budget-scope edit that made Dashboard and Stats smokes fail.
 - Compact generated-preview header and stats density verification on 2026-06-01 HKT: `npm run build`, `npm run smoke:dashboard`, `npm run smoke:timeline`, `npm run smoke:weather`, `npm run smoke:stats`, `npm run smoke:scan`, `npm run smoke:history`, `npm run smoke:settings`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Playwright generated a final seven-tab 390px mobile contact sheet at `/tmp/compact-preview-pass19-final/mobile-contact-sheet.png`; console/page errors were empty, document/body width stayed `390`, and the compact version remained independent from the React and legacy apps.
 - Compact smaller-font preview verification on 2026-06-01 HKT: `npm run build`, `npm run smoke:dashboard`, `npm run smoke:scan`, `npm run smoke:timeline`, `npm run smoke:history`, `npm run smoke:weather`, `npm run smoke:stats`, `npm run smoke:settings`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Playwright generated a seven-tab 390px mobile contact sheet at `/tmp/compact-current-audit-20260601-smallfont-after2/mobile-contact-sheet.png` with no console/page errors after tightening the compact mobile type scale and hardening Settings against missing `shareRatios` / trip `currencies`.
 - Compact Scan first-viewport verification on 2026-05-31 HKT: `npm run smoke:scan`, `npm run smoke:weather`, `npm run build`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, and `git diff --check` passed from `app-compact/`. Local Playwright mobile proof at 390px verified document/body width `390`, Scan camera frame height `232`, red camera card and green gallery card both visible from `480-608px`, bottom dock top `751`, and no console/page errors. Screenshot captured at `/tmp/compact-scan-first-viewport-pass15.png`.

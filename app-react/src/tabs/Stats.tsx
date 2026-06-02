@@ -123,9 +123,9 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
             </div>
           </div>
           <div className="stats-command-visual">
-            <SpendingCompass 
+            <SpendingCompass
               categories={catTotals} 
-              total={analysisTotal} 
+              total={analysisTotal}
               totalHkd={analysisTotalHkd}
               budget={Number(state.budget) || 0} 
               budgetHkd={budgetHkd}
@@ -541,4 +541,3 @@ function Bar({ label, leading, value, valueHkd, tripCurrencySymbol, activeRate, 
     </div>
   );
 }
-
