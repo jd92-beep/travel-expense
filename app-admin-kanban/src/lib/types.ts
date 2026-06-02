@@ -107,7 +107,7 @@ export type AdminAuditEvent = {
 export type AdminKanbanSnapshot = {
   generatedAt: string;
   staleAfterSeconds: number;
-  source: 'live' | 'fixture' | 'configuration_error';
+  source: 'live' | 'live-edge' | 'fixture' | 'configuration_error';
   supabase: {
     projectRef: string;
     status: HealthState;

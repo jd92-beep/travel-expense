@@ -149,6 +149,10 @@ test('desktop board renders live snapshot and guarded delete flow', async ({ pag
   await page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ }).click();
   await expect(page.getByLabel('Inspector')).toContainText('emailMasked');
   await expect(page.getByLabel('Inspector')).not.toContainText('token');
+  await page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ }).dragTo(page.locator('[data-lane-id="trips"]'));
+  await expect(page.locator('[data-lane-id="trips"] [data-testid="triage-stack"]')).toContainText('vc***@g***.com');
+  await page.locator('[data-lane-id="trips"] .triage-card').click();
+  await expect(page.locator('[data-lane-id="trips"] [data-testid="triage-stack"]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Preview delete scope/ })).toBeEnabled();
   await page.getByRole('button', { name: /Preview delete scope/ }).click();
   await expect(page.getByText('Delete preview')).toBeVisible();

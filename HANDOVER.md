@@ -11,11 +11,12 @@ Last updated: 2026-06-03 HKT
 - Admin login check: `/api/session` works after generated admin env was added.
 - Live snapshot check: Vercel frontend uses `VITE_ADMIN_API_URL=https://fbnnjoahvtdrnigevrtw.supabase.co/functions/v1/admin-kanban`; authenticated Edge snapshot returned `HTTP 200` with `source=live-edge` and counts `authUsers=3`, `profiles=3`, `trips=1`, `receipts=0`.
 - Runtime split: Vercel owns admin passphrase login and `/api/verify-session`; Supabase Edge Function `admin-kanban` validates the Bearer session through Vercel and uses Supabase runtime service-role env for cross-user reads and destructive admin actions. Do not add service-role secrets to frontend or Vercel client env.
+- Local KanBan triage: live cards can be dragged into another lane to create a localStorage triage copy. This is an admin board preference only and does not mutate production user/trip/receipt state.
 - Local admin passphrase file: `app-admin-kanban/.env.admin-kanban.local`; this file is ignored by git and has `600` permissions. Do not commit it or print its contents.
 - Supabase admin telemetry/audit migrations were applied live to project `fbnnjoahvtdrnigevrtw`: `add_admin_kanban_telemetry` and `harden_admin_kanban_telemetry`.
 - Live Supabase verification after migration: admin telemetry/audit tables exist; RLS and FORCE RLS are enabled; `admin_kanban_rls_state()` returns all core public tables; admin/data-quality tables deny anon/authenticated browser access.
 - Supabase advisors after hardening: admin-table RLS/security-definer findings are cleared; remaining security advisor is `auth_leaked_password_protection` disabled, which is a Supabase Auth dashboard setting.
-- Verification passed: `app-admin-kanban npm run typecheck`, `npm run build`, `npm run smoke`, API `node --check`, `app-react npm run db:policy:scan`, `git diff --check`, live Vercel HTTP probes, live Edge snapshot count comparison, guarded delete-preview, wrong-confirm delete rejection, and desktop/mobile Vercel UI smoke.
+- Verification passed: `app-admin-kanban npm run typecheck`, `npm run build`, `npm run smoke`, API `node --check`, `app-react npm run db:policy:scan`, `git diff --check`, live Vercel HTTP probes, live Edge snapshot count comparison, guarded delete-preview, wrong-confirm delete rejection, live drag/drop triage, and desktop/mobile Vercel UI smoke.
 
 Latest pushed commits:
 

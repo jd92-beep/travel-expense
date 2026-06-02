@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type DragEvent, type ReactNode } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -41,7 +41,17 @@ type Lane = {
   body: ReactNode;
 };
 
+type TriageCard = {
+  id: string;
+  laneId: LaneId;
+  title: string;
+  detail: string;
+  sourceType: string;
+  createdAt: string;
+};
+
 const RANGE_OPTIONS = [1, 7, 30, 90];
+const TRIAGE_KEY = 'travel-expense-admin-kanban:triage:v1';
 
 const statusText: Record<HealthState, string> = {
   healthy: 'Healthy',
@@ -59,6 +69,19 @@ function fmtDate(value: string | null | undefined): string {
 
 function classForHealth(status: HealthState): string {
   return `health health-${status}`;
+}
+
+function readTriageCards(): TriageCard[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(TRIAGE_KEY) || '[]') as TriageCard[];
+    return Array.isArray(parsed) ? parsed.filter((card) => card.id && card.laneId && card.title) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeTriageCards(cards: TriageCard[]) {
+  window.localStorage.setItem(TRIAGE_KEY, JSON.stringify(cards.slice(0, 80)));
 }
 
 function matchesSearch(snapshot: AdminKanbanSnapshot, search: string): boolean {
@@ -135,9 +158,9 @@ function EmptyState({ icon, title, detail }: { icon: ReactNode; title: string; d
   );
 }
 
-function ProviderCard({ provider, onSelect }: { provider: AdminProviderHealth; onSelect: () => void }) {
+function ProviderCard({ provider, onSelect, dragProps }: { provider: AdminProviderHealth; onSelect: () => void; dragProps?: ButtonHTMLAttributes<HTMLButtonElement> }) {
   return (
-    <button className="op-card provider-card" type="button" onClick={onSelect}>
+    <button className="op-card provider-card" type="button" onClick={onSelect} {...dragProps}>
       <span className="provider-icon"><Bot size={22} /></span>
       <span>
         <strong>{provider.label}</strong>
@@ -149,9 +172,9 @@ function ProviderCard({ provider, onSelect }: { provider: AdminProviderHealth; o
   );
 }
 
-function UserCard({ user, onSelect }: { user: AdminUserCard; onSelect: () => void }) {
+function UserCard({ user, onSelect, dragProps }: { user: AdminUserCard; onSelect: () => void; dragProps?: ButtonHTMLAttributes<HTMLButtonElement> }) {
   return (
-    <button className="op-card user-card" type="button" onClick={onSelect}>
+    <button className="op-card user-card" type="button" onClick={onSelect} {...dragProps}>
       <span className="avatar"><UserRound size={16} /></span>
       <span>
         <strong>{user.emailMasked}</strong>
@@ -291,6 +314,23 @@ function Inspector({ selected }: { selected: { type: string; data: Record<string
   );
 }
 
+function TriageStack({ cards, onRemove }: { cards: TriageCard[]; onRemove: (id: string) => void }) {
+  if (!cards.length) return null;
+  return (
+    <div className="triage-stack" data-testid="triage-stack">
+      {cards.map((card) => (
+        <button className="triage-card" key={card.id} type="button" onClick={() => onRemove(card.id)}>
+          <span>
+            <strong>{card.title}</strong>
+            <small>{card.sourceType} · {card.detail}</small>
+          </span>
+          <b>Clear</b>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function Board({
   snapshot,
   session,
@@ -309,8 +349,55 @@ function Board({
   const [search, setSearch] = useState('');
   const [activeLane, setActiveLane] = useState<LaneId>('users');
   const [selected, setSelected] = useState<{ type: string; data: Record<string, unknown> } | null>(null);
+  const [triageCards, setTriageCards] = useState<TriageCard[]>(() => readTriageCards());
 
   const visible = matchesSearch(snapshot, search);
+  const triageByLane = useMemo(() => {
+    const grouped = new Map<LaneId, TriageCard[]>();
+    for (const card of triageCards) {
+      grouped.set(card.laneId, [...(grouped.get(card.laneId) || []), card]);
+    }
+    return grouped;
+  }, [triageCards]);
+
+  function rememberTriage(next: TriageCard[]) {
+    setTriageCards(next);
+    writeTriageCards(next);
+  }
+
+  function dragProps(sourceType: string, id: string, title: string, detail: string): ButtonHTMLAttributes<HTMLButtonElement> {
+    return {
+      draggable: true,
+      onDragStart: (event) => {
+        event.dataTransfer.effectAllowed = 'copy';
+        event.dataTransfer.setData('application/json', JSON.stringify({ sourceType, id, title, detail }));
+      },
+    };
+  }
+
+  function dropOnLane(laneId: LaneId, event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    const raw = event.dataTransfer.getData('application/json');
+    if (!raw) return;
+    try {
+      const card = JSON.parse(raw) as Omit<TriageCard, 'laneId' | 'createdAt'>;
+      if (!card.id || !card.title) return;
+      const nextCard: TriageCard = {
+        ...card,
+        id: `${card.sourceType}:${card.id}`,
+        laneId,
+        createdAt: new Date().toISOString(),
+      };
+      rememberTriage([nextCard, ...triageCards.filter((item) => item.id !== nextCard.id)]);
+      setActiveLane(laneId);
+    } catch {
+      // Ignore malformed external drag payloads.
+    }
+  }
+
+  function removeTriageCard(id: string) {
+    rememberTriage(triageCards.filter((card) => card.id !== id));
+  }
 
   const lanes: Lane[] = useMemo(() => [
     {
@@ -321,7 +408,14 @@ function Board({
       body: snapshot.users.length ? (
         <>
           <Metric label="Active users" value={snapshot.usage.activeUsers} status="healthy" />
-          {snapshot.users.map((user) => <UserCard key={user.id} user={user} onSelect={() => setSelected({ type: 'User', data: user })} />)}
+          {snapshot.users.map((user) => (
+            <UserCard
+              key={user.id}
+              user={user}
+              onSelect={() => setSelected({ type: 'User', data: user })}
+              dragProps={dragProps('User', user.id, user.emailMasked, `${user.tripCount} trips · ${user.receiptCount} receipts`)}
+            />
+          ))}
         </>
       ) : <EmptyState icon={<UserRound />} title="No user events yet" detail="Telemetry will fill this lane after app usage is recorded." />,
     },
@@ -331,7 +425,13 @@ function Board({
       count: snapshot.trips.length,
       tone: 'green',
       body: snapshot.trips.length ? snapshot.trips.map((trip) => (
-        <button className="op-card trip-card" key={trip.id} type="button" onClick={() => setSelected({ type: 'Trip', data: trip })}>
+        <button
+          className="op-card trip-card"
+          key={trip.id}
+          type="button"
+          onClick={() => setSelected({ type: 'Trip', data: trip })}
+          {...dragProps('Trip', trip.id, trip.name, `${trip.destination} · ${trip.receiptCount} receipts`)}
+        >
           <strong>{trip.name}</strong>
           <small>{trip.destination} · {trip.dateRange}</small>
           <span>{trip.currency} · {trip.receiptCount} receipts</span>
@@ -345,7 +445,13 @@ function Board({
       count: snapshot.receipts.length,
       tone: 'amber',
       body: snapshot.receipts.length ? snapshot.receipts.map((receipt) => (
-        <button className="op-card receipt-card" key={receipt.id} type="button" onClick={() => setSelected({ type: 'Receipt', data: receipt })}>
+        <button
+          className="op-card receipt-card"
+          key={receipt.id}
+          type="button"
+          onClick={() => setSelected({ type: 'Receipt', data: receipt })}
+          {...dragProps('Receipt', receipt.id, receipt.store, `${receipt.currency} ${receipt.amount.toLocaleString()}`)}
+        >
           <strong>{receipt.store}</strong>
           <small>{receipt.recordDate} · {receipt.status}</small>
           <span>{receipt.currency} {receipt.amount.toLocaleString()}</span>
@@ -374,7 +480,14 @@ function Board({
       tone: 'cyan',
       body: (
         <>
-          {snapshot.llm.map((provider) => <ProviderCard key={provider.provider} provider={provider} onSelect={() => setSelected({ type: 'Provider', data: provider as unknown as Record<string, unknown> })} />)}
+          {snapshot.llm.map((provider) => (
+            <ProviderCard
+              key={provider.provider}
+              provider={provider}
+              onSelect={() => setSelected({ type: 'Provider', data: provider as unknown as Record<string, unknown> })}
+              dragProps={dragProps('Provider', provider.provider, provider.label, provider.model || provider.provider)}
+            />
+          ))}
         </>
       ),
     },
@@ -407,7 +520,7 @@ function Board({
       tone: 'red',
       body: <DeletePanel snapshot={snapshot} session={session} selectedUser={selected?.type === 'User' ? selected.data as AdminUserCard : null} onDone={onRefresh} />,
     },
-  ], [snapshot, session, selected, onRefresh]);
+  ], [snapshot, session, selected, onRefresh, triageCards]);
 
   const active = lanes.find((lane) => lane.id === activeLane) || lanes[0];
 
@@ -455,15 +568,26 @@ function Board({
         </aside>
 
         <div className={`lanes ${visible ? '' : 'is-filtered-empty'}`}>
-          {lanes.map((lane) => (
-            <article className={`lane lane-${lane.tone} ${lane.id === active.id ? 'mobile-active' : ''}`} key={lane.id}>
+          {lanes.map((lane) => {
+            const laneTriage = triageByLane.get(lane.id) || [];
+            return (
+            <article
+              className={`lane lane-${lane.tone} ${lane.id === active.id ? 'mobile-active' : ''}`}
+              data-lane-id={lane.id}
+              key={lane.id}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => dropOnLane(lane.id, event)}
+            >
               <div className="lane-head">
                 <span>{lane.title}</span>
-                <b>{lane.count}</b>
+                <b>{lane.count + laneTriage.length}</b>
               </div>
-              <div className="lane-body">{lane.body}</div>
+              <div className="lane-body">
+                <TriageStack cards={laneTriage} onRemove={removeTriageCard} />
+                {lane.body}
+              </div>
             </article>
-          ))}
+          );})}
           {!visible && <div className="search-empty">No cards match the current search.</div>}
         </div>
 

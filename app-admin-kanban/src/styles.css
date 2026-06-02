@@ -383,6 +383,14 @@ button:disabled {
   background: rgba(34, 216, 255, 0.11);
 }
 
+.op-card[draggable="true"] {
+  cursor: grab;
+}
+
+.op-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .op-card strong,
 .op-card small,
 .op-card span {
@@ -409,6 +417,45 @@ button:disabled {
 .provider-card > .health,
 .provider-card > small:last-child {
   grid-column: 2;
+}
+
+.triage-stack {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(200, 93, 255, 0.32);
+  border-radius: 6px;
+  padding: 8px;
+  background: rgba(200, 93, 255, 0.08);
+}
+
+.triage-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid rgba(200, 93, 255, 0.38);
+  border-radius: 6px;
+  color: var(--text);
+  background: rgba(4, 13, 22, 0.84);
+  padding: 9px;
+  text-align: left;
+}
+
+.triage-card strong,
+.triage-card small {
+  display: block;
+}
+
+.triage-card small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.triage-card b {
+  color: var(--purple);
+  font-size: 11px;
+  text-transform: uppercase;
 }
 
 .provider-icon,
