@@ -171,6 +171,43 @@ function installProviderFetchStub() {
       assert.equal(auth, bearer('kimi-secret-for-test'));
       const body = JSON.parse(init.body || '{}');
       kimiModels.push(body.model);
+      const promptText = JSON.stringify(body.messages || body.prompt || '');
+      if (promptText.includes('Analyze the user')) {
+        return Response.json({ choices: [{ message: { content: JSON.stringify({
+          trip: {
+            name: 'Seoul Food Sprint',
+            destinationSummary: 'Seoul, South Korea',
+            startDate: '2026-06-10',
+            endDate: '2026-06-12',
+            homeCurrency: 'HKD',
+            currencies: ['HKD', 'KRW'],
+            intelligence: {
+              countryCode: 'KR',
+              countryName: 'South Korea',
+              primaryCurrency: 'KRW',
+              themeKey: 'korea_editorial',
+              locale: 'ko-KR',
+              timezone: 'Asia/Seoul',
+              weatherRegion: 'Seoul',
+              confidence: 'high',
+            },
+            itinerary: [{
+              date: '2026-06-10',
+              day: 1,
+              region: 'Seoul',
+              city: 'Seoul',
+              country: 'South Korea',
+              timezone: 'Asia/Seoul',
+              currency: 'KRW',
+              highlight: 'Arrival and market dinner',
+              spots: [{ time: '19:00', name: 'Gwangjang Market', type: 'food', timezone: 'Asia/Seoul', lat: 37.5701, lon: 126.9996 }],
+            }],
+          },
+          summary: 'Structured Seoul trip',
+          warnings: [],
+          changes: ['Detected Korea currency and timezone'],
+        }) } }] });
+      }
       return Response.json({ choices: [{ message: { content: '{"ok":true,"provider":"kimi"}' } }] });
     }
 
@@ -502,6 +539,21 @@ async function run() {
     });
     assert.equal(supabaseKimi.response.status, 200);
     assert.equal(supabaseKimi.data.data.provider, 'kimi');
+
+    const tripIntelligence = await jsonFetch(env, '/trip/intelligence', {
+      method: 'POST',
+      supabaseToken: 'supabase-user-token',
+      body: {
+        paragraph: 'June 10 to June 12 Seoul food trip, use Korean won and stay around Gwangjang Market.',
+        currentTrip: { destinationSummary: 'Seoul', timezones: ['Asia/Seoul'] },
+        model: 'kimi-code',
+      },
+    });
+    assert.equal(tripIntelligence.response.status, 200);
+    assert.equal(tripIntelligence.data.data.trip.name, 'Seoul Food Sprint');
+    assert.equal(tripIntelligence.data.data.trip.intelligence.primaryCurrency, 'KRW');
+    assert.equal(tripIntelligence.data.data.trip.intelligence.themeKey, 'korea_editorial');
+    assert.equal(restoreFetch.kimiModels().at(-1), 'kimi-code');
 
     env.SUPABASE_AI_DAILY_LIMIT = '1';
     const supabaseKimiLimited = await jsonFetch(env, '/kimi/json', {

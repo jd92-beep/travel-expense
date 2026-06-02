@@ -1,5 +1,6 @@
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
-import { brokerAiJson, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
+import { tripIntelligencePromptContract } from '../domain/trip/context';
+import { brokerAiJson, brokerTripIntelligence, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
 import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_KIMI_PRIMARY_MODEL_ID } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, TripDraft, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
@@ -163,6 +164,11 @@ function sameModelAttempt(a: ModelAttempt, b: ModelAttempt): boolean {
 function isQuotaOrRateLimitError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || '');
   return /(?:\b429\b|quota|daily limit|rate limit|too many requests|用量|配額|限額)/i.test(message);
+}
+
+function isBrokerRouteUnavailable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /(?:\b404\b|not found|route|endpoint|Network error)/i.test(message);
 }
 
 async function callGoogleJson(
@@ -432,16 +438,18 @@ function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): T
 
 export async function parseTripParagraph(paragraph: string, state: AppState): Promise<TripDraft> {
   const current = activeTrip(state);
+  const currentTrip = {
+    id: current.id,
+    name: current.name,
+    startDate: current.startDate,
+    endDate: current.endDate,
+    destinationSummary: current.destinationSummary,
+    itinerary: current.itinerary,
+  };
   const prompt = `Analyze this travel itinerary paragraph and return JSON only.
+${tripIntelligencePromptContract()}
 Current trip JSON:
-${JSON.stringify({
-  id: current.id,
-  name: current.name,
-  startDate: current.startDate,
-  endDate: current.endDate,
-  destinationSummary: current.destinationSummary,
-  itinerary: current.itinerary,
-}).slice(0, 12000)}
+${JSON.stringify(currentTrip).slice(0, 12000)}
 
 Return:
 {"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":"JP|KR|TW|GB|EU|GLOBAL","countryName":string,"primaryCurrency":string,"themeKey":"japan_washi|korea_editorial|taiwan_nightmarket|europe_rail|global_journal","locale":string,"timezone":string,"weatherRegion":string,"confidence":"low|medium|high"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"highlight":string,"lodging":{"name":string,"address":string,"mapUrl":string,"checkIn":string,"checkOut":string},"spots":[{"time":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other|sightseeing","address":string,"mapUrl":string,"note":string,"timezone":string,"lat":number,"lon":number}]}]},"summary":string,"warnings":string[],"changes":string[]}
@@ -451,7 +459,19 @@ Choose themeKey from destination context: Japan=japan_washi, Korea=korea_editori
 USER PARAGRAPH:
 ${paragraph.slice(0, 14000)}`;
   try {
-    return normalizeTripDraft(await callPreferredJson(state, prompt, 'trip'), state, paragraph);
+    let parsed: unknown;
+    try {
+      parsed = await brokerTripIntelligence(state, {
+        paragraph: paragraph.slice(0, 14000),
+        currentTrip,
+        model: KIMI_API_MODEL,
+      });
+    } catch (error) {
+      if (isQuotaOrRateLimitError(error) || !isBrokerRouteUnavailable(error)) throw error;
+      console.warn('[AI Routing] Trip intelligence backend unavailable, using legacy trip prompt:', error);
+      parsed = await callPreferredJson(state, prompt, 'trip');
+    }
+    return normalizeTripDraft(parsed, state, paragraph);
   } catch (error) {
     const fallback = tripFromLegacyState({
       ...state,

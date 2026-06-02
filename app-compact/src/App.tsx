@@ -20,7 +20,7 @@ import { shouldDisableHeavyEffects } from './lib/performance';
 import { hasSupabaseSession, useSupabaseAuth } from './lib/supabase';
 import { SupabaseGate } from './security/SupabaseGate';
 import { clearIndexedState } from './storage/indexedDb';
-import { WelcomeGuidePopup } from './components/WelcomeGuidePopup';
+import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/WelcomeGuidePopup';
 import { upsertSupabaseTrip } from './lib/supabase';
 import { createTripProfile } from './domain/trip/normalize';
 import { SupabaseUnlockGate } from './security/SupabaseUnlockGate';
@@ -73,7 +73,11 @@ export function App() {
   const [supabaseUnlocked, setSupabaseUnlocked] = useState(() => hasDeviceTrust());
   const [isNewTripWizardOpen, setIsNewTripWizardOpen] = useState(false);
 
-  const handleSaveGuideTrip = async (trip: TripProfile) => {
+  const handleSaveGuideTrip = async (result: WelcomeGuideResult | TripProfile) => {
+    const guide = 'trip' in result
+      ? result
+      : { trip: result, persons: state.persons, shareRatios: state.shareRatios };
+    const { trip, persons, shareRatios } = guide;
     try {
       const syncedTrip = await upsertSupabaseTrip(supabaseAuth.session!, state, trip);
       setState((prev) => ({
@@ -82,6 +86,12 @@ export function App() {
         activeTripId: syncedTrip.id,
         tripName: syncedTrip.name,
         tripDateRange: { start: syncedTrip.startDate, end: syncedTrip.endDate },
+        budget: syncedTrip.budget ?? prev.budget,
+        tripCurrency: syncedTrip.currencies?.find((currency) => currency !== 'HKD') || prev.tripCurrency,
+        customItinerary: syncedTrip.itinerary || [],
+        persons,
+        shareRatios,
+        settingsUpdatedAt: Date.now(),
       }));
     } catch (err) {
       console.error('Failed to save guide trip:', err);
@@ -91,6 +101,12 @@ export function App() {
         activeTripId: trip.id,
         tripName: trip.name,
         tripDateRange: { start: trip.startDate, end: trip.endDate },
+        budget: trip.budget ?? prev.budget,
+        tripCurrency: trip.currencies?.find((currency) => currency !== 'HKD') || prev.tripCurrency,
+        customItinerary: trip.itinerary || [],
+        persons,
+        shareRatios,
+        settingsUpdatedAt: Date.now(),
       }));
     }
   };

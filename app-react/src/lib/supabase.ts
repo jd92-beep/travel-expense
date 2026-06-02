@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, stampReceiptForTrip } from '../domain/trip/normalize';
+import { tripIntelligenceColumns } from '../domain/trip/context';
 import { DEFAULT_NOTION_DB, normalizeAiModelSettings } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, TripProfile } from './types';
 
@@ -24,6 +25,11 @@ type SupabaseTripRow = {
   archived?: boolean | null;
   notion_page_id?: string | null;
   notion_database_id?: string | null;
+  country_code?: string | null;
+  theme_key?: string | null;
+  locale?: string | null;
+  weather_region?: string | null;
+  trip_intelligence?: unknown;
   created_at: string;
   updated_at: string;
 };
@@ -207,6 +213,15 @@ function rowToTrip(row: SupabaseTripRow, state: AppState): TripProfile {
   const current = (state.trips || []).find((trip) => trip.id === appId || trip.supabaseId === row.id);
   const tripCurrency = row.trip_currency || current?.currencies?.find((currency) => currency !== row.home_currency) || state.tripCurrency || 'JPY';
   const metadata = jsonObject(row.app_metadata);
+  const columnIntelligence = {
+    countryCode: row.country_code || undefined,
+    themeKey: row.theme_key || undefined,
+    locale: row.locale || undefined,
+    weatherRegion: row.weather_region || undefined,
+  };
+  const intelligenceInput = Object.keys(jsonObject(row.trip_intelligence)).length
+    ? row.trip_intelligence
+    : metadata.intelligence || columnIntelligence || current?.intelligence;
   const itinerary = safeItinerary(row.itinerary, appId, tripCurrency);
   return {
     ...(current || {}),
@@ -224,7 +239,7 @@ function rowToTrip(row: SupabaseTripRow, state: AppState): TripProfile {
     archived: !!row.archived,
     itinerary: itinerary.length ? itinerary : current?.itinerary || [],
     intelligence: normalizeTripIntelligence(
-      metadata.intelligence || current?.intelligence,
+      intelligenceInput,
       row.destination_summary || current?.destinationSummary || '未設定目的地',
       tripCurrency,
       Array.isArray(row.timezones) ? row.timezones[0] : current?.timezones?.[0],
@@ -490,6 +505,12 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
   await ensureSupabaseProfile(session, state);
   const userId = session.user.id;
   const id = await findTripUuid(supabase, userId, trip);
+  const normalizedIntelligence = normalizeTripIntelligence(
+    trip.intelligence,
+    trip.destinationSummary,
+    trip.currencies?.find((currency) => currency !== (trip.homeCurrency || 'HKD')) || state.tripCurrency || 'JPY',
+    trip.timezones?.[0],
+  );
   const row = {
     id,
     owner_id: userId,
@@ -508,13 +529,9 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     app_metadata: {
       sourceId: trip.sourceId || `trip_${trip.id}`,
       localTripId: trip.id,
-      intelligence: normalizeTripIntelligence(
-        trip.intelligence,
-        trip.destinationSummary,
-        trip.currencies?.find((currency) => currency !== (trip.homeCurrency || 'HKD')) || state.tripCurrency || 'JPY',
-        trip.timezones?.[0],
-      ),
+      intelligence: normalizedIntelligence,
     },
+    ...tripIntelligenceColumns(normalizedIntelligence),
     version: Math.max(1, Number(trip.version) || 1),
     archived: !!trip.archived,
     notion_page_id: null,
@@ -522,11 +539,28 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     created_at: isoFromMs(trip.createdAt),
     updated_at: isoFromMs(trip.updatedAt),
   };
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('trips')
     .upsert(row, { onConflict: 'id' })
     .select('*')
     .single();
+  if (error && /country_code|theme_key|weather_region|trip_intelligence|schema cache|column/i.test(error.message || '')) {
+    const {
+      country_code: _countryCode,
+      theme_key: _themeKey,
+      locale: _locale,
+      weather_region: _weatherRegion,
+      trip_intelligence: _tripIntelligence,
+      ...legacyRow
+    } = row;
+    const fallback = await supabase
+      .from('trips')
+      .upsert(legacyRow, { onConflict: 'id' })
+      .select('*')
+      .single();
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) throw error;
   if (row.active) {
     const { error: deactivateError } = await supabase

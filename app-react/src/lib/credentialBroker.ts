@@ -1,7 +1,7 @@
 import { ALLOWED_CREDENTIAL_BROKER_URLS, DEFAULT_CREDENTIAL_BROKER_URL } from './constants';
 import { loadCredentialSession, saveCredentialSession } from './storage';
 import { currentSupabaseAccessToken } from './supabase';
-import type { AppState } from './types';
+import type { AppState, TripProfile } from './types';
 
 export type CredentialProvider = 'notion' | 'kimi' | 'google' | 'weatherapi';
 
@@ -343,6 +343,14 @@ export async function brokerAiJson(
     image,
     model: model || (provider === 'kimi' ? 'kimi-code' : state.googleBackupModel),
   });
+  return data.data;
+}
+
+export async function brokerTripIntelligence(
+  state: AppState,
+  payload: { paragraph: string; currentTrip: Pick<TripProfile, 'id' | 'name' | 'startDate' | 'endDate' | 'destinationSummary' | 'itinerary'>; model?: string },
+): Promise<unknown> {
+  const data = await brokerFetch<{ ok: boolean; data: unknown }>(state, '/trip/intelligence', payload);
   return data.data;
 }
 

@@ -1,5 +1,8 @@
 import { APP_SCHEMA_VERSION, DEFAULT_STATE, ITINERARY } from '../../lib/constants';
-import type { AppState, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile, TripThemeKey } from '../../lib/types';
+import type { AppState, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile } from '../../lib/types';
+import { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
+
+export { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
 
 const slug = (value: string) => String(value || '')
   .toLowerCase()
@@ -22,90 +25,12 @@ function inclusiveDays(startDate: string, endDate: string): number {
   return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
 }
 
-export function timezoneForDestination(destination = '', fallback = 'Asia/Tokyo'): string {
-  const value = destination.toLowerCase();
-  if (/香港|hong\s*kong|\bhk\b/.test(value)) return 'Asia/Hong_Kong';
-  if (/韓國|韩国|首爾|首尔|釜山|korea|seoul|busan/.test(value)) return 'Asia/Seoul';
-  if (/台灣|台湾|台北|taiwan|taipei/.test(value)) return 'Asia/Taipei';
-  if (/中國|中国|上海|北京|深圳|廣州|广州|china|shanghai|beijing|shenzhen|guangzhou/.test(value)) return 'Asia/Shanghai';
-  if (/新加坡|singapore/.test(value)) return 'Asia/Singapore';
-  if (/泰國|泰国|曼谷|thailand|bangkok/.test(value)) return 'Asia/Bangkok';
-  if (/越南|河內|河内|胡志明|vietnam|hanoi|ho\s*chi\s*minh/.test(value)) return 'Asia/Ho_Chi_Minh';
-  if (/馬來西亞|马来西亚|吉隆坡|malaysia|kuala\s*lumpur/.test(value)) return 'Asia/Kuala_Lumpur';
-  if (/菲律賓|菲律宾|馬尼拉|马尼拉|philippines|manila/.test(value)) return 'Asia/Manila';
-  if (/澳洲|悉尼|雪梨|墨爾本|墨尔本|australia|sydney|melbourne/.test(value)) return 'Australia/Sydney';
-  if (/紐西蘭|新西蘭|奥克兰|奧克蘭|new\s*zealand|auckland/.test(value)) return 'Pacific/Auckland';
-  if (/英國|英国|倫敦|伦敦|uk|london/.test(value)) return 'Europe/London';
-  if (/法國|法国|巴黎|france|paris/.test(value)) return 'Europe/Paris';
-  if (/美國|美国|紐約|纽约|new\s*york|usa|america/.test(value)) return 'America/New_York';
-  if (/日本|東京|东京|大阪|名古屋|京都|札幌|沖繩|冲绳|japan|tokyo|osaka|nagoya|kyoto|sapporo|okinawa/.test(value)) return 'Asia/Tokyo';
-  return normalizeZone(fallback) || 'Asia/Tokyo';
-}
-
-function countryContextForDestination(destination = '', currency = 'JPY'): Pick<TripIntelligence, 'countryCode' | 'countryName' | 'primaryCurrency' | 'themeKey' | 'locale'> {
-  const value = `${destination} ${currency}`.toLowerCase();
-  if (/韓國|韩国|首爾|首尔|釜山|korea|seoul|busan|krw/.test(value)) {
-    return { countryCode: 'KR', countryName: 'Korea', primaryCurrency: 'KRW', themeKey: 'korea_editorial', locale: 'ko-KR' };
-  }
-  if (/台灣|台湾|台北|taiwan|taipei|twd/.test(value)) {
-    return { countryCode: 'TW', countryName: 'Taiwan', primaryCurrency: 'TWD', themeKey: 'taiwan_nightmarket', locale: 'zh-TW' };
-  }
-  if (/歐洲|歐元|欧洲|英國|英国|倫敦|伦敦|法國|法国|巴黎|europe|eur|gbp|uk|london|france|paris|germany|italy/.test(value)) {
-    const isUk = /英國|英国|倫敦|伦敦|gbp|uk|london/.test(value);
-    return { countryCode: isUk ? 'GB' : 'EU', countryName: isUk ? 'United Kingdom' : 'Europe', primaryCurrency: isUk ? 'GBP' : 'EUR', themeKey: 'europe_rail', locale: isUk ? 'en-GB' : 'en-GB' };
-  }
-  if (/日本|東京|东京|大阪|名古屋|京都|札幌|沖繩|冲绳|japan|tokyo|osaka|nagoya|kyoto|sapporo|okinawa|jpy/.test(value)) {
-    return { countryCode: 'JP', countryName: 'Japan', primaryCurrency: 'JPY', themeKey: 'japan_washi', locale: 'ja-JP' };
-  }
-  return { countryCode: 'GLOBAL', countryName: 'Global', primaryCurrency: String(currency || 'JPY').toUpperCase(), themeKey: 'global_journal', locale: 'zh-HK' };
-}
-
-function validThemeKey(value: unknown): TripThemeKey | undefined {
-  const key = String(value || '').trim();
-  return ['japan_washi', 'korea_editorial', 'taiwan_nightmarket', 'europe_rail', 'global_journal'].includes(key)
-    ? key as TripThemeKey
-    : undefined;
-}
-
-export function normalizeTripIntelligence(
-  input: unknown,
-  destinationSummary = '',
-  currency = 'JPY',
-  timezone = timezoneForDestination(destinationSummary),
-): TripIntelligence {
-  const raw = input && typeof input === 'object' ? input as Partial<TripIntelligence> : {};
-  const aliases = raw as Partial<TripIntelligence> & Record<string, unknown>;
-  const inferredCurrency = raw.primaryCurrency || (aliases.primary_currency as string) || currency;
-  const inferred = countryContextForDestination(destinationSummary, inferredCurrency);
-  const primaryCurrency = String(raw.primaryCurrency || aliases.primary_currency || inferred.primaryCurrency || currency || 'JPY').toUpperCase();
-  const themeKey = validThemeKey(raw.themeKey || aliases.theme_key) || countryContextForDestination(destinationSummary, primaryCurrency).themeKey;
-  return {
-    countryCode: String(raw.countryCode || aliases.country_code || inferred.countryCode).toUpperCase(),
-    countryName: String(raw.countryName || aliases.country_name || inferred.countryName || ''),
-    primaryCurrency,
-    themeKey,
-    locale: String(raw.locale || inferred.locale || 'zh-HK'),
-    timezone: normalizeZone(raw.timezone || timezone) || timezone,
-    weatherRegion: String(raw.weatherRegion || aliases.weather_region || destinationSummary || inferred.countryName || ''),
-    confidence: raw.confidence === 'high' || raw.confidence === 'medium' || raw.confidence === 'low' ? raw.confidence : 'medium',
-    source: raw.source === 'ai' || raw.source === 'manual' || raw.source === 'heuristic' ? raw.source : 'heuristic',
-    updatedAt: Number(raw.updatedAt) || Date.now(),
-  };
-}
-
 export function stableDayId(tripId: string, date: string): string {
   return `${tripId}_day_${date.replace(/-/g, '')}`;
 }
 
 export function stableSpotId(tripId: string, date: string, idx: number, spot: Pick<ItinerarySpot, 'name' | 'time'>): string {
   return `${stableDayId(tripId, date)}_spot_${String(idx + 1).padStart(2, '0')}_${slug(`${spot.time}_${spot.name}`) || 'item'}`;
-}
-
-export function normalizeZone(value?: string): string {
-  const zone = String(value || '').trim();
-  if (zone === 'JST') return 'Asia/Tokyo';
-  if (zone === 'HKT') return 'Asia/Hong_Kong';
-  return zone;
 }
 
 export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fallbackCurrency = 'JPY'): ItineraryDay[] {

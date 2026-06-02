@@ -2,13 +2,29 @@ import { useState } from 'react';
 import { Compass, Sparkles, Calendar, DollarSign, MapPin, Loader2, ArrowRight, Info, Check } from 'lucide-react';
 import { parseTripParagraph } from '../lib/ai';
 import { createTripProfile } from '../domain/trip/normalize';
-import type { AppState, TripProfile } from '../lib/types';
+import type { AppState, Person, TripProfile } from '../lib/types';
+
+export type WelcomeGuideResult = {
+  trip: TripProfile;
+  persons: Person[];
+  shareRatios: Record<string, number>;
+};
 
 type WelcomeGuidePopupProps = {
   state: AppState;
-  onSave: (trip: TripProfile) => void;
+  onSave: (result: WelcomeGuideResult) => void;
   onSkip: () => void;
 };
+
+const GUIDE_COLORS = ['#CC2929', '#FF91A4', '#1E4D6B', '#2D6E48', '#D4A843', '#7C5CFF', '#0EA5E9', '#F97316'];
+const GUIDE_EMOJIS = ['👤', '🧳', '🗺️', '🎒', '🚆', '🍱', '📷', '🏨'];
+
+function makeGuidePersons(count: number, current: Array<{ name: string; ratio: string }> = []) {
+  return Array.from({ length: Math.max(1, Math.min(8, count)) }, (_, idx) => ({
+    name: current[idx]?.name || (idx === 0 ? '我' : `旅伴 ${idx + 1}`),
+    ratio: current[idx]?.ratio || '1',
+  }));
+}
 
 export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupProps) {
   const [activeTab, setActiveTab] = useState<'ai' | 'manual'>('ai');
@@ -30,6 +46,8 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   });
   const [budget, setBudget] = useState('50000');
   const [currency, setCurrency] = useState('JPY');
+  const [partySize, setPartySize] = useState('2');
+  const [guidePersons, setGuidePersons] = useState(() => makeGuidePersons(2));
 
   // AI Analyzed Result Preview State
   const [aiDraft, setAiDraft] = useState<TripProfile | null>(null);
@@ -59,10 +77,37 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
     }
   }
 
+  function updatePartySize(value: string) {
+    const count = Math.max(1, Math.min(8, Number(value) || 1));
+    setPartySize(String(count));
+    setGuidePersons((current) => makeGuidePersons(count, current));
+  }
+
+  function updateGuidePerson(index: number, patch: Partial<{ name: string; ratio: string }>) {
+    setGuidePersons((current) => current.map((person, idx) => idx === index ? { ...person, ...patch } : person));
+  }
+
+  function buildGuideResult(trip: TripProfile): WelcomeGuideResult {
+    const persons = guidePersons.map((person, idx) => ({
+      id: idx === 0 ? 'p_boss' : `p_trip_${idx + 1}`,
+      name: person.name.trim() || (idx === 0 ? '我' : `旅伴 ${idx + 1}`),
+      emoji: GUIDE_EMOJIS[idx % GUIDE_EMOJIS.length],
+      color: GUIDE_COLORS[idx % GUIDE_COLORS.length],
+    }));
+    return {
+      trip,
+      persons,
+      shareRatios: Object.fromEntries(persons.map((person, idx) => [
+        person.id,
+        Math.max(0, Number(guidePersons[idx]?.ratio) || 0),
+      ])),
+    };
+  }
+
   // Create trip based on current active tab
   function handleCreate() {
     if (activeTab === 'ai' && aiDraft) {
-      onSave(aiDraft);
+      onSave(buildGuideResult(aiDraft));
     } else {
       // Manual creation
       const trip = createTripProfile({
@@ -73,13 +118,13 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
         budget: Number(budget) || 0,
         currency: currency,
       });
-      onSave(trip);
+      onSave(buildGuideResult(trip));
     }
   }
 
   return (
     <div className="modal-backdrop welcome-guide-backdrop" style={{ display: 'grid', placeItems: 'center', background: 'rgba(23, 18, 12, 0.6)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', zIndex: 1500 }}>
-      <div className="modal welcome-guide-modal" style={{ width: 'min(640px, 95vw)', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid rgba(255, 255, 255, 0.6)', borderRadius: '24px', padding: '28px', boxShadow: '0 30px 70px rgba(42, 30, 18, 0.22)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', animation: 'page-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+      <div className="modal welcome-guide-modal" style={{ width: 'min(680px, 95vw)', maxHeight: '92vh', overflowY: 'auto', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid rgba(255, 255, 255, 0.6)', borderRadius: '24px', padding: '28px', boxShadow: '0 30px 70px rgba(42, 30, 18, 0.22)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', animation: 'page-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
         
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -151,6 +196,53 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             <span>{error}</span>
           </div>
         )}
+
+        <div style={{ display: 'grid', gap: '12px', padding: '14px', background: 'rgba(30, 77, 107, 0.04)', border: '1px solid rgba(30, 77, 107, 0.10)', borderRadius: '16px', marginBottom: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div>
+              <strong style={{ display: 'block', fontSize: '13px', color: '#1E4D6B', fontWeight: 900 }}>旅伴與分帳比例</strong>
+              <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 700 }}>共同支出會按比例自動計算，例如 1:1 或 2:1。</span>
+            </div>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800, minWidth: '88px' }}>
+              人數
+              <input
+                value={partySize}
+                onChange={(e) => updatePartySize(e.target.value)}
+                type="number"
+                min={1}
+                max={8}
+                style={{ padding: '8px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+              />
+            </label>
+          </div>
+          <div style={{ display: 'grid', gap: '8px' }}>
+            {guidePersons.map((person, idx) => (
+              <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 86px', gap: '8px', alignItems: 'end' }}>
+                <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+                  {idx === 0 ? '你嘅顯示名稱' : `旅伴 ${idx + 1} 名稱`}
+                  <input
+                    value={person.name}
+                    onChange={(e) => updateGuidePerson(idx, { name: e.target.value })}
+                    type="text"
+                    placeholder={idx === 0 ? '例如 Tony' : '例如 欣欣'}
+                    style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+                  />
+                </label>
+                <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+                  比例
+                  <input
+                    value={person.ratio}
+                    onChange={(e) => updateGuidePerson(idx, { ratio: e.target.value })}
+                    type="number"
+                    min={0}
+                    step="0.5"
+                    style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Tab 1: AI Parse */}
         {activeTab === 'ai' && (

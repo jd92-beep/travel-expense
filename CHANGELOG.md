@@ -4,6 +4,13 @@ All notable project changes should be recorded here.
 
 ## 2026-06-02
 
+### Public-user onboarding and trip privacy hardening
+
+- Added React and Compact welcome-guide fields for trip party size, traveler names, and expense split ratios, then persisted the shared `persons` and `shareRatios` data so both app versions can read the same Supabase-backed trip state.
+- Hardened public Supabase account startup so new non-Boss accounts no longer hydrate the demo Nagoya trip from legacy scoped state or empty cloud pulls; new users now start with an empty trip list and are guided into creating their own private trip.
+- Added Credential Broker `/trip/intelligence` routing for structured trip-country/currency/theme inference and locked trip-update parsing to required Kimi `kimi-code`, preserving quota/rate-limit hard stops.
+- Added onboarding and AI-routing smoke coverage in both React and Compact, and refreshed security smoke setup so scoped localStorage/IndexedDB isolation is tested with private seeded trips.
+
 ### Trip Intelligence architecture foundation
 
 - Added a shared optional `TripIntelligence` contract to both React and Compact trip profiles, covering inferred country/region, primary currency, dynamic UI theme key, locale, timezone, weather region, confidence, and source.

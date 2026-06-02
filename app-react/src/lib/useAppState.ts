@@ -70,18 +70,37 @@ function stateFreshness(state: Partial<AppState>): number {
   );
 }
 
+function isPublicSupabaseScope(storageScope: string, userEmail: string | null): boolean {
+  return storageScope.startsWith('supabase:') && String(userEmail || '').toLowerCase() !== 'vc06456@gmail.com';
+}
+
+function withoutPublicDemoTrip(state: AppState, storageScope: string, userEmail: string | null): AppState {
+  if (!isPublicSupabaseScope(storageScope, userEmail)) return state;
+  const demoTripId = DEFAULT_STATE.activeTripId;
+  const trips = (state.trips || []).filter((trip) => trip.id !== demoTripId);
+  const activeTripId = trips.find((trip) => trip.id === state.activeTripId && !trip.archived)?.id
+    || trips.find((trip) => trip.active && !trip.archived)?.id
+    || trips.find((trip) => !trip.archived)?.id
+    || '';
+  const active = trips.find((trip) => trip.id === activeTripId);
+  return {
+    ...state,
+    trips: trips.map((trip) => ({ ...trip, active: trip.id === activeTripId && !trip.archived })),
+    receipts: (state.receipts || []).filter((receipt) => receipt.tripId !== demoTripId),
+    activeTripId,
+    tripName: active?.name || (trips.length ? state.tripName : ''),
+    tripDateRange: active ? { start: active.startDate, end: active.endDate } : state.tripDateRange,
+    customItinerary: active?.itinerary || (trips.length ? state.customItinerary : null),
+  };
+}
+
+function migrateScopedState(input: unknown, storageScope: string, userEmail: string | null): AppState {
+  return withoutPublicDemoTrip(migrateAppState(input), storageScope, userEmail);
+}
+
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
   const [state, setState] = useState<AppState>(() => {
-    const rawState = loadState(storageScope);
-    if (userEmail && userEmail.toLowerCase() !== 'vc06456@gmail.com') {
-      return {
-        ...rawState,
-        trips: (rawState.trips || []).filter((t) => t.id !== 'trip_2026_04_nagoya'),
-        receipts: (rawState.receipts || []).filter((r) => r.tripId !== 'trip_2026_04_nagoya'),
-        activeTripId: rawState.activeTripId === 'trip_2026_04_nagoya' ? '' : rawState.activeTripId,
-      };
-    }
-    return rawState;
+    return withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
   });
   const [hydratedScope, setHydratedScope] = useState(storageScope);
   const skipNextSaveRef = useRef(false);
@@ -90,16 +109,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     let alive = true;
     skipNextSaveRef.current = true;
     const hasPrimarySnapshot = hasStoredState(storageScope);
-    const scopedState = loadState(storageScope);
-    let filteredState = scopedState;
-    if (userEmail && userEmail.toLowerCase() !== 'vc06456@gmail.com') {
-      filteredState = {
-        ...scopedState,
-        trips: (scopedState.trips || []).filter((t) => t.id !== 'trip_2026_04_nagoya'),
-        receipts: (scopedState.receipts || []).filter((r) => r.tripId !== 'trip_2026_04_nagoya'),
-        activeTripId: scopedState.activeTripId === 'trip_2026_04_nagoya' ? '' : scopedState.activeTripId,
-      };
-    }
+    const filteredState = withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
     setState(filteredState);
     setHydratedScope(storageScope);
     loadIndexedState(storageScope).then((indexed) => {
@@ -108,16 +118,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
         const indexedWins = !hasPrimarySnapshot || (stateFreshness(indexed) > stateFreshness(prev));
         if (indexedWins) {
           console.log('[useAppState] Hydrated newer state from IndexedDB');
-          let merged = { ...prev, ...indexed };
-          if (userEmail && userEmail.toLowerCase() !== 'vc06456@gmail.com') {
-            merged = {
-              ...merged,
-              trips: (merged.trips || []).filter((t) => t.id !== 'trip_2026_04_nagoya'),
-              receipts: (merged.receipts || []).filter((r) => r.tripId !== 'trip_2026_04_nagoya'),
-              activeTripId: merged.activeTripId === 'trip_2026_04_nagoya' ? '' : merged.activeTripId,
-            };
-          }
-          return migrateAppState(merged);
+          return migrateScopedState({ ...prev, ...indexed }, storageScope, userEmail);
         }
         return prev;
       });
@@ -135,7 +136,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
       return;
     }
     try {
-      saveState(migrateAppState(state), storageScope);
+      saveState(migrateScopedState(state, storageScope, userEmail), storageScope);
     } catch (error) {
       console.warn('[useAppState] Persist failed:', error instanceof Error ? error.message : String(error));
     }
@@ -149,14 +150,14 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
       const nextQueue = cloudReady
         ? enqueueSyncItem(prev.syncQueue, queueItem('settings', 'app-settings', 'upsert', { updatedAt: now }))
         : prev.syncQueue;
-      return migrateAppState({
+      return migrateScopedState({
         ...prev,
         ...patch,
         syncQueue: nextQueue,
         settingsUpdatedAt: settingsChanged ? now : prev.settingsUpdatedAt,
-      });
+      }, storageScope, userEmail);
     });
-  }, [syncAvailable]);
+  }, [syncAvailable, storageScope, userEmail]);
 
   const upsertReceipt = useCallback((receipt: Receipt) => {
     setState((prev) => {
@@ -211,8 +212,8 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     clearStoredCredentials();
     clearDeviceTrust();
     clearCurrencyCache();
-    setState({ ...DEFAULT_STATE, receipts: [] });
-  }, [storageScope]);
+    setState(withoutPublicDemoTrip({ ...DEFAULT_STATE, receipts: [] }, storageScope, userEmail));
+  }, [storageScope, userEmail]);
 
   return { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, hydratedScope, isHydratingScope: hydratedScope !== storageScope };
 }

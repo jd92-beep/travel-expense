@@ -2,6 +2,34 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+function stateWithTrip(tripId = 'security_trip', lastTab = 'dashboard') {
+  return {
+    schemaVersion: 3,
+    lastTab,
+    budget: 10000,
+    tripCurrency: 'JPY',
+    tripName: 'Security Trip',
+    tripDateRange: { start: '2026-05-01', end: '2026-05-02' },
+    activeTripId: tripId,
+    trips: [{
+      id: tripId,
+      name: 'Security Trip',
+      destinationSummary: 'Security City',
+      startDate: '2026-05-01',
+      endDate: '2026-05-02',
+      homeCurrency: 'HKD',
+      currencies: ['HKD', 'JPY'],
+      timezones: ['Asia/Tokyo'],
+      version: 1,
+      active: true,
+      itinerary: [{ date: '2026-05-01', day: 1, region: 'Security City', spots: [] }],
+      createdAt: 1,
+      updatedAt: 1,
+    }],
+    receipts: [],
+  };
+}
+
 test('Sensitive legacy fields are stripped from localStorage, IndexedDB, and service workers', async ({ page }) => {
   test.skip(process.env.SUPABASE_REDIRECT_SMOKE === '1', 'Run this local-storage security smoke without Supabase env.');
   await page.addInitScript(() => {
@@ -115,10 +143,11 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
   });
 
-  await page.addInitScript(({ userId }) => {
+  await page.addInitScript(({ userId, scopedStorageKey, scopedState }) => {
     localStorage.clear();
     indexedDB.deleteDatabase('travel-expense-react');
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem(scopedStorageKey, JSON.stringify(scopedState));
     localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify({
       access_token: 'fake-access-token',
       refresh_token: 'fake-refresh-token',
@@ -136,12 +165,12 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
         updated_at: new Date().toISOString(),
       },
     }));
-  }, { userId });
+  }, { userId, scopedStorageKey, scopedState: stateWithTrip() });
 
   page.on('dialog', (dialog) => dialog.accept());
 
   await page.goto('http://localhost:8902/travel-expense/react/');
-  await expect(page.getByRole('heading', { name: 'Travel Ledger' })).toBeVisible();
+  await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect(page.locator('.supabase-session-actions')).toHaveCount(0);
 
   await page.evaluate(async ({ scopedStorageKey, scopedIndexedKey }) => {
@@ -212,7 +241,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
     await route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
   });
   await page.goto('http://localhost:8902/__scope-seed');
-  await page.evaluate(async ({ userB, keyA, indexedKeyA, indexedKeyB }) => {
+  await page.evaluate(async ({ userB, keyA, keyB, indexedKeyA, indexedKeyB, scopeBState }) => {
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     await new Promise((resolve) => {
@@ -262,6 +291,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
         createdAt: Date.now() + 1000,
       }],
     }));
+    localStorage.setItem(keyB, JSON.stringify(scopeBState));
 
     const db = await new Promise((resolve, reject) => {
       const openReq = indexedDB.open('travel-expense-react', 1);
@@ -282,6 +312,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
           date: '2026-05-03',
           category: 'food',
           payment: 'cash',
+          tripId: 'scope_a_trip',
           createdAt: Date.now() + 1000,
         }],
       }, indexedKeyA);
@@ -294,6 +325,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
           date: '2026-05-04',
           category: 'food',
           payment: 'cash',
+          tripId: 'scope_b_trip',
           createdAt: Date.now(),
         }],
       }, indexedKeyB);
@@ -301,10 +333,10 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
       tx.onerror = () => reject(tx.error);
     });
     db.close();
-  }, { userB, keyA, indexedKeyA, indexedKeyB });
+  }, { userB, keyA, keyB, indexedKeyA, indexedKeyB, scopeBState: stateWithTrip('scope_b_trip', 'history') });
 
   await page.goto('http://localhost:8902/travel-expense/react/#history');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await expect(page.getByText('紀錄中心').first()).toBeVisible();
 
   await expect.poll(async () => page.evaluate((keyB) => {
     const raw = localStorage.getItem(keyB);

@@ -100,7 +100,7 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
 }
 
 export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
-  const fallbackTrips = state.trips?.length ? state.trips : [activeTrip(state)];
+  const fallbackTrips = state.trips?.length ? state.trips : (pulledTrips.length ? [activeTrip(state)] : []);
   const byId = new Map(fallbackTrips.map((trip) => [trip.id, trip]));
   let activeTripId = state.activeTripId;
   for (const remoteTrip of pulledTrips) {

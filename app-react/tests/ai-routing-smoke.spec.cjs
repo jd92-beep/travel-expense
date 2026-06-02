@@ -86,6 +86,42 @@ test('AI routing keeps required primary models ahead of stale settings', async (
     });
   });
 
+  await page.route('**/trip/intelligence', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ provider: 'kimi', kind: 'trip', model: body.model });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          trip: {
+            name: 'Kimi Seoul Trip',
+            destinationSummary: 'Seoul',
+            startDate: '2026-07-10',
+            endDate: '2026-07-12',
+            homeCurrency: 'HKD',
+            currencies: ['HKD', 'KRW'],
+            itinerary: [{
+              date: '2026-07-10',
+              day: 1,
+              region: 'Seoul',
+              city: 'Seoul',
+              country: 'South Korea',
+              timezone: 'Asia/Seoul',
+              currency: 'KRW',
+              highlight: 'Arrival',
+              spots: [{ time: '18:00', name: 'Hongdae', type: 'sightseeing' }],
+            }],
+          },
+          summary: 'Kimi parsed trip update',
+          warnings: [],
+          changes: ['Detected new Seoul trip.'],
+        },
+      }),
+    });
+  });
+
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
     localStorage.clear();
