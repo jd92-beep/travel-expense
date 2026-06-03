@@ -3,7 +3,7 @@ import type { AdminKanbanSnapshot, AdminSession, DeletePreview } from './types';
 const SESSION_KEY = 'travel-expense-admin-kanban:session:v1';
 
 function apiBase(): string {
-  return String(import.meta.env.VITE_ADMIN_API_URL || '').replace(/\/+$/, '');
+  return String(import.meta.env.VITE_ADMIN_API_URL || 'https://fbnnjoahvtdrnigevrtw.supabase.co/functions/v1/admin-kanban').replace(/\/+$/, '');
 }
 
 function adminDataUrl(path: string): string {
