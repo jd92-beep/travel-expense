@@ -10,6 +10,7 @@ All notable project changes should be recorded here.
 - Added Supabase admin telemetry/audit migrations for `app_usage_events`, `sync_attempt_events`, `data_quality_*`, `admin_audit_events`, and the service-role-only `admin_kanban_rls_state()` RPC; hardened the new tables after Supabase advisor review.
 - Deployed the independent Vercel project at `https://travel-expense-admin-kanban.vercel.app` and the Supabase Edge Function `admin-kanban`; the live board renders real Supabase counts through `live-edge` without exposing service-role secrets to Vercel or the browser.
 - Verified `app-admin-kanban/` with `npm run typecheck`, `npm run build`, `npm run smoke`, API `node --check`, `git diff --check`, Supabase live migration/RLS checks, Supabase advisors, live Edge snapshot count comparison, guarded delete-preview, wrong-confirm delete rejection, live drag/drop triage, and desktop/mobile Vercel UI smoke.
+- Deployed the Antigravity user-centric dashboard Edge update as Supabase `admin-kanban` version 4, verified live `imageCount` values from `receipt_photos`, restored guarded user-delete controls inside the user detail panel, and made the admin smoke suite start its own Vite server.
 
 ## 2026-06-02
 

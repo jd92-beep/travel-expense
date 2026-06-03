@@ -43,6 +43,7 @@ const snapshot = {
       eventCount: 0,
       tripCount: 1,
       receiptCount: 0,
+      imageCount: 2,
       notionConnected: false,
       aiRequestsToday: 0,
       health: 'healthy',
@@ -133,26 +134,16 @@ test('desktop board renders live snapshot and guarded delete flow', async ({ pag
   await page.getByPlaceholder('Required for cross-user visibility').fill('admin-pass');
   await page.getByRole('button', { name: /Enter board/ }).click();
 
-  const desktopLanes = page.locator('.lanes');
-  await expect(desktopLanes.getByText('Live Users', { exact: true })).toBeVisible();
-  await expect(desktopLanes.getByText('Trip Ops', { exact: true })).toBeVisible();
-  await expect(desktopLanes.getByText('Expense Flow', { exact: true })).toBeVisible();
-  await expect(desktopLanes.getByText('LLM Health', { exact: true })).toBeVisible();
-  await expect(desktopLanes.getByText('Backend Health', { exact: true })).toBeVisible();
-  await expect(desktopLanes.getByText('Admin Actions', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Universal App Health' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Live Users (1)' })).toBeVisible();
   await expect(page.getByText('ACTIVE_HEALTHY')).toBeVisible();
-  await expect(page.getByText('RLS force')).toBeVisible();
+  await expect(page.getByText('RLS Force Enabled')).toBeVisible();
   await expect(page.getByText('Mimo v2.5')).toBeVisible();
-  await expect(desktopLanes.locator('.lane-amber').getByText('0 receipts', { exact: true })).toBeVisible();
 
-  await expect(page.getByRole('button', { name: /Preview delete scope/ })).toBeDisabled();
   await page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ }).click();
-  await expect(page.getByLabel('Inspector')).toContainText('emailMasked');
-  await expect(page.getByLabel('Inspector')).not.toContainText('token');
-  await page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ }).dragTo(page.locator('[data-lane-id="trips"]'));
-  await expect(page.locator('[data-lane-id="trips"] [data-testid="triage-stack"]')).toContainText('vc***@g***.com');
-  await page.locator('[data-lane-id="trips"] .triage-card').click();
-  await expect(page.locator('[data-lane-id="trips"] [data-testid="triage-stack"]')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /vc\*\*\*@g\*\*\*\.com/ })).toBeVisible();
+  await expect(page.getByText('Images')).toBeVisible();
+  await expect(page.locator('.stat-box').filter({ hasText: 'Images' })).toContainText('2');
   await expect(page.getByRole('button', { name: /Preview delete scope/ })).toBeEnabled();
   await page.getByRole('button', { name: /Preview delete scope/ }).click();
   await expect(page.getByText('Delete preview')).toBeVisible();
@@ -173,20 +164,22 @@ test('mobile board is scrollable and lane picker controls one active lane', asyn
   await page.getByPlaceholder('Required for cross-user visibility').fill('admin-pass');
   await page.getByRole('button', { name: /Enter board/ }).click();
 
-  await expect(page.getByLabel('Mobile lane picker')).toBeVisible();
-  await page.getByRole('button', { name: /LLM Health/ }).click();
-  await expect(page.locator('.lane.mobile-active').filter({ hasText: 'LLM Health' })).toBeVisible();
-  await expect(page.locator('.lane.mobile-active')).toContainText('Google Gemma');
-  await expect(page.locator('.lane.mobile-active')).toContainText('Mimo v2.5');
+  await expect(page.getByRole('heading', { name: 'Universal App Health' })).toBeVisible();
+  await expect(page.getByText('Google Gemma')).toBeVisible();
+  await expect(page.getByText('Mimo v2.5')).toBeVisible();
+  await page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ }).click();
+  await expect(page.getByRole('heading', { name: /vc\*\*\*@g\*\*\*\.com/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Preview delete scope/ })).toBeVisible();
 
   const metrics = await page.evaluate(() => ({
     width: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
     bodyScrollWidth: document.body.scrollWidth,
-    activeLaneCount: document.querySelectorAll('.lane.mobile-active').length,
+    dashboardColumns: getComputedStyle(document.querySelector('.dashboard-content')).gridTemplateColumns,
   }));
   expect(metrics.width).toBe(390);
   expect(metrics.scrollWidth).toBeLessThanOrEqual(390);
   expect(metrics.bodyScrollWidth).toBeLessThanOrEqual(390);
-  expect(metrics.activeLaneCount).toBe(1);
+  expect(Number.parseInt(metrics.dashboardColumns, 10)).toBeLessThanOrEqual(390);
+  expect(metrics.dashboardColumns.trim().split(/\s+/)).toHaveLength(1);
 });

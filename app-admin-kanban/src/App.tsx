@@ -5,6 +5,7 @@ import {
   Bot,
   Cloud,
   Database,
+  Eye,
   Lock,
   LogOut,
   RefreshCw,
@@ -13,22 +14,23 @@ import {
   UserRound,
   Plane,
   Receipt,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Trash2
 } from 'lucide-react';
 import {
   clearSession,
+  confirmDeleteUser,
   currentSession,
   fetchSnapshot,
   loginAdmin,
+  previewDeleteUser,
 } from './lib/adminApi';
 import type {
   AdminKanbanSnapshot,
   AdminSession,
   AdminUserCard,
   HealthState,
-  AdminProviderHealth,
-  AdminTripCard,
-  AdminReceiptCard
+  DeletePreview,
 } from './lib/types';
 
 const RANGE_OPTIONS = [1, 7, 30, 90];
@@ -78,7 +80,7 @@ function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => void }) {
     <main className="login-screen">
       <section className="login-panel">
         <div className="brand-mark"><Shield size={30} /></div>
-        <h1>Travel Ops Dashboard</h1>
+        <h1>Travel Ops KanBan</h1>
         <p>Admin-only operations cockpit for users, trips, expenses, sync, and LLM health.</p>
         <label>
           Admin passphrase
@@ -156,7 +158,110 @@ function UniversalHealth({ snapshot }: { snapshot: AdminKanbanSnapshot }) {
   );
 }
 
-function UserDetailsPanel({ user, snapshot }: { user: AdminUserCard, snapshot: AdminKanbanSnapshot }) {
+function DeletePanel({
+  session,
+  user,
+  onDone,
+}: {
+  session: AdminSession;
+  user: AdminUserCard;
+  onDone: () => void;
+}) {
+  const [preview, setPreview] = useState<DeletePreview | null>(null);
+  const [confirmPhrase, setConfirmPhrase] = useState('');
+  const [adminPassphrase, setAdminPassphrase] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
+
+  useEffect(() => {
+    setPreview(null);
+    setConfirmPhrase('');
+    setAdminPassphrase('');
+    setStatus('');
+  }, [user.id]);
+
+  async function loadPreview() {
+    setBusy(true);
+    setStatus('');
+    try {
+      setPreview(await previewDeleteUser(session, user.id));
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Delete preview failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!preview) return;
+    setBusy(true);
+    setStatus('');
+    try {
+      const result = await confirmDeleteUser(session, preview.userId, confirmPhrase, adminPassphrase);
+      setStatus(result.deleted ? 'User delete completed and verified.' : 'Delete request returned incomplete result.');
+      setPreview(null);
+      setConfirmPhrase('');
+      setAdminPassphrase('');
+      onDone();
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="danger-panel" aria-label="Admin delete controls">
+      <div className="danger-head">
+        <AlertTriangle size={18} />
+        <span>Delete requires preview + confirm</span>
+      </div>
+      <p>Selected user: <strong>{user.emailMasked}</strong></p>
+      <button className="danger-command" type="button" disabled={busy} onClick={() => void loadPreview()}>
+        <Eye size={15} /> Preview delete scope
+      </button>
+      {preview && (
+        <div className="delete-preview">
+          <strong>Delete preview</strong>
+          <div className="count-grid">
+            {Object.entries(preview.counts).map(([key, value]) => (
+              <span key={key}><b>{value}</b>{key}</span>
+            ))}
+          </div>
+          <label>
+            Confirm phrase
+            <input value={confirmPhrase} onChange={(event) => setConfirmPhrase(event.target.value)} placeholder={preview.confirmPhrase} />
+          </label>
+          <label>
+            Admin re-auth
+            <input value={adminPassphrase} onChange={(event) => setAdminPassphrase(event.target.value)} type="password" />
+          </label>
+          <button
+            className="danger-command solid"
+            type="button"
+            disabled={busy || confirmPhrase !== preview.confirmPhrase || !adminPassphrase}
+            onClick={() => void confirmDelete()}
+          >
+            <Trash2 size={15} /> Confirm user delete
+          </button>
+        </div>
+      )}
+      {status && <p className="status-line">{status}</p>}
+    </section>
+  );
+}
+
+function UserDetailsPanel({
+  user,
+  snapshot,
+  session,
+  onDeleted,
+}: {
+  user: AdminUserCard;
+  snapshot: AdminKanbanSnapshot;
+  session: AdminSession;
+  onDeleted: () => void;
+}) {
   const userTrips = snapshot.trips.filter(t => t.ownerId === user.id);
   const userReceipts = snapshot.receipts.filter(r => r.ownerId === user.id);
 
@@ -191,6 +296,8 @@ function UserDetailsPanel({ user, snapshot }: { user: AdminUserCard, snapshot: A
         <Metric label="Notion Integration" value={user.notionConnected ? 'Connected' : 'Not Connected'} status={user.notionConnected ? 'healthy' : 'warning'} />
         <Metric label="AI Requests (Today)" value={user.aiRequestsToday} />
       </div>
+
+      <DeletePanel session={session} user={user} onDone={onDeleted} />
 
       <div className="user-lists">
         <div className="list-section">
@@ -301,7 +408,14 @@ function Board({
 
         <div className="dashboard-right">
           {selectedUser ? (
-            <UserDetailsPanel user={selectedUser} snapshot={snapshot} />
+            <UserDetailsPanel
+              user={selectedUser}
+              snapshot={snapshot}
+              session={session}
+              onDeleted={() => {
+                onRefresh();
+              }}
+            />
           ) : (
             <div className="empty-panel">
               <Activity size={48} />

@@ -957,6 +957,32 @@ button:disabled {
     gap: 8px;
   }
 
+  .dashboard-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .users-list-container {
+    max-height: none;
+  }
+
+  .dashboard-right {
+    min-height: 360px;
+    padding: 14px;
+  }
+
+  .user-details-panel .panel-header,
+  .user-lists {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .user-stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .left-rail .section-title,
   .left-rail .warning-line {
     grid-column: 1 / -1;
