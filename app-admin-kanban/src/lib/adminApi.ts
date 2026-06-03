@@ -105,3 +105,21 @@ export async function confirmDeleteUser(
   );
   return data.result;
 }
+
+export async function amendReceipt(
+  session: AdminSession,
+  receiptId: string,
+  updates: { store?: string; amount?: number; currency?: string; status?: string; category?: string }
+): Promise<{ id: string }> {
+  const data = await parseJson<{ ok: boolean; id: string }>(
+    await fetch(adminDataUrl('/api/amend-receipt'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ receiptId, ...updates }),
+    }),
+  );
+  return data;
+}

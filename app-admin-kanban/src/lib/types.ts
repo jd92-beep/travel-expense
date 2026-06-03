@@ -34,7 +34,7 @@ export type UsageSummary = {
 
 export type AdminUserCard = {
   id: string;
-  emailMasked: string;
+  email: string;
   joinedAt: string | null;
   lastSeenAt: string | null;
   sessionCount: number;
@@ -50,7 +50,7 @@ export type AdminUserCard = {
 export type AdminTripCard = {
   id: string;
   ownerId: string;
-  ownerEmailMasked: string;
+  ownerEmail: string;
   name: string;
   destination: string;
   dateRange: string;
@@ -73,6 +73,7 @@ export type AdminReceiptCard = {
   recordDate: string;
   updatedAt: string | null;
   notionSynced: boolean;
+  photoPath: string | null;
 };
 
 export type AdminNotionSummary = {

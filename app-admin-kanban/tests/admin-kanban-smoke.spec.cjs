@@ -36,7 +36,7 @@ const snapshot = {
   users: [
     {
       id: 'user-a',
-      emailMasked: 'vc***@g***.com',
+      email: 'vc***@g***.com',
       joinedAt: '2026-05-25T00:00:00Z',
       lastSeenAt: null,
       sessionCount: 0,
@@ -53,7 +53,7 @@ const snapshot = {
     {
       id: 'trip-a',
       ownerId: 'user-a',
-      ownerEmailMasked: 'vc***@g***.com',
+      ownerEmail: 'vc***@g***.com',
       name: 'Japan Ops Trip',
       destination: 'Japan',
       dateRange: '2026-06-02 - 2026-06-07',
@@ -104,7 +104,7 @@ async function mockAdminApi(page) {
         ok: true,
         preview: {
           userId: 'user-a',
-          emailMasked: 'vc***@g***.com',
+          email: 'vc***@g***.com',
           counts: { authUsers: 1, profiles: 1, trips: 1, receipts: 0, receiptPhotos: 0, integrations: 0 },
           confirmPhrase: 'DELETE USER vc***@g***.com',
           generatedAt: new Date().toISOString(),
@@ -156,7 +156,7 @@ test('desktop board renders live snapshot and guarded delete flow', async ({ pag
   await expect(page.getByText('User delete completed and verified.')).toBeVisible();
 });
 
-test('mobile board is scrollable and lane picker controls one active lane', async ({ page }) => {
+test('mobile board is scrollable and shows single column', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockAdminApi(page);
 

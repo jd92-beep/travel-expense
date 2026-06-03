@@ -24,14 +24,17 @@ import {
   fetchSnapshot,
   loginAdmin,
   previewDeleteUser,
+  amendReceipt,
 } from './lib/adminApi';
 import type {
   AdminKanbanSnapshot,
   AdminSession,
   AdminUserCard,
+  AdminReceiptCard,
   HealthState,
   DeletePreview,
 } from './lib/types';
+import { Pencil } from 'lucide-react';
 
 const RANGE_OPTIONS = [1, 7, 30, 90];
 
@@ -55,7 +58,7 @@ function classForHealth(status: HealthState): string {
 
 function matchesSearch(user: AdminUserCard, search: string): boolean {
   if (!search.trim()) return true;
-  return user.emailMasked.toLowerCase().includes(search.toLowerCase());
+  return user.email.toLowerCase().includes(search.toLowerCase());
 }
 
 function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => void }) {
@@ -216,7 +219,7 @@ function DeletePanel({
         <AlertTriangle size={18} />
         <span>Delete requires preview + confirm</span>
       </div>
-      <p>Selected user: <strong>{user.emailMasked}</strong></p>
+      <p>Selected user: <strong>{user.email}</strong></p>
       <button className="danger-command" type="button" disabled={busy} onClick={() => void loadPreview()}>
         <Eye size={15} /> Preview delete scope
       </button>
@@ -251,24 +254,81 @@ function DeletePanel({
   );
 }
 
+function ImageViewerModal({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content image-modal">
+        <button onClick={onClose} className="modal-close">&times;</button>
+        <img src={url} alt="Receipt" className="receipt-image-preview" />
+      </div>
+    </div>
+  );
+}
+
+function QuickAmendModal({ session, receipt, onClose, onRefresh }: { session: AdminSession, receipt: AdminReceiptCard, onClose: () => void, onRefresh: () => void }) {
+  const [store, setStore] = useState(receipt.store);
+  const [amount, setAmount] = useState(receipt.amount.toString());
+  const [currency, setCurrency] = useState(receipt.currency);
+  const [status, setStatus] = useState(receipt.status);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function save() {
+    setBusy(true);
+    setError('');
+    try {
+      await amendReceipt(session, receipt.id, { store, amount: Number(amount), currency, status });
+      onRefresh();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to amend receipt');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content amend-modal">
+        <h3 style={{marginTop: 0}}>Amend Receipt</h3>
+        <label>Store Name <input value={store} onChange={e => setStore(e.target.value)} /></label>
+        <label>Amount <input type="number" value={amount} onChange={e => setAmount(e.target.value)} /></label>
+        <label>Currency <input value={currency} onChange={e => setCurrency(e.target.value)} /></label>
+        <label>Status <select value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="draft">draft</option>
+          <option value="pending">pending</option>
+          <option value="confirmed">confirmed</option>
+        </select></label>
+        {error && <p className="error-line">{error}</p>}
+        <div className="modal-actions">
+          <button className="primary-command" disabled={busy} onClick={() => void save()}>Save</button>
+          <button className="ghost-command" disabled={busy} onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UserDetailsPanel({
   user,
   snapshot,
   session,
-  onDeleted,
+  onRefresh,
 }: {
   user: AdminUserCard;
   snapshot: AdminKanbanSnapshot;
   session: AdminSession;
-  onDeleted: () => void;
+  onRefresh: () => void;
+
 }) {
   const userTrips = snapshot.trips.filter(t => t.ownerId === user.id);
   const userReceipts = snapshot.receipts.filter(r => r.ownerId === user.id);
+  const [amendReceiptItem, setAmendReceiptItem] = useState<AdminReceiptCard | null>(null);
+  const [viewImageUrl, setViewImageUrl] = useState<string | null>(null);
 
   return (
     <div className="user-details-panel">
       <div className="panel-header">
-        <h2><UserRound size={20} /> {user.emailMasked}</h2>
+        <h2><UserRound size={20} /> {user.email}</h2>
         <span className="last-seen">Last seen: {fmtDate(user.lastSeenAt)}</span>
       </div>
 
@@ -297,7 +357,7 @@ function UserDetailsPanel({
         <Metric label="AI Requests (Today)" value={user.aiRequestsToday} />
       </div>
 
-      <DeletePanel session={session} user={user} onDone={onDeleted} />
+      <DeletePanel session={session} user={user} onDone={onRefresh} />
 
       <div className="user-lists">
         <div className="list-section">
@@ -322,13 +382,19 @@ function UserDetailsPanel({
           {userReceipts.length > 0 ? (
             <div className="card-list">
               {userReceipts.map(receipt => (
-                <div key={receipt.id} className="detail-card">
+                <div key={receipt.id} className="detail-card" style={{position: 'relative'}}>
                   <strong>{receipt.store}</strong>
                   <small>{receipt.recordDate} · {receipt.status}</small>
                   <span>{receipt.amount.toLocaleString()} {receipt.currency}</span>
                   <span className={`sync-status ${receipt.notionSynced ? 'synced' : 'pending'}`}>
                     {receipt.notionSynced ? 'Notion Synced' : 'Notion Pending'}
                   </span>
+                  <div className="detail-actions">
+                    {receipt.photoPath && (
+                      <button type="button" onClick={() => setViewImageUrl(`https://fbnnjoahvtdrnigevrtw.supabase.co/storage/v1/object/public/receipt-photos/${receipt.photoPath}`)} title="View Photo" className="icon-btn"><ImageIcon size={14} /></button>
+                    )}
+                    <button type="button" onClick={() => setAmendReceiptItem(receipt)} title="Amend" className="icon-btn"><Pencil size={14} /></button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -337,6 +403,12 @@ function UserDetailsPanel({
           )}
         </div>
       </div>
+      {amendReceiptItem && (
+        <QuickAmendModal session={session} receipt={amendReceiptItem} onClose={() => setAmendReceiptItem(null)} onRefresh={onRefresh} />
+      )}
+      {viewImageUrl && (
+        <ImageViewerModal url={viewImageUrl} onClose={() => setViewImageUrl(null)} />
+      )}
     </div>
   );
 }
@@ -397,7 +469,7 @@ function Board({
                   type="button"
                 >
                   <UserRound size={16} />
-                  <span>{user.emailMasked}</span>
+                  <span>{user.email}</span>
                   <span className={classForHealth(user.health)}>●</span>
                 </button>
               ))}
@@ -412,9 +484,7 @@ function Board({
               user={selectedUser}
               snapshot={snapshot}
               session={session}
-              onDeleted={() => {
-                onRefresh();
-              }}
+              onRefresh={onRefresh}
             />
           ) : (
             <div className="empty-panel">

@@ -76,12 +76,7 @@ async function verifyPassphrase(passphrase: string) {
 }
 
 function maskEmail(email: unknown) {
-  const clean = String(email || "").trim();
-  if (!clean || !clean.includes("@")) return "unknown";
-  const [name, host] = clean.split("@");
-  const maskedName = name.length <= 2 ? `${name[0] || "u"}*` : `${name.slice(0, 2)}***`;
-  const [domain, ...rest] = host.split(".");
-  return `${maskedName}@${domain.slice(0, 1)}***.${rest.join(".") || "mail"}`;
+  return String(email || "").trim() || "unknown";
 }
 
 async function hashId(value: unknown) {
@@ -208,7 +203,7 @@ async function snapshot(rangeDays: number) {
     listUsers(supabase),
     fetchRows(supabase, "trips", "id,owner_id,name,destination_summary,start_date,end_date,trip_currency,active,archived,updated_at,app_metadata"),
     fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,record_date,updated_at,notion_page_id,notion_sync_status,notion_last_synced_at"),
-    fetchRows(supabase, "receipt_photos", "id,owner_id"),
+    fetchRows(supabase, "receipt_photos", "id,receipt_id,owner_id,storage_path"),
     fetchRows(supabase, "integrations", "id,user_id,provider,status,last_synced_at"),
     fetchRows(supabase, "receipt_sync_jobs", "id,owner_id,provider,status,last_error,created_at,updated_at"),
     fetchRows(supabase, "app_usage_events", "user_id,session_id_hash,app_surface,event_name,provider,model,outcome,created_at", 1000),
@@ -240,7 +235,7 @@ async function snapshot(rangeDays: number) {
     const lastSeenAt = userUsage.map((row) => row.created_at).sort().at(-1) || user.last_sign_in_at || null;
     return {
       id: user.id,
-      emailMasked: maskEmail(user.email),
+      email: maskEmail(user.email),
       joinedAt: user.created_at || null,
       lastSeenAt,
       sessionCount: new Set(userUsage.map((row) => row.session_id_hash).filter(Boolean)).size,
@@ -260,7 +255,7 @@ async function snapshot(rangeDays: number) {
     return {
       id: trip.id,
       ownerId: trip.owner_id,
-      ownerEmailMasked: maskEmail((userById.get(trip.owner_id) as any)?.email),
+      ownerEmail: maskEmail((userById.get(trip.owner_id) as any)?.email),
       name: trip.name,
       destination: trip.destination_summary || "Unknown destination",
       dateRange: [trip.start_date, trip.end_date].filter(Boolean).join(" - ") || "No dates",
@@ -272,18 +267,23 @@ async function snapshot(rangeDays: number) {
       updatedAt: trip.updated_at || null,
     };
   });
-  const receiptCards = receipts.map((receipt: any) => ({
-    id: receipt.id,
-    tripId: receipt.trip_id,
-    ownerId: receipt.owner_id,
-    store: receipt.store,
-    status: receipt.status,
-    amount: Number(receipt.amount || 0),
-    currency: receipt.currency || "JPY",
-    recordDate: receipt.record_date,
-    updatedAt: receipt.updated_at || null,
-    notionSynced: !!receipt.notion_page_id || receipt.notion_sync_status === "synced",
-  }));
+  const photosByReceipt = groupBy(photos, "receipt_id");
+  const receiptCards = receipts.map((receipt: any) => {
+    const rPhotos = photosByReceipt.get(receipt.id) || [];
+    return {
+      id: receipt.id,
+      tripId: receipt.trip_id,
+      ownerId: receipt.owner_id,
+      store: receipt.store,
+      status: receipt.status,
+      amount: Number(receipt.amount || 0),
+      currency: receipt.currency || "JPY",
+      recordDate: receipt.record_date,
+      updatedAt: receipt.updated_at || null,
+      notionSynced: !!receipt.notion_page_id || receipt.notion_sync_status === "synced",
+      photoPath: rPhotos.length > 0 ? rPhotos[0].storage_path : null,
+    };
+  });
   const bySurface = [...groupBy(rangedUsage, "app_surface")].map(([surface, rows]) => ({
     surface: surface || "unknown",
     events: rows.length,
@@ -430,6 +430,31 @@ Deno.serve(async (req) => {
       const body = await readBody(req) as any;
       const result = await deleteUser(String(body.userId || ""), String(body.confirmPhrase || ""), String(body.adminPassphrase || ""), adminSubject);
       return json(req, 200, { ok: true, result });
+    }
+    if (req.method === "POST" && url.pathname.endsWith("/api/amend-receipt")) {
+      const body = await readBody(req) as any;
+      if (!body.receiptId) throw new Error("Missing receiptId");
+      const supabase = serviceClient();
+      const updates: any = { updated_at: new Date().toISOString() };
+      if (body.store !== undefined) updates.store = body.store;
+      if (body.amount !== undefined) updates.amount = Number(body.amount);
+      if (body.currency !== undefined) updates.currency = body.currency;
+      if (body.status !== undefined) updates.status = body.status;
+      if (body.category !== undefined) updates.category = body.category;
+      
+      const { data, error } = await supabase.from("receipts").update(updates).eq("id", body.receiptId).select("id").single();
+      if (error) throw error;
+      
+      await writeAudit(supabase, {
+        adminSubject,
+        action: "amend_receipt",
+        targetType: "receipt",
+        targetId: body.receiptId,
+        requestId: crypto.randomUUID(),
+        previewCounts: {},
+        result: { amended: true, updates },
+      });
+      return json(req, 200, { ok: true, id: data?.id });
     }
     return json(req, 404, { ok: false, error: "Admin KanBan route not found" });
   } catch (error) {

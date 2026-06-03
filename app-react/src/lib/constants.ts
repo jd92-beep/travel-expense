@@ -165,9 +165,7 @@ export const DEFAULT_STATE: AppState = {
 };
 
 export const BOSS_EMAILS = new Set([
-  'vc06456@gmail.com',
-  'vc06456@hotmail.com',
-  'ftjdfr@gmail.com'
+  'vc06456@gmail.com'
 ]);
 
 export function isBoss(email?: string | null): boolean {

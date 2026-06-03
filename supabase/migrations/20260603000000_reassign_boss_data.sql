@@ -1,16 +1,16 @@
 -- Supabase Migration: Reassign Boss Data
--- Description: Move trips, receipts, receipt_items, receipt_photos from ftjdfr@gmail.com to vc06456@hotmail.com
+-- Description: Move trips, receipts, receipt_items, receipt_photos from ftjdfr@gmail.com to vc06456@gmail.com
 
 -- Source: ftjdfr@gmail.com
 -- UUID: bf464ddb-9c80-4ae1-970c-1774d689d5fd
 
--- Target: vc06456@hotmail.com
--- UUID: e8580628-5af6-4a74-ac95-0b20a9dae98b
+-- Target: vc06456@gmail.com
+-- UUID: e6bd6e0a-4022-4491-95d3-e4b53ddc88f6
 
 DO $$
 DECLARE
     v_source_id UUID := 'bf464ddb-9c80-4ae1-970c-1774d689d5fd'::UUID;
-    v_target_id UUID := 'e8580628-5af6-4a74-ac95-0b20a9dae98b'::UUID;
+    v_target_id UUID := 'e6bd6e0a-4022-4491-95d3-e4b53ddc88f6'::UUID;
 BEGIN
     -- Only reassign if the target user actually exists to avoid foreign key violations
     IF EXISTS (SELECT 1 FROM auth.users WHERE id = v_target_id) THEN
