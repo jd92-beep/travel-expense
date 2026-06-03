@@ -1,57 +1,37 @@
-import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Activity,
   AlertTriangle,
   Bot,
   Cloud,
   Database,
-  Eye,
   Lock,
   LogOut,
   RefreshCw,
   Search,
   Shield,
-  Trash2,
   UserRound,
+  Plane,
+  Receipt,
+  Image as ImageIcon
 } from 'lucide-react';
 import {
   clearSession,
-  confirmDeleteUser,
   currentSession,
   fetchSnapshot,
   loginAdmin,
-  previewDeleteUser,
 } from './lib/adminApi';
 import type {
   AdminKanbanSnapshot,
-  AdminProviderHealth,
   AdminSession,
   AdminUserCard,
-  DeletePreview,
   HealthState,
+  AdminProviderHealth,
+  AdminTripCard,
+  AdminReceiptCard
 } from './lib/types';
 
-type LaneId = 'users' | 'trips' | 'receipts' | 'notion' | 'llm' | 'backend' | 'actions';
-
-type Lane = {
-  id: LaneId;
-  title: string;
-  count: number;
-  tone: 'cyan' | 'green' | 'amber' | 'purple' | 'red';
-  body: ReactNode;
-};
-
-type TriageCard = {
-  id: string;
-  laneId: LaneId;
-  title: string;
-  detail: string;
-  sourceType: string;
-  createdAt: string;
-};
-
 const RANGE_OPTIONS = [1, 7, 30, 90];
-const TRIAGE_KEY = 'travel-expense-admin-kanban:triage:v1';
 
 const statusText: Record<HealthState, string> = {
   healthy: 'Healthy',
@@ -71,28 +51,9 @@ function classForHealth(status: HealthState): string {
   return `health health-${status}`;
 }
 
-function readTriageCards(): TriageCard[] {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(TRIAGE_KEY) || '[]') as TriageCard[];
-    return Array.isArray(parsed) ? parsed.filter((card) => card.id && card.laneId && card.title) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeTriageCards(cards: TriageCard[]) {
-  window.localStorage.setItem(TRIAGE_KEY, JSON.stringify(cards.slice(0, 80)));
-}
-
-function matchesSearch(snapshot: AdminKanbanSnapshot, search: string): boolean {
+function matchesSearch(user: AdminUserCard, search: string): boolean {
   if (!search.trim()) return true;
-  const haystack = [
-    ...snapshot.users.map((u) => `${u.emailMasked} ${u.id}`),
-    ...snapshot.trips.map((t) => `${t.name} ${t.destination} ${t.ownerEmailMasked}`),
-    ...snapshot.receipts.map((r) => `${r.store} ${r.status} ${r.currency}`),
-    ...snapshot.llm.map((p) => `${p.provider} ${p.label} ${p.storedStatus}`),
-  ].join(' ').toLowerCase();
-  return haystack.includes(search.toLowerCase());
+  return user.emailMasked.toLowerCase().includes(search.toLowerCase());
 }
 
 function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => void }) {
@@ -117,7 +78,7 @@ function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => void }) {
     <main className="login-screen">
       <section className="login-panel">
         <div className="brand-mark"><Shield size={30} /></div>
-        <h1>Travel Ops KanBan</h1>
+        <h1>Travel Ops Dashboard</h1>
         <p>Admin-only operations cockpit for users, trips, expenses, sync, and LLM health.</p>
         <label>
           Admin passphrase
@@ -158,175 +119,117 @@ function EmptyState({ icon, title, detail }: { icon: ReactNode; title: string; d
   );
 }
 
-function ProviderCard({ provider, onSelect, dragProps }: { provider: AdminProviderHealth; onSelect: () => void; dragProps?: ButtonHTMLAttributes<HTMLButtonElement> }) {
+function UniversalHealth({ snapshot }: { snapshot: AdminKanbanSnapshot }) {
   return (
-    <button className="op-card provider-card" type="button" onClick={onSelect} {...dragProps}>
-      <span className="provider-icon"><Bot size={22} /></span>
-      <span>
-        <strong>{provider.label}</strong>
-        <small>{provider.model || provider.provider}</small>
-      </span>
-      <span className={classForHealth(provider.status)}>{statusText[provider.status]}</span>
-      <small>{provider.latencyMs ? `${provider.latencyMs}ms` : 'Latency pending'}</small>
-    </button>
-  );
-}
-
-function UserCard({ user, onSelect, dragProps }: { user: AdminUserCard; onSelect: () => void; dragProps?: ButtonHTMLAttributes<HTMLButtonElement> }) {
-  return (
-    <button className="op-card user-card" type="button" onClick={onSelect} {...dragProps}>
-      <span className="avatar"><UserRound size={16} /></span>
-      <span>
-        <strong>{user.emailMasked}</strong>
-        <small>Last seen {fmtDate(user.lastSeenAt)}</small>
-      </span>
-      <span className={classForHealth(user.health)}>{statusText[user.health]}</span>
-      <small>{user.tripCount} trips · {user.receiptCount} receipts</small>
-    </button>
-  );
-}
-
-function DeletePanel({
-  snapshot,
-  session,
-  selectedUser,
-  onDone,
-}: {
-  snapshot: AdminKanbanSnapshot;
-  session: AdminSession;
-  selectedUser: AdminUserCard | null;
-  onDone: () => void;
-}) {
-  const [preview, setPreview] = useState<DeletePreview | null>(null);
-  const [confirmPhrase, setConfirmPhrase] = useState('');
-  const [adminPassphrase, setAdminPassphrase] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('');
-
-  const user = selectedUser;
-
-  async function loadPreview() {
-    if (!user) return;
-    setBusy(true);
-    setStatus('');
-    try {
-      setPreview(await previewDeleteUser(session, user.id));
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Delete preview failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmDelete() {
-    if (!preview) return;
-    setBusy(true);
-    setStatus('');
-    try {
-      const result = await confirmDeleteUser(session, preview.userId, confirmPhrase, adminPassphrase);
-      setStatus(result.deleted ? 'User delete completed and verified.' : 'Delete request returned incomplete result.');
-      setPreview(null);
-      setConfirmPhrase('');
-      setAdminPassphrase('');
-      onDone();
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Delete failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="danger-panel">
-      <div className="danger-head">
-        <AlertTriangle size={18} />
-        <span>Delete requires preview + confirm</span>
-      </div>
-      <p>Selected user: <strong>{user ? user.emailMasked : 'No user available'}</strong></p>
-      <button className="danger-command" type="button" disabled={!user || busy} onClick={() => void loadPreview()}>
-        <Eye size={15} /> Preview delete scope
-      </button>
-      {preview && (
-        <div className="delete-preview">
-          <strong>Delete preview</strong>
-          <div className="count-grid">
-            {Object.entries(preview.counts).map(([key, value]) => (
-              <span key={key}><b>{value}</b>{key}</span>
+    <div className="universal-health">
+      <h2>Universal App Health</h2>
+      <div className="health-grid">
+        <div className="health-card">
+          <h3><Database size={16} /> Database & Backend</h3>
+          <Metric label="Supabase Status" value={snapshot.supabase.status === 'healthy' ? 'ACTIVE_HEALTHY' : statusText[snapshot.supabase.status]} status={snapshot.supabase.status} />
+          <Metric label="RLS Force Enabled" value={snapshot.supabase.rls.every((row) => row.enabled && row.force) ? 'Yes' : 'No'} status={snapshot.supabase.rls.every((row) => row.enabled && row.force) ? 'healthy' : 'warning'} />
+          <Metric label="Total Users" value={snapshot.supabase.counts.authUsers} />
+          <Metric label="Events (Range)" value={snapshot.usage.events} />
+        </div>
+        
+        <div className="health-card">
+          <h3><Bot size={16} /> LLM Providers</h3>
+          <div className="llm-list">
+            {snapshot.llm.map((provider) => (
+              <div key={provider.provider} className="llm-item">
+                <span>{provider.label} <small>({provider.model})</small></span>
+                <span className={classForHealth(provider.status)}>{statusText[provider.status]}</span>
+              </div>
             ))}
           </div>
-          <label>
-            Confirm phrase
-            <input value={confirmPhrase} onChange={(event) => setConfirmPhrase(event.target.value)} placeholder={preview.confirmPhrase} />
-          </label>
-          <label>
-            Admin re-auth
-            <input value={adminPassphrase} onChange={(event) => setAdminPassphrase(event.target.value)} type="password" />
-          </label>
-          <button
-            className="danger-command solid"
-            type="button"
-            disabled={busy || confirmPhrase !== preview.confirmPhrase || !adminPassphrase}
-            onClick={() => void confirmDelete()}
-          >
-            <Trash2 size={15} /> Confirm user delete
-          </button>
         </div>
-      )}
-      {status && <p className="status-line">{status}</p>}
+
+        <div className="health-card">
+          <h3><Cloud size={16} /> Notion Integration</h3>
+          <Metric label="Connected Users" value={snapshot.notion.connectedUsers} />
+          <Metric label="Synced Receipts" value={snapshot.notion.syncedReceipts} />
+          <Metric label="Pending Jobs" value={snapshot.notion.pendingJobs} status={snapshot.notion.pendingJobs ? 'warning' : 'healthy'} />
+          <Metric label="Failed Jobs" value={snapshot.notion.failedJobs} status={snapshot.notion.failedJobs ? 'danger' : 'healthy'} />
+        </div>
+      </div>
     </div>
   );
 }
 
-function formatInspectorValue(key: string, value: unknown): string {
-  if (value == null || value === '') return 'None';
-  if (/id$/i.test(key) && typeof value === 'string') return `${value.slice(0, 8)}...`;
-  if (/email/i.test(key) && typeof value === 'string') return value;
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (typeof value === 'number') return value.toLocaleString();
-  if (Array.isArray(value)) return `${value.length} item(s)`;
-  if (typeof value === 'object') return 'Structured metadata';
-  return String(value);
-}
+function UserDetailsPanel({ user, snapshot }: { user: AdminUserCard, snapshot: AdminKanbanSnapshot }) {
+  const userTrips = snapshot.trips.filter(t => t.ownerId === user.id);
+  const userReceipts = snapshot.receipts.filter(r => r.ownerId === user.id);
 
-function Inspector({ selected }: { selected: { type: string; data: Record<string, unknown> } | null }) {
-  const entries = selected
-    ? Object.entries(selected.data).filter(([key]) => !/token|secret|passphrase|key/i.test(key)).slice(0, 18)
-    : [];
   return (
-    <aside className="inspector" aria-label="Inspector">
-      <div className="section-title">
-        <span>Inspector</span>
-        <small>{selected?.type || 'No selection'}</small>
+    <div className="user-details-panel">
+      <div className="panel-header">
+        <h2><UserRound size={20} /> {user.emailMasked}</h2>
+        <span className="last-seen">Last seen: {fmtDate(user.lastSeenAt)}</span>
       </div>
-      {selected ? (
-        <div className="inspector-list">
-          {entries.map(([key, value]) => (
-            <span key={key}>
-              <b>{key}</b>
-              <small>{formatInspectorValue(key, value)}</small>
-            </span>
-          ))}
-        </div>
-      ) : (
-        <EmptyState icon={<Activity />} title="Select a card" detail="Card details, audit state, and admin commands appear here." />
-      )}
-    </aside>
-  );
-}
 
-function TriageStack({ cards, onRemove }: { cards: TriageCard[]; onRemove: (id: string) => void }) {
-  if (!cards.length) return null;
-  return (
-    <div className="triage-stack" data-testid="triage-stack">
-      {cards.map((card) => (
-        <button className="triage-card" key={card.id} type="button" onClick={() => onRemove(card.id)}>
-          <span>
-            <strong>{card.title}</strong>
-            <small>{card.sourceType} · {card.detail}</small>
-          </span>
-          <b>Clear</b>
-        </button>
-      ))}
+      <div className="user-stats-grid">
+        <div className="stat-box">
+          <Plane size={24} />
+          <strong>{user.tripCount}</strong>
+          <span>Trips</span>
+        </div>
+        <div className="stat-box">
+          <Receipt size={24} />
+          <strong>{user.receiptCount}</strong>
+          <span>Receipts</span>
+        </div>
+        <div className="stat-box">
+          <ImageIcon size={24} />
+          <strong>{user.imageCount || 0}</strong>
+          <span>Images</span>
+        </div>
+      </div>
+
+      <div className="connection-status">
+        <h3>Connection Status</h3>
+        <Metric label="Supabase Health" value={statusText[user.health]} status={user.health} />
+        <Metric label="Notion Integration" value={user.notionConnected ? 'Connected' : 'Not Connected'} status={user.notionConnected ? 'healthy' : 'warning'} />
+        <Metric label="AI Requests (Today)" value={user.aiRequestsToday} />
+      </div>
+
+      <div className="user-lists">
+        <div className="list-section">
+          <h3>Trips ({userTrips.length})</h3>
+          {userTrips.length > 0 ? (
+            <div className="card-list">
+              {userTrips.map(trip => (
+                <div key={trip.id} className="detail-card">
+                  <strong>{trip.name}</strong>
+                  <small>{trip.destination} · {trip.dateRange}</small>
+                  <span>{trip.receiptCount} receipts · {trip.currency}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="empty-text">No trips found.</p>
+          )}
+        </div>
+
+        <div className="list-section">
+          <h3>Receipts ({userReceipts.length})</h3>
+          {userReceipts.length > 0 ? (
+            <div className="card-list">
+              {userReceipts.map(receipt => (
+                <div key={receipt.id} className="detail-card">
+                  <strong>{receipt.store}</strong>
+                  <small>{receipt.recordDate} · {receipt.status}</small>
+                  <span>{receipt.amount.toLocaleString()} {receipt.currency}</span>
+                  <span className={`sync-status ${receipt.notionSynced ? 'synced' : 'pending'}`}>
+                    {receipt.notionSynced ? 'Notion Synced' : 'Notion Pending'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="empty-text">No receipts found.</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -347,189 +250,16 @@ function Board({
   onLogout: () => void;
 }) {
   const [search, setSearch] = useState('');
-  const [activeLane, setActiveLane] = useState<LaneId>('users');
-  const [selected, setSelected] = useState<{ type: string; data: Record<string, unknown> } | null>(null);
-  const [triageCards, setTriageCards] = useState<TriageCard[]>(() => readTriageCards());
+  const [selectedUser, setSelectedUser] = useState<AdminUserCard | null>(null);
 
-  const visible = matchesSearch(snapshot, search);
-  const triageByLane = useMemo(() => {
-    const grouped = new Map<LaneId, TriageCard[]>();
-    for (const card of triageCards) {
-      grouped.set(card.laneId, [...(grouped.get(card.laneId) || []), card]);
-    }
-    return grouped;
-  }, [triageCards]);
-
-  function rememberTriage(next: TriageCard[]) {
-    setTriageCards(next);
-    writeTriageCards(next);
-  }
-
-  function dragProps(sourceType: string, id: string, title: string, detail: string): ButtonHTMLAttributes<HTMLButtonElement> {
-    return {
-      draggable: true,
-      onDragStart: (event) => {
-        event.dataTransfer.effectAllowed = 'copy';
-        event.dataTransfer.setData('application/json', JSON.stringify({ sourceType, id, title, detail }));
-      },
-    };
-  }
-
-  function dropOnLane(laneId: LaneId, event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    const raw = event.dataTransfer.getData('application/json');
-    if (!raw) return;
-    try {
-      const card = JSON.parse(raw) as Omit<TriageCard, 'laneId' | 'createdAt'>;
-      if (!card.id || !card.title) return;
-      const nextCard: TriageCard = {
-        ...card,
-        id: `${card.sourceType}:${card.id}`,
-        laneId,
-        createdAt: new Date().toISOString(),
-      };
-      rememberTriage([nextCard, ...triageCards.filter((item) => item.id !== nextCard.id)]);
-      setActiveLane(laneId);
-    } catch {
-      // Ignore malformed external drag payloads.
-    }
-  }
-
-  function removeTriageCard(id: string) {
-    rememberTriage(triageCards.filter((card) => card.id !== id));
-  }
-
-  const lanes: Lane[] = useMemo(() => [
-    {
-      id: 'users',
-      title: 'Live Users',
-      count: snapshot.users.length,
-      tone: 'cyan',
-      body: snapshot.users.length ? (
-        <>
-          <Metric label="Active users" value={snapshot.usage.activeUsers} status="healthy" />
-          {snapshot.users.map((user) => (
-            <UserCard
-              key={user.id}
-              user={user}
-              onSelect={() => setSelected({ type: 'User', data: user })}
-              dragProps={dragProps('User', user.id, user.emailMasked, `${user.tripCount} trips · ${user.receiptCount} receipts`)}
-            />
-          ))}
-        </>
-      ) : <EmptyState icon={<UserRound />} title="No user events yet" detail="Telemetry will fill this lane after app usage is recorded." />,
-    },
-    {
-      id: 'trips',
-      title: 'Trip Ops',
-      count: snapshot.trips.length,
-      tone: 'green',
-      body: snapshot.trips.length ? snapshot.trips.map((trip) => (
-        <button
-          className="op-card trip-card"
-          key={trip.id}
-          type="button"
-          onClick={() => setSelected({ type: 'Trip', data: trip })}
-          {...dragProps('Trip', trip.id, trip.name, `${trip.destination} · ${trip.receiptCount} receipts`)}
-        >
-          <strong>{trip.name}</strong>
-          <small>{trip.destination} · {trip.dateRange}</small>
-          <span>{trip.currency} · {trip.receiptCount} receipts</span>
-          <span className={trip.archived ? 'health-warning' : 'health-healthy'}>{trip.archived ? 'Archived' : 'Active'}</span>
-        </button>
-      )) : <EmptyState icon={<Cloud />} title="No trips" detail="Supabase currently has no active trip cards for this range." />,
-    },
-    {
-      id: 'receipts',
-      title: 'Expense Flow',
-      count: snapshot.receipts.length,
-      tone: 'amber',
-      body: snapshot.receipts.length ? snapshot.receipts.map((receipt) => (
-        <button
-          className="op-card receipt-card"
-          key={receipt.id}
-          type="button"
-          onClick={() => setSelected({ type: 'Receipt', data: receipt })}
-          {...dragProps('Receipt', receipt.id, receipt.store, `${receipt.currency} ${receipt.amount.toLocaleString()}`)}
-        >
-          <strong>{receipt.store}</strong>
-          <small>{receipt.recordDate} · {receipt.status}</small>
-          <span>{receipt.currency} {receipt.amount.toLocaleString()}</span>
-        </button>
-      )) : <EmptyState icon={<Database />} title="0 receipts" detail="Expense cards will appear after users create receipt records." />,
-    },
-    {
-      id: 'notion',
-      title: 'Notion Mirror',
-      count: snapshot.notion.connectedUsers,
-      tone: 'purple',
-      body: (
-        <>
-          <Metric label="Connected users" value={snapshot.notion.connectedUsers} />
-          <Metric label="Synced receipts" value={snapshot.notion.syncedReceipts} />
-          <Metric label="Pending jobs" value={snapshot.notion.pendingJobs} status={snapshot.notion.pendingJobs ? 'warning' : 'healthy'} />
-          <Metric label="Failed jobs" value={snapshot.notion.failedJobs} status={snapshot.notion.failedJobs ? 'danger' : 'healthy'} />
-          <EmptyState icon={<Cloud />} title="Personal mirrors only" detail="Notion status comes from app-owned integration and sync metadata." />
-        </>
-      ),
-    },
-    {
-      id: 'llm',
-      title: 'LLM Health',
-      count: snapshot.llm.length,
-      tone: 'cyan',
-      body: (
-        <>
-          {snapshot.llm.map((provider) => (
-            <ProviderCard
-              key={provider.provider}
-              provider={provider}
-              onSelect={() => setSelected({ type: 'Provider', data: provider as unknown as Record<string, unknown> })}
-              dragProps={dragProps('Provider', provider.provider, provider.label, provider.model || provider.provider)}
-            />
-          ))}
-        </>
-      ),
-    },
-    {
-      id: 'backend',
-      title: 'Backend Health',
-      count: snapshot.supabase.rls.length,
-      tone: 'green',
-      body: (
-        <>
-          <Metric label="Supabase" value={snapshot.supabase.status === 'healthy' ? 'ACTIVE_HEALTHY' : statusText[snapshot.supabase.status]} status={snapshot.supabase.status} />
-          <Metric label="Users" value={snapshot.supabase.counts.authUsers} />
-          <Metric label="Trips" value={snapshot.supabase.counts.trips} />
-          <Metric label="Receipts" value={snapshot.supabase.counts.receipts} />
-          <div className="rls-grid">
-            {snapshot.supabase.rls.map((row) => (
-              <span key={row.table}>
-                <b>{row.table}</b>
-                <small className={row.enabled && row.force ? 'health-healthy' : 'health-danger'}>{row.enabled && row.force ? 'FORCE' : 'CHECK'}</small>
-              </span>
-            ))}
-          </div>
-        </>
-      ),
-    },
-    {
-      id: 'actions',
-      title: 'Admin Actions',
-      count: snapshot.audit.length,
-      tone: 'red',
-      body: <DeletePanel snapshot={snapshot} session={session} selectedUser={selected?.type === 'User' ? selected.data as AdminUserCard : null} onDone={onRefresh} />,
-    },
-  ], [snapshot, session, selected, onRefresh, triageCards]);
-
-  const active = lanes.find((lane) => lane.id === activeLane) || lanes[0];
+  const visibleUsers = snapshot.users.filter(u => matchesSearch(u, search));
 
   return (
-    <main className="ops-shell">
+    <main className="ops-shell dashboard-layout">
       <header className="top-command">
         <div className="brand">
           <span className="brand-mark small"><Shield size={19} /></span>
-          <span><strong>Travel Ops KanBan</strong><small>{session.adminSubject}</small></span>
+          <span><strong>Travel Ops Dashboard</strong><small>{session.adminSubject}</small></span>
         </div>
         <div className="command-row">
           <button type="button" onClick={onRefresh}><RefreshCw size={16} /> Refresh</button>
@@ -539,59 +269,46 @@ function Board({
           <span className="fresh-pill"><i /> Data fresh · {fmtDate(snapshot.generatedAt)}</span>
           <label className="search-box">
             <Search size={16} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users, trips, providers..." />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users..." />
           </label>
           <button type="button" onClick={onLogout}><LogOut size={16} /> Exit</button>
         </div>
       </header>
 
-      <div className="mobile-lane-picker" aria-label="Mobile lane picker">
-        {lanes.map((lane) => (
-          <button className={lane.id === activeLane ? 'active' : ''} key={lane.id} type="button" onClick={() => setActiveLane(lane.id)}>
-            {lane.title}<b>{lane.count}</b>
-          </button>
-        ))}
-      </div>
-
-      <section className="ops-grid">
-        <aside className="left-rail">
-          <div className="section-title"><span>Status Overview</span><small>{snapshot.source}</small></div>
-          <Metric label="Users" value={snapshot.supabase.counts.authUsers} status="healthy" />
-          <Metric label="Trips" value={snapshot.supabase.counts.trips} status="healthy" />
-          <Metric label="Receipts" value={snapshot.supabase.counts.receipts} />
-          <Metric label="RLS force" value={snapshot.supabase.rls.every((row) => row.enabled && row.force) ? 'Enabled' : 'Review'} status={snapshot.supabase.rls.every((row) => row.enabled && row.force) ? 'healthy' : 'danger'} />
-          <div className="section-title"><span>Usage</span><small>{rangeDays}d</small></div>
-          <Metric label="Events" value={snapshot.usage.events} />
-          <Metric label="Sessions" value={snapshot.usage.sessions} />
-          <Metric label="Active users" value={snapshot.usage.activeUsers} />
-          {snapshot.warnings.map((warning) => <p className="warning-line" key={warning}>{warning}</p>)}
-        </aside>
-
-        <div className={`lanes ${visible ? '' : 'is-filtered-empty'}`}>
-          {lanes.map((lane) => {
-            const laneTriage = triageByLane.get(lane.id) || [];
-            return (
-            <article
-              className={`lane lane-${lane.tone} ${lane.id === active.id ? 'mobile-active' : ''}`}
-              data-lane-id={lane.id}
-              key={lane.id}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => dropOnLane(lane.id, event)}
-            >
-              <div className="lane-head">
-                <span>{lane.title}</span>
-                <b>{lane.count + laneTriage.length}</b>
-              </div>
-              <div className="lane-body">
-                <TriageStack cards={laneTriage} onRemove={removeTriageCard} />
-                {lane.body}
-              </div>
-            </article>
-          );})}
-          {!visible && <div className="search-empty">No cards match the current search.</div>}
+      <section className="dashboard-content">
+        <div className="dashboard-left">
+          <UniversalHealth snapshot={snapshot} />
+          
+          <div className="users-list-container">
+            <h2>Live Users ({visibleUsers.length})</h2>
+            <div className="users-list">
+              {visibleUsers.map(user => (
+                <button 
+                  key={user.id} 
+                  className={`user-list-item ${selectedUser?.id === user.id ? 'active' : ''}`}
+                  onClick={() => setSelectedUser(user)}
+                  type="button"
+                >
+                  <UserRound size={16} />
+                  <span>{user.emailMasked}</span>
+                  <span className={classForHealth(user.health)}>●</span>
+                </button>
+              ))}
+              {visibleUsers.length === 0 && <p className="empty-text">No users found.</p>}
+            </div>
+          </div>
         </div>
 
-        <Inspector selected={selected} />
+        <div className="dashboard-right">
+          {selectedUser ? (
+            <UserDetailsPanel user={selectedUser} snapshot={snapshot} />
+          ) : (
+            <div className="empty-panel">
+              <Activity size={48} />
+              <p>Select a user to view their detailed operations and records.</p>
+            </div>
+          )}
+        </div>
       </section>
     </main>
   );

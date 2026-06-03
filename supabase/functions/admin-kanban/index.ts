@@ -204,10 +204,11 @@ async function brokerHealth() {
 
 async function snapshot(rangeDays: number) {
   const supabase = serviceClient();
-  const [users, trips, receipts, integrations, jobs, usage, audits, rlsRpc, llm] = await Promise.all([
+  const [users, trips, receipts, photos, integrations, jobs, usage, audits, rlsRpc, llm] = await Promise.all([
     listUsers(supabase),
     fetchRows(supabase, "trips", "id,owner_id,name,destination_summary,start_date,end_date,trip_currency,active,archived,updated_at,app_metadata"),
     fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,record_date,updated_at,notion_page_id,notion_sync_status,notion_last_synced_at"),
+    fetchRows(supabase, "receipt_photos", "id,owner_id"),
     fetchRows(supabase, "integrations", "id,user_id,provider,status,last_synced_at"),
     fetchRows(supabase, "receipt_sync_jobs", "id,owner_id,provider,status,last_error,created_at,updated_at"),
     fetchRows(supabase, "app_usage_events", "user_id,session_id_hash,app_surface,event_name,provider,model,outcome,created_at", 1000),
@@ -232,6 +233,7 @@ async function snapshot(rangeDays: number) {
   const userById = new Map(users.map((user: any) => [user.id, user]));
   const tripsByOwner = groupCount(trips, "owner_id");
   const receiptsByOwner = groupCount(receipts, "owner_id");
+  const photosByOwner = groupCount(photos, "owner_id");
   const usageByUser = groupBy(rangedUsage, "user_id");
   const userCards = users.map((user: any) => {
     const userUsage = usageByUser.get(user.id) || [];
@@ -245,6 +247,7 @@ async function snapshot(rangeDays: number) {
       eventCount: userUsage.length,
       tripCount: tripsByOwner.get(user.id) || 0,
       receiptCount: receiptsByOwner.get(user.id) || 0,
+      imageCount: photosByOwner.get(user.id) || 0,
       notionConnected: integrations.some((row: any) => row.user_id === user.id && row.provider === "notion" && row.status === "connected"),
       aiRequestsToday: userUsage.filter((row) => /^ai_request/.test(row.event_name || "")).length,
       health: "healthy",

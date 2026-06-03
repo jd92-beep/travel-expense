@@ -41,6 +41,7 @@ export type AdminUserCard = {
   eventCount: number;
   tripCount: number;
   receiptCount: number;
+  imageCount: number;
   notionConnected: boolean;
   aiRequestsToday: number;
   health: HealthState;
