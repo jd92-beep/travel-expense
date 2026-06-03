@@ -12,6 +12,7 @@ import { useSyncEngine } from './lib/useSyncEngine';
 import { clearCredentialSession, clearStoredState } from './lib/storage';
 import type { Receipt, SyncQueueItem, TabId, TripProfile } from './lib/types';
 import { TAB_MANIFEST } from './lib/tabs';
+import { isBoss } from './lib/constants';
 import { AuthGate } from './security/AuthGate';
 import { HyperframeBackground } from './components/HyperframeBackground';
 import { fetchLiveCurrencySnapshot, loadCurrencySnapshot, usableSnapshot, type CurrencySnapshot } from './lib/currency';
@@ -128,7 +129,7 @@ export function App() {
 
   const showGuide =
     hasSupabaseSession(supabaseAuth.session) &&
-    userEmail?.toLowerCase() !== 'vc06456@gmail.com' &&
+    !isBoss(userEmail) &&
     (state.trips || []).length === 0 &&
     !isHydratingScope &&
     !skippedGuide;

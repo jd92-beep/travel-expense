@@ -163,3 +163,14 @@ export const DEFAULT_STATE: AppState = {
   syncError: '',
   settingsPulledAt: 0,
 };
+
+export const BOSS_EMAILS = new Set([
+  'vc06456@gmail.com',
+  'vc06456@hotmail.com',
+  'ftjdfr@gmail.com'
+]);
+
+export function isBoss(email?: string | null): boolean {
+  if (!email) return false;
+  return BOSS_EMAILS.has(email.toLowerCase());
+}

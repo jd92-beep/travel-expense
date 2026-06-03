@@ -27,9 +27,24 @@ The following files were modified by the Antigravity dashboard pass and then con
 3. **Live Edge Snapshot**: Authenticated snapshot returned `HTTP 200`, `source=live-edge`, `authUsers=3`, `profiles=3`, `trips=1`, `receipts=0`, and per-user `imageCount` fields.
 4. **Environment**: Local secrets remain in `.env.admin-kanban.local` and are gitignored. Do not print the admin passphrase or Supabase tokens in chat.
 
-## 🚀 Codex: Next Steps
-When Codex takes over, please look into:
-1. **Production Vercel Check**: After pushing, confirm `https://travel-expense-admin-kanban.vercel.app` serves the dashboard bundle and login still reaches the Supabase Edge `live-edge` snapshot.
+## 🚀 Codex: Next Steps & Data Ownership Fixes
+
+When Codex takes over, please look into the following critical tasks to fix the **empty receipts / duplicate accounts** issue that Boss reported:
+
+### Why are there two identical VC accounts, and why are my receipts missing in Kanban?
+1. **The Duplicate Accounts Issue**: Supabase treats `vc06456@hotmail.com`, `vc06456@gmail.com`, and `ftjdfr@gmail.com` as completely separate users with different unique UUIDs. There are duplicate Boss accounts in the system because Boss has logged in using both the `gmail.com` and `hotmail.com` variants.
+2. **Missing Data in the Kanban Board**: The Kanban board **is correctly connected** to the live Supabase database. The reason no receipts or trips appear under `vc06456` accounts is that all of the Nagoya trip data was originally uploaded and saved under the **`ftjdfr@gmail.com` user UUID** (`bf464ddb-9c80-4ae1-970c-1774d689d5fd`). The `vc06456` accounts currently own exactly 0 trips and 0 receipts in Supabase.
+3. **Data sets connected?**: Yes. The dataset connections to the Kanban board are 100% correct, which is precisely why it accurately shows 0 receipts for the `vc06456` accounts!
+
+### Immediate Fix Required by Codex
+To fix the data isolation and show the real data under Boss's primary Hotmail account:
+1. Antigravity has created a SQL migration script located at `supabase/migrations/20260603000000_reassign_boss_data.sql`.
+2. This script moves all `trips`, `receipts`, and `receipt_photos` ownership from `ftjdfr@gmail.com` to `vc06456@hotmail.com` (`e8580628-5af6-4a74-ac95-0b20a9dae98b`).
+3. **Codex MUST instruct the Boss to run this SQL script directly in the live Supabase SQL Editor** (since we agents do not have the DB password). 
+4. Once the SQL is run on the production Supabase database, the data will instantly appear in the Kanban board under `vc06456@hotmail.com`.
+5. Alternatively, since **Notion is the source of truth**, Codex can advise Boss to trigger the Notion Pull/Sync while logged in as `vc06456@hotmail.com` to re-hydrate the receipts into Supabase under the Hotmail account UUID.
+
+### Other Next Steps
+1. **Production Vercel Check**: After pushing, confirm `https://travel-expense-admin-kanban.vercel.app` serves the dashboard bundle.
 2. **Verify Universal Health Statuses**: The LLM broker health is live; future work can add explicit frontend latency and DB latency measures.
 3. **Refine User details**: Add sync-job rows to the user detail lists if Boss wants job-level Notion diagnostics shown beside trips and receipts.
-4. **Mobile Layout Tweaks**: Keep the current one-column dashboard contract on narrow screens and run `npm run smoke` after any layout changes.

@@ -1,5 +1,5 @@
 import { activeTrip } from '../domain/trip/normalize';
-import { DEFAULT_NOTION_DB } from './constants';
+import { DEFAULT_NOTION_DB, isBoss } from './constants';
 import { hasCredentialBrokerSession, currentBrokerSession } from './credentialBroker';
 import { hasDirectNotionToken } from './notion';
 import type { AppState } from './types';
@@ -19,7 +19,7 @@ export function hasUserScopedNotionDatabase(state: AppState): boolean {
 }
 
 export function canUseNotionMirror(state: AppState, cloudSyncAvailable = false, userEmail: string | null = null): boolean {
-  if (userEmail?.toLowerCase() === 'vc06456@gmail.com') {
+  if (isBoss(userEmail)) {
     return true;
   }
   if (cloudSyncAvailable) {
@@ -29,7 +29,7 @@ export function canUseNotionMirror(state: AppState, cloudSyncAvailable = false, 
 }
 
 export function notionMirrorGuardMessage(state: AppState, cloudSyncAvailable = false, userEmail: string | null = null): string {
-  if (userEmail?.toLowerCase() === 'vc06456@gmail.com') return '';
+  if (isBoss(userEmail)) return '';
   if (cloudSyncAvailable && !hasUserScopedNotionDatabase(state)) {
     return 'Supabase public 帳號需要先設定自己嘅 Notion database ID；系統唔會使用預設共享 Notion notebook。';
   }

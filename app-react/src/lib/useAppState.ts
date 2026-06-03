@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { migrateAppState, stampReceiptForTrip } from '../domain/trip/normalize';
-import { DEFAULT_STATE } from './constants';
+import { DEFAULT_STATE, isBoss } from './constants';
 import { hasCredentialBrokerSession } from './credentialBroker';
 import { hasDirectNotionToken } from './notion';
 import { clearStoredCredentials, hasStoredState, loadState, saveState } from './storage';
@@ -71,7 +71,7 @@ function stateFreshness(state: Partial<AppState>): number {
 }
 
 function isPublicSupabaseScope(storageScope: string, userEmail: string | null): boolean {
-  return storageScope.startsWith('supabase:') && String(userEmail || '').toLowerCase() !== 'vc06456@gmail.com';
+  return storageScope.startsWith('supabase:') && !isBoss(userEmail);
 }
 
 function withoutPublicDemoTrip(state: AppState, storageScope: string, userEmail: string | null): AppState {

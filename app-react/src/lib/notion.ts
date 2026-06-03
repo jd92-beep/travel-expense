@@ -1,4 +1,4 @@
-import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS, normalizeAiModelSettings } from './constants';
+import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS, normalizeAiModelSettings, isBoss } from './constants';
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { brokerNotionRequest, hasCredentialBrokerSession, brokerNotionUploadFile } from './credentialBroker';
 import { displayStore, getPersons, hkd, receiptRegion } from './domain';
@@ -137,8 +137,8 @@ async function notionFetch<T>(state: AppState, path: string, init: RequestInit =
     return response.json() as Promise<T>;
   }
   const userEmail = await currentSupabaseUserEmail();
-  const isBoss = userEmail?.toLowerCase() === 'vc06456@gmail.com';
-  if (!isBoss && !hasCredentialBrokerSession(state) && state.personalNotionConnected !== true) {
+  const isBossUser = isBoss(userEmail);
+  if (!isBossUser && !hasCredentialBrokerSession(state) && state.personalNotionConnected !== true) {
     throw new Error('Credential Broker session 未連線；請先連接 Personal Notion notebook');
   }
   if (!activeDb?.trim()) throw new Error('未設定 Notion DB ID');
