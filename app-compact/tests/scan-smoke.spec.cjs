@@ -3,6 +3,50 @@ const { test, expect } = require('@playwright/test');
 test.use({ viewport: { width: 390, height: 844 } });
 
 test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page }) => {
+  const consoleMessages = [];
+  page.on('console', (msg) => consoleMessages.push(`${msg.type()}:${msg.text()}`));
+  let scanCalls = 0;
+  const brokerJsonRoute = async (route) => {
+    const body = route.request().postDataJSON();
+    let data;
+    if (body.kind === 'scan') {
+      scanCalls += 1;
+      const partial = scanCalls >= 4;
+      data = {
+        store: partial ? 'broken-email-screenshot' : 'm5-camera-receipt',
+        total: partial ? 0 : 1234,
+        date: '2026-05-08',
+        time: '09:30',
+        category: 'food',
+        payment: 'suica',
+        note: partial ? 'partial screenshot smoke' : '',
+      };
+    } else if (body.kind === 'voice') {
+      data = [{
+        store: 'M5 Voice Cafe',
+        total: 1234,
+        date: '2026-05-08',
+        time: '09:30',
+        category: 'food',
+        payment: 'suica',
+      }];
+    } else {
+      data = [{
+        store: 'M5 Email Lunch',
+        total: 888,
+        date: '2026-05-08',
+        time: '12:00',
+        category: 'food',
+        payment: 'credit',
+        bookingRef: 'REF55555',
+      }];
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data }) });
+  };
+  await page.route('**/google/json', brokerJsonRoute);
+  await page.route('**/kimi/json', brokerJsonRoute);
+  await page.route('**/mimo/json', brokerJsonRoute);
+
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
     localStorage.clear();
@@ -29,6 +73,8 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.locator('.scan-hero-card')).not.toContainText('從手機相簿選取');
   await expect(page.locator('.scan-function-art')).toHaveCount(6);
   await expect(page.locator('.scan-function-art svg, .scan-function-art img')).toHaveCount(0);
+  await expect(page.getByLabel('Scan cockpit')).toContainText('待掃描');
+  await expect(page.getByLabel('Scan cockpit')).toContainText('未有相片');
   const heroCard = await page.locator('.scan-hero-card').boundingBox();
   const heroButton = await page.locator('.scan-hero-button').boundingBox();
   const galleryButton = await page.locator('.scan-secondary-button').boundingBox();
@@ -68,6 +114,8 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.getByText('編輯紀錄')).toBeVisible();
   await expect(page.getByLabel('店名 / 項目')).toHaveValue('m5-camera-receipt');
   await page.getByRole('button', { name: '取消' }).click();
+  await expect(page.getByLabel('Scan cockpit')).toContainText('可確認');
+  await expect(page.getByLabel('Scan cockpit')).toContainText('m5-camera-receipt.jpg');
 
   await page.getByRole('button', { name: '手動', exact: true }).click();
   await page.getByLabel('店名 / 項目').fill('M5 手動測試');
@@ -109,9 +157,21 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await page.getByRole('button', { name: 'Email' }).click();
   await page.getByRole('button', { name: '複製 Gmail' }).click();
   await expect(page.getByText('ftjdfr+expense@gmail.com')).toBeVisible();
+  await page.locator('#scan-email-image-input').setInputFiles({
+    name: 'broken-email-screenshot.jpg',
+    mimeType: 'image/jpeg',
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+  });
+  await expect(page.getByRole('heading', { name: 'Batch Confirm' })).toBeVisible();
+  await expect(page.getByLabel('Batch recovery summary')).toContainText('1 需補資料');
+  await page.getByRole('button', { name: '只選完成' }).click();
+  await expect(page.getByRole('button', { name: /全部儲存/ })).toContainText('(0)');
+  await page.getByRole('button', { name: '取消' }).click();
   await page.getByPlaceholder('貼 booking confirmation / email 文字').fill('2026-05-08 at M5 Email Lunch 888 yen booking REF55555');
   await page.getByRole('button', { name: '解析文字' }).click();
   await expect(page.getByRole('heading', { name: 'Batch Confirm' })).toBeVisible();
+  await expect(page.getByLabel('Batch recovery summary')).toContainText('1 selected');
+  await expect(page.getByLabel('Batch recovery summary')).toContainText('0 需補資料');
   await page.getByRole('button', { name: /全部儲存/ }).click();
   await expect(page.getByText('已儲存 1 筆 email 待確認紀錄。')).toBeVisible();
 
@@ -125,4 +185,5 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await page.getByRole('button', { name: '刪除' }).click();
   await page.getByRole('dialog').getByRole('button', { name: '確認刪除' }).click();
   await expect(page.getByText('M5 Email')).toBeHidden();
+  expect(consoleMessages.filter((message) => message.includes('Session invalid') || (message.includes('[AI Routing]') && message.includes('嘗試失敗')))).toHaveLength(0);
 });

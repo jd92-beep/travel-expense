@@ -10,6 +10,7 @@ import scanMasterpieceSuite from '../assets/scan/scan-masterpiece-suite.png';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
 type ScanMode = 'scan' | 'voice' | 'email' | 'currency';
+type BatchReceipt = Receipt & { selected?: boolean };
 const CAMERA_INPUT_ID = 'scan-camera-input';
 const GALLERY_INPUT_ID = 'scan-gallery-input';
 const EMAIL_IMAGE_INPUT_ID = 'scan-email-image-input';
@@ -23,6 +24,16 @@ function safeFileStem(file: File): string {
     .replace(/[\u0000-\u001F\u007F]/g, '')
     .trim()
     .slice(0, 120) || '掃描收據';
+}
+
+function receiptNeedsReview(receipt: Partial<Receipt>): boolean {
+  const store = String(receipt.store || '');
+  const note = String(receipt.note || '');
+  return !store.trim()
+    || store.includes('解析失敗')
+    || !receipt.date
+    || !(Number(receipt.total) > 0)
+    || /OCR 未完成|Error:/i.test(note);
 }
 
 export function Scan({
@@ -49,7 +60,7 @@ export function Scan({
   const [status, setStatus] = useState('');
   const [voiceText, setVoiceText] = useState('');
   const [emailText, setEmailText] = useState('');
-  const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
+  const [batch, setBatch] = useState<BatchReceipt[]>([]);
   const [savingBatch, setSavingBatch] = useState(false);
   const [mode, setMode] = useState<ScanMode>('scan');
   const [inputKey, setInputKey] = useState(0);
@@ -83,6 +94,30 @@ export function Scan({
     const n = Number(amount) || 0;
     return convertAmount(n, from, to, state, fx);
   }, [amount, from, to, state, fx]);
+
+  const lastDraftNeedsReview = useMemo(() => lastDraft ? receiptNeedsReview(lastDraft) : false, [lastDraft]);
+  const batchQuality = useMemo(() => {
+    const selected = batch.filter((row) => row.selected !== false).length;
+    const review = batch.filter(receiptNeedsReview).length;
+    return {
+      total: batch.length,
+      selected,
+      complete: Math.max(0, batch.length - review),
+      review,
+    };
+  }, [batch]);
+  const scanConfidence = useMemo(() => {
+    if (busy === 'ocr' || busy === 'email-image') {
+      return { label: '辨識中', detail: '保持頁面開啟', tone: 'warning' as const };
+    }
+    if (lastDraft && lastDraftNeedsReview) {
+      return { label: '需補資料', detail: '已保存草稿相片', tone: 'warning' as const };
+    }
+    if (lastDraft) {
+      return { label: '可確認', detail: '上次草稿可重開', tone: 'ok' as const };
+    }
+    return { label: '待掃描', detail: '相機或相簿開始', tone: 'neutral' as const };
+  }, [busy, lastDraft, lastDraftNeedsReview]);
 
   const openDraft = useCallback((receipt: Receipt) => {
     setLastDraft(receipt);
@@ -311,8 +346,12 @@ export function Scan({
     }
   }, [busy]);
 
-  function updateBatch(id: string, patch: Partial<Receipt & { selected?: boolean }>) {
+  function updateBatch(id: string, patch: Partial<BatchReceipt>) {
     setBatch((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }
+
+  function selectCompleteBatchRows() {
+    setBatch((rows) => rows.map((row) => ({ ...row, selected: !receiptNeedsReview(row) })));
   }
 
   function saveBatch() {
@@ -438,6 +477,27 @@ export function Scan({
         <div className="preview-scan-tip relative z-10">
           <span>將收據置於框內以獲得最佳辨識效果</span>
           <b>自動拍攝：開啟</b>
+        </div>
+
+        <div className="scan-cockpit-panel relative z-10" aria-label="Scan cockpit">
+          <div>
+            <span>辨識狀態</span>
+            <strong>{scanConfidence.label}</strong>
+            <small>{scanConfidence.detail}</small>
+          </div>
+          <div>
+            <span>Batch</span>
+            <strong>{batchQuality.total ? `${batchQuality.selected}/${batchQuality.total}` : '未有'}</strong>
+            <small>{batchQuality.review ? `${batchQuality.review} 需補資料` : 'ready'}</small>
+          </div>
+          <div>
+            <span>Recovery</span>
+            <strong>{lastDraft ? '可重開' : '待建立'}</strong>
+            <small>{lastScanFile ? lastScanFile.name : '未有相片'}</small>
+          </div>
+          <StatusPill tone={scanConfidence.tone}>
+            {busy ? 'working' : lastDraftNeedsReview ? 'review' : 'ready'}
+          </StatusPill>
         </div>
 
         {/* MAIN SCAN MODES GRID */}
@@ -635,6 +695,13 @@ export function Scan({
                 <p className="muted">核對 email / 截圖解析結果，未勾選嘅唔會保存。</p>
               </div>
               <button className="icon-btn" type="button" onClick={() => setBatch([])}>×</button>
+            </div>
+            <div className="batch-recovery-bar" aria-label="Batch recovery summary">
+              <span><b>{batchQuality.selected}</b> selected</span>
+              <span><b>{batchQuality.complete}</b> 完成</span>
+              <span><b>{batchQuality.review}</b> 需補資料</span>
+              <button type="button" onClick={selectCompleteBatchRows}>只選完成</button>
+              <button type="button" onClick={() => setBatch((rows) => rows.map((row) => ({ ...row, selected: true })))}>全選</button>
             </div>
             <div className="batch-list">
               {batch.map((row) => (

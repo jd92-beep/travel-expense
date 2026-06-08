@@ -22,6 +22,11 @@ Last updated: 2026-06-08 HKT
   - `npm run security:scan` passed.
   - `git diff --check` passed.
 - P0-05 remains `LIVE`: verifying live Notion/Kimi/Google/Gemma/Mimo/WeatherAPI broker-vault paths requires deployed broker/account state and must not print secrets.
+- 2026-06-08 compact P1 progress:
+  - P1-01 done: Scan now has a one-hand cockpit panel showing OCR confidence/status, batch selected/total/needs-review counts, and last draft/photo recovery state.
+  - Batch Confirm now includes a recovery summary plus `只選完成` and `全選` controls, so failed/partial email screenshot rows can be skipped without losing the rest of the batch.
+  - Scan smoke now covers the cockpit, OCR fallback review state, failed screenshot batch recovery, and normal email batch save.
+  - Verification for P1-01: `npm run typecheck`, `npm run smoke:scan`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run security:scan`, and `npm run build` passed from `app-compact/`. Playwright mobile sweep at 390px produced `/tmp/compact-scan-cockpit-p1-01.png`, with document width `390` and no console errors.
 
 ## Active Admin KanBan Status
 

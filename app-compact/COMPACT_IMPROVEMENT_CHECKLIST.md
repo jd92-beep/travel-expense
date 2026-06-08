@@ -33,7 +33,7 @@ Credential Broker or ignored local files.
 
 | ID | Status | Task | Why It Matters | Verification |
 |---|---|---|---|---|
-| P1-01 | TODO | Upgrade Scan into a one-hand receipt cockpit with clearer confidence and partial-batch recovery states. | Scan is the main entry flow; users need fast correction when OCR is partial or uncertain. | `npm run smoke:scan`, mobile screenshot sweep. |
+| P1-01 | DONE | Upgrade Scan into a one-hand receipt cockpit with clearer confidence and partial-batch recovery states. | Scan is the main entry flow; users need fast correction when OCR is partial or uncertain. | 2026-06-08: added cockpit status, draft recovery, batch quality summary, complete-only batch selection; `npm run typecheck`, `npm run smoke:scan`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run security:scan`, `npm run build`, and mobile screenshot sweep `/tmp/compact-scan-cockpit-p1-01.png` passed. |
 | P1-02 | TODO | Add compact receipt health markers in History: pending, duplicate, photo missing, sync conflict, cloud-only/local-only. | Records should tell users what needs attention without opening each receipt. | `npm run smoke:history`, `npm run smoke:mobile-layout`. |
 | P1-03 | TODO | Add Timeline live-travel mode: now card, next stop, completed/current/upcoming states, and route action grouping. | The timeline should guide the user during the trip, not only display a static plan. | `npm run smoke:timeline`, visual mobile proof. |
 | P1-04 | TODO | Make Weather more trip-city aware with visible freshness, fallback reason, and destination/provider labels. | Users need to trust whether weather is live, cached, placeholder, city-based, or coordinate-based. | `npm run smoke:weather`, network-fallback smoke. |

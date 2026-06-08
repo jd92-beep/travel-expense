@@ -3183,6 +3183,86 @@ body {
   height: 86px;
   border-radius: 24px;
 }
+.scan-cockpit-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 8px;
+  margin: 10px 0 12px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.76), rgba(244,248,255,.48)),
+    rgba(255,255,255,.5);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 12px 28px rgba(35,42,60,.1);
+}
+.scan-cockpit-panel > div {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  padding: 7px 8px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.62);
+}
+.scan-cockpit-panel span,
+.scan-cockpit-panel small {
+  min-width: 0;
+  color: #657084;
+  font-size: 9.5px;
+  font-weight: 850;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scan-cockpit-panel strong {
+  min-width: 0;
+  color: #121826;
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scan-cockpit-panel .status-pill {
+  align-self: center;
+  justify-self: end;
+}
+.batch-recovery-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto auto;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 4px;
+  padding: 10px;
+  border: 1px solid rgba(139,115,85,.18);
+  border-radius: 16px;
+  background: rgba(255,253,247,.72);
+}
+.batch-recovery-bar span {
+  min-width: 0;
+  color: #5c5147;
+  font-size: 11px;
+  font-weight: 850;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.batch-recovery-bar b {
+  color: #1f2937;
+  font-size: 13px;
+}
+.batch-recovery-bar button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(139,115,85,.2);
+  border-radius: 999px;
+  background: rgba(255,255,255,.82);
+  color: #1f2937;
+  font-size: 11px;
+  font-weight: 900;
+}
 .settings-status-tooltips > span,
 .settings-status-tooltips [data-slot="tooltip-trigger"] {
   display: inline-flex;
@@ -9905,6 +9985,32 @@ textarea,
   .app-shell--scan .grid.grid-cols-2 {
     gap: 6px !important;
     padding: 8px 0 0 !important;
+  }
+
+  .app-shell--scan .scan-cockpit-panel {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 7px 0 8px;
+    padding: 7px;
+    border-radius: 16px;
+  }
+
+  .app-shell--scan .scan-cockpit-panel .status-pill {
+    display: none;
+  }
+
+  .app-shell--scan .scan-cockpit-panel > div {
+    padding: 6px;
+    border-radius: 12px;
+  }
+
+  .app-shell--scan .scan-cockpit-panel strong {
+    font-size: 11px;
+  }
+
+  .app-shell--scan .scan-cockpit-panel span,
+  .app-shell--scan .scan-cockpit-panel small {
+    font-size: 8px;
   }
 }
 

@@ -2,6 +2,8 @@
 
 ## 2026-06-08
 
+- Upgraded compact Scan with a one-hand cockpit panel for OCR confidence/status, batch progress, and last draft/photo recovery.
+- Added compact Batch Confirm recovery controls for partial email screenshot batches, including complete-only selection and smoke coverage.
 - Added `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`, a compact-only prioritized roadmap for weakness fixes and future upgrades.
 - Fixed compact duplicate-person rendering risk by deduplicating `getPersons()` output and added a final-navigation smoke regression for duplicate person IDs.
 - Aligned compact Dashboard budget scope so budget usage includes all current-trip receipts while daily/chart filtering can still exclude large trip items.
