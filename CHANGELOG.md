@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added a compact-only `DESIGN_SYSTEM.md` and shared CSS tokens for card/chip geometry, mobile gutters, quiet paper card surfaces, and control shadows; Stats story cards and the PWA readiness strip now reuse those tokens.
 - Added compact PWA/travel-readiness status chips for network state, pending sync queue, cache freshness, update availability, install prompt readiness, and reduced-motion mode.
 - Added compact Stats budget story cards for used percent, remaining-per-day pace, payer fairness, and category concentration/anomaly.
 - Added compact Dashboard local AI Trip Coach with daily burn, overspend forecast, next-day warning, and weather-linked reminders without calling external AI APIs.

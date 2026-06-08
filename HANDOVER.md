@@ -40,6 +40,10 @@ Last updated: 2026-06-08 HKT
   - Verification for P2-02: `npm run typecheck`, `npm run smoke:stats` (1 passed, including story card copy and 2x2 mobile geometry), `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run security:scan`, and `npm run build` passed from `app-compact/`. Playwright mobile proof at 390px produced `/tmp/compact-stats-budget-story-p2-02.png`, with document width `390`, four cards at `179x96`, and no console errors.
   - P2-03 done: Shell now shows a compact travel-readiness strip with network online/offline state, pending sync queue count, cache freshness, update-ready status, install prompt readiness, and reduced-motion/rich-motion mode. This does not register a service worker or expose credentials; it only reflects existing browser/app state.
   - Verification for P2-03: `npm run typecheck`, `npm run smoke:final-nav` (8 passed, including readiness strip update/install/offline/reduced-motion coverage), `npm run smoke:mobile-layout`, `npm run smoke:security`, `npm run security:scan`, and `npm run build` passed from `app-compact/`. Playwright mobile proof at 390px produced `/tmp/compact-pwa-readiness-p2-03.png`, with document width `390`, strip width `366`, six status chips, and no console errors.
+- 2026-06-08 compact P3 progress:
+  - P3-01 done: Compact now has a small documented design-token layer for panel/card/chip radius, mobile gaps/gutters, card/chip surfaces, control shadow, and muted/soft text colors. Stats story cards and the travel-readiness strip now reuse these tokens instead of duplicating one-off CSS values.
+  - Added `app-compact/DESIGN_SYSTEM.md` with compact-only token layers, tab hierarchy, reusable patterns, tab notes, and mobile/security guardrails.
+  - Verification for P3-01: `npm run build`, `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav` (8 passed), and `git diff --check` passed from `app-compact/`/repo root as appropriate. Playwright visual proof at 390px produced `/tmp/compact-design-system-p3-01/mobile-contact-sheet.png`; all seven tabs had document/body width `390`, no console problems, and no 4xx responses.
 
 ## Active Admin KanBan Status
 

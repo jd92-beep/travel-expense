@@ -11,6 +11,20 @@
   --compact-gold: #d4a843;
   --compact-green: #2d6e48;
   --compact-shadow: 0 20px 54px rgba(64, 43, 26, .14);
+  --compact-radius-panel: 18px;
+  --compact-radius-card: 14px;
+  --compact-radius-chip: 999px;
+  --compact-gap-mobile: 9px;
+  --compact-gutter-mobile: 12px;
+  --compact-chip-bg: rgba(255, 253, 248, .9);
+  --compact-card-bg:
+    linear-gradient(145deg, rgba(255,253,248,.95), rgba(247,238,222,.8)),
+    repeating-linear-gradient(135deg, rgba(211,154,41,.05) 0 1px, transparent 1px 18px);
+  --compact-card-border: 1px solid rgba(128, 99, 63, .16);
+  --compact-card-shadow: 0 12px 28px rgba(67, 46, 24, .055);
+  --compact-control-shadow: 0 6px 14px rgba(67, 46, 24, .04);
+  --compact-text-muted: #5D5041;
+  --compact-text-soft: #7A6044;
 }
 
 body {

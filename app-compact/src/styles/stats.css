@@ -112,7 +112,7 @@
 .stats-tab.stats-cockpit .stats-story-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--compact-gap-mobile, 12px);
 }
 
 .stats-tab.stats-cockpit .stats-story-card {
@@ -124,12 +124,10 @@
   gap: 6px;
   padding: 15px;
   overflow: hidden;
-  border: 1px solid rgba(128, 99, 63, .16);
-  border-radius: 18px;
-  background:
-    linear-gradient(145deg, rgba(255,253,248,.95), rgba(247,238,222,.8)),
-    repeating-linear-gradient(135deg, rgba(211,154,41,.05) 0 1px, transparent 1px 18px);
-  box-shadow: 0 12px 28px rgba(67, 46, 24, .055);
+  border: var(--compact-card-border, 1px solid rgba(128, 99, 63, .16));
+  border-radius: var(--compact-radius-panel, 18px);
+  background: var(--compact-card-bg);
+  box-shadow: var(--compact-card-shadow, 0 12px 28px rgba(67, 46, 24, .055));
 }
 
 .stats-tab.stats-cockpit .stats-story-card::after {
@@ -137,7 +135,7 @@
   position: absolute;
   inset: auto 14px 10px 14px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--compact-radius-chip, 999px);
   background: linear-gradient(90deg, #2D6E48, #D4A843);
   opacity: .88;
 }
@@ -151,7 +149,7 @@
 }
 
 .stats-tab.stats-cockpit .stats-story-card > span {
-  color: #7A6044;
+  color: var(--compact-text-soft, #7A6044);
   font-size: 11px;
   font-weight: 950;
   letter-spacing: 0;
@@ -169,7 +167,7 @@
 
 .stats-tab.stats-cockpit .stats-story-card > small {
   min-width: 0;
-  color: #5D5041;
+  color: var(--compact-text-muted, #5D5041);
   font-size: 11px;
   line-height: 1.25;
   font-weight: 780;
@@ -1440,13 +1438,13 @@
 
   .stats-tab.stats-cockpit .stats-story-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 9px;
+    gap: var(--compact-gap-mobile, 9px);
   }
 
   .stats-tab.stats-cockpit .stats-story-card {
     min-height: 96px;
     padding: 12px 11px 13px;
-    border-radius: 14px;
+    border-radius: var(--compact-radius-card, 14px);
   }
 
   .stats-tab.stats-cockpit .stats-story-card > span {

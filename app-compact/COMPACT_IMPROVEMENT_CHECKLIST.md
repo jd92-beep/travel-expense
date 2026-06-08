@@ -50,7 +50,7 @@ Credential Broker or ignored local files.
 
 | ID | Status | Task | Why It Matters | Verification |
 |---|---|---|---|---|
-| P3-01 | TODO | Convert repeated compact CSS overrides into small design tokens and documented tab patterns. | The current generated-preview polish works, but long override layers are hard to maintain. | `npm run build`, visual contact sheet. |
+| P3-01 | DONE | Convert repeated compact CSS overrides into small design tokens and documented tab patterns. | The current generated-preview polish works, but long override layers are hard to maintain. | 2026-06-08: added shared compact radius/gap/gutter/card/chip/text tokens, reused them in Stats story cards and the travel-readiness strip, and documented tab patterns in `DESIGN_SYSTEM.md`; `npm run build`, `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `git diff --check`, and visual contact sheet `/tmp/compact-design-system-p3-01/mobile-contact-sheet.png` passed. |
 | P3-02 | TODO | Automate a seven-tab mobile contact sheet after major UI edits. | Prevents card overlap, dock obstruction, and timeline rail regressions. | Playwright screenshot artifact plus `npm run smoke:mobile-layout`. |
 | P3-03 | TODO | Refresh compact docs so titles and paths say Compact instead of copied React wording. | Future agents should not confuse compact with main React. | Docs review plus `git diff --check`. |
 
