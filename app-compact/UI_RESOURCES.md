@@ -1,10 +1,10 @@
 # UI Resources And MCP Readiness
 
-This file records the design-resource decision for the React renovation. It is safe to commit and contains no credentials.
+This file records the design-resource decision for the Compact renovation. It is safe to commit and contains no credentials.
 
 ## Current App Decision
 
-- Keep the app on React 19 + Vite 8 + TypeScript 6.
+- Keep Compact on React 19 + Vite 8 + TypeScript 6.
 - Use `motion` for Settings accordion and future tab/receipt transitions.
 - Keep custom CSS tokens for the warm travel tone and Liquid Glass card treatment.
 - Do not reduce tabs: Dashboard, Scan, Timeline, History, Weather, Stats, Settings.
@@ -28,7 +28,7 @@ Checked on 2026-05-08 and refreshed on 2026-05-09 HKT against official public do
 
 - Tailwind CSS v4 is installed as an additive Vite utility/theme layer only. The app imports `tailwindcss/theme.css` and `tailwindcss/utilities.css` without Tailwind preflight so the existing handmade UI system keeps ownership.
 - `clsx`, `tailwind-merge`, and `class-variance-authority` are installed for local primitives and variants.
-- Keep React 19 + Vite 8 + TypeScript 6 + `motion` + custom CSS primitives as the production path.
+- Keep Compact on React 19 + Vite 8 + TypeScript 6 + `motion` + custom CSS primitives as the production path.
 - Recreate Magic UI / Aceternity / 21st-style effects locally when they are simple enough, especially glass cards, progress rings, dock polish, animated lists, and expandable cards.
 - Use v0/21st only after user-controlled login when needed; generated code must be reviewed before import.
 - Keep Tamagui as a later isolated spike, not a prerequisite for the UI masterpiece pass.

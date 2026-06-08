@@ -16,14 +16,14 @@ Status labels:
 |---|---|---|
 | A01 | 已驗證 | Local baseline opened at `/travel-expense/compact/`. |
 | A02 | 保留 | Root `index.html` is not moved; deploy copies it to root. |
-| A03 | 已驗證 | Vite base and deploy output target `_site/react/`. |
-| A04 | 已驗證 | React app code is inside `app-react/src`; no legacy import. |
+| A03 | 已驗證 | Vite base and compact deploy output target `/travel-expense/compact/`. |
+| A04 | 已驗證 | Compact app code is inside `app-compact/src`; no legacy or main React UI import. |
 | A05 | 已驗證 | Mobile viewport smoke at 390px showed tab shell and Settings. |
 | A06 | 已驗證 | `ErrorBoundary` wraps tab content. |
 | A07 | 已實作 | Shell listens to online/offline and keeps local data. |
 | A08 | 已實作 | Service worker controller update notice is supported. |
 | A09 | 已實作 | No AI/Notion request is cached by app code. |
-| A10 | 已驗證 | Workflow keeps root legacy and `/react/`; no key injection. |
+| A10 | 已驗證 | Workflow keeps root legacy and compact output separate; no key injection. |
 
 ## B. Lock / Auth Gate
 
@@ -72,7 +72,7 @@ Status labels:
 | E04 | 已驗證 | JSON extractor handles fenced JSON and embedded JSON. |
 | E05-E09 | 已實作 | OCR, voice, email, trip parser, diff preview paths implemented. |
 | E10-E11 | 已實作 | Invalid/failed AI output falls back or reports a safe error. |
-| E12 | 已驗證 | Deprecated providers removed from React UI. |
+| E12 | 已驗證 | Deprecated providers removed from Compact UI. |
 
 ## F. Notion Database / Sync
 
@@ -100,7 +100,7 @@ Status labels:
 | L01-L09 Stats | 已實作 | Settlement, private/cross-private, person/category/payment totals, top 10, trend, toggle mirror. |
 | M01-M25 Settings | 已實作 | All Settings cards are expandable; trip selector/update, currency, persons, broker credential rotation, Notion controls, export/import/reset/trust/version status remain available. |
 | N01-N07 Money | 已實作 | HKD anchor, per-trip/per-receipt currencies, rate snapshots, CSV/Notion currency fields. |
-| O01-O06 Maps | 已實作 | Google/Apple map URL, modal links, touch-safe React event handling, fallback address cascade. |
+| O01-O06 Maps | 已實作 | Google/Apple map URL, modal links, touch-safe Compact event handling, fallback address cascade. |
 | P01-P07 Email/App Script | 已實作 | Gmail address, SourceID, pending prefix, itinerary marker, safe helper text with no credential injection. |
 
 ## Q. Graphify / GitNexus / Docs
@@ -110,7 +110,7 @@ Status labels:
 | Q01 | 已驗證 | GitNexus impact checked before major symbol edits. |
 | Q02 | 已驗證 | `npx gitnexus analyze` reported index already up to date. |
 | Q03 | 已驗證 | GitNexus detect changes returned low risk for the final tracked docs/CSS/test diff after the timeline rail polish. |
-| Q04 | 已驗證 | Graphify refreshed `app-react/src` code graph. |
+| Q04 | 已驗證 | Historical Graphify refresh recorded for the source snapshot; use current compact files and smokes for fresh evidence. |
 | Q05-Q07 | 已實作 | `ARCHITECTURE.md` and this checklist document added. |
 
 ## R. Final Verification

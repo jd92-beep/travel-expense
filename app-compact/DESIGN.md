@@ -1,6 +1,6 @@
 # Epic Glass Field Design Spec
 
-This document defines the React renovation visual direction for `app-react/`.
+This document defines the Compact visual direction for `app-compact/`.
 It is documentation only and must not contain credentials, account IDs, tokens,
 or private trip data.
 
@@ -167,7 +167,7 @@ Glass is allowed only when text remains readable in the worst background case.
 
 ## Implementation Guardrails
 
-- Keep the production path as React + Vite + TypeScript + `motion` + local CSS
+- Keep the Compact production path as React + Vite + TypeScript + `motion` + local CSS
   primitives.
 - Any external UI reference must be re-authored locally unless the user approves
   a dependency spike.

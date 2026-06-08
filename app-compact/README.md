@@ -9,7 +9,7 @@ This is the independent compact version of the Travel Expense app.
 - Compact UI system: `DESIGN_SYSTEM.md`
 - Mobile visual QA: `npm run smoke:contact-sheet`
 
-The compact version is copied from the React app baseline but has its own package,
+The compact version is an independent React + Vite app with its own package,
 Vite base path, Vercel project, mobile scroll contract, and centered circular Scan
-dock. Changes here should not be made in `app-react/` or the legacy root app
+dock. Changes here should not be mirrored into `app-react/` or the legacy root app
 unless Boss explicitly asks for parity work.

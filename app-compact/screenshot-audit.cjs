@@ -1,4 +1,9 @@
 const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+
+const outDir = process.env.COMPACT_SCREENSHOT_AUDIT_OUT || '/tmp/compact-screenshot-audit';
+fs.mkdirSync(outDir, { recursive: true });
 
 (async () => {
   const browser = await chromium.launch();
@@ -8,7 +13,7 @@ const { chromium } = require('playwright');
   });
   const page = await context.newPage();
 
-  const baseUrl = 'http://127.0.0.1:8905/travel-expense/compact/';
+  const baseUrl = 'http://127.0.0.1:8903/travel-expense/compact/';
 
   // Navigate to app first to set localStorage with correct key
   await page.goto(baseUrl, { waitUntil: 'networkidle', timeout: 15000 });
@@ -20,12 +25,12 @@ const { chromium } = require('playwright');
   await page.waitForTimeout(3000);
 
   // Take screenshot of dashboard
-  await page.screenshot({ path: '/Users/tommy/Documents/New project/travel-expense/app-react/test-results/audit-dashboard.png', fullPage: false });
+  await page.screenshot({ path: path.join(outDir, 'audit-dashboard.png'), fullPage: false });
 
   // Scroll down
   await page.evaluate(() => window.scrollTo(0, 500));
   await page.waitForTimeout(500);
-  await page.screenshot({ path: '/Users/tommy/Documents/New project/travel-expense/app-react/test-results/audit-dashboard-scroll.png', fullPage: false });
+  await page.screenshot({ path: path.join(outDir, 'audit-dashboard-scroll.png'), fullPage: false });
 
   // Navigate through tabs using mobile nav only
   const tabs = ['紀錄', '統計', '設定'];
@@ -35,11 +40,11 @@ const { chromium } = require('playwright');
       const locator = page.locator('nav.md\\:hidden button', { hasText: tab });
       await locator.click();
       await page.waitForTimeout(1500);
-      await page.screenshot({ path: `/Users/tommy/Documents/New project/travel-expense/app-react/test-results/audit-${tab}.png`, fullPage: false });
+      await page.screenshot({ path: path.join(outDir, `audit-${tab}.png`), fullPage: false });
       console.log(`Screenshot ${tab} done`);
     } catch(e) { console.log(tab + ' tab error: ' + e.message); }
   }
 
   await browser.close();
-  console.log('Screenshots captured');
+  console.log(`Compact screenshots captured in ${outDir}`);
 })();
