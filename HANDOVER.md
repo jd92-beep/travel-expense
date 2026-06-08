@@ -36,6 +36,8 @@ Last updated: 2026-06-08 HKT
 - 2026-06-08 compact P2 progress:
   - P2-01 done: Dashboard now has a local-only `Local AI Coach` panel that calculates daily burn, projected overspend/remaining budget, next-day warning, and weather-linked reminders from current compact trip state. It does not call AI APIs or expose credentials.
   - Verification for P2-01: `npm run typecheck`, `npm run smoke:dashboard` (3 passed, including coach copy/actions), `npm run smoke:weather` (9 passed), `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run security:scan`, and `npm run build` passed from `app-compact/`. Playwright mobile proof at 390px produced `/tmp/compact-dashboard-ai-coach-p2-01.png`, with document width `390` and no console errors.
+  - P2-02 done: Stats now has four compact budget story cards below the budget compass: used percent, remaining-per-day pace, payer fairness, and category anomaly/concentration. These cards reuse current receipts, settlement, category totals, and trip currency logic without adding storage fields or calling external services.
+  - Verification for P2-02: `npm run typecheck`, `npm run smoke:stats` (1 passed, including story card copy and 2x2 mobile geometry), `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run security:scan`, and `npm run build` passed from `app-compact/`. Playwright mobile proof at 390px produced `/tmp/compact-stats-budget-story-p2-02.png`, with document width `390`, four cards at `179x96`, and no console errors.
 
 ## Active Admin KanBan Status
 

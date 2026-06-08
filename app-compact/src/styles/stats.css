@@ -109,6 +109,73 @@
   white-space: nowrap;
 }
 
+.stats-tab.stats-cockpit .stats-story-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stats-tab.stats-cockpit .stats-story-card {
+  position: relative;
+  min-width: 0;
+  min-height: 112px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 15px;
+  overflow: hidden;
+  border: 1px solid rgba(128, 99, 63, .16);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255,253,248,.95), rgba(247,238,222,.8)),
+    repeating-linear-gradient(135deg, rgba(211,154,41,.05) 0 1px, transparent 1px 18px);
+  box-shadow: 0 12px 28px rgba(67, 46, 24, .055);
+}
+
+.stats-tab.stats-cockpit .stats-story-card::after {
+  content: '';
+  position: absolute;
+  inset: auto 14px 10px 14px;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2D6E48, #D4A843);
+  opacity: .88;
+}
+
+.stats-tab.stats-cockpit .stats-story-card.tone-warning::after {
+  background: linear-gradient(90deg, #D4A843, #B66D13);
+}
+
+.stats-tab.stats-cockpit .stats-story-card.tone-danger::after {
+  background: linear-gradient(90deg, #C23B5E, #D4A843);
+}
+
+.stats-tab.stats-cockpit .stats-story-card > span {
+  color: #7A6044;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.stats-tab.stats-cockpit .stats-story-card > strong {
+  min-width: 0;
+  color: #162033;
+  font-size: 24px;
+  line-height: 1.02;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.stats-tab.stats-cockpit .stats-story-card > small {
+  min-width: 0;
+  color: #5D5041;
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 780;
+  overflow-wrap: anywhere;
+}
+
 .stats-tab.stats-cockpit .stats-command-visual {
   width: min(100%, 340px);
 }
@@ -1371,6 +1438,32 @@
     box-shadow: 0 12px 26px rgba(76, 50, 24, .06) !important;
   }
 
+  .stats-tab.stats-cockpit .stats-story-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .stats-tab.stats-cockpit .stats-story-card {
+    min-height: 96px;
+    padding: 12px 11px 13px;
+    border-radius: 14px;
+  }
+
+  .stats-tab.stats-cockpit .stats-story-card > span {
+    font-size: 9.5px;
+    line-height: 1.05;
+  }
+
+  .stats-tab.stats-cockpit .stats-story-card > strong {
+    font-size: 17px;
+    line-height: 1.04;
+  }
+
+  .stats-tab.stats-cockpit .stats-story-card > small {
+    font-size: 9.5px;
+    line-height: 1.18;
+  }
+
   .stats-tab.stats-cockpit .preview-stats-budget .stats-command-title-row {
     min-height: 40px !important;
     margin-bottom: 10px !important;
@@ -1770,6 +1863,11 @@
     gap: clamp(10px, .9vw, 14px) !important;
     border: 0 !important;
     background: transparent !important;
+  }
+
+  .app-shell--stats .stats-story-grid {
+    grid-column: 1 / -1 !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 
   .app-shell--stats .preview-stats-metrics .stats-metric {

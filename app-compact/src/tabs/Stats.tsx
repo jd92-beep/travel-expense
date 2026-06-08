@@ -53,6 +53,19 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
   const dailyBudget = Math.round((Number(state.budget) || 0) / tripDayCount);
   const dailyAverage = Math.round(analysisTotal / tripDayCount);
   const overBudgetDays = trend.filter(([, total]) => dailyBudget > 0 && total > dailyBudget).length;
+  const budgetStory = buildBudgetStoryCards({
+    budget: Number(state.budget) || 0,
+    analysisTotal,
+    tripDayCount,
+    trend,
+    itinerary,
+    persons,
+    settlement,
+    categories: catTotals,
+    state,
+    resolvedTripCurrency,
+    toHkd,
+  });
 
   return (
     <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto stats-tab stats-cockpit stats-screen preview-stats-screen">
@@ -66,6 +79,22 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
         </div>
         <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} updateState={updateState} onTab={onTab} />
       </GlassCard>
+
+      <section className="stats-story-grid" aria-label="Budget story cards">
+        {budgetStory.map((card) => (
+          <motion.article
+            className={`stats-story-card tone-${card.tone}`}
+            key={card.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+          >
+            <span>{card.label}</span>
+            <strong>{card.value}</strong>
+            <small>{card.detail}</small>
+          </motion.article>
+        ))}
+      </section>
 
       <DataPanel
         className="trend-panel preview-daily-pace"
@@ -335,6 +364,97 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
       </div>
     </div>
   );
+}
+
+type BudgetStoryInput = {
+  budget: number;
+  analysisTotal: number;
+  tripDayCount: number;
+  trend: Array<[string, number]>;
+  itinerary: ReturnType<typeof getItinerary>;
+  persons: ReturnType<typeof getPersons>;
+  settlement: ReturnType<typeof computeSettlements>;
+  categories: StatBucket[];
+  state: AppState;
+  resolvedTripCurrency: string;
+  toHkd: (amt: number) => number;
+};
+
+function buildBudgetStoryCards({
+  budget,
+  analysisTotal,
+  tripDayCount,
+  trend,
+  itinerary,
+  persons,
+  settlement,
+  categories,
+  state,
+  resolvedTripCurrency,
+  toHkd,
+}: BudgetStoryInput) {
+  const safeBudget = Math.max(0, budget);
+  const usedPercent = safeBudget > 0 ? Math.round(analysisTotal / safeBudget * 100) : 0;
+  const remaining = Math.max(0, safeBudget - analysisTotal);
+  const remainingDays = remainingTripDays(tripDayCount, trend, itinerary);
+  const remainingPerDay = Math.round(remaining / remainingDays);
+  const payerTotals = persons.map((person, index) => ({
+    person,
+    total: (settlement.sharedByPayer[index] || 0) + (settlement.privateByOwner[index] || 0),
+  }));
+  const sortedPayers = payerTotals.slice().sort((a, b) => b.total - a.total);
+  const maxPayer = sortedPayers[0];
+  const minPayer = sortedPayers[sortedPayers.length - 1];
+  const payerGap = maxPayer && minPayer ? Math.max(0, maxPayer.total - minPayer.total) : 0;
+  const sortedCategories = categories.slice().sort((a, b) => b.total - a.total);
+  const topCategory = sortedCategories[0];
+  const topCategoryPercent = topCategory && analysisTotal > 0 ? Math.round(topCategory.total / analysisTotal * 100) : 0;
+
+  const formatTrip = (amt: number) => `${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(amt)}`;
+  const formatHkd = (amt: number) => `HK$ ${fmt(toHkd(amt))}`;
+
+  return [
+    {
+      id: 'used-percent',
+      label: 'Used percent',
+      value: safeBudget > 0 ? `${usedPercent}%` : '未設定',
+      detail: safeBudget <= 0 ? '先到 Settings 加預算' : usedPercent >= 100 ? `超出 ${formatTrip(analysisTotal - safeBudget)}` : `尚餘 ${formatTrip(remaining)} · ${formatHkd(remaining)}`,
+      tone: usedPercent >= 100 ? 'danger' : usedPercent >= 80 ? 'warning' : 'ok',
+    },
+    {
+      id: 'remaining-day',
+      label: 'Remaining / day',
+      value: formatTrip(remainingPerDay),
+      detail: `${remainingDays} 日口徑 · 等值 ${formatHkd(remainingPerDay)}`,
+      tone: remainingPerDay <= 0 && safeBudget > 0 ? 'danger' : remainingPerDay < Math.max(1, budget / tripDayCount * 0.35) ? 'warning' : 'ok',
+    },
+    {
+      id: 'fairness-person',
+      label: 'Fairness by person',
+      value: payerGap > 0 && maxPayer ? `${maxPayer.person.name}` : '已平衡',
+      detail: payerGap > 0 ? `付款差距 ${formatHkd(payerGap)} · 待轉 HK$ ${fmt(toHkd(settlement.transfers.reduce((sum, item) => sum + item.amount, 0)))}` : '付款分佈暫時平均',
+      tone: settlement.transfers.length ? 'warning' : 'ok',
+    },
+    {
+      id: 'category-anomaly',
+      label: 'Category anomaly',
+      value: topCategory ? `${topCategory.name} ${topCategoryPercent}%` : '未有資料',
+      detail: topCategoryPercent >= 45 ? '集中度偏高，建議打開類別明細睇一次。' : '類別分佈正常，未見單一類別過熱。',
+      tone: topCategoryPercent >= 60 ? 'danger' : topCategoryPercent >= 45 ? 'warning' : 'ok',
+    },
+  ] as const;
+}
+
+function remainingTripDays(tripDayCount: number, trend: Array<[string, number]>, itinerary: ReturnType<typeof getItinerary>) {
+  const today = new Date().toISOString().slice(0, 10);
+  const dates = (itinerary.length ? itinerary.map((day) => day.date) : trend.map(([date]) => date)).filter(Boolean).sort();
+  if (!dates.length) return Math.max(1, tripDayCount);
+  const elapsed = today < dates[0]
+    ? 1
+    : today > dates[dates.length - 1]
+      ? tripDayCount
+      : Math.max(1, dates.filter((date) => date <= today).length);
+  return Math.max(1, tripDayCount - elapsed + 1);
 }
 
 function TopTenToggle({ includeBigItems, onChange }: { includeBigItems: boolean; onChange: (value: boolean) => void }) {

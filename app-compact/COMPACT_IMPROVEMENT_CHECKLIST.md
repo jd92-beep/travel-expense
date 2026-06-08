@@ -43,7 +43,7 @@ Credential Broker or ignored local files.
 | ID | Status | Task | Why It Matters | Verification |
 |---|---|---|---|---|
 | P2-01 | DONE | Add a compact AI trip coach panel for daily burn, overspend forecast, next-day warning, and weather-linked reminders. | This creates practical "少少 AI magic" without hiding controls. | 2026-06-08: added local-only Dashboard coach panel; `npm run typecheck`, `npm run smoke:dashboard`, `npm run smoke:weather`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run security:scan`, `npm run build`, and mobile screenshot proof `/tmp/compact-dashboard-ai-coach-p2-01.png` passed. |
-| P2-02 | TODO | Add Stats budget story cards: used percent, remaining per day, fairness by person, and category anomaly. | Stats should answer "am I okay?" quickly on a phone. | `npm run smoke:stats`, visual geometry proof. |
+| P2-02 | DONE | Add Stats budget story cards: used percent, remaining per day, fairness by person, and category anomaly. | Stats should answer "am I okay?" quickly on a phone. | 2026-06-08: added 2x2 compact Stats story cards; `npm run typecheck`, `npm run smoke:stats`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run security:scan`, `npm run build`, and mobile screenshot proof `/tmp/compact-stats-budget-story-p2-02.png` passed. |
 | P2-03 | TODO | Add better offline/PWA states: update available, offline queue, cache freshness, install prompt, and reduced-motion audit. | Compact should feel reliable while travelling. | `npm run smoke:final-nav`, `npm run smoke:mobile-layout`. |
 
 ## P3 - Design System And Visual QA

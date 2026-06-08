@@ -84,6 +84,34 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   expect(compassMetrics.width, JSON.stringify(compassMetrics, null, 2)).toBeLessThanOrEqual(354);
   expect(compassMetrics.scrollWidth, JSON.stringify(compassMetrics, null, 2)).toBeLessThanOrEqual(390);
   expect(compassMetrics.ringBackground).toContain('conic-gradient');
+  const story = page.locator('.stats-story-grid');
+  await expect(story).toBeVisible();
+  await expect(story.locator('.stats-story-card')).toHaveCount(4);
+  await expect(story).toContainText('Used percent');
+  await expect(story).toContainText('69%');
+  await expect(story).toContainText('Remaining / day');
+  await expect(story).toContainText('¥750');
+  await expect(story).toContainText('Fairness by person');
+  await expect(story).toContainText('User 1 Cheung');
+  await expect(story).toContainText('Category anomaly');
+  await expect(story).toContainText('餐飲 61%');
+  const storyMetrics = await story.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const cards = Array.from(node.querySelectorAll('.stats-story-card')).map((card) => {
+      const cardRect = card.getBoundingClientRect();
+      return { top: Math.round(cardRect.top), left: Math.round(cardRect.left), width: Math.round(cardRect.width) };
+    });
+    return {
+      width: Math.round(rect.width),
+      scrollWidth: document.documentElement.scrollWidth,
+      cards,
+    };
+  });
+  expect(storyMetrics.width, JSON.stringify(storyMetrics, null, 2)).toBeLessThanOrEqual(366);
+  expect(storyMetrics.scrollWidth, JSON.stringify(storyMetrics, null, 2)).toBeLessThanOrEqual(390);
+  expect(storyMetrics.cards[0].top).toBe(storyMetrics.cards[1].top);
+  expect(storyMetrics.cards[2].top).toBe(storyMetrics.cards[3].top);
+  expect(storyMetrics.cards[2].top).toBeGreaterThan(storyMetrics.cards[0].top);
   await expect(page.getByText('圖表統計額')).toBeVisible();
   await expect(page.getByText('共同分帳額')).toBeVisible();
   await expect(page.getByText('Xinxin').first()).toBeVisible();
