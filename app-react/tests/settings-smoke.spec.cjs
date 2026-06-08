@@ -9,6 +9,42 @@ async function setAccordion(page, title, expanded = true) {
   if ((await button.getAttribute('aria-expanded')) !== String(expanded)) await button.click();
 }
 
+function tripState(tripId = 'settings_sync_trip') {
+  return {
+    schemaVersion: 3,
+    lastTab: 'settings',
+    tripName: 'Settings Sync Trip',
+    tripDateRange: { start: '2026-06-08', end: '2026-06-10' },
+    activeTripId: tripId,
+    trips: [{
+      id: tripId,
+      name: 'Settings Sync Trip',
+      destinationSummary: 'Sync City',
+      startDate: '2026-06-08',
+      endDate: '2026-06-10',
+      homeCurrency: 'HKD',
+      currencies: ['HKD', 'JPY'],
+      timezones: ['Asia/Tokyo'],
+      version: 1,
+      active: true,
+      itinerary: [{ date: '2026-06-08', day: 1, region: 'Sync City', spots: [] }],
+      createdAt: 1,
+      updatedAt: 1,
+    }],
+    receipts: [{
+      id: 'settings_sync_receipt',
+      store: 'Sync Cafe',
+      total: 100,
+      date: '2026-06-08',
+      category: 'food',
+      payment: 'cash',
+      tripId,
+      createdAt: 1,
+      updatedAt: 1,
+    }],
+  };
+}
+
 test('Settings expandable cards, safe broker actions, backup, restore, and trust clear work', async ({ page }) => {
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => route.fulfill({
     status: 500,
@@ -186,6 +222,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await expect(page.getByText('設定控制中心')).toBeVisible();
   await expect(page.getByText('同步信心中心')).toBeVisible();
   await expect(page.locator('.settings-sync-confidence')).toContainText('Pending Queue');
+  await expect(page.locator('.settings-sync-confidence')).toContainText('已連接個人 notebook');
   await expect(page.locator('.settings-sync-confidence')).toContainText(/Status:|Local device cache|Supabase scoped cache/);
   const syncConfidenceMetrics = await page.locator('.settings-sync-confidence').evaluate((node) => {
     const rect = node.getBoundingClientRect();
@@ -329,6 +366,125 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await page.locator('#settings-data-panel').getByRole('button', { name: /清除裝置信任/ }).click();
   await expect(page.getByText(/已清除此裝置信任/)).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('travel-expense-react:device-trust:v1'))).toBeNull();
+});
+
+test('Settings sync confidence center shows queued and failed local health states', async ({ page }) => {
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
+  await page.addInitScript((seed) => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      ...seed,
+      autoSync: false,
+      personalNotionConnected: false,
+      globalSyncStatus: 'offline',
+      syncError: 'offline smoke failure',
+      lastSyncedAt: Date.now() - 2 * 60 * 60 * 1000,
+      syncQueue: [{
+        id: 'settings-queued-item',
+        type: 'receipt',
+        entityId: 'settings_sync_receipt',
+        op: 'update',
+        status: 'queued',
+        attempts: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      }, {
+        id: 'settings-failed-item',
+        type: 'receipt',
+        entityId: 'settings_failed_receipt',
+        op: 'update',
+        status: 'error',
+        attempts: 3,
+        error: 'network unavailable',
+        createdAt: 2,
+        updatedAt: 2,
+      }],
+    }));
+  }, tripState());
+
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  const center = page.locator('.settings-sync-confidence');
+  await expect(center).toBeVisible();
+  await expect(center).toContainText('Needs attention');
+  await expect(center).toContainText('未登入');
+  await expect(center).toContainText('Pending Queue');
+  await expect(center).toContainText('2 項');
+  await expect(center).toContainText('1 項需要重試');
+  await expect(center).toContainText('offline smoke failure');
+  await expect(center).toContainText('Status: offline');
+  expect(await center.locator('.settings-sync-confidence-grid > div').count()).toBe(4);
+});
+
+test('Settings sync confidence center labels Supabase-only cloud mode', async ({ page }) => {
+  test.skip(process.env.SUPABASE_SETTINGS_SMOKE !== '1', 'Run with fake Supabase env to verify Supabase-only sync confidence state.');
+  const userId = '22222222-2222-4222-8222-222222222222';
+  const scope = `supabase:${userId}`;
+  const scopedStorageKey = `boss-japan-tracker:state:${scope}`;
+
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+  await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({}),
+  }));
+  await page.route('https://test-travel-expense.supabase.co/rest/v1/**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([]),
+  }));
+
+  await page.addInitScript(({ userId, scopedStorageKey, scopedState }) => {
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem(scopedStorageKey, JSON.stringify(scopedState));
+    localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify({
+      access_token: 'fake-access-token',
+      refresh_token: 'fake-refresh-token',
+      token_type: 'bearer',
+      expires_in: 3600,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: {
+        id: userId,
+        aud: 'authenticated',
+        role: 'authenticated',
+        email: 'settings-sync@example.com',
+        app_metadata: { provider: 'email', providers: ['email'] },
+        user_metadata: {},
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    }));
+  }, {
+    userId,
+    scopedStorageKey,
+    scopedState: {
+      ...tripState('settings_supabase_trip'),
+      autoSync: false,
+      personalNotionConnected: false,
+      notionDb: '',
+      globalSyncStatus: 'idle',
+      syncQueue: [],
+    },
+  });
+
+  await page.goto('http://localhost:8902/travel-expense/react/#settings');
+  const center = page.locator('.settings-sync-confidence');
+  await expect(center).toBeVisible();
+  await expect(center).toContainText('已登入雲端');
+  await expect(center).toContainText('Supabase only');
+  await expect(center).toContainText('0 項');
+  await expect(center).toContainText(/Supabase scoped cache|Status:/);
 });
 
 test('Settings protects broker URL and does not keep archived trip active', async ({ page }) => {

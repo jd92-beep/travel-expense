@@ -6,7 +6,7 @@ Scope: this checklist tracks the main public React app in `app-react/` only. Com
 
 ## Current Evidence
 
-- Latest local and remote `main` checked on 2026-06-08 HKT: `fbae884b339dd6a46f5b00db85262bdae2cd436c`.
+- Latest pushed React-roadmap baseline checked on 2026-06-08 HKT: `5434f18` (`Add React improvement checklist and sync confidence center`).
 - Vercel React production checked Ready: `https://travel-expense-react.vercel.app`.
 - Latest GitHub Pages workflow checked successful for `main`.
 - `app-react npm run typecheck` passed on 2026-06-08 HKT before this checklist was started.
@@ -27,7 +27,7 @@ Every implementation task must end with a targeted smoke test. Broader tasks sho
 
 - [x] Add a React Settings `Sync Confidence Center` that summarizes Supabase readiness, Notion mirror readiness, auto-sync, pending queue, last sync, local cache scope, and latest sync error.
   - Proof: `npm run smoke:settings`; visual/mobile geometry probe or `npm run smoke:mobile-layout`.
-- [ ] Add focused tests for sync queue health states: queued, error, offline, Supabase-only, and Personal Notion connected.
+- [x] Add focused tests for sync queue health states: queued, error, offline, Supabase-only, and Personal Notion connected.
   - Proof: dedicated Playwright or unit coverage plus `npm run smoke:settings`.
 - [ ] Audit backup/import/export wording and UI so users know backups are active-trip only and never include secrets.
   - Proof: `npm run smoke:settings`.
@@ -91,3 +91,4 @@ Every implementation task must end with a targeted smoke test. Broader tasks sho
 ## Completed Tasks
 
 - [x] 2026-06-08 HKT: Added the React Settings `同步信心中心` top-level panel. It shows Supabase readiness, Personal Notion mirror readiness, pending queue count, last sync timing/status, local/Supabase cache scope, and sync errors. Verified with `npm run typecheck`, `npm run build`, `npm run smoke:settings`, and `npm run smoke:mobile-layout`.
+- [x] 2026-06-08 HKT: Added focused Settings smoke coverage for queued queue items, failed/error queue items, offline sync status, Supabase-only scoped cache mode, and Personal Notion connected mode. Verified with normal `npm run smoke:settings` and fake-env `SUPABASE_SETTINGS_SMOKE=1 npm run smoke:settings`.

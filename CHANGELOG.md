@@ -8,7 +8,7 @@ All notable project changes should be recorded here.
 
 - Added `docs/react-improvement-checklist.md`, a prioritized React-only improvement checklist covering trust/sync, mobile-native UX, core workflows, Trip Intelligence, Stats budget coaching, maintainability, and premium polish.
 - Added a top-level Settings `同步信心中心` panel for the React app, summarizing Supabase readiness, Personal Notion mirror readiness, pending sync queue, latest sync timing/status, cache scope, and sync errors.
-- Updated Settings smoke coverage so the new sync confidence panel is visible, has four status tiles, and does not introduce 390px mobile overflow.
+- Updated Settings smoke coverage so the new sync confidence panel is visible, has four status tiles, does not introduce 390px mobile overflow, and covers queued/error/offline local states, Supabase-only cloud mode, and Personal Notion connected mode.
 
 ## 2026-06-03
 
