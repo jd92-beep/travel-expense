@@ -13,6 +13,10 @@ export interface TravelDayWidget {
 
 type ScheduleSpot = ItinerarySpot & { _spotIdx: number; receiptId?: string };
 
+const ROUTE_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+const WEATHER_STALE_MS = 2 * 60 * 60 * 1000;
+const MIN_REASONABLE_TIMESTAMP = new Date('2020-01-01T00:00:00Z').getTime();
+
 export function buildTravelDayWidgets(state: AppState, itinerary: ItineraryDay[], nowMs = Date.now()): TravelDayWidget[] {
   const day = resolveTravelDay(itinerary, nowMs);
   if (!day) {
@@ -37,14 +41,17 @@ export function buildTravelDayWidgets(state: AppState, itinerary: ItineraryDay[]
   const minutesToTransit = transitTarget ? Math.max(0, minutesForTime(transitTarget.time) - nowMinutes) : null;
   const missingSpot = completedSpots.find((spot) => !hasMatchingReceipt(spot, receiptsUntilNow));
   const booking = nextBookingNote(tripReceipts, spots, day, nowMinutes);
-  const weather = weatherAlert(state, day);
+  const routeFreshness = routeStaleSignal(state, nowMs);
+  const weather = weatherAlert(state, day, nowMs);
 
   return [
     {
       kind: 'transit',
       label: 'Transit countdown',
-      value: minutesToTransit == null ? 'Done' : formatCountdown(minutesToTransit),
-      detail: transitTarget ? `${transitTarget.name} · ${transitTarget.time || '--:--'}` : '今日已無下一站',
+      value: routeFreshness?.value || (minutesToTransit == null ? 'Done' : formatCountdown(minutesToTransit)),
+      detail: routeFreshness
+        ? `${routeFreshness.detail}${transitTarget ? ` · ${transitTarget.name} · ${transitTarget.time || '--:--'}` : ''}`
+        : transitTarget ? `${transitTarget.name} · ${transitTarget.time || '--:--'}` : '今日已無下一站',
     },
     {
       kind: 'receipt',
@@ -65,6 +72,14 @@ export function buildTravelDayWidgets(state: AppState, itinerary: ItineraryDay[]
       detail: booking.detail,
     },
   ];
+}
+
+function routeStaleSignal(state: AppState, nowMs: number): { value: string; detail: string } | null {
+  const updatedAt = Number(activeTrip(state).updatedAt);
+  if (!isReasonableTimestamp(updatedAt)) return null;
+  const ageMs = nowMs - updatedAt;
+  if (ageMs <= ROUTE_STALE_MS) return null;
+  return { value: 'Route stale', detail: `${formatFreshnessAge(ageMs)} old` };
 }
 
 function resolveTravelDay(itinerary: ItineraryDay[], nowMs: number): ItineraryDay | null {
@@ -115,8 +130,12 @@ function nextBookingNote(receipts: Receipt[], spots: ScheduleSpot[], day: Itiner
   return { value: 'No booking yet', detail: '下一個 booking reference 未設定' };
 }
 
-function weatherAlert(state: AppState, day: ItineraryDay): { value: string; detail: string } {
+function weatherAlert(state: AppState, day: ItineraryDay, nowMs: number): { value: string; detail: string } {
   const best = bestWeatherSignal((state as AppState & { weatherCache?: unknown }).weatherCache);
+  if (isReasonableTimestamp(best.fetchedAt)) {
+    const ageMs = nowMs - best.fetchedAt;
+    if (ageMs > WEATHER_STALE_MS) return { value: 'Weather stale', detail: `${formatFreshnessAge(ageMs)} old · 出門前刷新` };
+  }
   if (best.rain >= 50) return { value: `Rain ${Math.round(best.rain)}%`, detail: `${fmtMm(best.precipMm)} · wind ${Math.round(best.windSpeed || 0)} km/h` };
   if (best.windSpeed >= 30) return { value: `Wind ${Math.round(best.windSpeed)} km/h`, detail: '交通/戶外點要預鬆時間' };
   const intelligence = activeTrip(state).intelligence;
@@ -125,11 +144,12 @@ function weatherAlert(state: AppState, day: ItineraryDay): { value: string; deta
   return { value: 'Refresh weather', detail: `${day.city || day.region} freshness 未確認` };
 }
 
-function bestWeatherSignal(cache: unknown): { rain: number; precipMm: number; windSpeed: number } {
+function bestWeatherSignal(cache: unknown): { rain: number; precipMm: number; windSpeed: number; fetchedAt: number } {
   const stack = [cache];
   let rain = 0;
   let precipMm = 0;
   let windSpeed = 0;
+  let fetchedAt = 0;
   while (stack.length) {
     const item = stack.pop();
     if (!item || typeof item !== 'object') continue;
@@ -141,8 +161,9 @@ function bestWeatherSignal(cache: unknown): { rain: number; precipMm: number; wi
     rain = Math.max(rain, Number(record.rain) || 0);
     precipMm = Math.max(precipMm, Number(record.precipMm) || Number(record.precipitation) || 0);
     windSpeed = Math.max(windSpeed, Number(record.windSpeed) || Number(record.wind_speed_10m) || 0);
+    fetchedAt = Math.max(fetchedAt, Number(record.fetchedAt) || Number(record.ts) || 0);
   }
-  return { rain, precipMm, windSpeed };
+  return { rain, precipMm, windSpeed, fetchedAt };
 }
 
 function extractBookingRef(value: string): string {
@@ -159,6 +180,16 @@ function formatCountdown(minutes: number): string {
 
 function fmtMm(value: number): string {
   return `${Math.round(value || 0)}mm`;
+}
+
+function isReasonableTimestamp(value: number): boolean {
+  return Number.isFinite(value) && value >= MIN_REASONABLE_TIMESTAMP;
+}
+
+function formatFreshnessAge(ageMs: number): string {
+  if (ageMs < 60 * 60 * 1000) return '<1h';
+  if (ageMs < 48 * 60 * 60 * 1000) return `${Math.round(ageMs / (60 * 60 * 1000))}h`;
+  return `${Math.round(ageMs / (24 * 60 * 60 * 1000))}d`;
 }
 
 function normalizeText(value: string): string {

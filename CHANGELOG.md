@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added compact travel-day stale-data warnings. Dashboard and Timeline now show `Route stale` when active-trip route/itinerary metadata is older than 7 days and `Weather stale` when cached weather is older than 2 hours, without adding schema fields or calling external APIs.
 - Added compact History `Cleanup Coach`, turning existing receipt health markers into guided repair suggestions for Pending OCR, Duplicate SourceID, Missing photo, and Missing payer, with actions that open the first relevant receipt or pending confirmation flow.
 - Added compact Settings backup restore dry-run preview. Selecting a Backup JSON now shows a sanitized preview with file, trip/receipt counts, target trip, and stripped/ignored safety notes; local state changes only after `Apply backup`, and `Cancel import` leaves the current state untouched.
 - Added compact Settings `Compact Trip Doctor`, a top-level health panel for data quality, sync queue, trip completeness, and backup safety. It uses only existing compact state, does not add a new accordion, and includes quick repair actions for records, data safety, and sync settings.

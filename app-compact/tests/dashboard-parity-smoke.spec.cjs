@@ -247,6 +247,78 @@ test('Dashboard travel-day widgets show countdown, receipt reminder, weather ale
   await expect(page).toHaveURL(/#timeline/);
 });
 
+test('Dashboard travel-day widgets warn when route and weather data are stale', async ({ page }) => {
+  const fixed = new Date('2026-05-09T09:30:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    const day = {
+      date: '2026-05-09',
+      day: 2,
+      region: 'Kyoto Stale Day',
+      city: 'Kyoto',
+      country: 'Japan',
+      timezone: 'Asia/Tokyo',
+      spots: [
+        { time: '09:00', name: 'Temple Gate', type: 'ticket', note: 'outdoor shrine walk' },
+        { time: '11:00', name: 'Kyoto Rail Transfer', type: 'transport', note: 'JR platform 4' },
+      ],
+    };
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      schemaVersion: 4,
+      lastTab: 'dashboard',
+      budget: 10000,
+      rate: 20,
+      activeTripId: 'stale_travel_day_trip',
+      tripName: 'Stale Travel Day Test',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-10' },
+      customItinerary: [day],
+      trips: [{
+        id: 'stale_travel_day_trip',
+        name: 'Stale Travel Day Test',
+        destinationSummary: 'Kyoto Japan',
+        startDate: '2026-05-08',
+        endDate: '2026-05-10',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: true,
+        intelligence: { countryCode: 'JP', primaryCurrency: 'JPY', themeKey: 'japan_washi', weatherRegion: 'Kyoto', weatherPreference: 'rain' },
+        itinerary: [day],
+        createdAt: 1,
+        updatedAt: fixedNow - 14 * 24 * 60 * 60 * 1000,
+      }],
+      receipts: [],
+      weatherCache: {
+        kyoto_stale: {
+          fetchedAt: fixedNow - 8 * 60 * 60 * 1000,
+          slots: [{ hour: 12, rain: 88, precipMm: 9, windSpeed: 16, code: 61 }],
+        },
+      },
+    }));
+  }, fixed);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  const widgets = page.getByLabel('Travel day widgets');
+  await expect(widgets).toBeVisible();
+  await expect(widgets).toContainText('Route stale');
+  await expect(widgets).toContainText('14d old');
+  await expect(widgets).toContainText('Weather stale');
+  await expect(widgets).toContainText('8h old');
+});
+
 async function seedBrokerAssistantDashboard(page) {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;

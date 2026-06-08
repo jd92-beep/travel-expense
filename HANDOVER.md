@@ -7,7 +7,7 @@ Last updated: 2026-06-08 HKT
 - Independent compact app: `app-compact/`.
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
-- Latest compact app-code proof commit before this pass: `bea065d` (`Add compact backup restore preview`).
+- Latest compact app-code proof commit before P6-04: `aceb125` (`Add compact receipt cleanup coach`).
 - Latest live proof command: `npm run smoke:deploy-live`. It should be rerun after each compact push/deploy for the exact current deployment ID, live HTTP 200 proof, compact title, asset hash, HTML hash, and alias/deployment content match.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
@@ -78,7 +78,9 @@ Last updated: 2026-06-08 HKT
   - Verification for P6-02: targeted RED restore-preview smoke first failed on missing preview, then passed. Additional checks passed: `npm run smoke:settings` (5 passed), `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:contact-sheet`, `npm run build`, `npm run security:scan`, and `npm run smoke:production-gate:full` (230.8s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-08T09-55-36-837Z/mobile-contact-sheet.png`.
   - P6-03 done: Compact History now has a `Cleanup Coach` panel that summarizes current-trip receipt cleanup needs for Pending OCR, Duplicate SourceID, Missing photo, and Missing payer. Each suggestion opens the first matching receipt or pending confirmation flow so users can repair data without hunting through every row. It reuses existing receipt fields and does not add schema or API calls.
   - Verification for P6-03: targeted RED History smoke first failed on missing `Receipt cleanup suggestions`, then passed. Additional checks passed: `npm run smoke:history` (5 passed), `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:contact-sheet`, `npm run build`, `npm run security:scan`, and `npm run smoke:production-gate:full` (237.6s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-08T10-08-51-763Z/mobile-contact-sheet.png`.
-  - Next compact checklist focus: continue P6 one item at a time. Suggested next task is P6-04, a route/weather stale-data monitor for travel-day widgets.
+  - P6-04 done: Compact Dashboard and Timeline travel-day widgets now warn when day-of-travel signals are too old to trust. `Route stale` appears when active-trip route/itinerary metadata is older than 7 days, and `Weather stale` appears when cached weather is older than 2 hours. Legacy placeholder timestamps such as `updatedAt: 1` are ignored so old fixtures do not create false warnings.
+  - Verification for P6-04: targeted Dashboard/Timeline stale smokes passed, then broader checks passed: `npm run smoke:dashboard` (7 passed), `npm run smoke:timeline` (9 passed), `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:contact-sheet`, `npm run build`, `npm run security:scan`, and `npm run smoke:production-gate:full` (283.1s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-08T10-24-54-649Z/mobile-contact-sheet.png`.
+  - Next compact checklist focus: choose the next P6/P7 item after live deploy proof. Strong future candidates are a booking-staleness monitor, compact offline conflict resolver, receipt-photo compression health check, and richer per-day trip readiness scoring.
 
 ## Active Admin KanBan Status
 
