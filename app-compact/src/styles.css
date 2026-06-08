@@ -8010,6 +8010,7 @@ textarea,
 
   .app-shell--dashboard .preview-dashboard-budget,
   .app-shell--dashboard .preview-dashboard-today,
+  .app-shell--dashboard .preview-dashboard-coach,
   .app-shell--dashboard .today-itinerary-card {
     border-radius: 14px !important;
     background: rgba(255, 253, 248, .94) !important;
@@ -8414,6 +8415,134 @@ textarea,
     color: #5d5041;
     font-size: 12px;
     font-weight: 700;
+  }
+
+  .preview-dashboard-coach {
+    padding: 16px 15px 14px !important;
+    margin: 0 0 14px !important;
+  }
+
+  .preview-dashboard-coach::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 88% 12%, rgba(212,168,67,.22), transparent 28%),
+      linear-gradient(135deg, rgba(45,110,72,.08), rgba(194,59,94,.06));
+    opacity: .9;
+  }
+
+  .preview-dashboard-coach-head,
+  .preview-dashboard-coach-grid,
+  .preview-dashboard-coach-actions {
+    position: relative;
+    z-index: 1;
+  }
+
+  .preview-dashboard-coach-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 11px;
+  }
+
+  .preview-dashboard-coach-head span,
+  .preview-dashboard-coach-head em {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #7a6044;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+
+  .preview-dashboard-coach-head h3 {
+    margin: 2px 0 0;
+    color: #101820;
+    font-size: 20px !important;
+    line-height: 1.05 !important;
+    font-weight: 950 !important;
+  }
+
+  .preview-dashboard-coach-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .preview-dashboard-coach-grid article {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+    padding: 9px;
+    border: 1px solid rgba(116,88,53,.14);
+    border-radius: 11px;
+    background: rgba(255,255,255,.58);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.82);
+  }
+
+  .preview-dashboard-coach-grid span {
+    color: #695542;
+    font-size: 10px;
+    font-weight: 850;
+    line-height: 1.05;
+  }
+
+  .preview-dashboard-coach-grid strong {
+    min-width: 0;
+    color: #122033;
+    font-size: 15px !important;
+    line-height: 1.06 !important;
+    font-weight: 950 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .preview-dashboard-coach.tone-danger .preview-dashboard-coach-grid article:nth-child(2) strong {
+    color: #c23b5e !important;
+  }
+
+  .preview-dashboard-coach.tone-warning .preview-dashboard-coach-grid article:nth-child(2) strong {
+    color: #b66d13 !important;
+  }
+
+  .preview-dashboard-coach.tone-ok .preview-dashboard-coach-grid article:nth-child(2) strong {
+    color: #2d6e48 !important;
+  }
+
+  .preview-dashboard-coach-grid small {
+    min-width: 0;
+    color: #5d5041;
+    font-size: 9.5px;
+    font-weight: 750;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .preview-dashboard-coach-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-top: 9px;
+  }
+
+  .preview-dashboard-coach-actions button {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid rgba(116,88,53,.16);
+    border-radius: 10px;
+    background: #fffdf8;
+    color: #18395c;
+    font-size: 11px;
+    font-weight: 900;
   }
 
   .preview-dashboard-spot-actions {
@@ -9405,6 +9534,9 @@ textarea,
   .preview-dashboard-budget-tip,
   .preview-dashboard-today-actions span,
   .preview-dashboard-today-actions small,
+  .preview-dashboard-coach-grid span,
+  .preview-dashboard-coach-grid small,
+  .preview-dashboard-coach-actions button,
   .preview-dashboard-spot-actions {
     font-size: 10.5px !important;
   }

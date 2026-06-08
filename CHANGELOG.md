@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added compact Dashboard local AI Trip Coach with daily burn, overspend forecast, next-day warning, and weather-linked reminders without calling external AI APIs.
 - Added compact Weather source/freshness transparency with provider, live/cache age, city-geocode/coordinate target labels, and fallback reason chips.
 - Added compact Timeline live-travel mode with a current/next stop card, completed/current/upcoming state pills, and grouped route actions.
 - Added compact History receipt health markers for pending, duplicate, photo-missing, sync-conflict, cloud-only, and local-only states.

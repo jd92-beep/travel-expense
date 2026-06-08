@@ -22,7 +22,8 @@ import {
   BarChart3,
   MoreHorizontal,
   Camera,
-  Wallet
+  Wallet,
+  Sparkles
 } from 'lucide-react';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
@@ -76,6 +77,13 @@ function tripLength(startDate: string, endDate: string, fallback: number) {
   const end = new Date(`${endDate}T00:00:00`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return Math.max(1, fallback);
   return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+}
+
+function tripDayNumber(startDate: string, targetDate: string, fallback = 1) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const target = new Date(`${targetDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(target.getTime())) return Math.max(1, fallback);
+  return Math.max(1, Math.round((target.getTime() - start.getTime()) / 86_400_000) + 1);
 }
 
 // 根據景點屬性或名字，智能配對和風 icon 及顏色
@@ -330,12 +338,32 @@ export function Dashboard({
   const day = itinerary.find((d) => d.date === today) || itinerary[0];
   const length = tripLength(trip.startDate, trip.endDate, itinerary.length);
   const displayDayDate = day?.date || today;
+  const currentDayNumber = Math.max(1, Math.min(length, day?.day || tripDayNumber(trip.startDate, displayDayDate, 1)));
   const remainingBudgetHkd = Math.max(0, budgetHkd - spentHkd);
   const dayRemainingHkd = Math.max(0, Math.round(hkd(dailyBudget - todayTotal, state)));
-  const recommendedDailyHkd = Math.max(0, Math.round((budgetHkd - spentHkd) / Math.max(1, Math.max(1, length) - Math.max(1, day?.day || 1) + 1)));
+  const recommendedDailyHkd = Math.max(0, Math.round((budgetHkd - spentHkd) / Math.max(1, Math.max(1, length) - currentDayNumber + 1)));
   const budgetWarning = rawBudgetPct >= 100 ? '超出預算區' : rawBudgetPct >= 80 ? '接近上限' : '狀態良好';
   const daySpots = (day?.spots || []).slice(0, 4);
   const recentReceipts = tripReceipts.slice().sort((a, b) => `${b.date} ${b.time || ''}`.localeCompare(`${a.date} ${a.time || ''}`));
+  const burnDays = Math.max(1, Math.min(length, currentDayNumber));
+  const dailyBurnHkd = Math.round(spentHkd / burnDays);
+  const projectedSpendHkd = Math.round(dailyBurnHkd * length);
+  const forecastDeltaHkd = projectedSpendHkd - budgetHkd;
+  const nextDay = itinerary.find((item) => (item.day || 0) > currentDayNumber) || itinerary.find((item) => item.date > displayDayDate);
+  const coachFocusDay = nextDay || day;
+  const coachSpots = coachFocusDay?.spots || [];
+  const weatherSensitive = coachSpots.some((spot) => /transport|ticket|localtour|other|sightseeing/i.test(spot.type) || /城|寺|神社|park|garden|market|山|海|戶外|outdoor/i.test(`${spot.name} ${spot.note || ''} ${spot.address || ''}`));
+  const coachWeatherRegion = coachFocusDay?.city || coachFocusDay?.region || trip.destinationSummary || trip.name;
+  const coachTone = forecastDeltaHkd > 0 ? 'danger' : forecastDeltaHkd > -Math.max(1, budgetHkd * 0.08) ? 'warning' : 'ok';
+  const coachForecastText = forecastDeltaHkd > 0
+    ? `可能超支 HK$ ${fmt(forecastDeltaHkd)}`
+    : `預計尚餘 HK$ ${fmt(Math.abs(forecastDeltaHkd))}`;
+  const coachNextDayText = nextDay
+    ? `明日 ${nextDay.region} · ${coachSpots.length} 個點`
+    : `最後一天 · ${coachSpots.length || daySpots.length} 個點`;
+  const coachWeatherText = weatherSensitive
+    ? `先刷新 ${coachWeatherRegion} 天氣，戶外/交通多要預雨風。`
+    : `先睇 ${coachWeatherRegion} 天氣 freshness，再出門。`;
 
   // 名古屋經典行程 Mockup Fallback — 如果今日無行程，為 Boss 展示極致精美嘅 dummy 行程
   const displaySpots: ItinerarySpot[] = daySpots.length > 0 ? daySpots : [
@@ -585,6 +613,45 @@ export function Dashboard({
         <div className="preview-dashboard-today-actions">
           <button type="button" onClick={() => onTab('stats')}><PieChart size={28} /><span>預算分析</span><small>查看支出結構</small><ChevronRight size={18} /></button>
           <button type="button" onClick={() => onTab('timeline')}><BarChart3 size={28} /><span>行程時間線</span><small>查看每日行程與支出</small><ChevronRight size={18} /></button>
+        </div>
+      </GlassCard>
+      </Reveal>
+
+      {/* 2.6 本地 AI Trip Coach */}
+      <Reveal className="dashboard-reveal" delay={0.06}>
+      <GlassCard as="div" className={`dashboard-ai-coach preview-dashboard-coach tone-${coachTone} relative overflow-hidden z-10`}>
+        <div className="preview-dashboard-coach-head">
+          <div>
+            <span><Sparkles size={15} /> Local AI Coach</span>
+            <h3>旅行小助理</h3>
+          </div>
+          <em>本地推算 · no API</em>
+        </div>
+        <div className="preview-dashboard-coach-grid">
+          <article>
+            <span>Daily burn</span>
+            <strong>HK$ {fmt(dailyBurnHkd)}</strong>
+            <small>Day {currentDayNumber}/{length} · 今日 HK$ {fmt(Math.round(todaySpentHkd))}</small>
+          </article>
+          <article>
+            <span>Overspend forecast</span>
+            <strong>{coachForecastText}</strong>
+            <small>預計全程 HK$ {fmt(projectedSpendHkd)}</small>
+          </article>
+          <article>
+            <span>Next-day warning</span>
+            <strong>{coachNextDayText}</strong>
+            <small>{coachSpots[0]?.name || '記得補齊下一日行程'}</small>
+          </article>
+          <article>
+            <span>Weather Reminder</span>
+            <strong>{weatherSensitive ? 'Check rain / wind' : 'Check freshness'}</strong>
+            <small>{coachWeatherText}</small>
+          </article>
+        </div>
+        <div className="preview-dashboard-coach-actions">
+          <button type="button" onClick={() => onTab('weather')}><CloudSun size={16} /> 天氣</button>
+          <button type="button" onClick={() => onTab('stats')}><PieChart size={16} /> 預算</button>
         </div>
       </GlassCard>
       </Reveal>
