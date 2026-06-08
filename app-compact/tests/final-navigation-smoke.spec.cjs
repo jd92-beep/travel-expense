@@ -144,6 +144,38 @@ test('Sync error indicator is clickable and retries sync', async ({ page }) => {
   await expect(page.locator('.sync-status-indicator')).not.toContainText('Sync error');
 });
 
+test('Duplicate person ids do not create React key warnings', async ({ page }) => {
+  const consoleErrors = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'stats',
+      autoSync: false,
+      persons: [
+        { id: 'p_trip_2', name: 'May', emoji: 'M', color: '#2d5a8e' },
+        { id: 'p_trip_2', name: 'Duplicate May', emoji: 'D', color: '#c23b5e' },
+        { id: 'p_boss', name: 'User 1', emoji: 'T', color: '#cc2929' },
+      ],
+      shareRatios: { p_trip_2: 1, p_boss: 1 },
+      receipts: [
+        { id: 'dup_person_receipt', store: 'Compact Cafe', total: 1000, date: '2026-04-20', category: 'food', payment: 'cash', personId: 'p_trip_2', splitMode: 'shared', createdAt: 1 },
+      ],
+      schemaVersion: 3,
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByText('預算使用分析').first()).toBeVisible();
+  await page.getByLabel('主要分頁').getByRole('button', { name: '設定', exact: true }).click();
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
+  await expect.poll(() => consoleErrors.filter((text) => text.includes('same key') || text.includes('Encountered two children')).length).toBe(0);
+});
+
 test('Boot currency and sync effects run once without noisy mobile 403s', async ({ page }) => {
   const consoleEvents = [];
   const notionPaths = [];

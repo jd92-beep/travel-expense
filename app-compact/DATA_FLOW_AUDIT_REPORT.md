@@ -1,9 +1,28 @@
-# Travel-Expense React App — Data Flow & State Management Audit Report
+# Travel-Expense Compact App — Historical Data Flow & State Management Audit Report
 
 > **Audit Date**: 2026-05-09
 > **Scope**: `src/lib/types.ts`, `useAppState.ts`, `syncMerge.ts`, `domain/trip/normalize.ts`, `storage.ts`, `domain.ts`, `tabs/Dashboard.tsx`, `tabs/History.tsx`, `tabs/Stats.tsx`, `useSyncEngine.ts`, `notion.ts`, `constants.ts`, `storage/indexedDb.ts`, `currency.ts`
 
 ---
+
+## 2026-06-08 Compact Reconciliation
+
+This audit is historical. It remains useful as a risk inventory, but it was not
+written against the current compact code after the generated-preview renovation,
+Supabase public-mode hardening, broker-only credential model, and 2026-06-08 P0
+compact fixes.
+
+Current compact evidence from the 2026-06-08 P0 pass:
+
+| Area | Current Status | Evidence |
+|---|---|---|
+| Person selector stability | Fixed in compact P0-01; duplicate IDs are filtered before consumers render options, rows, settlements, Notion props, or CSV output. | `npm run smoke:final-nav`, `npm run smoke:settings`, `npm run smoke:stats`. |
+| Budget/statistics scope | Fixed in compact P0-02; Dashboard budget usage includes all current-trip receipts, while stats filter remains available for daily/chart views. | `npm run smoke:dashboard`, `npm run smoke:stats`, `npm run smoke:mobile-layout`. |
+| Backup portability and secret stripping | Clarified in compact P0-03 and already enforced by existing export/import code paths. | `npm run smoke:settings`, `npm run security:scan`. |
+| IndexedDB / live sync / provider-vault risks | Must be verified from current source and live broker/account state before closing. | Track follow-up in `COMPACT_IMPROVEMENT_CHECKLIST.md` instead of relying on old line numbers here. |
+
+For new work, convert any still-current item below into a concrete checklist
+task with current files, current repro steps, and compact smoke commands.
 
 ## 1. Data Loss on Refresh (HIGH)
 

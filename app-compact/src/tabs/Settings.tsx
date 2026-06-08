@@ -1840,11 +1840,15 @@ export function Settings({
             }
           }}><RotateCcw size={18} /> 清除本地資料</button>
         </div>
+        <div className="settings-backup-safety" aria-label="Backup safety scope">
+          <span><ShieldCheck size={15} /> CSV / Backup JSON 只包含目前旅程，不會匯出其他旅程紀錄。</span>
+          <span><KeyRound size={15} /> Backup 不包含 API key、Notion token、broker session 或解鎖 secret。</span>
+          <span><AlertTriangle size={15} /> 匯入 Backup 時會丟棄外部 cloud IDs、sync queue、舊 Trip links 同 credential 欄位。</span>
+        </div>
         <div className="mini-list">
           <span onClick={handleVersionClick} style={{ cursor: 'pointer', userSelect: 'none' }}>
             Build: {buildLabel} {clickCount > 0 ? `(${clickCount}/5)` : ''} {showStressPanel ? '🔓' : '🔒'}
           </span>
-          <span>Backup / CSV 不包含 provider API key、Notion token、broker session 或解鎖 secret。</span>
         </div>
       </AccordionCard>
 

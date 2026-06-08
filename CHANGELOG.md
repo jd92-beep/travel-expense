@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06-08
+
+- Added `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`, a compact-only prioritized roadmap for weakness fixes and future upgrades.
+- Fixed compact duplicate-person rendering risk by deduplicating `getPersons()` output and added a final-navigation smoke regression for duplicate person IDs.
+- Aligned compact Dashboard budget scope so budget usage includes all current-trip receipts while daily/chart filtering can still exclude large trip items.
+- Added compact Settings backup-safety copy and smoke coverage for current-trip-only export, secret stripping, and import cleanup behavior.
+- Reconciled compact historical QA/data-flow reports with current 2026-06-08 compact P0 evidence.
+
 All notable project changes should be recorded here.
 
 ## 2026-06-08

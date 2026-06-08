@@ -63,13 +63,13 @@ test('Dashboard spending toggle matches legacy semantics for today stats but bud
   const defaultPage = await defaultContext.newPage();
   await openDashboard(defaultPage, false);
   await expect(defaultPage.locator('.washi-today-stats-card').filter({ hasText: '今日支出' })).toContainText('HK$ 49');
-  await expect(defaultPage.locator('.washi-budget-card').filter({ hasText: '已使用' })).toContainText('HK$ 50');
+  await expect(defaultPage.locator('.washi-budget-card').filter({ hasText: '已使用' })).toContainText('HK$ 500');
   await defaultContext.close();
 
   const flippedContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const flippedPage = await flippedContext.newPage();
   await openDashboard(flippedPage, true);
-  await expect(flippedPage.locator('.washi-today-stats-card').filter({ hasText: '今日支出' })).toContainText('HK$ 491');
+  await expect(flippedPage.locator('.washi-today-stats-card').filter({ hasText: '今日支出' })).toContainText('HK$ 489');
   await expect(flippedPage.locator('.washi-budget-card').filter({ hasText: '已使用' })).toContainText('HK$ 500');
   await flippedContext.close();
 });

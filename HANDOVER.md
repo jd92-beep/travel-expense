@@ -2,6 +2,27 @@
 
 Last updated: 2026-06-08 HKT
 
+## Active Compact Improvement Status
+
+- Independent compact app: `app-compact/`.
+- Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
+- Current compact live URL: `https://travel-expense-compact.vercel.app/`.
+- 2026-06-08 compact P0 progress:
+  - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
+  - P0-02 done: Dashboard budget usage now always includes all current-trip receipts, while `statsIncludeTransportLodging` only affects today/daily/chart-style filtered views.
+  - P0-03 done: Settings `資料管理 / Security` now shows a compact backup-safety panel explaining current-trip-only export, secret stripping, and import cleanup of cloud IDs/sync queues/stale trip links/credential fields.
+  - P0-04 done: old compact `QA_BUG_REPORT.md` and `DATA_FLOW_AUDIT_REPORT.md` now have 2026-06-08 reconciliation notes so future agents treat them as historical risk inventories, not current line-accurate truth.
+- Verification for compact P0 pass:
+  - `npm run typecheck` passed from `app-compact/`.
+  - `npm run smoke:final-nav` passed with 7 tests, including the duplicate-person console regression.
+  - `npm run smoke:settings` passed with 3 tests and now checks the backup-safety panel.
+  - `npm run smoke:stats` passed.
+  - `npm run smoke:dashboard` passed.
+  - `npm run smoke:mobile-layout` passed.
+  - `npm run security:scan` passed.
+  - `git diff --check` passed.
+- P0-05 remains `LIVE`: verifying live Notion/Kimi/Google/Gemma/Mimo/WeatherAPI broker-vault paths requires deployed broker/account state and must not print secrets.
+
 ## Active Admin KanBan Status
 
 - Independent admin board app: `app-admin-kanban/`.

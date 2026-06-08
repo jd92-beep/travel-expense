@@ -1,4 +1,8 @@
-# Travel Expense React Checklist Status
+# Travel Expense Compact Checklist Status
+
+This is the historical compact parity checklist. New compact-only improvement
+work is tracked in `COMPACT_IMPROVEMENT_CHECKLIST.md`, which prioritizes the
+current weakness-fix and future-upgrade roadmap.
 
 Status labels:
 - `已驗證`: implemented and smoke/type/build covered in this pass.

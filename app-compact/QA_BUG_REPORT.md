@@ -1,10 +1,30 @@
-# Travel-Expense React App — QA Bug Report
+# Travel-Expense Compact App — Historical QA Bug Report
 
 > **Tester:** Kimi Code CLI (Sub-agent)
 > **Scope:** Deep functional testing of auth, navigation, data entry, settings, weather, Notion sync, and memory leaks.
 > **Date:** 2026-05-09
 
 ---
+
+## 2026-06-08 Compact Reconciliation
+
+This report is historical. It was written against an earlier React baseline and
+many items have since been fixed or redesigned in the independent compact app.
+Do not treat the line numbers below as current without checking `app-compact/`
+source and smoke results first.
+
+Current compact evidence from the 2026-06-08 P0 pass:
+
+| Area | Current Status | Evidence |
+|---|---|---|
+| Duplicate person rows / React key warnings | Fixed in compact P0-01 by deduplicating `getPersons()` output while preserving first valid person order. | `npm run smoke:final-nav` includes the duplicate-person console regression and passed. |
+| Dashboard budget scope | Fixed in compact P0-02. Budget usage now includes all receipts; the stats filter only affects today/daily/chart scope. | `npm run smoke:dashboard`, `npm run smoke:stats`, and `npm run smoke:mobile-layout` passed. |
+| Backup/export safety clarity | Fixed in compact P0-03. Settings now states current-trip export scope and secret/cloud-id stripping behavior. | `npm run smoke:settings`, `npm run security:scan`, and `npm run smoke:mobile-layout` passed. |
+| Broker-only secret handling | Still follows the compact security contract; live provider-vault checks remain separate because they need deployed broker/account state. | `COMPACT_IMPROVEMENT_CHECKLIST.md` item P0-05 remains `LIVE`. |
+
+Remaining work from this report should be converted into prioritized compact
+tasks before implementation. Prefer current smoke failures, browser console
+evidence, and source inspection over these old line references.
 
 ## 1. Auth & Unlock
 

@@ -297,13 +297,11 @@ export function Dashboard({
   })();
 
   // 統一口徑與過濾邏輯：
-  // state.statsIncludeTransportLodging = false
-  // -> totalIncludeFL = false (Spent 排除大額) / dailyIncludeFL = false (今日花費與日均排除大額)
-  // state.statsIncludeTransportLodging = true
-  // -> totalIncludeFL = true (Spent 包含大額) / dailyIncludeFL = true (今日花費與日均包含大額)
-  const flipped = !!state.statsIncludeTransportLodging;
-  const totalIncludeFL = flipped;
-  const dailyIncludeFL = flipped;
+  // 總消費額永遠包含所有項目，確保預算使用比例不會因圖表篩選而被低估。
+  // statsIncludeTransportLodging 只影響今日/日均與統計圖表的大額項目篩選。
+  const statsIncludeTransportLodging = !!state.statsIncludeTransportLodging;
+  const totalIncludeFL = true;
+  const dailyIncludeFL = statsIncludeTransportLodging;
 
   const isBigTripItem = (r: Receipt) =>
     r.category === 'flight' || r.category === 'lodging' || r.category === 'transport';
