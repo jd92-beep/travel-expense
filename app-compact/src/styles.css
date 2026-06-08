@@ -3438,6 +3438,102 @@ body {
   font-size: 10px;
   font-weight: 900;
 }
+.history-cleanup-coach {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(139,115,85,.16);
+  background:
+    linear-gradient(135deg, rgba(255,253,247,.8), rgba(247,252,255,.62)),
+    rgba(255,255,255,.56);
+}
+.history-cleanup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #18243a;
+}
+.history-cleanup-head h2 {
+  margin: 0;
+  color: #18243a;
+  font-size: 14px;
+  line-height: 1.1;
+  font-weight: 950;
+}
+.history-cleanup-head p {
+  margin: 2px 0 0;
+  color: #7c6f61;
+  font-size: 10px;
+  line-height: 1.15;
+  font-weight: 850;
+}
+.history-cleanup-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.history-cleanup-item {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid rgba(126,104,75,.14);
+  border-radius: 12px;
+  background: rgba(255,253,248,.78);
+}
+.history-cleanup-item.tone-warning {
+  border-color: rgba(217,119,6,.22);
+}
+.history-cleanup-item.tone-danger {
+  border-color: rgba(204,41,41,.22);
+}
+.history-cleanup-item span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.history-cleanup-item strong {
+  min-width: 0;
+  color: #18243a;
+  font-size: 11px;
+  font-weight: 950;
+  line-height: 1.1;
+}
+.history-cleanup-item b {
+  flex: 0 0 auto;
+  min-width: 22px;
+  min-height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255,255,255,.78);
+  color: #b92626;
+  font-size: 11px;
+  font-weight: 950;
+}
+.history-cleanup-item small {
+  color: #5f5549;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.history-cleanup-item button {
+  min-height: 32px;
+  padding: 6px 7px;
+  border: 1px solid rgba(126,104,75,.16);
+  border-radius: 999px;
+  background: rgba(255,255,255,.76);
+  color: #18243a;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+.history-cleanup-item button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--screen-accent-2) 44%, transparent);
+  outline-offset: 2px;
+}
 .settings-screen .settings-trip-doctor {
   padding: 12px;
   border: 1px solid rgba(139,115,85,.18);
@@ -10683,6 +10779,45 @@ textarea,
 
   .app-shell--settings .settings-restore-preview-grid strong {
     font-size: 10px;
+  }
+
+  .app-shell--history .history-cleanup-coach {
+    gap: 7px;
+    padding: 8px !important;
+    border-radius: 10px;
+  }
+
+  .app-shell--history .history-cleanup-head h2 {
+    font-size: 12px;
+  }
+
+  .app-shell--history .history-cleanup-head p {
+    font-size: 9px;
+  }
+
+  .app-shell--history .history-cleanup-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .app-shell--history .history-cleanup-item {
+    gap: 4px;
+    padding: 7px;
+    border-radius: 8px;
+  }
+
+  .app-shell--history .history-cleanup-item strong {
+    font-size: 10px;
+  }
+
+  .app-shell--history .history-cleanup-item small {
+    font-size: 8.5px;
+  }
+
+  .app-shell--history .history-cleanup-item button {
+    min-height: 32px;
+    padding: 5px 6px;
+    font-size: 9px;
   }
 
   .app-shell--settings .accordion-card {

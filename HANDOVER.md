@@ -7,7 +7,7 @@ Last updated: 2026-06-08 HKT
 - Independent compact app: `app-compact/`.
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
-- Latest compact app-code proof commit before this pass: `36cd3ce` (`Add compact trip doctor`).
+- Latest compact app-code proof commit before this pass: `bea065d` (`Add compact backup restore preview`).
 - Latest live proof command: `npm run smoke:deploy-live`. It should be rerun after each compact push/deploy for the exact current deployment ID, live HTTP 200 proof, compact title, asset hash, HTML hash, and alias/deployment content match.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
@@ -76,7 +76,9 @@ Last updated: 2026-06-08 HKT
   - Verification for P6-01: targeted Trip Doctor smoke first failed before implementation, then passed. Additional checks passed: `npm run smoke:settings` (4 passed), `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:contact-sheet`, `npm run build`, `npm run security:scan`, and `npm run smoke:production-gate:full` (242.3s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-08T09-40-24-032Z/mobile-contact-sheet.png`.
   - P6-02 done: Compact Settings backup import now opens a sanitized `Restore preview` card before local state changes. The preview shows file, trip/receipt counts, target trip, and safety notes for stripped secrets, removed cloud IDs, and ignored sync queues. `Cancel import` leaves local state untouched; `Apply backup` then runs the existing sanitized import path.
   - Verification for P6-02: targeted RED restore-preview smoke first failed on missing preview, then passed. Additional checks passed: `npm run smoke:settings` (5 passed), `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:contact-sheet`, `npm run build`, `npm run security:scan`, and `npm run smoke:production-gate:full` (230.8s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-08T09-55-36-837Z/mobile-contact-sheet.png`.
-  - Next compact checklist focus: continue P6 one item at a time. Suggested next task is P6-03, guided receipt cleanup suggestions for missing payer, duplicate SourceID, pending OCR, and missing expected photos.
+  - P6-03 done: Compact History now has a `Cleanup Coach` panel that summarizes current-trip receipt cleanup needs for Pending OCR, Duplicate SourceID, Missing photo, and Missing payer. Each suggestion opens the first matching receipt or pending confirmation flow so users can repair data without hunting through every row. It reuses existing receipt fields and does not add schema or API calls.
+  - Verification for P6-03: targeted RED History smoke first failed on missing `Receipt cleanup suggestions`, then passed. Additional checks passed: `npm run smoke:history` (5 passed), `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:contact-sheet`, `npm run build`, `npm run security:scan`, and `npm run smoke:production-gate:full` (237.6s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-08T10-08-51-763Z/mobile-contact-sheet.png`.
+  - Next compact checklist focus: continue P6 one item at a time. Suggested next task is P6-04, a route/weather stale-data monitor for travel-day widgets.
 
 ## Active Admin KanBan Status
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { CalendarDays, Camera, ChevronDown, ChevronRight, Mail, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Camera, ChevronDown, ChevronRight, Mail, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
 import { Reveal, Toast } from '../components/ui';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { hasCredentialBrokerSession } from '../lib/credentialBroker';
@@ -14,6 +14,16 @@ type ReceiptHealthMarker = {
   key: string;
   label: string;
   tone: 'warning' | 'danger' | 'info' | 'ok' | 'neutral';
+};
+
+type ReceiptCleanupSuggestion = {
+  key: 'pending' | 'duplicate' | 'photo-missing' | 'missing-payer';
+  title: string;
+  count: number;
+  detail: string;
+  actionLabel: string;
+  receipt: Receipt;
+  tone: 'warning' | 'danger';
 };
 
 function historyDateLabel(date: string): string {
@@ -58,6 +68,57 @@ function receiptHealthMarkers(
   if ((receipt.supabaseId || receipt.notionPageId) && !receipt.sourceId) markers.push({ key: 'cloud-only', label: 'cloud-only', tone: 'info' });
   if (!receipt.supabaseId && !receipt.notionPageId) markers.push({ key: 'local-only', label: 'local-only', tone: 'neutral' });
   return markers;
+}
+
+function buildReceiptCleanupSuggestions(
+  receipts: Receipt[],
+  state: AppState,
+  sourceIdCounts: Record<string, number>,
+  validPersonIds: Set<string>,
+): ReceiptCleanupSuggestion[] {
+  const pending = receipts.filter(isPendingReceipt);
+  const duplicates = receipts.filter((receipt) => !!receipt.sourceId && sourceIdCounts[receipt.sourceId] > 1);
+  const missingPhotos = receipts.filter((receipt) => isReceiptPhotoExpected(receipt) && !safePhotoUrl(receipt.photoUrl, receipt.photoThumb));
+  const missingPayers = receipts.filter((receipt) => !receipt.personId || !validPersonIds.has(receipt.personId));
+  const suggestions: Array<ReceiptCleanupSuggestion | null> = [
+    pending.length ? {
+      key: 'pending',
+      title: 'Pending OCR',
+      count: pending.length,
+      detail: 'Confirm email/OCR draft before it becomes final spending.',
+      actionLabel: 'Confirm pending OCR',
+      receipt: pending[0],
+      tone: 'warning' as const,
+    } : null,
+    duplicates.length ? {
+      key: 'duplicate',
+      title: 'Duplicate SourceID',
+      count: duplicates.length,
+      detail: 'Same import source appears more than once.',
+      actionLabel: 'Open duplicate',
+      receipt: duplicates[0],
+      tone: 'danger' as const,
+    } : null,
+    missingPhotos.length ? {
+      key: 'photo-missing',
+      title: 'Missing photo',
+      count: missingPhotos.length,
+      detail: 'OCR/imported receipt expected a photo but none is stored.',
+      actionLabel: 'Open missing photo',
+      receipt: missingPhotos[0],
+      tone: 'warning' as const,
+    } : null,
+    missingPayers.length ? {
+      key: 'missing-payer',
+      title: 'Missing payer',
+      count: missingPayers.length,
+      detail: 'Receipt needs a traveller before split totals are trustworthy.',
+      actionLabel: 'Open missing payer',
+      receipt: missingPayers[0],
+      tone: 'danger' as const,
+    } : null,
+  ];
+  return suggestions.filter((item): item is ReceiptCleanupSuggestion => !!item);
 }
 
 export function History({
@@ -121,6 +182,11 @@ export function History({
   }, {});
   const pending = tripReceipts.filter((r) => r.store?.startsWith('⏳ '));
   const people = getPersons(state);
+  const validPersonIds = useMemo(() => new Set(people.map((person) => person.id)), [people]);
+  const cleanupSuggestions = useMemo(
+    () => buildReceiptCleanupSuggestions(tripReceipts, state, sourceIdCounts, validPersonIds),
+    [tripReceipts, state, sourceIdCounts, validPersonIds],
+  );
   const categoryChips = [
     { id: 'all' as const, name: '全部', color: '#cf2626' },
     ...CATEGORIES.filter((item) => ['flight', 'lodging', 'food', 'transport', 'shopping', 'ticket', 'other'].includes(item.id)),
@@ -160,6 +226,15 @@ export function History({
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleCleanupSuggestion(suggestion: ReceiptCleanupSuggestion) {
+    if (!suggestion.receipt) return;
+    if (suggestion.key === 'pending') {
+      onConfirmPending(suggestion.receipt);
+      return;
+    }
+    onOpen(suggestion.receipt);
   }
 
   return (
@@ -207,6 +282,31 @@ export function History({
           </button>
         ))}
       </div>
+      {cleanupSuggestions.length > 0 && (
+        <section className="history-cleanup-coach card" aria-label="Receipt cleanup suggestions">
+          <div className="history-cleanup-head">
+            <AlertTriangle size={18} aria-hidden="true" />
+            <div>
+              <h2>Cleanup Coach</h2>
+              <p>{cleanupSuggestions.reduce((sum, item) => sum + item.count, 0)} checks need review</p>
+            </div>
+          </div>
+          <div className="history-cleanup-grid">
+            {cleanupSuggestions.map((suggestion) => (
+              <article key={suggestion.key} className={`history-cleanup-item tone-${suggestion.tone}`}>
+                <span>
+                  <strong>{suggestion.title}</strong>
+                  <b>{suggestion.count}</b>
+                </span>
+                <small>{suggestion.detail}</small>
+                <button type="button" onClick={() => handleCleanupSuggestion(suggestion)}>
+                  {suggestion.actionLabel}
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       {pending.length > 0 && (
         <section className="history-pending-banner card" aria-label="Email 待確認">
           <Mail size={30} aria-hidden="true" />

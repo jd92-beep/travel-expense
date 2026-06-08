@@ -100,6 +100,16 @@ const receipts = [
     splitMode: 'shared',
     createdAt: 8,
   },
+  {
+    id: 'm7_missing_payer',
+    store: 'M7 Missing Payer',
+    total: 888,
+    date: '2026-04-25',
+    category: 'food',
+    payment: 'cash',
+    splitMode: 'shared',
+    createdAt: 9,
+  },
 ];
 
 test('History search, filter, pending, edit, delete, and safe pull', async ({ page }) => {
@@ -258,6 +268,40 @@ test('History desktop shell title uses current record-center copy', async ({ pag
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.getByRole('heading', { name: '紀錄中心' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Expense Archive' })).toHaveCount(0);
+});
+
+test('History guided cleanup suggestions open the right receipt for repair', async ({ page }) => {
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
+  await page.addInitScript((seedReceipts) => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts, autoSync: false }));
+  }, receipts);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+
+  const cleanup = page.getByLabel('Receipt cleanup suggestions');
+  await expect(cleanup).toBeVisible();
+  await expect(cleanup).toContainText('Cleanup Coach');
+  await expect(cleanup).toContainText('Pending OCR');
+  await expect(cleanup).toContainText('1');
+  await expect(cleanup).toContainText('Duplicate SourceID');
+  await expect(cleanup).toContainText('2');
+  await expect(cleanup).toContainText('Missing photo');
+  await expect(cleanup).toContainText('1');
+  await expect(cleanup).toContainText('Missing payer');
+  await expect(cleanup).toContainText('1');
+
+  await cleanup.getByRole('button', { name: /Open missing payer/ }).click();
+  await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('M7 Missing Payer');
 });
 
 test('History manual pull routes through global sync engine when broker session exists', async ({ page }) => {
