@@ -15,6 +15,7 @@ type ScheduleSpot = ItinerarySpot & { _spotIdx: number; receiptId?: string };
 
 const ROUTE_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 const WEATHER_STALE_MS = 2 * 60 * 60 * 1000;
+const BOOKING_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_REASONABLE_TIMESTAMP = new Date('2020-01-01T00:00:00Z').getTime();
 
 export function buildTravelDayWidgets(state: AppState, itinerary: ItineraryDay[], nowMs = Date.now()): TravelDayWidget[] {
@@ -40,7 +41,7 @@ export function buildTravelDayWidgets(state: AppState, itinerary: ItineraryDay[]
   const transitTarget = nextTransport || nextSpot;
   const minutesToTransit = transitTarget ? Math.max(0, minutesForTime(transitTarget.time) - nowMinutes) : null;
   const missingSpot = completedSpots.find((spot) => !hasMatchingReceipt(spot, receiptsUntilNow));
-  const booking = nextBookingNote(tripReceipts, spots, day, nowMinutes);
+  const booking = nextBookingNote(tripReceipts, spots, day, nowMinutes, nowMs);
   const routeFreshness = routeStaleSignal(state, nowMs);
   const weather = weatherAlert(state, day, nowMs);
 
@@ -103,11 +104,18 @@ function hasMatchingReceipt(spot: ScheduleSpot, receipts: Receipt[]): boolean {
   });
 }
 
-function nextBookingNote(receipts: Receipt[], spots: ScheduleSpot[], day: ItineraryDay, nowMinutes: number): { value: string; detail: string } {
+function nextBookingNote(receipts: Receipt[], spots: ScheduleSpot[], day: ItineraryDay, nowMinutes: number, nowMs: number): { value: string; detail: string } {
   const upcomingReceipt = receipts
     .filter((receipt) => receipt.bookingRef && minutesForTime(receipt.time) >= nowMinutes)
     .sort((a, b) => minutesForTime(a.time) - minutesForTime(b.time))[0];
   if (upcomingReceipt?.bookingRef) {
+    const updatedAt = Number(upcomingReceipt.updatedAt);
+    if (isReasonableTimestamp(updatedAt) && nowMs - updatedAt > BOOKING_STALE_MS) {
+      return {
+        value: 'Booking stale',
+        detail: `${formatFreshnessAge(nowMs - updatedAt)} old · ${upcomingReceipt.bookingRef} · ${displayStore(upcomingReceipt)} · ${upcomingReceipt.time || '--:--'}`,
+      };
+    }
     return {
       value: upcomingReceipt.bookingRef,
       detail: `${displayStore(upcomingReceipt)} · ${upcomingReceipt.time || '--:--'}`,

@@ -2,6 +2,8 @@
 
 ## 2026-06-08
 
+- Added compact P7 travel reliability roadmap and completed P7-01 booking-reference staleness monitoring. Dashboard and Timeline now show `Booking stale` when an upcoming booking receipt has a booking ref but has not been updated for more than 30 days, while preserving the age, ref, store, and time for travel-day checks.
+- Quieted the expected compact Welcome Guide no-session fallback so creating a local trip without an active Supabase session no longer logs a console error.
 - Hardened compact `StatefulActionButton` animation feedback so decorative Motion animations cannot throw an unhandled rejection when an action unmounts the button, and stabilized the shared-contract smoke so runtime sync side effects are reported separately instead of failing the shared data contract comparison.
 - Added compact travel-day stale-data warnings. Dashboard and Timeline now show `Route stale` when active-trip route/itinerary metadata is older than 7 days and `Weather stale` when cached weather is older than 2 hours, without adding schema fields or calling external APIs.
 - Added compact History `Cleanup Coach`, turning existing receipt health markers into guided repair suggestions for Pending OCR, Duplicate SourceID, Missing photo, and Missing payer, with actions that open the first relevant receipt or pending confirmation flow.

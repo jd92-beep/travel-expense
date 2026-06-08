@@ -97,8 +97,7 @@ export function App() {
         shareRatios,
         settingsUpdatedAt: Date.now(),
       }));
-    } catch (err) {
-      console.error('Failed to save guide trip:', err);
+    } catch {
       setState((prev) => ({
         ...prev,
         trips: [trip],
