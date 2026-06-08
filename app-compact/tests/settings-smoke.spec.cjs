@@ -292,6 +292,12 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(backupText).not.toContain('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
 
   await page.locator('#settings-data-panel input[type="file"]').setInputFiles(restorePath);
+  const restorePreview = page.getByLabel('Backup restore preview');
+  await expect(restorePreview).toBeVisible();
+  await expect(restorePreview).toContainText('Restore preview');
+  await expect(restorePreview).toContainText('1 receipt');
+  await expect(restorePreview).toContainText('Secrets stripped');
+  await restorePreview.getByRole('button', { name: /Apply backup/ }).click();
   await expect(page.getByText(/已匯入 backup/)).toBeVisible();
   const storageAfterRestore = await page.evaluate(() => JSON.stringify(localStorage));
   expect(storageAfterRestore).not.toContain('evil.example');
@@ -498,6 +504,111 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
   await page.getByLabel('Compact Trip Doctor').getByRole('button', { name: /Data safety/ }).click();
   await expect(page.locator('[aria-controls="settings-data-panel"]')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#settings-data-panel')).toBeVisible();
+});
+
+test('Settings backup restore preview can be cancelled before mutating local state', async ({ page }) => {
+  const restorePath = path.join('/tmp', 'travel-expense-preview-cancel-restore.json');
+  fs.writeFileSync(restorePath, JSON.stringify({
+    credentialSession: 'preview-session-should-not-survive',
+    notionToken: 'preview-notion-token-should-not-survive',
+    activeTripId: 'foreign_preview_trip',
+    trips: [{
+      id: 'foreign_preview_trip',
+      name: 'Foreign Preview Trip',
+      destinationSummary: 'Preview City',
+      startDate: '2026-08-01',
+      endDate: '2026-08-02',
+      homeCurrency: 'HKD',
+      currencies: ['HKD', 'KRW'],
+      timezones: ['Asia/Seoul'],
+      version: 1,
+      active: true,
+      itinerary: [{ date: '2026-08-01', day: 1, region: 'Preview City', spots: [] }],
+      createdAt: 1,
+      updatedAt: 1,
+    }],
+    receipts: [{
+      id: 'preview_restore_receipt',
+      store: 'Preview Restore Cafe',
+      total: 345,
+      date: '2026-08-01',
+      category: 'food',
+      payment: 'cash',
+      tripId: 'foreign_preview_trip',
+      notionPageId: 'preview-page-should-not-survive',
+      supabaseId: '11111111-1111-4111-8111-111111111111',
+      sourceId: 'preview-source-should-not-survive',
+      createdAt: 1,
+    }],
+  }));
+
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      activeTripId: 'trip_preview_current',
+      trips: [{
+        id: 'trip_preview_current',
+        name: 'Current Preview Trip',
+        destinationSummary: 'Current City',
+        startDate: '2026-07-01',
+        endDate: '2026-07-02',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: true,
+        itinerary: [{ date: '2026-07-01', day: 1, region: 'Current City', spots: [] }],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      receipts: [{
+        id: 'current_preview_receipt',
+        store: 'Current Cafe',
+        total: 123,
+        date: '2026-07-01',
+        category: 'food',
+        payment: 'cash',
+        tripId: 'trip_preview_current',
+        createdAt: 1,
+      }],
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expectSettingsReady(page);
+  await setAccordion(page, '資料管理');
+
+  await page.locator('#settings-data-panel input[type="file"]').setInputFiles(restorePath);
+  const restorePreview = page.getByLabel('Backup restore preview');
+  await expect(restorePreview).toBeVisible();
+  await expect(restorePreview).toContainText('Restore preview');
+  await expect(restorePreview).toContainText('Foreign Preview Trip');
+  await expect(restorePreview).toContainText('1 receipt');
+  await expect(restorePreview).toContainText('Secrets stripped');
+
+  let stateSnapshot = await page.evaluate(() => localStorage.getItem('boss-japan-tracker') || '');
+  expect(stateSnapshot).toContain('Current Cafe');
+  expect(stateSnapshot).not.toContain('Preview Restore Cafe');
+  expect(stateSnapshot).not.toContain('preview-session-should-not-survive');
+
+  await restorePreview.getByRole('button', { name: /Cancel import/ }).click();
+  await expect(restorePreview).toBeHidden();
+  stateSnapshot = await page.evaluate(() => localStorage.getItem('boss-japan-tracker') || '');
+  expect(stateSnapshot).not.toContain('Preview Restore Cafe');
+
+  await page.locator('#settings-data-panel input[type="file"]').setInputFiles(restorePath);
+  await expect(page.getByLabel('Backup restore preview')).toBeVisible();
+  await page.getByLabel('Backup restore preview').getByRole('button', { name: /Apply backup/ }).click();
+  await expect(page.getByText(/已匯入 backup：1 筆/)).toBeVisible();
+
+  stateSnapshot = await page.evaluate(() => localStorage.getItem('boss-japan-tracker') || '');
+  expect(stateSnapshot).toContain('Preview Restore Cafe');
+  expect(stateSnapshot).not.toContain('preview-session-should-not-survive');
+  expect(stateSnapshot).not.toContain('preview-page-should-not-survive');
+  expect(stateSnapshot).not.toContain('11111111-1111-4111-8111-111111111111');
 });
 
 test('Settings can connect a broker session without leaking the password into app state', async ({ page }) => {

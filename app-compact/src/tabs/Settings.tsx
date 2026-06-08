@@ -234,6 +234,59 @@ function compactTripDoctor(
   };
 }
 
+type BackupImportPreview = {
+  fileName: string;
+  safePayload: Partial<AppState>;
+  importedTrips?: TripProfile[];
+  receipts: Receipt[];
+  tripCount: number;
+  receiptCount: number;
+  targetTripName: string;
+  warnings: string[];
+};
+
+function buildBackupImportPreview(fileName: string, payload: Partial<AppState>, state: AppState, currentTrip: TripProfile): BackupImportPreview {
+  const {
+    credentialBrokerUrl: _credentialBrokerUrl,
+    notionDb: _notionDb,
+    syncQueue: _syncQueue,
+    notionDeletedIds: _notionDeletedIds,
+    notionDeletedSourceIds: _notionDeletedSourceIds,
+    lastSyncedAt: _lastSyncedAt,
+    globalSyncStatus: _globalSyncStatus,
+    syncError: _syncError,
+    settingsPulledAt: _settingsPulledAt,
+    receipts: _receipts,
+    trips: _trips,
+    ...safePayload
+  } = stripSensitiveState(payload) as Partial<AppState> & { credentialBrokerUrl?: unknown };
+  const importedTrips = sanitizeImportedTrips(payload.trips);
+  const nextTrips = importedTrips || state.trips || [];
+  const allowedTripIds = new Set(nextTrips.map((trip) => trip.id).filter(Boolean));
+  const requestedActiveTripId = typeof payload.activeTripId === 'string' && allowedTripIds.has(payload.activeTripId)
+    ? payload.activeTripId
+    : undefined;
+  const fallbackTripId = requestedActiveTripId || currentTrip.id || nextTrips.find((trip) => !trip.archived)?.id || nextTrips[0]?.id;
+  const receipts = sanitizeImportedReceipts(payload.receipts, currentTrip.startDate || state.tripDateRange.start, allowedTripIds, fallbackTripId);
+  const targetTrip = nextTrips.find((trip) => trip.id === fallbackTripId) || currentTrip;
+  const warnings = [
+    'Secrets stripped',
+    'Cloud IDs removed',
+    'Sync queue ignored',
+  ];
+  if (!importedTrips?.length) warnings.push('Receipts mapped to current trip');
+  return {
+    fileName,
+    safePayload,
+    importedTrips,
+    receipts,
+    tripCount: importedTrips?.length || 0,
+    receiptCount: receipts.length,
+    targetTripName: targetTrip.name || currentTrip.name || 'Current trip',
+    warnings,
+  };
+}
+
 export function Settings({
   state,
   setState,
@@ -310,6 +363,7 @@ export function Settings({
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);
+  const [backupPreview, setBackupPreview] = useState<BackupImportPreview | null>(null);
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -1165,40 +1219,34 @@ export function Settings({
     try {
       const payload = JSON.parse(await file.text()) as Partial<AppState>;
       if (!validateBackupSchema(payload)) throw new Error('Backup JSON 格式無效或結構損壞');
-      const {
-        credentialBrokerUrl: _credentialBrokerUrl,
-        notionDb: _notionDb,
-        syncQueue: _syncQueue,
-        notionDeletedIds: _notionDeletedIds,
-        notionDeletedSourceIds: _notionDeletedSourceIds,
-        lastSyncedAt: _lastSyncedAt,
-        globalSyncStatus: _globalSyncStatus,
-        syncError: _syncError,
-        settingsPulledAt: _settingsPulledAt,
-        receipts: _receipts,
-        trips: _trips,
-        ...safePayload
-      } = stripSensitiveState(payload) as Partial<AppState> & { credentialBrokerUrl?: unknown };
-      const importedTrips = sanitizeImportedTrips(payload.trips);
-      const nextTrips = importedTrips || state.trips || [];
-      const allowedTripIds = new Set(nextTrips.map((trip) => trip.id).filter(Boolean));
-      const requestedActiveTripId = typeof payload.activeTripId === 'string' && allowedTripIds.has(payload.activeTripId)
-        ? payload.activeTripId
-        : undefined;
-      const fallbackTripId = requestedActiveTripId || currentTrip.id || nextTrips.find((trip) => !trip.archived)?.id || nextTrips[0]?.id;
-      const receipts = sanitizeImportedReceipts(payload.receipts, currentTrip.startDate || state.tripDateRange.start, allowedTripIds, fallbackTripId);
-      setState((prev) => migrateAppState({
-        ...prev,
-        ...safePayload,
-        trips: importedTrips || prev.trips,
-        receipts: receipts.length ? receipts : prev.receipts,
-      }));
-      setStatus(`已匯入 backup：${receipts.length || state.receipts.length} 筆`);
+      const preview = buildBackupImportPreview(file.name, payload, state, currentTrip);
+      setBackupPreview(preview);
+      setStatus(`Backup preview ready：${preview.receiptCount || state.receipts.length} 筆，確認後先匯入`);
     } catch (error) {
+      setBackupPreview(null);
       setStatus(`Backup 匯入失敗：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       if (backupInput.current) backupInput.current.value = '';
     }
+  }
+
+  function applyBackupPreview() {
+    if (!backupPreview) return;
+    const preview = backupPreview;
+    setState((prev) => migrateAppState({
+      ...prev,
+      ...preview.safePayload,
+      trips: preview.importedTrips || prev.trips,
+      receipts: preview.receipts.length ? preview.receipts : prev.receipts,
+    }));
+    setBackupPreview(null);
+    setStatus(`已匯入 backup：${preview.receiptCount || state.receipts.length} 筆`);
+  }
+
+  function cancelBackupPreview() {
+    setBackupPreview(null);
+    if (backupInput.current) backupInput.current.value = '';
+    setStatus('已取消 backup 匯入，未有改動本地資料');
   }
 
   return (
@@ -2012,6 +2060,37 @@ export function Settings({
             }
           }}><RotateCcw size={18} /> 清除本地資料</button>
         </div>
+        {backupPreview && (
+          <div className="settings-restore-preview" role="region" aria-label="Backup restore preview">
+            <div className="settings-restore-preview-head">
+              <span><Upload size={15} /> Restore preview</span>
+              <strong>{backupPreview.receiptCount} receipt{backupPreview.receiptCount === 1 ? '' : 's'}</strong>
+            </div>
+            <div className="settings-restore-preview-grid">
+              <span>
+                <small>File</small>
+                <strong>{backupPreview.fileName}</strong>
+              </span>
+              <span>
+                <small>Trips</small>
+                <strong>{backupPreview.tripCount || 'Current trip'}</strong>
+              </span>
+              <span>
+                <small>Target</small>
+                <strong>{backupPreview.targetTripName}</strong>
+              </span>
+            </div>
+            <div className="settings-restore-preview-warnings">
+              {backupPreview.warnings.map((warning) => (
+                <span key={warning}><ShieldCheck size={13} /> {warning}</span>
+              ))}
+            </div>
+            <div className="action-row wrap">
+              <button className="primary" type="button" onClick={applyBackupPreview}><Upload size={16} /> Apply backup</button>
+              <button className="secondary" type="button" onClick={cancelBackupPreview}>Cancel import</button>
+            </div>
+          </div>
+        )}
         <div className="settings-backup-safety" aria-label="Backup safety scope">
           <span><ShieldCheck size={15} /> CSV / Backup JSON 只包含目前旅程，不會匯出其他旅程紀錄。</span>
           <span><KeyRound size={15} /> Backup 不包含 API key、Notion token、broker session 或解鎖 secret。</span>

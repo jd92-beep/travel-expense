@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added compact Settings backup restore dry-run preview. Selecting a Backup JSON now shows a sanitized preview with file, trip/receipt counts, target trip, and stripped/ignored safety notes; local state changes only after `Apply backup`, and `Cancel import` leaves the current state untouched.
 - Added compact Settings `Compact Trip Doctor`, a top-level health panel for data quality, sync queue, trip completeness, and backup safety. It uses only existing compact state, does not add a new accordion, and includes quick repair actions for records, data safety, and sync settings.
 - Added compact travel-day widgets to Dashboard and Timeline, backed by shared `buildTravelDayWidgets()` logic for transit countdown, receipt reminder, weather alert, and next booking note without adding schema fields or calling external APIs.
 - Added `npm run smoke:shared-contract` for the compact app and included it in the full compact production gate. The smoke boots compact and React with one public-safe fixture, compares the shared trip/receipt/person/share/settings/sync/Supabase/Notion/trip-intelligence contract, accepts compact schema v4 with React schema v3 compatibility, and confirms compact-only personalization survives.
