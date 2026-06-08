@@ -5266,6 +5266,102 @@ body {
   box-shadow: none;
 }
 
+.compact-pwa-readiness {
+  width: min(100%, 1500px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: -8px auto 12px;
+  padding: 0 4px;
+  position: relative;
+  z-index: 18;
+}
+
+.compact-pwa-readiness .pwa-chip {
+  min-width: 0;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgba(128, 99, 63, .16);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(255, 253, 248, .9);
+  color: #2A2119;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 6px 14px rgba(67, 46, 24, .04);
+}
+
+.compact-pwa-readiness button.pwa-chip,
+.compact-pwa-readiness .pwa-chip button {
+  cursor: pointer;
+}
+
+.compact-pwa-readiness .pwa-chip button {
+  min-height: 20px;
+  margin-left: 2px;
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: #18395C;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.compact-pwa-readiness .pwa-chip.ok {
+  color: #2D6E48;
+  border-color: rgba(45, 110, 72, .18);
+}
+
+.compact-pwa-readiness .pwa-chip.warning {
+  color: #9A6418;
+  border-color: rgba(180, 109, 19, .22);
+  background: rgba(255, 248, 226, .92);
+}
+
+.compact-pwa-readiness .pwa-chip.danger {
+  color: #A83030;
+  border-color: rgba(194, 59, 94, .25);
+  background: rgba(255, 241, 244, .92);
+}
+
+.compact-pwa-readiness .pwa-chip.install {
+  border-color: rgba(24, 57, 92, .22);
+  background: #18395C;
+  color: #fff;
+}
+
+@media (max-width: 767px) {
+  .compact-pwa-readiness {
+    width: auto;
+    max-width: calc(100% - 24px);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 6px 12px 8px;
+    padding: 0;
+  }
+
+  .compact-pwa-readiness .pwa-chip {
+    width: 100%;
+    min-height: 28px;
+    padding: 5px 6px;
+    justify-content: center;
+    font-size: 9.5px;
+    overflow: hidden;
+    text-overflow: clip;
+  }
+
+  .compact-pwa-readiness .pwa-chip button {
+    display: none;
+  }
+}
+
 @media (min-width: 768px) {
   :root {
     --preview-ink: #141b24;

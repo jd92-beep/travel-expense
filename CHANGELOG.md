@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added compact PWA/travel-readiness status chips for network state, pending sync queue, cache freshness, update availability, install prompt readiness, and reduced-motion mode.
 - Added compact Stats budget story cards for used percent, remaining-per-day pace, payer fairness, and category concentration/anomaly.
 - Added compact Dashboard local AI Trip Coach with daily burn, overspend forecast, next-day warning, and weather-linked reminders without calling external AI APIs.
 - Added compact Weather source/freshness transparency with provider, live/cache age, city-geocode/coordinate target labels, and fallback reason chips.

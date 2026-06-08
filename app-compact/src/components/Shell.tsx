@@ -1,4 +1,4 @@
-import { BarChart3, Bell, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users, ChevronDown, RefreshCw } from 'lucide-react';
+import { BarChart3, Bell, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users, ChevronDown, RefreshCw, Wifi, WifiOff, Smartphone, Gauge, PackageCheck, Archive } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
@@ -36,9 +36,25 @@ const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: s
   settings: { title: 'Secure Controls', mobileTitle: '設定控制中心', subtitle: 'Secure Controls', status: '系統狀態' },
 };
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice?: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
+
 // Legacy helper kept for backwards compatibility but we rely on shouldDisableHeavyEffects now.
 function prefersStableMobileEffects() {
   return shouldDisableHeavyEffects();
+}
+
+function relativeFreshness(value: number) {
+  if (!value) return 'local only';
+  const seconds = Math.max(1, Math.round((Date.now() - value) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
 export function Shell({
@@ -64,9 +80,11 @@ export function Shell({
 }) {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
+  const [installReady, setInstallReady] = useState(false);
   const [stableMobileEffects, setStableMobileEffects] = useState(shouldDisableHeavyEffects);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
   const raf = useRef<number | null>(null);
+  const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const richVisualEffects = !prefersReducedMotion && !stableMobileEffects;
 
@@ -118,15 +136,38 @@ export function Shell({
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
     const onControllerChange = () => setUpdateReady(true);
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      installPromptRef.current = event as BeforeInstallPromptEvent;
+      setInstallReady(true);
+    };
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
     navigator.serviceWorker?.addEventListener('controllerchange', onControllerChange);
     return () => {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange);
     };
   }, []);
+
+  const handleInstallClick = async () => {
+    const promptEvent = installPromptRef.current;
+    if (!promptEvent) return;
+    try {
+      await promptEvent.prompt();
+      await promptEvent.userChoice?.catch(() => undefined);
+    } finally {
+      installPromptRef.current = null;
+      setInstallReady(false);
+    }
+  };
+
+  const cacheTime = Math.max(syncState?.lastSyncedAt || 0, Number(state?.settingsPulledAt || 0));
+  const cacheLabel = relativeFreshness(cacheTime);
+  const motionLabel = prefersReducedMotion || stableMobileEffects ? 'reduced' : 'rich';
 
   useEffect(() => {
     const handlePerformanceAndEffects = () => {
@@ -572,6 +613,35 @@ export function Shell({
           </button>
         )}
       </header>
+      <section className="compact-pwa-readiness" aria-label="Compact travel readiness">
+        <span className={`pwa-chip ${online ? 'ok' : 'warning'}`}>
+          {online ? <Wifi size={13} /> : <WifiOff size={13} />}
+          Network · {online ? 'online' : 'offline'}
+        </span>
+        <span className={`pwa-chip ${syncState?.pendingCount ? 'warning' : syncState?.status === 'error' ? 'danger' : 'ok'}`}>
+          <Archive size={13} />
+          Queue · {syncState?.pendingCount ? `${syncState.pendingCount} pending` : syncState?.status === 'offline' ? 'paused' : 'clear'}
+        </span>
+        <span className="pwa-chip neutral">
+          <PackageCheck size={13} />
+          Cache · {cacheLabel}
+        </span>
+        <span className={`pwa-chip ${updateReady ? 'warning' : 'ok'}`}>
+          <RefreshCw size={13} />
+          Update · {updateReady ? 'ready' : 'current'}
+          {updateReady && <button type="button" onClick={() => location.reload()}>Reload</button>}
+        </span>
+        {installReady && (
+          <button className="pwa-chip install" type="button" onClick={handleInstallClick}>
+            <Smartphone size={13} />
+            Install
+          </button>
+        )}
+        <span className={`pwa-chip ${motionLabel === 'reduced' ? 'neutral' : 'ok'}`}>
+          <Gauge size={13} />
+          Motion · {motionLabel}
+        </span>
+      </section>
       <main className="content">{children}</main>
       <WindmillTransition activeKey={active} />
 

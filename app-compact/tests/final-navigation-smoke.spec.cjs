@@ -176,6 +176,80 @@ test('Duplicate person ids do not create React key warnings', async ({ page }) =
   await expect.poll(() => consoleErrors.filter((text) => text.includes('same key') || text.includes('Encountered two children')).length).toBe(0);
 });
 
+test('Compact PWA readiness strip surfaces queue, install, update, cache, and motion states', async ({ browser }) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    reducedMotion: 'reduce',
+  });
+  const page = await context.newPage();
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'dashboard',
+      autoSync: true,
+      globalSyncStatus: 'queued',
+      lastSyncedAt: Date.now() - 5 * 60_000,
+      syncQueue: [{
+        id: 'pwa_queue_receipt',
+        type: 'receipt',
+        entityId: 'pwa_receipt',
+        op: 'create',
+        status: 'queued',
+        attempts: 0,
+        createdAt: Date.now() - 1_000,
+        updatedAt: Date.now() - 1_000,
+      }],
+      receipts: [],
+      schemaVersion: 3,
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  const readiness = page.getByLabel('Compact travel readiness');
+  await expect(readiness).toBeVisible();
+  await expect(readiness).toContainText('Network · online');
+  await expect(readiness).toContainText('Queue · 1 pending');
+  await expect(readiness).toContainText(/Cache · [56]m/);
+  await expect(readiness).toContainText('Update · current');
+  await expect(readiness).toContainText('Motion · reduced');
+
+  await page.evaluate(() => {
+    const event = new Event('beforeinstallprompt');
+    Object.defineProperty(event, 'prompt', {
+      value: async () => { window.__compactInstallPrompted = true; },
+    });
+    Object.defineProperty(event, 'userChoice', {
+      value: Promise.resolve({ outcome: 'accepted', platform: 'web' }),
+    });
+    window.dispatchEvent(event);
+  });
+  await expect(readiness.getByRole('button', { name: /Install/ })).toBeVisible();
+  await readiness.getByRole('button', { name: /Install/ }).click();
+  await expect.poll(() => page.evaluate(() => window.__compactInstallPrompted === true)).toBe(true);
+
+  await page.evaluate(() => navigator.serviceWorker?.dispatchEvent(new Event('controllerchange')));
+  await expect(readiness).toContainText('Update · ready');
+
+  await context.setOffline(true);
+  await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await expect(readiness).toContainText('Network · offline');
+
+  const metrics = await readiness.evaluate((node) => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    chipCount: node.querySelectorAll('.pwa-chip').length,
+  }));
+  expect(metrics.scrollWidth, JSON.stringify(metrics, null, 2)).toBeLessThanOrEqual(390);
+  expect(metrics.chipCount).toBeGreaterThanOrEqual(5);
+  await context.close();
+});
+
 test('Boot currency and sync effects run once without noisy mobile 403s', async ({ page }) => {
   const consoleEvents = [];
   const notionPaths = [];
