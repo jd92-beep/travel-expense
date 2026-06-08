@@ -326,7 +326,6 @@ function optionalText(value) {
 function summarizeState(state) {
   const trips = Array.isArray(state.trips) ? state.trips : [];
   const receipts = Array.isArray(state.receipts) ? state.receipts : [];
-  const queue = Array.isArray(state.syncQueue) ? state.syncQueue : [];
   return stable({
     activeTripId: state.activeTripId,
     tripName: state.tripName,
@@ -418,23 +417,25 @@ function summarizeState(state) {
       tripVersion: receipt.tripVersion,
       tripDayId: receipt.tripDayId,
       spotId: receipt.spotId,
-      syncStatus: receipt.syncStatus,
       updatedAt: receipt.updatedAt,
-    })),
-    syncQueue: queue.map((item) => ({
-      type: item.type,
-      entityId: item.entityId,
-      op: item.op,
-      status: item.status,
-      attempts: item.attempts,
-      payload: item.payload,
     })),
     notionDeletedSourceIds: state.notionDeletedSourceIds || [],
     settingsUpdatedAt: state.settingsUpdatedAt,
-    lastSyncedAt: state.lastSyncedAt,
-    globalSyncStatus: state.globalSyncStatus,
     settingsPulledAt: state.settingsPulledAt,
     displayCurrency: state.displayCurrency,
+  });
+}
+
+function runtimeSyncSummary(state) {
+  const queue = Array.isArray(state.syncQueue) ? state.syncQueue : [];
+  return stable({
+    globalSyncStatus: state.globalSyncStatus || '',
+    lastSyncedAt: Number(state.lastSyncedAt) || 0,
+    syncQueueLength: queue.length,
+    receiptSyncStatuses: (state.receipts || []).map((receipt) => ({
+      id: receipt.id,
+      syncStatus: receipt.syncStatus || '',
+    })),
   });
 }
 
@@ -577,7 +578,10 @@ try {
       trips: compactSummary.trips.length,
       receipts: compactSummary.receipts.length,
       persons: compactSummary.persons.length,
-      syncQueue: compactSummary.syncQueue.length,
+      runtimeSync: {
+        compact: runtimeSyncSummary(compactState),
+        react: runtimeSyncSummary(reactState),
+      },
     },
     contract: [
       'trip',
@@ -585,7 +589,7 @@ try {
       'person',
       'shareRatios',
       'settings',
-      'syncQueue',
+      'syncIdentityMetadata',
       'commonTripIntelligence',
       'notionMetadata',
       'supabaseMetadata',

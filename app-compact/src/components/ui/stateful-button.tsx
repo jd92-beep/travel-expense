@@ -10,9 +10,19 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button = ({ className, children, ...props }: ButtonProps) => {
   const [scope, animate] = useAnimate();
+  type AnimateArgs = Parameters<typeof animate>;
+
+  const runScopedAnimation = async (...args: AnimateArgs) => {
+    if (!scope.current) return;
+    try {
+      await animate(...args);
+    } catch {
+      // Purely decorative feedback can race with state changes that unmount the button.
+    }
+  };
 
   const animateLoading = async () => {
-    await animate(
+    await runScopedAnimation(
       ".loader",
       {
         width: "20px",
@@ -26,7 +36,7 @@ export const Button = ({ className, children, ...props }: ButtonProps) => {
   };
 
   const animateSuccess = async () => {
-    await animate(
+    await runScopedAnimation(
       ".loader",
       {
         width: "0px",
@@ -37,7 +47,7 @@ export const Button = ({ className, children, ...props }: ButtonProps) => {
         duration: 0.2,
       },
     );
-    await animate(
+    await runScopedAnimation(
       ".check",
       {
         width: "20px",
@@ -49,7 +59,7 @@ export const Button = ({ className, children, ...props }: ButtonProps) => {
       },
     );
 
-    await animate(
+    await runScopedAnimation(
       ".check",
       {
         width: "0px",
