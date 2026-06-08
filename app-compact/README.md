@@ -10,6 +10,7 @@ This is the independent compact version of the Travel Expense app.
 - Mobile visual QA: `npm run smoke:contact-sheet`
 - Accessibility/touch QA: `npm run smoke:a11y-touch`
 - Live broker preflight: `npm run smoke:broker-live`
+- Prepare local broker proof session: `npm run broker-vault:prepare`
 - Broker vault guard: `npm run smoke:broker-vault:guard`
 - Authenticated broker vault proof: `npm run smoke:broker-vault`
 - Core release gate: `npm run smoke:production-gate`
@@ -29,6 +30,13 @@ fail closed.
 `npm run smoke:broker-vault` is optional authenticated proof. It only runs provider
 checks when you supply a local ignored session through `.broker-vault-session.local.json`
 or local env. Do not commit or print these values.
+
+`npm run broker-vault:prepare` helps create that ignored local session file. It
+prompts locally without echoing the input, calls
+the live broker `/session/unlock`, writes only `.broker-vault-session.local.json`
+with permission `0600`, and prints only redacted status/expiry metadata. Use
+`npm run broker-vault:prepare -- --dry-run` first if you only want to check the
+target file is git-ignored.
 
 ```json
 {

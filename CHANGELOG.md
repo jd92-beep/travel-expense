@@ -2,6 +2,7 @@
 
 ## 2026-06-09
 
+- Added `npm run broker-vault:prepare` for compact P0-05. It uses a hidden local terminal prompt to create an ignored private broker-vault session file, with redacted output only, so authenticated provider proof can run without committing or printing secrets.
 - Added `npm run smoke:broker-vault:doctor` for compact P0-05 readiness. It reports whether ignored broker-vault auth input is present, git-ignored, permission-safe, and unexpired without printing session/token values or calling providers.
 - Added a compact local release-note diff panel for update-ready states. The PWA readiness strip now offers `Release notes`, showing a short local `Now vs previous` summary with no GitHub, changelog, or external release calls.
 - Added compact per-day trip readiness scoring to Dashboard and Timeline. The shared scorer combines itinerary coverage, route freshness, weather freshness/risk, stale booking references, receipt gaps, and cleanup signals into deterministic daily scores with mobile smoke coverage.

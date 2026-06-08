@@ -31,6 +31,7 @@
     "smoke:security": "playwright test tests/security-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:supabase-notion-mirror": "playwright test tests/supabase-notion-mirror-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:broker-live": "node scripts/broker-live-preflight.mjs",
+    "broker-vault:prepare": "node scripts/broker-vault-prepare.mjs",
     "smoke:broker-vault": "node scripts/broker-vault-verify.mjs",
     "smoke:broker-vault:doctor": "node scripts/broker-vault-doctor.mjs",
     "smoke:broker-vault:guard": "node scripts/broker-vault-verify.mjs --expect-missing-session",
