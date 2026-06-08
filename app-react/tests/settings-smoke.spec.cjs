@@ -184,6 +184,19 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
 
   await page.goto('http://localhost:8902/travel-expense/react/');
   await expect(page.getByText('設定控制中心')).toBeVisible();
+  await expect(page.getByText('同步信心中心')).toBeVisible();
+  await expect(page.locator('.settings-sync-confidence')).toContainText('Pending Queue');
+  await expect(page.locator('.settings-sync-confidence')).toContainText(/Status:|Local device cache|Supabase scoped cache/);
+  const syncConfidenceMetrics = await page.locator('.settings-sync-confidence').evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      width: Math.round(rect.width),
+      scrollWidth: document.documentElement.scrollWidth,
+      tiles: node.querySelectorAll('.settings-sync-confidence-grid > div').length,
+    };
+  });
+  expect(syncConfidenceMetrics.tiles).toBe(4);
+  expect(syncConfidenceMetrics.scrollWidth, JSON.stringify(syncConfidenceMetrics, null, 2)).toBeLessThanOrEqual(390);
 
   const summaries = page.locator('.accordion-summary');
   await expect(summaries).toHaveCount(9);

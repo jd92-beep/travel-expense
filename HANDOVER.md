@@ -1,6 +1,6 @@
 # Travel Expense App - Agent Handover
 
-Last updated: 2026-06-03 HKT
+Last updated: 2026-06-08 HKT
 
 ## Active Admin KanBan Status
 
@@ -101,6 +101,13 @@ Before changing code:
 3. Run `npx gitnexus status`.
 4. Use GitNexus impact analysis before editing symbols.
 5. Keep existing dirty files unless Boss asks to include them.
+
+## React Improvement Roadmap
+
+- React improvement checklist: `docs/react-improvement-checklist.md`.
+- Current first completed roadmap task on 2026-06-08 HKT: React Settings now has a top-level `同步信心中心` panel summarizing Supabase readiness, Personal Notion mirror readiness, pending queue, last sync timing/status, cache scope, and sync errors.
+- Verification for the first completed checklist task: `npm run typecheck`, `npm run build`, `npm run smoke:settings`, and `npm run smoke:mobile-layout` passed from `app-react/`.
+- Continue the checklist one item at a time. After each implementation task, run the task-specific smoke test first, then broader mobile/build checks before commit.
 
 ## Current Status Snapshot
 

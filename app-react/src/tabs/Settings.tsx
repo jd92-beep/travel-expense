@@ -84,6 +84,21 @@ function validateBackupSchema(payload: unknown): boolean {
   return true;
 }
 
+function formatSyncTime(value?: number): string {
+  if (!value) return '未同步';
+  const diff = Date.now() - value;
+  if (diff < 60_000) return '剛剛';
+  if (diff < 3_600_000) return `${Math.max(1, Math.round(diff / 60_000))} 分鐘前`;
+  if (diff < 86_400_000) return `${Math.max(1, Math.round(diff / 3_600_000))} 小時前`;
+  return new Date(value).toLocaleString('zh-HK', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function syncConfidenceTone(syncState: SyncEngineState | undefined, cloudSyncAvailable: boolean): 'ok' | 'warning' | 'danger' {
+  if (syncState?.status === 'error' || syncState?.status === 'offline') return 'danger';
+  if (!cloudSyncAvailable || (syncState?.pendingCount || 0) > 0 || syncState?.status === 'queued') return 'warning';
+  return 'ok';
+}
+
 function sanitizeImportedReceipts(input: unknown, fallbackDate: string, allowedTripIds: Set<string>, fallbackTripId?: string): Receipt[] {
   if (!Array.isArray(input)) return [];
   return input
@@ -262,6 +277,11 @@ export function Settings({
   const resolvedNotionDb = configuredNotionDatabaseId(state);
   const notionMirrorDbLabel = notionMirrorReady ? resolvedNotionDb : 'Personal Notion 未連接';
   const notionActionDisabled = !!busy || publicSupabaseOnly;
+  const pendingQueue = state.syncQueue?.filter((item) => item.status !== 'synced') || [];
+  const failedQueue = pendingQueue.filter((item) => item.status === 'error' || item.status === 'failed');
+  const safeStorageScope = storageScope.startsWith('supabase:') ? 'Supabase scoped cache' : 'Local device cache';
+  const syncConfidence = syncConfidenceTone(syncState, cloudSyncAvailable);
+  const syncConfidenceLabel = syncConfidence === 'ok' ? 'Ready' : syncConfidence === 'danger' ? 'Needs attention' : 'Watch';
   const directTokenEnabled = import.meta.env.DEV;
   const buildLabel = `${import.meta.env.MODE} · React ${reactVersion}`;
 
@@ -1107,6 +1127,40 @@ export function Settings({
             </div>
           </TooltipProvider>
         </div>
+      </GlassCard>
+
+      <GlassCard className="settings-sync-confidence" tone="control">
+        <div className="section-head">
+          <h2><Cloud size={20} /> 同步信心中心</h2>
+          <StatusPill tone={syncConfidence}>{syncConfidenceLabel}</StatusPill>
+        </div>
+        <div className="settings-sync-confidence-grid">
+          <div>
+            <span>Supabase</span>
+            <strong>{cloudSyncAvailable ? '已登入雲端' : '未登入'}</strong>
+            <small>{cloudSyncAvailable ? '資料會按帳號隔離同步' : '目前只保存在本機'}</small>
+          </div>
+          <div>
+            <span>Notion Mirror</span>
+            <strong>{notionMirrorReady ? '已連接個人 notebook' : publicSupabaseOnly ? 'Supabase only' : '未連接'}</strong>
+            <small>{notionMirrorReady ? notionMirrorDbLabel : 'Notion 係可選備份，不影響 Supabase'}</small>
+          </div>
+          <div>
+            <span>Pending Queue</span>
+            <strong>{pendingQueue.length} 項</strong>
+            <small>{failedQueue.length ? `${failedQueue.length} 項需要重試` : state.autoSync ? 'Auto sync 已開啟' : 'Auto sync 未開啟'}</small>
+          </div>
+          <div>
+            <span>Last Sync</span>
+            <strong>{formatSyncTime(syncState?.lastSyncedAt || state.lastSyncedAt)}</strong>
+            <small>{syncState?.status ? `Status: ${syncState.status}` : safeStorageScope}</small>
+          </div>
+        </div>
+        {(syncState?.error || state.syncError) && (
+          <p className="settings-sync-confidence-error">
+            <AlertTriangle size={15} /> {syncState?.error || state.syncError}
+          </p>
+        )}
       </GlassCard>
 
       <AccordionCard id="settings-trip" eyebrow="Trip Manager" title="旅程管理器 🏯🌸" meta={<span className="pill">v{managedTrip.version}</span>}>

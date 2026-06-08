@@ -2,6 +2,14 @@
 
 All notable project changes should be recorded here.
 
+## 2026-06-08
+
+### React improvement roadmap and sync confidence center
+
+- Added `docs/react-improvement-checklist.md`, a prioritized React-only improvement checklist covering trust/sync, mobile-native UX, core workflows, Trip Intelligence, Stats budget coaching, maintainability, and premium polish.
+- Added a top-level Settings `同步信心中心` panel for the React app, summarizing Supabase readiness, Personal Notion mirror readiness, pending sync queue, latest sync timing/status, cache scope, and sync errors.
+- Updated Settings smoke coverage so the new sync confidence panel is visible, has four status tiles, and does not introduce 390px mobile overflow.
+
 ## 2026-06-03
 
 ### Admin cyber KanBan foundation

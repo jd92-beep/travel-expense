@@ -3246,6 +3246,66 @@ body {
 .settings-screen .credential-status-grid .pill {
   background: rgba(255,255,255,.7);
 }
+.settings-screen .settings-sync-confidence {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.86), rgba(240,239,246,.58)),
+    rgba(255,255,255,.52);
+}
+.settings-screen .settings-sync-confidence .section-head {
+  margin-bottom: 0;
+}
+.settings-screen .settings-sync-confidence-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.settings-screen .settings-sync-confidence-grid > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 10px 11px;
+  border: 1px solid rgba(255,255,255,.66);
+  border-radius: 16px;
+  background: rgba(255,255,255,.56);
+}
+.settings-screen .settings-sync-confidence-grid span {
+  color: #7A7068;
+  font-size: 11px;
+  font-weight: 900;
+}
+.settings-screen .settings-sync-confidence-grid strong {
+  min-width: 0;
+  color: #2A2119;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+.settings-screen .settings-sync-confidence-grid small {
+  min-width: 0;
+  color: #6B625A;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.settings-screen .settings-sync-confidence-error {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(194,59,94,.22);
+  border-radius: 14px;
+  background: rgba(255,240,242,.72);
+  color: #A83030;
+  font-size: 12px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
 
 input,
 select,
@@ -3403,6 +3463,17 @@ textarea {
   .stats-screen .stats-command,
   .settings-screen .settings-command {
     margin-bottom: 16px;
+  }
+  .settings-screen .settings-sync-confidence {
+    padding: 14px;
+  }
+  .settings-screen .settings-sync-confidence-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .settings-screen .settings-sync-confidence-grid > div {
+    min-height: 78px;
+    padding: 9px;
   }
   .scan-screen .scan-hero-card {
     padding-left: 12px !important;
