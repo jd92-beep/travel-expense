@@ -2,6 +2,8 @@
 
 ## 2026-06-08
 
+- Added compact History `Offline Conflict Resolver` for failed local/cloud receipt sync conflicts. It offers `Review conflict`, `Keep local`, and `Keep cloud` actions, sanitizes requeued payloads, and smoke coverage verifies fake provider-token/error payload fields are not rendered.
+- Hardened compact release smokes by extending the shared-contract temporary server wait window and making the final-navigation sync-error retry check resilient to React re-render detach.
 - Added compact P7 travel reliability roadmap and completed P7-01 booking-reference staleness monitoring. Dashboard and Timeline now show `Booking stale` when an upcoming booking receipt has a booking ref but has not been updated for more than 30 days, while preserving the age, ref, store, and time for travel-day checks.
 - Quieted the expected compact Welcome Guide no-session fallback so creating a local trip without an active Supabase session no longer logs a console error.
 - Hardened compact `StatefulActionButton` animation feedback so decorative Motion animations cannot throw an unhandled rejection when an action unmounts the button, and stabilized the shared-contract smoke so runtime sync side effects are reported separately instead of failing the shared data contract comparison.

@@ -287,7 +287,10 @@ async function ensureServer({ name, cwd, url, port, base }) {
   let output = '';
   server.stdout.on('data', (chunk) => { output += String(chunk); });
   server.stderr.on('data', (chunk) => { output += String(chunk); });
-  for (let i = 0; i < 80; i += 1) {
+  for (let i = 0; i < 160; i += 1) {
+    if (server.exitCode !== null) {
+      throw new Error(`${name} server exited early with code ${server.exitCode}\n${output.slice(-2000)}`);
+    }
     if (await probe(url)) {
       console.log(`[shared-contract] started ${name} server at ${url}`);
       return server;

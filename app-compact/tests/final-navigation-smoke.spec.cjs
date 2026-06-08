@@ -137,10 +137,13 @@ test('Sync error indicator is clickable and retries sync', async ({ page }) => {
   });
 
   await page.reload();
-  const retry = page.getByRole('button', { name: /Sync error/ });
-  await expect(retry).toBeVisible();
-  await retry.click();
-  await expect(retry).toBeHidden();
+  await expect(page.getByRole('button', { name: /Sync error/ })).toBeVisible();
+  await expect.poll(async () => {
+    const retry = page.getByRole('button', { name: /Sync error/ });
+    if (!(await retry.isVisible().catch(() => false))) return true;
+    await retry.evaluate((button) => button.click()).catch(() => undefined);
+    return !(await page.getByRole('button', { name: /Sync error/ }).isVisible().catch(() => false));
+  }, { timeout: 10_000 }).toBe(true);
   await expect(page.locator('.sync-status-indicator')).not.toContainText('Sync error');
 });
 

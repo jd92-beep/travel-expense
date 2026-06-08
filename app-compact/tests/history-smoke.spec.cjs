@@ -112,6 +112,41 @@ const receipts = [
   },
 ];
 
+const conflictReceipts = [
+  {
+    id: 'conflict_local',
+    sourceId: 'conflict_source_local',
+    supabaseId: '11111111-1111-4111-8111-111111111111',
+    store: 'Offline Noodles',
+    total: 1234,
+    date: '2026-04-26',
+    time: '19:10',
+    category: 'food',
+    payment: 'credit',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    syncStatus: 'failed',
+    updatedAt: 1_776_000_000_000,
+    createdAt: 10,
+  },
+  {
+    id: 'conflict_cloud',
+    sourceId: 'conflict_source_cloud',
+    supabaseId: '22222222-2222-4222-8222-222222222222',
+    store: 'Cloud Taxi',
+    total: 4321,
+    date: '2026-04-26',
+    time: '21:30',
+    category: 'transport',
+    payment: 'cash',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    syncStatus: 'error',
+    updatedAt: 1_776_000_100_000,
+    createdAt: 11,
+  },
+];
+
 test('History search, filter, pending, edit, delete, and safe pull', async ({ page }) => {
   let notionRequests = 0;
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/notion/request', async (route) => {
@@ -302,6 +337,98 @@ test('History guided cleanup suggestions open the right receipt for repair', asy
   await cleanup.getByRole('button', { name: /Open missing payer/ }).click();
   await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
   await expect(page.getByLabel('店名 / 項目')).toHaveValue('M7 Missing Payer');
+});
+
+test('History offline conflict resolver reviews and resolves local/cloud receipt conflicts safely', async ({ page }) => {
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
+  await page.addInitScript((seedReceipts) => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'history',
+      receipts: seedReceipts,
+      autoSync: false,
+      syncQueue: [
+        {
+          id: 'queue_conflict_local',
+          type: 'receipt',
+          entityId: 'conflict_local',
+          op: 'update',
+          status: 'failed',
+          attempts: 3,
+          error: 'FAKE_QUEUE_ERROR_SHOULD_NOT_RENDER',
+          createdAt: 1_776_000_000_000,
+          updatedAt: 1_776_000_200_000,
+          payload: {
+            sourceId: 'conflict_source_local',
+            supabaseId: '11111111-1111-4111-8111-111111111111',
+            providerToken: 'FAKE_PROVIDER_TOKEN_SHOULD_NOT_RENDER',
+          },
+        },
+        {
+          id: 'queue_conflict_cloud',
+          type: 'receipt',
+          entityId: 'conflict_cloud',
+          op: 'update',
+          status: 'error',
+          attempts: 2,
+          error: 'FAKE_CLOUD_ERROR_SHOULD_NOT_RENDER',
+          createdAt: 1_776_000_000_000,
+          updatedAt: 1_776_000_300_000,
+          payload: {
+            sourceId: 'conflict_source_cloud',
+            supabaseId: '22222222-2222-4222-8222-222222222222',
+            notionSecret: 'FAKE_NOTION_SECRET_SHOULD_NOT_RENDER',
+          },
+        },
+      ],
+    }));
+  }, conflictReceipts);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+
+  const resolver = page.getByLabel('Offline conflict resolver');
+  await expect(resolver).toBeVisible();
+  await expect(resolver).toContainText('Offline Conflict Resolver');
+  await expect(resolver).toContainText('2 conflicts');
+  await expect(resolver).toContainText('Offline Noodles');
+  await expect(resolver).toContainText('Cloud Taxi');
+  await expect(page.locator('body')).not.toContainText('FAKE_PROVIDER_TOKEN_SHOULD_NOT_RENDER');
+  await expect(page.locator('body')).not.toContainText('FAKE_QUEUE_ERROR_SHOULD_NOT_RENDER');
+  await expect(page.locator('body')).not.toContainText('FAKE_NOTION_SECRET_SHOULD_NOT_RENDER');
+
+  const localConflict = resolver.locator('.history-conflict-item').filter({ hasText: 'Offline Noodles' });
+  await localConflict.getByRole('button', { name: 'Review conflict' }).click();
+  await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Offline Noodles');
+  await page.getByRole('dialog', { name: '編輯紀錄' }).getByRole('button', { name: '取消' }).click();
+
+  await localConflict.getByRole('button', { name: 'Keep local' }).click();
+  await expect(resolver).toContainText('1 conflicts');
+  await expect(resolver).not.toContainText('Offline Noodles');
+  const keepLocalState = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
+  const keptLocalReceipt = keepLocalState.receipts.find((receipt) => receipt.id === 'conflict_local');
+  const keptLocalQueue = keepLocalState.syncQueue.find((item) => item.id === 'queue_conflict_local');
+  expect(keptLocalReceipt.syncStatus).toBe('queued');
+  expect(keptLocalQueue.status).toBe('queued');
+  expect(keptLocalQueue.attempts).toBe(0);
+  expect(keptLocalQueue.error).toBeUndefined();
+  expect(keptLocalQueue.payload.providerToken).toBeUndefined();
+
+  const cloudConflict = resolver.locator('.history-conflict-item').filter({ hasText: 'Cloud Taxi' });
+  await cloudConflict.getByRole('button', { name: 'Keep cloud' }).click();
+  await expect(page.getByLabel('Offline conflict resolver')).toHaveCount(0);
+  const keepCloudState = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
+  const keptCloudReceipt = keepCloudState.receipts.find((receipt) => receipt.id === 'conflict_cloud');
+  expect(keptCloudReceipt.syncStatus).toBe('synced');
+  expect(keepCloudState.syncQueue.some((item) => item.id === 'queue_conflict_cloud')).toBe(false);
 });
 
 test('History manual pull routes through global sync engine when broker session exists', async ({ page }) => {

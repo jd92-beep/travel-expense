@@ -5,7 +5,7 @@ import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { hasCredentialBrokerSession } from '../lib/credentialBroker';
 import { hasDirectNotionToken } from '../lib/notion';
 import { CATEGORIES } from '../lib/constants';
-import type { AppState, CategoryId, Receipt, TripProfile } from '../lib/types';
+import type { AppState, CategoryId, Receipt, SyncQueueItem, TripProfile } from '../lib/types';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
@@ -26,6 +26,13 @@ type ReceiptCleanupSuggestion = {
   tone: 'warning' | 'danger';
 };
 
+type ReceiptConflictItem = {
+  receipt: Receipt;
+  queueItem?: SyncQueueItem;
+  status: string;
+  detail: string;
+};
+
 function historyDateLabel(date: string): string {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
@@ -43,15 +50,49 @@ function isReceiptPhotoExpected(receipt: Receipt): boolean {
 
 function receiptHasSyncConflict(receipt: Receipt, state: AppState): boolean {
   if (receipt.syncStatus === 'error' || receipt.syncStatus === 'failed') return true;
-  return (state.syncQueue || []).some((item) => (
-    (item.status === 'error' || item.status === 'failed')
-    && (
-      item.entityId === receipt.id
-      || (!!receipt.sourceId && item.payload?.sourceId === receipt.sourceId)
-      || (!!receipt.supabaseId && item.payload?.supabaseId === receipt.supabaseId)
-      || (!!receipt.notionPageId && item.payload?.notionPageId === receipt.notionPageId)
-    )
-  ));
+  return (state.syncQueue || []).some((item) => isFailedQueueItem(item) && queueItemMatchesReceipt(item, receipt));
+}
+
+function isFailedQueueItem(item: SyncQueueItem): boolean {
+  return item.status === 'error' || item.status === 'failed';
+}
+
+function queueItemMatchesReceipt(item: SyncQueueItem, receipt: Receipt): boolean {
+  return item.entityId === receipt.id
+    || (!!receipt.sourceId && item.payload?.sourceId === receipt.sourceId)
+    || (!!receipt.supabaseId && item.payload?.supabaseId === receipt.supabaseId)
+    || (!!receipt.notionPageId && item.payload?.notionPageId === receipt.notionPageId);
+}
+
+function findReceiptConflictQueueItem(receipt: Receipt, state: AppState): SyncQueueItem | undefined {
+  return (state.syncQueue || []).find((item) => item.type === 'receipt' && isFailedQueueItem(item) && queueItemMatchesReceipt(item, receipt));
+}
+
+function buildSafeReceiptPayload(receipt: Receipt, updatedAt: number): SyncQueueItem['payload'] {
+  return {
+    tripId: receipt.tripId,
+    sourceId: receipt.sourceId,
+    supabaseId: receipt.supabaseId,
+    notionPageId: receipt.notionPageId,
+    updatedAt,
+  };
+}
+
+function buildReceiptConflictItems(receipts: Receipt[], state: AppState): ReceiptConflictItem[] {
+  const items: Array<ReceiptConflictItem | null> = receipts
+    .map((receipt) => {
+      const queueItem = findReceiptConflictQueueItem(receipt, state);
+      if (!queueItem && receipt.syncStatus !== 'error' && receipt.syncStatus !== 'failed') return null;
+      const status = String(queueItem?.status || receipt.syncStatus || 'failed');
+      const operation = queueItem?.op ? `${queueItem.op} receipt` : 'receipt update';
+      return {
+        receipt,
+        queueItem,
+        status,
+        detail: `${operation} needs review before the next push.`,
+      };
+    });
+  return items.filter((item): item is ReceiptConflictItem => !!item);
 }
 
 function receiptHealthMarkers(
@@ -187,6 +228,10 @@ export function History({
     () => buildReceiptCleanupSuggestions(tripReceipts, state, sourceIdCounts, validPersonIds),
     [tripReceipts, state, sourceIdCounts, validPersonIds],
   );
+  const conflictItems = useMemo(
+    () => buildReceiptConflictItems(tripReceipts, state),
+    [tripReceipts, state],
+  );
   const categoryChips = [
     { id: 'all' as const, name: '全部', color: '#cf2626' },
     ...CATEGORIES.filter((item) => ['flight', 'lodging', 'food', 'transport', 'shopping', 'ticket', 'other'].includes(item.id)),
@@ -237,6 +282,80 @@ export function History({
     onOpen(suggestion.receipt);
   }
 
+  function handleKeepLocal(conflict: ReceiptConflictItem) {
+    if (!setState) return;
+    const now = Date.now();
+    setState((prev) => {
+      const currentReceipt = prev.receipts.find((receipt) => receipt.id === conflict.receipt.id) || conflict.receipt;
+      const updatedReceipt: Receipt = {
+        ...currentReceipt,
+        syncStatus: 'queued',
+        updatedAt: now,
+      };
+      let matched = false;
+      const nextQueue = (prev.syncQueue || []).map((item) => {
+        const matches = item.id === conflict.queueItem?.id || queueItemMatchesReceipt(item, currentReceipt);
+        if (!matches || item.type !== 'receipt') return item;
+        matched = true;
+        return {
+          ...item,
+          error: undefined,
+          status: 'queued' as const,
+          attempts: 0,
+          updatedAt: now,
+          payload: buildSafeReceiptPayload(updatedReceipt, now),
+        };
+      });
+      if (!matched) {
+        nextQueue.push({
+          id: `receipt-conflict-${updatedReceipt.id}-${now}`,
+          type: 'receipt',
+          entityId: updatedReceipt.id,
+          op: updatedReceipt.supabaseId || updatedReceipt.notionPageId ? 'update' : 'create',
+          status: 'queued',
+          attempts: 0,
+          createdAt: now,
+          updatedAt: now,
+          payload: buildSafeReceiptPayload(updatedReceipt, now),
+        });
+      }
+      const stillHasFailedQueue = nextQueue.some(isFailedQueueItem);
+      return {
+        ...prev,
+        receipts: prev.receipts.map((receipt) => receipt.id === updatedReceipt.id ? updatedReceipt : receipt),
+        syncQueue: nextQueue.slice(-500),
+        globalSyncStatus: stillHasFailedQueue ? prev.globalSyncStatus : 'queued',
+        syncError: stillHasFailedQueue ? prev.syncError : '',
+      };
+    });
+    setStatus('已保留本機版本，稍後會重新同步。');
+  }
+
+  function handleKeepCloud(conflict: ReceiptConflictItem) {
+    if (!setState) return;
+    const now = Date.now();
+    setState((prev) => {
+      const currentReceipt = prev.receipts.find((receipt) => receipt.id === conflict.receipt.id) || conflict.receipt;
+      const cloudStatus = currentReceipt.supabaseId || currentReceipt.notionPageId ? 'synced' : 'local';
+      const nextQueue = (prev.syncQueue || []).filter((item) => (
+        item.id !== conflict.queueItem?.id && !queueItemMatchesReceipt(item, currentReceipt)
+      ));
+      const stillHasFailedQueue = nextQueue.some(isFailedQueueItem);
+      return {
+        ...prev,
+        receipts: prev.receipts.map((receipt) => receipt.id === currentReceipt.id ? {
+          ...receipt,
+          syncStatus: cloudStatus,
+          updatedAt: now,
+        } : receipt),
+        syncQueue: nextQueue,
+        globalSyncStatus: stillHasFailedQueue ? prev.globalSyncStatus : (nextQueue.length ? 'queued' : 'idle'),
+        syncError: stillHasFailedQueue ? prev.syncError : '',
+      };
+    });
+    setStatus('已信任雲端版本，停止重試本機衝突。');
+  }
+
   return (
     <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto history-screen">
       <div className="japanese-sun-decor" />
@@ -282,6 +401,37 @@ export function History({
           </button>
         ))}
       </div>
+      {conflictItems.length > 0 && (
+        <section className="history-conflict-resolver card" aria-label="Offline conflict resolver">
+          <div className="history-conflict-head">
+            <AlertTriangle size={18} aria-hidden="true" />
+            <div>
+              <h2>Offline Conflict Resolver</h2>
+              <p>{conflictItems.length} conflicts need a safe choice</p>
+            </div>
+          </div>
+          <div className="history-conflict-grid">
+            {conflictItems.map((conflict) => {
+              const cat = categoryById(conflict.receipt.category);
+              return (
+                <article key={conflict.receipt.id} className="history-conflict-item">
+                  <span>
+                    <strong>{displayStore(conflict.receipt)}</strong>
+                    <b>{conflict.status}</b>
+                  </span>
+                  <small>{[cat.name, conflict.receipt.date, conflict.receipt.time].filter(Boolean).join(' · ')}</small>
+                  <small>{conflict.detail}</small>
+                  <div className="history-conflict-actions">
+                    <button type="button" onClick={() => onOpen(conflict.receipt)}>Review conflict</button>
+                    <button type="button" onClick={() => handleKeepLocal(conflict)}>Keep local</button>
+                    <button type="button" onClick={() => handleKeepCloud(conflict)}>Keep cloud</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {cleanupSuggestions.length > 0 && (
         <section className="history-cleanup-coach card" aria-label="Receipt cleanup suggestions">
           <div className="history-cleanup-head">
