@@ -26,12 +26,24 @@ type ReceiptCleanupSuggestion = {
   tone: 'warning' | 'danger';
 };
 
+type ReceiptAttachmentSuggestion = {
+  key: 'photo-large' | 'photo-missing' | 'photo-unsynced';
+  title: string;
+  count: number;
+  detail: string;
+  actionLabel: string;
+  receipt: Receipt;
+  tone: 'warning' | 'danger' | 'info';
+};
+
 type ReceiptConflictItem = {
   receipt: Receipt;
   queueItem?: SyncQueueItem;
   status: string;
   detail: string;
 };
+
+const LARGE_PHOTO_BYTES = 600_000;
 
 function historyDateLabel(date: string): string {
   const parsed = new Date(`${date}T00:00:00`);
@@ -46,6 +58,33 @@ function isReceiptPhotoExpected(receipt: Receipt): boolean {
     || source === 'react-ocr-manual'
     || source === 'react-email-image'
     || /OCR|截圖|掃描/i.test(String(receipt.note || ''));
+}
+
+function estimatePhotoBytes(value: unknown): number {
+  const raw = String(value || '').trim().replace(/[\r\n\s]/g, '');
+  if (!raw || /^https?:\/\//i.test(raw)) return 0;
+  const base64 = raw.includes(',') ? raw.split(',').pop() || '' : raw;
+  if (!/^[a-z0-9+/=]+$/i.test(base64)) return 0;
+  const padding = (base64.match(/=+$/)?.[0].length || 0);
+  return Math.max(0, Math.floor(base64.length * 3 / 4) - padding);
+}
+
+function receiptPhotoBytes(receipt: Receipt): number {
+  return Math.max(estimatePhotoBytes(receipt.photoThumb), estimatePhotoBytes(receipt.photoUrl));
+}
+
+function receiptHasLargePhoto(receipt: Receipt): boolean {
+  return receiptPhotoBytes(receipt) > LARGE_PHOTO_BYTES;
+}
+
+function receiptHasLocalPhoto(receipt: Receipt): boolean {
+  return estimatePhotoBytes(receipt.photoThumb) > 0 || (!!receipt.photoUrl && !/^https?:\/\//i.test(String(receipt.photoUrl)));
+}
+
+function receiptPhotoNeedsSync(receipt: Receipt): boolean {
+  if (!receiptHasLocalPhoto(receipt)) return false;
+  if (receipt._photoSyncedToNotion || receipt.notionFileUploadId || /^https?:\/\//i.test(String(receipt.photoUrl || ''))) return false;
+  return receipt.syncStatus !== 'synced' || !receipt.photoUrl;
 }
 
 function receiptHasSyncConflict(receipt: Receipt, state: AppState): boolean {
@@ -105,10 +144,48 @@ function receiptHealthMarkers(
   if (isPendingReceipt(receipt)) markers.push({ key: 'pending', label: 'pending', tone: 'warning' });
   if (receipt.sourceId && sourceIdCounts[receipt.sourceId] > 1) markers.push({ key: 'duplicate', label: 'duplicate', tone: 'danger' });
   if (isReceiptPhotoExpected(receipt) && !photoSrc) markers.push({ key: 'photo-missing', label: 'photo missing', tone: 'warning' });
+  if (receiptHasLargePhoto(receipt)) markers.push({ key: 'photo-large', label: 'photo large', tone: 'warning' });
+  if (receiptPhotoNeedsSync(receipt)) markers.push({ key: 'photo-unsynced', label: 'photo unsynced', tone: 'info' });
   if (receiptHasSyncConflict(receipt, state)) markers.push({ key: 'sync-conflict', label: 'sync conflict', tone: 'danger' });
   if ((receipt.supabaseId || receipt.notionPageId) && !receipt.sourceId) markers.push({ key: 'cloud-only', label: 'cloud-only', tone: 'info' });
   if (!receipt.supabaseId && !receipt.notionPageId) markers.push({ key: 'local-only', label: 'local-only', tone: 'neutral' });
   return markers;
+}
+
+function buildReceiptAttachmentSuggestions(receipts: Receipt[]): ReceiptAttachmentSuggestion[] {
+  const largePhotos = receipts.filter(receiptHasLargePhoto);
+  const missingPhotos = receipts.filter((receipt) => isReceiptPhotoExpected(receipt) && !safePhotoUrl(receipt.photoUrl, receipt.photoThumb));
+  const unsyncedPhotos = receipts.filter(receiptPhotoNeedsSync);
+  const suggestions: Array<ReceiptAttachmentSuggestion | null> = [
+    largePhotos.length ? {
+      key: 'photo-large',
+      title: 'Large photo',
+      count: largePhotos.length,
+      detail: 'Replace this image to auto-compress before travel sync.',
+      actionLabel: 'Compress guide',
+      receipt: largePhotos[0],
+      tone: 'warning' as const,
+    } : null,
+    missingPhotos.length ? {
+      key: 'photo-missing',
+      title: 'Missing photo',
+      count: missingPhotos.length,
+      detail: 'OCR/import expected an attachment but no image is stored.',
+      actionLabel: 'Add photo',
+      receipt: missingPhotos[0],
+      tone: 'danger' as const,
+    } : null,
+    unsyncedPhotos.length ? {
+      key: 'photo-unsynced',
+      title: 'Unsynced photo',
+      count: unsyncedPhotos.length,
+      detail: 'Local image is not yet backed by a cloud-safe attachment.',
+      actionLabel: 'Review sync',
+      receipt: unsyncedPhotos[0],
+      tone: 'info' as const,
+    } : null,
+  ];
+  return suggestions.filter((item): item is ReceiptAttachmentSuggestion => !!item);
 }
 
 function buildReceiptCleanupSuggestions(
@@ -228,6 +305,10 @@ export function History({
     () => buildReceiptCleanupSuggestions(tripReceipts, state, sourceIdCounts, validPersonIds),
     [tripReceipts, state, sourceIdCounts, validPersonIds],
   );
+  const attachmentSuggestions = useMemo(
+    () => buildReceiptAttachmentSuggestions(tripReceipts),
+    [tripReceipts],
+  );
   const conflictItems = useMemo(
     () => buildReceiptConflictItems(tripReceipts, state),
     [tripReceipts, state],
@@ -279,6 +360,15 @@ export function History({
       onConfirmPending(suggestion.receipt);
       return;
     }
+    onOpen(suggestion.receipt);
+  }
+
+  function handleAttachmentSuggestion(suggestion: ReceiptAttachmentSuggestion) {
+    setStatus(suggestion.key === 'photo-large'
+      ? '更換相片時會自動壓縮，建議保留清晰文字但降低容量。'
+      : suggestion.key === 'photo-unsynced'
+        ? '請確認收據後重新同步，避免旅行途中只有本機相片。'
+        : '請加入收據相片，讓 OCR / backup 更完整。');
     onOpen(suggestion.receipt);
   }
 
@@ -429,6 +519,31 @@ export function History({
                 </article>
               );
             })}
+          </div>
+        </section>
+      )}
+      {attachmentSuggestions.length > 0 && (
+        <section className="history-attachment-health card" aria-label="Receipt attachment health">
+          <div className="history-attachment-head">
+            <Camera size={18} aria-hidden="true" />
+            <div>
+              <h2>Attachment Health</h2>
+              <p>{attachmentSuggestions.reduce((sum, item) => sum + item.count, 0)} photo checks need review</p>
+            </div>
+          </div>
+          <div className="history-attachment-grid">
+            {attachmentSuggestions.map((suggestion) => (
+              <article key={suggestion.key} className={`history-attachment-item tone-${suggestion.tone}`}>
+                <span>
+                  <strong>{suggestion.title}</strong>
+                  <b>{suggestion.count}</b>
+                </span>
+                <small>{suggestion.detail}</small>
+                <button type="button" onClick={() => handleAttachmentSuggestion(suggestion)}>
+                  {suggestion.actionLabel}
+                </button>
+              </article>
+            ))}
           </div>
         </section>
       )}

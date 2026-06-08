@@ -495,6 +495,11 @@ export function Scan({
             <strong>{lastDraft ? '可重開' : '待建立'}</strong>
             <small>{lastScanFile ? lastScanFile.name : '未有相片'}</small>
           </div>
+          <div aria-label="Photo compression guidance">
+            <span>Attachment</span>
+            <strong>Auto-compress</strong>
+            <small>480px scan · 800px edit</small>
+          </div>
           <StatusPill tone={scanConfidence.tone}>
             {busy ? 'working' : lastDraftNeedsReview ? 'review' : 'ready'}
           </StatusPill>

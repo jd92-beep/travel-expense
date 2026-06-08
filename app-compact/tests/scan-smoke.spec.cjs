@@ -75,6 +75,20 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.locator('.scan-function-art svg, .scan-function-art img')).toHaveCount(0);
   await expect(page.getByLabel('Scan cockpit')).toContainText('待掃描');
   await expect(page.getByLabel('Scan cockpit')).toContainText('未有相片');
+  await expect(page.getByLabel('Photo compression guidance')).toContainText('Auto-compress');
+  await expect(page.getByLabel('Photo compression guidance')).toContainText('480px scan');
+  const cockpitMetrics = await page.evaluate(() => {
+    const cockpit = document.querySelector('[aria-label="Scan cockpit"]')?.getBoundingClientRect();
+    const compression = document.querySelector('[aria-label="Photo compression guidance"]')?.getBoundingClientRect();
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      cockpitWidth: cockpit?.width || 0,
+      compressionWidth: compression?.width || 0,
+    };
+  });
+  expect(cockpitMetrics.scrollWidth).toBe(390);
+  expect(cockpitMetrics.cockpitWidth).toBeLessThanOrEqual(390);
+  expect(cockpitMetrics.compressionWidth).toBeGreaterThan(120);
   const heroCard = await page.locator('.scan-hero-card').boundingBox();
   const heroButton = await page.locator('.scan-hero-button').boundingBox();
   const galleryButton = await page.locator('.scan-secondary-button').boundingBox();

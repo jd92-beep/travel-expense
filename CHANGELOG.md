@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-09
+
+- Added compact History `Attachment Health` for oversized, missing, and unsynced receipt photos, plus `photo large` and `photo unsynced` row markers. Scan cockpit now explains attachment auto-compression with `480px scan · 800px edit` guidance.
+
 ## 2026-06-08
 
 - Added compact History `Offline Conflict Resolver` for failed local/cloud receipt sync conflicts. It offers `Review conflict`, `Keep local`, and `Keep cloud` actions, sanitizes requeued payloads, and smoke coverage verifies fake provider-token/error payload fields are not rendered.

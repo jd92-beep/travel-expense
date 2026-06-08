@@ -1,13 +1,13 @@
 # Travel Expense App - Agent Handover
 
-Last updated: 2026-06-08 HKT
+Last updated: 2026-06-09 HKT
 
 ## Active Compact Improvement Status
 
 - Independent compact app: `app-compact/`.
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
-- Latest compact app-code proof commit: `b6960cc` (`Add compact offline conflict resolver`).
+- Latest compact app-code proof commit before P7-03 commit: `5870bfe` (`Record compact conflict resolver deploy`).
 - Latest live proof command: `npm run smoke:deploy-live`. Latest proof on 2026-06-08 HKT passed for Vercel deployment `dpl_9hsHC43txPnC8gssmnFPf9dTiAFc`, live URL `https://travel-expense-compact.vercel.app/`, HTTP 200, title `旅費 Compact`, asset hash `1d7ed56019631fb8`, HTML hash `e81d28440a2d5da9`, and alias/deployment content match.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
@@ -90,7 +90,10 @@ Last updated: 2026-06-08 HKT
   - P7-02 security behavior: the resolver intentionally shows only receipt name, category/date/time, operation/status, and safe action labels. It does not render queue `error` strings or unknown provider-token/provider-secret payload fields.
   - Release-gate hardening during P7-02: `smoke:shared-contract` now waits up to 40 seconds for its temporary compact/react Vite servers and reports early server exit output, preventing slow startup from failing the full gate. `final-navigation-smoke` also re-locates the sync-error retry button during click verification so React re-render detach does not cause a false negative.
   - Verification for P7-02: targeted offline-conflict resolver smoke passed, then `npm run smoke:history` (6 passed), `npm run typecheck`, `npm run smoke:final-nav` (8 passed), `npm run smoke:mobile-layout`, `npm run smoke:contact-sheet`, `npm run build`, `npm run security:scan`, standalone `npm run smoke:shared-contract`, and final `npm run smoke:production-gate:full` (259.6s) all passed. Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-08T16-16-54-800Z/mobile-contact-sheet.png`.
-  - Next compact checklist focus: continue P7 one item at a time. Suggested next task is P7-03, receipt-photo compression and attachment health checks.
+  - P7-03 done: Compact History now has an `Attachment Health` panel for receipt photo quality and sync readiness. It detects oversized local images, missing expected OCR/email attachments, and local photos that are not yet backed by cloud-safe attachment state. Receipt rows now add `photo large` and `photo unsynced` markers beside the existing `photo missing` marker.
+  - Scan-side P7-03 change: Scan cockpit now shows visible `Attachment / Auto-compress / 480px scan · 800px edit` guidance, matching the existing compression behavior in `Scan` and `ReceiptEditor` so users understand camera/gallery/manual images are reduced before sync.
+  - Verification for P7-03: targeted attachment-health smoke passed, then `npm run smoke:scan`, `npm run smoke:history` (7 passed), `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:contact-sheet`, `npm run build`, `npm run security:scan`, and final `npm run smoke:production-gate:full` (245.1s) all passed. Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-08T16-34-04-541Z/mobile-contact-sheet.png`.
+  - Next compact checklist focus: continue P7 one item at a time. Suggested next task is P7-04, per-day trip readiness scoring.
 
 ## Active Admin KanBan Status
 

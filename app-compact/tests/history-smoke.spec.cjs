@@ -147,6 +147,51 @@ const conflictReceipts = [
   },
 ];
 
+const attachmentReceipts = [
+  {
+    id: 'photo_large',
+    store: 'Large Photo Bento',
+    total: 1200,
+    date: '2026-04-27',
+    time: '12:10',
+    category: 'food',
+    payment: 'cash',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    source: 'react-ocr-manual',
+    photoThumb: 'data:image/jpeg;base64,' + 'a'.repeat(900_000),
+    syncStatus: 'local',
+    createdAt: 12,
+  },
+  {
+    id: 'photo_missing_attachment',
+    store: 'Missing Attachment Ticket',
+    total: 2200,
+    date: '2026-04-27',
+    category: 'ticket',
+    payment: 'credit',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    source: 'react-email-image',
+    note: '掃描 receipt should have attachment',
+    createdAt: 13,
+  },
+  {
+    id: 'photo_unsynced',
+    store: 'Unsynced Photo Taxi',
+    total: 3300,
+    date: '2026-04-28',
+    category: 'transport',
+    payment: 'cash',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    source: 'react-ocr-manual',
+    photoThumb: 'data:image/jpeg;base64,' + 'b'.repeat(120_000),
+    syncStatus: 'queued',
+    createdAt: 14,
+  },
+];
+
 test('History search, filter, pending, edit, delete, and safe pull', async ({ page }) => {
   let notionRequests = 0;
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/notion/request', async (route) => {
@@ -429,6 +474,52 @@ test('History offline conflict resolver reviews and resolves local/cloud receipt
   const keptCloudReceipt = keepCloudState.receipts.find((receipt) => receipt.id === 'conflict_cloud');
   expect(keptCloudReceipt.syncStatus).toBe('synced');
   expect(keepCloudState.syncQueue.some((item) => item.id === 'queue_conflict_cloud')).toBe(false);
+});
+
+test('History attachment health surfaces large, missing, and unsynced receipt photos without overflow', async ({ page }) => {
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
+  await page.addInitScript((seedReceipts) => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts, autoSync: false }));
+  }, attachmentReceipts);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+
+  const attachment = page.getByLabel('Receipt attachment health');
+  await expect(attachment).toBeVisible();
+  await expect(attachment).toContainText('Attachment Health');
+  await expect(attachment).toContainText('Large photo');
+  await expect(attachment).toContainText('Missing photo');
+  await expect(attachment).toContainText('Unsynced photo');
+  await expect(page.getByLabel('Receipt health markers for Large Photo Bento')).toContainText('photo large');
+  await expect(page.getByLabel('Receipt health markers for Large Photo Bento')).toContainText('photo unsynced');
+  await expect(page.getByLabel('Receipt health markers for Missing Attachment Ticket')).toContainText('photo missing');
+  await expect(page.getByLabel('Receipt health markers for Unsynced Photo Taxi')).toContainText('photo unsynced');
+
+  const metrics = await page.evaluate(() => {
+    const card = document.querySelector('[aria-label="Receipt attachment health"]')?.getBoundingClientRect();
+    const items = Array.from(document.querySelectorAll('.history-attachment-item')).map((node) => node.getBoundingClientRect().width);
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      cardWidth: card?.width || 0,
+      minItemWidth: Math.min(...items),
+    };
+  });
+  expect(metrics.scrollWidth).toBe(390);
+  expect(metrics.cardWidth).toBeLessThanOrEqual(390);
+  expect(metrics.minItemWidth).toBeGreaterThan(120);
+
+  await attachment.getByRole('button', { name: 'Compress guide' }).click();
+  await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Large Photo Bento');
 });
 
 test('History manual pull routes through global sync engine when broker session exists', async ({ page }) => {
