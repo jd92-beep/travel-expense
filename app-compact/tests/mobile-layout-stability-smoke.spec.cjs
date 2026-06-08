@@ -101,6 +101,8 @@ async function assertNoHorizontalOverflow(page) {
       '.timeline-event',
       '.compact-pwa-readiness',
       '.pwa-chip',
+      '.app-floating-dock-mobile',
+      '.tabbar',
       '.bottom-dock',
     ];
     const overflowing = selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)).map((el) => {

@@ -7,6 +7,7 @@ This is the independent compact version of the Travel Expense app.
 - Production URL: `https://travel-expense-compact.vercel.app`
 - Vercel project: `travel-expense-compact`
 - Compact UI system: `DESIGN_SYSTEM.md`
+- Mobile visual QA: `npm run smoke:contact-sheet`
 
 The compact version is copied from the React app baseline but has its own package,
 Vite base path, Vercel project, mobile scroll contract, and centered circular Scan

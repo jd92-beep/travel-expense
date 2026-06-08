@@ -62,5 +62,9 @@ does not report overflow. Avoid `width: 100%` plus side margins.
 - Keep generated assets reviewed and public-safe before committing.
 - Mobile geometry must pass `npm run smoke:mobile-layout` after shared layout
   or tab pattern changes.
+- Major compact UI edits should also run `npm run smoke:contact-sheet`. The
+  script creates a seven-tab 390px mobile contact sheet, checks for horizontal
+  overflow, verifies the bottom dock is visible, and guards the Timeline rail
+  gutter from overlapping itinerary content.
 - Prefer `npm run build` plus a targeted tab smoke before committing visual
   system changes.
