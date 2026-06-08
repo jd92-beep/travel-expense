@@ -2,6 +2,7 @@
 
 ## 2026-06-09
 
+- Added `npm run smoke:broker-vault:doctor` for compact P0-05 readiness. It reports whether ignored broker-vault auth input is present, git-ignored, permission-safe, and unexpired without printing session/token values or calling providers.
 - Added a compact local release-note diff panel for update-ready states. The PWA readiness strip now offers `Release notes`, showing a short local `Now vs previous` summary with no GitHub, changelog, or external release calls.
 - Added compact per-day trip readiness scoring to Dashboard and Timeline. The shared scorer combines itinerary coverage, route freshness, weather freshness/risk, stale booking references, receipt gaps, and cleanup signals into deterministic daily scores with mobile smoke coverage.
 - Added compact History `Attachment Health` for oversized, missing, and unsynced receipt photos, plus `photo large` and `photo unsynced` row markers. Scan cockpit now explains attachment auto-compression with `480px scan · 800px edit` guidance.
