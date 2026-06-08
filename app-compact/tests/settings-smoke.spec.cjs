@@ -407,6 +407,99 @@ test('Settings protects broker URL and does not keep archived trip active', asyn
   await expect(tripSelect).toHaveValue('trip_active_guard');
 });
 
+test('Settings Trip Doctor summarizes compact data quality and opens repair panels', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      budget: 80000,
+      rate: 20,
+      autoSync: true,
+      activeTripId: 'trip_doctor',
+      persons: [
+        { id: 'p_boss', name: 'Boss' },
+        { id: 'p_friend', name: 'Friend' },
+      ],
+      shareRatios: { p_boss: 1 },
+      syncQueue: [
+        { id: 'sync_doctor_1', type: 'receipt', entityId: 'doctor_pending_ocr', op: 'update', status: 'queued', attempts: 0, createdAt: 1, updatedAt: 1 },
+        { id: 'sync_doctor_2', type: 'receipt', entityId: 'doctor_missing_person', op: 'update', status: 'error', attempts: 2, createdAt: 2, updatedAt: 2, lastError: 'network down' },
+      ],
+      trips: [{
+        id: 'trip_doctor',
+        name: 'Doctor Korea Trip',
+        destinationSummary: 'Jeju, Korea',
+        startDate: '2026-07-01',
+        endDate: '2026-07-03',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'KRW'],
+        timezones: ['Asia/Seoul'],
+        version: 1,
+        active: true,
+        itinerary: [{ date: '2026-07-01', day: 1, region: 'Jeju', spots: [{ time: '10:00', name: 'Airport', type: 'transport' }] }],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      receipts: [
+        {
+          id: 'doctor_pending_ocr',
+          store: '⏳ Pending OCR',
+          total: 1000,
+          date: '2026-07-01',
+          category: 'food',
+          payment: 'cash',
+          personId: 'p_boss',
+          splitMode: 'shared',
+          tripId: 'trip_doctor',
+          syncStatus: 'pending',
+          createdAt: 1,
+        },
+        {
+          id: 'doctor_missing_person',
+          store: 'Missing Person Cafe',
+          total: 2000,
+          date: '2026-07-01',
+          category: 'food',
+          payment: 'cash',
+          splitMode: 'shared',
+          tripId: 'trip_doctor',
+          syncStatus: 'error',
+          createdAt: 2,
+        },
+      ],
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expectSettingsReady(page);
+
+  const doctor = page.getByLabel('Compact Trip Doctor');
+  await expect(doctor).toBeVisible();
+  await expect(doctor).toContainText('Compact Trip Doctor');
+  await expect(doctor).toContainText('Data quality');
+  await expect(doctor).toContainText('2 issues');
+  await expect(doctor).toContainText('Pending OCR');
+  await expect(doctor).toContainText('Missing payer');
+  await expect(doctor).toContainText('Sync queue');
+  await expect(doctor).toContainText('2 pending');
+  await expect(doctor).toContainText('1 failed');
+  await expect(doctor).toContainText('Trip completeness');
+  await expect(doctor).toContainText('1/3 days');
+  await expect(doctor).toContainText('Backup safety');
+  await expect(doctor).toContainText('Current-trip only');
+
+  await doctor.getByRole('button', { name: /Review records/ }).click();
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await page.getByRole('button', { name: /設定/ }).click();
+  await expectSettingsReady(page);
+
+  await page.getByLabel('Compact Trip Doctor').getByRole('button', { name: /Data safety/ }).click();
+  await expect(page.locator('[aria-controls="settings-data-panel"]')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#settings-data-panel')).toBeVisible();
+});
+
 test('Settings can connect a broker session without leaking the password into app state', async ({ page }) => {
   let unlockCount = 0;
 

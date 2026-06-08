@@ -164,6 +164,76 @@ function sanitizeImportedTrips(input: unknown): TripProfile[] | undefined {
   return trips.length ? trips : undefined;
 }
 
+function dateMs(ymd: string | undefined): number | null {
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+  const value = new Date(`${ymd}T00:00:00Z`).getTime();
+  return Number.isFinite(value) ? value : null;
+}
+
+function inclusiveTripDayCount(trip: TripProfile): number {
+  const start = dateMs(trip.startDate);
+  const end = dateMs(trip.endDate);
+  if (start === null || end === null || end < start) return Math.max(1, trip.itinerary?.length || 1);
+  return Math.max(1, Math.round((end - start) / 86_400_000) + 1);
+}
+
+function compactTripDoctor(
+  state: AppState,
+  trip: TripProfile,
+  persons: Person[],
+  syncState: SyncEngineState | undefined,
+  cloudSyncAvailable: boolean,
+  notionMirrorReady: boolean,
+  storageScope: string,
+) {
+  const tripReceipts = scopedReceiptsForTrip(state, trip);
+  const validPersonIds = new Set(persons.map((person) => person.id));
+  const pendingOcr = tripReceipts.filter(isPendingReceipt).length;
+  const missingPayer = tripReceipts.filter((receipt) => !receipt.personId || !validPersonIds.has(receipt.personId)).length;
+  const dataIssues = pendingOcr + missingPayer;
+  const queue = state.syncQueue || [];
+  const pendingQueue = Math.max(syncState?.pendingCount || 0, queue.filter((item) => item.status !== 'synced').length);
+  const failedQueue = queue.filter((item) => item.status === 'error' || item.status === 'failed').length + (syncState?.status === 'error' ? 1 : 0);
+  const expectedDays = inclusiveTripDayCount(trip);
+  const plannedDates = new Set((trip.itinerary || []).map((day) => day.date).filter(Boolean));
+  const plannedDays = Math.min(expectedDays, Math.max(0, plannedDates.size || (trip.itinerary?.length || 0)));
+  const tripGaps = Math.max(0, expectedDays - plannedDays);
+  const storageLabel = cloudSyncAvailable ? (notionMirrorReady ? 'Supabase + Notion' : 'Supabase only') : storageScope;
+  const issueTotal = dataIssues + pendingQueue + failedQueue + tripGaps;
+  return {
+    tone: issueTotal > 0 ? 'warning' : 'ok',
+    statusLabel: issueTotal > 0 ? `${issueTotal} checks` : 'Ready',
+    items: [
+      {
+        key: 'data',
+        title: 'Data quality',
+        value: dataIssues ? `${dataIssues} issues` : 'Clean',
+        detail: dataIssues
+          ? [`${pendingOcr} Pending OCR`, `${missingPayer} Missing payer`].filter((line) => !line.startsWith('0 ')).join(' · ')
+          : `${tripReceipts.length} receipts checked`,
+      },
+      {
+        key: 'sync',
+        title: 'Sync queue',
+        value: pendingQueue ? `${pendingQueue} pending` : 'Clear',
+        detail: failedQueue ? `${failedQueue} failed · ${storageLabel}` : storageLabel,
+      },
+      {
+        key: 'trip',
+        title: 'Trip completeness',
+        value: `${plannedDays}/${expectedDays} days`,
+        detail: tripGaps ? `${tripGaps} day plans missing` : 'Itinerary days ready',
+      },
+      {
+        key: 'backup',
+        title: 'Backup safety',
+        value: 'Current-trip only',
+        detail: 'Secrets, cloud IDs, sync queues stripped',
+      },
+    ],
+  };
+}
+
 export function Settings({
   state,
   setState,
@@ -295,6 +365,7 @@ export function Settings({
   const notionActionDisabled = !!busy || publicSupabaseOnly;
   const directTokenEnabled = true;
   const buildLabel = `${import.meta.env.MODE} · React ${reactVersion}`;
+  const tripDoctor = compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope);
 
   // Local state for Trip Manager
   const [managerTripId, setManagerTripId] = useState(currentTrip.id);
@@ -1191,6 +1262,38 @@ export function Settings({
             </button>
           </div>
         </div>
+      </GlassCard>
+
+      <GlassCard className={`settings-trip-doctor settings-trip-doctor--${tripDoctor.tone}`}>
+        <section role="region" aria-label="Compact Trip Doctor">
+          <div className="settings-trip-doctor-head">
+            <span><ShieldCheck size={16} /> Compact Trip Doctor</span>
+            <strong>{tripDoctor.statusLabel}</strong>
+          </div>
+          <div className="settings-trip-doctor-grid">
+            {tripDoctor.items.map((item) => (
+              <div className="settings-trip-doctor-item" key={item.key}>
+                <span>{item.title}</span>
+                <strong>{item.value}</strong>
+                <small>{item.detail}</small>
+              </div>
+            ))}
+          </div>
+          <div className="settings-trip-doctor-actions">
+            <button type="button" onClick={() => changeTab?.('history')}>
+              <Copy size={14} />
+              <span>Review records</span>
+            </button>
+            <button type="button" onClick={() => openSettingsPanel('settings-data')}>
+              <ShieldCheck size={14} />
+              <span>Data safety</span>
+            </button>
+            <button type="button" onClick={() => openSettingsPanel('settings-notion')}>
+              <Cloud size={14} />
+              <span>Sync settings</span>
+            </button>
+          </div>
+        </section>
       </GlassCard>
 
       <AccordionCard id="settings-trip" eyebrow="Trip Manager" title="旅程管理器 🏯🌸" meta={<span className="pill">v{managedTrip.version}</span>}>

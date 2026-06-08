@@ -7,7 +7,7 @@ Last updated: 2026-06-08 HKT
 - Independent compact app: `app-compact/`.
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
-- Latest compact app-code proof commit: `4fb57ea` (`Add compact broker AI assistant`).
+- Latest compact app-code proof commit before this pass: `267d110` (`Add compact travel day widgets`).
 - Latest live proof command: `npm run smoke:deploy-live`. It should be rerun after each compact push/deploy for the exact current deployment ID, live HTTP 200 proof, compact title, asset hash, HTML hash, and alias/deployment content match.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
@@ -72,7 +72,9 @@ Last updated: 2026-06-08 HKT
   - P5-04 done: Compact now has shared `buildTravelDayWidgets()` logic powering Dashboard and Timeline with the same day-of-travel widget set: transit countdown, receipt reminder, weather alert, and next booking note. It uses current itinerary, current-trip receipts, local/cached weather signals, and existing booking refs only; it does not add schema fields or call external APIs.
   - Dashboard now shows the travel-day widget panel with a Timeline action. Timeline shows the same widgets as a compact horizontal strip below the command card so the command header stays at or below the existing 130px height and the rail/content spacing stays clear on mobile.
   - Verification for P5-04: targeted Dashboard/Timeline RED smokes first failed on missing `Travel day widgets`, then passed after implementation. Additional checks passed: `npm run smoke:dashboard` (6 passed), `npm run smoke:timeline` (8 passed), `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:contact-sheet`, `npm run build`, `npm run security:scan`, and `npm run smoke:production-gate:full` (233.9s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-08T09-21-36-673Z/mobile-contact-sheet.png`.
-  - Next compact checklist focus: add the next P5 item only after Boss approves or after a fresh compact roadmap review, because P5-01 through P5-04 are now implemented.
+  - P6-01 done: Compact Settings now has a top-level `Compact Trip Doctor` panel that summarizes data quality, sync queue, trip completeness, and backup safety without adding another accordion. It uses existing receipt/person/sync/trip itinerary state only and adds quick repair actions for `Review records`, `Data safety`, and `Sync settings`.
+  - Verification for P6-01: targeted Trip Doctor smoke first failed before implementation, then passed. Additional checks passed: `npm run smoke:settings` (4 passed), `npm run typecheck`, `npm run smoke:mobile-layout`, `npm run smoke:contact-sheet`, `npm run build`, `npm run security:scan`, and `npm run smoke:production-gate:full` (242.3s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-08T09-40-24-032Z/mobile-contact-sheet.png`.
+  - Next compact checklist focus: continue P6 one item at a time. Suggested next task is P6-02, a backup restore dry-run preview before applying imported JSON.
 
 ## Active Admin KanBan Status
 
