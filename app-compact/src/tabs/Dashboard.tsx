@@ -51,7 +51,7 @@ import { activeTrip, createTripProfile, scopedReceiptsForTrip } from '../domain/
 import type { AppState, ItinerarySpot, Receipt, SyncQueueItem, TabId } from '../lib/types';
 import { brokerAiJson, redactedError } from '../lib/credentialBroker';
 import { DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
-import { buildTravelDayWidgets } from '../lib/travelDay';
+import { buildDayReadinessScores, buildTravelDayWidgets } from '../lib/travelDay';
 
 function displayDateRange(startDate: string, endDate: string) {
   const fmtDate = (date: string) => {
@@ -386,6 +386,7 @@ export function Dashboard({
     ? `先刷新 ${coachWeatherRegion} 天氣，戶外/交通多要預雨風。`
     : `先睇 ${coachWeatherRegion} 天氣 freshness，再出門。`;
   const travelDayWidgets = buildTravelDayWidgets(state, itinerary);
+  const dayReadinessScores = buildDayReadinessScores(state, itinerary);
 
   const handleBrokerAssistant = async () => {
     setAssistantStatus('loading');
@@ -728,6 +729,22 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
               <small>{widget.detail}</small>
             </article>
           ))}
+        </div>
+        <div className="day-readiness-strip" role="region" aria-label="Day readiness scores">
+          <div className="day-readiness-title">
+            <span>Day readiness</span>
+            <b>{dayReadinessScores[0]?.score ?? 0}%</b>
+          </div>
+          <div className="day-readiness-list">
+            {dayReadinessScores.map((item) => (
+              <article className={`day-readiness-card tone-${item.tone}`} key={`${item.date || 'empty'}-${item.day}`}>
+                <span>Day {item.day || '-'}</span>
+                <strong>{item.score}%</strong>
+                <em>{item.label}</em>
+                <small>{item.detail}</small>
+              </article>
+            ))}
+          </div>
         </div>
         </div>
       </GlassCard>

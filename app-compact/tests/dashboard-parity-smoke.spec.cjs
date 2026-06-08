@@ -393,6 +393,87 @@ test('Dashboard travel-day widgets warn when a booking reference is stale', asyn
   await expect(widgets).toContainText('KTX-5512');
 });
 
+test('Dashboard shows deterministic per-day readiness score from itinerary, weather, booking, and cleanup signals', async ({ page }) => {
+  const fixed = new Date('2026-05-09T09:30:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    const day = {
+      date: '2026-05-09',
+      day: 2,
+      region: 'Kyoto Readiness Day',
+      city: 'Kyoto',
+      country: 'Japan',
+      timezone: 'Asia/Tokyo',
+      spots: [
+        { time: '08:00', name: 'Hotel Breakfast', type: 'food' },
+        { time: '09:00', name: 'Temple Gate', type: 'ticket', note: 'outdoor shrine walk' },
+        { time: '11:00', name: 'Kyoto Rail Transfer', type: 'transport', note: 'JR platform 4' },
+      ],
+    };
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      schemaVersion: 4,
+      lastTab: 'dashboard',
+      budget: 10000,
+      rate: 20,
+      activeTripId: 'readiness_trip',
+      tripName: 'Readiness Test',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-10' },
+      customItinerary: [day],
+      trips: [{
+        id: 'readiness_trip',
+        name: 'Readiness Test',
+        destinationSummary: 'Kyoto Japan',
+        startDate: '2026-05-08',
+        endDate: '2026-05-10',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: true,
+        intelligence: { countryCode: 'JP', primaryCurrency: 'JPY', themeKey: 'japan_washi', weatherRegion: 'Kyoto', weatherPreference: 'rain' },
+        itinerary: [day],
+        createdAt: fixedNow - 60 * 60 * 1000,
+        updatedAt: fixedNow - 14 * 24 * 60 * 60 * 1000,
+      }],
+      receipts: [
+        { id: 'breakfast_receipt', store: 'Hotel Breakfast', total: 1200, date: '2026-05-09', time: '08:10', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', sourceId: 'dup-src', createdAt: 1 },
+        { id: 'pending_photo_receipt', store: '⏳ Temple Gate OCR', total: 1800, date: '2026-05-09', time: '09:10', category: 'ticket', payment: 'credit', splitMode: 'shared', source: 'react-ocr', note: 'OCR imported receipt', sourceId: 'dup-src', createdAt: 2 },
+        { id: 'rail_booking_old', store: 'Kyoto Rail Transfer', total: 2200, date: '2026-05-09', time: '11:00', category: 'transport', payment: 'credit', bookingRef: 'KTX-5512', personId: 'p_boss', splitMode: 'shared', createdAt: fixedNow - 45 * 24 * 60 * 60 * 1000, updatedAt: fixedNow - 45 * 24 * 60 * 60 * 1000 },
+      ],
+      weatherCache: {
+        kyoto_stale: {
+          fetchedAt: fixedNow - 8 * 60 * 60 * 1000,
+          slots: [{ hour: 12, rain: 88, precipMm: 9, windSpeed: 16, code: 61 }],
+        },
+      },
+    }));
+  }, fixed);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  const readiness = page.getByLabel('Day readiness scores');
+  await expect(readiness).toBeVisible();
+  await expect(readiness).toContainText('Day readiness');
+  await expect(readiness).toContainText('Day 2');
+  await expect(readiness).toContainText('20%');
+  await expect(readiness).toContainText('Risk');
+  await expect(readiness).toContainText('Route stale');
+  await expect(readiness).toContainText('Weather stale');
+  await expect(readiness).toContainText('Booking stale');
+  await expect(readiness).toContainText('Cleanup');
+});
+
 async function seedBrokerAssistantDashboard(page) {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;

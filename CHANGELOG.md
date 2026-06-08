@@ -2,6 +2,7 @@
 
 ## 2026-06-09
 
+- Added compact per-day trip readiness scoring to Dashboard and Timeline. The shared scorer combines itinerary coverage, route freshness, weather freshness/risk, stale booking references, receipt gaps, and cleanup signals into deterministic daily scores with mobile smoke coverage.
 - Added compact History `Attachment Health` for oversized, missing, and unsynced receipt photos, plus `photo large` and `photo unsynced` row markers. Scan cockpit now explains attachment auto-compression with `480px scan · 800px edit` guidance.
 
 ## 2026-06-08

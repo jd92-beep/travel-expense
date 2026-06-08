@@ -1,8 +1,9 @@
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { displayStore, getScheduleSpots } from './domain';
+import { displayStore, getScheduleSpots, isPendingReceipt, safePhotoUrl } from './domain';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from './types';
 
 export type TravelDayWidgetKind = 'transit' | 'receipt' | 'weather' | 'booking';
+export type DayReadinessTone = 'ready' | 'watch' | 'review' | 'risk';
 
 export interface TravelDayWidget {
   kind: TravelDayWidgetKind;
@@ -11,12 +12,24 @@ export interface TravelDayWidget {
   detail: string;
 }
 
+export interface DayReadinessScore {
+  date: string;
+  day: number;
+  region: string;
+  score: number;
+  tone: DayReadinessTone;
+  label: string;
+  detail: string;
+  issues: string[];
+}
+
 type ScheduleSpot = ItinerarySpot & { _spotIdx: number; receiptId?: string };
 
 const ROUTE_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 const WEATHER_STALE_MS = 2 * 60 * 60 * 1000;
 const BOOKING_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_REASONABLE_TIMESTAMP = new Date('2020-01-01T00:00:00Z').getTime();
+const LARGE_PHOTO_BYTES = 600_000;
 
 export function buildTravelDayWidgets(state: AppState, itinerary: ItineraryDay[], nowMs = Date.now()): TravelDayWidget[] {
   const day = resolveTravelDay(itinerary, nowMs);
@@ -75,12 +88,91 @@ export function buildTravelDayWidgets(state: AppState, itinerary: ItineraryDay[]
   ];
 }
 
+export function buildDayReadinessScores(state: AppState, itinerary: ItineraryDay[], nowMs = Date.now()): DayReadinessScore[] {
+  if (!itinerary.length) {
+    return [{
+      date: '',
+      day: 0,
+      region: 'No itinerary',
+      score: 40,
+      tone: 'review',
+      label: 'Plan needed',
+      detail: '匯入行程後顯示每日準備度',
+      issues: ['No itinerary'],
+    }];
+  }
+
+  const trip = activeTrip(state);
+  const receipts = scopedReceiptsForTrip(state, trip);
+  const sourceIdCounts = countReceiptSourceIds(receipts);
+  const routeFreshness = routeStaleSignal(state, nowMs);
+  const weather = bestWeatherSignal((state as AppState & { weatherCache?: unknown }).weatherCache);
+
+  return itinerary.map((day) => {
+    const spots = getScheduleSpots(state, day);
+    const dayReceipts = receipts.filter((receipt) => receipt.date === day.date);
+    const issues: string[] = [];
+    let penalty = 0;
+
+    const addIssue = (label: string, value: number) => {
+      if (!issues.includes(label)) issues.push(label);
+      penalty += value;
+    };
+
+    if (!spots.length) addIssue('No itinerary', 30);
+    if (routeFreshness) addIssue('Route stale', 10);
+
+    if (isReasonableTimestamp(weather.fetchedAt)) {
+      const ageMs = nowMs - weather.fetchedAt;
+      if (ageMs > WEATHER_STALE_MS) addIssue('Weather stale', 15);
+      else if (weather.rain >= 50 || weather.windSpeed >= 30) addIssue('Weather risk', 5);
+    } else {
+      addIssue('Weather missing', 10);
+    }
+
+    if (dayReceipts.some((receipt) => isBookingStale(receipt, nowMs))) addIssue('Booking stale', 15);
+
+    const nowForDay = minutesForReadinessDay(day, nowMs);
+    if (nowForDay > 0) {
+      const receiptsUntilNow = dayReceipts.filter((receipt) => minutesForTime(receipt.time) <= nowForDay);
+      const missingReceiptCount = spots
+        .filter((spot) => minutesForTime(spot.time) <= nowForDay)
+        .filter((spot) => !hasMatchingReceipt(spot, receiptsUntilNow))
+        .length;
+      if (missingReceiptCount) addIssue('Receipt gap', Math.min(16, missingReceiptCount * 8));
+    }
+
+    const cleanupPenalty = dayCleanupPenalty(dayReceipts, sourceIdCounts);
+    if (cleanupPenalty) addIssue('Cleanup', cleanupPenalty);
+
+    const score = Math.max(20, Math.min(100, 100 - penalty));
+    const tone = readinessTone(score);
+    const label = readinessLabel(tone);
+    return {
+      date: day.date,
+      day: day.day || 0,
+      region: day.city || day.region || day.country || 'Travel day',
+      score,
+      tone,
+      label,
+      detail: issues.length ? issues.slice(0, 4).join(' · ') : 'All key signals ready',
+      issues: issues.length ? issues : ['Ready'],
+    };
+  });
+}
+
 function routeStaleSignal(state: AppState, nowMs: number): { value: string; detail: string } | null {
   const updatedAt = Number(activeTrip(state).updatedAt);
   if (!isReasonableTimestamp(updatedAt)) return null;
   const ageMs = nowMs - updatedAt;
   if (ageMs <= ROUTE_STALE_MS) return null;
   return { value: 'Route stale', detail: `${formatFreshnessAge(ageMs)} old` };
+}
+
+function isBookingStale(receipt: Receipt, nowMs: number): boolean {
+  if (!receipt.bookingRef) return false;
+  const updatedAt = Number(receipt.updatedAt);
+  return isReasonableTimestamp(updatedAt) && nowMs - updatedAt > BOOKING_STALE_MS;
 }
 
 function resolveTravelDay(itinerary: ItineraryDay[], nowMs: number): ItineraryDay | null {
@@ -92,6 +184,79 @@ function resolveTravelDay(itinerary: ItineraryDay[], nowMs: number): ItineraryDa
   if (!reference) return first;
   if (reference.date < first.date) return first;
   return itinerary.find((day) => day.date >= reference.date) || itinerary[itinerary.length - 1];
+}
+
+function countReceiptSourceIds(receipts: Receipt[]): Record<string, number> {
+  return receipts.reduce<Record<string, number>>((counts, receipt) => {
+    const sourceId = String(receipt.sourceId || '').trim();
+    if (!sourceId) return counts;
+    counts[sourceId] = (counts[sourceId] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function dayCleanupPenalty(receipts: Receipt[], sourceIdCounts: Record<string, number>): number {
+  const issueCount = receipts.reduce((count, receipt) => {
+    let next = count;
+    if (isPendingReceipt(receipt)) next += 1;
+    if (receipt.sourceId && sourceIdCounts[receipt.sourceId] > 1) next += 1;
+    if (isReceiptPhotoExpected(receipt) && !safePhotoUrl(receipt.photoUrl, receipt.photoThumb)) next += 1;
+    if (receiptHasLargePhoto(receipt)) next += 1;
+    if (receiptPhotoNeedsSync(receipt)) next += 1;
+    if (receipt.syncStatus === 'error' || receipt.syncStatus === 'failed') next += 1;
+    if (!receipt.personId) next += 1;
+    return next;
+  }, 0);
+  return Math.min(40, issueCount * 10);
+}
+
+function isReceiptPhotoExpected(receipt: Receipt): boolean {
+  const source = String(receipt.source || '');
+  return source === 'react-ocr'
+    || source === 'react-ocr-manual'
+    || source === 'react-email-image'
+    || /OCR|截圖|掃描/i.test(String(receipt.note || ''));
+}
+
+function estimatePhotoBytes(value: unknown): number {
+  const raw = String(value || '').trim().replace(/[\r\n\s]/g, '');
+  if (!raw || /^https?:\/\//i.test(raw)) return 0;
+  const base64 = raw.includes(',') ? raw.split(',').pop() || '' : raw;
+  if (!/^[a-z0-9+/=]+$/i.test(base64)) return 0;
+  const padding = base64.match(/=+$/)?.[0].length || 0;
+  return Math.max(0, Math.floor(base64.length * 3 / 4) - padding);
+}
+
+function receiptHasLargePhoto(receipt: Receipt): boolean {
+  return Math.max(estimatePhotoBytes(receipt.photoThumb), estimatePhotoBytes(receipt.photoUrl)) > LARGE_PHOTO_BYTES;
+}
+
+function receiptPhotoNeedsSync(receipt: Receipt): boolean {
+  const hasLocalPhoto = estimatePhotoBytes(receipt.photoThumb) > 0 || (!!receipt.photoUrl && !/^https?:\/\//i.test(String(receipt.photoUrl)));
+  if (!hasLocalPhoto) return false;
+  if (receipt._photoSyncedToNotion || receipt.notionFileUploadId || /^https?:\/\//i.test(String(receipt.photoUrl || ''))) return false;
+  return receipt.syncStatus !== 'synced' || !receipt.photoUrl;
+}
+
+function minutesForReadinessDay(day: ItineraryDay, nowMs: number): number {
+  const current = datePartsForZone(nowMs, normalizeTravelTimezone(day.timezone));
+  if (!current) return 0;
+  if (current.date === day.date) return current.minutes;
+  return current.date > day.date ? 24 * 60 : 0;
+}
+
+function readinessTone(score: number): DayReadinessTone {
+  if (score >= 85) return 'ready';
+  if (score >= 65) return 'watch';
+  if (score >= 45) return 'review';
+  return 'risk';
+}
+
+function readinessLabel(tone: DayReadinessTone): string {
+  if (tone === 'ready') return 'Ready';
+  if (tone === 'watch') return 'Watch';
+  if (tone === 'review') return 'Review';
+  return 'Risk';
 }
 
 function hasMatchingReceipt(spot: ScheduleSpot, receipts: Receipt[]): boolean {
