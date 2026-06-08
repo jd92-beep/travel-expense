@@ -34,6 +34,7 @@
     "smoke:broker-vault:guard": "node scripts/broker-vault-verify.mjs --expect-missing-session",
     "smoke:production-gate": "node scripts/compact-production-gate.mjs",
     "smoke:production-gate:full": "node scripts/compact-production-gate.mjs --full",
+    "smoke:deploy-live": "node scripts/compact-live-verify.mjs",
     "smoke:mobile-layout": "playwright test tests/mobile-layout-stability-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:contact-sheet": "node scripts/mobile-contact-sheet.mjs",
     "smoke:final-nav": "playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",

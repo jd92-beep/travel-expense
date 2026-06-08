@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added `npm run smoke:deploy-live` for compact post-deploy verification. It compares local `main`/`origin/main`, Vercel production deployment readiness and aliases, live HTTP status, title, root node, asset hash, and alias-vs-deployment HTML/assets.
 - Added `npm run smoke:a11y-touch` for compact and raised key compact actions to a 44px touch floor with visible focus rings. The smoke covers accessible button names, bottom dock targets, Dashboard CTAs, Scan action cards, Settings quick controls, reduced-motion readiness, and keyboard focus movement.
 - Added `npm run smoke:broker-vault` and `npm run smoke:broker-vault:guard` for compact. The authenticated workflow reads only ignored local session input or explicit local env, redacts provider output, and can verify Notion, Kimi, Google/Gemma, Mimo, and WeatherAPI broker-vault paths without committing or printing secrets; the guard mode proves missing-session fail-closed behavior for normal release gates.
 - Added `npm run smoke:production-gate` and `npm run smoke:production-gate:full` for the compact app. The core gate starts/reuses the compact dev server, keeps a restricted no-secret child environment, then runs typecheck, final navigation smoke, mobile layout smoke, accessibility/touch smoke, contact sheet visual QA, live broker preflight, broker-vault fail-closed guard, security scan, and production build.

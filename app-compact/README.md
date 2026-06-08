@@ -13,6 +13,7 @@ This is the independent compact version of the Travel Expense app.
 - Broker vault guard: `npm run smoke:broker-vault:guard`
 - Authenticated broker vault proof: `npm run smoke:broker-vault`
 - Core release gate: `npm run smoke:production-gate`
+- Post-deploy live proof: `npm run smoke:deploy-live`
 
 The compact version is an independent React + Vite app with its own package,
 Vite base path, Vercel project, mobile scroll contract, and centered circular Scan
