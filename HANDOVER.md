@@ -7,8 +7,8 @@ Last updated: 2026-06-08 HKT
 - Independent compact app: `app-compact/`.
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
-- Latest compact app-code proof commit before P6-04: `aceb125` (`Add compact receipt cleanup coach`).
-- Latest live proof command: `npm run smoke:deploy-live`. It should be rerun after each compact push/deploy for the exact current deployment ID, live HTTP 200 proof, compact title, asset hash, HTML hash, and alias/deployment content match.
+- Latest compact app-code proof commit: `b6960cc` (`Add compact offline conflict resolver`).
+- Latest live proof command: `npm run smoke:deploy-live`. Latest proof on 2026-06-08 HKT passed for Vercel deployment `dpl_9hsHC43txPnC8gssmnFPf9dTiAFc`, live URL `https://travel-expense-compact.vercel.app/`, HTTP 200, title `旅費 Compact`, asset hash `1d7ed56019631fb8`, HTML hash `e81d28440a2d5da9`, and alias/deployment content match.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
   - P0-02 done: Dashboard budget usage now always includes all current-trip receipts, while `statsIncludeTransportLodging` only affects today/daily/chart-style filtered views.
