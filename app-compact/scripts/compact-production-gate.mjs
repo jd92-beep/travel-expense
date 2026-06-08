@@ -10,6 +10,7 @@ const baseSteps = [
   ['mobile layout smoke', ['npm', 'run', 'smoke:mobile-layout']],
   ['contact sheet smoke', ['npm', 'run', 'smoke:contact-sheet']],
   ['live broker preflight', ['npm', 'run', 'smoke:broker-live']],
+  ['broker vault fail-closed guard', ['npm', 'run', 'smoke:broker-vault:guard']],
   ['security scan', ['npm', 'run', 'security:scan']],
   ['production build', ['npm', 'run', 'build']],
 ];

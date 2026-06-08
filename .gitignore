@@ -12,6 +12,8 @@ app-react/dist/
 secrets.local.*
 credential-seed*.json
 credential-vault*.json
+.broker-vault-session*.json
+app-compact/.broker-vault-session*.json
 workers/**/.dev.vars*
 
 # Claude Code internal

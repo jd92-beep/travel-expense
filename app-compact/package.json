@@ -29,6 +29,8 @@
     "smoke:security": "playwright test tests/security-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:supabase-notion-mirror": "playwright test tests/supabase-notion-mirror-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:broker-live": "node scripts/broker-live-preflight.mjs",
+    "smoke:broker-vault": "node scripts/broker-vault-verify.mjs",
+    "smoke:broker-vault:guard": "node scripts/broker-vault-verify.mjs --expect-missing-session",
     "smoke:production-gate": "node scripts/compact-production-gate.mjs",
     "smoke:production-gate:full": "node scripts/compact-production-gate.mjs --full",
     "smoke:mobile-layout": "playwright test tests/mobile-layout-stability-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
