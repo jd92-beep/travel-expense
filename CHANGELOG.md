@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added compact first-run personalization for trip style, preferred trip currency, home city, and weather preference in the Welcome Guide and Settings; new public Supabase sessions now use their scoped storage immediately, preventing fallback to legacy demo/Nagoya local state.
 - Added compact Dashboard `Broker AI Assistant`, routed through the Credential Broker Kimi JSON path with visible `kimi/kimi-code` primary-model, broker quota, and no-fallback-on-429 policy; dashboard smoke now covers success and quota hard-stop behavior without calling Google/Mimo fallbacks.
 - Added `npm run smoke:deploy-live` for compact post-deploy verification. It compares local `main`/`origin/main`, Vercel production deployment readiness and aliases, live HTTP status, title, root node, asset hash, and alias-vs-deployment HTML/assets.
 - Added `npm run smoke:a11y-touch` for compact and raised key compact actions to a 44px touch floor with visible focus rings. The smoke covers accessible button names, bottom dock targets, Dashboard CTAs, Scan action cards, Settings quick controls, reduced-motion readiness, and keyboard focus movement.

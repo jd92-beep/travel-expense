@@ -183,6 +183,20 @@ function validThemeKey(value: unknown): TripThemeKey | undefined {
   return TRIP_THEME_KEYS.includes(key as TripThemeKey) ? key as TripThemeKey : undefined;
 }
 
+function validTripStyle(value: unknown): TripIntelligence['tripStyle'] | undefined {
+  const key = String(value || '').trim();
+  return ['balanced', 'food', 'shopping', 'culture', 'nature', 'family', 'business'].includes(key)
+    ? key as TripIntelligence['tripStyle']
+    : undefined;
+}
+
+function validWeatherPreference(value: unknown): TripIntelligence['weatherPreference'] | undefined {
+  const key = String(value || '').trim();
+  return ['balanced', 'rain', 'heat', 'cold', 'wind', 'uv'].includes(key)
+    ? key as TripIntelligence['weatherPreference']
+    : undefined;
+}
+
 export function resolveTripContext(destination = '', currency = 'JPY', countryCode = ''): Omit<DestinationContext, 'pattern'> {
   const haystack = `${destination} ${currency} ${countryCode}`.toLowerCase();
   const code = String(countryCode || '').trim().toUpperCase();
@@ -229,6 +243,9 @@ export function normalizeTripIntelligence(
     locale: String(raw.locale || refined.locale || 'zh-HK'),
     timezone: normalizeZone(raw.timezone || timezone || refined.timezone) || refined.timezone,
     weatherRegion: String(raw.weatherRegion || aliases.weather_region || refined.weatherRegion || destinationSummary || refined.countryName || ''),
+    tripStyle: validTripStyle(raw.tripStyle || aliases.trip_style) || 'balanced',
+    homeCity: String(raw.homeCity || aliases.home_city || '').trim(),
+    weatherPreference: validWeatherPreference(raw.weatherPreference || aliases.weather_preference) || 'balanced',
     confidence: raw.confidence === 'high' || raw.confidence === 'medium' || raw.confidence === 'low' ? raw.confidence : 'medium',
     source: raw.source === 'ai' || raw.source === 'manual' || raw.source === 'heuristic' ? raw.source : 'heuristic',
     updatedAt: Number(raw.updatedAt) || Date.now(),

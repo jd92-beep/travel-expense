@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { parseTripParagraph, testGoogleBackupConnection, testKimiConnection } from '../lib/ai';
-import { activeTrip, createTripProfile, migrateAppState, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import { activeTrip, createTripProfile, migrateAppState, normalizeTripIntelligence, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { AI_MODELS, DEFAULT_KIMI_PRIMARY_MODEL_ID, ITINERARY } from '../lib/constants';
 import {
   brokerHealth,
@@ -46,6 +46,23 @@ import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
 const MAX_SAFE_AMOUNT = 1_000_000_000;
+const TRIP_STYLE_OPTIONS = [
+  { value: 'balanced', label: 'Balanced · 平衡' },
+  { value: 'food', label: 'Food · 美食' },
+  { value: 'shopping', label: 'Shopping · 購物' },
+  { value: 'culture', label: 'Culture · 文化' },
+  { value: 'nature', label: 'Nature · 自然' },
+  { value: 'family', label: 'Family · 家庭' },
+  { value: 'business', label: 'Business · 商務' },
+] as const;
+const WEATHER_PREFERENCE_OPTIONS = [
+  { value: 'balanced', label: 'Balanced · 全部提醒' },
+  { value: 'rain', label: 'Rain · 雨天優先' },
+  { value: 'heat', label: 'Heat · 體感炎熱' },
+  { value: 'cold', label: 'Cold · 低溫保暖' },
+  { value: 'wind', label: 'Wind · 大風交通' },
+  { value: 'uv', label: 'UV · 防曬' },
+] as const;
 
 function clampFinite(value: unknown, fallback: number, min = 0, max = MAX_SAFE_AMOUNT): number {
   const n = Number(value);
@@ -290,6 +307,9 @@ export function Settings({
   const [mgrBudget, setMgrBudget] = useState(String(managedTrip.budget || 0));
   const [mgrCurrency, setMgrCurrency] = useState(nonHomeCurrencyForTrip(managedTrip));
   const [mgrArchived, setMgrArchived] = useState(!!managedTrip.archived);
+  const [mgrTripStyle, setMgrTripStyle] = useState(managedTrip.intelligence?.tripStyle || 'balanced');
+  const [mgrHomeCity, setMgrHomeCity] = useState(managedTrip.intelligence?.homeCity || 'Hong Kong');
+  const [mgrWeatherPreference, setMgrWeatherPreference] = useState(managedTrip.intelligence?.weatherPreference || 'balanced');
   const managedTripVersionKey = `${managedTrip.id}:${managedTrip.updatedAt || 0}:${managedTrip.version || 0}`;
   const [newManagedTripName, setNewManagedTripName] = useState('');
   const [newManagedTripDest, setNewManagedTripDest] = useState('');
@@ -310,6 +330,9 @@ export function Settings({
     setMgrBudget(String(target.budget || 0));
     setMgrCurrency(nonHomeCurrencyForTrip(target));
     setMgrArchived(!!target.archived);
+    setMgrTripStyle(target.intelligence?.tripStyle || 'balanced');
+    setMgrHomeCity(target.intelligence?.homeCity || 'Hong Kong');
+    setMgrWeatherPreference(target.intelligence?.weatherPreference || 'balanced');
   };
 
   // Keep managed trip in sync when active trip changes
@@ -328,6 +351,9 @@ export function Settings({
       setMgrBudget(String(target.budget || 0));
       setMgrCurrency(nonHomeCurrencyForTrip(target));
       setMgrArchived(!!target.archived);
+      setMgrTripStyle(target.intelligence?.tripStyle || 'balanced');
+      setMgrHomeCity(target.intelligence?.homeCity || 'Hong Kong');
+      setMgrWeatherPreference(target.intelligence?.weatherPreference || 'balanced');
     }
   }, [managerTripId, managedTripVersionKey]);
 
@@ -772,6 +798,20 @@ export function Settings({
     }
 
     const nextBudget = clampFinite(mgrBudget, 0);
+    const nextIntelligence = normalizeTripIntelligence(
+      {
+        ...target.intelligence,
+        primaryCurrency: mgrCurrency,
+        tripStyle: mgrTripStyle,
+        homeCity: mgrHomeCity.trim() || 'Hong Kong',
+        weatherPreference: mgrWeatherPreference,
+        source: 'manual',
+        updatedAt: Date.now(),
+      },
+      mgrDest.trim() || target.destinationSummary || '',
+      mgrCurrency,
+      target.intelligence?.timezone || target.timezones?.[0],
+    );
     const nextTrip: TripProfile = {
       ...target,
       name: mgrName.trim() || target.name,
@@ -780,6 +820,7 @@ export function Settings({
       endDate: mgrEnd || target.endDate,
       budget: nextBudget,
       currencies: Array.from(new Set(['HKD', mgrCurrency])),
+      intelligence: nextIntelligence,
       archived: mgrArchived,
       version: target.version + 1,
       updatedAt: Date.now(),
@@ -1273,6 +1314,34 @@ export function Settings({
               <option value="archived">📁 已封存 (Archived)</option>
             </select>
           </label>
+        </div>
+
+        <div className="compact-personalization-panel" aria-label="旅程個人化設定" style={{ marginTop: '1rem', padding: '14px', borderRadius: '16px', border: '1px solid rgba(204,41,94,.16)', background: 'rgba(255,255,255,.08)' }}>
+          <div className="section-head">
+            <h2>旅程個人化</h2>
+            <span className="pill">Compact</span>
+          </div>
+          <p className="muted">旅行風格、出發城市同天氣偏好會跟住呢個旅程保存，用嚟改善 Dashboard / Weather / Timeline 嘅提示。</p>
+          <div className="form-grid">
+            <label>旅行風格
+              <select aria-label="設定旅行風格" value={mgrTripStyle} onChange={(e) => setMgrTripStyle(e.target.value as typeof mgrTripStyle)}>
+                {TRIP_STYLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label>出發城市
+              <input aria-label="設定 Home city" value={mgrHomeCity} onChange={(e) => setMgrHomeCity(e.target.value)} placeholder="Hong Kong" />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>天氣偏好
+              <select aria-label="設定天氣偏好" value={mgrWeatherPreference} onChange={(e) => setMgrWeatherPreference(e.target.value as typeof mgrWeatherPreference)}>
+                {WEATHER_PREFERENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label>目前 weather region
+              <input readOnly value={managedTrip.intelligence?.weatherRegion || managedTrip.destinationSummary || 'Global'} />
+            </label>
+          </div>
         </div>
 
         <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>

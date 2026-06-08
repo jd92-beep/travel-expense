@@ -24,6 +24,9 @@ export interface TripIntelligence {
   locale?: string;
   timezone?: string;
   weatherRegion?: string;
+  tripStyle?: 'balanced' | 'food' | 'shopping' | 'culture' | 'nature' | 'family' | 'business';
+  homeCity?: string;
+  weatherPreference?: 'balanced' | 'rain' | 'heat' | 'cold' | 'wind' | 'uv';
   confidence?: 'low' | 'medium' | 'high';
   source?: 'ai' | 'heuristic' | 'manual';
   updatedAt?: number;

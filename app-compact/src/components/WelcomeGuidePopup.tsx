@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Compass, Sparkles, Calendar, DollarSign, MapPin, Loader2, ArrowRight, Info, Check } from 'lucide-react';
 import { parseTripParagraph } from '../lib/ai';
-import { createTripProfile } from '../domain/trip/normalize';
+import { createTripProfile, normalizeTripIntelligence } from '../domain/trip/normalize';
 import type { AppState, Person, TripProfile } from '../lib/types';
 
 export type WelcomeGuideResult = {
@@ -18,6 +18,23 @@ type WelcomeGuidePopupProps = {
 
 const GUIDE_COLORS = ['#CC2929', '#FF91A4', '#1E4D6B', '#2D6E48', '#D4A843', '#7C5CFF', '#0EA5E9', '#F97316'];
 const GUIDE_EMOJIS = ['👤', '🧳', '🗺️', '🎒', '🚆', '🍱', '📷', '🏨'];
+const TRIP_STYLE_OPTIONS = [
+  { value: 'balanced', label: 'Balanced · 平衡' },
+  { value: 'food', label: 'Food · 美食' },
+  { value: 'shopping', label: 'Shopping · 購物' },
+  { value: 'culture', label: 'Culture · 文化' },
+  { value: 'nature', label: 'Nature · 自然' },
+  { value: 'family', label: 'Family · 家庭' },
+  { value: 'business', label: 'Business · 商務' },
+] as const;
+const WEATHER_PREFERENCE_OPTIONS = [
+  { value: 'balanced', label: 'Balanced · 全部提醒' },
+  { value: 'rain', label: 'Rain · 雨天優先' },
+  { value: 'heat', label: 'Heat · 體感炎熱' },
+  { value: 'cold', label: 'Cold · 低溫保暖' },
+  { value: 'wind', label: 'Wind · 大風交通' },
+  { value: 'uv', label: 'UV · 防曬' },
+] as const;
 
 function makeGuidePersons(count: number, current: Array<{ name: string; ratio: string }> = []) {
   return Array.from({ length: Math.max(1, Math.min(8, count)) }, (_, idx) => ({
@@ -48,6 +65,9 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   const [currency, setCurrency] = useState('JPY');
   const [partySize, setPartySize] = useState('2');
   const [guidePersons, setGuidePersons] = useState(() => makeGuidePersons(2));
+  const [tripStyle, setTripStyle] = useState<(typeof TRIP_STYLE_OPTIONS)[number]['value']>('balanced');
+  const [homeCity, setHomeCity] = useState('Hong Kong');
+  const [weatherPreference, setWeatherPreference] = useState<(typeof WEATHER_PREFERENCE_OPTIONS)[number]['value']>('balanced');
 
   // AI Analyzed Result Preview State
   const [aiDraft, setAiDraft] = useState<TripProfile | null>(null);
@@ -104,10 +124,35 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
     };
   }
 
+  function personalizeTrip(trip: TripProfile): TripProfile {
+    const now = Date.now();
+    const intelligence = normalizeTripIntelligence(
+      {
+        ...trip.intelligence,
+        primaryCurrency: currency,
+        tripStyle,
+        homeCity: homeCity.trim() || 'Hong Kong',
+        weatherPreference,
+        source: 'manual',
+        updatedAt: now,
+      },
+      trip.destinationSummary,
+      currency,
+      trip.intelligence?.timezone || trip.timezones?.[0],
+    );
+    return {
+      ...trip,
+      homeCurrency: 'HKD',
+      currencies: Array.from(new Set(['HKD', currency, ...(trip.currencies || [])])),
+      intelligence,
+      updatedAt: now,
+    };
+  }
+
   // Create trip based on current active tab
   function handleCreate() {
     if (activeTab === 'ai' && aiDraft) {
-      onSave(buildGuideResult(aiDraft));
+      onSave(buildGuideResult(personalizeTrip(aiDraft)));
     } else {
       // Manual creation
       const trip = createTripProfile({
@@ -117,8 +162,15 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
         endDate,
         budget: Number(budget) || 0,
         currency: currency,
+        intelligence: {
+          primaryCurrency: currency,
+          tripStyle,
+          homeCity: homeCity.trim() || 'Hong Kong',
+          weatherPreference,
+          source: 'manual',
+        },
       });
-      onSave(buildGuideResult(trip));
+      onSave(buildGuideResult(personalizeTrip(trip)));
     }
   }
 
@@ -241,6 +293,67 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                 </label>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div aria-label="First-run personalization" style={{ display: 'grid', gap: '12px', padding: '14px', background: 'rgba(204, 41, 41, 0.045)', border: '1px solid rgba(204, 41, 41, 0.12)', borderRadius: '16px', marginBottom: '18px' }}>
+          <div>
+            <strong style={{ display: 'block', fontSize: '13px', color: '#A83030', fontWeight: 900 }}>個人化旅行偏好</strong>
+            <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 700 }}>用嚟設定旅程風格、預設天氣提醒同出發城市；不會保存任何 API key。</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+              旅行風格
+              <select
+                aria-label="旅行風格"
+                value={tripStyle}
+                onChange={(e) => setTripStyle(e.target.value as typeof tripStyle)}
+                style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+              >
+                {TRIP_STYLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+              出發城市
+              <input
+                aria-label="Home city"
+                value={homeCity}
+                onChange={(e) => setHomeCity(e.target.value)}
+                type="text"
+                placeholder="Hong Kong"
+                style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+              />
+            </label>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+              天氣偏好
+              <select
+                aria-label="天氣偏好"
+                value={weatherPreference}
+                onChange={(e) => setWeatherPreference(e.target.value as typeof weatherPreference)}
+                style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+              >
+                {WEATHER_PREFERENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+              當地貨幣
+              <select
+                aria-label="偏好貨幣"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+              >
+                <option value="JPY">JPY</option>
+                <option value="KRW">KRW</option>
+                <option value="TWD">TWD</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="CNY">CNY</option>
+              </select>
+            </label>
           </div>
         </div>
 

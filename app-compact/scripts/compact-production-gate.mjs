@@ -24,6 +24,7 @@ const fullSteps = [
   ['weather smoke', ['npm', 'run', 'smoke:weather']],
   ['stats smoke', ['npm', 'run', 'smoke:stats']],
   ['settings smoke', ['npm', 'run', 'smoke:settings']],
+  ['welcome guide smoke', ['npm', 'run', 'smoke:welcome-guide']],
   ['auth broker smoke', ['npm', 'run', 'smoke:auth-broker']],
   ['ai routing smoke', ['npm', 'run', 'smoke:ai-routing']],
   ['trip intelligence smoke', ['npm', 'run', 'smoke:trip-intelligence']],

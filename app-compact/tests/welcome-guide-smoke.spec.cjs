@@ -43,12 +43,17 @@ test('New Supabase account guide captures trip members and split ratios', async 
   await expect(page.getByLabel('人數')).toBeVisible();
   await expect(page.getByLabel('你嘅顯示名稱')).toBeVisible();
   await expect(page.getByLabel('旅伴 2 名稱')).toBeVisible();
+  await expect(page.getByLabel('First-run personalization')).toBeVisible();
 
   await page.getByLabel('人數').fill('3');
   await expect(page.getByLabel('旅伴 3 名稱')).toBeVisible();
   await page.getByLabel('你嘅顯示名稱').fill('User 1');
   await page.getByLabel('旅伴 2 名稱').fill('May');
   await page.getByLabel('旅伴 3 名稱').fill('Sam');
+  await page.getByLabel('旅行風格').selectOption('food');
+  await page.getByLabel('Home city').fill('Hong Kong');
+  await page.getByLabel('天氣偏好').selectOption('rain');
+  await page.getByLabel('偏好貨幣').selectOption('KRW');
 
   const ratioInputs = page.locator('.welcome-guide-modal input[type="number"]');
   await ratioInputs.nth(1).fill('2');
@@ -75,6 +80,29 @@ test('New Supabase account guide captures trip members and split ratios', async 
       p_trip_2: 1,
       p_trip_3: 0.5,
     },
-    trips: [expect.objectContaining({ name: 'Guide Smoke Trip' })],
+    tripCurrency: 'KRW',
+    trips: [expect.objectContaining({
+      name: 'Guide Smoke Trip',
+      currencies: expect.arrayContaining(['HKD', 'KRW']),
+      intelligence: expect.objectContaining({
+        primaryCurrency: 'KRW',
+        tripStyle: 'food',
+        homeCity: 'Hong Kong',
+        weatherPreference: 'rain',
+        source: 'manual',
+      }),
+    })],
   });
+
+  const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), scopedStorageKey);
+  expect(stored.trips.map((trip) => trip.id)).not.toContain('trip_2026_04_nagoya');
+  expect(stored.trips.map((trip) => trip.id)).not.toContain('trip_default');
+  expect(stored.receipts || []).toHaveLength(0);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.getByRole('button', { name: /旅程管理器/ }).click();
+  await expect(page.getByLabel('旅程個人化設定')).toBeVisible();
+  await expect(page.getByLabel('設定旅行風格')).toHaveValue('food');
+  await expect(page.getByLabel('設定 Home city')).toHaveValue('Hong Kong');
+  await expect(page.getByLabel('設定天氣偏好')).toHaveValue('rain');
 });

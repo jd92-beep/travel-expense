@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { ErrorBoundary } from './app/ErrorBoundary';
 import { ReceiptEditor } from './components/ReceiptEditor';
 import { Shell } from './components/Shell';
@@ -52,21 +53,24 @@ function fetchBootCurrencySnapshot(): Promise<CurrencySnapshot> {
   return bootCurrencyPromise;
 }
 
+function storedSupabaseSession(): Session | null {
+  try {
+    const raw = localStorage.getItem('travel-expense:supabase-auth:v1');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.user?.id && parsed?.access_token ? parsed as Session : null;
+  } catch {
+    return null;
+  }
+}
+
 export function App() {
   const supabaseAuth = useSupabaseAuth();
-  const hasLocalSupabaseSession = () => {
-    try {
-      const stored = localStorage.getItem('travel-expense:supabase-auth:v1');
-      if (!stored) return false;
-      const parsed = JSON.parse(stored);
-      return !!parsed?.access_token;
-    } catch {
-      return false;
-    }
-  };
-  const isCloudSyncActive = hasSupabaseSession(supabaseAuth.session) || hasLocalSupabaseSession();
-  const userEmail = supabaseAuth.session?.user?.email || null;
-  const storageScope = hasSupabaseSession(supabaseAuth.session) ? `supabase:${supabaseAuth.session.user.id}` : 'local';
+  const localSupabaseSession = storedSupabaseSession();
+  const effectiveSupabaseSession = supabaseAuth.session || localSupabaseSession;
+  const isCloudSyncActive = hasSupabaseSession(effectiveSupabaseSession);
+  const userEmail = effectiveSupabaseSession?.user?.email || null;
+  const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';
   const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope } = useAppState(isCloudSyncActive, storageScope, userEmail);
 
   const [skippedGuide, setSkippedGuide] = useState(false);
@@ -78,7 +82,8 @@ export function App() {
       : { trip: result, persons: state.persons, shareRatios: state.shareRatios };
     const { trip, persons, shareRatios } = guide;
     try {
-      const syncedTrip = await upsertSupabaseTrip(supabaseAuth.session!, state, trip);
+      if (!supabaseAuth.session) throw new Error('Supabase session unavailable');
+      const syncedTrip = await upsertSupabaseTrip(supabaseAuth.session, state, trip);
       setState((prev) => ({
         ...prev,
         trips: [syncedTrip],
@@ -128,7 +133,7 @@ export function App() {
   };
 
   const showGuide =
-    hasSupabaseSession(supabaseAuth.session) &&
+    hasSupabaseSession(effectiveSupabaseSession) &&
     !isBoss(userEmail) &&
     (state.trips || []).length === 0 &&
     !isHydratingScope &&
@@ -146,7 +151,7 @@ export function App() {
   receiptCountRef.current = state.receipts.length;
   const safeTab = safeTabId(tab);
   const clearSupabaseDeviceData = async () => {
-    const scope = hasSupabaseSession(supabaseAuth.session) ? `supabase:${supabaseAuth.session.user.id}` : storageScope;
+    const scope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : storageScope;
     clearStoredState(scope);
     await clearIndexedState(scope);
     clearCredentialSession();
