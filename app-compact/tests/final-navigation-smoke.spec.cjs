@@ -185,6 +185,13 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
     reducedMotion: 'reduce',
   });
   const page = await context.newPage();
+  const releaseNoteRequests = [];
+  page.on('request', (request) => {
+    const url = request.url();
+    if (/github|changelog|release-notes|releases/i.test(url) && !url.startsWith('http://localhost:8903/')) {
+      releaseNoteRequests.push(url);
+    }
+  });
   await page.route('**/secrets.local.js', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/javascript',
@@ -239,6 +246,16 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
 
   await page.evaluate(() => navigator.serviceWorker?.dispatchEvent(new Event('controllerchange')));
   await expect(readiness).toContainText('Update · ready');
+  await expect(readiness.getByRole('button', { name: /Release notes/ })).toBeVisible();
+  await readiness.getByRole('button', { name: /Release notes/ }).click();
+  const releaseNotes = page.getByLabel('Compact release notes');
+  await expect(releaseNotes).toBeVisible();
+  await expect(releaseNotes).toContainText('Compact release notes');
+  await expect(releaseNotes).toContainText('Now vs previous');
+  await expect(releaseNotes).toContainText('Day readiness scores');
+  await expect(releaseNotes).toContainText('Attachment Health');
+  await expect(releaseNotes).toContainText('No external calls');
+  expect(releaseNoteRequests, releaseNoteRequests.join('\n')).toHaveLength(0);
 
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));

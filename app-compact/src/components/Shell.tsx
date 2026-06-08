@@ -36,6 +36,14 @@ const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: s
   settings: { title: 'Secure Controls', mobileTitle: '設定控制中心', subtitle: 'Secure Controls', status: '系統狀態' },
 };
 
+const COMPACT_RELEASE_NOTE_ID = 'compact-2026-06-09-p7';
+const COMPACT_RELEASE_NOTES = [
+  { title: 'Day readiness scores', detail: 'Dashboard / Timeline show daily readiness from itinerary, weather, bookings, receipts, and cleanup signals.' },
+  { title: 'Attachment Health', detail: 'History highlights large, missing, and unsynced receipt photos before travel sync.' },
+  { title: 'Offline conflict resolver', detail: 'History can review failed local/cloud receipt conflicts without exposing provider payloads.' },
+];
+const COMPACT_RELEASE_NOTES_SEEN_KEY = 'travel-expense-compact:release-notes-seen';
+
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice?: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
@@ -81,6 +89,7 @@ export function Shell({
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
   const [installReady, setInstallReady] = useState(false);
+  const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
   const [stableMobileEffects, setStableMobileEffects] = useState(shouldDisableHeavyEffects);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
   const raf = useRef<number | null>(null);
@@ -135,7 +144,14 @@ export function Shell({
   useEffect(() => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
-    const onControllerChange = () => setUpdateReady(true);
+    const onControllerChange = () => {
+      setUpdateReady(true);
+      try {
+        setReleaseNotesOpen(localStorage.getItem(COMPACT_RELEASE_NOTES_SEEN_KEY) !== COMPACT_RELEASE_NOTE_ID);
+      } catch {
+        setReleaseNotesOpen(true);
+      }
+    };
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       installPromptRef.current = event as BeforeInstallPromptEvent;
@@ -163,6 +179,16 @@ export function Shell({
       installPromptRef.current = null;
       setInstallReady(false);
     }
+  };
+
+  const handleReleaseNotesToggle = () => setReleaseNotesOpen(true);
+  const handleReleaseNotesDismiss = () => {
+    try {
+      localStorage.setItem(COMPACT_RELEASE_NOTES_SEEN_KEY, COMPACT_RELEASE_NOTE_ID);
+    } catch {
+      // Local release notes must stay non-blocking if storage is unavailable.
+    }
+    setReleaseNotesOpen(false);
   };
 
   const cacheTime = Math.max(syncState?.lastSyncedAt || 0, Number(state?.settingsPulledAt || 0));
@@ -631,6 +657,12 @@ export function Shell({
           Update · {updateReady ? 'ready' : 'current'}
           {updateReady && <button type="button" onClick={() => location.reload()}>Reload</button>}
         </span>
+        {updateReady && (
+          <button className="pwa-chip release-notes" type="button" onClick={handleReleaseNotesToggle}>
+            <Bell size={13} />
+            Release notes
+          </button>
+        )}
         {installReady && (
           <button className="pwa-chip install" type="button" onClick={handleInstallClick}>
             <Smartphone size={13} />
@@ -642,6 +674,26 @@ export function Shell({
           Motion · {motionLabel}
         </span>
       </section>
+      {updateReady && releaseNotesOpen && (
+        <section className="compact-release-notes" aria-label="Compact release notes">
+          <div className="compact-release-notes-head">
+            <div>
+              <span>Compact release notes</span>
+              <strong>Now vs previous</strong>
+            </div>
+            <button type="button" onClick={handleReleaseNotesDismiss}>Done</button>
+          </div>
+          <div className="compact-release-note-list">
+            {COMPACT_RELEASE_NOTES.map((note) => (
+              <article key={note.title}>
+                <b>{note.title}</b>
+                <small>{note.detail}</small>
+              </article>
+            ))}
+          </div>
+          <p>No external calls · local summary only</p>
+        </section>
+      )}
       <main className="content">{children}</main>
       <WindmillTransition activeKey={active} />
 

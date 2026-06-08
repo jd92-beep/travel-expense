@@ -5816,6 +5816,105 @@ body {
   color: #fff;
 }
 
+.compact-pwa-readiness .pwa-chip.release-notes {
+  border-color: rgba(24, 57, 92, .18);
+  background: rgba(239, 247, 255, .92);
+  color: #18395C;
+}
+
+.compact-release-notes {
+  width: min(100%, 1500px);
+  display: grid;
+  gap: 8px;
+  margin: -4px auto 12px;
+  padding: 10px 12px;
+  border: var(--compact-card-border, 1px solid rgba(128, 99, 63, .16));
+  border-radius: var(--compact-radius-card, 16px);
+  background:
+    linear-gradient(135deg, rgba(255,253,248,.92), rgba(239,247,255,.78)),
+    rgba(255,255,255,.76);
+  color: #2A2119;
+  box-shadow: var(--compact-card-shadow, 0 12px 28px rgba(45, 54, 72, .08));
+  position: relative;
+  z-index: 17;
+}
+
+.compact-release-notes-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.compact-release-notes-head div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.compact-release-notes-head span {
+  color: #6d563c;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.compact-release-notes-head strong {
+  color: #18395C;
+  font-size: 15px;
+  line-height: 1.08;
+  font-weight: 950;
+}
+
+.compact-release-notes-head button {
+  min-height: 30px;
+  border: 1px solid rgba(24,57,92,.18);
+  border-radius: var(--compact-radius-chip, 999px);
+  padding: 0 10px;
+  background: #18395C;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.compact-release-note-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.compact-release-note-list article {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid rgba(116,88,53,.12);
+  border-radius: 12px;
+  background: rgba(255,255,255,.68);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.82);
+}
+
+.compact-release-note-list b {
+  color: #101820;
+  font-size: 11px;
+  line-height: 1.12;
+  font-weight: 950;
+}
+
+.compact-release-note-list small,
+.compact-release-notes p {
+  color: #5d5041;
+  font-size: 9.5px;
+  line-height: 1.2;
+  font-weight: 750;
+}
+
+.compact-release-notes p {
+  margin: 0;
+}
+
 @media (max-width: 767px) {
   .compact-pwa-readiness {
     width: auto;
@@ -5839,6 +5938,22 @@ body {
 
   .compact-pwa-readiness .pwa-chip button {
     display: none;
+  }
+
+  .compact-release-notes {
+    width: auto;
+    max-width: calc(100% - (var(--compact-gutter-mobile, 12px) * 2));
+    margin: -2px var(--compact-gutter-mobile, 12px) 10px;
+    padding: 9px;
+  }
+
+  .compact-release-note-list {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .compact-release-note-list article {
+    padding: 7px 8px;
   }
 }
 
