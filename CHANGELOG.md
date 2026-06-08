@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added compact History receipt health markers for pending, duplicate, photo-missing, sync-conflict, cloud-only, and local-only states.
 - Upgraded compact Scan with a one-hand cockpit panel for OCR confidence/status, batch progress, and last draft/photo recovery.
 - Added compact Batch Confirm recovery controls for partial email screenshot batches, including complete-only selection and smoke coverage.
 - Added `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`, a compact-only prioritized roadmap for weakness fixes and future upgrades.

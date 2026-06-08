@@ -39,6 +39,67 @@ const receipts = [
     splitMode: 'shared',
     createdAt: 3,
   },
+  {
+    id: 'm7_photo_missing',
+    store: 'M7 Photo Missing',
+    total: 444,
+    date: '2026-04-22',
+    category: 'food',
+    payment: 'cash',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    source: 'react-ocr-manual',
+    createdAt: 4,
+  },
+  {
+    id: 'm7_duplicate_a',
+    sourceId: 'm7_duplicate_source',
+    store: 'M7 Duplicate A',
+    total: 555,
+    date: '2026-04-23',
+    category: 'shopping',
+    payment: 'credit',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    createdAt: 5,
+  },
+  {
+    id: 'm7_duplicate_b',
+    sourceId: 'm7_duplicate_source',
+    store: 'M7 Duplicate B',
+    total: 556,
+    date: '2026-04-23',
+    category: 'shopping',
+    payment: 'credit',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    createdAt: 6,
+  },
+  {
+    id: 'm7_sync_failed',
+    sourceId: 'm7_sync_failed_source',
+    store: 'M7 Sync Failed',
+    total: 666,
+    date: '2026-04-24',
+    category: 'ticket',
+    payment: 'cash',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    syncStatus: 'failed',
+    createdAt: 7,
+  },
+  {
+    id: 'm7_cloud_only',
+    supabaseId: '77777777-7777-4777-8777-777777777777',
+    store: 'M7 Cloud Only',
+    total: 777,
+    date: '2026-04-24',
+    category: 'other',
+    payment: 'cash',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    createdAt: 8,
+  },
 ];
 
 test('History search, filter, pending, edit, delete, and safe pull', async ({ page }) => {
@@ -82,6 +143,13 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   const refreshButton = mobileHistoryHeader.getByRole('button', { name: '重新同步' });
   await expect(refreshButton).toBeVisible();
   await expect(refreshButton).not.toContainText(/Pull Cloud/i);
+  await expect(page.getByLabel('Receipt health markers for M7 Coffee')).toContainText('local-only');
+  await expect(page.getByLabel('Receipt health markers for M7 Photo Missing')).toContainText('photo missing');
+  await expect(page.getByLabel('Receipt health markers for M7 Duplicate A')).toContainText('duplicate');
+  await expect(page.getByLabel('Receipt health markers for M7 Duplicate B')).toContainText('duplicate');
+  await expect(page.getByLabel('Receipt health markers for M7 Sync Failed')).toContainText('sync conflict');
+  await expect(page.getByLabel('Receipt health markers for M7 Cloud Only')).toContainText('cloud-only');
+  await expect(page.getByLabel('Receipt health markers for M7 Pending')).toContainText('pending');
   const commandMetrics = await page.evaluate(() => {
     const card = document.querySelector('[aria-label="紀錄中心 header"]')?.getBoundingClientRect();
     const actions = document.querySelector('.compact-mobile-action-history')?.getBoundingClientRect();

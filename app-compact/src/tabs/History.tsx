@@ -10,11 +10,54 @@ import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 
+type ReceiptHealthMarker = {
+  key: string;
+  label: string;
+  tone: 'warning' | 'danger' | 'info' | 'ok' | 'neutral';
+};
+
 function historyDateLabel(date: string): string {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
   const weekday = ['日', '一', '二', '三', '四', '五', '六'][parsed.getDay()];
   return `${parsed.getFullYear()}年${parsed.getMonth() + 1}月${parsed.getDate()}日（${weekday}）`;
+}
+
+function isReceiptPhotoExpected(receipt: Receipt): boolean {
+  const source = String(receipt.source || '');
+  return source === 'react-ocr'
+    || source === 'react-ocr-manual'
+    || source === 'react-email-image'
+    || /OCR|截圖|掃描/i.test(String(receipt.note || ''));
+}
+
+function receiptHasSyncConflict(receipt: Receipt, state: AppState): boolean {
+  if (receipt.syncStatus === 'error' || receipt.syncStatus === 'failed') return true;
+  return (state.syncQueue || []).some((item) => (
+    (item.status === 'error' || item.status === 'failed')
+    && (
+      item.entityId === receipt.id
+      || (!!receipt.sourceId && item.payload?.sourceId === receipt.sourceId)
+      || (!!receipt.supabaseId && item.payload?.supabaseId === receipt.supabaseId)
+      || (!!receipt.notionPageId && item.payload?.notionPageId === receipt.notionPageId)
+    )
+  ));
+}
+
+function receiptHealthMarkers(
+  receipt: Receipt,
+  state: AppState,
+  sourceIdCounts: Record<string, number>,
+  photoSrc?: string,
+): ReceiptHealthMarker[] {
+  const markers: ReceiptHealthMarker[] = [];
+  if (isPendingReceipt(receipt)) markers.push({ key: 'pending', label: 'pending', tone: 'warning' });
+  if (receipt.sourceId && sourceIdCounts[receipt.sourceId] > 1) markers.push({ key: 'duplicate', label: 'duplicate', tone: 'danger' });
+  if (isReceiptPhotoExpected(receipt) && !photoSrc) markers.push({ key: 'photo-missing', label: 'photo missing', tone: 'warning' });
+  if (receiptHasSyncConflict(receipt, state)) markers.push({ key: 'sync-conflict', label: 'sync conflict', tone: 'danger' });
+  if ((receipt.supabaseId || receipt.notionPageId) && !receipt.sourceId) markers.push({ key: 'cloud-only', label: 'cloud-only', tone: 'info' });
+  if (!receipt.supabaseId && !receipt.notionPageId) markers.push({ key: 'local-only', label: 'local-only', tone: 'neutral' });
+  return markers;
 }
 
 export function History({
@@ -51,9 +94,14 @@ export function History({
 
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
+  const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip), [state.receipts, trip.id]);
+  const sourceIdCounts = useMemo(() => tripReceipts.reduce<Record<string, number>>((acc, receipt) => {
+    if (receipt.sourceId) acc[receipt.sourceId] = (acc[receipt.sourceId] || 0) + 1;
+    return acc;
+  }, {}), [tripReceipts]);
   const receipts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return scopedReceiptsForTrip(state, trip)
+    return tripReceipts
       .filter((r) => category === 'all' || r.category === category)
       .filter((r) => !q || [r.store, r.note, r.itemsText, r.region, r.bookingRef, r.address].some((v) => String(v || '').toLowerCase().includes(q)))
       .sort((a, b) => {
@@ -66,12 +114,12 @@ export function History({
         const timeB = b.time || '00:00';
         return timeB.localeCompare(timeA);
       });
-  }, [state.receipts, query, category, trip.id]);
+  }, [tripReceipts, query, category]);
   const groups = receipts.reduce<Record<string, Receipt[]>>((acc, r) => {
     (acc[r.date] ||= []).push(r);
     return acc;
   }, {});
-  const pending = scopedReceiptsForTrip(state, trip).filter((r) => r.store?.startsWith('⏳ '));
+  const pending = tripReceipts.filter((r) => r.store?.startsWith('⏳ '));
   const people = getPersons(state);
   const categoryChips = [
     { id: 'all' as const, name: '全部', color: '#cf2626' },
@@ -189,6 +237,7 @@ export function History({
               const cat = categoryById(r.category);
               const person = people.find((p) => p.id === r.personId) || people[0];
               const photoSrc = safePhotoUrl(r.photoUrl, r.photoThumb);
+              const healthMarkers = receiptHealthMarkers(r, state, sourceIdCounts, photoSrc);
               return (
                 <div
                   key={r.id}
@@ -205,6 +254,13 @@ export function History({
                       {displayStore(r)}
                     </strong>
                     <small>{[cat.name, r.date.slice(5).replace('-', '/'), r.region || r.regionSnapshot, person?.name].filter(Boolean).join(' · ')}</small>
+                    {healthMarkers.length > 0 && (
+                      <span className="history-health-markers" aria-label={`Receipt health markers for ${displayStore(r)}`}>
+                        {healthMarkers.map((marker) => (
+                          <i key={marker.key} className={`history-health-marker tone-${marker.tone}`}>{marker.label}</i>
+                        ))}
+                      </span>
+                    )}
                   </span>
                   <span className="history-photo-slot" aria-hidden={!photoSrc}>
                     {photoSrc ? (

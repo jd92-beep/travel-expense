@@ -8955,6 +8955,57 @@ textarea,
     font-weight: 900;
   }
 
+  .app-shell--history .history-health-markers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+    min-width: 0;
+  }
+
+  .app-shell--history .history-health-marker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 15px;
+    max-width: 100%;
+    padding: 2px 5px;
+    border: 1px solid rgba(76, 63, 48, .13);
+    border-radius: 999px;
+    background: rgba(255,255,255,.72);
+    color: #4c463f;
+    font-size: 8.5px;
+    font-style: normal;
+    font-weight: 900;
+    line-height: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-shell--history .history-health-marker.tone-warning {
+    background: #fff4d5;
+    color: #855a0d;
+    border-color: rgba(193, 135, 26, .22);
+  }
+
+  .app-shell--history .history-health-marker.tone-danger {
+    background: #ffe8e8;
+    color: #9d2424;
+    border-color: rgba(192, 59, 59, .22);
+  }
+
+  .app-shell--history .history-health-marker.tone-info {
+    background: #e8f1ff;
+    color: #204f82;
+    border-color: rgba(69, 114, 169, .2);
+  }
+
+  .app-shell--history .history-health-marker.tone-ok {
+    background: #e8f7ed;
+    color: #2d6e48;
+    border-color: rgba(67, 135, 88, .2);
+  }
+
   .app-shell--history .history-photo-slot {
     display: grid;
     place-items: center;
