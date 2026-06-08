@@ -7,6 +7,9 @@ Last updated: 2026-06-08 HKT
 - Independent compact app: `app-compact/`.
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
+- Latest compact app-code proof commit: `4fb57ea` (`Add compact broker AI assistant`).
+- Latest verified compact Vercel deployment: `dpl_7hhdmP7Yj9BtKooQK2rXgxHGcytN`, production URL `https://travel-expense-compact-3icm00krj-ftjdfr-7940s-projects.vercel.app`, aliased to `https://travel-expense-compact.vercel.app/`.
+- Latest live proof: `npm run smoke:deploy-live` passed with live HTTP 200, title `旅費 Compact`, asset hash `047731d30c52aefc`, HTML hash `26052d70cdce20e8`, and alias/deployment content match.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
   - P0-02 done: Dashboard budget usage now always includes all current-trip receipts, while `statsIncludeTransportLodging` only affects today/daily/chart-style filtered views.
@@ -60,7 +63,7 @@ Last updated: 2026-06-08 HKT
   - P4-04 done as a workflow: Compact now has `npm run smoke:deploy-live` for post-deploy production proof. It checks branch `main`, local HEAD versus `origin/main`, deploy-relevant worktree cleanliness, `vercel inspect --json` READY production status, alias attachment, live HTTP 200, title `旅費 Compact`, root node, asset hash, and live-alias HTML/assets matching the inspected deployment URL.
   - Verification for P4-04 before commit: `node --check scripts/compact-live-verify.mjs`, `node scripts/compact-live-verify.mjs --allow-dirty`, and `git diff --check` passed. The dry run correctly reported `deployRelevantWorktreeClean: false` because the new script/docs were still uncommitted. Run normal `npm run smoke:deploy-live` after the final compact deploy.
   - P5-01 done: Dashboard now has a broker-backed `Broker AI Assistant` panel. It uses the Credential Broker Kimi JSON path for trip-spending questions, displays the primary route as `kimi/kimi-code`, exposes broker-metered quota policy, and treats `429`/quota/rate-limit failures as visible hard stops with no automatic fallback.
-  - Verification for P5-01: `npm run smoke:dashboard` passed with 5 tests, including stubbed Kimi success, request `kind=trip` / `model=kimi-code`, visible primary/quota/no-fallback labels, and a 429 quota regression proving Google/Mimo fallback routes are not called. Broader compact checks also passed: `npm run typecheck`, `npm run build`, `npm run smoke:mobile-layout`, `npm run smoke:a11y-touch`, `npm run smoke:production-gate`, and `git diff --check`.
+  - Verification for P5-01: `npm run smoke:dashboard` passed with 5 tests, including stubbed Kimi success, request `kind=trip` / `model=kimi-code`, visible primary/quota/no-fallback labels, and a 429 quota regression proving Google/Mimo fallback routes are not called. Broader compact checks also passed: `npm run typecheck`, `npm run build`, `npm run smoke:mobile-layout`, `npm run smoke:a11y-touch`, `npm run smoke:production-gate`, `npm run smoke:deploy-live`, and `git diff --check`.
   - Next compact checklist focus: P5-02, first-run compact personalization for trip style, currency, home city, and weather preference.
 
 ## Active Admin KanBan Status
