@@ -33,6 +33,7 @@
     "smoke:broker-live": "node scripts/broker-live-preflight.mjs",
     "smoke:broker-vault": "node scripts/broker-vault-verify.mjs",
     "smoke:broker-vault:guard": "node scripts/broker-vault-verify.mjs --expect-missing-session",
+    "smoke:shared-contract": "node scripts/shared-contract-smoke.mjs",
     "smoke:production-gate": "node scripts/compact-production-gate.mjs",
     "smoke:production-gate:full": "node scripts/compact-production-gate.mjs --full",
     "smoke:deploy-live": "node scripts/compact-live-verify.mjs",

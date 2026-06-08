@@ -25,6 +25,7 @@ const fullSteps = [
   ['stats smoke', ['npm', 'run', 'smoke:stats']],
   ['settings smoke', ['npm', 'run', 'smoke:settings']],
   ['welcome guide smoke', ['npm', 'run', 'smoke:welcome-guide']],
+  ['shared contract smoke', ['npm', 'run', 'smoke:shared-contract']],
   ['auth broker smoke', ['npm', 'run', 'smoke:auth-broker']],
   ['ai routing smoke', ['npm', 'run', 'smoke:ai-routing']],
   ['trip intelligence smoke', ['npm', 'run', 'smoke:trip-intelligence']],
