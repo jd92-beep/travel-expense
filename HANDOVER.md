@@ -22,6 +22,8 @@ Last updated: 2026-06-08 HKT
   - `npm run security:scan` passed.
   - `git diff --check` passed.
 - P0-05 remains `LIVE`: verifying live Notion/Kimi/Google/Gemma/Mimo/WeatherAPI broker-vault paths requires deployed broker/account state and must not print secrets.
+- 2026-06-08 P0-05 preflight progress: `npm run smoke:broker-live` now exists in `app-compact/`. It performs a no-secret live preflight against `https://travel-expense-credential-broker.ftjdfr.workers.dev`, checking `/health`, compact-origin CORS, and no-session auth guards for `/notion/request`, `/kimi/json`, `/google/json`, `/mimo/json`, `/weather/forecast`, `/credentials/status`, and `/credentials/test-all`.
+- Latest P0-05 preflight evidence: `npm run smoke:broker-live` passed with `/health` 200 (`travel-expense-credential-broker`, version `2026.05.29`), CORS preflight 204 for `https://travel-expense-compact.vercel.app`, protected paths 401 `Session missing`, and no sensitive-looking response text. This does not prove provider vault contents; authenticated provider tests still require a safe session/admin/Supabase context.
 - 2026-06-08 compact P1 progress:
   - P1-01 done: Scan now has a one-hand cockpit panel showing OCR confidence/status, batch selected/total/needs-review counts, and last draft/photo recovery state.
   - Batch Confirm now includes a recovery summary plus `只選完成` and `全選` controls, so failed/partial email screenshot rows can be skipped without losing the rest of the batch.

@@ -8,6 +8,7 @@ This is the independent compact version of the Travel Expense app.
 - Vercel project: `travel-expense-compact`
 - Compact UI system: `DESIGN_SYSTEM.md`
 - Mobile visual QA: `npm run smoke:contact-sheet`
+- Live broker preflight: `npm run smoke:broker-live`
 
 The compact version is an independent React + Vite app with its own package,
 Vite base path, Vercel project, mobile scroll contract, and centered circular Scan

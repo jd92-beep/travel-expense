@@ -28,6 +28,7 @@
     "smoke:settings": "playwright test tests/settings-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:security": "playwright test tests/security-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:supabase-notion-mirror": "playwright test tests/supabase-notion-mirror-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:broker-live": "node scripts/broker-live-preflight.mjs",
     "smoke:mobile-layout": "playwright test tests/mobile-layout-stability-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:contact-sheet": "node scripts/mobile-contact-sheet.mjs",
     "smoke:final-nav": "playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",

@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added `npm run smoke:broker-live` for the compact app, a no-secret live Credential Broker preflight that verifies broker health, compact-origin CORS, and protected Notion/Kimi/Google/Mimo/WeatherAPI/credentials endpoints reject unauthenticated requests without leaking sensitive-looking response text.
 - Refreshed compact docs and audit helper paths so architecture/design/resource/checklist/generated-asset notes point to `app-compact/`, `/travel-expense/compact/`, the `travel-expense-compact` Vercel project, and `/tmp/compact-screenshot-audit` instead of copied main React wording or stale `app-react/test-results` paths.
 - Added `npm run smoke:contact-sheet` for the compact app, automating seven-tab 390px mobile visual QA with public-safe seeded data, external API stubs, overflow checks, bottom-dock visibility checks, and Timeline rail/content separation checks.
 - Added a compact-only `DESIGN_SYSTEM.md` and shared CSS tokens for card/chip geometry, mobile gutters, quiet paper card surfaces, and control shadows; Stats story cards and the PWA readiness strip now reuse those tokens.
