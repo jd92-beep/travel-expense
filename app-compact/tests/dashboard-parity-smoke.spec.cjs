@@ -160,3 +160,134 @@ test('Dashboard local AI coach shows burn forecast, next-day warning, and weathe
   await coach.getByRole('button', { name: /預算/ }).click();
   await expect(page).toHaveURL(/#stats/);
 });
+
+async function seedBrokerAssistantDashboard(page) {
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    const fixedNow = new Date('2026-05-09T10:00:00+08:00').valueOf();
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'assistant-session',
+      credentialSessionExpiresAt: fixedNow + 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      schemaVersion: 3,
+      lastTab: 'dashboard',
+      budget: 10000,
+      rate: 20,
+      credentialSession: 'assistant-session',
+      credentialSessionExpiresAt: fixedNow + 60_000,
+      activeTripId: 'assistant_trip',
+      tripName: 'Assistant Test',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-10' },
+      customItinerary: [
+        { date: '2026-05-08', day: 1, region: 'Nagoya', timezone: 'Asia/Hong_Kong', spots: [{ time: '10:00', name: 'Nagoya Food', type: 'food' }] },
+        { date: '2026-05-09', day: 2, region: 'Inuyama', timezone: 'Asia/Hong_Kong', spots: [{ time: '09:00', name: 'Inuyama Castle', type: 'ticket' }] },
+        { date: '2026-05-10', day: 3, region: 'Outdoor Mountain', timezone: 'Asia/Hong_Kong', spots: [{ time: '08:30', name: 'Mountain trail', type: 'ticket', note: 'outdoor walking' }] },
+      ],
+      trips: [{
+        id: 'assistant_trip',
+        name: 'Assistant Test',
+        destinationSummary: 'Nagoya / Inuyama / Outdoor Mountain',
+        startDate: '2026-05-08',
+        endDate: '2026-05-10',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Hong_Kong'],
+        version: 1,
+        active: true,
+        itinerary: [
+          { date: '2026-05-08', day: 1, region: 'Nagoya', timezone: 'Asia/Hong_Kong', spots: [{ time: '10:00', name: 'Nagoya Food', type: 'food' }] },
+          { date: '2026-05-09', day: 2, region: 'Inuyama', timezone: 'Asia/Hong_Kong', spots: [{ time: '09:00', name: 'Inuyama Castle', type: 'ticket' }] },
+          { date: '2026-05-10', day: 3, region: 'Outdoor Mountain', timezone: 'Asia/Hong_Kong', spots: [{ time: '08:30', name: 'Mountain trail', type: 'ticket', note: 'outdoor walking' }] },
+        ],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      receipts: [
+        { id: 'assistant_food', store: 'Nagoya Food', total: 4000, date: '2026-05-08', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1 },
+        { id: 'assistant_ticket', store: 'Inuyama Ticket', total: 4000, date: '2026-05-09', category: 'ticket', payment: 'credit', personId: 'p_boss', splitMode: 'shared', createdAt: 2 },
+      ],
+    }));
+  });
+}
+
+test('Dashboard broker AI assistant shows primary model, quota policy, and broker answer', async ({ page }) => {
+  const calls = [];
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          summary: '今日控制預算：先保留交通同晚餐 buffer。',
+          risk: 'watch',
+          recommendation: 'Shopping 先限 HK$100，晚餐前再補記收據。',
+          nextAction: '先記低 Inuyama Ticket，再去統計頁睇分類。',
+        },
+      }),
+    });
+  });
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/google/json', async (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'google should not be called' }) }));
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/mimo/json', async (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'mimo should not be called' }) }));
+
+  await seedBrokerAssistantDashboard(page);
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  const assistant = page.getByLabel('Broker AI assistant');
+  await expect(assistant).toBeVisible();
+  await expect(assistant).toContainText('Broker AI Assistant');
+  await expect(assistant).toContainText('Primary · kimi/kimi-code');
+  await expect(assistant).toContainText('Quota · broker metered');
+  await expect(assistant).toContainText('No fallback on 429');
+  await assistant.getByLabel('AI assistant question').fill('今日 shopping budget 應該點？');
+  await assistant.getByRole('button', { name: '問 AI' }).click();
+  await expect(assistant).toContainText('今日控制預算');
+  await expect(assistant).toContainText('Risk · watch');
+  await expect(assistant).toContainText('Shopping 先限 HK$100');
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({ kind: 'trip', model: 'kimi-code' });
+  expect(String(calls[0].prompt)).toContain('Return JSON only');
+});
+
+test('Dashboard broker AI assistant hard-stops on quota without fallback', async ({ page }) => {
+  const calls = { kimi: 0, google: 0, mimo: 0 };
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
+    calls.kimi += 1;
+    await route.fulfill({
+      status: 429,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: 'Supabase AI daily quota exceeded' }),
+    });
+  });
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/google/json', async (route) => {
+    calls.google += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: {} }) });
+  });
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/mimo/json', async (route) => {
+    calls.mimo += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: {} }) });
+  });
+
+  await seedBrokerAssistantDashboard(page);
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  const assistant = page.getByLabel('Broker AI assistant');
+  await assistant.getByRole('button', { name: '問 AI' }).click();
+  await expect(assistant).toContainText('Quota hard stop');
+  await expect(assistant).toContainText('No fallback was attempted');
+  await expect(assistant).toContainText('Supabase AI daily quota exceeded');
+  expect(calls).toEqual({ kimi: 1, google: 0, mimo: 0 });
+});

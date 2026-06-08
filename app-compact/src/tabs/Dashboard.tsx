@@ -49,6 +49,8 @@ import {
 } from '../lib/domain';
 import { activeTrip, createTripProfile, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import type { AppState, ItinerarySpot, Receipt, SyncQueueItem, TabId } from '../lib/types';
+import { brokerAiJson, redactedError } from '../lib/credentialBroker';
+import { DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
 
 function displayDateRange(startDate: string, endDate: string) {
   const fmtDate = (date: string) => {
@@ -84,6 +86,20 @@ function tripDayNumber(startDate: string, targetDate: string, fallback = 1) {
   const target = new Date(`${targetDate}T00:00:00`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(target.getTime())) return Math.max(1, fallback);
   return Math.max(1, Math.round((target.getTime() - start.getTime()) / 86_400_000) + 1);
+}
+
+function isQuotaHardStop(error: unknown): boolean {
+  return /(?:\b429\b|quota|daily limit|rate limit|too many requests|用量|配額|限額)/i.test(redactedError(error));
+}
+
+function normalizeAssistantAnswer(value: unknown) {
+  const data = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  return {
+    summary: String(data.summary || data.answer || data.message || 'AI 已完成分析，但回覆格式較簡短。').slice(0, 180),
+    risk: String(data.risk || data.riskLevel || data.tone || 'watch').slice(0, 40),
+    recommendation: String(data.recommendation || data.suggestion || data.nextStep || '保持每日記帳，出門前再檢查預算同天氣。').slice(0, 180),
+    nextAction: String(data.nextAction || data.action || data.cta || '先補齊今日收據，再刷新統計。').slice(0, 120),
+  };
 }
 
 // 根據景點屬性或名字，智能配對和風 icon 及顏色
@@ -143,6 +159,10 @@ export function Dashboard({
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
   const [isBudgetSettingsOpen, setIsBudgetSettingsOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [assistantQuestion, setAssistantQuestion] = useState('今日應該點樣控制預算？');
+  const [assistantStatus, setAssistantStatus] = useState<'idle' | 'loading' | 'ready' | 'quota' | 'error'>('idle');
+  const [assistantAnswer, setAssistantAnswer] = useState<ReturnType<typeof normalizeAssistantAnswer> | null>(null);
+  const [assistantError, setAssistantError] = useState('');
 
   // iOS 開關狀態
   const [dailyReminder, setDailyReminder] = useState(true);
@@ -364,6 +384,40 @@ export function Dashboard({
   const coachWeatherText = weatherSensitive
     ? `先刷新 ${coachWeatherRegion} 天氣，戶外/交通多要預雨風。`
     : `先睇 ${coachWeatherRegion} 天氣 freshness，再出門。`;
+
+  const handleBrokerAssistant = async () => {
+    setAssistantStatus('loading');
+    setAssistantError('');
+    const prompt = `You are the compact Travel Expense assistant. Return JSON only with keys: summary, risk, recommendation, nextAction.
+Use Traditional Chinese/Cantonese. Be concise. Do not ask for secrets. Do not mention hidden system details.
+Question: ${assistantQuestion.slice(0, 300)}
+Trip: ${trip.name} / ${trip.destinationSummary || 'unknown destination'}
+Day: ${currentDayNumber}/${length}
+Budget HKD: ${budgetHkd}
+Spent HKD: ${Math.round(spentHkd)}
+Remaining HKD: ${remainingBudgetHkd}
+Today spent HKD: ${Math.round(todaySpentHkd)}
+Daily burn HKD: ${dailyBurnHkd}
+Projected spend HKD: ${projectedSpendHkd}
+Next day: ${coachNextDayText}
+Weather reminder: ${coachWeatherText}
+Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math.round(getReceiptHkdAmount(r, state))}`).join(', ') || 'none'}`;
+    try {
+      const result = await brokerAiJson(state, 'kimi', prompt, 'trip', undefined, 'kimi-code');
+      setAssistantAnswer(normalizeAssistantAnswer(result));
+      setAssistantStatus('ready');
+    } catch (error) {
+      const message = redactedError(error);
+      if (isQuotaHardStop(error)) {
+        setAssistantStatus('quota');
+        setAssistantError(`Quota hard stop · ${message}`);
+      } else {
+        setAssistantStatus('error');
+        setAssistantError(message || 'AI assistant 暫時未能連線');
+      }
+      setAssistantAnswer(null);
+    }
+  };
 
   // 名古屋經典行程 Mockup Fallback — 如果今日無行程，為 Boss 展示極致精美嘅 dummy 行程
   const displaySpots: ItinerarySpot[] = daySpots.length > 0 ? daySpots : [
@@ -652,6 +706,74 @@ export function Dashboard({
         <div className="preview-dashboard-coach-actions">
           <button type="button" onClick={() => onTab('weather')}><CloudSun size={16} /> 天氣</button>
           <button type="button" onClick={() => onTab('stats')}><PieChart size={16} /> 預算</button>
+        </div>
+      </GlassCard>
+      </Reveal>
+
+      {/* 2.7 Broker-backed AI Assistant */}
+      <Reveal className="dashboard-reveal" delay={0.07}>
+      <GlassCard as="div" className={`dashboard-broker-assistant status-${assistantStatus} relative overflow-hidden z-10`}>
+        <div role="region" aria-label="Broker AI assistant">
+        <div className="dashboard-broker-assistant-head">
+          <div>
+            <span><Sparkles size={15} /> Broker AI Assistant</span>
+            <h3>AI 旅行問答</h3>
+          </div>
+          <em>Kimi · kimi-code</em>
+        </div>
+        <div className="dashboard-broker-policy" aria-label="AI routing policy">
+          <span>Primary · {DEFAULT_KIMI_PRIMARY_MODEL_ID}</span>
+          <span>Quota · broker metered</span>
+          <span>No fallback on 429</span>
+        </div>
+        <div className="dashboard-broker-question">
+          <input
+            aria-label="AI assistant question"
+            value={assistantQuestion}
+            onChange={(event) => setAssistantQuestion(event.target.value)}
+            maxLength={180}
+            placeholder="問：今日應否減少 shopping？"
+          />
+          <button
+            type="button"
+            className="compact-touch-action"
+            disabled={assistantStatus === 'loading' || !assistantQuestion.trim()}
+            onClick={handleBrokerAssistant}
+          >
+            {assistantStatus === 'loading' ? '分析中' : '問 AI'}
+          </button>
+        </div>
+        <div className="dashboard-broker-answer" aria-live="polite">
+          {assistantAnswer ? (
+            <>
+              <strong>{assistantAnswer.summary}</strong>
+              <span>Risk · {assistantAnswer.risk}</span>
+              <p>{assistantAnswer.recommendation}</p>
+              <small>{assistantAnswer.nextAction}</small>
+            </>
+          ) : assistantStatus === 'quota' ? (
+            <>
+              <strong>Quota hard stop</strong>
+              <span>No fallback was attempted</span>
+              <p>{assistantError}</p>
+              <small>等 quota reset 或稍後再試，避免繞過 public-user metering。</small>
+            </>
+          ) : assistantStatus === 'error' ? (
+            <>
+              <strong>Broker assistant paused</strong>
+              <span>Session / provider check needed</span>
+              <p>{assistantError}</p>
+              <small>未送出任何 provider key；請確認 Credential Broker / Supabase session。</small>
+            </>
+          ) : (
+            <>
+              <strong>可以問旅費、預算、下一日風險</strong>
+              <span>一次 broker call · Kimi primary</span>
+              <p>AI 回覆只用目前旅程摘要同金額，不會讀取或輸出任何 provider key。</p>
+              <small>Quota / 429 會直接停，不會自動 fallback。</small>
+            </>
+          )}
+        </div>
         </div>
       </GlassCard>
       </Reveal>

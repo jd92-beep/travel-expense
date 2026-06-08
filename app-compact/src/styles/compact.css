@@ -367,6 +367,144 @@ body {
   box-shadow: 0 6px 16px rgba(194, 59, 94, 0.4) !important;
 }
 
+.dashboard-broker-assistant {
+  padding: 16px !important;
+  border-radius: var(--compact-radius-panel) !important;
+  border: var(--compact-card-border) !important;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.92), rgba(248,241,229,.82)),
+    repeating-linear-gradient(135deg, rgba(24,57,92,.04) 0 1px, transparent 1px 16px) !important;
+  box-shadow: var(--compact-card-shadow) !important;
+}
+
+.dashboard-broker-assistant-head,
+.dashboard-broker-question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashboard-broker-assistant-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--compact-red);
+  text-transform: uppercase;
+}
+
+.dashboard-broker-assistant-head h3 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--compact-ink);
+}
+
+.dashboard-broker-assistant-head em {
+  flex-shrink: 0;
+  border-radius: var(--compact-radius-chip);
+  border: 1px solid rgba(24,57,92,.14);
+  background: rgba(255,255,255,.72);
+  padding: 7px 10px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  color: var(--compact-blue);
+}
+
+.dashboard-broker-policy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.dashboard-broker-policy span {
+  border-radius: var(--compact-radius-chip);
+  border: 1px solid rgba(194,59,94,.14);
+  background: rgba(255,255,255,.68);
+  padding: 6px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  color: #6c5842;
+}
+
+.dashboard-broker-question input {
+  min-width: 0;
+  flex: 1;
+  min-height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(128,99,63,.18);
+  background: rgba(255,255,255,.76);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--compact-ink);
+}
+
+.dashboard-broker-question button {
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--compact-red), #a83030);
+  color: white;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(194,59,94,.18);
+}
+
+.dashboard-broker-question button:disabled {
+  opacity: .55;
+}
+
+.dashboard-broker-answer {
+  margin-top: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.7);
+  background: rgba(255,255,255,.52);
+  padding: 12px;
+}
+
+.dashboard-broker-answer strong,
+.dashboard-broker-answer span,
+.dashboard-broker-answer small {
+  display: block;
+}
+
+.dashboard-broker-answer strong {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--compact-ink);
+}
+
+.dashboard-broker-answer span {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--compact-red);
+  text-transform: uppercase;
+}
+
+.dashboard-broker-answer p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--compact-text-muted);
+}
+
+.dashboard-broker-answer small {
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--compact-text-soft);
+}
+
+.dashboard-broker-assistant.status-quota {
+  border-color: rgba(194,59,94,.28) !important;
+}
+
 /* Sleek 2px Itinerary timeline rail beam overrides */
 .timeline-rail {
   --timeline-rail-width: 2px !important;
