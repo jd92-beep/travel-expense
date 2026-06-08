@@ -1757,6 +1757,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   margin: 0;
   font-size: 14px;
 }
+.weather-location-meta {
+  margin: 0 0 2px;
+}
 .weather-slot {
   display: grid;
   gap: 4px;
@@ -7311,6 +7314,47 @@ textarea,
     border-radius: 18px !important;
   }
 
+  .preview-weather-source-strip,
+  .weather-location-meta {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .preview-weather-source-strip {
+    margin-bottom: 2px;
+    padding: 0 0 10px;
+    border-bottom: 1px solid rgba(116,88,53,.14);
+  }
+
+  .preview-weather-source-strip span,
+  .weather-location-meta span {
+    min-width: 0;
+    max-width: 100%;
+    padding: 4px 8px;
+    border: 1px solid rgba(255,255,255,.72);
+    border-radius: 999px;
+    background: rgba(255,255,255,.58);
+    color: #254058;
+    font-size: 11px;
+    font-weight: 850;
+    line-height: 1.12;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.84);
+  }
+
+  .preview-weather-source-strip .weather-fallback-chip,
+  .weather-location-meta .weather-fallback-chip {
+    border-color: rgba(217, 119, 6, .28);
+    background: rgba(255, 247, 237, .76);
+    color: #8a4b08;
+  }
+
   .preview-weather-current-card > .relative.z-40 {
     display: grid !important;
     grid-template-columns: 112px minmax(0,1fr) !important;
@@ -9561,6 +9605,19 @@ textarea,
     align-items: center !important;
   }
 
+  .app-shell--weather .preview-weather-source-strip {
+    gap: 4px !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 7px !important;
+  }
+
+  .app-shell--weather .preview-weather-source-strip span,
+  .app-shell--weather .weather-location-meta span {
+    padding: 3px 5px !important;
+    font-size: 8.5px !important;
+    line-height: 1.05 !important;
+  }
+
   .app-shell--weather .preview-weather-hero-icon svg {
     width: 72px !important;
     height: 72px !important;
@@ -9676,6 +9733,11 @@ textarea,
     min-width: 0 !important;
     max-width: 100% !important;
     overflow: visible !important;
+  }
+
+  .app-shell--weather .weather-location-meta {
+    gap: 4px !important;
+    margin: 4px 0 6px !important;
   }
 
   .app-shell--weather .weather-slot-detailed {

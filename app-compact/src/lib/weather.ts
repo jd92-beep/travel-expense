@@ -10,6 +10,8 @@ export interface WeatherCoord {
   lon: number;
   timezone?: string;
   missing?: boolean;
+  origin?: 'spot-coordinate' | 'known-region' | 'city-geocode' | 'missing';
+  query?: string;
 }
 
 export interface WeatherSlot {
@@ -31,6 +33,10 @@ export interface DayWeather {
   coord: WeatherCoord;
   source: string;
   slots: WeatherSlot[];
+  provider?: string;
+  cached?: boolean;
+  fetchedAt?: number;
+  fallbackReason?: string;
 }
 
 const REGION_COORDS: Record<string, WeatherCoord> = {
@@ -63,7 +69,7 @@ export function coordsForDay(day: ItineraryDay, limit = 2): WeatherCoord[] {
 
   for (const spot of day.spots) {
     if (Number.isFinite(spot.lat) && Number.isFinite(spot.lon) && spot.lat != null && spot.lon != null) {
-      add({ label: spot.name || day.city || day.region, lat: spot.lat, lon: spot.lon });
+      add({ label: spot.name || day.city || day.region, lat: spot.lat, lon: spot.lon, timezone: spot.timezone || day.timezone, origin: 'spot-coordinate' });
     }
   }
   const hay = `${day.region} ${day.spots.map((s) => `${s.name} ${s.address || ''} ${s.note || ''}`).join(' ')}`;
@@ -73,11 +79,11 @@ export function coordsForDay(day: ItineraryDay, limit = 2): WeatherCoord[] {
     .filter((item) => Number.isFinite(item.idx))
     .sort((a, b) => a.idx - b.idx);
   for (const { key } of matchedKeys) {
-    add(REGION_COORDS[key]);
+    add({ ...REGION_COORDS[key], timezone: day.timezone, origin: 'known-region' });
     if (coords.length >= limit) break;
   }
   if (coords.length) return coords.slice(0, limit);
-  return [{ label: weatherLocationLabel(day), lat: Number.NaN, lon: Number.NaN, missing: true }];
+  return [{ label: weatherLocationLabel(day), lat: Number.NaN, lon: Number.NaN, timezone: day.timezone, missing: true, origin: 'missing' }];
 }
 
 export function coordForDay(day: ItineraryDay): WeatherCoord {
@@ -163,6 +169,8 @@ async function geocodeWeatherLocation(query: string, country?: string, limit = 2
       lat: Number(result.latitude),
       lon: Number(result.longitude),
       timezone: typeof result.timezone === 'string' ? result.timezone : undefined,
+      origin: 'city-geocode' as const,
+      query,
     }));
   localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), coords }));
   return coords;
@@ -214,20 +222,22 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJm
   try {
     const cached = cacheKey ? JSON.parse(localStorage.getItem(cacheKey) || 'null') : null;
     if (cached && Date.now() - cached.ts < 60 * 60 * 1000 && weatherDataIncludesDate(cached.data, targetDate)) {
-      return { data: cached.data, source: `${cached.source} cache` };
+      return { data: cached.data, source: `${cached.source} cache`, provider: String(cached.source || 'Weather'), cached: true, fetchedAt: Number(cached.ts) || Date.now() };
     }
   } catch {
     // Ignore corrupt cache.
   }
 
+  let brokerFallbackReason = '';
   if (state) {
     try {
       const data = await brokerWeatherForecast(state, { lat: coord.lat, lon: coord.lon, days: 3 });
       if (data && typeof data === 'object') {
         if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: 'WeatherAPI.com' }));
-        return { data, source: 'WeatherAPI.com' };
+        return { data, source: 'WeatherAPI.com', provider: 'WeatherAPI.com', cached: false, fetchedAt: Date.now() };
       }
-    } catch {
+    } catch (error) {
+      brokerFallbackReason = `WeatherAPI.com unavailable: ${weatherErrorLabel(error)}`;
       // WeatherAPI.com is a private broker-backed enhancement; fall back to public providers if unavailable.
     }
   }
@@ -251,16 +261,23 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJm
     { url: base, source: 'Open-Meteo' },
   ];
   let lastError: unknown;
+  let providerFallbackReason = brokerFallbackReason;
   for (const c of candidates) {
     try {
       const data = await fetchJson(c.url);
       if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: c.source }));
-      return { data, source: c.source };
+      return { data, source: c.source, provider: c.source, cached: false, fetchedAt: Date.now(), fallbackReason: providerFallbackReason || undefined };
     } catch (error) {
       lastError = error;
+      if (c.source === 'JMA') providerFallbackReason = [providerFallbackReason, `JMA unavailable: ${weatherErrorLabel(error)}`].filter(Boolean).join(' · ');
     }
   }
   throw lastError instanceof Error ? lastError : new Error('天氣拉取失敗');
+}
+
+function weatherErrorLabel(error: unknown): string {
+  if (error instanceof Error) return error.message.replace(/\s+/g, ' ').slice(0, 80);
+  return String(error || 'unknown').replace(/\s+/g, ' ').slice(0, 80);
 }
 
 export function slotsForDate(data: { hourly?: {

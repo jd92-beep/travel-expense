@@ -70,6 +70,7 @@ export function Weather({ state }: { state: AppState }) {
   );
   const leadDay = displayItinerary[0];
   const leadRows = leadDay ? rows[leadDay.date] || [] : [];
+  const leadSource = leadRows[0];
   const leadSlot = leadRows.flatMap((row) => row.slots || []).find((slot) => slot.temp != null) || leadRows.flatMap((row) => row.slots || [])[0];
   const previewHourlySlots = leadRows.flatMap((row) => row.slots || []).slice(0, 5);
   const previewHourlyFallback: WeatherSlot[] = WEATHER_SLOTS.slice(0, 5).map((hour) => ({ hour, code: 2 }));
@@ -93,9 +94,17 @@ export function Weather({ state }: { state: AppState }) {
                 continue;
               }
               const isJapan = /日本|Japan|JP|名古屋|金澤|長野|高山|白川|常滑|上高地|立山|東京|京都|大阪/.test(`${day.country || ''} ${day.region || ''} ${coord.label}`);
-              const { data, source } = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', isJapan, state, day.date);
+              const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', isJapan, state, day.date);
               if (cancelled) return;
-              next[day.date].push({ coord, source, slots: slotsForDate(data, day.date) });
+              next[day.date].push({
+                coord,
+                source: result.source,
+                provider: result.provider,
+                cached: result.cached,
+                fetchedAt: result.fetchedAt,
+                fallbackReason: result.fallbackReason,
+                slots: slotsForDate(result.data as Parameters<typeof slotsForDate>[0], day.date),
+              });
             } catch (innerErr) {
               if (cancelled) return;
               console.warn(`[Weather] Load failed for ${coord.label}:`, innerErr);
@@ -140,6 +149,12 @@ export function Weather({ state }: { state: AppState }) {
         {error && <Toast tone="warning">天氣拉取失敗：{error}</Toast>}
       </GlassCard>
       <GlassCard className="preview-weather-current-card">
+        <div className="preview-weather-source-strip" aria-label="Weather source status">
+          <span>{weatherProviderLabel(leadSource)}</span>
+          <span>{weatherFreshnessLabel(leadSource)}</span>
+          <span>{weatherTargetOriginLabel(leadSource?.coord)}</span>
+          {leadSource?.fallbackReason && <span className="weather-fallback-chip">{weatherFallbackLabel(leadSource.fallbackReason)}</span>}
+        </div>
         <div className="preview-weather-hero-icon">
           <WeatherIcon code={leadSlot?.code} size={92} />
         </div>
@@ -181,6 +196,12 @@ export function Weather({ state }: { state: AppState }) {
               return (
                 <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
                   {dayRows.length > 1 && <h3>{weather.coord.label}</h3>}
+                  <div className="weather-location-meta" aria-label={`Weather metadata for ${weather.coord.label}`}>
+                    <span>{weatherProviderLabel(weather)}</span>
+                    <span>{weatherFreshnessLabel(weather)}</span>
+                    <span>{weatherTargetOriginLabel(weather.coord)}</span>
+                    {weather.fallbackReason && <span className="weather-fallback-chip">{weatherFallbackLabel(weather.fallbackReason)}</span>}
+                  </div>
                   {emptyForecast && <p className="notice">旅程日期超出目前預報範圍，會顯示佔位資料；稍後刷新會自動更新。</p>}
                   <div className="weather-grid weather-grid-detailed">
                     {(weather.slots || []).map((slot) => {
@@ -305,6 +326,33 @@ function weatherTargetSummary(days: ItineraryDay[], hasEnded: boolean, today: st
       : `${days.length}日`;
   const visible = labels.slice(0, 3).join('/') || '未設定地點';
   return `${scope} · ${visible}${labels.length > 3 ? ` +${labels.length - 3}` : ''}`;
+}
+
+function weatherProviderLabel(weather?: DayWeather): string {
+  const provider = String(weather?.provider || weather?.source || '').replace(/\s+cache$/i, '').trim();
+  return provider ? `Provider · ${provider}` : 'Provider · 載入中';
+}
+
+function weatherFreshnessLabel(weather?: DayWeather): string {
+  if (!weather) return 'Freshness · loading';
+  const ts = Number(weather.fetchedAt || 0);
+  if (!Number.isFinite(ts) || ts <= 0) return weather.cached ? 'Freshness · cached' : 'Freshness · live';
+  const ageMs = Math.max(0, Date.now() - ts);
+  const minutes = Math.round(ageMs / 60000);
+  const age = minutes < 1 ? 'just now' : minutes < 60 ? `${minutes}m ago` : `${Math.round(minutes / 60)}h ago`;
+  return `${weather.cached ? 'Cache' : 'Live'} · ${age}`;
+}
+
+function weatherTargetOriginLabel(coord?: DayWeather['coord']): string {
+  if (!coord) return 'Target · resolving';
+  if (coord.origin === 'spot-coordinate') return `Target · spot coord · ${coord.label}`;
+  if (coord.origin === 'city-geocode') return `Target · city geocode · ${coord.query || coord.label}`;
+  if (coord.origin === 'known-region') return `Target · trip city · ${coord.label}`;
+  return `Target · fallback needed · ${coord.label}`;
+}
+
+function weatherFallbackLabel(reason: string): string {
+  return `Fallback · ${reason.replace(/\s+/g, ' ').slice(0, 96)}`;
 }
 
 function weatherHint(slot: { rain?: number; precipMm?: number; windSpeed?: number; windGust?: number; uvIndex?: number; temp?: number; feelsLike?: number }) {

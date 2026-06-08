@@ -85,13 +85,16 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
   });
   await installState(page, {});
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('天氣預報')).toBeVisible();
+  await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.getByText(/Day 1 · JMA/)).toBeVisible();
   const command = page.locator('.weather-command-fancy');
   await expect(command.locator('.weather-target-pill .status-pill')).toHaveCount(1);
   await expect(command.locator('.weather-target-pill')).toContainText('Today');
   await expect(command).not.toContainText('刷新');
   await expect(command.getByLabel('刷新天氣')).toBeVisible();
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText(/Live ·|Cache ·/);
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
   const commandMetrics = await command.evaluate((node) => {
     const card = node.getBoundingClientRect();
     const title = node.querySelector('.weather-command-row h2')?.getBoundingClientRect();
@@ -124,6 +127,37 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
   await expect(page.getByText(/濕度 62%/).first()).toBeVisible();
   await expect(page.getByText(/UV 6|UV 2/).first()).toBeVisible();
   expect(urls.some((url) => url.includes('models=jma_seamless'))).toBe(true);
+});
+
+test('Japan weather shows fallback reason when JMA fails and Open-Meteo succeeds', async ({ page }) => {
+  const fixed = new Date('2026-04-20T10:00:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+  }, fixed);
+  await page.route('https://api.open-meteo.com/**', async (route) => {
+    if (route.request().url().includes('models=jma_seamless')) {
+      await route.fulfill({ status: 503, body: 'JMA unavailable' });
+      return;
+    }
+    await route.fulfill({ json: weatherFixture({ temp: 23, feels: 24 }) });
+  });
+  await installState(page, {});
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByText(/Day 1 · Open-Meteo/)).toBeVisible();
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · Open-Meteo');
+  await expect(page.locator('.weather-fallback-chip').first()).toContainText('Fallback ·');
+  await expect(page.locator('.weather-fallback-chip').first()).toContainText('JMA unavailable');
+  await expect(page.getByText('23°C').first()).toBeVisible();
 });
 
 test('WeatherAPI broker forecast is preferred when broker session is active', async ({ page }) => {
@@ -174,6 +208,8 @@ test('WeatherAPI broker forecast is preferred when broker session is active', as
   });
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.getByText(/Day 1 · WeatherAPI.com/)).toBeVisible();
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · WeatherAPI.com');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
   await expect(page.getByText('21°C').first()).toBeVisible();
   expect(brokerCalls).toBeGreaterThan(0);
   expect(brokerPayloads.some((payload) => Math.abs(payload.lat - 35.1815) < 0.0001 && Math.abs(payload.lon - 136.9066) < 0.0001)).toBe(true);
@@ -223,7 +259,7 @@ test('Ended trip ignores stale same-coordinate cache and shows current forecast'
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('天氣預報')).toBeVisible();
+  await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
   await expect(page.getByText('25°C').first()).toBeVisible();
   await expect(page.locator('[aria-label="體感 27°C"]').first()).toBeVisible();
@@ -354,6 +390,7 @@ test('City and country names are geocoded when itinerary has no coordinates', as
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.getByText('Paris').first()).toBeVisible();
   await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · city geocode · Paris France');
   await expect(page.getByText('21°C').first()).toBeVisible();
   expect(geocodeUrls.some((url) => url.includes('name=Paris%20France'))).toBe(true);
   expect(forecastUrls.some((url) => url.includes('latitude=48.8566') && url.includes('longitude=2.3522'))).toBe(true);
@@ -457,7 +494,7 @@ test('Multi-city day renders two forecast locations and live slot', async ({ pag
     }],
   });
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('天氣預報')).toBeVisible();
+  await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉']);
   await expect(page.locator('.live-badge')).toHaveCount(2);
   expect(urls.length).toBeGreaterThanOrEqual(2);
