@@ -8,6 +8,7 @@ const baseSteps = [
   ['typecheck', ['npm', 'run', 'typecheck']],
   ['final navigation smoke', ['npm', 'run', 'smoke:final-nav']],
   ['mobile layout smoke', ['npm', 'run', 'smoke:mobile-layout']],
+  ['accessibility and touch smoke', ['npm', 'run', 'smoke:a11y-touch']],
   ['contact sheet smoke', ['npm', 'run', 'smoke:contact-sheet']],
   ['live broker preflight', ['npm', 'run', 'smoke:broker-live']],
   ['broker vault fail-closed guard', ['npm', 'run', 'smoke:broker-vault:guard']],

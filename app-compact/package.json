@@ -26,6 +26,7 @@
     "smoke:weather": "playwright test tests/weather-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:stats": "playwright test tests/stats-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:settings": "playwright test tests/settings-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:a11y-touch": "playwright test tests/a11y-touch-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:security": "playwright test tests/security-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:supabase-notion-mirror": "playwright test tests/supabase-notion-mirror-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:broker-live": "node scripts/broker-live-preflight.mjs",

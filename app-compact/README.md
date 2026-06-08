@@ -8,6 +8,7 @@ This is the independent compact version of the Travel Expense app.
 - Vercel project: `travel-expense-compact`
 - Compact UI system: `DESIGN_SYSTEM.md`
 - Mobile visual QA: `npm run smoke:contact-sheet`
+- Accessibility/touch QA: `npm run smoke:a11y-touch`
 - Live broker preflight: `npm run smoke:broker-live`
 - Broker vault guard: `npm run smoke:broker-vault:guard`
 - Authenticated broker vault proof: `npm run smoke:broker-vault`

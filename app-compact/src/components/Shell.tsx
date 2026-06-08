@@ -291,7 +291,7 @@ export function Shell({
             <button
               type="button"
               onClick={onRetryFailed}
-              className="px-3 py-1 text-xs font-semibold bg-[#C23B5E] hover:bg-[#A83030] text-white rounded-full transition-all duration-200 active:scale-95 shadow-sm shrink-0"
+              className="compact-touch-action px-3 py-1 text-xs font-semibold bg-[#C23B5E] hover:bg-[#A83030] text-white rounded-full transition-all duration-200 active:scale-95 shadow-sm shrink-0"
               style={{ border: 0, padding: '4px 12px', height: 'auto', background: '#C23B5E', color: 'white' }}
             >
               手動重試
@@ -608,7 +608,7 @@ export function Shell({
             </button>
           </div>
         ) : (
-          <button className={`compact-mobile-action relative z-10 ${active === 'dashboard' ? 'has-alert' : ''}`} type="button" aria-label="更多操作">
+          <button className={`compact-mobile-action compact-touch-action relative z-10 ${active === 'dashboard' ? 'has-alert' : ''}`} type="button" aria-label="更多操作">
             {active === 'dashboard' ? <Bell size={25} /> : active === 'scan' ? <Settings size={25} /> : <MoreVertical size={25} />}
           </button>
         )}

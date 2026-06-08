@@ -736,7 +736,7 @@ export function Dashboard({
 
         {/* 展開全部按鈕 */}
         <button
-          className="w-full text-center text-xs font-bold text-[#8C7864] flex items-center justify-center gap-1 mt-5 hover:text-slate-800 active:scale-95 transition-all border-none bg-transparent focus:outline-none"
+          className="compact-touch-action w-full text-center text-xs font-bold text-[#8C7864] flex items-center justify-center gap-1 mt-5 hover:text-slate-800 active:scale-95 transition-all border-none bg-transparent focus:outline-none"
           type="button"
           onClick={() => onTab('timeline')}
         >
@@ -752,7 +752,7 @@ export function Dashboard({
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-slate-800">Recent Expenses</h3>
           <button
-            className="text-xs font-bold text-[#D94132] hover:underline border-none bg-transparent focus:outline-none"
+            className="compact-touch-action text-xs font-bold text-[#D94132] hover:underline border-none bg-transparent focus:outline-none"
             type="button"
             onClick={() => onTab('history')}
           >

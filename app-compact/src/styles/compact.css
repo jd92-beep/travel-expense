@@ -25,6 +25,7 @@
   --compact-control-shadow: 0 6px 14px rgba(67, 46, 24, .04);
   --compact-text-muted: #5D5041;
   --compact-text-soft: #7A6044;
+  --compact-touch-min: 44px;
 }
 
 body {
@@ -244,6 +245,26 @@ body {
 }
 .washi-btn:hover::before {
   border-width: 0 32px 32px 0;
+}
+
+.compact-touch-action {
+  min-width: var(--compact-touch-min) !important;
+  min-height: var(--compact-touch-min) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  touch-action: manipulation;
+}
+
+.compact-touch-action:focus-visible,
+.app-floating-dock-mobile button:focus-visible,
+.scan-hero-button:focus-visible,
+.scan-secondary-button:focus-visible,
+.scan-utility-button:focus-visible,
+.settings-preview-controls button:focus-visible {
+  outline: 2px solid rgba(194, 59, 94, .72) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 5px rgba(194, 59, 94, .14), var(--compact-control-shadow) !important;
 }
 
 /* History traditional seal stamp & ledger styling */
