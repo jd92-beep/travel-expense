@@ -2,6 +2,8 @@
 
 ## 2026-06-08
 
+- Added `npm run smoke:production-gate` and `npm run smoke:production-gate:full` for the compact app. The core gate starts/reuses the compact dev server, keeps a restricted no-secret child environment, then runs typecheck, final navigation smoke, mobile layout smoke, contact sheet visual QA, live broker preflight, security scan, and production build.
+- Extended `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md` with P4 production-readiness tasks and P5 future product upgrades, keeping P0-05 marked `LIVE` until authenticated provider-vault proof can be collected safely.
 - Added `npm run smoke:broker-live` for the compact app, a no-secret live Credential Broker preflight that verifies broker health, compact-origin CORS, and protected Notion/Kimi/Google/Mimo/WeatherAPI/credentials endpoints reject unauthenticated requests without leaking sensitive-looking response text.
 - Refreshed compact docs and audit helper paths so architecture/design/resource/checklist/generated-asset notes point to `app-compact/`, `/travel-expense/compact/`, the `travel-expense-compact` Vercel project, and `/tmp/compact-screenshot-audit` instead of copied main React wording or stale `app-react/test-results` paths.
 - Added `npm run smoke:contact-sheet` for the compact app, automating seven-tab 390px mobile visual QA with public-safe seeded data, external API stubs, overflow checks, bottom-dock visibility checks, and Timeline rail/content separation checks.
