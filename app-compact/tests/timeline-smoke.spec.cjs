@@ -57,7 +57,8 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
   await expect(page.getByText('M6 Loose Receipt')).toBeVisible();
   await page.locator('.receipt-row').filter({ hasText: 'M6 Loose Receipt' }).click();
   await page.getByRole('button', { name: '刪除' }).click();
-  await expect(page.getByText('M6 Loose Receipt')).toBeHidden();
+  await page.getByRole('button', { name: '確認刪除' }).click();
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M6 Loose Receipt' })).toBeHidden();
 });
 
 test('Timeline map links reject unsafe imported URLs and use Android intent fallback', async ({ browser }) => {
@@ -132,9 +133,16 @@ test('Timeline highlights live, passed, and future itinerary spots', async ({ pa
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.getByText('行程時間線').first()).toBeVisible();
   await expect(page.locator('.timeline-event.is-passed')).toContainText('Breakfast Stop');
+  await expect(page.locator('.timeline-event.is-passed')).toContainText('完成');
   await expect(page.locator('.timeline-event.is-live')).toContainText('Lunch Stop');
   await expect(page.locator('.timeline-event.is-live')).toContainText('Now');
   await expect(page.locator('.timeline-event.is-future')).toContainText('Dinner Stop');
+  await expect(page.locator('.timeline-event.is-future')).toContainText('即將');
+  await expect(page.locator('.timeline-live-card')).toContainText('12:30');
+  await expect(page.locator('.timeline-live-card')).toContainText('Lunch Stop');
+  await expect(page.locator('.timeline-live-card')).toContainText('Next · 18:00 Dinner Stop');
+  await expect(page.locator('.timeline-route-actions').first()).toBeVisible();
+  await expect(page.locator('.timeline-route-actions').first().getByRole('link', { name: '地圖' })).toBeVisible();
   const liveGlint = await page.locator('.timeline-event.is-live').evaluate((node) => getComputedStyle(node, '::after').animationName);
   expect(liveGlint).toContain('route-glint');
 });
@@ -379,7 +387,7 @@ test('Timeline rail uses a lighter inactive colour when today is outside the tri
   }, fixed);
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('Past Day Two')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Past Day Two' })).toBeVisible();
   await expect(page.locator('.timeline-rail.is-today')).toHaveCount(0);
   await expect(page.locator('.timeline-now-marker')).toHaveCount(0);
   await expect(page.locator('.timeline-rail.is-outside-trip')).toHaveCount(2);

@@ -29,6 +29,8 @@ Last updated: 2026-06-08 HKT
   - Verification for P1-01: `npm run typecheck`, `npm run smoke:scan`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run security:scan`, and `npm run build` passed from `app-compact/`. Playwright mobile sweep at 390px produced `/tmp/compact-scan-cockpit-p1-01.png`, with document width `390` and no console errors.
   - P1-02 done: History receipt rows now show compact health markers for pending, duplicate SourceID, expected photo missing, sync conflict, cloud-only, and local-only states without adding new storage fields.
   - History smoke now seeds and verifies each marker type. Verification for P1-02: `npm run typecheck`, `npm run smoke:history`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run security:scan`, and `npm run build` passed from `app-compact/`. Playwright mobile sweep at 390px produced `/tmp/compact-history-health-markers-p1-02.png`, with document width `390` and no console errors.
+  - P1-03 done: Timeline now has a compact live-travel command card showing current time, current stop, next stop, and day progress context; itinerary rows show visible `完成` / `Now` / `即將` states, and each row groups map plus record/edit actions as a route action cluster.
+  - Verification for P1-03: `npm run typecheck`, `npm run smoke:timeline` (7 passed), `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run security:scan`, and `npm run build` passed from `app-compact/`. Playwright mobile sweep at 390px produced `/tmp/compact-timeline-live-mode-p1-03.png`, with document width `390`, command height `130`, visible state labels, route actions, and no console errors.
 
 ## Active Admin KanBan Status
 

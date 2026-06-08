@@ -5,7 +5,7 @@ import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail } from '../com
 import { MagicCard } from '../components/ui/magic-card';
 import { ShineBorder } from '../components/ui/shine-border';
 import { categoryById, dayLooseReceipts, fmt, getItinerary, getScheduleSpots, hkd, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts } from '../lib/domain';
-import type { AppState, ItinerarySpot, Receipt } from '../lib/types';
+import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from '../lib/types';
 import { ReceiptRow } from './Dashboard';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
@@ -14,6 +14,19 @@ import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 import '../styles/timeline.css';
 
 type ScheduleSpot = ItinerarySpot & { _spotIdx: number; receiptId?: string };
+type TimelineStatus = 'is-passed' | 'is-live' | 'is-future';
+
+type TimelineLiveContext = {
+  mode: 'active' | 'before' | 'after' | 'outside' | 'empty';
+  date?: string;
+  day?: number;
+  region?: string;
+  nowLabel: string;
+  headline: string;
+  detail: string;
+  currentLabel: string;
+  nextLabel: string;
+};
 
 export function Timeline({ state, setState, onOpen }: { state: AppState; setState: Dispatch<SetStateAction<AppState>>; onOpen: (receipt: Receipt) => void }) {
   const today = todayForReceipts(state);
@@ -27,7 +40,8 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   const looseReceipts = activeDay ? dayLooseReceipts(state, activeDay) : [];
   const hasOpenModal = Boolean(editing || activeDay || viewPhoto);
   const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
-  const commandDay = itinerary.find((day) => day.date === today) || itinerary[0];
+  const liveContext = timelineLiveContext(state, itinerary, nowTick, tripWindow);
+  const commandDay = (liveContext.date ? itinerary.find((day) => day.date === liveContext.date) : null) || itinerary.find((day) => day.date === today) || itinerary[0];
   const commandDate = commandDay?.date ? new Date(`${commandDay.date}T00:00:00`) : null;
   const commandYear = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getFullYear()) : '----';
   const commandMonth = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getMonth() + 1) : '--';
@@ -91,7 +105,13 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
               <div className="preview-timeline-copy">
                 <span>第 {commandDay.day} 天 / 共 {itinerary.length || 1} 天</span>
                 <strong>{commandDay.region}</strong>
-                <small>19°C / 25°C · 多雲時晴</small>
+                <small>{liveContext.detail}</small>
+                <div className={`timeline-live-card mode-${liveContext.mode}`} aria-label="Live travel timeline">
+                  <span className="timeline-live-clock">{liveContext.nowLabel}</span>
+                  <b>{liveContext.headline}</b>
+                  <em>{liveContext.currentLabel}</em>
+                  <small>{liveContext.nextLabel}</small>
+                </div>
               </div>
               <div className="preview-timeline-stats">
                 <span><MapPin size={18} /> 行程 {getScheduleSpots(state, commandDay).length} 個景點</span>
@@ -141,6 +161,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
             )}
             {spots.map((spot, idx) => {
               const progress = timelineProgress(day.date, spot.timezone || day.timezone, spots, idx, nowTick);
+              const stateLabel = timelineStateLabel(progress);
               const category = categoryById(spot.type);
               const stableKey = spotStableKey(day.date, spot, idx);
               return (
@@ -153,11 +174,12 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
                 <strong className="timeline-main">
                   <span className="timeline-title-row">
                     <span className="timeline-title">{spot.name}</span>
-                    {progress === 'is-live' && <em className="timeline-now">Now</em>}
+                    <em className={`timeline-now timeline-state-${progress}`}>{stateLabel}</em>
                   </span>
                   {spot.note && <small>{spot.note}</small>}
                   {spot.address && <small>{spot.address}</small>}
                 </strong>
+                <div className="timeline-route-actions" aria-label={`Route actions for ${spot.name}`}>
                 <ActionSheet>
                   <a
                     className="secondary mini"
@@ -176,6 +198,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
                   <button className="secondary mini" type="button" onClick={() => setEditing({ date: day.date, idx: spot._spotIdx, original: spot })}><PencilLine size={14} /> 編輯</button>
                 )}
                 </ActionSheet>
+                </div>
               </article>
             );})}
           </TimelineRail>
@@ -264,6 +287,69 @@ function timelineProgress(date: string, timezone: string | undefined, spots: Arr
   if (current.minutes < start) return 'is-future';
   if (current.minutes < next) return 'is-live';
   return 'is-passed';
+}
+
+function timelineStateLabel(progress: TimelineStatus): string {
+  if (progress === 'is-passed') return '完成';
+  if (progress === 'is-live') return 'Now';
+  return '即將';
+}
+
+function timelineLiveContext(state: AppState, itinerary: ItineraryDay[], nowMs: number, tripWindow?: { start: string; end: string } | null): TimelineLiveContext {
+  if (!itinerary.length) {
+    return {
+      mode: 'empty',
+      nowLabel: '--:--',
+      headline: '未有行程',
+      detail: '匯入行程後會顯示即時位置',
+      currentLabel: 'Current · --',
+      nextLabel: 'Next · --',
+    };
+  }
+
+  const firstZone = normalizeTimelineTimezone(itinerary[0]?.timezone);
+  const reference = datePartsForZone(nowMs, firstZone);
+  const outsideTrip = Boolean(reference && tripWindow && (reference.date < tripWindow.start || reference.date > tripWindow.end));
+  const activeDay = itinerary.find((day) => {
+    const current = datePartsForZone(nowMs, normalizeTimelineTimezone(day.timezone));
+    return current?.date === day.date;
+  });
+
+  if (outsideTrip || !activeDay) {
+    const isBefore = Boolean(reference && tripWindow && reference.date < tripWindow.start);
+    const day = isBefore ? itinerary[0] : itinerary[itinerary.length - 1];
+    const spots = getScheduleSpots(state, day);
+    const target = isBefore ? spots[0] : spots[spots.length - 1];
+    return {
+      mode: outsideTrip ? 'outside' : isBefore ? 'before' : 'after',
+      date: day.date,
+      day: day.day,
+      region: day.region,
+      nowLabel: reference ? formatTimelineMinutes(reference.minutes) : '--:--',
+      headline: isBefore ? '旅程未開始' : '旅程已完結',
+      detail: isBefore ? `Day ${day.day} · ${day.region}` : `最後一日 · ${day.region}`,
+      currentLabel: target ? `Focus · ${target.name}` : 'Focus · --',
+      nextLabel: isBefore && target ? `Next · ${target.time || '--:--'} ${target.name}` : 'Next · 休息 / 整理紀錄',
+    };
+  }
+
+  const current = datePartsForZone(nowMs, normalizeTimelineTimezone(activeDay.timezone));
+  const spots = getScheduleSpots(state, activeDay);
+  const live = spots.find((spot, idx) => timelineProgress(activeDay.date, spot.timezone || activeDay.timezone, spots, idx, nowMs) === 'is-live');
+  const next = spots.find((spot, idx) => timelineProgress(activeDay.date, spot.timezone || activeDay.timezone, spots, idx, nowMs) === 'is-future');
+  const passedCount = spots.filter((spot, idx) => timelineProgress(activeDay.date, spot.timezone || activeDay.timezone, spots, idx, nowMs) === 'is-passed').length;
+
+  return {
+    mode: 'active',
+    date: activeDay.date,
+    day: activeDay.day,
+    region: activeDay.region,
+    nowLabel: current ? formatTimelineMinutes(current.minutes) : '--:--',
+    headline: live ? `而家 · ${live.name}` : next ? '準備出發' : '今日行程完成',
+    detail: `Day ${activeDay.day} · ${activeDay.region} · ${passedCount}/${spots.length || 0} 完成`,
+    currentLabel: live ? `Current · ${live.time || '--:--'} ${live.name}` : 'Current · 等待下一站',
+    nextLabel: next ? `Next · ${next.time || '--:--'} ${next.name}` : 'Next · 今日已無下一站',
+  };
 }
 
 function timelineRailMetrics(date: string, timezone: string | undefined, spots: Array<ItinerarySpot & { _spotIdx: number }>, nowMs: number, tripWindow?: { start: string; end: string } | null): { isToday: boolean; isOutsideTrip: boolean; progress: number; label: string } {

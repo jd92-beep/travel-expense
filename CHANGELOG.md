@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added compact Timeline live-travel mode with a current/next stop card, completed/current/upcoming state pills, and grouped route actions.
 - Added compact History receipt health markers for pending, duplicate, photo-missing, sync-conflict, cloud-only, and local-only states.
 - Upgraded compact Scan with a one-hand cockpit panel for OCR confidence/status, batch progress, and last draft/photo recovery.
 - Added compact Batch Confirm recovery controls for partial email screenshot batches, including complete-only selection and smoke coverage.

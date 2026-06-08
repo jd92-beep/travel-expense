@@ -556,19 +556,32 @@
   box-shadow: 0 8px 16px rgba(217,65,50,.2);
 }
 
+.timeline-state-is-passed {
+  background: rgba(117,108,98,.72);
+  box-shadow: 0 8px 16px rgba(117,108,98,.12);
+}
+
+.timeline-state-is-future {
+  background: rgba(45,110,72,.84);
+  box-shadow: 0 8px 16px rgba(45,110,72,.16);
+}
+
 .timeline-main small {
   color: rgba(31, 26, 20, .62);
   font-size: 11px;
   line-height: 1.25;
 }
 
-.timeline-event .action-sheet {
+.timeline-route-actions {
   grid-column: 4 / -1;
   grid-row: 1 / span 2;
   align-self: center;
+  min-width: 52px;
+}
+
+.timeline-event .action-sheet {
   display: grid;
   gap: 4px;
-  min-width: 52px;
   margin-top: 0;
   padding: 0;
   border: 0;
@@ -795,7 +808,7 @@
     line-height: 1.2;
   }
 
-  .timeline-event .action-sheet {
+  .timeline-route-actions {
     grid-column: 4 / -1;
     min-width: 48px;
   }

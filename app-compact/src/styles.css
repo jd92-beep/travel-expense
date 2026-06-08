@@ -7210,6 +7210,63 @@ textarea,
     font-weight: 800;
   }
 
+  .timeline-live-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 8px;
+    align-items: center;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255,255,255,.72);
+    border-radius: 14px;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,.82), rgba(255,244,226,.64)),
+      rgba(255,255,255,.56);
+    box-shadow:
+      0 10px 22px rgba(68, 46, 22, .1),
+      inset 0 1px 0 rgba(255,255,255,.88);
+  }
+
+  .timeline-live-card .timeline-live-clock {
+    grid-row: 1 / span 3;
+    display: grid;
+    place-items: center;
+    min-width: 54px;
+    min-height: 42px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(194,59,94,.92), rgba(212,168,67,.86));
+    color: #fff8ec;
+    font-size: 15px;
+    font-weight: 950;
+    line-height: 1;
+    box-shadow: 0 10px 20px rgba(194,59,94,.18);
+  }
+
+  .timeline-live-card b,
+  .timeline-live-card em,
+  .timeline-live-card small {
+    min-width: 0;
+    margin: 0 !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.15;
+  }
+
+  .timeline-live-card b {
+    color: #17140f;
+    font-size: 15px;
+    font-weight: 950;
+  }
+
+  .timeline-live-card em,
+  .timeline-live-card small {
+    color: #5e4f41;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 850;
+  }
+
   .preview-timeline-stats {
     grid-column: 1 / -1;
     display: grid;
@@ -10396,6 +10453,29 @@ textarea,
     font-size: 9.5px !important;
   }
 
+  .app-shell--timeline .timeline-live-card {
+    gap: 2px 5px !important;
+    margin-top: 4px !important;
+    padding: 4px 5px !important;
+    border-radius: 9px !important;
+  }
+
+  .app-shell--timeline .timeline-live-card .timeline-live-clock {
+    min-width: 36px !important;
+    min-height: 30px !important;
+    border-radius: 8px !important;
+    font-size: 10px !important;
+  }
+
+  .app-shell--timeline .timeline-live-card b {
+    font-size: 10px !important;
+  }
+
+  .app-shell--timeline .timeline-live-card em,
+  .app-shell--timeline .timeline-live-card small {
+    font-size: 8.5px !important;
+  }
+
   .app-shell--timeline .preview-timeline-stats {
     grid-template-columns: 1fr 1fr !important;
     gap: 5px !important;
@@ -10577,6 +10657,27 @@ textarea,
 
   .app-shell--timeline .preview-timeline-copy small {
     display: none !important;
+  }
+
+  .app-shell--timeline .timeline-live-card {
+    display: grid !important;
+    margin-top: 2px !important;
+    padding: 3px 4px !important;
+  }
+
+  .app-shell--timeline .timeline-live-card .timeline-live-clock {
+    min-width: 30px !important;
+    min-height: 24px !important;
+    font-size: 8px !important;
+  }
+
+  .app-shell--timeline .timeline-live-card b {
+    font-size: 8.5px !important;
+  }
+
+  .app-shell--timeline .timeline-live-card em,
+  .app-shell--timeline .timeline-live-card small {
+    font-size: 7.5px !important;
   }
 
   .app-shell--timeline .preview-timeline-stats {
