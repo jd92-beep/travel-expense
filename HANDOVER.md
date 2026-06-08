@@ -8,8 +8,7 @@ Last updated: 2026-06-08 HKT
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
 - Latest compact app-code proof commit: `4fb57ea` (`Add compact broker AI assistant`).
-- Latest verified compact Vercel deployment: `dpl_7hhdmP7Yj9BtKooQK2rXgxHGcytN`, production URL `https://travel-expense-compact-3icm00krj-ftjdfr-7940s-projects.vercel.app`, aliased to `https://travel-expense-compact.vercel.app/`.
-- Latest live proof: `npm run smoke:deploy-live` passed with live HTTP 200, title `旅費 Compact`, asset hash `047731d30c52aefc`, HTML hash `26052d70cdce20e8`, and alias/deployment content match.
+- Latest live proof command: `npm run smoke:deploy-live`. It should be rerun after each compact push/deploy for the exact current deployment ID, live HTTP 200 proof, compact title, asset hash, HTML hash, and alias/deployment content match.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
   - P0-02 done: Dashboard budget usage now always includes all current-trip receipts, while `statsIncludeTransportLodging` only affects today/daily/chart-style filtered views.
