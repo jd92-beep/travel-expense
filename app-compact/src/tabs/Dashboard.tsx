@@ -51,6 +51,7 @@ import { activeTrip, createTripProfile, scopedReceiptsForTrip } from '../domain/
 import type { AppState, ItinerarySpot, Receipt, SyncQueueItem, TabId } from '../lib/types';
 import { brokerAiJson, redactedError } from '../lib/credentialBroker';
 import { DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
+import { buildTravelDayWidgets } from '../lib/travelDay';
 
 function displayDateRange(startDate: string, endDate: string) {
   const fmtDate = (date: string) => {
@@ -384,6 +385,7 @@ export function Dashboard({
   const coachWeatherText = weatherSensitive
     ? `先刷新 ${coachWeatherRegion} 天氣，戶外/交通多要預雨風。`
     : `先睇 ${coachWeatherRegion} 天氣 freshness，再出門。`;
+  const travelDayWidgets = buildTravelDayWidgets(state, itinerary);
 
   const handleBrokerAssistant = async () => {
     setAssistantStatus('loading');
@@ -706,6 +708,27 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
         <div className="preview-dashboard-coach-actions">
           <button type="button" onClick={() => onTab('weather')}><CloudSun size={16} /> 天氣</button>
           <button type="button" onClick={() => onTab('stats')}><PieChart size={16} /> 預算</button>
+        </div>
+      </GlassCard>
+      </Reveal>
+
+      {/* 2.65 Travel-day widgets */}
+      <Reveal className="dashboard-reveal" delay={0.065}>
+      <GlassCard as="div" className="travel-day-panel dashboard-travel-day-panel relative overflow-hidden z-10">
+        <div role="region" aria-label="Travel day widgets">
+        <div className="travel-day-panel-head">
+          <span><Compass size={15} /> Travel-day control</span>
+          <button type="button" className="compact-touch-action" onClick={() => onTab('timeline')}>Timeline</button>
+        </div>
+        <div className="travel-day-widget-grid">
+          {travelDayWidgets.map((widget) => (
+            <article className={`travel-day-widget kind-${widget.kind}`} key={widget.kind}>
+              <span>{widget.label}</span>
+              <strong>{widget.value}</strong>
+              <small>{widget.detail}</small>
+            </article>
+          ))}
+        </div>
         </div>
       </GlassCard>
       </Reveal>

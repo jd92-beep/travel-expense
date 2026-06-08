@@ -8641,6 +8641,155 @@ textarea,
     font-weight: 900;
   }
 
+  .travel-day-panel {
+    padding: 13px 12px !important;
+    margin: 0 0 14px !important;
+    border: 1px solid rgba(255,255,255,.64) !important;
+    background:
+      linear-gradient(135deg, rgba(255,253,248,.82), rgba(242,248,244,.62)),
+      rgba(255,255,255,.54) !important;
+    box-shadow:
+      0 14px 28px rgba(45, 54, 72, .08),
+      inset 0 1px 0 rgba(255,255,255,.85) !important;
+  }
+
+  .travel-day-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(90deg, rgba(45,110,72,.18), rgba(212,168,67,.18), rgba(194,59,94,.14)),
+      radial-gradient(circle at 12% 8%, rgba(255,255,255,.7), transparent 30%);
+    opacity: .72;
+  }
+
+  .travel-day-panel-head,
+  .travel-day-widget-grid {
+    position: relative;
+    z-index: 1;
+  }
+
+  .travel-day-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 9px;
+  }
+
+  .travel-day-panel-head span,
+  .travel-day-panel-head b,
+  .travel-day-panel-head button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #6d563c;
+    font-size: 10px;
+    font-weight: 950;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .travel-day-panel-head button {
+    min-height: 30px;
+    border: 1px solid rgba(116,88,53,.16);
+    border-radius: 999px;
+    background: rgba(255,255,255,.72);
+    padding: 0 10px;
+    color: #18395c;
+  }
+
+  .travel-day-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .travel-day-widget {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+    padding: 8px;
+    border-radius: 11px;
+    border: 1px solid rgba(116,88,53,.13);
+    background: rgba(255,255,255,.66);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.84);
+  }
+
+  .travel-day-widget span {
+    color: #6a5946;
+    font-size: 9.5px;
+    font-weight: 900;
+    line-height: 1.05;
+  }
+
+  .travel-day-widget strong {
+    min-width: 0;
+    color: #101820;
+    font-size: 14px !important;
+    line-height: 1.06 !important;
+    font-weight: 950 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .travel-day-widget small {
+    min-width: 0;
+    color: #5d5041;
+    font-size: 9.5px;
+    font-weight: 750;
+    line-height: 1.14;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .travel-day-widget.kind-weather strong {
+    color: #c23b5e !important;
+  }
+
+  .travel-day-widget.kind-transit strong {
+    color: #18395c !important;
+  }
+
+  .timeline-travel-day-panel {
+    padding: 8px !important;
+    margin: -10px 0 -8px !important;
+  }
+
+  .timeline-travel-day-panel .travel-day-panel-head {
+    display: none;
+  }
+
+  .timeline-travel-day-panel .travel-day-widget-grid {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 1px;
+    scrollbar-width: none;
+  }
+
+  .timeline-travel-day-panel .travel-day-widget-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .timeline-travel-day-panel .travel-day-widget {
+    flex: 0 0 128px;
+    min-height: 54px;
+    padding: 6px 7px;
+  }
+
+  .timeline-travel-day-panel .travel-day-widget span,
+  .timeline-travel-day-panel .travel-day-widget small {
+    font-size: 9px;
+  }
+
+  .timeline-travel-day-panel .travel-day-widget strong {
+    font-size: 13px !important;
+  }
+
   .preview-dashboard-spot-actions {
     display: flex;
     align-items: center;

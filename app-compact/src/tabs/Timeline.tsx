@@ -6,6 +6,7 @@ import { MagicCard } from '../components/ui/magic-card';
 import { ShineBorder } from '../components/ui/shine-border';
 import { categoryById, dayLooseReceipts, fmt, getItinerary, getScheduleSpots, hkd, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts } from '../lib/domain';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from '../lib/types';
+import { buildTravelDayWidgets } from '../lib/travelDay';
 import { ReceiptRow } from './Dashboard';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
@@ -41,6 +42,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   const hasOpenModal = Boolean(editing || activeDay || viewPhoto);
   const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
   const liveContext = timelineLiveContext(state, itinerary, nowTick, tripWindow);
+  const travelDayWidgets = buildTravelDayWidgets(state, itinerary, nowTick);
   const commandDay = (liveContext.date ? itinerary.find((day) => day.date === liveContext.date) : null) || itinerary.find((day) => day.date === today) || itinerary[0];
   const commandDate = commandDay?.date ? new Date(`${commandDay.date}T00:00:00`) : null;
   const commandYear = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getFullYear()) : '----';
@@ -121,6 +123,24 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
           )}
         </div>
       </MagicCard>
+
+      <GlassCard className="travel-day-panel timeline-travel-day-panel">
+        <div role="region" aria-label="Travel day widgets">
+        <div className="travel-day-panel-head">
+          <span><MapPin size={15} /> Travel-day control</span>
+          <b>{liveContext.nowLabel}</b>
+        </div>
+        <div className="travel-day-widget-grid">
+          {travelDayWidgets.map((widget) => (
+            <article className={`travel-day-widget kind-${widget.kind}`} key={widget.kind}>
+              <span>{widget.label}</span>
+              <strong>{widget.value}</strong>
+              <small>{widget.detail}</small>
+            </article>
+          ))}
+        </div>
+        </div>
+      </GlassCard>
 
       {itinerary.map((day) => {
         const spots = getScheduleSpots(state, day);

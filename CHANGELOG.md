@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Added compact travel-day widgets to Dashboard and Timeline, backed by shared `buildTravelDayWidgets()` logic for transit countdown, receipt reminder, weather alert, and next booking note without adding schema fields or calling external APIs.
 - Added `npm run smoke:shared-contract` for the compact app and included it in the full compact production gate. The smoke boots compact and React with one public-safe fixture, compares the shared trip/receipt/person/share/settings/sync/Supabase/Notion/trip-intelligence contract, accepts compact schema v4 with React schema v3 compatibility, and confirms compact-only personalization survives.
 - Added compact first-run personalization for trip style, preferred trip currency, home city, and weather preference in the Welcome Guide and Settings; new public Supabase sessions now use their scoped storage immediately, preventing fallback to legacy demo/Nagoya local state.
 - Added compact Dashboard `Broker AI Assistant`, routed through the Credential Broker Kimi JSON path with visible `kimi/kimi-code` primary-model, broker quota, and no-fallback-on-429 policy; dashboard smoke now covers success and quota hard-stop behavior without calling Google/Mimo fallbacks.

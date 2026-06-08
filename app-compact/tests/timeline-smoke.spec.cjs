@@ -186,6 +186,7 @@ test('Timeline command card stays compact and day header shows one date', async 
   expect(commandAtmosphere).toContain('travel-ai-atlas');
   const commandMetrics = await page.evaluate(() => {
     const card = document.querySelector('.timeline-command')?.getBoundingClientRect();
+    const travelDayPanel = document.querySelector('.timeline-travel-day-panel')?.getBoundingClientRect();
     const firstDay = document.querySelector('.timeline-day')?.getBoundingClientRect();
     const screen = document.querySelector('.timeline-screen')?.getBoundingClientRect();
     const title = document.querySelector('.timeline-command-title')?.getBoundingClientRect();
@@ -193,8 +194,9 @@ test('Timeline command card stays compact and day header shows one date', async 
     return {
       height: card?.height || 0,
       topGap: card && screen ? card.top - screen.top : 0,
-      lowerGap: card && firstDay ? firstDay.top - card.bottom : 0,
+      lowerGap: travelDayPanel && firstDay ? firstDay.top - travelDayPanel.bottom : 0,
       firstDayTop: firstDay?.top || 0,
+      travelDayHeight: travelDayPanel?.height || 0,
       titleCenter: title ? title.top + title.height / 2 : 0,
       daysCenter: days ? days.top + days.height / 2 : 0,
       titleRight: title?.right || 0,
@@ -204,7 +206,8 @@ test('Timeline command card stays compact and day header shows one date', async 
   expect(commandMetrics.height, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(130);
   expect(commandMetrics.topGap, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(18);
   expect(commandMetrics.lowerGap, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(16);
-  expect(commandMetrics.firstDayTop, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(320);
+  expect(commandMetrics.travelDayHeight, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(100);
+  expect(commandMetrics.firstDayTop, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(400);
   expect(Math.abs(commandMetrics.titleCenter - commandMetrics.daysCenter), JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(7);
   expect(commandMetrics.daysLeft, JSON.stringify(commandMetrics, null, 2)).toBeGreaterThan(commandMetrics.titleRight);
 
@@ -345,6 +348,100 @@ test('Timeline rail progress follows the current itinerary spot instead of the w
   expect(railMetrics.progress, JSON.stringify(railMetrics, null, 2)).toBeGreaterThan(0.31);
   expect(railMetrics.progress, JSON.stringify(railMetrics, null, 2)).toBeLessThan(0.36);
   expect(Math.abs((railMetrics.markerCenterY || 0) - (railMetrics.liveCenterY || 0)), JSON.stringify(railMetrics, null, 2)).toBeLessThan(34);
+});
+
+test('Timeline command includes travel-day countdown, receipt, weather, and booking widgets', async ({ page }) => {
+  const fixed = new Date('2026-05-09T09:30:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    const day = {
+      date: '2026-05-09',
+      day: 2,
+      region: 'Kyoto Control Day',
+      city: 'Kyoto',
+      country: 'Japan',
+      timezone: 'Asia/Tokyo',
+      lodging: { name: 'Kyoto Station Hotel', checkIn: '15:00', address: 'Kyoto Station' },
+      spots: [
+        { time: '08:00', name: 'Hotel Breakfast', type: 'food' },
+        { time: '09:00', name: 'Temple Gate', type: 'ticket', note: 'outdoor shrine walk' },
+        { time: '11:00', name: 'Kyoto Rail Transfer', type: 'transport', note: 'JR platform 4' },
+        { time: '15:00', name: 'Museum Booking', type: 'ticket', note: 'booking REF-MUSEUM-77' },
+      ],
+    };
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      schemaVersion: 4,
+      lastTab: 'timeline',
+      budget: 10000,
+      rate: 20,
+      activeTripId: 'travel_day_trip',
+      tripName: 'Travel Day Test',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-10' },
+      customItinerary: [day],
+      trips: [{
+        id: 'travel_day_trip',
+        name: 'Travel Day Test',
+        destinationSummary: 'Kyoto Japan',
+        startDate: '2026-05-08',
+        endDate: '2026-05-10',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: true,
+        intelligence: { countryCode: 'JP', primaryCurrency: 'JPY', themeKey: 'japan_washi', weatherRegion: 'Kyoto', weatherPreference: 'rain' },
+        itinerary: [day],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      receipts: [
+        { id: 'breakfast_receipt', store: 'Hotel Breakfast', total: 1200, date: '2026-05-09', time: '08:10', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1 },
+        { id: 'rail_booking', store: 'Kyoto Rail Transfer', total: 2200, date: '2026-05-09', time: '11:00', category: 'transport', payment: 'credit', bookingRef: 'KTX-5512', note: 'Reserved seats', personId: 'p_boss', splitMode: 'shared', createdAt: 2 },
+      ],
+      weatherCache: {
+        kyoto_today: {
+          fetchedAt: fixedNow - 15 * 60 * 1000,
+          slots: [{ hour: 12, rain: 78, precipMm: 6, windSpeed: 18, code: 61 }],
+        },
+      },
+    }));
+  }, fixed);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByText('行程時間線').first()).toBeVisible();
+  const widgets = page.getByLabel('Travel day widgets');
+  await expect(widgets).toBeVisible();
+  await expect(widgets).toContainText('Transit countdown');
+  await expect(widgets).toContainText('90m');
+  await expect(widgets).toContainText('Receipt reminder');
+  await expect(widgets).toContainText('補記 Temple Gate');
+  await expect(widgets).toContainText('Weather alert');
+  await expect(widgets).toContainText('Rain 78%');
+  await expect(widgets).toContainText('Booking note');
+  await expect(widgets).toContainText('KTX-5512');
+  const geometry = await widgets.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    const screen = document.querySelector('.timeline-screen')?.getBoundingClientRect();
+    return {
+      width: box.width,
+      right: box.right,
+      screenRight: screen?.right || 0,
+    };
+  });
+  expect(geometry.width).toBeLessThanOrEqual(360);
+  expect(geometry.right).toBeLessThanOrEqual(geometry.screenRight);
 });
 
 test('Timeline rail uses a lighter inactive colour when today is outside the trip dates', async ({ page }) => {
