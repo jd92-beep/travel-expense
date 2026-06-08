@@ -2,6 +2,7 @@
 
 ## 2026-06-09
 
+- Made compact `npm run smoke:security` self-start the local Vite server through a safe-env runner, so the standalone security smoke no longer fails with `ERR_CONNECTION_REFUSED` when no dev server is already running.
 - Added `npm run broker-vault:prepare` for compact P0-05. It uses a hidden local terminal prompt to create an ignored private broker-vault session file, with redacted output only, so authenticated provider proof can run without committing or printing secrets.
 - Added `npm run smoke:broker-vault:doctor` for compact P0-05 readiness. It reports whether ignored broker-vault auth input is present, git-ignored, permission-safe, and unexpired without printing session/token values or calling providers.
 - Added a compact local release-note diff panel for update-ready states. The PWA readiness strip now offers `Release notes`, showing a short local `Now vs previous` summary with no GitHub, changelog, or external release calls.
