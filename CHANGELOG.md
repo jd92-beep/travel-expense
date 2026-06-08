@@ -4,11 +4,15 @@ All notable project changes should be recorded here.
 
 ## 2026-06-08
 
-### React improvement roadmap and sync confidence center
+### React improvement roadmap, sync confidence, and backup safety
 
 - Added `docs/react-improvement-checklist.md`, a prioritized React-only improvement checklist covering trust/sync, mobile-native UX, core workflows, Trip Intelligence, Stats budget coaching, maintainability, and premium polish.
 - Added a top-level Settings `同步信心中心` panel for the React app, summarizing Supabase readiness, Personal Notion mirror readiness, pending sync queue, latest sync timing/status, cache scope, and sync errors.
 - Updated Settings smoke coverage so the new sync confidence panel is visible, has four status tiles, does not introduce 390px mobile overflow, and covers queued/error/offline local states, Supabase-only cloud mode, and Personal Notion connected mode.
+- Clarified React Settings backup/import/export safety wording with a visible data-management panel: CSV and Backup JSON are current-trip only, portable backups exclude keys/tokens/sessions/unlock secrets, and imports discard external cloud IDs, sync queues, stale trip links, and credential fields.
+- Hardened Settings rendering against duplicate person IDs from corrupted/imported state so settlement/person rows no longer emit duplicate React key warnings.
+- Restored the Stats top budget compass to follow the selected chart filter, matching the existing Stats smoke contract where daily/spending charts can exclude transport/lodging while settlement totals still use all receipts.
+- Quieted the disabled-IndexedDB smoke path so tests that intentionally remove `window.indexedDB` do not produce storage snapshot warnings.
 
 ## 2026-06-03
 

@@ -52,7 +52,7 @@ function scopedSnapshotKey(scope?: string): string {
 }
 
 export async function loadIndexedState(scope?: string): Promise<Partial<AppState> | null> {
-  if (!('indexedDB' in window)) return null;
+  if (!window.indexedDB) return null;
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STATE_STORE, 'readonly');
@@ -63,7 +63,7 @@ export async function loadIndexedState(scope?: string): Promise<Partial<AppState
 }
 
 export async function saveIndexedState(state: AppState, scope?: string): Promise<void> {
-  if (!('indexedDB' in window)) return;
+  if (!window.indexedDB) return;
   const db = await openDb();
   const safe = stripSensitiveState(state);
   await new Promise<void>((resolve, reject) => {
@@ -75,7 +75,7 @@ export async function saveIndexedState(state: AppState, scope?: string): Promise
 }
 
 export async function clearIndexedState(scope?: string): Promise<void> {
-  if (!('indexedDB' in window)) return;
+  if (!window.indexedDB) return;
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STATE_STORE, 'readwrite');

@@ -73,10 +73,6 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
   const analysisTotal = analysisReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
   const analysisTotalHkd = analysisReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
 
-  // 總預算環專用（永遠包含所有項目）
-  const trueTotal = scopedState.receipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
-  const trueTotalHkd = scopedState.receipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
-
   const transferTotal = settlement.transfers.reduce((s, t) => s + t.amount, 0);
   const transferTotalHkd = Math.round(transferTotal / activeRate);
 
@@ -133,8 +129,8 @@ export function Stats({ state, updateState }: { state: AppState; updateState: (p
           <div className="stats-command-visual">
             <SpendingCompass
               categories={catTotals} 
-              total={trueTotal}
-              totalHkd={trueTotalHkd}
+              total={analysisTotal}
+              totalHkd={analysisTotalHkd}
               budget={Number(state.budget) || 0} 
               budgetHkd={budgetHkd}
               dailyAverage={dailyAverage} 

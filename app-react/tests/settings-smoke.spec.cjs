@@ -293,6 +293,10 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await expect(page.getByText(/連線正常/)).toBeVisible();
 
   await setAccordion(page, '資料管理');
+  const dataSafety = page.locator('.settings-backup-safety');
+  await expect(dataSafety).toContainText('CSV / Backup JSON 只包含目前旅程');
+  await expect(dataSafety).toContainText('Backup 不包含 API key、Notion token、broker session 或解鎖 secret');
+  await expect(dataSafety).toContainText('匯入 Backup 時會丟棄外部 cloud IDs、sync queue、舊 Trip links 同 credential 欄位');
   const csvDownloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: /匯出 CSV/ }).click();
   const csvDownload = await csvDownloadPromise;

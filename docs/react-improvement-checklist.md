@@ -6,7 +6,7 @@ Scope: this checklist tracks the main public React app in `app-react/` only. Com
 
 ## Current Evidence
 
-- Latest pushed React-roadmap baseline checked on 2026-06-08 HKT: `5434f18` (`Add React improvement checklist and sync confidence center`).
+- Latest pushed React-roadmap baseline checked on 2026-06-08 HKT: `68e80f9` (`Cover React sync confidence smoke states`).
 - Vercel React production checked Ready: `https://travel-expense-react.vercel.app`.
 - Latest GitHub Pages workflow checked successful for `main`.
 - `app-react npm run typecheck` passed on 2026-06-08 HKT before this checklist was started.
@@ -29,7 +29,7 @@ Every implementation task must end with a targeted smoke test. Broader tasks sho
   - Proof: `npm run smoke:settings`; visual/mobile geometry probe or `npm run smoke:mobile-layout`.
 - [x] Add focused tests for sync queue health states: queued, error, offline, Supabase-only, and Personal Notion connected.
   - Proof: dedicated Playwright or unit coverage plus `npm run smoke:settings`.
-- [ ] Audit backup/import/export wording and UI so users know backups are active-trip only and never include secrets.
+- [x] Audit backup/import/export wording and UI so users know backups are active-trip only and never include secrets.
   - Proof: `npm run smoke:settings`.
 - [ ] Add user-facing recovery steps for sync errors, including retry, local-safe explanation, and when Notion is optional.
   - Proof: `npm run smoke:settings` and `npm run smoke:final-nav`.
@@ -92,3 +92,4 @@ Every implementation task must end with a targeted smoke test. Broader tasks sho
 
 - [x] 2026-06-08 HKT: Added the React Settings `同步信心中心` top-level panel. It shows Supabase readiness, Personal Notion mirror readiness, pending queue count, last sync timing/status, local/Supabase cache scope, and sync errors. Verified with `npm run typecheck`, `npm run build`, `npm run smoke:settings`, and `npm run smoke:mobile-layout`.
 - [x] 2026-06-08 HKT: Added focused Settings smoke coverage for queued queue items, failed/error queue items, offline sync status, Supabase-only scoped cache mode, and Personal Notion connected mode. Verified with normal `npm run smoke:settings` and fake-env `SUPABASE_SETTINGS_SMOKE=1 npm run smoke:settings`.
+- [x] 2026-06-08 HKT: Clarified React Settings backup/import/export wording with a visible safety panel: CSV and Backup JSON are current-trip only, portable backups exclude API keys/tokens/sessions/unlock secrets, and imports discard external cloud IDs, sync queues, stale trip links, and credential fields. While verifying the broader Settings blast radius, also fixed duplicate-person-id React key warnings, quieted the disabled-IndexedDB smoke path, and restored Stats budget compass totals to follow the chart filter. Verified with `npm run smoke:settings`, `npm run smoke:stats`, `npm run smoke:history`, `npm run smoke:timeline`, `npm run smoke:final-nav`, `npm run smoke:mobile-layout`, `npm run typecheck`, `npm run build`, and `npm run security:scan`.

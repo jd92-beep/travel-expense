@@ -200,6 +200,7 @@ export function Settings({
   const trips = state.trips?.length ? state.trips : [currentTrip];
   const activeTripSettlementState = {
     ...state,
+    persons,
     receipts: scopedReceiptsForTrip(state, currentTrip),
   };
   const settlement = computeSettlements(activeTripSettlementState);
@@ -1833,7 +1834,7 @@ export function Settings({
       <AccordionCard id="settings-data" title="資料管理 / Security" icon={<ShieldCheck />}>
         <input ref={backupInput} hidden type="file" accept="application/json,.json" onChange={(e) => importBackup(e.target.files?.[0])} />
         <div className="action-row wrap">
-          <button className="secondary" type="button" onClick={() => exportCsv(state)}><Download size={18} /> 匯出 CSV</button>
+          <button className="secondary" type="button" onClick={() => exportCsv(state)}><Download size={18} /> 匯出 CSV（目前旅程）</button>
           <button className="secondary" type="button" onClick={() => downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup JSON（目前旅程）</button>
           <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup JSON</button>
           <button className="danger" type="button" onClick={() => { clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); }}><KeyRound size={18} /> 清除 broker session</button>
@@ -1851,11 +1852,15 @@ export function Settings({
             }
           }}><RotateCcw size={18} /> 清除本地資料</button>
         </div>
+        <div className="settings-backup-safety" aria-label="Backup safety scope">
+          <span><ShieldCheck size={15} /> CSV / Backup JSON 只包含目前旅程，不會匯出其他旅程紀錄。</span>
+          <span><KeyRound size={15} /> Backup 不包含 API key、Notion token、broker session 或解鎖 secret。</span>
+          <span><AlertTriangle size={15} /> 匯入 Backup 時會丟棄外部 cloud IDs、sync queue、舊 Trip links 同 credential 欄位。</span>
+        </div>
         <div className="mini-list">
           <span onClick={handleVersionClick} style={{ cursor: 'pointer', userSelect: 'none' }}>
             Build: {buildLabel} {clickCount > 0 ? `(${clickCount}/5)` : ''} {showStressPanel ? '🔓' : '🔒'}
           </span>
-          <span>Backup / CSV 不包含 provider API key、Notion token、broker session 或解鎖 secret。</span>
         </div>
       </AccordionCard>
 

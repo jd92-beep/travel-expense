@@ -102,10 +102,18 @@ export function getReceiptPhase(state: AppState, receipt: Receipt): TripPhase {
 }
 
 export function getPersons(state: AppState): Person[] {
-  return state.persons && state.persons.length ? state.persons : [
+  const fallbackPersons = [
     { id: 'p_boss', name: 'User 1', emoji: '👦', color: '#CC2929' },
     { id: 'p_xinxin', name: 'User 2', emoji: '👧', color: '#FF91A4' },
   ];
+  const rawPersons = state.persons && state.persons.length ? state.persons : fallbackPersons;
+  const seen = new Set<string>();
+  const persons = rawPersons.filter((person) => {
+    if (!person.id || seen.has(person.id)) return false;
+    seen.add(person.id);
+    return true;
+  });
+  return persons.length ? persons : fallbackPersons;
 }
 
 export function displayStore(receipt: Receipt): string {
