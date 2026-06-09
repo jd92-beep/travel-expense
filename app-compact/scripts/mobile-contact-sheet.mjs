@@ -267,9 +267,10 @@ async function captureTabs() {
     await stubExternalRequests(page);
     await page.addInitScript(seedScript);
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
+    await page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]').waitFor({ state: 'visible', timeout: 15000 });
 
     const captures = [];
-    const nav = page.getByLabel('主要分頁');
+    const nav = page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]');
     for (const tab of tabs) {
       await nav.getByRole('button', { name: tab.label, exact: true }).click();
       if (tab.expected === '紀錄中心' || tab.expected === '設定控制中心') {

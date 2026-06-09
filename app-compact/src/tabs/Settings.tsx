@@ -2813,6 +2813,32 @@ export function Settings({
             </div>
           </div>
         )}
+        <details className="settings-maintainer-release-note" aria-label="Maintainer deploy recovery note">
+          <summary>
+            <span><Server size={15} /> Maintainer deploy recovery</span>
+            <strong>Quota-safe</strong>
+          </summary>
+          <div className="settings-maintainer-release-grid">
+            <span>
+              <small>Source of truth</small>
+              <strong>origin/main first</strong>
+            </span>
+            <span>
+              <small>Live proof</small>
+              <strong>smoke:deploy-live</strong>
+            </span>
+            <span>
+              <small>Quota blocker</small>
+              <strong>api-deployments-free-per-day</strong>
+            </span>
+          </div>
+          <p>For maintainers only: when Vercel quota blocks production, treat GitHub `main` plus local release gates as latest code, but do not call it live until a new production deploy succeeds.</p>
+          <div className="settings-restore-preview-warnings">
+            <span><Cloud size={13} /> Retry: npx vercel deploy --prod --scope ftjdfr-7940s-projects --yes</span>
+            <span><ShieldCheck size={13} /> Verify: npm run smoke:deploy-live</span>
+            <span><AlertTriangle size={13} /> Never paste API keys, tokens, sessions, or account secrets into deploy notes.</span>
+          </div>
+        </details>
         <div className="settings-backup-safety" aria-label="Backup safety scope">
           <span><ShieldCheck size={15} /> CSV / Backup JSON 只包含目前旅程，不會匯出其他旅程紀錄。</span>
           <span><KeyRound size={15} /> Backup 不包含 API key、Notion token、broker session 或解鎖 secret。</span>
