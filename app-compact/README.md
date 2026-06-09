@@ -48,3 +48,11 @@ target file is git-ignored.
 You may also use `supabaseAccessToken` instead of `credentialSession` for a
 public-user proof. The script redacts provider output and prints only status/shape
 summaries.
+
+If `broker-vault:prepare` reports `status: "ready"` but
+`smoke:broker-vault` exits `2`, the unlock password/session path has already
+worked. Read the redacted `failures` list: Kimi billing-cycle quota, unavailable
+Google/Gemma model ids, Mimo provider config/backend 404s, or temporary provider
+high-demand messages are live provider/account blockers, not local folder or
+password failures. Do not add frontend fallback calls after quota/rate-limit
+errors.
