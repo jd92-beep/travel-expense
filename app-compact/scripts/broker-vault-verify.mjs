@@ -22,6 +22,16 @@ const sensitivePatterns = [
   /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/,
 ];
 
+const accountLimitPatterns = [
+  /usage limit/i,
+  /quota/i,
+  /billing cycle/i,
+  /rate limit/i,
+  /too many requests/i,
+  /insufficient.*credit/i,
+  /payment required/i,
+];
+
 function assertNoSensitiveText(label, text) {
   for (const pattern of sensitivePatterns) {
     if (pattern.test(text)) {
@@ -52,6 +62,15 @@ async function readJsonFile(filePath) {
 }
 
 async function loadAuthInput() {
+  if (expectMissingSession) {
+    return {
+      mode: 'missing',
+      session: '',
+      supabaseToken: '',
+      expiresAt: 0,
+      source: 'forced-missing-session',
+    };
+  }
   const fileInput = await readJsonFile(sessionFile);
   const session = process.env.COMPACT_BROKER_VAULT_SESSION
     || fileInput?.credentialSession
@@ -104,6 +123,52 @@ function expectStatus(label, result, allowedStatuses) {
   }
 }
 
+function responseMessage(result) {
+  return redactedError(result?.data?.error || result?.data?.message || '');
+}
+
+function responseOutcome(result) {
+  const message = responseMessage(result);
+  if (result.status === 429 || accountLimitPatterns.some((pattern) => pattern.test(message))) {
+    return 'account-limited';
+  }
+  if (result.status === 401 || result.status === 403) return 'auth-blocked';
+  if (result.status >= 500) return 'provider-error';
+  return 'unexpected-status';
+}
+
+function summarizeFailedCall(pathname, result) {
+  return {
+    path: pathname,
+    status: result.status,
+    ok: result.data?.ok === true,
+    outcome: responseOutcome(result),
+    message: responseMessage(result) || undefined,
+  };
+}
+
+async function collectCall(checks, failures, label, pathname, expectedStatuses, run, summarizeSuccess) {
+  try {
+    const result = await run();
+    if (expectedStatuses.includes(result.status)) {
+      checks.push(summarizeSuccess(result));
+      return;
+    }
+    const failure = summarizeFailedCall(pathname, result);
+    checks.push(failure);
+    failures.push({ label, ...failure });
+  } catch (error) {
+    const failure = {
+      label,
+      path: pathname,
+      outcome: 'request-error',
+      message: redactedError(error),
+    };
+    checks.push(failure);
+    failures.push(failure);
+  }
+}
+
 function summarizeProviders(data) {
   return (data?.providers || []).map((provider) => ({
     provider: provider.provider,
@@ -126,96 +191,158 @@ function summarizeAi(pathname, result) {
   };
 }
 
-const auth = await loadAuthInput();
-const checks = [];
+async function main() {
+  const auth = await loadAuthInput();
+  const checks = [];
+  const failures = [];
+  let notionDatabaseId = '';
 
-if (auth.mode === 'missing') {
-  const guard = await requestJson('/credentials/status');
-  expectStatus('missing-session guard', guard, [401]);
-  const errorText = String(guard.data?.error || '');
-  if (!/session/i.test(errorText)) {
-    throw new Error(`missing-session guard returned unexpected error: ${redactedError(JSON.stringify(guard.data))}`);
+  if (auth.mode === 'missing') {
+    const guard = await requestJson('/credentials/status');
+    expectStatus('missing-session guard', guard, [401]);
+    const errorText = String(guard.data?.error || '');
+    if (!/session/i.test(errorText)) {
+      throw new Error(`missing-session guard returned unexpected error: ${redactedError(JSON.stringify(guard.data))}`);
+    }
+    const result = {
+      brokerUrl,
+      origin,
+      mode: 'missing-session',
+      status: expectMissingSession ? 'passed' : 'blocked',
+      summary: expectMissingSession
+        ? 'fail-closed guard passed; authenticated provider calls were not executed'
+        : 'missing local broker vault session; authenticated provider calls were not executed',
+      next: `Create ignored ${path.basename(DEFAULT_SESSION_FILE)} or set COMPACT_BROKER_VAULT_SESSION / COMPACT_BROKER_VAULT_SUPABASE_TOKEN locally, then rerun npm run smoke:broker-vault.`,
+      checks: [{ path: '/credentials/status', status: guard.status, guard: errorText }],
+    };
+    console.log(JSON.stringify(result, null, 2));
+    if (!expectMissingSession) process.exit(2);
+    return;
   }
-  const result = {
+
+  if (auth.mode === 'broker-session' && auth.expiresAt && auth.expiresAt <= Date.now()) {
+    throw new Error('Local broker vault session is expired; refresh it before running authenticated provider proof.');
+  }
+
+  await collectCall(
+    checks,
+    failures,
+    'credentials status',
+    '/credentials/status',
+    [200],
+    () => requestJson('/credentials/status', undefined, auth),
+    (result) => ({
+      path: '/credentials/status',
+      status: result.status,
+      broker: result.data?.broker || 'unknown',
+      providers: summarizeProviders(result.data),
+      ...(() => {
+        notionDatabaseId = String((result.data?.providers || []).find((provider) => provider.provider === 'notion')?.databaseId || '');
+        return { hasNotionDatabaseId: !!notionDatabaseId };
+      })(),
+    }),
+  );
+
+  await collectCall(
+    checks,
+    failures,
+    'credentials test-all',
+    '/credentials/test-all',
+    [200],
+    () => requestJson('/credentials/test-all', { method: 'POST', body: {} }, auth),
+    (result) => ({
+      path: '/credentials/test-all',
+      status: result.status,
+      providers: summarizeProviders(result.data),
+    }),
+  );
+
+  await collectCall(
+    checks,
+    failures,
+    'weather forecast',
+    '/weather/forecast',
+    [200],
+    () => requestJson('/weather/forecast', {
+      method: 'POST',
+      body: { lat: 33.50972, lon: 126.52194, days: 1 },
+    }, auth),
+    (result) => ({
+      path: '/weather/forecast',
+      status: result.status,
+      source: result.data?.data?.source || result.data?.data?.provider || 'unknown',
+      hasHourly: Array.isArray(result.data?.data?.hourly?.time),
+      hasFeelsLike: Array.isArray(result.data?.data?.hourly?.apparent_temperature),
+    }),
+  );
+
+  for (const providerPath of ['/kimi/json', '/google/json', '/mimo/json']) {
+    await collectCall(
+      checks,
+      failures,
+      providerPath,
+      providerPath,
+      [200],
+      () => requestJson(providerPath, {
+        method: 'POST',
+        body: {
+          prompt: 'Return only JSON: {"ok":true,"provider":"smoke"}',
+          kind: 'test',
+        },
+      }, auth),
+      (result) => summarizeAi(providerPath, result),
+    );
+  }
+
+  await collectCall(
+    checks,
+    failures,
+    'notion request',
+    '/notion/request',
+    [200],
+    () => requestJson('/notion/request', {
+      method: 'POST',
+      body: {
+        path: notionDatabaseId ? `/databases/${notionDatabaseId}/query` : '/databases/redacted/query',
+        method: 'POST',
+        body: { page_size: 1 },
+        databaseId: notionDatabaseId || undefined,
+      },
+    }, auth),
+    (result) => ({
+      path: '/notion/request',
+      status: result.status,
+      hasData: result.data?.data !== undefined,
+      shape: result.data?.data && typeof result.data.data === 'object' ? Object.keys(result.data.data).slice(0, 8) : [],
+    }),
+  );
+
+  const accountLimited = failures.length > 0 && failures.every((failure) => failure.outcome === 'account-limited');
+  console.log(JSON.stringify({
     brokerUrl,
     origin,
-    mode: 'missing-session',
-    status: expectMissingSession ? 'passed' : 'blocked',
-    summary: expectMissingSession
-      ? 'fail-closed guard passed; authenticated provider calls were not executed'
-      : 'missing local broker vault session; authenticated provider calls were not executed',
-    next: `Create ignored ${path.basename(DEFAULT_SESSION_FILE)} or set COMPACT_BROKER_VAULT_SESSION / COMPACT_BROKER_VAULT_SUPABASE_TOKEN locally, then rerun npm run smoke:broker-vault.`,
-    checks: [{ path: '/credentials/status', status: guard.status, guard: errorText }],
-  };
-  console.log(JSON.stringify(result, null, 2));
-  if (!expectMissingSession) process.exit(2);
-  process.exit(0);
+    mode: auth.mode,
+    source: auth.source,
+    status: failures.length ? 'blocked' : 'passed',
+    summary: failures.length
+      ? accountLimited
+        ? 'authenticated broker-vault proof reached provider paths, but provider account quota/rate limits blocked completion; no fallback calls were made'
+        : 'authenticated broker-vault proof found provider/account/path failures; no secrets were printed and no fallback calls were made'
+      : 'authenticated broker-vault provider proof passed with redacted output; no provider response bodies or tokens were printed',
+    checks,
+    failures,
+  }, null, 2));
+
+  if (failures.length) process.exit(2);
 }
 
-if (auth.mode === 'broker-session' && auth.expiresAt && auth.expiresAt <= Date.now()) {
-  throw new Error('Local broker vault session is expired; refresh it before running authenticated provider proof.');
-}
-
-const status = await requestJson('/credentials/status', undefined, auth);
-expectStatus('credentials status', status, [200]);
-checks.push({
-  path: '/credentials/status',
-  status: status.status,
-  broker: status.data?.broker || 'unknown',
-  providers: summarizeProviders(status.data),
+main().catch((error) => {
+  console.error(JSON.stringify({
+    brokerUrl,
+    origin,
+    status: 'failed',
+    noSecretsPrinted: true,
+    error: redactedError(error),
+  }, null, 2));
+  process.exit(1);
 });
-
-const testAll = await requestJson('/credentials/test-all', { method: 'POST', body: {} }, auth);
-expectStatus('credentials test-all', testAll, [200]);
-checks.push({
-  path: '/credentials/test-all',
-  status: testAll.status,
-  providers: summarizeProviders(testAll.data),
-});
-
-const weather = await requestJson('/weather/forecast', {
-  method: 'POST',
-  body: { lat: 33.50972, lon: 126.52194, days: 1 },
-}, auth);
-expectStatus('weather forecast', weather, [200]);
-checks.push({
-  path: '/weather/forecast',
-  status: weather.status,
-  source: weather.data?.data?.source || weather.data?.data?.provider || 'unknown',
-  hasHourly: Array.isArray(weather.data?.data?.hourly?.time),
-  hasFeelsLike: Array.isArray(weather.data?.data?.hourly?.apparent_temperature),
-});
-
-for (const providerPath of ['/kimi/json', '/google/json', '/mimo/json']) {
-  const result = await requestJson(providerPath, {
-    method: 'POST',
-    body: {
-      prompt: 'Return only JSON: {"ok":true,"provider":"smoke"}',
-      kind: 'test',
-    },
-  }, auth);
-  expectStatus(providerPath, result, [200]);
-  checks.push(summarizeAi(providerPath, result));
-}
-
-const notion = await requestJson('/notion/request', {
-  method: 'POST',
-  body: { path: '/databases/redacted/query', method: 'POST', body: { page_size: 1 } },
-}, auth);
-expectStatus('notion request', notion, [200]);
-checks.push({
-  path: '/notion/request',
-  status: notion.status,
-  hasData: notion.data?.data !== undefined,
-  shape: notion.data?.data && typeof notion.data.data === 'object' ? Object.keys(notion.data.data).slice(0, 8) : [],
-});
-
-console.log(JSON.stringify({
-  brokerUrl,
-  origin,
-  mode: auth.mode,
-  source: auth.source,
-  status: 'passed',
-  summary: 'authenticated broker-vault provider proof passed with redacted output; no provider response bodies or tokens were printed',
-  checks,
-}, null, 2));

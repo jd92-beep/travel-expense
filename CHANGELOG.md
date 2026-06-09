@@ -2,6 +2,8 @@
 
 ## 2026-06-09
 
+- Improved compact `npm run smoke:broker-vault` authenticated reporting. It now continues after provider quota/config failures, emits one redacted JSON summary instead of a stack trace, and uses the broker-reported Notion database for the Notion proof query.
+- Fixed compact `npm run smoke:broker-vault:guard` so guard mode always forces a missing-session proof even when an ignored local broker-vault session file exists.
 - Made compact `npm run smoke:security` self-start the local Vite server through a safe-env runner, so the standalone security smoke no longer fails with `ERR_CONNECTION_REFUSED` when no dev server is already running.
 - Added `npm run broker-vault:prepare` for compact P0-05. It uses a hidden local terminal prompt to create an ignored private broker-vault session file, with redacted output only, so authenticated provider proof can run without committing or printing secrets.
 - Added `npm run smoke:broker-vault:doctor` for compact P0-05 readiness. It reports whether ignored broker-vault auth input is present, git-ignored, permission-safe, and unexpired without printing session/token values or calling providers.
