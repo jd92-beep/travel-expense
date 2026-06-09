@@ -7,13 +7,14 @@ Last updated: 2026-06-09 HKT
 - Independent compact app: `app-compact/`.
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
-- Latest compact app-code proof commit: `efbd9db` (`Add compact deploy recovery note`).
+- Latest compact app-code proof commit: `e1fa760` (`Keep compact readiness capsules in settings`).
+- Latest compact production deployment: Vercel deployment `dpl_DEVBMCi8aRe2C8RLipv9XoxjXLxj`, live URL `https://travel-expense-compact.vercel.app/`, HTTP 200, title `旅費 Compact`, asset hash `02ff6e6463213690`, HTML hash `a127b1f82cfa1567`, and alias/deployment content match for commit `e1fa760`.
+- P12-01 live recovery is complete as of 2026-06-09 HKT: Vercel daily deploy quota no longer blocks compact production, and `npm run smoke:deploy-live` passed with local `main` and `origin/main` both at `e1fa760`.
+- Previous compact app-code proof commit: `efbd9db` (`Add compact deploy recovery note`).
 - Previous compact app-code proof commit: `5b5009a` (`Add compact timeline weather packing risk`).
 - Previous compact app-code proof commit: `1f75aba` (`Add compact history itinerary review queue`).
 - Previous compact app-code proof commit: `e68f10c` (`Add compact settlement action plan`).
 - Previous pushed compact app-code proof commit: `8fadfcb` (`Add compact public diagnostics preview`).
-- Latest live deployment remains Vercel deployment `dpl_EGaWZXC84K1MJAXSkdkBSjbnyFLm`, live URL `https://travel-expense-compact.vercel.app/`, HTTP 200, title `旅費 Compact`, asset hash `8a0b517705ad942b`, HTML hash `db6785c7c7060df5`, and alias/deployment content match. This production deployment predates P10-04.
-- Latest P11-04 manual Vercel deploy attempt on 2026-06-09 HKT still failed with external quota `api-deployments-free-per-day` / `Resource is limited - try again in 24 hours (more than 100)`. P10-04, P11-01, P11-02, P11-03, and P11-04 are pushed to `origin/main` and locally release-gated, but not yet live on Vercel. `npm run smoke:deploy-live` still passes only as health/current-alias proof for old deployment `dpl_EGaWZXC84K1MJAXSkdkBSjbnyFLm`, with live asset hash `8a0b517705ad942b`; latest proof saw local/origin `main` at `6221737`. Retry `npx vercel deploy --prod --scope ftjdfr-7940s-projects --yes` from `app-compact/` after the deployment quota resets, then run `npm run smoke:deploy-live`.
 - 2026-06-09 compact Settings-only readiness pass: the Shell-level PWA/travel-readiness capsules (`Network`, `Queue`, `Cache`, `Update`, `Install`, `Motion`) now render only while the Settings tab is active. This keeps system status in Settings and removes the repeated capsule row from Dashboard, Scan, Timeline, History, Weather, and Stats first screens. Verification passed: GitNexus impact on `Shell` was LOW; `npm run typecheck`; `node scripts/run-with-dev-server.mjs -- npm run smoke:final-nav` (8 passed, including Dashboard-absent/Settings-visible readiness); `node scripts/run-with-dev-server.mjs -- npm run smoke:a11y-touch`; `node scripts/run-with-dev-server.mjs -- npm run smoke:mobile-layout`; `npm run build`; `npm run security:scan`; `npm run smoke:contact-sheet` with `/tmp/compact-contact-sheet-2026-06-09T13-59-12-423Z/mobile-contact-sheet.png`.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.

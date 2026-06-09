@@ -4,6 +4,7 @@
 
 - Moved the compact PWA/travel-readiness capsules (`Network`, `Queue`, `Cache`, `Update`, `Install`, `Motion`) off the top of every tab and kept them only on the Settings tab, so Dashboard, Scan, Timeline, History, Weather, and Stats regain first-screen space while Settings remains the system-status home.
 - Updated compact final-navigation and accessibility smokes to prove the readiness strip is absent on Dashboard and visible/tappable in Settings.
+- Recovered compact Vercel production deployment after the previous quota blocker. Deployment `dpl_DEVBMCi8aRe2C8RLipv9XoxjXLxj` is READY and aliased to `https://travel-expense-compact.vercel.app/`; `npm run smoke:deploy-live` passed for commit `e1fa760` with asset hash `02ff6e6463213690`.
 - Added compact Timeline per-day `Weather pack` risk strips, a local/no-API packing summary that turns cached weather, itinerary outdoor/transport context, and weather preferences into rain, stale-weather, wind, outdoor, or transit-buffer recommendations directly inside day cards.
 - The Timeline packing risk strips keep chips horizontally contained on 390px mobile cards and do not cover the timeline rail; targeted Timeline smoke now verifies rain and stale-weather packing states.
 - Pushed the compact Timeline weather packing risk to `origin/main` as app-code commit `5b5009a` plus proof docs; Vercel production deploy is still blocked by external daily quota `api-deployments-free-per-day`, so live production still points at old deployment `dpl_EGaWZXC84K1MJAXSkdkBSjbnyFLm` until the quota resets.
