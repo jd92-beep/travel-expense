@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "check": "node --check src/index.js && node --check scripts/seed-vault.mjs && node --check test/self-test.mjs",
+    "preflight:deploy": "node scripts/deploy-preflight.mjs",
     "seed:vault": "node scripts/seed-vault.mjs",
     "self-test": "node test/self-test.mjs"
   },
