@@ -5,6 +5,7 @@ import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { hasCredentialBrokerSession } from '../lib/credentialBroker';
 import { hasDirectNotionToken } from '../lib/notion';
 import { CATEGORIES } from '../lib/constants';
+import { takeReceiptRepairIntent } from '../lib/repairIntent';
 import type { AppState, CategoryId, Receipt, SyncQueueItem, TripProfile } from '../lib/types';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
@@ -313,6 +314,18 @@ export function History({
     () => buildReceiptConflictItems(tripReceipts, state),
     [tripReceipts, state],
   );
+  useEffect(() => {
+    const repairReceiptId = takeReceiptRepairIntent();
+    if (!repairReceiptId) return;
+    const receipt = tripReceipts.find((item) => item.id === repairReceiptId)
+      || (state.receipts || []).find((item) => item.id === repairReceiptId);
+    if (receipt) {
+      setStatus(`已開啟需要修正嘅紀錄：${displayStore(receipt)}`);
+      onOpen(receipt);
+      return;
+    }
+    setStatus('找不到需要修正嘅紀錄，請檢查目前旅程。');
+  }, [tripReceipts, state.receipts, onOpen]);
   const categoryChips = [
     { id: 'all' as const, name: '全部', color: '#cf2626' },
     ...CATEGORIES.filter((item) => ['flight', 'lodging', 'food', 'transport', 'shopping', 'ticket', 'other'].includes(item.id)),

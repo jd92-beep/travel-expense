@@ -24,6 +24,7 @@ import {
 } from '../lib/credentialBroker';
 import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
 import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
+import { saveReceiptRepairIntent } from '../lib/repairIntent';
 import {
   diagnoseNotionSchema,
   diagnoseReactReceiptMapping,
@@ -576,9 +577,12 @@ function buildTripScopeAudit(state: AppState, trip: TripProfile) {
   const autoLinked = scopedReceipts.filter((receipt) => receipt.tripLinkSource && receipt.tripLinkSource !== 'explicit');
   const otherTrip = receipts.filter((receipt) => receipt.tripId && receipt.tripId !== trip.id);
   const issueCount = outOfRange.length + (hasMultipleTrips ? autoLinked.length : 0);
+  const repairReceipt = outOfRange[0] || (hasMultipleTrips ? autoLinked[0] : undefined);
   return {
     tone: issueCount ? 'warning' : 'ok',
     statusLabel: issueCount ? `${issueCount} scope checks` : 'Scope ready',
+    repairReceiptId: repairReceipt?.id || '',
+    repairReceiptLabel: repairReceipt?.store || repairReceipt?.id || '',
     helper: hasTripDates
       ? `${trip.startDate} to ${trip.endDate} · current-trip export/sync only`
       : 'Trip dates are incomplete; export still stays current-trip scoped.',
@@ -1534,6 +1538,16 @@ export function Settings({
     setStatus('Safe cleanup preview 已開啟；確認前不會刪除任何雲端資料。');
   }
 
+  function openScopeRepairShortcut() {
+    if (!tripScopeAudit.repairReceiptId) {
+      changeTab?.('history');
+      return;
+    }
+    saveReceiptRepairIntent(tripScopeAudit.repairReceiptId);
+    setStatus(`Opening repair: ${tripScopeAudit.repairReceiptLabel || 'receipt'}`);
+    changeTab?.('history');
+  }
+
   async function copyTripSharePreview() {
     if (!tripSharePreview) return;
     await copyText(tripSharePreview.copiedText, '已複製 private trip-share summary');
@@ -1772,7 +1786,13 @@ export function Settings({
               </div>
             ))}
           </div>
-          <div className="settings-trip-doctor-actions settings-sync-dry-run-actions">
+          <div className="settings-trip-doctor-actions">
+            {tripScopeAudit.repairReceiptId && (
+              <button type="button" onClick={openScopeRepairShortcut}>
+                <AlertTriangle size={14} />
+                <span>Repair first issue</span>
+              </button>
+            )}
             <button type="button" onClick={() => changeTab?.('history')}>
               <Copy size={14} />
               <span>Review records</span>

@@ -1026,9 +1026,13 @@ test('Settings trip scope audit flags active trip boundaries without provider ca
   await expect(audit).not.toContainText('other-trip-page-should-not-render');
   expect(brokerCalls).toBe(0);
 
-  await audit.getByRole('button', { name: /Review records/ }).click();
+  await audit.getByRole('button', { name: /Repair first issue/ }).click();
   await expect(page).toHaveURL(/#history/);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Scope Early Train');
+  await page.getByRole('button', { name: '×' }).click();
+  await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeHidden();
   await page.getByRole('button', { name: /設定/ }).click();
   await expectSettingsReady(page);
   await page.getByLabel('Trip scope audit').getByRole('button', { name: /Data safety/ }).click();
