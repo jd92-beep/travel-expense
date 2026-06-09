@@ -3,6 +3,7 @@
 ## 2026-06-09
 
 - Added compact Settings `Clear local data preview` before destructive local reset. It replaces the thin browser confirm with an in-app safety modal showing current trip, local receipt count, cloud-not-deleted scope, and Backup/private-share guidance; Settings smoke verifies cancel leaves local state untouched.
+- Deployed the compact Clear Local Data Preview build to Vercel production as `dpl_2tvWrSos8TwWxP2qVfk2Ed53noXM`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added compact Settings `Private trip-share preview` for companion-safe current-trip summaries. Users now preview before copy/download, and smoke coverage verifies fake API/session/cloud IDs, sync queues, photo URLs, and other-trip data are stripped from preview text, copied text, and downloaded JSON.
 - Deployed the compact Private Trip-share Preview build to Vercel production as `dpl_2tgPXS5GEH7CfMaabfhWpwdbUAan`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added compact Dashboard `Day-end Closeout`, a local/no-API evening wrap-up card for missing receipts, overspend notes, tomorrow readiness, and Records/Stats/Timeline shortcuts.

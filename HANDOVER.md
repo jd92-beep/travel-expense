@@ -7,8 +7,8 @@ Last updated: 2026-06-09 HKT
 - Independent compact app: `app-compact/`.
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
-- Latest compact app-code proof commit: pending commit for P9-01 (`Add compact clear local data preview`).
-- Latest live proof command: `npm run smoke:deploy-live`. Latest proof on 2026-06-09 HKT passed for Vercel deployment `dpl_2tgPXS5GEH7CfMaabfhWpwdbUAan`, live URL `https://travel-expense-compact.vercel.app/`, HTTP 200, title `旅費 Compact`, asset hash `3b563e2eb8cf51a5`, HTML hash `0bddb5f52ed0dd7d`, and alias/deployment content match.
+- Latest compact app-code proof commit: `88ce00e` (`Add compact clear local data preview`).
+- Latest live proof command: `npm run smoke:deploy-live`. Latest proof on 2026-06-09 HKT passed for Vercel deployment `dpl_2tvWrSos8TwWxP2qVfk2Ed53noXM`, live URL `https://travel-expense-compact.vercel.app/`, HTTP 200, title `旅費 Compact`, asset hash `e70b52b8fdeb5ee0`, HTML hash `71e147267a4dab1c`, and alias/deployment content match.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
   - P0-02 done: Dashboard budget usage now always includes all current-trip receipts, while `statsIncludeTransportLodging` only affects today/daily/chart-style filtered views.
@@ -119,7 +119,7 @@ Last updated: 2026-06-09 HKT
   - P9 roadmap added for safety polish and travel continuity: clear-local-data preview, post-trip archive checklist, and sync-readiness dry run.
   - P9-01 done: Settings `清除本地資料` now opens an in-app `Clear local data preview` modal instead of relying on `window.confirm`. It shows current trip, local receipt count, cloud data not deleted, and guidance to export Backup JSON or private trip-share first.
   - P9-01 safety behavior: canceling the preview leaves local trip/receipt state untouched; confirming still uses the existing reset flow. No schema fields, broker/provider calls, or React/legacy behavior were changed.
-  - Verification for P9-01: targeted `npm run smoke:settings` passed with 5 tests, including preview/cancel no-mutation coverage. Broader checks passed: `npm run typecheck`, `npm run security:scan`, `npm run smoke:mobile-layout`, `npm run smoke:a11y-touch`, `npm run smoke:contact-sheet`, `npm run build`, `git diff --check`, and final `npm run smoke:production-gate` (75.3s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-09T03-32-50-010Z/mobile-contact-sheet.png`.
+  - Verification for P9-01: targeted `npm run smoke:settings` passed with 5 tests, including preview/cancel no-mutation coverage. Broader checks passed: `npm run typecheck`, `npm run security:scan`, `npm run smoke:mobile-layout`, `npm run smoke:a11y-touch`, `npm run smoke:contact-sheet`, `npm run build`, `git diff --check`, and final `npm run smoke:production-gate` (75.3s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-09T03-32-50-010Z/mobile-contact-sheet.png`. Manual Vercel production deploy from linked `app-compact/` project produced `dpl_2tvWrSos8TwWxP2qVfk2Ed53noXM`; `npm run smoke:deploy-live` passed for commit `88ce00e` with asset hash `e70b52b8fdeb5ee0`.
   - Current compact checklist focus: P0-05 remains `LIVE` because full provider-vault proof is still blocked by Kimi quota, required Google/Gemma model availability, Mimo authenticated provider config, and Wrangler account visibility. Continue P9 one task at a time while keeping broker-vault output redacted and secrets out of git.
 
 ## Active Admin KanBan Status
