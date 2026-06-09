@@ -9348,7 +9348,8 @@ textarea,
     color: #18395c !important;
   }
 
-  .dashboard-trip-snapshot {
+  .dashboard-trip-snapshot,
+  .dashboard-departure-checklist {
     padding: 13px 12px !important;
     margin: 0 0 14px !important;
     border: 1px solid rgba(255,255,255,.64) !important;
@@ -9360,7 +9361,8 @@ textarea,
       inset 0 1px 0 rgba(255,255,255,.86) !important;
   }
 
-  .dashboard-trip-snapshot::before {
+  .dashboard-trip-snapshot::before,
+  .dashboard-departure-checklist::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -9498,6 +9500,44 @@ textarea,
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .dashboard-departure-checklist::before {
+    background:
+      linear-gradient(90deg, rgba(45,110,72,.16), rgba(24,57,92,.12), rgba(212,168,67,.16)),
+      radial-gradient(circle at 10% 10%, rgba(255,255,255,.68), transparent 28%);
+  }
+
+  .dashboard-departure-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-departure-grid article:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-departure-actions {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-top: 8px;
+  }
+
+  .dashboard-departure-actions button {
+    min-width: 0;
+    min-height: var(--compact-touch-min, 44px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid rgba(116,88,53,.16);
+    border-radius: 10px;
+    background: #fffdf8;
+    color: #18395c;
+    font-size: 10.5px;
+    font-weight: 950;
   }
 
   .day-readiness-strip {

@@ -395,6 +395,41 @@ export function Dashboard({
   const snapshotIssues = (activeReadiness?.issues || []).filter((issue) => issue !== 'Ready').slice(0, 3);
   const transitWidget = travelDayWidgets.find((widget) => widget.kind === 'transit');
   const receiptWidget = travelDayWidgets.find((widget) => widget.kind === 'receipt');
+  const weatherWidget = travelDayWidgets.find((widget) => widget.kind === 'weather');
+  const bookingWidget = travelDayWidgets.find((widget) => widget.kind === 'booking');
+  const allDaySpots = day?.spots || [];
+  const outdoorSpot = allDaySpots.find((spot) => /ticket|localtour|sightseeing|other/i.test(spot.type) || /outdoor|park|garden|temple|shrine|山|海|戶外|寺|神社|城/i.test(`${spot.name} ${spot.note || ''} ${spot.address || ''}`));
+  const transportSpot = allDaySpots.find((spot) => /transport/i.test(spot.type));
+  const weatherSignal = `${weatherWidget?.value || ''} ${weatherWidget?.detail || ''}`.toLowerCase();
+  const bookingSignal = `${bookingWidget?.value || ''} ${bookingWidget?.detail || ''}`.toLowerCase();
+  const receiptSignal = `${receiptWidget?.value || ''} ${receiptWidget?.detail || ''}`.toLowerCase();
+  const departureChecklist = [
+    {
+      label: 'Weather kit',
+      value: weatherSignal.includes('stale') ? 'Refresh first' : /rain|雨|mm/.test(weatherSignal) ? '雨具 / Umbrella' : /wind|風/.test(weatherSignal) ? 'Wind layer' : 'Weather checked',
+      detail: weatherWidget ? `${weatherWidget.value} · ${weatherWidget.detail}` : 'Open Weather before leaving',
+    },
+    {
+      label: 'Route kit',
+      value: transitWidget?.value === 'Route stale' ? 'Offline map' : transportSpot ? 'IC / ticket ready' : 'Route ready',
+      detail: transitWidget ? `${transitWidget.value} · ${transitWidget.detail}` : 'Timeline has no next stop yet',
+    },
+    {
+      label: 'Itinerary type',
+      value: outdoorSpot ? 'Outdoor layer' : 'Light pack',
+      detail: outdoorSpot ? `${outdoorSpot.name} · ${outdoorSpot.time || '--:--'}` : 'Mostly indoor / food stops',
+    },
+    {
+      label: 'Booking check',
+      value: bookingWidget?.value === 'Booking stale' ? 'Recheck booking' : bookingSignal.includes('no booking') ? 'ID / cash' : 'Ref ready',
+      detail: bookingWidget ? `${bookingWidget.value} · ${bookingWidget.detail}` : 'No booking signal',
+    },
+    {
+      label: 'Receipt habit',
+      value: snapshotIssues.some((issue) => /receipt|cleanup/i.test(issue)) || /補記|gap|cleanup/.test(receiptSignal) ? 'Fix before moving' : 'Record ready',
+      detail: receiptWidget ? `${receiptWidget.value} · ${receiptWidget.detail}` : 'No receipt signal',
+    },
+  ];
   const snapshotText = [
     `${trip.name} · Day ${currentDayNumber}/${length}`,
     `Dates: ${displayDateRange(trip.startDate, trip.endDate)}`,
@@ -823,7 +858,39 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
       </GlassCard>
       </Reveal>
 
-      {/* 2.8 Broker-backed AI Assistant */}
+      {/* 2.8 Departure checklist */}
+      <Reveal className="dashboard-reveal" delay={0.069}>
+      <GlassCard as="div" className="dashboard-departure-checklist relative overflow-hidden z-10">
+        <div role="region" aria-label="Departure checklist">
+          <div className="dashboard-trip-snapshot-head">
+            <div>
+              <span><ClipboardList size={15} /> Departure Checklist</span>
+              <h3>出門前檢查</h3>
+            </div>
+            <em>local · no API</em>
+          </div>
+          <div className="dashboard-trip-snapshot-grid dashboard-departure-grid">
+            {departureChecklist.map((item) => (
+              <article key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <small>{item.detail}</small>
+              </article>
+            ))}
+          </div>
+          <div className="dashboard-departure-actions">
+            <button type="button" className="compact-touch-action" onClick={() => onTab('weather')}>
+              <CloudSun size={15} /> Weather
+            </button>
+            <button type="button" className="compact-touch-action" onClick={() => onTab('timeline')}>
+              <Compass size={15} /> Timeline
+            </button>
+          </div>
+        </div>
+      </GlassCard>
+      </Reveal>
+
+      {/* 2.9 Broker-backed AI Assistant */}
       <Reveal className="dashboard-reveal" delay={0.07}>
       <GlassCard as="div" className={`dashboard-broker-assistant status-${assistantStatus} relative overflow-hidden z-10`}>
         <div role="region" aria-label="Broker AI assistant">

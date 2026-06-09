@@ -2,6 +2,7 @@
 
 ## 2026-06-09
 
+- Added compact Dashboard `Departure Checklist`, a local/no-API pre-departure card that turns weather, route, outdoor itinerary, booking, and receipt/readiness signals into five quick checks.
 - Added compact Dashboard `Trip Snapshot`, a local/no-API handoff card with day, budget-left, next-stop, readiness/watch signals, copyable summary text, and Timeline/Records shortcuts.
 - Deployed the compact Trip Snapshot build to Vercel production as `dpl_DnjLXzyypyXV9uSXsc798LAqAtC3`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added a no-secret Credential Broker deploy preflight for compact P0-05. `workers/credential-broker npm run preflight:deploy` checks source Mimo route presence, syntax, self-test, Wrangler dry-run, Wrangler auth/account readiness, live health, and whether live `/mimo/json` returns the expected unauthenticated guard instead of 404.
