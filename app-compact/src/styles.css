@@ -12917,3 +12917,164 @@ input[type="checkbox"] {
     font-size: 9px !important;
   }
 }
+
+.app-shell--weather .preview-weather-current-card {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 10px !important;
+  overflow: visible !important;
+}
+
+.app-shell--weather .preview-weather-current-card > .relative.z-40 {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas: none !important;
+  gap: 10px !important;
+  align-items: stretch !important;
+  width: 100% !important;
+}
+
+.app-shell--weather .preview-weather-current-card .preview-weather-current-layout {
+  display: grid !important;
+  justify-self: stretch !important;
+  grid-template-columns: minmax(82px, 112px) minmax(0, 1fr) !important;
+  grid-template-areas:
+    "icon temp"
+    "facts facts"
+    "hourly hourly" !important;
+  gap: 12px 16px !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.app-shell--weather .preview-weather-source-strip {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+  min-width: 0 !important;
+}
+
+.app-shell--weather .preview-weather-source-strip span,
+.app-shell--weather .weather-location-meta span {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere !important;
+  line-height: 1.12 !important;
+}
+
+.app-shell--weather .preview-weather-hero-icon {
+  grid-area: icon !important;
+  min-width: 0 !important;
+}
+
+.app-shell--weather .preview-weather-temp {
+  grid-area: temp !important;
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 4px !important;
+}
+
+.app-shell--weather .preview-weather-temp strong,
+.app-shell--weather .preview-weather-temp span,
+.app-shell--weather .preview-weather-temp small,
+.app-shell--weather .preview-weather-place {
+  min-width: 0 !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.app-shell--weather .preview-weather-temp strong {
+  white-space: nowrap !important;
+}
+
+.app-shell--weather .preview-weather-temp span,
+.app-shell--weather .preview-weather-temp small,
+.app-shell--weather .preview-weather-place {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+
+.app-shell--weather .preview-weather-place {
+  display: block !important;
+  color: #1e6d86 !important;
+  font-size: 11px !important;
+  font-style: normal !important;
+  font-weight: 900 !important;
+  line-height: 1.15 !important;
+}
+
+.app-shell--weather .preview-weather-facts {
+  grid-area: facts !important;
+  min-width: 0 !important;
+}
+
+.app-shell--weather .preview-weather-hourly-rail {
+  grid-area: hourly !important;
+  min-width: 0 !important;
+}
+
+@media (max-width: 520px) {
+  .app-shell--weather .preview-weather-current-card {
+    padding: 14px 12px 13px !important;
+  }
+
+  .app-shell--weather .preview-weather-current-card .preview-weather-current-layout {
+    grid-template-columns: 78px minmax(0, 1fr) !important;
+    gap: 10px 11px !important;
+  }
+
+  .app-shell--weather .preview-weather-hero-icon svg {
+    width: 76px !important;
+    height: 76px !important;
+  }
+
+  .app-shell--weather .preview-weather-temp strong {
+    font-size: 44px !important;
+    line-height: .94 !important;
+  }
+
+  .app-shell--weather .preview-weather-temp span {
+    font-size: 14px !important;
+    line-height: 1.08 !important;
+  }
+
+  .app-shell--weather .preview-weather-temp small {
+    font-size: 10.5px !important;
+    line-height: 1.25 !important;
+  }
+
+  .app-shell--weather .preview-weather-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    padding-top: 10px !important;
+  }
+
+  .app-shell--weather .preview-weather-facts span {
+    min-height: 34px !important;
+    display: grid !important;
+    align-content: center !important;
+    justify-items: center !important;
+    padding: 4px 6px !important;
+    border: 1px solid rgba(116,88,53,.12) !important;
+    border-radius: 10px !important;
+    background: rgba(255,255,255,.48) !important;
+    font-size: 10px !important;
+    line-height: 1.1 !important;
+  }
+
+  .app-shell--weather .preview-weather-facts b {
+    font-size: 13px !important;
+  }
+
+  .app-shell--weather .preview-weather-hourly-rail {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+  }
+
+  .app-shell--weather .preview-weather-hourly-chip {
+    min-height: 52px !important;
+    padding: 5px 2px !important;
+  }
+}

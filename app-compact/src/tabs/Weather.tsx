@@ -10,6 +10,8 @@ import { coordForDay, coordsForDay, fetchWeather, resolveCoordsForDay, slotsForD
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
+const WEATHER_LOCATIONS_PER_DAY = 6;
+
 function WeatherIcon({ code, size = 18 }: { code?: number; size?: number }) {
   if (code == null) return <CloudSun size={size} />;
   if (code === 0) return <Sun size={size} />;
@@ -34,38 +36,20 @@ export function Weather({ state }: { state: AppState }) {
 
   const displayItinerary = useMemo<ItineraryDay[]>(() => {
     if (!hasEnded) return itinerary;
-    const allCoords = itinerary.flatMap((day) => coordsForDay(day, 2));
-    const seen = new Set<string>();
-    const uniqueCoords = allCoords.filter((c) => {
-      const key = `${c.lat.toFixed(3)}:${c.lon.toFixed(3)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    return [{
-      date: today,
-      day: 0,
-      region: trip.name || '目前位置',
-      city: '',
-      country: '',
-      timezone: trip.timezones?.[0] || 'Asia/Hong_Kong',
-      spots: uniqueCoords.map((c) => ({
-        name: c.label,
-        time: '',
-        type: 'other' as const,
-        lat: c.lat,
-        lon: c.lon,
-      })),
-    }];
+    return itinerary.map((day, index) => ({
+      ...day,
+      day: day.day || index + 1,
+      timezone: day.timezone || trip.timezones?.[0] || 'Asia/Hong_Kong',
+    }));
   }, [itinerary, hasEnded, today, trip]);
 
   const itineraryKey = displayItinerary.map((day) => {
-    const coords = coordsForDay(day).map((coord) => `${coord.label}:${coord.lat}:${coord.lon}`).join(',');
-    return `${day.date}:${day.region}:${day.country || ''}:${coords}`;
+    const coords = coordsForDay(day, WEATHER_LOCATIONS_PER_DAY).map((coord) => `${coord.label}:${coord.lat}:${coord.lon}`).join(',');
+    return `${day.date}:${day.region}:${day.country || ''}:${hasEnded ? today : day.date}:${coords}`;
   }).join('|');
   const targetSummary = useMemo(() => weatherTargetSummary(displayItinerary, hasEnded, today), [displayItinerary, hasEnded, today]);
   const hasMissingTarget = useMemo(
-    () => displayItinerary.some((day) => coordsForDay(day).some((coord) => coord.missing)),
+    () => displayItinerary.some((day) => coordsForDay(day, WEATHER_LOCATIONS_PER_DAY).some((coord) => coord.missing)),
     [displayItinerary],
   );
   const leadDay = displayItinerary[0];
@@ -86,15 +70,16 @@ export function Weather({ state }: { state: AppState }) {
       try {
         const next: Record<string, DayWeather[]> = {};
         for (const day of displayItinerary) {
+          const forecastDate = hasEnded ? today : day.date;
           next[day.date] = [];
-          for (const coord of await resolveCoordsForDay(day)) {
+          for (const coord of await resolveCoordsForDay(day, WEATHER_LOCATIONS_PER_DAY)) {
             try {
               if (coord.missing) {
                 next[day.date].push({ coord, source: '缺少座標', slots: [] });
                 continue;
               }
               const isJapan = /日本|Japan|JP|名古屋|金澤|長野|高山|白川|常滑|上高地|立山|東京|京都|大阪/.test(`${day.country || ''} ${day.region || ''} ${coord.label}`);
-              const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', isJapan, state, day.date);
+              const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', isJapan, state, forecastDate);
               if (cancelled) return;
               next[day.date].push({
                 coord,
@@ -103,7 +88,7 @@ export function Weather({ state }: { state: AppState }) {
                 cached: result.cached,
                 fetchedAt: result.fetchedAt,
                 fallbackReason: result.fallbackReason,
-                slots: slotsForDate(result.data as Parameters<typeof slotsForDate>[0], day.date),
+                slots: slotsForDate(result.data as Parameters<typeof slotsForDate>[0], forecastDate),
               });
             } catch (innerErr) {
               if (cancelled) return;
@@ -155,28 +140,31 @@ export function Weather({ state }: { state: AppState }) {
           <span>{weatherTargetOriginLabel(leadSource?.coord)}</span>
           {leadSource?.fallbackReason && <span className="weather-fallback-chip">{weatherFallbackLabel(leadSource.fallbackReason)}</span>}
         </div>
-        <div className="preview-weather-hero-icon">
-          <WeatherIcon code={leadSlot?.code} size={92} />
-        </div>
-        <div className="preview-weather-temp">
-          <strong>{leadSlot?.temp != null ? Math.round(leadSlot.temp) : 22}°C</strong>
-          <span>{weatherLabel(leadSlot?.code)}</span>
-          <small>實際氣溫 {leadSlot?.temp != null ? Math.round(leadSlot.temp) : 22}°C · 體感 {leadSlot?.feelsLike != null ? Math.round(leadSlot.feelsLike) : 21}°C</small>
-        </div>
-        <div className="preview-weather-facts">
-          <span>最高 <b className="hot">{leadSlot?.temp != null ? Math.round(leadSlot.temp + 2) : 24}°C</b></span>
-          <span>最低 <b>{leadSlot?.temp != null ? Math.round(leadSlot.temp - 6) : 16}°C</b></span>
-          <span>濕度 <b>{leadSlot?.humidity ?? 56}%</b></span>
-          <span>風速 <b>{leadSlot?.windSpeed ?? 3} m/s</b></span>
-        </div>
-        <div className="preview-weather-hourly-rail" aria-label="今日逐時天氣">
-          {previewHourly.map((slot, index) => (
-            <span className="preview-weather-hourly-chip" key={`preview-hour-${slot.hour}-${index}`}>
-              <b>{formatHour(slot.hour)}</b>
-              <WeatherIcon code={slot.code} size={18} />
-              <em>{slot.temp == null ? '—' : `${Math.round(slot.temp)}°C`}</em>
-            </span>
-          ))}
+        <div className="preview-weather-current-layout relative z-40">
+          <div className="preview-weather-hero-icon">
+            <WeatherIcon code={leadSlot?.code} size={92} />
+          </div>
+          <div className="preview-weather-temp">
+            <strong>{leadSlot?.temp != null ? Math.round(leadSlot.temp) : 22}°C</strong>
+            <span>{weatherLabel(leadSlot?.code)}</span>
+            <em className="preview-weather-place">{leadSource?.coord.label || leadDay?.region || '目前地點'}</em>
+            <small>實際氣溫 {leadSlot?.temp != null ? Math.round(leadSlot.temp) : 22}°C · 體感 {leadSlot?.feelsLike != null ? Math.round(leadSlot.feelsLike) : 21}°C</small>
+          </div>
+          <div className="preview-weather-facts">
+            <span>最高 <b className="hot">{leadSlot?.temp != null ? Math.round(leadSlot.temp + 2) : 24}°C</b></span>
+            <span>最低 <b>{leadSlot?.temp != null ? Math.round(leadSlot.temp - 6) : 16}°C</b></span>
+            <span>濕度 <b>{leadSlot?.humidity ?? 56}%</b></span>
+            <span>風速 <b>{leadSlot?.windSpeed ?? 3} m/s</b></span>
+          </div>
+          <div className="preview-weather-hourly-rail" aria-label="今日逐時天氣">
+            {previewHourly.map((slot, index) => (
+              <span className="preview-weather-hourly-chip" key={`preview-hour-${slot.hour}-${index}`}>
+                <b>{formatHour(slot.hour)}</b>
+                <WeatherIcon code={slot.code} size={18} />
+                <em>{slot.temp == null ? '—' : `${Math.round(slot.temp)}°C`}</em>
+              </span>
+            ))}
+          </div>
         </div>
       </GlassCard>
       {displayItinerary.map((day) => {
@@ -186,13 +174,13 @@ export function Weather({ state }: { state: AppState }) {
           <Reveal key={day.date} className="weather-day-reveal" delay={Math.min(0.14, day.day * 0.02)}>
           <GlassCard className="weather-day">
             <div className="section-head">
-              <div><p className="eyebrow">{hasEnded ? `Today · ${today}` : `Day ${day.day}`} · {dayRows.map((weather) => weather.source).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
-              <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{coordsForDay(day).map((coord) => coord.label).join(' / ') || coordForDay(day).label}</StatusPill>
+              <div><p className="eyebrow">{hasEnded ? `Current · ${today} · Trip Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map((weather) => weather.source).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
+              <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{coordsForDay(day, WEATHER_LOCATIONS_PER_DAY).map((coord) => coord.label).join(' / ') || coordForDay(day).label}</StatusPill>
             </div>
             {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
             {dayRows.map((weather) => {
               const emptyForecast = weather.slots?.length && weather.slots.every((slot) => slot.temp == null && slot.rain == null);
-              const liveHour = liveSlotHour(day.date, normalizedTimezone(day.timezone) || 'Asia/Tokyo');
+              const liveHour = liveSlotHour(hasEnded ? today : day.date, normalizedTimezone(day.timezone) || 'Asia/Tokyo');
               return (
                 <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
                   {dayRows.length > 1 && <h3>{weather.coord.label}</h3>}
@@ -317,10 +305,12 @@ function formatHour(hour: number): string {
 
 function weatherTargetSummary(days: ItineraryDay[], hasEnded: boolean, today: string): string {
   const todayDay = days.find((day) => day.date === today);
-  const sourceDays = hasEnded || todayDay ? (todayDay ? [todayDay] : days) : days;
-  const labels = Array.from(new Set(sourceDays.flatMap((day) => coordsForDay(day).map((coord) => coord.label).filter(Boolean))));
-  const scope = hasEnded || Boolean(todayDay) || days.every((day) => day.day <= 0)
-    ? 'Today'
+  const sourceDays = hasEnded ? days : todayDay ? [todayDay] : days;
+  const labels = Array.from(new Set(sourceDays.flatMap((day) => coordsForDay(day, WEATHER_LOCATIONS_PER_DAY).map((coord) => coord.label).filter(Boolean))));
+  const scope = hasEnded
+    ? 'Current'
+    : Boolean(todayDay) || days.every((day) => day.day <= 0)
+      ? 'Today'
     : days.length === 1
       ? `Day ${days[0]?.day || 1}`
       : `${days.length}日`;

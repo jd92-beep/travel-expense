@@ -95,6 +95,7 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA');
   await expect(page.locator('.preview-weather-source-strip')).toContainText(/Live ·|Cache ·/);
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
+  await expect(page.locator('.preview-weather-place')).toContainText('名古屋');
   const commandMetrics = await command.evaluate((node) => {
     const card = node.getBoundingClientRect();
     const title = node.querySelector('.weather-command-row h2')?.getBoundingClientRect();
@@ -113,6 +114,40 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
   expect(commandMetrics.scrollWidth, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(390);
   expect(commandMetrics.pillLeft, JSON.stringify(commandMetrics, null, 2)).toBeGreaterThan(commandMetrics.titleRight);
   expect(commandMetrics.buttonLeft, JSON.stringify(commandMetrics, null, 2)).toBeGreaterThanOrEqual(commandMetrics.pillRight);
+  const currentCardMetrics = await page.locator('.preview-weather-current-card').evaluate((node) => {
+    const card = node.getBoundingClientRect();
+    const selectors = [
+      '.preview-weather-source-strip',
+      '.preview-weather-hero-icon',
+      '.preview-weather-temp',
+      '.preview-weather-facts',
+      '.preview-weather-hourly-rail',
+    ];
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      cardHeight: card.height,
+      children: selectors.map((selector) => {
+        const rect = node.querySelector(selector)?.getBoundingClientRect();
+        return {
+          selector,
+          found: Boolean(rect),
+          top: rect?.top || 0,
+          left: rect?.left || 0,
+          right: rect?.right || 0,
+          bottom: rect?.bottom || 0,
+        };
+      }),
+      card: { top: card.top, left: card.left, right: card.right, bottom: card.bottom },
+    };
+  });
+  expect(currentCardMetrics.scrollWidth, JSON.stringify(currentCardMetrics, null, 2)).toBeLessThanOrEqual(390);
+  expect(currentCardMetrics.cardHeight, JSON.stringify(currentCardMetrics, null, 2)).toBeGreaterThan(210);
+  for (const child of currentCardMetrics.children) {
+    expect(child.found, JSON.stringify(currentCardMetrics, null, 2)).toBe(true);
+    expect(child.left, JSON.stringify(currentCardMetrics, null, 2)).toBeGreaterThanOrEqual(currentCardMetrics.card.left - 1);
+    expect(child.right, JSON.stringify(currentCardMetrics, null, 2)).toBeLessThanOrEqual(currentCardMetrics.card.right + 1);
+    expect(child.bottom, JSON.stringify(currentCardMetrics, null, 2)).toBeLessThanOrEqual(currentCardMetrics.card.bottom + 1);
+  }
   const weatherAtmosphere = await page.locator('.weather-command-fancy').evaluate((node) => getComputedStyle(node).backgroundImage);
   const weatherDrift = await page.locator('.weather-slot-detailed').first().evaluate((node) => getComputedStyle(node, '::after').animationName);
   expect(weatherAtmosphere).toContain('travel-ai-atlas');
@@ -264,6 +299,37 @@ test('Ended trip ignores stale same-coordinate cache and shows current forecast'
   await expect(page.getByText('25°C').first()).toBeVisible();
   await expect(page.locator('[aria-label="體感 27°C"]').first()).toBeVisible();
   expect(forecastCalls).toBeGreaterThan(0);
+});
+
+test('Ended trip shows current weather for every itinerary day location', async ({ page }) => {
+  const fixed = new Date('2026-05-30T10:00:00+09:00').valueOf();
+  const forecastUrls = [];
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+  }, fixed);
+  await page.route('https://api.open-meteo.com/**', async (route) => {
+    forecastUrls.push(route.request().url());
+    await route.fulfill({ json: weatherFixture({ dates: ['2026-05-30', '2026-05-31'], temp: 26, feels: 28 }) });
+  });
+  await installState(page, {});
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
+  await expect(page.getByText(/Current · 2026-05-30 · Trip Day 1/)).toBeVisible();
+  await expect(page.getByText(/Current · 2026-05-30 · Trip Day 6/)).toBeVisible();
+  await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉', '長野', '名古屋', '立山黑部', '金澤', '上高地', '金澤', '常滑', '香港']);
+  await expect(page.locator('.preview-weather-place')).toContainText('名古屋');
+  await expect(page.locator('[aria-label="體感 28°C"]').first()).toBeVisible();
+  expect(forecastUrls.length).toBe(10);
 });
 
 test('Non-Japan trip uses Open-Meteo without JMA', async ({ page }) => {
@@ -495,7 +561,7 @@ test('Multi-city day renders two forecast locations and live slot', async ({ pag
   });
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
-  await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉']);
-  await expect(page.locator('.live-badge')).toHaveCount(2);
-  expect(urls.length).toBeGreaterThanOrEqual(2);
+  await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉', '長野']);
+  await expect(page.locator('.live-badge')).toHaveCount(3);
+  expect(urls.length).toBeGreaterThanOrEqual(3);
 });
