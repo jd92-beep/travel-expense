@@ -490,6 +490,7 @@ export function Settings({
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);
+  const [showClearLocalPreview, setShowClearLocalPreview] = useState(false);
   const [backupPreview, setBackupPreview] = useState<BackupImportPreview | null>(null);
   const [tripSharePreview, setTripSharePreview] = useState<TripSharePreview | null>(null);
 
@@ -531,6 +532,20 @@ export function Settings({
       setShowClearDeviceConfirm(false);
     } catch (err) {
       setStatus(`清除裝置資料失敗：${redactedError(err)}`);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleClearLocalData = async () => {
+    setBusy('清除資料');
+    setStatus('');
+    try {
+      await onReset();
+      setShowClearLocalPreview(false);
+      setStatus('已清除 React 本地紀錄、broker session、裝置信任同快取。');
+    } catch (error) {
+      setStatus(`清除失敗：${redactedError(error)}`);
     } finally {
       setBusy('');
     }
@@ -2193,18 +2208,7 @@ export function Settings({
           <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup JSON</button>
           <button className="danger" type="button" onClick={() => { clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); }}><KeyRound size={18} /> 清除 broker session</button>
           <button className="danger" type="button" onClick={() => { clearDeviceTrust(); void clearTrustedDevice(); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
-          <button className="danger" type="button" disabled={!!busy} onClick={async () => {
-            if (!window.confirm('確定清除 React 本地紀錄？')) return;
-            setBusy('清除資料');
-            try {
-              await onReset();
-              setStatus('已清除 React 本地紀錄、broker session、裝置信任同快取。');
-            } catch (error) {
-              setStatus(`清除失敗：${redactedError(error)}`);
-            } finally {
-              setBusy('');
-            }
-          }}><RotateCcw size={18} /> 清除本地資料</button>
+          <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearLocalPreview(true)}><RotateCcw size={18} /> 清除本地資料</button>
         </div>
         {tripSharePreview && (
           <div className="settings-trip-share-preview" role="region" aria-label="Private trip-share preview">
@@ -2351,6 +2355,51 @@ export function Settings({
               </button>
               <button className="danger" type="button" disabled={!!busy} onClick={() => void handleClearDeviceAndSignOut()}>
                 <Trash2 size={18} /> 確認清除並登出
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showClearLocalPreview && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Clear local data preview"
+          style={{ placeItems: 'center', zIndex: 9999, padding: '20px 20px max(110px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="modal settings-clear-device-modal">
+            <div className="settings-warning-icon">
+              <AlertTriangle size={30} />
+            </div>
+            <h2>清除本地資料前預覽</h2>
+            <p>
+              將會清除此裝置嘅 React 本地紀錄、broker session、裝置信任同快取。
+            </p>
+            <div className="settings-restore-preview-grid">
+              <span>
+                <small>Current trip</small>
+                <strong>{currentTrip.name || state.tripName || 'Current trip'}</strong>
+              </span>
+              <span>
+                <small>Local receipts</small>
+                <strong>{scopedReceiptsForTrip(state, currentTrip).length}</strong>
+              </span>
+              <span>
+                <small>Cloud data</small>
+                <strong>Not deleted</strong>
+              </span>
+            </div>
+            <p className="muted">
+              Supabase / Notion 雲端資料不會刪除；重新登入或 pull cloud 後可以再同步。建議先匯出 Backup JSON 或 private trip-share。
+            </p>
+            <div className="modal-actions">
+              <button className="secondary" type="button" disabled={!!busy} onClick={() => setShowClearLocalPreview(false)}>
+                Cancel clear
+              </button>
+              <button className="danger" type="button" disabled={!!busy} onClick={() => void handleClearLocalData()}>
+                <Trash2 size={18} /> Confirm local clear
               </button>
             </div>
           </div>

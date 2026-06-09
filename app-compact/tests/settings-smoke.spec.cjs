@@ -395,6 +395,21 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await page.locator('#settings-data-panel').getByRole('button', { name: /清除裝置信任/ }).click();
   await expect(page.getByText(/已清除此裝置信任/)).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('travel-expense-react:device-trust:v1'))).toBeNull();
+
+  await page.locator('#settings-data-panel').getByRole('button', { name: /清除本地資料/ }).click();
+  const clearLocalPreview = page.getByLabel('Clear local data preview');
+  await expect(clearLocalPreview).toBeVisible();
+  await expect(clearLocalPreview).toContainText('清除本地資料前預覽');
+  await expect(clearLocalPreview).toContainText('M10 Export Trip');
+  await expect(clearLocalPreview).toContainText('Local receipts');
+  await expect(clearLocalPreview).toContainText('1');
+  await expect(clearLocalPreview).toContainText('Cloud data');
+  await expect(clearLocalPreview).toContainText('Not deleted');
+  await expect(clearLocalPreview).toContainText('Backup JSON');
+  await clearLocalPreview.getByRole('button', { name: /Cancel clear/ }).click();
+  await expect(clearLocalPreview).toBeHidden();
+  const storageAfterClearCancel = await page.evaluate(() => localStorage.getItem('boss-japan-tracker') || '');
+  expect(storageAfterClearCancel).toContain('M10 Restore Cafe');
 });
 
 test('Settings protects broker URL and does not keep archived trip active', async ({ page }) => {

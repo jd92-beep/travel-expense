@@ -7,7 +7,7 @@ Last updated: 2026-06-09 HKT
 - Independent compact app: `app-compact/`.
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
-- Latest compact app-code proof commit: `ed256f7` (`Add compact private trip-share preview`).
+- Latest compact app-code proof commit: pending commit for P9-01 (`Add compact clear local data preview`).
 - Latest live proof command: `npm run smoke:deploy-live`. Latest proof on 2026-06-09 HKT passed for Vercel deployment `dpl_2tgPXS5GEH7CfMaabfhWpwdbUAan`, live URL `https://travel-expense-compact.vercel.app/`, HTTP 200, title `旅費 Compact`, asset hash `3b563e2eb8cf51a5`, HTML hash `0bddb5f52ed0dd7d`, and alias/deployment content match.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
@@ -116,7 +116,11 @@ Last updated: 2026-06-09 HKT
   - P8-04 done: Settings `資料管理 / Security` now has `Preview trip share`, which opens a `Private trip-share preview` before users can `Copy summary` or `Download safe JSON`.
   - P8-04 safety behavior: the private trip-share payload is rebuilt from current-trip state into a companion-safe summary only. It includes trip dates/destination, budget/spend, itinerary spot names/times, receipt store/category/amount/payer summaries, and companion names, but intentionally omits internal trip/receipt ids, API keys, broker sessions, Notion/Supabase IDs, sync queue, deleted-cloud markers, photo URLs, and all other trips. It does not write storage, add schema fields, call broker/provider APIs, or change React/legacy behavior.
   - Verification for P8-04: targeted `npm run smoke:settings` passed with 5 tests, including fake credential/cloud/id strings across backup export, trip-share preview, copied text, downloaded safe JSON, and restore preview. Broader checks passed: `npm run typecheck`, `npm run security:scan`, `npm run smoke:mobile-layout`, `npm run smoke:a11y-touch`, `npm run smoke:contact-sheet`, `npm run build`, `git diff --check`, and final `npm run smoke:production-gate` (76.8s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-09T03-23-00-803Z/mobile-contact-sheet.png`. Manual Vercel production deploy from linked `app-compact/` project produced `dpl_2tgPXS5GEH7CfMaabfhWpwdbUAan`; `npm run smoke:deploy-live` passed for commit `ed256f7` with asset hash `3b563e2eb8cf51a5`.
-  - Current compact checklist focus: P0-05 remains `LIVE` because full provider-vault proof is still blocked by Kimi quota, required Google/Gemma model availability, Mimo authenticated provider config, and Wrangler account visibility. Continue P8 one task at a time while keeping broker-vault output redacted and secrets out of git.
+  - P9 roadmap added for safety polish and travel continuity: clear-local-data preview, post-trip archive checklist, and sync-readiness dry run.
+  - P9-01 done: Settings `清除本地資料` now opens an in-app `Clear local data preview` modal instead of relying on `window.confirm`. It shows current trip, local receipt count, cloud data not deleted, and guidance to export Backup JSON or private trip-share first.
+  - P9-01 safety behavior: canceling the preview leaves local trip/receipt state untouched; confirming still uses the existing reset flow. No schema fields, broker/provider calls, or React/legacy behavior were changed.
+  - Verification for P9-01: targeted `npm run smoke:settings` passed with 5 tests, including preview/cancel no-mutation coverage. Broader checks passed: `npm run typecheck`, `npm run security:scan`, `npm run smoke:mobile-layout`, `npm run smoke:a11y-touch`, `npm run smoke:contact-sheet`, `npm run build`, `git diff --check`, and final `npm run smoke:production-gate` (75.3s). Latest contact sheet: `/tmp/compact-contact-sheet-2026-06-09T03-32-50-010Z/mobile-contact-sheet.png`.
+  - Current compact checklist focus: P0-05 remains `LIVE` because full provider-vault proof is still blocked by Kimi quota, required Google/Gemma model availability, Mimo authenticated provider config, and Wrangler account visibility. Continue P9 one task at a time while keeping broker-vault output redacted and secrets out of git.
 
 ## Active Admin KanBan Status
 
