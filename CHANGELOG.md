@@ -2,6 +2,9 @@
 
 ## 2026-06-09
 
+- Added compact Settings `Trip Scope Audit`, a local/no-API card that summarizes current-trip included receipts, date-window outliers, auto-linked originally-unlinked receipts, and other-trip exclusions before export/share/backup/sync decisions.
+- Preserved compact receipt `tripLinkSource` metadata during normalization so auto-linked legacy/unlinked receipts can be reviewed without changing current-trip export/sync scope or leaking cloud/provider IDs.
+- Deployed the compact Trip Scope Audit build to Vercel production as `dpl_3YGbzZGF5B1K8mAik7WmSkvbE4Qo`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added compact Settings `Sync dry run` before push controls. It summarizes active-trip pending queue, failed/conflict signals, oldest offline edit age, last sync age, delete warnings, and target without calling broker/provider APIs or rendering queue error secrets.
 - Deployed the compact Sync Dry Run build to Vercel production as `dpl_3Hq2eTA4cFZDNpb5UgG9RSbFD5BU`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added compact Settings `Post-trip Archive`, a local/no-API finish checklist that separates final Backup JSON, private trip-share preview, settlement review, and safe local cleanup preview for finished trips.
