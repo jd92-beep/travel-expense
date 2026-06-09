@@ -2,6 +2,9 @@
 
 ## 2026-06-09
 
+- Added compact Settings `Repair first issue`, a Trip Scope Audit shortcut that jumps to History and opens the first date-window or auto-linked receipt needing review.
+- Added a session-only compact receipt repair intent so cross-tab repair navigation is one-shot, local, and not persisted into app state.
+- Deployed the compact receipt repair shortcut build to Vercel production as `dpl_Buc32pf6nDJvRA7FU54u3LGii32p`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added compact Settings `Trip Scope Audit`, a local/no-API card that summarizes current-trip included receipts, date-window outliers, auto-linked originally-unlinked receipts, and other-trip exclusions before export/share/backup/sync decisions.
 - Preserved compact receipt `tripLinkSource` metadata during normalization so auto-linked legacy/unlinked receipts can be reviewed without changing current-trip export/sync scope or leaking cloud/provider IDs.
 - Deployed the compact Trip Scope Audit build to Vercel production as `dpl_3YGbzZGF5B1K8mAik7WmSkvbE4Qo`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
