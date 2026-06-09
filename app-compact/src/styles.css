@@ -9348,6 +9348,158 @@ textarea,
     color: #18395c !important;
   }
 
+  .dashboard-trip-snapshot {
+    padding: 13px 12px !important;
+    margin: 0 0 14px !important;
+    border: 1px solid rgba(255,255,255,.64) !important;
+    background:
+      linear-gradient(135deg, rgba(255,253,248,.86), rgba(246,240,230,.66)),
+      rgba(255,255,255,.56) !important;
+    box-shadow:
+      0 14px 28px rgba(45, 54, 72, .08),
+      inset 0 1px 0 rgba(255,255,255,.86) !important;
+  }
+
+  .dashboard-trip-snapshot::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(90deg, rgba(24,57,92,.12), rgba(212,168,67,.18), rgba(45,110,72,.13)),
+      radial-gradient(circle at 88% 12%, rgba(255,255,255,.66), transparent 28%);
+    opacity: .82;
+  }
+
+  .dashboard-trip-snapshot-head,
+  .dashboard-trip-snapshot-grid,
+  .dashboard-trip-snapshot-copy,
+  .dashboard-trip-snapshot-actions {
+    position: relative;
+    z-index: 1;
+  }
+
+  .dashboard-trip-snapshot-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 9px;
+  }
+
+  .dashboard-trip-snapshot-head span,
+  .dashboard-trip-snapshot-head em {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #6d563c;
+    font-size: 10px;
+    font-weight: 950;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .dashboard-trip-snapshot-head h3 {
+    margin: 1px 0 0;
+    color: #101820;
+    font-size: 17px;
+    font-weight: 950;
+    line-height: 1.05;
+  }
+
+  .dashboard-trip-snapshot-head em {
+    margin-top: 2px;
+    color: #2d6e48;
+    font-style: normal;
+  }
+
+  .dashboard-trip-snapshot-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .dashboard-trip-snapshot-grid article {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+    padding: 8px;
+    border-radius: 11px;
+    border: 1px solid rgba(116,88,53,.13);
+    background: rgba(255,255,255,.68);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.86);
+  }
+
+  .dashboard-trip-snapshot-grid span {
+    color: #6a5946;
+    font-size: 9.5px;
+    font-weight: 900;
+    line-height: 1.05;
+  }
+
+  .dashboard-trip-snapshot-grid strong {
+    min-width: 0;
+    color: #101820;
+    font-size: 14px !important;
+    line-height: 1.06 !important;
+    font-weight: 950 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-trip-snapshot-grid small {
+    min-width: 0;
+    color: #5d5041;
+    font-size: 9.5px;
+    font-weight: 750;
+    line-height: 1.14;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboard-trip-snapshot-copy {
+    width: 100%;
+    max-height: 88px;
+    margin: 8px 0 0;
+    overflow: hidden;
+    border: 1px dashed rgba(116,88,53,.2);
+    border-radius: 12px;
+    background: rgba(255,255,255,.56);
+    padding: 8px;
+    color: #4f4438;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 9.5px;
+    font-weight: 750;
+    line-height: 1.25;
+    white-space: pre-wrap;
+  }
+
+  .dashboard-trip-snapshot-actions {
+    display: grid;
+    grid-template-columns: 1.25fr .85fr .85fr;
+    gap: 7px;
+    margin-top: 8px;
+  }
+
+  .dashboard-trip-snapshot-actions button {
+    min-width: 0;
+    min-height: var(--compact-touch-min, 44px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid rgba(116,88,53,.16);
+    border-radius: 10px;
+    background: #fffdf8;
+    color: #18395c;
+    font-size: 10.5px;
+    font-weight: 950;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .day-readiness-strip {
     position: relative;
     z-index: 1;

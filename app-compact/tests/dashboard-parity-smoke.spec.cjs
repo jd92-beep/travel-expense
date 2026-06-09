@@ -86,6 +86,41 @@ test('Dashboard travel reminders expose useful actions', async ({ page }) => {
   await expect(page).toHaveURL(/#history/);
 });
 
+test('Dashboard trip snapshot is local, copyable, and links to travel context', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__copiedSnapshot = '';
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (text) => {
+          window.__copiedSnapshot = text;
+        },
+      },
+    });
+  });
+  await openDashboard(page, false);
+  const snapshot = page.getByLabel('Trip snapshot');
+  await expect(snapshot).toBeVisible();
+  await expect(snapshot).toContainText('Trip Snapshot');
+  await expect(snapshot).toContainText('local · no API');
+  await expect(snapshot).toContainText('Day');
+  await expect(snapshot).toContainText('1/1');
+  await expect(snapshot).toContainText('Budget left');
+  await expect(snapshot).toContainText('HK$ 479');
+  await expect(snapshot).toContainText('Next');
+  await expect(snapshot).toContainText('Watch');
+  await snapshot.getByRole('button', { name: /Copy snapshot/ }).click();
+  await expect(snapshot.getByRole('button', { name: /Copied/ })).toBeVisible();
+  const copied = await page.evaluate(() => window.__copiedSnapshot);
+  expect(copied).toContain('Dashboard Test · Day 1/1');
+  expect(copied).toContain('Budget left: HK$ 479');
+  await snapshot.getByRole('button', { name: 'Timeline' }).click();
+  await expect(page).toHaveURL(/#timeline/);
+  await page.getByLabel('主要分頁').getByRole('button', { name: '主頁', exact: true }).click();
+  await snapshot.getByRole('button', { name: 'Records' }).click();
+  await expect(page).toHaveURL(/#history/);
+});
+
 test('Dashboard local AI coach shows burn forecast, next-day warning, and weather reminder', async ({ page }) => {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;

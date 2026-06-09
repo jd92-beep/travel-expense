@@ -23,7 +23,10 @@ import {
   MoreHorizontal,
   Camera,
   Wallet,
-  Sparkles
+  Sparkles,
+  ClipboardList,
+  Copy,
+  Check
 } from 'lucide-react';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
@@ -164,6 +167,7 @@ export function Dashboard({
   const [assistantStatus, setAssistantStatus] = useState<'idle' | 'loading' | 'ready' | 'quota' | 'error'>('idle');
   const [assistantAnswer, setAssistantAnswer] = useState<ReturnType<typeof normalizeAssistantAnswer> | null>(null);
   const [assistantError, setAssistantError] = useState('');
+  const [snapshotStatus, setSnapshotStatus] = useState<'idle' | 'copied' | 'fallback'>('idle');
 
   // iOS 開關狀態
   const [dailyReminder, setDailyReminder] = useState(true);
@@ -387,6 +391,29 @@ export function Dashboard({
     : `先睇 ${coachWeatherRegion} 天氣 freshness，再出門。`;
   const travelDayWidgets = buildTravelDayWidgets(state, itinerary);
   const dayReadinessScores = buildDayReadinessScores(state, itinerary);
+  const activeReadiness = dayReadinessScores.find((item) => item.date === displayDayDate) || dayReadinessScores[0];
+  const snapshotIssues = (activeReadiness?.issues || []).filter((issue) => issue !== 'Ready').slice(0, 3);
+  const transitWidget = travelDayWidgets.find((widget) => widget.kind === 'transit');
+  const receiptWidget = travelDayWidgets.find((widget) => widget.kind === 'receipt');
+  const snapshotText = [
+    `${trip.name} · Day ${currentDayNumber}/${length}`,
+    `Dates: ${displayDateRange(trip.startDate, trip.endDate)}`,
+    `Budget left: HK$ ${fmt(remainingBudgetHkd)} · daily burn HK$ ${fmt(dailyBurnHkd)}`,
+    `Readiness: ${activeReadiness?.score ?? 0}% ${activeReadiness?.label || 'Review'}`,
+    `Next: ${transitWidget?.value || '--'} · ${transitWidget?.detail || 'No next stop'}`,
+    `Receipts: ${receiptWidget?.value || `${todayReceipts.length} today`} · ${tripReceipts.length} trip records`,
+    `Watch: ${snapshotIssues.length ? snapshotIssues.join(', ') : 'All key signals ready'}`,
+  ].join('\n');
+
+  const handleCopySnapshot = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(snapshotText);
+      setSnapshotStatus('copied');
+    } catch {
+      setSnapshotStatus('fallback');
+    }
+  };
 
   const handleBrokerAssistant = async () => {
     setAssistantStatus('loading');
@@ -750,7 +777,53 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
       </GlassCard>
       </Reveal>
 
-      {/* 2.7 Broker-backed AI Assistant */}
+      {/* 2.7 Local Trip Snapshot */}
+      <Reveal className="dashboard-reveal" delay={0.068}>
+      <GlassCard as="div" className="dashboard-trip-snapshot relative overflow-hidden z-10">
+        <div role="region" aria-label="Trip snapshot">
+          <div className="dashboard-trip-snapshot-head">
+            <div>
+              <span><ClipboardList size={15} /> Trip Snapshot</span>
+              <h3>出發快照</h3>
+            </div>
+            <em>local · no API</em>
+          </div>
+          <div className="dashboard-trip-snapshot-grid">
+            <article>
+              <span>Day</span>
+              <strong>{currentDayNumber}/{length}</strong>
+              <small>{weekdayLabel(displayDayDate)}</small>
+            </article>
+            <article>
+              <span>Budget left</span>
+              <strong>HK$ {fmt(remainingBudgetHkd)}</strong>
+              <small>burn HK$ {fmt(dailyBurnHkd)}/day</small>
+            </article>
+            <article>
+              <span>Next</span>
+              <strong>{transitWidget?.value || '--'}</strong>
+              <small>{transitWidget?.detail || 'No next stop'}</small>
+            </article>
+            <article>
+              <span>Watch</span>
+              <strong>{snapshotIssues.length ? `${snapshotIssues.length} items` : 'Ready'}</strong>
+              <small>{snapshotIssues.length ? snapshotIssues.join(' · ') : 'All key signals ready'}</small>
+            </article>
+          </div>
+          <pre className="dashboard-trip-snapshot-copy">{snapshotText}</pre>
+          <div className="dashboard-trip-snapshot-actions">
+            <button type="button" className="compact-touch-action" onClick={handleCopySnapshot}>
+              {snapshotStatus === 'copied' ? <Check size={15} /> : <Copy size={15} />}
+              {snapshotStatus === 'copied' ? 'Copied' : snapshotStatus === 'fallback' ? 'Preview ready' : 'Copy snapshot'}
+            </button>
+            <button type="button" className="compact-touch-action" onClick={() => onTab('timeline')}>Timeline</button>
+            <button type="button" className="compact-touch-action" onClick={() => onTab('history')}>Records</button>
+          </div>
+        </div>
+      </GlassCard>
+      </Reveal>
+
+      {/* 2.8 Broker-backed AI Assistant */}
       <Reveal className="dashboard-reveal" delay={0.07}>
       <GlassCard as="div" className={`dashboard-broker-assistant status-${assistantStatus} relative overflow-hidden z-10`}>
         <div role="region" aria-label="Broker AI assistant">

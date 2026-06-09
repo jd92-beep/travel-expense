@@ -2,6 +2,7 @@
 
 ## 2026-06-09
 
+- Added compact Dashboard `Trip Snapshot`, a local/no-API handoff card with day, budget-left, next-stop, readiness/watch signals, copyable summary text, and Timeline/Records shortcuts.
 - Added a no-secret Credential Broker deploy preflight for compact P0-05. `workers/credential-broker npm run preflight:deploy` checks source Mimo route presence, syntax, self-test, Wrangler dry-run, Wrangler auth/account readiness, live health, and whether live `/mimo/json` returns the expected unauthenticated guard instead of 404.
 - Improved compact `npm run smoke:broker-vault` authenticated reporting. It now continues after provider quota/config failures, emits one redacted JSON summary instead of a stack trace, treats Notion database proof as covered by `/credentials/test-all` without printing database ids, and adds a Google route diagnostic model probe without changing the app primary model contract.
 - Fixed compact `npm run smoke:broker-vault:guard` so guard mode always forces a missing-session proof even when an ignored local broker-vault session file exists.
