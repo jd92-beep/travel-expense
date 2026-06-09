@@ -724,6 +724,186 @@ test('Settings post-trip archive checklist separates backup, share, settlement, 
   expect(storageAfterCancel).toContain('Archive Shared Dinner');
 });
 
+test('Settings sync readiness dry run summarizes offline queue without provider calls', async ({ page }) => {
+  let brokerCalls = 0;
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/**', async (route) => {
+    brokerCalls += 1;
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: 'broker should not be called by dry run' }),
+    });
+  });
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    const now = Date.now();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      autoSync: false,
+      activeTripId: 'trip_sync_dry',
+      lastSyncedAt: now - 5 * 86_400_000,
+      trips: [{
+        id: 'trip_sync_dry',
+        name: 'Sync Dry Run Trip',
+        destinationSummary: 'Seoul, Korea',
+        startDate: '2026-06-01',
+        endDate: '2026-06-03',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'KRW'],
+        timezones: ['Asia/Seoul'],
+        version: 1,
+        active: true,
+        itinerary: [{ date: '2026-06-01', day: 1, region: 'Seoul', spots: [] }],
+        createdAt: 1,
+        updatedAt: 1,
+      }, {
+        id: 'trip_sync_other',
+        name: 'Other Sync Trip',
+        destinationSummary: 'Other',
+        startDate: '2026-07-01',
+        endDate: '2026-07-02',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        active: false,
+        itinerary: [],
+        createdAt: 2,
+        updatedAt: 2,
+      }],
+      receipts: [{
+        id: 'sync_dry_receipt',
+        store: 'Dry Run Dinner',
+        total: 20000,
+        date: '2026-06-01',
+        category: 'food',
+        payment: 'cash',
+        tripId: 'trip_sync_dry',
+        syncStatus: 'queued',
+        createdAt: 1,
+      }, {
+        id: 'sync_dry_conflict',
+        store: 'Dry Run Taxi',
+        total: 15000,
+        date: '2026-06-02',
+        category: 'transport',
+        payment: 'cash',
+        tripId: 'trip_sync_dry',
+        syncStatus: 'failed',
+        createdAt: 2,
+      }, {
+        id: 'sync_other_receipt',
+        store: 'Other Queue Cafe',
+        total: 999,
+        date: '2026-07-01',
+        category: 'food',
+        payment: 'cash',
+        tripId: 'trip_sync_other',
+        createdAt: 3,
+      }],
+      syncQueue: [{
+        id: 'queue_sync_receipt',
+        type: 'receipt',
+        entityId: 'sync_dry_receipt',
+        op: 'update',
+        status: 'queued',
+        attempts: 0,
+        createdAt: now - 3 * 86_400_000,
+        updatedAt: now - 3 * 86_400_000,
+        payload: { tripId: 'trip_sync_dry', sourceId: 'safe-source-id' },
+      }, {
+        id: 'queue_sync_delete',
+        type: 'delete-receipt',
+        entityId: 'sync_dry_conflict',
+        op: 'delete',
+        status: 'failed',
+        attempts: 3,
+        error: 'provider-secret-should-not-render sk-test-should-not-render',
+        createdAt: now - 2 * 86_400_000,
+        updatedAt: now - 2 * 86_400_000,
+        payload: {
+          tripId: 'trip_sync_dry',
+          sourceId: 'delete-source-id',
+          notionPageId: 'page-should-not-render',
+          supabaseId: '11111111-1111-4111-8111-111111111111',
+        },
+      }, {
+        id: 'queue_sync_trip',
+        type: 'trip',
+        entityId: 'trip_sync_dry',
+        op: 'update',
+        status: 'queued',
+        attempts: 1,
+        createdAt: now - 90_000_000,
+        updatedAt: now - 90_000_000,
+        payload: { sourceId: 'trip-source-id' },
+      }, {
+        id: 'queue_sync_settings',
+        type: 'settings',
+        entityId: 'settings',
+        op: 'upsert',
+        status: 'queued',
+        attempts: 0,
+        createdAt: now - 80_000_000,
+        updatedAt: now - 80_000_000,
+      }, {
+        id: 'queue_other_trip',
+        type: 'receipt',
+        entityId: 'sync_other_receipt',
+        op: 'update',
+        status: 'queued',
+        attempts: 0,
+        createdAt: now - 4 * 86_400_000,
+        updatedAt: now - 4 * 86_400_000,
+        payload: { tripId: 'trip_sync_other', sourceId: 'other-source-id' },
+      }],
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expectSettingsReady(page);
+  await setAccordion(page, 'Notion Sync');
+
+  const dryRun = page.getByLabel('Sync readiness dry run');
+  await expect(dryRun).toBeVisible();
+  await expect(dryRun).toContainText('Sync dry run');
+  await expect(dryRun).toContainText('Review first');
+  await expect(dryRun).toContainText('4 pending');
+  await expect(dryRun).toContainText('2 receipt');
+  await expect(dryRun).toContainText('1 trip');
+  await expect(dryRun).toContainText('1 settings');
+  await expect(dryRun).toContainText('2 signals');
+  await expect(dryRun).toContainText('1 failed queue item');
+  await expect(dryRun).toContainText('3d old');
+  await expect(dryRun).toContainText('Last sync 5d old');
+  await expect(dryRun).toContainText('local');
+  await expect(dryRun).toContainText('Dry run only');
+  await expect(dryRun).toContainText('No provider calls');
+  await expect(dryRun).toContainText('1 delete queued');
+  await expect(dryRun).toContainText('Review conflicts before Push All');
+  await expect(dryRun).not.toContainText('provider-secret-should-not-render');
+  await expect(dryRun).not.toContainText('sk-test-should-not-render');
+  await expect(dryRun).not.toContainText('page-should-not-render');
+  await expect(dryRun).not.toContainText('11111111-1111-4111-8111-111111111111');
+  expect(brokerCalls).toBe(0);
+
+  await dryRun.getByRole('button', { name: /Review records/ }).click();
+  await expect(page).toHaveURL(/#history/);
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await page.getByRole('button', { name: /設定/ }).click();
+  await expectSettingsReady(page);
+  await setAccordion(page, 'Notion Sync');
+  await page.getByLabel('Sync readiness dry run').getByRole('button', { name: /Backup first/ }).click();
+  await expect(page.locator('[aria-controls="settings-data-panel"]')).toHaveAttribute('aria-expanded', 'true');
+  expect(brokerCalls).toBe(0);
+});
+
 test('Settings backup restore preview can be cancelled before mutating local state', async ({ page }) => {
   const restorePath = path.join('/tmp', 'travel-expense-preview-cancel-restore.json');
   fs.writeFileSync(restorePath, JSON.stringify({

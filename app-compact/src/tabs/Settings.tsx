@@ -467,6 +467,103 @@ function buildPostTripArchiveChecklist(
   };
 }
 
+function formatSyncAge(timestamp: number): string {
+  if (!timestamp || !Number.isFinite(timestamp)) return 'never';
+  const ageMs = Math.max(0, Date.now() - timestamp);
+  const minutes = Math.floor(ageMs / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m old`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h old`;
+  return `${Math.floor(hours / 24)}d old`;
+}
+
+function buildSyncReadinessDryRun(
+  state: AppState,
+  trip: TripProfile,
+  syncState: SyncEngineState | undefined,
+  cloudSyncAvailable: boolean,
+  notionMirrorReady: boolean,
+  brokerReady: boolean,
+  storageScope: string,
+) {
+  const tripReceipts = scopedReceiptsForTrip(state, trip);
+  const tripReceiptIds = new Set(tripReceipts.map((receipt) => receipt.id));
+  const queue = (state.syncQueue || []).filter((item) => item.status !== 'synced');
+  const relevantQueue = queue.filter((item) => (
+    item.type === 'settings'
+    || item.entityId === trip.id
+    || item.payload?.tripId === trip.id
+    || tripReceiptIds.has(item.entityId)
+  ));
+  const failedQueue = relevantQueue.filter((item) => item.status === 'error' || item.status === 'failed');
+  const destructiveQueue = relevantQueue.filter((item) => item.op === 'delete' || item.type === 'delete-receipt');
+  const receiptQueue = relevantQueue.filter((item) => item.type === 'receipt' || item.type === 'delete-receipt');
+  const tripQueue = relevantQueue.filter((item) => item.type === 'trip');
+  const settingsQueue = relevantQueue.filter((item) => item.type === 'settings');
+  const queueKeyCounts = new Map<string, number>();
+  relevantQueue.forEach((item) => {
+    const key = `${item.type}:${item.entityId}`;
+    queueKeyCounts.set(key, (queueKeyCounts.get(key) || 0) + 1);
+  });
+  const duplicateQueueKeys = Array.from(queueKeyCounts.values()).filter((count) => count > 1).length;
+  const failedQueueKeys = new Set(failedQueue.map((item) => `${item.type}:${item.entityId}`));
+  const receiptConflictCount = tripReceipts.filter((receipt) => (
+    (receipt.syncStatus === 'error' || receipt.syncStatus === 'failed') && !failedQueueKeys.has(`receipt:${receipt.id}`)
+  )).length;
+  const conflictSignals = failedQueue.length + duplicateQueueKeys + receiptConflictCount;
+  const oldestQueuedAt = relevantQueue.reduce((oldest, item) => {
+    const stamp = Number(item.createdAt || item.updatedAt || 0);
+    if (!stamp) return oldest;
+    return oldest ? Math.min(oldest, stamp) : stamp;
+  }, 0);
+  const target = cloudSyncAvailable
+    ? notionMirrorReady ? 'Supabase + Notion' : 'Supabase only'
+    : brokerReady ? 'Broker / Notion' : storageScope;
+  const statusLabel = conflictSignals
+    ? 'Review first'
+    : relevantQueue.length
+      ? 'Ready dry run'
+      : 'Queue clear';
+  return {
+    tone: conflictSignals ? 'warning' : relevantQueue.length ? 'info' : 'ok',
+    statusLabel,
+    helper: 'Local dry run only; no provider, broker, Supabase, or Notion calls are made here.',
+    items: [
+      {
+        key: 'pending',
+        title: 'Pending changes',
+        value: relevantQueue.length ? `${relevantQueue.length} pending` : 'None',
+        detail: `${receiptQueue.length} receipt · ${tripQueue.length} trip · ${settingsQueue.length} settings`,
+      },
+      {
+        key: 'conflicts',
+        title: 'Conflict signals',
+        value: conflictSignals ? `${conflictSignals} signal${conflictSignals === 1 ? '' : 's'}` : 'Clear',
+        detail: failedQueue.length ? `${failedQueue.length} failed queue item${failedQueue.length === 1 ? '' : 's'}` : 'No failed queue',
+      },
+      {
+        key: 'age',
+        title: 'Offline age',
+        value: oldestQueuedAt ? formatSyncAge(oldestQueuedAt) : 'No queue',
+        detail: `Last sync ${formatSyncAge(syncState?.lastSyncedAt || state.lastSyncedAt || 0)}`,
+      },
+      {
+        key: 'target',
+        title: 'Push target',
+        value: target,
+        detail: syncState?.status ? `Engine ${syncState.status}` : 'Local queue snapshot',
+      },
+    ],
+    warnings: [
+      'Dry run only',
+      'No provider calls',
+      ...(destructiveQueue.length ? [`${destructiveQueue.length} delete queued`] : []),
+      ...(conflictSignals ? ['Review conflicts before Push All'] : relevantQueue.length ? ['Backup before long offline push'] : ['Nothing pending to push']),
+    ],
+  };
+}
+
 export function Settings({
   state,
   setState,
@@ -617,6 +714,7 @@ export function Settings({
   const buildLabel = `${import.meta.env.MODE} · React ${reactVersion}`;
   const tripDoctor = compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope);
   const postTripArchive = buildPostTripArchiveChecklist(state, currentTrip, persons, settlement);
+  const syncReadiness = buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope);
 
   // Local state for Trip Manager
   const [managerTripId, setManagerTripId] = useState(currentTrip.id);
@@ -2186,6 +2284,37 @@ export function Settings({
             {mappingDiag.issues.length > 40 && <p className="muted" style={{ marginTop: 8 }}>只顯示首 40 項 issue。</p>}
           </div>
         )}
+        <div className={`settings-sync-dry-run settings-sync-dry-run--${syncReadiness.tone}`} role="region" aria-label="Sync readiness dry run">
+          <div className="settings-restore-preview-head">
+            <span><Cloud size={15} /> Sync dry run</span>
+            <strong>{syncReadiness.statusLabel}</strong>
+          </div>
+          <p className="settings-post-trip-helper">{syncReadiness.helper}</p>
+          <div className="settings-restore-preview-grid">
+            {syncReadiness.items.map((item) => (
+              <span key={item.key}>
+                <small>{item.title}</small>
+                <strong>{item.value}</strong>
+                <small>{item.detail}</small>
+              </span>
+            ))}
+          </div>
+          <div className="settings-restore-preview-warnings">
+            {syncReadiness.warnings.map((warning) => (
+              <span key={warning}><ShieldCheck size={13} /> {warning}</span>
+            ))}
+          </div>
+          <div className="settings-trip-doctor-actions settings-sync-dry-run-actions">
+            <button type="button" onClick={() => changeTab?.('history')}>
+              <Copy size={14} />
+              <span>Review records</span>
+            </button>
+            <button type="button" onClick={() => openSettingsPanel('settings-data')}>
+              <Download size={14} />
+              <span>Backup first</span>
+            </button>
+          </div>
+        </div>
         <div className="action-row wrap">
           <button className="secondary" type="button" disabled={!!busy} onClick={saveLocalSettingsNow}>Save Local Settings</button>
           <button className="secondary" type="button" disabled={notionActionDisabled} onClick={() => {
