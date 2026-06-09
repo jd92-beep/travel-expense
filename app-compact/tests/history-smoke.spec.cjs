@@ -192,6 +192,48 @@ const attachmentReceipts = [
   },
 ];
 
+const reconciliationItinerary = [
+  { date: '2026-05-08', day: 1, region: 'Nagoya Missing Day', city: 'Nagoya', spots: [{ time: '09:00', name: 'Nagoya Breakfast', type: 'food' }] },
+  { date: '2026-05-09', day: 2, region: 'Kyoto Busy Day', city: 'Kyoto', spots: [{ time: '10:00', name: 'Kyoto Market', type: 'shopping' }] },
+  { date: '2026-05-10', day: 3, region: 'Nara Ready Day', city: 'Nara', spots: [{ time: '12:00', name: 'Nara Lunch', type: 'food' }] },
+];
+
+const reconciliationReceipts = [
+  ...Array.from({ length: 5 }, (_, idx) => ({
+    id: `review_kyoto_${idx}`,
+    store: idx === 0 ? 'Kyoto Market' : `Kyoto Busy Receipt ${idx + 1}`,
+    total: 1000 + idx,
+    date: '2026-05-09',
+    category: idx % 2 ? 'food' : 'shopping',
+    payment: 'cash',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    createdAt: 100 + idx,
+  })),
+  {
+    id: 'review_nara_lunch',
+    store: 'Nara Lunch',
+    total: 1800,
+    date: '2026-05-10',
+    category: 'food',
+    payment: 'credit',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    createdAt: 111,
+  },
+  {
+    id: 'review_outside',
+    store: 'Outside Itinerary Taxi',
+    total: 2200,
+    date: '2026-05-11',
+    category: 'transport',
+    payment: 'cash',
+    personId: 'p_boss',
+    splitMode: 'shared',
+    createdAt: 112,
+  },
+];
+
 test('History search, filter, pending, edit, delete, and safe pull', async ({ page }) => {
   let notionRequests = 0;
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/notion/request', async (route) => {
@@ -382,6 +424,74 @@ test('History guided cleanup suggestions open the right receipt for repair', asy
   await cleanup.getByRole('button', { name: /Open missing payer/ }).click();
   await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
   await expect(page.getByLabel('店名 / 項目')).toHaveValue('M7 Missing Payer');
+});
+
+test('History itinerary review queue filters receipt gaps by travel day', async ({ page }) => {
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
+  await page.addInitScript(({ seedReceipts, itinerary }) => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'history',
+      receipts: seedReceipts,
+      customItinerary: itinerary,
+      tripDateRange: { start: '2026-05-08', end: '2026-05-10' },
+      autoSync: false,
+    }));
+  }, { seedReceipts: reconciliationReceipts, itinerary: reconciliationItinerary });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+
+  const queue = page.getByLabel('Itinerary receipt review queue');
+  await expect(queue).toBeVisible();
+  await expect(queue).toContainText('Itinerary Review Queue');
+  await expect(queue).toContainText('3 days need receipt review');
+  await expect(queue).toContainText('No receipts');
+  await expect(queue).toContainText('Nagoya Breakfast');
+  await expect(queue).toContainText('High receipt count');
+  await expect(queue).toContainText('2026-05-09 · Kyoto');
+  await expect(queue).toContainText('Outside itinerary');
+  await expect(queue).toContainText('2026-05-11');
+  await expect(page.locator('body')).not.toContainText(/secret_|providerToken|FAKE_/i);
+
+  const metrics = await queue.evaluate((node) => {
+    const card = node.getBoundingClientRect();
+    const items = Array.from(node.querySelectorAll('.history-review-item')).map((item) => {
+      const rect = item.getBoundingClientRect();
+      return { width: Math.round(rect.width), top: Math.round(rect.top) };
+    });
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      cardWidth: Math.round(card.width),
+      items,
+    };
+  });
+  expect(metrics.scrollWidth).toBe(390);
+  expect(metrics.cardWidth).toBeLessThanOrEqual(390);
+  expect(metrics.items).toHaveLength(3);
+  expect(metrics.items[0].top).toBe(metrics.items[1].top);
+
+  await queue.locator('.history-review-item').filter({ hasText: 'High receipt count' }).getByRole('button', { name: 'Show receipts' }).click();
+  await expect(page.getByLabel('Active itinerary review filter')).toContainText('2026-05-09');
+  await expect(page.locator('.receipt-row')).toHaveCount(5);
+  await expect(page.locator('.receipt-row').filter({ hasText: 'Kyoto Market' })).toBeVisible();
+  await expect(page.locator('.receipt-row').filter({ hasText: 'Outside Itinerary Taxi' })).toHaveCount(0);
+
+  await queue.locator('.history-review-item').filter({ hasText: 'No receipts' }).getByRole('button', { name: 'Show empty day' }).click();
+  await expect(page.getByLabel('Active itinerary review filter')).toContainText('2026-05-08');
+  await expect(page.locator('.receipt-row')).toHaveCount(0);
+  await expect(page.getByText('2026-05-08 未有紀錄，請新增或修正當日 receipt。')).toBeVisible();
+
+  await page.getByRole('button', { name: 'All records' }).click();
+  await expect(page.getByLabel('Active itinerary review filter')).toHaveCount(0);
+  await expect(page.locator('.receipt-row')).toHaveCount(7);
 });
 
 test('History offline conflict resolver reviews and resolves local/cloud receipt conflicts safely', async ({ page }) => {

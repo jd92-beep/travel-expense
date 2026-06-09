@@ -3587,6 +3587,141 @@ body {
   outline: 3px solid color-mix(in srgb, var(--screen-accent-2) 44%, transparent);
   outline-offset: 2px;
 }
+.history-review-queue {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(45,90,142,.16);
+  background:
+    linear-gradient(135deg, rgba(247,252,255,.82), rgba(255,253,247,.64)),
+    rgba(255,255,255,.58);
+}
+.history-review-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1E4D6B;
+}
+.history-review-head h2 {
+  margin: 0;
+  color: #18243a;
+  font-size: 14px;
+  line-height: 1.1;
+  font-weight: 950;
+}
+.history-review-head p {
+  margin: 2px 0 0;
+  color: #637184;
+  font-size: 10px;
+  line-height: 1.15;
+  font-weight: 850;
+}
+.history-review-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.history-review-item {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid rgba(45,90,142,.14);
+  border-radius: 12px;
+  background: rgba(255,253,248,.78);
+}
+.history-review-item.tone-missing,
+.history-review-item.tone-gap {
+  border-color: rgba(217,119,6,.24);
+}
+.history-review-item.tone-high {
+  border-color: rgba(194,59,94,.22);
+}
+.history-review-item.tone-outside {
+  border-color: rgba(45,90,142,.24);
+}
+.history-review-item span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.history-review-item strong {
+  min-width: 0;
+  color: #18243a;
+  font-size: 11px;
+  font-weight: 950;
+  line-height: 1.1;
+}
+.history-review-item b {
+  min-width: 0;
+  color: #C23B5E;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.history-review-item small {
+  min-width: 0;
+  color: #5f5549;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.history-review-item button {
+  min-height: 32px;
+  padding: 6px 7px;
+  border: 1px solid rgba(45,90,142,.16);
+  border-radius: 999px;
+  background: rgba(255,255,255,.78);
+  color: #1E4D6B;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+.history-review-item button:focus-visible,
+.history-review-active button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--screen-accent-2) 44%, transparent);
+  outline-offset: 2px;
+}
+.history-review-active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(45,90,142,.14);
+  border-radius: 14px;
+  background: rgba(255,255,255,.62);
+}
+.history-review-active span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.history-review-active strong {
+  color: #1E4D6B;
+  font-size: 12px;
+  font-weight: 950;
+}
+.history-review-active small {
+  min-width: 0;
+  color: #5f5549;
+  font-size: 10px;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+.history-review-active button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid rgba(45,90,142,.18);
+  border-radius: 999px;
+  background: #fff;
+  color: #1E4D6B;
+  font-size: 10px;
+  font-weight: 950;
+}
 .history-conflict-resolver {
   display: grid;
   gap: 10px;
@@ -11669,6 +11804,52 @@ textarea,
     min-height: 32px;
     padding: 5px 6px;
     font-size: 9px;
+  }
+
+  .app-shell--history .history-review-queue {
+    gap: 7px;
+    padding: 8px !important;
+    border-radius: 10px;
+  }
+
+  .app-shell--history .history-review-head h2 {
+    font-size: 12px;
+  }
+
+  .app-shell--history .history-review-head p {
+    font-size: 9px;
+  }
+
+  .app-shell--history .history-review-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .app-shell--history .history-review-item {
+    gap: 4px;
+    padding: 7px;
+    border-radius: 8px;
+  }
+
+  .app-shell--history .history-review-item strong {
+    font-size: 10px;
+  }
+
+  .app-shell--history .history-review-item small {
+    font-size: 8.5px;
+  }
+
+  .app-shell--history .history-review-item button,
+  .app-shell--history .history-review-active button {
+    min-height: 32px;
+    padding: 5px 6px;
+    font-size: 9px;
+  }
+
+  .app-shell--history .history-review-active {
+    align-items: start;
+    padding: 7px;
+    border-radius: 9px;
   }
 
   .app-shell--history .history-conflict-resolver {

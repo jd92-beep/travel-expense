@@ -9,7 +9,8 @@ import { takeReceiptRepairIntent } from '../lib/repairIntent';
 import type { AppState, CategoryId, Receipt, SyncQueueItem, TripProfile } from '../lib/types';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
-import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
+import { categoryById, displayStore, fmt, getItinerary, getPersons, hkd, isPendingReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
+import { buildItineraryReceiptReconciliation, type ItineraryReceiptDay } from '../lib/travelDay';
 
 type ReceiptHealthMarker = {
   key: string;
@@ -42,6 +43,10 @@ type ReceiptConflictItem = {
   queueItem?: SyncQueueItem;
   status: string;
   detail: string;
+};
+
+type HistoryReviewItem = ItineraryReceiptDay & {
+  actionLabel: string;
 };
 
 const LARGE_PHOTO_BYTES = 600_000;
@@ -133,6 +138,17 @@ function buildReceiptConflictItems(receipts: Receipt[], state: AppState): Receip
       };
     });
   return items.filter((item): item is ReceiptConflictItem => !!item);
+}
+
+function buildHistoryReviewQueue(state: AppState): HistoryReviewItem[] {
+  const itinerary = getItinerary(state);
+  const reconciliation = buildItineraryReceiptReconciliation(state, itinerary);
+  return [...reconciliation.days, ...reconciliation.outside]
+    .filter((item) => item.tone !== 'ok')
+    .map((item) => ({
+      ...item,
+      actionLabel: item.receiptCount > 0 ? 'Show receipts' : 'Show empty day',
+    }));
 }
 
 function receiptHealthMarkers(
@@ -267,6 +283,7 @@ export function History({
   }, []);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<'all' | CategoryId>('all');
+  const [reviewDateFilter, setReviewDateFilter] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
@@ -282,6 +299,7 @@ export function History({
   const receipts = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tripReceipts
+      .filter((r) => !reviewDateFilter || r.date === reviewDateFilter)
       .filter((r) => category === 'all' || r.category === category)
       .filter((r) => !q || [r.store, r.note, r.itemsText, r.region, r.bookingRef, r.address].some((v) => String(v || '').toLowerCase().includes(q)))
       .sort((a, b) => {
@@ -294,7 +312,7 @@ export function History({
         const timeB = b.time || '00:00';
         return timeB.localeCompare(timeA);
       });
-  }, [tripReceipts, query, category]);
+  }, [tripReceipts, query, category, reviewDateFilter]);
   const groups = receipts.reduce<Record<string, Receipt[]>>((acc, r) => {
     (acc[r.date] ||= []).push(r);
     return acc;
@@ -313,6 +331,11 @@ export function History({
   const conflictItems = useMemo(
     () => buildReceiptConflictItems(tripReceipts, state),
     [tripReceipts, state],
+  );
+  const reviewQueue = useMemo(() => buildHistoryReviewQueue(state), [state]);
+  const selectedReviewItem = useMemo(
+    () => reviewQueue.find((item) => item.date === reviewDateFilter),
+    [reviewQueue, reviewDateFilter],
   );
   useEffect(() => {
     const repairReceiptId = takeReceiptRepairIntent();
@@ -383,6 +406,20 @@ export function History({
         ? '請確認收據後重新同步，避免旅行途中只有本機相片。'
         : '請加入收據相片，讓 OCR / backup 更完整。');
     onOpen(suggestion.receipt);
+  }
+
+  function handleReviewItem(item: HistoryReviewItem) {
+    setQuery('');
+    setCategory('all');
+    setReviewDateFilter(item.date || null);
+    setStatus(item.receiptCount > 0
+      ? `已篩選 ${item.date}：${item.label}`
+      : `已篩選 ${item.date}：當日未有 receipt。`);
+  }
+
+  function clearReviewFilter() {
+    setReviewDateFilter(null);
+    setStatus('已返回全部紀錄。');
   }
 
   function handleKeepLocal(conflict: ReceiptConflictItem) {
@@ -504,6 +541,41 @@ export function History({
           </button>
         ))}
       </div>
+      {reviewQueue.length > 0 && (
+        <section className="history-review-queue card" aria-label="Itinerary receipt review queue">
+          <div className="history-review-head">
+            <AlertTriangle size={18} aria-hidden="true" />
+            <div>
+              <h2>Itinerary Review Queue</h2>
+              <p>{reviewQueue.length} days need receipt review · local only</p>
+            </div>
+          </div>
+          <div className="history-review-grid">
+            {reviewQueue.slice(0, 4).map((item) => (
+              <article key={`${item.date}-${item.label}`} className={`history-review-item tone-${item.tone}`}>
+                <span>
+                  <strong>{item.day ? `Day ${item.day}` : 'Outside'}</strong>
+                  <b>{item.label}</b>
+                </span>
+                <small>{item.date} · {item.region}</small>
+                <small>{item.detail} · {item.receiptCount} receipts · {resolvedTripCurrency} {fmt(item.amount)}</small>
+                <button type="button" onClick={() => handleReviewItem(item)}>
+                  {item.actionLabel}
+                </button>
+              </article>
+            ))}
+          </div>
+          {reviewDateFilter && (
+            <div className="history-review-active" aria-label="Active itinerary review filter">
+              <span>
+                <strong>{reviewDateFilter}</strong>
+                <small>{selectedReviewItem ? `${selectedReviewItem.label} · ${selectedReviewItem.detail}` : 'Review filter active'}</small>
+              </span>
+              <button type="button" onClick={clearReviewFilter}>All records</button>
+            </div>
+          )}
+        </section>
+      )}
       {conflictItems.length > 0 && (
         <section className="history-conflict-resolver card" aria-label="Offline conflict resolver">
           <div className="history-conflict-head">
@@ -598,7 +670,11 @@ export function History({
           </button>
         </section>
       )}
-      {Object.keys(groups).length === 0 && <p className="empty card">未有紀錄</p>}
+      {Object.keys(groups).length === 0 && (
+        <p className="empty card">
+          {reviewDateFilter ? `${reviewDateFilter} 未有紀錄，請新增或修正當日 receipt。` : '未有紀錄'}
+        </p>
+      )}
       {Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([date, items], groupIdx) => (
         <Reveal key={date} className="history-date-reveal" delay={Math.min(0.16, groupIdx * 0.018)}>
         <details className="card history-expandable-group" open>
