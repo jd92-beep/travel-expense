@@ -54,6 +54,7 @@ async function openDashboard(page, statsIncludeTransportLodging) {
   await expect(page.locator('.today-itinerary-card').getByText('今日行程')).toHaveCount(1);
   await expect(page.getByText('Budget Settings')).toHaveCount(0);
   await expect(page.getByText('Notifications')).toHaveCount(0);
+  await expect(page.getByText('預算控制')).toHaveCount(0);
   await expect(page.locator('.washi-budget-card')).toBeVisible();
   await expect(page.locator('.washi-today-stats-card .preview-dashboard-today-grid > div')).toHaveCount(3);
 }
@@ -82,14 +83,18 @@ test('Dashboard keeps Home simple without travel-day diagnostic cards', async ({
   await expect(page.getByLabel('Departure checklist')).toHaveCount(0);
   await expect(page.getByLabel('Day-end closeout')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /旅程提醒/ })).toHaveCount(0);
+  await expect(page.getByText('預算分析')).toHaveCount(0);
+  await expect(page.getByText('行程時間線')).toHaveCount(0);
+  await expect(page.locator('.dashboard-ai-coach')).toHaveCount(0);
+  await expect(page.getByText('Local AI Coach')).toHaveCount(0);
   await expect(page.getByLabel('Broker AI assistant')).toBeVisible();
   await expect(page.locator('.today-itinerary-card')).toBeVisible();
 });
 
-test('Dashboard local AI coach shows burn forecast, next-day warning, and weather reminder', async ({ page }) => {
+test('Dashboard compact itinerary and recent expenses show denser Home information', async ({ page }) => {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
-    const fixedNow = new Date('2026-05-09T10:00:00+08:00').valueOf();
+    const fixedNow = new Date('2026-05-08T10:00:00+08:00').valueOf();
     const RealDate = Date;
     class MockDate extends RealDate {
       constructor(...args) {
@@ -102,63 +107,61 @@ test('Dashboard local AI coach shows burn forecast, next-day warning, and weathe
     window.Date = MockDate;
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    const itinerary = [{
+      date: '2026-05-08',
+      day: 1,
+      region: 'Compact Home',
+      spots: [
+        { time: '09:00', name: 'Station Coffee', type: 'food', note: 'Breakfast before train', address: 'Central Station' },
+        { time: '10:30', name: 'Museum Gate', type: 'ticket', note: 'Booking QR ready', address: 'Museum Road' },
+        { time: '13:00', name: 'Market Lunch', type: 'food', note: 'Seafood lane', address: 'Market Street' },
+        { time: '16:00', name: 'Souvenir Shop', type: 'shopping', note: 'Gifts', address: 'Old Town' },
+      ],
+    }];
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       schemaVersion: 3,
       lastTab: 'dashboard',
-      budget: 10000,
+      budget: 20000,
       rate: 20,
-      activeTripId: 'coach_trip',
-      tripName: 'Coach Test',
-      tripDateRange: { start: '2026-05-08', end: '2026-05-10' },
-      customItinerary: [
-        { date: '2026-05-08', day: 1, region: 'Nagoya', timezone: 'Asia/Hong_Kong', spots: [{ time: '10:00', name: 'Nagoya Food', type: 'food' }] },
-        { date: '2026-05-09', day: 2, region: 'Inuyama', timezone: 'Asia/Hong_Kong', spots: [{ time: '09:00', name: 'Inuyama Castle', type: 'ticket' }] },
-        { date: '2026-05-10', day: 3, region: 'Outdoor Mountain', timezone: 'Asia/Hong_Kong', spots: [{ time: '08:30', name: 'Mountain trail', type: 'ticket', note: 'outdoor walking' }] },
-      ],
+      activeTripId: 'compact_home_trip',
+      tripName: 'Compact Home Test',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-08' },
+      customItinerary: itinerary,
       trips: [{
-        id: 'coach_trip',
-        name: 'Coach Test',
-        destinationSummary: 'Nagoya / Inuyama / Outdoor Mountain',
+        id: 'compact_home_trip',
+        name: 'Compact Home Test',
+        destinationSummary: 'Compact Home',
         startDate: '2026-05-08',
-        endDate: '2026-05-10',
+        endDate: '2026-05-08',
         homeCurrency: 'HKD',
         currencies: ['HKD', 'JPY'],
         timezones: ['Asia/Hong_Kong'],
         version: 1,
         active: true,
-        itinerary: [
-          { date: '2026-05-08', day: 1, region: 'Nagoya', timezone: 'Asia/Hong_Kong', spots: [{ time: '10:00', name: 'Nagoya Food', type: 'food' }] },
-          { date: '2026-05-09', day: 2, region: 'Inuyama', timezone: 'Asia/Hong_Kong', spots: [{ time: '09:00', name: 'Inuyama Castle', type: 'ticket' }] },
-          { date: '2026-05-10', day: 3, region: 'Outdoor Mountain', timezone: 'Asia/Hong_Kong', spots: [{ time: '08:30', name: 'Mountain trail', type: 'ticket', note: 'outdoor walking' }] },
-        ],
+        itinerary,
         createdAt: 1,
         updatedAt: 1,
       }],
       receipts: [
-        { id: 'coach_day1', store: 'Nagoya Food', total: 4000, date: '2026-05-08', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1 },
-        { id: 'coach_day2', store: 'Inuyama Ticket', total: 4000, date: '2026-05-09', category: 'ticket', payment: 'credit', personId: 'p_boss', splitMode: 'shared', createdAt: 2 },
+        { id: 'recent_1', store: 'Station Coffee', total: 600, date: '2026-05-08', time: '09:05', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 6 },
+        { id: 'recent_2', store: 'Museum Gate', total: 1200, date: '2026-05-08', time: '10:35', category: 'ticket', payment: 'credit', personId: 'p_boss', splitMode: 'shared', createdAt: 5 },
+        { id: 'recent_3', store: 'Market Lunch', total: 1800, date: '2026-05-08', time: '13:10', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 4 },
+        { id: 'recent_4', store: 'Souvenir Shop', total: 2200, date: '2026-05-08', time: '16:05', category: 'shopping', payment: 'credit', personId: 'p_boss', splitMode: 'shared', createdAt: 3 },
+        { id: 'recent_5', store: 'Evening Snack', total: 500, date: '2026-05-08', time: '18:30', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 2 },
+        { id: 'recent_6', store: 'Hotel Water', total: 300, date: '2026-05-08', time: '21:00', category: 'other', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1 },
       ],
     }));
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  const coach = page.locator('.dashboard-ai-coach');
-  await expect(coach).toBeVisible();
-  await expect(coach).toContainText('Local AI Coach');
-  await expect(coach).toContainText('本地推算 · no API');
-  await expect(coach).toContainText('Daily burn');
-  await expect(coach).toContainText('HK$ 200');
-  await expect(coach).toContainText('Overspend forecast');
-  await expect(coach).toContainText('可能超支 HK$ 111');
-  await expect(coach).toContainText('Next-day warning');
-  await expect(coach).toContainText('明日 Outdoor Mountain');
-  await expect(coach).toContainText('Weather Reminder');
-  await expect(coach).toContainText('Check rain / wind');
-  await coach.getByRole('button', { name: /天氣/ }).click();
-  await expect(page).toHaveURL(/#weather/);
-  await page.getByLabel('主要分頁').getByRole('button', { name: '主頁', exact: true }).click();
-  await coach.getByRole('button', { name: /預算/ }).click();
-  await expect(page).toHaveURL(/#stats/);
+  await expect(page.locator('.dashboard-compact-itinerary-row')).toHaveCount(4);
+  await expect(page.locator('.dashboard-compact-itinerary-row').first()).toContainText('09:00');
+  await expect(page.locator('.dashboard-compact-itinerary-row').first()).toContainText('Station Coffee');
+  await expect(page.locator('.dashboard-compact-itinerary-row').first()).toContainText('Breakfast before train');
+  await expect(page.locator('.dashboard-compact-itinerary-row').first()).toContainText('¥600');
+  await expect(page.locator('.dashboard-compact-recent-row')).toHaveCount(6);
+  await expect(page.locator('.dashboard-compact-recent-row').first()).toContainText('Hotel Water');
+  await expect(page.locator('.dashboard-compact-recent-row').last()).toContainText('Station Coffee');
 });
 
 async function seedBrokerAssistantDashboard(page) {

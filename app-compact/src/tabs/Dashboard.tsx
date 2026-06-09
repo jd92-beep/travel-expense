@@ -16,7 +16,6 @@ import {
   Utensils,
   ShoppingBag,
   Bath,
-  Settings as GearIcon,
   Compass,
   BarChart3,
   MoreHorizontal,
@@ -149,7 +148,6 @@ export function Dashboard({
 }) {
   const [sheet, setSheet] = useState<{ kind: 'day-receipts' } | { kind: 'spot'; spot: ItinerarySpot } | null>(null);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
-  const [isBudgetSettingsOpen, setIsBudgetSettingsOpen] = useState(false);
   const [assistantQuestion, setAssistantQuestion] = useState('今日應該點樣控制預算？');
   const [assistantStatus, setAssistantStatus] = useState<'idle' | 'loading' | 'ready' | 'quota' | 'error'>('idle');
   const [assistantAnswer, setAssistantAnswer] = useState<ReturnType<typeof normalizeAssistantAnswer> | null>(null);
@@ -340,16 +338,11 @@ export function Dashboard({
   const burnDays = Math.max(1, Math.min(length, currentDayNumber));
   const dailyBurnHkd = Math.round(spentHkd / burnDays);
   const projectedSpendHkd = Math.round(dailyBurnHkd * length);
-  const forecastDeltaHkd = projectedSpendHkd - budgetHkd;
   const nextDay = itinerary.find((item) => (item.day || 0) > currentDayNumber) || itinerary.find((item) => item.date > displayDayDate);
   const coachFocusDay = nextDay || day;
   const coachSpots = coachFocusDay?.spots || [];
   const weatherSensitive = coachSpots.some((spot) => /transport|ticket|localtour|other|sightseeing/i.test(spot.type) || /城|寺|神社|park|garden|market|山|海|戶外|outdoor/i.test(`${spot.name} ${spot.note || ''} ${spot.address || ''}`));
   const coachWeatherRegion = coachFocusDay?.city || coachFocusDay?.region || trip.destinationSummary || trip.name;
-  const coachTone = forecastDeltaHkd > 0 ? 'danger' : forecastDeltaHkd > -Math.max(1, budgetHkd * 0.08) ? 'warning' : 'ok';
-  const coachForecastText = forecastDeltaHkd > 0
-    ? `可能超支 HK$ ${fmt(forecastDeltaHkd)}`
-    : `預計尚餘 HK$ ${fmt(Math.abs(forecastDeltaHkd))}`;
   const coachNextDayText = nextDay
     ? `明日 ${nextDay.region} · ${coachSpots.length} 個點`
     : `最後一天 · ${coachSpots.length || daySpots.length} 個點`;
@@ -636,53 +629,10 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
             <small>{dayRemainingHkd > 0 ? '狀態良好' : '需要留意'}</small>
           </div>
         </div>
-        <div className="preview-dashboard-today-actions">
-          <button type="button" onClick={() => onTab('stats')}><PieChart size={28} /><span>預算分析</span><small>查看支出結構</small><ChevronRight size={18} /></button>
-          <button type="button" onClick={() => onTab('timeline')}><BarChart3 size={28} /><span>行程時間線</span><small>查看每日行程與支出</small><ChevronRight size={18} /></button>
-        </div>
       </GlassCard>
       </Reveal>
 
-      {/* 2.6 本地 AI Trip Coach */}
-      <Reveal className="dashboard-reveal" delay={0.06}>
-      <GlassCard as="div" className={`dashboard-ai-coach preview-dashboard-coach tone-${coachTone} relative overflow-hidden z-10`}>
-        <div className="preview-dashboard-coach-head">
-          <div>
-            <span><Sparkles size={15} /> Local AI Coach</span>
-            <h3>旅行小助理</h3>
-          </div>
-          <em>本地推算 · no API</em>
-        </div>
-        <div className="preview-dashboard-coach-grid">
-          <article>
-            <span>Daily burn</span>
-            <strong>HK$ {fmt(dailyBurnHkd)}</strong>
-            <small>Day {currentDayNumber}/{length} · 今日 HK$ {fmt(Math.round(todaySpentHkd))}</small>
-          </article>
-          <article>
-            <span>Overspend forecast</span>
-            <strong>{coachForecastText}</strong>
-            <small>預計全程 HK$ {fmt(projectedSpendHkd)}</small>
-          </article>
-          <article>
-            <span>Next-day warning</span>
-            <strong>{coachNextDayText}</strong>
-            <small>{coachSpots[0]?.name || '記得補齊下一日行程'}</small>
-          </article>
-          <article>
-            <span>Weather Reminder</span>
-            <strong>{weatherSensitive ? 'Check rain / wind' : 'Check freshness'}</strong>
-            <small>{coachWeatherText}</small>
-          </article>
-        </div>
-        <div className="preview-dashboard-coach-actions">
-          <button type="button" onClick={() => onTab('weather')}><CloudSun size={16} /> 天氣</button>
-          <button type="button" onClick={() => onTab('stats')}><PieChart size={16} /> 預算</button>
-        </div>
-      </GlassCard>
-      </Reveal>
-
-      {/* 2.65 Broker-backed AI Assistant */}
+      {/* 2.6 Broker-backed AI Assistant */}
       <Reveal className="dashboard-reveal" delay={0.07}>
       <GlassCard as="div" className={`dashboard-broker-assistant status-${assistantStatus} relative overflow-hidden z-10`}>
         <div role="region" aria-label="Broker AI assistant">
@@ -752,7 +702,7 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
 
       {/* 3. Today 行程時間軸 */}
       <Reveal className="dashboard-reveal" delay={0.08}>
-      <GlassCard as="div" className="today-itinerary-card washi-timeline-container p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
+      <GlassCard as="div" className="today-itinerary-card dashboard-compact-itinerary washi-timeline-container p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
         <div className="flex justify-between items-center mb-4">
           <div className="flex flex-col">
             <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">行程摘要</span>
@@ -764,73 +714,54 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
           </div>
         </div>
 
-        {/* 時間軌道 */}
-        <div className="washi-timeline relative pl-7 before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-[2px] before:bg-[#E2C08D] before:rounded-full">
+        <div className="dashboard-compact-itinerary-list">
           {displaySpots.map((spot, idx) => {
             const details = getSpotIconDetails(spot.type, spot.name);
             const spotKey = spot.id || spot.spotId || `${today}_${spot.time || 'time'}_${spot.name || idx}_${idx}`;
-            // 嘗試配對今日的真實消費
             const matchedReceipt = dailyReceipts.find(
               (r) => displayStore(r).toLowerCase().includes(spot.name.toLowerCase()) ||
                      spot.name.toLowerCase().includes(displayStore(r).toLowerCase())
             );
+            const spotMeta = [spot.note, spot.address].filter(Boolean).join(' · ');
             return (
-              <div key={spotKey} className="washi-timeline-item relative mb-5 last:mb-0">
-                {/* 時間點節點 */}
-                <div className="washi-timeline-badge absolute left-[-28px] top-4 w-3.5 h-3.5 rounded-full bg-[#F8F5EE] border-[3px] border-[#E2C08D] z-10" />
-
-                <span className="washi-timeline-time block text-xs font-bold text-[#D4A359] mb-1.5 pl-3">
-                  {spot.time || '--:--'}
-                </span>
-
-                <div
-                  className="washi-timeline-card bg-white border border-amber-100/50 rounded-2xl p-3 shadow-sm hover:translate-y-[-2px] hover:border-amber-200/80 hover:shadow-md transition-all cursor-pointer"
-                  onClick={() => openMapExternal(spot.mapUrl, spot.name, spot.address)}
-                  title="點擊開啟 Google Map"
-                >
-                  {/* 1. Icon (對應 Grid Column 1: 42px) */}
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${details.bgClass}`}>
-                    {details.icon}
-                  </div>
-
-                  {/* 2. Text (對應 Grid Column 2: 1fr, 帶 min-w-0 以防 truncate 壓縮為 0px) */}
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <strong className="text-[14px] font-bold text-slate-800 truncate leading-snug">{spot.name}</strong>
-                    <span className="text-xs text-slate-400 truncate mt-0.5">
-                      {spot.note || spot.address || '日本名古屋'}
-                    </span>
-                  </div>
-
-                  {/* 3. Action (對應 Grid Column 3: auto) */}
-                  <div className="flex items-center gap-2 shrink-0 justify-end">
-                    {matchedReceipt ? (
-                      <button
-                        className="text-xs font-extrabold text-[#D94132] px-2.5 py-1 rounded-full bg-red-50 hover:bg-red-100 border border-red-200/60 hover:scale-105 active:scale-95 transition-all focus:outline-none"
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpen(matchedReceipt);
-                        }}
-                        title="查看消費詳情"
-                      >
-                        ¥{fmt(matchedReceipt.total)}
-                      </button>
-                    ) : (
-                      <div className="preview-dashboard-spot-actions">
-                        <span><MapPin size={16} /> 地圖</span>
-                        <span><NotebookPen size={15} /> 記帳</span>
-                      </div>
-                    )}
-                  </div>
+              <article
+                key={spotKey}
+                className="dashboard-compact-itinerary-row"
+                onClick={() => openMapExternal(spot.mapUrl, spot.name, spot.address)}
+                title="點擊開啟 Google Map"
+              >
+                <time>{spot.time || '--:--'}</time>
+                <div className={`dashboard-compact-itinerary-icon ${details.bgClass}`}>
+                  {details.icon}
                 </div>
-              </div>
+                <div className="dashboard-compact-itinerary-main">
+                  <strong>{spot.name}</strong>
+                  <span>{spotMeta || spot.type || 'Trip stop'}</span>
+                  <small>{spot.type || 'itinerary'}{day?.city || day?.region ? ` · ${day?.city || day?.region}` : ''}</small>
+                </div>
+                <div className="dashboard-compact-itinerary-actions">
+                  {matchedReceipt ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpen(matchedReceipt);
+                      }}
+                    >
+                      ¥{fmt(matchedReceipt.total)}
+                    </button>
+                  ) : (
+                    <span><MapPin size={14} /> 地圖</span>
+                  )}
+                </div>
+              </article>
             );
           })}
         </div>
 
         {/* 展開全部按鈕 */}
         <button
-          className="compact-touch-action w-full text-center text-xs font-bold text-[#8C7864] flex items-center justify-center gap-1 mt-5 hover:text-slate-800 active:scale-95 transition-all border-none bg-transparent focus:outline-none"
+          className="compact-touch-action w-full text-center text-xs font-bold text-[#8C7864] flex items-center justify-center gap-1 mt-4 hover:text-slate-800 active:scale-95 transition-all border-none bg-transparent focus:outline-none"
           type="button"
           onClick={() => onTab('timeline')}
         >
@@ -842,8 +773,8 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
 
       {/* 4. 最近花費 */}
       <Reveal className="dashboard-reveal" delay={0.12}>
-      <GlassCard as="div" className="washi-recent-card dashboard-magic-records p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
-        <div className="flex justify-between items-center mb-4">
+      <GlassCard as="div" className="washi-recent-card dashboard-magic-records dashboard-compact-recent p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
+        <div className="flex justify-between items-center mb-3">
           <h3 className="text-lg font-bold text-slate-800">Recent Expenses</h3>
           <button
             className="compact-touch-action text-xs font-bold text-[#D94132] hover:underline border-none bg-transparent focus:outline-none"
@@ -854,54 +785,50 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
           </button>
         </div>
 
-        {/* 消費列表 */}
-        <div className="flex flex-col gap-3">
-          {recentReceipts.length ? recentReceipts.slice(0, 3).map((r) => {
+        <div className="dashboard-compact-recent-list">
+          {recentReceipts.length ? recentReceipts.slice(0, 6).map((r) => {
             const photoSrc = safePhotoUrl(r.photoUrl, r.photoThumb);
             return (
-              <div
+              <button
                 key={r.id}
-                className="receipt-row w-full bg-white border border-slate-100 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm hover:translate-y-[-2px] transition-all cursor-pointer"
+                type="button"
+                className="dashboard-compact-recent-row"
                 onClick={() => onOpen(r)}
               >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <VisualIcon id={r.category as any} size="md" className="shrink-0" />
-                  <div className="flex flex-col justify-center gap-0.5 min-w-0 flex-1">
-                    <strong className="flex items-center gap-1.5 min-w-0 text-slate-800 font-bold text-[14px]">
-                      <span className="truncate flex items-center gap-1 min-w-0 flex-1">
-                        <span className="truncate">{displayStore(r)}</span>
-                      </span>
-                      {photoSrc && (
-                        <button
-                          type="button"
-                          className="flex-shrink-0 flex items-center text-[#D94132]"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setViewPhoto(r); }}
-                          style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
-                        >
-                          <Camera size={14} className="w-4 h-4 text-[#D94132] animate-pulse" />
-                        </button>
-                      )}
-                    </strong>
-                    <small className="text-slate-400 text-xs font-medium truncate block">
-                      {categoryById(r.category).name} · {r.date.split('-').slice(1).join('/')}
-                    </small>
-                  </div>
+                <VisualIcon id={r.category as any} size="sm" className="dashboard-compact-recent-icon" />
+                <div className="dashboard-compact-recent-main">
+                  <strong>{displayStore(r)}</strong>
+                  <span>{categoryById(r.category).name} · {r.date.split('-').slice(1).join('/')}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex flex-col items-end">
-                    <span className="text-[15px] font-extrabold text-slate-900">¥{fmt(r.total)}</span>
-                    <span className="text-[11px] text-slate-400 font-medium">~HK${fmt(Math.round(hkd(r.total, state)))}</span>
-                  </div>
-                  <ChevronRight size={18} className="text-slate-300" />
+                {photoSrc && (
+                  <span
+                    className="dashboard-compact-recent-photo"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setViewPhoto(r); }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`查看 ${displayStore(r)} 收據相片`}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setViewPhoto(r);
+                      }
+                    }}
+                  >
+                    <Camera size={13} />
+                  </span>
+                )}
+                <div className="dashboard-compact-recent-amount">
+                  <strong>¥{fmt(r.total)}</strong>
+                  <span>HK${fmt(Math.round(hkd(r.total, state)))}</span>
                 </div>
-              </div>
+              </button>
             );
           }) : (
             <p className="text-center text-xs text-slate-400 py-6">暫時未有支出紀錄。</p>
           )}
         </div>
 
-        {/* 新增費用按鈕 */}
         <button
           className="washi-add-expense-btn washi-btn flex items-center justify-center gap-1.5 w-full bg-white border border-[#D94132] text-[#D94132] font-bold py-3.5 rounded-2xl mt-4 active:scale-98 transition-all hover:bg-red-50/20 focus:outline-none"
           type="button"
@@ -913,48 +840,9 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
       </GlassCard>
       </Reveal>
 
-      {/* 5. Budget Settings 折疊 Accordion */}
-      <div className="bg-white/50 backdrop-blur-md border border-white/60 rounded-[24px] overflow-hidden mb-3 shadow-sm z-10 relative">
-        <button
-          type="button"
-          className="w-full flex items-center justify-between p-4 focus:outline-none"
-          onClick={() => setIsBudgetSettingsOpen(!isBudgetSettingsOpen)}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#18395C] flex items-center justify-center text-white shadow-sm shrink-0">
-              <GearIcon size={18} />
-            </div>
-            <div className="flex flex-col text-left">
-              <span className="text-sm font-bold text-slate-800">預算控制</span>
-              <span className="text-xs text-slate-500">調整每日限額、匯率同提醒</span>
-            </div>
-          </div>
-          <ChevronDown size={20} className={`text-slate-400 transition-transform duration-300 ${isBudgetSettingsOpen ? 'transform rotate-180' : ''}`} />
-        </button>
-        {isBudgetSettingsOpen && (
-          <div className="px-5 pb-5 pt-2 border-t border-dashed border-slate-200/50 flex flex-col gap-3">
-            <div className="flex justify-between items-center bg-white/40 p-3 rounded-xl border border-white/40">
-              <span className="text-xs font-semibold text-[#8C7864]">每日預算上限</span>
-              <span className="text-sm font-bold text-slate-800">¥{fmt(dailyBudget)} / day</span>
-            </div>
-            <div className="flex justify-between items-center bg-white/40 p-3 rounded-xl border border-white/40">
-              <span className="text-xs font-semibold text-[#8C7864]">預計旅費</span>
-              <span className="text-sm font-bold text-slate-800">HK$ {fmt(hkd(state.budget, state))}</span>
-            </div>
-            <button
-              type="button"
-              className="w-full text-xs font-bold text-[#D94132] hover:underline text-center mt-1"
-              onClick={() => onTab('settings')}
-            >
-              前往設定調整預算 ➔
-            </button>
-          </div>
-        )}
       </div>
 
-      </div>
-
-      {/* 6. 名古屋 2026 和風 Dock Bar (懸浮底欄) */}
+      {/* 5. 名古屋 2026 和風 Dock Bar (懸浮底欄) */}
       <div className="washi-floating-tabbar pointer-events-auto">
         <button
           className="washi-dock-item active"
