@@ -414,6 +414,59 @@ function buildBackupImportPreview(fileName: string, payload: Partial<AppState>, 
   };
 }
 
+function todayLocalDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function buildPostTripArchiveChecklist(
+  state: AppState,
+  trip: TripProfile,
+  persons: Person[],
+  settlement: ReturnType<typeof computeSettlements>,
+) {
+  const tripReceipts = scopedReceiptsForTrip(state, trip);
+  const itinerary = trip.itinerary?.length ? trip.itinerary : getItinerary(state);
+  const tripFinished = !!trip.archived || (!!trip.endDate && todayLocalDate() > trip.endDate);
+  const transferCount = settlement.transfers.length;
+  const companionCount = Math.max(0, persons.length - 1);
+  return {
+    tone: tripFinished ? 'ok' : 'warning',
+    statusLabel: tripFinished ? 'Archive ready' : 'Trip active',
+    helper: tripFinished
+      ? 'Finish the trip in four separate steps: backup, share, settlement, then local cleanup.'
+      : 'Trip is still active; keep these finish steps ready for the last travel day.',
+    items: [
+      {
+        key: 'backup',
+        title: 'Final backup',
+        value: `${tripReceipts.length} receipt${tripReceipts.length === 1 ? '' : 's'}`,
+        detail: 'Current-trip JSON only',
+      },
+      {
+        key: 'share',
+        title: 'Share export',
+        value: `${itinerary.length || 0} day${itinerary.length === 1 ? '' : 's'}`,
+        detail: companionCount ? `${companionCount} companion${companionCount === 1 ? '' : 's'}` : 'Companion-safe summary',
+      },
+      {
+        key: 'settlement',
+        title: 'Settlement check',
+        value: transferCount ? `${transferCount} transfer${transferCount === 1 ? '' : 's'}` : 'No transfer',
+        detail: `${formatMoney(settlement.sharedTotal)} shared`,
+      },
+      {
+        key: 'cleanup',
+        title: 'Safe cleanup',
+        value: 'Preview first',
+        detail: 'Cloud data not deleted',
+      },
+    ],
+  };
+}
+
 export function Settings({
   state,
   setState,
@@ -563,6 +616,7 @@ export function Settings({
   const directTokenEnabled = true;
   const buildLabel = `${import.meta.env.MODE} · React ${reactVersion}`;
   const tripDoctor = compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope);
+  const postTripArchive = buildPostTripArchiveChecklist(state, currentTrip, persons, settlement);
 
   // Local state for Trip Manager
   const [managerTripId, setManagerTripId] = useState(currentTrip.id);
@@ -1319,6 +1373,21 @@ export function Settings({
     setStatus(`Trip-share preview ready：${preview.payload.summary.receipts} receipts，安全預覽後可 copy/download`);
   }
 
+  function downloadPostTripBackup() {
+    downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState());
+    setStatus('Post-trip final backup 已下載；下一步可做 private share 或 settlement check。');
+  }
+
+  function openPostTripSharePreview() {
+    openSettingsPanel('settings-data');
+    previewTripShareExport();
+  }
+
+  function openPostTripCleanupPreview() {
+    setShowClearLocalPreview(true);
+    setStatus('Safe cleanup preview 已開啟；確認前不會刪除任何雲端資料。');
+  }
+
   async function copyTripSharePreview() {
     if (!tripSharePreview) return;
     await copyText(tripSharePreview.copiedText, '已複製 private trip-share summary');
@@ -1499,6 +1568,43 @@ export function Settings({
             <button type="button" onClick={() => openSettingsPanel('settings-notion')}>
               <Cloud size={14} />
               <span>Sync settings</span>
+            </button>
+          </div>
+        </section>
+      </GlassCard>
+
+      <GlassCard className={`settings-trip-doctor settings-post-trip-archive settings-post-trip-archive--${postTripArchive.tone}`}>
+        <section role="region" aria-label="Post-trip archive checklist">
+          <div className="settings-trip-doctor-head">
+            <span><CheckCircle2 size={16} /> Post-trip Archive</span>
+            <strong>{postTripArchive.statusLabel}</strong>
+          </div>
+          <p className="settings-post-trip-helper">{postTripArchive.helper}</p>
+          <div className="settings-trip-doctor-grid">
+            {postTripArchive.items.map((item) => (
+              <div className="settings-trip-doctor-item" key={item.key}>
+                <span>{item.title}</span>
+                <strong>{item.value}</strong>
+                <small>{item.detail}</small>
+              </div>
+            ))}
+          </div>
+          <div className="settings-trip-doctor-actions settings-post-trip-actions">
+            <button type="button" onClick={downloadPostTripBackup}>
+              <Download size={14} />
+              <span>Final backup</span>
+            </button>
+            <button type="button" onClick={openPostTripSharePreview}>
+              <Copy size={14} />
+              <span>Private share</span>
+            </button>
+            <button type="button" onClick={() => changeTab?.('stats')}>
+              <ShieldCheck size={14} />
+              <span>Settlement check</span>
+            </button>
+            <button type="button" onClick={openPostTripCleanupPreview}>
+              <RotateCcw size={14} />
+              <span>Safe cleanup</span>
             </button>
           </div>
         </section>
