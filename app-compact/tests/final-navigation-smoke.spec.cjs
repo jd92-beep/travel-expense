@@ -222,6 +222,9 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByLabel('Compact travel readiness')).toHaveCount(0);
+  const nav = page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]');
+  await nav.getByRole('button', { name: '設定', exact: true }).click();
   const readiness = page.getByLabel('Compact travel readiness');
   await expect(readiness).toBeVisible();
   await expect(readiness).toContainText('Network · online');

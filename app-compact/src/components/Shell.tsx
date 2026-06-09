@@ -639,42 +639,44 @@ export function Shell({
           </button>
         )}
       </header>
-      <section className="compact-pwa-readiness" aria-label="Compact travel readiness">
-        <span className={`pwa-chip ${online ? 'ok' : 'warning'}`}>
-          {online ? <Wifi size={13} /> : <WifiOff size={13} />}
-          Network · {online ? 'online' : 'offline'}
-        </span>
-        <span className={`pwa-chip ${syncState?.pendingCount ? 'warning' : syncState?.status === 'error' ? 'danger' : 'ok'}`}>
-          <Archive size={13} />
-          Queue · {syncState?.pendingCount ? `${syncState.pendingCount} pending` : syncState?.status === 'offline' ? 'paused' : 'clear'}
-        </span>
-        <span className="pwa-chip neutral">
-          <PackageCheck size={13} />
-          Cache · {cacheLabel}
-        </span>
-        <span className={`pwa-chip ${updateReady ? 'warning' : 'ok'}`}>
-          <RefreshCw size={13} />
-          Update · {updateReady ? 'ready' : 'current'}
-          {updateReady && <button type="button" onClick={() => location.reload()}>Reload</button>}
-        </span>
-        {updateReady && (
-          <button className="pwa-chip release-notes" type="button" onClick={handleReleaseNotesToggle}>
-            <Bell size={13} />
-            Release notes
-          </button>
-        )}
-        {installReady && (
-          <button className="pwa-chip install" type="button" onClick={handleInstallClick}>
-            <Smartphone size={13} />
-            Install
-          </button>
-        )}
-        <span className={`pwa-chip ${motionLabel === 'reduced' ? 'neutral' : 'ok'}`}>
-          <Gauge size={13} />
-          Motion · {motionLabel}
-        </span>
-      </section>
-      {updateReady && releaseNotesOpen && (
+      {active === 'settings' && (
+        <section className="compact-pwa-readiness" aria-label="Compact travel readiness">
+          <span className={`pwa-chip ${online ? 'ok' : 'warning'}`}>
+            {online ? <Wifi size={13} /> : <WifiOff size={13} />}
+            Network · {online ? 'online' : 'offline'}
+          </span>
+          <span className={`pwa-chip ${syncState?.pendingCount ? 'warning' : syncState?.status === 'error' ? 'danger' : 'ok'}`}>
+            <Archive size={13} />
+            Queue · {syncState?.pendingCount ? `${syncState.pendingCount} pending` : syncState?.status === 'offline' ? 'paused' : 'clear'}
+          </span>
+          <span className="pwa-chip neutral">
+            <PackageCheck size={13} />
+            Cache · {cacheLabel}
+          </span>
+          <span className={`pwa-chip ${updateReady ? 'warning' : 'ok'}`}>
+            <RefreshCw size={13} />
+            Update · {updateReady ? 'ready' : 'current'}
+            {updateReady && <button type="button" onClick={() => location.reload()}>Reload</button>}
+          </span>
+          {updateReady && (
+            <button className="pwa-chip release-notes" type="button" onClick={handleReleaseNotesToggle}>
+              <Bell size={13} />
+              Release notes
+            </button>
+          )}
+          {installReady && (
+            <button className="pwa-chip install" type="button" onClick={handleInstallClick}>
+              <Smartphone size={13} />
+              Install
+            </button>
+          )}
+          <span className={`pwa-chip ${motionLabel === 'reduced' ? 'neutral' : 'ok'}`}>
+            <Gauge size={13} />
+            Motion · {motionLabel}
+          </span>
+        </section>
+      )}
+      {active === 'settings' && updateReady && releaseNotesOpen && (
         <section className="compact-release-notes" aria-label="Compact release notes">
           <div className="compact-release-notes-head">
             <div>

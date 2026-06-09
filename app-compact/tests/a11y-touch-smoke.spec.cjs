@@ -105,16 +105,19 @@ test('Compact main controls keep accessible names, touch targets, reduced motion
   await seedCompactA11yState(page);
   await page.goto(APP_URL);
 
-  await expect(page.getByLabel('Compact travel readiness')).toContainText('Motion · reduced');
+  await expect(page.getByLabel('Compact travel readiness')).toHaveCount(0);
   await expectTouchTarget(page.getByRole('button', { name: '更多操作' }), 'mobile header action', 40);
   await expectTouchTarget(page.getByRole('button', { name: 'Add Expense' }), 'add expense primary action');
   await expectTouchTarget(page.getByRole('button', { name: /查看完整行程/ }), 'view full itinerary action');
   await expectTouchTarget(page.getByRole('button', { name: 'View all' }), 'view all records action');
 
-  const nav = page.getByLabel('主要分頁');
+  const nav = page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]');
   for (const name of ['主頁', '紀錄', '行程', '記帳', '天氣', '統計', '設定']) {
     await expectTouchTarget(nav.getByRole('button', { name, exact: true }), `bottom dock ${name}`);
   }
+
+  await nav.getByRole('button', { name: '設定', exact: true }).click();
+  await expect(page.getByLabel('Compact travel readiness')).toContainText('Motion · reduced');
 
   await nav.getByRole('button', { name: '記帳', exact: true }).click();
   await expect(page.getByText('掃描收據').first()).toBeVisible();
