@@ -2,6 +2,10 @@
 
 ## 2026-06-09
 
+- Fixed the compact Weather top current-weather card layout so provider/live/target/fallback chips, actual temperature, feels-like temperature, high/low/humidity/wind facts, place label, and hourly chips all fit cleanly inside the large card on 390px mobile.
+- Changed compact Weather post-trip behavior so finished trips keep the original itinerary day cards and show current weather for each itinerary-derived day/location instead of collapsing to one today card that only showed two locations.
+- Expanded compact Weather itinerary resolution to use up to six coordinates per day, so multi-spot travel days can show proper location cards before, during, and after the trip based on the user's entered itinerary city/spot data.
+- Deployed the compact Weather itinerary/current-weather fix to Vercel production as `dpl_81o32cF6fgRwNYux3VKuFcMxNAHf`; `npm run smoke:deploy-live` passed for commit `f71fbff` with asset hash `dd031820637afe8a`.
 - Removed the compact Record tab `Review only when needed` strip and its itinerary/cleanup shortcut state, leaving Records focused on search, category filters, compact rows, row markers, pending confirmations, and sync conflict handling.
 - Added compact HK Express receipt normalization so existing HK Express / 香港快運 / `UO` flight-number records that were stored as `transport` or `other` are shown under the `flight` / `機票` category.
 - Removed the compact Timeline travel-day widget/readiness/countdown row (`Day readiness`, transition countdown, and same-line travel-day cards) while keeping the live itinerary command card, rail progress, day cards, and `Weather pack` risk strips.
