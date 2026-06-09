@@ -3,6 +3,7 @@
 ## 2026-06-09
 
 - Added compact Settings `Private trip-share preview` for companion-safe current-trip summaries. Users now preview before copy/download, and smoke coverage verifies fake API/session/cloud IDs, sync queues, photo URLs, and other-trip data are stripped from preview text, copied text, and downloaded JSON.
+- Deployed the compact Private Trip-share Preview build to Vercel production as `dpl_2tgPXS5GEH7CfMaabfhWpwdbUAan`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added compact Dashboard `Day-end Closeout`, a local/no-API evening wrap-up card for missing receipts, overspend notes, tomorrow readiness, and Records/Stats/Timeline shortcuts.
 - Deployed the compact Day-end Closeout build to Vercel production as `dpl_CxWB3mbtgL4PhkfvynRqvncdGsF8`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Rechecked compact broker-vault proof with an ignored local session. The script now reports redacted `status: blocked` JSON instead of a stack trace; WeatherAPI, Notion, and Google diagnostic route proof pass, while Kimi quota, required Google/Gemma model availability, and Mimo authenticated config remain external live blockers.
