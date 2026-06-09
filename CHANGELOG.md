@@ -2,6 +2,9 @@
 
 ## 2026-06-09
 
+- Added compact Settings `Preview diagnostics`, a local/no-API public-safe diagnostics preview with copy and safe JSON download actions.
+- The compact diagnostics payload is aggregate-only and strips raw trips, raw receipts, raw people, raw sync queue, IDs, SourceID, queue payloads/errors, traveller names, receipt/store names, photos, photo URLs, provider tokens, API keys, and broker sessions.
+- Pushed the compact diagnostics preview to `origin/main` as `8fadfcb`; Vercel production deploy is currently blocked by the external daily deploy quota `api-deployments-free-per-day`, so live production still points at the previous P10-03 deployment until the quota resets.
 - Added compact Dashboard `Itinerary Receipt Match`, a local/no-API day-by-day reconciliation card for no-receipt itinerary days, spot-level receipt gaps, unusually high receipt counts, and current-trip spending outside itinerary dates.
 - Added shared compact `buildItineraryReceiptReconciliation()` logic so itinerary/receipt coverage can be reused without adding storage fields, rendering cloud IDs, or calling broker/provider APIs.
 - Deployed the compact itinerary receipt reconciliation build to Vercel production as `dpl_HjZgAoUwDLXTQAZ6Xee5egAzbJqE`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
