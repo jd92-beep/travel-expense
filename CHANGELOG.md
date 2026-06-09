@@ -2,6 +2,8 @@
 
 ## 2026-06-09
 
+- Added compact Settings `Post-trip Archive`, a local/no-API finish checklist that separates final Backup JSON, private trip-share preview, settlement review, and safe local cleanup preview for finished trips.
+- Deployed the compact Post-trip Archive build to Vercel production as `dpl_ByavGUVve1btyEdedjkvCb4U7Q7w`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added compact Settings `Clear local data preview` before destructive local reset. It replaces the thin browser confirm with an in-app safety modal showing current trip, local receipt count, cloud-not-deleted scope, and Backup/private-share guidance; Settings smoke verifies cancel leaves local state untouched.
 - Deployed the compact Clear Local Data Preview build to Vercel production as `dpl_2tvWrSos8TwWxP2qVfk2Ed53noXM`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added compact Settings `Private trip-share preview` for companion-safe current-trip summaries. Users now preview before copy/download, and smoke coverage verifies fake API/session/cloud IDs, sync queues, photo URLs, and other-trip data are stripped from preview text, copied text, and downloaded JSON.
