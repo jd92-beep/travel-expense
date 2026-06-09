@@ -40,6 +40,7 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
   const transferTotal = settlement.transfers.reduce((s, t) => s + t.amount, 0);
   const privateTotal = settlement.privateByOwner.reduce((s, n) => s + n, 0);
   const maxPersonTotal = Math.max(1, ...persons.map((_, i) => settlement.sharedByPayer[i] + settlement.privateByOwner[i]));
+  const settlementActionPlan = buildSettlementActionPlan(settlement, resolvedTripCurrency, toHkd);
   const topReceipts = scopedState.receipts
     .filter((r) => state.top10IncludeBigItems || !isFlightOrHotelItem(r))
     .slice()
@@ -121,6 +122,22 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
       >
         {settlement.transfers.length ? (
           <>
+            <section className="settlement-action-plan" aria-label="Settlement action plan">
+              {settlementActionPlan.map((item) => (
+                <motion.article
+                  className={`settlement-action-card ${item.tone}`}
+                  key={item.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.24, ease: 'easeOut' }}
+                >
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                  <small>{item.detail}</small>
+                </motion.article>
+              ))}
+            </section>
+
             <div className="settlement-visual-map py-4 px-3 bg-[#FAF7F0]/60 backdrop-blur-sm rounded-2xl border border-stone-200/50 flex flex-col items-center justify-center gap-3 mb-4">
               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">結算概覽連線圖</span>
               <div className="flex items-center justify-center gap-8 w-full relative">
@@ -441,6 +458,43 @@ function buildBudgetStoryCards({
       value: topCategory ? `${topCategory.name} ${topCategoryPercent}%` : '未有資料',
       detail: topCategoryPercent >= 45 ? '集中度偏高，建議打開類別明細睇一次。' : '類別分佈正常，未見單一類別過熱。',
       tone: topCategoryPercent >= 60 ? 'danger' : topCategoryPercent >= 45 ? 'warning' : 'ok',
+    },
+  ] as const;
+}
+
+function buildSettlementActionPlan(
+  settlement: ReturnType<typeof computeSettlements>,
+  resolvedTripCurrency: string,
+  toHkd: (amt: number) => number,
+) {
+  const transferTotal = settlement.transfers.reduce((sum, item) => sum + item.amount, 0);
+  const firstTransfer = settlement.transfers[0];
+  const receiverCount = new Set(settlement.transfers.map((item) => item.to.id)).size;
+  const crossPrivateTotal = settlement.crossPrivate.reduce((sum, item) => sum + item.amount, 0);
+  const formatTrip = (amt: number) => `${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(amt)}`;
+  const formatHkd = (amt: number) => `HK$ ${fmt(toHkd(amt))}`;
+
+  return [
+    {
+      id: 'next-transfer',
+      label: 'Next action',
+      value: firstTransfer ? `${firstTransfer.from.name} → ${firstTransfer.to.name}` : '已平衡',
+      detail: firstTransfer ? `${formatTrip(firstTransfer.amount)} · ${formatHkd(firstTransfer.amount)}` : '暫時不用轉帳',
+      tone: firstTransfer ? 'danger' : 'ok',
+    },
+    {
+      id: 'transfer-total',
+      label: 'Total to settle',
+      value: formatHkd(transferTotal),
+      detail: `${settlement.transfers.length} 筆轉帳 · ${receiverCount || 0} 位收款人`,
+      tone: transferTotal > 0 ? 'warning' : 'ok',
+    },
+    {
+      id: 'private-repay',
+      label: 'Private repay',
+      value: formatTrip(crossPrivateTotal),
+      detail: settlement.crossPrivate.length ? `${settlement.crossPrivate.length} 筆私人代付已納入結算` : '未有私人代付',
+      tone: settlement.crossPrivate.length ? 'warning' : 'ok',
     },
   ] as const;
 }

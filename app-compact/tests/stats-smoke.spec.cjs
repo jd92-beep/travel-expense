@@ -116,6 +116,31 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(page.getByText('共同分帳額')).toBeVisible();
   await expect(page.getByText('Xinxin').first()).toBeVisible();
   await expect(page.getByText('User 1').first()).toBeVisible();
+  const actionPlan = page.getByLabel('Settlement action plan');
+  await expect(actionPlan).toBeVisible();
+  await expect(actionPlan).toContainText('Next action');
+  await expect(actionPlan).toContainText('Xinxin Wong → User 1 Cheung');
+  await expect(actionPlan).toContainText('¥2,850');
+  await expect(actionPlan).toContainText('Total to settle');
+  await expect(actionPlan).toContainText('HK$ 139');
+  await expect(actionPlan).toContainText('Private repay');
+  await expect(actionPlan).toContainText('¥300');
+  const actionMetrics = await actionPlan.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const cards = Array.from(node.querySelectorAll('.settlement-action-card')).map((card) => {
+      const cardRect = card.getBoundingClientRect();
+      return { top: Math.round(cardRect.top), left: Math.round(cardRect.left), width: Math.round(cardRect.width) };
+    });
+    return {
+      width: Math.round(rect.width),
+      scrollWidth: document.documentElement.scrollWidth,
+      cards,
+    };
+  });
+  expect(actionMetrics.width, JSON.stringify(actionMetrics, null, 2)).toBeLessThanOrEqual(354);
+  expect(actionMetrics.scrollWidth, JSON.stringify(actionMetrics, null, 2)).toBeLessThanOrEqual(390);
+  expect(actionMetrics.cards).toHaveLength(3);
+  expect(actionMetrics.cards[0].width).toBeGreaterThan(actionMetrics.cards[1].width);
   await expect(page.locator('.transfer-modern')).toContainText('¥2,850');
   await expect(page.locator('.transfer-modern')).toContainText('User 1 Cheung');
   await expect(page.locator('.transfer-modern')).toContainText('Xinxin Wong');

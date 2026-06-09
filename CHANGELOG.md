@@ -2,6 +2,8 @@
 
 ## 2026-06-09
 
+- Added compact Stats `Settlement action plan`, a local/no-API three-card summary above the detailed transfer graph showing the next transfer, total to settle, and private repayment scope with full traveller names.
+- Added P11 compact roadmap items for decision support and trip review, starting with Stats settlement clarity and leaving History reconciliation filters and Timeline weather-risk summaries as next candidates.
 - Added compact Settings `Preview diagnostics`, a local/no-API public-safe diagnostics preview with copy and safe JSON download actions.
 - The compact diagnostics payload is aggregate-only and strips raw trips, raw receipts, raw people, raw sync queue, IDs, SourceID, queue payloads/errors, traveller names, receipt/store names, photos, photo URLs, provider tokens, API keys, and broker sessions.
 - Pushed the compact diagnostics preview to `origin/main` as `8fadfcb`; Vercel production deploy is currently blocked by the external daily deploy quota `api-deployments-free-per-day`, so live production still points at the previous P10-03 deployment until the quota resets.
