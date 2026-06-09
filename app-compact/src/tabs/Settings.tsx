@@ -23,7 +23,7 @@ import {
   type ProviderStatus,
 } from '../lib/credentialBroker';
 import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
-import { computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
+import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
 import {
   diagnoseNotionSchema,
   diagnoseReactReceiptMapping,
@@ -245,6 +245,133 @@ type BackupImportPreview = {
   warnings: string[];
 };
 
+type TripSharePreview = {
+  filename: string;
+  copiedText: string;
+  payload: {
+    exportType: 'private-trip-share';
+    generatedAt: string;
+    safety: {
+      tripScoped: true;
+      stripped: string[];
+    };
+    trip: {
+      name: string;
+      destination: string;
+      startDate: string;
+      endDate: string;
+      currency: string;
+      budget: number;
+      days: number;
+    };
+    summary: {
+      receipts: number;
+      spentHkd: number;
+      remainingHkd: number;
+      companions: string[];
+    };
+    itinerary: Array<{
+      day: number;
+      date: string;
+      region: string;
+      spots: Array<{ time: string; name: string; type: string }>;
+    }>;
+    receipts: Array<{
+      date: string;
+      store: string;
+      category: string;
+      amount: number;
+      currency: string;
+      payer: string;
+    }>;
+  };
+};
+
+function formatMoney(value: number): string {
+  return `HK$ ${Math.round(value).toLocaleString('en-US')}`;
+}
+
+function safeShareFilename(name: string): string {
+  return `${(name || 'travel-expense').replace(/[^\w\u4e00-\u9fff-]+/g, '-')}-private-share.json`;
+}
+
+function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Person[]): TripSharePreview {
+  const tripReceipts = scopedReceiptsForTrip(state, trip);
+  const itinerary = (trip.itinerary?.length ? trip.itinerary : getItinerary(state)).filter((day) => {
+    if (!day.date) return true;
+    return day.date >= trip.startDate && day.date <= trip.endDate;
+  });
+  const personNameById = new Map(persons.map((person) => [person.id, person.name]));
+  const spentHkd = tripReceipts.reduce((sum, receipt) => sum + (Number(receipt.hkdAmount ?? receipt.total) || 0), 0);
+  const budgetHkd = Number(trip.budget || state.budget || 0) / Math.max(1, Number(state.rate || 1));
+  const remainingHkd = Math.max(0, budgetHkd - spentHkd);
+  const payload: TripSharePreview['payload'] = {
+    exportType: 'private-trip-share',
+    generatedAt: new Date().toISOString(),
+    safety: {
+      tripScoped: true,
+      stripped: [
+        'API keys',
+        'broker sessions',
+        'Notion/Supabase IDs',
+        'sync queue',
+        'deleted cloud markers',
+        'other trips',
+      ],
+    },
+    trip: {
+      name: trip.name || state.tripName || 'Trip',
+      destination: trip.destinationSummary || '',
+      startDate: trip.startDate || state.tripDateRange.start,
+      endDate: trip.endDate || state.tripDateRange.end,
+      currency: trip.currencies?.[1] || state.tripCurrency || 'JPY',
+      budget: Number(trip.budget || state.budget || 0),
+      days: inclusiveTripDayCount(trip),
+    },
+    summary: {
+      receipts: tripReceipts.length,
+      spentHkd,
+      remainingHkd,
+      companions: persons.map((person) => person.name),
+    },
+    itinerary: itinerary.map((day) => ({
+      day: Number(day.day) || 1,
+      date: day.date,
+      region: day.region || '',
+      spots: (day.spots || []).slice(0, 8).map((spot) => ({
+        time: spot.time || '',
+        name: spot.name || '',
+        type: spot.type || 'other',
+      })),
+    })),
+    receipts: tripReceipts.map((receipt) => ({
+      date: receipt.date,
+      store: receipt.store,
+      category: categoryById(receipt.category).name,
+      amount: Number(receipt.originalAmount ?? receipt.total) || 0,
+      currency: receipt.originalCurrency || receipt.currency || state.tripCurrency,
+      payer: personNameById.get(receipt.personId || '') || 'Unassigned',
+    })),
+  };
+  const nextStop = payload.itinerary.flatMap((day) => day.spots.map((spot) => `${day.date} ${spot.time} ${spot.name}`)).find(Boolean) || 'No itinerary spot';
+  const receiptLine = payload.receipts.length
+    ? payload.receipts.slice(0, 3).map((receipt) => `${receipt.store} ${receipt.currency} ${Math.round(receipt.amount).toLocaleString('en-US')}`).join(' · ')
+    : 'No receipts yet';
+  const copiedText = [
+    `${payload.trip.name} · Private trip share`,
+    `${payload.trip.startDate} to ${payload.trip.endDate} · ${payload.trip.destination || 'Destination pending'}`,
+    `Spend: ${formatMoney(spentHkd)} · Remaining: ${formatMoney(remainingHkd)} · Receipts: ${tripReceipts.length}`,
+    `Next: ${nextStop}`,
+    `Receipts: ${receiptLine}`,
+    'Safe export: current trip only; no API keys, broker sessions, Notion/Supabase IDs, sync queue, or other trips.',
+  ].join('\n');
+  return {
+    filename: safeShareFilename(payload.trip.name),
+    copiedText,
+    payload,
+  };
+}
+
 function buildBackupImportPreview(fileName: string, payload: Partial<AppState>, state: AppState, currentTrip: TripProfile): BackupImportPreview {
   const {
     credentialBrokerUrl: _credentialBrokerUrl,
@@ -364,6 +491,7 @@ export function Settings({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);
   const [backupPreview, setBackupPreview] = useState<BackupImportPreview | null>(null);
+  const [tripSharePreview, setTripSharePreview] = useState<TripSharePreview | null>(null);
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -1168,6 +1296,23 @@ export function Settings({
       trips: [currentTrip],
       receipts: scopedReceiptsForTrip(state, currentTrip),
     });
+  }
+
+  function previewTripShareExport() {
+    const preview = buildTripSharePreview(state, currentTrip, persons);
+    setTripSharePreview(preview);
+    setStatus(`Trip-share preview ready：${preview.payload.summary.receipts} receipts，安全預覽後可 copy/download`);
+  }
+
+  async function copyTripSharePreview() {
+    if (!tripSharePreview) return;
+    await copyText(tripSharePreview.copiedText, '已複製 private trip-share summary');
+  }
+
+  function downloadTripSharePreview() {
+    if (!tripSharePreview) return;
+    downloadJson(tripSharePreview.filename, tripSharePreview.payload);
+    setStatus('已下載 private trip-share JSON');
   }
 
   async function importItinerary(file?: File) {
@@ -2044,6 +2189,7 @@ export function Settings({
         <div className="action-row wrap">
           <button className="secondary" type="button" onClick={() => exportCsv(state)}><Download size={18} /> 匯出 CSV</button>
           <button className="secondary" type="button" onClick={() => downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup JSON（目前旅程）</button>
+          <button className="secondary" type="button" onClick={previewTripShareExport}><Copy size={18} /> Preview trip share</button>
           <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup JSON</button>
           <button className="danger" type="button" onClick={() => { clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); }}><KeyRound size={18} /> 清除 broker session</button>
           <button className="danger" type="button" onClick={() => { clearDeviceTrust(); void clearTrustedDevice(); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
@@ -2060,6 +2206,39 @@ export function Settings({
             }
           }}><RotateCcw size={18} /> 清除本地資料</button>
         </div>
+        {tripSharePreview && (
+          <div className="settings-trip-share-preview" role="region" aria-label="Private trip-share preview">
+            <div className="settings-restore-preview-head">
+              <span><ShieldCheck size={15} /> Private trip-share preview</span>
+              <strong>{tripSharePreview.payload.summary.receipts} receipt{tripSharePreview.payload.summary.receipts === 1 ? '' : 's'}</strong>
+            </div>
+            <div className="settings-restore-preview-grid">
+              <span>
+                <small>Trip</small>
+                <strong>{tripSharePreview.payload.trip.name}</strong>
+              </span>
+              <span>
+                <small>Spend</small>
+                <strong>{formatMoney(tripSharePreview.payload.summary.spentHkd)}</strong>
+              </span>
+              <span>
+                <small>Days</small>
+                <strong>{tripSharePreview.payload.trip.days}</strong>
+              </span>
+            </div>
+            <pre className="settings-trip-share-copy">{tripSharePreview.copiedText}</pre>
+            <div className="settings-restore-preview-warnings">
+              {tripSharePreview.payload.safety.stripped.map((warning) => (
+                <span key={warning}><ShieldCheck size={13} /> {warning}</span>
+              ))}
+            </div>
+            <div className="action-row wrap">
+              <button className="primary" type="button" onClick={() => void copyTripSharePreview()}><Copy size={16} /> Copy summary</button>
+              <button className="secondary" type="button" onClick={downloadTripSharePreview}><Download size={16} /> Download safe JSON</button>
+              <button className="secondary" type="button" onClick={() => { setTripSharePreview(null); setStatus('已關閉 trip-share preview'); }}>Close preview</button>
+            </div>
+          </div>
+        )}
         {backupPreview && (
           <div className="settings-restore-preview" role="region" aria-label="Backup restore preview">
             <div className="settings-restore-preview-head">

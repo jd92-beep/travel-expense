@@ -93,6 +93,15 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
 
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
+    window.__copiedTripShare = '';
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (text) => {
+          window.__copiedTripShare = text;
+        },
+      },
+    });
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
@@ -290,6 +299,60 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(backupText).not.toContain('99999999-9999-4999-8999-999999999999');
   expect(backupText).not.toContain('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
   expect(backupText).not.toContain('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+
+  await page.getByRole('button', { name: /Preview trip share/ }).click();
+  const tripSharePreview = page.getByLabel('Private trip-share preview');
+  await expect(tripSharePreview).toBeVisible();
+  await expect(tripSharePreview).toContainText('Private trip-share preview');
+  await expect(tripSharePreview).toContainText('M10 Export Trip');
+  await expect(tripSharePreview).toContainText('M10 Export Cafe');
+  await expect(tripSharePreview).toContainText('current trip only');
+  await expect(tripSharePreview).toContainText('Notion/Supabase IDs');
+  await expect(tripSharePreview).not.toContainText('M10 Other Export Trip');
+  await expect(tripSharePreview).not.toContainText('M10 Other Trip Cafe');
+  await expect(tripSharePreview).not.toContainText('export-personal-db-should-not-survive');
+  await expect(tripSharePreview).not.toContainText('export-trip-page-should-not-survive');
+  await expect(tripSharePreview).not.toContainText('export-receipt-page-should-not-survive');
+  await expect(tripSharePreview).not.toContainText('export-sync-queue-should-not-survive');
+
+  await tripSharePreview.getByRole('button', { name: /Copy summary/ }).click();
+  const copiedTripShare = await page.evaluate(() => window.__copiedTripShare);
+  expect(copiedTripShare).toContain('M10 Export Trip');
+  expect(copiedTripShare).toContain('M10 Export Cafe');
+  expect(copiedTripShare).toContain('current trip only');
+  expect(copiedTripShare).not.toContain('M10 Other Trip Cafe');
+  expect(copiedTripShare).not.toContain('export-trip-page-should-not-survive');
+  expect(copiedTripShare).not.toContain('export-receipt-page-should-not-survive');
+  expect(copiedTripShare).not.toContain('export-sync-queue-should-not-survive');
+
+  const shareDownloadPromise = page.waitForEvent('download');
+  await tripSharePreview.getByRole('button', { name: /Download safe JSON/ }).click();
+  const shareDownload = await shareDownloadPromise;
+  const sharePath = await shareDownload.path();
+  const shareText = fs.readFileSync(sharePath, 'utf8');
+  const shareJson = JSON.parse(shareText);
+  expect(shareJson.exportType).toBe('private-trip-share');
+  expect(shareJson.trip.name).toBe('M10 Export Trip');
+  expect(shareJson.trip.id).toBeUndefined();
+  expect(shareJson.receipts).toHaveLength(1);
+  expect(shareJson.receipts[0].store).toBe('M10 Export Cafe');
+  expect(shareJson.receipts[0].id).toBeUndefined();
+  expect(shareText).not.toContain('M10 Other Export Trip');
+  expect(shareText).not.toContain('M10 Other Trip Cafe');
+  expect(shareText).not.toContain('credentialSession');
+  expect(shareText).not.toContain('export-personal-db-should-not-survive');
+  expect(shareText).not.toContain('export-trip-db-should-not-survive');
+  expect(shareText).not.toContain('export-trip-page-should-not-survive');
+  expect(shareText).not.toContain('export-trip-source-should-not-survive');
+  expect(shareText).not.toContain('export-receipt-page-should-not-survive');
+  expect(shareText).not.toContain('export-file-upload-should-not-survive');
+  expect(shareText).not.toContain('export-receipt-source-should-not-survive');
+  expect(shareText).not.toContain('export-photo-should-not-survive');
+  expect(shareText).not.toContain('export-sync-queue-should-not-survive');
+  expect(shareText).not.toContain('export-deleted-page-should-not-survive');
+  expect(shareText).not.toContain('99999999-9999-4999-8999-999999999999');
+  expect(shareText).not.toContain('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  expect(shareText).not.toContain('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
 
   await page.locator('#settings-data-panel input[type="file"]').setInputFiles(restorePath);
   const restorePreview = page.getByLabel('Backup restore preview');
