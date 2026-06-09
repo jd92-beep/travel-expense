@@ -3798,6 +3798,85 @@ body {
   font-size: 10px;
   font-weight: 950;
 }
+.history-maintenance-strip {
+  display: grid;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid rgba(126,104,75,.14);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(255,253,247,.78), rgba(247,252,255,.52)),
+    rgba(255,255,255,.56);
+}
+.history-maintenance-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #5f5549;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+.history-maintenance-head strong {
+  margin-left: auto;
+  color: #1E4D6B;
+  font-size: 10px;
+  font-weight: 950;
+}
+.history-maintenance-buttons {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 1px;
+  scrollbar-width: none;
+}
+.history-maintenance-buttons::-webkit-scrollbar {
+  display: none;
+}
+.history-maintenance-pill {
+  flex: 0 0 auto;
+  min-height: 34px;
+  max-width: 138px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid rgba(126,104,75,.14);
+  border-radius: 999px;
+  background: rgba(255,255,255,.74);
+  color: #18243a;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+.history-maintenance-pill span,
+.history-maintenance-pill b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-maintenance-pill b {
+  color: #C23B5E;
+  font-weight: 950;
+}
+.history-maintenance-pill.tone-danger,
+.history-maintenance-pill.tone-high {
+  border-color: rgba(194,59,94,.22);
+}
+.history-maintenance-pill.tone-warning,
+.history-maintenance-pill.tone-missing,
+.history-maintenance-pill.tone-gap {
+  border-color: rgba(217,119,6,.24);
+}
+.history-maintenance-pill.tone-outside {
+  border-color: rgba(45,90,142,.24);
+}
+.history-maintenance-pill:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--screen-accent-2) 44%, transparent);
+  outline-offset: 2px;
+}
 .history-conflict-resolver {
   display: grid;
   gap: 10px;
@@ -4066,7 +4145,7 @@ body {
 }
 .settings-trip-doctor-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 8px;
 }
 .settings-trip-doctor-item {

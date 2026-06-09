@@ -36,10 +36,10 @@ const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: s
   settings: { title: 'Secure Controls', mobileTitle: '設定控制中心', subtitle: 'Secure Controls', status: '系統狀態' },
 };
 
-const COMPACT_RELEASE_NOTE_ID = 'compact-2026-06-09-p7';
+const COMPACT_RELEASE_NOTE_ID = 'compact-2026-06-09-record-declutter';
 const COMPACT_RELEASE_NOTES = [
   { title: 'Day readiness scores', detail: 'Dashboard / Timeline show daily readiness from itinerary, weather, bookings, receipts, and cleanup signals.' },
-  { title: 'Attachment Health', detail: 'History highlights large, missing, and unsynced receipt photos before travel sync.' },
+  { title: 'Attachment checks', detail: 'Settings Trip Doctor summarizes photo issues while Record rows keep small photo markers.' },
   { title: 'Offline conflict resolver', detail: 'History can review failed local/cloud receipt conflicts without exposing provider payloads.' },
 ];
 const COMPACT_RELEASE_NOTES_SEEN_KEY = 'travel-expense-compact:release-notes-seen';

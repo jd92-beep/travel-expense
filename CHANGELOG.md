@@ -2,6 +2,8 @@
 
 ## 2026-06-09
 
+- Slimmed the compact Record tab diagnostic area: the large `Itinerary Review Queue`, `Attachment Health`, and `Cleanup Coach` cards no longer sit above the records list. Itinerary and cleanup issues now appear only as a compact `Review only when needed` shortcut strip, while attachment/photo health is summarized in Settings `Compact Trip Doctor` and kept as small row markers in Records.
+- Updated compact History, Settings, and final-navigation smokes to prove the new Record layout still filters itinerary issue days, opens cleanup repairs, keeps photo health markers, and shows attachment counts in Settings Trip Doctor.
 - Moved the compact PWA/travel-readiness capsules (`Network`, `Queue`, `Cache`, `Update`, `Install`, `Motion`) off the top of every tab and kept them only on the Settings tab, so Dashboard, Scan, Timeline, History, Weather, and Stats regain first-screen space while Settings remains the system-status home.
 - Updated compact final-navigation and accessibility smokes to prove the readiness strip is absent on Dashboard and visible/tappable in Settings.
 - Recovered compact Vercel production deployment after the previous quota blocker. Deployment `dpl_DEVBMCi8aRe2C8RLipv9XoxjXLxj` is READY and aliased to `https://travel-expense-compact.vercel.app/`; `npm run smoke:deploy-live` passed for commit `e1fa760` with asset hash `02ff6e6463213690`.

@@ -10,6 +10,7 @@ import type { AppState, CategoryId, Receipt, SyncQueueItem, TripProfile } from '
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryById, displayStore, fmt, getItinerary, getPersons, hkd, isPendingReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
+import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 import { buildItineraryReceiptReconciliation, type ItineraryReceiptDay } from '../lib/travelDay';
 
 type ReceiptHealthMarker = {
@@ -28,16 +29,6 @@ type ReceiptCleanupSuggestion = {
   tone: 'warning' | 'danger';
 };
 
-type ReceiptAttachmentSuggestion = {
-  key: 'photo-large' | 'photo-missing' | 'photo-unsynced';
-  title: string;
-  count: number;
-  detail: string;
-  actionLabel: string;
-  receipt: Receipt;
-  tone: 'warning' | 'danger' | 'info';
-};
-
 type ReceiptConflictItem = {
   receipt: Receipt;
   queueItem?: SyncQueueItem;
@@ -49,48 +40,11 @@ type HistoryReviewItem = ItineraryReceiptDay & {
   actionLabel: string;
 };
 
-const LARGE_PHOTO_BYTES = 600_000;
-
 function historyDateLabel(date: string): string {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
   const weekday = ['日', '一', '二', '三', '四', '五', '六'][parsed.getDay()];
   return `${parsed.getFullYear()}年${parsed.getMonth() + 1}月${parsed.getDate()}日（${weekday}）`;
-}
-
-function isReceiptPhotoExpected(receipt: Receipt): boolean {
-  const source = String(receipt.source || '');
-  return source === 'react-ocr'
-    || source === 'react-ocr-manual'
-    || source === 'react-email-image'
-    || /OCR|截圖|掃描/i.test(String(receipt.note || ''));
-}
-
-function estimatePhotoBytes(value: unknown): number {
-  const raw = String(value || '').trim().replace(/[\r\n\s]/g, '');
-  if (!raw || /^https?:\/\//i.test(raw)) return 0;
-  const base64 = raw.includes(',') ? raw.split(',').pop() || '' : raw;
-  if (!/^[a-z0-9+/=]+$/i.test(base64)) return 0;
-  const padding = (base64.match(/=+$/)?.[0].length || 0);
-  return Math.max(0, Math.floor(base64.length * 3 / 4) - padding);
-}
-
-function receiptPhotoBytes(receipt: Receipt): number {
-  return Math.max(estimatePhotoBytes(receipt.photoThumb), estimatePhotoBytes(receipt.photoUrl));
-}
-
-function receiptHasLargePhoto(receipt: Receipt): boolean {
-  return receiptPhotoBytes(receipt) > LARGE_PHOTO_BYTES;
-}
-
-function receiptHasLocalPhoto(receipt: Receipt): boolean {
-  return estimatePhotoBytes(receipt.photoThumb) > 0 || (!!receipt.photoUrl && !/^https?:\/\//i.test(String(receipt.photoUrl)));
-}
-
-function receiptPhotoNeedsSync(receipt: Receipt): boolean {
-  if (!receiptHasLocalPhoto(receipt)) return false;
-  if (receipt._photoSyncedToNotion || receipt.notionFileUploadId || /^https?:\/\//i.test(String(receipt.photoUrl || ''))) return false;
-  return receipt.syncStatus !== 'synced' || !receipt.photoUrl;
 }
 
 function receiptHasSyncConflict(receipt: Receipt, state: AppState): boolean {
@@ -167,42 +121,6 @@ function receiptHealthMarkers(
   if ((receipt.supabaseId || receipt.notionPageId) && !receipt.sourceId) markers.push({ key: 'cloud-only', label: 'cloud-only', tone: 'info' });
   if (!receipt.supabaseId && !receipt.notionPageId) markers.push({ key: 'local-only', label: 'local-only', tone: 'neutral' });
   return markers;
-}
-
-function buildReceiptAttachmentSuggestions(receipts: Receipt[]): ReceiptAttachmentSuggestion[] {
-  const largePhotos = receipts.filter(receiptHasLargePhoto);
-  const missingPhotos = receipts.filter((receipt) => isReceiptPhotoExpected(receipt) && !safePhotoUrl(receipt.photoUrl, receipt.photoThumb));
-  const unsyncedPhotos = receipts.filter(receiptPhotoNeedsSync);
-  const suggestions: Array<ReceiptAttachmentSuggestion | null> = [
-    largePhotos.length ? {
-      key: 'photo-large',
-      title: 'Large photo',
-      count: largePhotos.length,
-      detail: 'Replace this image to auto-compress before travel sync.',
-      actionLabel: 'Compress guide',
-      receipt: largePhotos[0],
-      tone: 'warning' as const,
-    } : null,
-    missingPhotos.length ? {
-      key: 'photo-missing',
-      title: 'Missing photo',
-      count: missingPhotos.length,
-      detail: 'OCR/import expected an attachment but no image is stored.',
-      actionLabel: 'Add photo',
-      receipt: missingPhotos[0],
-      tone: 'danger' as const,
-    } : null,
-    unsyncedPhotos.length ? {
-      key: 'photo-unsynced',
-      title: 'Unsynced photo',
-      count: unsyncedPhotos.length,
-      detail: 'Local image is not yet backed by a cloud-safe attachment.',
-      actionLabel: 'Review sync',
-      receipt: unsyncedPhotos[0],
-      tone: 'info' as const,
-    } : null,
-  ];
-  return suggestions.filter((item): item is ReceiptAttachmentSuggestion => !!item);
 }
 
 function buildReceiptCleanupSuggestions(
@@ -324,10 +242,7 @@ export function History({
     () => buildReceiptCleanupSuggestions(tripReceipts, state, sourceIdCounts, validPersonIds),
     [tripReceipts, state, sourceIdCounts, validPersonIds],
   );
-  const attachmentSuggestions = useMemo(
-    () => buildReceiptAttachmentSuggestions(tripReceipts),
-    [tripReceipts],
-  );
+  const cleanupIssueCount = cleanupSuggestions.reduce((sum, item) => sum + item.count, 0);
   const conflictItems = useMemo(
     () => buildReceiptConflictItems(tripReceipts, state),
     [tripReceipts, state],
@@ -396,15 +311,6 @@ export function History({
       onConfirmPending(suggestion.receipt);
       return;
     }
-    onOpen(suggestion.receipt);
-  }
-
-  function handleAttachmentSuggestion(suggestion: ReceiptAttachmentSuggestion) {
-    setStatus(suggestion.key === 'photo-large'
-      ? '更換相片時會自動壓縮，建議保留清晰文字但降低容量。'
-      : suggestion.key === 'photo-unsynced'
-        ? '請確認收據後重新同步，避免旅行途中只有本機相片。'
-        : '請加入收據相片，讓 OCR / backup 更完整。');
     onOpen(suggestion.receipt);
   }
 
@@ -541,40 +447,51 @@ export function History({
           </button>
         ))}
       </div>
-      {reviewQueue.length > 0 && (
-        <section className="history-review-queue card" aria-label="Itinerary receipt review queue">
-          <div className="history-review-head">
-            <AlertTriangle size={18} aria-hidden="true" />
-            <div>
-              <h2>Itinerary Review Queue</h2>
-              <p>{reviewQueue.length} days need receipt review · local only</p>
-            </div>
+      {(reviewQueue.length > 0 || cleanupSuggestions.length > 0) && (
+        <section className="history-maintenance-strip card" aria-label="Record review shortcuts">
+          <div className="history-maintenance-head">
+            <AlertTriangle size={16} aria-hidden="true" />
+            <span>Review only when needed</span>
+            <strong>{reviewQueue.length + cleanupIssueCount} checks</strong>
           </div>
-          <div className="history-review-grid">
-            {reviewQueue.slice(0, 4).map((item) => (
-              <article key={`${item.date}-${item.label}`} className={`history-review-item tone-${item.tone}`}>
-                <span>
-                  <strong>{item.day ? `Day ${item.day}` : 'Outside'}</strong>
-                  <b>{item.label}</b>
-                </span>
-                <small>{item.date} · {item.region}</small>
-                <small>{item.detail} · {item.receiptCount} receipts · {resolvedTripCurrency} {fmt(item.amount)}</small>
-                <button type="button" onClick={() => handleReviewItem(item)}>
-                  {item.actionLabel}
-                </button>
-              </article>
+          <div className="history-maintenance-buttons">
+            {reviewQueue.slice(0, 3).map((item) => (
+              <button
+                key={`${item.date}-${item.label}`}
+                type="button"
+                className={`history-maintenance-pill tone-${item.tone}`}
+                onClick={() => handleReviewItem(item)}
+                aria-label={`${item.actionLabel} ${item.date}`}
+              >
+                <CalendarDays size={13} aria-hidden="true" />
+                <span>{item.day ? `Day ${item.day}` : 'Outside'}</span>
+                <b>{item.label}</b>
+              </button>
+            ))}
+            {cleanupSuggestions.map((suggestion) => (
+              <button
+                key={suggestion.key}
+                type="button"
+                className={`history-maintenance-pill tone-${suggestion.tone}`}
+                onClick={() => handleCleanupSuggestion(suggestion)}
+                aria-label={suggestion.actionLabel}
+              >
+                <AlertTriangle size={13} aria-hidden="true" />
+                <span>{suggestion.title}</span>
+                <b>{suggestion.count}</b>
+              </button>
             ))}
           </div>
-          {reviewDateFilter && (
-            <div className="history-review-active" aria-label="Active itinerary review filter">
-              <span>
-                <strong>{reviewDateFilter}</strong>
-                <small>{selectedReviewItem ? `${selectedReviewItem.label} · ${selectedReviewItem.detail}` : 'Review filter active'}</small>
-              </span>
-              <button type="button" onClick={clearReviewFilter}>All records</button>
-            </div>
-          )}
         </section>
+      )}
+      {reviewDateFilter && (
+        <div className="history-review-active card" aria-label="Active itinerary review filter">
+          <span>
+            <strong>{reviewDateFilter}</strong>
+            <small>{selectedReviewItem ? `${selectedReviewItem.label} · ${selectedReviewItem.detail}` : 'Review filter active'}</small>
+          </span>
+          <button type="button" onClick={clearReviewFilter}>All records</button>
+        </div>
       )}
       {conflictItems.length > 0 && (
         <section className="history-conflict-resolver card" aria-label="Offline conflict resolver">
@@ -604,56 +521,6 @@ export function History({
                 </article>
               );
             })}
-          </div>
-        </section>
-      )}
-      {attachmentSuggestions.length > 0 && (
-        <section className="history-attachment-health card" aria-label="Receipt attachment health">
-          <div className="history-attachment-head">
-            <Camera size={18} aria-hidden="true" />
-            <div>
-              <h2>Attachment Health</h2>
-              <p>{attachmentSuggestions.reduce((sum, item) => sum + item.count, 0)} photo checks need review</p>
-            </div>
-          </div>
-          <div className="history-attachment-grid">
-            {attachmentSuggestions.map((suggestion) => (
-              <article key={suggestion.key} className={`history-attachment-item tone-${suggestion.tone}`}>
-                <span>
-                  <strong>{suggestion.title}</strong>
-                  <b>{suggestion.count}</b>
-                </span>
-                <small>{suggestion.detail}</small>
-                <button type="button" onClick={() => handleAttachmentSuggestion(suggestion)}>
-                  {suggestion.actionLabel}
-                </button>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-      {cleanupSuggestions.length > 0 && (
-        <section className="history-cleanup-coach card" aria-label="Receipt cleanup suggestions">
-          <div className="history-cleanup-head">
-            <AlertTriangle size={18} aria-hidden="true" />
-            <div>
-              <h2>Cleanup Coach</h2>
-              <p>{cleanupSuggestions.reduce((sum, item) => sum + item.count, 0)} checks need review</p>
-            </div>
-          </div>
-          <div className="history-cleanup-grid">
-            {cleanupSuggestions.map((suggestion) => (
-              <article key={suggestion.key} className={`history-cleanup-item tone-${suggestion.tone}`}>
-                <span>
-                  <strong>{suggestion.title}</strong>
-                  <b>{suggestion.count}</b>
-                </span>
-                <small>{suggestion.detail}</small>
-                <button type="button" onClick={() => handleCleanupSuggestion(suggestion)}>
-                  {suggestion.actionLabel}
-                </button>
-              </article>
-            ))}
           </div>
         </section>
       )}

@@ -23,7 +23,8 @@ import {
   type ProviderStatus,
 } from '../lib/credentialBroker';
 import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
-import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, validateItinerary } from '../lib/domain';
+import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, safePhotoUrl, validateItinerary } from '../lib/domain';
+import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 import { saveReceiptRepairIntent } from '../lib/repairIntent';
 import {
   diagnoseNotionSchema,
@@ -191,6 +192,10 @@ function compactTripDoctor(
   const validPersonIds = new Set(persons.map((person) => person.id));
   const pendingOcr = tripReceipts.filter(isPendingReceipt).length;
   const missingPayer = tripReceipts.filter((receipt) => !receipt.personId || !validPersonIds.has(receipt.personId)).length;
+  const largePhotos = tripReceipts.filter(receiptHasLargePhoto).length;
+  const missingPhotos = tripReceipts.filter((receipt) => isReceiptPhotoExpected(receipt) && !safePhotoUrl(receipt.photoUrl, receipt.photoThumb)).length;
+  const unsyncedPhotos = tripReceipts.filter(receiptPhotoNeedsSync).length;
+  const attachmentIssues = largePhotos + missingPhotos + unsyncedPhotos;
   const dataIssues = pendingOcr + missingPayer;
   const queue = state.syncQueue || [];
   const pendingQueue = Math.max(syncState?.pendingCount || 0, queue.filter((item) => item.status !== 'synced').length);
@@ -200,7 +205,7 @@ function compactTripDoctor(
   const plannedDays = Math.min(expectedDays, Math.max(0, plannedDates.size || (trip.itinerary?.length || 0)));
   const tripGaps = Math.max(0, expectedDays - plannedDays);
   const storageLabel = cloudSyncAvailable ? (notionMirrorReady ? 'Supabase + Notion' : 'Supabase only') : storageScope;
-  const issueTotal = dataIssues + pendingQueue + failedQueue + tripGaps;
+  const issueTotal = dataIssues + attachmentIssues + pendingQueue + failedQueue + tripGaps;
   return {
     tone: issueTotal > 0 ? 'warning' : 'ok',
     statusLabel: issueTotal > 0 ? `${issueTotal} checks` : 'Ready',
@@ -218,6 +223,14 @@ function compactTripDoctor(
         title: 'Sync queue',
         value: pendingQueue ? `${pendingQueue} pending` : 'Clear',
         detail: failedQueue ? `${failedQueue} failed · ${storageLabel}` : storageLabel,
+      },
+      {
+        key: 'attachments',
+        title: 'Attachments',
+        value: attachmentIssues ? `${attachmentIssues} issues` : 'Clean',
+        detail: attachmentIssues
+          ? [`${largePhotos} large`, `${missingPhotos} missing`, `${unsyncedPhotos} unsynced`].filter((line) => !line.startsWith('0 ')).join(' · ')
+          : 'Photos ready',
       },
       {
         key: 'trip',

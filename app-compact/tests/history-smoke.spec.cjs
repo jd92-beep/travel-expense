@@ -409,19 +409,16 @@ test('History guided cleanup suggestions open the right receipt for repair', asy
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
 
-  const cleanup = page.getByLabel('Receipt cleanup suggestions');
-  await expect(cleanup).toBeVisible();
-  await expect(cleanup).toContainText('Cleanup Coach');
-  await expect(cleanup).toContainText('Pending OCR');
-  await expect(cleanup).toContainText('1');
-  await expect(cleanup).toContainText('Duplicate SourceID');
-  await expect(cleanup).toContainText('2');
-  await expect(cleanup).toContainText('Missing photo');
-  await expect(cleanup).toContainText('1');
-  await expect(cleanup).toContainText('Missing payer');
-  await expect(cleanup).toContainText('1');
+  await expect(page.getByLabel('Receipt cleanup suggestions')).toHaveCount(0);
+  const shortcuts = page.getByLabel('Record review shortcuts');
+  await expect(shortcuts).toBeVisible();
+  await expect(shortcuts).toContainText('Review only when needed');
+  await expect(shortcuts).toContainText('Pending OCR');
+  await expect(shortcuts).toContainText('Duplicate SourceID');
+  await expect(shortcuts).toContainText('Missing photo');
+  await expect(shortcuts).toContainText('Missing payer');
 
-  await cleanup.getByRole('button', { name: /Open missing payer/ }).click();
+  await shortcuts.getByRole('button', { name: /Open missing payer/ }).click();
   await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
   await expect(page.getByLabel('店名 / 項目')).toHaveValue('M7 Missing Payer');
 });
@@ -449,21 +446,18 @@ test('History itinerary review queue filters receipt gaps by travel day', async 
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
 
-  const queue = page.getByLabel('Itinerary receipt review queue');
+  await expect(page.getByLabel('Itinerary receipt review queue')).toHaveCount(0);
+  const queue = page.getByLabel('Record review shortcuts');
   await expect(queue).toBeVisible();
-  await expect(queue).toContainText('Itinerary Review Queue');
-  await expect(queue).toContainText('3 days need receipt review');
+  await expect(queue).toContainText('Review only when needed');
   await expect(queue).toContainText('No receipts');
-  await expect(queue).toContainText('Nagoya Breakfast');
   await expect(queue).toContainText('High receipt count');
-  await expect(queue).toContainText('2026-05-09 · Kyoto');
   await expect(queue).toContainText('Outside itinerary');
-  await expect(queue).toContainText('2026-05-11');
   await expect(page.locator('body')).not.toContainText(/secret_|providerToken|FAKE_/i);
 
   const metrics = await queue.evaluate((node) => {
     const card = node.getBoundingClientRect();
-    const items = Array.from(node.querySelectorAll('.history-review-item')).map((item) => {
+    const items = Array.from(node.querySelectorAll('.history-maintenance-pill')).map((item) => {
       const rect = item.getBoundingClientRect();
       return { width: Math.round(rect.width), top: Math.round(rect.top) };
     });
@@ -475,16 +469,15 @@ test('History itinerary review queue filters receipt gaps by travel day', async 
   });
   expect(metrics.scrollWidth).toBe(390);
   expect(metrics.cardWidth).toBeLessThanOrEqual(390);
-  expect(metrics.items).toHaveLength(3);
-  expect(metrics.items[0].top).toBe(metrics.items[1].top);
+  expect(metrics.items.length).toBeGreaterThanOrEqual(3);
 
-  await queue.locator('.history-review-item').filter({ hasText: 'High receipt count' }).getByRole('button', { name: 'Show receipts' }).click();
+  await queue.getByRole('button', { name: /Show receipts 2026-05-09/ }).click();
   await expect(page.getByLabel('Active itinerary review filter')).toContainText('2026-05-09');
   await expect(page.locator('.receipt-row')).toHaveCount(5);
   await expect(page.locator('.receipt-row').filter({ hasText: 'Kyoto Market' })).toBeVisible();
   await expect(page.locator('.receipt-row').filter({ hasText: 'Outside Itinerary Taxi' })).toHaveCount(0);
 
-  await queue.locator('.history-review-item').filter({ hasText: 'No receipts' }).getByRole('button', { name: 'Show empty day' }).click();
+  await queue.getByRole('button', { name: /Show empty day 2026-05-08/ }).click();
   await expect(page.getByLabel('Active itinerary review filter')).toContainText('2026-05-08');
   await expect(page.locator('.receipt-row')).toHaveCount(0);
   await expect(page.getByText('2026-05-08 未有紀錄，請新增或修正當日 receipt。')).toBeVisible();
@@ -603,33 +596,28 @@ test('History attachment health surfaces large, missing, and unsynced receipt ph
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
 
-  const attachment = page.getByLabel('Receipt attachment health');
-  await expect(attachment).toBeVisible();
-  await expect(attachment).toContainText('Attachment Health');
-  await expect(attachment).toContainText('Large photo');
-  await expect(attachment).toContainText('Missing photo');
-  await expect(attachment).toContainText('Unsynced photo');
+  await expect(page.getByLabel('Receipt attachment health')).toHaveCount(0);
   await expect(page.getByLabel('Receipt health markers for Large Photo Bento')).toContainText('photo large');
   await expect(page.getByLabel('Receipt health markers for Large Photo Bento')).toContainText('photo unsynced');
   await expect(page.getByLabel('Receipt health markers for Missing Attachment Ticket')).toContainText('photo missing');
   await expect(page.getByLabel('Receipt health markers for Unsynced Photo Taxi')).toContainText('photo unsynced');
 
   const metrics = await page.evaluate(() => {
-    const card = document.querySelector('[aria-label="Receipt attachment health"]')?.getBoundingClientRect();
-    const items = Array.from(document.querySelectorAll('.history-attachment-item')).map((node) => node.getBoundingClientRect().width);
     return {
       scrollWidth: document.documentElement.scrollWidth,
-      cardWidth: card?.width || 0,
-      minItemWidth: Math.min(...items),
+      rowMarkerCount: document.querySelectorAll('.history-health-marker').length,
     };
   });
   expect(metrics.scrollWidth).toBe(390);
-  expect(metrics.cardWidth).toBeLessThanOrEqual(390);
-  expect(metrics.minItemWidth).toBeGreaterThan(120);
+  expect(metrics.rowMarkerCount).toBeGreaterThanOrEqual(4);
 
-  await attachment.getByRole('button', { name: 'Compress guide' }).click();
-  await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
-  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Large Photo Bento');
+  await page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]').getByRole('button', { name: '設定', exact: true }).click();
+  const doctor = page.getByLabel('Compact Trip Doctor');
+  await expect(doctor).toContainText('Attachments');
+  await expect(doctor).toContainText('4 issues');
+  await expect(doctor).toContainText('1 large');
+  await expect(doctor).toContainText('1 missing');
+  await expect(doctor).toContainText('2 unsynced');
 });
 
 test('History manual pull routes through global sync engine when broker session exists', async ({ page }) => {

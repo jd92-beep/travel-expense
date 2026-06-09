@@ -256,7 +256,7 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
   await expect(releaseNotes).toContainText('Compact release notes');
   await expect(releaseNotes).toContainText('Now vs previous');
   await expect(releaseNotes).toContainText('Day readiness scores');
-  await expect(releaseNotes).toContainText('Attachment Health');
+  await expect(releaseNotes).toContainText('Attachment checks');
   await expect(releaseNotes).toContainText('No external calls');
   expect(releaseNoteRequests, releaseNoteRequests.join('\n')).toHaveLength(0);
 
