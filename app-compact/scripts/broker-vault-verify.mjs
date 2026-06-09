@@ -12,6 +12,7 @@ const expectMissingSession = process.argv.includes('--expect-missing-session')
 const brokerUrl = (process.env.COMPACT_BROKER_URL || DEFAULT_BROKER_URL).replace(/\/+$/, '');
 const origin = process.env.COMPACT_BROKER_ORIGIN || DEFAULT_ORIGIN;
 const sessionFile = process.env.COMPACT_BROKER_VAULT_SESSION_FILE || DEFAULT_SESSION_FILE;
+const googleDiagnosticModel = process.env.COMPACT_BROKER_GOOGLE_DIAGNOSTIC_MODEL || 'gemini-2.5-flash';
 
 const sensitivePatterns = [
   /sk-[A-Za-z0-9_-]{12,}/,
@@ -195,7 +196,6 @@ async function main() {
   const auth = await loadAuthInput();
   const checks = [];
   const failures = [];
-  let notionDatabaseId = '';
 
   if (auth.mode === 'missing') {
     const guard = await requestJson('/credentials/status');
@@ -236,10 +236,6 @@ async function main() {
       status: result.status,
       broker: result.data?.broker || 'unknown',
       providers: summarizeProviders(result.data),
-      ...(() => {
-        notionDatabaseId = String((result.data?.providers || []).find((provider) => provider.provider === 'notion')?.databaseId || '');
-        return { hasNotionDatabaseId: !!notionDatabaseId };
-      })(),
     }),
   );
 
@@ -297,25 +293,28 @@ async function main() {
   await collectCall(
     checks,
     failures,
-    'notion request',
-    '/notion/request',
+    'google diagnostic model',
+    '/google/json',
     [200],
-    () => requestJson('/notion/request', {
+    () => requestJson('/google/json', {
       method: 'POST',
       body: {
-        path: notionDatabaseId ? `/databases/${notionDatabaseId}/query` : '/databases/redacted/query',
-        method: 'POST',
-        body: { page_size: 1 },
-        databaseId: notionDatabaseId || undefined,
+        prompt: 'Return only JSON: {"ok":true,"provider":"google-diagnostic"}',
+        kind: 'test',
+        model: googleDiagnosticModel,
       },
     }, auth),
     (result) => ({
-      path: '/notion/request',
-      status: result.status,
-      hasData: result.data?.data !== undefined,
-      shape: result.data?.data && typeof result.data.data === 'object' ? Object.keys(result.data.data).slice(0, 8) : [],
+      ...summarizeAi('/google/json', result),
+      diagnosticModel: googleDiagnosticModel,
     }),
   );
+
+  checks.push({
+    path: '/notion/request',
+    status: 'skipped-by-design',
+    reason: 'Global Notion database id is intentionally not exposed by /credentials/status; /credentials/test-all covers token and database permission without printing ids.',
+  });
 
   const accountLimited = failures.length > 0 && failures.every((failure) => failure.outcome === 'account-limited');
   console.log(JSON.stringify({
