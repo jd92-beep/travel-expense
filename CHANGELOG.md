@@ -2,6 +2,9 @@
 
 ## 2026-06-09
 
+- Added compact Dashboard `Itinerary Receipt Match`, a local/no-API day-by-day reconciliation card for no-receipt itinerary days, spot-level receipt gaps, unusually high receipt counts, and current-trip spending outside itinerary dates.
+- Added shared compact `buildItineraryReceiptReconciliation()` logic so itinerary/receipt coverage can be reused without adding storage fields, rendering cloud IDs, or calling broker/provider APIs.
+- Deployed the compact itinerary receipt reconciliation build to Vercel production as `dpl_HjZgAoUwDLXTQAZ6Xee5egAzbJqE`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added compact Settings `Repair first issue`, a Trip Scope Audit shortcut that jumps to History and opens the first date-window or auto-linked receipt needing review.
 - Added a session-only compact receipt repair intent so cross-tab repair navigation is one-shot, local, and not persisted into app state.
 - Deployed the compact receipt repair shortcut build to Vercel production as `dpl_Buc32pf6nDJvRA7FU54u3LGii32p`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
