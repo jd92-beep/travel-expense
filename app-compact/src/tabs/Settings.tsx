@@ -288,12 +288,65 @@ type TripSharePreview = {
   };
 };
 
+type DiagnosticsPreview = {
+  filename: string;
+  copiedText: string;
+  payload: {
+    exportType: 'public-safe-diagnostics';
+    generatedAt: string;
+    safety: {
+      publicSafe: true;
+      stripped: string[];
+      excludesRawData: string[];
+    };
+    app: {
+      surface: 'compact';
+      reactVersion: string;
+      storageScope: string;
+      cloudSyncAvailable: boolean;
+      notionMirrorReady: boolean;
+      brokerSessionPresent: boolean;
+      lastTab: string;
+    };
+    trip: {
+      hasActiveTrip: boolean;
+      startDate: string;
+      endDate: string;
+      dayCount: number;
+      itineraryDays: number;
+      archived: boolean;
+      currency: string;
+    };
+    receipts: {
+      currentTrip: number;
+      allTrips: number;
+      pendingOcr: number;
+      missingPayer: number;
+      syncErrors: number;
+      localPhotoSignals: number;
+      categories: Record<string, number>;
+    };
+    sync: {
+      queuePending: number;
+      queueFailed: number;
+      deleteQueued: number;
+      status: string;
+      lastSyncAge: string;
+    };
+    checks: Array<{ label: string; status: string; detail: string }>;
+  };
+};
+
 function formatMoney(value: number): string {
   return `HK$ ${Math.round(value).toLocaleString('en-US')}`;
 }
 
 function safeShareFilename(name: string): string {
   return `${(name || 'travel-expense').replace(/[^\w\u4e00-\u9fff-]+/g, '-')}-private-share.json`;
+}
+
+function safeDiagnosticsFilename(): string {
+  return `travel-expense-compact-diagnostics-${todayLocalDate()}.json`;
 }
 
 function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Person[]): TripSharePreview {
@@ -368,6 +421,108 @@ function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Pers
   ].join('\n');
   return {
     filename: safeShareFilename(payload.trip.name),
+    copiedText,
+    payload,
+  };
+}
+
+function buildDiagnosticsPreview(
+  state: AppState,
+  trip: TripProfile,
+  persons: Person[],
+  syncState: SyncEngineState | undefined,
+  cloudSyncAvailable: boolean,
+  notionMirrorReady: boolean,
+  brokerReady: boolean,
+  storageScope: string,
+): DiagnosticsPreview {
+  const tripReceipts = scopedReceiptsForTrip(state, trip);
+  const queue = state.syncQueue || [];
+  const pendingQueue = queue.filter((item) => item.status !== 'synced');
+  const failedQueue = pendingQueue.filter((item) => item.status === 'error' || item.status === 'failed');
+  const deleteQueue = pendingQueue.filter((item) => item.op === 'delete' || item.type === 'delete-receipt');
+  const validPersonIds = new Set(persons.map((person) => person.id));
+  const categories = tripReceipts.reduce<Record<string, number>>((counts, receipt) => {
+    const label = categoryById(receipt.category).name || 'Other';
+    counts[label] = (counts[label] || 0) + 1;
+    return counts;
+  }, {});
+  const localPhotoSignals = tripReceipts.filter((receipt) => (
+    !!receipt.photoThumb
+    || (!!receipt.photoUrl && !/^https?:\/\//i.test(String(receipt.photoUrl)))
+    || !!receipt.notionFileUploadId
+  )).length;
+  const pendingOcr = tripReceipts.filter(isPendingReceipt).length;
+  const missingPayer = tripReceipts.filter((receipt) => !receipt.personId || !validPersonIds.has(receipt.personId)).length;
+  const syncErrors = tripReceipts.filter((receipt) => receipt.syncStatus === 'error' || receipt.syncStatus === 'failed').length + failedQueue.length;
+  const payload: DiagnosticsPreview['payload'] = {
+    exportType: 'public-safe-diagnostics',
+    generatedAt: new Date().toISOString(),
+    safety: {
+      publicSafe: true,
+      stripped: [
+        'API keys and provider tokens',
+        'broker sessions',
+        'Notion/Supabase IDs',
+        'receipt IDs and SourceID',
+        'sync queue payloads and error text',
+        'receipt photos and photo URLs',
+        'traveller names and receipt/store names',
+      ],
+      excludesRawData: ['raw receipts', 'raw trips', 'raw persons', 'raw sync queue', 'photos'],
+    },
+    app: {
+      surface: 'compact',
+      reactVersion,
+      storageScope,
+      cloudSyncAvailable,
+      notionMirrorReady,
+      brokerSessionPresent: brokerReady,
+      lastTab: state.lastTab || 'unknown',
+    },
+    trip: {
+      hasActiveTrip: !!trip.id,
+      startDate: trip.startDate || '',
+      endDate: trip.endDate || '',
+      dayCount: inclusiveTripDayCount(trip),
+      itineraryDays: (trip.itinerary?.length ? trip.itinerary : getItinerary(state)).length,
+      archived: !!trip.archived,
+      currency: trip.currencies?.find((currency) => currency !== 'HKD') || state.tripCurrency || 'JPY',
+    },
+    receipts: {
+      currentTrip: tripReceipts.length,
+      allTrips: Array.isArray(state.receipts) ? state.receipts.length : 0,
+      pendingOcr,
+      missingPayer,
+      syncErrors,
+      localPhotoSignals,
+      categories,
+    },
+    sync: {
+      queuePending: pendingQueue.length,
+      queueFailed: failedQueue.length,
+      deleteQueued: deleteQueue.length,
+      status: syncState?.status || state.globalSyncStatus || 'local',
+      lastSyncAge: formatSyncAge(syncState?.lastSyncedAt || state.lastSyncedAt || 0),
+    },
+    checks: [
+      { label: 'Trip scope', status: tripReceipts.length === (state.receipts || []).length ? 'single-trip' : 'multi-trip', detail: `${tripReceipts.length} current-trip receipts` },
+      { label: 'Sync queue', status: pendingQueue.length ? 'pending' : 'clear', detail: `${failedQueue.length} failed · ${deleteQueue.length} delete queued` },
+      { label: 'Data quality', status: pendingOcr + missingPayer + syncErrors ? 'review' : 'clean', detail: `${pendingOcr} pending OCR · ${missingPayer} missing payer · ${syncErrors} sync errors` },
+      { label: 'Backup safety', status: 'safe-preview', detail: 'No raw IDs, tokens, photos, or queue payloads included' },
+    ],
+  };
+  const copiedText = [
+    'Travel Expense Compact · public diagnostics',
+    `Surface: compact · React ${reactVersion} · Storage ${storageScope}`,
+    `Trip: ${payload.trip.dayCount} days · ${payload.trip.itineraryDays} itinerary days · ${payload.trip.currency}`,
+    `Receipts: ${payload.receipts.currentTrip} current-trip / ${payload.receipts.allTrips} total`,
+    `Data quality: ${pendingOcr} pending OCR · ${missingPayer} missing payer · ${syncErrors} sync errors`,
+    `Sync: ${payload.sync.queuePending} pending · ${payload.sync.queueFailed} failed · last sync ${payload.sync.lastSyncAge}`,
+    'Safe export: no API keys, broker sessions, Notion/Supabase IDs, receipt IDs, SourceID, sync payloads, error text, traveller names, store names, photos, or photo URLs.',
+  ].join('\n');
+  return {
+    filename: safeDiagnosticsFilename(),
     copiedText,
     payload,
   };
@@ -694,6 +849,7 @@ export function Settings({
   const [showClearLocalPreview, setShowClearLocalPreview] = useState(false);
   const [backupPreview, setBackupPreview] = useState<BackupImportPreview | null>(null);
   const [tripSharePreview, setTripSharePreview] = useState<TripSharePreview | null>(null);
+  const [diagnosticsPreview, setDiagnosticsPreview] = useState<DiagnosticsPreview | null>(null);
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -1523,6 +1679,12 @@ export function Settings({
     setStatus(`Trip-share preview ready：${preview.payload.summary.receipts} receipts，安全預覽後可 copy/download`);
   }
 
+  function previewDiagnosticsExport() {
+    const preview = buildDiagnosticsPreview(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope);
+    setDiagnosticsPreview(preview);
+    setStatus(`Diagnostics preview ready：${preview.payload.receipts.currentTrip} current-trip receipts，public-safe copy/download only`);
+  }
+
   function downloadPostTripBackup() {
     downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState());
     setStatus('Post-trip final backup 已下載；下一步可做 private share 或 settlement check。');
@@ -1557,6 +1719,17 @@ export function Settings({
     if (!tripSharePreview) return;
     downloadJson(tripSharePreview.filename, tripSharePreview.payload);
     setStatus('已下載 private trip-share JSON');
+  }
+
+  async function copyDiagnosticsPreview() {
+    if (!diagnosticsPreview) return;
+    await copyText(diagnosticsPreview.copiedText, '已複製 public-safe diagnostics summary');
+  }
+
+  function downloadDiagnosticsPreview() {
+    if (!diagnosticsPreview) return;
+    downloadJson(diagnosticsPreview.filename, diagnosticsPreview.payload);
+    setStatus('已下載 public-safe diagnostics JSON');
   }
 
   async function importItinerary(file?: File) {
@@ -2537,6 +2710,7 @@ export function Settings({
           <button className="secondary" type="button" onClick={() => exportCsv(state)}><Download size={18} /> 匯出 CSV</button>
           <button className="secondary" type="button" onClick={() => downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup JSON（目前旅程）</button>
           <button className="secondary" type="button" onClick={previewTripShareExport}><Copy size={18} /> Preview trip share</button>
+          <button className="secondary" type="button" onClick={previewDiagnosticsExport}><ShieldCheck size={18} /> Preview diagnostics</button>
           <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup JSON</button>
           <button className="danger" type="button" onClick={() => { clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); }}><KeyRound size={18} /> 清除 broker session</button>
           <button className="danger" type="button" onClick={() => { clearDeviceTrust(); void clearTrustedDevice(); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
@@ -2572,6 +2746,39 @@ export function Settings({
               <button className="primary" type="button" onClick={() => void copyTripSharePreview()}><Copy size={16} /> Copy summary</button>
               <button className="secondary" type="button" onClick={downloadTripSharePreview}><Download size={16} /> Download safe JSON</button>
               <button className="secondary" type="button" onClick={() => { setTripSharePreview(null); setStatus('已關閉 trip-share preview'); }}>Close preview</button>
+            </div>
+          </div>
+        )}
+        {diagnosticsPreview && (
+          <div className="settings-trip-share-preview" role="region" aria-label="Public diagnostics preview">
+            <div className="settings-restore-preview-head">
+              <span><ShieldCheck size={15} /> Public diagnostics preview</span>
+              <strong>{diagnosticsPreview.payload.receipts.currentTrip} receipt{diagnosticsPreview.payload.receipts.currentTrip === 1 ? '' : 's'}</strong>
+            </div>
+            <div className="settings-restore-preview-grid">
+              <span>
+                <small>Surface</small>
+                <strong>{diagnosticsPreview.payload.app.surface}</strong>
+              </span>
+              <span>
+                <small>Sync</small>
+                <strong>{diagnosticsPreview.payload.sync.queuePending} pending</strong>
+              </span>
+              <span>
+                <small>Quality</small>
+                <strong>{diagnosticsPreview.payload.receipts.pendingOcr + diagnosticsPreview.payload.receipts.missingPayer + diagnosticsPreview.payload.receipts.syncErrors} checks</strong>
+              </span>
+            </div>
+            <pre className="settings-trip-share-copy">{diagnosticsPreview.copiedText}</pre>
+            <div className="settings-restore-preview-warnings">
+              {diagnosticsPreview.payload.safety.stripped.map((warning) => (
+                <span key={warning}><ShieldCheck size={13} /> {warning}</span>
+              ))}
+            </div>
+            <div className="action-row wrap">
+              <button className="primary" type="button" onClick={() => void copyDiagnosticsPreview()}><Copy size={16} /> Copy diagnostics</button>
+              <button className="secondary" type="button" onClick={downloadDiagnosticsPreview}><Download size={16} /> Download diagnostics JSON</button>
+              <button className="secondary" type="button" onClick={() => { setDiagnosticsPreview(null); setStatus('已關閉 diagnostics preview'); }}>Close preview</button>
             </div>
           </div>
         )}
