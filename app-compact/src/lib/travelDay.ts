@@ -4,6 +4,7 @@ import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from './types';
 
 export type TravelDayWidgetKind = 'transit' | 'receipt' | 'weather' | 'booking';
 export type DayReadinessTone = 'ready' | 'watch' | 'review' | 'risk';
+export type WeatherPackingTone = 'ready' | 'watch' | 'review' | 'risk';
 
 export interface TravelDayWidget {
   kind: TravelDayWidgetKind;
@@ -21,6 +22,16 @@ export interface DayReadinessScore {
   label: string;
   detail: string;
   issues: string[];
+}
+
+export interface WeatherPackingRisk {
+  date: string;
+  day: number;
+  region: string;
+  tone: WeatherPackingTone;
+  label: string;
+  detail: string;
+  items: string[];
 }
 
 export type ItineraryReceiptTone = 'ok' | 'missing' | 'gap' | 'high' | 'outside';
@@ -183,6 +194,69 @@ export function buildDayReadinessScores(state: AppState, itinerary: ItineraryDay
       label,
       detail: issues.length ? issues.slice(0, 4).join(' · ') : 'All key signals ready',
       issues: issues.length ? issues : ['Ready'],
+    };
+  });
+}
+
+export function buildWeatherPackingRisks(state: AppState, itinerary: ItineraryDay[], nowMs = Date.now()): WeatherPackingRisk[] {
+  const best = bestWeatherSignal((state as AppState & { weatherCache?: unknown }).weatherCache);
+  const hasWeather = isReasonableTimestamp(best.fetchedAt);
+  const ageMs = hasWeather ? nowMs - best.fetchedAt : Number.POSITIVE_INFINITY;
+  const weatherIsStale = !hasWeather || ageMs > WEATHER_STALE_MS;
+  const intelligence = activeTrip(state).intelligence;
+
+  return itinerary.map((day) => {
+    const spots = getScheduleSpots(state, day);
+    const outdoorSpot = spots.find(isOutdoorSpot);
+    const transportSpot = spots.find((spot) => spot.type === 'transport');
+    const location = day.city || day.region || day.country || 'Travel day';
+    let tone: WeatherPackingTone = 'ready';
+    let label = 'Light pack';
+    let detail = `${location} · weather ready`;
+    const items = new Set<string>(['Water', 'Receipts']);
+
+    if (weatherIsStale) {
+      tone = 'review';
+      label = 'Refresh first';
+      detail = hasWeather ? `${formatFreshnessAge(ageMs)} old · refresh before leaving` : `${location} · weather missing`;
+      items.add('Update weather');
+      items.add(outdoorSpot ? 'Outdoor layer' : 'Light bag');
+    } else if (best.rain >= 50) {
+      tone = 'risk';
+      label = '雨具 / Umbrella';
+      detail = `Rain ${Math.round(best.rain)}% · ${fmtMm(best.precipMm)}${outdoorSpot ? ` · ${outdoorSpot.name}` : ''}`;
+      items.add('Umbrella');
+      items.add('Waterproof bag');
+      if (outdoorSpot) items.add('Outdoor layer');
+    } else if (best.windSpeed >= 30) {
+      tone = 'watch';
+      label = 'Wind layer';
+      detail = `Wind ${Math.round(best.windSpeed)} km/h${transportSpot ? ` · ${transportSpot.name}` : ''}`;
+      items.add('Wind layer');
+      if (transportSpot) items.add('Transit buffer');
+    } else if (outdoorSpot || intelligence?.weatherPreference === 'rain') {
+      tone = 'watch';
+      label = 'Outdoor layer';
+      detail = outdoorSpot ? `${outdoorSpot.name} · rain check` : `${location} · rain preference`;
+      items.add('Light shell');
+      items.add('Comfort shoes');
+    } else if (transportSpot) {
+      label = 'Transit buffer';
+      detail = `${transportSpot.name} · ${transportSpot.time || '--:--'}`;
+      items.add('IC card');
+      items.add('Time buffer');
+    } else {
+      items.add('Light bag');
+    }
+
+    return {
+      date: day.date,
+      day: day.day || 0,
+      region: location,
+      tone,
+      label,
+      detail,
+      items: Array.from(items).slice(0, 4),
     };
   });
 }
@@ -429,6 +503,11 @@ function weatherAlert(state: AppState, day: ItineraryDay, nowMs: number): { valu
   const outdoor = (day.spots || []).some((spot) => /ticket|localtour|transport|sightseeing|other/i.test(spot.type) || /outdoor|park|garden|temple|shrine|山|海|戶外|寺|神社/i.test(`${spot.name} ${spot.note || ''} ${spot.address || ''}`));
   if (intelligence?.weatherPreference === 'rain' || outdoor) return { value: 'Rain check', detail: `${day.city || day.region} 出門前刷新天氣` };
   return { value: 'Refresh weather', detail: `${day.city || day.region} freshness 未確認` };
+}
+
+function isOutdoorSpot(spot: ItinerarySpot): boolean {
+  return /ticket|localtour|transport|sightseeing|other/i.test(String(spot.type || ''))
+    || /outdoor|park|garden|temple|shrine|castle|beach|trail|walk|山|海|湖|公園|花園|戶外|寺|神社|城|散步/i.test(`${spot.name || ''} ${spot.note || ''} ${spot.address || ''}`);
 }
 
 function bestWeatherSignal(cache: unknown): { rain: number; precipMm: number; windSpeed: number; fetchedAt: number } {

@@ -431,17 +431,30 @@ test('Timeline command includes travel-day countdown, receipt, weather, and book
   await expect(widgets).toContainText('Rain 78%');
   await expect(widgets).toContainText('Booking note');
   await expect(widgets).toContainText('KTX-5512');
+  const packingRisk = page.getByLabel('Weather packing risk for Day 2');
+  await expect(packingRisk).toBeVisible();
+  await expect(packingRisk).toContainText('Weather pack');
+  await expect(packingRisk).toContainText('雨具 / Umbrella');
+  await expect(packingRisk).toContainText('Rain 78%');
+  await expect(packingRisk).toContainText('Temple Gate');
+  await expect(packingRisk.getByLabel('Packing items for Day 2')).toContainText('Umbrella');
+  await expect(packingRisk.getByLabel('Packing items for Day 2')).toContainText('Waterproof bag');
   const geometry = await widgets.evaluate((node) => {
     const box = node.getBoundingClientRect();
     const screen = document.querySelector('.timeline-screen')?.getBoundingClientRect();
+    const packing = document.querySelector('[aria-label="Weather packing risk for Day 2"]')?.getBoundingClientRect();
     return {
       width: box.width,
       right: box.right,
       screenRight: screen?.right || 0,
+      packingWidth: packing?.width || 0,
+      packingRight: packing?.right || 0,
     };
   });
   expect(geometry.width).toBeLessThanOrEqual(360);
   expect(geometry.right).toBeLessThanOrEqual(geometry.screenRight);
+  expect(geometry.packingWidth, JSON.stringify(geometry, null, 2)).toBeLessThanOrEqual(360);
+  expect(geometry.packingRight, JSON.stringify(geometry, null, 2)).toBeLessThanOrEqual(geometry.screenRight);
 });
 
 test('Timeline travel-day widgets warn when route and weather data are stale', async ({ page }) => {
@@ -515,6 +528,11 @@ test('Timeline travel-day widgets warn when route and weather data are stale', a
   await expect(widgets).toContainText('14d old');
   await expect(widgets).toContainText('Weather stale');
   await expect(widgets).toContainText('8h old');
+  const packingRisk = page.getByLabel('Weather packing risk for Day 2');
+  await expect(packingRisk).toBeVisible();
+  await expect(packingRisk).toContainText('Refresh first');
+  await expect(packingRisk).toContainText('8h old');
+  await expect(packingRisk.getByLabel('Packing items for Day 2')).toContainText('Update weather');
 });
 
 test('Timeline travel-day widgets warn when a booking reference is stale', async ({ page }) => {
