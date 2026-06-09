@@ -2,6 +2,9 @@
 
 ## 2026-06-09
 
+- Simplified the compact Home/Dashboard screen by removing `Travel-day control`, `Itinerary Receipt Match`, `Trip Snapshot`, `Departure Checklist`, `Day-end Closeout`, and the bottom `旅程提醒` accordion from Home, plus their Dashboard-only derived state/imports.
+- Kept the shared travel-day and itinerary/receipt helper logic available for Timeline and Records/History, so related non-Home workflows are not removed accidentally.
+- Deployed the compact Home simplification build to Vercel production as `dpl_GdfqimEjDaiC6mYCxB6v4c1rAKHX`; `npm run smoke:deploy-live` passed for commit `a1d2fe2` with asset hash `1776760a3f776a73`.
 - Slimmed the compact Record tab diagnostic area: the large `Itinerary Review Queue`, `Attachment Health`, and `Cleanup Coach` cards no longer sit above the records list. Itinerary and cleanup issues now appear only as a compact `Review only when needed` shortcut strip, while attachment/photo health is summarized in Settings `Compact Trip Doctor` and kept as small row markers in Records.
 - Updated compact History, Settings, and final-navigation smokes to prove the new Record layout still filters itinerary issue days, opens cleanup repairs, keeps photo health markers, and shows attachment counts in Settings Trip Doctor.
 - Deployed the compact Record declutter build to Vercel production as `dpl_2ZEBiwXihz3VtxsQMQwuEYhzWG93`; `npm run smoke:deploy-live` passed for commit `22bb1f2` with asset hash `fe55b9edeb9815bd`.
