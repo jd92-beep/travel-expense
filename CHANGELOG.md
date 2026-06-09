@@ -2,6 +2,8 @@
 
 ## 2026-06-09
 
+- Added compact Dashboard `Day-end Closeout`, a local/no-API evening wrap-up card for missing receipts, overspend notes, tomorrow readiness, and Records/Stats/Timeline shortcuts.
+- Rechecked compact broker-vault proof with an ignored local session. The script now reports redacted `status: blocked` JSON instead of a stack trace; WeatherAPI, Notion, and Google diagnostic route proof pass, while Kimi quota, required Google/Gemma model availability, and Mimo authenticated config remain external live blockers.
 - Added compact Dashboard `Departure Checklist`, a local/no-API pre-departure card that turns weather, route, outdoor itinerary, booking, and receipt/readiness signals into five quick checks.
 - Deployed the compact Departure Checklist build to Vercel production as `dpl_RjHoxECCHK2BYckYMg2UkEyrttRE`; live alias verification passed for `https://travel-expense-compact.vercel.app/`.
 - Added compact Dashboard `Trip Snapshot`, a local/no-API handoff card with day, budget-left, next-stop, readiness/watch signals, copyable summary text, and Timeline/Records shortcuts.

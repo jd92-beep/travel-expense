@@ -447,6 +447,106 @@ test('Dashboard travel-day widgets warn when a booking reference is stale', asyn
   await expect(widgets).toContainText('KTX-5512');
 });
 
+test('Dashboard day-end closeout shows missing receipts, budget note, and tomorrow readiness', async ({ page }) => {
+  const fixed = new Date('2026-05-09T20:30:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    const today = {
+      date: '2026-05-09',
+      day: 2,
+      region: 'Kyoto Closeout Day',
+      city: 'Kyoto',
+      country: 'Japan',
+      timezone: 'Asia/Tokyo',
+      spots: [
+        { time: '10:00', name: 'Morning Coffee', type: 'food' },
+        { time: '19:00', name: 'Evening Market', type: 'shopping', note: 'souvenirs' },
+      ],
+    };
+    const tomorrow = {
+      date: '2026-05-10',
+      day: 3,
+      region: 'Nara Tomorrow',
+      city: 'Nara',
+      country: 'Japan',
+      timezone: 'Asia/Tokyo',
+      spots: [
+        { time: '09:30', name: 'Nara Park', type: 'ticket', note: 'outdoor walk' },
+      ],
+    };
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      schemaVersion: 4,
+      lastTab: 'dashboard',
+      budget: 9000,
+      rate: 20,
+      activeTripId: 'closeout_trip',
+      tripName: 'Closeout Test',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-10' },
+      customItinerary: [today, tomorrow],
+      trips: [{
+        id: 'closeout_trip',
+        name: 'Closeout Test',
+        destinationSummary: 'Kyoto / Nara',
+        startDate: '2026-05-08',
+        endDate: '2026-05-10',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: true,
+        intelligence: { countryCode: 'JP', primaryCurrency: 'JPY', themeKey: 'japan_washi', weatherRegion: 'Kyoto', weatherPreference: 'rain' },
+        itinerary: [today, tomorrow],
+        createdAt: fixedNow - 60 * 60 * 1000,
+        updatedAt: fixedNow - 60 * 60 * 1000,
+      }],
+      receipts: [
+        { id: 'closeout_coffee', store: 'Morning Coffee', total: 5000, date: '2026-05-09', time: '10:10', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1 },
+      ],
+      weatherCache: {
+        closeout_weather: {
+          fetchedAt: fixedNow - 20 * 60 * 1000,
+          slots: [{ hour: 12, rain: 20, precipMm: 1, windSpeed: 8, code: 2 }],
+        },
+      },
+    }));
+  }, fixed);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  const closeout = page.getByLabel('Day-end closeout');
+  await expect(closeout).toBeVisible();
+  await expect(closeout).toContainText('Day-end Closeout');
+  await expect(closeout).toContainText('local · no API');
+  await expect(closeout).toContainText('Missing receipts');
+  await expect(closeout).toContainText('Close gaps');
+  await expect(closeout).toContainText('補記 Evening Market');
+  await expect(closeout).toContainText('Budget note');
+  await expect(closeout).toContainText('Daily 111%');
+  await expect(closeout).toContainText('Tomorrow readiness');
+  await expect(closeout).toContainText('Day 3 · 100%');
+  await expect(closeout).toContainText('Nara');
+  await expect(closeout).toContainText('Cleanup action');
+  await closeout.getByRole('button', { name: /Records/ }).click();
+  await expect(page).toHaveURL(/#history/);
+  await page.getByLabel('主要分頁').getByRole('button', { name: '主頁', exact: true }).click();
+  await closeout.getByRole('button', { name: /Stats/ }).click();
+  await expect(page).toHaveURL(/#stats/);
+  await page.getByLabel('主要分頁').getByRole('button', { name: '主頁', exact: true }).click();
+  await closeout.getByRole('button', { name: /Tomorrow/ }).click();
+  await expect(page).toHaveURL(/#timeline/);
+});
+
 test('Dashboard shows deterministic per-day readiness score from itinerary, weather, booking, and cleanup signals', async ({ page }) => {
   const fixed = new Date('2026-05-09T09:30:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {

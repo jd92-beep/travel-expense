@@ -430,6 +430,36 @@ export function Dashboard({
       detail: receiptWidget ? `${receiptWidget.value} · ${receiptWidget.detail}` : 'No receipt signal',
     },
   ];
+  const nextReadiness = dayReadinessScores.find((item) => (item.day || 0) > currentDayNumber)
+    || dayReadinessScores.find((item) => item.date > displayDayDate);
+  const receiptNeedsCloseout = snapshotIssues.some((issue) => /receipt|cleanup/i.test(issue)) || /補記|gap|cleanup/.test(receiptSignal);
+  const dailyOverBudget = todayBudgetPct > 100;
+  const closeoutItems = [
+    {
+      label: 'Missing receipts',
+      value: receiptNeedsCloseout ? 'Close gaps' : 'All recorded',
+      detail: receiptWidget ? `${receiptWidget.value} · ${receiptWidget.detail}` : `${todayReceipts.length} receipt${todayReceipts.length === 1 ? '' : 's'} today`,
+    },
+    {
+      label: 'Budget note',
+      value: dailyOverBudget ? `Daily ${Math.round(todayBudgetPct)}%` : forecastDeltaHkd > 0 ? 'Trip risk' : 'Within pace',
+      detail: dailyOverBudget
+        ? `今日超出每日預算 · 先補原因`
+        : forecastDeltaHkd > 0
+          ? `預計超支 HK$ ${fmt(forecastDeltaHkd)}`
+          : `預計尚餘 HK$ ${fmt(Math.abs(forecastDeltaHkd))}`,
+    },
+    {
+      label: 'Tomorrow readiness',
+      value: nextReadiness ? `Day ${nextReadiness.day || '-'} · ${nextReadiness.score}%` : 'Last day',
+      detail: nextReadiness ? `${nextReadiness.label} · ${nextReadiness.region} · ${nextReadiness.detail}` : '完成後匯出 backup / 檢查同步',
+    },
+    {
+      label: 'Cleanup action',
+      value: snapshotIssues.length ? `${snapshotIssues.length} open` : 'Ready to close',
+      detail: snapshotIssues.length ? snapshotIssues.join(' · ') : '今晚無明顯阻塞，可以同步/備份',
+    },
+  ];
   const snapshotText = [
     `${trip.name} · Day ${currentDayNumber}/${length}`,
     `Dates: ${displayDateRange(trip.startDate, trip.endDate)}`,
@@ -890,7 +920,42 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
       </GlassCard>
       </Reveal>
 
-      {/* 2.9 Broker-backed AI Assistant */}
+      {/* 2.9 Day-end closeout */}
+      <Reveal className="dashboard-reveal" delay={0.0695}>
+      <GlassCard as="div" className="dashboard-day-end-closeout relative overflow-hidden z-10">
+        <div role="region" aria-label="Day-end closeout">
+          <div className="dashboard-trip-snapshot-head">
+            <div>
+              <span><ClipboardList size={15} /> Day-end Closeout</span>
+              <h3>今晚收工</h3>
+            </div>
+            <em>local · no API</em>
+          </div>
+          <div className="dashboard-trip-snapshot-grid dashboard-closeout-grid">
+            {closeoutItems.map((item) => (
+              <article key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <small>{item.detail}</small>
+              </article>
+            ))}
+          </div>
+          <div className="dashboard-departure-actions dashboard-closeout-actions">
+            <button type="button" className="compact-touch-action" onClick={() => onTab('history')}>
+              <NotebookPen size={15} /> Records
+            </button>
+            <button type="button" className="compact-touch-action" onClick={() => onTab('stats')}>
+              <PieChart size={15} /> Stats
+            </button>
+            <button type="button" className="compact-touch-action" onClick={() => onTab('timeline')}>
+              <CalendarDays size={15} /> Tomorrow
+            </button>
+          </div>
+        </div>
+      </GlassCard>
+      </Reveal>
+
+      {/* 2.10 Broker-backed AI Assistant */}
       <Reveal className="dashboard-reveal" delay={0.07}>
       <GlassCard as="div" className={`dashboard-broker-assistant status-${assistantStatus} relative overflow-hidden z-10`}>
         <div role="region" aria-label="Broker AI assistant">
