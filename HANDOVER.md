@@ -7,11 +7,12 @@ Last updated: 2026-06-09 HKT
 - Independent compact app: `app-compact/`.
 - Compact improvement checklist: `app-compact/COMPACT_IMPROVEMENT_CHECKLIST.md`.
 - Current compact live URL: `https://travel-expense-compact.vercel.app/`.
-- Latest compact app-code proof commit: `1f75aba` (`Add compact history itinerary review queue`).
+- Latest compact app-code proof commit: `5b5009a` (`Add compact timeline weather packing risk`).
+- Previous compact app-code proof commit: `1f75aba` (`Add compact history itinerary review queue`).
 - Previous compact app-code proof commit: `e68f10c` (`Add compact settlement action plan`).
 - Previous pushed compact app-code proof commit: `8fadfcb` (`Add compact public diagnostics preview`).
 - Latest live deployment remains Vercel deployment `dpl_EGaWZXC84K1MJAXSkdkBSjbnyFLm`, live URL `https://travel-expense-compact.vercel.app/`, HTTP 200, title `旅費 Compact`, asset hash `8a0b517705ad942b`, HTML hash `db6785c7c7060df5`, and alias/deployment content match. This production deployment predates P10-04.
-- Latest P11-02 manual Vercel deploy attempt on 2026-06-09 HKT still failed with external quota `api-deployments-free-per-day` / `Resource is limited - try again in 24 hours (more than 100)`. P10-04, P11-01, and P11-02 are pushed to `origin/main` and locally release-gated, but not yet live on Vercel. Retry `npx vercel deploy --prod --scope ftjdfr-7940s-projects --yes` from `app-compact/` after the deployment quota resets, then run `npm run smoke:deploy-live`.
+- Latest P11-02 manual Vercel deploy attempt on 2026-06-09 HKT still failed with external quota `api-deployments-free-per-day` / `Resource is limited - try again in 24 hours (more than 100)`. P10-04, P11-01, and P11-02 are pushed to `origin/main` and locally release-gated, but not yet live on Vercel. P11-03 app code is locally release-gated in commit `5b5009a`; retry `npx vercel deploy --prod --scope ftjdfr-7940s-projects --yes` from `app-compact/` after the deployment quota resets, then run `npm run smoke:deploy-live`.
 - 2026-06-08 compact P0 progress:
   - P0-01 done: `getPersons()` now deduplicates person IDs while preserving first valid order, preventing duplicate React key warnings such as `p_trip_2` from corrupted/imported state.
   - P0-02 done: Dashboard budget usage now always includes all current-trip receipts, while `statsIncludeTransportLodging` only affects today/daily/chart-style filtered views.

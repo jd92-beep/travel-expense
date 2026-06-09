@@ -2,6 +2,8 @@
 
 ## 2026-06-09
 
+- Added compact Timeline per-day `Weather pack` risk strips, a local/no-API packing summary that turns cached weather, itinerary outdoor/transport context, and weather preferences into rain, stale-weather, wind, outdoor, or transit-buffer recommendations directly inside day cards.
+- The Timeline packing risk strips keep chips horizontally contained on 390px mobile cards and do not cover the timeline rail; targeted Timeline smoke now verifies rain and stale-weather packing states.
 - Added compact History `Itinerary Review Queue`, a local/no-API review filter for missing receipt days, high-count days, and outside-itinerary spending from the existing itinerary/receipt reconciliation logic.
 - The History review queue lets users filter one day at a time and reset with `All records`, without writing storage, adding schema fields, or calling broker/provider APIs.
 - Pushed the compact History review queue to `origin/main` as `1f75aba`; Vercel production deploy is still blocked by the external daily deploy quota `api-deployments-free-per-day`, so live production still points at the previous P10-03 deployment until the quota resets.
