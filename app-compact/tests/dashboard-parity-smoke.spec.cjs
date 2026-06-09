@@ -301,6 +301,96 @@ test('Dashboard travel-day widgets show countdown, receipt reminder, weather ale
   await expect(page).toHaveURL(/#timeline/);
 });
 
+test('Dashboard reconciles itinerary days against receipt coverage', async ({ page }) => {
+  const fixed = new Date('2026-05-09T12:00:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    const itinerary = [
+      { date: '2026-05-08', day: 1, region: 'Nagoya Missing Day', city: 'Nagoya', timezone: 'Asia/Tokyo', spots: [{ time: '09:00', name: 'Nagoya Breakfast', type: 'food' }] },
+      { date: '2026-05-09', day: 2, region: 'Kyoto Busy Day', city: 'Kyoto', timezone: 'Asia/Tokyo', spots: [{ time: '10:00', name: 'Kyoto Market', type: 'shopping' }] },
+      { date: '2026-05-10', day: 3, region: 'Nara Ready Day', city: 'Nara', timezone: 'Asia/Tokyo', spots: [{ time: '10:00', name: 'Nara Lunch', type: 'food' }] },
+    ];
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      schemaVersion: 4,
+      lastTab: 'dashboard',
+      budget: 20000,
+      rate: 20,
+      activeTripId: 'reconcile_trip',
+      tripName: 'Receipt Reconcile Test',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-10' },
+      customItinerary: itinerary,
+      trips: [{
+        id: 'reconcile_trip',
+        name: 'Receipt Reconcile Test',
+        destinationSummary: 'Nagoya / Kyoto / Nara',
+        startDate: '2026-05-08',
+        endDate: '2026-05-10',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: true,
+        itinerary,
+        createdAt: fixedNow - 60 * 60 * 1000,
+        updatedAt: fixedNow - 60 * 60 * 1000,
+      }],
+      receipts: [
+        { id: 'busy_1', tripId: 'reconcile_trip', store: 'Kyoto Market', total: 1000, date: '2026-05-09', time: '10:05', category: 'shopping', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1 },
+        { id: 'busy_2', tripId: 'reconcile_trip', store: 'Kyoto Snack', total: 600, date: '2026-05-09', time: '10:30', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 2 },
+        { id: 'busy_3', tripId: 'reconcile_trip', store: 'Kyoto Train', total: 800, date: '2026-05-09', time: '11:00', category: 'transport', payment: 'credit', personId: 'p_boss', splitMode: 'shared', createdAt: 3 },
+        { id: 'busy_4', tripId: 'reconcile_trip', store: 'Kyoto Gift', total: 1200, date: '2026-05-09', time: '12:00', category: 'shopping', payment: 'credit', personId: 'p_boss', splitMode: 'shared', createdAt: 4 },
+        { id: 'busy_5', tripId: 'reconcile_trip', store: 'Kyoto Coffee', total: 500, date: '2026-05-09', time: '13:00', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 5 },
+        { id: 'nara_lunch', tripId: 'reconcile_trip', store: 'Nara Lunch', total: 1500, date: '2026-05-10', time: '10:10', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 6 },
+        { id: 'outside_day', tripId: 'reconcile_trip', store: 'Airport Extra', total: 2200, date: '2026-05-11', time: '09:00', category: 'transport', payment: 'credit', personId: 'p_boss', splitMode: 'shared', createdAt: 7 },
+      ],
+      weatherCache: {
+        reconcile_weather: {
+          fetchedAt: fixedNow - 20 * 60 * 1000,
+          slots: [{ hour: 12, rain: 5, precipMm: 0, windSpeed: 8, code: 1 }],
+        },
+      },
+    }));
+  }, fixed);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  const reconciliation = page.getByLabel('Itinerary receipt reconciliation');
+  await expect(reconciliation).toBeVisible();
+  await expect(reconciliation).toContainText('Itinerary Receipt Match');
+  await expect(reconciliation).toContainText('每日紀錄對帳');
+  await expect(reconciliation).toContainText('local · no API');
+  await expect(reconciliation.locator('.dashboard-reconciliation-summary article').filter({ hasText: 'Missing days' })).toContainText('1');
+  await expect(reconciliation.locator('.dashboard-reconciliation-summary article').filter({ hasText: 'High count' })).toContainText('1');
+  await expect(reconciliation.locator('.dashboard-reconciliation-summary article').filter({ hasText: 'Outside itinerary' })).toContainText('1');
+  await expect(reconciliation.locator('.dashboard-reconciliation-summary article').filter({ hasText: 'Review' })).toContainText('3 days');
+  await expect(reconciliation).toContainText('No receipts');
+  await expect(reconciliation).toContainText('Nagoya Breakfast');
+  await expect(reconciliation).toContainText('High receipt count');
+  await expect(reconciliation).toContainText('Day 2');
+  await expect(reconciliation).toContainText('5 receipts');
+  await expect(reconciliation).toContainText('Outside itinerary');
+  await expect(reconciliation).toContainText('2026-05-11');
+  await reconciliation.getByRole('button', { name: /Records/ }).click();
+  await expect(page).toHaveURL(/#history/);
+  await page.getByLabel('主要分頁').getByRole('button', { name: '主頁', exact: true }).click();
+  await reconciliation.getByRole('button', { name: /Stats/ }).click();
+  await expect(page).toHaveURL(/#stats/);
+  await page.getByLabel('主要分頁').getByRole('button', { name: '主頁', exact: true }).click();
+  await reconciliation.getByRole('button', { name: /Timeline/ }).click();
+  await expect(page).toHaveURL(/#timeline/);
+});
+
 test('Dashboard travel-day widgets warn when route and weather data are stale', async ({ page }) => {
   const fixed = new Date('2026-05-09T09:30:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {

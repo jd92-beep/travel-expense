@@ -54,7 +54,7 @@ import { activeTrip, createTripProfile, scopedReceiptsForTrip } from '../domain/
 import type { AppState, ItinerarySpot, Receipt, SyncQueueItem, TabId } from '../lib/types';
 import { brokerAiJson, redactedError } from '../lib/credentialBroker';
 import { DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
-import { buildDayReadinessScores, buildTravelDayWidgets } from '../lib/travelDay';
+import { buildDayReadinessScores, buildItineraryReceiptReconciliation, buildTravelDayWidgets } from '../lib/travelDay';
 
 function displayDateRange(startDate: string, endDate: string) {
   const fmtDate = (date: string) => {
@@ -391,6 +391,11 @@ export function Dashboard({
     : `先睇 ${coachWeatherRegion} 天氣 freshness，再出門。`;
   const travelDayWidgets = buildTravelDayWidgets(state, itinerary);
   const dayReadinessScores = buildDayReadinessScores(state, itinerary);
+  const receiptReconciliation = buildItineraryReceiptReconciliation(state, itinerary);
+  const receiptReviewDays = [...receiptReconciliation.days, ...receiptReconciliation.outside]
+    .filter((item) => item.tone !== 'ok')
+    .slice(0, 4);
+  const receiptReviewPreview = receiptReviewDays.length ? receiptReviewDays : receiptReconciliation.days.slice(0, 2);
   const activeReadiness = dayReadinessScores.find((item) => item.date === displayDayDate) || dayReadinessScores[0];
   const snapshotIssues = (activeReadiness?.issues || []).filter((issue) => issue !== 'Ready').slice(0, 3);
   const transitWidget = travelDayWidgets.find((widget) => widget.kind === 'transit');
@@ -838,6 +843,64 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
             ))}
           </div>
         </div>
+        </div>
+      </GlassCard>
+      </Reveal>
+
+      {/* 2.68 Itinerary receipt reconciliation */}
+      <Reveal className="dashboard-reveal" delay={0.066}>
+      <GlassCard as="div" className="dashboard-itinerary-reconciliation relative overflow-hidden z-10">
+        <div role="region" aria-label="Itinerary receipt reconciliation">
+          <div className="dashboard-trip-snapshot-head">
+            <div>
+              <span><ClipboardList size={15} /> Itinerary Receipt Match</span>
+              <h3>每日紀錄對帳</h3>
+            </div>
+            <em>local · no API</em>
+          </div>
+          <div className="dashboard-trip-snapshot-grid dashboard-reconciliation-summary">
+            <article>
+              <span>Missing days</span>
+              <strong>{receiptReconciliation.missingDays}</strong>
+              <small>{receiptReconciliation.gapDays ? `${receiptReconciliation.gapDays} spot-gap day${receiptReconciliation.gapDays === 1 ? '' : 's'}` : `${receiptReconciliation.totalDays} itinerary day${receiptReconciliation.totalDays === 1 ? '' : 's'}`}</small>
+            </article>
+            <article>
+              <span>High count</span>
+              <strong>{receiptReconciliation.highCountDays}</strong>
+              <small>receipt count above itinerary pace</small>
+            </article>
+            <article>
+              <span>Outside itinerary</span>
+              <strong>{receiptReconciliation.outsideDays}</strong>
+              <small>spending dates not in the plan</small>
+            </article>
+            <article>
+              <span>Review</span>
+              <strong>{receiptReconciliation.reviewCount ? `${receiptReconciliation.reviewCount} days` : 'Ready'}</strong>
+              <small>{receiptReconciliation.currency} day-by-day check</small>
+            </article>
+          </div>
+          <div className="dashboard-reconciliation-list">
+            {receiptReviewPreview.map((item) => (
+              <article className={`tone-${item.tone}`} key={`${item.date || 'none'}-${item.label}`}>
+                <span>{item.day ? `Day ${item.day}` : 'Outside'}</span>
+                <strong>{item.label}</strong>
+                <small>{item.date} · {item.region} · {item.receiptCount} receipts · {receiptReconciliation.currency} {fmt(item.amount)}</small>
+                <em>{item.detail}</em>
+              </article>
+            ))}
+          </div>
+          <div className="dashboard-departure-actions dashboard-reconciliation-actions">
+            <button type="button" className="compact-touch-action" onClick={() => onTab('history')}>
+              <NotebookPen size={15} /> Records
+            </button>
+            <button type="button" className="compact-touch-action" onClick={() => onTab('stats')}>
+              <BarChart3 size={15} /> Stats
+            </button>
+            <button type="button" className="compact-touch-action" onClick={() => onTab('timeline')}>
+              <CalendarDays size={15} /> Timeline
+            </button>
+          </div>
         </div>
       </GlassCard>
       </Reveal>

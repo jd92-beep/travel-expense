@@ -1,5 +1,5 @@
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { displayStore, getScheduleSpots, isPendingReceipt, safePhotoUrl } from './domain';
+import { displayStore, getReceiptTripAmount, getResolvedTripCurrency, getScheduleSpots, isPendingReceipt, safePhotoUrl } from './domain';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from './types';
 
 export type TravelDayWidgetKind = 'transit' | 'receipt' | 'weather' | 'booking';
@@ -21,6 +21,32 @@ export interface DayReadinessScore {
   label: string;
   detail: string;
   issues: string[];
+}
+
+export type ItineraryReceiptTone = 'ok' | 'missing' | 'gap' | 'high' | 'outside';
+
+export interface ItineraryReceiptDay {
+  date: string;
+  day: number;
+  region: string;
+  spotCount: number;
+  receiptCount: number;
+  amount: number;
+  tone: ItineraryReceiptTone;
+  label: string;
+  detail: string;
+}
+
+export interface ItineraryReceiptReconciliation {
+  currency: string;
+  totalDays: number;
+  missingDays: number;
+  gapDays: number;
+  highCountDays: number;
+  outsideDays: number;
+  reviewCount: number;
+  days: ItineraryReceiptDay[];
+  outside: ItineraryReceiptDay[];
 }
 
 type ScheduleSpot = ItinerarySpot & { _spotIdx: number; receiptId?: string };
@@ -161,6 +187,79 @@ export function buildDayReadinessScores(state: AppState, itinerary: ItineraryDay
   });
 }
 
+export function buildItineraryReceiptReconciliation(state: AppState, itinerary: ItineraryDay[]): ItineraryReceiptReconciliation {
+  const trip = activeTrip(state);
+  const receipts = scopedReceiptsForTrip(state, trip);
+  const currency = getResolvedTripCurrency(state, trip);
+  const itineraryDates = new Set(itinerary.map((day) => day.date).filter(Boolean));
+  const receiptsByDate = groupReceiptsByDate(receipts);
+
+  const days = itinerary.map<ItineraryReceiptDay>((day) => {
+    const spots = getScheduleSpots(state, day);
+    const dayReceipts = receiptsByDate.get(day.date) || [];
+    const missingSpots = spots.filter((spot) => !hasMatchingReceipt(spot, dayReceipts));
+    const amount = receiptAmount(dayReceipts, state, currency);
+    const highCountThreshold = Math.max(4, spots.length + 2);
+    let tone: ItineraryReceiptTone = 'ok';
+    let label = 'Matched';
+
+    if (spots.length > 0 && dayReceipts.length === 0) {
+      tone = 'missing';
+      label = 'No receipts';
+    } else if (missingSpots.length > 0 && dayReceipts.length > 0) {
+      tone = 'gap';
+      label = 'Spot gaps';
+    } else if (dayReceipts.length > highCountThreshold) {
+      tone = 'high';
+      label = 'High receipt count';
+    } else if (!spots.length && dayReceipts.length > 0) {
+      tone = 'outside';
+      label = 'Spending no plan';
+    }
+
+    const missingDetail = missingSpots.slice(0, 2).map((spot) => spot.name).join(' · ');
+    return {
+      date: day.date,
+      day: day.day || 0,
+      region: day.city || day.region || day.country || 'Travel day',
+      spotCount: spots.length,
+      receiptCount: dayReceipts.length,
+      amount,
+      tone,
+      label,
+      detail: missingDetail || `${spots.length} stops · ${dayReceipts.length} receipts`,
+    };
+  });
+
+  const outside = Array.from(receiptsByDate.entries())
+    .filter(([date]) => date && !itineraryDates.has(date))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map<ItineraryReceiptDay>(([date, dateReceipts]) => ({
+      date,
+      day: 0,
+      region: date < (itinerary[0]?.date || date) ? 'Before itinerary' : 'Outside itinerary',
+      spotCount: 0,
+      receiptCount: dateReceipts.length,
+      amount: receiptAmount(dateReceipts, state, currency),
+      tone: 'outside',
+      label: 'Outside itinerary',
+      detail: `${dateReceipts.length} receipt${dateReceipts.length === 1 ? '' : 's'} on ${date}`,
+    }));
+
+  const needsReview = [...days, ...outside].filter((item) => item.tone !== 'ok');
+  return {
+    currency,
+    totalDays: days.length,
+    missingDays: days.filter((item) => item.tone === 'missing').length,
+    gapDays: days.filter((item) => item.tone === 'gap').length,
+    highCountDays: days.filter((item) => item.tone === 'high').length,
+    outsideDays: outside.length + days.filter((item) => item.tone === 'outside').length,
+    reviewCount: needsReview.length,
+    days,
+    outside,
+  };
+}
+
 function routeStaleSignal(state: AppState, nowMs: number): { value: string; detail: string } | null {
   const updatedAt = Number(activeTrip(state).updatedAt);
   if (!isReasonableTimestamp(updatedAt)) return null;
@@ -216,6 +315,21 @@ function isReceiptPhotoExpected(receipt: Receipt): boolean {
     || source === 'react-ocr-manual'
     || source === 'react-email-image'
     || /OCR|截圖|掃描/i.test(String(receipt.note || ''));
+}
+
+function groupReceiptsByDate(receipts: Receipt[]): Map<string, Receipt[]> {
+  return receipts.reduce<Map<string, Receipt[]>>((groups, receipt) => {
+    const date = String(receipt.date || '').slice(0, 10);
+    if (!date) return groups;
+    const current = groups.get(date) || [];
+    current.push(receipt);
+    groups.set(date, current);
+    return groups;
+  }, new Map());
+}
+
+function receiptAmount(receipts: Receipt[], state: AppState, currency: string): number {
+  return Math.round(receipts.reduce((sum, receipt) => sum + getReceiptTripAmount(receipt, state, currency), 0));
 }
 
 function estimatePhotoBytes(value: unknown): number {
