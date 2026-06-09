@@ -223,7 +223,7 @@ test('React Notion pull prefers plain fields, skips itinerary/settings rows, and
     store: 'HK Express UO690 HKG→NGO',
     total: 66170,
     date: '2026-04-20',
-    category: 'transport',
+    category: 'flight',
     payment: 'credit',
     itemsText: '去程 · 2 位 · UO690',
     note: '',

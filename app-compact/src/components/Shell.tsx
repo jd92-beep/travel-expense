@@ -38,7 +38,7 @@ const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: s
 
 const COMPACT_RELEASE_NOTE_ID = 'compact-2026-06-09-record-declutter';
 const COMPACT_RELEASE_NOTES = [
-  { title: 'Day readiness scores', detail: 'Dashboard / Timeline show daily readiness from itinerary, weather, bookings, receipts, and cleanup signals.' },
+  { title: 'Compact Home and Timeline', detail: 'Home and Timeline keep current-day itinerary detail without extra diagnostic control strips.' },
   { title: 'Attachment checks', detail: 'Settings Trip Doctor summarizes photo issues while Record rows keep small photo markers.' },
   { title: 'Offline conflict resolver', detail: 'History can review failed local/cloud receipt conflicts without exposing provider payloads.' },
 ];

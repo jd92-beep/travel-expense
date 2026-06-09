@@ -1,5 +1,5 @@
 import { APP_SCHEMA_VERSION, DEFAULT_STATE, ITINERARY } from '../../lib/constants';
-import type { AppState, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile } from '../../lib/types';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile } from '../../lib/types';
 import { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
 
 export { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
@@ -151,6 +151,20 @@ export function scopedReceiptsForTrip(state: AppState, trip: TripProfile = activ
   return receipts.filter((receipt) => receipt.tripId === trip.id || (!hasMultipleTrips && !receipt.tripId));
 }
 
+function normalizedReceiptCategory(receipt: Receipt): CategoryId {
+  const category = receipt.category || 'other';
+  if (category !== 'transport' && category !== 'other') return category;
+  const text = [
+    receipt.store,
+    receipt.note,
+    receipt.itemsText,
+    receipt.bookingRef,
+    receipt.sourceId,
+  ].filter(Boolean).join(' ');
+  if (/\bhk\s*express\b|hkexpress|香港快運|香港快运|\bUO\s?\d{2,4}\b/i.test(text)) return 'flight';
+  return category;
+}
+
 export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: { preserveUpdatedAt?: boolean } = {}): Receipt {
   const trips = Array.isArray(state.trips) && state.trips.length ? state.trips : [];
   const originalTripId = receipt.tripId;
@@ -215,6 +229,7 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
 
   return {
     ...receipt,
+    category: normalizedReceiptCategory(receipt),
     tripId: trip.id,
     tripLinkSource,
     tripVersion: receipt.tripVersion || trip.version,

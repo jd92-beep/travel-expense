@@ -6,7 +6,7 @@ import { MagicCard } from '../components/ui/magic-card';
 import { ShineBorder } from '../components/ui/shine-border';
 import { categoryById, dayLooseReceipts, fmt, getItinerary, getScheduleSpots, hkd, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts } from '../lib/domain';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from '../lib/types';
-import { buildDayReadinessScores, buildTravelDayWidgets, buildWeatherPackingRisks } from '../lib/travelDay';
+import { buildWeatherPackingRisks } from '../lib/travelDay';
 import { ReceiptRow } from './Dashboard';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
@@ -42,8 +42,6 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   const hasOpenModal = Boolean(editing || activeDay || viewPhoto);
   const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
   const liveContext = timelineLiveContext(state, itinerary, nowTick, tripWindow);
-  const travelDayWidgets = buildTravelDayWidgets(state, itinerary, nowTick);
-  const dayReadinessScores = buildDayReadinessScores(state, itinerary, nowTick);
   const weatherPackingRisks = buildWeatherPackingRisks(state, itinerary, nowTick);
   const commandDay = (liveContext.date ? itinerary.find((day) => day.date === liveContext.date) : null) || itinerary.find((day) => day.date === today) || itinerary[0];
   const commandDate = commandDay?.date ? new Date(`${commandDay.date}T00:00:00`) : null;
@@ -125,30 +123,6 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
           )}
         </div>
       </MagicCard>
-
-      <GlassCard className="travel-day-panel timeline-travel-day-panel">
-        <div role="region" aria-label="Travel day widgets">
-        <div className="travel-day-panel-head">
-          <span><MapPin size={15} /> Travel-day control</span>
-          <b>{liveContext.nowLabel}</b>
-        </div>
-        <div className="travel-day-widget-grid">
-          <article className={`day-readiness-card timeline-day-readiness-inline tone-${dayReadinessScores[0]?.tone || 'review'}`} role="region" aria-label="Day readiness scores">
-            <span>Day readiness</span>
-            <strong>{dayReadinessScores[0]?.score ?? 0}%</strong>
-            <em>{dayReadinessScores[0]?.label || 'Review'}</em>
-            <small>Day {dayReadinessScores[0]?.day || '-'} · {dayReadinessScores[0]?.detail || 'No itinerary'}</small>
-          </article>
-          {travelDayWidgets.map((widget) => (
-            <article className={`travel-day-widget kind-${widget.kind}`} key={widget.kind}>
-              <span>{widget.label}</span>
-              <strong>{widget.value}</strong>
-              <small>{widget.detail}</small>
-            </article>
-          ))}
-        </div>
-        </div>
-      </GlassCard>
 
       {itinerary.map((day) => {
         const spots = getScheduleSpots(state, day);

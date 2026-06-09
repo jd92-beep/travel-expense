@@ -9,9 +9,8 @@ import { takeReceiptRepairIntent } from '../lib/repairIntent';
 import type { AppState, CategoryId, Receipt, SyncQueueItem, TripProfile } from '../lib/types';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
-import { categoryById, displayStore, fmt, getItinerary, getPersons, hkd, isPendingReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
+import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
-import { buildItineraryReceiptReconciliation, type ItineraryReceiptDay } from '../lib/travelDay';
 
 type ReceiptHealthMarker = {
   key: string;
@@ -19,25 +18,11 @@ type ReceiptHealthMarker = {
   tone: 'warning' | 'danger' | 'info' | 'ok' | 'neutral';
 };
 
-type ReceiptCleanupSuggestion = {
-  key: 'pending' | 'duplicate' | 'photo-missing' | 'missing-payer';
-  title: string;
-  count: number;
-  detail: string;
-  actionLabel: string;
-  receipt: Receipt;
-  tone: 'warning' | 'danger';
-};
-
 type ReceiptConflictItem = {
   receipt: Receipt;
   queueItem?: SyncQueueItem;
   status: string;
   detail: string;
-};
-
-type HistoryReviewItem = ItineraryReceiptDay & {
-  actionLabel: string;
 };
 
 function historyDateLabel(date: string): string {
@@ -94,17 +79,6 @@ function buildReceiptConflictItems(receipts: Receipt[], state: AppState): Receip
   return items.filter((item): item is ReceiptConflictItem => !!item);
 }
 
-function buildHistoryReviewQueue(state: AppState): HistoryReviewItem[] {
-  const itinerary = getItinerary(state);
-  const reconciliation = buildItineraryReceiptReconciliation(state, itinerary);
-  return [...reconciliation.days, ...reconciliation.outside]
-    .filter((item) => item.tone !== 'ok')
-    .map((item) => ({
-      ...item,
-      actionLabel: item.receiptCount > 0 ? 'Show receipts' : 'Show empty day',
-    }));
-}
-
 function receiptHealthMarkers(
   receipt: Receipt,
   state: AppState,
@@ -121,57 +95,6 @@ function receiptHealthMarkers(
   if ((receipt.supabaseId || receipt.notionPageId) && !receipt.sourceId) markers.push({ key: 'cloud-only', label: 'cloud-only', tone: 'info' });
   if (!receipt.supabaseId && !receipt.notionPageId) markers.push({ key: 'local-only', label: 'local-only', tone: 'neutral' });
   return markers;
-}
-
-function buildReceiptCleanupSuggestions(
-  receipts: Receipt[],
-  state: AppState,
-  sourceIdCounts: Record<string, number>,
-  validPersonIds: Set<string>,
-): ReceiptCleanupSuggestion[] {
-  const pending = receipts.filter(isPendingReceipt);
-  const duplicates = receipts.filter((receipt) => !!receipt.sourceId && sourceIdCounts[receipt.sourceId] > 1);
-  const missingPhotos = receipts.filter((receipt) => isReceiptPhotoExpected(receipt) && !safePhotoUrl(receipt.photoUrl, receipt.photoThumb));
-  const missingPayers = receipts.filter((receipt) => !receipt.personId || !validPersonIds.has(receipt.personId));
-  const suggestions: Array<ReceiptCleanupSuggestion | null> = [
-    pending.length ? {
-      key: 'pending',
-      title: 'Pending OCR',
-      count: pending.length,
-      detail: 'Confirm email/OCR draft before it becomes final spending.',
-      actionLabel: 'Confirm pending OCR',
-      receipt: pending[0],
-      tone: 'warning' as const,
-    } : null,
-    duplicates.length ? {
-      key: 'duplicate',
-      title: 'Duplicate SourceID',
-      count: duplicates.length,
-      detail: 'Same import source appears more than once.',
-      actionLabel: 'Open duplicate',
-      receipt: duplicates[0],
-      tone: 'danger' as const,
-    } : null,
-    missingPhotos.length ? {
-      key: 'photo-missing',
-      title: 'Missing photo',
-      count: missingPhotos.length,
-      detail: 'OCR/imported receipt expected a photo but none is stored.',
-      actionLabel: 'Open missing photo',
-      receipt: missingPhotos[0],
-      tone: 'warning' as const,
-    } : null,
-    missingPayers.length ? {
-      key: 'missing-payer',
-      title: 'Missing payer',
-      count: missingPayers.length,
-      detail: 'Receipt needs a traveller before split totals are trustworthy.',
-      actionLabel: 'Open missing payer',
-      receipt: missingPayers[0],
-      tone: 'danger' as const,
-    } : null,
-  ];
-  return suggestions.filter((item): item is ReceiptCleanupSuggestion => !!item);
 }
 
 export function History({
@@ -201,7 +124,6 @@ export function History({
   }, []);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<'all' | CategoryId>('all');
-  const [reviewDateFilter, setReviewDateFilter] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
@@ -217,7 +139,6 @@ export function History({
   const receipts = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tripReceipts
-      .filter((r) => !reviewDateFilter || r.date === reviewDateFilter)
       .filter((r) => category === 'all' || r.category === category)
       .filter((r) => !q || [r.store, r.note, r.itemsText, r.region, r.bookingRef, r.address].some((v) => String(v || '').toLowerCase().includes(q)))
       .sort((a, b) => {
@@ -230,27 +151,16 @@ export function History({
         const timeB = b.time || '00:00';
         return timeB.localeCompare(timeA);
       });
-  }, [tripReceipts, query, category, reviewDateFilter]);
+  }, [tripReceipts, query, category]);
   const groups = receipts.reduce<Record<string, Receipt[]>>((acc, r) => {
     (acc[r.date] ||= []).push(r);
     return acc;
   }, {});
   const pending = tripReceipts.filter((r) => r.store?.startsWith('⏳ '));
   const people = getPersons(state);
-  const validPersonIds = useMemo(() => new Set(people.map((person) => person.id)), [people]);
-  const cleanupSuggestions = useMemo(
-    () => buildReceiptCleanupSuggestions(tripReceipts, state, sourceIdCounts, validPersonIds),
-    [tripReceipts, state, sourceIdCounts, validPersonIds],
-  );
-  const cleanupIssueCount = cleanupSuggestions.reduce((sum, item) => sum + item.count, 0);
   const conflictItems = useMemo(
     () => buildReceiptConflictItems(tripReceipts, state),
     [tripReceipts, state],
-  );
-  const reviewQueue = useMemo(() => buildHistoryReviewQueue(state), [state]);
-  const selectedReviewItem = useMemo(
-    () => reviewQueue.find((item) => item.date === reviewDateFilter),
-    [reviewQueue, reviewDateFilter],
   );
   useEffect(() => {
     const repairReceiptId = takeReceiptRepairIntent();
@@ -303,29 +213,6 @@ export function History({
     } finally {
       setBusy(false);
     }
-  }
-
-  function handleCleanupSuggestion(suggestion: ReceiptCleanupSuggestion) {
-    if (!suggestion.receipt) return;
-    if (suggestion.key === 'pending') {
-      onConfirmPending(suggestion.receipt);
-      return;
-    }
-    onOpen(suggestion.receipt);
-  }
-
-  function handleReviewItem(item: HistoryReviewItem) {
-    setQuery('');
-    setCategory('all');
-    setReviewDateFilter(item.date || null);
-    setStatus(item.receiptCount > 0
-      ? `已篩選 ${item.date}：${item.label}`
-      : `已篩選 ${item.date}：當日未有 receipt。`);
-  }
-
-  function clearReviewFilter() {
-    setReviewDateFilter(null);
-    setStatus('已返回全部紀錄。');
   }
 
   function handleKeepLocal(conflict: ReceiptConflictItem) {
@@ -447,52 +334,6 @@ export function History({
           </button>
         ))}
       </div>
-      {(reviewQueue.length > 0 || cleanupSuggestions.length > 0) && (
-        <section className="history-maintenance-strip card" aria-label="Record review shortcuts">
-          <div className="history-maintenance-head">
-            <AlertTriangle size={16} aria-hidden="true" />
-            <span>Review only when needed</span>
-            <strong>{reviewQueue.length + cleanupIssueCount} checks</strong>
-          </div>
-          <div className="history-maintenance-buttons">
-            {reviewQueue.slice(0, 3).map((item) => (
-              <button
-                key={`${item.date}-${item.label}`}
-                type="button"
-                className={`history-maintenance-pill tone-${item.tone}`}
-                onClick={() => handleReviewItem(item)}
-                aria-label={`${item.actionLabel} ${item.date}`}
-              >
-                <CalendarDays size={13} aria-hidden="true" />
-                <span>{item.day ? `Day ${item.day}` : 'Outside'}</span>
-                <b>{item.label}</b>
-              </button>
-            ))}
-            {cleanupSuggestions.map((suggestion) => (
-              <button
-                key={suggestion.key}
-                type="button"
-                className={`history-maintenance-pill tone-${suggestion.tone}`}
-                onClick={() => handleCleanupSuggestion(suggestion)}
-                aria-label={suggestion.actionLabel}
-              >
-                <AlertTriangle size={13} aria-hidden="true" />
-                <span>{suggestion.title}</span>
-                <b>{suggestion.count}</b>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-      {reviewDateFilter && (
-        <div className="history-review-active card" aria-label="Active itinerary review filter">
-          <span>
-            <strong>{reviewDateFilter}</strong>
-            <small>{selectedReviewItem ? `${selectedReviewItem.label} · ${selectedReviewItem.detail}` : 'Review filter active'}</small>
-          </span>
-          <button type="button" onClick={clearReviewFilter}>All records</button>
-        </div>
-      )}
       {conflictItems.length > 0 && (
         <section className="history-conflict-resolver card" aria-label="Offline conflict resolver">
           <div className="history-conflict-head">
@@ -539,7 +380,7 @@ export function History({
       )}
       {Object.keys(groups).length === 0 && (
         <p className="empty card">
-          {reviewDateFilter ? `${reviewDateFilter} 未有紀錄，請新增或修正當日 receipt。` : '未有紀錄'}
+          未有紀錄
         </p>
       )}
       {Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([date, items], groupIdx) => (

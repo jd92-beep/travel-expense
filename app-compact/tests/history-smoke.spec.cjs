@@ -392,7 +392,7 @@ test('History desktop shell title uses current record-center copy', async ({ pag
   await expect(page.getByRole('heading', { name: 'Expense Archive' })).toHaveCount(0);
 });
 
-test('History guided cleanup suggestions open the right receipt for repair', async ({ page }) => {
+test('History keeps record review shortcut strip removed while row markers remain', async ({ page }) => {
   await page.route('**/secrets.local.js', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/javascript',
@@ -410,20 +410,14 @@ test('History guided cleanup suggestions open the right receipt for repair', asy
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
 
   await expect(page.getByLabel('Receipt cleanup suggestions')).toHaveCount(0);
-  const shortcuts = page.getByLabel('Record review shortcuts');
-  await expect(shortcuts).toBeVisible();
-  await expect(shortcuts).toContainText('Review only when needed');
-  await expect(shortcuts).toContainText('Pending OCR');
-  await expect(shortcuts).toContainText('Duplicate SourceID');
-  await expect(shortcuts).toContainText('Missing photo');
-  await expect(shortcuts).toContainText('Missing payer');
-
-  await shortcuts.getByRole('button', { name: /Open missing payer/ }).click();
-  await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
-  await expect(page.getByLabel('店名 / 項目')).toHaveValue('M7 Missing Payer');
+  await expect(page.getByLabel('Record review shortcuts')).toHaveCount(0);
+  await expect(page.getByText('Review only when needed')).toHaveCount(0);
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Missing Payer' })).toBeVisible();
+  await expect(page.getByLabel('Receipt health markers for M7 Duplicate A')).toContainText('duplicate');
+  await expect(page.getByLabel('Receipt health markers for M7 Photo Missing')).toContainText('photo missing');
 });
 
-test('History itinerary review queue filters receipt gaps by travel day', async ({ page }) => {
+test('History keeps itinerary review shortcuts removed without hiding records', async ({ page }) => {
   await page.route('**/secrets.local.js', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/javascript',
@@ -447,44 +441,22 @@ test('History itinerary review queue filters receipt gaps by travel day', async 
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
 
   await expect(page.getByLabel('Itinerary receipt review queue')).toHaveCount(0);
-  const queue = page.getByLabel('Record review shortcuts');
-  await expect(queue).toBeVisible();
-  await expect(queue).toContainText('Review only when needed');
-  await expect(queue).toContainText('No receipts');
-  await expect(queue).toContainText('High receipt count');
-  await expect(queue).toContainText('Outside itinerary');
-  await expect(page.locator('body')).not.toContainText(/secret_|providerToken|FAKE_/i);
-
-  const metrics = await queue.evaluate((node) => {
-    const card = node.getBoundingClientRect();
-    const items = Array.from(node.querySelectorAll('.history-maintenance-pill')).map((item) => {
-      const rect = item.getBoundingClientRect();
-      return { width: Math.round(rect.width), top: Math.round(rect.top) };
-    });
-    return {
-      scrollWidth: document.documentElement.scrollWidth,
-      cardWidth: Math.round(card.width),
-      items,
-    };
-  });
-  expect(metrics.scrollWidth).toBe(390);
-  expect(metrics.cardWidth).toBeLessThanOrEqual(390);
-  expect(metrics.items.length).toBeGreaterThanOrEqual(3);
-
-  await queue.getByRole('button', { name: /Show receipts 2026-05-09/ }).click();
-  await expect(page.getByLabel('Active itinerary review filter')).toContainText('2026-05-09');
-  await expect(page.locator('.receipt-row')).toHaveCount(5);
-  await expect(page.locator('.receipt-row').filter({ hasText: 'Kyoto Market' })).toBeVisible();
-  await expect(page.locator('.receipt-row').filter({ hasText: 'Outside Itinerary Taxi' })).toHaveCount(0);
-
-  await queue.getByRole('button', { name: /Show empty day 2026-05-08/ }).click();
-  await expect(page.getByLabel('Active itinerary review filter')).toContainText('2026-05-08');
-  await expect(page.locator('.receipt-row')).toHaveCount(0);
-  await expect(page.getByText('2026-05-08 未有紀錄，請新增或修正當日 receipt。')).toBeVisible();
-
-  await page.getByRole('button', { name: 'All records' }).click();
+  await expect(page.getByLabel('Record review shortcuts')).toHaveCount(0);
   await expect(page.getByLabel('Active itinerary review filter')).toHaveCount(0);
+  await expect(page.getByText('Review only when needed')).toHaveCount(0);
+  await expect(page.getByText('No receipts')).toHaveCount(0);
+  await expect(page.getByText('High receipt count')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText(/secret_|providerToken|FAKE_/i);
   await expect(page.locator('.receipt-row')).toHaveCount(7);
+  await expect(page.locator('.receipt-row').filter({ hasText: 'Kyoto Market' })).toBeVisible();
+  await expect(page.locator('.receipt-row').filter({ hasText: 'Outside Itinerary Taxi' })).toBeVisible();
+
+  const metrics = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    shortcutCount: document.querySelectorAll('.history-maintenance-strip').length,
+  }));
+  expect(metrics.scrollWidth).toBe(390);
+  expect(metrics.shortcutCount).toBe(0);
 });
 
 test('History offline conflict resolver reviews and resolves local/cloud receipt conflicts safely', async ({ page }) => {
