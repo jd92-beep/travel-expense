@@ -564,6 +564,53 @@ function buildSyncReadinessDryRun(
   };
 }
 
+function buildTripScopeAudit(state: AppState, trip: TripProfile) {
+  const receipts = Array.isArray(state.receipts) ? state.receipts : [];
+  const scopedReceipts = scopedReceiptsForTrip(state, trip);
+  const hasMultipleTrips = (state.trips || []).length > 1;
+  const hasTripDates = !!trip.startDate && !!trip.endDate && trip.endDate >= trip.startDate;
+  const inDateWindow = (receipt: Receipt) => (
+    !receipt.date || !hasTripDates || (receipt.date >= trip.startDate && receipt.date <= trip.endDate)
+  );
+  const outOfRange = scopedReceipts.filter((receipt) => !inDateWindow(receipt));
+  const autoLinked = scopedReceipts.filter((receipt) => receipt.tripLinkSource && receipt.tripLinkSource !== 'explicit');
+  const otherTrip = receipts.filter((receipt) => receipt.tripId && receipt.tripId !== trip.id);
+  const issueCount = outOfRange.length + (hasMultipleTrips ? autoLinked.length : 0);
+  return {
+    tone: issueCount ? 'warning' : 'ok',
+    statusLabel: issueCount ? `${issueCount} scope checks` : 'Scope ready',
+    helper: hasTripDates
+      ? `${trip.startDate} to ${trip.endDate} · current-trip export/sync only`
+      : 'Trip dates are incomplete; export still stays current-trip scoped.',
+    items: [
+      {
+        key: 'included',
+        title: 'Included',
+        value: `${scopedReceipts.length} receipt${scopedReceipts.length === 1 ? '' : 's'}`,
+        detail: 'Backup/share/sync scope',
+      },
+      {
+        key: 'date',
+        title: 'Date window',
+        value: outOfRange.length ? `${outOfRange.length} outside` : 'Clean',
+        detail: hasTripDates ? `${trip.startDate} to ${trip.endDate}` : 'Trip dates missing',
+      },
+      {
+        key: 'unlinked',
+        title: 'Unlinked',
+        value: autoLinked.length ? `${autoLinked.length} auto-linked` : 'None',
+        detail: hasMultipleTrips ? (autoLinked.length ? 'Review trip link' : 'No auto links') : 'Single-trip fallback',
+      },
+      {
+        key: 'other',
+        title: 'Other trips',
+        value: otherTrip.length ? `${otherTrip.length} excluded` : 'None',
+        detail: 'Not exported here',
+      },
+    ],
+  };
+}
+
 export function Settings({
   state,
   setState,
@@ -715,6 +762,7 @@ export function Settings({
   const tripDoctor = compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope);
   const postTripArchive = buildPostTripArchiveChecklist(state, currentTrip, persons, settlement);
   const syncReadiness = buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope);
+  const tripScopeAudit = buildTripScopeAudit(state, currentTrip);
 
   // Local state for Trip Manager
   const [managerTripId, setManagerTripId] = useState(currentTrip.id);
@@ -1703,6 +1751,35 @@ export function Settings({
             <button type="button" onClick={openPostTripCleanupPreview}>
               <RotateCcw size={14} />
               <span>Safe cleanup</span>
+            </button>
+          </div>
+        </section>
+      </GlassCard>
+
+      <GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${tripScopeAudit.tone}`}>
+        <section role="region" aria-label="Trip scope audit">
+          <div className="settings-trip-doctor-head">
+            <span><ShieldCheck size={16} /> Trip Scope Audit</span>
+            <strong>{tripScopeAudit.statusLabel}</strong>
+          </div>
+          <p className="settings-post-trip-helper">{tripScopeAudit.helper}</p>
+          <div className="settings-trip-doctor-grid">
+            {tripScopeAudit.items.map((item) => (
+              <div className="settings-trip-doctor-item" key={item.key}>
+                <span>{item.title}</span>
+                <strong>{item.value}</strong>
+                <small>{item.detail}</small>
+              </div>
+            ))}
+          </div>
+          <div className="settings-trip-doctor-actions settings-sync-dry-run-actions">
+            <button type="button" onClick={() => changeTab?.('history')}>
+              <Copy size={14} />
+              <span>Review records</span>
+            </button>
+            <button type="button" onClick={() => openSettingsPanel('settings-data')}>
+              <ShieldCheck size={14} />
+              <span>Data safety</span>
             </button>
           </div>
         </section>

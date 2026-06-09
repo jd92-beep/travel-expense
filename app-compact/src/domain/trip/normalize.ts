@@ -153,6 +153,8 @@ export function scopedReceiptsForTrip(state: AppState, trip: TripProfile = activ
 
 export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: { preserveUpdatedAt?: boolean } = {}): Receipt {
   const trips = Array.isArray(state.trips) && state.trips.length ? state.trips : [];
+  const originalTripId = receipt.tripId;
+  let tripLinkSource: Receipt['tripLinkSource'] = receipt.tripLinkSource || (originalTripId ? 'explicit' : 'fallback-auto');
   
   // 智能配對重校對：
   // 優先看日期是否能完美落入某個 active 旅程中。
@@ -161,6 +163,7 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   let trip: TripProfile | undefined;
   if (receipt.date) {
     trip = trips.find((t) => receipt.date >= t.startDate && receipt.date <= t.endDate && !t.archived);
+    if (trip && !originalTripId) tripLinkSource = 'date-auto';
   }
   
   // 增加 Prep-phase 大額預付項目智能歸位邏輯（升級版：覆蓋所有行前預付類別）：
@@ -170,12 +173,14 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
     const isDefaultOrEmptyTripId = !receipt.tripId || receipt.tripId === 'trip_default' || receipt.tripId === 'default' || !trips.some(t => t.id === receipt.tripId && !t.archived);
     if (isBeforeTripEnd && isDefaultOrEmptyTripId && active) {
       trip = active;
+      if (!originalTripId || originalTripId === 'trip_default' || originalTripId === 'default') tripLinkSource = 'prep-auto';
     }
   }
 
   // 如果日期沒配上，才去看 receipt.tripId
   if (!trip && receipt.tripId) {
     trip = trips.find((t) => t.id === receipt.tripId && !t.archived);
+    if (trip && !receipt.tripLinkSource) tripLinkSource = 'explicit';
   }
 
   // 還是找不到就 fallback 到 activeTrip
@@ -211,6 +216,7 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   return {
     ...receipt,
     tripId: trip.id,
+    tripLinkSource,
     tripVersion: receipt.tripVersion || trip.version,
     tripDayId: day?.dayId || day?.id || receipt.tripDayId,
     currency,

@@ -904,6 +904,139 @@ test('Settings sync readiness dry run summarizes offline queue without provider 
   expect(brokerCalls).toBe(0);
 });
 
+test('Settings trip scope audit flags active trip boundaries without provider calls', async ({ page }) => {
+  let brokerCalls = 0;
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/**', async (route) => {
+    brokerCalls += 1;
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: 'broker should not be called by trip scope audit' }),
+    });
+  });
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      activeTripId: 'trip_scope_audit',
+      trips: [{
+        id: 'trip_scope_audit',
+        name: 'Scope Audit Trip',
+        destinationSummary: 'Seoul, Korea',
+        startDate: '2026-06-01',
+        endDate: '2026-06-03',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'KRW'],
+        timezones: ['Asia/Seoul'],
+        version: 1,
+        active: true,
+        itinerary: [{ date: '2026-06-01', day: 1, region: 'Seoul', spots: [] }],
+        createdAt: 1,
+        updatedAt: 1,
+      }, {
+        id: 'trip_scope_other',
+        name: 'Other Scope Trip',
+        destinationSummary: 'Other City',
+        startDate: '2026-07-01',
+        endDate: '2026-07-03',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: false,
+        itinerary: [{ date: '2026-07-01', day: 1, region: 'Other', spots: [] }],
+        createdAt: 2,
+        updatedAt: 2,
+      }],
+      receipts: [{
+        id: 'scope_in_range',
+        store: 'Scope Lunch',
+        total: 12000,
+        date: '2026-06-02',
+        category: 'food',
+        payment: 'cash',
+        tripId: 'trip_scope_audit',
+        sourceId: 'scope-source-should-not-render',
+        notionPageId: 'scope-page-should-not-render',
+        createdAt: 1,
+      }, {
+        id: 'scope_out_of_range',
+        store: 'Scope Early Train',
+        total: 30000,
+        date: '2026-05-29',
+        category: 'transport',
+        payment: 'cash',
+        tripId: 'trip_scope_audit',
+        supabaseId: '22222222-2222-4222-8222-222222222222',
+        createdAt: 2,
+      }, {
+        id: 'scope_unlinked',
+        store: 'Scope Unlinked Cafe',
+        total: 9000,
+        date: '2026-06-02',
+        category: 'food',
+        payment: 'cash',
+        sourceId: 'unlinked-source-should-not-render',
+        createdAt: 3,
+      }, {
+        id: 'scope_other_trip',
+        store: 'Scope Other Hotel',
+        total: 80000,
+        date: '2026-07-01',
+        category: 'hotel',
+        payment: 'card',
+        tripId: 'trip_scope_other',
+        notionPageId: 'other-trip-page-should-not-render',
+        createdAt: 4,
+      }],
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expectSettingsReady(page);
+
+  const audit = page.getByLabel('Trip scope audit');
+  await expect(audit).toBeVisible();
+  await expect(audit).toContainText('Trip Scope Audit');
+  await expect(audit).toContainText('2 scope checks');
+  await expect(audit).toContainText('2026-06-01 to 2026-06-03');
+  await expect(audit).toContainText('Included');
+  await expect(audit).toContainText('3 receipts');
+  await expect(audit).toContainText('Backup/share/sync scope');
+  await expect(audit).toContainText('Date window');
+  await expect(audit).toContainText('1 outside');
+  await expect(audit).toContainText('Unlinked');
+  await expect(audit).toContainText('1 auto-linked');
+  await expect(audit).toContainText('Review trip link');
+  await expect(audit).toContainText('Other trips');
+  await expect(audit).toContainText('1 excluded');
+  await expect(audit).toContainText('Not exported here');
+  await expect(audit).not.toContainText('scope-source-should-not-render');
+  await expect(audit).not.toContainText('scope-page-should-not-render');
+  await expect(audit).not.toContainText('22222222-2222-4222-8222-222222222222');
+  await expect(audit).not.toContainText('unlinked-source-should-not-render');
+  await expect(audit).not.toContainText('other-trip-page-should-not-render');
+  expect(brokerCalls).toBe(0);
+
+  await audit.getByRole('button', { name: /Review records/ }).click();
+  await expect(page).toHaveURL(/#history/);
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await page.getByRole('button', { name: /設定/ }).click();
+  await expectSettingsReady(page);
+  await page.getByLabel('Trip scope audit').getByRole('button', { name: /Data safety/ }).click();
+  await expect(page.locator('[aria-controls="settings-data-panel"]')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#settings-data-panel')).toBeVisible();
+  expect(brokerCalls).toBe(0);
+});
+
 test('Settings backup restore preview can be cancelled before mutating local state', async ({ page }) => {
   const restorePath = path.join('/tmp', 'travel-expense-preview-cancel-restore.json');
   fs.writeFileSync(restorePath, JSON.stringify({

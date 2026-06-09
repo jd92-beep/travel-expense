@@ -75,6 +75,7 @@ export interface Receipt {
   source?: string;
   sourceId?: string;
   tripId?: string;
+  tripLinkSource?: 'explicit' | 'date-auto' | 'prep-auto' | 'fallback-auto';
   tripVersion?: number;
   tripDayId?: string;
   spotId?: string;
