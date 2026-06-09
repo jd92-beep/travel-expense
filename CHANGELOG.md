@@ -2,6 +2,10 @@
 
 ## 2026-06-09
 
+- Further simplified the compact Home/Dashboard screen by removing the Today Situation `預算分析` and `行程時間線` actions, the `Local AI Coach` panel, and the `預算控制` accordion.
+- Repacked the compact Home `今日行程` card into denser itinerary-style rows that show time, icon, place, note/address, city/type context, and matched receipt or map action without taking over the phone screen.
+- Expanded compact Home `Recent Expenses` from 3 to 6 visible records and changed the rows to a tighter mobile layout with store/category/date/photo marker and JPY/HKD amounts.
+- Deployed the compact Home information-density build to Vercel production as `dpl_BfhqqyhVNaUi6fSCfKEi9Dw9DhUa`; `npm run smoke:deploy-live` passed for commit `b69887e` with asset hash `366bc6374213ab04`.
 - Simplified the compact Home/Dashboard screen by removing `Travel-day control`, `Itinerary Receipt Match`, `Trip Snapshot`, `Departure Checklist`, `Day-end Closeout`, and the bottom `旅程提醒` accordion from Home, plus their Dashboard-only derived state/imports.
 - Kept the shared travel-day and itinerary/receipt helper logic available for Timeline and Records/History, so related non-Home workflows are not removed accidentally.
 - Deployed the compact Home simplification build to Vercel production as `dpl_GdfqimEjDaiC6mYCxB6v4c1rAKHX`; `npm run smoke:deploy-live` passed for commit `a1d2fe2` with asset hash `1776760a3f776a73`.
