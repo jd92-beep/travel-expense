@@ -17,22 +17,17 @@ import {
   ShoppingBag,
   Bath,
   Settings as GearIcon,
-  Bell,
   Compass,
   BarChart3,
   MoreHorizontal,
   Camera,
   Wallet,
-  Sparkles,
-  ClipboardList,
-  Copy,
-  Check
+  Sparkles
 } from 'lucide-react';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { AnimatedNumber, GlassCard, Reveal } from '../components/ui';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
-import { Switch } from '../components/ui/switch';
 import {
   categoryById,
   displayStore,
@@ -54,7 +49,6 @@ import { activeTrip, createTripProfile, scopedReceiptsForTrip } from '../domain/
 import type { AppState, ItinerarySpot, Receipt, SyncQueueItem, TabId } from '../lib/types';
 import { brokerAiJson, redactedError } from '../lib/credentialBroker';
 import { DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
-import { buildDayReadinessScores, buildItineraryReceiptReconciliation, buildTravelDayWidgets } from '../lib/travelDay';
 
 function displayDateRange(startDate: string, endDate: string) {
   const fmtDate = (date: string) => {
@@ -63,12 +57,6 @@ function displayDateRange(startDate: string, endDate: string) {
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
   };
   return `${fmtDate(startDate)} – ${fmtDate(endDate)}`;
-}
-
-function weekdayLabel(date: string) {
-  const parsed = new Date(`${date}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return date;
-  return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(parsed);
 }
 
 function chineseDateLabel(date: string) {
@@ -162,16 +150,10 @@ export function Dashboard({
   const [sheet, setSheet] = useState<{ kind: 'day-receipts' } | { kind: 'spot'; spot: ItinerarySpot } | null>(null);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
   const [isBudgetSettingsOpen, setIsBudgetSettingsOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [assistantQuestion, setAssistantQuestion] = useState('今日應該點樣控制預算？');
   const [assistantStatus, setAssistantStatus] = useState<'idle' | 'loading' | 'ready' | 'quota' | 'error'>('idle');
   const [assistantAnswer, setAssistantAnswer] = useState<ReturnType<typeof normalizeAssistantAnswer> | null>(null);
   const [assistantError, setAssistantError] = useState('');
-  const [snapshotStatus, setSnapshotStatus] = useState<'idle' | 'copied' | 'fallback'>('idle');
-
-  // iOS 開關狀態
-  const [dailyReminder, setDailyReminder] = useState(true);
-  const [lowBudgetAlert, setLowBudgetAlert] = useState(true);
 
   // Dropdown & Wizard States
   const [isTripDropdownOpen, setIsTripDropdownOpen] = useState(false);
@@ -314,21 +296,6 @@ export function Dashboard({
   const today = todayForReceipts(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
 
-  const tripCurrencySymbol = (() => {
-    switch (resolvedTripCurrency.toUpperCase()) {
-      case 'JPY': return '¥';
-      case 'HKD': return 'HK$';
-      case 'USD': return '$';
-      case 'EUR': return '€';
-      case 'TWD': return 'NT$';
-      case 'KRW': return '₩';
-      case 'GBP': return '£';
-      case 'CNY': return '¥';
-      case 'THB': return '฿';
-      default: return resolvedTripCurrency + ' ';
-    }
-  })();
-
   // 統一口徑與過濾邏輯：
   // 總消費額永遠包含所有項目，確保預算使用比例不會因圖表篩選而被低估。
   // statsIncludeTransportLodging 只影響今日/日均與統計圖表的大額項目篩選。
@@ -389,101 +356,6 @@ export function Dashboard({
   const coachWeatherText = weatherSensitive
     ? `先刷新 ${coachWeatherRegion} 天氣，戶外/交通多要預雨風。`
     : `先睇 ${coachWeatherRegion} 天氣 freshness，再出門。`;
-  const travelDayWidgets = buildTravelDayWidgets(state, itinerary);
-  const dayReadinessScores = buildDayReadinessScores(state, itinerary);
-  const receiptReconciliation = buildItineraryReceiptReconciliation(state, itinerary);
-  const receiptReviewDays = [...receiptReconciliation.days, ...receiptReconciliation.outside]
-    .filter((item) => item.tone !== 'ok')
-    .slice(0, 4);
-  const receiptReviewPreview = receiptReviewDays.length ? receiptReviewDays : receiptReconciliation.days.slice(0, 2);
-  const activeReadiness = dayReadinessScores.find((item) => item.date === displayDayDate) || dayReadinessScores[0];
-  const snapshotIssues = (activeReadiness?.issues || []).filter((issue) => issue !== 'Ready').slice(0, 3);
-  const transitWidget = travelDayWidgets.find((widget) => widget.kind === 'transit');
-  const receiptWidget = travelDayWidgets.find((widget) => widget.kind === 'receipt');
-  const weatherWidget = travelDayWidgets.find((widget) => widget.kind === 'weather');
-  const bookingWidget = travelDayWidgets.find((widget) => widget.kind === 'booking');
-  const allDaySpots = day?.spots || [];
-  const outdoorSpot = allDaySpots.find((spot) => /ticket|localtour|sightseeing|other/i.test(spot.type) || /outdoor|park|garden|temple|shrine|山|海|戶外|寺|神社|城/i.test(`${spot.name} ${spot.note || ''} ${spot.address || ''}`));
-  const transportSpot = allDaySpots.find((spot) => /transport/i.test(spot.type));
-  const weatherSignal = `${weatherWidget?.value || ''} ${weatherWidget?.detail || ''}`.toLowerCase();
-  const bookingSignal = `${bookingWidget?.value || ''} ${bookingWidget?.detail || ''}`.toLowerCase();
-  const receiptSignal = `${receiptWidget?.value || ''} ${receiptWidget?.detail || ''}`.toLowerCase();
-  const departureChecklist = [
-    {
-      label: 'Weather kit',
-      value: weatherSignal.includes('stale') ? 'Refresh first' : /rain|雨|mm/.test(weatherSignal) ? '雨具 / Umbrella' : /wind|風/.test(weatherSignal) ? 'Wind layer' : 'Weather checked',
-      detail: weatherWidget ? `${weatherWidget.value} · ${weatherWidget.detail}` : 'Open Weather before leaving',
-    },
-    {
-      label: 'Route kit',
-      value: transitWidget?.value === 'Route stale' ? 'Offline map' : transportSpot ? 'IC / ticket ready' : 'Route ready',
-      detail: transitWidget ? `${transitWidget.value} · ${transitWidget.detail}` : 'Timeline has no next stop yet',
-    },
-    {
-      label: 'Itinerary type',
-      value: outdoorSpot ? 'Outdoor layer' : 'Light pack',
-      detail: outdoorSpot ? `${outdoorSpot.name} · ${outdoorSpot.time || '--:--'}` : 'Mostly indoor / food stops',
-    },
-    {
-      label: 'Booking check',
-      value: bookingWidget?.value === 'Booking stale' ? 'Recheck booking' : bookingSignal.includes('no booking') ? 'ID / cash' : 'Ref ready',
-      detail: bookingWidget ? `${bookingWidget.value} · ${bookingWidget.detail}` : 'No booking signal',
-    },
-    {
-      label: 'Receipt habit',
-      value: snapshotIssues.some((issue) => /receipt|cleanup/i.test(issue)) || /補記|gap|cleanup/.test(receiptSignal) ? 'Fix before moving' : 'Record ready',
-      detail: receiptWidget ? `${receiptWidget.value} · ${receiptWidget.detail}` : 'No receipt signal',
-    },
-  ];
-  const nextReadiness = dayReadinessScores.find((item) => (item.day || 0) > currentDayNumber)
-    || dayReadinessScores.find((item) => item.date > displayDayDate);
-  const receiptNeedsCloseout = snapshotIssues.some((issue) => /receipt|cleanup/i.test(issue)) || /補記|gap|cleanup/.test(receiptSignal);
-  const dailyOverBudget = todayBudgetPct > 100;
-  const closeoutItems = [
-    {
-      label: 'Missing receipts',
-      value: receiptNeedsCloseout ? 'Close gaps' : 'All recorded',
-      detail: receiptWidget ? `${receiptWidget.value} · ${receiptWidget.detail}` : `${todayReceipts.length} receipt${todayReceipts.length === 1 ? '' : 's'} today`,
-    },
-    {
-      label: 'Budget note',
-      value: dailyOverBudget ? `Daily ${Math.round(todayBudgetPct)}%` : forecastDeltaHkd > 0 ? 'Trip risk' : 'Within pace',
-      detail: dailyOverBudget
-        ? `今日超出每日預算 · 先補原因`
-        : forecastDeltaHkd > 0
-          ? `預計超支 HK$ ${fmt(forecastDeltaHkd)}`
-          : `預計尚餘 HK$ ${fmt(Math.abs(forecastDeltaHkd))}`,
-    },
-    {
-      label: 'Tomorrow readiness',
-      value: nextReadiness ? `Day ${nextReadiness.day || '-'} · ${nextReadiness.score}%` : 'Last day',
-      detail: nextReadiness ? `${nextReadiness.label} · ${nextReadiness.region} · ${nextReadiness.detail}` : '完成後匯出 backup / 檢查同步',
-    },
-    {
-      label: 'Cleanup action',
-      value: snapshotIssues.length ? `${snapshotIssues.length} open` : 'Ready to close',
-      detail: snapshotIssues.length ? snapshotIssues.join(' · ') : '今晚無明顯阻塞，可以同步/備份',
-    },
-  ];
-  const snapshotText = [
-    `${trip.name} · Day ${currentDayNumber}/${length}`,
-    `Dates: ${displayDateRange(trip.startDate, trip.endDate)}`,
-    `Budget left: HK$ ${fmt(remainingBudgetHkd)} · daily burn HK$ ${fmt(dailyBurnHkd)}`,
-    `Readiness: ${activeReadiness?.score ?? 0}% ${activeReadiness?.label || 'Review'}`,
-    `Next: ${transitWidget?.value || '--'} · ${transitWidget?.detail || 'No next stop'}`,
-    `Receipts: ${receiptWidget?.value || `${todayReceipts.length} today`} · ${tripReceipts.length} trip records`,
-    `Watch: ${snapshotIssues.length ? snapshotIssues.join(', ') : 'All key signals ready'}`,
-  ].join('\n');
-
-  const handleCopySnapshot = async () => {
-    try {
-      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
-      await navigator.clipboard.writeText(snapshotText);
-      setSnapshotStatus('copied');
-    } catch {
-      setSnapshotStatus('fallback');
-    }
-  };
 
   const handleBrokerAssistant = async () => {
     setAssistantStatus('loading');
@@ -810,215 +682,7 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
       </GlassCard>
       </Reveal>
 
-      {/* 2.65 Travel-day widgets */}
-      <Reveal className="dashboard-reveal" delay={0.065}>
-      <GlassCard as="div" className="travel-day-panel dashboard-travel-day-panel relative overflow-hidden z-10">
-        <div role="region" aria-label="Travel day widgets">
-        <div className="travel-day-panel-head">
-          <span><Compass size={15} /> Travel-day control</span>
-          <button type="button" className="compact-touch-action" onClick={() => onTab('timeline')}>Timeline</button>
-        </div>
-        <div className="travel-day-widget-grid">
-          {travelDayWidgets.map((widget) => (
-            <article className={`travel-day-widget kind-${widget.kind}`} key={widget.kind}>
-              <span>{widget.label}</span>
-              <strong>{widget.value}</strong>
-              <small>{widget.detail}</small>
-            </article>
-          ))}
-        </div>
-        <div className="day-readiness-strip" role="region" aria-label="Day readiness scores">
-          <div className="day-readiness-title">
-            <span>Day readiness</span>
-            <b>{dayReadinessScores[0]?.score ?? 0}%</b>
-          </div>
-          <div className="day-readiness-list">
-            {dayReadinessScores.map((item) => (
-              <article className={`day-readiness-card tone-${item.tone}`} key={`${item.date || 'empty'}-${item.day}`}>
-                <span>Day {item.day || '-'}</span>
-                <strong>{item.score}%</strong>
-                <em>{item.label}</em>
-                <small>{item.detail}</small>
-              </article>
-            ))}
-          </div>
-        </div>
-        </div>
-      </GlassCard>
-      </Reveal>
-
-      {/* 2.68 Itinerary receipt reconciliation */}
-      <Reveal className="dashboard-reveal" delay={0.066}>
-      <GlassCard as="div" className="dashboard-itinerary-reconciliation relative overflow-hidden z-10">
-        <div role="region" aria-label="Itinerary receipt reconciliation">
-          <div className="dashboard-trip-snapshot-head">
-            <div>
-              <span><ClipboardList size={15} /> Itinerary Receipt Match</span>
-              <h3>每日紀錄對帳</h3>
-            </div>
-            <em>local · no API</em>
-          </div>
-          <div className="dashboard-trip-snapshot-grid dashboard-reconciliation-summary">
-            <article>
-              <span>Missing days</span>
-              <strong>{receiptReconciliation.missingDays}</strong>
-              <small>{receiptReconciliation.gapDays ? `${receiptReconciliation.gapDays} spot-gap day${receiptReconciliation.gapDays === 1 ? '' : 's'}` : `${receiptReconciliation.totalDays} itinerary day${receiptReconciliation.totalDays === 1 ? '' : 's'}`}</small>
-            </article>
-            <article>
-              <span>High count</span>
-              <strong>{receiptReconciliation.highCountDays}</strong>
-              <small>receipt count above itinerary pace</small>
-            </article>
-            <article>
-              <span>Outside itinerary</span>
-              <strong>{receiptReconciliation.outsideDays}</strong>
-              <small>spending dates not in the plan</small>
-            </article>
-            <article>
-              <span>Review</span>
-              <strong>{receiptReconciliation.reviewCount ? `${receiptReconciliation.reviewCount} days` : 'Ready'}</strong>
-              <small>{receiptReconciliation.currency} day-by-day check</small>
-            </article>
-          </div>
-          <div className="dashboard-reconciliation-list">
-            {receiptReviewPreview.map((item) => (
-              <article className={`tone-${item.tone}`} key={`${item.date || 'none'}-${item.label}`}>
-                <span>{item.day ? `Day ${item.day}` : 'Outside'}</span>
-                <strong>{item.label}</strong>
-                <small>{item.date} · {item.region} · {item.receiptCount} receipts · {receiptReconciliation.currency} {fmt(item.amount)}</small>
-                <em>{item.detail}</em>
-              </article>
-            ))}
-          </div>
-          <div className="dashboard-departure-actions dashboard-reconciliation-actions">
-            <button type="button" className="compact-touch-action" onClick={() => onTab('history')}>
-              <NotebookPen size={15} /> Records
-            </button>
-            <button type="button" className="compact-touch-action" onClick={() => onTab('stats')}>
-              <BarChart3 size={15} /> Stats
-            </button>
-            <button type="button" className="compact-touch-action" onClick={() => onTab('timeline')}>
-              <CalendarDays size={15} /> Timeline
-            </button>
-          </div>
-        </div>
-      </GlassCard>
-      </Reveal>
-
-      {/* 2.7 Local Trip Snapshot */}
-      <Reveal className="dashboard-reveal" delay={0.068}>
-      <GlassCard as="div" className="dashboard-trip-snapshot relative overflow-hidden z-10">
-        <div role="region" aria-label="Trip snapshot">
-          <div className="dashboard-trip-snapshot-head">
-            <div>
-              <span><ClipboardList size={15} /> Trip Snapshot</span>
-              <h3>出發快照</h3>
-            </div>
-            <em>local · no API</em>
-          </div>
-          <div className="dashboard-trip-snapshot-grid">
-            <article>
-              <span>Day</span>
-              <strong>{currentDayNumber}/{length}</strong>
-              <small>{weekdayLabel(displayDayDate)}</small>
-            </article>
-            <article>
-              <span>Budget left</span>
-              <strong>HK$ {fmt(remainingBudgetHkd)}</strong>
-              <small>burn HK$ {fmt(dailyBurnHkd)}/day</small>
-            </article>
-            <article>
-              <span>Next</span>
-              <strong>{transitWidget?.value || '--'}</strong>
-              <small>{transitWidget?.detail || 'No next stop'}</small>
-            </article>
-            <article>
-              <span>Watch</span>
-              <strong>{snapshotIssues.length ? `${snapshotIssues.length} items` : 'Ready'}</strong>
-              <small>{snapshotIssues.length ? snapshotIssues.join(' · ') : 'All key signals ready'}</small>
-            </article>
-          </div>
-          <pre className="dashboard-trip-snapshot-copy">{snapshotText}</pre>
-          <div className="dashboard-trip-snapshot-actions">
-            <button type="button" className="compact-touch-action" onClick={handleCopySnapshot}>
-              {snapshotStatus === 'copied' ? <Check size={15} /> : <Copy size={15} />}
-              {snapshotStatus === 'copied' ? 'Copied' : snapshotStatus === 'fallback' ? 'Preview ready' : 'Copy snapshot'}
-            </button>
-            <button type="button" className="compact-touch-action" onClick={() => onTab('timeline')}>Timeline</button>
-            <button type="button" className="compact-touch-action" onClick={() => onTab('history')}>Records</button>
-          </div>
-        </div>
-      </GlassCard>
-      </Reveal>
-
-      {/* 2.8 Departure checklist */}
-      <Reveal className="dashboard-reveal" delay={0.069}>
-      <GlassCard as="div" className="dashboard-departure-checklist relative overflow-hidden z-10">
-        <div role="region" aria-label="Departure checklist">
-          <div className="dashboard-trip-snapshot-head">
-            <div>
-              <span><ClipboardList size={15} /> Departure Checklist</span>
-              <h3>出門前檢查</h3>
-            </div>
-            <em>local · no API</em>
-          </div>
-          <div className="dashboard-trip-snapshot-grid dashboard-departure-grid">
-            {departureChecklist.map((item) => (
-              <article key={item.label}>
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-                <small>{item.detail}</small>
-              </article>
-            ))}
-          </div>
-          <div className="dashboard-departure-actions">
-            <button type="button" className="compact-touch-action" onClick={() => onTab('weather')}>
-              <CloudSun size={15} /> Weather
-            </button>
-            <button type="button" className="compact-touch-action" onClick={() => onTab('timeline')}>
-              <Compass size={15} /> Timeline
-            </button>
-          </div>
-        </div>
-      </GlassCard>
-      </Reveal>
-
-      {/* 2.9 Day-end closeout */}
-      <Reveal className="dashboard-reveal" delay={0.0695}>
-      <GlassCard as="div" className="dashboard-day-end-closeout relative overflow-hidden z-10">
-        <div role="region" aria-label="Day-end closeout">
-          <div className="dashboard-trip-snapshot-head">
-            <div>
-              <span><ClipboardList size={15} /> Day-end Closeout</span>
-              <h3>今晚收工</h3>
-            </div>
-            <em>local · no API</em>
-          </div>
-          <div className="dashboard-trip-snapshot-grid dashboard-closeout-grid">
-            {closeoutItems.map((item) => (
-              <article key={item.label}>
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-                <small>{item.detail}</small>
-              </article>
-            ))}
-          </div>
-          <div className="dashboard-departure-actions dashboard-closeout-actions">
-            <button type="button" className="compact-touch-action" onClick={() => onTab('history')}>
-              <NotebookPen size={15} /> Records
-            </button>
-            <button type="button" className="compact-touch-action" onClick={() => onTab('stats')}>
-              <PieChart size={15} /> Stats
-            </button>
-            <button type="button" className="compact-touch-action" onClick={() => onTab('timeline')}>
-              <CalendarDays size={15} /> Tomorrow
-            </button>
-          </div>
-        </div>
-      </GlassCard>
-      </Reveal>
-
-      {/* 2.10 Broker-backed AI Assistant */}
+      {/* 2.65 Broker-backed AI Assistant */}
       <Reveal className="dashboard-reveal" delay={0.07}>
       <GlassCard as="div" className={`dashboard-broker-assistant status-${assistantStatus} relative overflow-hidden z-10`}>
         <div role="region" aria-label="Broker AI assistant">
@@ -1288,69 +952,9 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
         )}
       </div>
 
-      {/* 6. Notifications 折疊 Accordion */}
-      <div className="bg-white/50 backdrop-blur-md border border-white/60 rounded-[24px] overflow-hidden mb-6 shadow-sm z-10 relative">
-        <button
-          type="button"
-          className="w-full flex items-center justify-between p-4 focus:outline-none"
-          onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#D94132] flex items-center justify-center text-white shadow-sm shrink-0">
-              <Bell size={18} />
-            </div>
-            <div className="flex flex-col text-left">
-              <span className="text-sm font-bold text-slate-800">旅程提醒</span>
-              <span className="text-xs text-slate-500">管理記帳提醒同預算提示</span>
-            </div>
-          </div>
-          <ChevronDown size={20} className={`text-slate-400 transition-transform duration-300 ${isNotificationsOpen ? 'transform rotate-180' : ''}`} />
-        </button>
-        {isNotificationsOpen && (
-          <div className="px-5 pb-5 pt-2 border-t border-dashed border-slate-200/50 flex flex-col gap-4">
-            <div className="rounded-2xl border border-white/50 bg-white/45 p-3 flex items-center justify-between gap-3">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-700">今日記帳狀態</span>
-                <span className="text-[10px] text-slate-400">今日已有 {todayReceipts.length} 筆紀錄</span>
-              </div>
-              <span className="text-xs font-black text-[#D94132]">{tripCurrencySymbol}{fmt(todayTotal)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-700">每日記帳提醒</span>
-                <span className="text-[10px] text-slate-400">每日提示你補齊旅費紀錄</span>
-              </div>
-              <Switch className="dashboard-switch" checked={dailyReminder} onCheckedChange={setDailyReminder} aria-label="每日記帳提醒" />
-            </div>
-            <div className="flex justify-between items-center">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-700">低預算提示</span>
-                <span className="text-[10px] text-slate-400">預算餘額低於 20% 時提醒</span>
-              </div>
-              <Switch className="dashboard-switch" checked={lowBudgetAlert} onCheckedChange={setLowBudgetAlert} aria-label="低預算提示" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                className="rounded-2xl bg-[#D94132] px-3 py-2.5 text-xs font-black text-white shadow-sm active:scale-95 transition"
-                onClick={onManual}
-              >
-                立即記帳
-              </button>
-              <button
-                type="button"
-                className="rounded-2xl border border-white/70 bg-white/70 px-3 py-2.5 text-xs font-black text-[#18395C] shadow-sm active:scale-95 transition"
-                onClick={() => onTab('history')}
-              >
-                查看紀錄
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
       </div>
 
-      {/* 7. 名古屋 2026 和風 Dock Bar (懸浮底欄) */}
+      {/* 6. 名古屋 2026 和風 Dock Bar (懸浮底欄) */}
       <div className="washi-floating-tabbar pointer-events-auto">
         <button
           className="washi-dock-item active"
