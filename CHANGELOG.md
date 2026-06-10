@@ -2,6 +2,8 @@
 
 ## 2026-06-10
 
+- Decluttered compact Stats `預算使用分析`: removed the yellow center dot from the budget compass, removed `Fairness by person` and `Category anomaly`, removed the four summary cards (`圖表統計額`, `共同分帳額`, `私人/代付`, `待轉帳`), and moved `TOP 10 支出` directly under the budget analysis card.
+- Updated Stats smoke coverage to prove the removed cards stay absent, the remaining budget story cards fit in one row on 390px mobile, and `TOP 10 支出` sits below `預算使用分析`; deployed to Vercel production as `dpl_PHVAGw1KXvsUEKGUSo6BEyADKRbd` with live asset hash `9c8c7687429a0251`.
 - Added a compact Weather official-provider router that resolves official sources from itinerary country/region/city and coordinates before private or Open-Meteo fallback.
 - Added direct official Weather adapters for Singapore NEA/data.gov.sg, US NWS, and Canada MSC GeoMet, alongside the existing Japan JMA official adapter. Official data now stays the displayed provider while fallback data only fills missing hourly fields.
 - Added Weather smoke coverage for US NWS, Singapore NEA, and Canada MSC provider selection, plus country-first routing so Canada is not misclassified as US and Korea/Jeju is not misclassified as Japan by coordinate bounds.
