@@ -6,6 +6,7 @@
 - Added the `確認 AI 行程更新` modal with trip name, dates, destination, selected model/source quality, extraction counts, hotels, restaurants, missing fields, assumptions, warnings, and day-by-day lodging/spots before anything is applied.
 - Added `返回修改文字` and `確認並更新行程` actions so users can edit/re-analyze the pasted itinerary or explicitly confirm before the Itinerary and Weather tabs receive updated trip data.
 - Added Settings smoke coverage for an 8-day Jeju itinerary extracted from pasted text, confirming the modal shows Hotel Fine Jeju, Stanford Hotel & Resort Jeju, Day 3 城山日出峰, missing-field warnings, and that confirming updates local itinerary state plus the Timeline tab.
+- Deployed the compact Trip Update AI confirmation modal to Vercel production as `dpl_7fsr8nN2MzWwL1e2Faz6yEoqbZaQ`; `npm run smoke:deploy-live` passed for commit `015165d` with asset hash `0f42ae296e04c912`.
 - Fixed compact Google Gemma 4 31B routing by changing the stored/default model id from `gemma-4-31b` to the exact Google Gemini API id `gemma-4-31b-it`, while keeping the Settings label as `Google Gemma 4 31B`.
 - Updated compact AI routing and shared-contract smoke coverage so scan/voice calls prove `gemma-4-31b-it` is sent to the broker.
 - Hardened Credential Broker source for Mimo v2.5 by using Xiaomi's documented `api-key` header and adding a pay-as-you-go base fallback after Token Plan 404s.
