@@ -28,12 +28,12 @@
 - 所有改動直接 commit 去 `main` (`git push origin main`)，Boss approve 咗一次就係永久。
 
 ### 4. 密碼與 Security 🔐
-- **絕對唔好** 將任何 API Keys (Zhipu, MiniMax, Gemini, Notion token) commit 上 GitHub！Repo 係 public 嘅！
+- **絕對唔好** 將 any API Keys (Zhipu, MiniMax, Gemini, Notion token) commit 上 GitHub！Repo 係 public 嘅！
 - `index.html` 嘅 secrets 會靠 vault 處理，`app-react/` 會經 Credential Broker 處理，跟足現有架構。
 
 ---
 
-## 🛠️ 核心架構與最新升級 (2026-06-02 HKT)
+## 🛠️ 核心架構與最新升級 (2026-06-10 HKT)
 
 ### 0. 📍 React Itinerary Timeline 最新狀態
 - **Spot-index progress**：React `/react/` Itinerary rail 依家跟「目前時間所屬嘅景點位置」推進，而唔係用 24 小時比例硬拉條線。
@@ -58,21 +58,36 @@
 - **Itinerary Overrides 切割**：由於 Notion 屬性限制 2000 字符，用戶的手動調整 (`itineraryOverrides`) 被 JSON 化後，使用 `richTextChunks` 將其切割為多個 1800-char block 儲存在 Notion Rich Text (`__meta_settings__` row) 中，最大支持 **144 KB** 超大容量同步！
 - **合併機制**：同步拉取時，將遠端 settings 與本地 settings 進行 shallow merge，避免覆蓋 Boss 在手機端最新做的 Tweaks。
 
-### 4. 🗑️ 刪除紀錄雙重確認與版面美化 (2026-06-02 新增)
-另一位 AI Agent 幫手做咗超正嘅優化：
+### 4. 🗑️ 刪除紀錄雙重確認與版面美化
 - **雙重確認 Dialog**：喺 React 同 Compact 嘅 `ReceiptEditor.tsx` 入面新增咗刪除確認 Modal，防止 Boss 唔小心揈走重要嘅消費紀錄。
 - **Footer 佈局重組**：重構咗 `.receipt-editor-actions` 嘅 CSS Flex 佈局。將「刪除」擺左邊，而「儲存」同「取消」擺右邊，確保喺 390px 手機寬度下絕對唔會發生按鈕重疊或溢出，排版超級 Professional！
 - **Playwright Test 覆蓋**：`history-smoke.spec.cjs` 已經加咗對應嘅測試用例，確認雙重確認框嘅顯示、取消同確認刪除邏輯 100% 通過！
 
-### 5. 💰 Dashboard ＆ Stats 總消費額修正 (2026-06-01 新增)
+### 5. 💰 Dashboard ＆ Stats 總消費額修正
 - **總消費額解耦**：修正咗 React Dashboard 嘅 `totalIncludeFL` 同 Stats 嘅 `trueTotalHkd`。以前如果熄咗「包括交通/住宿於統計圖表」，總消費額會縮水到日常開支嘅 HK$11,898，令預算環顯示有 HK$6,107 餘額。
 - **現時狀態**：總消費額 (Total Spent) 永遠包含所有項目（包括機票同住宿），以確保與總預算比較時顯示正確嘅超量狀態（>$20,000），而 Toggle 依家只會用嚟過濾圓餅圖、Top 10 同日均開支！
+
+### 6. 📱 Compact App & 氣象/AI/精靈 升級 (2026-06-10 新增)
+另一位 AI Agent 完成咗超大規模嘅優化同修復：
+- **AI 行程更新確認彈窗 (Settings AI Confirmation)**：喺 Compact 貼入長篇行程並按「用已選模型分析」時，依家會即刻彈出一個 `確認 AI 行程更新` Modal。Modal 會清楚列出分析模型、行程天數、酒店/餐廳數量、缺漏欄位、假設與警告等，等 Boss 看清晒先至按 `確認並更新行程`，體驗超順暢！
+- **Mimo / Gemma 路由同 JSON 抽取硬化**：
+  1. Google Gemma 模型 ID 正式對齊官方 API 規格，改用 `google/gemma-4-31b-it`，並全自動將舊有嘅備用設定進行熱遷移。
+  2. Worker 抽取 JSON 邏輯重構，就算 Gemma 喺 JSON 後面吱吱喳喳多加咗廢話，都可以 100% 準確提取物件。
+  3. Mimo 請求路由改用 `api-key` header，並喺 Token 方案失效時自動 fallback 至 pay-as-you-go 基本路徑。
+- **多國官方氣象 Router (Weather JMA/NEA/NWS/MSC)**：
+  1. 氣象系統會依據國家 code/座標定位直接連去日本 JMA、新加坡 NEA、美國 NWS、加拿大 MSC 嘅官方 API。
+  2. 當官方資料缺乏體感/UV/雲量時，先用 WeatherAPI fallback 填補，唔會隨便暴露 key。
+  3. 氣象指標晶片卡片重構為 2x2 grid，徹底解決手機 390px 寬度下 UV/風速/雨量被 `...` 截斷嘅慘劇，UV 排第一位！
+- **新旅程建立精靈 (New Trip Wizard)**： Step 2 新增 +/- 天數調整器，解決時區 off-by-one 扣天數 bug；Step 1 輸入韓國會自動設定 KRW 做主結算貨幣；Step 4 串接 Wikivoyage 免密鑰 API 動態拉取景點建議。
+- **Dashboard ＆ Stats 大瘦身**：
+  1. Dashboard/Home 頁面移除了「打包清單」、「出發倒數」、「AI 教練」等贅餘 widget，大幅提升頁面載入速度與視覺清爽度。
+  2. Stats 頁面預算指南卡片精簡為 used %、每日餘額與 Top 10 支出，清走多餘嘅分帳/代付卡。
 
 ---
 
 ## 🗂 重點檔案地圖
 - `index.html`: Legacy 主程式 (~10,000 行，已全面剔除 Zhipu，升級為 Kimi-first connections/voice/OCR fallback)。
-- `legacy-notion.js`: 由 index.html 抽離的 legacy Notion sync module，要 keep 住 compatible。
+- `legacy-notion.js`: 由 index.html 抽離 the legacy Notion sync module，要 keep 住 compatible。
 - `app-react/`: 新版 React 18 + Vite + TS 專案，已 100% 編譯通過。核心 AI 調用在 `src/lib/ai.ts` 與 `src/lib/credentialBroker.ts`。
 - `email-to-notion.gs`: 後端 Apps Script。已全面更換為 Kimi 接口與 OpenAI 格式 retry，並實現 PropertiesService 查重防重複機制。
 - `workers/credential-broker`: Cloudflare Worker 項目。`wrangler.jsonc` 包含 `KIMI_PROXY_URL` 配置，`src/index.js` 將設備 TTL 縮短至 90 天以硬化安全。
