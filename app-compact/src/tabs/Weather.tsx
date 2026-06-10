@@ -55,7 +55,14 @@ export function Weather({ state }: { state: AppState }) {
   const leadDay = displayItinerary[0];
   const leadRows = leadDay ? rows[leadDay.date] || [] : [];
   const leadSource = leadRows[0];
-  const leadSlot = leadRows.flatMap((row) => row.slots || []).find((slot) => slot.temp != null) || leadRows.flatMap((row) => row.slots || [])[0];
+  const leadForecastDate = leadDay ? (hasEnded ? today : leadDay.date) : today;
+  const leadLiveHour = leadDay ? liveSlotHour(leadForecastDate, normalizedTimezone(leadDay.timezone) || 'Asia/Tokyo') : null;
+  const leadSourceSlots = leadSource?.slots || [];
+  const leadAllSlots = leadRows.flatMap((row) => row.slots || []);
+  const leadSlot = (leadLiveHour != null ? leadSourceSlots.find((slot) => slot.hour === leadLiveHour && slot.temp != null) : undefined)
+    || leadSourceSlots.find((slot) => slot.temp != null)
+    || leadAllSlots.find((slot) => slot.temp != null)
+    || leadAllSlots[0];
   const previewHourlySlots = leadRows.flatMap((row) => row.slots || []).slice(0, 5);
   const previewHourlyFallback: WeatherSlot[] = WEATHER_SLOTS.slice(0, 5).map((hour) => ({ hour, code: 2 }));
   const previewHourly = previewHourlySlots.length ? previewHourlySlots : previewHourlyFallback;
@@ -235,6 +242,16 @@ export function Weather({ state }: { state: AppState }) {
                           </div>
 
                           <div className="weather-metrics">
+                            {hasSunUv && (
+                              <span className="metric-tag sun-tag">
+                                <Sun size={13} className="metric-icon" />
+                                <span className="metric-val">
+                                  {slot.uvIndex != null ? `UV ${formatNumber(slot.uvIndex, '')}` : ''}
+                                  {slot.uvIndex != null && slot.cloudCover != null ? ' · ' : ''}
+                                  {slot.cloudCover != null ? `雲 ${formatNumber(slot.cloudCover, '%')}` : ''}
+                                </span>
+                              </span>
+                            )}
                             {hasRain && (
                               <span className="metric-tag rain-tag">
                                 <CloudRain size={13} className="metric-icon" />
@@ -260,16 +277,6 @@ export function Weather({ state }: { state: AppState }) {
                               <span className="metric-tag humidity-tag">
                                 <Umbrella size={13} className="metric-icon" />
                                 <span className="metric-val">濕度 {formatNumber(slot.humidity, '%')}</span>
-                              </span>
-                            )}
-                            {hasSunUv && (
-                              <span className="metric-tag sun-tag">
-                                <Sun size={13} className="metric-icon" />
-                                <span className="metric-val">
-                                  {slot.uvIndex != null ? `UV ${formatNumber(slot.uvIndex, '')}` : ''}
-                                  {slot.uvIndex != null && slot.cloudCover != null ? ' · ' : ''}
-                                  {slot.cloudCover != null ? `雲 ${formatNumber(slot.cloudCover, '%')}` : ''}
-                                </span>
                               </span>
                             )}
                           </div>

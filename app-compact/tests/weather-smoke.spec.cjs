@@ -14,6 +14,8 @@ function weatherFixture(options = {}) {
   const temp = options.temp ?? 21;
   const feels = options.feels ?? 20;
   const hours = [9, 12, 16, 21];
+  const hourlyTemps = options.hourlyTemps || {};
+  const hourlyFeels = options.hourlyFeels || {};
   const time = [];
   const temperature_2m = [];
   const apparent_temperature = [];
@@ -29,8 +31,8 @@ function weatherFixture(options = {}) {
   for (const date of dates) {
     for (const hour of hours) {
       time.push(`${date}T${String(hour).padStart(2, '0')}:00`);
-      temperature_2m.push(temp);
-      apparent_temperature.push(feels);
+      temperature_2m.push(hourlyTemps[hour] ?? temp);
+      apparent_temperature.push(hourlyFeels[hour] ?? feels);
       weather_code.push(1);
       precipitation_probability.push(18);
       precipitation.push(0.2);
@@ -196,7 +198,7 @@ test('Japan weather shows fallback reason when JMA fails and Open-Meteo succeeds
 });
 
 test('WeatherAPI broker forecast is preferred when broker session is active', async ({ page }) => {
-  const fixed = new Date('2026-04-20T10:00:00+09:00').valueOf();
+  const fixed = new Date('2026-04-20T13:30:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {
     window.__disable_supabase_configured = true;
     const RealDate = Date;
@@ -230,7 +232,7 @@ test('WeatherAPI broker forecast is preferred when broker session is active', as
     brokerPayloads.push(payload);
     await route.fulfill({
       headers: { 'Access-Control-Allow-Origin': 'http://localhost:8903' },
-      json: { ok: true, data: { ...weatherFixture(), source: 'WeatherAPI.com' } },
+      json: { ok: true, data: { ...weatherFixture({ hourlyTemps: { 9: 22, 12: 27, 16: 24, 21: 23 }, hourlyFeels: { 9: 25, 12: 30, 16: 27, 21: 24 } }), source: 'WeatherAPI.com' } },
     });
   });
   await page.route('https://api.open-meteo.com/**', async (route) => {
@@ -246,7 +248,10 @@ test('WeatherAPI broker forecast is preferred when broker session is active', as
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · Live weather');
   await expect(page.locator('.weather-screen')).not.toContainText('WeatherAPI.com');
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
-  await expect(page.getByText('21°C').first()).toBeVisible();
+  await expect(page.locator('.preview-weather-temp strong')).toHaveText('27°C');
+  await expect(page.locator('.preview-weather-temp small')).toContainText('體感 30°C');
+  await expect(page.locator('.weather-slot-detailed.is-live .weather-temp-block').first().locator('.temp-num')).toContainText('27');
+  await expect(page.locator('.weather-slot-detailed.is-live .weather-metrics .metric-tag').first()).toHaveClass(/sun-tag/);
   const accentLineMetrics = await page.locator('.weather-slot-detailed').first().evaluate((node) => {
     const card = node.getBoundingClientRect();
     const header = node.querySelector('.weather-slot-header')?.getBoundingClientRect();
