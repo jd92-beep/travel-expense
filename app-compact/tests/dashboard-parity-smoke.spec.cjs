@@ -91,6 +91,36 @@ test('Dashboard keeps Home simple without travel-day diagnostic cards', async ({
   await expect(page.locator('.today-itinerary-card')).toBeVisible();
 });
 
+test('Dashboard new trip wizard lets users choose trip days on step two', async ({ page }) => {
+  await openDashboard(page, false);
+  await page.locator('.compact-mobile-header').getByRole('button', { name: /Dashboard Test/ }).click();
+  await page.getByRole('button', { name: /建立新旅程/ }).click();
+  await expect(page.getByText('Step 1 of 4')).toBeVisible();
+
+  await page.getByPlaceholder('例如：名古屋櫻花祭 2026').fill('Seoul Spring Trip');
+  await page.getByRole('button', { name: '下一步' }).click();
+  await expect(page.getByText('Step 2 of 4')).toBeVisible();
+
+  const dateInputs = page.locator('input[type="date"]');
+  await expect(dateInputs.nth(0)).toHaveValue('2026-05-08');
+  await expect(dateInputs.nth(1)).toHaveValue('2026-05-14');
+
+  const daySelect = page.getByLabel('選擇旅程日數');
+  await expect(daySelect).toHaveValue('7');
+  await daySelect.selectOption('10');
+  await expect(daySelect).toHaveValue('10');
+  await expect(dateInputs.nth(1)).toHaveValue('2026-05-17');
+  await expect(page.getByText('10 天').last()).toBeVisible();
+
+  await page.getByRole('button', { name: '增加旅程日數' }).click();
+  await expect(daySelect).toHaveValue('11');
+  await expect(dateInputs.nth(1)).toHaveValue('2026-05-18');
+
+  await page.getByRole('button', { name: '減少旅程日數' }).click();
+  await expect(daySelect).toHaveValue('10');
+  await expect(dateInputs.nth(1)).toHaveValue('2026-05-17');
+});
+
 test('Dashboard compact itinerary and recent expenses show denser Home information', async ({ page }) => {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;

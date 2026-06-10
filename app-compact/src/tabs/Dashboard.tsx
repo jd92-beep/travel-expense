@@ -79,6 +79,23 @@ function tripDayNumber(startDate: string, targetDate: string, fallback = 1) {
   return Math.max(1, Math.round((target.getTime() - start.getTime()) / 86_400_000) + 1);
 }
 
+function addDaysToIsoDate(date: string, daysToAdd: number) {
+  const [year, month, day] = date.split('-').map(Number);
+  if (!year || !month || !day) return date;
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(parsed.getTime())) return date;
+  parsed.setUTCDate(parsed.getUTCDate() + daysToAdd);
+  return [
+    parsed.getUTCFullYear(),
+    String(parsed.getUTCMonth() + 1).padStart(2, '0'),
+    String(parsed.getUTCDate()).padStart(2, '0')
+  ].join('-');
+}
+
+function normalizeTripDurationDays(value: number) {
+  return Math.max(1, Math.min(60, Math.round(value) || 1));
+}
+
 function isQuotaHardStop(error: unknown): boolean {
   return /(?:\b429\b|quota|daily limit|rate limit|too many requests|用量|配額|限額)/i.test(redactedError(error));
 }
@@ -209,6 +226,27 @@ export function Dashboard({
     const diff = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
     return diff;
   }, [newTripStartDate, newTripEndDate]);
+  const selectedTripDuration = calculatedDuration || 7;
+  const durationOptions = useMemo(() => {
+    const base = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 21, 30];
+    return base.includes(selectedTripDuration)
+      ? base
+      : [...base, selectedTripDuration].sort((a, b) => a - b);
+  }, [selectedTripDuration]);
+
+  const applyTripDuration = (days: number, baseDate = newTripStartDate) => {
+    const duration = normalizeTripDurationDays(days);
+    const start = baseDate || new Date().toISOString().slice(0, 10);
+    setNewTripStartDate(start);
+    setNewTripEndDate(addDaysToIsoDate(start, duration - 1));
+  };
+
+  const handleStartDateChange = (value: string) => {
+    setNewTripStartDate(value);
+    if (value) {
+      setNewTripEndDate(addDaysToIsoDate(value, normalizeTripDurationDays(selectedTripDuration) - 1));
+    }
+  };
 
   const handleSwitchTrip = (tripId: string) => {
     const target = state.trips?.find((t) => t.id === tripId && !t.archived);
@@ -1018,9 +1056,42 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
                     <input
                       type="date"
                       value={newTripStartDate}
-                      onChange={(e) => setNewTripStartDate(e.target.value)}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all"
                     />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500">旅程日數</label>
+                    <div className="grid grid-cols-[44px_minmax(0,1fr)_44px] gap-2">
+                      <button
+                        type="button"
+                        aria-label="減少旅程日數"
+                        onClick={() => applyTripDuration(selectedTripDuration - 1)}
+                        className="h-11 rounded-xl border border-slate-200 bg-white text-lg font-black text-[#6D5643] shadow-sm transition active:scale-95 disabled:opacity-40"
+                        disabled={selectedTripDuration <= 1}
+                      >
+                        −
+                      </button>
+                      <select
+                        aria-label="選擇旅程日數"
+                        value={selectedTripDuration}
+                        onChange={(e) => applyTripDuration(Number(e.target.value))}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm font-bold text-slate-700 focus:outline-none transition-all cursor-pointer"
+                      >
+                        {durationOptions.map((days) => (
+                          <option value={days} key={days}>{days} 天</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        aria-label="增加旅程日數"
+                        onClick={() => applyTripDuration(selectedTripDuration + 1)}
+                        className="h-11 rounded-xl border border-slate-200 bg-white text-lg font-black text-[#6D5643] shadow-sm transition active:scale-95 disabled:opacity-40"
+                        disabled={selectedTripDuration >= 60}
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-slate-500">結束日期</label>
