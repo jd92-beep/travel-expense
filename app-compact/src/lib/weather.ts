@@ -39,6 +39,40 @@ export interface DayWeather {
   fallbackReason?: string;
 }
 
+type WeatherData = {
+  hourly?: Record<string, unknown[]>;
+  current?: Record<string, unknown>;
+};
+
+type WeatherFetchResult = {
+  data: WeatherData;
+  source: string;
+  provider: string;
+  cached: boolean;
+  fetchedAt: number;
+  fallbackReason?: string;
+};
+
+type JmaLocationProfile = {
+  label: string;
+  matcher: RegExp;
+  officeCode: string;
+  stationCode: string;
+  lat: number;
+  lon: number;
+};
+
+const JMA_LOCATION_PROFILES: JmaLocationProfile[] = [
+  { label: '名古屋', matcher: /名古屋|Nagoya|常滑|Tokoname|中部国際|Chubu/i, officeCode: '230000', stationCode: '51106', lat: 35.1667, lon: 136.965 },
+  { label: '高山', matcher: /高山|Takayama|白川|Shirakawa|Gifu/i, officeCode: '210000', stationCode: '52146', lat: 36.155, lon: 137.2533 },
+  { label: '長野', matcher: /長野|Nagano|上高地|Kamikochi|松本|Matsumoto/i, officeCode: '200000', stationCode: '48156', lat: 36.6617, lon: 138.1917 },
+  { label: '立山', matcher: /立山|Tateyama|黒部|Kurobe|Toyama|富山/i, officeCode: '160000', stationCode: '55102', lat: 36.7083, lon: 137.2033 },
+  { label: '金澤', matcher: /金沢|金澤|Kanazawa|Ishikawa|石川/i, officeCode: '170000', stationCode: '56227', lat: 36.5883, lon: 136.6333 },
+  { label: '東京', matcher: /東京|Tokyo/i, officeCode: '130000', stationCode: '44132', lat: 35.6917, lon: 139.75 },
+  { label: '京都', matcher: /京都|Kyoto/i, officeCode: '260000', stationCode: '61286', lat: 35.0133, lon: 135.7317 },
+  { label: '大阪', matcher: /大阪|Osaka/i, officeCode: '270000', stationCode: '62078', lat: 34.6817, lon: 135.5183 },
+];
+
 const REGION_COORDS: Record<string, WeatherCoord> = {
   名古屋: { label: '名古屋', lat: 35.1815, lon: 136.9066 },
   白川: { label: '白川鄉', lat: 36.2583, lon: 136.9063 },
@@ -213,28 +247,304 @@ async function fetchJson(url: string, timeoutMs = 10000) {
   }
 }
 
+async function fetchText(url: string, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.text();
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+function resolveJmaLocationProfile(coord: WeatherCoord): JmaLocationProfile | null {
+  const hay = `${coord.label || ''} ${coord.query || ''}`;
+  const textMatch = JMA_LOCATION_PROFILES.find((profile) => profile.matcher.test(hay));
+  if (textMatch) return textMatch;
+  if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) return null;
+  const inJapanBounds = coord.lat >= 24 && coord.lat <= 46 && coord.lon >= 122 && coord.lon <= 146;
+  if (!inJapanBounds) return null;
+  return JMA_LOCATION_PROFILES
+    .map((profile) => ({ profile, distance: distanceKm(coord.lat, coord.lon, profile.lat, profile.lon) }))
+    .sort((a, b) => a.distance - b.distance)[0]?.profile || null;
+}
+
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (value: number) => value * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function emptyWeatherDataForDate(date: string): WeatherData {
+  return {
+    hourly: {
+      time: WEATHER_SLOTS.map((hour) => `${date}T${String(hour).padStart(2, '0')}:00`),
+      temperature_2m: WEATHER_SLOTS.map(() => undefined),
+      apparent_temperature: WEATHER_SLOTS.map(() => undefined),
+      weather_code: WEATHER_SLOTS.map(() => undefined),
+      precipitation_probability: WEATHER_SLOTS.map(() => undefined),
+      precipitation: WEATHER_SLOTS.map(() => undefined),
+      relative_humidity_2m: WEATHER_SLOTS.map(() => undefined),
+      wind_speed_10m: WEATHER_SLOTS.map(() => undefined),
+      wind_direction_10m: WEATHER_SLOTS.map(() => undefined),
+      wind_gusts_10m: WEATHER_SLOTS.map(() => undefined),
+      cloud_cover: WEATHER_SLOTS.map(() => undefined),
+      uv_index: WEATHER_SLOTS.map(() => undefined),
+    },
+  };
+}
+
+function slotIndexForIso(iso: string, targetDate: string): number {
+  if (!iso.startsWith(targetDate)) return -1;
+  const hour = Number(iso.slice(11, 13));
+  if (!Number.isFinite(hour)) return -1;
+  let bestIndex = 0;
+  let bestDistance = Infinity;
+  WEATHER_SLOTS.forEach((slot, index) => {
+    const distance = Math.abs(slot - hour);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+  return bestDistance <= 4 ? bestIndex : -1;
+}
+
+function setHourlyValue(data: WeatherData, field: string, index: number, value: unknown) {
+  if (index < 0 || value == null || value === '') return;
+  const hourly = data.hourly || {};
+  const arr = hourly[field] as unknown[] | undefined;
+  if (!Array.isArray(arr)) return;
+  const numeric = Number(value);
+  arr[index] = Number.isFinite(numeric) ? numeric : value;
+}
+
+function jmaWeatherCodeToWmo(code: unknown): number | undefined {
+  const value = String(code || '').trim();
+  if (!value) return undefined;
+  const first = value[0];
+  if (first === '1') return value.includes('3') ? 61 : value.includes('2') ? 2 : 1;
+  if (first === '2') return value.includes('3') ? 61 : 3;
+  if (first === '3') return 61;
+  if (first === '4') return 71;
+  return undefined;
+}
+
+function jmaForecastArea(forecast: unknown, seriesIndex: number, preferredAreaCode?: string): Record<string, unknown> | null {
+  const timeSeries = (forecast as { timeSeries?: unknown[] }[] | null)?.[0]?.timeSeries;
+  const series = Array.isArray(timeSeries) ? timeSeries[seriesIndex] as { areas?: unknown[] } : null;
+  const areas = Array.isArray(series?.areas) ? series.areas as Record<string, unknown>[] : [];
+  return areas.find((area) => String((area.area as { code?: unknown } | undefined)?.code || '') === preferredAreaCode) || areas[0] || null;
+}
+
+function applyJmaForecast(data: WeatherData, forecast: unknown, profile: JmaLocationProfile, targetDate: string) {
+  const timeSeries = (forecast as { timeSeries?: unknown[] }[] | null)?.[0]?.timeSeries;
+  if (!Array.isArray(timeSeries)) return;
+
+  const weatherSeries = timeSeries[0] as { timeDefines?: string[] } | undefined;
+  const weatherArea = jmaForecastArea(forecast, 0);
+  const weatherCodes = Array.isArray(weatherArea?.weatherCodes) ? weatherArea.weatherCodes : [];
+  (weatherSeries?.timeDefines || []).forEach((iso, index) => {
+    const slot = slotIndexForIso(String(iso), targetDate);
+    const code = jmaWeatherCodeToWmo(weatherCodes[index]);
+    if (slot >= 0 && code != null) setHourlyValue(data, 'weather_code', slot, code);
+  });
+
+  const popSeries = timeSeries[1] as { timeDefines?: string[] } | undefined;
+  const popArea = jmaForecastArea(forecast, 1);
+  const pops = Array.isArray(popArea?.pops) ? popArea.pops : [];
+  (popSeries?.timeDefines || []).forEach((iso, index) => {
+    setHourlyValue(data, 'precipitation_probability', slotIndexForIso(String(iso), targetDate), pops[index]);
+  });
+
+  const tempSeries = timeSeries[2] as { timeDefines?: string[] } | undefined;
+  const tempArea = jmaForecastArea(forecast, 2, profile.stationCode);
+  const temps = Array.isArray(tempArea?.temps) ? tempArea.temps : [];
+  (tempSeries?.timeDefines || []).forEach((iso, index) => {
+    setHourlyValue(data, 'temperature_2m', slotIndexForIso(String(iso), targetDate), temps[index]);
+  });
+}
+
+function currentYmdInTimezone(timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function liveSlotIndexForDate(targetDate: string, timezone: string): number {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false }).formatToParts(now);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
+  const today = `${part('year')}-${part('month')}-${part('day')}`;
+  if (today !== targetDate) return -1;
+  const hour = Number(part('hour'));
+  const slot = WEATHER_SLOTS.slice().reverse().find((candidate) => hour >= candidate) || WEATHER_SLOTS[0];
+  return WEATHER_SLOTS.indexOf(slot);
+}
+
+function formatJmaAmedasMapTime(latestTime: string): string {
+  const match = latestTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!match) throw new Error('JMA latest time format changed');
+  return `${match[1]}${match[2]}${match[3]}${match[4]}${match[5]}00`;
+}
+
+function firstAmedasValue(record: Record<string, unknown> | undefined, key: string): number | undefined {
+  const raw = record?.[key];
+  const value = Array.isArray(raw) ? Number(raw[0]) : Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+async function applyJmaAmedasObservation(data: WeatherData, profile: JmaLocationProfile, targetDate: string, timezone: string) {
+  if (currentYmdInTimezone(timezone) !== targetDate) return;
+  const slotIndex = liveSlotIndexForDate(targetDate, timezone);
+  if (slotIndex < 0) return;
+  const latestTime = (await fetchText('https://www.jma.go.jp/bosai/amedas/data/latest_time.txt')).trim();
+  const mapTime = formatJmaAmedasMapTime(latestTime);
+  const map = await fetchJson(`https://www.jma.go.jp/bosai/amedas/data/map/${mapTime}.json`) as Record<string, Record<string, unknown>>;
+  const record = map?.[profile.stationCode];
+  setHourlyValue(data, 'temperature_2m', slotIndex, firstAmedasValue(record, 'temp'));
+  setHourlyValue(data, 'relative_humidity_2m', slotIndex, firstAmedasValue(record, 'humidity'));
+  const windMs = firstAmedasValue(record, 'wind');
+  if (windMs != null) setHourlyValue(data, 'wind_speed_10m', slotIndex, windMs * 3.6);
+  setHourlyValue(data, 'wind_direction_10m', slotIndex, firstAmedasValue(record, 'windDirection'));
+  setHourlyValue(data, 'precipitation', slotIndex, firstAmedasValue(record, 'precipitation1h'));
+}
+
+function hasMeaningfulWeatherData(data: WeatherData): boolean {
+  const hourly = data.hourly || {};
+  return ['temperature_2m', 'weather_code', 'precipitation_probability', 'relative_humidity_2m']
+    .some((field) => Array.isArray(hourly[field]) && hourly[field].some((value) => value != null && value !== ''));
+}
+
+async function fetchJmaOfficialWeather(coord: WeatherCoord, timezone: string, targetDate?: string): Promise<WeatherFetchResult> {
+  const date = targetDate || currentYmdInTimezone(timezone === 'auto' ? 'Asia/Tokyo' : timezone);
+  const profile = resolveJmaLocationProfile(coord);
+  if (!profile) throw new Error('No matching JMA office/station');
+  const data = emptyWeatherDataForDate(date);
+  const forecast = await fetchJson(`https://www.jma.go.jp/bosai/forecast/data/forecast/${profile.officeCode}.json`);
+  applyJmaForecast(data, forecast, profile, date);
+  try {
+    await applyJmaAmedasObservation(data, profile, date, timezone === 'auto' ? 'Asia/Tokyo' : timezone);
+  } catch {
+    // AMeDAS is live-only. Forecast data remains useful if observations miss.
+  }
+  if (!hasMeaningfulWeatherData(data)) throw new Error('JMA official returned no matching weather values');
+  return { data, source: 'JMA official', provider: 'JMA official', cached: false, fetchedAt: Date.now() };
+}
+
+const MERGEABLE_WEATHER_FIELDS = [
+  'temperature_2m',
+  'apparent_temperature',
+  'weather_code',
+  'precipitation_probability',
+  'precipitation',
+  'relative_humidity_2m',
+  'wind_speed_10m',
+  'wind_direction_10m',
+  'wind_gusts_10m',
+  'cloud_cover',
+  'uv_index',
+];
+
+function valueForTime(data: WeatherData, field: string, time: string): unknown {
+  const times = data.hourly?.time;
+  const values = data.hourly?.[field];
+  if (!Array.isArray(times) || !Array.isArray(values)) return undefined;
+  const idx = times.findIndex((entry) => String(entry) === time);
+  return idx >= 0 ? values[idx] : undefined;
+}
+
+function mergeWeatherData(primary: WeatherData, fallback?: WeatherData): WeatherData {
+  if (!fallback?.hourly) return primary;
+  const times = Array.isArray(primary.hourly?.time) ? primary.hourly.time.map(String) : [];
+  const merged: WeatherData = { hourly: { time: times }, current: primary.current || fallback.current };
+  for (const field of MERGEABLE_WEATHER_FIELDS) {
+    merged.hourly![field] = times.map((time) => {
+      const primaryValue = valueForTime(primary, field, time);
+      return primaryValue != null && primaryValue !== '' ? primaryValue : valueForTime(fallback, field, time);
+    });
+  }
+  return merged;
+}
+
+function weatherDataHasGaps(data: WeatherData): boolean {
+  const times = data.hourly?.time;
+  if (!Array.isArray(times) || !times.length) return true;
+  return ['temperature_2m', 'apparent_temperature', 'uv_index', 'cloud_cover', 'wind_gusts_10m']
+    .some((field) => !Array.isArray(data.hourly?.[field]) || data.hourly?.[field].some((value) => value == null || value === ''));
+}
+
 type WeatherBrokerState = Pick<AppState, 'credentialBrokerUrl' | 'credentialSession' | 'credentialSessionExpiresAt'>;
 
-export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJma = false, state?: WeatherBrokerState, targetDate?: string) {
+export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJma = false, state?: WeatherBrokerState, targetDate?: string): Promise<WeatherFetchResult> {
   if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) throw new Error(`${coord.label} 缺少 lat/lon，請喺行程 spot 加座標或用 Kimi 更新行程。`);
   const cacheKey = weatherCacheKey(coord);
   const safeTimezone = normalizeWeatherTimezone(timezone);
   try {
     const cached = cacheKey ? JSON.parse(localStorage.getItem(cacheKey) || 'null') : null;
-    if (cached && Date.now() - cached.ts < 60 * 60 * 1000 && weatherDataIncludesDate(cached.data, targetDate)) {
-      return { data: cached.data, source: `${cached.source} cache`, provider: String(cached.source || 'Weather'), cached: true, fetchedAt: Number(cached.ts) || Date.now() };
+    const cachedSource = String(cached?.source || '');
+    const officialCacheAllowed = !useJma || /JMA official/i.test(cachedSource);
+    if (cached && officialCacheAllowed && Date.now() - cached.ts < 60 * 60 * 1000 && weatherDataIncludesDate(cached.data, targetDate)) {
+      return { data: cached.data as WeatherData, source: `${cached.source} cache`, provider: String(cached.source || 'Weather'), cached: true, fetchedAt: Number(cached.ts) || Date.now() };
     }
   } catch {
     // Ignore corrupt cache.
   }
 
+  let officialResult: WeatherFetchResult | null = null;
+  let officialFallbackReason = '';
+  if (useJma) {
+    try {
+      officialResult = await fetchJmaOfficialWeather(coord, safeTimezone, targetDate);
+      if (!weatherDataHasGaps(officialResult.data)) {
+        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: officialResult.data, source: officialResult.source }));
+        return officialResult;
+      }
+    } catch (error) {
+      officialFallbackReason = `JMA official unavailable: ${weatherErrorLabel(error)}`;
+    }
+  }
+
+  if (officialResult) {
+    try {
+      const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, useJma, state, officialFallbackReason);
+      const data = mergeWeatherData(officialResult.data, fallbackResult.data);
+      const reason = fallbackResult.provider
+        ? `JMA official missing some hourly fields; filled by ${fallbackResult.provider}`
+        : undefined;
+      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: 'JMA official' }));
+      return {
+        data,
+        source: 'JMA official',
+        provider: 'JMA official',
+        cached: false,
+        fetchedAt: Date.now(),
+        fallbackReason: reason,
+      };
+    } catch (error) {
+      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: officialResult.data, source: 'JMA official' }));
+      return {
+        ...officialResult,
+        fallbackReason: `JMA official served; fallback supplement unavailable: ${weatherErrorLabel(error)}`,
+      };
+    }
+  }
+  const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, useJma, state, officialFallbackReason);
+  if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: fallbackResult.data, source: fallbackResult.source }));
+  return fallbackResult;
+}
+
+async function fetchFallbackWeather(coord: WeatherCoord, safeTimezone: string, useJma: boolean, state?: WeatherBrokerState, priorReason = ''): Promise<WeatherFetchResult> {
   let brokerFallbackReason = '';
   if (state) {
     try {
       const data = await brokerWeatherForecast(state, { lat: coord.lat, lon: coord.lon, days: 3 });
       if (data && typeof data === 'object') {
-        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: 'WeatherAPI.com' }));
-        return { data, source: 'WeatherAPI.com', provider: 'WeatherAPI.com', cached: false, fetchedAt: Date.now() };
+        return { data: data as WeatherData, source: 'WeatherAPI.com', provider: 'WeatherAPI.com', cached: false, fetchedAt: Date.now(), fallbackReason: priorReason || undefined };
       }
     } catch (error) {
       brokerFallbackReason = `WeatherAPI.com unavailable: ${weatherErrorLabel(error)}`;
@@ -261,11 +571,10 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJm
     { url: base, source: 'Open-Meteo' },
   ];
   let lastError: unknown;
-  let providerFallbackReason = brokerFallbackReason;
+  let providerFallbackReason = [priorReason, brokerFallbackReason].filter(Boolean).join(' · ');
   for (const c of candidates) {
     try {
-      const data = await fetchJson(c.url);
-      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: c.source }));
+      const data = await fetchJson(c.url) as WeatherData;
       return { data, source: c.source, provider: c.source, cached: false, fetchedAt: Date.now(), fallbackReason: providerFallbackReason || undefined };
     } catch (error) {
       lastError = error;

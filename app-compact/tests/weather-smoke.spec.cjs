@@ -47,6 +47,62 @@ function weatherFixture(options = {}) {
   return { hourly: { time, temperature_2m, apparent_temperature, weather_code, precipitation_probability, precipitation, relative_humidity_2m, wind_speed_10m, wind_direction_10m, wind_gusts_10m, cloud_cover, uv_index } };
 }
 
+function jmaForecastFixture(options = {}) {
+  const date = options.date || '2026-04-20';
+  const temp = String(options.temp ?? 21);
+  const rain = String(options.rain ?? 18);
+  const code = String(options.code ?? 101);
+  return [{
+    publishingOffice: '名古屋地方気象台',
+    reportDatetime: `${date}T11:00:00+09:00`,
+    timeSeries: [
+      {
+        timeDefines: [`${date}T11:00:00+09:00`, '2026-04-21T00:00:00+09:00', '2026-04-22T00:00:00+09:00'],
+        areas: [{ area: { name: '西部', code: '230010' }, weatherCodes: [code, code, code] }],
+      },
+      {
+        timeDefines: [`${date}T00:00:00+09:00`, `${date}T06:00:00+09:00`, `${date}T12:00:00+09:00`, `${date}T18:00:00+09:00`],
+        areas: [{ area: { name: '西部', code: '230010' }, pops: [rain, rain, rain, rain] }],
+      },
+      {
+        timeDefines: [`${date}T09:00:00+09:00`, `${date}T00:00:00+09:00`, '2026-04-21T00:00:00+09:00', '2026-04-21T09:00:00+09:00'],
+        areas: [{ area: { name: '名古屋', code: '51106' }, temps: [temp, temp, String(Number(temp) - 4), String(Number(temp) + 2)] }],
+      },
+    ],
+  }];
+}
+
+async function routeJmaOfficial(page, options = {}) {
+  const calls = [];
+  await page.route('https://www.jma.go.jp/bosai/forecast/data/forecast/**', async (route) => {
+    calls.push(route.request().url());
+    if (options.failForecast) {
+      await route.fulfill({ status: 503, body: 'JMA official unavailable' });
+      return;
+    }
+    await route.fulfill({ json: jmaForecastFixture(options) });
+  });
+  await page.route('https://www.jma.go.jp/bosai/amedas/data/latest_time.txt', async (route) => {
+    calls.push(route.request().url());
+    await route.fulfill({ contentType: 'text/plain', body: `${options.date || '2026-04-20'}T10:00:00+09:00` });
+  });
+  await page.route('https://www.jma.go.jp/bosai/amedas/data/map/**', async (route) => {
+    calls.push(route.request().url());
+    await route.fulfill({
+      json: {
+        '51106': {
+          temp: [options.temp ?? 21, 0],
+          humidity: [options.humidity ?? 62, 0],
+          precipitation1h: [options.precipitation ?? 0.2, 0],
+          windDirection: [13, 0],
+          wind: [3.6, 0],
+        },
+      },
+    });
+  });
+  return calls;
+}
+
 async function installState(page, state) {
   await page.addInitScript((payload) => {
     window.__disable_supabase_configured = true;
@@ -65,7 +121,7 @@ async function installState(page, state) {
   }, trustAndState(state));
 }
 
-test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
+test('Japan weather uses JMA official first and renders slots', async ({ page }) => {
   const fixed = new Date('2026-04-20T10:00:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {
     window.__disable_supabase_configured = true;
@@ -81,6 +137,7 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
     window.Date = MockDate;
   }, fixed);
   const urls = [];
+  const jmaCalls = await routeJmaOfficial(page);
   await page.route('https://api.open-meteo.com/**', async (route) => {
     urls.push(route.request().url());
     await route.fulfill({ json: weatherFixture() });
@@ -88,13 +145,13 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
   await installState(page, {});
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
-  await expect(page.getByText(/Day 1 · JMA/)).toBeVisible();
+  await expect(page.getByText(/Day 1 · JMA official/)).toBeVisible();
   const command = page.locator('.weather-command-fancy');
   await expect(command.locator('.weather-target-pill .status-pill')).toHaveCount(1);
   await expect(command.locator('.weather-target-pill')).toContainText('Today');
   await expect(command).not.toContainText('刷新');
   await expect(command.getByLabel('刷新天氣')).toBeVisible();
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA official');
   await expect(page.locator('.preview-weather-source-strip')).toContainText(/Live ·|Cache ·/);
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
   await expect(page.locator('.preview-weather-place')).toContainText('名古屋');
@@ -163,10 +220,11 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
   await expect(page.locator('[aria-label="體感 20°C"]').first()).toBeVisible();
   await expect(page.getByText(/濕度 62%/).first()).toBeVisible();
   await expect(page.getByText(/UV 6|UV 2/).first()).toBeVisible();
+  expect(jmaCalls.some((url) => url.includes('/forecast/data/forecast/230000.json'))).toBe(true);
   expect(urls.some((url) => url.includes('models=jma_seamless'))).toBe(true);
 });
 
-test('Japan weather shows fallback reason when JMA fails and Open-Meteo succeeds', async ({ page }) => {
+test('Japan weather shows fallback reason when JMA official fails and Open-Meteo succeeds', async ({ page }) => {
   const fixed = new Date('2026-04-20T10:00:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {
     window.__disable_supabase_configured = true;
@@ -181,6 +239,7 @@ test('Japan weather shows fallback reason when JMA fails and Open-Meteo succeeds
     }
     window.Date = MockDate;
   }, fixed);
+  await routeJmaOfficial(page, { failForecast: true });
   await page.route('https://api.open-meteo.com/**', async (route) => {
     if (route.request().url().includes('models=jma_seamless')) {
       await route.fulfill({ status: 503, body: 'JMA unavailable' });
@@ -193,11 +252,11 @@ test('Japan weather shows fallback reason when JMA fails and Open-Meteo succeeds
   await expect(page.getByText(/Day 1 · Open-Meteo/)).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · Open-Meteo');
   await expect(page.locator('.weather-fallback-chip').first()).toContainText('Fallback ·');
-  await expect(page.locator('.weather-fallback-chip').first()).toContainText('JMA unavailable');
+  await expect(page.locator('.weather-fallback-chip').first()).toContainText('JMA official unavailable');
   await expect(page.getByText('23°C').first()).toBeVisible();
 });
 
-test('WeatherAPI broker forecast is preferred when broker session is active', async ({ page }) => {
+test('JMA official stays preferred when broker session is active', async ({ page }) => {
   const fixed = new Date('2026-04-20T13:30:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {
     window.__disable_supabase_configured = true;
@@ -215,6 +274,7 @@ test('WeatherAPI broker forecast is preferred when broker session is active', as
   let brokerCalls = 0;
   let openMeteoCalls = 0;
   const brokerPayloads = [];
+  await routeJmaOfficial(page, { temp: 21, humidity: 62 });
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/weather/forecast', async (route) => {
     if (route.request().method() === 'OPTIONS') {
       await route.fulfill({
@@ -244,13 +304,13 @@ test('WeatherAPI broker forecast is preferred when broker session is active', as
     credentialSessionExpiresAt: fixed + 60_000,
   });
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText(/Day 1 · Live weather/)).toBeVisible();
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · Live weather');
+  await expect(page.getByText(/Day 1 · JMA official/)).toBeVisible();
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA official');
   await expect(page.locator('.weather-screen')).not.toContainText('WeatherAPI.com');
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
-  await expect(page.locator('.preview-weather-temp strong')).toHaveText('27°C');
+  await expect(page.locator('.preview-weather-temp strong')).toHaveText('21°C');
   await expect(page.locator('.preview-weather-temp small')).toContainText('體感 30°C');
-  await expect(page.locator('.weather-slot-detailed.is-live .weather-temp-block').first().locator('.temp-num')).toContainText('27');
+  await expect(page.locator('.weather-slot-detailed.is-live .weather-temp-block').first().locator('.temp-num')).toContainText('21');
   await expect(page.locator('.weather-slot-detailed.is-live .weather-metrics .metric-tag').first()).toHaveClass(/sun-tag/);
   await expect(page.locator('.weather-slot-detailed.is-live .weather-metrics .metric-tag').first()).toContainText('UV 6 · 雲35%');
   const uvMetricFits = await page.locator('.weather-slot-detailed.is-live .sun-tag .metric-val').first().evaluate((node) => ({
@@ -328,6 +388,7 @@ test('Ended trip ignores stale same-coordinate cache and shows current forecast'
       },
     },
   });
+  await routeJmaOfficial(page, { failForecast: true });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
@@ -357,6 +418,7 @@ test('Ended trip shows current weather for every itinerary day location', async 
     forecastUrls.push(route.request().url());
     await route.fulfill({ json: weatherFixture({ dates: ['2026-05-30', '2026-05-31'], temp: 26, feels: 28 }) });
   });
+  await routeJmaOfficial(page, { failForecast: true });
   await installState(page, {});
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
@@ -365,7 +427,8 @@ test('Ended trip shows current weather for every itinerary day location', async 
   await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉', '長野', '名古屋', '立山黑部', '金澤', '上高地', '金澤', '常滑', '香港']);
   await expect(page.locator('.preview-weather-place')).toContainText('名古屋');
   await expect(page.locator('[aria-label="體感 28°C"]').first()).toBeVisible();
-  expect(forecastUrls.length).toBe(10);
+  expect(forecastUrls.length).toBeGreaterThanOrEqual(10);
+  expect(forecastUrls.some((url) => url.includes('models=jma_seamless'))).toBe(true);
 });
 
 test('Non-Japan trip uses Open-Meteo without JMA', async ({ page }) => {
@@ -388,6 +451,7 @@ test('Non-Japan trip uses Open-Meteo without JMA', async ({ page }) => {
     urls.push(route.request().url());
     await route.fulfill({ json: weatherFixture() });
   });
+  await routeJmaOfficial(page, { failForecast: true });
   await installState(page, {
     tripName: 'US 2026',
     tripCurrency: 'USD',
