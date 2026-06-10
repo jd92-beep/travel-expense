@@ -2411,9 +2411,11 @@ export function Settings({
                     {day.highlight && <p>{day.highlight}</p>}
                     {day.lodging?.name && (
                       <div className="trip-confirm-lodging">
-                        <b>酒店</b>
+                        <b>🏨 酒店</b>
                         <span>{day.lodging.name}</span>
-                        {(day.lodging.checkIn || day.lodging.checkOut) && <small>{[day.lodging.checkIn, day.lodging.checkOut].filter(Boolean).join(' → ')}</small>}
+                        {day.lodging.address && <small>{day.lodging.address}</small>}
+                        {(day.lodging.checkIn || day.lodging.checkOut) && <small>🕐 {[day.lodging.checkIn, day.lodging.checkOut].filter(Boolean).join(' → ')}</small>}
+                        {day.lodging.bookingRef && <small>Ref: {day.lodging.bookingRef}</small>}
                       </div>
                     )}
                     <div className="trip-confirm-spots">
@@ -2422,7 +2424,13 @@ export function Settings({
                           <time>{spot.time || '--:--'}{spot.timeEnd ? `-${spot.timeEnd}` : ''}</time>
                           <div>
                             <strong>{spot.name || '未命名地點'}</strong>
-                            <small>{spot.type || 'itinerary'}{spot.address ? ` · ${spot.address}` : ''}{spot.note ? ` · ${spot.note}` : ''}</small>
+                            <small>
+                              {spot.type === 'flight' ? '✈️' : spot.type === 'transport' ? '🚆' : spot.type === 'food' ? '🍽️' : spot.type === 'shopping' ? '🛍️' : spot.type === 'lodging' ? '🏨' : spot.type === 'sightseeing' ? '📸' : spot.type === 'ticket' ? '🎫' : spot.type === 'localtour' ? '🗺️' : '📍'}{' '}
+                              {spot.type || 'other'}
+                              {spot.address ? ` · ${spot.address}` : ''}
+                              {spot.note ? ` · ${spot.note}` : ''}
+                              {Number.isFinite(spot.lat) && Number.isFinite(spot.lon) ? ' · 📌' : ''}
+                            </small>
                           </div>
                         </div>
                       ))}

@@ -329,7 +329,10 @@ function buildTripCreateParagraph(input: {
     `Preferred currency: ${input.currency}`,
     input.details ? `User trip details:\n${input.details}` : '',
     ideaText ? `Destination ideas already suggested to user:\n${ideaText}` : '',
-    'Please create a practical day-by-day itinerary with city, country, timezone, currency, spot names, times, categories, notes, and lat/lon for weather.'
+    'Please create a practical day-by-day itinerary. For EVERY spot include: name, time (HH:MM), timeEnd (HH:MM), type (flight|transport|food|shopping|lodging|ticket|localtour|sightseeing|other), city, country, timezone, currency.',
+    'For lodging include: name, address, checkIn time, checkOut time, lat/lon if known.',
+    'For each spot include lat/lon coordinates when inferable from the place name; otherwise omit and note in missingCriticalFields.',
+    'Include highlight (one-line summary) for each day.',
   ].filter(Boolean).join('\n\n');
 }
 
@@ -1420,7 +1423,7 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-slate-500">目的地</label>
+                    <label className="text-xs font-bold text-slate-500">目的地 <span className="text-[10px] text-slate-400 font-semibold">(城市或國家名稱，影響天氣與幣種)</span></label>
                     <input
                       type="text"
                       value={newTripDestination}
