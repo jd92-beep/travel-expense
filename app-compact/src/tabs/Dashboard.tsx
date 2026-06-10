@@ -49,6 +49,13 @@ import type { AppState, ItinerarySpot, Receipt, SyncQueueItem, TabId } from '../
 import { brokerAiJson, redactedError } from '../lib/credentialBroker';
 import { DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
 
+type DestinationIdea = {
+  id: string;
+  label: string;
+  detail: string;
+  source: 'online' | 'fallback';
+};
+
 function displayDateRange(startDate: string, endDate: string) {
   const fmtDate = (date: string) => {
     const parsed = new Date(`${date}T00:00:00`);
@@ -94,6 +101,120 @@ function addDaysToIsoDate(date: string, daysToAdd: number) {
 
 function normalizeTripDurationDays(value: number) {
   return Math.max(1, Math.min(60, Math.round(value) || 1));
+}
+
+function normalizeDestinationText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/济/g, '濟')
+    .replace(/韩国/g, '韓國');
+}
+
+function destinationLooksLikeKorea(value: string) {
+  const dest = normalizeDestinationText(value);
+  return ['韓國', 'south korea', 'korea', 'kr', '濟州', 'jeju', 'seoul', '首爾', 'busan', '釜山'].some((keyword) => dest.includes(keyword));
+}
+
+function stripSearchMarkup(value: unknown) {
+  return String(value || '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function fallbackDestinationIdeas(destination: string): DestinationIdea[] {
+  const dest = normalizeDestinationText(destination);
+  if (dest.includes('濟州') || dest.includes('jeju')) {
+    return [
+      {
+        id: 'jeju-seongsan',
+        label: '城山日出峰',
+        detail: '濟州景點建議：城山日出峰睇日出，牛島踩單車/海岸線，漢拏山健行，萬丈窟熔岩洞，涉地可支海岸散步，東門市場食海鮮小食。',
+        source: 'fallback',
+      },
+      {
+        id: 'jeju-hallasan',
+        label: '漢拏山 + 牛島',
+        detail: '濟州自然路線：早上漢拏山或城山日出峰，中午牛島，下午涉地可支/海岸咖啡，晚上東門市場或黑豬肉晚餐。',
+        source: 'fallback',
+      },
+      {
+        id: 'jeju-waterfalls',
+        label: '西歸浦瀑布線',
+        detail: '濟州西歸浦路線：天地淵瀑布、正房瀑布、柱狀節理帶、Olle 小路，再加海邊 cafe 或橘子甜品。',
+        source: 'fallback',
+      },
+    ];
+  }
+
+  if (dest.includes('名古屋') || dest.includes('nagoya')) {
+    return [
+      {
+        id: 'nagoya-food',
+        label: '名古屋城 + 大須',
+        detail: '名古屋景點建議：名古屋城、大須觀音商店街、熱田神宮、榮町 Shopping，餐飲安排蓬萊軒鰻魚飯三食同矢場ton味噌豬扒。',
+        source: 'fallback',
+      },
+    ];
+  }
+
+  return [];
+}
+
+function uniqueDestinationIdeas(ideas: DestinationIdea[]) {
+  const seen = new Set<string>();
+  return ideas.filter((idea) => {
+    const key = normalizeDestinationText(idea.label);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isRelevantDestinationResult(destination: string, title: string, snippet: string) {
+  const haystack = normalizeDestinationText(`${title} ${snippet}`);
+  const dest = normalizeDestinationText(destination);
+  if (!dest) return false;
+  if (destinationLooksLikeKorea(destination)) {
+    return /(濟州|jeju|seogwipo|西歸浦|城山|牛島|udo|hallasan|漢拏)/i.test(haystack);
+  }
+  const compactDest = dest.replace(/\s+/g, '');
+  return compactDest.length >= 2 && haystack.replace(/\s+/g, '').includes(compactDest.slice(0, Math.min(4, compactDest.length)));
+}
+
+async function fetchDestinationIdeas(destination: string, signal: AbortSignal): Promise<DestinationIdea[]> {
+  const query = destination.trim();
+  if (query.length < 2) return [];
+  const endpoints = ['https://zh.wikivoyage.org/w/api.php', 'https://en.wikivoyage.org/w/api.php'];
+  const searches = [`${query} 景點`, `${query} attractions`];
+  const ideas: DestinationIdea[] = [];
+
+  for (const endpoint of endpoints) {
+    for (const search of searches) {
+      const url = `${endpoint}?action=query&list=search&srsearch=${encodeURIComponent(search)}&format=json&origin=*`;
+      const response = await fetch(url, { signal });
+      if (!response.ok) continue;
+      const data = await response.json() as { query?: { search?: Array<{ title?: string; snippet?: string }> } };
+      for (const item of data.query?.search || []) {
+        const title = stripSearchMarkup(item.title);
+        const snippet = stripSearchMarkup(item.snippet);
+        if (!title || !isRelevantDestinationResult(query, title, snippet)) continue;
+        ideas.push({
+          id: `online-${title}`,
+          label: title.slice(0, 32),
+          detail: `${query} 景點建議：${title}${snippet ? `。${snippet.slice(0, 96)}` : ''}`,
+          source: 'online',
+        });
+      }
+      if (ideas.length >= 3) return uniqueDestinationIdeas(ideas).slice(0, 3);
+    }
+  }
+
+  return uniqueDestinationIdeas(ideas).slice(0, 3);
 }
 
 function isQuotaHardStop(error: unknown): boolean {
@@ -185,6 +306,8 @@ export function Dashboard({
   const [newTripBudget, setNewTripBudget] = useState('');
   const [newTripCurrency, setNewTripCurrency] = useState('JPY');
   const [newTripDetails, setNewTripDetails] = useState('');
+  const [destinationIdeas, setDestinationIdeas] = useState<DestinationIdea[]>([]);
+  const [destinationIdeaStatus, setDestinationIdeaStatus] = useState<'idle' | 'loading' | 'online' | 'fallback' | 'error'>('idle');
 
   // 1. 📅 智能預設黃金 7 天
   useEffect(() => {
@@ -214,8 +337,45 @@ export function Dashboard({
       setNewTripCurrency('HKD');
     } else if (usdKeywords.some(kw => dest.includes(kw))) {
       setNewTripCurrency('USD');
+    } else if (destinationLooksLikeKorea(dest)) {
+      setNewTripCurrency('KRW');
     }
   }, [newTripDestination]);
+
+  useEffect(() => {
+    if (!activeIsWizardOpen) return;
+    const destination = newTripDestination.trim();
+    if (destination.length < 2) {
+      setDestinationIdeas([]);
+      setDestinationIdeaStatus('idle');
+      return;
+    }
+
+    const controller = new AbortController();
+    const fallback = fallbackDestinationIdeas(destination);
+    setDestinationIdeaStatus('loading');
+    setDestinationIdeas(fallback);
+
+    const timer = window.setTimeout(() => {
+      fetchDestinationIdeas(destination, controller.signal)
+        .then((onlineIdeas) => {
+          const merged = uniqueDestinationIdeas([...fallback, ...onlineIdeas]).slice(0, 4);
+          setDestinationIdeas(merged);
+          setDestinationIdeaStatus(onlineIdeas.length ? 'online' : fallback.length ? 'fallback' : 'error');
+        })
+        .catch((error) => {
+          if (controller.signal.aborted) return;
+          console.warn('Destination suggestion lookup failed', redactedError(error));
+          setDestinationIdeas(fallback);
+          setDestinationIdeaStatus(fallback.length ? 'fallback' : 'error');
+        });
+    }, 350);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [activeIsWizardOpen, newTripDestination]);
 
   // Date duration auto-calc
   const calculatedDuration = useMemo(() => {
@@ -245,6 +405,16 @@ export function Dashboard({
     setNewTripStartDate(value);
     if (value) {
       setNewTripEndDate(addDaysToIsoDate(value, normalizeTripDurationDays(selectedTripDuration) - 1));
+    }
+  };
+
+  const applyDestinationIdea = (idea: DestinationIdea) => {
+    setNewTripDetails(idea.detail);
+    if (!newTripDestination.trim()) {
+      setNewTripDestination(idea.label);
+    }
+    if (!newTripName.trim() || newTripName.includes('新旅程')) {
+      setNewTripName(`${newTripDestination || idea.label} Trip`);
     }
   };
 
@@ -324,6 +494,8 @@ export function Dashboard({
     setNewTripBudget('');
     setNewTripCurrency('JPY');
     setNewTripDetails('');
+    setDestinationIdeas([]);
+    setDestinationIdeaStatus('idle');
   };
 
   const trip = activeTrip(state);
@@ -1042,10 +1214,40 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
                       type="text"
                       value={newTripDestination}
                       onChange={(e) => setNewTripDestination(e.target.value)}
-                      placeholder="例如：名古屋、東京、大阪"
+                      placeholder="例如：濟州、首爾、名古屋、東京"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all"
                     />
                   </div>
+                  {newTripDestination.trim().length >= 2 && (
+                    <div className="rounded-xl border border-[#6D5643]/10 bg-[#6D5643]/5 px-3 py-2 flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2 text-[10px] font-bold text-[#6D5643]">
+                        <span>
+                          {destinationIdeaStatus === 'loading'
+                            ? '正在網上搜尋景點...'
+                            : destinationIdeaStatus === 'online'
+                              ? '網上景點建議'
+                              : destinationIdeaStatus === 'fallback'
+                                ? '離線景點建議'
+                                : '景點建議'}
+                        </span>
+                        {destinationIdeas.length > 0 && <span>{destinationIdeas[0]?.source === 'online' ? 'Wikivoyage' : 'Local'}</span>}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {destinationIdeas.length ? destinationIdeas.map((idea) => (
+                          <button
+                            type="button"
+                            key={idea.id}
+                            onClick={() => applyDestinationIdea(idea)}
+                            className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-white hover:bg-[#D94132]/10 text-[#6D5643] border border-[#6D5643]/15 transition active:scale-95 cursor-pointer"
+                          >
+                            {idea.label}
+                          </button>
+                        )) : (
+                          <span className="text-[11px] font-bold text-slate-400">輸入更完整地方名會有更準建議</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1127,11 +1329,13 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-slate-500">主結算幣種</label>
                     <select
+                      aria-label="主結算幣種"
                       value={newTripCurrency}
                       onChange={(e) => setNewTripCurrency(e.target.value)}
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all cursor-pointer"
                     >
                       <option value="JPY">💴 日圓 (JPY)</option>
+                      <option value="KRW">🇰🇷 韓元 (KRW)</option>
                       <option value="HKD">💵 港幣 (HKD)</option>
                       <option value="USD">💵 美元 (USD)</option>
                     </select>
@@ -1152,38 +1356,20 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
                     />
                   </div>
                   <div className="flex flex-col gap-1.5 mt-0.5">
-                    <span className="text-[10px] font-bold text-slate-400">💡 智能行程填充靈感 (一鍵套用)：</span>
+                    <span className="text-[10px] font-bold text-slate-400">💡 {newTripDestination || '目的地'} 景點靈感 (一鍵套用)：</span>
                     <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewTripDetails("🍱 必食蓬萊軒鰻魚飯三食、矢場ton味噌豬扒！🏮 行程包括名古屋城賞櫻、大須觀音街、熱田神宮，仲有去榮町 Shopping！🌸");
-                          if (!newTripName || newTripName.trim() === '' || newTripName.includes('新旅程')) {
-                            setNewTripName("🌸 名古屋美味賞櫻之旅 2026 🏯");
-                          }
-                          if (!newTripDestination) {
-                            setNewTripDestination("名古屋 (Nagoya)");
-                          }
-                        }}
-                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200/50 transition active:scale-95 cursor-pointer"
-                      >
-                        🌸 2026 名古屋賞櫻美食行程
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewTripDetails("🗻 箱根溫泉旅館一泊二食！🏮 行程包括富士山河口湖五合目、淺間神社看富士山、新宿 Shopping 買藥妝！🛒");
-                          if (!newTripName || newTripName.trim() === '' || newTripName.includes('新旅程')) {
-                            setNewTripName("🗻 富士箱根溫泉療癒之旅 🍁");
-                          }
-                          if (!newTripDestination) {
-                            setNewTripDestination("東京/箱根 (Tokyo/Hakone)");
-                          }
-                        }}
-                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/50 transition active:scale-95 cursor-pointer"
-                      >
-                        🗻 東京富士箱根溫泉之旅
-                      </button>
+                      {destinationIdeas.length ? destinationIdeas.map((idea) => (
+                        <button
+                          type="button"
+                          key={idea.id}
+                          onClick={() => applyDestinationIdea(idea)}
+                          className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/50 transition active:scale-95 cursor-pointer"
+                        >
+                          {idea.label}
+                        </button>
+                      )) : (
+                        <span className="text-[11px] font-bold text-slate-400">第一步填目的地後會自動建議景點</span>
+                      )}
                     </div>
                   </div>
                 </div>

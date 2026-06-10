@@ -92,12 +92,34 @@ test('Dashboard keeps Home simple without travel-day diagnostic cards', async ({
 });
 
 test('Dashboard new trip wizard lets users choose trip days on step two', async ({ page }) => {
+  await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: {
+        search: [
+          { title: '城山日出峰', snippet: '濟州島著名火山口日出景點' },
+          { title: '牛島', snippet: '濟州近海小島，適合踩單車和海岸線行程' },
+        ],
+      },
+    }),
+  }));
+  await page.route('https://en.wikivoyage.org/w/api.php**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ query: { search: [] } }),
+  }));
+
   await openDashboard(page, false);
   await page.locator('.compact-mobile-header').getByRole('button', { name: /Dashboard Test/ }).click();
   await page.getByRole('button', { name: /建立新旅程/ }).click();
   await expect(page.getByText('Step 1 of 4')).toBeVisible();
 
   await page.getByPlaceholder('例如：名古屋櫻花祭 2026').fill('Seoul Spring Trip');
+  await page.getByPlaceholder('例如：濟州、首爾、名古屋、東京').fill('濟州');
+  await expect(page.getByText('網上景點建議')).toBeVisible();
+  await expect(page.getByRole('button', { name: '城山日出峰' }).first()).toBeVisible();
+  await page.getByRole('button', { name: '城山日出峰' }).first().click();
   await page.getByRole('button', { name: '下一步' }).click();
   await expect(page.getByText('Step 2 of 4')).toBeVisible();
 
@@ -119,6 +141,15 @@ test('Dashboard new trip wizard lets users choose trip days on step two', async 
   await page.getByRole('button', { name: '減少旅程日數' }).click();
   await expect(daySelect).toHaveValue('10');
   await expect(dateInputs.nth(1)).toHaveValue('2026-05-17');
+
+  await page.getByRole('button', { name: '下一步' }).click();
+  await expect(page.getByText('Step 3 of 4')).toBeVisible();
+  await expect(page.getByLabel('主結算幣種')).toHaveValue('KRW');
+
+  await page.getByRole('button', { name: '下一步' }).click();
+  await expect(page.getByText('Step 4 of 4')).toBeVisible();
+  await expect(page.getByText('濟州 景點靈感')).toBeVisible();
+  await expect(page.locator('textarea')).toContainText('城山日出峰');
 });
 
 test('Dashboard compact itinerary and recent expenses show denser Home information', async ({ page }) => {
