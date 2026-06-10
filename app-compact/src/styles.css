@@ -1515,6 +1515,94 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   margin: 0;
   font-size: 16px;
 }
+.trip-preview-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.trip-preview-head .pill {
+  flex: 0 0 auto;
+  max-width: 48%;
+  white-space: normal;
+}
+.trip-preview-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.trip-preview-stats span {
+  display: grid;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255,255,255,.62);
+  text-align: center;
+}
+.trip-preview-stats b {
+  color: var(--ink);
+  font-size: 15px;
+}
+.trip-preview-stats small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.trip-preview-days {
+  display: grid;
+  gap: 8px;
+}
+.trip-preview-days article {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255,255,255,.58);
+}
+.trip-preview-days header {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.trip-preview-days header span,
+.trip-preview-days small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.trip-preview-days p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+}
+.trip-preview-days article > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.trip-preview-days article > div span {
+  padding: 5px 7px;
+  border-radius: 999px;
+  background: #fbf6ef;
+  color: var(--ink);
+  font-size: 11px;
+}
+@media (max-width: 520px) {
+  .trip-preview-head {
+    display: grid;
+  }
+  .trip-preview-head .pill {
+    max-width: 100%;
+  }
+  .trip-preview-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .trip-preview-days header {
+    display: grid;
+    gap: 2px;
+  }
+}
 .accordion-card {
   position: relative;
   overflow: clip;

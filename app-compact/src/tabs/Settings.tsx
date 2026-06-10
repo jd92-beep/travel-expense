@@ -248,6 +248,48 @@ function compactTripDoctor(
   };
 }
 
+function aiModelLabel(modelId: string | undefined): string {
+  const id = modelId || DEFAULT_KIMI_PRIMARY_MODEL_ID;
+  return AI_MODELS.find((model) => model.id === id)?.name || id;
+}
+
+function tripDraftPreviewStats(draft: TripDraft) {
+  const days = draft.trip.itinerary || [];
+  const spots = days.flatMap((day) => day.spots || []);
+  const lodgingNames = new Set<string>();
+  const foodNames = new Set<string>();
+  const detailNames = new Set<string>();
+  for (const day of days) {
+    if (day.lodging?.name) lodgingNames.add(day.lodging.name);
+    if (day.highlight) detailNames.add(day.highlight);
+    for (const spot of day.spots || []) {
+      const name = String(spot.name || '').trim();
+      if (!name) continue;
+      if (spot.type === 'lodging' || /hotel|酒店|住宿|旅館/i.test(name)) lodgingNames.add(name);
+      if (spot.type === 'food' || /restaurant|cafe|餐|飯|食|咖啡|壽司|拉麵/i.test(name)) foodNames.add(name);
+      if (spot.note || spot.address || spot.mapUrl || spot.time) detailNames.add(name);
+    }
+  }
+  return {
+    dayCount: days.length,
+    spotCount: spots.filter((spot) => String(spot.name || '').trim()).length,
+    lodgingCount: lodgingNames.size,
+    foodCount: foodNames.size,
+    detailCount: detailNames.size,
+    lodgingNames: Array.from(lodgingNames).slice(0, 4),
+    foodNames: Array.from(foodNames).slice(0, 4),
+    detailNames: Array.from(detailNames).slice(0, 5),
+    days: days.slice(0, 8).map((day) => ({
+      key: `${day.date}-${day.day}-${day.region}`,
+      title: `Day ${day.day} · ${day.date}`,
+      region: [day.region, day.city, day.country].filter(Boolean).join(' · '),
+      highlight: day.highlight || '',
+      lodging: day.lodging?.name || '',
+      spots: (day.spots || []).filter((spot) => String(spot.name || '').trim()).slice(0, 4),
+    })),
+  };
+}
+
 type BackupImportPreview = {
   fileName: string;
   safePayload: Partial<AppState>;
@@ -863,6 +905,9 @@ export function Settings({
   const [backupPreview, setBackupPreview] = useState<BackupImportPreview | null>(null);
   const [tripSharePreview, setTripSharePreview] = useState<TripSharePreview | null>(null);
   const [diagnosticsPreview, setDiagnosticsPreview] = useState<DiagnosticsPreview | null>(null);
+  const tripUpdateModelId = state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
+  const tripUpdateModelName = aiModelLabel(tripUpdateModelId);
+  const tripPreviewStats = tripDraft ? tripDraftPreviewStats(tripDraft) : null;
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -2212,8 +2257,8 @@ export function Settings({
         </div>
       </AccordionCard>
 
-      <AccordionCard id="settings-trip-update" eyebrow="Kimi Trip Update" title="行程更新卡片" icon={<Sparkles />}>
-        <p className="muted">貼入新旅程或補充行程 paragraph，AI 會先產生 preview；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
+      <AccordionCard id="settings-trip-update" eyebrow="Trip Update AI" title="AI 行程更新" icon={<Sparkles />}>
+        <p className="muted">目前 primary：{tripUpdateModelName}。貼入長行程後，AI 會先分析日程、景點、酒店、餐廳同重要細節；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
         <textarea
           rows={6}
           value={tripParagraph}
@@ -2227,24 +2272,55 @@ export function Settings({
             disabled={!tripParagraph.trim() || !!busy}
             onClick={() => run('分析行程', async () => {
               const draft = await parseTripParagraph(tripParagraph, state);
+              const stats = tripDraftPreviewStats(draft);
               setTripDraft(draft);
-              return `已產生 preview：${draft.trip.name}`;
+              return `已分析：${draft.trip.name} · ${stats.dayCount} 日 · ${stats.spotCount} 景點 · ${stats.lodgingCount} 酒店 · ${stats.foodCount} 餐飲 · ${stats.detailCount} 重要細節`;
             })}
           >
-            <Plane size={18} /> 用 Kimi 分析
+            <Plane size={18} /> 用已選模型分析
           </button>
           {tripDraft && <button className="secondary" type="button" onClick={() => setTripDraft(null)}>清除 preview</button>}
         </div>
-        {tripDraft && (
+        {tripDraft && tripPreviewStats && (
           <div className="trip-preview">
-            <h3>{tripDraft.trip.name}</h3>
-            <p className="muted">{tripDraft.summary}</p>
+            <div className="trip-preview-head">
+              <div>
+                <h3>{tripDraft.trip.name}</h3>
+                <p className="muted">{tripDraft.summary}</p>
+              </div>
+              <span className="pill">Primary · {tripUpdateModelName}</span>
+            </div>
+            <div className="trip-preview-stats">
+              <span><b>{tripPreviewStats.dayCount}</b><small>日程</small></span>
+              <span><b>{tripPreviewStats.spotCount}</b><small>景點</small></span>
+              <span><b>{tripPreviewStats.lodgingCount}</b><small>酒店</small></span>
+              <span><b>{tripPreviewStats.foodCount}</b><small>餐飲</small></span>
+              <span><b>{tripPreviewStats.detailCount}</b><small>重要細節</small></span>
+            </div>
             <div className="mini-list">
               <span>{tripDraft.trip.startDate} → {tripDraft.trip.endDate}</span>
               <span>{tripDraft.trip.destinationSummary}</span>
               <span>{tripDraft.trip.itinerary.length} 日 · {currenciesForTrip(tripDraft.trip).join(', ')}</span>
+              {!!tripPreviewStats.lodgingNames.length && <span>酒店：{tripPreviewStats.lodgingNames.join('、')}</span>}
+              {!!tripPreviewStats.foodNames.length && <span>餐飲：{tripPreviewStats.foodNames.join('、')}</span>}
+              {!!tripPreviewStats.detailNames.length && <span>重要細節：{tripPreviewStats.detailNames.join('、')}</span>}
               {tripDraft.changes.map((change) => <span key={change}>{change}</span>)}
               {tripDraft.warnings.map((warning) => <span key={warning}>Warning: {warning}</span>)}
+            </div>
+            <div className="trip-preview-days">
+              {tripPreviewStats.days.map((day) => (
+                <article key={day.key}>
+                  <header>
+                    <strong>{day.title}</strong>
+                    <span>{day.region || '未命名地區'}</span>
+                  </header>
+                  {day.highlight && <p>{day.highlight}</p>}
+                  {day.lodging && <small>酒店 · {day.lodging}</small>}
+                  <div>
+                    {day.spots.map((spot) => <span key={`${day.key}-${spot.time}-${spot.name}`}>{spot.time ? `${spot.time} ` : ''}{spot.name}</span>)}
+                  </div>
+                </article>
+              ))}
             </div>
             <div className="action-row wrap">
               <button className="primary" type="button" onClick={() => applyTripDraft(tripDraft)}>套用到 React</button>
@@ -2377,7 +2453,7 @@ export function Settings({
       </AccordionCard>
 
       <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
-        <p className="muted">Kimi / kimi-code 係 email、trip update primary；Google Gemma 4 31B 係 scan、voice primary。Provider keys 不會進入 React state。</p>
+        <p className="muted">Email 預設使用 Kimi / kimi-code；scan、voice 預設使用 Google Gemma 4 31B；trip update 會使用你下面選擇嘅 Trip update model 做 primary。Provider keys 不會進入 React state。</p>
         <div className="form-grid">
           <label>Scan model
             <select value={state.scanModel} onChange={(e) => updateState({ scanModel: e.target.value })}>

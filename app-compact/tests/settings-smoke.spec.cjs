@@ -21,6 +21,41 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
     contentType: 'application/json',
     body: JSON.stringify({ ok: false, error: 'test kimi unavailable' }),
   }));
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/trip/intelligence', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      ok: true,
+      data: {
+        trip: {
+          name: 'Settings Seoul Trip',
+          destinationSummary: 'Seoul',
+          startDate: '2026-07-10',
+          endDate: '2026-07-12',
+          homeCurrency: 'HKD',
+          currencies: ['HKD', 'KRW'],
+          itinerary: [{
+            date: '2026-07-10',
+            day: 1,
+            region: 'Seoul',
+            city: 'Seoul',
+            country: 'South Korea',
+            timezone: 'Asia/Seoul',
+            currency: 'KRW',
+            highlight: 'Arrival and Hongdae dinner',
+            lodging: { name: 'Hongdae Stay' },
+            spots: [
+              { time: '18:00', name: 'Hongdae Street', type: 'sightseeing' },
+              { time: '19:30', name: 'Seoul BBQ', type: 'food' },
+            ],
+          }],
+        },
+        summary: 'Settings smoke parsed the trip update.',
+        warnings: [],
+        changes: ['Detected new Seoul trip.'],
+      },
+    }),
+  }));
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/credentials/rotate', async (route) => route.fulfill({
     status: 400,
     contentType: 'application/json',
@@ -219,10 +254,12 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await page.getByLabel(/反轉首頁統計/).check();
   await expect(tripNameInput).toHaveValue('M10 Trip Updated');
 
-  await setAccordion(page, '行程更新卡片');
+  await setAccordion(page, 'AI 行程更新');
   await page.getByPlaceholder(/下次/).fill('2026-07-10 to 2026-07-12 Seoul, arrive Hongdae 18:00, stay near Hongdae.');
-  await page.getByRole('button', { name: /用 Kimi 分析/ }).click();
-  await expect(page.getByText(/已產生 preview|AI 暫時未能完整分析/).first()).toBeVisible();
+  await page.getByRole('button', { name: /用已選模型分析/ }).click();
+  await expect(page.getByRole('heading', { name: 'Settings Seoul Trip' })).toBeVisible();
+  await expect(page.getByText('酒店：Hongdae Stay')).toBeVisible();
+  await expect(page.getByText('餐飲：Seoul BBQ')).toBeVisible();
 
   await setAccordion(page, '旅伴');
   await page.getByPlaceholder('旅伴名字').fill('M10 Friend');

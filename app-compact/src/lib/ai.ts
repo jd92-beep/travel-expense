@@ -176,6 +176,77 @@ function hasUsefulTripItinerary(draft: TripDraft): boolean {
     && draft.trip.itinerary.some((day) => (day.spots || []).some((spot) => String(spot.name || '').trim()));
 }
 
+function selectedModelAttempt(chosenModelId: string): ModelAttempt | null {
+  if (!chosenModelId) return null;
+  const parts = chosenModelId.split('/');
+  if (parts.length === 2) {
+    const provider = parts[0] as 'kimi' | 'google' | 'mimo';
+    return {
+      provider,
+      model: parts[1],
+      label: `${provider === 'kimi' ? 'Kimi' : provider === 'mimo' ? 'Mimo' : 'Google'} (${parts[1]}) [Selected]`,
+    };
+  }
+  if (/kimi/i.test(chosenModelId)) {
+    return { provider: 'kimi', model: chosenModelId, label: `Kimi (${chosenModelId}) [Selected]` };
+  }
+  if (/mimo/i.test(chosenModelId)) {
+    return { provider: 'mimo', model: chosenModelId, label: `Mimo (${chosenModelId}) [Selected]` };
+  }
+  return { provider: 'google', model: chosenModelId, label: `Google (${chosenModelId}) [Selected]` };
+}
+
+function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' | 'trip'): ModelAttempt[] {
+  const chosenModelId = kind === 'scan'
+    ? state.scanModel || ''
+    : kind === 'voice'
+      ? state.voiceModel || ''
+      : kind === 'email'
+        ? state.emailModel || ''
+        : state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
+  const preferredAttempt = selectedModelAttempt(chosenModelId);
+  const requiredPrimary: ModelAttempt = kind === 'email'
+    ? { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Required Primary)' }
+    : kind === 'trip'
+      ? preferredAttempt || { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Trip Update Primary)' }
+      : { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Required Primary)' };
+  const baseAttempts: ModelAttempt[] = kind === 'email' || kind === 'trip'
+    ? [
+        { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
+        { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (2nd Fallback)' },
+        { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (3rd Fallback)' },
+        { provider: 'google', model: 'gemini-3.1-flash', label: 'Google Gemini 3.1 Flash (4th Fallback)' },
+        { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (5th Fallback)' },
+      ]
+    : [
+        { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
+        { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (2nd Fallback)' },
+        { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (3rd Fallback)' },
+        { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (4th Fallback)' },
+      ];
+
+  const attempts: ModelAttempt[] = [requiredPrimary];
+  if (kind !== 'trip' && preferredAttempt && !sameModelAttempt(requiredPrimary, preferredAttempt)) {
+    attempts.push(preferredAttempt);
+  }
+  for (const base of baseAttempts) {
+    if (!attempts.some((attempt) => sameModelAttempt(base, attempt))) attempts.push(base);
+  }
+  return attempts;
+}
+
+async function callModelAttemptJson(
+  state: AppState,
+  attempt: ModelAttempt,
+  prompt: string,
+  kind: 'scan' | 'voice' | 'email' | 'trip',
+  image?: { base64: string; mime: string },
+) {
+  if (attempt.provider === 'kimi') return callKimiJson(state, prompt, kind, image, attempt.model);
+  if (attempt.provider === 'mimo') return callMimoJson(state, prompt, kind, image, attempt.model);
+  return callGoogleJson(state, prompt, kind, image, attempt.model);
+}
+
 async function callGoogleJson(
   state: AppState,
   prompt: string,
@@ -214,94 +285,12 @@ async function callPreferredJson(
   kind: 'scan' | 'voice' | 'email' | 'trip',
   image?: { base64: string; mime: string }
 ) {
-  let chosenModelId = '';
-  if (kind === 'scan') {
-    chosenModelId = state.scanModel || '';
-  } else if (kind === 'voice') {
-    chosenModelId = state.voiceModel || '';
-  } else if (kind === 'email') {
-    chosenModelId = state.emailModel || '';
-  } else if (kind === 'trip') {
-    chosenModelId = state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
-  }
-
-  let preferredAttempt: ModelAttempt | null = null;
-  if (chosenModelId) {
-    const parts = chosenModelId.split('/');
-      if (parts.length === 2) {
-      preferredAttempt = {
-        provider: parts[0] as 'kimi' | 'google' | 'mimo',
-        model: parts[1],
-        label: `${parts[0] === 'kimi' ? 'Kimi' : parts[0] === 'mimo' ? 'Mimo' : 'Google'} (${parts[1]}) [Selected]`,
-      };
-    } else {
-      if (/kimi/i.test(chosenModelId)) {
-        preferredAttempt = {
-          provider: 'kimi',
-          model: chosenModelId,
-          label: `Kimi (${chosenModelId}) [Selected]`,
-        };
-      } else if (/mimo/i.test(chosenModelId)) {
-        preferredAttempt = {
-          provider: 'mimo',
-          model: chosenModelId,
-          label: `Mimo (${chosenModelId}) [Selected]`,
-        };
-      } else {
-        preferredAttempt = {
-          provider: 'google',
-          model: chosenModelId,
-          label: `Google (${chosenModelId}) [Selected]`,
-        };
-      }
-    }
-  }
-
-  const requiredPrimary: ModelAttempt = kind === 'email' || kind === 'trip'
-    ? { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Required Primary)' }
-    : { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Required Primary)' };
-  let baseAttempts: ModelAttempt[] = [];
-  if (kind === 'email' || kind === 'trip') {
-    baseAttempts = [
-      { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
-      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (2nd Fallback)' },
-      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (3rd Fallback)' },
-      { provider: 'google', model: 'gemini-3.1-flash', label: 'Google Gemini 3.1 Flash (4th Fallback)' },
-      { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (5th Fallback)' },
-    ];
-  } else {
-    // voice 或 scan
-    baseAttempts = [
-      { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
-      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (2nd Fallback)' },
-      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (3rd Fallback)' },
-      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (4th Fallback)' },
-    ];
-  }
-
-  const attempts: ModelAttempt[] = [requiredPrimary];
-  if (preferredAttempt && !sameModelAttempt(requiredPrimary, preferredAttempt)) {
-    attempts.push(preferredAttempt);
-  }
-
-  for (const base of baseAttempts) {
-    const isDup = attempts.some((attempt) => sameModelAttempt(base, attempt));
-    if (!isDup) {
-      attempts.push(base);
-    }
-  }
-
+  const attempts = modelAttemptsForKind(state, kind);
   let last: unknown;
   for (const attempt of attempts) {
     try {
       console.log(`[AI Routing] 正在嘗試調用: ${attempt.label}...`);
-      if (attempt.provider === 'kimi') {
-        return await callKimiJson(state, prompt, kind, image, attempt.model);
-      } else if (attempt.provider === 'mimo') {
-        return await callMimoJson(state, prompt, kind, image, attempt.model);
-      } else {
-        return await callGoogleJson(state, prompt, kind, image, attempt.model);
-      }
+      return await callModelAttemptJson(state, attempt, prompt, kind, image);
     } catch (error) {
       console.warn(`[AI Routing] ${attempt.label} 嘗試失敗:`, error);
       last = error;
@@ -485,32 +474,37 @@ USER PARAGRAPH:
 ${paragraph.slice(0, 14000)}`;
   try {
     const warnings: string[] = [];
-    try {
-      const brokerParsed = await brokerTripIntelligence(state, {
-        paragraph: paragraph.slice(0, 14000),
-        currentTrip,
-        model: KIMI_API_MODEL,
-      });
-      const brokerDraft = normalizeTripDraft(brokerParsed, state, paragraph);
-      if (hasUsefulTripItinerary(brokerDraft)) return brokerDraft;
-      warnings.push('Trip intelligence primary returned no usable itinerary spots.');
-      console.warn('[AI Routing] Trip intelligence primary returned no usable itinerary spots; trying model fallback ladder.');
-    } catch (error) {
-      if (isQuotaOrRateLimitError(error)) throw error;
-      warnings.push(error instanceof Error ? error.message : String(error));
-      const routeLabel = isBrokerRouteUnavailable(error) ? 'backend unavailable' : 'primary failed';
-      console.warn(`[AI Routing] Trip intelligence ${routeLabel}, trying model fallback ladder:`, error);
+    const attempts = modelAttemptsForKind(state, 'trip');
+    let last: unknown;
+    for (const [index, attempt] of attempts.entries()) {
+      try {
+        console.log(`[AI Routing] 正在嘗試行程更新: ${attempt.label}...`);
+        const selectedKimiTripPrimary = index === 0 && attempt.provider === 'kimi' && isKimiModel(`${attempt.provider}/${attempt.model || ''}`);
+        const parsed = selectedKimiTripPrimary
+          ? await brokerTripIntelligence(state, {
+              paragraph: paragraph.slice(0, 14000),
+              currentTrip,
+              model: attempt.model || KIMI_API_MODEL,
+            })
+          : await callModelAttemptJson(state, attempt, prompt, 'trip');
+        const draft = normalizeTripDraft(parsed, state, paragraph);
+        if (hasUsefulTripItinerary(draft)) {
+          return {
+            ...draft,
+            warnings: [...warnings, ...draft.warnings].filter(Boolean),
+          };
+        }
+        warnings.push(`${attempt.label} returned no usable itinerary spots.`);
+        console.warn(`[AI Routing] ${attempt.label} returned no usable itinerary spots; trying next trip model.`);
+      } catch (error) {
+        if (isQuotaOrRateLimitError(error)) throw error;
+        last = error;
+        warnings.push(error instanceof Error ? error.message : String(error));
+        const routeLabel = isBrokerRouteUnavailable(error) ? 'backend unavailable' : 'attempt failed';
+        console.warn(`[AI Routing] Trip update ${attempt.label} ${routeLabel}, trying next model:`, error);
+      }
     }
-
-    const parsed = await callPreferredJson(state, prompt, 'trip');
-    const draft = normalizeTripDraft(parsed, state, paragraph);
-    if (hasUsefulTripItinerary(draft)) {
-      return {
-        ...draft,
-        warnings: [...warnings, ...draft.warnings].filter(Boolean),
-      };
-    }
-    throw new Error([...warnings, 'All trip LLM attempts returned no usable itinerary spots.'].filter(Boolean).join(' | '));
+    throw new Error([...warnings, last instanceof Error ? last.message : '', 'All trip LLM attempts returned no usable itinerary spots.'].filter(Boolean).join(' | '));
   } catch (error) {
     if (isQuotaOrRateLimitError(error)) throw error instanceof Error ? error : new Error(String(error));
     const fallback = tripFromLegacyState({

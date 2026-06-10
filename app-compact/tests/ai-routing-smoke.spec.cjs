@@ -16,7 +16,36 @@ test('AI routing keeps required primary models ahead of stale settings', async (
     const body = route.request().postDataJSON();
     calls.push({ provider: 'google', kind: body.kind, model: body.model });
     const store = body.kind === 'scan' ? 'Gemma Scan Mart' : 'Gemma Voice Cafe';
-    const data = body.kind === 'scan'
+    const data = body.kind === 'trip'
+      ? {
+          trip: {
+            name: 'Google Seoul Trip',
+            destinationSummary: 'Seoul',
+            startDate: '2026-07-10',
+            endDate: '2026-07-12',
+            homeCurrency: 'HKD',
+            currencies: ['HKD', 'KRW'],
+            itinerary: [{
+              date: '2026-07-10',
+              day: 1,
+              region: 'Seoul',
+              city: 'Seoul',
+              country: 'South Korea',
+              timezone: 'Asia/Seoul',
+              currency: 'KRW',
+              highlight: 'Arrival',
+              lodging: { name: 'Hongdae Hotel' },
+              spots: [
+                { time: '18:00', name: 'Hongdae', type: 'sightseeing' },
+                { time: '19:30', name: 'Google BBQ', type: 'food' },
+              ],
+            }],
+          },
+          summary: 'Google parsed trip update',
+          warnings: [],
+          changes: ['Detected new Seoul trip.'],
+        }
+      : body.kind === 'scan'
       ? {
           store,
           total: 1234,
@@ -173,22 +202,23 @@ test('AI routing keeps required primary models ahead of stale settings', async (
 
   await nav.getByRole('button', { name: '設定', exact: true }).click();
   await expect(page.getByText('設定控制中心')).toBeVisible();
-  const tripUpdate = page.getByRole('button', { name: /行程更新卡片/ });
+  const tripUpdate = page.getByRole('button', { name: /AI 行程更新/ });
   if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
   await page.getByPlaceholder(/下次/).fill('下次 2026-07-10 至 2026-07-12 去首爾，第一晚住弘大。');
-  await page.getByRole('button', { name: /用 Kimi 分析/ }).click();
-  await expect(page.getByRole('heading', { name: 'Kimi Seoul Trip' })).toBeVisible();
+  await page.getByRole('button', { name: /用已選模型分析/ }).click();
+  await expect(page.getByRole('heading', { name: 'Google Seoul Trip' })).toBeVisible();
+  await expect(page.getByText('餐飲：Google BBQ')).toBeVisible();
 
   expect(calls).toEqual(expect.arrayContaining([
     expect.objectContaining({ provider: 'google', kind: 'scan', model: 'gemma-4-31b' }),
     expect.objectContaining({ provider: 'google', kind: 'voice', model: 'gemma-4-31b' }),
     expect.objectContaining({ provider: 'kimi', kind: 'email', model: 'kimi-code' }),
-    expect.objectContaining({ provider: 'kimi', kind: 'trip', model: 'kimi-code' }),
+    expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash' }),
   ]));
   expect(calls.some((call) => call.kind === 'scan' && call.provider === 'kimi')).toBe(false);
   expect(calls.some((call) => call.kind === 'voice' && call.provider === 'kimi')).toBe(false);
   expect(calls.some((call) => call.kind === 'email' && call.provider === 'google')).toBe(false);
-  expect(calls.some((call) => call.kind === 'trip' && call.provider === 'google')).toBe(false);
+  expect(calls.some((call) => call.kind === 'trip' && call.provider === 'kimi')).toBe(false);
 });
 
 test('AI routing stops provider fallback when broker quota is exceeded', async ({ page }) => {
@@ -317,7 +347,36 @@ test('Supabase users can call required AI primaries without a broker password se
       supabaseAuth: route.request().headers()['x-supabase-auth'] || '',
       brokerSession: route.request().headers()['x-travel-session'] || '',
     });
-    const data = body.kind === 'voice'
+    const data = body.kind === 'trip'
+      ? {
+          trip: {
+            name: 'Supabase Google Seoul',
+            destinationSummary: 'Seoul public trip',
+            startDate: '2026-07-10',
+            endDate: '2026-07-12',
+            homeCurrency: 'HKD',
+            currencies: ['HKD', 'KRW'],
+            itinerary: [{
+              date: '2026-07-10',
+              day: 1,
+              region: 'Seoul',
+              city: 'Seoul',
+              country: 'South Korea',
+              timezone: 'Asia/Seoul',
+              currency: 'KRW',
+              highlight: 'Arrival',
+              lodging: { name: 'Supabase Google Hotel' },
+              spots: [
+                { time: '18:00', name: 'Hongdae', type: 'sightseeing' },
+                { time: '19:30', name: 'Supabase Google BBQ', type: 'food' },
+              ],
+            }],
+          },
+          summary: 'Google parsed public Supabase trip update',
+          warnings: [],
+          changes: ['Detected new Seoul public trip.'],
+        }
+      : body.kind === 'voice'
       ? [{
           store: 'Supabase Gemma Voice',
           total: 4321,
@@ -439,11 +498,12 @@ test('Supabase users can call required AI primaries without a broker password se
 
   await nav.getByRole('button', { name: '設定', exact: true }).click();
   await expect(page.getByText('設定控制中心')).toBeVisible();
-  const tripUpdate = page.getByRole('button', { name: /行程更新卡片/ });
+  const tripUpdate = page.getByRole('button', { name: /AI 行程更新/ });
   if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
   await page.getByPlaceholder(/下次/).fill('下次 2026-07-10 至 2026-07-12 去首爾。');
-  await page.getByRole('button', { name: /用 Kimi 分析/ }).click();
-  await expect(page.getByRole('heading', { name: 'Supabase Kimi Seoul' })).toBeVisible();
+  await page.getByRole('button', { name: /用已選模型分析/ }).click();
+  await expect(page.getByRole('heading', { name: 'Supabase Google Seoul' })).toBeVisible();
+  await expect(page.getByText('餐飲：Supabase Google BBQ')).toBeVisible();
 
   expect(calls).toEqual(expect.arrayContaining([
     expect.objectContaining({
@@ -468,9 +528,9 @@ test('Supabase users can call required AI primaries without a broker password se
       brokerSession: '',
     }),
     expect.objectContaining({
-      provider: 'kimi',
+      provider: 'google',
       kind: 'trip',
-      model: 'kimi-code',
+      model: 'gemini-3.1-flash',
       supabaseAuth: 'Bearer test-ai-access-token',
       brokerSession: '',
     }),
@@ -478,5 +538,5 @@ test('Supabase users can call required AI primaries without a broker password se
   expect(calls.some((call) => call.kind === 'scan' && call.provider === 'kimi')).toBe(false);
   expect(calls.some((call) => call.kind === 'voice' && call.provider === 'kimi')).toBe(false);
   expect(calls.some((call) => call.kind === 'email' && call.provider === 'google')).toBe(false);
-  expect(calls.some((call) => call.kind === 'trip' && call.provider === 'google')).toBe(false);
+  expect(calls.some((call) => call.kind === 'trip' && call.provider === 'kimi')).toBe(false);
 });
