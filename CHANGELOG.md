@@ -5,6 +5,7 @@
 - Changed compact Weather provider priority for Japan so itinerary locations in Japan try true JMA official public JSON first, then use broker-backed WeatherAPI or Open-Meteo/JMA model data only to fill missing fields such as feels-like, UV, cloud cover, and wind gusts.
 - Added JMA official forecast + AMeDAS support for the current Japan trip regions used by the compact app, with stale non-official cache bypass so WeatherAPI cache no longer blocks official Japan data.
 - Added Weather smoke coverage for JMA official success, JMA official failure fallback, broker-session fallback filling, ended-trip current weather, city geocoding, Korea fallback geocoding, and multi-city weather cards.
+- Deployed the compact JMA official-first Weather provider pass to Vercel production as `dpl_6SWopzxDZWJJNHjfF7GPTDyJ4YCq`; `npm run smoke:deploy-live` passed for app-code commit `bf5c8c4` with asset hash `7bce869406406666`.
 - Changed compact Weather metric chips to a 2x2 mobile grid so UV/cloud, rain/precipitation, wind/gust, and humidity values no longer collapse into `...`.
 - Kept the UV/cloud chip as the left-most Weather metric and shortened cloud copy to `雲35%` style for readability.
 - Added Weather smoke coverage proving every live metric value fits without horizontal text overflow.
