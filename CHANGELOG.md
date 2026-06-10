@@ -2,6 +2,11 @@
 
 ## 2026-06-10
 
+- Fixed compact Google Gemma 4 31B routing by changing the stored/default model id from `gemma-4-31b` to the exact Google Gemini API id `gemma-4-31b-it`, while keeping the Settings label as `Google Gemma 4 31B`.
+- Updated compact AI routing and shared-contract smoke coverage so scan/voice calls prove `gemma-4-31b-it` is sent to the broker.
+- Hardened Credential Broker source for Mimo v2.5 by using Xiaomi's documented `api-key` header and adding a pay-as-you-go base fallback after Token Plan 404s.
+- Hardened Credential Broker JSON extraction so provider replies that contain a valid JSON object followed by extra text no longer fail parsing.
+- Deployed the compact frontend model-id fix to Vercel production as `dpl_C6F4PTLypt1BiLhxz82EgPahhtgV` with live asset hash `899db69a2d900bfe`; the Cloudflare Worker source fix is committed but production Worker deployment is still blocked by local Cloudflare auth/account permissions.
 - Hardened compact trip-update/new-trip itinerary extraction guidance so models must return an app-wide `extractionReport`, source quality, assumptions, missing critical fields, confidence, source text, booking references, and richer city/country/timezone/address/map metadata.
 - Fixed trip extraction normalization so a missing itinerary is not treated as success by copying the current itinerary; empty or incomplete model output now continues through the fallback ladder instead of silently reusing stale trip data.
 - Preserved itinerary spot and lodging metadata through validation, including `city`, `country`, `timezone`, `currency`, `lat/lon`, `bookingRef`, `sourceText`, `confidence`, and `timeEnd`, so Timeline, Weather, and backend sync can use the extracted trip details.
