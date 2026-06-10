@@ -2,6 +2,11 @@
 
 ## 2026-06-10
 
+- Hardened compact trip-update/new-trip itinerary extraction guidance so models must return an app-wide `extractionReport`, source quality, assumptions, missing critical fields, confidence, source text, booking references, and richer city/country/timezone/address/map metadata.
+- Fixed trip extraction normalization so a missing itinerary is not treated as success by copying the current itinerary; empty or incomplete model output now continues through the fallback ladder instead of silently reusing stale trip data.
+- Preserved itinerary spot and lodging metadata through validation, including `city`, `country`, `timezone`, `currency`, `lat/lon`, `bookingRef`, `sourceText`, `confidence`, and `timeEnd`, so Timeline, Weather, and backend sync can use the extracted trip details.
+- Improved the Settings trip-update preview with source quality, transport count, missing critical fields, and model assumptions before applying a pasted itinerary.
+- Added smoke coverage proving trip update does not accept copied current itinerary as a successful extraction, and deployed the compact itinerary extraction hardening to Vercel production as `dpl_9y7VSDw6f7n1i9FjGixc7BWGFZ1U` with live asset hash `1f6bd07479b69f86`.
 - Changed the compact Settings trip-update card from Kimi-only wording to `Trip Update AI` / `AI 行程更新`.
 - Trip updates now use the selected `Trip update model` from Model routing as the primary model; selected Google/Mimo models no longer get bypassed by a hard-coded Kimi `/trip/intelligence` call, while selected Kimi still uses the structured route first.
 - Improved the trip-update preview so long pasted itineraries show extracted day count, scenery spot count, hotel count, restaurant/food count, important-detail count, hotel/food/detail names, and compact per-day spot rows before the user applies the update.
