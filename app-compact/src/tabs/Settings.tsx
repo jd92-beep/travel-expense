@@ -256,6 +256,7 @@ function aiModelLabel(modelId: string | undefined): string {
 function tripDraftPreviewStats(draft: TripDraft) {
   const days = draft.trip.itinerary || [];
   const spots = days.flatMap((day) => day.spots || []);
+  const report = draft.extractionReport;
   const lodgingNames = new Set<string>();
   const foodNames = new Set<string>();
   const detailNames = new Set<string>();
@@ -266,16 +267,20 @@ function tripDraftPreviewStats(draft: TripDraft) {
       const name = String(spot.name || '').trim();
       if (!name) continue;
       if (spot.type === 'lodging' || /hotel|酒店|住宿|旅館/i.test(name)) lodgingNames.add(name);
-      if (spot.type === 'food' || /restaurant|cafe|餐|飯|食|咖啡|壽司|拉麵/i.test(name)) foodNames.add(name);
-      if (spot.note || spot.address || spot.mapUrl || spot.time) detailNames.add(name);
+      if (spot.type === 'food' || /restaurant|cafe|餐|飯|食|咖啡|壽司|拉麵|bbq/i.test(name)) foodNames.add(name);
+      if (spot.note || spot.address || spot.mapUrl || spot.time || spot.bookingRef || spot.sourceText) detailNames.add(name);
     }
   }
   return {
-    dayCount: days.length,
-    spotCount: spots.filter((spot) => String(spot.name || '').trim()).length,
-    lodgingCount: lodgingNames.size,
-    foodCount: foodNames.size,
-    detailCount: detailNames.size,
+    dayCount: report?.daysExtracted ?? days.length,
+    spotCount: report?.spotsExtracted ?? spots.filter((spot) => String(spot.name || '').trim()).length,
+    lodgingCount: report?.hotelsExtracted ?? lodgingNames.size,
+    foodCount: report?.restaurantsExtracted ?? foodNames.size,
+    transportCount: report?.transportsExtracted ?? 0,
+    detailCount: report?.importantDetailsExtracted ?? detailNames.size,
+    sourceQuality: report?.sourceQuality || 'medium',
+    missingCriticalFields: report?.missingCriticalFields || [],
+    assumptions: report?.assumptions || [],
     lodgingNames: Array.from(lodgingNames).slice(0, 4),
     foodNames: Array.from(foodNames).slice(0, 4),
     detailNames: Array.from(detailNames).slice(0, 5),
@@ -2274,7 +2279,7 @@ export function Settings({
               const draft = await parseTripParagraph(tripParagraph, state);
               const stats = tripDraftPreviewStats(draft);
               setTripDraft(draft);
-              return `已分析：${draft.trip.name} · ${stats.dayCount} 日 · ${stats.spotCount} 景點 · ${stats.lodgingCount} 酒店 · ${stats.foodCount} 餐飲 · ${stats.detailCount} 重要細節`;
+              return `已分析：${draft.trip.name} · ${stats.dayCount} 日 · ${stats.spotCount} 景點 · ${stats.lodgingCount} 酒店 · ${stats.foodCount} 餐飲 · ${stats.transportCount} 交通 · ${stats.detailCount} 重要細節`;
             })}
           >
             <Plane size={18} /> 用已選模型分析
@@ -2288,13 +2293,14 @@ export function Settings({
                 <h3>{tripDraft.trip.name}</h3>
                 <p className="muted">{tripDraft.summary}</p>
               </div>
-              <span className="pill">Primary · {tripUpdateModelName}</span>
+              <span className="pill">Primary · {tripUpdateModelName} · {tripPreviewStats.sourceQuality}</span>
             </div>
             <div className="trip-preview-stats">
               <span><b>{tripPreviewStats.dayCount}</b><small>日程</small></span>
               <span><b>{tripPreviewStats.spotCount}</b><small>景點</small></span>
               <span><b>{tripPreviewStats.lodgingCount}</b><small>酒店</small></span>
               <span><b>{tripPreviewStats.foodCount}</b><small>餐飲</small></span>
+              <span><b>{tripPreviewStats.transportCount}</b><small>交通</small></span>
               <span><b>{tripPreviewStats.detailCount}</b><small>重要細節</small></span>
             </div>
             <div className="mini-list">
@@ -2304,6 +2310,8 @@ export function Settings({
               {!!tripPreviewStats.lodgingNames.length && <span>酒店：{tripPreviewStats.lodgingNames.join('、')}</span>}
               {!!tripPreviewStats.foodNames.length && <span>餐飲：{tripPreviewStats.foodNames.join('、')}</span>}
               {!!tripPreviewStats.detailNames.length && <span>重要細節：{tripPreviewStats.detailNames.join('、')}</span>}
+              {!!tripPreviewStats.missingCriticalFields.length && <span>未確認：{tripPreviewStats.missingCriticalFields.slice(0, 5).join('、')}</span>}
+              {!!tripPreviewStats.assumptions.length && <span>模型假設：{tripPreviewStats.assumptions.slice(0, 4).join('、')}</span>}
               {tripDraft.changes.map((change) => <span key={change}>{change}</span>)}
               {tripDraft.warnings.map((warning) => <span key={warning}>Warning: {warning}</span>)}
             </div>

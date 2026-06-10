@@ -221,6 +221,162 @@ test('AI routing keeps required primary models ahead of stale settings', async (
   expect(calls.some((call) => call.kind === 'trip' && call.provider === 'kimi')).toBe(false);
 });
 
+test('Trip update does not treat the current itinerary as a successful extraction', async ({ page }) => {
+  test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
+  const calls = [];
+
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
+  await page.route('**/google/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ provider: 'google', kind: body.kind, model: body.model });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          trip: {
+            name: 'Empty Google Trip',
+            destinationSummary: 'Jeju Korea',
+            startDate: '2026-08-01',
+            endDate: '2026-08-03',
+            homeCurrency: 'HKD',
+            currencies: ['HKD', 'KRW'],
+            itinerary: [],
+          },
+          extractionReport: {
+            daysExtracted: 0,
+            spotsExtracted: 0,
+            hotelsExtracted: 0,
+            restaurantsExtracted: 0,
+            transportsExtracted: 0,
+            importantDetailsExtracted: 0,
+            sourceQuality: 'low',
+            missingCriticalFields: ['itinerary days', 'itinerary spots'],
+            assumptions: [],
+            warnings: ['No itinerary extracted from primary model.'],
+          },
+          summary: 'Primary returned no usable itinerary.',
+          warnings: ['No itinerary extracted.'],
+          changes: [],
+        },
+      }),
+    });
+  });
+
+  await page.route('**/mimo/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ provider: 'mimo', kind: body.kind, model: body.model });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          trip: {
+            name: 'Mimo Jeju Trip',
+            destinationSummary: 'Jeju, South Korea',
+            startDate: '2026-08-01',
+            endDate: '2026-08-03',
+            homeCurrency: 'HKD',
+            currencies: ['HKD', 'KRW'],
+            itinerary: [{
+              date: '2026-08-01',
+              day: 1,
+              region: 'Jeju City',
+              city: 'Jeju',
+              country: 'South Korea',
+              timezone: 'Asia/Seoul',
+              currency: 'KRW',
+              highlight: 'Arrival and market dinner',
+              lodging: { name: 'Jeju Harbor Hotel', address: 'Jeju-si', confidence: 'medium' },
+              spots: [
+                { time: '15:00', name: 'Jeju International Airport', type: 'transport', timezone: 'Asia/Seoul', sourceText: 'arrive Jeju 15:00', confidence: 'high' },
+                { time: '19:00', name: 'Dongmun Market', type: 'food', timezone: 'Asia/Seoul', sourceText: 'market dinner', confidence: 'high' },
+              ],
+            }],
+          },
+          extractionReport: {
+            daysExtracted: 1,
+            spotsExtracted: 2,
+            hotelsExtracted: 1,
+            restaurantsExtracted: 1,
+            transportsExtracted: 1,
+            importantDetailsExtracted: 3,
+            sourceQuality: 'high',
+            missingCriticalFields: ['Dongmun Market lat/lon'],
+            assumptions: ['Jeju market dinner means Dongmun Market.'],
+            warnings: [],
+          },
+          summary: 'Fallback extracted Jeju itinerary.',
+          warnings: [],
+          changes: ['Used fallback model after empty primary result.'],
+        },
+      }),
+    });
+  });
+
+  await page.route('**/kimi/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ provider: 'kimi', kind: body.kind, model: body.model });
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'unexpected kimi call' }) });
+  });
+
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'ai-routing-session',
+      credentialSessionExpiresAt: Date.now() + 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      tripUpdateModel: 'google/gemini-3.1-flash',
+      activeTripId: 'trip_old',
+      tripName: 'Old Current Trip',
+      tripDateRange: { start: '2026-04-20', end: '2026-04-21' },
+      customItinerary: [{ date: '2026-04-20', day: 1, region: 'Old Region', spots: [{ time: '10:00', name: 'Old Current Spot', type: 'sightseeing' }] }],
+      trips: [{
+        id: 'trip_old',
+        name: 'Old Current Trip',
+        destinationSummary: 'Old Region',
+        startDate: '2026-04-20',
+        endDate: '2026-04-21',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: true,
+        itinerary: [{ date: '2026-04-20', day: 1, region: 'Old Region', spots: [{ time: '10:00', name: 'Old Current Spot', type: 'sightseeing' }] }],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      receipts: [],
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByText('設定控制中心')).toBeVisible();
+  const tripUpdate = page.getByRole('button', { name: /AI 行程更新/ });
+  if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
+  await page.getByPlaceholder(/下次/).fill('2026-08-01 to 2026-08-03 Jeju, arrive 15:00, dinner at market, stay near harbor.');
+  await page.getByRole('button', { name: /用已選模型分析/ }).click();
+  await expect(page.getByRole('heading', { name: 'Mimo Jeju Trip' })).toBeVisible();
+  await expect(page.getByText('餐飲：Dongmun Market')).toBeVisible();
+  await expect(page.getByText('未確認：Dongmun Market lat/lon')).toBeVisible();
+  await expect(page.getByText('Old Current Spot')).toHaveCount(0);
+  expect(calls).toEqual(expect.arrayContaining([
+    expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash' }),
+    expect.objectContaining({ provider: 'mimo', kind: 'trip', model: 'mimo-v2.5' }),
+  ]));
+});
+
 test('AI routing stops provider fallback when broker quota is exceeded', async ({ page }) => {
   test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
   const calls = [];

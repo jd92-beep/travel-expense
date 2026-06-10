@@ -51,6 +51,18 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
           }],
         },
         summary: 'Settings smoke parsed the trip update.',
+        extractionReport: {
+          daysExtracted: 1,
+          spotsExtracted: 2,
+          hotelsExtracted: 1,
+          restaurantsExtracted: 1,
+          transportsExtracted: 0,
+          importantDetailsExtracted: 3,
+          sourceQuality: 'high',
+          missingCriticalFields: ['Hongdae Stay address/mapUrl'],
+          assumptions: ['Hongdae arrival time was treated as Day 1 evening'],
+          warnings: [],
+        },
         warnings: [],
         changes: ['Detected new Seoul trip.'],
       },
@@ -260,6 +272,8 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await expect(page.getByRole('heading', { name: 'Settings Seoul Trip' })).toBeVisible();
   await expect(page.getByText('酒店：Hongdae Stay')).toBeVisible();
   await expect(page.getByText('餐飲：Seoul BBQ')).toBeVisible();
+  await expect(page.getByText('未確認：Hongdae Stay address/mapUrl')).toBeVisible();
+  await expect(page.getByText('模型假設：Hongdae arrival time was treated as Day 1 evening')).toBeVisible();
 
   await setAccordion(page, '旅伴');
   await page.getByPlaceholder('旅伴名字').fill('M10 Friend');

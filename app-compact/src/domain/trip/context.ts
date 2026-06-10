@@ -269,7 +269,11 @@ export function tripIntelligencePromptContract(): string {
   return [
     'Return strict JSON only.',
     'Trip intelligence must include countryCode, countryName, primaryCurrency, themeKey, locale, timezone, weatherRegion, confidence.',
+    'Supported countryCode values include JP, KR, TW, GB, EU, HK, CN, SG, TH, MY, VN, PH, AU, NZ, US, GLOBAL.',
     `themeKey must be one of: ${TRIP_THEME_KEYS.join(', ')}.`,
     'Use country/day itinerary context to set currency and weather location. Do not invent secrets or API keys.',
+    'Never copy the current itinerary as a successful extraction unless the user text explicitly contains those same days/spots.',
+    'For every extracted place, include city, country, timezone, address/mapUrl when present, and lat/lon only when reasonably inferable; otherwise omit lat/lon and add a warning.',
+    'Mark uncertain fields with confidence low and list assumptions/missingCriticalFields in extractionReport.',
   ].join(' ');
 }

@@ -93,6 +93,7 @@ export interface ItinerarySpot {
   id?: string;
   spotId?: string;
   time: string;
+  timeEnd?: string;
   name: string;
   type: CategoryId | 'sightseeing';
   note?: string;
@@ -101,6 +102,9 @@ export interface ItinerarySpot {
   lat?: number;
   lon?: number;
   timezone?: string;
+  bookingRef?: string;
+  sourceText?: string;
+  confidence?: 'low' | 'medium' | 'high';
 }
 
 export interface ItineraryDay {
@@ -121,6 +125,11 @@ export interface ItineraryDay {
     mapUrl?: string;
     checkIn?: string;
     checkOut?: string;
+    bookingRef?: string;
+    lat?: number;
+    lon?: number;
+    sourceText?: string;
+    confidence?: 'low' | 'medium' | 'high';
   };
   spots: ItinerarySpot[];
 }
@@ -153,6 +162,20 @@ export interface TripDraft {
   summary: string;
   warnings: string[];
   changes: string[];
+  extractionReport?: TripExtractionReport;
+}
+
+export interface TripExtractionReport {
+  daysExtracted: number;
+  spotsExtracted: number;
+  hotelsExtracted: number;
+  restaurantsExtracted: number;
+  transportsExtracted: number;
+  importantDetailsExtracted: number;
+  sourceQuality: 'low' | 'medium' | 'high';
+  missingCriticalFields: string[];
+  assumptions: string[];
+  warnings: string[];
 }
 
 export interface ExchangeRateEntry {
