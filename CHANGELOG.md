@@ -2,6 +2,10 @@
 
 ## 2026-06-10
 
+- Added compact trip-update/new-trip LLM fallback ladder behavior: if primary `/trip/intelligence` fails or returns no useful itinerary spots, the app now tries the model fallback ladder before using curated scenery spots.
+- Kept quota/rate-limit protection for trip creation: 429/quota errors keep the wizard open with a no-bypass error message instead of silently using another model or default scenery fallback.
+- Added Dashboard smoke coverage proving a failed primary trip route plus failed Kimi request can still create an itinerary from Mimo before scenery fallback, and proving quota errors do not create a Jeju trip or sync queue item.
+- Deployed the compact trip wizard LLM fallback ladder to Vercel production as `dpl_8ypkt9eQeAcbgYceSoo242uSknBS` with live asset hash `9883b825ee87b549`.
 - Fixed compact Home new-trip creation so Step 4 `旅程詳情` is actually analyzed by the trip-intelligence/Kimi route instead of being discarded.
 - New trips now store generated itinerary days into the active trip and `customItinerary`, so the Itinerary tab, Weather tab, and active-trip sync queue are populated immediately after creation.
 - Added Jeju/Korea fallback itinerary generation with practical spots, `lat/lon`, `city`, `country`, `Asia/Seoul`, and `KRW` when AI/session/quota is unavailable or returns no useful spots.
