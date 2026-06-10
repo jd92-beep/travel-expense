@@ -2,6 +2,11 @@
 
 ## 2026-06-10
 
+- Fixed compact Home new-trip creation so Step 4 `旅程詳情` is actually analyzed by the trip-intelligence/Kimi route instead of being discarded.
+- New trips now store generated itinerary days into the active trip and `customItinerary`, so the Itinerary tab, Weather tab, and active-trip sync queue are populated immediately after creation.
+- Added Jeju/Korea fallback itinerary generation with practical spots, `lat/lon`, `city`, `country`, `Asia/Seoul`, and `KRW` when AI/session/quota is unavailable or returns no useful spots.
+- Updated Dashboard smoke coverage to create `濟州2026`, verify `/trip/intelligence` uses `kimi-code`, confirm KRW/country metadata, prove Timeline and Weather targets show Jeju itinerary data, and confirm the trip create sync queue includes `tripId`/`sourceId`.
+- Hardened Weather smoke state setup against IndexedDB bleed-through and full trip-profile gaps; deployed to Vercel production as `dpl_895zhEKvsF7gNzCT86D56WcPTBPR` with live asset hash `16cf4ea1bc1e64b2`.
 - Added compact Home new-trip wizard destination-aware suggestions: typing `濟州` now auto-selects KRW, shows Jeju attraction chips, uses Wikivoyage/Wikipedia online search when available, and falls back to curated Jeju spots such as 城山日出峰、牛島、漢拏山、萬丈窟、涉地可支、天地淵瀑布.
 - Replaced the hardcoded Nagoya/Tokyo itinerary-detail buttons with destination-specific suggestions that can fill `旅程詳情`; Dashboard smoke now mocks online Jeju search, verifies KRW, and proves Step 4 keeps the Jeju attraction detail. Deployed to Vercel production as `dpl_EvC79RvgQ5KjNA6wUUaGfCr9CZ2o` with live asset hash `5eaf64085ce97271`.
 - Fixed compact Home new-trip wizard step 2 so users can choose trip length directly. The step now has a `旅程日數` selector plus +/- controls, changing days updates the end date immediately, and the date math is UTC-safe so Asia timezones do not turn 10 days into 9 days.
