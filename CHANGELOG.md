@@ -2,6 +2,10 @@
 
 ## 2026-06-10
 
+- Synced the compact Weather top current-weather card with the same live time slot used by the first location card, so Nagoya's top temperature now matches the lower `LIVE` card instead of showing an earlier slot.
+- Moved the Weather UV/cloud capsule to the left-most metric position inside each weather slot card, before rain, wind, and humidity.
+- Added Weather smoke coverage with varied hourly temperatures proving the top card shows the 27°C live slot and the first live metric chip is the UV capsule.
+- Deployed the compact Weather live-preview sync fix to Vercel production as `dpl_7Qf6LKbWF4f6n9bwr5XzQeujfvTt`; `npm run smoke:deploy-live` passed for commit `7dddb74` with asset hash `eda620ea5513d4bc`.
 - Fixed compact Weather location cards so the decorative colored rail sits on the card top edge instead of crossing over the first row of time/temperature text.
 - Hid direct `WeatherAPI.com` vendor wording from compact Weather cards by displaying broker-backed private weather as `Live weather` and sanitizing fallback copy.
 - Added Weather smoke regression coverage proving the vendor string is absent and the slot accent rail no longer overlaps the weather-slot header.
