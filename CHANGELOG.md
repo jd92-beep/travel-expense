@@ -2,6 +2,10 @@
 
 ## 2026-06-10
 
+- Changed the compact Settings trip-update card from Kimi-only wording to `Trip Update AI` / `AI 行程更新`.
+- Trip updates now use the selected `Trip update model` from Model routing as the primary model; selected Google/Mimo models no longer get bypassed by a hard-coded Kimi `/trip/intelligence` call, while selected Kimi still uses the structured route first.
+- Improved the trip-update preview so long pasted itineraries show extracted day count, scenery spot count, hotel count, restaurant/food count, important-detail count, hotel/food/detail names, and compact per-day spot rows before the user applies the update.
+- Updated Settings and AI routing smoke coverage to prove a selected Google trip model is used first and that the preview displays extracted hotel/restaurant/scenery data; deployed to Vercel production as `dpl_3eB3LEyVJ9HbGKtNw6nCMjwh4ABn` with live asset hash `40852c45340f0a59`.
 - Added compact trip-update/new-trip LLM fallback ladder behavior: if primary `/trip/intelligence` fails or returns no useful itinerary spots, the app now tries the model fallback ladder before using curated scenery spots.
 - Kept quota/rate-limit protection for trip creation: 429/quota errors keep the wizard open with a no-bypass error message instead of silently using another model or default scenery fallback.
 - Added Dashboard smoke coverage proving a failed primary trip route plus failed Kimi request can still create an itinerary from Mimo before scenery fallback, and proving quota errors do not create a Jeju trip or sync queue item.
