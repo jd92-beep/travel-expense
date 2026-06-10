@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06-10
+
+- Fixed compact Weather location cards so the decorative colored rail sits on the card top edge instead of crossing over the first row of time/temperature text.
+- Hid direct `WeatherAPI.com` vendor wording from compact Weather cards by displaying broker-backed private weather as `Live weather` and sanitizing fallback copy.
+- Added Weather smoke regression coverage proving the vendor string is absent and the slot accent rail no longer overlaps the weather-slot header.
+- Deployed the compact Weather card overlay fix to Vercel production as `dpl_F2Mm5VwZQmKSm9LL63jQDfL6WspG`; `npm run smoke:deploy-live` passed for commit `c18111b` with asset hash `536ad6249f14332f`.
+
 ## 2026-06-09
 
 - Fixed the compact Weather top current-weather card layout so provider/live/target/fallback chips, actual temperature, feels-like temperature, high/low/humidity/wind facts, place label, and hourly chips all fit cleanly inside the large card on 390px mobile.
