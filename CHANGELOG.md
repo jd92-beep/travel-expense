@@ -2,6 +2,10 @@
 
 ## 2026-06-10
 
+- Changed compact Weather metric chips to a 2x2 mobile grid so UV/cloud, rain/precipitation, wind/gust, and humidity values no longer collapse into `...`.
+- Kept the UV/cloud chip as the left-most Weather metric and shortened cloud copy to `雲35%` style for readability.
+- Added Weather smoke coverage proving every live metric value fits without horizontal text overflow.
+- Deployed the compact Weather metric readability fix to Vercel production as `dpl_FobtW3gA4frBxXKg47xhU9M5hKW3`; `npm run smoke:deploy-live` passed for commit `dabb152` with asset hash `4be0e10ad6659974`.
 - Synced the compact Weather top current-weather card with the same live time slot used by the first location card, so Nagoya's top temperature now matches the lower `LIVE` card instead of showing an earlier slot.
 - Moved the Weather UV/cloud capsule to the left-most metric position inside each weather slot card, before rain, wind, and humidity.
 - Added Weather smoke coverage with varied hourly temperatures proving the top card shows the 27°C live slot and the first live metric chip is the UV capsule.
