@@ -7,8 +7,6 @@ import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getP
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { EmptyState, GlassCard, StatusPill } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
-import { NumberTicker } from '../components/ui/number-ticker';
-import { GlareHover } from '../components/ui/glare-hover';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryIconId } from '../lib/iconManifest';
 import '../styles/stats.css';
@@ -36,9 +34,6 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
   const catTotals = categoryTotals(analysisReceipts, state, resolvedTripCurrency);
   const payTotals = paymentTotals(analysisReceipts, state, resolvedTripCurrency);
   const analysisTotal = analysisReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
-  const analysisTotalHkd = analysisReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
-  const transferTotal = settlement.transfers.reduce((s, t) => s + t.amount, 0);
-  const privateTotal = settlement.privateByOwner.reduce((s, n) => s + n, 0);
   const maxPersonTotal = Math.max(1, ...persons.map((_, i) => settlement.sharedByPayer[i] + settlement.privateByOwner[i]));
   const settlementActionPlan = buildSettlementActionPlan(settlement, resolvedTripCurrency, toHkd);
   const topReceipts = scopedState.receipts
@@ -60,10 +55,6 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
     tripDayCount,
     trend,
     itinerary,
-    persons,
-    settlement,
-    categories: catTotals,
-    state,
     resolvedTripCurrency,
     toHkd,
   });
@@ -80,6 +71,24 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
         </div>
         <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} updateState={updateState} onTab={onTab} />
       </GlassCard>
+
+      <DataPanel
+        className="top-expenses-panel"
+        icon={<Trophy size={19} />}
+        title="TOP 10 支出"
+        status={<TopTenToggle includeBigItems={state.top10IncludeBigItems} onChange={(value) => updateState({ top10IncludeBigItems: value })} />}
+      >
+        {topReceipts.length ? topReceipts.map((r, idx) => {
+          const cat = categoryById(r.category);
+          return (
+            <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
+              <b>{idx + 1}</b>
+              <span><VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {displayStore(r)}</span>
+              <strong>{r.currency === 'HKD' ? 'HK$' : (r.currency || resolvedTripCurrency === 'JPY' ? '¥' : r.currency || resolvedTripCurrency + ' ')}{fmt(r.total)}</strong>
+            </motion.div>
+          );
+        }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
+      </DataPanel>
 
       <section className="stats-story-grid" aria-label="Budget story cards">
         {budgetStory.map((card) => (
@@ -106,13 +115,6 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
         {trend.length ? <BudgetPaceChart trend={trend} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} /> : null}
         {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
       </DataPanel>
-
-      <div className="metric-grid stats-metrics preview-stats-metrics">
-        <CockpitMetric label="圖表統計額" value={<NumberTicker value={analysisTotalHkd} prefix="HK$ " />} detail={`等值 ${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(analysisTotal)}`} tone="accent" />
-        <CockpitMetric label="共同分帳額" value={<NumberTicker value={toHkd(settlement.sharedTotal)} prefix="HK$ " delay={0.04} />} detail={`等值 ${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(settlement.sharedTotal)}`} />
-        <CockpitMetric label="私人/代付" value={<NumberTicker value={toHkd(privateTotal)} prefix="HK$ " delay={0.08} />} detail={`等值 ${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(privateTotal)}`} tone="success" />
-        <CockpitMetric label="待轉帳" value={<NumberTicker value={toHkd(transferTotal)} prefix="HK$ " delay={0.12} />} detail={`等值 ${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(transferTotal)}`} tone={settlement.transfers.length ? 'danger' : 'success'} />
-      </div>
 
       <DataPanel
         className="settlement-card"
@@ -204,24 +206,6 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
             ))}
           </>
         ) : <EmptyState title="暫時唔需要互相轉帳" description="所有共同支出與代付已經平衡。" />}
-      </DataPanel>
-
-      <DataPanel
-        className="top-expenses-panel"
-        icon={<Trophy size={19} />}
-        title="TOP 10 支出"
-        status={<TopTenToggle includeBigItems={state.top10IncludeBigItems} onChange={(value) => updateState({ top10IncludeBigItems: value })} />}
-      >
-        {topReceipts.length ? topReceipts.map((r, idx) => {
-          const cat = categoryById(r.category);
-          return (
-            <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
-              <b>{idx + 1}</b>
-              <span><VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {displayStore(r)}</span>
-              <strong>{r.currency === 'HKD' ? 'HK$' : (r.currency || resolvedTripCurrency === 'JPY' ? '¥' : r.currency || resolvedTripCurrency + ' ')}{fmt(r.total)}</strong>
-            </motion.div>
-          );
-        }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
       </DataPanel>
 
       <DataPanel className="payer-panel" icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全 receipts</StatusPill>}>
@@ -321,7 +305,6 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
       <div className="preview-budget-overview">
         <div className="preview-budget-main">
           <div className="spending-compass-ring" aria-hidden="true">
-            <motion.i initial={{ rotate: -20, scale: 0.92 }} animate={{ rotate: 0, scale: 1 }} transition={{ duration: 0.5, ease: 'easeOut' }} />
             <div className="spending-compass-copy">
               <span>預算使用</span>
               <strong>{shownPercent}</strong>
@@ -389,10 +372,6 @@ type BudgetStoryInput = {
   tripDayCount: number;
   trend: Array<[string, number]>;
   itinerary: ReturnType<typeof getItinerary>;
-  persons: ReturnType<typeof getPersons>;
-  settlement: ReturnType<typeof computeSettlements>;
-  categories: StatBucket[];
-  state: AppState;
   resolvedTripCurrency: string;
   toHkd: (amt: number) => number;
 };
@@ -403,10 +382,6 @@ function buildBudgetStoryCards({
   tripDayCount,
   trend,
   itinerary,
-  persons,
-  settlement,
-  categories,
-  state,
   resolvedTripCurrency,
   toHkd,
 }: BudgetStoryInput) {
@@ -415,17 +390,6 @@ function buildBudgetStoryCards({
   const remaining = Math.max(0, safeBudget - analysisTotal);
   const remainingDays = remainingTripDays(tripDayCount, trend, itinerary);
   const remainingPerDay = Math.round(remaining / remainingDays);
-  const payerTotals = persons.map((person, index) => ({
-    person,
-    total: (settlement.sharedByPayer[index] || 0) + (settlement.privateByOwner[index] || 0),
-  }));
-  const sortedPayers = payerTotals.slice().sort((a, b) => b.total - a.total);
-  const maxPayer = sortedPayers[0];
-  const minPayer = sortedPayers[sortedPayers.length - 1];
-  const payerGap = maxPayer && minPayer ? Math.max(0, maxPayer.total - minPayer.total) : 0;
-  const sortedCategories = categories.slice().sort((a, b) => b.total - a.total);
-  const topCategory = sortedCategories[0];
-  const topCategoryPercent = topCategory && analysisTotal > 0 ? Math.round(topCategory.total / analysisTotal * 100) : 0;
 
   const formatTrip = (amt: number) => `${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(amt)}`;
   const formatHkd = (amt: number) => `HK$ ${fmt(toHkd(amt))}`;
@@ -444,20 +408,6 @@ function buildBudgetStoryCards({
       value: formatTrip(remainingPerDay),
       detail: `${remainingDays} 日口徑 · 等值 ${formatHkd(remainingPerDay)}`,
       tone: remainingPerDay <= 0 && safeBudget > 0 ? 'danger' : remainingPerDay < Math.max(1, budget / tripDayCount * 0.35) ? 'warning' : 'ok',
-    },
-    {
-      id: 'fairness-person',
-      label: 'Fairness by person',
-      value: payerGap > 0 && maxPayer ? `${maxPayer.person.name}` : '已平衡',
-      detail: payerGap > 0 ? `付款差距 ${formatHkd(payerGap)} · 待轉 HK$ ${fmt(toHkd(settlement.transfers.reduce((sum, item) => sum + item.amount, 0)))}` : '付款分佈暫時平均',
-      tone: settlement.transfers.length ? 'warning' : 'ok',
-    },
-    {
-      id: 'category-anomaly',
-      label: 'Category anomaly',
-      value: topCategory ? `${topCategory.name} ${topCategoryPercent}%` : '未有資料',
-      detail: topCategoryPercent >= 45 ? '集中度偏高，建議打開類別明細睇一次。' : '類別分佈正常，未見單一類別過熱。',
-      tone: topCategoryPercent >= 60 ? 'danger' : topCategoryPercent >= 45 ? 'warning' : 'ok',
     },
   ] as const;
 }
@@ -517,24 +467,6 @@ function TopTenToggle({ includeBigItems, onChange }: { includeBigItems: boolean;
       <button type="button" className={includeBigItems ? 'active' : ''} aria-pressed={includeBigItems} onClick={() => onChange(true)}>全項目</button>
       <button type="button" className={!includeBigItems ? 'active' : ''} aria-pressed={!includeBigItems} onClick={() => onChange(false)}>除了機票和酒店</button>
     </div>
-  );
-}
-
-function CockpitMetric({ label, value, detail, tone = 'neutral' }: { label: string; value: ReactNode; detail?: ReactNode; tone?: 'neutral' | 'accent' | 'danger' | 'success' }) {
-  return (
-    <GlareHover className="stats-metric-glare" background="transparent" color={tone === 'danger' ? '#d94132' : '#d39a29'} opacity={0.16} width="100%" height="100%" playOnce>
-      <motion.article
-        className={`metric-card stats-metric ${tone}`}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.26, ease: 'easeOut' }}
-      >
-        <span>{label}</span>
-        <strong>{value}</strong>
-        {detail && <small>{detail}</small>}
-        <i aria-hidden="true" />
-      </motion.article>
-    </GlareHover>
   );
 }
 
