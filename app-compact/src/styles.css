@@ -13078,3 +13078,25 @@ input[type="checkbox"] {
     padding: 5px 2px !important;
   }
 }
+
+.app-shell--weather .weather-slot-detailed {
+  isolation: isolate !important;
+}
+
+.app-shell--weather .weather-slot-detailed::before {
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  height: 4px !important;
+  border-radius: inherit inherit 0 0 !important;
+  z-index: 0 !important;
+}
+
+.app-shell--weather .weather-slot-detailed::after {
+  z-index: 0 !important;
+}
+
+.app-shell--weather .weather-slot-detailed > * {
+  position: relative !important;
+  z-index: 1 !important;
+}

@@ -174,7 +174,7 @@ export function Weather({ state }: { state: AppState }) {
           <Reveal key={day.date} className="weather-day-reveal" delay={Math.min(0.14, day.day * 0.02)}>
           <GlassCard className="weather-day">
             <div className="section-head">
-              <div><p className="eyebrow">{hasEnded ? `Current · ${today} · Trip Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map((weather) => weather.source).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
+              <div><p className="eyebrow">{hasEnded ? `Current · ${today} · Trip Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
               <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{coordsForDay(day, WEATHER_LOCATIONS_PER_DAY).map((coord) => coord.label).join(' / ') || coordForDay(day).label}</StatusPill>
             </div>
             {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
@@ -320,7 +320,16 @@ function weatherTargetSummary(days: ItineraryDay[], hasEnded: boolean, today: st
 
 function weatherProviderLabel(weather?: DayWeather): string {
   const provider = String(weather?.provider || weather?.source || '').replace(/\s+cache$/i, '').trim();
-  return provider ? `Provider · ${provider}` : 'Provider · 載入中';
+  return provider ? `Provider · ${weatherDisplayProvider(provider)}` : 'Provider · 載入中';
+}
+
+function weatherSourceLabel(weather?: DayWeather): string {
+  const source = String(weather?.source || '').replace(/\s+cache$/i, '').trim();
+  return source ? weatherDisplayProvider(source) : '';
+}
+
+function weatherDisplayProvider(value: string): string {
+  return /weatherapi/i.test(value) ? 'Live weather' : value;
 }
 
 function weatherFreshnessLabel(weather?: DayWeather): string {
@@ -342,7 +351,8 @@ function weatherTargetOriginLabel(coord?: DayWeather['coord']): string {
 }
 
 function weatherFallbackLabel(reason: string): string {
-  return `Fallback · ${reason.replace(/\s+/g, ' ').slice(0, 96)}`;
+  const safeReason = reason.replace(/WeatherAPI\.com/gi, 'private weather provider');
+  return `Fallback · ${safeReason.replace(/\s+/g, ' ').slice(0, 96)}`;
 }
 
 function weatherHint(slot: { rain?: number; precipMm?: number; windSpeed?: number; windGust?: number; uvIndex?: number; temp?: number; feelsLike?: number }) {

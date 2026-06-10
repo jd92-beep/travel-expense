@@ -242,10 +242,26 @@ test('WeatherAPI broker forecast is preferred when broker session is active', as
     credentialSessionExpiresAt: fixed + 60_000,
   });
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText(/Day 1 · WeatherAPI.com/)).toBeVisible();
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · WeatherAPI.com');
+  await expect(page.getByText(/Day 1 · Live weather/)).toBeVisible();
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · Live weather');
+  await expect(page.locator('.weather-screen')).not.toContainText('WeatherAPI.com');
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
   await expect(page.getByText('21°C').first()).toBeVisible();
+  const accentLineMetrics = await page.locator('.weather-slot-detailed').first().evaluate((node) => {
+    const card = node.getBoundingClientRect();
+    const header = node.querySelector('.weather-slot-header')?.getBoundingClientRect();
+    const before = getComputedStyle(node, '::before');
+    const lineTop = card.top + Number.parseFloat(before.top || '0');
+    const lineBottom = lineTop + Number.parseFloat(before.height || '0');
+    return {
+      lineTop,
+      lineBottom,
+      headerTop: header?.top || 0,
+      headerBottom: header?.bottom || 0,
+      overlapsHeader: Boolean(header && lineBottom > header.top && lineTop < header.bottom),
+    };
+  });
+  expect(accentLineMetrics.overlapsHeader, JSON.stringify(accentLineMetrics, null, 2)).toBe(false);
   expect(brokerCalls).toBeGreaterThan(0);
   expect(brokerPayloads.some((payload) => Math.abs(payload.lat - 35.1815) < 0.0001 && Math.abs(payload.lon - 136.9066) < 0.0001)).toBe(true);
   expect(openMeteoCalls).toBe(0);
