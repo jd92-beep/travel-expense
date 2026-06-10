@@ -269,11 +269,15 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await setAccordion(page, 'AI 行程更新');
   await page.getByPlaceholder(/下次/).fill('2026-07-10 to 2026-07-12 Seoul, arrive Hongdae 18:00, stay near Hongdae.');
   await page.getByRole('button', { name: /用已選模型分析/ }).click();
+  const tripConfirm = page.getByRole('dialog', { name: '確認 AI 行程更新' });
+  await expect(tripConfirm).toBeVisible();
+  await expect(tripConfirm).toContainText('Settings Seoul Trip');
+  await expect(tripConfirm).toContainText('Hongdae Stay');
+  await expect(tripConfirm).toContainText('Seoul BBQ');
+  await expect(tripConfirm).toContainText('未確認：Hongdae Stay address/mapUrl');
+  await expect(tripConfirm).toContainText('模型假設：Hongdae arrival time was treated as Day 1 evening');
+  await tripConfirm.getByRole('button', { name: '返回修改文字' }).click();
   await expect(page.getByRole('heading', { name: 'Settings Seoul Trip' })).toBeVisible();
-  await expect(page.getByText('酒店：Hongdae Stay')).toBeVisible();
-  await expect(page.getByText('餐飲：Seoul BBQ')).toBeVisible();
-  await expect(page.getByText('未確認：Hongdae Stay address/mapUrl')).toBeVisible();
-  await expect(page.getByText('模型假設：Hongdae arrival time was treated as Day 1 evening')).toBeVisible();
 
   await setAccordion(page, '旅伴');
   await page.getByPlaceholder('旅伴名字').fill('M10 Friend');
@@ -1269,6 +1273,155 @@ test('Settings backup restore preview can be cancelled before mutating local sta
   expect(stateSnapshot).not.toContain('preview-session-should-not-survive');
   expect(stateSnapshot).not.toContain('preview-page-should-not-survive');
   expect(stateSnapshot).not.toContain('11111111-1111-4111-8111-111111111111');
+});
+
+test('Trip update AI opens a day-by-day confirmation modal and applies a long Jeju itinerary', async ({ page }) => {
+  const jejuItinerary = Array.from({ length: 8 }, (_, index) => {
+    const day = index + 1;
+    const date = `2026-06-${String(12 + day).padStart(2, '0')}`;
+    const lodging = day <= 4 ? 'Hotel Fine Jeju' : day <= 7 ? 'Stanford Hotel & Resort Jeju' : undefined;
+    const regions = ['Jeju West', 'Seogwipo', 'Udo / Seongsan', 'Aqua Planet', 'Aewol', 'Jeju City', 'Sinjeju', 'Airport'];
+    const spotNames = [
+      ['濟州機場', '道頭洞彩虹海岸道路', 'Osulloc Tea Museum'],
+      ['Cafe Gyulkkot Darak', 'Camellia Hill', '偶來市場'],
+      ['城山浦港', 'BLANC ROCHER', '城山日出峰'],
+      ['牛沼端', 'Aqua Planet Jeju', 'Audrant'],
+      ['9.81 Park Jeju', '涯月海邊咖啡街', 'Flowave'],
+      ['七星路購物街', '東門市場', 'Moodjeju'],
+      ['姐妹麵條', 'E-Mart Sinjeju Branch', '新羅免稅店'],
+      ['Aewol The Sunset', 'Baro Pig’s Feet', '濟州機場'],
+    ][index];
+    return {
+      date,
+      day,
+      region: regions[index],
+      city: 'Jeju',
+      country: 'South Korea',
+      timezone: 'Asia/Seoul',
+      currency: 'KRW',
+      highlight: `${regions[index]} day plan`,
+      ...(lodging ? { lodging: { name: lodging, confidence: 'high' } } : {}),
+      spots: spotNames.map((name, spotIndex) => ({
+        time: ['09:00', '12:30', '17:30'][spotIndex],
+        name,
+        type: spotIndex === 1 ? 'sightseeing' : spotIndex === 2 && /Flowave|Pig|市場|麵條/.test(name) ? 'food' : 'other',
+        note: `Extracted from Day ${day}`,
+        confidence: 'high',
+      })),
+    };
+  });
+
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/trip/intelligence', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      ok: true,
+      data: {
+        trip: {
+          name: '濟州2026',
+          destinationSummary: 'Jeju, South Korea',
+          startDate: '2026-06-13',
+          endDate: '2026-06-20',
+          homeCurrency: 'HKD',
+          currencies: ['HKD', 'KRW'],
+          intelligence: {
+            countryCode: 'KR',
+            countryName: 'South Korea',
+            primaryCurrency: 'KRW',
+            themeKey: 'korea_editorial',
+            locale: 'ko-KR',
+            timezone: 'Asia/Seoul',
+            weatherRegion: 'Jeju',
+            confidence: 'high',
+          },
+          itinerary: jejuItinerary,
+        },
+        extractionReport: {
+          daysExtracted: 8,
+          spotsExtracted: 24,
+          hotelsExtracted: 2,
+          restaurantsExtracted: 8,
+          transportsExtracted: 4,
+          importantDetailsExtracted: 24,
+          sourceQuality: 'high',
+          missingCriticalFields: ['Some exact addresses omitted'],
+          assumptions: ['6月13日 interpreted as 2026-06-13 from trip context'],
+          warnings: [],
+        },
+        summary: 'Extracted eight Jeju travel days from pasted itinerary.',
+        warnings: [],
+        changes: ['Built Jeju day-by-day itinerary.'],
+      },
+    }),
+  }));
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'settings-jeju-trip-session',
+      credentialSessionExpiresAt: Date.now() + 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      tripUpdateModel: 'kimi/kimi-code',
+      activeTripId: 'trip_current',
+      tripName: 'Current Trip',
+      tripDateRange: { start: '2026-06-13', end: '2026-06-20' },
+      tripCurrency: 'KRW',
+      trips: [{
+        id: 'trip_current',
+        name: 'Current Trip',
+        destinationSummary: 'Jeju',
+        startDate: '2026-06-13',
+        endDate: '2026-06-20',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'KRW'],
+        timezones: ['Asia/Seoul'],
+        version: 1,
+        active: true,
+        itinerary: [],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      customItinerary: [],
+      receipts: [],
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expectSettingsReady(page);
+  await setAccordion(page, 'AI 行程更新');
+  await page.getByPlaceholder(/下次/).fill('Day 1｜6月13日｜到步＋西線入住｜住 Hotel Fine Jeju\nDay 3｜6月15日｜牛島＋城山日出峰\nDay 8｜6月20日｜涯月慢遊＋機場回程');
+  await page.getByRole('button', { name: /用已選模型分析/ }).click();
+
+  const modal = page.getByRole('dialog', { name: '確認 AI 行程更新' });
+  await expect(modal).toBeVisible();
+  await expect(modal).toContainText('濟州2026');
+  await expect(modal).toContainText('Hotel Fine Jeju');
+  await expect(modal).toContainText('Stanford Hotel & Resort Jeju');
+  await expect(modal).toContainText('Day 3 · 2026-06-15');
+  await expect(modal).toContainText('城山日出峰');
+  await expect(modal).toContainText('Some exact addresses omitted');
+
+  await modal.getByRole('button', { name: '確認並更新行程' }).click();
+  await expect(page.getByText('已套用旅程：濟州2026')).toBeVisible();
+
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}'));
+  expect(stored.tripName).toBe('濟州2026');
+  expect(stored.tripCurrency).toBe('KRW');
+  expect(stored.customItinerary).toHaveLength(8);
+  expect(stored.customItinerary[2].spots.map((spot) => spot.name).join(' ')).toContain('城山日出峰');
+  expect(stored.trips.find((trip) => trip.active).itinerary).toHaveLength(8);
+
+  await page.getByLabel('主要分頁').getByRole('button', { name: '行程', exact: true }).click();
+  await expect(page.locator('.timeline-trip-days')).toContainText('8日');
+  await expect(page.getByText('城山日出峰')).toBeVisible();
 });
 
 test('Settings can connect a broker session without leaking the password into app state', async ({ page }) => {

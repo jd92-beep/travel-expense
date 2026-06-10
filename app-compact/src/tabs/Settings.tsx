@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, LogOut, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, LogOut, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
@@ -891,6 +891,7 @@ export function Settings({
   const [newPersonName, setNewPersonName] = useState('');
   const [tripParagraph, setTripParagraph] = useState('');
   const [tripDraft, setTripDraft] = useState<TripDraft | null>(null);
+  const [tripDraftModalOpen, setTripDraftModalOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
   const [rotationProvider, setRotationProvider] = useState<CredentialProvider>('notion');
   const [rotationSecret, setRotationSecret] = useState('');
@@ -913,6 +914,11 @@ export function Settings({
   const tripUpdateModelId = state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
   const tripUpdateModelName = aiModelLabel(tripUpdateModelId);
   const tripPreviewStats = tripDraft ? tripDraftPreviewStats(tripDraft) : null;
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('modal-open', tripDraftModalOpen);
+    return () => document.documentElement.classList.remove('modal-open');
+  }, [tripDraftModalOpen]);
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -1436,6 +1442,7 @@ export function Settings({
       });
     });
     setTripDraft(null);
+    setTripDraftModalOpen(false);
     setStatus(`已套用旅程：${draft.trip.name}`);
   }
 
@@ -2279,12 +2286,14 @@ export function Settings({
               const draft = await parseTripParagraph(tripParagraph, state);
               const stats = tripDraftPreviewStats(draft);
               setTripDraft(draft);
+              setTripDraftModalOpen(true);
               return `已分析：${draft.trip.name} · ${stats.dayCount} 日 · ${stats.spotCount} 景點 · ${stats.lodgingCount} 酒店 · ${stats.foodCount} 餐飲 · ${stats.transportCount} 交通 · ${stats.detailCount} 重要細節`;
             })}
           >
-            <Plane size={18} /> 用已選模型分析
+            {busy === '分析行程' ? <RotateCcw size={18} className="spin" /> : <Plane size={18} />} 用已選模型分析
           </button>
-          {tripDraft && <button className="secondary" type="button" onClick={() => setTripDraft(null)}>清除 preview</button>}
+          {tripDraft && <button className="secondary" type="button" onClick={() => setTripDraftModalOpen(true)}>開啟確認視窗</button>}
+          {tripDraft && <button className="secondary" type="button" onClick={() => { setTripDraft(null); setTripDraftModalOpen(false); }}>清除 preview</button>}
         </div>
         {tripDraft && tripPreviewStats && (
           <div className="trip-preview">
@@ -2331,7 +2340,7 @@ export function Settings({
               ))}
             </div>
             <div className="action-row wrap">
-              <button className="primary" type="button" onClick={() => applyTripDraft(tripDraft)}>套用到 React</button>
+              <button className="primary" type="button" onClick={() => setTripDraftModalOpen(true)}>確認 / 編輯前檢查</button>
               <button className="secondary" type="button" disabled={!!busy} onClick={() => {
                 if (!requireNotionMirror('建立 Notion Trip')) return;
                 void run('建立 Notion Trip', async () => {
@@ -2341,6 +2350,92 @@ export function Settings({
                 });
               }}>套用並同步 Notion</button>
             </div>
+          </div>
+        )}
+        {tripDraft && tripPreviewStats && tripDraftModalOpen && (
+          <div
+            className="modal-backdrop trip-confirm-backdrop"
+            role="presentation"
+            onClick={() => setTripDraftModalOpen(false)}
+          >
+            <section
+              className="modal trip-confirm-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="trip-confirm-title"
+              aria-describedby="trip-confirm-description"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="modal-head trip-confirm-head">
+                <div>
+                  <span className="pill">Primary · {tripUpdateModelName} · {tripPreviewStats.sourceQuality}</span>
+                  <h2 id="trip-confirm-title">確認 AI 行程更新</h2>
+                  <h3>{tripDraft.trip.name}</h3>
+                  <p id="trip-confirm-description" className="muted">
+                    {tripDraft.trip.startDate} → {tripDraft.trip.endDate} · {tripDraft.trip.destinationSummary}
+                  </p>
+                </div>
+                <button className="icon-button" type="button" aria-label="關閉行程確認" onClick={() => setTripDraftModalOpen(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="trip-confirm-summary">
+                <span><b>{tripPreviewStats.dayCount}</b><small>日程</small></span>
+                <span><b>{tripPreviewStats.spotCount}</b><small>景點</small></span>
+                <span><b>{tripPreviewStats.lodgingCount}</b><small>酒店</small></span>
+                <span><b>{tripPreviewStats.foodCount}</b><small>餐飲</small></span>
+                <span><b>{tripPreviewStats.transportCount}</b><small>交通</small></span>
+                <span><b>{tripPreviewStats.detailCount}</b><small>細節</small></span>
+              </div>
+
+              <div className="trip-confirm-notes">
+                <span>{tripDraft.summary}</span>
+                {!!tripPreviewStats.lodgingNames.length && <span>酒店：{tripPreviewStats.lodgingNames.join('、')}</span>}
+                {!!tripPreviewStats.foodNames.length && <span>餐飲：{tripPreviewStats.foodNames.join('、')}</span>}
+                {!!tripPreviewStats.missingCriticalFields.length && <span>未確認：{tripPreviewStats.missingCriticalFields.slice(0, 8).join('、')}</span>}
+                {!!tripPreviewStats.assumptions.length && <span>模型假設：{tripPreviewStats.assumptions.slice(0, 6).join('、')}</span>}
+                {tripDraft.warnings.map((warning) => <span key={warning}>Warning: {warning}</span>)}
+              </div>
+
+              <div className="trip-confirm-days" aria-label="AI extracted itinerary days">
+                {tripDraft.trip.itinerary.map((day) => (
+                  <article key={`${day.date}-${day.day}`} className="trip-confirm-day">
+                    <header>
+                      <div>
+                        <strong>Day {day.day} · {day.date}</strong>
+                        <span>{day.region || day.city || '未命名地區'}{day.city ? ` · ${day.city}` : ''}{day.country ? ` · ${day.country}` : ''}</span>
+                      </div>
+                      <small>{day.currency || ''}{day.timezone ? ` · ${day.timezone}` : ''}</small>
+                    </header>
+                    {day.highlight && <p>{day.highlight}</p>}
+                    {day.lodging?.name && (
+                      <div className="trip-confirm-lodging">
+                        <b>酒店</b>
+                        <span>{day.lodging.name}</span>
+                        {(day.lodging.checkIn || day.lodging.checkOut) && <small>{[day.lodging.checkIn, day.lodging.checkOut].filter(Boolean).join(' → ')}</small>}
+                      </div>
+                    )}
+                    <div className="trip-confirm-spots">
+                      {(day.spots || []).map((spot, index) => (
+                        <div key={`${day.date}-${index}-${spot.time}-${spot.name}`} className="trip-confirm-spot">
+                          <time>{spot.time || '--:--'}{spot.timeEnd ? `-${spot.timeEnd}` : ''}</time>
+                          <div>
+                            <strong>{spot.name || '未命名地點'}</strong>
+                            <small>{spot.type || 'itinerary'}{spot.address ? ` · ${spot.address}` : ''}{spot.note ? ` · ${spot.note}` : ''}</small>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <div className="modal-actions trip-confirm-actions">
+                <button className="secondary" type="button" onClick={() => setTripDraftModalOpen(false)}>返回修改文字</button>
+                <button className="primary" type="button" onClick={() => applyTripDraft(tripDraft)}>確認並更新行程</button>
+              </div>
+            </section>
           </div>
         )}
       </AccordionCard>

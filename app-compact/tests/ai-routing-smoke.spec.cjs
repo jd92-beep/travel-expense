@@ -206,8 +206,10 @@ test('AI routing keeps required primary models ahead of stale settings', async (
   if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
   await page.getByPlaceholder(/下次/).fill('下次 2026-07-10 至 2026-07-12 去首爾，第一晚住弘大。');
   await page.getByRole('button', { name: /用已選模型分析/ }).click();
-  await expect(page.getByRole('heading', { name: 'Google Seoul Trip' })).toBeVisible();
-  await expect(page.getByText('餐飲：Google BBQ')).toBeVisible();
+  const tripConfirm = page.getByRole('dialog', { name: '確認 AI 行程更新' });
+  await expect(tripConfirm).toBeVisible();
+  await expect(tripConfirm.getByRole('heading', { name: 'Google Seoul Trip' })).toBeVisible();
+  await expect(tripConfirm).toContainText('Google BBQ');
 
   expect(calls).toEqual(expect.arrayContaining([
     expect.objectContaining({ provider: 'google', kind: 'scan', model: 'gemma-4-31b-it' }),
@@ -367,9 +369,11 @@ test('Trip update does not treat the current itinerary as a successful extractio
   if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
   await page.getByPlaceholder(/下次/).fill('2026-08-01 to 2026-08-03 Jeju, arrive 15:00, dinner at market, stay near harbor.');
   await page.getByRole('button', { name: /用已選模型分析/ }).click();
-  await expect(page.getByRole('heading', { name: 'Mimo Jeju Trip' })).toBeVisible();
-  await expect(page.getByText('餐飲：Dongmun Market')).toBeVisible();
-  await expect(page.getByText('未確認：Dongmun Market lat/lon')).toBeVisible();
+  const tripConfirm = page.getByRole('dialog', { name: '確認 AI 行程更新' });
+  await expect(tripConfirm).toBeVisible();
+  await expect(tripConfirm.getByRole('heading', { name: 'Mimo Jeju Trip' })).toBeVisible();
+  await expect(tripConfirm).toContainText('Dongmun Market');
+  await expect(tripConfirm).toContainText('未確認：Dongmun Market lat/lon');
   await expect(page.getByText('Old Current Spot')).toHaveCount(0);
   expect(calls).toEqual(expect.arrayContaining([
     expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash' }),
@@ -658,8 +662,10 @@ test('Supabase users can call required AI primaries without a broker password se
   if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
   await page.getByPlaceholder(/下次/).fill('下次 2026-07-10 至 2026-07-12 去首爾。');
   await page.getByRole('button', { name: /用已選模型分析/ }).click();
-  await expect(page.getByRole('heading', { name: 'Supabase Google Seoul' })).toBeVisible();
-  await expect(page.getByText('餐飲：Supabase Google BBQ')).toBeVisible();
+  const tripConfirm = page.getByRole('dialog', { name: '確認 AI 行程更新' });
+  await expect(tripConfirm).toBeVisible();
+  await expect(tripConfirm.getByRole('heading', { name: 'Supabase Google Seoul' })).toBeVisible();
+  await expect(tripConfirm).toContainText('Supabase Google BBQ');
 
   expect(calls).toEqual(expect.arrayContaining([
     expect.objectContaining({

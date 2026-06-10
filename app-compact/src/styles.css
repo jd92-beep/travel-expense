@@ -1588,6 +1588,176 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   color: var(--ink);
   font-size: 11px;
 }
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255,255,255,.68);
+  color: var(--ink);
+}
+.trip-confirm-backdrop {
+  z-index: 1500;
+  place-items: center;
+  background: rgba(23, 18, 12, .55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.trip-confirm-modal {
+  width: min(940px, calc(100vw - 24px));
+  max-height: min(92svh, 820px);
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255,253,247,.96), rgba(241,248,243,.88)),
+    var(--card);
+}
+.trip-confirm-head {
+  align-items: flex-start;
+}
+.trip-confirm-head h2 {
+  margin: 8px 0 4px;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+.trip-confirm-head h3 {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 16px;
+  letter-spacing: 0;
+}
+.trip-confirm-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.trip-confirm-summary span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1px solid rgba(139,115,85,.18);
+  border-radius: 12px;
+  background: rgba(255,255,255,.66);
+  text-align: center;
+}
+.trip-confirm-summary b {
+  font-size: 18px;
+  color: var(--ink);
+}
+.trip-confirm-summary small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.trip-confirm-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.trip-confirm-notes span {
+  max-width: 100%;
+  padding: 7px 9px;
+  border: 1px solid rgba(139,115,85,.16);
+  border-radius: 999px;
+  background: rgba(255,255,255,.6);
+  color: var(--muted);
+  font-size: 12px;
+}
+.trip-confirm-days {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  padding-right: 2px;
+}
+.trip-confirm-day {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid rgba(139,115,85,.18);
+  border-radius: 14px;
+  background: rgba(255,255,255,.66);
+}
+.trip-confirm-day header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+.trip-confirm-day header div,
+.trip-confirm-spot div {
+  min-width: 0;
+}
+.trip-confirm-day header strong,
+.trip-confirm-spot strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+.trip-confirm-day header span,
+.trip-confirm-day header small,
+.trip-confirm-spot small,
+.trip-confirm-lodging small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: normal;
+}
+.trip-confirm-day p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+}
+.trip-confirm-lodging {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(231, 240, 255, .58);
+}
+.trip-confirm-lodging b {
+  color: var(--blue);
+  font-size: 12px;
+}
+.trip-confirm-lodging span {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+.trip-confirm-lodging small {
+  grid-column: 2;
+}
+.trip-confirm-spots {
+  display: grid;
+  gap: 7px;
+}
+.trip-confirm-spot {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+  border-radius: 12px;
+  background: #fbf6ef;
+}
+.trip-confirm-spot time {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.trip-confirm-actions {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(255,253,247,.72), rgba(255,253,247,.98));
+  border-top-color: rgba(139,115,85,.18);
+}
 @media (max-width: 520px) {
   .trip-preview-head {
     display: grid;
@@ -1601,6 +1771,25 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .trip-preview-days header {
     display: grid;
     gap: 2px;
+  }
+  .trip-confirm-modal {
+    width: calc(100vw - 16px);
+    max-height: 94svh;
+    padding: 12px;
+    border-radius: 16px;
+  }
+  .trip-confirm-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .trip-confirm-day header {
+    grid-template-columns: 1fr;
+  }
+  .trip-confirm-spot {
+    grid-template-columns: 54px minmax(0, 1fr);
+  }
+  .trip-confirm-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }
 .accordion-card {
