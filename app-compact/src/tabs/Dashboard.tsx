@@ -44,8 +44,9 @@ import {
   getReceiptTripAmount,
   getResolvedTripCurrency
 } from '../lib/domain';
-import { activeTrip, createTripProfile, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import type { AppState, ItinerarySpot, Receipt, SyncQueueItem, TabId } from '../lib/types';
+import { activeTrip, createTripProfile, normalizeItinerary, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import type { AppState, ItineraryDay, ItinerarySpot, Receipt, SyncQueueItem, TabId, TripProfile } from '../lib/types';
+import { parseTripParagraph } from '../lib/ai';
 import { brokerAiJson, redactedError } from '../lib/credentialBroker';
 import { DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
 
@@ -173,6 +174,163 @@ function uniqueDestinationIdeas(ideas: DestinationIdea[]) {
     seen.add(key);
     return true;
   });
+}
+
+const JEJU_FALLBACK_SPOTS: Array<ItinerarySpot & { region: string; city: string; country: string }> = [
+  { time: '09:00', name: '城山日出峰', type: 'sightseeing', region: '濟州東部', city: 'Jeju', country: 'South Korea', timezone: 'Asia/Seoul', lat: 33.4580, lon: 126.9425, note: '日出火山口與海岸步道' },
+  { time: '12:00', name: '牛島', type: 'localtour', region: '濟州東部', city: 'Jeju', country: 'South Korea', timezone: 'Asia/Seoul', lat: 33.5066, lon: 126.9534, note: '海岸線、單車與花生雪糕' },
+  { time: '16:00', name: '涉地可支', type: 'sightseeing', region: '濟州東部', city: 'Seogwipo', country: 'South Korea', timezone: 'Asia/Seoul', lat: 33.4242, lon: 126.9306, note: '海崖散步與咖啡' },
+  { time: '09:30', name: '漢拏山', type: 'sightseeing', region: '濟州中部', city: 'Jeju', country: 'South Korea', timezone: 'Asia/Seoul', lat: 33.3617, lon: 126.5292, note: '自然健行，留意風雨與裝備' },
+  { time: '14:30', name: '萬丈窟', type: 'ticket', region: '濟州東北', city: 'Jeju', country: 'South Korea', timezone: 'Asia/Seoul', lat: 33.5283, lon: 126.7715, note: '熔岩洞景點' },
+  { time: '18:30', name: '東門市場', type: 'food', region: '濟州市區', city: 'Jeju', country: 'South Korea', timezone: 'Asia/Seoul', lat: 33.5124, lon: 126.5260, note: '晚餐、小食與手信' },
+  { time: '10:00', name: '天地淵瀑布', type: 'sightseeing', region: '西歸浦', city: 'Seogwipo', country: 'South Korea', timezone: 'Asia/Seoul', lat: 33.2461, lon: 126.5544, note: '瀑布與森林步道' },
+  { time: '13:30', name: '正房瀑布', type: 'sightseeing', region: '西歸浦', city: 'Seogwipo', country: 'South Korea', timezone: 'Asia/Seoul', lat: 33.2448, lon: 126.5716, note: '海邊瀑布' },
+  { time: '16:30', name: '柱狀節理帶', type: 'sightseeing', region: '西歸浦', city: 'Seogwipo', country: 'South Korea', timezone: 'Asia/Seoul', lat: 33.2379, lon: 126.4260, note: '玄武岩海岸景觀' },
+];
+
+function hasMeaningfulItinerary(itinerary?: ItineraryDay[] | null) {
+  return Array.isArray(itinerary) && itinerary.some((day) => (day.spots || []).some((spot) => spot.name?.trim()));
+}
+
+function fallbackTripIntelligence(destination: string, currency: string, now: number): TripProfile['intelligence'] {
+  if (destinationLooksLikeKorea(destination)) {
+    return {
+      countryCode: 'KR',
+      countryName: 'South Korea',
+      primaryCurrency: 'KRW',
+      themeKey: 'korea_editorial',
+      locale: 'ko-KR',
+      timezone: 'Asia/Seoul',
+      weatherRegion: destination || 'Jeju',
+      confidence: 'medium',
+      source: 'heuristic',
+      updatedAt: now,
+    };
+  }
+  return {
+    countryCode: 'GLOBAL',
+    countryName: destination || 'Unknown',
+    primaryCurrency: currency,
+    themeKey: 'global_journal',
+    locale: 'en',
+    timezone: 'Asia/Hong_Kong',
+    weatherRegion: destination || 'Trip',
+    confidence: 'low',
+    source: 'heuristic',
+    updatedAt: now,
+  };
+}
+
+function buildFallbackItinerary(base: TripProfile, destinationIdeas: DestinationIdea[], details: string): ItineraryDay[] {
+  const destinationText = `${base.destinationSummary} ${base.name} ${details}`;
+  const isJeju = /濟州|jeju/i.test(normalizeDestinationText(destinationText));
+  const ideaSpots = destinationIdeas.map((idea, index): ItinerarySpot => ({
+    time: ['09:30', '13:00', '16:30'][index % 3],
+    name: idea.label,
+    type: 'sightseeing',
+    note: idea.detail,
+    timezone: destinationLooksLikeKorea(destinationText) ? 'Asia/Seoul' : base.timezones[0] || 'Asia/Hong_Kong',
+  }));
+
+  return base.itinerary.map((day, index) => {
+    const sourcePool = isJeju ? JEJU_FALLBACK_SPOTS : ideaSpots;
+    const daySpots = sourcePool.length
+      ? sourcePool.slice(index * 2, index * 2 + 3)
+      : [];
+    const wrappedSpots = daySpots.length ? daySpots : sourcePool.slice(0, 3);
+    const firstSpot = wrappedSpots[0] as (ItinerarySpot & { region?: string; city?: string; country?: string }) | undefined;
+    return {
+      ...day,
+      day: index + 1,
+      region: firstSpot?.region || day.region || base.destinationSummary,
+      city: firstSpot?.city || day.city || (destinationLooksLikeKorea(destinationText) ? 'Jeju' : undefined),
+      country: firstSpot?.country || day.country || (destinationLooksLikeKorea(destinationText) ? 'South Korea' : undefined),
+      timezone: firstSpot?.timezone || day.timezone || (destinationLooksLikeKorea(destinationText) ? 'Asia/Seoul' : base.timezones[0]),
+      currency: day.currency || base.currencies.find((code) => code !== 'HKD') || 'JPY',
+      highlight: day.highlight || wrappedSpots.map((spot) => spot.name).slice(0, 2).join(' / '),
+      spots: wrappedSpots.map((spot) => ({
+        ...spot,
+        timezone: spot.timezone || firstSpot?.timezone || day.timezone,
+      })),
+    };
+  });
+}
+
+function mergeAnalyzedTrip(base: TripProfile, analyzed: TripProfile | null, fallbackItinerary: ItineraryDay[], now: number, selectedCurrency: string): TripProfile {
+  const currency = String(
+    analyzed?.currencies?.find((code) => code !== 'HKD')
+    || selectedCurrency
+    || base.currencies.find((code) => code !== 'HKD')
+    || 'JPY'
+  ).toUpperCase();
+  const analyzedDays = Array.isArray(analyzed?.itinerary) ? analyzed.itinerary : [];
+  const alignedItinerary = base.itinerary.map((baseDay, index) => {
+    const aiDay = analyzedDays[index];
+    const fallbackDay = fallbackItinerary[index] || baseDay;
+    const spots = aiDay?.spots?.length ? aiDay.spots : fallbackDay.spots;
+    return {
+      ...fallbackDay,
+      ...aiDay,
+      date: baseDay.date,
+      day: index + 1,
+      region: aiDay?.region || fallbackDay.region || baseDay.region,
+      city: aiDay?.city || fallbackDay.city || baseDay.city,
+      country: aiDay?.country || fallbackDay.country || baseDay.country,
+      timezone: aiDay?.timezone || fallbackDay.timezone || baseDay.timezone,
+      currency: aiDay?.currency || fallbackDay.currency || currency,
+      spots,
+    };
+  });
+  const itinerary = normalizeItinerary(alignedItinerary, base.id, currency);
+  const intelligence = analyzed?.intelligence?.countryCode
+    ? { ...fallbackTripIntelligence(base.destinationSummary, currency, now), ...analyzed.intelligence, source: 'ai' as const, updatedAt: now }
+    : fallbackTripIntelligence(base.destinationSummary, currency, now);
+  return {
+    ...base,
+    ...(analyzed || {}),
+    id: base.id,
+    sourceId: base.sourceId || `trip_${base.id}`,
+    notionPageId: base.notionPageId,
+    supabaseId: base.supabaseId,
+    createdAt: base.createdAt,
+    updatedAt: now,
+    name: analyzed?.name || base.name,
+    destinationSummary: analyzed?.destinationSummary || base.destinationSummary,
+    startDate: base.startDate,
+    endDate: base.endDate,
+    homeCurrency: 'HKD',
+    currencies: Array.from(new Set(['HKD', ...(analyzed?.currencies || []), currency])),
+    timezones: Array.from(new Set(itinerary.map((day) => day.timezone || intelligence?.timezone || 'Asia/Hong_Kong'))),
+    budget: base.budget,
+    version: Math.max((base.version || 1) + 1, analyzed?.version || 1),
+    active: true,
+    archived: false,
+    intelligence,
+    itinerary,
+  };
+}
+
+function buildTripCreateParagraph(input: {
+  name: string;
+  destination: string;
+  startDate: string;
+  endDate: string;
+  budget: string;
+  currency: string;
+  details: string;
+  ideas: DestinationIdea[];
+}) {
+  const ideaText = input.ideas.map((idea) => `- ${idea.label}: ${idea.detail}`).join('\n');
+  return [
+    `Trip name: ${input.name}`,
+    `Destination: ${input.destination || '未設定目的地'}`,
+    `Dates: ${input.startDate} to ${input.endDate}`,
+    `Budget: ${input.budget || 'not set'} ${input.currency}`,
+    `Preferred currency: ${input.currency}`,
+    input.details ? `User trip details:\n${input.details}` : '',
+    ideaText ? `Destination ideas already suggested to user:\n${ideaText}` : '',
+    'Please create a practical day-by-day itinerary with city, country, timezone, currency, spot names, times, categories, notes, and lat/lon for weather.'
+  ].filter(Boolean).join('\n\n');
 }
 
 function isRelevantDestinationResult(destination: string, title: string, snippet: string) {
@@ -308,6 +466,7 @@ export function Dashboard({
   const [newTripDetails, setNewTripDetails] = useState('');
   const [destinationIdeas, setDestinationIdeas] = useState<DestinationIdea[]>([]);
   const [destinationIdeaStatus, setDestinationIdeaStatus] = useState<'idle' | 'loading' | 'online' | 'fallback' | 'error'>('idle');
+  const [tripCreateStatus, setTripCreateStatus] = useState<'idle' | 'analyzing' | 'fallback'>('idle');
 
   // 1. 📅 智能預設黃金 7 天
   useEffect(() => {
@@ -434,7 +593,7 @@ export function Dashboard({
     }));
   };
 
-  const handleCreateTrip = (overrideName?: string) => {
+  const handleCreateTrip = async (overrideName?: string) => {
     const finalName = (overrideName || newTripName).trim();
     if (!finalName) return;
 
@@ -448,24 +607,66 @@ export function Dashboard({
       currency: newTripCurrency || 'JPY',
       now,
     });
+    const fallbackItinerary = buildFallbackItinerary(newTrip, destinationIdeas, newTripDetails);
+    let finalTrip = mergeAnalyzedTrip(newTrip, null, fallbackItinerary, now, newTripCurrency || 'JPY');
+    const paragraph = buildTripCreateParagraph({
+      name: finalName,
+      destination: newTripDestination,
+      startDate: newTripStartDate,
+      endDate: newTripEndDate,
+      budget: newTripBudget,
+      currency: newTripCurrency || 'JPY',
+      details: newTripDetails,
+      ideas: destinationIdeas,
+    });
+
+    setTripCreateStatus('analyzing');
+    try {
+      const draft = await parseTripParagraph(paragraph, {
+        ...state,
+        trips: [...(state.trips || []).map((trip) => ({ ...trip, active: false })), newTrip],
+        activeTripId: newTrip.id,
+        tripName: newTrip.name,
+        tripDateRange: { start: newTrip.startDate, end: newTrip.endDate },
+        tripCurrency: newTripCurrency || 'JPY',
+        budget: newTrip.budget || 0,
+        customItinerary: newTrip.itinerary,
+      });
+      if (hasMeaningfulItinerary(draft.trip.itinerary)) {
+        finalTrip = mergeAnalyzedTrip(newTrip, draft.trip, fallbackItinerary, Date.now(), newTripCurrency || 'JPY');
+      } else {
+        setTripCreateStatus('fallback');
+      }
+    } catch (error) {
+      console.warn('[Dashboard] New trip AI analysis failed, using destination fallback:', error);
+      setTripCreateStatus('fallback');
+    }
+
+    const updatedAt = Date.now();
+    finalTrip = {
+      ...finalTrip,
+      updatedAt,
+      itinerary: normalizeItinerary(finalTrip.itinerary, finalTrip.id, finalTrip.currencies.find((currency) => currency !== 'HKD') || newTripCurrency || 'JPY'),
+    };
 
     const queueItem: SyncQueueItem = {
-      id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+      id: `sync_${updatedAt}_${Math.random().toString(16).slice(2)}`,
       type: 'trip',
-      entityId: newTrip.id,
+      entityId: finalTrip.id,
       op: 'create',
       status: 'queued',
       attempts: 0,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: updatedAt,
+      updatedAt,
       payload: {
-        sourceId: newTrip.sourceId,
-        updatedAt: now
+        tripId: finalTrip.id,
+        sourceId: finalTrip.sourceId || `trip_${finalTrip.id}`,
+        updatedAt,
       }
     };
 
     setState((prev) => {
-      const trips = [...(prev.trips || []).map((item) => ({ ...item, active: false })), newTrip];
+      const trips = [...(prev.trips || []).map((item) => ({ ...item, active: false })), finalTrip];
       const nextQueue = [...(prev.syncQueue || []), queueItem];
 
       const latest = new Map<string, SyncQueueItem>();
@@ -476,11 +677,12 @@ export function Dashboard({
       return {
         ...prev,
         trips,
-        activeTripId: newTrip.id,
-        budget: newTrip.budget || 0,
-        tripCurrency: newTrip.currencies.find((currency) => currency !== 'HKD') || 'JPY',
-        customItinerary: newTrip.itinerary,
-        tripDateRange: { start: newTrip.startDate, end: newTrip.endDate },
+        activeTripId: finalTrip.id,
+        tripName: finalTrip.name,
+        budget: finalTrip.budget || 0,
+        tripCurrency: finalTrip.currencies.find((currency) => currency !== 'HKD') || 'JPY',
+        customItinerary: finalTrip.itinerary,
+        tripDateRange: { start: finalTrip.startDate, end: finalTrip.endDate },
         syncQueue: [...latest.values()].slice(-500)
       };
     });
@@ -496,6 +698,7 @@ export function Dashboard({
     setNewTripDetails('');
     setDestinationIdeas([]);
     setDestinationIdeaStatus('idle');
+    setTripCreateStatus('idle');
   };
 
   const trip = activeTrip(state);
@@ -1372,6 +1575,13 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
                       )}
                     </div>
                   </div>
+                  {tripCreateStatus !== 'idle' && (
+                    <div className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-800">
+                      {tripCreateStatus === 'analyzing'
+                        ? '正在用 Trip AI 分析行程，完成後會自動建立 Timeline、Weather target 同後端同步項目...'
+                        : 'Trip AI 暫時未能產生完整行程，會用目的地建議先建立可用時間線。'}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1388,11 +1598,12 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
               ) : (
                 <button
                   type="button"
+                  disabled={tripCreateStatus === 'analyzing'}
                   onClick={() => {
                     const defaultName = `新旅程_${new Date().toLocaleDateString('zh-HK')}`;
                     handleCreateTrip(newTripName.trim() || defaultName);
                   }}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-all border-none focus:outline-none cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-all border-none focus:outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   稍後填寫 (快速跳過)
                 </button>
@@ -1401,7 +1612,7 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
               {wizardStep < 4 ? (
                 <button
                   type="button"
-                  disabled={wizardStep === 1 && !newTripName.trim()}
+                  disabled={(wizardStep === 1 && !newTripName.trim()) || tripCreateStatus === 'analyzing'}
                   onClick={() => setWizardStep(wizardStep + 1)}
                   className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all border-none focus:outline-none cursor-pointer ${
                     wizardStep === 1 && !newTripName.trim()
@@ -1414,10 +1625,11 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
               ) : (
                 <button
                   type="button"
+                  disabled={tripCreateStatus === 'analyzing'}
                   onClick={() => handleCreateTrip()}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#D94132] hover:bg-red-700 transition-all border-none focus:outline-none cursor-pointer animate-pulse"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#D94132] hover:bg-red-700 transition-all border-none focus:outline-none cursor-pointer animate-pulse disabled:opacity-60 disabled:cursor-wait"
                 >
-                  完成創建 🎉
+                  {tripCreateStatus === 'analyzing' ? '分析中...' : '完成創建 🎉'}
                 </button>
               )}
             </div>

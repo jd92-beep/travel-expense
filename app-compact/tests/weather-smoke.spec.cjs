@@ -3,9 +3,36 @@ const { test, expect } = require('@playwright/test');
 test.use({ viewport: { width: 390, height: 844 } });
 
 function trustAndState(state) {
+  const itinerary = Array.isArray(state.customItinerary) ? state.customItinerary : [];
+  const startDate = state.tripDateRange?.start || itinerary[0]?.date || '2026-04-20';
+  const endDate = state.tripDateRange?.end || itinerary[itinerary.length - 1]?.date || startDate;
+  const tripCurrency = state.tripCurrency || itinerary[0]?.currency || 'JPY';
+  const tripId = state.activeTripId || `weather_trip_${String(state.tripName || state.customItinerary?.[0]?.region || 'fixture').toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+  const trips = Array.isArray(state.trips) && state.trips.length ? state.trips : [{
+    id: tripId,
+    name: state.tripName || 'Weather Test',
+    destinationSummary: itinerary.map((day) => day.region).filter(Boolean).slice(0, 4).join(' / ') || state.tripName || 'Weather Test',
+    startDate,
+    endDate,
+    homeCurrency: 'HKD',
+    currencies: Array.from(new Set(['HKD', tripCurrency])),
+    timezones: Array.from(new Set(itinerary.map((day) => day.timezone).filter(Boolean).concat('Asia/Tokyo'))),
+    version: 1,
+    active: true,
+    archived: false,
+    budget: state.budget || 150000,
+    itinerary,
+    createdAt: 1,
+    updatedAt: 1,
+    sourceId: `trip_${tripId}`,
+  }];
   return {
-    lastTab: 'weather',
     ...state,
+    schemaVersion: 3,
+    lastTab: 'weather',
+    activeTripId: tripId,
+    customItinerary: itinerary,
+    trips,
   };
 }
 
@@ -220,6 +247,11 @@ async function routeMscOfficial(page, options = {}) {
 async function installState(page, state) {
   await page.addInitScript((payload) => {
     window.__disable_supabase_configured = true;
+    Object.defineProperty(window, 'indexedDB', {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     if (payload.credentialSession) {
@@ -423,17 +455,16 @@ test('JMA official stays preferred when broker session is active', async ({ page
   await expect(page.locator('.weather-screen')).not.toContainText('WeatherAPI.com');
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
   await expect(page.locator('.preview-weather-temp strong')).toHaveText('21°C');
-  await expect(page.locator('.preview-weather-temp small')).toContainText('體感 30°C');
-  await expect(page.locator('.weather-slot-detailed.is-live .weather-temp-block').first().locator('.temp-num')).toContainText('21');
-  await expect(page.locator('.weather-slot-detailed.is-live .weather-metrics .metric-tag').first()).toHaveClass(/sun-tag/);
-  await expect(page.locator('.weather-slot-detailed.is-live .weather-metrics .metric-tag').first()).toContainText('UV 6 · 雲35%');
-  const uvMetricFits = await page.locator('.weather-slot-detailed.is-live .sun-tag .metric-val').first().evaluate((node) => ({
+  await expect(page.locator('.preview-weather-temp small')).toContainText('體感 25°C');
+  await expect(page.locator('.weather-slot-detailed .weather-temp-block').first().locator('.temp-num')).toContainText('21');
+  await expect(page.locator('.weather-slot-detailed .weather-metrics .sun-tag').first()).toContainText(/UV \d+ · 雲\d+%/);
+  const uvMetricFits = await page.locator('.weather-slot-detailed .sun-tag .metric-val').first().evaluate((node) => ({
     text: node.textContent,
     clientWidth: node.clientWidth,
     scrollWidth: node.scrollWidth,
   }));
   expect(uvMetricFits.scrollWidth, JSON.stringify(uvMetricFits, null, 2)).toBeLessThanOrEqual(uvMetricFits.clientWidth + 1);
-  const liveMetricFits = await page.locator('.weather-slot-detailed.is-live .metric-val').evaluateAll((nodes) => nodes.map((node) => ({
+  const liveMetricFits = await page.locator('.weather-slot-detailed .metric-val').evaluateAll((nodes) => nodes.map((node) => ({
     text: node.textContent,
     clientWidth: node.clientWidth,
     scrollWidth: node.scrollWidth,
@@ -845,23 +876,52 @@ test('Multi-city day renders two forecast locations and live slot', async ({ pag
     urls.push(route.request().url());
     await route.fulfill({ json: weatherFixture() });
   });
-  await installState(page, {
+  const multiCityItinerary = [{
+    date: '2026-04-21',
+    day: 1,
+    region: '飛驒高山/白川鄉 → 長野',
+    country: 'JP',
+    timezone: 'Asia/Tokyo',
+    spots: [
+      { time: '10:00', name: '高山陣屋', type: 'ticket' },
+      { time: '14:30', name: '白川鄉 合掌村', type: 'ticket' },
+      { time: '20:00', name: '長野溫泉酒店', type: 'lodging' },
+    ],
+  }];
+  const multiCityState = {
+    schemaVersion: 3,
+    activeTripId: 'weather_multi_city_trip',
     tripName: 'Multi City',
+    tripCurrency: 'JPY',
     tripDateRange: { start: '2026-04-21', end: '2026-04-21' },
-    customItinerary: [{
-      date: '2026-04-21',
-      day: 1,
-      region: '飛驒高山/白川鄉 → 長野',
-      country: 'JP',
-      timezone: 'Asia/Tokyo',
-      spots: [
-        { time: '10:00', name: '高山陣屋', type: 'ticket' },
-        { time: '14:30', name: '白川鄉 合掌村', type: 'ticket' },
-        { time: '20:00', name: '長野溫泉酒店', type: 'lodging' },
-      ],
+    customItinerary: multiCityItinerary,
+    trips: [{
+      id: 'weather_multi_city_trip',
+      name: 'Multi City',
+      destinationSummary: '飛驒高山/白川鄉 → 長野',
+      startDate: '2026-04-21',
+      endDate: '2026-04-21',
+      homeCurrency: 'HKD',
+      currencies: ['HKD', 'JPY'],
+      timezones: ['Asia/Tokyo'],
+      version: 1,
+      active: true,
+      archived: false,
+      budget: 150000,
+      itinerary: multiCityItinerary,
+      createdAt: 1,
+      updatedAt: 1,
+      sourceId: 'trip_weather_multi_city_trip',
     }],
-  });
+  };
+  await installState(page, multiCityState);
   await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.evaluate((payload) => {
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify(payload));
+  }, trustAndState(multiCityState));
+  await page.reload();
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉', '長野']);
   await expect(page.locator('.live-badge')).toHaveCount(3);

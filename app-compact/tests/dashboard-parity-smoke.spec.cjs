@@ -2,8 +2,8 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-async function openDashboard(page, statsIncludeTransportLodging) {
-  await page.addInitScript((includeToggle) => {
+async function openDashboard(page, statsIncludeTransportLodging, extraState = {}) {
+  await page.addInitScript(({ includeToggle, extraState: extra }) => {
     window.__disable_supabase_configured = true;
     const fixedNow = new Date('2026-05-08T10:00:00+08:00').valueOf();
     const RealDate = Date;
@@ -18,6 +18,12 @@ async function openDashboard(page, statsIncludeTransportLodging) {
     window.Date = MockDate;
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    if (extra.credentialSession) {
+      localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+        credentialSession: extra.credentialSession,
+        credentialSessionExpiresAt: extra.credentialSessionExpiresAt || fixedNow + 60_000,
+      }));
+    }
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       schemaVersion: 3,
       lastTab: 'dashboard',
@@ -47,8 +53,9 @@ async function openDashboard(page, statsIncludeTransportLodging) {
         { id: 'dash_food', store: 'Dashboard Food', total: 1000, date: '2026-05-08', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1 },
         { id: 'dash_flight', store: 'Dashboard Flight', total: 9000, date: '2026-05-08', category: 'flight', payment: 'credit', personId: 'p_boss', splitMode: 'shared', createdAt: 2 },
       ],
+      ...extra,
     }));
-  }, statsIncludeTransportLodging);
+  }, { includeToggle: statsIncludeTransportLodging, extraState });
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect(page.locator('.today-itinerary-card').getByText('今日行程')).toHaveCount(1);
@@ -92,6 +99,7 @@ test('Dashboard keeps Home simple without travel-day diagnostic cards', async ({
 });
 
 test('Dashboard new trip wizard lets users choose trip days on step two', async ({ page }) => {
+  const tripIntelligenceCalls = [];
   await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -109,8 +117,61 @@ test('Dashboard new trip wizard lets users choose trip days on step two', async 
     contentType: 'application/json',
     body: JSON.stringify({ query: { search: [] } }),
   }));
+  await page.route('**/trip/intelligence', async (route) => {
+    const body = route.request().postDataJSON();
+    tripIntelligenceCalls.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          trip: {
+            name: '濟州2026',
+            destinationSummary: 'Jeju, South Korea',
+            startDate: '2026-05-08',
+            endDate: '2026-05-17',
+            homeCurrency: 'HKD',
+            currencies: ['HKD', 'KRW'],
+            intelligence: {
+              countryCode: 'KR',
+              countryName: 'South Korea',
+              primaryCurrency: 'KRW',
+              themeKey: 'korea_editorial',
+              locale: 'ko-KR',
+              timezone: 'Asia/Seoul',
+              weatherRegion: 'Jeju',
+              confidence: 'high',
+            },
+            itinerary: [
+              {
+                date: '2026-05-08',
+                day: 1,
+                region: '濟州東部',
+                city: 'Jeju',
+                country: 'South Korea',
+                timezone: 'Asia/Seoul',
+                currency: 'KRW',
+                highlight: '火山口與海岸',
+                spots: [
+                  { time: '09:00', name: '城山日出峰', type: 'sightseeing', lat: 33.4580, lon: 126.9425, timezone: 'Asia/Seoul', note: '日出火山口' },
+                  { time: '13:00', name: '牛島', type: 'localtour', lat: 33.5066, lon: 126.9534, timezone: 'Asia/Seoul', note: '海岸線' },
+                ],
+              },
+            ],
+          },
+          summary: 'Created Jeju day-by-day itinerary',
+          warnings: [],
+          changes: ['Generated Jeju itinerary from wizard details.'],
+        },
+      }),
+    });
+  });
 
-  await openDashboard(page, false);
+  await openDashboard(page, false, {
+    credentialSession: 'wizard-trip-session',
+    credentialSessionExpiresAt: new Date('2026-05-08T10:00:00+08:00').valueOf() + 60_000,
+  });
   await page.locator('.compact-mobile-header').getByRole('button', { name: /Dashboard Test/ }).click();
   await page.getByRole('button', { name: /建立新旅程/ }).click();
   await expect(page.getByText('Step 1 of 4')).toBeVisible();
@@ -150,6 +211,39 @@ test('Dashboard new trip wizard lets users choose trip days on step two', async 
   await expect(page.getByText('Step 4 of 4')).toBeVisible();
   await expect(page.getByText('濟州 景點靈感')).toBeVisible();
   await expect(page.locator('textarea')).toContainText('城山日出峰');
+  await page.getByRole('button', { name: /完成創建/ }).click();
+  await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
+
+  expect(tripIntelligenceCalls.length).toBe(1);
+  expect(tripIntelligenceCalls[0].paragraph).toContain('濟州');
+  expect(tripIntelligenceCalls[0].model).toBe('kimi-code');
+
+  const created = await page.evaluate(() => {
+    const raw = localStorage.getItem('boss-japan-tracker');
+    const state = raw ? JSON.parse(raw) : {};
+    const trip = state.trips?.find((item) => item.id === state.activeTripId);
+    return {
+      activeTripId: state.activeTripId,
+      tripName: state.tripName,
+      tripCurrency: state.tripCurrency,
+      itinerary: trip?.itinerary,
+      customItinerary: state.customItinerary,
+      syncQueue: state.syncQueue,
+      countryCode: trip?.intelligence?.countryCode,
+    };
+  });
+  expect(created.tripName).toBe('濟州2026');
+  expect(created.tripCurrency).toBe('KRW');
+  expect(created.countryCode).toBe('KR');
+  expect(created.itinerary).toHaveLength(10);
+  expect(created.itinerary[0].spots[0]).toMatchObject({ name: '城山日出峰', lat: 33.458, lon: 126.9425 });
+  expect(created.customItinerary[0].spots[0].name).toBe('城山日出峰');
+  expect(created.syncQueue.some((item) => item.type === 'trip' && item.op === 'create' && item.entityId === created.activeTripId && item.payload?.tripId === created.activeTripId)).toBe(true);
+
+  await page.getByLabel('主要分頁').getByRole('button', { name: '行程', exact: true }).click();
+  await expect(page.getByText('城山日出峰').first()).toBeVisible();
+  await page.getByLabel('主要分頁').getByRole('button', { name: '天氣', exact: true }).click();
+  await expect(page.getByText(/城山日出峰|濟州東部|Jeju/).first()).toBeVisible();
 });
 
 test('Dashboard compact itinerary and recent expenses show denser Home information', async ({ page }) => {
