@@ -2,6 +2,8 @@
 
 ## 2026-06-10
 
+- Added compact Home new-trip wizard destination-aware suggestions: typing `濟州` now auto-selects KRW, shows Jeju attraction chips, uses Wikivoyage/Wikipedia online search when available, and falls back to curated Jeju spots such as 城山日出峰、牛島、漢拏山、萬丈窟、涉地可支、天地淵瀑布.
+- Replaced the hardcoded Nagoya/Tokyo itinerary-detail buttons with destination-specific suggestions that can fill `旅程詳情`; Dashboard smoke now mocks online Jeju search, verifies KRW, and proves Step 4 keeps the Jeju attraction detail. Deployed to Vercel production as `dpl_EvC79RvgQ5KjNA6wUUaGfCr9CZ2o` with live asset hash `5eaf64085ce97271`.
 - Fixed compact Home new-trip wizard step 2 so users can choose trip length directly. The step now has a `旅程日數` selector plus +/- controls, changing days updates the end date immediately, and the date math is UTC-safe so Asia timezones do not turn 10 days into 9 days.
 - Added Dashboard smoke coverage that opens the wizard from the Home trip dropdown, selects 10 days, verifies the end date, and checks +/- day controls; deployed to Vercel production as `dpl_GusQKVAHVwrHy5bHhPG4tR7YgSPP` with live asset hash `7cc97c041c7247d6`.
 - Decluttered compact Stats `預算使用分析`: removed the yellow center dot from the budget compass, removed `Fairness by person` and `Category anomaly`, removed the four summary cards (`圖表統計額`, `共同分帳額`, `私人/代付`, `待轉帳`), and moved `TOP 10 支出` directly under the budget analysis card.
