@@ -2,6 +2,9 @@
 
 ## 2026-06-10
 
+- Added a compact Weather official-provider router that resolves official sources from itinerary country/region/city and coordinates before private or Open-Meteo fallback.
+- Added direct official Weather adapters for Singapore NEA/data.gov.sg, US NWS, and Canada MSC GeoMet, alongside the existing Japan JMA official adapter. Official data now stays the displayed provider while fallback data only fills missing hourly fields.
+- Added Weather smoke coverage for US NWS, Singapore NEA, and Canada MSC provider selection, plus country-first routing so Canada is not misclassified as US and Korea/Jeju is not misclassified as Japan by coordinate bounds.
 - Changed compact Weather provider priority for Japan so itinerary locations in Japan try true JMA official public JSON first, then use broker-backed WeatherAPI or Open-Meteo/JMA model data only to fill missing fields such as feels-like, UV, cloud cover, and wind gusts.
 - Added JMA official forecast + AMeDAS support for the current Japan trip regions used by the compact app, with stale non-official cache bypass so WeatherAPI cache no longer blocks official Japan data.
 - Added Weather smoke coverage for JMA official success, JMA official failure fallback, broker-session fallback filling, ended-trip current weather, city geocoding, Korea fallback geocoding, and multi-city weather cards.

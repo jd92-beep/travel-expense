@@ -46,7 +46,7 @@
 
 ## 天氣資料
 
-Compact app 的 Weather 頁會根據行程城市、國家和景點座標抓天氣。日本旅程會優先使用日本氣象廳 JMA 官方公開資料，再用 WeatherAPI 或 Open-Meteo 補回官方資料沒有的欄位，例如體感、UV 或雲量。其他國家的官方氣象源會按是否可安全直連、是否需要 API key、是否需要代理伺服器逐步加入；API key 不會放入公開前端。
+Compact app 的 Weather 頁會根據行程城市、國家和景點座標抓天氣。日本、新加坡、美國和加拿大旅程會優先使用當地官方氣象資料，例如 JMA、NEA/data.gov.sg、NWS 和 MSC GeoMet，再用 WeatherAPI 或 Open-Meteo 補回官方資料沒有的欄位，例如體感、UV 或雲量。其他國家的官方氣象源會按是否可安全直連、是否需要 API key、是否需要代理伺服器逐步加入；API key 不會放入公開前端。
 
 ## 誰可以用
 

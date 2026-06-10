@@ -103,6 +103,120 @@ async function routeJmaOfficial(page, options = {}) {
   return calls;
 }
 
+async function routeNwsOfficial(page, options = {}) {
+  const calls = [];
+  const date = options.date || '2026-04-20';
+  await page.route('https://api.weather.gov/points/**', async (route) => {
+    calls.push(route.request().url());
+    if (options.fail) {
+      await route.fulfill({ status: 503, body: 'NWS unavailable' });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        properties: {
+          forecastHourly: 'https://api.weather.gov/gridpoints/MTR/85,105/forecast/hourly',
+          timeZone: 'America/Los_Angeles',
+        },
+      },
+    });
+  });
+  await page.route('https://api.weather.gov/gridpoints/**/forecast/hourly', async (route) => {
+    calls.push(route.request().url());
+    await route.fulfill({
+      json: {
+        properties: {
+          periods: [9, 12, 16, 21].map((hour) => ({
+            startTime: `${date}T${String(hour).padStart(2, '0')}:00:00-07:00`,
+            temperature: options.tempF?.[hour] ?? 68,
+            temperatureUnit: 'F',
+            shortForecast: hour === 12 ? 'Sunny' : 'Mostly Cloudy',
+            probabilityOfPrecipitation: { value: hour === 21 ? 30 : 10 },
+            relativeHumidity: { value: 64 },
+            windSpeed: '8 mph',
+          })),
+        },
+      },
+    });
+  });
+  return calls;
+}
+
+async function routeSingaporeOfficial(page, options = {}) {
+  const calls = [];
+  await page.route('https://api-open.data.gov.sg/v2/real-time/api/**', async (route) => {
+    const url = route.request().url();
+    calls.push(url);
+    const endpoint = url.split('/').pop();
+    if (endpoint === 'two-hr-forecast') {
+      await route.fulfill({
+        json: {
+          code: 0,
+          data: {
+            area_metadata: [{ name: 'City', label_location: { latitude: 1.292, longitude: 103.844 } }],
+            items: [{ forecasts: [{ area: 'City', forecast: options.forecast || 'Cloudy' }] }],
+          },
+        },
+      });
+      return;
+    }
+    const values = {
+      'air-temperature': options.temp ?? 30,
+      'relative-humidity': options.humidity ?? 74,
+      rainfall: options.rain ?? 0.4,
+      'wind-speed': options.wind ?? 12,
+      'wind-direction': options.windDirection ?? 180,
+    };
+    await route.fulfill({
+      json: {
+        code: 0,
+        data: {
+          stations: [{ id: 'S111', name: 'Scotts Road', location: { latitude: 1.3106, longitude: 103.8365 } }],
+          readings: [{ timestamp: '2026-04-20T10:00:00+08:00', data: [{ stationId: 'S111', value: values[endpoint] ?? 0 }] }],
+        },
+        errorMsg: '',
+      },
+    });
+  });
+  return calls;
+}
+
+async function routeMscOfficial(page, options = {}) {
+  const calls = [];
+  await page.route('https://api.weather.gc.ca/collections/citypageweather-realtime/items**', async (route) => {
+    calls.push(route.request().url());
+    if (options.fail) {
+      await route.fulfill({ status: 503, body: 'MSC unavailable' });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          id: 'bc-74',
+          geometry: { type: 'Point', coordinates: [-123.12, 49.28] },
+          properties: {
+            name: { en: 'Vancouver', fr: 'Vancouver' },
+            currentConditions: {
+              temperature: { value: { en: options.temp ?? 14 } },
+              humidex: { value: { en: options.feels ?? 16 } },
+              relativeHumidity: { value: { en: options.humidity ?? 82 } },
+              condition: { en: options.condition || 'Cloudy' },
+              wind: {
+                speed: { value: { en: 10 } },
+                gust: { value: { en: 20 } },
+                bearing: { value: { en: 270 } },
+              },
+            },
+          },
+        }],
+      },
+    });
+  });
+  return calls;
+}
+
 async function installState(page, state) {
   await page.addInitScript((payload) => {
     window.__disable_supabase_configured = true;
@@ -431,7 +545,7 @@ test('Ended trip shows current weather for every itinerary day location', async 
   expect(forecastUrls.some((url) => url.includes('models=jma_seamless'))).toBe(true);
 });
 
-test('Non-Japan trip uses Open-Meteo without JMA', async ({ page }) => {
+test('US trip uses NWS official before Open-Meteo fallback fill', async ({ page }) => {
   const fixed = new Date('2026-04-20T10:00:00-07:00').valueOf();
   await page.addInitScript((fixedNow) => {
     window.__disable_supabase_configured = true;
@@ -447,9 +561,10 @@ test('Non-Japan trip uses Open-Meteo without JMA', async ({ page }) => {
     window.Date = MockDate;
   }, fixed);
   const urls = [];
+  const nwsCalls = await routeNwsOfficial(page, { tempF: { 9: 66, 12: 70, 16: 64, 21: 60 } });
   await page.route('https://api.open-meteo.com/**', async (route) => {
     urls.push(route.request().url());
-    await route.fulfill({ json: weatherFixture() });
+    await route.fulfill({ json: weatherFixture({ hourlyTemps: { 9: 18, 12: 21, 16: 19, 21: 16 }, hourlyFeels: { 9: 17, 12: 20, 16: 18, 21: 15 } }) });
   });
   await routeJmaOfficial(page, { failForecast: true });
   await installState(page, {
@@ -469,9 +584,96 @@ test('Non-Japan trip uses Open-Meteo without JMA', async ({ page }) => {
   });
   await page.goto('http://localhost:8903/travel-expense/compact/');
   await expect(page.getByText('San Francisco').first()).toBeVisible();
-  await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
+  await expect(page.getByText('Day 1 · NWS official')).toBeVisible();
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · NWS official');
+  await expect(page.locator('.weather-fallback-chip').first()).toContainText('NWS official missing some hourly fields');
+  await expect(page.getByText('21°C').first()).toBeVisible();
+  expect(nwsCalls.some((url) => url.includes('api.weather.gov/points/'))).toBe(true);
   expect(urls.length).toBeGreaterThan(0);
   expect(urls.every((url) => !url.includes('models=jma_seamless'))).toBe(true);
+});
+
+test('Singapore trip uses NEA official live data with fallback fill', async ({ page }) => {
+  const fixed = new Date('2026-04-20T10:30:00+08:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+  }, fixed);
+  const neaCalls = await routeSingaporeOfficial(page, { temp: 30, humidity: 74, forecast: 'Cloudy' });
+  await page.route('https://api.open-meteo.com/**', async (route) => {
+    await route.fulfill({ json: weatherFixture({ hourlyTemps: { 9: 29, 12: 31, 16: 30, 21: 28 }, hourlyFeels: { 9: 33, 12: 35, 16: 34, 21: 32 } }) });
+  });
+  await installState(page, {
+    tripName: 'Singapore 2026',
+    tripCurrency: 'SGD',
+    tripDateRange: { start: '2026-04-20', end: '2026-04-20' },
+    customItinerary: [{
+      date: '2026-04-20',
+      day: 1,
+      region: 'Singapore City',
+      city: 'Singapore',
+      country: 'Singapore',
+      timezone: 'Asia/Singapore',
+      currency: 'SGD',
+      spots: [{ time: '09:00', name: 'Marina Bay', type: 'ticket', lat: 1.283, lon: 103.86 }],
+    }],
+  });
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByText(/Day 1 · NEA official/)).toBeVisible();
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · NEA official');
+  await expect(page.getByText('30°C').first()).toBeVisible();
+  expect(neaCalls.some((url) => url.includes('two-hr-forecast'))).toBe(true);
+  expect(neaCalls.some((url) => url.includes('air-temperature'))).toBe(true);
+});
+
+test('Canada trip uses MSC official current conditions with fallback fill', async ({ page }) => {
+  const fixed = new Date('2026-04-20T10:30:00-07:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+  }, fixed);
+  const mscCalls = await routeMscOfficial(page, { temp: 14, feels: 16, condition: 'Cloudy' });
+  await page.route('https://api.open-meteo.com/**', async (route) => {
+    await route.fulfill({ json: weatherFixture({ hourlyTemps: { 9: 13, 12: 15, 16: 16, 21: 12 }, hourlyFeels: { 9: 12, 12: 14, 16: 15, 21: 11 } }) });
+  });
+  await installState(page, {
+    tripName: 'Canada 2026',
+    tripCurrency: 'CAD',
+    tripDateRange: { start: '2026-04-20', end: '2026-04-20' },
+    customItinerary: [{
+      date: '2026-04-20',
+      day: 1,
+      region: 'Vancouver',
+      city: 'Vancouver',
+      country: 'Canada',
+      timezone: 'America/Vancouver',
+      currency: 'CAD',
+      spots: [{ time: '09:00', name: 'Canada Place', type: 'other', lat: 49.2888, lon: -123.1111 }],
+    }],
+  });
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByText(/Day 1 · MSC official/)).toBeVisible();
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · MSC official');
+  await expect(page.getByText('14°C').first()).toBeVisible();
+  expect(mscCalls.some((url) => url.includes('citypageweather-realtime'))).toBe(true);
 });
 
 test('Missing coordinates show warning and do not crash', async ({ page }) => {

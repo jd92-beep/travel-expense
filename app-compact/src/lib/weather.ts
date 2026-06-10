@@ -53,6 +53,14 @@ type WeatherFetchResult = {
   fallbackReason?: string;
 };
 
+export type OfficialWeatherProviderId = 'jma' | 'nea-sg' | 'nws-us' | 'msc-ca';
+
+export type OfficialWeatherContext = {
+  country?: string;
+  region?: string;
+  city?: string;
+};
+
 type JmaLocationProfile = {
   label: string;
   matcher: RegExp;
@@ -90,6 +98,34 @@ const REGION_COORDS: Record<string, WeatherCoord> = {
   香港: { label: '香港', lat: 22.3193, lon: 114.1694 },
   SanFrancisco: { label: 'San Francisco', lat: 37.7749, lon: -122.4194 },
 };
+
+const OFFICIAL_PROVIDER_SOURCE: Record<OfficialWeatherProviderId, string> = {
+  jma: 'JMA official',
+  'nea-sg': 'NEA official',
+  'nws-us': 'NWS official',
+  'msc-ca': 'MSC official',
+};
+
+export function resolveOfficialWeatherProvider(coord: WeatherCoord, context: OfficialWeatherContext = {}): OfficialWeatherProviderId | null {
+  const country = String(context.country || '').trim();
+  if (country) {
+    if (/日本|Japan|JP|JPN/i.test(country)) return 'jma';
+    if (/Singapore|SG|新加坡|星加坡|Singapura/i.test(country)) return 'nea-sg';
+    if (/United States|USA|U\.S\.|US\b|美國|美国/i.test(country)) return 'nws-us';
+    if (/Canada|CA\b|加拿大/i.test(country)) return 'msc-ca';
+    return null;
+  }
+  const hay = [context.region, context.city, coord.label, coord.query].map((part) => String(part || '')).join(' ');
+  if (/日本|Japan|JP|JPN|名古屋|金澤|金沢|長野|高山|白川|常滑|上高地|立山|東京|京都|大阪/i.test(hay)) return 'jma';
+  if (/Singapore|SG|新加坡|星加坡|Singapura/i.test(hay)) return 'nea-sg';
+  if (/United States|USA|U\.S\.|US\b|美國|美国/i.test(hay)) return 'nws-us';
+  if (/Canada|CA\b|加拿大/i.test(hay)) return 'msc-ca';
+  if (coord.lat >= 24 && coord.lat <= 46 && coord.lon >= 122 && coord.lon <= 146) return 'jma';
+  if (coord.lat >= 1.13 && coord.lat <= 1.48 && coord.lon >= 103.55 && coord.lon <= 104.15) return 'nea-sg';
+  if (coord.lat >= 41 && coord.lat <= 84 && coord.lon >= -141 && coord.lon <= -52) return 'msc-ca';
+  if (coord.lat >= 18 && coord.lat <= 72 && coord.lon >= -170 && coord.lon <= -60) return 'nws-us';
+  return null;
+}
 
 export function coordsForDay(day: ItineraryDay, limit = 2): WeatherCoord[] {
   const coords: WeatherCoord[] = [];
@@ -436,6 +472,182 @@ async function fetchJmaOfficialWeather(coord: WeatherCoord, timezone: string, ta
   return { data, source: 'JMA official', provider: 'JMA official', cached: false, fetchedAt: Date.now() };
 }
 
+function weatherTextToWmo(text: unknown): number | undefined {
+  const value = String(text || '').toLowerCase();
+  if (!value) return undefined;
+  if (/thunder|storm|雷/.test(value)) return 95;
+  if (/snow|sleet|雪/.test(value)) return 71;
+  if (/shower|rain|drizzle|wet|雨/.test(value)) return 61;
+  if (/fog|mist|haze|霧|雾/.test(value)) return 45;
+  if (/overcast|cloudy|雲|云|cloud/.test(value)) return /part|fair|少/.test(value) ? 2 : 3;
+  if (/sunny|clear|晴|fair/.test(value)) return 0;
+  return 2;
+}
+
+function nearestByDistance<T>(items: T[], coord: WeatherCoord, latOf: (item: T) => number, lonOf: (item: T) => number): T | undefined {
+  return items
+    .filter((item) => Number.isFinite(latOf(item)) && Number.isFinite(lonOf(item)))
+    .map((item) => ({ item, distance: distanceKm(coord.lat, coord.lon, latOf(item), lonOf(item)) }))
+    .sort((a, b) => a.distance - b.distance)[0]?.item;
+}
+
+async function fetchSingaporeReading(endpoint: string, coord: WeatherCoord): Promise<number | undefined> {
+  const json = await fetchJson(`https://api-open.data.gov.sg/v2/real-time/api/${endpoint}`) as {
+    data?: {
+      stations?: Array<{ id?: string; location?: { latitude?: number; longitude?: number } }>;
+      readings?: Array<{ data?: Array<{ stationId?: string; value?: number }> }>;
+    };
+  };
+  const stations = json.data?.stations || [];
+  const nearest = nearestByDistance(stations, coord, (station) => Number(station.location?.latitude), (station) => Number(station.location?.longitude));
+  const reading = json.data?.readings?.[0]?.data?.find((item) => item.stationId === nearest?.id);
+  const value = Number(reading?.value);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+async function fetchSingaporeForecastCode(coord: WeatherCoord): Promise<number | undefined> {
+  const json = await fetchJson('https://api-open.data.gov.sg/v2/real-time/api/two-hr-forecast') as {
+    data?: {
+      area_metadata?: Array<{ name?: string; label_location?: { latitude?: number; longitude?: number } }>;
+      items?: Array<{ forecasts?: Array<{ area?: string; forecast?: string }> }>;
+    };
+  };
+  const areas = json.data?.area_metadata || [];
+  const nearest = nearestByDistance(areas, coord, (area) => Number(area.label_location?.latitude), (area) => Number(area.label_location?.longitude));
+  const forecast = json.data?.items?.[0]?.forecasts?.find((item) => item.area === nearest?.name);
+  return weatherTextToWmo(forecast?.forecast);
+}
+
+async function fetchSingaporeOfficialWeather(coord: WeatherCoord, timezone: string, targetDate?: string): Promise<WeatherFetchResult> {
+  const safeTimezone = timezone === 'auto' ? 'Asia/Singapore' : timezone;
+  const date = targetDate || currentYmdInTimezone(safeTimezone);
+  if (date !== currentYmdInTimezone(safeTimezone)) throw new Error('NEA official live data is outside target date');
+  const data = emptyWeatherDataForDate(date);
+  const slotIndex = liveSlotIndexForDate(date, safeTimezone);
+  if (slotIndex < 0) throw new Error('NEA official live slot unavailable');
+  const [temp, humidity, rainMm, windSpeed, windDirection, code] = await Promise.all([
+    fetchSingaporeReading('air-temperature', coord),
+    fetchSingaporeReading('relative-humidity', coord),
+    fetchSingaporeReading('rainfall', coord),
+    fetchSingaporeReading('wind-speed', coord),
+    fetchSingaporeReading('wind-direction', coord),
+    fetchSingaporeForecastCode(coord),
+  ]);
+  setHourlyValue(data, 'temperature_2m', slotIndex, temp);
+  setHourlyValue(data, 'relative_humidity_2m', slotIndex, humidity);
+  setHourlyValue(data, 'precipitation', slotIndex, rainMm);
+  setHourlyValue(data, 'wind_speed_10m', slotIndex, windSpeed);
+  setHourlyValue(data, 'wind_direction_10m', slotIndex, windDirection);
+  setHourlyValue(data, 'weather_code', slotIndex, code);
+  if (!hasMeaningfulWeatherData(data)) throw new Error('NEA official returned no matching weather values');
+  return { data, source: 'NEA official', provider: 'NEA official', cached: false, fetchedAt: Date.now() };
+}
+
+function fahrenheitToCelsius(value: unknown): number | undefined {
+  const f = Number(value);
+  if (!Number.isFinite(f)) return undefined;
+  return (f - 32) * 5 / 9;
+}
+
+function parseNwsWindKmh(value: unknown): number | undefined {
+  const text = String(value || '');
+  const match = text.match(/(\d+(?:\.\d+)?)/);
+  const mph = match ? Number(match[1]) : Number.NaN;
+  return Number.isFinite(mph) ? mph * 1.60934 : undefined;
+}
+
+async function fetchNwsOfficialWeather(coord: WeatherCoord, targetDate?: string): Promise<WeatherFetchResult> {
+  const points = await fetchJson(`https://api.weather.gov/points/${coord.lat.toFixed(4)},${coord.lon.toFixed(4)}`) as {
+    properties?: { forecastHourly?: string; timeZone?: string };
+  };
+  const forecastHourly = points.properties?.forecastHourly;
+  if (!forecastHourly) throw new Error('NWS official hourly forecast URL missing');
+  const date = targetDate || currentYmdInTimezone(points.properties?.timeZone || 'America/New_York');
+  const forecast = await fetchJson(forecastHourly) as {
+    properties?: {
+      periods?: Array<{
+        startTime?: string;
+        temperature?: number;
+        temperatureUnit?: string;
+        probabilityOfPrecipitation?: { value?: number };
+        relativeHumidity?: { value?: number };
+        windSpeed?: string;
+        shortForecast?: string;
+      }>;
+    };
+  };
+  const data = emptyWeatherDataForDate(date);
+  for (const period of forecast.properties?.periods || []) {
+    const slot = slotIndexForIso(String(period.startTime || ''), date);
+    const temp = period.temperatureUnit === 'F' ? fahrenheitToCelsius(period.temperature) : Number(period.temperature);
+    setHourlyValue(data, 'temperature_2m', slot, temp);
+    setHourlyValue(data, 'weather_code', slot, weatherTextToWmo(period.shortForecast));
+    setHourlyValue(data, 'precipitation_probability', slot, period.probabilityOfPrecipitation?.value);
+    setHourlyValue(data, 'relative_humidity_2m', slot, period.relativeHumidity?.value);
+    setHourlyValue(data, 'wind_speed_10m', slot, parseNwsWindKmh(period.windSpeed));
+  }
+  if (!hasMeaningfulWeatherData(data)) throw new Error('NWS official returned no matching weather values');
+  return { data, source: 'NWS official', provider: 'NWS official', cached: false, fetchedAt: Date.now() };
+}
+
+function localizedNumber(value: unknown): number | undefined {
+  const raw = (value as { en?: unknown } | undefined)?.en ?? value;
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+async function fetchMscOfficialWeather(coord: WeatherCoord, timezone: string, targetDate?: string): Promise<WeatherFetchResult> {
+  const safeTimezone = timezone === 'auto' ? 'America/Toronto' : timezone;
+  const date = targetDate || currentYmdInTimezone(safeTimezone);
+  if (date !== currentYmdInTimezone(safeTimezone)) throw new Error('MSC official current conditions are outside target date');
+  const pad = 1.5;
+  const bbox = [coord.lon - pad, coord.lat - pad, coord.lon + pad, coord.lat + pad].map((value) => value.toFixed(3)).join(',');
+  const json = await fetchJson(`https://api.weather.gc.ca/collections/citypageweather-realtime/items?f=json&limit=50&bbox=${bbox}`) as {
+    features?: Array<{
+      geometry?: { coordinates?: number[] };
+      properties?: {
+        currentConditions?: {
+          temperature?: { value?: unknown };
+          humidex?: { value?: unknown };
+          windChill?: { value?: unknown };
+          relativeHumidity?: { value?: unknown };
+          condition?: { en?: string };
+          wind?: { speed?: { value?: unknown }; gust?: { value?: unknown }; bearing?: { value?: unknown } };
+        };
+      };
+    }>;
+  };
+  const feature = nearestByDistance(json.features || [], coord, (item) => Number(item.geometry?.coordinates?.[1]), (item) => Number(item.geometry?.coordinates?.[0]));
+  const conditions = feature?.properties?.currentConditions;
+  const data = emptyWeatherDataForDate(date);
+  const slotIndex = liveSlotIndexForDate(date, safeTimezone);
+  if (slotIndex < 0) throw new Error('MSC official live slot unavailable');
+  const temp = localizedNumber(conditions?.temperature?.value);
+  const humidex = localizedNumber(conditions?.humidex?.value);
+  const windChill = localizedNumber(conditions?.windChill?.value);
+  setHourlyValue(data, 'temperature_2m', slotIndex, temp);
+  setHourlyValue(data, 'apparent_temperature', slotIndex, humidex ?? windChill ?? temp);
+  setHourlyValue(data, 'relative_humidity_2m', slotIndex, localizedNumber(conditions?.relativeHumidity?.value));
+  setHourlyValue(data, 'weather_code', slotIndex, weatherTextToWmo(conditions?.condition?.en));
+  setHourlyValue(data, 'wind_speed_10m', slotIndex, localizedNumber(conditions?.wind?.speed?.value));
+  setHourlyValue(data, 'wind_gusts_10m', slotIndex, localizedNumber(conditions?.wind?.gust?.value));
+  setHourlyValue(data, 'wind_direction_10m', slotIndex, localizedNumber(conditions?.wind?.bearing?.value));
+  if (!hasMeaningfulWeatherData(data)) throw new Error('MSC official returned no matching weather values');
+  return { data, source: 'MSC official', provider: 'MSC official', cached: false, fetchedAt: Date.now() };
+}
+
+function officialProviderSource(provider: OfficialWeatherProviderId): string {
+  return OFFICIAL_PROVIDER_SOURCE[provider];
+}
+
+async function fetchOfficialWeather(provider: OfficialWeatherProviderId, coord: WeatherCoord, timezone: string, targetDate?: string): Promise<WeatherFetchResult> {
+  if (provider === 'jma') return fetchJmaOfficialWeather(coord, timezone, targetDate);
+  if (provider === 'nea-sg') return fetchSingaporeOfficialWeather(coord, timezone, targetDate);
+  if (provider === 'nws-us') return fetchNwsOfficialWeather(coord, targetDate);
+  if (provider === 'msc-ca') return fetchMscOfficialWeather(coord, timezone, targetDate);
+  throw new Error(`Unsupported official provider: ${provider}`);
+}
+
 const MERGEABLE_WEATHER_FIELDS = [
   'temperature_2m',
   'apparent_temperature',
@@ -480,14 +692,22 @@ function weatherDataHasGaps(data: WeatherData): boolean {
 
 type WeatherBrokerState = Pick<AppState, 'credentialBrokerUrl' | 'credentialSession' | 'credentialSessionExpiresAt'>;
 
-export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJma = false, state?: WeatherBrokerState, targetDate?: string): Promise<WeatherFetchResult> {
+function normalizeOfficialProvider(value: OfficialWeatherProviderId | boolean | null | undefined): OfficialWeatherProviderId | null {
+  if (value === true) return 'jma';
+  if (value === false || value == null) return null;
+  return value;
+}
+
+export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', officialProviderInput: OfficialWeatherProviderId | boolean | null = null, state?: WeatherBrokerState, targetDate?: string): Promise<WeatherFetchResult> {
   if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) throw new Error(`${coord.label} 缺少 lat/lon，請喺行程 spot 加座標或用 Kimi 更新行程。`);
+  const officialProvider = normalizeOfficialProvider(officialProviderInput);
+  const officialSource = officialProvider ? officialProviderSource(officialProvider) : '';
   const cacheKey = weatherCacheKey(coord);
   const safeTimezone = normalizeWeatherTimezone(timezone);
   try {
     const cached = cacheKey ? JSON.parse(localStorage.getItem(cacheKey) || 'null') : null;
     const cachedSource = String(cached?.source || '');
-    const officialCacheAllowed = !useJma || /JMA official/i.test(cachedSource);
+    const officialCacheAllowed = !officialProvider || cachedSource === officialSource;
     if (cached && officialCacheAllowed && Date.now() - cached.ts < 60 * 60 * 1000 && weatherDataIncludesDate(cached.data, targetDate)) {
       return { data: cached.data as WeatherData, source: `${cached.source} cache`, provider: String(cached.source || 'Weather'), cached: true, fetchedAt: Number(cached.ts) || Date.now() };
     }
@@ -497,48 +717,48 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', useJm
 
   let officialResult: WeatherFetchResult | null = null;
   let officialFallbackReason = '';
-  if (useJma) {
+  if (officialProvider) {
     try {
-      officialResult = await fetchJmaOfficialWeather(coord, safeTimezone, targetDate);
+      officialResult = await fetchOfficialWeather(officialProvider, coord, safeTimezone, targetDate);
       if (!weatherDataHasGaps(officialResult.data)) {
         if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: officialResult.data, source: officialResult.source }));
         return officialResult;
       }
     } catch (error) {
-      officialFallbackReason = `JMA official unavailable: ${weatherErrorLabel(error)}`;
+      officialFallbackReason = `${officialSource} unavailable: ${weatherErrorLabel(error)}`;
     }
   }
 
   if (officialResult) {
     try {
-      const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, useJma, state, officialFallbackReason);
+      const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, officialProvider, state, officialFallbackReason);
       const data = mergeWeatherData(officialResult.data, fallbackResult.data);
       const reason = fallbackResult.provider
-        ? `JMA official missing some hourly fields; filled by ${fallbackResult.provider}`
+        ? `${officialResult.provider} missing some hourly fields; filled by ${fallbackResult.provider}`
         : undefined;
-      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: 'JMA official' }));
+      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: officialResult.source }));
       return {
         data,
-        source: 'JMA official',
-        provider: 'JMA official',
+        source: officialResult.source,
+        provider: officialResult.provider,
         cached: false,
         fetchedAt: Date.now(),
         fallbackReason: reason,
       };
     } catch (error) {
-      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: officialResult.data, source: 'JMA official' }));
+      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: officialResult.data, source: officialResult.source }));
       return {
         ...officialResult,
-        fallbackReason: `JMA official served; fallback supplement unavailable: ${weatherErrorLabel(error)}`,
+        fallbackReason: `${officialResult.provider} served; fallback supplement unavailable: ${weatherErrorLabel(error)}`,
       };
     }
   }
-  const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, useJma, state, officialFallbackReason);
+  const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, officialProvider, state, officialFallbackReason);
   if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: fallbackResult.data, source: fallbackResult.source }));
   return fallbackResult;
 }
 
-async function fetchFallbackWeather(coord: WeatherCoord, safeTimezone: string, useJma: boolean, state?: WeatherBrokerState, priorReason = ''): Promise<WeatherFetchResult> {
+async function fetchFallbackWeather(coord: WeatherCoord, safeTimezone: string, officialProvider: OfficialWeatherProviderId | null, state?: WeatherBrokerState, priorReason = ''): Promise<WeatherFetchResult> {
   let brokerFallbackReason = '';
   if (state) {
     try {
@@ -567,7 +787,7 @@ async function fetchFallbackWeather(coord: WeatherCoord, safeTimezone: string, u
   ].join(',');
   const base = `https://api.open-meteo.com/v1/forecast?latitude=${coord.lat}&longitude=${coord.lon}&hourly=${hourly}&current=temperature_2m,weather_code&timezone=${encodeURIComponent(safeTimezone)}&forecast_days=7`;
   const candidates = [
-    ...(useJma ? [{ url: `${base}&models=jma_seamless`, source: 'JMA' }] : []),
+    ...(officialProvider === 'jma' ? [{ url: `${base}&models=jma_seamless`, source: 'JMA' }] : []),
     { url: base, source: 'Open-Meteo' },
   ];
   let lastError: unknown;

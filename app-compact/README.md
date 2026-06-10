@@ -24,18 +24,23 @@ unless Boss explicitly asks for parity work.
 ## Weather Provider Priority
 
 Compact Weather should prefer official local meteorological data when an itinerary
-country/region has a safe source. Japan trips currently use JMA official public
-JSON first (`www.jma.go.jp` forecast + AMeDAS observations), then fill missing
-fields with broker-backed WeatherAPI or Open-Meteo fallback data. Do not let a
-private WeatherAPI cache replace fresh JMA official data for Japan.
+country/region has a safe source. Current browser-direct official providers are:
+
+- Japan: JMA official public JSON (`www.jma.go.jp` forecast + AMeDAS observations).
+- Singapore: NEA/data.gov.sg real-time readings and two-hour forecast.
+- United States: NWS `api.weather.gov` point and hourly forecast APIs.
+- Canada: MSC GeoMet City Page Weather current conditions.
+
+Official data remains the displayed provider. Broker-backed WeatherAPI or
+Open-Meteo should only fill fields the official source does not provide, such as
+feels-like, UV, cloud cover, or wind gusts. Do not let a private WeatherAPI cache
+replace fresh official data.
 
 Official providers with required keys or strict User-Agent/cache rules must go
 through the Credential Broker or another backend proxy, not the public frontend.
-Current research notes: Singapore NEA/data.gov.sg and US NWS are strong
-browser-direct candidates; Canada MSC GeoMet is promising but needs
-normalization; Korea KMA, Taiwan CWA, UK Met Office, DWD, Meteo-France, BOM, and
-MET Norway production use should be broker/proxy-backed because of keys, CORS,
-User-Agent, parsing, cache, or licence constraints.
+Korea KMA, Taiwan CWA, UK Met Office, DWD, Meteo-France, BOM, and MET Norway
+production use should be broker/proxy-backed because of keys, CORS, User-Agent,
+parsing, cache, or licence constraints.
 
 ## Broker Vault Proof
 

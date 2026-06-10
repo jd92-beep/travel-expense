@@ -6,7 +6,7 @@ import { Meteors } from '../components/ui/meteors';
 import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import { coordForDay, coordsForDay, fetchWeather, resolveCoordsForDay, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type WeatherSlot } from '../lib/weather';
+import { coordForDay, coordsForDay, fetchWeather, resolveCoordsForDay, resolveOfficialWeatherProvider, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type WeatherSlot } from '../lib/weather';
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
@@ -85,8 +85,8 @@ export function Weather({ state }: { state: AppState }) {
                 next[day.date].push({ coord, source: '缺少座標', slots: [] });
                 continue;
               }
-              const isJapan = /日本|Japan|JP|名古屋|金澤|長野|高山|白川|常滑|上高地|立山|東京|京都|大阪/.test(`${day.country || ''} ${day.region || ''} ${coord.label}`);
-              const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', isJapan, state, forecastDate);
+              const officialProvider = resolveOfficialWeatherProvider(coord, { country: day.country, region: day.region, city: day.city });
+              const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', officialProvider, state, forecastDate);
               if (cancelled) return;
               next[day.date].push({
                 coord,
