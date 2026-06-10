@@ -43,12 +43,18 @@ export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fa
       day: Number(day.day) || dayIdx + 1,
       timezone: normalizeZone(day.timezone || day.spots?.find((spot) => spot.timezone)?.timezone) || 'Asia/Tokyo',
       currency: day.currency || fallbackCurrency,
-      spots: (day.spots || []).map((spot, spotIdx) => ({
-        ...spot,
-        id: spot.spotId || spot.id || stableSpotId(tripId, day.date, spotIdx, spot),
-        spotId: spot.spotId || spot.id || stableSpotId(tripId, day.date, spotIdx, spot),
-        mapUrl: spot.mapUrl || '',
-      })),
+      spots: (day.spots || []).map((spot, spotIdx) => {
+        const rawLat = Number(spot.lat);
+        const rawLon = Number(spot.lon);
+        return {
+          ...spot,
+          id: spot.spotId || spot.id || stableSpotId(tripId, day.date, spotIdx, spot),
+          spotId: spot.spotId || spot.id || stableSpotId(tripId, day.date, spotIdx, spot),
+          mapUrl: spot.mapUrl || '',
+          lat: Number.isFinite(rawLat) ? rawLat : undefined,
+          lon: Number.isFinite(rawLon) ? rawLon : undefined,
+        };
+      }),
     };
   });
 }

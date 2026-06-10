@@ -2404,7 +2404,7 @@ export function Settings({
                     <header>
                       <div>
                         <strong>Day {day.day} · {day.date}</strong>
-                        <span>{day.region || day.city || '未命名地區'}{day.city ? ` · ${day.city}` : ''}{day.country ? ` · ${day.country}` : ''}</span>
+                        <span>{day.region || day.city || '未命名地區'}{day.city && day.city !== day.region ? ` · ${day.city}` : ''}{day.country ? ` · ${day.country}` : ''}</span>
                       </div>
                       <small>{day.currency || ''}{day.timezone ? ` · ${day.timezone}` : ''}</small>
                     </header>

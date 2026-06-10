@@ -137,12 +137,13 @@ export function coordsForDay(day: ItineraryDay, limit = 2): WeatherCoord[] {
     coords.push(coord);
   };
 
-  for (const spot of day.spots) {
+  const spots = day.spots || [];
+  for (const spot of spots) {
     if (Number.isFinite(spot.lat) && Number.isFinite(spot.lon) && spot.lat != null && spot.lon != null) {
       add({ label: spot.name || day.city || day.region, lat: spot.lat, lon: spot.lon, timezone: spot.timezone || day.timezone, origin: 'spot-coordinate' });
     }
   }
-  const hay = `${day.region} ${day.spots.map((s) => `${s.name} ${s.address || ''} ${s.note || ''}`).join(' ')}`;
+  const hay = `${day.region} ${spots.map((s) => `${s.name} ${s.address || ''} ${s.note || ''}`).join(' ')}`;
   const compactHay = hay.replace(/\s+/g, '');
   const matchedKeys = Object.keys(REGION_COORDS)
     .map((key) => ({ key, idx: Math.min(...[hay.indexOf(key), compactHay.indexOf(key)].filter((idx) => idx >= 0)) }))
