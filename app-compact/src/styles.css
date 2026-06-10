@@ -11397,16 +11397,16 @@ textarea,
   .app-shell--weather .weather-metrics {
     grid-area: metrics !important;
     display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 4px !important;
     min-width: 0 !important;
   }
 
   .app-shell--weather .metric-tag {
     min-width: 0 !important;
-    justify-content: center !important;
+    justify-content: flex-start !important;
     gap: 2px !important;
-    padding: 3px 4px !important;
+    padding: 3px 6px !important;
     border-radius: 8px !important;
     white-space: nowrap !important;
   }
@@ -11414,6 +11414,11 @@ textarea,
   .app-shell--weather .metric-tag svg {
     width: 10px !important;
     height: 10px !important;
+  }
+
+  .app-shell--weather .metric-tag .metric-val {
+    overflow: visible !important;
+    text-overflow: clip !important;
   }
 
   .app-shell--weather .weather-hint-container {

@@ -248,7 +248,7 @@ export function Weather({ state }: { state: AppState }) {
                                 <span className="metric-val">
                                   {slot.uvIndex != null ? `UV ${formatNumber(slot.uvIndex, '')}` : ''}
                                   {slot.uvIndex != null && slot.cloudCover != null ? ' · ' : ''}
-                                  {slot.cloudCover != null ? `雲 ${formatNumber(slot.cloudCover, '%')}` : ''}
+                                  {slot.cloudCover != null ? `雲${formatNumber(slot.cloudCover, '%')}` : ''}
                                 </span>
                               </span>
                             )}

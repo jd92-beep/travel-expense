@@ -252,6 +252,21 @@ test('WeatherAPI broker forecast is preferred when broker session is active', as
   await expect(page.locator('.preview-weather-temp small')).toContainText('體感 30°C');
   await expect(page.locator('.weather-slot-detailed.is-live .weather-temp-block').first().locator('.temp-num')).toContainText('27');
   await expect(page.locator('.weather-slot-detailed.is-live .weather-metrics .metric-tag').first()).toHaveClass(/sun-tag/);
+  await expect(page.locator('.weather-slot-detailed.is-live .weather-metrics .metric-tag').first()).toContainText('UV 6 · 雲35%');
+  const uvMetricFits = await page.locator('.weather-slot-detailed.is-live .sun-tag .metric-val').first().evaluate((node) => ({
+    text: node.textContent,
+    clientWidth: node.clientWidth,
+    scrollWidth: node.scrollWidth,
+  }));
+  expect(uvMetricFits.scrollWidth, JSON.stringify(uvMetricFits, null, 2)).toBeLessThanOrEqual(uvMetricFits.clientWidth + 1);
+  const liveMetricFits = await page.locator('.weather-slot-detailed.is-live .metric-val').evaluateAll((nodes) => nodes.map((node) => ({
+    text: node.textContent,
+    clientWidth: node.clientWidth,
+    scrollWidth: node.scrollWidth,
+  })));
+  for (const metric of liveMetricFits) {
+    expect(metric.scrollWidth, JSON.stringify(metric, null, 2)).toBeLessThanOrEqual(metric.clientWidth + 1);
+  }
   const accentLineMetrics = await page.locator('.weather-slot-detailed').first().evaluate((node) => {
     const card = node.getBoundingClientRect();
     const header = node.querySelector('.weather-slot-header')?.getBoundingClientRect();
