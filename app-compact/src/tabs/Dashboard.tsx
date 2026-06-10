@@ -467,6 +467,7 @@ export function Dashboard({
   const [destinationIdeas, setDestinationIdeas] = useState<DestinationIdea[]>([]);
   const [destinationIdeaStatus, setDestinationIdeaStatus] = useState<'idle' | 'loading' | 'online' | 'fallback' | 'error'>('idle');
   const [tripCreateStatus, setTripCreateStatus] = useState<'idle' | 'analyzing' | 'fallback'>('idle');
+  const [tripCreateError, setTripCreateError] = useState('');
 
   // 1. 📅 智能預設黃金 7 天
   useEffect(() => {
@@ -620,6 +621,7 @@ export function Dashboard({
       ideas: destinationIdeas,
     });
 
+    setTripCreateError('');
     setTripCreateStatus('analyzing');
     try {
       const draft = await parseTripParagraph(paragraph, {
@@ -638,6 +640,11 @@ export function Dashboard({
         setTripCreateStatus('fallback');
       }
     } catch (error) {
+      if (isQuotaHardStop(error)) {
+        setTripCreateStatus('idle');
+        setTripCreateError(`AI quota / rate limit：${redactedError(error)}`);
+        return;
+      }
       console.warn('[Dashboard] New trip AI analysis failed, using destination fallback:', error);
       setTripCreateStatus('fallback');
     }
@@ -699,6 +706,7 @@ export function Dashboard({
     setDestinationIdeas([]);
     setDestinationIdeaStatus('idle');
     setTripCreateStatus('idle');
+    setTripCreateError('');
   };
 
   const trip = activeTrip(state);
@@ -1578,8 +1586,13 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
                   {tripCreateStatus !== 'idle' && (
                     <div className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-800">
                       {tripCreateStatus === 'analyzing'
-                        ? '正在用 Trip AI 分析行程，完成後會自動建立 Timeline、Weather target 同後端同步項目...'
-                        : 'Trip AI 暫時未能產生完整行程，會用目的地建議先建立可用時間線。'}
+                        ? '正在依序嘗試 Trip AI 模型，完成後會自動建立 Timeline、Weather target 同後端同步項目...'
+                        : 'Trip AI 模型梯隊暫時未能產生完整行程，會用目的地建議先建立可用時間線。'}
+                    </div>
+                  )}
+                  {tripCreateError && (
+                    <div className="px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-[11px] font-bold text-red-700">
+                      {tripCreateError}。請稍後再試或到 Settings 換可用模型；為避免繞過用量限制，未有自動使用景點 fallback。
                     </div>
                   )}
                 </div>

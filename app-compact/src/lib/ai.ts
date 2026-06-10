@@ -171,6 +171,11 @@ function isBrokerRouteUnavailable(error: unknown): boolean {
   return /(?:\b404\b|not found|route|endpoint|Network error)/i.test(message);
 }
 
+function hasUsefulTripItinerary(draft: TripDraft): boolean {
+  return Array.isArray(draft.trip.itinerary)
+    && draft.trip.itinerary.some((day) => (day.spots || []).some((spot) => String(spot.name || '').trim()));
+}
+
 async function callGoogleJson(
   state: AppState,
   prompt: string,
@@ -479,20 +484,35 @@ Choose themeKey from destination context: Japan=japan_washi, Korea=korea_editori
 USER PARAGRAPH:
 ${paragraph.slice(0, 14000)}`;
   try {
-    let parsed: unknown;
+    const warnings: string[] = [];
     try {
-      parsed = await brokerTripIntelligence(state, {
+      const brokerParsed = await brokerTripIntelligence(state, {
         paragraph: paragraph.slice(0, 14000),
         currentTrip,
         model: KIMI_API_MODEL,
       });
+      const brokerDraft = normalizeTripDraft(brokerParsed, state, paragraph);
+      if (hasUsefulTripItinerary(brokerDraft)) return brokerDraft;
+      warnings.push('Trip intelligence primary returned no usable itinerary spots.');
+      console.warn('[AI Routing] Trip intelligence primary returned no usable itinerary spots; trying model fallback ladder.');
     } catch (error) {
-      if (isQuotaOrRateLimitError(error) || !isBrokerRouteUnavailable(error)) throw error;
-      console.warn('[AI Routing] Trip intelligence backend unavailable, using legacy trip prompt:', error);
-      parsed = await callPreferredJson(state, prompt, 'trip');
+      if (isQuotaOrRateLimitError(error)) throw error;
+      warnings.push(error instanceof Error ? error.message : String(error));
+      const routeLabel = isBrokerRouteUnavailable(error) ? 'backend unavailable' : 'primary failed';
+      console.warn(`[AI Routing] Trip intelligence ${routeLabel}, trying model fallback ladder:`, error);
     }
-    return normalizeTripDraft(parsed, state, paragraph);
+
+    const parsed = await callPreferredJson(state, prompt, 'trip');
+    const draft = normalizeTripDraft(parsed, state, paragraph);
+    if (hasUsefulTripItinerary(draft)) {
+      return {
+        ...draft,
+        warnings: [...warnings, ...draft.warnings].filter(Boolean),
+      };
+    }
+    throw new Error([...warnings, 'All trip LLM attempts returned no usable itinerary spots.'].filter(Boolean).join(' | '));
   } catch (error) {
+    if (isQuotaOrRateLimitError(error)) throw error instanceof Error ? error : new Error(String(error));
     const fallback = tripFromLegacyState({
       ...state,
       tripName: current.name,

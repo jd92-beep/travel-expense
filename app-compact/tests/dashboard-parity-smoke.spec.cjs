@@ -246,6 +246,147 @@ test('Dashboard new trip wizard lets users choose trip days on step two', async 
   await expect(page.getByText(/城山日出峰|濟州東部|Jeju/).first()).toBeVisible();
 });
 
+test('Dashboard new trip wizard tries LLM fallbacks before default scenery spots', async ({ page }) => {
+  const calls = [];
+  await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
+  await page.route('https://en.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
+  await page.route('**/trip/intelligence', async (route) => {
+    calls.push({ path: 'trip-intelligence' });
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: 'primary trip model temporarily unavailable' }),
+    });
+  });
+  await page.route('**/kimi/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ path: 'kimi', model: body.model });
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: 'kimi model unavailable' }),
+    });
+  });
+  await page.route('**/mimo/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ path: 'mimo', model: body.model });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          trip: {
+            name: '濟州2026',
+            destinationSummary: 'Jeju, South Korea',
+            startDate: '2026-05-08',
+            endDate: '2026-05-10',
+            homeCurrency: 'HKD',
+            currencies: ['HKD', 'KRW'],
+            intelligence: {
+              countryCode: 'KR',
+              countryName: 'South Korea',
+              primaryCurrency: 'KRW',
+              themeKey: 'korea_editorial',
+              locale: 'ko-KR',
+              timezone: 'Asia/Seoul',
+              weatherRegion: 'Jeju',
+              confidence: 'medium',
+            },
+            itinerary: [{
+              date: '2026-05-08',
+              day: 1,
+              region: 'LLM Jeju',
+              city: 'Jeju',
+              country: 'South Korea',
+              timezone: 'Asia/Seoul',
+              currency: 'KRW',
+              spots: [{ time: '10:00', name: 'Mimo Jeju Observatory', type: 'sightseeing', lat: 33.4996, lon: 126.5312, timezone: 'Asia/Seoul' }],
+            }],
+          },
+          summary: 'Mimo fallback created Jeju itinerary',
+          warnings: [],
+          changes: ['Used fallback LLM after primary failure.'],
+        },
+      }),
+    });
+  });
+
+  await openDashboard(page, false, {
+    credentialSession: 'wizard-fallback-session',
+    credentialSessionExpiresAt: new Date('2026-05-08T10:00:00+08:00').valueOf() + 60_000,
+  });
+  await page.locator('.compact-mobile-header').getByRole('button', { name: /Dashboard Test/ }).click();
+  await page.getByRole('button', { name: /建立新旅程/ }).click();
+  await page.getByPlaceholder('例如：名古屋櫻花祭 2026').fill('濟州2026');
+  await page.getByPlaceholder('例如：濟州、首爾、名古屋、東京').fill('濟州');
+  await page.getByRole('button', { name: '下一步' }).click();
+  await page.getByLabel('選擇旅程日數').selectOption('3');
+  await page.getByRole('button', { name: '下一步' }).click();
+  await page.getByRole('button', { name: '下一步' }).click();
+  await page.locator('textarea').fill('想去濟州自然景點同咖啡店，請安排每日行程。');
+  await page.getByRole('button', { name: /完成創建/ }).click();
+  await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
+
+  expect(calls.map((call) => call.path)).toEqual(['trip-intelligence', 'kimi', 'mimo']);
+  const created = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
+    const trip = state.trips?.find((item) => item.id === state.activeTripId);
+    return {
+      tripCurrency: state.tripCurrency,
+      firstSpot: trip?.itinerary?.[0]?.spots?.[0]?.name,
+      syncQueued: state.syncQueue?.some((item) => item.type === 'trip' && item.op === 'create' && item.entityId === state.activeTripId),
+    };
+  });
+  expect(created.tripCurrency).toBe('KRW');
+  expect(created.firstSpot).toBe('Mimo Jeju Observatory');
+  expect(created.syncQueued).toBe(true);
+});
+
+test('Dashboard new trip wizard hard-stops quota instead of default scenery fallback', async ({ page }) => {
+  let kimiCalls = 0;
+  await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
+  await page.route('https://en.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
+  await page.route('**/trip/intelligence', async (route) => route.fulfill({
+    status: 429,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: false, error: 'Supabase AI daily quota exceeded' }),
+  }));
+  await page.route('**/kimi/json', async (route) => {
+    kimiCalls += 1;
+    await route.fulfill({ json: { ok: true, data: {} } });
+  });
+
+  await openDashboard(page, false, {
+    credentialSession: 'wizard-quota-session',
+    credentialSessionExpiresAt: new Date('2026-05-08T10:00:00+08:00').valueOf() + 60_000,
+  });
+  await page.locator('.compact-mobile-header').getByRole('button', { name: /Dashboard Test/ }).click();
+  await page.getByRole('button', { name: /建立新旅程/ }).click();
+  await page.getByPlaceholder('例如：名古屋櫻花祭 2026').fill('濟州2026');
+  await page.getByPlaceholder('例如：濟州、首爾、名古屋、東京').fill('濟州');
+  await page.getByRole('button', { name: '下一步' }).click();
+  await page.getByRole('button', { name: '下一步' }).click();
+  await page.getByRole('button', { name: '下一步' }).click();
+  await page.locator('textarea').fill('濟州行程需要 AI 安排。');
+  await page.getByRole('button', { name: /完成創建/ }).click();
+
+  await expect(page.getByText('Step 4 of 4')).toBeVisible();
+  await expect(page.getByText(/AI quota \/ rate limit/)).toBeVisible();
+  expect(kimiCalls).toBe(0);
+  const unchanged = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
+    return {
+      tripName: state.tripName,
+      hasJejuTrip: state.trips?.some((item) => item.name === '濟州2026'),
+      hasTripCreate: state.syncQueue?.some((item) => item.type === 'trip' && item.op === 'create'),
+    };
+  });
+  expect(unchanged.tripName).toBe('Dashboard Test');
+  expect(unchanged.hasJejuTrip).toBeFalsy();
+  expect(unchanged.hasTripCreate).toBeFalsy();
+});
+
 test('Dashboard compact itinerary and recent expenses show denser Home information', async ({ page }) => {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
