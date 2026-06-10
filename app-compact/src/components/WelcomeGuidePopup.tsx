@@ -345,13 +345,20 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                 onChange={(e) => setCurrency(e.target.value)}
                 style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
               >
-                <option value="JPY">JPY</option>
-                <option value="KRW">KRW</option>
-                <option value="TWD">TWD</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="GBP">GBP</option>
-                <option value="CNY">CNY</option>
+                <option value="JPY">JPY 日圓</option>
+                <option value="KRW">KRW 韓元</option>
+                <option value="TWD">TWD 台幣</option>
+                <option value="USD">USD 美元</option>
+                <option value="EUR">EUR 歐元</option>
+                <option value="GBP">GBP 英鎊</option>
+                <option value="CNY">CNY 人民幣</option>
+                <option value="SGD">SGD 新加坡元</option>
+                <option value="THB">THB 泰銖</option>
+                <option value="MYR">MYR 馬幣</option>
+                <option value="VND">VND 越南盾</option>
+                <option value="PHP">PHP 菲律賓披索</option>
+                <option value="AUD">AUD 澳元</option>
+                <option value="NZD">NZD 紐元</option>
               </select>
             </label>
           </div>
@@ -372,13 +379,13 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                   disabled={busy}
                   style={{
                     width: '100%',
-                    height: '140px',
+                    minHeight: '220px',
                     padding: '12px',
                     border: '1px solid rgba(139, 115, 85, 0.25)',
                     borderRadius: '12px',
                     fontSize: '13px',
                     lineHeight: 1.6,
-                    resize: 'none',
+                    resize: 'vertical',
                     background: 'white',
                     outline: 'none',
                     fontFamily: 'inherit'
@@ -444,10 +451,16 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                     <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 800 }}>日期區間</span>
                     <span style={{ fontSize: '12px', color: '#2A1E12', fontWeight: 700 }}>📅 {aiDraft.startDate} 至 {aiDraft.endDate} ({aiDraft.itinerary?.length || 1} 天)</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(139, 115, 85, 0.08)', paddingBottom: '8px' }}>
                     <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 800 }}>預算與幣別</span>
                     <span style={{ fontSize: '13px', color: '#CC2929', fontWeight: 900 }}>💰 {aiDraft.budget?.toLocaleString()} {aiDraft.currencies?.[1] || 'JPY'}</span>
                   </div>
+                  {(aiDraft.itinerary?.length ?? 0) > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 800 }}>行程景點</span>
+                      <span style={{ fontSize: '12px', color: '#2A1E12', fontWeight: 700 }}>📍 {aiDraft.itinerary!.reduce((sum, day) => sum + (day.spots?.length || 0), 0)} 個景點 / {aiDraft.itinerary!.filter(day => day.lodging?.name).length} 酒店</span>
+                    </div>
+                  )}
                 </div>
 
                 {aiChanges.length > 0 && (
@@ -577,10 +590,18 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                   <option value="JPY">JPY (日元)</option>
                   <option value="TWD">TWD (台幣)</option>
                   <option value="KRW">KRW (韓元)</option>
+                  <option value="HKD">HKD (港幣)</option>
                   <option value="USD">USD (美元)</option>
                   <option value="EUR">EUR (歐元)</option>
                   <option value="GBP">GBP (英鎊)</option>
                   <option value="CNY">CNY (人民幣)</option>
+                  <option value="SGD">SGD (新加坡元)</option>
+                  <option value="THB">THB (泰銖)</option>
+                  <option value="MYR">MYR (馬幣)</option>
+                  <option value="VND">VND (越南盾)</option>
+                  <option value="PHP">PHP (菲律賓披索)</option>
+                  <option value="AUD">AUD (澳元)</option>
+                  <option value="NZD">NZD (紐元)</option>
                 </select>
               </label>
             </div>

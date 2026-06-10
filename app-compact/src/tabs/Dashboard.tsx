@@ -1547,8 +1547,19 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
                     >
                       <option value="JPY">💴 日圓 (JPY)</option>
                       <option value="KRW">🇰🇷 韓元 (KRW)</option>
+                      <option value="TWD">🇹🇼 台幣 (TWD)</option>
                       <option value="HKD">💵 港幣 (HKD)</option>
                       <option value="USD">💵 美元 (USD)</option>
+                      <option value="EUR">🇪🇺 歐元 (EUR)</option>
+                      <option value="GBP">🇬🇧 英鎊 (GBP)</option>
+                      <option value="CNY">🇨🇳 人民幣 (CNY)</option>
+                      <option value="SGD">🇸🇬 新加坡元 (SGD)</option>
+                      <option value="THB">🇹🇭 泰銖 (THB)</option>
+                      <option value="MYR">🇲🇾 馬幣 (MYR)</option>
+                      <option value="VND">🇻🇳 越南盾 (VND)</option>
+                      <option value="PHP">🇵🇭 菲律賓披索 (PHP)</option>
+                      <option value="AUD">🇦🇺 澳元 (AUD)</option>
+                      <option value="NZD">🇳🇿 紐元 (NZD)</option>
                     </select>
                   </div>
                 </div>
@@ -1557,13 +1568,14 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
               {wizardStep === 4 && (
                 <div className="flex flex-col gap-3.5 animate-slide-in">
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-slate-500">旅程詳情 (選填)</label>
+                    <label className="text-xs font-bold text-[#6D5643]">📋 貼上你的行程計劃 (強烈建議)</label>
+                    <p className="text-[10px] text-slate-400 font-semibold -mt-0.5 mb-0.5">可以貼上長篇行程、酒店確認郵件或網上 copy 嘅筆記，AI 會幫你自動整理做 Timeline 同查天氣！</p>
                     <textarea
                       value={newTripDetails}
                       onChange={(e) => setNewTripDetails(e.target.value)}
-                      placeholder="例如：名古屋城賞櫻、立山黑部雪之大谷、高山飛驒牛美食之旅..."
-                      rows={4}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all resize-none"
+                      placeholder={`例如：\n5月20號飛名古屋玩6日\n住 Daiwa Royal Hotel，check-in 15:00\nDay 1: 中部國際機場 → 名古屋城 → 大須商店街\nDay 2: 白川鄉合掌村 → 高山老街 → 飛驒牛午餐\n預算10萬日元...`}
+                      rows={8}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all resize-vertical"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5 mt-0.5">

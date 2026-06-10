@@ -2272,10 +2272,10 @@ export function Settings({
       <AccordionCard id="settings-trip-update" eyebrow="Trip Update AI" title="AI 行程更新" icon={<Sparkles />}>
         <p className="muted">目前 primary：{tripUpdateModelName}。貼入長行程後，AI 會先分析日程、景點、酒店、餐廳同重要細節；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
         <textarea
-          rows={6}
+          rows={10}
           value={tripParagraph}
           onChange={(e) => setTripParagraph(e.target.value)}
-          placeholder="例：下次 2026-07-10 至 2026-07-15 去首爾，第一晚住弘大..."
+          placeholder={`例：下次 2026-07-10 至 2026-07-15 去首爾，第一晚住弘大...\n\n支援貼上整份行程表，包含航班、酒店、景點、餐廳等，AI 會自動更新時間線同天氣！\n\nDay 1: 仁川機場 → 弘大商圈 → 烤肉晚餐\nDay 2: 景福宮 → 北村韓屋 → 明洞購物`}
         />
         <div className="action-row wrap">
           <button
