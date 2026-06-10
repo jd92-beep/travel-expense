@@ -39,7 +39,7 @@ Mobile Chrome URL
 
 ## AI Flow
 
-- Google `gemma-4-31b` is primary for receipt image OCR and voice parsing.
+- Google `gemma-4-31b-it` is primary for receipt image OCR and voice parsing.
 - Kimi `kimi-code` is primary for email parsing and trip paragraph analysis.
 - Broker-routed fallback models are tested server-side before use.
 - MiniMax, GLM/ZAI, and OpenRouter are not shown in the Compact model picker.

@@ -5,11 +5,11 @@ export const DEFAULT_NOTION_DB = '3438d94d5f7c81878221fcda6d65d39d';
 export const DEFAULT_CREDENTIAL_BROKER_URL = 'https://travel-expense-credential-broker.ftjdfr.workers.dev';
 export const ALLOWED_CREDENTIAL_BROKER_URLS = [DEFAULT_CREDENTIAL_BROKER_URL] as const;
 export const APP_SCHEMA_VERSION = 3;
-export const DEFAULT_GOOGLE_BACKUP_MODEL = 'gemma-4-31b';
+export const DEFAULT_GOOGLE_BACKUP_MODEL = 'gemma-4-31b-it';
 export const DEFAULT_SCAN_VOICE_MODEL_ID = `google/${DEFAULT_GOOGLE_BACKUP_MODEL}`;
 export const DEFAULT_KIMI_PRIMARY_MODEL_ID = 'kimi/kimi-code';
 
-const STALE_GOOGLE_BACKUP_MODELS = new Set(['gemma-3-27b-it', 'gemma-4-31b-it', 'gemma-4-26b-a4b-it']);
+const STALE_GOOGLE_BACKUP_MODELS = new Set(['gemma-3-27b-it', 'gemma-4-31b', 'gemma-4-26b-a4b-it']);
 const LEGACY_SCAN_VOICE_DEFAULTS = new Set(['kimi/kimi-code', 'kimi-code', 'kimi/kimi-k2.6', 'kimi-k2.6']);
 const LEGACY_EMAIL_TRIP_DEFAULTS = new Set(['', 'kimi-code', 'kimi/kimi-for-coding', 'kimi-for-coding']);
 
@@ -22,7 +22,7 @@ export const AI_MODELS = [
   { id: 'google/gemini-2.5-flash', name: 'Google Gemini 2.5 Flash' },
   { id: 'google/gemini-3.1-flash', name: 'Google Gemini 3.1 Flash' },
   { id: 'google/gemini-3.1-flash-lite', name: 'Google Gemini 3.1 Flash Lite' },
-  { id: 'google/gemma-4-31b', name: 'Google Gemma 4 31B' },
+  { id: 'google/gemma-4-31b-it', name: 'Google Gemma 4 31B' },
   { id: 'google/gemma-4-26b', name: 'Google Gemma 4 26B' },
   { id: 'mimo/mimo-v2.5', name: 'Mimo v2.5' },
 ] as const;

@@ -210,8 +210,8 @@ test('AI routing keeps required primary models ahead of stale settings', async (
   await expect(page.getByText('餐飲：Google BBQ')).toBeVisible();
 
   expect(calls).toEqual(expect.arrayContaining([
-    expect.objectContaining({ provider: 'google', kind: 'scan', model: 'gemma-4-31b' }),
-    expect.objectContaining({ provider: 'google', kind: 'voice', model: 'gemma-4-31b' }),
+    expect.objectContaining({ provider: 'google', kind: 'scan', model: 'gemma-4-31b-it' }),
+    expect.objectContaining({ provider: 'google', kind: 'voice', model: 'gemma-4-31b-it' }),
     expect.objectContaining({ provider: 'kimi', kind: 'email', model: 'kimi-code' }),
     expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash' }),
   ]));
@@ -450,7 +450,7 @@ test('AI routing stops provider fallback when broker quota is exceeded', async (
   await expect(page.getByLabel('備註')).toHaveValue(/Supabase AI daily quota exceeded/);
 
   expect(calls).toEqual([
-    expect.objectContaining({ provider: 'google', kind: 'scan', model: 'gemma-4-31b' }),
+    expect.objectContaining({ provider: 'google', kind: 'scan', model: 'gemma-4-31b-it' }),
   ]);
 });
 
@@ -665,14 +665,14 @@ test('Supabase users can call required AI primaries without a broker password se
     expect.objectContaining({
       provider: 'google',
       kind: 'scan',
-      model: 'gemma-4-31b',
+      model: 'gemma-4-31b-it',
       supabaseAuth: 'Bearer test-ai-access-token',
       brokerSession: '',
     }),
     expect.objectContaining({
       provider: 'google',
       kind: 'voice',
-      model: 'gemma-4-31b',
+      model: 'gemma-4-31b-it',
       supabaseAuth: 'Bearer test-ai-access-token',
       brokerSession: '',
     }),

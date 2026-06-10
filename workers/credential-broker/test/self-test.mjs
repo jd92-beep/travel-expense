@@ -213,12 +213,12 @@ function installProviderFetchStub() {
 
     if (href.includes('generativelanguage.googleapis.com/v1beta/models?')) {
       assert.match(href, /key=google-secret-for-test/);
-      return Response.json({ models: [{ name: 'models/gemma-4-31b' }] });
+      return Response.json({ models: [{ name: 'models/gemma-4-31b-it' }] });
     }
 
-    if (href.includes('generativelanguage.googleapis.com/v1beta/models/gemma-4-31b:generateContent')) {
+    if (href.includes('generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent')) {
       assert.match(href, /key=google-secret-for-test/);
-      googleModels.push('gemma-4-31b');
+      googleModels.push('gemma-4-31b-it');
       return Response.json({ candidates: [{ content: { parts: [{ text: '{"ok":true,"provider":"google"}' }] } }] });
     }
 
@@ -586,16 +586,16 @@ async function run() {
     });
     assert.equal(google.response.status, 200);
     assert.equal(google.data.data.provider, 'google');
-    assert.equal(restoreFetch.googleModels().at(-1), 'gemma-4-31b');
+    assert.equal(restoreFetch.googleModels().at(-1), 'gemma-4-31b-it');
 
     const supabaseGoogle = await jsonFetch(env, '/google/json', {
       method: 'POST',
       supabaseToken: 'supabase-user-token',
-      body: { prompt: 'Return JSON', kind: 'test', model: 'gemma-4-31b' },
+      body: { prompt: 'Return JSON', kind: 'test', model: 'gemma-4-31b-it' },
     });
     assert.equal(supabaseGoogle.response.status, 200);
     assert.equal(supabaseGoogle.data.data.provider, 'google');
-    assert.equal(restoreFetch.googleModels().at(-1), 'gemma-4-31b');
+    assert.equal(restoreFetch.googleModels().at(-1), 'gemma-4-31b-it');
 
     const weatherApiRotate = await jsonFetch(env, '/credentials/rotate', {
       method: 'POST',

@@ -10,7 +10,8 @@ const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi', 'mimo'];
 const NOTION_VERSION = '2022-06-28';
 const KIMI_DEFAULT_BASE = 'https://api.kimi.com/coding/v1';
 const MIMO_DEFAULT_BASE = 'https://token-plan-sgp.xiaomimimo.com/v1';
-const GOOGLE_DEFAULT_MODEL = 'gemma-4-31b';
+const MIMO_PAYG_BASE = 'https://api.xiaomimimo.com/v1';
+const GOOGLE_DEFAULT_MODEL = 'gemma-4-31b-it';
 const RATE_WINDOW_MS = 1000 * 60 * 15;
 const DEFAULT_SUPABASE_AI_DAILY_LIMIT = 50;
 const TRIP_THEME_KEYS = ['japan_washi', 'korea_editorial', 'taiwan_nightmarket', 'europe_rail', 'global_journal'];
@@ -866,7 +867,6 @@ async function kimiJson(env, prompt, kind, image, requestedModel) {
 async function mimoJson(env, prompt, kind, image, requestedModel) {
   const credential = await readCredential(env, 'mimo');
   if (!credential?.secret) throw new Error('Mimo credential missing');
-  const base = String(env.MIMO_API_BASE || MIMO_DEFAULT_BASE).replace(/\/+$/, '');
   const messages = [
     { role: 'system', content: 'Return strict JSON only. No markdown.' },
     { role: 'user', content: image ? [
@@ -874,20 +874,39 @@ async function mimoJson(env, prompt, kind, image, requestedModel) {
       { type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.base64}` } },
     ] : prompt },
   ];
-  const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${credential.secret}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({
-      model: requestedModel || env.MIMO_MODEL || 'mimo-v2.5',
-      messages,
-      temperature: kind === 'test' ? 0 : 0.1,
-    }),
-  }));
+  const data = await mimoChatCompletion(env, credential, {
+    model: requestedModel || env.MIMO_MODEL || 'mimo-v2.5',
+    messages,
+    temperature: kind === 'test' ? 0 : 0.1,
+  });
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
+}
+
+async function mimoChatCompletion(env, credential, body) {
+  const bases = [
+    String(env.MIMO_API_BASE || MIMO_DEFAULT_BASE).replace(/\/+$/, ''),
+    MIMO_PAYG_BASE,
+  ].filter((base, index, list) => base && list.indexOf(base) === index);
+  let lastError = null;
+  for (const base of bases) {
+    const response = await fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'api-key': credential.secret,
+        Authorization: `Bearer ${credential.secret}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    try {
+      return await parseProviderJson(response);
+    } catch (error) {
+      lastError = error;
+      if (Number(error?.status) !== 404) throw error;
+    }
+  }
+  throw lastError || new Error('Mimo provider unavailable');
 }
 
 async function googleJson(env, prompt, _kind, image, requestedModel) {
@@ -986,10 +1005,43 @@ function extractJson(text) {
   try {
     return JSON.parse(cleaned);
   } catch {
-    const match = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-    if (!match) throw new Error('Provider returned non-JSON response');
-    return JSON.parse(match[1]);
+    const first = firstJsonValue(cleaned);
+    if (!first) throw new Error('Provider returned non-JSON response');
+    return JSON.parse(first);
   }
+}
+
+function firstJsonValue(text) {
+  const source = String(text || '');
+  const start = source.search(/[\{\[]/);
+  if (start < 0) return '';
+  const stack = [];
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{') stack.push('}');
+    if (char === '[') stack.push(']');
+    if (char === '}' || char === ']') {
+      if (stack.pop() !== char) return '';
+      if (stack.length === 0) return source.slice(start, index + 1);
+    }
+  }
+  return '';
 }
 
 function normalizeZone(value) {
@@ -1138,20 +1190,11 @@ async function kimiJsonWithCredential(env, credential) {
 }
 
 async function mimoJsonWithCredential(env, credential) {
-  const base = String(env.MIMO_API_BASE || MIMO_DEFAULT_BASE).replace(/\/+$/, '');
-  const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${credential.secret}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({
-      model: env.MIMO_MODEL || 'mimo-v2.5',
-      messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
-      temperature: 0,
-    }),
-  }));
+  const data = await mimoChatCompletion(env, credential, {
+    model: env.MIMO_MODEL || 'mimo-v2.5',
+    messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
+    temperature: 0,
+  });
   return extractJson(data?.choices?.[0]?.message?.content || '');
 }
 
