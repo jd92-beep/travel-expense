@@ -192,10 +192,10 @@ interface ModelAttempt {
   label: string;
 }
 
-const TRIP_PRIMARY_TIMEOUT_MS = 8_000;
-const TRIP_FALLBACK_TIMEOUT_MS = 9_000;
-const TRIP_NO_LOCAL_TIMEOUT_MS = 25_000;
-const TRIP_FAST_LOCAL_DEADLINE_MS = 14_000;
+const TRIP_PRIMARY_TIMEOUT_MS = 15_000;
+const TRIP_FALLBACK_TIMEOUT_MS = 12_000;
+const TRIP_NO_LOCAL_TIMEOUT_MS = 30_000;
+const TRIP_FAST_LOCAL_DEADLINE_MS = 25_000;
 
 function sameModelAttempt(a: ModelAttempt, b: ModelAttempt): boolean {
   return a.provider === b.provider && (a.model || '') === (b.model || '');
@@ -374,6 +374,32 @@ function localSpotFromParts(time: string, name: string, sourceText: string, cate
   };
 }
 
+function computeTimeEnd(time: string, durationMinutes: number): string {
+  if (!durationMinutes || !time) return '';
+  const [h, m] = time.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
+  const totalMin = h * 60 + m + durationMinutes;
+  const endH = Math.floor(((totalMin % 1440) + 1440) % 1440 / 60);
+  const endM = ((totalMin % 60) + 60) % 60;
+  return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+}
+
+function parseDuration(raw: string, time = ''): { minutes: number; end: string; note: string } {
+  const clean = String(raw || '').replace(/[—–\-]/g, '–').trim();
+  if (!clean || clean === '—' || clean === '-') return { minutes: 0, end: '', note: '' };
+  const range = clean.match(/(?:約)?(\d+)\s*–\s*(\d+)\s*分鐘(?:車程|步程|停留)?/);
+  if (range) {
+    const avg = Math.round((Number(range[1]) + Number(range[2])) / 2);
+    return { minutes: avg, end: computeTimeEnd(time, avg), note: `${range[1]}–${range[2]}分鐘` };
+  }
+  const single = clean.match(/(\d+)\s*分鐘/);
+  if (single) {
+    const mins = Number(single[1]);
+    return { minutes: mins, end: computeTimeEnd(time, mins), note: `${single[1]}分鐘` };
+  }
+  return { minutes: 0, end: '', note: clean !== '—' ? clean : '' };
+}
+
 export function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
   const spots: ItineraryDay['spots'] = [];
   const seen = new Set<string>();
@@ -401,8 +427,16 @@ export function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
     if (tabs.length >= 2 && !line.includes('｜') && !line.includes('|')) {
       const timeMatch = tabs[0].match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
       if (timeMatch) {
-         add(localSpotFromParts(`${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`, tabs[1], rawLine, tabs.slice(2).join(' / ')));
-         continue;
+        const time = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+        const name = tabs[1];
+        const duration = parseDuration(tabs[2] || '', time);
+        const spot = localSpotFromParts(time, name, rawLine);
+        if (spot) {
+          if (duration.end) spot.timeEnd = duration.end;
+          if (duration.note) spot.note = spot.note ? `${spot.note} (${duration.note})` : duration.note;
+          add(spot);
+        }
+        continue;
       }
     }
 
@@ -415,11 +449,11 @@ export function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
 }
 
 function stringifyOrganizedItinerary(value: unknown, fallbackTrip?: Pick<TripProfile, 'name' | 'itinerary'>): string {
-  if (typeof value === 'string') return value.replace(/\s+\n/g, '\n').trim().slice(0, 5000);
+  if (typeof value === 'string') return value.replace(/\s+\n/g, '\n').trim().slice(0, 12000);
   if (Array.isArray(value) || (value && typeof value === 'object')) {
     try {
       const text = JSON.stringify(value);
-      if (text && text !== '{}') return text.slice(0, 5000);
+      if (text && text !== '{}') return text.slice(0, 12000);
     } catch {
       // Fall through to trip-derived summary.
     }
@@ -433,7 +467,7 @@ function stringifyOrganizedItinerary(value: unknown, fallbackTrip?: Pick<TripPro
       lines.push(`- ${spot.time || '--:--'} ${spot.name}${spot.type ? ` (${spot.type})` : ''}`);
     }
   }
-  return lines.join('\n').slice(0, 5000);
+  return lines.join('\n').slice(0, 12000);
 }
 
 function organizedItineraryFromModel(value: unknown, fallbackTrip?: Pick<TripProfile, 'name' | 'itinerary'>): string {
@@ -466,6 +500,12 @@ function localTripDraftFromParagraph(paragraph: string, state: AppState, warning
     const lodgingMatch = block.match(/(?:住宿|住)[:：]?\s*([^\n｜|]+)/i);
     const region = headerTail.replace(/(?:住宿|住)[:：]?\s+.*/i, '').replace(/^[：:\-–—\s]+/, '').trim()
       || (context.weatherRegion || context.countryName || `Day ${dayNo}`);
+    const adviceLines: string[] = [];
+    for (const blockLine of block.split('\n')) {
+      const trimmed = blockLine.trim();
+      const adviceMatch = trimmed.match(/^建議[：:]\s*(.+)/);
+      if (adviceMatch) adviceLines.push(adviceMatch[1].trim());
+    }
     const spots = extractLocalDaySpots(block)
       .map((spot) => ({ ...spot, timezone: context.timezone || spot.timezone || 'Asia/Seoul' }))
       .filter((spot) => spot.name && !/建議[:：]/.test(spot.name));
@@ -478,6 +518,7 @@ function localTripDraftFromParagraph(paragraph: string, state: AppState, warning
       timezone: context.timezone || 'Asia/Seoul',
       currency,
       highlight: region,
+      note: adviceLines.join('；') || undefined,
       lodging: lodgingMatch?.[1]?.trim() ? {
         name: lodgingMatch[1].trim(),
         confidence: 'medium',
@@ -921,15 +962,50 @@ Current trip JSON for merge/date/year context only:
 ${JSON.stringify(currentTrip).slice(0, 12000)}
 
 Return minimalist schema:
-{"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"lodging":{"name":string},"spots":[{"time":"HH:MM","name":string,"note":string,"address":string,"bookingRef":string}]}]},"summary":string,"warnings":string[],"changes":string[]}
+{"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"lodging":{"name":string},"spots":[{"time":"HH:MM","timeEnd":"HH:MM","name":string,"note":string,"address":string,"bookingRef":string}]}]},"summary":string,"warnings":string[],"changes":string[]}
 
 organizedItinerary must match the canonical itinerary you used for extraction.
 Include lodging, arrival times, places, restaurants, transport/flight/train references, booking references.
+For each spot, estimate timeEnd from duration/stay information when available (e.g., "60分鐘" means timeEnd = time + 60min). If no duration info, omit timeEnd.
 Do not invent or guess any lat/lon coordinates. Frontend handles that.
 If the canonical itinerary has no usable trip data, return an empty itinerary.
 
 CANONICAL ORGANIZED ITINERARY:
 ${organizedItinerary.slice(0, 28000)}`;
+}
+
+function mergeTripDrafts(llmDraft: TripDraft, localDraft: TripDraft | null): TripDraft {
+  if (!localDraft) return llmDraft;
+  const llmDays = llmDraft.trip.itinerary;
+  const localDays = localDraft.trip.itinerary;
+  if (llmDays.length >= localDays.length) return llmDraft;
+
+  const mergedDays: ItineraryDay[] = [];
+  const maxDays = Math.max(llmDays.length, localDays.length);
+  for (let i = 0; i < maxDays; i++) {
+    const llmDay = llmDays[i];
+    const localDay = localDays[i];
+    if (llmDay && localDay) {
+      const llmSpotNames = new Set((llmDay.spots || []).map(s => s.name));
+      const extraSpots = (localDay.spots || []).filter(s => !llmSpotNames.has(s.name));
+      mergedDays.push({
+        ...llmDay,
+        note: llmDay.note || localDay.note,
+        spots: [
+          ...(llmDay.spots || []).map(s => ({ ...s, timeEnd: s.timeEnd || localDay.spots?.find(ls => ls.name === s.name)?.timeEnd })),
+          ...extraSpots,
+        ],
+      });
+    } else {
+      mergedDays.push(llmDay || localDay!);
+    }
+  }
+
+  return {
+    ...llmDraft,
+    trip: { ...llmDraft.trip, itinerary: mergedDays },
+    warnings: [...llmDraft.warnings, ...(localDraft.warnings || [])].filter(Boolean),
+  };
 }
 
 export async function parseTripParagraph(paragraph: string, state: AppState): Promise<TripDraft> {
@@ -970,22 +1046,31 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
         if (draft) return draft;
       }
       try {
-        console.log(`[AI Routing] 正在嘗試行程重整: ${attempt.label}...`);
         const timeoutMs = tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft);
-        const organizedRaw = await withTimeout(
-          callModelAttemptJson(state, attempt, organizePrompt, 'trip'),
-          timeoutMs,
-          `Trip organize ${attempt.label}`,
-        );
-        const organizedItinerary = organizedItineraryFromModel(organizedRaw, fastLocalDraft?.trip);
-        if (!organizedItinerary || organizedItinerary.length < 20) {
-          warnings.push(`${attempt.label} returned no usable organized itinerary.`);
-          console.warn(`[AI Routing] ${attempt.label} returned no usable organized itinerary; trying next trip model.`);
-          continue;
-        }
+        const isGoogleModel = attempt.provider === 'google';
+        let organizedItinerary: string;
+        let extractionPrompt: string;
 
-        console.log(`[AI Routing] 正在由重整行程抽取 app data: ${attempt.label}...`);
-        const extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip);
+        if (isGoogleModel) {
+          console.log(`[AI Routing] Google model — using single-stage extraction: ${attempt.label}...`);
+          organizedItinerary = paragraph.slice(0, 28000);
+          extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip);
+        } else {
+          console.log(`[AI Routing] 正在嘗試行程重整: ${attempt.label}...`);
+          const organizedRaw = await withTimeout(
+            callModelAttemptJson(state, attempt, organizePrompt, 'trip'),
+            timeoutMs,
+            `Trip organize ${attempt.label}`,
+          );
+          organizedItinerary = organizedItineraryFromModel(organizedRaw, fastLocalDraft?.trip);
+          if (!organizedItinerary || organizedItinerary.length < 20) {
+            warnings.push(`${attempt.label} returned no usable organized itinerary.`);
+            console.warn(`[AI Routing] ${attempt.label} returned no usable organized itinerary; trying next trip model.`);
+            continue;
+          }
+          console.log(`[AI Routing] 正在由重整行程抽取 app data: ${attempt.label}...`);
+          extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip);
+        }
         const parsed = await withTimeout(
           callModelAttemptJson(state, attempt, extractionPrompt, 'trip'),
           timeoutMs,
@@ -999,9 +1084,10 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
           organizedItinerary: parsedRecord.organizedItinerary || organizedItinerary,
         }, state, organizedItinerary);
         if (hasUsefulTripItinerary(draft)) {
+          const merged = mergeTripDrafts(draft, fastLocalDraft);
           return {
-            ...draft,
-            warnings: [...warnings, ...draft.warnings].filter(Boolean),
+            ...merged,
+            warnings: [...warnings, ...merged.warnings].filter(Boolean),
           };
         }
         warnings.push(`${attempt.label} returned no usable itinerary spots.`);

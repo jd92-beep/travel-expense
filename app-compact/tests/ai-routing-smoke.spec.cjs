@@ -444,30 +444,8 @@ test('Trip update skips a slow selected model and opens confirmation with a fast
     calls.push({ provider: 'google', kind: body.kind, model: body.model });
     const prompt = String(body.prompt || '');
     expect(prompt).toContain('organizedItinerary');
-    if (prompt.includes('stage 1 of a two-stage Trip Update workflow')) {
-      expect(prompt).toContain('Do not extract app fields yet');
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ok: true,
-          data: {
-            organizedItinerary: [
-              'Canonical itinerary: Fast Google Jeju Trip',
-              'Day 1 2026-06-13 | Stay: Hotel Fine Jeju',
-              '- 06:30 濟州機場',
-              '- 14:00 Fast Google Osulloc',
-            ].join('\n'),
-            summary: 'Fast fallback reorganized Jeju itinerary.',
-            warnings: [],
-            assumptions: [],
-          },
-        }),
-      });
-      return;
-    }
+    // Google models now use single-stage extraction (no organize stage)
     expect(prompt).toContain('You must use only CANONICAL ORGANIZED ITINERARY');
-    expect(prompt).toContain('The app will use trip.itinerary as the backbone');
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -579,9 +557,8 @@ test('Trip update skips a slow selected model and opens confirmation with a fast
   await expect(tripConfirm).toContainText('Fast Google Osulloc');
   await expect(tripConfirm).not.toContainText('Slow Mimo Spot');
 
-  expect(calls.slice(0, 3)).toEqual([
+  expect(calls.slice(0, 2)).toEqual([
     expect.objectContaining({ provider: 'mimo', kind: 'trip', model: 'mimo-v2.5-pro' }),
-    expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash-lite' }),
     expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash-lite' }),
   ]);
 });

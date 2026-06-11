@@ -274,6 +274,7 @@ function tripDraftPreviewStats(draft: TripDraft) {
       title: `Day ${day.day} · ${day.date}`,
       region: [day.region, day.city, day.country].filter(Boolean).join(' · '),
       highlight: day.highlight || '',
+      note: day.note || '',
       lodging: day.lodging?.name || '',
       spots: (day.spots || []).filter((spot) => String(spot.name || '').trim()).slice(0, 4),
     })),
@@ -2336,6 +2337,7 @@ export function Settings({
                     <span>{day.region || '未命名地區'}</span>
                   </header>
                   {day.highlight && <p>{day.highlight}</p>}
+                  {day.note && <p style={{ fontSize: '0.82em', opacity: 0.8, marginTop: 4 }}>💡 {day.note}</p>}
                   {day.lodging && <small>酒店 · {day.lodging}</small>}
                   <div>
                     {day.spots.map((spot) => <span key={`${day.key}-${spot.time}-${spot.name}`}>{spot.time ? `${spot.time} ` : ''}{spot.name}</span>)}
@@ -2419,6 +2421,7 @@ export function Settings({
                       <small>{day.currency || ''}{day.timezone ? ` · ${day.timezone}` : ''}</small>
                     </header>
                     {day.highlight && <p>{day.highlight}</p>}
+                    {day.note && <p style={{ fontSize: '0.82em', opacity: 0.8, marginTop: 4 }}>💡 {day.note}</p>}
                     {day.lodging?.name && (
                       <div className="trip-confirm-lodging">
                         <b>🏨 酒店</b>

@@ -183,7 +183,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
               return (
               <article className={`timeline-event ${progress}`} data-spot-key={stableKey} key={stableKey}>
                 <time className="timeline-time" dateTime={`${day.date}T${spot.time || '00:00'}`}>
-                  <span>{spot.time}</span>
+                  <span>{spot.timeEnd ? `${spot.time} – ${spot.timeEnd}` : spot.time}</span>
                   {spot.timezone && <small>{spot.timezone}</small>}
                 </time>
                 <VisualIcon id={categoryIconId(spot.type)} label={category.name} className="cat timeline-cat" />

@@ -118,6 +118,7 @@ export interface ItineraryDay {
   timezone?: string;
   currency?: string;
   highlight?: string;
+  note?: string;
   lodging?: {
     id?: string;
     name: string;
