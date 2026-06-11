@@ -268,6 +268,8 @@ export function tripIntelligenceColumns(intelligence: TripIntelligence) {
 export function tripIntelligencePromptContract(): string {
   return [
     'Return strict JSON only.',
+    'Use a four-stage itinerary workflow: (1) read and understand the full user text, (2) reorganize it into your own clean canonical itinerary, (3) extract app data only from that canonical itinerary, and (4) use the extracted data as the trip backbone.',
+    'The JSON response must include organizedItinerary as a concise human-readable canonical itinerary written by the model before the structured trip object.',
     'Trip intelligence must include countryCode, countryName, primaryCurrency, themeKey, locale, timezone, weatherRegion, confidence.',
     'Supported countryCode values include JP, KR, TW, GB, EU, HK, CN, SG, TH, MY, VN, PH, AU, NZ, US, GLOBAL.',
     `themeKey must be one of: ${TRIP_THEME_KEYS.join(', ')}.`,

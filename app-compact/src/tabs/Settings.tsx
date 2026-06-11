@@ -265,6 +265,7 @@ function tripDraftPreviewStats(draft: TripDraft) {
     sourceQuality: report?.sourceQuality || 'medium',
     missingCriticalFields: report?.missingCriticalFields || [],
     assumptions: report?.assumptions || [],
+    organizedItinerary: draft.organizedItinerary || '',
     lodgingNames: Array.from(lodgingNames).slice(0, 4),
     foodNames: Array.from(foodNames).slice(0, 4),
     detailNames: Array.from(detailNames).slice(0, 5),
@@ -2301,6 +2302,7 @@ export function Settings({
               {!!tripPreviewStats.detailNames.length && <span>重要細節：{tripPreviewStats.detailNames.join('、')}</span>}
               {!!tripPreviewStats.missingCriticalFields.length && <span>未確認：{tripPreviewStats.missingCriticalFields.slice(0, 5).join('、')}</span>}
               {!!tripPreviewStats.assumptions.length && <span>模型假設：{tripPreviewStats.assumptions.slice(0, 4).join('、')}</span>}
+              {!!tripPreviewStats.organizedItinerary && <span>AI 重整行程：{tripPreviewStats.organizedItinerary.split('\n').slice(0, 3).join(' / ')}</span>}
               {tripDraft.changes.map((change) => <span key={change}>{change}</span>)}
               {tripDraft.warnings.map((warning) => <span key={warning}>Warning: {warning}</span>)}
             </div>
@@ -2377,6 +2379,12 @@ export function Settings({
                 {!!tripPreviewStats.assumptions.length && <span>模型假設：{tripPreviewStats.assumptions.slice(0, 6).join('、')}</span>}
                 {tripDraft.warnings.map((warning) => <span key={warning}>Warning: {warning}</span>)}
               </div>
+
+              {!!tripPreviewStats.organizedItinerary && (
+                <div className="trip-confirm-notes" aria-label="AI reorganized itinerary">
+                  <span>AI 重整行程：{tripPreviewStats.organizedItinerary.split('\n').slice(0, 10).join(' / ')}</span>
+                </div>
+              )}
 
               <div className="trip-confirm-days" aria-label="AI extracted itinerary days">
                 {tripDraft.trip.itinerary.map((day) => (

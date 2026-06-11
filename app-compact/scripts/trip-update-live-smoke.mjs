@@ -118,11 +118,23 @@ function sampleItinerary() {
   ].join('\n');
 }
 
-function buildPrompt() {
-  return `Analyze this travel itinerary paragraph and return JSON only.
-Return {"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":"KR","countryName":"South Korea","primaryCurrency":"KRW","timezone":"Asia/Seoul"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":"Jeju","country":"South Korea","timezone":"Asia/Seoul","currency":"KRW","spots":[{"time":"HH:MM","name":string,"type":string}]}]},"extractionReport":{"daysExtracted":number,"spotsExtracted":number,"sourceQuality":"high|medium|low","warnings":string[]},"summary":string,"warnings":[],"changes":[]}
+function buildOrganizePrompt() {
+  return `Read and understand this travel itinerary text, then return JSON only.
+This is stage 1 of a two-stage Trip Update workflow. Do not extract app fields yet.
+Rewrite the trip into your own organizedItinerary: a clean canonical itinerary grouped day-by-day with dates, lodging, transport, meals, attractions, shopping, optional notes, timing, and important constraints.
+The organizedItinerary must be your own rewritten version, not a copy-paste of the raw input.
+Return {"organizedItinerary":string,"summary":string,"warnings":string[],"assumptions":string[]}
 USER PARAGRAPH:
 ${sampleItinerary()}`;
+}
+
+function buildExtractionPrompt(organizedItinerary) {
+  return `Extract app-ready trip data from this canonical itinerary and return JSON only.
+This is stage 2 of a two-stage Trip Update workflow.
+Use only CANONICAL ORGANIZED ITINERARY below as the source of truth for trip.itinerary.
+Return {"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":"KR","countryName":"South Korea","primaryCurrency":"KRW","timezone":"Asia/Seoul"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":"Jeju","country":"South Korea","timezone":"Asia/Seoul","currency":"KRW","spots":[{"time":"HH:MM","name":string,"type":string}]}]},"extractionReport":{"daysExtracted":number,"spotsExtracted":number,"sourceQuality":"high|medium|low","warnings":string[]},"summary":string,"warnings":[],"changes":[]}
+CANONICAL ORGANIZED ITINERARY:
+${organizedItinerary}`;
 }
 
 async function main() {
@@ -143,14 +155,27 @@ async function main() {
 
   const startedAt = Date.now();
   const endpoint = provider === 'mimo' ? '/mimo/json' : provider === 'kimi' ? '/kimi/json' : '/google/json';
-  const response = await fetch(`${brokerUrl}${endpoint}`, {
+  const organizeResponse = await fetch(`${brokerUrl}${endpoint}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ prompt: buildPrompt(), kind: 'trip', model }),
+    body: JSON.stringify({ prompt: buildOrganizePrompt(), kind: 'trip', model }),
   });
-  const text = await response.text();
-  assertNoSensitiveText(endpoint, text);
-  const data = text ? JSON.parse(text) : {};
+  const organizeText = await organizeResponse.text();
+  assertNoSensitiveText(`${endpoint} organize`, organizeText);
+  const organizeData = organizeText ? JSON.parse(organizeText) : {};
+  const organizedItinerary = String(organizeData?.data?.organizedItinerary || '').trim();
+  if (!organizeResponse.ok || organizeData?.ok !== true || organizedItinerary.length < 80) {
+    throw new Error(`Organize stage failed with ${organizeResponse.status}: ${redactedError(organizeData?.error || organizeText.slice(0, 240))}`);
+  }
+
+  const extractResponse = await fetch(`${brokerUrl}${endpoint}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ prompt: buildExtractionPrompt(organizedItinerary), kind: 'trip', model }),
+  });
+  const extractText = await extractResponse.text();
+  assertNoSensitiveText(`${endpoint} extract`, extractText);
+  const data = extractText ? JSON.parse(extractText) : {};
   const durationMs = Date.now() - startedAt;
   const payload = data?.data;
   const itinerary = payload?.trip?.itinerary;
@@ -165,11 +190,13 @@ async function main() {
     source: auth.source,
     provider,
     model,
-    status: response.ok && data?.ok === true && days >= 8 && spots >= 20 && durationMs <= maxDurationMs ? 'passed' : 'failed',
+    status: extractResponse.ok && data?.ok === true && days >= 8 && spots >= 20 && durationMs <= maxDurationMs ? 'passed' : 'failed',
     noSecretsPrinted: true,
-    responseStatus: response.status,
+    organizeStatus: organizeResponse.status,
+    extractStatus: extractResponse.status,
     durationMs,
     maxDurationMs,
+    organizedLength: organizedItinerary.length,
     tripName: typeof payload?.trip?.name === 'string' ? payload.trip.name.slice(0, 80) : undefined,
     days,
     spots,

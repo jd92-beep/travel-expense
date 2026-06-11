@@ -162,6 +162,7 @@ export interface TripDraft {
   summary: string;
   warnings: string[];
   changes: string[];
+  organizedItinerary?: string;
   extractionReport?: TripExtractionReport;
 }
 

@@ -16,8 +16,27 @@ test('AI routing keeps required primary models ahead of stale settings', async (
     const body = route.request().postDataJSON();
     calls.push({ provider: 'google', kind: body.kind, model: body.model });
     const store = body.kind === 'scan' ? 'Gemma Scan Mart' : 'Gemma Voice Cafe';
+    const prompt = String(body.prompt || '');
     const data = body.kind === 'trip'
-      ? {
+      ? prompt.includes('stage 1 of a two-stage Trip Update workflow')
+        ? {
+          organizedItinerary: [
+            'Canonical itinerary: Google Seoul Trip',
+            'Day 1 2026-07-10 | Stay: Hongdae Hotel',
+            '- 18:00 Hongdae',
+            '- 19:30 Google BBQ',
+          ].join('\n'),
+          summary: 'Google reorganized Seoul trip',
+          warnings: [],
+          assumptions: [],
+        }
+        : {
+          organizedItinerary: [
+            'Canonical itinerary: Google Seoul Trip',
+            'Day 1 2026-07-10 | Stay: Hongdae Hotel',
+            '- 18:00 Hongdae',
+            '- 19:30 Google BBQ',
+          ].join('\n'),
           trip: {
             name: 'Google Seoul Trip',
             destinationSummary: 'Seoul',
@@ -423,12 +442,44 @@ test('Trip update skips a slow selected model and opens confirmation with a fast
   await page.route('**/google/json', async (route) => {
     const body = route.request().postDataJSON();
     calls.push({ provider: 'google', kind: body.kind, model: body.model });
+    const prompt = String(body.prompt || '');
+    expect(prompt).toContain('organizedItinerary');
+    if (prompt.includes('stage 1 of a two-stage Trip Update workflow')) {
+      expect(prompt).toContain('Do not extract app fields yet');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            organizedItinerary: [
+              'Canonical itinerary: Fast Google Jeju Trip',
+              'Day 1 2026-06-13 | Stay: Hotel Fine Jeju',
+              '- 06:30 濟州機場',
+              '- 14:00 Fast Google Osulloc',
+            ].join('\n'),
+            summary: 'Fast fallback reorganized Jeju itinerary.',
+            warnings: [],
+            assumptions: [],
+          },
+        }),
+      });
+      return;
+    }
+    expect(prompt).toContain('You must use only CANONICAL ORGANIZED ITINERARY');
+    expect(prompt).toContain('The app will use trip.itinerary as the backbone');
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         ok: true,
         data: {
+          organizedItinerary: [
+            'Canonical itinerary: Fast Google Jeju Trip',
+            'Day 1 2026-06-13 | Stay: Hotel Fine Jeju',
+            '- 06:30 濟州機場',
+            '- 14:00 Fast Google Osulloc',
+          ].join('\n'),
           trip: {
             name: 'Fast Google Jeju Trip',
             destinationSummary: 'Jeju, South Korea',
@@ -524,11 +575,13 @@ test('Trip update skips a slow selected model and opens confirmation with a fast
   const tripConfirm = page.getByRole('dialog', { name: '確認 AI 行程更新' });
   await expect(tripConfirm).toBeVisible();
   await expect(tripConfirm.getByRole('heading', { name: 'Fast Google Jeju Trip' })).toBeVisible();
+  await expect(tripConfirm).toContainText('AI 重整行程');
   await expect(tripConfirm).toContainText('Fast Google Osulloc');
   await expect(tripConfirm).not.toContainText('Slow Mimo Spot');
 
-  expect(calls.slice(0, 2)).toEqual([
+  expect(calls.slice(0, 3)).toEqual([
     expect.objectContaining({ provider: 'mimo', kind: 'trip', model: 'mimo-v2.5-pro' }),
+    expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash-lite' }),
     expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash-lite' }),
   ]);
 });

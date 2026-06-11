@@ -1,6 +1,6 @@
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
 import { resolveTripContext, tripIntelligencePromptContract } from '../domain/trip/context';
-import { brokerAiJson, brokerTripIntelligence, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
+import { brokerAiJson, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
 import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_KIMI_PRIMARY_MODEL_ID } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
@@ -8,10 +8,6 @@ import { currentSupabaseAccessToken } from './supabase';
 
 const KIMI_API_MODEL = DEFAULT_KIMI_PRIMARY_MODEL_ID.replace(/^kimi\//, '');
 const KIMI_NON_THINKING = { type: 'disabled' } as const;
-
-function isKimiModel(model?: string): boolean {
-  return /kimi/i.test(String(model || ''));
-}
 
 function extractJson(text: string): unknown {
   const cleaned = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
@@ -174,11 +170,6 @@ function isQuotaOrRateLimitError(error: unknown): boolean {
 function isBrokerRouteUnavailable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || '');
   return /(?:\b404\b|not found|route|endpoint|Network error)/i.test(message);
-}
-
-function isTimeoutError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error || '');
-  return /timed out|timeout/i.test(message);
 }
 
 function hasUsefulTripItinerary(draft: TripDraft): boolean {
@@ -374,6 +365,38 @@ function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
   return spots;
 }
 
+function stringifyOrganizedItinerary(value: unknown, fallbackTrip?: Pick<TripProfile, 'name' | 'itinerary'>): string {
+  if (typeof value === 'string') return value.replace(/\s+\n/g, '\n').trim().slice(0, 5000);
+  if (Array.isArray(value) || (value && typeof value === 'object')) {
+    try {
+      const text = JSON.stringify(value);
+      if (text && text !== '{}') return text.slice(0, 5000);
+    } catch {
+      // Fall through to trip-derived summary.
+    }
+  }
+  const days = fallbackTrip?.itinerary || [];
+  if (!days.length) return '';
+  const lines = [`Canonical itinerary: ${fallbackTrip?.name || 'Trip'}`];
+  for (const day of days.slice(0, 12)) {
+    lines.push(`Day ${day.day} ${day.date} ${day.region || ''}${day.lodging?.name ? ` | Stay: ${day.lodging.name}` : ''}`.trim());
+    for (const spot of (day.spots || []).slice(0, 8)) {
+      lines.push(`- ${spot.time || '--:--'} ${spot.name}${spot.type ? ` (${spot.type})` : ''}`);
+    }
+  }
+  return lines.join('\n').slice(0, 5000);
+}
+
+function organizedItineraryFromModel(value: unknown, fallbackTrip?: Pick<TripProfile, 'name' | 'itinerary'>): string {
+  const record = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return stringifyOrganizedItinerary(
+    record.organizedItinerary || record.canonicalItinerary || record.canonicalTrip || record.organizedTrip || value,
+    fallbackTrip,
+  );
+}
+
 function localTripDraftFromParagraph(paragraph: string, state: AppState, warnings: string[] = []): TripDraft | null {
   const text = normalizeTripInputText(paragraph);
   if (!text) return null;
@@ -448,6 +471,10 @@ function localTripDraftFromParagraph(paragraph: string, state: AppState, warning
       assumptions: [`Month/day dates interpreted as ${year}`, 'Local parser used after AI provider attempts did not produce a usable itinerary'],
       warnings,
     },
+    organizedItinerary: stringifyOrganizedItinerary(null, {
+      name: /濟州|jeju/i.test(text) ? '濟州2026' : `${context.weatherRegion || context.countryName || 'Trip'} ${year}`,
+      itinerary,
+    }),
     summary: '已用本地 itinerary parser 抽取日程；請喺確認視窗檢查景點、酒店、餐廳同時間。',
     warnings,
     changes: ['已建立可確認嘅 day-by-day 行程草稿。'],
@@ -735,7 +762,17 @@ ${text.slice(0, 12000)}`;
 
 function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): TripDraft {
   const current = activeTrip(state);
-  const value = raw && typeof raw === 'object' ? raw as Partial<TripDraft> & { trip?: Partial<TripProfile>; itinerary?: ItineraryDay[]; intelligence?: Partial<TripIntelligence>; extractionReport?: unknown } : {};
+  const value = raw && typeof raw === 'object'
+    ? raw as Partial<TripDraft> & {
+      trip?: Partial<TripProfile>;
+      itinerary?: ItineraryDay[];
+      intelligence?: Partial<TripIntelligence>;
+      extractionReport?: unknown;
+      canonicalItinerary?: unknown;
+      canonicalTrip?: unknown;
+      organizedTrip?: unknown;
+    }
+    : {};
   const tripValue: Partial<TripProfile> = value.trip || {};
   const itineraryProvided = Array.isArray(tripValue.itinerary)
     ? tripValue.itinerary
@@ -786,6 +823,10 @@ function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): T
     updatedAt: Date.now(),
   };
   const extractionReport = buildTripExtractionReport(value.extractionReport, trip);
+  const organizedItinerary = stringifyOrganizedItinerary(
+    value.organizedItinerary || value.canonicalItinerary || value.canonicalTrip || value.organizedTrip,
+    trip,
+  );
   return {
     trip,
     summary: String(value.summary || `已分析 ${paragraph.slice(0, 80)}`),
@@ -796,8 +837,52 @@ function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): T
     changes: Array.isArray(value.changes) ? value.changes.map(String) : [
       isNewTrip ? '偵測到新日期或新目的地，建議建立新旅程。' : '偵測為現有旅程更新，會套用版本更新。',
     ],
+    organizedItinerary,
     extractionReport,
   };
+}
+
+function buildTripOrganizePrompt(paragraph: string, currentTrip: unknown): string {
+  return `Read and understand this travel itinerary text, then return JSON only.
+This is stage 1 of a two-stage Trip Update workflow. Do not extract app fields yet.
+Your job:
+1. Read the whole user text across Markdown tables, HTML-ish pasted text, plain timetables, Cantonese/Chinese/English/Korean names, duplicate lines, and mixed date formats.
+2. Infer the real travel plan and resolve conflicts by travel logic.
+3. Rewrite it into your own organizedItinerary: a clean canonical itinerary grouped day-by-day, with date, day number, lodging, transport, flights, meals, attractions, shopping, optional notes, timing, and important constraints.
+4. The organizedItinerary must be your own rewritten version. Do not copy-paste the raw input.
+
+Current trip JSON for date/year context only:
+${JSON.stringify(currentTrip).slice(0, 12000)}
+
+Return exactly:
+{"organizedItinerary":string,"summary":string,"warnings":string[],"assumptions":string[]}
+
+USER RAW ITINERARY:
+${paragraph.slice(0, 28000)}`;
+}
+
+function buildTripExtractionPrompt(organizedItinerary: string, currentTrip: unknown): string {
+  return `Extract app-ready trip data from this canonical itinerary and return JSON only.
+${tripIntelligencePromptContract()}
+This is stage 2 of a two-stage Trip Update workflow.
+You must use only CANONICAL ORGANIZED ITINERARY below as the source of truth for trip.itinerary.
+Do not go back to the user's raw pasted text. Do not copy Current trip JSON as a successful extraction.
+The app will use trip.itinerary as the backbone for Timeline, Weather, Records, Stats, and sync.
+
+Current trip JSON for merge/date/year context only:
+${JSON.stringify(currentTrip).slice(0, 12000)}
+
+Return:
+{"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":"JP|KR|TW|GB|EU|HK|CN|SG|TH|MY|VN|PH|AU|NZ|US|GLOBAL","countryName":string,"primaryCurrency":string,"themeKey":"japan_washi|korea_editorial|taiwan_nightmarket|europe_rail|global_journal","locale":string,"timezone":string,"weatherRegion":string,"confidence":"low|medium|high"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"highlight":string,"lodging":{"name":string,"address":string,"mapUrl":string,"checkIn":string,"checkOut":string,"bookingRef":string,"lat":number,"lon":number,"sourceText":string,"confidence":"low|medium|high"},"spots":[{"time":"HH:MM","timeEnd":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other|sightseeing","address":string,"mapUrl":string,"note":string,"timezone":string,"lat":number,"lon":number,"bookingRef":string,"sourceText":string,"confidence":"low|medium|high"}]}]},"extractionReport":{"daysExtracted":number,"spotsExtracted":number,"hotelsExtracted":number,"restaurantsExtracted":number,"transportsExtracted":number,"importantDetailsExtracted":number,"sourceQuality":"low|medium|high","missingCriticalFields":string[],"assumptions":string[],"warnings":string[]},"summary":string,"warnings":string[],"changes":string[]}
+
+organizedItinerary must match the canonical itinerary you used for extraction.
+Include lodging, arrival times, places, restaurants, transport/flight/train references, booking references, Google Maps links, addresses, and coordinates when inferable from the canonical itinerary. Do not invent API keys.
+If exact coordinates are uncertain, omit lat/lon and add the place to extractionReport.missingCriticalFields or assumptions instead of guessing.
+If the canonical itinerary has no usable trip data, return an empty itinerary and explain missingCriticalFields.
+Choose themeKey from destination context: Japan=japan_washi, Korea=korea_editorial, Taiwan=taiwan_nightmarket, Europe/UK=europe_rail, unknown=global_journal.
+
+CANONICAL ORGANIZED ITINERARY:
+${organizedItinerary.slice(0, 28000)}`;
 }
 
 export async function parseTripParagraph(paragraph: string, state: AppState): Promise<TripDraft> {
@@ -810,21 +895,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
     destinationSummary: current.destinationSummary,
     itinerary: current.itinerary,
   };
-  const prompt = `Analyze this travel itinerary paragraph and return JSON only.
-${tripIntelligencePromptContract()}
-Input may be Markdown tables, HTML-ish pasted text, or plain timetables. Preserve all days and all timed rows.
-Current trip JSON:
-${JSON.stringify(currentTrip).slice(0, 12000)}
-
-Return:
-{"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":"JP|KR|TW|GB|EU|HK|CN|SG|TH|MY|VN|PH|AU|NZ|US|GLOBAL","countryName":string,"primaryCurrency":string,"themeKey":"japan_washi|korea_editorial|taiwan_nightmarket|europe_rail|global_journal","locale":string,"timezone":string,"weatherRegion":string,"confidence":"low|medium|high"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"highlight":string,"lodging":{"name":string,"address":string,"mapUrl":string,"checkIn":string,"checkOut":string,"bookingRef":string,"lat":number,"lon":number,"sourceText":string,"confidence":"low|medium|high"},"spots":[{"time":"HH:MM","timeEnd":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other|sightseeing","address":string,"mapUrl":string,"note":string,"timezone":string,"lat":number,"lon":number,"bookingRef":string,"sourceText":string,"confidence":"low|medium|high"}]}]},"extractionReport":{"daysExtracted":number,"spotsExtracted":number,"hotelsExtracted":number,"restaurantsExtracted":number,"transportsExtracted":number,"importantDetailsExtracted":number,"sourceQuality":"low|medium|high","missingCriticalFields":string[],"assumptions":string[],"warnings":string[]},"summary":string,"warnings":string[],"changes":string[]}
-Include lodging, arrival times, places, restaurants, transport/flight/train references, booking references, Google Maps links, addresses, and coordinates when inferable from input. Do not invent API keys.
-  If exact coordinates are uncertain, omit lat/lon and add the place to extractionReport.missingCriticalFields or assumptions instead of guessing.
-If the user text does not contain a new itinerary, return an empty itinerary and explain missingCriticalFields; do not copy Current trip JSON as a successful extraction.
-Choose themeKey from destination context: Japan=japan_washi, Korea=korea_editorial, Taiwan=taiwan_nightmarket, Europe/UK=europe_rail, unknown=global_journal.
-
-USER PARAGRAPH:
-${paragraph.slice(0, 28000)}`;
+  const organizePrompt = buildTripOrganizePrompt(paragraph, currentTrip);
   const startedAt = Date.now();
   const fastLocalDraft = localTripDraftFromParagraph(paragraph, state);
   const hasFastLocalDraft = !!fastLocalDraft && hasUsefulTripItinerary(fastLocalDraft);
@@ -852,44 +923,34 @@ ${paragraph.slice(0, 28000)}`;
         if (draft) return draft;
       }
       try {
-        console.log(`[AI Routing] 正在嘗試行程更新: ${attempt.label}...`);
-        const selectedKimiTripPrimary = index === 0 && attempt.provider === 'kimi' && isKimiModel(`${attempt.provider}/${attempt.model || ''}`);
-        let parsed: unknown;
-        if (selectedKimiTripPrimary) {
-          try {
-            parsed = await withTimeout(
-              brokerTripIntelligence(state, {
-                paragraph: paragraph.slice(0, 28000),
-                currentTrip,
-                model: attempt.model || KIMI_API_MODEL,
-              }),
-              tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft),
-              `Trip intelligence ${attempt.label}`,
-            );
-          } catch (brokerError) {
-            warnings.push(brokerError instanceof Error ? brokerError.message : String(brokerError));
-            const routeLabel = isBrokerRouteUnavailable(brokerError) ? 'backend unavailable' : 'structured route failed';
-            console.warn(`[AI Routing] Trip intelligence ${attempt.label} ${routeLabel}, trying same model JSON route:`, brokerError);
-            if (hasFastLocalDraft && isTimeoutError(brokerError)) {
-              warnings.push(`${attempt.label} structured route was slow; trying faster trip fallback.`);
-              continue;
-            }
-          }
-          if (!parsed) {
-            parsed = await withTimeout(
-              callModelAttemptJson(state, attempt, prompt, 'trip'),
-              tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft),
-              `Trip model ${attempt.label}`,
-            );
-          }
-        } else {
-          parsed = await withTimeout(
-            callModelAttemptJson(state, attempt, prompt, 'trip'),
-            tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft),
-            `Trip model ${attempt.label}`,
-          );
+        console.log(`[AI Routing] 正在嘗試行程重整: ${attempt.label}...`);
+        const timeoutMs = tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft);
+        const organizedRaw = await withTimeout(
+          callModelAttemptJson(state, attempt, organizePrompt, 'trip'),
+          timeoutMs,
+          `Trip organize ${attempt.label}`,
+        );
+        const organizedItinerary = organizedItineraryFromModel(organizedRaw, fastLocalDraft?.trip);
+        if (!organizedItinerary || organizedItinerary.length < 20) {
+          warnings.push(`${attempt.label} returned no usable organized itinerary.`);
+          console.warn(`[AI Routing] ${attempt.label} returned no usable organized itinerary; trying next trip model.`);
+          continue;
         }
-        const draft = normalizeTripDraft(parsed, state, paragraph);
+
+        console.log(`[AI Routing] 正在由重整行程抽取 app data: ${attempt.label}...`);
+        const extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip);
+        const parsed = await withTimeout(
+          callModelAttemptJson(state, attempt, extractionPrompt, 'trip'),
+          timeoutMs,
+          `Trip extract ${attempt.label}`,
+        );
+        const parsedRecord = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? parsed as Record<string, unknown>
+          : {};
+        const draft = normalizeTripDraft({
+          ...parsedRecord,
+          organizedItinerary: parsedRecord.organizedItinerary || organizedItinerary,
+        }, state, organizedItinerary);
         if (hasUsefulTripItinerary(draft)) {
           return {
             ...draft,

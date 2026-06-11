@@ -1317,12 +1317,28 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
     };
   });
 
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/trip/intelligence', async (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      ok: true,
-      data: {
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
+    const body = route.request().postDataJSON();
+    const prompt = String(body.prompt || '');
+    const organizedItinerary = [
+      'Canonical itinerary: 濟州2026',
+      'Day 1 2026-06-13 | Stay: Hotel Fine Jeju | Jeju West',
+      '- 09:00 濟州機場',
+      '- 12:30 道頭洞彩虹海岸道路',
+      '- 17:30 Osulloc Tea Museum',
+      'Day 3 2026-06-15 | Udo / Seongsan',
+      '- 17:30 城山日出峰',
+      'Day 8 2026-06-20 | Airport',
+    ].join('\n');
+    const data = prompt.includes('stage 1 of a two-stage Trip Update workflow')
+      ? {
+        organizedItinerary,
+        summary: 'Reorganized eight Jeju travel days from pasted itinerary.',
+        warnings: [],
+        assumptions: ['6月13日 interpreted as 2026-06-13 from trip context'],
+      }
+      : {
+        organizedItinerary,
         trip: {
           name: '濟州2026',
           destinationSummary: 'Jeju, South Korea',
@@ -1354,12 +1370,16 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
           assumptions: ['6月13日 interpreted as 2026-06-13 from trip context'],
           warnings: [],
         },
-        summary: 'Extracted eight Jeju travel days from pasted itinerary.',
+        summary: 'Extracted eight Jeju travel days from canonical itinerary.',
         warnings: [],
         changes: ['Built Jeju day-by-day itinerary.'],
-      },
-    }),
-  }));
+      };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data }),
+    });
+  });
   await page.route('**/secrets.local.js', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/javascript',
@@ -1411,6 +1431,7 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
   await expect(modal).toContainText('濟州2026');
   await expect(modal).toContainText('Hotel Fine Jeju');
   await expect(modal).toContainText('Stanford Hotel & Resort Jeju');
+  await expect(modal).toContainText('AI 重整行程');
   await expect(modal).toContainText('Day 3 · 2026-06-15');
   await expect(modal).toContainText('城山日出峰');
   await expect(modal).toContainText('Some exact addresses omitted');
