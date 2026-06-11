@@ -2,6 +2,7 @@ import { APP_SCHEMA_VERSION, DEFAULT_STATE, ITINERARY } from '../../lib/constant
 import { perHkdForCurrency } from '../../lib/currency';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile } from '../../lib/types';
 import { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
+import { resolveGeoCoordinate, resolveCategory } from '../../lib/geo';
 
 export { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
 
@@ -90,16 +91,19 @@ export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fa
       timezone: normalizeZone(day.timezone || day.spots?.find((spot) => spot.timezone)?.timezone) || 'Asia/Tokyo',
       currency: day.currency || fallbackCurrency,
       spots: (day.spots || []).map((spot, spotIdx) => {
+        const name = String(spot.name || '').trim() || `Spot ${spotIdx + 1}`;
+        const geo = resolveGeoCoordinate(name);
         const rawLat = Number(spot.lat);
         const rawLon = Number(spot.lon);
         return {
           ...spot,
-          name: String(spot.name || '').trim() || `Spot ${spotIdx + 1}`,
+          name,
+          type: spot.type || resolveCategory(name),
           id: spot.spotId || spot.id || stableSpotId(tripId, safeDate, spotIdx, spot),
           spotId: spot.spotId || spot.id || stableSpotId(tripId, safeDate, spotIdx, spot),
           mapUrl: spot.mapUrl || '',
-          lat: Number.isFinite(rawLat) ? rawLat : undefined,
-          lon: Number.isFinite(rawLon) ? rawLon : undefined,
+          lat: Number.isFinite(rawLat) ? rawLat : geo?.lat,
+          lon: Number.isFinite(rawLon) ? rawLon : geo?.lon,
         };
       }),
     };

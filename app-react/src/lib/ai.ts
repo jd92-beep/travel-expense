@@ -18,9 +18,48 @@ function extractJson(text: string): unknown {
   try {
     return JSON.parse(cleaned);
   } catch {
-    const match = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-    if (!match) throw new Error('AI 回覆唔係 JSON');
-    return JSON.parse(match[1]);
+    const firstBrace = cleaned.indexOf('{');
+    const firstBracket = cleaned.indexOf('[');
+    let start = -1;
+    if (firstBrace !== -1 && firstBracket !== -1) start = Math.min(firstBrace, firstBracket);
+    else if (firstBrace !== -1) start = firstBrace;
+    else if (firstBracket !== -1) start = firstBracket;
+    if (start === -1) throw new Error('AI 回覆唔係 JSON');
+
+    let str = cleaned.slice(start);
+    let inString = false;
+    let escape = false;
+    const stack: ('}' | ']')[] = [];
+    let endIdx = -1;
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (escape) { escape = false; continue; }
+      if (char === '\\') { escape = true; continue; }
+      if (char === '"') { inString = !inString; continue; }
+      if (!inString) {
+        if (char === '{') stack.push('}');
+        else if (char === '[') stack.push(']');
+        else if (char === '}' || char === ']') {
+          if (stack.length > 0 && stack[stack.length - 1] === char) {
+            stack.pop();
+            if (stack.length === 0) { endIdx = i; break; }
+          }
+        }
+      }
+    }
+    
+    if (endIdx !== -1) {
+      str = str.slice(0, endIdx + 1);
+    } else {
+      if (inString) str += '"';
+      while (stack.length > 0) str += stack.pop();
+    }
+    
+    try {
+      return JSON.parse(str);
+    } catch {
+      throw new Error('AI 回覆唔係 JSON');
+    }
   }
 }
 

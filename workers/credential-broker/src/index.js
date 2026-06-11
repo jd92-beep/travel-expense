@@ -1008,43 +1008,49 @@ function extractJson(text) {
   try {
     return JSON.parse(cleaned);
   } catch {
-    const first = firstJsonValue(cleaned);
-    if (!first) throw new Error('Provider returned non-JSON response');
-    return JSON.parse(first);
-  }
-}
+    const firstBrace = cleaned.indexOf('{');
+    const firstBracket = cleaned.indexOf('[');
+    let start = -1;
+    if (firstBrace !== -1 && firstBracket !== -1) start = Math.min(firstBrace, firstBracket);
+    else if (firstBrace !== -1) start = firstBrace;
+    else if (firstBracket !== -1) start = firstBracket;
+    if (start === -1) throw new Error('Provider returned non-JSON response');
 
-function firstJsonValue(text) {
-  const source = String(text || '');
-  const start = source.search(/[\{\[]/);
-  if (start < 0) return '';
-  const stack = [];
-  let inString = false;
-  let escaped = false;
-  for (let index = start; index < source.length; index += 1) {
-    const char = source[index];
-    if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === '\\') {
-        escaped = true;
-      } else if (char === '"') {
-        inString = false;
+    let str = cleaned.slice(start);
+    let inString = false;
+    let escape = false;
+    const stack = [];
+    let endIdx = -1;
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (escape) { escape = false; continue; }
+      if (char === '\\') { escape = true; continue; }
+      if (char === '"') { inString = !inString; continue; }
+      if (!inString) {
+        if (char === '{') stack.push('}');
+        else if (char === '[') stack.push(']');
+        else if (char === '}' || char === ']') {
+          if (stack.length > 0 && stack[stack.length - 1] === char) {
+            stack.pop();
+            if (stack.length === 0) { endIdx = i; break; }
+          }
+        }
       }
-      continue;
     }
-    if (char === '"') {
-      inString = true;
-      continue;
+    
+    if (endIdx !== -1) {
+      str = str.slice(0, endIdx + 1);
+    } else {
+      if (inString) str += '"';
+      while (stack.length > 0) str += stack.pop();
     }
-    if (char === '{') stack.push('}');
-    if (char === '[') stack.push(']');
-    if (char === '}' || char === ']') {
-      if (stack.pop() !== char) return '';
-      if (stack.length === 0) return source.slice(start, index + 1);
+    
+    try {
+      return JSON.parse(str);
+    } catch {
+      throw new Error('Provider returned non-JSON response');
     }
   }
-  return '';
 }
 
 function normalizeZone(value) {

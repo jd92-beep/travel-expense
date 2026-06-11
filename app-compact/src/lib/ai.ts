@@ -14,9 +14,48 @@ function extractJson(text: string): unknown {
   try {
     return JSON.parse(cleaned);
   } catch {
-    const match = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-    if (!match) throw new Error('AI 回覆唔係 JSON');
-    return JSON.parse(match[1]);
+    const firstBrace = cleaned.indexOf('{');
+    const firstBracket = cleaned.indexOf('[');
+    let start = -1;
+    if (firstBrace !== -1 && firstBracket !== -1) start = Math.min(firstBrace, firstBracket);
+    else if (firstBrace !== -1) start = firstBrace;
+    else if (firstBracket !== -1) start = firstBracket;
+    if (start === -1) throw new Error('AI 回覆唔係 JSON');
+
+    let str = cleaned.slice(start);
+    let inString = false;
+    let escape = false;
+    const stack: ('}' | ']')[] = [];
+    let endIdx = -1;
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (escape) { escape = false; continue; }
+      if (char === '\\') { escape = true; continue; }
+      if (char === '"') { inString = !inString; continue; }
+      if (!inString) {
+        if (char === '{') stack.push('}');
+        else if (char === '[') stack.push(']');
+        else if (char === '}' || char === ']') {
+          if (stack.length > 0 && stack[stack.length - 1] === char) {
+            stack.pop();
+            if (stack.length === 0) { endIdx = i; break; }
+          }
+        }
+      }
+    }
+    
+    if (endIdx !== -1) {
+      str = str.slice(0, endIdx + 1);
+    } else {
+      if (inString) str += '"';
+      while (stack.length > 0) str += stack.pop();
+    }
+    
+    try {
+      return JSON.parse(str);
+    } catch {
+      throw new Error('AI 回覆唔係 JSON');
+    }
   }
 }
 
@@ -335,7 +374,7 @@ function localSpotFromParts(time: string, name: string, sourceText: string, cate
   };
 }
 
-function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
+export function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
   const spots: ItineraryDay['spots'] = [];
   const seen = new Set<string>();
   const add = (spot: ItineraryDay['spots'][number] | null) => {
@@ -357,6 +396,16 @@ function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
       }
       continue;
     }
+    
+    const tabs = line.split(/\t| {3,}/).map(c => c.trim()).filter(Boolean);
+    if (tabs.length >= 2 && !line.includes('｜') && !line.includes('|')) {
+      const timeMatch = tabs[0].match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+      if (timeMatch) {
+         add(localSpotFromParts(`${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`, tabs[1], rawLine, tabs.slice(2).join(' / ')));
+         continue;
+      }
+    }
+
     const plain = line.match(/^(?:[-*]\s*)?([01]?\d|2[0-3]):([0-5]\d)\s*(AM|PM)?\s*[:：]?\s+(.+?)\s*$/i);
     if (plain) {
       add(localSpotFromParts(normalizeTripTime(plain[1], plain[2], plain[3]), plain[4], rawLine));
@@ -863,7 +912,6 @@ ${paragraph.slice(0, 28000)}`;
 
 function buildTripExtractionPrompt(organizedItinerary: string, currentTrip: unknown): string {
   return `Extract app-ready trip data from this canonical itinerary and return JSON only.
-${tripIntelligencePromptContract()}
 This is stage 2 of a two-stage Trip Update workflow.
 You must use only CANONICAL ORGANIZED ITINERARY below as the source of truth for trip.itinerary.
 Do not go back to the user's raw pasted text. Do not copy Current trip JSON as a successful extraction.
@@ -872,14 +920,13 @@ The app will use trip.itinerary as the backbone for Timeline, Weather, Records, 
 Current trip JSON for merge/date/year context only:
 ${JSON.stringify(currentTrip).slice(0, 12000)}
 
-Return:
-{"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":"JP|KR|TW|GB|EU|HK|CN|SG|TH|MY|VN|PH|AU|NZ|US|GLOBAL","countryName":string,"primaryCurrency":string,"themeKey":"japan_washi|korea_editorial|taiwan_nightmarket|europe_rail|global_journal","locale":string,"timezone":string,"weatherRegion":string,"confidence":"low|medium|high"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"highlight":string,"lodging":{"name":string,"address":string,"mapUrl":string,"checkIn":string,"checkOut":string,"bookingRef":string,"lat":number,"lon":number,"sourceText":string,"confidence":"low|medium|high"},"spots":[{"time":"HH:MM","timeEnd":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other|sightseeing","address":string,"mapUrl":string,"note":string,"timezone":string,"lat":number,"lon":number,"bookingRef":string,"sourceText":string,"confidence":"low|medium|high"}]}]},"extractionReport":{"daysExtracted":number,"spotsExtracted":number,"hotelsExtracted":number,"restaurantsExtracted":number,"transportsExtracted":number,"importantDetailsExtracted":number,"sourceQuality":"low|medium|high","missingCriticalFields":string[],"assumptions":string[],"warnings":string[]},"summary":string,"warnings":string[],"changes":string[]}
+Return minimalist schema:
+{"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"lodging":{"name":string},"spots":[{"time":"HH:MM","name":string,"note":string,"address":string,"bookingRef":string}]}]},"summary":string,"warnings":string[],"changes":string[]}
 
 organizedItinerary must match the canonical itinerary you used for extraction.
-Include lodging, arrival times, places, restaurants, transport/flight/train references, booking references, Google Maps links, addresses, and coordinates when inferable from the canonical itinerary. Do not invent API keys.
-If exact coordinates are uncertain, omit lat/lon and add the place to extractionReport.missingCriticalFields or assumptions instead of guessing.
-If the canonical itinerary has no usable trip data, return an empty itinerary and explain missingCriticalFields.
-Choose themeKey from destination context: Japan=japan_washi, Korea=korea_editorial, Taiwan=taiwan_nightmarket, Europe/UK=europe_rail, unknown=global_journal.
+Include lodging, arrival times, places, restaurants, transport/flight/train references, booking references.
+Do not invent or guess any lat/lon coordinates. Frontend handles that.
+If the canonical itinerary has no usable trip data, return an empty itinerary.
 
 CANONICAL ORGANIZED ITINERARY:
 ${organizedItinerary.slice(0, 28000)}`;
