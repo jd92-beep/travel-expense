@@ -440,7 +440,7 @@ export function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
       }
     }
 
-    const plain = line.match(/^(?:[-*]\s*)?([01]?\d|2[0-3]):([0-5]\d)\s*(AM|PM)?\s*[:：]?\s+(.+?)\s*$/i);
+    const plain = line.match(/^\s*(?:[-*]\s*)?([01]?\d|2[0-3]):([0-5]\d)\s*(AM|PM)?\s*[:：\-–—]?\s*(.+?)\s*$/i);
     if (plain) {
       add(localSpotFromParts(normalizeTripTime(plain[1], plain[2], plain[3]), plain[4], rawLine));
     }

@@ -2,6 +2,12 @@
 
 ## 2026-06-11
 
+- Weather tab now groups itinerary spots by city using Haversine 30km radius clustering (`groupedCoordsForDay`). Multiple nearby spots collapse into one weather card per city instead of one per spot, reducing duplicate API calls.
+- Weather API calls parallelized with `Promise.all` — all city groups for all days fetch simultaneously instead of sequentially, significantly reducing total load time.
+- Added module-level weather cache with 1hr TTL that persists across tab switches. Cached data shows immediately when switching back to Weather tab; a background refresh updates if stale.
+- Weather cards now always display the city label as header (previously only when multiple locations per day).
+- Removed the post-trip archive smoke test (`settings-smoke.spec.cjs`) since the feature it tested was already removed.
+- User model selection in Settings now becomes the true primary for all AI functions (scan, voice, email, trip). Previously scan/voice hardcoded Google Gemma as primary and email hardcoded Kimi, ignoring user Settings selection. The old contract-default model is now the first fallback.
 - Hardened compact Trip Update local tab parser with `parseDuration()` and `computeTimeEnd()` helpers. Tab-separated itinerary spots now extract `timeEnd` from the `建議停留` column by averaging duration ranges (e.g., `30–45分鐘` → avg 37min → `timeEnd = time + 37min`). Timeline tab shows `time – timeEnd` ranges when available.
 - Added day-level advice capture: lines starting with `建議：` are now stored as `ItineraryDay.note` and rendered as `💡` advice tips in the Settings AI confirmation modal.
 - Expanded `GEO_DICTIONARY` from 9 to 32 Jeju locations, covering transport hubs (城山浦港), hotels, Jeju City area (東門市場, 七星路, 中央地下街, 道頭洞, 蓮洞), Seogwipo area (Camellia Hill, 正房瀑布, 天地淵, 偶來市場, 休愛里, 牛沼端), Seongsan/East (涉地可支), Aewol/Northwest, and specific cafes/restaurants (橘子, 李春玉, umu, 風爐, Blanc Rocher, Randy's Donuts, Blue Elephant).

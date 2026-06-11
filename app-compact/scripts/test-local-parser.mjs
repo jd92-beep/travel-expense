@@ -110,7 +110,7 @@ function extractLocalDaySpots(block) {
       }
     }
 
-    const plain = line.match(/^(?:[-*]\s*)?([01]?\d|2[0-3]):([0-5]\d)\s*(AM|PM)?\s*[:：]?\s+(.+?)\s*$/i);
+    const plain = line.match(/^\s*(?:[-*]\s*)?([01]?\d|2[0-3]):([0-5]\d)\s*(AM|PM)?\s*[:：\-–—]?\s*(.+?)\s*$/i);
     if (plain) {
       add(localSpotFromParts(normalizeTripTime(plain[1], plain[2], plain[3]), plain[4], rawLine));
     }
@@ -246,6 +246,45 @@ assert(plainSpots.length === 3, `Plain text has 3 spots (got ${plainSpots.length
 assert(plainSpots[0].time === '09:00', 'Plain spot 1 time correct');
 assert(plainSpots[1].time === '14:30', 'Plain spot 2 time (PM) correct');
 assert(plainSpots[2].time === '18:00', 'Plain spot 3 time correct');
+
+console.log('\n=== Bullet list with AM/PM and full-width colon ===\n');
+
+const bulletBlock = `  * 06:30 AM：抵達濟州機場及辦理入境
+  * 08:30 AM：機場取車
+  * 09:30 AM：道頭洞彩虹海岸道路、麥當勞打卡石頭爺爺 (打卡拍照)
+  * 11:30 AM：李春玉元祖鯖魚包飯 (午餐：燉泡菜鯖魚)
+  * 01:30 PM：umu pudding (買布丁)
+  * 03:00 PM：Osulloc Tea Museum (綠茶博物館)`;
+const bulletSpots = extractLocalDaySpots(bulletBlock);
+assert(bulletSpots.length === 6, `Bullet list has 6 spots (got ${bulletSpots.length})`);
+assert(bulletSpots[0].time === '06:30', `Bullet spot 1 time is 06:30 (got ${bulletSpots[0].time})`);
+assert(bulletSpots[0].name.includes('抵達濟州機場'), `Bullet spot 1 name correct (got ${bulletSpots[0].name})`);
+assert(bulletSpots[1].time === '08:30', `Bullet spot 2 time is 08:30 (got ${bulletSpots[1].time})`);
+assert(bulletSpots[3].time === '11:30', `Bullet spot 4 time is 11:30 (got ${bulletSpots[3].time})`);
+assert(bulletSpots[4].time === '13:30', `Bullet spot 5 time is 13:30 PM (got ${bulletSpots[4].time})`);
+assert(bulletSpots[5].time === '15:00', `Bullet spot 6 time is 15:00 PM (got ${bulletSpots[5].time})`);
+
+console.log('\n=== Pipe table with category column ===\n');
+
+const pipeCatBlock = `| 06:30 | 航班降落 | 濟州國際機場 |
+| 08:30 | 地點 / 交通 | 機場取車完成 |
+| 09:00 | 餐廳 | 簡單早餐 / 咖啡（肚餓記住先食野） |
+| 11:15 | 餐廳 | 李春玉元祖鯖魚包飯（午餐） |`;
+const pipeCatSpots = extractLocalDaySpots(pipeCatBlock);
+assert(pipeCatSpots.length === 4, `Pipe table with category has 4 spots (got ${pipeCatSpots.length})`);
+assert(pipeCatSpots[0].time === '06:30', `Pipe cat spot 1 time correct`);
+assert(pipeCatSpots[0].name.includes('濟州國際機場'), `Pipe cat spot 1 name correct`);
+assert(pipeCatSpots[1].name.includes('機場取車完成'), `Pipe cat spot 2 name correct`);
+
+console.log('\n=== Full-width colon separator without space ===\n');
+
+const colonBlock = `09:00：簡單早餐
+11:30：午餐
+15:00：景點`;
+const colonSpots = extractLocalDaySpots(colonBlock);
+assert(colonSpots.length === 3, `Full-width colon has 3 spots (got ${colonSpots.length})`);
+assert(colonSpots[0].time === '09:00', `Colon spot 1 time correct`);
+assert(colonSpots[0].name === '簡單早餐', `Colon spot 1 name correct`);
 
 console.log('\n=== computeTimeEnd edge cases ===\n');
 

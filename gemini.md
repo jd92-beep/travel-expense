@@ -107,6 +107,16 @@
 - **清理相關樣式同測試**：
   1. 刪除咗 `compact.css` 裡面所有關於 `.dashboard-broker-assistant` 嘅 layout 同裝飾 CSS，保持樣式表乾淨。
   2. 同步清空 `dashboard-parity-smoke.spec.cjs` 裡面針對 `Broker AI assistant` 嘅 Playwright 測試案例，避免 CI 門檻報錯。
+### 10. ⏱️ Trip Update AI 深度硬化 — Duration/TimeEnd、建議捕獲、Geo 擴展 (2026-06-11 新增)
+Antigravity 同 Codex 協作完成咗 Trip Update AI 嘅深度強化：
+- **Duration 解析同 TimeEnd 計算**：新增 `parseDuration()` 同 `computeTimeEnd()` helper。Tab 表格嘅 `建議停留` 欄位（例如 `30–45分鐘`）會自動取平均值計算 `timeEnd`，Timeline tab 依家會顯示 `09:00 – 09:38` 時間範圍。
+- **建議捕獲**：`建議：` 開頭嘅行會儲存做 `ItineraryDay.note`，Settings AI 確認 Modal 會顯示 `💡` 建議提示。
+- **GEO_DICTIONARY 大擴展**：由 9 個位置擴展到 32 個濟州島位置，涵蓋交通（城山浦港）、酒店、濟州市區（東門市場、七星路、道頭洞）、西歸浦（山茶花、正房瀑布、天地淵、偶來市場）、城山/東部（涉地可支）、涯月/西北，同特定 cafe/餐廳。
+- **LLM Timeout 提升**：8s→15s、9s→12s、14s→25s、25s→30s，減少慢 model（如 Mimo）timeout 失敗。
+- **Organized Itinerary 截斷提升**：5K→12K chars，避免長行程被截斷。
+- **Google 單階段捷徑**：Google model 跳過 organize stage 直接做 extraction，省一次 LLM call。
+- **mergeTripDrafts**：LLM 同 local parser 結果合併——如果 LLM 返回嘅日數少過 local parser，會從 local draft 補返缺失嘅日數同景點。
+- **48 個 Unit Tests**：`app-compact/scripts/test-local-parser.mjs` 覆蓋 tab 解析、pipe 表格、純文字、`computeTimeEnd` 邊界（午夜 wrap、零 duration、空 input）同 `parseDuration` 邊界。
 
 ---
 
