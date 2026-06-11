@@ -2,6 +2,8 @@
 
 ## 2026-06-11
 
+- Fixed compact Jeju Trip Update sync so confirming an AI itinerary update now queues both the active `trip` row and the app-level `settings` profile. The missing settings queue was the reason Jeju could update locally while cloud/profile sync still behaved as if the previous active-trip settings were authoritative.
+- Added a regression smoke assertion that an 8-day Jeju Trip Update confirmation writes the itinerary and queues both `trip:<activeTripId>` and `settings:app-settings`. Verification passed after the fix with targeted Settings Trip Update smoke, `app-compact npm run typecheck`, production build, and final-navigation smoke through the dev-server wrapper (`8 passed`).
 - Reworked compact Trip Update AI into a canonical-first two-stage model workflow. The selected/fallback LLM now first reads the raw pasted itinerary and rewrites its own `organizedItinerary`, then a second LLM call extracts `trip.itinerary` and the app backbone only from that organized version, instead of directly scraping structured fields from the user's mixed-format text.
 - Added `organizedItinerary` to the compact trip draft contract and surfaced `AI 重整行程` in the Settings confirmation flow, so the user can see the model's organized day-by-day version before applying itinerary, weather, records, stats, and sync data.
 - Stopped the compact Trip Update frontend path from depending on the old one-shot `/trip/intelligence` route; provider JSON routes now support selected model first, fast fallback, and local parser fallback while preserving the no-silent-loading confirmation modal behavior.
