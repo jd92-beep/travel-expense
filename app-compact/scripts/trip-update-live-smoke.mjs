@@ -11,6 +11,7 @@ const brokerUrl = (process.env.COMPACT_BROKER_URL || DEFAULT_BROKER_URL).replace
 const origin = process.env.COMPACT_BROKER_ORIGIN || DEFAULT_ORIGIN;
 const sessionFile = process.env.COMPACT_BROKER_VAULT_SESSION_FILE || DEFAULT_SESSION_FILE;
 const model = process.env.COMPACT_TRIP_UPDATE_LIVE_MODEL || 'gemini-3.1-flash-lite';
+const provider = process.env.COMPACT_TRIP_UPDATE_LIVE_PROVIDER || (model.startsWith('mimo') ? 'mimo' : 'google');
 const maxDurationMs = Number(process.env.COMPACT_TRIP_UPDATE_LIVE_MAX_MS || 25_000);
 
 const sensitivePatterns = [
@@ -141,13 +142,14 @@ async function main() {
   if (auth.supabaseToken) headers[SUPABASE_AUTH_HEADER] = `Bearer ${auth.supabaseToken}`;
 
   const startedAt = Date.now();
-  const response = await fetch(`${brokerUrl}/google/json`, {
+  const endpoint = provider === 'mimo' ? '/mimo/json' : provider === 'kimi' ? '/kimi/json' : '/google/json';
+  const response = await fetch(`${brokerUrl}${endpoint}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ prompt: buildPrompt(), kind: 'trip', model }),
   });
   const text = await response.text();
-  assertNoSensitiveText('/google/json', text);
+  assertNoSensitiveText(endpoint, text);
   const data = text ? JSON.parse(text) : {};
   const durationMs = Date.now() - startedAt;
   const payload = data?.data;
@@ -161,6 +163,7 @@ async function main() {
     origin,
     mode: auth.mode,
     source: auth.source,
+    provider,
     model,
     status: response.ok && data?.ok === true && days >= 8 && spots >= 20 && durationMs <= maxDurationMs ? 'passed' : 'failed',
     noSecretsPrinted: true,

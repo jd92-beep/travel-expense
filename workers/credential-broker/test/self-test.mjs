@@ -120,6 +120,7 @@ function installProviderFetchStub() {
   const integrations = [];
   const kimiModels = [];
   const googleModels = [];
+  const mimoBodies = [];
   const weatherQueries = [];
   let notionCalls = 0;
   globalThis.fetch = async (url, init = {}) => {
@@ -211,6 +212,14 @@ function installProviderFetchStub() {
       return Response.json({ choices: [{ message: { content: '{"ok":true,"provider":"kimi"}' } }] });
     }
 
+    if (href.includes('xiaomimimo.com/v1/chat/completions')) {
+      assert.equal(init.headers?.['api-key'], 'mimo-secret-for-test');
+      assert.equal(auth, bearer('mimo-secret-for-test'));
+      const body = JSON.parse(init.body || '{}');
+      mimoBodies.push(body);
+      return Response.json({ choices: [{ message: { content: '{"ok":true,"provider":"mimo"}' } }] });
+    }
+
     if (href.includes('generativelanguage.googleapis.com/v1beta/models?')) {
       assert.match(href, /key=google-secret-for-test/);
       return Response.json({ models: [{ name: 'models/gemma-4-31b-it' }] });
@@ -260,6 +269,7 @@ function installProviderFetchStub() {
   restore.notionCalls = () => notionCalls;
   restore.kimiModels = () => kimiModels.slice();
   restore.googleModels = () => googleModels.slice();
+  restore.mimoBodies = () => mimoBodies.slice();
   restore.weatherQueries = () => weatherQueries.slice();
   return restore;
 }
@@ -596,6 +606,28 @@ async function run() {
     assert.equal(supabaseGoogle.response.status, 200);
     assert.equal(supabaseGoogle.data.data.provider, 'google');
     assert.equal(restoreFetch.googleModels().at(-1), 'gemma-4-31b-it');
+
+    const mimoRotate = await jsonFetch(env, '/credentials/rotate', {
+      method: 'POST',
+      session,
+      body: { provider: 'mimo', secret: 'mimo-secret-for-test', adminPassphrase: ADMIN_PASSWORD },
+    });
+    assert.equal(mimoRotate.response.status, 200);
+    assert.deepEqual(restoreFetch.mimoBodies().at(-1).thinking, { type: 'disabled' });
+    assert.equal(restoreFetch.mimoBodies().at(-1).stream, false);
+    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 800);
+
+    const mimo = await jsonFetch(env, '/mimo/json', {
+      method: 'POST',
+      session,
+      body: { prompt: 'Return JSON', kind: 'trip', model: 'mimo-v2.5' },
+    });
+    assert.equal(mimo.response.status, 200);
+    assert.equal(mimo.data.data.provider, 'mimo');
+    assert.equal(restoreFetch.mimoBodies().at(-1).model, 'mimo-v2.5');
+    assert.deepEqual(restoreFetch.mimoBodies().at(-1).thinking, { type: 'disabled' });
+    assert.equal(restoreFetch.mimoBodies().at(-1).stream, false);
+    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 3500);
 
     const weatherApiRotate = await jsonFetch(env, '/credentials/rotate', {
       method: 'POST',

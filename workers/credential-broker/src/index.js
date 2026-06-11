@@ -878,6 +878,9 @@ async function mimoJson(env, prompt, kind, image, requestedModel) {
     model: requestedModel || env.MIMO_MODEL || 'mimo-v2.5',
     messages,
     temperature: kind === 'test' ? 0 : 0.1,
+    stream: false,
+    thinking: { type: 'disabled' },
+    max_tokens: kind === 'trip' ? 3500 : 800,
   });
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
 }
@@ -1194,6 +1197,9 @@ async function mimoJsonWithCredential(env, credential) {
     model: env.MIMO_MODEL || 'mimo-v2.5',
     messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
     temperature: 0,
+    stream: false,
+    thinking: { type: 'disabled' },
+    max_tokens: 800,
   });
   return extractJson(data?.choices?.[0]?.message?.content || '');
 }

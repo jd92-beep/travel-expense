@@ -2,6 +2,9 @@
 
 ## 2026-06-11
 
+- Optimized the live Credential Broker Mimo v2.5 JSON path by sending `thinking: { type: "disabled" }`, `stream: false`, and capped `max_tokens` for `/mimo/json` plus credential-test calls. This fixes the slow default reasoning path that made Mimo trip extraction feel stuck.
+- Deployed the Mimo fast-path Worker update as Credential Broker version `fb3a389b-dd50-425f-88d0-a228098a95eb`. Live proof improved from a prior `mimo-v2.5` 2-day extraction taking about 44.7s to an 8-day Jeju extraction completing in 22376ms with 8 days and 32 spots. The Google fast fallback remains faster at 6443ms for the same 8-day smoke.
+- Extended `npm run smoke:trip-update-live` so it can target `/mimo/json` or `/google/json` with redacted broker-vault output, and added Worker self-test assertions that Mimo requests really include the fast-path payload fields.
 - Fixed compact Trip Update AI no-response behavior by adding trip-attempt timeouts, a faster trip fallback ladder, and a fast local day-by-day draft fallback for pasted itineraries.
 - Kept the selected trip-update model as primary, but if it is too slow the app now moves to `google/gemini-3.1-flash-lite` and `google/gemini-2.5-flash` before slower fallbacks, instead of waiting indefinitely on Mimo or retrying the same slow route.
 - Added `npm run smoke:trip-update-live`, a redacted live broker smoke that proves real LLM itinerary extraction without printing secrets; live proof extracted an 8-day Jeju itinerary with 32 spots using `gemini-3.1-flash-lite` in 5312ms.
