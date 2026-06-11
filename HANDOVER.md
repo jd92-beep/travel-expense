@@ -30,7 +30,9 @@ See previous HANDOVER entries in git history for details on:
 
 ## Current State
 - `app-compact` passes TypeScript compilation (`npm run typecheck`) ✅
-- Latest commit `e070570` pushed to `origin main`
+- Unit tests (`node scripts/test-local-parser.mjs`) pass successfully (62/62) ✅
+- Git push authentication problem resolved (run with `env -u GITHUB_TOKEN` to bypass invalid token injection) ✅
+- Latest commits pushed to `origin main`
 - Vercel React app deployed and live at `https://travel-expense-react.vercel.app`
 
 ## Next Steps for the Boss / Next Agent
