@@ -2,6 +2,8 @@
 
 ## 2026-06-11
 
+- Fixed Compact Trip Update AI extraction for pasted itinerary formats that use Markdown headings, pipe tables, inline `<br>` day separators, Chinese dates, English month dates, and plain timetable rows. The LLM prompt now explicitly instructs models to treat table rows as itinerary spots, and the local fallback parser now extracts day/date/lodging/timed activity rows from those formats instead of returning an empty or stale itinerary.
+- Added a regression smoke for the Jeju markdown-table itinerary format with all providers forced to fail; the app still opens the confirmation modal and extracts 8 days, Hotel Fine Jeju, Stanford Hotel & Resort Jeju, 城山日出峰, and PARIS BAGUETTE. A live broker LLM proof using `gemini-3.1-flash-lite` also passed on the table format in 6660ms with 8 days, 17 spots, and 3 lodging entries.
 - Added `Mimo v2.5 Pro` (`mimo/mimo-v2.5-pro`) to the Compact and React AI model selectors. It uses the existing `/mimo/json` Credential Broker path, so it shares the same Mimo base URL and vaulted API key as `mimo-v2.5`.
 - Added smoke coverage proving the Settings model dropdown includes `Mimo v2.5 Pro` and that Compact trip-update routing sends selected Pro requests to provider `mimo` with model `mimo-v2.5-pro`. Live broker proof returned HTTP 200 for `mimo-v2.5-pro`, extracting an 8-day Jeju itinerary with 32 spots in 42810ms. Deployed the Compact selector update to Vercel production as `dpl_6K3CfmwH5C54dN298bYTvud6vsTi`.
 - Optimized the live Credential Broker Mimo v2.5 JSON path by sending `thinking: { type: "disabled" }`, `stream: false`, and capped `max_tokens` for `/mimo/json` plus credential-test calls. This fixes the slow default reasoning path that made Mimo trip extraction feel stuck.

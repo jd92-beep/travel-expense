@@ -1533,6 +1533,118 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
   expect(stored.customItinerary[7].spots.map((spot) => spot.name).join(' ')).toContain('Aewol The Sunset');
 });
 
+test('Trip update AI extracts markdown table itinerary when providers fail', async ({ page }) => {
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/trip/intelligence', async (route) => route.fulfill({
+    status: 500,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: false, error: 'trip intelligence unavailable' }),
+  }));
+  for (const provider of ['mimo', 'kimi', 'google']) {
+    await page.route(`https://travel-expense-credential-broker.ftjdfr.workers.dev/${provider}/json`, async (route) => route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: `${provider} unavailable` }),
+    }));
+  }
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'settings-jeju-markdown-table-session',
+      credentialSessionExpiresAt: Date.now() + 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      tripUpdateModel: 'mimo/mimo-v2.5-pro',
+      activeTripId: 'trip_current_markdown_parser',
+      tripName: 'Current Trip',
+      tripDateRange: { start: '2026-06-13', end: '2026-06-20' },
+      tripCurrency: 'KRW',
+      trips: [{
+        id: 'trip_current_markdown_parser',
+        name: 'Current Trip',
+        destinationSummary: 'Jeju',
+        startDate: '2026-06-13',
+        endDate: '2026-06-20',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'KRW'],
+        timezones: ['Asia/Seoul'],
+        version: 1,
+        active: true,
+        itinerary: [],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      customItinerary: [],
+      receipts: [],
+    }));
+  });
+
+  const markdownJeju = [
+    '### Day 1 ｜ 6月13日',
+    '住宿： Hotel Fine Jeju',
+    '| 時間 | 類別 | 地點名稱 / 活動 |',
+    '| :--- | :--- | :--- |',
+    '| 06:30 | 航班降落 | 濟州國際機場 |',
+    '| 09:45 | 景點 | 道頭洞彩虹海岸道路 ＋ 石頭爺爺麥當勞 |',
+    '| 14:00 | 景點 / 咖啡廳 | Osulloc 綠茶博物館 |',
+    '| 19:00 | 餐廳 | 晚餐（Chilsimni-ro 或酒店附近） | <br> ### Day 2 ｜ 6月14日 <br> 住宿： Hotel Fine Jeju',
+    '| 時間 | 類別 | 地點名稱 / 活動 |',
+    '| :--- | :--- | :--- |',
+    '| 10:30 | 景點 | Camellia Hill（山茶花之丘） |',
+    '| 18:15 | 地點 / 餐廳 | 西歸浦每日偶來市場（晚餐 / 甜品掃街） | <br> ### Day 3 ｜ 6月15日 <br> 住宿： Hotel Fine Jeju',
+    '| 時間 | 類別 | 地點名稱 / 活動 |',
+    '| 09:00 | 地點 | 城山浦港（買船票 / 排隊） |',
+    '| 17:00 | 景點 | 城山日出峰 | <br> ### Day 4 ｜ 6月16日 <br> 住宿： Hotel Fine Jeju',
+    '| 時間 | 類別 | 地點名稱 / 活動 |',
+    '| 09:40 | 景點 | 牛沼端（划木舟及木筏） |',
+    '| 13:00 | 景點 | Aqua Planet Jeju 入場 | <br> ### Day 5 ｜ 6月17日 <br> 住宿： Stanford Hotel & Resort Jeju',
+    '| 時間 | 類別 | 地點名稱 / 活動 |',
+    '| 11:30 | 景點 / 活動 | 9.81 Park Jeju（玩賽車/設施） |',
+    '| 18:30 | 餐廳 | Flowave（晚餐） | <br> ### Day 6 ｜ 6月18日 <br> 住宿： Stanford Hotel & Resort Jeju',
+    '| 時間 | 類別 | 地點名稱 / 活動 |',
+    '| 10:45 | 地點 / 購物 | 七星路購物街 |',
+    '| 12:45 | 餐廳 / 地點 | 東門市場（午餐掃街） | <br> ### Day 7 ｜ 6月19日 <br> 住宿： Stanford Hotel & Resort Jeju',
+    '| 時間 | 類別 | 地點名稱 / 活動 |',
+    '| 10:30 | 地點 / 購物 | E-Mart（新濟州店） |',
+    '| 15:15 | 地點 / 購物 | 新羅免稅店 | <br> ### Day 8 ｜ 6月20日 <br> 住宿： 返香港（航機上）',
+    '| 時間 | 類別 | 地點名稱 / 活動 |',
+    '| 18:45 | 地點 | 抵達濟州機場 |',
+    '| 19:15 | 小店 | PARIS BAGUETTE（最後衝刺買手信） |',
+    '| 21:30 | 航班起飛 | 濟州國際機場 (CJU) |',
+    '| 23:35 | 航班降落 | 香港國際機場 (HKG) |',
+  ].join('\n');
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expectSettingsReady(page);
+  await setAccordion(page, 'AI 行程更新');
+  await page.getByPlaceholder(/下次/).fill(markdownJeju);
+  await page.getByRole('button', { name: /用已選模型分析/ }).click();
+
+  const modal = page.getByRole('dialog', { name: '確認 AI 行程更新' });
+  await expect(modal).toBeVisible();
+  await expect(modal).toContainText('濟州2026');
+  await expect(modal).toContainText('Hotel Fine Jeju');
+  await expect(modal).toContainText('Stanford Hotel & Resort Jeju');
+  await expect(modal).toContainText('Day 8 · 2026-06-20');
+  await expect(modal).toContainText('PARIS BAGUETTE');
+  await modal.getByRole('button', { name: '確認並更新行程' }).click();
+  await expect(page.getByText('已套用旅程：濟州2026')).toBeVisible();
+
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}'));
+  expect(stored.customItinerary).toHaveLength(8);
+  expect(stored.customItinerary[0].lodging.name).toContain('Hotel Fine Jeju');
+  expect(stored.customItinerary[4].lodging.name).toContain('Stanford Hotel');
+  expect(stored.customItinerary[2].spots.map((spot) => spot.name).join(' ')).toContain('城山日出峰');
+  expect(stored.customItinerary[7].spots.map((spot) => spot.name).join(' ')).toContain('PARIS BAGUETTE');
+});
+
 test('Settings can connect a broker session without leaking the password into app state', async ({ page }) => {
   let unlockCount = 0;
 

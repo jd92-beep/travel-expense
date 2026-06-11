@@ -238,6 +238,50 @@ function dateFromMonthDay(month: string, day: string, year: string): string {
   return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }
 
+const ENGLISH_MONTHS: Record<string, string> = {
+  jan: '01',
+  january: '01',
+  feb: '02',
+  february: '02',
+  mar: '03',
+  march: '03',
+  apr: '04',
+  april: '04',
+  may: '05',
+  jun: '06',
+  june: '06',
+  jul: '07',
+  july: '07',
+  aug: '08',
+  august: '08',
+  sep: '09',
+  sept: '09',
+  september: '09',
+  oct: '10',
+  october: '10',
+  nov: '11',
+  november: '11',
+  dec: '12',
+  december: '12',
+};
+
+function normalizeTripInputText(text: string): string {
+  return String(text || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
+}
+
+function normalizeTripTime(hour: string, minute: string, meridiem = ''): string {
+  let h = Number(hour);
+  const suffix = meridiem.toLowerCase();
+  if (suffix === 'pm' && h < 12) h += 12;
+  if (suffix === 'am' && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${minute.padStart(2, '0')}`;
+}
+
 function classifyTripSpot(name: string): ItineraryDay['spots'][number]['type'] {
   if (/機場|airport|航班|起飛|抵達|還車|租車|check-?in|check out|退房|出發|回到|開車|搭船|船票|港/i.test(name)) return 'transport';
   if (/hotel|resort|酒店|住宿|stanford|fine jeju/i.test(name)) return 'lodging';
@@ -247,39 +291,111 @@ function classifyTripSpot(name: string): ItineraryDay['spots'][number]['type'] {
   return 'other';
 }
 
+interface LocalDayHeader {
+  index: number;
+  dayNo: number;
+  date: string;
+  tail: string;
+}
+
+function collectLocalDayHeaders(text: string, year: string): LocalDayHeader[] {
+  const headers: LocalDayHeader[] = [];
+  const push = (index: number | undefined, dayNo: string, date: string, tail: string) => {
+    if (index == null) return;
+    headers.push({ index, dayNo: Number(dayNo) || headers.length + 1, date, tail: String(tail || '') });
+  };
+  const chinese = /(?:^|\n)\s*#{0,6}\s*Day\s*(\d+)\s*(?:[｜|\-–—]\s*)?(?:(20\d{2})[年\/.-]\s*)?(\d{1,2})\s*(?:月|\/|-)\s*(\d{1,2})\s*(?:日)?([^\n]*)/gi;
+  for (const match of text.matchAll(chinese)) {
+    push(match.index, match[1], dateFromMonthDay(match[3], match[4], match[2] || year), match[5] || '');
+  }
+  const english = /(?:^|\n)\s*#{0,6}\s*Day\s*(\d+)\s*[-–—]\s*([A-Za-z]{3,9})\s+(\d{1,2}),?\s*(20\d{2})([^\n]*)/gi;
+  for (const match of text.matchAll(english)) {
+    const month = ENGLISH_MONTHS[String(match[2] || '').toLowerCase()];
+    if (month) push(match.index, match[1], `${match[4]}-${month}-${match[3].padStart(2, '0')}`, match[5] || '');
+  }
+  return headers
+    .sort((a, b) => a.index - b.index)
+    .filter((header, index, list) => index === 0 || header.index !== list[index - 1].index);
+}
+
+function cleanLocalSpotName(value: string): string {
+  return String(value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\*\s*([^*]+?)\s*\*/g, '$1')
+    .replace(/^\s*(?:地點\s*\/\s*活動|建議停留|時間|類別)\s*$/i, '')
+    .replace(/\s*[—-]\s*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+}
+
+function localSpotFromParts(time: string, name: string, sourceText: string, category = ''): ItineraryDay['spots'][number] | null {
+  const cleanName = cleanLocalSpotName(name);
+  if (!cleanName || /^[:：-]+$/.test(cleanName) || /^(時間|類別|地點名稱|建議停留)$/i.test(cleanName)) return null;
+  const classifierText = `${category} ${cleanName}`;
+  return {
+    time,
+    name: cleanName,
+    type: classifyTripSpot(classifierText),
+    timezone: 'Asia/Seoul',
+    note: category ? cleanLocalSpotName(category) : cleanName,
+    sourceText: sourceText.trim(),
+    confidence: 'medium',
+  };
+}
+
+function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
+  const spots: ItineraryDay['spots'] = [];
+  const seen = new Set<string>();
+  const add = (spot: ItineraryDay['spots'][number] | null) => {
+    if (!spot) return;
+    const key = `${spot.time}|${spot.name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    spots.push(spot);
+  };
+
+  for (const rawLine of block.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || /^[-|:\s]+$/.test(line)) continue;
+    if (/^\|/.test(line)) {
+      const cells = line.split('|').map((cell) => cell.trim()).filter(Boolean);
+      if (cells.length >= 2 && !cells.some((cell) => /^:?-{3,}:?$/.test(cell))) {
+        const timeMatch = cells[0].match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+        if (timeMatch) add(localSpotFromParts(`${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`, cells.slice(2).join(' / ') || cells[1], rawLine, cells[1]));
+      }
+      continue;
+    }
+    const plain = line.match(/^(?:[-*]\s*)?([01]?\d|2[0-3]):([0-5]\d)\s*(AM|PM)?\s*[:：]?\s+(.+?)\s*$/i);
+    if (plain) {
+      add(localSpotFromParts(normalizeTripTime(plain[1], plain[2], plain[3]), plain[4], rawLine));
+    }
+  }
+  return spots;
+}
+
 function localTripDraftFromParagraph(paragraph: string, state: AppState, warnings: string[] = []): TripDraft | null {
-  const text = paragraph.trim();
+  const text = normalizeTripInputText(paragraph);
   if (!text) return null;
   const year = inferTripYear(text, state);
   const currency = inferTripCurrencyFromText(text, state.tripCurrency || 'JPY');
   const context = resolveTripContext(text, currency);
-  const dayMatches = Array.from(text.matchAll(/(?:^|\n)\s*Day\s*(\d+)[^\n]*?(?:(20\d{2})[年/-])?(\d{1,2})\s*(?:月|\/|-)\s*(\d{1,2})\s*(?:日)?([^\n]*)/gi));
-  if (!dayMatches.length) return null;
+  const dayHeaders = collectLocalDayHeaders(text, year);
+  if (!dayHeaders.length) return null;
 
   const itinerary: ItineraryDay[] = [];
-  for (let i = 0; i < dayMatches.length; i += 1) {
-    const match = dayMatches[i];
-    const next = dayMatches[i + 1];
-    const block = text.slice(match.index || 0, next?.index || text.length);
-    const dayNo = Number(match[1]) || i + 1;
-    const date = dateFromMonthDay(match[3], match[4], match[2] || year);
-    const headerTail = String(match[5] || '').replace(/[｜|]/g, ' ').trim();
-    const lodgingMatch = block.match(/住\s+([^\n｜|]+)/i);
-    const region = headerTail.replace(/住\s+.*/i, '').trim() || (context.weatherRegion || context.countryName || `Day ${dayNo}`);
-    const spots = Array.from(block.matchAll(/^\s*([01]?\d|2[0-3]):([0-5]\d)\s+(.+?)(?:\t| {2,}|約|$)/gm))
-      .map((line) => {
-        const rawName = String(line[3] || '').replace(/\s+/g, ' ').trim();
-        const name = rawName.replace(/^(午餐|晚餐|早餐)[:：]\s*/i, '$1：').slice(0, 90);
-        return {
-          time: `${line[1].padStart(2, '0')}:${line[2]}`,
-          name: name || '未命名地點',
-          type: classifyTripSpot(name),
-          timezone: context.timezone || 'Asia/Seoul',
-          note: rawName,
-          sourceText: line[0].trim(),
-          confidence: 'medium' as const,
-        };
-      })
+  for (let i = 0; i < dayHeaders.length; i += 1) {
+    const header = dayHeaders[i];
+    const next = dayHeaders[i + 1];
+    const block = text.slice(header.index, next?.index || text.length);
+    const dayNo = header.dayNo || i + 1;
+    const date = header.date;
+    const headerTail = String(header.tail || '').replace(/[｜|]/g, ' ').trim();
+    const lodgingMatch = block.match(/(?:住宿|住)[:：]?\s*([^\n｜|]+)/i);
+    const region = headerTail.replace(/(?:住宿|住)[:：]?\s+.*/i, '').replace(/^[：:\-–—\s]+/, '').trim()
+      || (context.weatherRegion || context.countryName || `Day ${dayNo}`);
+    const spots = extractLocalDaySpots(block)
+      .map((spot) => ({ ...spot, timezone: context.timezone || spot.timezone || 'Asia/Seoul' }))
       .filter((spot) => spot.name && !/建議[:：]/.test(spot.name));
     itinerary.push({
       date,
@@ -696,6 +812,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
   };
   const prompt = `Analyze this travel itinerary paragraph and return JSON only.
 ${tripIntelligencePromptContract()}
+Input may be Markdown tables, HTML-ish pasted text, or plain timetables. Preserve all days and all timed rows.
 Current trip JSON:
 ${JSON.stringify(currentTrip).slice(0, 12000)}
 
@@ -707,7 +824,7 @@ If the user text does not contain a new itinerary, return an empty itinerary and
 Choose themeKey from destination context: Japan=japan_washi, Korea=korea_editorial, Taiwan=taiwan_nightmarket, Europe/UK=europe_rail, unknown=global_journal.
 
 USER PARAGRAPH:
-${paragraph.slice(0, 14000)}`;
+${paragraph.slice(0, 28000)}`;
   const startedAt = Date.now();
   const fastLocalDraft = localTripDraftFromParagraph(paragraph, state);
   const hasFastLocalDraft = !!fastLocalDraft && hasUsefulTripItinerary(fastLocalDraft);
@@ -742,7 +859,7 @@ ${paragraph.slice(0, 14000)}`;
           try {
             parsed = await withTimeout(
               brokerTripIntelligence(state, {
-                paragraph: paragraph.slice(0, 14000),
+                paragraph: paragraph.slice(0, 28000),
                 currentTrip,
                 model: attempt.model || KIMI_API_MODEL,
               }),
