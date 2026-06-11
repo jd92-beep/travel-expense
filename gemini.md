@@ -88,6 +88,20 @@
 - **Blast radius 好大**：GitNexus impact 顯示 `normalizeItinerary()` 喺 Compact 係 CRITICAL，React 亦係 CRITICAL，因為 Timeline、Weather、Stats、Settings、receipt stamping、Supabase/Notion sync 都靠佢。做任何後續日期/schema 改動，一定要跑 `typecheck`，再補 `smoke:timeline`、`smoke:weather`、`smoke:settings`、`smoke:shared-contract` 或相關 build。
 - **Settings 普通用戶清理**：Compact Settings 已經將 dev-only diagnostics、stress tools、deploy recovery、Notion schema/debug 工具收埋喺 developer panel，保留 AI Models、Trip Manager、Trip Update AI、sync、backup 同 data management 俾日常使用。Trip Manager 亦有 `View / Edit Itinerary` 可以開現有行程確認視窗。
 
+### 8. ✈️ Compact Trip Update Sync、兩階段 AI 流程、Mimo Pro 與性能優化 (2026-06-11 新增)
+另一位 AI Agent 完成咗針對行程更新同模型載入嘅深度修復同優化：
+- **Jeju 行程更新同步修正 (Sync Queue Fix)**：修復咗 Settings 中 AI 行程確認時，`applyTripDraft()` 淨係 queue 咗 `trip:<tripId>` 但漏咗 `settings:app-settings` 嘅問題。依家會同步寫入 settings 並 queue 兩者，確保本地同 Supabase/Notion 雲端同步時 activeTripId 唔會錯配。
+- **兩階段 AI 行程重整與提取 (Two-stage Trip Update)**：重構咗 Trip Update 嘅 AI 流程。依家會分兩步行：
+  1. 第一步先叫 LLM 整理 raw input，產出一個 day-by-day 嘅 `organizedItinerary`；
+  2. 第二步再將重整後嘅 itinerary 丟俾 LLM 提取 `trip.itinerary` 結構化欄位。
+  - 界面新增咗 `AI 重整行程` 預覽，等 Boss 確認重整版無錯先 apply。
+  - 前端唔再依賴舊嘅單次一體化 `/trip/intelligence` 路由，完全走 provider JSON 路由，保留 fallback 機制。
+- **行程 Parser 硬化與 Markdown 表格支援 (Markdown Table Extraction)**：優化咗 parser 對各種花里胡哨排版（例如 Markdown 標題、Pipe 表格、`<br>` 分隔符、中英文日期、純時間表等）嘅提取能力，即使 LLM 失敗或回傳為空，local parser fallback 依然能完美抽取出 8 日行程同景點/酒店。
+- **Mimo v2.5 Pro 支援同速度優化**：
+  1. 前端 AI Model Selector 加入 `Mimo v2.5 Pro` (`mimo/mimo-v2.5-pro`)，共用 Mimo API 密鑰同路由。
+  2. 針對 Credential Broker 中 Mimo (/mimo/json) 的載入效能進行優化，預設停用思維思考路徑 (`thinking: { type: "disabled" }`)，關閉 `stream` 並限制 `max_tokens`。
+  3. 優化後 Mimo 8日行程提取時間由 40s+ 縮短至 22s 左右（不過 Google Gemini 依然以 6s 保持最快速度）。
+
 ---
 
 ## 🗂 重點檔案地圖
