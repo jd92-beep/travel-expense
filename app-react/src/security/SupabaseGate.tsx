@@ -42,6 +42,17 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
     }
   }
 
+  async function handleGoogleLogin() {
+    setBusy(true);
+    setStatus('');
+    try {
+      await auth.signInWithGoogle();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Google 登入失敗');
+      setBusy(false);
+    }
+  }
+
   if (!auth.configured) return <>{children}</>;
 
   if (auth.loading) {
@@ -174,6 +185,43 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
             {activeTab === 'signin' && (busy ? '登入中...' : '🔑 帳號密碼登入')}
             {activeTab === 'signup' && (busy ? '註冊中...' : '✨ 註冊新帳號')}
             {activeTab === 'magiclink' && (busy ? '寄送中...' : '✉️ 寄出登入連結')}
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', margin: '4px 0', color: '#9CA3AF', fontSize: '11px', fontWeight: 700 }}>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(0, 0, 0, 0.08)' }} />
+            <span style={{ padding: '0 8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>或</span>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(0, 0, 0, 0.08)' }} />
+          </div>
+
+          <button
+            onClick={handleGoogleLogin}
+            disabled={busy}
+            type="button"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              width: '100%',
+              padding: '11px',
+              borderRadius: '10px',
+              border: '1px solid rgba(0, 0, 0, 0.1)',
+              background: 'white',
+              color: '#374151',
+              fontSize: '13px',
+              fontWeight: 800,
+              cursor: busy ? 'default' : 'pointer',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04)',
+              transition: 'all 0.2s',
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" style={{ display: 'block' }}>
+              <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.51 14.98 1 12 1 7.35 1 3.37 3.67 1.39 7.56l3.85 2.99c.9-2.7 3.42-4.51 6.76-4.51z"/>
+              <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.45c-.28 1.47-1.11 2.71-2.36 3.55l3.66 2.84c2.14-1.97 3.38-4.87 3.38-8.49z"/>
+              <path fill="#FBBC05" d="M5.24 14.28A7.17 7.17 0 0 1 4.75 12c0-.8.14-1.57.38-2.28L1.28 6.73A11.94 11.94 0 0 0 0 12c0 1.92.45 3.74 1.25 5.37l3.99-3.09z"/>
+              <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.92l-3.66-2.84c-1.01.68-2.31 1.08-4.3 1.08-3.34 0-5.86-1.81-6.76-4.51L1.39 16.9C3.37 20.33 7.35 23 12 23z"/>
+            </svg>
+            {busy ? '正在跳轉...' : '使用 Google 帳號登入'}
           </button>
         </div>
       </section>

@@ -554,7 +554,7 @@ async function providerStatus(env, provider) {
 function safeNotionPath(path) {
   const clean = String(path || '').trim();
   if (!clean.startsWith('/')) throw new Error('Notion path invalid');
-  if (!/^\/(databases|pages|blocks|file_uploads)(\/|$)/.test(clean)) throw new Error('Notion path not allowed');
+  if (!/^\/(databases|pages|blocks|file_uploads|search)(\/|$)/.test(clean)) throw new Error('Notion path not allowed');
   return clean;
 }
 

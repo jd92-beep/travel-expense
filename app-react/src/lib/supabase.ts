@@ -432,6 +432,17 @@ export function useSupabaseAuth() {
     if (signOutError) throw signOutError;
   }, [supabase]);
 
+  const signInWithGoogle = useCallback(async () => {
+    if (!supabase) throw new Error('Supabase is not configured');
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: publicOrigin(),
+      },
+    });
+    if (signInError) throw signInError;
+  }, [supabase]);
+
   return {
     configured,
     loading,
@@ -442,6 +453,7 @@ export function useSupabaseAuth() {
     signInWithPassword,
     signUpWithPassword,
     updatePassword,
+    signInWithGoogle,
     signOut,
   };
 }
