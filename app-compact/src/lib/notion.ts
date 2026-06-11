@@ -1267,15 +1267,29 @@ export async function pushTripPage(state: AppState, trip: TripProfile): Promise<
         { method: 'GET' }
       );
 
-      const parentPageId = dbMeta.parent?.page_id;
+      let parentPageId = dbMeta.parent?.page_id;
       if (!parentPageId) {
-        throw new Error('無法獲取 Notion DB 的 parent page_id，無法自動創表');
+        console.log('[notion] 無法獲取 Notion DB 的 parent page_id，嘗試尋找 ✈️ Travel Notebooks 作為備用 parent...');
+        const searchRes = await notionFetch<{ results: any[] }>(
+          state,
+          '/search',
+          {
+            method: 'POST',
+            body: JSON.stringify({ query: 'Travel Notebooks', filter: { property: 'object', value: 'page' } })
+          }
+        );
+        const folderPage = searchRes.results?.find((p: any) => p.properties?.title?.title?.[0]?.plain_text?.includes('Travel Notebooks'));
+        if (folderPage) {
+          parentPageId = folderPage.id;
+        } else {
+          throw new Error('無法獲取 Notion DB 的 parent page_id，且找不到備用的 ✈️ Travel Notebooks 資料夾，無法自動創表');
+        }
       }
 
       const newDbId = await createNotionDatabase(
         state,
         currentTrip.name,
-        parentPageId,
+        parentPageId as string,
         dbMeta.properties || {}
       );
 
