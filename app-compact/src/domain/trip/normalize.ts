@@ -33,22 +33,51 @@ export function stableSpotId(tripId: string, date: string, idx: number, spot: Pi
   return `${stableDayId(tripId, date)}_spot_${String(idx + 1).padStart(2, '0')}_${slug(`${spot.time}_${spot.name}`) || 'item'}`;
 }
 
+function pad2(value: string | number): string {
+  return String(value).padStart(2, '0');
+}
+
+function isValidMonthDay(month: number, day: number): boolean {
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31;
+}
+
+function inferItineraryYear(itinerary: ItineraryDay[], tripId: string): number {
+  const datedDay = itinerary.find((day) => /^\d{4}[-/.年]/.test(String(day.date || '')));
+  const source = datedDay ? String(datedDay.date || '') : tripId;
+  const match = source.match(/\b(19\d{2}|20\d{2})\b/) || source.match(/(19\d{2}|20\d{2})/);
+  return match ? Number(match[1]) : new Date().getFullYear();
+}
+
+function normalizeItineraryDate(rawDate: unknown, fallbackYear: number): string {
+  const raw = String(rawDate || '').trim();
+  if (!raw) return raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+  const full = raw.match(/^(\d{4})[年\/.-](\d{1,2})[月\/.-](\d{1,2})日?$/);
+  if (full) {
+    const month = Number(full[2]);
+    const day = Number(full[3]);
+    if (isValidMonthDay(month, day)) return `${full[1]}-${pad2(month)}-${pad2(day)}`;
+  }
+
+  const monthDay = raw.match(/^(\d{1,2})[月\/.-](\d{1,2})日?$/);
+  if (monthDay) {
+    const month = Number(monthDay[1]);
+    const day = Number(monthDay[2]);
+    if (isValidMonthDay(month, day)) return `${fallbackYear}-${pad2(month)}-${pad2(day)}`;
+  }
+
+  const parsed = new Date(raw + (raw.includes('T') ? '' : 'T00:00:00'));
+  if (!Number.isNaN(parsed.getTime())) {
+    return `${parsed.getUTCFullYear()}-${pad2(parsed.getUTCMonth() + 1)}-${pad2(parsed.getUTCDate())}`;
+  }
+  return raw;
+}
+
 export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fallbackCurrency = 'JPY'): ItineraryDay[] {
+  const fallbackYear = inferItineraryYear(itinerary, tripId);
   return itinerary.map((day, dayIdx) => {
-    // Coerce non-standard date formats (e.g. "4/20", "2026/04/20") to YYYY-MM-DD
-    const rawDate = String(day.date || '');
-    const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
-      ? rawDate
-      : (() => {
-          const parsed = new Date(rawDate);
-          if (!Number.isNaN(parsed.getTime())) {
-            const yyyy = parsed.getFullYear();
-            const mm = String(parsed.getMonth() + 1).padStart(2, '0');
-            const dd = String(parsed.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
-          }
-          return rawDate; // keep original if unparsable
-        })();
+    const safeDate = normalizeItineraryDate(day.date, fallbackYear);
     const dayId = day.dayId || day.id || stableDayId(tripId, safeDate);
     return {
       ...day,

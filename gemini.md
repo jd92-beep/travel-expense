@@ -33,7 +33,7 @@
 
 ---
 
-## 🛠️ 核心架構與最新升級 (2026-06-10 HKT)
+## 🛠️ 核心架構與最新升級 (2026-06-11 HKT)
 
 ### 0. 📍 React Itinerary Timeline 最新狀態
 - **Spot-index progress**：React `/react/` Itinerary rail 依家跟「目前時間所屬嘅景點位置」推進，而唔係用 24 小時比例硬拉條線。
@@ -82,6 +82,11 @@
 - **Dashboard ＆ Stats 大瘦身**：
   1. Dashboard/Home 頁面移除了「打包清單」、「出發倒數」、「AI 教練」等贅餘 widget，大幅提升頁面載入速度與視覺清爽度。
   2. Stats 頁面預算指南卡片精簡為 used %、每日餘額與 Top 10 支出，清走多餘嘅分帳/代付卡。
+
+### 7. 🧭 Shared Trip Contract 最新修正 (2026-06-11)
+- **React + Compact 日期 normalization 同步**：`app-react/src/domain/trip/normalize.ts` 同 `app-compact/src/domain/trip/normalize.ts` 都已經修正 itinerary date parser。`2026/6/13`、`2026.6.13`、`2026年6月13日` 會直接變成 `2026-06-13`；`6/13`、`6月13日` 會用同一 itinerary 或 trip id 入面嘅年份推斷，唔再畀 `new Date()` 因 timezone 變前一日或者變 2001 年。
+- **Blast radius 好大**：GitNexus impact 顯示 `normalizeItinerary()` 喺 Compact 係 CRITICAL，React 亦係 CRITICAL，因為 Timeline、Weather、Stats、Settings、receipt stamping、Supabase/Notion sync 都靠佢。做任何後續日期/schema 改動，一定要跑 `typecheck`，再補 `smoke:timeline`、`smoke:weather`、`smoke:settings`、`smoke:shared-contract` 或相關 build。
+- **Settings 普通用戶清理**：Compact Settings 已經將 dev-only diagnostics、stress tools、deploy recovery、Notion schema/debug 工具收埋喺 developer panel，保留 AI Models、Trip Manager、Trip Update AI、sync、backup 同 data management 俾日常使用。Trip Manager 亦有 `View / Edit Itinerary` 可以開現有行程確認視窗。
 
 ---
 

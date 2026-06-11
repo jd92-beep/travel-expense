@@ -21,6 +21,20 @@ Vite base path, Vercel project, mobile scroll contract, and centered circular Sc
 dock. Changes here should not be mirrored into `app-react/` or the legacy root app
 unless Boss explicitly asks for parity work.
 
+## Shared Trip Contract Notes
+
+Compact and React must keep the same trip/itinerary data contract. In particular,
+`src/domain/trip/normalize.ts` normalizes itinerary dates before generating
+`dayId` and `spotId`. It accepts ISO dates plus common copied-itinerary formats
+such as `2026/6/13`, `2026年6月13日`, `6/13`, and `6月13日`. Month/day-only values
+infer the year from another itinerary day or the trip id, avoiding browser
+timezone parsing that can shift dates to the previous day.
+
+`normalizeItinerary()` has CRITICAL blast radius in GitNexus because Timeline,
+Weather, Settings, Stats, receipt stamping, Supabase, and Notion sync all depend
+on stable itinerary days. After touching it, run at least typecheck plus targeted
+Timeline/Weather/Settings/shared-contract checks before claiming live proof.
+
 ## Weather Provider Priority
 
 Compact Weather should prefer official local meteorological data when an itinerary

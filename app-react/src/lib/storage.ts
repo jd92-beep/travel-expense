@@ -88,9 +88,6 @@ export function normalizeState(input: unknown): AppState {
   if (!state.persons.find((p) => p.id === 'p_boss')) {
     state.persons = [DEFAULT_STATE.persons[0], ...state.persons];
   }
-  if (!state.persons.find((p) => p.id === 'p_xinxin')) {
-    state.persons = [...state.persons, DEFAULT_STATE.persons[1]];
-  }
   state.receipts = state.receipts.filter((r) => !(typeof r.id === 'string' && r.id.startsWith('__meta_')));
   return stripLegacyProviderSecrets(state);
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-11
+
+- Polished the compact trip-entry flow: larger itinerary text areas, richer placeholders, fuller currency choices, and clearer guidance that Step 4 trip details should include hotels, restaurants, transport, bookings, and daily plans.
+- Improved compact Trip Update AI review: the extraction prompt now asks for end times, lodging check-in/check-out, coordinates, spot type, and day highlights; the confirmation modal shows clearer hotel/restaurant/scenery counts, coordinate markers, lodging details, and avoids duplicate city wording.
+- Fixed compact itinerary/weather guardrails by coercing string `lat/lon` to numbers, guarding weather day spots when missing, and keeping the top trip/Settings experience simpler for normal users.
+- Simplified compact Settings for everyday use: developer-only diagnostics and stress tools are hidden behind the developer panel, AI Models stays visible, Trip Manager has a `View / Edit Itinerary` action, data-management actions are cleaner, and first-run defaults now start with one traveller.
+- Hardened React and Compact shared itinerary normalization. Slash dates and Chinese month-day dates such as `2026/6/13`, `6/13`, and `6月13日` now normalize without timezone day-shifts; month/day-only values infer the trip year from existing itinerary dates or the trip id, preserving stable day and spot ids for Timeline, Weather, Stats, Supabase, and Notion sync.
+- Verified this pass with `app-compact npm run typecheck` and `app-react npm run typecheck`. GitNexus impact for `normalizeItinerary()` is CRITICAL on both app surfaces because it feeds trip hydration, Timeline, Weather, Settings, Stats, receipt stamping, and sync flows, so broader smoke/build checks remain required before treating a live deployment as fully proven.
+
 ## 2026-06-10
 
 - Fixed compact Settings `Trip Update AI` so clicking `用已選模型分析` after pasting a long itinerary opens a real confirmation modal instead of only showing an inline preview.

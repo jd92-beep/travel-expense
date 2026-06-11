@@ -128,7 +128,6 @@ export function getReceiptPhase(state: AppState, receipt: Receipt): TripPhase {
 export function getPersons(state: AppState): Person[] {
   const fallbackPersons = [
     { id: 'p_boss', name: 'User 1', emoji: '👦', color: '#CC2929' },
-    { id: 'p_xinxin', name: 'User 2', emoji: '👧', color: '#FF91A4' },
   ];
   const rawPersons = state.persons && state.persons.length ? state.persons : fallbackPersons;
   const seen = new Set<string>();
