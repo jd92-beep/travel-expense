@@ -103,9 +103,11 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     return withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
   });
   const [hydratedScope, setHydratedScope] = useState(storageScope);
+  const [indexedReadyScope, setIndexedReadyScope] = useState('');
 
   useLayoutEffect(() => {
     let alive = true;
+    setIndexedReadyScope('');
     const hasPrimarySnapshot = hasStoredState(storageScope);
     const filteredState = withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
     setState(filteredState);
@@ -122,6 +124,8 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
       });
     }).catch(() => {
       // localStorage remains the compatibility fallback.
+    }).finally(() => {
+      if (alive) setIndexedReadyScope(storageScope);
     });
     return () => {
       alive = false;
@@ -129,12 +133,13 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   }, [storageScope, userEmail]);
 
   useEffect(() => {
+    if (indexedReadyScope !== storageScope) return;
     try {
       saveState(migrateScopedState(state, storageScope, userEmail), storageScope);
     } catch (error) {
       console.warn('[useAppState] Persist failed:', error instanceof Error ? error.message : String(error));
     }
-  }, [state, storageScope]);
+  }, [indexedReadyScope, state, storageScope, userEmail]);
 
   const updateState = useCallback((patch: Partial<AppState>) => {
     setState((prev) => {

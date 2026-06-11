@@ -2,6 +2,11 @@
 
 ## 2026-06-11
 
+- Completed Google OAuth setup for the compact app: the GCP OAuth web client and Supabase Google provider are configured for the public Supabase auth flow, with the OAuth secret kept out of the repo and terminal output.
+- Added compact Google sign-in support via `signInWithOAuth`, with a clean app-root redirect for `/travel-expense/compact/` and regression coverage in `smoke:security`.
+- Renovated the compact login page into a chilled travel-cloud glass panel using the existing `travel-ai-atlas.webp` asset, compact login mode tabs, and a Google sign-in button; the old banana artwork no longer appears on the compact login card.
+- Fixed a compact scoped-storage race where localStorage could save before IndexedDB fallback hydration completed for the signed-in Supabase user.
+- Verified this compact pass with `npm run typecheck`, `npm run build`, `SUPABASE_REDIRECT_SMOKE=1 npm run smoke:security`, `npm run smoke:mobile-layout`, and a Chrome-profile visual check of the login panel.
 - Weather tab now groups itinerary spots by city using Haversine 30km radius clustering (`groupedCoordsForDay`). Multiple nearby spots collapse into one weather card per city instead of one per spot, reducing duplicate API calls.
 - Weather API calls parallelized with `Promise.all` — all city groups for all days fetch simultaneously instead of sequentially, significantly reducing total load time.
 - Added module-level weather cache with 1hr TTL that persists across tab switches. Cached data shows immediately when switching back to Weather tab; a background refresh updates if stale.

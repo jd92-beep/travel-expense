@@ -122,12 +122,42 @@ test('Supabase magic-link redirect uses a clean app root without route hash', as
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/#settings');
-  await page.getByRole('button', { name: 'Email連結' }).click();
-  await expect(page.getByText('無密碼連結登入 ✉️')).toBeVisible();
+  await page.getByRole('button', { name: 'Email' }).click();
+  await expect(page.getByText('Email 連結登入')).toBeVisible();
   await page.getByPlaceholder('you@example.com').fill('redirect-smoke@example.com');
   await page.getByRole('button', { name: /寄出登入連結/ }).click();
 
   await expect.poll(() => redirectTo, { timeout: 10000 }).toBe('http://localhost:8903/travel-expense/compact/');
+  expect(redirectTo).not.toContain('#');
+  expect(redirectTo).not.toContain('access_token');
+});
+
+test('Supabase Google OAuth starts with a clean app root redirect', async ({ page }) => {
+  test.skip(process.env.SUPABASE_REDIRECT_SMOKE !== '1', 'Set SUPABASE_REDIRECT_SMOKE=1 and start Vite with fake Supabase env.');
+  let provider = '';
+  let redirectTo = '';
+
+  await page.route('https://test-travel-expense.supabase.co/auth/v1/authorize**', async (route) => {
+    const url = new URL(route.request().url());
+    provider = url.searchParams.get('provider') || '';
+    redirectTo = url.searchParams.get('redirect_to') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<!doctype html><title>OAuth smoke</title><main>Google OAuth smoke</main>',
+    });
+  });
+
+  await page.addInitScript(() => {
+    localStorage.clear();
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await expect(page.getByText('旅程雲端登入')).toBeVisible();
+  await page.getByRole('button', { name: '使用 Google 帳號登入' }).click();
+
+  await expect.poll(() => provider, { timeout: 10000 }).toBe('google');
+  expect(redirectTo).toBe('http://localhost:8903/travel-expense/compact/');
   expect(redirectTo).not.toContain('#');
   expect(redirectTo).not.toContain('access_token');
 });
@@ -199,7 +229,7 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
   await expect(page.getByRole('dialog', { name: '清除此裝置資料' })).toBeVisible();
   await expect(page.getByText(/雲端 Supabase \/ Notion 資料不會刪除/)).toBeVisible();
   await page.getByRole('button', { name: '確認清除並登出' }).click();
-  await expect(page.getByText('密碼登入 🔑')).toBeVisible();
+  await expect(page.getByText('旅程雲端登入')).toBeVisible();
 
   const remaining = await page.evaluate(async ({ scopedStorageKey, scopedIndexedKey }) => {
     const localValue = localStorage.getItem(scopedStorageKey);
@@ -234,7 +264,26 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
   const indexedKeyB = `app-state:${scopeB}`;
 
   await page.route('https://test-travel-expense.supabase.co/**', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    const table = url.pathname.split('/').pop();
+    if (url.pathname.startsWith('/auth/v1/')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+      return;
+    }
+    if (table === 'profiles' && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ app_settings: {} }) });
+      return;
+    }
+    if (table === 'profiles' && (method === 'POST' || method === 'PATCH')) {
+      await route.fulfill({ status: method === 'POST' ? 201 : 204, contentType: 'application/json', body: method === 'POST' ? JSON.stringify([]) : '' });
+      return;
+    }
+    if (table === 'trips' || table === 'receipts') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
   });
 
   await page.route('http://localhost:8903/__scope-seed', async (route) => {

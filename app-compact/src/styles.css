@@ -5172,6 +5172,315 @@ input:checked + .washi-slider:before {
   max-width: 440px;
 }
 
+.compact-login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  min-height: 100svh;
+  width: 100vw;
+  overflow-y: auto;
+  padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
+  background:
+    linear-gradient(140deg, rgba(233, 246, 241, .94), rgba(255, 250, 238, .92) 42%, rgba(232, 242, 249, .94));
+}
+
+.compact-login-panel {
+  width: min(438px, calc(100vw - 28px));
+  max-height: none;
+  display: grid;
+  gap: 13px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, .82);
+  border-radius: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .88), rgba(255, 252, 246, .76)),
+    var(--canva-ledger-pattern);
+  box-shadow:
+    0 24px 54px rgba(31, 47, 56, .18),
+    inset 0 1px 0 rgba(255, 255, 255, .88);
+  backdrop-filter: blur(26px) saturate(1.12);
+  -webkit-backdrop-filter: blur(26px) saturate(1.12);
+}
+
+.compact-login-panel--loading {
+  width: min(360px, calc(100vw - 28px));
+  padding: 22px;
+  text-align: center;
+}
+
+.compact-login-panel::before {
+  display: none;
+}
+
+.compact-login-visual {
+  position: relative;
+  min-height: 166px;
+  aspect-ratio: 2.08 / 1;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, .76);
+  background: #d9e8e2;
+  box-shadow:
+    0 14px 30px rgba(51, 65, 76, .14),
+    inset 0 1px 0 rgba(255, 255, 255, .7);
+}
+
+.compact-login-visual img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
+
+.compact-login-visual-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(16, 30, 37, .02), rgba(16, 30, 37, .3)),
+    linear-gradient(90deg, rgba(255, 255, 255, .12), transparent 44%, rgba(17, 38, 46, .18));
+}
+
+.compact-login-badge,
+.compact-login-weather {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  max-width: calc(100% - 28px);
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, .68);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .82);
+  color: #1f3844;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  box-shadow: 0 9px 22px rgba(31, 56, 68, .16);
+  backdrop-filter: blur(16px) saturate(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.compact-login-badge {
+  left: 12px;
+  top: 12px;
+}
+
+.compact-login-weather {
+  right: 12px;
+  bottom: 12px;
+  color: #315d45;
+}
+
+.compact-login-head {
+  text-align: center;
+  display: grid;
+  gap: 5px;
+  padding: 0 4px;
+}
+
+.compact-login-head .eyebrow {
+  margin: 0;
+  color: #6b5a43;
+  letter-spacing: 0;
+}
+
+.compact-login-head h1 {
+  margin: 0;
+  color: #19242b;
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.compact-login-head p {
+  margin: 0;
+  color: #58636b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.compact-login-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(54, 76, 84, .1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .58);
+}
+
+.compact-login-tabs button {
+  min-width: 0;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #647078;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.compact-login-tabs button.is-active {
+  background: #fff;
+  color: #b93b34;
+  box-shadow: 0 6px 14px rgba(42, 54, 61, .08);
+}
+
+.compact-login-form {
+  display: grid;
+  gap: 10px;
+}
+
+.compact-login-form label {
+  display: grid;
+  gap: 5px;
+  color: #34424a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.compact-login-form label span {
+  padding-left: 2px;
+}
+
+.compact-login-form input {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid rgba(81, 92, 97, .16);
+  border-radius: 12px;
+  outline: none;
+  background: rgba(255, 255, 255, .92);
+  color: #1f2932;
+  font-size: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+
+.compact-login-form input:focus {
+  border-color: rgba(64, 116, 131, .44);
+  box-shadow:
+    0 0 0 3px rgba(64, 116, 131, .12),
+    inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+
+.compact-login-message {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.compact-login-message--ok {
+  color: #23714c;
+}
+
+.compact-login-primary,
+.compact-login-google {
+  width: 100%;
+  min-height: 43px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 13px;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.compact-login-primary {
+  border: 0;
+  background:
+    linear-gradient(135deg, #ba3933, #d96f3d 48%, #31715b);
+  color: #fff;
+  box-shadow: 0 12px 26px rgba(186, 57, 51, .2);
+}
+
+.compact-login-primary:disabled {
+  background: #9ca3af;
+  box-shadow: none;
+  cursor: default;
+}
+
+.compact-login-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 9px;
+  color: #7b858c;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.compact-login-divider::before,
+.compact-login-divider::after {
+  content: '';
+  height: 1px;
+  background: rgba(65, 78, 85, .14);
+}
+
+.compact-login-google {
+  border: 1px solid rgba(65, 78, 85, .14);
+  background: rgba(255, 255, 255, .9);
+  color: #2f3a42;
+  box-shadow: 0 8px 18px rgba(44, 60, 67, .08);
+}
+
+.compact-login-google:disabled {
+  opacity: .68;
+  cursor: default;
+}
+
+@media (max-width: 420px) {
+  .compact-login-screen {
+    align-items: start;
+    padding-inline: 10px;
+  }
+
+  .compact-login-panel {
+    width: min(100%, calc(100vw - 20px));
+    gap: 11px;
+    padding: 10px;
+    border-radius: 22px;
+  }
+
+  .compact-login-visual {
+    min-height: 134px;
+    border-radius: 17px;
+  }
+
+  .compact-login-badge,
+  .compact-login-weather {
+    min-height: 25px;
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .compact-login-head h1 {
+    font-size: 20px;
+  }
+
+  .compact-login-head p {
+    font-size: 11px;
+  }
+
+  .compact-login-tabs button {
+    min-height: 32px;
+  }
+}
+
 /* Legacy dashboard-only dock kept in markup for now, but the app shell owns tab navigation. */
 .washi-floating-tabbar {
   position: fixed !important;

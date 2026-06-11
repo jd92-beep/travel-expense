@@ -25,9 +25,9 @@
 
 ## 第一次使用
 
-1. 打開主要公開 app。
-2. 輸入自己的 email 登入 Supabase。
-3. 去 email inbox 按登入連結。
+1. 打開主要公開 app 或 Compact app。
+2. 用自己的 email 登入 Supabase，或在 Compact app 按 `使用 Google 帳號登入`。
+3. 如果使用 email link，去 email inbox 按登入連結。
 4. 回到 app 後，第一次使用指引會帶你建立第一個旅程。
 5. 預設會先建立一位旅伴 `User 1`。如果有同行者，再加入每位旅伴名字和分帳比例，例如 `Tony 2`, `May 1`, `Sam 0.5`。
 6. 新增第一筆開支。
@@ -186,7 +186,7 @@ App 只會經 server-side Credential Broker 使用 AI。瀏覽器不應該存放
 
 - 不要把真正 API key 放入 GitHub、Vercel、Netlify 或瀏覽器程式碼。
 - 不要讓所有公開用戶共用同一個登入帳號。
-- 公開用戶要用 Supabase auth。
+- 公開用戶要用 Supabase auth；Compact app 也支援 Google login。
 - Notion 應該是每個人自己的同步筆記簿，不是一個大家共用的公開筆記簿。
 - 如果用共用裝置，登出前清除這部裝置的資料。
 
