@@ -1445,6 +1445,8 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
   expect(stored.customItinerary).toHaveLength(8);
   expect(stored.customItinerary[2].spots.map((spot) => spot.name).join(' ')).toContain('城山日出峰');
   expect(stored.trips.find((trip) => trip.active).itinerary).toHaveLength(8);
+  expect(stored.syncQueue.some((item) => item.type === 'trip' && item.entityId === stored.activeTripId)).toBe(true);
+  expect(stored.syncQueue.some((item) => item.type === 'settings' && item.entityId === 'app-settings')).toBe(true);
 
   await page.getByLabel('主要分頁').getByRole('button', { name: '行程', exact: true }).click();
   await expect(page.locator('.timeline-trip-days')).toContainText('8日');

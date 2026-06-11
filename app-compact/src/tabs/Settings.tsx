@@ -1396,11 +1396,37 @@ export function Settings({
 
   function applyTripDraft(draft: TripDraft) {
     setState((prev) => {
+      const now = Date.now();
       const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
       const exists = prevTrips.some((trip) => trip.id === draft.trip.id);
       const tripsNext = exists
         ? prevTrips.map((trip) => trip.id === draft.trip.id ? { ...draft.trip, active: true, archived: false } : { ...trip, active: false })
         : [...prevTrips.map((trip) => ({ ...trip, active: false })), { ...draft.trip, active: true, archived: false }];
+      const tripSyncItem: SyncQueueItem = {
+        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+        type: 'trip',
+        entityId: draft.trip.id,
+        op: exists ? 'update' : 'create',
+        status: 'queued',
+        attempts: 0,
+        createdAt: now,
+        updatedAt: now,
+        payload: {
+          sourceId: draft.trip.sourceId || `trip_${draft.trip.id}`,
+          updatedAt: draft.trip.updatedAt,
+        },
+      };
+      const settingsSyncItem: SyncQueueItem = {
+        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+        type: 'settings',
+        entityId: 'app-settings',
+        op: 'upsert',
+        status: 'queued',
+        attempts: 0,
+        createdAt: now,
+        updatedAt: now,
+        payload: { updatedAt: now },
+      };
       return migrateAppState({
         ...prev,
         activeTripId: draft.trip.id,
@@ -1410,20 +1436,16 @@ export function Settings({
         tripCurrency: nonHomeCurrencyForTrip(draft.trip, prev.tripCurrency),
         budget: draft.trip.budget,
         customItinerary: draft.trip.itinerary,
-        syncQueue: [...(prev.syncQueue || []), {
-          id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-          type: 'trip',
-          entityId: draft.trip.id,
-          op: exists ? 'update' : 'create',
-          status: 'queued',
-          attempts: 0,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          payload: {
-            sourceId: draft.trip.sourceId || `trip_${draft.trip.id}`,
-            updatedAt: draft.trip.updatedAt,
-          },
-        }].slice(-500),
+        settingsUpdatedAt: now,
+        syncQueue: [
+          ...(prev.syncQueue || []).filter((item) => (
+            item.status !== 'synced' &&
+            !(item.type === 'trip' && item.entityId === draft.trip.id) &&
+            !(item.type === 'settings' && item.entityId === 'app-settings')
+          )),
+          tripSyncItem,
+          settingsSyncItem,
+        ].slice(-500),
       });
     });
     setTripDraft(null);
