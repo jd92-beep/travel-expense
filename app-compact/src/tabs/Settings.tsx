@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, LogOut, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, LogOut, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
@@ -1927,24 +1927,19 @@ export function Settings({
             </button>
             <button type="button" onClick={() => openSettingsPanel('settings-trip-update')}>
               <Sparkles size={17} />
-              <span>Kimi</span>
+              <span>行程 AI</span>
               <small>更新</small>
-            </button>
-            <button type="button" onClick={() => openSettingsPanel('settings-credentials')}>
-              <KeyRound size={17} />
-              <span>Vault</span>
-              <small>{brokerReady ? 'Active' : 'Lock'}</small>
             </button>
             <button type="button" onClick={() => openSettingsPanel('settings-data')}>
               <ShieldCheck size={17} />
-              <span>安全</span>
-              <small>{syncState?.status || 'local'}</small>
+              <span>備份</span>
+              <small>資料管理</small>
             </button>
           </div>
         </div>
       </GlassCard>
 
-      <GlassCard className={`settings-trip-doctor settings-trip-doctor--${tripDoctor.tone}`}>
+      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-doctor--${tripDoctor.tone}`}>
         <section role="region" aria-label="Compact Trip Doctor">
           <div className="settings-trip-doctor-head">
             <span><ShieldCheck size={16} /> Compact Trip Doctor</span>
@@ -1974,7 +1969,7 @@ export function Settings({
             </button>
           </div>
         </section>
-      </GlassCard>
+      </GlassCard>)}
 
       <GlassCard className={`settings-trip-doctor settings-post-trip-archive settings-post-trip-archive--${postTripArchive.tone}`}>
         <section role="region" aria-label="Post-trip archive checklist">
@@ -2013,7 +2008,7 @@ export function Settings({
         </section>
       </GlassCard>
 
-      <GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${tripScopeAudit.tone}`}>
+      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${tripScopeAudit.tone}`}>
         <section role="region" aria-label="Trip scope audit">
           <div className="settings-trip-doctor-head">
             <span><ShieldCheck size={16} /> Trip Scope Audit</span>
@@ -2046,7 +2041,7 @@ export function Settings({
             </button>
           </div>
         </section>
-      </GlassCard>
+      </GlassCard>)}
 
       <AccordionCard id="settings-trip" eyebrow="Trip Manager" title="旅程管理器 🏯🌸" meta={<span className="pill">v{managedTrip.version}</span>}>
         <div style={{ marginBottom: '1.5rem', borderBottom: '1px dashed rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
@@ -2171,33 +2166,34 @@ export function Settings({
           </label>
         </div>
 
-        <div className="compact-personalization-panel" aria-label="旅程個人化設定" style={{ marginTop: '1rem', padding: '14px', borderRadius: '16px', border: '1px solid rgba(204,41,94,.16)', background: 'rgba(255,255,255,.08)' }}>
-          <div className="section-head">
-            <h2>旅程個人化</h2>
-            <span className="pill">Compact</span>
+        {/* Quick Itinerary View / Edit - opens confirmation modal with current trip data */}
+        {getItinerary(state).length > 0 && (
+          <div style={{ marginTop: '1rem', padding: '14px', borderRadius: '16px', border: '1px solid rgba(30, 77, 107, 0.16)', background: 'rgba(30, 77, 107, 0.04)' }}>
+            <div className="section-head">
+              <h2>📋 當前行程</h2>
+              <span className="pill">{getItinerary(state).length} 日 · {getItinerary(state).reduce((sum, day) => sum + (day.spots?.length || 0), 0)} 景點</span>
+            </div>
+            <p className="muted">查看或編輯目前旅程嘅每日行程安排、景點同住宿資料。</p>
+            <button
+              className="secondary"
+              type="button"
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '0.5rem' }}
+              onClick={() => {
+                const itinerary = getItinerary(state);
+                const draft: TripDraft = {
+                  trip: { ...managedTrip, itinerary },
+                  summary: `目前行程：${managedTrip.name}，共 ${itinerary.length} 日`,
+                  warnings: [],
+                  changes: [],
+                };
+                setTripDraft(draft);
+                setTripDraftModalOpen(true);
+              }}
+            >
+              <MapPin size={16} /> 查看 / 編輯行程詳情
+            </button>
           </div>
-          <p className="muted">旅行風格、出發城市同天氣偏好會跟住呢個旅程保存，用嚟改善 Dashboard / Weather / Timeline 嘅提示。</p>
-          <div className="form-grid">
-            <label>旅行風格
-              <select aria-label="設定旅行風格" value={mgrTripStyle} onChange={(e) => setMgrTripStyle(e.target.value as typeof mgrTripStyle)}>
-                {TRIP_STYLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
-            <label>出發城市
-              <input aria-label="設定 Home city" value={mgrHomeCity} onChange={(e) => setMgrHomeCity(e.target.value)} placeholder="Hong Kong" />
-            </label>
-          </div>
-          <div className="form-grid">
-            <label>天氣偏好
-              <select aria-label="設定天氣偏好" value={mgrWeatherPreference} onChange={(e) => setMgrWeatherPreference(e.target.value as typeof mgrWeatherPreference)}>
-                {WEATHER_PREFERENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
-            <label>目前 weather region
-              <input readOnly value={managedTrip.intelligence?.weatherRegion || managedTrip.destinationSummary || 'Global'} />
-            </label>
-          </div>
-        </div>
+        )}
 
         <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <button
@@ -2448,14 +2444,14 @@ export function Settings({
         )}
       </AccordionCard>
 
-      <AccordionCard id="settings-itinerary-json" title="行程 JSON" meta={<span className="pill">{getItinerary(state).length} 日</span>}>
+      {showStressPanel && (<AccordionCard id="settings-itinerary-json" title="行程 JSON" meta={<span className="pill">{getItinerary(state).length} 日</span>}>
         <input ref={itineraryInput} hidden type="file" accept="application/json,.json" onChange={(e) => importItinerary(e.target.files?.[0])} />
         <div className="action-row wrap">
           <button className="secondary" type="button" onClick={() => downloadJson(`${state.tripName || 'trip'}-itinerary.json`, getItinerary(state))}><Download size={18} /> 匯出行程</button>
           <button className="secondary" type="button" onClick={() => itineraryInput.current?.click()}><Upload size={18} /> 匯入行程</button>
           <button className="danger" type="button" onClick={() => updateState({ customItinerary: null, itineraryOverrides: {}, tripDateRange: { start: ITINERARY[0].date, end: ITINERARY[ITINERARY.length - 1].date } })}><RotateCcw size={18} /> 還原預設</button>
         </div>
-      </AccordionCard>
+      </AccordionCard>)}
 
       <AccordionCard id="settings-people" title="旅伴 / 分帳比例" meta={<span className="pill">{persons.length} 人</span>}>
         {persons.map((p) => (
@@ -2524,7 +2520,7 @@ export function Settings({
             <span>已登入 Supabase 帳號，AI 智能記帳已自動激活，免輸入解鎖密碼！🔓🤖</span>
           </div>
         )}
-        <div className="action-row wrap">
+        {showStressPanel && (<div className="action-row wrap">
           <button className="secondary" type="button" disabled={!!busy} onClick={refreshCredentialStatus}>
             Test all connections
           </button>
@@ -2534,8 +2530,8 @@ export function Settings({
           <button className="secondary" type="button" disabled={!!busy} onClick={() => run('測試 Google backup', async () => testGoogleBackupConnection(state))}>
             Test Google
           </button>
-        </div>
-        <div className="rotation-box">
+        </div>)}
+        {showStressPanel && (<div className="rotation-box">
           <div className="form-grid">
             <label>Provider
               <select value={rotationProvider} onChange={(e) => setRotationProvider(e.target.value as CredentialProvider)}>
@@ -2560,7 +2556,7 @@ export function Settings({
           <button className="primary" type="button" disabled={!!busy} onClick={rotateCredential}>
             <ShieldCheck size={18} /> Rotate safely
           </button>
-        </div>
+        </div>)}
       </AccordionCard>
 
       <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
@@ -2660,7 +2656,7 @@ export function Settings({
           <input type="checkbox" checked={state.autoSync} onChange={(e) => updateState({ autoSync: e.target.checked })} />
           儲存 receipt 後自動同步
         </label>
-        <div className="action-row wrap">
+        {showStressPanel && (<div className="action-row wrap">
           <button
             className="secondary"
             type="button"
@@ -2692,8 +2688,8 @@ export function Settings({
           >
             檢查 Mapping
           </button>
-        </div>
-        {schemaDiag && (
+        </div>)}
+        {showStressPanel && schemaDiag && (
           <div style={{ marginTop: 12, overflow: 'auto' }}>
             <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
               <thead>
@@ -2721,7 +2717,7 @@ export function Settings({
             </table>
           </div>
         )}
-        {mappingDiag && (
+        {showStressPanel && mappingDiag && (
           <div style={{ marginTop: 12, overflow: 'auto' }}>
             <div className="action-row wrap" style={{ marginBottom: 10 }}>
               <span className="pill">Scanned {mappingDiag.scanned}</span>
@@ -2754,7 +2750,7 @@ export function Settings({
             {mappingDiag.issues.length > 40 && <p className="muted" style={{ marginTop: 8 }}>只顯示首 40 項 issue。</p>}
           </div>
         )}
-        <div className={`settings-sync-dry-run settings-sync-dry-run--${syncReadiness.tone}`} role="region" aria-label="Sync readiness dry run">
+        {showStressPanel && (<div className={`settings-sync-dry-run settings-sync-dry-run--${syncReadiness.tone}`} role="region" aria-label="Sync readiness dry run">
           <div className="settings-restore-preview-head">
             <span><Cloud size={15} /> Sync dry run</span>
             <strong>{syncReadiness.statusLabel}</strong>
@@ -2784,13 +2780,8 @@ export function Settings({
               <span>Backup first</span>
             </button>
           </div>
-        </div>
+        </div>)}
         <div className="action-row wrap">
-          <button className="secondary" type="button" disabled={!!busy} onClick={saveLocalSettingsNow}>Save Local Settings</button>
-          <button className="secondary" type="button" disabled={notionActionDisabled} onClick={() => {
-            if (!requireNotionMirror('測試 Notion')) return;
-            void run('測試 Notion', async () => `連線正常：${await testNotion(state)}`);
-          }}>測試</button>
           <StatefulActionButton className="secondary" type="button" disabled={!!busy} onClick={() => {
             if (!requireBroker('Pull', true)) return;
             void run('Pull', async () => {
@@ -2807,6 +2798,13 @@ export function Settings({
           }}>
             <Upload size={18} /> {publicSupabaseOnly ? 'Push Supabase' : 'Push All'}
           </StatefulActionButton>
+        </div>
+        {showStressPanel && (<div className="action-row wrap">
+          <button className="secondary" type="button" disabled={!!busy} onClick={saveLocalSettingsNow}>Save Local Settings</button>
+          <button className="secondary" type="button" disabled={notionActionDisabled} onClick={() => {
+            if (!requireNotionMirror('測試 Notion')) return;
+            void run('測試 Notion', async () => `連線正常：${await testNotion(state)}`);
+          }}>測試</button>
           <button className="secondary" type="button" disabled={!!busy} onClick={() => {
             saveLocalSettingsNow();
             if (!requireBroker('Save & Push Settings', true)) return;
@@ -2820,10 +2818,10 @@ export function Settings({
             if (!requireNotionMirror('Schema migrate')) return;
             void run('Schema', async () => migrateNotionSchema(state));
           }}>美化 Schema</button>
-        </div>
+        </div>)}
       </AccordionCard>
 
-      <AccordionCard id="settings-email" title="Email / Shortcut" icon={<Copy />}>
+      {showStressPanel && (<AccordionCard id="settings-email" title="Email / Shortcut" icon={<Copy />}>
         <p className="muted">
           {cloudSyncAvailable
             ? 'Public Supabase mode 不使用共享 Gmail inbox。請喺 Scan 貼上 email 文字或截圖；如已連接個人 Notion，可拉取你自己 notebook 入面嘅待確認紀錄。'
@@ -2838,7 +2836,7 @@ export function Settings({
             </>
           )}
         </div>
-      </AccordionCard>
+      </AccordionCard>)}
 
       {cloudSyncAvailable && updatePassword && (
         <AccordionCard id="settings-supabase-account" eyebrow="Supabase Auth" title="雲端帳號與密碼設定 🔐" icon={<KeyRound />}>
@@ -2904,19 +2902,21 @@ export function Settings({
         </AccordionCard>
       )}
 
-      <AccordionCard id="settings-data" title="資料管理 / Security" icon={<ShieldCheck />}>
+      <AccordionCard id="settings-data" title="資料管理" icon={<ShieldCheck />}>
         <input ref={backupInput} hidden type="file" accept="application/json,.json" onChange={(e) => importBackup(e.target.files?.[0])} />
         <div className="action-row wrap">
           <button className="secondary" type="button" onClick={() => exportCsv(state)}><Download size={18} /> 匯出 CSV</button>
-          <button className="secondary" type="button" onClick={() => downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup JSON（目前旅程）</button>
-          <button className="secondary" type="button" onClick={previewTripShareExport}><Copy size={18} /> Preview trip share</button>
-          <button className="secondary" type="button" onClick={previewDiagnosticsExport}><ShieldCheck size={18} /> Preview diagnostics</button>
-          <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup JSON</button>
-          <button className="danger" type="button" onClick={() => { clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); }}><KeyRound size={18} /> 清除 broker session</button>
-          <button className="danger" type="button" onClick={() => { clearDeviceTrust(); void clearTrustedDevice(); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
+          <button className="secondary" type="button" onClick={() => downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup</button>
+          <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup</button>
           <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearLocalPreview(true)}><RotateCcw size={18} /> 清除本地資料</button>
         </div>
-        {tripSharePreview && (
+        {showStressPanel && (<div className="action-row wrap" style={{ marginTop: '0.5rem' }}>
+          <button className="secondary" type="button" onClick={previewTripShareExport}><Copy size={18} /> Preview trip share</button>
+          <button className="secondary" type="button" onClick={previewDiagnosticsExport}><ShieldCheck size={18} /> Preview diagnostics</button>
+          <button className="danger" type="button" onClick={() => { clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); }}><KeyRound size={18} /> 清除 broker session</button>
+          <button className="danger" type="button" onClick={() => { clearDeviceTrust(); void clearTrustedDevice(); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
+        </div>)}
+        {showStressPanel && tripSharePreview && (
           <div className="settings-trip-share-preview" role="region" aria-label="Private trip-share preview">
             <div className="settings-restore-preview-head">
               <span><ShieldCheck size={15} /> Private trip-share preview</span>
@@ -2949,7 +2949,7 @@ export function Settings({
             </div>
           </div>
         )}
-        {diagnosticsPreview && (
+        {showStressPanel && diagnosticsPreview && (
           <div className="settings-trip-share-preview" role="region" aria-label="Public diagnostics preview">
             <div className="settings-restore-preview-head">
               <span><ShieldCheck size={15} /> Public diagnostics preview</span>
@@ -3013,7 +3013,7 @@ export function Settings({
             </div>
           </div>
         )}
-        <details className="settings-maintainer-release-note" aria-label="Maintainer deploy recovery note">
+        {showStressPanel && (<details className="settings-maintainer-release-note" aria-label="Maintainer deploy recovery note">
           <summary>
             <span><Server size={15} /> Maintainer deploy recovery</span>
             <strong>Quota-safe</strong>
@@ -3038,7 +3038,7 @@ export function Settings({
             <span><ShieldCheck size={13} /> Verify: npm run smoke:deploy-live</span>
             <span><AlertTriangle size={13} /> Never paste API keys, tokens, sessions, or account secrets into deploy notes.</span>
           </div>
-        </details>
+        </details>)}
         <div className="settings-backup-safety" aria-label="Backup safety scope">
           <span><ShieldCheck size={15} /> CSV / Backup JSON 只包含目前旅程，不會匯出其他旅程紀錄。</span>
           <span><KeyRound size={15} /> Backup 不包含 API key、Notion token、broker session 或解鎖 secret。</span>

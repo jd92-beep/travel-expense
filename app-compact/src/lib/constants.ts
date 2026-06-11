@@ -128,7 +128,6 @@ export const DEFAULT_STATE: AppState = {
   googleBackupModel: DEFAULT_GOOGLE_BACKUP_MODEL,
   persons: [
     { id: 'p_boss', name: 'User 1', emoji: '👤', color: '#CC2929' },
-    { id: 'p_trip_2', name: 'User 2', emoji: '👤', color: '#1E4D6B' },
   ],
   shareRatios: {},
   tripName: '名古屋 2026',

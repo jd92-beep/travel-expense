@@ -63,8 +63,8 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   });
   const [budget, setBudget] = useState('50000');
   const [currency, setCurrency] = useState('JPY');
-  const [partySize, setPartySize] = useState('2');
-  const [guidePersons, setGuidePersons] = useState(() => makeGuidePersons(2));
+  const [partySize, setPartySize] = useState('1');
+  const [guidePersons, setGuidePersons] = useState(() => makeGuidePersons(1));
   const [tripStyle, setTripStyle] = useState<(typeof TRIP_STYLE_OPTIONS)[number]['value']>('balanced');
   const [homeCity, setHomeCity] = useState('Hong Kong');
   const [weatherPreference, setWeatherPreference] = useState<(typeof WEATHER_PREFERENCE_OPTIONS)[number]['value']>('balanced');
