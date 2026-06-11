@@ -657,11 +657,13 @@ function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' 
         ? state.emailModel || ''
         : state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
   const preferredAttempt = selectedModelAttempt(chosenModelId);
-  const requiredPrimary: ModelAttempt = kind === 'email'
-    ? { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Required Primary)' }
-    : kind === 'trip'
-      ? preferredAttempt || { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Trip Update Primary)' }
-      : { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Required Primary)' };
+  // Contract default: email/trip → Kimi kimi-code, scan/voice → Google Gemma 4 31B.
+  // Used as first fallback when user selects a different model.
+  const contractDefault: ModelAttempt = kind === 'email' || kind === 'trip'
+    ? { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Contract Default)' }
+    : { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Contract Default)' };
+  // User's selection is the true primary; falls back to contract default if empty.
+  const primary: ModelAttempt = preferredAttempt || contractDefault;
   const baseAttempts: ModelAttempt[] = kind === 'email'
     ? [
         { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
@@ -684,9 +686,10 @@ function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' 
         { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (4th Fallback)' },
       ];
 
-  const attempts: ModelAttempt[] = [requiredPrimary];
-  if (kind !== 'trip' && preferredAttempt && !sameModelAttempt(requiredPrimary, preferredAttempt)) {
-    attempts.push(preferredAttempt);
+  const attempts: ModelAttempt[] = [primary];
+  // Insert contract default as first fallback if user chose something different
+  if (!sameModelAttempt(primary, contractDefault)) {
+    attempts.push(contractDefault);
   }
   for (const base of baseAttempts) {
     if (!attempts.some((attempt) => sameModelAttempt(base, attempt))) attempts.push(base);

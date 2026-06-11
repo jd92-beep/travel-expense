@@ -623,52 +623,6 @@ function todayLocalDate(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-function buildPostTripArchiveChecklist(
-  state: AppState,
-  trip: TripProfile,
-  persons: Person[],
-  settlement: ReturnType<typeof computeSettlements>,
-) {
-  const tripReceipts = scopedReceiptsForTrip(state, trip);
-  const itinerary = trip.itinerary?.length ? trip.itinerary : getItinerary(state);
-  const tripFinished = !!trip.archived || (!!trip.endDate && todayLocalDate() > trip.endDate);
-  const transferCount = settlement.transfers.length;
-  const companionCount = Math.max(0, persons.length - 1);
-  return {
-    tone: tripFinished ? 'ok' : 'warning',
-    statusLabel: tripFinished ? 'Archive ready' : 'Trip active',
-    helper: tripFinished
-      ? 'Finish the trip in four separate steps: backup, share, settlement, then local cleanup.'
-      : 'Trip is still active; keep these finish steps ready for the last travel day.',
-    items: [
-      {
-        key: 'backup',
-        title: 'Final backup',
-        value: `${tripReceipts.length} receipt${tripReceipts.length === 1 ? '' : 's'}`,
-        detail: 'Current-trip JSON only',
-      },
-      {
-        key: 'share',
-        title: 'Share export',
-        value: `${itinerary.length || 0} day${itinerary.length === 1 ? '' : 's'}`,
-        detail: companionCount ? `${companionCount} companion${companionCount === 1 ? '' : 's'}` : 'Companion-safe summary',
-      },
-      {
-        key: 'settlement',
-        title: 'Settlement check',
-        value: transferCount ? `${transferCount} transfer${transferCount === 1 ? '' : 's'}` : 'No transfer',
-        detail: `${formatMoney(settlement.sharedTotal)} shared`,
-      },
-      {
-        key: 'cleanup',
-        title: 'Safe cleanup',
-        value: 'Preview first',
-        detail: 'Cloud data not deleted',
-      },
-    ],
-  };
-}
-
 function formatSyncAge(timestamp: number): string {
   if (!timestamp || !Number.isFinite(timestamp)) return 'never';
   const ageMs = Math.max(0, Date.now() - timestamp);
@@ -975,7 +929,6 @@ export function Settings({
   const directTokenEnabled = true;
   const buildLabel = `${import.meta.env.MODE} · React ${reactVersion}`;
   const tripDoctor = compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope);
-  const postTripArchive = buildPostTripArchiveChecklist(state, currentTrip, persons, settlement);
   const syncReadiness = buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope);
   const tripScopeAudit = buildTripScopeAudit(state, currentTrip);
 
@@ -1454,32 +1407,6 @@ export function Settings({
     setStatus(`已套用旅程：${draft.trip.name}`);
   }
 
-  function toggleArchiveTrip(trip: TripProfile) {
-    setState((prev) => {
-      const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
-      const willArchive = !trip.archived;
-      if (willArchive && prevTrips.filter((item) => item.id !== trip.id && !item.archived).length === 0) {
-        setStatus('最少要保留一個未封存旅程');
-        return prev;
-      }
-      const updated = prevTrips.map((item) => item.id === trip.id ? { ...item, archived: willArchive, active: false, updatedAt: Date.now() } : item);
-      const nextActive = willArchive
-        ? updated.find((item) => !item.archived && item.id !== trip.id) || updated.find((item) => !item.archived)
-        : updated.find((item) => item.id === trip.id);
-      const tripsNext = updated.map((item) => ({ ...item, active: item.id === nextActive?.id }));
-      if (!nextActive) return { ...prev, trips: tripsNext };
-      return {
-        ...prev,
-        trips: tripsNext,
-        activeTripId: nextActive.id,
-        tripName: nextActive.name,
-        tripDateRange: { start: nextActive.startDate, end: nextActive.endDate },
-        tripCurrency: nonHomeCurrencyForTrip(nextActive, prev.tripCurrency),
-        customItinerary: nextActive.itinerary,
-      };
-    });
-  }
-
   function updateCurrentTrip(patch: Partial<TripProfile>) {
     const nextTrip = { ...currentTrip, ...patch, version: currentTrip.version + 1, updatedAt: Date.now() };
     updateState({
@@ -1763,21 +1690,6 @@ export function Settings({
     setStatus(`Diagnostics preview ready：${preview.payload.receipts.currentTrip} current-trip receipts，public-safe copy/download only`);
   }
 
-  function downloadPostTripBackup() {
-    downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState());
-    setStatus('Post-trip final backup 已下載；下一步可做 private share 或 settlement check。');
-  }
-
-  function openPostTripSharePreview() {
-    openSettingsPanel('settings-data');
-    previewTripShareExport();
-  }
-
-  function openPostTripCleanupPreview() {
-    setShowClearLocalPreview(true);
-    setStatus('Safe cleanup preview 已開啟；確認前不會刪除任何雲端資料。');
-  }
-
   function openScopeRepairShortcut() {
     if (!tripScopeAudit.repairReceiptId) {
       changeTab?.('history');
@@ -1978,43 +1890,6 @@ export function Settings({
           </div>
         </section>
       </GlassCard>)}
-
-      <GlassCard className={`settings-trip-doctor settings-post-trip-archive settings-post-trip-archive--${postTripArchive.tone}`}>
-        <section role="region" aria-label="Post-trip archive checklist">
-          <div className="settings-trip-doctor-head">
-            <span><CheckCircle2 size={16} /> Post-trip Archive</span>
-            <strong>{postTripArchive.statusLabel}</strong>
-          </div>
-          <p className="settings-post-trip-helper">{postTripArchive.helper}</p>
-          <div className="settings-trip-doctor-grid">
-            {postTripArchive.items.map((item) => (
-              <div className="settings-trip-doctor-item" key={item.key}>
-                <span>{item.title}</span>
-                <strong>{item.value}</strong>
-                <small>{item.detail}</small>
-              </div>
-            ))}
-          </div>
-          <div className="settings-trip-doctor-actions settings-post-trip-actions">
-            <button type="button" onClick={downloadPostTripBackup}>
-              <Download size={14} />
-              <span>Final backup</span>
-            </button>
-            <button type="button" onClick={openPostTripSharePreview}>
-              <Copy size={14} />
-              <span>Private share</span>
-            </button>
-            <button type="button" onClick={() => changeTab?.('stats')}>
-              <ShieldCheck size={14} />
-              <span>Settlement check</span>
-            </button>
-            <button type="button" onClick={openPostTripCleanupPreview}>
-              <RotateCcw size={14} />
-              <span>Safe cleanup</span>
-            </button>
-          </div>
-        </section>
-      </GlassCard>
 
       {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${tripScopeAudit.tone}`}>
         <section role="region" aria-label="Trip scope audit">
@@ -2577,7 +2452,7 @@ export function Settings({
       </AccordionCard>
 
       <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
-        <p className="muted">Email 預設使用 Kimi / kimi-code；scan、voice 預設使用 Google Gemma 4 31B；trip update 會使用你下面選擇嘅 Trip update model 做 primary。Provider keys 不會進入 React state。</p>
+        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。如果失敗，會自動 fallback 到 contract default（Scan/Voice → Gemma 4 31B，Email/Trip → Kimi kimi-code），然後再 fallback 到其他備用模型。Provider keys 不會進入 React state。</p>
         <div className="form-grid">
           <label>Scan model
             <select value={state.scanModel} onChange={(e) => updateState({ scanModel: e.target.value })}>
