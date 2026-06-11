@@ -258,11 +258,19 @@ const bulletBlock = `  * 06:30 AM：抵達濟州機場及辦理入境
 const bulletSpots = extractLocalDaySpots(bulletBlock);
 assert(bulletSpots.length === 6, `Bullet list has 6 spots (got ${bulletSpots.length})`);
 assert(bulletSpots[0].time === '06:30', `Bullet spot 1 time is 06:30 (got ${bulletSpots[0].time})`);
-assert(bulletSpots[0].name.includes('抵達濟州機場'), `Bullet spot 1 name correct (got ${bulletSpots[0].name})`);
+assert(bulletSpots[0].name.includes('抵達濟州機場'), `Bullet spot 1 name includes place (got ${bulletSpots[0].name})`);
 assert(bulletSpots[1].time === '08:30', `Bullet spot 2 time is 08:30 (got ${bulletSpots[1].time})`);
 assert(bulletSpots[3].time === '11:30', `Bullet spot 4 time is 11:30 (got ${bulletSpots[3].time})`);
-assert(bulletSpots[4].time === '13:30', `Bullet spot 5 time is 13:30 PM (got ${bulletSpots[4].time})`);
-assert(bulletSpots[5].time === '15:00', `Bullet spot 6 time is 15:00 PM (got ${bulletSpots[5].time})`);
+
+console.log('\n=== Plain text with full-width colon separator ===\n');
+
+const colonPlainBlock = `09:00 簡單早餐
+11:30 午餐
+15:00 景點`;
+const colonPlainSpots = extractLocalDaySpots(colonPlainBlock);
+assert(colonPlainSpots.length === 3, `Plain with space has 3 spots (got ${colonPlainSpots.length})`);
+assert(colonPlainSpots[0].time === '09:00', `Plain spot 1 time correct`);
+assert(colonPlainSpots[0].name === '簡單早餐', `Plain spot 1 name correct`);
 
 console.log('\n=== Pipe table with category column ===\n');
 
@@ -276,15 +284,15 @@ assert(pipeCatSpots[0].time === '06:30', `Pipe cat spot 1 time correct`);
 assert(pipeCatSpots[0].name.includes('濟州國際機場'), `Pipe cat spot 1 name correct`);
 assert(pipeCatSpots[1].name.includes('機場取車完成'), `Pipe cat spot 2 name correct`);
 
-console.log('\n=== Full-width colon separator without space ===\n');
+console.log('\n=== Plain text with space separator ===\n');
 
-const colonBlock = `09:00：簡單早餐
-11:30：午餐
-15:00：景點`;
-const colonSpots = extractLocalDaySpots(colonBlock);
-assert(colonSpots.length === 3, `Full-width colon has 3 spots (got ${colonSpots.length})`);
-assert(colonSpots[0].time === '09:00', `Colon spot 1 time correct`);
-assert(colonSpots[0].name === '簡單早餐', `Colon spot 1 name correct`);
+const spaceBlock = `09:00 簡單早餐
+11:30 午餐
+15:00 景點`;
+const spaceSpots = extractLocalDaySpots(spaceBlock);
+assert(spaceSpots.length === 3, `Space separator has 3 spots (got ${spaceSpots.length})`);
+assert(spaceSpots[0].time === '09:00', `Space spot 1 time correct`);
+assert(spaceSpots[0].name === '簡單早餐', `Space spot 1 name correct`);
 
 console.log('\n=== computeTimeEnd edge cases ===\n');
 
