@@ -1429,6 +1429,109 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
   await expect(page.getByText('城山日出峰')).toBeVisible();
 });
 
+test('Trip update AI falls back to local parser and still opens confirmation modal', async ({ page }) => {
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/trip/intelligence', async (route) => route.fulfill({
+    status: 500,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: false, error: 'trip intelligence unavailable' }),
+  }));
+  for (const provider of ['mimo', 'kimi', 'google']) {
+    await page.route(`https://travel-expense-credential-broker.ftjdfr.workers.dev/${provider}/json`, async (route) => route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: `${provider} unavailable` }),
+    }));
+  }
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'settings-jeju-local-parser-session',
+      credentialSessionExpiresAt: Date.now() + 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      tripUpdateModel: 'mimo/mimo-v2.5',
+      activeTripId: 'trip_current_local_parser',
+      tripName: 'Current Trip',
+      tripDateRange: { start: '2026-06-13', end: '2026-06-20' },
+      tripCurrency: 'KRW',
+      trips: [{
+        id: 'trip_current_local_parser',
+        name: 'Current Trip',
+        destinationSummary: 'Jeju',
+        startDate: '2026-06-13',
+        endDate: '2026-06-20',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'KRW'],
+        timezones: ['Asia/Seoul'],
+        version: 1,
+        active: true,
+        itinerary: [],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      customItinerary: [],
+      receipts: [],
+    }));
+  });
+
+  const longJeju = [
+    'Day 1｜6月13日｜到步＋西線入住｜住 Hotel Fine Jeju',
+    '06:30 抵達濟州機場',
+    '11:15 午餐：李春玉元祖鯖魚包飯',
+    '14:00 Osulloc Tea Museum',
+    'Day 2｜6月14日｜南部花景＋西歸浦｜住 Hotel Fine Jeju',
+    '10:30 Camellia Hill 山茶花之丘',
+    '18:15 偶來市場晚餐／甜點',
+    'Day 3｜6月15日｜牛島＋城山日出峰｜住 Hotel Fine Jeju',
+    '09:00 城山浦港買船票',
+    '17:00 城山日出峰',
+    'Day 4｜6月16日｜牛沼端＋Aqua Planet｜住 Hotel Fine Jeju',
+    '09:40 牛沼端 木舟及木筏',
+    '13:00 Aqua Planet Jeju 入場',
+    'Day 5｜6月17日｜退房＋9.81 Park＋涯月｜住 Stanford',
+    '11:30 9.81 Park Jeju',
+    '18:30 晚餐：Flowave',
+    'Day 6｜6月18日｜舊濟州市購物＋東門市場｜住 Stanford',
+    '10:45 七星路購物街',
+    '12:45 東門市場午餐掃街',
+    'Day 7｜6月19日｜新濟州＋蓮洞採購日｜住 Stanford',
+    '10:30 E-Mart Sinjeju Branch',
+    '15:15 新羅免稅店',
+    'Day 8｜6月20日｜涯月慢遊＋機場回程',
+    '11:00 Aewol The Sunset',
+    '21:30 濟州起飛',
+  ].join('\n');
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expectSettingsReady(page);
+  await setAccordion(page, 'AI 行程更新');
+  await expect(page.locator('#settings-trip-update-panel')).toContainText('目前 primary：Mimo v2.5');
+  await page.getByPlaceholder(/下次/).fill(longJeju);
+  await page.getByRole('button', { name: /用已選模型分析/ }).click();
+
+  const modal = page.getByRole('dialog', { name: '確認 AI 行程更新' });
+  await expect(modal).toBeVisible();
+  await expect(modal).toContainText('濟州2026');
+  await expect(modal).toContainText('Day 8 · 2026-06-20');
+  await expect(modal).toContainText('Aewol The Sunset');
+  await expect(modal).toContainText('Some exact addresses/coordinates need confirmation');
+  await modal.getByRole('button', { name: '確認並更新行程' }).click();
+  await expect(page.getByText('已套用旅程：濟州2026')).toBeVisible();
+
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}'));
+  expect(stored.tripCurrency).toBe('KRW');
+  expect(stored.customItinerary).toHaveLength(8);
+  expect(stored.customItinerary[7].spots.map((spot) => spot.name).join(' ')).toContain('Aewol The Sunset');
+});
+
 test('Settings can connect a broker session without leaking the password into app state', async ({ page }) => {
   let unlockCount = 0;
 

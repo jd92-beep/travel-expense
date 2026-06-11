@@ -27,13 +27,13 @@ import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { AnimatedNumber, GlassCard, Reveal } from '../components/ui';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
+import { amountToHkd, formatCurrencyAmount } from '../lib/currency';
 import {
   categoryById,
   displayStore,
   fmt,
   getItinerary,
   getPersons,
-  hkd,
   isPendingReceipt,
   mapsUrl,
   openMapExternal,
@@ -48,7 +48,7 @@ import { activeTrip, createTripProfile, normalizeItinerary, scopedReceiptsForTri
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt, SyncQueueItem, TabId, TripProfile } from '../lib/types';
 import { parseTripParagraph } from '../lib/ai';
 import { brokerAiJson, redactedError } from '../lib/credentialBroker';
-import { DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
+import { AI_MODELS, DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
 
 type DestinationIdea = {
   id: string;
@@ -392,6 +392,24 @@ function normalizeAssistantAnswer(value: unknown) {
   };
 }
 
+function aiModelLabel(modelId: string | undefined): string {
+  const id = modelId || DEFAULT_KIMI_PRIMARY_MODEL_ID;
+  return AI_MODELS.find((model) => model.id === id)?.name || id;
+}
+
+function aiProviderForModel(modelId: string | undefined): { provider: 'kimi' | 'google' | 'mimo'; model: string; id: string } {
+  const id = modelId || DEFAULT_KIMI_PRIMARY_MODEL_ID;
+  const [providerRaw, modelRaw] = id.includes('/') ? id.split('/') : ['', id];
+  const provider = providerRaw === 'google' || providerRaw === 'mimo' || providerRaw === 'kimi'
+    ? providerRaw
+    : /mimo/i.test(id)
+      ? 'mimo'
+      : /kimi/i.test(id)
+        ? 'kimi'
+        : 'google';
+  return { provider, model: modelRaw || id, id };
+}
+
 // 根據景點屬性或名字，智能配對和風 icon 及顏色
 function getSpotIconDetails(type: string, name: string) {
   const t = type.toLowerCase();
@@ -717,6 +735,13 @@ export function Dashboard({
   const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip), [state, trip]);
   const today = todayForReceipts(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
+  const activeDisplayCurrency = !state.displayCurrency || state.displayCurrency === 'HKD'
+    ? 'HKD'
+    : state.displayCurrency === resolvedTripCurrency
+      ? resolvedTripCurrency
+      : resolvedTripCurrency;
+  const showTripCurrency = activeDisplayCurrency !== 'HKD';
+  const displayMoney = (amount: number, currency = activeDisplayCurrency || 'HKD') => formatCurrencyAmount(amount, currency);
 
   // 統一口徑與過濾邏輯：
   // 總消費額永遠包含所有項目，確保預算使用比例不會因圖表篩選而被低估。
@@ -742,7 +767,7 @@ export function Dashboard({
   const totalForBudget = totalReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
   const todayTotal = dailyReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
 
-  const budgetHkd = Math.round(hkd(state.budget, state));
+  const budgetHkd = Math.round(amountToHkd(Number(state.budget) || 0, resolvedTripCurrency, state));
   const rawBudgetPct = budgetHkd > 0 ? (spentHkd / budgetHkd) * 100 : 0;
   const budgetPct = Math.min(100, rawBudgetPct);
 
@@ -754,7 +779,7 @@ export function Dashboard({
   const displayDayDate = day?.date || today;
   const currentDayNumber = Math.max(1, Math.min(length, day?.day || tripDayNumber(trip.startDate, displayDayDate, 1)));
   const remainingBudgetHkd = Math.max(0, budgetHkd - spentHkd);
-  const dayRemainingHkd = Math.max(0, Math.round(hkd(dailyBudget - todayTotal, state)));
+  const dayRemainingHkd = Math.max(0, Math.round(amountToHkd(dailyBudget - todayTotal, resolvedTripCurrency, state)));
   const recommendedDailyHkd = Math.max(0, Math.round((budgetHkd - spentHkd) / Math.max(1, Math.max(1, length) - currentDayNumber + 1)));
   const budgetWarning = rawBudgetPct >= 100 ? '超出預算區' : rawBudgetPct >= 80 ? '接近上限' : '狀態良好';
   const daySpots = (day?.spots || []).slice(0, 4);
@@ -792,14 +817,15 @@ Next day: ${coachNextDayText}
 Weather reminder: ${coachWeatherText}
 Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math.round(getReceiptHkdAmount(r, state))}`).join(', ') || 'none'}`;
     try {
-      const result = await brokerAiJson(state, 'kimi', prompt, 'trip', undefined, 'kimi-code');
+      const selectedAi = aiProviderForModel(state.tripUpdateModel);
+      const result = await brokerAiJson(state, selectedAi.provider, prompt, 'trip', undefined, selectedAi.model);
       setAssistantAnswer(normalizeAssistantAnswer(result));
       setAssistantStatus('ready');
     } catch (error) {
       const message = redactedError(error);
       if (isQuotaHardStop(error)) {
         setAssistantStatus('quota');
-        setAssistantError(`Quota hard stop · ${message}`);
+        setAssistantError(`Selected primary quota · ${message}`);
       } else {
         setAssistantStatus('error');
         setAssistantError(message || 'AI assistant 暫時未能連線');
@@ -941,24 +967,23 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
           <h2>預算總覽 <Info size={20} aria-hidden="true" /></h2>
           <div className="preview-dashboard-currency" role="group" aria-label="顯示貨幣">
             <span
-              className={(!state.displayCurrency || state.displayCurrency === 'HKD') ? 'is-active' : ''}
+              className={activeDisplayCurrency === 'HKD' ? 'is-active' : ''}
               onClick={() => updateState({ displayCurrency: 'HKD' })}
               style={{ cursor: 'pointer' }}
             >
               HKD
             </span>
             <span
-              className={state.displayCurrency === 'JPY' ? 'is-active' : ''}
-              onClick={() => updateState({ displayCurrency: 'JPY' })}
+              className={activeDisplayCurrency === resolvedTripCurrency ? 'is-active' : ''}
+              onClick={() => updateState({ displayCurrency: resolvedTripCurrency })}
               style={{ cursor: 'pointer' }}
             >
-              JPY
+              {resolvedTripCurrency}
             </span>
           </div>
         </div>
 
         {(() => {
-          const isJpy = state.displayCurrency === 'JPY';
           return (
             <div className="preview-dashboard-budget-grid">
               <div className="preview-dashboard-ring">
@@ -977,16 +1002,16 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
               <div className="preview-dashboard-budget-side">
                 <div className="preview-dashboard-budget-row is-total">
                   <span>總預算</span>
-                  <strong>{isJpy ? `¥ ${fmt(state.budget)}` : `HK$ ${fmt(budgetHkd)}`}</strong>
+                  <strong>{showTripCurrency ? displayMoney(state.budget, resolvedTripCurrency) : displayMoney(budgetHkd, 'HKD')}</strong>
                   <button type="button" onClick={() => onTab('settings')}><Pencil size={16} /> 編輯</button>
                 </div>
                 <div className="preview-dashboard-budget-row is-used">
                   <span>已使用</span>
-                  <strong>{isJpy ? `¥ ${fmt(totalForBudget)}` : `HK$ ${fmt(spentHkd)}`}</strong>
+                  <strong>{showTripCurrency ? displayMoney(totalForBudget, resolvedTripCurrency) : displayMoney(spentHkd, 'HKD')}</strong>
                 </div>
                 <div className="preview-dashboard-budget-row is-left">
                   <span>剩餘預算</span>
-                  <strong>{isJpy ? `¥ ${fmt(Math.max(0, state.budget - totalForBudget))}` : `HK$ ${fmt(remainingBudgetHkd)}`}</strong>
+                  <strong>{showTripCurrency ? displayMoney(Math.max(0, state.budget - totalForBudget), resolvedTripCurrency) : displayMoney(remainingBudgetHkd, 'HKD')}</strong>
                 </div>
               </div>
             </div>
@@ -994,19 +1019,18 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
         })()}
 
         {(() => {
-          const isJpy = state.displayCurrency === 'JPY';
           return (
             <>
               <div className="preview-dashboard-budget-strip">
                 <div>
                   <Wallet size={24} />
                   <span>每日預算</span>
-                  <strong>{isJpy ? `¥${fmt(dailyBudget)}` : `HK$${fmt(Math.round(hkd(dailyBudget, state)))}`}</strong>
+                  <strong>{showTripCurrency ? displayMoney(dailyBudget, resolvedTripCurrency) : displayMoney(Math.round(amountToHkd(dailyBudget, resolvedTripCurrency, state)), 'HKD')}</strong>
                 </div>
                 <div>
                   <CalendarDays size={24} />
                   <span>日均結餘</span>
-                  <strong>{isJpy ? `¥${fmt(Math.max(0, dailyBudget - todayTotal))}` : `HK$${fmt(dayRemainingHkd)}`}</strong>
+                  <strong>{showTripCurrency ? displayMoney(Math.max(0, dailyBudget - todayTotal), resolvedTripCurrency) : displayMoney(dayRemainingHkd, 'HKD')}</strong>
                 </div>
                 <button type="button" onClick={() => onTab('stats')}>
                   <PieChart size={26} />
@@ -1018,7 +1042,7 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
 
               <button className="preview-dashboard-budget-tip" type="button" onClick={() => onTab('stats')}>
                 <Lightbulb size={22} />
-                <span>提示：每日平均使用需 ≤ {isJpy ? `¥ ${fmt(Math.round(dailyBudget))}` : `HK$ ${fmt(recommendedDailyHkd || Math.round(hkd(dailyBudget, state)))}`}</span>
+                <span>提示：每日平均使用需 ≤ {showTripCurrency ? displayMoney(Math.round(dailyBudget), resolvedTripCurrency) : displayMoney(recommendedDailyHkd || Math.round(amountToHkd(dailyBudget, resolvedTripCurrency, state)), 'HKD')}</span>
                 <ChevronRight size={18} />
               </button>
             </>
@@ -1038,14 +1062,14 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
         <div className="preview-dashboard-today-grid">
           <div>
             <span>今日支出</span>
-            <strong><AnimatedNumber value={Math.round(hkd(todayTotal, state))} prefix="HK$ " /></strong>
+            <strong><AnimatedNumber value={Math.round(amountToHkd(todayTotal, resolvedTripCurrency, state))} prefix="HK$ " /></strong>
             <small>已記 {dailyReceipts.length} 筆</small>
           </div>
           <div>
             <span>每日預算使用</span>
             <strong>{Math.round(todayBudgetPct)}%</strong>
             <i><b style={{ width: `${Math.min(100, Math.round(todayBudgetPct))}%` }} /></i>
-            <small>目標：HK$ {fmt(Math.round(hkd(dailyBudget, state)))}</small>
+            <small>目標：HK$ {fmt(Math.round(amountToHkd(dailyBudget, resolvedTripCurrency, state)))}</small>
           </div>
           <div>
             <span>日均結餘</span>
@@ -1065,12 +1089,12 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
             <span><Sparkles size={15} /> Broker AI Assistant</span>
             <h3>AI 旅行問答</h3>
           </div>
-          <em>Kimi · kimi-code</em>
+          <em>{aiModelLabel(state.tripUpdateModel)}</em>
         </div>
         <div className="dashboard-broker-policy" aria-label="AI routing policy">
-          <span>Primary · {DEFAULT_KIMI_PRIMARY_MODEL_ID}</span>
+          <span>Primary · {aiProviderForModel(state.tripUpdateModel).id}</span>
           <span>Quota · broker metered</span>
-          <span>No fallback on 429</span>
+          <span>Selected model primary</span>
         </div>
         <div className="dashboard-broker-question">
           <input
@@ -1099,10 +1123,10 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
             </>
           ) : assistantStatus === 'quota' ? (
             <>
-              <strong>Quota hard stop</strong>
-              <span>No fallback was attempted</span>
+              <strong>Selected primary paused</strong>
+              <span>Quota or rate limit</span>
               <p>{assistantError}</p>
-              <small>等 quota reset 或稍後再試，避免繞過 public-user metering。</small>
+              <small>可喺 Settings 改另一個 Trip update model 再試。</small>
             </>
           ) : assistantStatus === 'error' ? (
             <>
@@ -1114,9 +1138,9 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
           ) : (
             <>
               <strong>可以問旅費、預算、下一日風險</strong>
-              <span>一次 broker call · Kimi primary</span>
+              <span>一次 broker call · {aiModelLabel(state.tripUpdateModel)} primary</span>
               <p>AI 回覆只用目前旅程摘要同金額，不會讀取或輸出任何 provider key。</p>
-              <small>Quota / 429 會直接停，不會自動 fallback。</small>
+              <small>跟 Settings 入面 Trip update model routing。</small>
             </>
           )}
         </div>
@@ -1243,8 +1267,8 @@ Recent categories: ${recentReceipts.slice(0, 5).map((r) => `${r.category}:${Math
                   </span>
                 )}
                 <div className="dashboard-compact-recent-amount">
-                  <strong>¥{fmt(r.total)}</strong>
-                  <span>HK${fmt(Math.round(hkd(r.total, state)))}</span>
+                  <strong>{formatCurrencyAmount(Number(r.total) || 0, r.currency || r.originalCurrency || resolvedTripCurrency)}</strong>
+                  <span>{formatCurrencyAmount(getReceiptHkdAmount(r, state), 'HKD')}</span>
                 </div>
               </button>
             );
@@ -1741,8 +1765,8 @@ export function ReceiptRow({
         </span>
       </div>
       <span className="amount flex flex-col items-end shrink-0">
-        <strong className="text-[15px] font-extrabold text-slate-900">¥{fmt(receipt.total)}</strong>
-        <small className="text-[10px] text-slate-400">HK$ {fmt(hkd(receipt.total, state))}</small>
+        <strong className="text-[15px] font-extrabold text-slate-900">{formatCurrencyAmount(receipt.total, receipt.currency || receipt.originalCurrency || state.tripCurrency)}</strong>
+        <small className="text-[10px] text-slate-400">{formatCurrencyAmount(getReceiptHkdAmount(receipt, state), 'HKD')}</small>
       </span>
     </div>
   );

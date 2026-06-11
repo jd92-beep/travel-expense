@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { SUPPORTED_CURRENCIES } from '../lib/currency';
-import { getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
+import { getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt, SplitMode } from '../lib/types';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
 
@@ -31,6 +31,12 @@ export function ReceiptEditor({
 }) {
   const persons = useMemo(() => getPersons(state), [state]);
   const first = persons[0] || { id: '', name: '' };
+  const itinerary = useMemo(() => getItinerary(state), [state]);
+  const currencyForDate = (date?: string) => (
+    itinerary.find((day) => day.date === date)?.currency
+    || state.tripCurrency
+    || 'JPY'
+  );
   const photoRef = useRef<HTMLInputElement | null>(null);
   const mountedRef = useRef(true);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
@@ -40,6 +46,8 @@ export function ReceiptEditor({
     store: '',
     total: 0,
     date: todayForReceipts(state),
+    currency: currencyForDate(todayForReceipts(state)),
+    originalCurrency: currencyForDate(todayForReceipts(state)),
     category: 'food',
     payment: 'cash',
     personId: first?.id || '',
@@ -61,6 +69,8 @@ export function ReceiptEditor({
       store: '',
       total: 0,
       date: todayForReceipts(state),
+      currency: currencyForDate(todayForReceipts(state)),
+      originalCurrency: currencyForDate(todayForReceipts(state)),
       category: 'food',
       payment: 'cash',
       personId: first?.id || '',
@@ -71,7 +81,13 @@ export function ReceiptEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receipt]);
 
-  const set = <K extends keyof Receipt>(key: K, value: Receipt[K]) => setDraft((d) => ({ ...d, [key]: value }));
+  const set = <K extends keyof Receipt>(key: K, value: Receipt[K]) => setDraft((d) => {
+    if (key === 'date' && !receipt) {
+      const nextCurrency = currencyForDate(String(value || ''));
+      return { ...d, [key]: value, currency: nextCurrency, originalCurrency: nextCurrency };
+    }
+    return { ...d, [key]: value };
+  });
 
   async function attachPhoto(file?: File) {
     if (!file) return;
@@ -110,8 +126,8 @@ export function ReceiptEditor({
             store: draft.store.trim() || '未命名',
             total,
             originalAmount,
-            originalCurrency: draft.originalCurrency || draft.currency || state.tripCurrency,
-            currency: draft.currency || draft.originalCurrency || state.tripCurrency,
+            originalCurrency: draft.originalCurrency || draft.currency || currencyForDate(draft.date),
+            currency: draft.currency || draft.originalCurrency || currencyForDate(draft.date),
             personId: draft.personId || first?.id || '',
             splitMode: draft.splitMode || 'shared',
           });
@@ -141,7 +157,7 @@ export function ReceiptEditor({
             }} />
           </label>
           <label>原貨幣
-            <select value={draft.originalCurrency || draft.currency || state.tripCurrency} onChange={(e) => {
+            <select value={draft.originalCurrency || draft.currency || currencyForDate(draft.date)} onChange={(e) => {
               set('originalCurrency', e.target.value);
               set('currency', e.target.value);
             }}>

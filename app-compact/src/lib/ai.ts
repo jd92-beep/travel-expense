@@ -1,5 +1,5 @@
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
-import { tripIntelligencePromptContract } from '../domain/trip/context';
+import { resolveTripContext, tripIntelligencePromptContract } from '../domain/trip/context';
 import { brokerAiJson, brokerTripIntelligence, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
 import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_KIMI_PRIMARY_MODEL_ID } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
@@ -179,6 +179,125 @@ function hasUsefulTripItinerary(draft: TripDraft): boolean {
 function asStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item || '').trim()).filter(Boolean);
+}
+
+function inferTripCurrencyFromText(text: string, fallback = 'JPY'): string {
+  if (/濟州|济州|韓國|韩国|south korea|korea|jeju|seoul|busan|krw/i.test(text)) return 'KRW';
+  if (/日本|japan|tokyo|osaka|nagoya|kyoto|okinawa|jpy|円|日圓|日元/i.test(text)) return 'JPY';
+  if (/台灣|台湾|taiwan|taipei|twd/i.test(text)) return 'TWD';
+  if (/singapore|新加坡|sgd/i.test(text)) return 'SGD';
+  if (/hong kong|香港|hkd/i.test(text)) return 'HKD';
+  return String(fallback || 'JPY').toUpperCase();
+}
+
+function inferTripYear(text: string, state: AppState): string {
+  const explicit = text.match(/\b(20\d{2})\b/);
+  if (explicit) return explicit[1];
+  return (activeTrip(state).startDate || state.tripDateRange.start || new Date().toISOString()).slice(0, 4);
+}
+
+function dateFromMonthDay(month: string, day: string, year: string): string {
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+function classifyTripSpot(name: string): ItineraryDay['spots'][number]['type'] {
+  if (/機場|airport|航班|起飛|抵達|還車|租車|check-?in|check out|退房|出發|回到|開車|搭船|船票|港/i.test(name)) return 'transport';
+  if (/hotel|resort|酒店|住宿|stanford|fine jeju/i.test(name)) return 'lodging';
+  if (/午餐|晚餐|早餐|cafe|coffee|donut|donuts|restaurant|市場|黑豬|麵|飯|豬腳|炸雞|甜點|pudding|starbucks|bakery|baguette|flowave|waboda|chita|安頓|風爐/i.test(name)) return 'food';
+  if (/mart|shopping|購物|免稅|手信|街|地下街|小店|emart|lotte|新羅|七星路|nuwemaru|blue elephant|the islander|moodjeju|randy/i.test(name)) return 'shopping';
+  if (/park|museum|planet|瀑布|山|峰|牛島|海岸|沙灘|公園|水族館|aqua|camellia|osulloc|9\.81|日出峰|自然|市場/i.test(name)) return 'sightseeing';
+  return 'other';
+}
+
+function localTripDraftFromParagraph(paragraph: string, state: AppState, warnings: string[] = []): TripDraft | null {
+  const text = paragraph.trim();
+  if (!text) return null;
+  const year = inferTripYear(text, state);
+  const currency = inferTripCurrencyFromText(text, state.tripCurrency || 'JPY');
+  const context = resolveTripContext(text, currency);
+  const dayMatches = Array.from(text.matchAll(/(?:^|\n)\s*Day\s*(\d+)[^\n]*?(?:(20\d{2})[年/-])?(\d{1,2})\s*(?:月|\/|-)\s*(\d{1,2})\s*(?:日)?([^\n]*)/gi));
+  if (!dayMatches.length) return null;
+
+  const itinerary: ItineraryDay[] = [];
+  for (let i = 0; i < dayMatches.length; i += 1) {
+    const match = dayMatches[i];
+    const next = dayMatches[i + 1];
+    const block = text.slice(match.index || 0, next?.index || text.length);
+    const dayNo = Number(match[1]) || i + 1;
+    const date = dateFromMonthDay(match[3], match[4], match[2] || year);
+    const headerTail = String(match[5] || '').replace(/[｜|]/g, ' ').trim();
+    const lodgingMatch = block.match(/住\s+([^\n｜|]+)/i);
+    const region = headerTail.replace(/住\s+.*/i, '').trim() || (context.weatherRegion || context.countryName || `Day ${dayNo}`);
+    const spots = Array.from(block.matchAll(/^\s*([01]?\d|2[0-3]):([0-5]\d)\s+(.+?)(?:\t| {2,}|約|$)/gm))
+      .map((line) => {
+        const rawName = String(line[3] || '').replace(/\s+/g, ' ').trim();
+        const name = rawName.replace(/^(午餐|晚餐|早餐)[:：]\s*/i, '$1：').slice(0, 90);
+        return {
+          time: `${line[1].padStart(2, '0')}:${line[2]}`,
+          name: name || '未命名地點',
+          type: classifyTripSpot(name),
+          timezone: context.timezone || 'Asia/Seoul',
+          note: rawName,
+          sourceText: line[0].trim(),
+          confidence: 'medium' as const,
+        };
+      })
+      .filter((spot) => spot.name && !/建議[:：]/.test(spot.name));
+    itinerary.push({
+      date,
+      day: dayNo,
+      region,
+      city: /濟州|jeju/i.test(text) ? 'Jeju' : context.weatherRegion || context.countryName || '',
+      country: context.countryName || '',
+      timezone: context.timezone || 'Asia/Seoul',
+      currency,
+      highlight: region,
+      lodging: lodgingMatch?.[1]?.trim() ? {
+        name: lodgingMatch[1].trim(),
+        confidence: 'medium',
+      } : undefined,
+      spots,
+    });
+  }
+
+  const usableDays = itinerary.filter((day) => day.spots.length);
+  if (!usableDays.length) return null;
+  return normalizeTripDraft({
+    trip: {
+      name: /濟州|jeju/i.test(text) ? '濟州2026' : `${context.weatherRegion || context.countryName || 'Trip'} ${year}`,
+      destinationSummary: context.weatherRegion || context.countryName || itinerary.map((day) => day.region).slice(0, 3).join(' / '),
+      startDate: itinerary[0].date,
+      endDate: itinerary[itinerary.length - 1].date,
+      homeCurrency: 'HKD',
+      currencies: Array.from(new Set(['HKD', currency])),
+      intelligence: {
+        countryCode: context.countryCode,
+        countryName: context.countryName,
+        primaryCurrency: currency,
+        themeKey: context.themeKey,
+        locale: context.locale,
+        timezone: context.timezone,
+        weatherRegion: context.weatherRegion,
+        confidence: 'medium',
+      },
+      itinerary,
+    },
+    extractionReport: {
+      daysExtracted: itinerary.length,
+      spotsExtracted: itinerary.reduce((sum, day) => sum + day.spots.length, 0),
+      hotelsExtracted: itinerary.filter((day) => day.lodging?.name).length,
+      restaurantsExtracted: itinerary.flatMap((day) => day.spots).filter((spot) => spot.type === 'food').length,
+      transportsExtracted: itinerary.flatMap((day) => day.spots).filter((spot) => spot.type === 'transport').length,
+      importantDetailsExtracted: itinerary.reduce((sum, day) => sum + day.spots.length + (day.lodging?.name ? 1 : 0), 0),
+      sourceQuality: 'medium',
+      missingCriticalFields: ['Some exact addresses/coordinates need confirmation'],
+      assumptions: [`Month/day dates interpreted as ${year}`, 'Local parser used after AI provider attempts did not produce a usable itinerary'],
+      warnings,
+    },
+    summary: '已用本地 itinerary parser 抽取日程；請喺確認視窗檢查景點、酒店、餐廳同時間。',
+    warnings,
+    changes: ['已建立可確認嘅 day-by-day 行程草稿。'],
+  }, state, paragraph);
 }
 
 function normalizeSourceQuality(value: unknown): TripExtractionReport['sourceQuality'] {
@@ -561,7 +680,6 @@ ${paragraph.slice(0, 14000)}`;
               model: attempt.model || KIMI_API_MODEL,
             });
           } catch (brokerError) {
-            if (isQuotaOrRateLimitError(brokerError)) throw brokerError;
             warnings.push(brokerError instanceof Error ? brokerError.message : String(brokerError));
             const routeLabel = isBrokerRouteUnavailable(brokerError) ? 'backend unavailable' : 'structured route failed';
             console.warn(`[AI Routing] Trip intelligence ${attempt.label} ${routeLabel}, trying same model JSON route:`, brokerError);
@@ -582,16 +700,18 @@ ${paragraph.slice(0, 14000)}`;
         warnings.push(`${attempt.label} returned no usable itinerary spots.`);
         console.warn(`[AI Routing] ${attempt.label} returned no usable itinerary spots; trying next trip model.`);
       } catch (error) {
-        if (isQuotaOrRateLimitError(error)) throw error;
         last = error;
         warnings.push(error instanceof Error ? error.message : String(error));
         const routeLabel = isBrokerRouteUnavailable(error) ? 'backend unavailable' : 'attempt failed';
         console.warn(`[AI Routing] Trip update ${attempt.label} ${routeLabel}, trying next model:`, error);
       }
     }
+    const localDraft = localTripDraftFromParagraph(paragraph, state, warnings);
+    if (localDraft && hasUsefulTripItinerary(localDraft)) return localDraft;
     throw new Error([...warnings, last instanceof Error ? last.message : '', 'All trip LLM attempts returned no usable itinerary spots.'].filter(Boolean).join(' | '));
   } catch (error) {
-    if (isQuotaOrRateLimitError(error)) throw error instanceof Error ? error : new Error(String(error));
+    const localDraft = localTripDraftFromParagraph(paragraph, state, [error instanceof Error ? error.message : String(error)]);
+    if (localDraft && hasUsefulTripItinerary(localDraft)) return localDraft;
     const fallback = tripFromLegacyState({
       ...state,
       tripName: current.name,
@@ -599,7 +719,7 @@ ${paragraph.slice(0, 14000)}`;
       customItinerary: current.itinerary,
     });
     return {
-      trip: { ...fallback, version: current.version + 1, updatedAt: Date.now() },
+      trip: { ...fallback, itinerary: [], version: current.version + 1, updatedAt: Date.now() },
       summary: 'AI 暫時未能完整分析，已保留現有旅程供手動修改。',
       warnings: [error instanceof Error ? error.message : String(error)],
       changes: ['沒有自動套用新資料。'],

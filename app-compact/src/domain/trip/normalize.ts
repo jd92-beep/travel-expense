@@ -1,4 +1,5 @@
 import { APP_SCHEMA_VERSION, DEFAULT_STATE, ITINERARY } from '../../lib/constants';
+import { perHkdForCurrency } from '../../lib/currency';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile } from '../../lib/types';
 import { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
 
@@ -260,9 +261,7 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   const rate = Math.max(
     0.1,
     Number(receipt.exchangeRate)
-      || Number(state.rateTable?.[currency]?.perHkd)
-      || Number(state.rate)
-      || 20.36,
+      || perHkdForCurrency(state, currency),
   );
 
   // 增加強大嘅港幣折算自我修復 (Self-Healing) 校驗

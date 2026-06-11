@@ -4,6 +4,46 @@ export const SUPPORTED_CURRENCIES = ['JPY', 'HKD', 'USD', 'KRW', 'TWD', 'CNY', '
 
 export type CurrencyCode = typeof SUPPORTED_CURRENCIES[number];
 
+export const FALLBACK_PER_HKD: Record<string, number> = {
+  HKD: 1,
+  JPY: 20.36,
+  KRW: 175,
+  USD: 0.128,
+  TWD: 4,
+  CNY: 0.92,
+  EUR: 0.118,
+  GBP: 0.1,
+  AUD: 0.195,
+  SGD: 0.173,
+  THB: 4.7,
+  MYR: 0.6,
+  VND: 3250,
+  CAD: 0.175,
+  NZD: 0.21,
+  CHF: 0.114,
+  PHP: 7.2,
+};
+
+const CURRENCY_PREFIX: Record<string, string> = {
+  HKD: 'HK$',
+  JPY: '¥',
+  KRW: '₩',
+  USD: 'US$',
+  TWD: 'NT$',
+  CNY: '¥',
+  EUR: '€',
+  GBP: '£',
+  AUD: 'A$',
+  SGD: 'S$',
+  THB: '฿',
+  MYR: 'RM',
+  VND: '₫',
+  CAD: 'C$',
+  NZD: 'NZ$',
+  CHF: 'CHF',
+  PHP: '₱',
+};
+
 export interface CurrencySnapshot {
   base: 'HKD';
   rates: Record<string, number>;
@@ -25,6 +65,41 @@ const MAX_AGE = 60 * 60 * 1000; // 1 hour cache
 
 function jpyPerHkd(state: AppState): number {
   return Math.max(0.1, Number(state.rate) || 20.36);
+}
+
+export function perHkdForCurrency(state: AppState, currency = 'JPY'): number {
+  const code = String(currency || 'JPY').toUpperCase();
+  if (code === 'HKD') return 1;
+  const explicit = Number(state.rateTable?.[code]?.perHkd);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  if (code === 'JPY') return jpyPerHkd(state);
+  return FALLBACK_PER_HKD[code] || 1;
+}
+
+export function amountToHkd(amount: number, currency: string, state: AppState): number {
+  const code = String(currency || 'JPY').toUpperCase();
+  const value = Number(amount) || 0;
+  if (code === 'HKD') return value;
+  return value / Math.max(0.1, perHkdForCurrency(state, code));
+}
+
+export function hkdToCurrency(amountHkd: number, currency: string, state: AppState): number {
+  const code = String(currency || 'JPY').toUpperCase();
+  const value = Number(amountHkd) || 0;
+  if (code === 'HKD') return value;
+  return value * Math.max(0.1, perHkdForCurrency(state, code));
+}
+
+export function currencyPrefix(currency: string): string {
+  const code = String(currency || '').toUpperCase();
+  return CURRENCY_PREFIX[code] || `${code} `;
+}
+
+export function formatCurrencyAmount(amount: number, currency: string): string {
+  const code = String(currency || '').toUpperCase();
+  const prefix = currencyPrefix(code);
+  const rounded = Math.round(Number(amount) || 0).toLocaleString('en-US');
+  return prefix.endsWith(' ') ? `${prefix}${rounded}` : `${prefix} ${rounded}`;
 }
 
 export function isCurrencyCode(value: string): value is CurrencyCode {

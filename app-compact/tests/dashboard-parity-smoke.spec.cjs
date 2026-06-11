@@ -89,6 +89,66 @@ test('Dashboard keeps Home simple without travel-day diagnostic cards', async ({
   await expect(page.locator('.today-itinerary-card')).toBeVisible();
 });
 
+test('Dashboard budget currency toggle follows active Korea trip currency', async ({ page }) => {
+  await openDashboard(page, false, {
+    budget: 1750000,
+    tripCurrency: 'KRW',
+    displayCurrency: 'JPY',
+    activeTripId: 'dash_jeju_trip',
+    tripName: '濟州2026',
+    tripDateRange: { start: '2026-05-08', end: '2026-05-08' },
+    customItinerary: [{
+      date: '2026-05-08',
+      day: 1,
+      region: 'Jeju City',
+      city: 'Jeju',
+      country: 'South Korea',
+      timezone: 'Asia/Seoul',
+      currency: 'KRW',
+      spots: [{ time: '10:00', name: 'Dongmun Market', type: 'food' }],
+    }],
+    trips: [{
+      id: 'dash_jeju_trip',
+      name: '濟州2026',
+      destinationSummary: 'Jeju, South Korea',
+      startDate: '2026-05-08',
+      endDate: '2026-05-08',
+      homeCurrency: 'HKD',
+      currencies: ['HKD', 'KRW'],
+      timezones: ['Asia/Seoul'],
+      version: 1,
+      active: true,
+      itinerary: [{
+        date: '2026-05-08',
+        day: 1,
+        region: 'Jeju City',
+        city: 'Jeju',
+        country: 'South Korea',
+        timezone: 'Asia/Seoul',
+        currency: 'KRW',
+        spots: [{ time: '10:00', name: 'Dongmun Market', type: 'food' }],
+      }],
+      intelligence: { countryCode: 'KR', countryName: 'South Korea', primaryCurrency: 'KRW', themeKey: 'korea_editorial', timezone: 'Asia/Seoul', weatherRegion: 'Jeju' },
+      createdAt: 1,
+      updatedAt: 1,
+    }],
+    receipts: [
+      { id: 'dash_krw_food', store: 'Dongmun Market', total: 175000, currency: 'KRW', originalCurrency: 'KRW', date: '2026-05-08', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1 },
+    ],
+  });
+
+  const budgetCard = page.locator('.washi-budget-card');
+  await expect(budgetCard.locator('.preview-dashboard-currency')).toContainText('HKD');
+  await expect(budgetCard.locator('.preview-dashboard-currency')).toContainText('KRW');
+  await expect(budgetCard.locator('.preview-dashboard-currency')).not.toContainText('JPY');
+  await expect(budgetCard).toContainText('₩ 175,000');
+  await budgetCard.getByText('HKD').click();
+  await expect(budgetCard).toContainText('HK$ 1,000');
+  await page.getByRole('button', { name: 'Add Expense' }).click();
+  await expect(page.getByText('手動記一筆')).toBeVisible();
+  await expect(page.getByLabel('原貨幣')).toHaveValue('KRW');
+});
+
 test('Dashboard new trip wizard lets users choose trip days on step two', async ({ page }) => {
   const tripIntelligenceCalls = [];
   await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({
@@ -334,8 +394,8 @@ test('Dashboard new trip wizard tries LLM fallbacks before default scenery spots
   expect(created.syncQueued).toBe(true);
 });
 
-test('Dashboard new trip wizard hard-stops quota instead of default scenery fallback', async ({ page }) => {
-  let kimiCalls = 0;
+test('Dashboard new trip wizard tries model fallbacks after quota before destination fallback', async ({ page }) => {
+  const calls = { kimi: 0, mimo: 0, google: 0 };
   await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
   await page.route('https://en.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
   await page.route('**/trip/intelligence', async (route) => route.fulfill({
@@ -344,8 +404,16 @@ test('Dashboard new trip wizard hard-stops quota instead of default scenery fall
     body: JSON.stringify({ ok: false, error: 'Supabase AI daily quota exceeded' }),
   }));
   await page.route('**/kimi/json', async (route) => {
-    kimiCalls += 1;
+    calls.kimi += 1;
     await route.fulfill({ json: { ok: true, data: {} } });
+  });
+  await page.route('**/mimo/json', async (route) => {
+    calls.mimo += 1;
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'mimo unavailable' }) });
+  });
+  await page.route('**/google/json', async (route) => {
+    calls.google += 1;
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'google unavailable' }) });
   });
 
   await openDashboard(page, false, {
@@ -362,20 +430,24 @@ test('Dashboard new trip wizard hard-stops quota instead of default scenery fall
   await page.locator('textarea').fill('濟州行程需要 AI 安排。');
   await page.getByRole('button', { name: /完成創建/ }).click();
 
-  await expect(page.getByText('Step 4 of 4')).toBeVisible();
-  await expect(page.getByText(/AI quota \/ rate limit/)).toBeVisible();
-  expect(kimiCalls).toBe(0);
-  const unchanged = await page.evaluate(() => {
+  await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
+  expect(calls.kimi).toBeGreaterThanOrEqual(1);
+  expect(calls.mimo).toBeGreaterThanOrEqual(1);
+  expect(calls.google).toBeGreaterThanOrEqual(1);
+  const created = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
+    const trip = state.trips?.find((item) => item.id === state.activeTripId);
     return {
       tripName: state.tripName,
-      hasJejuTrip: state.trips?.some((item) => item.name === '濟州2026'),
+      tripCurrency: state.tripCurrency,
+      firstSpot: trip?.itinerary?.[0]?.spots?.[0]?.name,
       hasTripCreate: state.syncQueue?.some((item) => item.type === 'trip' && item.op === 'create'),
     };
   });
-  expect(unchanged.tripName).toBe('Dashboard Test');
-  expect(unchanged.hasJejuTrip).toBeFalsy();
-  expect(unchanged.hasTripCreate).toBeFalsy();
+  expect(created.tripName).toBe('濟州2026');
+  expect(created.tripCurrency).toBe('KRW');
+  expect(created.firstSpot).toBeTruthy();
+  expect(created.hasTripCreate).toBe(true);
 });
 
 test('Dashboard compact itinerary and recent expenses show denser Home information', async ({ page }) => {
@@ -478,6 +550,7 @@ async function seedBrokerAssistantDashboard(page) {
       rate: 20,
       credentialSession: 'assistant-session',
       credentialSessionExpiresAt: fixedNow + 60_000,
+      tripUpdateModel: 'mimo/mimo-v2.5',
       activeTripId: 'assistant_trip',
       tripName: 'Assistant Test',
       tripDateRange: { start: '2026-05-08', end: '2026-05-10' },
@@ -515,7 +588,7 @@ async function seedBrokerAssistantDashboard(page) {
 
 test('Dashboard broker AI assistant shows primary model, quota policy, and broker answer', async ({ page }) => {
   const calls = [];
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/mimo/json', async (route) => {
     const body = route.request().postDataJSON();
     calls.push(body);
     await route.fulfill({
@@ -533,30 +606,30 @@ test('Dashboard broker AI assistant shows primary model, quota policy, and broke
     });
   });
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/google/json', async (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'google should not be called' }) }));
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/mimo/json', async (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'mimo should not be called' }) }));
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'kimi should not be called' }) }));
 
   await seedBrokerAssistantDashboard(page);
   await page.goto('http://localhost:8903/travel-expense/compact/');
   const assistant = page.getByLabel('Broker AI assistant');
   await expect(assistant).toBeVisible();
   await expect(assistant).toContainText('Broker AI Assistant');
-  await expect(assistant).toContainText('Primary · kimi/kimi-code');
+  await expect(assistant).toContainText('Primary · mimo/mimo-v2.5');
   await expect(assistant).toContainText('Quota · broker metered');
-  await expect(assistant).toContainText('No fallback on 429');
+  await expect(assistant).toContainText('Selected model primary');
   await assistant.getByLabel('AI assistant question').fill('今日 shopping budget 應該點？');
   await assistant.getByRole('button', { name: '問 AI' }).click();
   await expect(assistant).toContainText('今日控制預算');
   await expect(assistant).toContainText('Risk · watch');
   await expect(assistant).toContainText('Shopping 先限 HK$100');
   expect(calls).toHaveLength(1);
-  expect(calls[0]).toMatchObject({ kind: 'trip', model: 'kimi-code' });
+  expect(calls[0]).toMatchObject({ kind: 'trip', model: 'mimo-v2.5' });
   expect(String(calls[0].prompt)).toContain('Return JSON only');
 });
 
-test('Dashboard broker AI assistant hard-stops on quota without fallback', async ({ page }) => {
+test('Dashboard broker AI assistant reports selected primary quota without using Kimi label', async ({ page }) => {
   const calls = { kimi: 0, google: 0, mimo: 0 };
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
-    calls.kimi += 1;
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/mimo/json', async (route) => {
+    calls.mimo += 1;
     await route.fulfill({
       status: 429,
       contentType: 'application/json',
@@ -567,8 +640,8 @@ test('Dashboard broker AI assistant hard-stops on quota without fallback', async
     calls.google += 1;
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: {} }) });
   });
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/mimo/json', async (route) => {
-    calls.mimo += 1;
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
+    calls.kimi += 1;
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: {} }) });
   });
 
@@ -576,8 +649,8 @@ test('Dashboard broker AI assistant hard-stops on quota without fallback', async
   await page.goto('http://localhost:8903/travel-expense/compact/');
   const assistant = page.getByLabel('Broker AI assistant');
   await assistant.getByRole('button', { name: '問 AI' }).click();
-  await expect(assistant).toContainText('Quota hard stop');
-  await expect(assistant).toContainText('No fallback was attempted');
+  await expect(assistant).toContainText('Selected primary paused');
+  await expect(assistant).toContainText('Quota or rate limit');
   await expect(assistant).toContainText('Supabase AI daily quota exceeded');
-  expect(calls).toEqual({ kimi: 1, google: 0, mimo: 0 });
+  expect(calls).toEqual({ kimi: 0, google: 0, mimo: 1 });
 });

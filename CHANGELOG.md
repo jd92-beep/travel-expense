@@ -2,6 +2,12 @@
 
 ## 2026-06-11
 
+- Fixed compact Korea/Jeju trip currency handling. Home budget overview now toggles between HKD and the active trip currency such as KRW instead of hardcoded JPY, and old stale `displayCurrency: "JPY"` state is corrected visually for KRW trips.
+- Fixed compact Record manual-entry defaults so `原貨幣` follows the itinerary day or active trip currency, with shared conversion helpers for KRW and other common travel currencies instead of falling back to the JPY rate.
+- Fixed compact Dashboard Broker AI Assistant wording and routing so it shows the selected primary trip-update model, such as Mimo v2.5, and sends the broker request to that provider/model instead of always displaying/calling Kimi.
+- Hardened compact Trip Update AI for long pasted itineraries: provider failures now continue through the trip model ladder, and when providers are unavailable the local parser can extract day-by-day Jeju itinerary details, lodging, spots, country/currency/timezone, warnings, and open the confirmation modal instead of loading silently.
+- Fixed compact Weather fallback behavior so short WeatherAPI forecast windows can fall through to Open-Meteo for future travel dates, preventing empty or placeholder weather cards for itinerary days outside the broker forecast range.
+- Added compact smoke coverage for KRW budget toggles, KRW receipt default currency, selected-model Dashboard assistant routing, trip-update local parser confirmation, and model fallback behavior. Verification passed with `app-compact npm run typecheck`, `app-compact npm run build`, `app-compact npm run security:scan`, `git diff --check`, Dashboard smoke (`9 passed`), Settings Trip Update smoke (`2 passed`), and AI routing smoke (`3 passed, 1 skipped`).
 - Polished the compact trip-entry flow: larger itinerary text areas, richer placeholders, fuller currency choices, and clearer guidance that Step 4 trip details should include hotels, restaurants, transport, bookings, and daily plans.
 - Improved compact Trip Update AI review: the extraction prompt now asks for end times, lodging check-in/check-out, coordinates, spot type, and day highlights; the confirmation modal shows clearer hotel/restaurant/scenery counts, coordinate markers, lodging details, and avoids duplicate city wording.
 - Fixed compact itinerary/weather guardrails by coercing string `lat/lon` to numbers, guarding weather day spots when missing, and keeping the top trip/Settings experience simpler for normal users.

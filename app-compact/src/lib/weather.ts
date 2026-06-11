@@ -732,7 +732,7 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', offic
 
   if (officialResult) {
     try {
-      const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, officialProvider, state, officialFallbackReason);
+      const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, officialProvider, state, targetDate, officialFallbackReason);
       const data = mergeWeatherData(officialResult.data, fallbackResult.data);
       const reason = fallbackResult.provider
         ? `${officialResult.provider} missing some hourly fields; filled by ${fallbackResult.provider}`
@@ -754,18 +754,21 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', offic
       };
     }
   }
-  const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, officialProvider, state, officialFallbackReason);
+  const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, officialProvider, state, targetDate, officialFallbackReason);
   if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: fallbackResult.data, source: fallbackResult.source }));
   return fallbackResult;
 }
 
-async function fetchFallbackWeather(coord: WeatherCoord, safeTimezone: string, officialProvider: OfficialWeatherProviderId | null, state?: WeatherBrokerState, priorReason = ''): Promise<WeatherFetchResult> {
+async function fetchFallbackWeather(coord: WeatherCoord, safeTimezone: string, officialProvider: OfficialWeatherProviderId | null, state?: WeatherBrokerState, targetDate?: string, priorReason = ''): Promise<WeatherFetchResult> {
   let brokerFallbackReason = '';
   if (state) {
     try {
       const data = await brokerWeatherForecast(state, { lat: coord.lat, lon: coord.lon, days: 3 });
       if (data && typeof data === 'object') {
-        return { data: data as WeatherData, source: 'WeatherAPI.com', provider: 'WeatherAPI.com', cached: false, fetchedAt: Date.now(), fallbackReason: priorReason || undefined };
+        if (!targetDate || weatherDataIncludesDate(data, targetDate)) {
+          return { data: data as WeatherData, source: 'WeatherAPI.com', provider: 'WeatherAPI.com', cached: false, fetchedAt: Date.now(), fallbackReason: priorReason || undefined };
+        }
+        brokerFallbackReason = `WeatherAPI.com has no ${targetDate} forecast; using public fallback`;
       }
     } catch (error) {
       brokerFallbackReason = `WeatherAPI.com unavailable: ${weatherErrorLabel(error)}`;

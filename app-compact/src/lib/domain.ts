@@ -1,4 +1,5 @@
 import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
+import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, TripPhase } from './types';
 
@@ -148,7 +149,7 @@ export function isPendingReceipt(receipt: Receipt): boolean {
 }
 
 export function hkd(jpy: number, state: AppState): number {
-  const rate = Math.max(0.1, Number(state.rate) || 20.36);
+  const rate = Math.max(0.1, perHkdForCurrency(state, 'JPY'));
   return Math.round((Number(jpy) || 0) / rate);
 }
 
@@ -157,13 +158,7 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   if (cur === 'HKD') {
     return Number(r.total) || 0;
   }
-  const rate = Math.max(
-    0.1,
-    Number(r.exchangeRate) ||
-    Number(state.rateTable?.[cur]?.perHkd) ||
-    (cur === 'JPY' ? Number(state.rate) : undefined) ||
-    20.36
-  );
+  const rate = Math.max(0.1, Number(r.exchangeRate) || perHkdForCurrency(state, cur));
 
   // 增加強大嘅自我修復 Self-Healing 校驗：
   // 如果 hkdAmount 存在，但與依匯率計算出的金額偏差超過 40% (偏離過大說明數據有污染/被寫錯了)，
@@ -190,13 +185,7 @@ export function getReceiptTripAmount(r: Receipt, state: AppState, resolvedTripCu
     return Number(r.total) || 0;
   }
   const hkdAmt = getReceiptHkdAmount(r, state);
-  const activeRate = Math.max(
-    0.1,
-    Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
-    (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
-    20.36
-  );
-  return Math.round(hkdAmt * activeRate);
+  return Math.round(hkdToCurrency(hkdAmt, resolvedTripCurrency, state));
 }
 
 export function getResolvedTripCurrency(state: AppState, trip: any): string {
