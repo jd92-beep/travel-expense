@@ -2034,6 +2034,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   margin: 0;
   font-size: 14px;
 }
+.weather-group-spots {
+  font-size: 0.72rem;
+  color: var(--muted, #888);
+  margin: -0.15rem 0 0.35rem 0;
+  opacity: 0.7;
+}
 .weather-location-meta {
   margin: 0 0 2px;
 }
@@ -4251,12 +4257,6 @@ body {
     linear-gradient(135deg, rgba(255,253,247,.86), rgba(255,238,230,.62)),
     rgba(255,255,255,.64);
 }
-.settings-screen .settings-post-trip-archive--ok {
-  border-color: rgba(5,150,105,.22);
-  background:
-    linear-gradient(135deg, rgba(255,253,247,.86), rgba(230,247,239,.74)),
-    rgba(255,255,255,.64);
-}
 .settings-screen .settings-trip-scope-audit--ok {
   border-color: rgba(63,126,85,.2);
   background:
@@ -4342,9 +4342,6 @@ body {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
   margin-top: 9px;
-}
-.settings-post-trip-actions {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .settings-trip-doctor-actions button {
   min-width: 0;
@@ -11955,10 +11952,6 @@ textarea,
   .app-shell--settings .settings-trip-doctor-actions {
     gap: 5px;
     margin-top: 7px;
-  }
-
-  .app-shell--settings .settings-post-trip-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .app-shell--settings .settings-trip-doctor-actions button {

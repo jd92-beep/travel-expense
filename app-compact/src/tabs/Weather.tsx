@@ -6,7 +6,7 @@ import { Meteors } from '../components/ui/meteors';
 import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import { coordForDay, coordsForDay, fetchWeather, resolveCoordsForDay, resolveOfficialWeatherProvider, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type WeatherSlot } from '../lib/weather';
+import { coordForDay, coordsForDay, fetchWeather, getCachedWeatherRows, groupedCoordsForDay, resolveOfficialWeatherProvider, setCachedWeatherRows, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type GroupedWeatherLocation, type WeatherCoord, type WeatherSlot } from '../lib/weather';
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
@@ -25,8 +25,9 @@ function WeatherIcon({ code, size = 18 }: { code?: number; size?: number }) {
 }
 
 export function Weather({ state }: { state: AppState }) {
-  const [rows, setRows] = useState<Record<string, DayWeather[]>>({});
+  const [rows, setRows] = useState<Record<string, DayWeather[]>>(() => getCachedWeatherRows() || {});
   const [busy, setBusy] = useState(false);
+  const [stale, setStale] = useState(false);
   const [error, setError] = useState('');
   const trip = activeTrip(state);
   const itinerary = useMemo(() => getItinerary(state), [state]);
@@ -44,12 +45,13 @@ export function Weather({ state }: { state: AppState }) {
   }, [itinerary, hasEnded, today, trip]);
 
   const itineraryKey = displayItinerary.map((day) => {
-    const coords = coordsForDay(day, WEATHER_LOCATIONS_PER_DAY).map((coord) => `${coord.label}:${coord.lat}:${coord.lon}`).join(',');
+    const groups = groupedCoordsForDay(day);
+    const coords = groups.map((g) => `${g.label}:${g.lat}:${g.lon}`).join(',');
     return `${day.date}:${day.region}:${day.country || ''}:${hasEnded ? today : day.date}:${coords}`;
   }).join('|');
   const targetSummary = useMemo(() => weatherTargetSummary(displayItinerary, hasEnded, today), [displayItinerary, hasEnded, today]);
   const hasMissingTarget = useMemo(
-    () => displayItinerary.some((day) => coordsForDay(day, WEATHER_LOCATIONS_PER_DAY).some((coord) => coord.missing)),
+    () => displayItinerary.some((day) => groupedCoordsForDay(day).some((g) => g.missing)),
     [displayItinerary],
   );
   const leadDay = displayItinerary[0];
@@ -72,23 +74,28 @@ export function Weather({ state }: { state: AppState }) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      setBusy(true);
+      const cached = getCachedWeatherRows();
+      if (cached && Object.keys(cached).length > 0) {
+        setRows(cached);
+        setStale(true);
+      } else {
+        setBusy(true);
+      }
       setError('');
       try {
-        const next: Record<string, DayWeather[]> = {};
-        for (const day of displayItinerary) {
+        const dayPromises = displayItinerary.map(async (day) => {
           const forecastDate = hasEnded ? today : day.date;
-          next[day.date] = [];
-          for (const coord of await resolveCoordsForDay(day, WEATHER_LOCATIONS_PER_DAY)) {
+          const groups = groupedCoordsForDay(day);
+          const coordPromises = groups.map(async (group) => {
             try {
-              if (coord.missing) {
-                next[day.date].push({ coord, source: '缺少座標', slots: [] });
-                continue;
+              if (group.missing) {
+                return { coord: group as WeatherCoord, source: '缺少座標', slots: [] };
               }
+              const coord: WeatherCoord = { label: group.label, lat: group.lat, lon: group.lon, timezone: group.timezone, origin: 'known-region' };
               const officialProvider = resolveOfficialWeatherProvider(coord, { country: day.country, region: day.region, city: day.city });
               const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', officialProvider, state, forecastDate);
-              if (cancelled) return;
-              next[day.date].push({
+              if (cancelled) return null;
+              return {
                 coord,
                 source: result.source,
                 provider: result.provider,
@@ -96,21 +103,30 @@ export function Weather({ state }: { state: AppState }) {
                 fetchedAt: result.fetchedAt,
                 fallbackReason: result.fallbackReason,
                 slots: slotsForDate(result.data as Parameters<typeof slotsForDate>[0], forecastDate),
-              });
+              };
             } catch (innerErr) {
-              if (cancelled) return;
-              console.warn(`[Weather] Load failed for ${coord.label}:`, innerErr);
-              next[day.date].push({ coord, source: '拉取失敗', slots: [] });
+              if (cancelled) return null;
+              console.warn(`[Weather] Load failed for ${group.label}:`, innerErr);
+              return { coord: { label: group.label, lat: group.lat, lon: group.lon } as WeatherCoord, source: '拉取失敗', slots: [] };
             }
-          }
-        }
+          });
+          const results = (await Promise.all(coordPromises)).filter((r): r is NonNullable<typeof r> => r != null);
+          return { date: day.date, rows: results };
+        });
+        const dayResults = await Promise.all(dayPromises);
         if (cancelled) return;
+        const next: Record<string, DayWeather[]> = {};
+        for (const { date, rows: dayRows } of dayResults) next[date] = dayRows;
         setRows(next);
+        setCachedWeatherRows(next);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : String(err));
       } finally {
-        if (!cancelled) setBusy(false);
+        if (!cancelled) {
+          setBusy(false);
+          setStale(false);
+        }
       }
     }
     loadRef.current = load;
@@ -137,7 +153,8 @@ export function Weather({ state }: { state: AppState }) {
             </button>
           </div>
         </div>
-        {busy && <LoadingState label="更新天氣中" />}
+        {busy && !stale && <LoadingState label="更新天氣中" />}
+        {stale && !busy && <span className="weather-stale-hint" style={{ fontSize: '0.72rem', opacity: 0.6 }}>背景更新中</span>}
         {error && <Toast tone="warning">天氣拉取失敗：{error}</Toast>}
       </GlassCard>
       <GlassCard className="preview-weather-current-card">
@@ -182,7 +199,7 @@ export function Weather({ state }: { state: AppState }) {
           <GlassCard className="weather-day">
             <div className="section-head">
               <div><p className="eyebrow">{hasEnded ? `Current · ${today} · Trip Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
-              <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{coordsForDay(day, WEATHER_LOCATIONS_PER_DAY).map((coord) => coord.label).join(' / ') || coordForDay(day).label}</StatusPill>
+              <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{groupedCoordsForDay(day).map((g) => g.label).join(' / ') || day.region}</StatusPill>
             </div>
             {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
             {dayRows.map((weather) => {
@@ -190,7 +207,7 @@ export function Weather({ state }: { state: AppState }) {
               const liveHour = liveSlotHour(hasEnded ? today : day.date, normalizedTimezone(day.timezone) || 'Asia/Tokyo');
               return (
                 <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
-                  {dayRows.length > 1 && <h3>{weather.coord.label}</h3>}
+                  <h3>{weather.coord.label}</h3>
                   <div className="weather-location-meta" aria-label={`Weather metadata for ${weather.coord.label}`}>
                     <span>{weatherProviderLabel(weather)}</span>
                     <span>{weatherFreshnessLabel(weather)}</span>
@@ -313,7 +330,7 @@ function formatHour(hour: number): string {
 function weatherTargetSummary(days: ItineraryDay[], hasEnded: boolean, today: string): string {
   const todayDay = days.find((day) => day.date === today);
   const sourceDays = hasEnded ? days : todayDay ? [todayDay] : days;
-  const labels = Array.from(new Set(sourceDays.flatMap((day) => coordsForDay(day, WEATHER_LOCATIONS_PER_DAY).map((coord) => coord.label).filter(Boolean))));
+  const labels = Array.from(new Set(sourceDays.flatMap((day) => groupedCoordsForDay(day).map((g) => g.label).filter(Boolean))));
   const scope = hasEnded
     ? 'Current'
     : Boolean(todayDay) || days.every((day) => day.day <= 0)

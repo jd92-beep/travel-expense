@@ -1,8 +1,23 @@
 import type { ItineraryDay } from './types';
 import { brokerWeatherForecast } from './credentialBroker';
 import type { AppState } from './types';
+import { GEO_DICTIONARY } from './geo';
 
 export const WEATHER_SLOTS = [9, 12, 16, 21];
+
+const ROWS_CACHE_TTL = 60 * 60 * 1000;
+let _weatherRowsCache: { data: Record<string, DayWeather[]>; ts: number } | null = null;
+
+export function getCachedWeatherRows(): Record<string, DayWeather[]> | null {
+  if (_weatherRowsCache && Date.now() - _weatherRowsCache.ts < ROWS_CACHE_TTL) {
+    return _weatherRowsCache.data;
+  }
+  return null;
+}
+
+export function setCachedWeatherRows(data: Record<string, DayWeather[]>): void {
+  _weatherRowsCache = { data, ts: Date.now() };
+}
 
 export interface WeatherCoord {
   label: string;
@@ -159,6 +174,80 @@ export function coordsForDay(day: ItineraryDay, limit = 2): WeatherCoord[] {
 
 export function coordForDay(day: ItineraryDay): WeatherCoord {
   return coordsForDay(day, 1)[0];
+}
+
+export interface GroupedWeatherLocation {
+  label: string;
+  lat: number;
+  lon: number;
+  spotNames: string[];
+  timezone?: string;
+  missing?: boolean;
+}
+
+function haversineKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+const GROUP_RADIUS_KM = 30;
+
+function buildCityAnchors(): { label: string; lat: number; lon: number }[] {
+  const anchors = new Map<string, { label: string; lat: number; lon: number }>();
+  for (const entry of Object.values(REGION_COORDS)) {
+    anchors.set(entry.label, { label: entry.label, lat: entry.lat, lon: entry.lon });
+  }
+  for (const entry of GEO_DICTIONARY) {
+    const city = entry.geo.city;
+    if (!anchors.has(city)) {
+      anchors.set(city, { label: city, lat: entry.geo.lat, lon: entry.geo.lon });
+    }
+  }
+  return Array.from(anchors.values());
+}
+
+let _cityAnchorsCache: { label: string; lat: number; lon: number }[] | null = null;
+function getCityAnchors() {
+  if (!_cityAnchorsCache) _cityAnchorsCache = buildCityAnchors();
+  return _cityAnchorsCache;
+}
+
+export function groupedCoordsForDay(day: ItineraryDay): GroupedWeatherLocation[] {
+  const rawCoords = coordsForDay(day, 99);
+  if (rawCoords.length === 0 || (rawCoords.length === 1 && rawCoords[0].missing)) {
+    return [{ label: weatherLocationLabel(day), lat: Number.NaN, lon: Number.NaN, spotNames: [], missing: true, timezone: day.timezone }];
+  }
+
+  const cityAnchors = getCityAnchors();
+  const groups = new Map<string, { label: string; lat: number; lon: number; spotNames: string[]; timezone?: string }>();
+
+  for (const coord of rawCoords) {
+    if (coord.missing) continue;
+    let matched = false;
+    for (const city of cityAnchors) {
+      if (haversineKm(coord, city) <= GROUP_RADIUS_KM) {
+        const key = city.label;
+        if (!groups.has(key)) groups.set(key, { label: city.label, lat: city.lat, lon: city.lon, spotNames: [], timezone: coord.timezone });
+        groups.get(key)!.spotNames.push(coord.label);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      const key = `${coord.lat.toFixed(2)}_${coord.lon.toFixed(2)}`;
+      if (!groups.has(key)) groups.set(key, { label: coord.label, lat: coord.lat, lon: coord.lon, spotNames: [], timezone: coord.timezone });
+      groups.get(key)!.spotNames.push(coord.label);
+    }
+  }
+
+  if (groups.size === 0) {
+    return [{ label: weatherLocationLabel(day), lat: Number.NaN, lon: Number.NaN, spotNames: [], missing: true, timezone: day.timezone }];
+  }
+
+  return Array.from(groups.values());
 }
 
 export async function resolveCoordsForDay(day: ItineraryDay, limit = 2): Promise<WeatherCoord[]> {
