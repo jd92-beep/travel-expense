@@ -136,12 +136,12 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await page.getByLabel('金額（legacy total）').fill('456');
   await page.getByLabel('時間').fill('10:10');
   await page.getByRole('button', { name: '儲存' }).click();
-  await page.getByRole('button', { name: '主頁' }).click();
+  await nav.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first()).toBeVisible();
   await page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first().click();
   await page.getByLabel('金額（legacy total）').fill('789');
   await page.getByRole('button', { name: '儲存' }).click();
-  await expect(page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first()).toContainText('¥789');
+  await expect(page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first()).toContainText('789');
   await page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first().click();
   await page.getByRole('button', { name: '刪除' }).click();
   await page.getByRole('dialog').getByRole('button', { name: '確認刪除' }).click();

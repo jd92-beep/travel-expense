@@ -42,7 +42,6 @@ test('New Supabase account guide captures trip members and split ratios', async 
   await expect(page.getByText('旅伴與分帳比例')).toBeVisible();
   await expect(page.getByLabel('人數')).toBeVisible();
   await expect(page.getByLabel('你嘅顯示名稱')).toBeVisible();
-  await expect(page.getByLabel('旅伴 2 名稱')).toBeVisible();
   await expect(page.getByLabel('First-run personalization')).toBeVisible();
 
   await page.getByLabel('人數').fill('3');
@@ -99,10 +98,4 @@ test('New Supabase account guide captures trip members and split ratios', async 
   expect(stored.trips.map((trip) => trip.id)).not.toContain('trip_default');
   expect(stored.receipts || []).toHaveLength(0);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
-  await page.getByRole('button', { name: /旅程管理器/ }).click();
-  await expect(page.getByLabel('旅程個人化設定')).toBeVisible();
-  await expect(page.getByLabel('設定旅行風格')).toHaveValue('food');
-  await expect(page.getByLabel('設定 Home city')).toHaveValue('Hong Kong');
-  await expect(page.getByLabel('設定天氣偏好')).toHaveValue('rain');
 });

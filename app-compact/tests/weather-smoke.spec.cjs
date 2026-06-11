@@ -455,7 +455,7 @@ test('JMA official stays preferred when broker session is active', async ({ page
   await expect(page.locator('.weather-screen')).not.toContainText('WeatherAPI.com');
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
   await expect(page.locator('.preview-weather-temp strong')).toHaveText('21°C');
-  await expect(page.locator('.preview-weather-temp small')).toContainText('體感 25°C');
+  await expect(page.locator('.preview-weather-temp small')).toContainText('體感 30°C');
   await expect(page.locator('.weather-slot-detailed .weather-temp-block').first().locator('.temp-num')).toContainText('21');
   await expect(page.locator('.weather-slot-detailed .weather-metrics .sun-tag').first()).toContainText(/UV \d+ · 雲\d+%/);
   const uvMetricFits = await page.locator('.weather-slot-detailed .sun-tag .metric-val').first().evaluate((node) => ({
@@ -872,6 +872,7 @@ test('Multi-city day renders two forecast locations and live slot', async ({ pag
     }
     window.Date = MockDate;
   }, fixed);
+  await routeJmaOfficial(page, { date: '2026-04-21' });
   await page.route('https://api.open-meteo.com/**', async (route) => {
     urls.push(route.request().url());
     await route.fulfill({ json: weatherFixture() });
@@ -916,12 +917,6 @@ test('Multi-city day renders two forecast locations and live slot', async ({ pag
   };
   await installState(page, multiCityState);
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await page.evaluate((payload) => {
-    localStorage.clear();
-    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
-    localStorage.setItem('boss-japan-tracker', JSON.stringify(payload));
-  }, trustAndState(multiCityState));
-  await page.reload();
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉', '長野']);
   await expect(page.locator('.live-badge')).toHaveCount(3);

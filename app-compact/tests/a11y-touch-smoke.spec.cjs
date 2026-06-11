@@ -130,8 +130,8 @@ test('Compact main controls keep accessible names, touch targets, reduced motion
   await nav.getByRole('button', { name: '設定', exact: true }).click();
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
   const quickControls = page.locator('.settings-preview-controls button');
-  await expect(quickControls).toHaveCount(4);
-  for (let i = 0; i < 4; i += 1) {
+  await expect(quickControls).toHaveCount(3);
+  for (let i = 0; i < 3; i += 1) {
     await expectTouchTarget(quickControls.nth(i), `settings quick control ${i + 1}`, 56);
   }
 

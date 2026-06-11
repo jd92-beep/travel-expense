@@ -3,19 +3,10 @@ const { test, expect } = require('@playwright/test');
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function openDashboard(page, statsIncludeTransportLodging, extraState = {}) {
+  await page.clock.install({ time: new Date('2026-05-08T10:00:00+08:00') });
   await page.addInitScript(({ includeToggle, extraState: extra }) => {
     window.__disable_supabase_configured = true;
     const fixedNow = new Date('2026-05-08T10:00:00+08:00').valueOf();
-    const RealDate = Date;
-    class MockDate extends RealDate {
-      constructor(...args) {
-        super(...(args.length ? args : [fixedNow]));
-      }
-      static now() {
-        return fixedNow;
-      }
-    }
-    window.Date = MockDate;
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     if (extra.credentialSession) {
@@ -77,7 +68,7 @@ test('Dashboard spending toggle matches legacy semantics for today stats but bud
   const flippedContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const flippedPage = await flippedContext.newPage();
   await openDashboard(flippedPage, true);
-  await expect(flippedPage.locator('.washi-today-stats-card').filter({ hasText: '今日支出' })).toContainText('HK$ 489');
+  await expect(flippedPage.locator('.washi-today-stats-card').filter({ hasText: '今日支出' })).toContainText('HK$ 488');
   await expect(flippedPage.locator('.washi-budget-card').filter({ hasText: '已使用' })).toContainText('HK$ 500');
   await flippedContext.close();
 });

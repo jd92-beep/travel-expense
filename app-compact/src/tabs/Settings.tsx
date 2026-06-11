@@ -2805,7 +2805,7 @@ export function Settings({
         </div>)}
       </AccordionCard>
 
-      {showStressPanel && (<AccordionCard id="settings-email" title="Email / Shortcut" icon={<Copy />}>
+      <AccordionCard id="settings-email" title="Email / Shortcut" icon={<Copy />}>
         <p className="muted">
           {cloudSyncAvailable
             ? 'Public Supabase mode 不使用共享 Gmail inbox。請喺 Scan 貼上 email 文字或截圖；如已連接個人 Notion，可拉取你自己 notebook 入面嘅待確認紀錄。'
@@ -2820,7 +2820,7 @@ export function Settings({
             </>
           )}
         </div>
-      </AccordionCard>)}
+      </AccordionCard>
 
       {cloudSyncAvailable && updatePassword && (
         <AccordionCard id="settings-supabase-account" eyebrow="Supabase Auth" title="雲端帳號與密碼設定 🔐" icon={<KeyRound />}>

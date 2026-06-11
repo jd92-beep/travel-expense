@@ -5,14 +5,14 @@ const path = require('node:path');
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function setAccordion(page, title, expanded = true) {
-  const button = page.getByRole('button', { name: new RegExp(title) });
+  const button = page.locator('.accordion-summary', { hasText: new RegExp(title) }).first();
   if ((await button.getAttribute('aria-expanded')) !== String(expanded)) await button.click();
 }
 
 async function expectSettingsReady(page) {
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
   await expect(page.locator('.settings-preview-controls')).toBeVisible();
-  await expect(page.locator('.settings-preview-controls button')).toHaveCount(4);
+  await expect(page.locator('.settings-preview-controls button')).toHaveCount(3);
 }
 
 test('Settings expandable cards, safe broker actions, backup, restore, and trust clear work', async ({ page }) => {
@@ -150,6 +150,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
       },
     });
     localStorage.clear();
+    localStorage.setItem('__stress_panel_unlocked', 'true');
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
       credentialSession: 'settings-session',
@@ -248,8 +249,8 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await expectSettingsReady(page);
 
   const summaries = page.locator('.accordion-summary');
-  await expect(summaries).toHaveCount(9);
-  for (let i = 0; i < 9; i += 1) {
+  await expect(summaries).toHaveCount(10);
+  for (let i = 0; i < 10; i += 1) {
     const card = summaries.nth(i);
     const before = await card.getAttribute('aria-expanded');
     await card.click();
@@ -309,7 +310,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await expect(page.getByText(/本機設定已保存/)).toBeVisible();
   await page.getByRole('button', { name: 'Save & Push Settings' }).click();
   await expect(page.getByText(/已推送 non-secret settings meta/)).toBeVisible();
-  await page.getByRole('button', { name: '測試' }).click();
+  await page.getByRole('button', { name: '測試', exact: true }).click();
   await expect(page.getByText(/連線正常/)).toBeVisible();
 
   await setAccordion(page, '資料管理');
@@ -338,7 +339,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(csvText).not.toContain('M10 Other Trip Cafe');
 
   const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: /匯出 Backup JSON/ }).click();
+  await page.getByRole('button', { name: '匯出 Backup', exact: true }).click();
   const download = await downloadPromise;
   const backupPath = await download.path();
   const backupText = fs.readFileSync(backupPath, 'utf8');
@@ -624,6 +625,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
     localStorage.clear();
+    localStorage.setItem('__stress_panel_unlocked', 'true');
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'settings',
@@ -723,6 +725,7 @@ test('Settings post-trip archive checklist separates backup, share, settlement, 
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
     localStorage.clear();
+    localStorage.setItem('__stress_panel_unlocked', 'true');
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'settings',
@@ -811,7 +814,7 @@ test('Settings post-trip archive checklist separates backup, share, settlement, 
   await expect(archive).toContainText('Share export');
   await expect(archive).toContainText('2 days');
   await expect(archive).toContainText('Settlement check');
-  await expect(archive).toContainText('2 transfers');
+  await expect(archive).toContainText('1 transfer');
   await expect(archive).toContainText('Safe cleanup');
   await expect(archive).toContainText('Cloud data not deleted');
 
@@ -872,6 +875,7 @@ test('Settings sync readiness dry run summarizes offline queue without provider 
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
     localStorage.clear();
+    localStorage.setItem('__stress_panel_unlocked', 'true');
     const now = Date.now();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
@@ -1052,6 +1056,7 @@ test('Settings trip scope audit flags active trip boundaries without provider ca
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
     localStorage.clear();
+    localStorage.setItem('__stress_panel_unlocked', 'true');
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'settings',

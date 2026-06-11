@@ -561,6 +561,7 @@ test('History attachment health surfaces large, missing, and unsynced receipt ph
   await page.addInitScript((seedReceipts) => {
     window.__disable_supabase_configured = true;
     localStorage.clear();
+    localStorage.setItem('__stress_panel_unlocked', 'true');
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts, autoSync: false }));
   }, attachmentReceipts);
