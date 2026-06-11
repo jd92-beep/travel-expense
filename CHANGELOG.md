@@ -2,6 +2,10 @@
 
 ## 2026-06-11
 
+- Fixed compact Trip Update AI no-response behavior by adding trip-attempt timeouts, a faster trip fallback ladder, and a fast local day-by-day draft fallback for pasted itineraries.
+- Kept the selected trip-update model as primary, but if it is too slow the app now moves to `google/gemini-3.1-flash-lite` and `google/gemini-2.5-flash` before slower fallbacks, instead of waiting indefinitely on Mimo or retrying the same slow route.
+- Added `npm run smoke:trip-update-live`, a redacted live broker smoke that proves real LLM itinerary extraction without printing secrets; live proof extracted an 8-day Jeju itinerary with 32 spots using `gemini-3.1-flash-lite` in 5312ms.
+- Added AI routing smoke coverage proving a slow selected Mimo model is skipped and the Settings confirmation modal opens from the fast Google trip fallback.
 - Fixed compact Korea/Jeju trip currency handling. Home budget overview now toggles between HKD and the active trip currency such as KRW instead of hardcoded JPY, and old stale `displayCurrency: "JPY"` state is corrected visually for KRW trips.
 - Fixed compact Record manual-entry defaults so `原貨幣` follows the itinerary day or active trip currency, with shared conversion helpers for KRW and other common travel currencies instead of falling back to the JPY rate.
 - Fixed compact Dashboard Broker AI Assistant wording and routing so it shows the selected primary trip-update model, such as Mimo v2.5, and sends the broker request to that provider/model instead of always displaying/calling Kimi.

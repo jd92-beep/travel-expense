@@ -318,6 +318,15 @@ test('Dashboard new trip wizard tries LLM fallbacks before default scenery spots
       body: JSON.stringify({ ok: false, error: 'kimi model unavailable' }),
     });
   });
+  await page.route('**/google/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ path: 'google', model: body.model });
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: 'google fast trip fallback unavailable' }),
+    });
+  });
   await page.route('**/mimo/json', async (route) => {
     const body = route.request().postDataJSON();
     calls.push({ path: 'mimo', model: body.model });
@@ -379,7 +388,11 @@ test('Dashboard new trip wizard tries LLM fallbacks before default scenery spots
   await page.getByRole('button', { name: /完成創建/ }).click();
   await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
 
-  expect(calls.map((call) => call.path)).toEqual(['trip-intelligence', 'kimi', 'mimo']);
+  expect(calls.map((call) => call.path)).toEqual(['trip-intelligence', 'kimi', 'google', 'google', 'mimo']);
+  expect(calls).toEqual(expect.arrayContaining([
+    expect.objectContaining({ path: 'google', model: 'gemini-3.1-flash-lite' }),
+    expect.objectContaining({ path: 'google', model: 'gemini-2.5-flash' }),
+  ]));
   const created = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
     const trip = state.trips?.find((item) => item.id === state.activeTripId);

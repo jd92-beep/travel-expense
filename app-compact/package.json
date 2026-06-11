@@ -35,6 +35,7 @@
     "smoke:broker-vault": "node scripts/broker-vault-verify.mjs",
     "smoke:broker-vault:doctor": "node scripts/broker-vault-doctor.mjs",
     "smoke:broker-vault:guard": "node scripts/broker-vault-verify.mjs --expect-missing-session",
+    "smoke:trip-update-live": "node scripts/trip-update-live-smoke.mjs",
     "smoke:shared-contract": "node scripts/shared-contract-smoke.mjs",
     "smoke:production-gate": "node scripts/compact-production-gate.mjs",
     "smoke:production-gate:full": "node scripts/compact-production-gate.mjs --full",

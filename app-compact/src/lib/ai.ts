@@ -157,6 +157,11 @@ interface ModelAttempt {
   label: string;
 }
 
+const TRIP_PRIMARY_TIMEOUT_MS = 8_000;
+const TRIP_FALLBACK_TIMEOUT_MS = 9_000;
+const TRIP_NO_LOCAL_TIMEOUT_MS = 25_000;
+const TRIP_FAST_LOCAL_DEADLINE_MS = 14_000;
+
 function sameModelAttempt(a: ModelAttempt, b: ModelAttempt): boolean {
   return a.provider === b.provider && (a.model || '') === (b.model || '');
 }
@@ -171,9 +176,42 @@ function isBrokerRouteUnavailable(error: unknown): boolean {
   return /(?:\b404\b|not found|route|endpoint|Network error)/i.test(message);
 }
 
+function isTimeoutError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /timed out|timeout/i.test(message);
+}
+
 function hasUsefulTripItinerary(draft: TripDraft): boolean {
   return Array.isArray(draft.trip.itinerary)
     && draft.trip.itinerary.some((day) => (day.spots || []).some((spot) => String(spot.name || '').trim()));
+}
+
+function configuredTripAttemptTimeoutMs(): number | null {
+  const source = globalThis as typeof globalThis & { __TRAVEL_TRIP_ATTEMPT_TIMEOUT_MS?: unknown };
+  const value = Number(source.__TRAVEL_TRIP_ATTEMPT_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? Math.max(100, Math.min(60_000, value)) : null;
+}
+
+function tripAttemptTimeoutMs(attempt: ModelAttempt, index: number, hasLocalDraft: boolean): number {
+  const override = configuredTripAttemptTimeoutMs();
+  if (override) return override;
+  if (!hasLocalDraft) return TRIP_NO_LOCAL_TIMEOUT_MS;
+  if (index === 0) return attempt.provider === 'mimo' ? 7_000 : TRIP_PRIMARY_TIMEOUT_MS;
+  return TRIP_FALLBACK_TIMEOUT_MS;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function asStringList(value: unknown): string[] {
@@ -391,13 +429,20 @@ function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' 
     : kind === 'trip'
       ? preferredAttempt || { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Trip Update Primary)' }
       : { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Required Primary)' };
-  const baseAttempts: ModelAttempt[] = kind === 'email' || kind === 'trip'
+  const baseAttempts: ModelAttempt[] = kind === 'email'
     ? [
         { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
         { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (2nd Fallback)' },
         { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (3rd Fallback)' },
-        { provider: 'google', model: 'gemini-3.1-flash', label: 'Google Gemini 3.1 Flash (4th Fallback)' },
-        { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (5th Fallback)' },
+        { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (4th Fallback)' },
+      ]
+    : kind === 'trip'
+      ? [
+        { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (Fast Trip Fallback)' },
+        { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Trip Fallback)' },
+        { provider: 'google', model: 'gemini-2.5-flash', label: 'Google Gemini 2.5 Flash (Trip Fallback)' },
+        { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (Trip Fallback)' },
+        { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Trip Fallback)' },
       ]
     : [
         { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
@@ -657,38 +702,75 @@ ${JSON.stringify(currentTrip).slice(0, 12000)}
 Return:
 {"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":"JP|KR|TW|GB|EU|HK|CN|SG|TH|MY|VN|PH|AU|NZ|US|GLOBAL","countryName":string,"primaryCurrency":string,"themeKey":"japan_washi|korea_editorial|taiwan_nightmarket|europe_rail|global_journal","locale":string,"timezone":string,"weatherRegion":string,"confidence":"low|medium|high"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"highlight":string,"lodging":{"name":string,"address":string,"mapUrl":string,"checkIn":string,"checkOut":string,"bookingRef":string,"lat":number,"lon":number,"sourceText":string,"confidence":"low|medium|high"},"spots":[{"time":"HH:MM","timeEnd":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other|sightseeing","address":string,"mapUrl":string,"note":string,"timezone":string,"lat":number,"lon":number,"bookingRef":string,"sourceText":string,"confidence":"low|medium|high"}]}]},"extractionReport":{"daysExtracted":number,"spotsExtracted":number,"hotelsExtracted":number,"restaurantsExtracted":number,"transportsExtracted":number,"importantDetailsExtracted":number,"sourceQuality":"low|medium|high","missingCriticalFields":string[],"assumptions":string[],"warnings":string[]},"summary":string,"warnings":string[],"changes":string[]}
 Include lodging, arrival times, places, restaurants, transport/flight/train references, booking references, Google Maps links, addresses, and coordinates when inferable from input. Do not invent API keys.
-If exact coordinates are uncertain, omit lat/lon and add the place to extractionReport.missingCriticalFields or assumptions instead of guessing.
+  If exact coordinates are uncertain, omit lat/lon and add the place to extractionReport.missingCriticalFields or assumptions instead of guessing.
 If the user text does not contain a new itinerary, return an empty itinerary and explain missingCriticalFields; do not copy Current trip JSON as a successful extraction.
 Choose themeKey from destination context: Japan=japan_washi, Korea=korea_editorial, Taiwan=taiwan_nightmarket, Europe/UK=europe_rail, unknown=global_journal.
 
 USER PARAGRAPH:
 ${paragraph.slice(0, 14000)}`;
+  const startedAt = Date.now();
+  const fastLocalDraft = localTripDraftFromParagraph(paragraph, state);
+  const hasFastLocalDraft = !!fastLocalDraft && hasUsefulTripItinerary(fastLocalDraft);
+  const localDraftWithWarnings = (extraWarnings: string[]): TripDraft | null => {
+    if (!hasFastLocalDraft || !fastLocalDraft) return null;
+    const warnings = [...extraWarnings, ...fastLocalDraft.warnings].filter(Boolean);
+    const extractionReport = fastLocalDraft.extractionReport || buildTripExtractionReport(undefined, fastLocalDraft.trip);
+    return {
+      ...fastLocalDraft,
+      warnings,
+      extractionReport: {
+        ...extractionReport,
+        warnings: [...(extractionReport.warnings || []), ...extraWarnings].filter(Boolean).slice(0, 20),
+      },
+    };
+  };
   try {
     const warnings: string[] = [];
     const attempts = modelAttemptsForKind(state, 'trip');
     let last: unknown;
     for (const [index, attempt] of attempts.entries()) {
+      if (hasFastLocalDraft && Date.now() - startedAt > TRIP_FAST_LOCAL_DEADLINE_MS) {
+        warnings.push('AI provider analysis exceeded the fast response window; local itinerary extraction is ready for confirmation.');
+        const draft = localDraftWithWarnings(warnings);
+        if (draft) return draft;
+      }
       try {
         console.log(`[AI Routing] 正在嘗試行程更新: ${attempt.label}...`);
         const selectedKimiTripPrimary = index === 0 && attempt.provider === 'kimi' && isKimiModel(`${attempt.provider}/${attempt.model || ''}`);
         let parsed: unknown;
         if (selectedKimiTripPrimary) {
           try {
-            parsed = await brokerTripIntelligence(state, {
-              paragraph: paragraph.slice(0, 14000),
-              currentTrip,
-              model: attempt.model || KIMI_API_MODEL,
-            });
+            parsed = await withTimeout(
+              brokerTripIntelligence(state, {
+                paragraph: paragraph.slice(0, 14000),
+                currentTrip,
+                model: attempt.model || KIMI_API_MODEL,
+              }),
+              tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft),
+              `Trip intelligence ${attempt.label}`,
+            );
           } catch (brokerError) {
             warnings.push(brokerError instanceof Error ? brokerError.message : String(brokerError));
             const routeLabel = isBrokerRouteUnavailable(brokerError) ? 'backend unavailable' : 'structured route failed';
             console.warn(`[AI Routing] Trip intelligence ${attempt.label} ${routeLabel}, trying same model JSON route:`, brokerError);
+            if (hasFastLocalDraft && isTimeoutError(brokerError)) {
+              warnings.push(`${attempt.label} structured route was slow; trying faster trip fallback.`);
+              continue;
+            }
           }
           if (!parsed) {
-            parsed = await callModelAttemptJson(state, attempt, prompt, 'trip');
+            parsed = await withTimeout(
+              callModelAttemptJson(state, attempt, prompt, 'trip'),
+              tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft),
+              `Trip model ${attempt.label}`,
+            );
           }
         } else {
-          parsed = await callModelAttemptJson(state, attempt, prompt, 'trip');
+          parsed = await withTimeout(
+            callModelAttemptJson(state, attempt, prompt, 'trip'),
+            tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft),
+            `Trip model ${attempt.label}`,
+          );
         }
         const draft = normalizeTripDraft(parsed, state, paragraph);
         if (hasUsefulTripItinerary(draft)) {
@@ -706,11 +788,12 @@ ${paragraph.slice(0, 14000)}`;
         console.warn(`[AI Routing] Trip update ${attempt.label} ${routeLabel}, trying next model:`, error);
       }
     }
-    const localDraft = localTripDraftFromParagraph(paragraph, state, warnings);
+    const localDraft = localDraftWithWarnings(warnings) || localTripDraftFromParagraph(paragraph, state, warnings);
     if (localDraft && hasUsefulTripItinerary(localDraft)) return localDraft;
     throw new Error([...warnings, last instanceof Error ? last.message : '', 'All trip LLM attempts returned no usable itinerary spots.'].filter(Boolean).join(' | '));
   } catch (error) {
-    const localDraft = localTripDraftFromParagraph(paragraph, state, [error instanceof Error ? error.message : String(error)]);
+    const localDraft = localDraftWithWarnings([error instanceof Error ? error.message : String(error)])
+      || localTripDraftFromParagraph(paragraph, state, [error instanceof Error ? error.message : String(error)]);
     if (localDraft && hasUsefulTripItinerary(localDraft)) return localDraft;
     const fallback = tripFromLegacyState({
       ...state,

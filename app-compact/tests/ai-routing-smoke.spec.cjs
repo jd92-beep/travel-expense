@@ -381,6 +381,158 @@ test('Trip update does not treat the current itinerary as a successful extractio
   ]));
 });
 
+test('Trip update skips a slow selected model and opens confirmation with a fast fallback', async ({ page }) => {
+  test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
+  const calls = [];
+
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+
+  await page.route('**/mimo/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ provider: 'mimo', kind: body.kind, model: body.model });
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          trip: {
+            name: 'Slow Mimo Jeju Trip',
+            destinationSummary: 'Jeju',
+            startDate: '2026-06-13',
+            endDate: '2026-06-14',
+            homeCurrency: 'HKD',
+            currencies: ['HKD', 'KRW'],
+            itinerary: [{
+              date: '2026-06-13',
+              day: 1,
+              region: 'Jeju',
+              spots: [{ time: '10:00', name: 'Slow Mimo Spot', type: 'sightseeing' }],
+            }],
+          },
+        },
+      }),
+    });
+  });
+
+  await page.route('**/google/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ provider: 'google', kind: body.kind, model: body.model });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          trip: {
+            name: 'Fast Google Jeju Trip',
+            destinationSummary: 'Jeju, South Korea',
+            startDate: '2026-06-13',
+            endDate: '2026-06-14',
+            homeCurrency: 'HKD',
+            currencies: ['HKD', 'KRW'],
+            intelligence: {
+              countryCode: 'KR',
+              countryName: 'South Korea',
+              primaryCurrency: 'KRW',
+              timezone: 'Asia/Seoul',
+              weatherRegion: 'Jeju',
+              confidence: 'high',
+            },
+            itinerary: [{
+              date: '2026-06-13',
+              day: 1,
+              region: 'Jeju West',
+              city: 'Jeju',
+              country: 'South Korea',
+              timezone: 'Asia/Seoul',
+              currency: 'KRW',
+              spots: [
+                { time: '06:30', name: '濟州機場', type: 'transport' },
+                { time: '14:00', name: 'Fast Google Osulloc', type: 'sightseeing' },
+              ],
+            }],
+          },
+          extractionReport: {
+            daysExtracted: 1,
+            spotsExtracted: 2,
+            hotelsExtracted: 0,
+            restaurantsExtracted: 0,
+            transportsExtracted: 1,
+            importantDetailsExtracted: 2,
+            sourceQuality: 'high',
+            missingCriticalFields: ['Fast Google Osulloc lat/lon'],
+            assumptions: ['Used fast fallback after selected model timeout.'],
+            warnings: [],
+          },
+          summary: 'Fast fallback extracted Jeju itinerary.',
+          warnings: [],
+          changes: ['Skipped slow selected model after timeout.'],
+        },
+      }),
+    });
+  });
+
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    window.__TRAVEL_TRIP_ATTEMPT_TIMEOUT_MS = 150;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'slow-selected-trip-session',
+      credentialSessionExpiresAt: Date.now() + 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      tripUpdateModel: 'mimo/mimo-v2.5',
+      activeTripId: 'trip_current',
+      tripName: 'Current Trip',
+      tripDateRange: { start: '2026-06-13', end: '2026-06-14' },
+      tripCurrency: 'KRW',
+      trips: [{
+        id: 'trip_current',
+        name: 'Current Trip',
+        destinationSummary: 'Jeju',
+        startDate: '2026-06-13',
+        endDate: '2026-06-14',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'KRW'],
+        timezones: ['Asia/Seoul'],
+        version: 1,
+        active: true,
+        itinerary: [],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      customItinerary: [],
+      receipts: [],
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByText('設定控制中心')).toBeVisible();
+  const tripUpdate = page.getByRole('button', { name: /AI 行程更新/ });
+  if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
+  await page.getByPlaceholder(/下次/).fill('Day 1｜6月13日｜到步＋西線入住｜住 Hotel Fine Jeju\n06:30 抵達濟州機場\n14:00 Osulloc Tea Museum');
+  await page.getByRole('button', { name: /用已選模型分析/ }).click();
+
+  const tripConfirm = page.getByRole('dialog', { name: '確認 AI 行程更新' });
+  await expect(tripConfirm).toBeVisible();
+  await expect(tripConfirm.getByRole('heading', { name: 'Fast Google Jeju Trip' })).toBeVisible();
+  await expect(tripConfirm).toContainText('Fast Google Osulloc');
+  await expect(tripConfirm).not.toContainText('Slow Mimo Spot');
+
+  expect(calls.slice(0, 2)).toEqual([
+    expect.objectContaining({ provider: 'mimo', kind: 'trip', model: 'mimo-v2.5' }),
+    expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash-lite' }),
+  ]);
+});
+
 test('AI routing stops provider fallback when broker quota is exceeded', async ({ page }) => {
   test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
   const calls = [];
