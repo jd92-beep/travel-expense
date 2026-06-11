@@ -25,6 +25,7 @@ export const AI_MODELS = [
   { id: 'google/gemma-4-31b', name: 'Google Gemma 4 31B' },
   { id: 'google/gemma-4-26b', name: 'Google Gemma 4 26B' },
   { id: 'mimo/mimo-v2.5', name: 'Mimo v2.5' },
+  { id: 'mimo/mimo-v2.5-pro', name: 'Mimo v2.5 Pro' },
 ] as const;
 
 export function normalizeAiModelSettings<T extends Partial<Pick<AppState, 'scanModel' | 'voiceModel' | 'emailModel' | 'tripUpdateModel' | 'googleBackupModel'>>>(settings: T): T {

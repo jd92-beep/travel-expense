@@ -489,7 +489,7 @@ test('Trip update skips a slow selected model and opens confirmation with a fast
     }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'settings',
-      tripUpdateModel: 'mimo/mimo-v2.5',
+      tripUpdateModel: 'mimo/mimo-v2.5-pro',
       activeTripId: 'trip_current',
       tripName: 'Current Trip',
       tripDateRange: { start: '2026-06-13', end: '2026-06-14' },
@@ -528,7 +528,7 @@ test('Trip update skips a slow selected model and opens confirmation with a fast
   await expect(tripConfirm).not.toContainText('Slow Mimo Spot');
 
   expect(calls.slice(0, 2)).toEqual([
-    expect.objectContaining({ provider: 'mimo', kind: 'trip', model: 'mimo-v2.5' }),
+    expect.objectContaining({ provider: 'mimo', kind: 'trip', model: 'mimo-v2.5-pro' }),
     expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash-lite' }),
   ]);
 });

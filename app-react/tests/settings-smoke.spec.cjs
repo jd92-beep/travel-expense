@@ -282,6 +282,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   const modelOptions = await page.locator('#settings-ai-models-panel option').allTextContents();
   expect(modelOptions.join(' ')).toContain('Kimi (kimi-code)');
   expect(modelOptions.join(' ')).toContain('Google Gemini 2.5 Flash');
+  expect(modelOptions.join(' ')).toContain('Mimo v2.5 Pro');
   expect(modelOptions.join(' ')).not.toMatch(/MiniMax|OpenRouter|GLM|ZAI/);
 
   await setAccordion(page, 'Notion Sync');

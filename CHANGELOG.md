@@ -2,6 +2,8 @@
 
 ## 2026-06-11
 
+- Added `Mimo v2.5 Pro` (`mimo/mimo-v2.5-pro`) to the Compact and React AI model selectors. It uses the existing `/mimo/json` Credential Broker path, so it shares the same Mimo base URL and vaulted API key as `mimo-v2.5`.
+- Added smoke coverage proving the Settings model dropdown includes `Mimo v2.5 Pro` and that Compact trip-update routing sends selected Pro requests to provider `mimo` with model `mimo-v2.5-pro`. Live broker proof returned HTTP 200 for `mimo-v2.5-pro`, extracting an 8-day Jeju itinerary with 32 spots in 42810ms.
 - Optimized the live Credential Broker Mimo v2.5 JSON path by sending `thinking: { type: "disabled" }`, `stream: false`, and capped `max_tokens` for `/mimo/json` plus credential-test calls. This fixes the slow default reasoning path that made Mimo trip extraction feel stuck.
 - Deployed the Mimo fast-path Worker update as Credential Broker version `fb3a389b-dd50-425f-88d0-a228098a95eb`. Live proof improved from a prior `mimo-v2.5` 2-day extraction taking about 44.7s to an 8-day Jeju extraction completing in 22376ms with 8 days and 32 spots. The Google fast fallback remains faster at 6443ms for the same 8-day smoke.
 - Extended `npm run smoke:trip-update-live` so it can target `/mimo/json` or `/google/json` with redacted broker-vault output, and added Worker self-test assertions that Mimo requests really include the fast-path payload fields.
