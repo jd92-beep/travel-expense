@@ -85,7 +85,7 @@ test('Dashboard keeps Home simple without travel-day diagnostic cards', async ({
   await expect(page.getByText('行程時間線')).toHaveCount(0);
   await expect(page.locator('.dashboard-ai-coach')).toHaveCount(0);
   await expect(page.getByText('Local AI Coach')).toHaveCount(0);
-  await expect(page.getByLabel('Broker AI assistant')).toBeVisible();
+  await expect(page.getByLabel('Broker AI assistant')).toHaveCount(0);
   await expect(page.locator('.today-itinerary-card')).toBeVisible();
 });
 
@@ -168,55 +168,70 @@ test('Dashboard new trip wizard lets users choose trip days on step two', async 
     contentType: 'application/json',
     body: JSON.stringify({ query: { search: [] } }),
   }));
-  await page.route('**/trip/intelligence', async (route) => {
+  await page.route('**/kimi/json', async (route) => {
     const body = route.request().postDataJSON();
     tripIntelligenceCalls.push(body);
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ok: true,
-        data: {
-          trip: {
-            name: '濟州2026',
-            destinationSummary: 'Jeju, South Korea',
-            startDate: '2026-05-08',
-            endDate: '2026-05-17',
-            homeCurrency: 'HKD',
-            currencies: ['HKD', 'KRW'],
-            intelligence: {
-              countryCode: 'KR',
-              countryName: 'South Korea',
-              primaryCurrency: 'KRW',
-              themeKey: 'korea_editorial',
-              locale: 'ko-KR',
-              timezone: 'Asia/Seoul',
-              weatherRegion: 'Jeju',
-              confidence: 'high',
-            },
-            itinerary: [
-              {
-                date: '2026-05-08',
-                day: 1,
-                region: '濟州東部',
-                city: 'Jeju',
-                country: 'South Korea',
-                timezone: 'Asia/Seoul',
-                currency: 'KRW',
-                highlight: '火山口與海岸',
-                spots: [
-                  { time: '09:00', name: '城山日出峰', type: 'sightseeing', lat: 33.4580, lon: 126.9425, timezone: 'Asia/Seoul', note: '日出火山口' },
-                  { time: '13:00', name: '牛島', type: 'localtour', lat: 33.5066, lon: 126.9534, timezone: 'Asia/Seoul', note: '海岸線' },
-                ],
-              },
-            ],
+    const isStage1 = String(body.prompt || '').includes('stage 1 of a two-stage');
+    if (isStage1) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            organizedItinerary: `Day 1 (2026-05-08): Nagoya to Jeju.
+Day 2 (2026-05-09): Jeju City.`,
           },
-          summary: 'Created Jeju day-by-day itinerary',
-          warnings: [],
-          changes: ['Generated Jeju itinerary from wizard details.'],
-        },
-      }),
-    });
+        }),
+      });
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            trip: {
+              name: '濟州2026',
+              destinationSummary: 'Jeju, South Korea',
+              startDate: '2026-05-08',
+              endDate: '2026-05-17',
+              homeCurrency: 'HKD',
+              currencies: ['HKD', 'KRW'],
+              intelligence: {
+                countryCode: 'KR',
+                countryName: 'South Korea',
+                primaryCurrency: 'KRW',
+                themeKey: 'korea_editorial',
+                locale: 'ko-KR',
+                timezone: 'Asia/Seoul',
+                weatherRegion: 'Jeju',
+                confidence: 'high',
+              },
+              itinerary: [
+                {
+                  date: '2026-05-08',
+                  day: 1,
+                  region: '濟州東部',
+                  city: 'Jeju',
+                  country: 'South Korea',
+                  timezone: 'Asia/Seoul',
+                  currency: 'KRW',
+                  highlight: '火山口與海岸',
+                  spots: [
+                    { time: '09:00', name: '城山日出峰', type: 'sightseeing', lat: 33.4580, lon: 126.9425, timezone: 'Asia/Seoul', note: '日出火山口' },
+                    { time: '13:00', name: '牛島', type: 'localtour', lat: 33.5066, lon: 126.9534, timezone: 'Asia/Seoul', note: '海岸線' },
+                  ],
+                },
+              ],
+            },
+            summary: 'Created Jeju day-by-day itinerary',
+            warnings: [],
+            changes: ['Generated Jeju itinerary from wizard details.'],
+          },
+        }),
+      });
+    }
   });
 
   await openDashboard(page, false, {
@@ -265,8 +280,8 @@ test('Dashboard new trip wizard lets users choose trip days on step two', async 
   await page.getByRole('button', { name: /完成創建/ }).click();
   await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
 
-  expect(tripIntelligenceCalls.length).toBe(1);
-  expect(tripIntelligenceCalls[0].paragraph).toContain('濟州');
+  expect(tripIntelligenceCalls.length).toBe(2);
+  expect(tripIntelligenceCalls[0].prompt).toContain('濟州');
   expect(tripIntelligenceCalls[0].model).toBe('kimi-code');
 
   const created = await page.evaluate(() => {
@@ -301,14 +316,7 @@ test('Dashboard new trip wizard tries LLM fallbacks before default scenery spots
   const calls = [];
   await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
   await page.route('https://en.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
-  await page.route('**/trip/intelligence', async (route) => {
-    calls.push({ path: 'trip-intelligence' });
-    await route.fulfill({
-      status: 500,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: false, error: 'primary trip model temporarily unavailable' }),
-    });
-  });
+
   await page.route('**/kimi/json', async (route) => {
     const body = route.request().postDataJSON();
     calls.push({ path: 'kimi', model: body.model });
@@ -330,46 +338,61 @@ test('Dashboard new trip wizard tries LLM fallbacks before default scenery spots
   await page.route('**/mimo/json', async (route) => {
     const body = route.request().postDataJSON();
     calls.push({ path: 'mimo', model: body.model });
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ok: true,
-        data: {
-          trip: {
-            name: '濟州2026',
-            destinationSummary: 'Jeju, South Korea',
-            startDate: '2026-05-08',
-            endDate: '2026-05-10',
-            homeCurrency: 'HKD',
-            currencies: ['HKD', 'KRW'],
-            intelligence: {
-              countryCode: 'KR',
-              countryName: 'South Korea',
-              primaryCurrency: 'KRW',
-              themeKey: 'korea_editorial',
-              locale: 'ko-KR',
-              timezone: 'Asia/Seoul',
-              weatherRegion: 'Jeju',
-              confidence: 'medium',
-            },
-            itinerary: [{
-              date: '2026-05-08',
-              day: 1,
-              region: 'LLM Jeju',
-              city: 'Jeju',
-              country: 'South Korea',
-              timezone: 'Asia/Seoul',
-              currency: 'KRW',
-              spots: [{ time: '10:00', name: 'Mimo Jeju Observatory', type: 'sightseeing', lat: 33.4996, lon: 126.5312, timezone: 'Asia/Seoul' }],
-            }],
+    const isStage1 = String(body.prompt || '').includes('stage 1 of a two-stage');
+    if (isStage1) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            organizedItinerary: `Day 1 (2026-05-08): Nagoya to Jeju.
+Day 2 (2026-05-09): Jeju City.`,
           },
-          summary: 'Mimo fallback created Jeju itinerary',
-          warnings: [],
-          changes: ['Used fallback LLM after primary failure.'],
-        },
-      }),
-    });
+        }),
+      });
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            trip: {
+              name: '濟州2026',
+              destinationSummary: 'Jeju, South Korea',
+              startDate: '2026-05-08',
+              endDate: '2026-05-10',
+              homeCurrency: 'HKD',
+              currencies: ['HKD', 'KRW'],
+              intelligence: {
+                countryCode: 'KR',
+                countryName: 'South Korea',
+                primaryCurrency: 'KRW',
+                themeKey: 'korea_editorial',
+                locale: 'ko-KR',
+                timezone: 'Asia/Seoul',
+                weatherRegion: 'Jeju',
+                confidence: 'medium',
+              },
+              itinerary: [{
+                date: '2026-05-08',
+                day: 1,
+                region: 'LLM Jeju',
+                city: 'Jeju',
+                country: 'South Korea',
+                timezone: 'Asia/Seoul',
+                currency: 'KRW',
+                spots: [{ time: '10:00', name: 'Mimo Jeju Observatory', type: 'sightseeing', lat: 33.4996, lon: 126.5312, timezone: 'Asia/Seoul' }],
+              }],
+            },
+            summary: 'Mimo fallback created Jeju itinerary',
+            warnings: [],
+            changes: ['Used fallback LLM after primary failure.'],
+          },
+        }),
+      });
+    }
   });
 
   await openDashboard(page, false, {
@@ -388,7 +411,7 @@ test('Dashboard new trip wizard tries LLM fallbacks before default scenery spots
   await page.getByRole('button', { name: /完成創建/ }).click();
   await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
 
-  expect(calls.map((call) => call.path)).toEqual(['trip-intelligence', 'kimi', 'google', 'google', 'mimo']);
+  expect(calls.map((call) => call.path)).toEqual(['kimi', 'google', 'google', 'mimo', 'mimo']);
   expect(calls).toEqual(expect.arrayContaining([
     expect.objectContaining({ path: 'google', model: 'gemini-3.1-flash-lite' }),
     expect.objectContaining({ path: 'google', model: 'gemini-2.5-flash' }),
@@ -411,11 +434,7 @@ test('Dashboard new trip wizard tries model fallbacks after quota before destina
   const calls = { kimi: 0, mimo: 0, google: 0 };
   await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
   await page.route('https://en.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
-  await page.route('**/trip/intelligence', async (route) => route.fulfill({
-    status: 429,
-    contentType: 'application/json',
-    body: JSON.stringify({ ok: false, error: 'Supabase AI daily quota exceeded' }),
-  }));
+
   await page.route('**/kimi/json', async (route) => {
     calls.kimi += 1;
     await route.fulfill({ json: { ok: true, data: {} } });
@@ -536,134 +555,3 @@ test('Dashboard compact itinerary and recent expenses show denser Home informati
   await expect(page.locator('.dashboard-compact-recent-row').last()).toContainText('Station Coffee');
 });
 
-async function seedBrokerAssistantDashboard(page) {
-  await page.addInitScript(() => {
-    window.__disable_supabase_configured = true;
-    const fixedNow = new Date('2026-05-09T10:00:00+08:00').valueOf();
-    const RealDate = Date;
-    class MockDate extends RealDate {
-      constructor(...args) {
-        super(...(args.length ? args : [fixedNow]));
-      }
-      static now() {
-        return fixedNow;
-      }
-    }
-    window.Date = MockDate;
-    localStorage.clear();
-    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
-    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
-      credentialSession: 'assistant-session',
-      credentialSessionExpiresAt: fixedNow + 60_000,
-    }));
-    localStorage.setItem('boss-japan-tracker', JSON.stringify({
-      schemaVersion: 3,
-      lastTab: 'dashboard',
-      budget: 10000,
-      rate: 20,
-      credentialSession: 'assistant-session',
-      credentialSessionExpiresAt: fixedNow + 60_000,
-      tripUpdateModel: 'mimo/mimo-v2.5',
-      activeTripId: 'assistant_trip',
-      tripName: 'Assistant Test',
-      tripDateRange: { start: '2026-05-08', end: '2026-05-10' },
-      customItinerary: [
-        { date: '2026-05-08', day: 1, region: 'Nagoya', timezone: 'Asia/Hong_Kong', spots: [{ time: '10:00', name: 'Nagoya Food', type: 'food' }] },
-        { date: '2026-05-09', day: 2, region: 'Inuyama', timezone: 'Asia/Hong_Kong', spots: [{ time: '09:00', name: 'Inuyama Castle', type: 'ticket' }] },
-        { date: '2026-05-10', day: 3, region: 'Outdoor Mountain', timezone: 'Asia/Hong_Kong', spots: [{ time: '08:30', name: 'Mountain trail', type: 'ticket', note: 'outdoor walking' }] },
-      ],
-      trips: [{
-        id: 'assistant_trip',
-        name: 'Assistant Test',
-        destinationSummary: 'Nagoya / Inuyama / Outdoor Mountain',
-        startDate: '2026-05-08',
-        endDate: '2026-05-10',
-        homeCurrency: 'HKD',
-        currencies: ['HKD', 'JPY'],
-        timezones: ['Asia/Hong_Kong'],
-        version: 1,
-        active: true,
-        itinerary: [
-          { date: '2026-05-08', day: 1, region: 'Nagoya', timezone: 'Asia/Hong_Kong', spots: [{ time: '10:00', name: 'Nagoya Food', type: 'food' }] },
-          { date: '2026-05-09', day: 2, region: 'Inuyama', timezone: 'Asia/Hong_Kong', spots: [{ time: '09:00', name: 'Inuyama Castle', type: 'ticket' }] },
-          { date: '2026-05-10', day: 3, region: 'Outdoor Mountain', timezone: 'Asia/Hong_Kong', spots: [{ time: '08:30', name: 'Mountain trail', type: 'ticket', note: 'outdoor walking' }] },
-        ],
-        createdAt: 1,
-        updatedAt: 1,
-      }],
-      receipts: [
-        { id: 'assistant_food', store: 'Nagoya Food', total: 4000, date: '2026-05-08', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1 },
-        { id: 'assistant_ticket', store: 'Inuyama Ticket', total: 4000, date: '2026-05-09', category: 'ticket', payment: 'credit', personId: 'p_boss', splitMode: 'shared', createdAt: 2 },
-      ],
-    }));
-  });
-}
-
-test('Dashboard broker AI assistant shows primary model, quota policy, and broker answer', async ({ page }) => {
-  const calls = [];
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/mimo/json', async (route) => {
-    const body = route.request().postDataJSON();
-    calls.push(body);
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ok: true,
-        data: {
-          summary: '今日控制預算：先保留交通同晚餐 buffer。',
-          risk: 'watch',
-          recommendation: 'Shopping 先限 HK$100，晚餐前再補記收據。',
-          nextAction: '先記低 Inuyama Ticket，再去統計頁睇分類。',
-        },
-      }),
-    });
-  });
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/google/json', async (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'google should not be called' }) }));
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'kimi should not be called' }) }));
-
-  await seedBrokerAssistantDashboard(page);
-  await page.goto('http://localhost:8903/travel-expense/compact/');
-  const assistant = page.getByLabel('Broker AI assistant');
-  await expect(assistant).toBeVisible();
-  await expect(assistant).toContainText('Broker AI Assistant');
-  await expect(assistant).toContainText('Primary · mimo/mimo-v2.5');
-  await expect(assistant).toContainText('Quota · broker metered');
-  await expect(assistant).toContainText('Selected model primary');
-  await assistant.getByLabel('AI assistant question').fill('今日 shopping budget 應該點？');
-  await assistant.getByRole('button', { name: '問 AI' }).click();
-  await expect(assistant).toContainText('今日控制預算');
-  await expect(assistant).toContainText('Risk · watch');
-  await expect(assistant).toContainText('Shopping 先限 HK$100');
-  expect(calls).toHaveLength(1);
-  expect(calls[0]).toMatchObject({ kind: 'trip', model: 'mimo-v2.5' });
-  expect(String(calls[0].prompt)).toContain('Return JSON only');
-});
-
-test('Dashboard broker AI assistant reports selected primary quota without using Kimi label', async ({ page }) => {
-  const calls = { kimi: 0, google: 0, mimo: 0 };
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/mimo/json', async (route) => {
-    calls.mimo += 1;
-    await route.fulfill({
-      status: 429,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: false, error: 'Supabase AI daily quota exceeded' }),
-    });
-  });
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/google/json', async (route) => {
-    calls.google += 1;
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: {} }) });
-  });
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
-    calls.kimi += 1;
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: {} }) });
-  });
-
-  await seedBrokerAssistantDashboard(page);
-  await page.goto('http://localhost:8903/travel-expense/compact/');
-  const assistant = page.getByLabel('Broker AI assistant');
-  await assistant.getByRole('button', { name: '問 AI' }).click();
-  await expect(assistant).toContainText('Selected primary paused');
-  await expect(assistant).toContainText('Quota or rate limit');
-  await expect(assistant).toContainText('Supabase AI daily quota exceeded');
-  expect(calls).toEqual({ kimi: 0, google: 0, mimo: 1 });
-});

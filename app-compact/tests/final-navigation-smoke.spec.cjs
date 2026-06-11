@@ -101,42 +101,45 @@ test('Sync error indicator is clickable and retries sync', async ({ page }) => {
     window.__disable_supabase_configured = true;
   });
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await page.evaluate(async () => {
-    const clearIndexedSnapshot = () => new Promise((resolve) => {
-      const req = indexedDB.open('travel-expense-react', 1);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains('state')) db.createObjectStore('state');
-      };
-      req.onerror = () => resolve(undefined);
-      req.onsuccess = () => {
-        const db = req.result;
-        const tx = db.transaction('state', 'readwrite');
-        tx.objectStore('state').delete('app-state');
-        tx.oncomplete = () => {
-          db.close();
-          resolve(undefined);
+  await Promise.all([
+    page.waitForNavigation(),
+    page.evaluate(async () => {
+      const clearIndexedSnapshot = () => new Promise((resolve) => {
+        const req = indexedDB.open('travel-expense-react', 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains('state')) db.createObjectStore('state');
         };
-        tx.onerror = () => {
-          db.close();
-          resolve(undefined);
+        req.onerror = () => resolve(undefined);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('state', 'readwrite');
+          tx.objectStore('state').delete('app-state');
+          tx.oncomplete = () => {
+            db.close();
+            resolve(undefined);
+          };
+          tx.onerror = () => {
+            db.close();
+            resolve(undefined);
+          };
         };
-      };
-    });
-    await clearIndexedSnapshot();
-    localStorage.clear();
-    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
-    localStorage.setItem('boss-japan-tracker', JSON.stringify({
-      lastTab: 'dashboard',
-      receipts: [],
-      autoSync: false,
-      globalSyncStatus: 'error',
-      syncError: 'manual smoke failure',
-      syncQueue: [],
-    }));
-  });
+      });
+      await clearIndexedSnapshot();
+      localStorage.clear();
+      localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+      localStorage.setItem('boss-japan-tracker', JSON.stringify({
+        lastTab: 'dashboard',
+        receipts: [],
+        autoSync: false,
+        globalSyncStatus: 'error',
+        syncError: 'manual smoke failure',
+        syncQueue: [],
+      }));
+      window.location.reload();
+    })
+  ]);
 
-  await page.reload();
   await expect(page.getByRole('button', { name: /Sync error/ })).toBeVisible();
   await expect.poll(async () => {
     const retry = page.getByRole('button', { name: /Sync error/ });

@@ -2,6 +2,8 @@
 
 ## 2026-06-11
 
+- Removed the compact Dashboard `Broker AI Assistant` (the question-and-answer panel card) from the Home tab, along with its input state, analysis handlers, and local-only helper components to keep the Home/Dashboard view simple and uncluttered.
+- Cleaned up all matching styling for `.dashboard-broker-assistant` in `compact.css` and removed outdated assertions/tests for the assistant from `dashboard-parity-smoke.spec.cjs`.
 - Fixed compact Jeju Trip Update sync so confirming an AI itinerary update now queues both the active `trip` row and the app-level `settings` profile. The missing settings queue was the reason Jeju could update locally while cloud/profile sync still behaved as if the previous active-trip settings were authoritative.
 - Added a regression smoke assertion that an 8-day Jeju Trip Update confirmation writes the itinerary and queues both `trip:<activeTripId>` and `settings:app-settings`. Verification passed after the fix with targeted Settings Trip Update smoke, `app-compact npm run typecheck`, production build, and final-navigation smoke through the dev-server wrapper (`8 passed`).
 - Deployed the compact Jeju Trip Update sync fix to Vercel production as `dpl_2rvr48g1yNbfx6KcveppjbEbrgFG`; `npm run smoke:deploy-live` passed for `https://travel-expense-compact.vercel.app/` with live asset hash `a0a8fde5209a9028`.

@@ -102,6 +102,12 @@
   2. 針對 Credential Broker 中 Mimo (/mimo/json) 的載入效能進行優化，預設停用思維思考路徑 (`thinking: { type: "disabled" }`)，關閉 `stream` 並限制 `max_tokens`。
   3. 優化後 Mimo 8日行程提取時間由 40s+ 縮短至 22s 左右（不過 Google Gemini 依然以 6s 保持最快速度）。
 
+### 9. 🤖 移除 Dashboard Broker AI Assistant (2026-06-11 新增)
+- **Home 頁面極致簡化**：遵循 Boss 簡化首屏嘅要求，將原本位於 Dashboard / Home 頁面嘅 `Broker AI Assistant` 面板（問答 card）徹底移除，包括對應嘅 input、狀態變數同 handle 邏輯，減少首頁複雜度。
+- **清理相關樣式同測試**：
+  1. 刪除咗 `compact.css` 裡面所有關於 `.dashboard-broker-assistant` 嘅 layout 同裝飾 CSS，保持樣式表乾淨。
+  2. 同步清空 `dashboard-parity-smoke.spec.cjs` 裡面針對 `Broker AI assistant` 嘅 Playwright 測試案例，避免 CI 門檻報錯。
+
 ---
 
 ## 🗂 重點檔案地圖
