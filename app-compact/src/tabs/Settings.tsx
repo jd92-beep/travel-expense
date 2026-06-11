@@ -48,23 +48,7 @@ import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
 const MAX_SAFE_AMOUNT = 1_000_000_000;
-const TRIP_STYLE_OPTIONS = [
-  { value: 'balanced', label: 'Balanced · 平衡' },
-  { value: 'food', label: 'Food · 美食' },
-  { value: 'shopping', label: 'Shopping · 購物' },
-  { value: 'culture', label: 'Culture · 文化' },
-  { value: 'nature', label: 'Nature · 自然' },
-  { value: 'family', label: 'Family · 家庭' },
-  { value: 'business', label: 'Business · 商務' },
-] as const;
-const WEATHER_PREFERENCE_OPTIONS = [
-  { value: 'balanced', label: 'Balanced · 全部提醒' },
-  { value: 'rain', label: 'Rain · 雨天優先' },
-  { value: 'heat', label: 'Heat · 體感炎熱' },
-  { value: 'cold', label: 'Cold · 低溫保暖' },
-  { value: 'wind', label: 'Wind · 大風交通' },
-  { value: 'uv', label: 'UV · 防曬' },
-] as const;
+
 
 function clampFinite(value: unknown, fallback: number, min = 0, max = MAX_SAFE_AMOUNT): number {
   const n = Number(value);

@@ -35,20 +35,43 @@ export function stableSpotId(tripId: string, date: string, idx: number, spot: Pi
 
 export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fallbackCurrency = 'JPY'): ItineraryDay[] {
   return itinerary.map((day, dayIdx) => {
-    const dayId = day.dayId || day.id || stableDayId(tripId, day.date);
+    // Coerce non-standard date formats (e.g. "4/20", "2026/04/20") to YYYY-MM-DD
+    const rawDate = String(day.date || '');
+    const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+      ? rawDate
+      : (() => {
+          const parsed = new Date(rawDate);
+          if (!Number.isNaN(parsed.getTime())) {
+            const yyyy = parsed.getFullYear();
+            const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+            const dd = String(parsed.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+          }
+          return rawDate; // keep original if unparsable
+        })();
+    const dayId = day.dayId || day.id || stableDayId(tripId, safeDate);
     return {
       ...day,
+      date: safeDate,
       id: dayId,
       dayId,
       day: Number(day.day) || dayIdx + 1,
+      region: day.region || day.city || `Day ${dayIdx + 1}`,
       timezone: normalizeZone(day.timezone || day.spots?.find((spot) => spot.timezone)?.timezone) || 'Asia/Tokyo',
       currency: day.currency || fallbackCurrency,
-      spots: (day.spots || []).map((spot, spotIdx) => ({
-        ...spot,
-        id: spot.spotId || spot.id || stableSpotId(tripId, day.date, spotIdx, spot),
-        spotId: spot.spotId || spot.id || stableSpotId(tripId, day.date, spotIdx, spot),
-        mapUrl: spot.mapUrl || '',
-      })),
+      spots: (day.spots || []).map((spot, spotIdx) => {
+        const rawLat = Number(spot.lat);
+        const rawLon = Number(spot.lon);
+        return {
+          ...spot,
+          name: String(spot.name || '').trim() || `Spot ${spotIdx + 1}`,
+          id: spot.spotId || spot.id || stableSpotId(tripId, safeDate, spotIdx, spot),
+          spotId: spot.spotId || spot.id || stableSpotId(tripId, safeDate, spotIdx, spot),
+          mapUrl: spot.mapUrl || '',
+          lat: Number.isFinite(rawLat) ? rawLat : undefined,
+          lon: Number.isFinite(rawLon) ? rawLon : undefined,
+        };
+      }),
     };
   });
 }

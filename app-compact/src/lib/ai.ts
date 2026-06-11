@@ -491,6 +491,8 @@ function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): T
     destinationSummary,
     startDate,
     endDate,
+    // Explicitly coerce budget — LLM may return string/undefined/null; preserve current budget if AI doesn't provide one
+    budget: Math.max(0, Number(tripValue.budget ?? current.budget) || 0),
     homeCurrency: String(tripValue.homeCurrency || current.homeCurrency || 'HKD'),
     currencies,
     timezones: Array.from(new Set(normalizedItinerary.map((day) => day.timezone || 'Asia/Hong_Kong'))),

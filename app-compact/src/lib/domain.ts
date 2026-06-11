@@ -14,7 +14,9 @@ export const paymentById = (id: PaymentId | string | undefined) =>
 export function getItinerary(state: AppState): ItineraryDay[] {
   const trip = activeTrip(state);
   if (trip?.itinerary?.length) return normalizeItinerary(trip.itinerary, trip.id, trip.currencies?.[1] || state.tripCurrency || 'JPY');
-  return state.customItinerary && state.customItinerary.length ? normalizeItinerary(state.customItinerary, state.activeTripId || 'trip_default', state.tripCurrency) : ITINERARY;
+  if (state.customItinerary && state.customItinerary.length) return normalizeItinerary(state.customItinerary, state.activeTripId || 'trip_default', state.tripCurrency);
+  // Fallback: always normalize the constant ITINERARY to ensure stable dayId/spotId
+  return normalizeItinerary(ITINERARY, state.activeTripId || 'trip_default', state.tripCurrency || 'JPY');
 }
 
 export function validateItinerary(input: unknown): { ok: true; itinerary: ItineraryDay[] } | { ok: false; error: string } {
