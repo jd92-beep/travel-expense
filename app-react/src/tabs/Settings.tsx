@@ -214,6 +214,8 @@ export function Settings({
   const [newPersonName, setNewPersonName] = useState('');
   const [tripParagraph, setTripParagraph] = useState('');
   const [tripDraft, setTripDraft] = useState<TripDraft | null>(null);
+  const tripUpdateModelId = state.tripUpdateModel || 'mimo/mimo-v2.5-pro';
+  const tripUpdateModelName = AI_MODELS.find(m => m.id === tripUpdateModelId)?.name || tripUpdateModelId;
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
   const [rotationProvider, setRotationProvider] = useState<CredentialProvider>('notion');
   const [rotationSecret, setRotationSecret] = useState('');
@@ -1667,8 +1669,8 @@ export function Settings({
         </div>
       </AccordionCard>
 
-      <AccordionCard id="settings-trip-update" eyebrow="Kimi Trip Update" title="行程更新卡片" icon={<Sparkles />}>
-        <p className="muted">貼入新旅程或補充行程 paragraph，AI 會先產生 preview；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
+      <AccordionCard id="settings-trip-update" eyebrow="Trip Update AI" title="AI 行程更新" icon={<Sparkles />}>
+        <p className="muted">目前 primary：{tripUpdateModelName}。貼入新旅程或補充行程 paragraph，AI 會先產生 preview；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
         <textarea
           rows={6}
           value={tripParagraph}
@@ -1681,12 +1683,26 @@ export function Settings({
             type="button"
             disabled={!tripParagraph.trim() || !!busy}
             onClick={() => run('分析行程', async () => {
-              const draft = await parseTripParagraph(tripParagraph, state);
-              setTripDraft(draft);
-              return `已產生 preview：${draft.trip.name}`;
+              try {
+                const draft = await parseTripParagraph(tripParagraph, state);
+                const hasSpots = draft && draft.trip && Array.isArray(draft.trip.itinerary) &&
+                  draft.trip.itinerary.some((day) => Array.isArray(day.spots) && day.spots.length > 0);
+                if (!hasSpots) {
+                  const warningMsg = (draft && draft.warnings && draft.warnings.join(' | ')) || '';
+                  throw new Error(warningMsg || 'AI 智能解析未成功提取任何日程景點，請檢查貼入嘅文字內容。');
+                }
+                setTripDraft(draft);
+                return `已產生 preview：${draft.trip.name}`;
+              } catch (err) {
+                console.error('[Settings] AI parse failed:', err);
+                const errorMsg = err instanceof Error ? err.message : String(err);
+                const debugText = `--- AI PARSING FAILED ❌ ---\nError: ${errorMsg}\n\n如果您遇到此問題，請檢查 API 金鑰設定，或者切換到手動輸入。`;
+                setTripParagraph(debugText);
+                throw err;
+              }
             })}
           >
-            <Plane size={18} /> 用 Kimi 分析
+            <Plane size={18} /> 用已選模型分析
           </button>
           {tripDraft && <button className="secondary" type="button" onClick={() => setTripDraft(null)}>清除 preview</button>}
         </div>

@@ -2596,11 +2596,25 @@ export function Settings({
             type="button"
             disabled={!tripParagraph.trim() || !!busy}
             onClick={() => run('分析行程', async () => {
-              const draft = await parseTripParagraph(tripParagraph, state);
-              const stats = tripDraftPreviewStats(draft);
-              setTripDraft(draft);
-              setTripDraftModalOpen(true);
-              return `已分析：${draft.trip.name} · ${stats.dayCount} 日 · ${stats.spotCount} 景點 · ${stats.lodgingCount} 酒店 · ${stats.foodCount} 餐飲 · ${stats.transportCount} 交通 · ${stats.detailCount} 重要細節`;
+              try {
+                const draft = await parseTripParagraph(tripParagraph, state);
+                const hasSpots = draft && draft.trip && Array.isArray(draft.trip.itinerary) &&
+                  draft.trip.itinerary.some((day) => Array.isArray(day.spots) && day.spots.length > 0);
+                if (!hasSpots) {
+                  const warningMsg = (draft && draft.warnings && draft.warnings.join(' | ')) || '';
+                  throw new Error(warningMsg || 'AI 智能解析未成功提取任何日程景點，請檢查貼入嘅文字內容。');
+                }
+                const stats = tripDraftPreviewStats(draft);
+                setTripDraft(draft);
+                setTripDraftModalOpen(true);
+                return `已分析：${draft.trip.name} · ${stats.dayCount} 日 · ${stats.spotCount} 景點 · ${stats.lodgingCount} 酒店 · ${stats.foodCount} 餐飲 · ${stats.transportCount} 交通 · ${stats.detailCount} 重要細節`;
+              } catch (err) {
+                console.error('[Settings] AI parse failed:', err);
+                const errorMsg = err instanceof Error ? err.message : String(err);
+                const debugText = `--- AI PARSING FAILED ❌ ---\nError: ${errorMsg}\n\n如果您遇到此問題，請檢查 API 金鑰設定，或者切換到手動輸入。`;
+                setTripParagraph(debugText);
+                throw err;
+              }
             })}
           >
             {busy === '分析行程' ? <RotateCcw size={18} className="spin" /> : <Plane size={18} />} 用已選模型分析

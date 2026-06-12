@@ -171,7 +171,13 @@ function canManageSharing(role?: TripMemberRole): boolean {
 function publicOrigin(): string {
   if (typeof window === 'undefined') return '';
   const { origin, pathname } = window.location;
-  if (pathname.startsWith('/travel-expense/react')) return `${origin}/travel-expense/react/`;
+  if (pathname.includes('/react')) {
+    const match = pathname.match(/(.*\/react)/);
+    if (match) {
+      return `${origin}${match[1]}/`;
+    }
+  }
+  if (pathname.startsWith('/travel-expense')) return `${origin}/travel-expense/`;
   return `${origin}/`;
 }
 
