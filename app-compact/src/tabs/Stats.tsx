@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
@@ -34,6 +34,7 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
   const catTotals = categoryTotals(analysisReceipts, state, resolvedTripCurrency);
   const payTotals = paymentTotals(analysisReceipts, state, resolvedTripCurrency);
   const analysisTotal = analysisReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
+  const trueTotal = scopedState.receipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
   const maxPersonTotal = Math.max(1, ...persons.map((_, i) => settlement.sharedByPayer[i] + settlement.privateByOwner[i]));
   const settlementActionPlan = buildSettlementActionPlan(settlement, resolvedTripCurrency, toHkd);
   const topReceipts = scopedState.receipts
@@ -47,7 +48,7 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
   }, {})).sort(([a], [b]) => a.localeCompare(b));
   const tripDayCount = Math.max(1, itinerary.length || trend.length);
   const dailyBudget = Math.round((Number(state.budget) || 0) / tripDayCount);
-  const dailyAverage = Math.round(analysisTotal / tripDayCount);
+  const dailyAverage = Math.round(trueTotal / tripDayCount);
   const overBudgetDays = trend.filter(([, total]) => dailyBudget > 0 && total > dailyBudget).length;
   const budgetStory = buildBudgetStoryCards({
     budget: Number(state.budget) || 0,
@@ -69,7 +70,7 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
             <StatusPill tone="info" icon={<ReceiptText size={14} />}>{analysisReceipts.length} 筆紀錄</StatusPill>
           </span>
         </div>
-        <SpendingCompass categories={catTotals} total={analysisTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} updateState={updateState} onTab={onTab} />
+        <SpendingCompass categories={catTotals} total={trueTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} updateState={updateState} onTab={onTab} />
       </GlassCard>
 
       <DataPanel
@@ -246,6 +247,8 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
 }
 
 function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state, updateState, onTab }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [editBudgetVal, setEditBudgetVal] = useState('');
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
   const toHkd = (amt: number) => {
@@ -323,15 +326,48 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
         <div className="preview-budget-side">
           <div className="preview-budget-total">
             <span>總預算</span>
-            <strong>{safeBudget > 0 ? fmtValue(safeBudget) : '未設定'}</strong>
-            <button
-              type="button"
-              aria-label="編輯預算"
-              onClick={() => onTab?.('settings')}
-              style={{ cursor: 'pointer' }}
-            >
-              <Pencil size={15} aria-hidden="true" /> 編輯
-            </button>
+            {isEditingBudget ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  className="w-20 text-sm px-1 py-0.5 rounded border border-gray-300 text-slate-800"
+                  value={editBudgetVal}
+                  onChange={(e) => setEditBudgetVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      updateState({ budget: Number(editBudgetVal) || 0 });
+                      setIsEditingBudget(false);
+                    }
+                  }}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="text-xs bg-slate-800 text-white px-2 py-0.5 rounded"
+                  onClick={() => {
+                    updateState({ budget: Number(editBudgetVal) || 0 });
+                    setIsEditingBudget(false);
+                  }}
+                >
+                  儲存
+                </button>
+              </div>
+            ) : (
+              <>
+                <strong>{safeBudget > 0 ? fmtValue(safeBudget) : '未設定'}</strong>
+                <button
+                  type="button"
+                  aria-label="編輯預算"
+                  onClick={() => {
+                    setEditBudgetVal(String(safeBudget || ''));
+                    setIsEditingBudget(true);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <Pencil size={15} aria-hidden="true" /> 編輯
+                </button>
+              </>
+            )}
           </div>
           <div className="preview-budget-row is-used">
             <span>已用</span>

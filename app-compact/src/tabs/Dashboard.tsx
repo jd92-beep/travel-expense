@@ -454,6 +454,8 @@ export function Dashboard({
 }) {
   const [sheet, setSheet] = useState<{ kind: 'day-receipts' } | { kind: 'spot'; spot: ItinerarySpot } | null>(null);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [editBudgetVal, setEditBudgetVal] = useState('');
 
   // Dropdown & Wizard States
   const [isTripDropdownOpen, setIsTripDropdownOpen] = useState(false);
@@ -941,8 +943,41 @@ export function Dashboard({
               <div className="preview-dashboard-budget-side">
                 <div className="preview-dashboard-budget-row is-total">
                   <span>總預算</span>
-                  <strong>{showTripCurrency ? displayMoney(state.budget, resolvedTripCurrency) : displayMoney(budgetHkd, 'HKD')}</strong>
-                  <button type="button" onClick={() => onTab('settings')}><Pencil size={16} /> 編輯</button>
+                  {isEditingBudget ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        className="w-20 text-sm px-1 py-0.5 rounded border border-gray-300 text-slate-800"
+                        value={editBudgetVal}
+                        onChange={(e) => setEditBudgetVal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            updateState({ budget: Number(editBudgetVal) || 0 });
+                            setIsEditingBudget(false);
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="text-xs bg-slate-800 text-white px-2 py-0.5 rounded"
+                        onClick={() => {
+                          updateState({ budget: Number(editBudgetVal) || 0 });
+                          setIsEditingBudget(false);
+                        }}
+                      >
+                        儲存
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <strong>{showTripCurrency ? displayMoney(state.budget, resolvedTripCurrency) : displayMoney(budgetHkd, 'HKD')}</strong>
+                      <button type="button" onClick={() => {
+                        setEditBudgetVal(String(state.budget || ''));
+                        setIsEditingBudget(true);
+                      }}><Pencil size={16} /> 編輯</button>
+                    </>
+                  )}
                 </div>
                 <div className="preview-dashboard-budget-row is-used">
                   <span>已使用</span>
