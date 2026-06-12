@@ -706,6 +706,10 @@ async function notionUploadFileWorker(env, base64, mime, filename, user) {
   // Step 3: POST multipart data to S3 upload url
   const sendRes = await fetch(sendUrl, {
     method: 'POST',
+    headers: {
+      Authorization: `Bearer ${credential.secret}`,
+      'Notion-Version': NOTION_VERSION,
+    },
     body: form
   });
 
