@@ -947,7 +947,7 @@ export function Settings({
   const notionMirrorDbLabel = notionMirrorReady ? resolvedNotionDb : 'Personal Notion 未連接';
   const notionActionDisabled = !!busy || publicSupabaseOnly;
   const directTokenEnabled = true;
-  const buildLabel = `v0.1.0`;
+  const buildLabel = `v0.1.1`;
   const tripDoctor = compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope);
   const syncReadiness = buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope);
   const tripScopeAudit = buildTripScopeAudit(state, currentTrip);
@@ -2938,11 +2938,6 @@ export function Settings({
           <span><KeyRound size={15} /> Backup 不包含 API key、Notion token、broker session 或解鎖 secret。</span>
           <span><AlertTriangle size={15} /> 匯入 Backup 時會丟棄外部 cloud IDs、sync queue、舊 Trip links 同 credential 欄位。</span>
         </div>
-        <div className="mini-list">
-          <span onClick={handleVersionClick} style={{ cursor: 'pointer', userSelect: 'none' }}>
-            Build: {buildLabel} {clickCount > 0 ? `(${clickCount}/5)` : ''} {showStressPanel ? '🔓' : '🔒'}
-          </span>
-        </div>
       </AccordionCard>
 
       {showStressPanel && (<AccordionCard id="settings-itinerary-json" title="行程 JSON" meta={<span className="pill">{getItinerary(state).length} 日</span>}>
@@ -3178,6 +3173,13 @@ export function Settings({
       })()}
 
       {status && <Toast tone={/失敗|未連線|暫停|請輸入/.test(status) ? 'warning' : 'success'}>{status}</Toast>}
+
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '2rem', paddingBottom: '2rem' }}>
+        <span onClick={handleVersionClick} style={{ cursor: 'pointer', userSelect: 'none', color: 'rgba(255, 255, 255, 0.35)', fontSize: '12px', letterSpacing: '0.05em' }}>
+          Build: {buildLabel} {clickCount > 0 ? `(${clickCount}/5)` : ''} {showStressPanel ? '🔓' : '🔒'}
+        </span>
+      </div>
+
       </div>
     </section>
   );
