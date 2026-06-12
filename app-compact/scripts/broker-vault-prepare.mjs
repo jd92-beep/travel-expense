@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 const DEFAULT_BROKER_URL = 'https://travel-expense-credential-broker.ftjdfr.workers.dev';
-const DEFAULT_ORIGIN = 'https://travel-expense-compact.vercel.app';
+const DEFAULT_ORIGIN = 'https://travel-expense-compact.netlify.app';
 const DEFAULT_SESSION_FILE = path.resolve(process.cwd(), '.broker-vault-session.local.json');
 
 const brokerUrl = (process.env.COMPACT_BROKER_URL || DEFAULT_BROKER_URL).replace(/\/+$/, '');

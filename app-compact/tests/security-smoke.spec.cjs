@@ -3,8 +3,6 @@ const { test, expect } = require('@playwright/test');
 test.use({ viewport: { width: 390, height: 844 } });
 
 function expectedAuthRedirect() {
-  const authRedirect = String(process.env.VITE_COMPACT_AUTH_REDIRECT_URL || '').trim();
-  if (authRedirect) return new URL(authRedirect).toString();
   const configured = String(process.env.VITE_COMPACT_PUBLIC_URL || '').trim();
   if (configured) return new URL(configured).toString();
   return 'http://localhost:8903/travel-expense/compact/';

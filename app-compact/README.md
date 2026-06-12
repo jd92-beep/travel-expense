@@ -4,7 +4,9 @@ This is the independent compact version of the Travel Expense app.
 
 - Local dev: `npm run dev`
 - Local URL: `http://localhost:8903/travel-expense/compact/`
-- Production URL: `https://travel-expense-compact.vercel.app`
+- Netlify production URL: `https://travel-expense-compact.netlify.app`
+- Vercel production URL: `https://travel-expense-compact.vercel.app`
+- Netlify site: `travel-expense-compact`
 - Vercel project: `travel-expense-compact`
 - Compact UI system: `DESIGN_SYSTEM.md`
 - Mobile visual QA: `npm run smoke:contact-sheet`
@@ -17,7 +19,7 @@ This is the independent compact version of the Travel Expense app.
 - Post-deploy live proof: `npm run smoke:deploy-live`
 
 The compact version is an independent React + Vite app with its own package,
-Vite base path, Vercel project, mobile scroll contract, and centered circular Scan
+Vite base path, Netlify site, Vercel project, mobile scroll contract, and centered circular Scan
 dock. Changes here should not be mirrored into `app-react/` or the legacy root app
 unless Boss explicitly asks for parity work.
 

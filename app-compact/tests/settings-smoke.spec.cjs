@@ -374,10 +374,11 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await expect(deployRecovery).toContainText('Maintainer deploy recovery');
   await expect(deployRecovery).toContainText('Quota-safe');
   await deployRecovery.locator('summary').click();
-  await expect(deployRecovery).toContainText('origin/main first');
+  await expect(deployRecovery).toContainText('Compact production');
   await expect(deployRecovery).toContainText('smoke:deploy-live');
-  await expect(deployRecovery).toContainText('api-deployments-free-per-day');
-  await expect(deployRecovery).toContainText('npx vercel deploy --prod --scope ftjdfr-7940s-projects --yes');
+  await expect(deployRecovery).toContainText('Vercel + Netlify');
+  await expect(deployRecovery).toContainText('gh workflow run "Deploy Compact to Netlify" --ref main');
+  await expect(deployRecovery).toContainText('travel-expense-compact auto-deploys main');
   await expect(deployRecovery).toContainText('npm run smoke:deploy-live');
   const deployRecoveryText = await deployRecovery.textContent();
   expect(deployRecoveryText || '').not.toMatch(/sk-[A-Za-z0-9_-]{12,}|AIza[0-9A-Za-z_-]{12,}|ntn_[A-Za-z0-9]{12,}|Bearer\s+[A-Za-z0-9._-]+|credentialSession|settings-session/i);

@@ -2882,20 +2882,21 @@ export function Settings({
           <div className="settings-maintainer-release-grid">
             <span>
               <small>Source of truth</small>
-              <strong>origin/main first</strong>
+              <strong>Compact production</strong>
             </span>
             <span>
               <small>Live proof</small>
               <strong>smoke:deploy-live</strong>
             </span>
             <span>
-              <small>Quota blocker</small>
-              <strong>api-deployments-free-per-day</strong>
+              <small>Deploy path</small>
+              <strong>Vercel + Netlify</strong>
             </span>
           </div>
-          <p>For maintainers only: when Vercel quota blocks production, treat GitHub `main` plus local release gates as latest code, but do not call it live until a new production deploy succeeds.</p>
+          <p>For maintainers only: Compact production is deployed to both Vercel and Netlify from GitHub `main`. Treat local release gates as latest code, but do not call it live until both Compact production URLs pass live proof.</p>
           <div className="settings-restore-preview-warnings">
-            <span><Cloud size={13} /> Retry: npx vercel deploy --prod --scope ftjdfr-7940s-projects --yes</span>
+            <span><Cloud size={13} /> Retry Netlify: gh workflow run "Deploy Compact to Netlify" --ref main</span>
+            <span><Cloud size={13} /> Vercel: GitHub-connected project travel-expense-compact auto-deploys main</span>
             <span><ShieldCheck size={13} /> Verify: npm run smoke:deploy-live</span>
             <span><AlertTriangle size={13} /> Never paste API keys, tokens, sessions, or account secrets into deploy notes.</span>
           </div>

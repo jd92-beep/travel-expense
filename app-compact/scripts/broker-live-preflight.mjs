@@ -1,5 +1,5 @@
 const DEFAULT_BROKER_URL = 'https://travel-expense-credential-broker.ftjdfr.workers.dev';
-const DEFAULT_ORIGIN = 'https://travel-expense-compact.vercel.app';
+const DEFAULT_ORIGIN = 'https://travel-expense-compact.netlify.app';
 const brokerUrl = (process.env.COMPACT_BROKER_URL || DEFAULT_BROKER_URL).replace(/\/+$/, '');
 const origin = process.env.COMPACT_BROKER_ORIGIN || DEFAULT_ORIGIN;
 

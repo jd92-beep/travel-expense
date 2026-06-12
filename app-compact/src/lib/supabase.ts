@@ -119,7 +119,6 @@ export type SupabasePullResult = {
 const rawUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim();
 const rawKey = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 const configuredPublicUrl = String(import.meta.env.VITE_COMPACT_PUBLIC_URL || '').trim();
-const configuredAuthRedirectUrl = String(import.meta.env.VITE_COMPACT_AUTH_REDIRECT_URL || '').trim();
 
 let client: SupabaseClient | null = null;
 
@@ -197,9 +196,6 @@ function publicOrigin(): string {
 }
 
 function authRedirectUrl(): string {
-  if (configuredAuthRedirectUrl) {
-    return normalizedConfiguredUrl(configuredAuthRedirectUrl);
-  }
   return publicOrigin();
 }
 
