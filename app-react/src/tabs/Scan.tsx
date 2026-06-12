@@ -33,6 +33,8 @@ export function Scan({
   cloudSyncAvailable = false,
   state,
   onBusyChange,
+  batch,
+  setBatch,
 }: {
   onManual: () => void;
   onDraft: (receipt: Receipt) => void;
@@ -41,6 +43,8 @@ export function Scan({
   cloudSyncAvailable?: boolean;
   state: AppState;
   onBusyChange?: (busy: string) => void;
+  batch: Array<Receipt & { selected?: boolean }>;
+  setBatch: React.Dispatch<React.SetStateAction<Array<Receipt & { selected?: boolean }>>>;
 }) {
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const galleryRef = useRef<HTMLInputElement | null>(null);
@@ -56,7 +60,7 @@ export function Scan({
   const [status, setStatus] = useState('');
   const [voiceText, setVoiceText] = useState('');
   const [emailText, setEmailText] = useState('');
-  const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
+
   const [savingBatch, setSavingBatch] = useState(false);
   const [mode, setMode] = useState<ScanMode>('scan');
   const [inputKey, setInputKey] = useState(0);
@@ -92,22 +96,22 @@ export function Scan({
   }, [amount, from, to, state, fx]);
 
   const openDraft = useCallback((receipt: Receipt) => {
-    setLastDraft(receipt);
+    if (mountedRef.current) setLastDraft(receipt);
     onDraft(receipt);
   }, [onDraft]);
 
   const handleImage = useCallback(async (file?: File, retry = false) => {
     if (!file) {
-      setStatus('未收到圖片。相機無彈出時，請試相簿或手動記一筆。');
+      if (mountedRef.current) setStatus('未收到圖片。相機無彈出時，請試相簿或手動記一筆。');
       return;
     }
     if (file.size > 5_000_000) {
-      setStatus('圖片太大（超過 5MB），請先壓縮。');
+      if (mountedRef.current) setStatus('圖片太大（超過 5MB），請先壓縮。');
       return;
     }
     if (!retry) setLastScanFile(file);
     setBusyWithGlobal('ocr');
-    setStatus('讀取收據圖片…');
+    if (mountedRef.current) setStatus('讀取收據圖片…');
     let localThumb: string | undefined = undefined;
     try {
       // Pre-compress photo to avoid losing it on OCR failure
@@ -126,11 +130,9 @@ export function Scan({
 
     try {
       const receipt = await scanReceiptImage(file, state);
-      if (!mountedRef.current) return;
       openDraft(receipt);
-      setStatus('OCR 完成，請確認欄位。');
+      if (mountedRef.current) setStatus('OCR 完成，請確認欄位。');
     } catch (error) {
-      if (!mountedRef.current) return;
       const draft = {
         ...heuristicReceiptFromText(file.name, state),
         store: safeFileStem(file),
@@ -139,12 +141,12 @@ export function Scan({
         photoThumb: localThumb,
       };
       openDraft(draft);
-      setStatus('未能自動 OCR，已開啟 React 確認表俾你手動補資料。');
+      if (mountedRef.current) setStatus('未能自動 OCR，已開啟 React 確認表俾你手動補資料。');
     } finally {
       if (mountedRef.current) setBusy('');
       onBusyChange?.('');
     }
-  }, [openDraft, state]);
+  }, [openDraft, state, onBusyChange]);
 
   const handleCameraChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -179,16 +181,14 @@ export function Scan({
     setBusyWithGlobal('voice');
     try {
       const receipts = await parseTextWithAi(voiceText, state, 'react-voice');
-      if (!mountedRef.current) return;
       if (!receipts?.length) {
-        setStatus('解析不到任何收據');
+        if (mountedRef.current) setStatus('解析不到任何收據');
         return;
       }
       openDraft(receipts[0]);
-      setStatus('語音文字已解析，請確認欄位。');
+      if (mountedRef.current) setStatus('語音文字已解析，請確認欄位。');
     } catch (error) {
-      if (!mountedRef.current) return;
-      setStatus(`語音解析失敗：${error instanceof Error ? error.message : String(error)}`);
+      if (mountedRef.current) setStatus(`語音解析失敗：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       if (mountedRef.current) setBusy('');
       onBusyChange?.('');
@@ -230,16 +230,14 @@ export function Scan({
     setBusyWithGlobal('email');
     try {
       const receipts = await parseTextWithAi(emailText, state, 'react-email');
-      if (!mountedRef.current) return;
       if (!receipts?.length) {
-        setStatus('解析不到任何收據');
+        if (mountedRef.current) setStatus('解析不到任何收據');
         return;
       }
       setBatch(receipts.map((r) => ({ ...r, store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
-      setStatus(`已解析 ${receipts.length} 筆，請喺 batch confirm 核對。`);
+      if (mountedRef.current) setStatus(`已解析 ${receipts.length} 筆，請喺 batch confirm 核對。`);
     } catch (error) {
-      if (!mountedRef.current) return;
-      setStatus(`Email 解析失敗：${error instanceof Error ? error.message : String(error)}`);
+      if (mountedRef.current) setStatus(`Email 解析失敗：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       if (mountedRef.current) setBusy('');
       onBusyChange?.('');
@@ -250,7 +248,7 @@ export function Scan({
     const list = Array.from(files || []);
     if (!list.length) return;
     setBusyWithGlobal('email-image');
-    setStatus(`解析 ${list.length} 張 email 截圖…`);
+    if (mountedRef.current) setStatus(`解析 ${list.length} 張 email 截圖…`);
     try {
       const receipts: Receipt[] = [];
       for (const file of list) {
@@ -292,12 +290,10 @@ export function Scan({
           } as Receipt);
         }
       }
-      if (!mountedRef.current) return;
       setBatch(receipts.map((r) => ({ ...r, source: 'react-email-image', store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
-      setStatus(`已解析 ${receipts.length} 筆截圖，請核對後保存。`);
+      if (mountedRef.current) setStatus(`已解析 ${receipts.length} 筆截圖，請核對後保存。`);
     } catch (error) {
-      if (!mountedRef.current) return;
-      setStatus(`截圖解析失敗：${error instanceof Error ? error.message : String(error)}`);
+      if (mountedRef.current) setStatus(`截圖解析失敗：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       if (mountedRef.current) {
         setBusy('');
@@ -307,7 +303,7 @@ export function Scan({
       }
       onBusyChange?.('');
     }
-  }, [state]);
+  }, [state, setBatch, onBusyChange]);
 
   const handleEmailImagesChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const files = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];

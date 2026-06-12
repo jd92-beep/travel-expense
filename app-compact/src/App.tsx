@@ -77,6 +77,7 @@ export function App() {
   const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope } = useAppState(isCloudSyncActive, storageScope, userEmail);
 
   const [globalOcrBusy, setGlobalOcrBusy] = useState('');
+  const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
   const [skippedGuide, setSkippedGuide] = useState(false);
   const [isNewTripWizardOpen, setIsNewTripWizardOpen] = useState(false);
   const [acceptedInviteToken, setAcceptedInviteToken] = useState('');
@@ -207,10 +208,6 @@ export function App() {
       const rawHash = window.location.hash.slice(1);
       if (rawHash.startsWith('accept-invite')) return;
       const next = safeTabId(rawHash);
-      if (globalOcrBusy) {
-        window.history.replaceState(null, '', `#${tab}`);
-        return;
-      }
       // Fix Bug 9.1: Correct url hash address bar if corrupt
       if (rawHash && rawHash !== next) {
         window.history.replaceState(null, '', `#${next}`);
@@ -227,7 +224,7 @@ export function App() {
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, [updateState, globalOcrBusy, tab]);
+  }, [updateState]);
 
   // Fix Bug 9.2: Hydrate tab once from state on boot if no hash present
   useEffect(() => {
@@ -298,7 +295,6 @@ export function App() {
   }, [isHydratingScope, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, supabaseAuth.session]);
 
   const changeTab = (next: TabId) => {
-    if (globalOcrBusy) return;
     const normalized = safeTabId(next);
     const currentIndex = TAB_MANIFEST.findIndex((t) => t.id === safeTab);
     const nextIndex = TAB_MANIFEST.findIndex((t) => t.id === normalized);
@@ -358,20 +354,15 @@ export function App() {
         />
       )}
       {globalOcrBusy && (
-        <div className="global-ocr-overlay">
-          <div className="global-ocr-overlay-card animate-slide-in">
-            <Loader2 className="global-ocr-overlay-spinner" size={36} />
-            <h3 className="global-ocr-overlay-title">
-              {globalOcrBusy === 'ocr' && 'AI 正在辨識收據...'}
-              {globalOcrBusy === 'email-image' && 'AI 正在解析截圖...'}
-              {globalOcrBusy === 'voice' && 'AI 正在解析語音...'}
-              {globalOcrBusy === 'email' && 'AI 正在解析郵件...'}
-              {(!['ocr', 'email-image', 'voice', 'email'].includes(globalOcrBusy)) && 'AI 正在處理中...'}
-            </h3>
-            <p className="global-ocr-overlay-subtitle">
-              請保持分頁開啟，完成後會自動彈出編輯視窗 📸⛩️
-            </p>
-          </div>
+        <div className="global-ocr-floating-badge">
+          <Loader2 className="global-ocr-floating-spinner" size={14} />
+          <span className="global-ocr-floating-text">
+            {globalOcrBusy === 'ocr' && 'AI 正在背景辨識收據...'}
+            {globalOcrBusy === 'email-image' && 'AI 正在背景解析截圖...'}
+            {globalOcrBusy === 'voice' && 'AI 正在背景解析語音...'}
+            {globalOcrBusy === 'email' && 'AI 正在背景解析郵件...'}
+            {(!['ocr', 'email-image', 'voice', 'email'].includes(globalOcrBusy)) && 'AI 正在背景處理中...'}
+          </span>
         </div>
       )}
       <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)}>
@@ -389,6 +380,8 @@ export function App() {
                     onPull={syncEngine.pull}
                     cloudSyncAvailable={isCloudSyncActive}
                     onBusyChange={setGlobalOcrBusy}
+                    batch={batch}
+                    setBatch={setBatch}
                   />
                 )}
                 {safeTab === 'timeline' && <Timeline state={state} setState={setState} onOpen={setEditing} />}
@@ -437,6 +430,8 @@ export function App() {
                       onPull={syncEngine.pull}
                       cloudSyncAvailable={isCloudSyncActive}
                       onBusyChange={setGlobalOcrBusy}
+                      batch={batch}
+                      setBatch={setBatch}
                     />
                   )}
                   {safeTab === 'timeline' && <Timeline state={state} setState={setState} onOpen={setEditing} />}
