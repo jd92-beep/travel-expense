@@ -1,11 +1,11 @@
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.05.29';
+const VERSION = '2026.06.12';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const TRUSTED_DEVICE_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const SESSION_CHALLENGE_TTL_MS = 1000 * 60 * 5;
-const MAX_JSON_BYTES = 900000;
+const MAX_JSON_BYTES = 4500000;
 const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi', 'mimo'];
 const NOTION_VERSION = '2022-06-28';
 const KIMI_DEFAULT_BASE = 'https://api.kimi.com/coding/v1';
