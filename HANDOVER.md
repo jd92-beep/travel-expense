@@ -7,11 +7,15 @@
 
 ## What Was Done
 
-### Session 13 (Antigravity — commit `2bff938`)
+### Session 13 (Antigravity — commit `bcc6093`)
 1. **Added AI Receipt Translation in Brackets**: Updated the LLM prompts in `app-compact/src/lib/ai.ts` and `app-react/src/lib/ai.ts` for both `scanReceiptImage` (OCR) and `parseTextWithAi` (text/voice/email parsing) to automatically preserve the original foreign language text (e.g. Korean or Japanese) and append its translation in brackets right next to it (e.g. `편의점 (Convenience Store)`).
-2. **Settings Version Bump to v0.1.2**: Bumped version to `0.1.2` in `app-compact/package.json` and updated the `buildLabel` in `app-compact/src/tabs/Settings.tsx` to `v0.1.2`.
-3. **Verified and E2E Smoke Tested**: Successfully ran TypeScript typecheck and Vite build in both React and Compact subdirectories. Confirmed that both `smoke:production-gate` in `app-compact` and `smoke:ai-routing` in `app-react` pass 100% without regression.
-4. **Deployed and Aliased**: Deployed the prebuilt output of the Compact app to production Vercel (`travel-expense-compact`), aliasing to `https://travel-expense-compact.vercel.app`.
+2. **Fixed Settings AI Confirmation Modal Position**: Moved the `tripDraft` confirmation modal out of the nested `<AccordionCard id="settings-trip-update">` block and placed it at the root level of the `Settings.tsx` component. This prevents the modal from rendering at the bottom of the nested scrollable accordion context, allowing it to correctly overlay the viewport without requiring the user to scroll.
+3. **Enhanced Scan Tab UX**:
+   - Made the mock receipt photo card (`preview-scan-camera`) clickable (`onClick={triggerCamera}`) so that clicking it directly opens the camera, matching user expectations.
+   - Removed the obsolete "flashlight" (閃光) and "cut/crop" (裁切) preview overlay buttons.
+4. **Settings Version Bump to v0.1.2**: Bumped version to `0.1.2` in `app-compact/package.json` and updated the `buildLabel` in `app-compact/src/tabs/Settings.tsx` to `v0.1.2`.
+5. **Verified and E2E Smoke Tested**: Successfully ran TypeScript typecheck and Vite build in both React and Compact subdirectories. Confirmed that both `smoke:production-gate` and `smoke:scan` in `app-compact` and `smoke:ai-routing` in `app-react` pass 100% without regression.
+6. **Deployed and Aliased**: Deployed the prebuilt output of the Compact app to production Vercel (`travel-expense-compact`), aliasing to `https://travel-expense-compact.vercel.app`.
 
 ### Session 12 (Antigravity — commit `bf70321`)
 1. **Removed Stray Dot on Settings Tab**: Modified `app-compact/src/components/Shell.tsx` to only render the mobile header action button (`compact-mobile-action`) on the `dashboard` and `scan` tabs. This removes the non-functional vertical ellipsis button from other tabs, solving the stray black dot issue on the Settings tab.
