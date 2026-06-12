@@ -584,6 +584,13 @@ export function useSupabaseAuth() {
     if (signInError) throw signInError;
   }, [supabase]);
 
+  const deleteUserAccount = useCallback(async () => {
+    if (!supabase) throw new Error('Supabase is not configured');
+    const { error: rpcError } = await supabase.rpc('delete_own_user_account');
+    if (rpcError) throw rpcError;
+    await signOut();
+  }, [supabase, signOut]);
+
   return {
     configured,
     loading,
@@ -596,6 +603,7 @@ export function useSupabaseAuth() {
     updatePassword,
     signInWithGoogle,
     signOut,
+    deleteUserAccount,
   };
 }
 

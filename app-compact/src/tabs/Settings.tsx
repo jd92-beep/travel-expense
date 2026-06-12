@@ -36,6 +36,8 @@ import {
   pushTripPage,
   testNotion,
   type ReactMappingDiagnostics,
+  archiveReceipt,
+  notionFetch,
 } from '../lib/notion';
 import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
 import type { AppState, Person, Receipt, SyncEngineState, SyncQueueItem, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
@@ -850,6 +852,8 @@ export function Settings({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);
   const [showClearLocalPreview, setShowClearLocalPreview] = useState(false);
+  const [deleteConfirmEmailInput, setDeleteConfirmEmailInput] = useState('');
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
   const [backupPreview, setBackupPreview] = useState<BackupImportPreview | null>(null);
   const [tripSharePreview, setTripSharePreview] = useState<TripSharePreview | null>(null);
   const [diagnosticsPreview, setDiagnosticsPreview] = useState<DiagnosticsPreview | null>(null);
@@ -918,6 +922,51 @@ export function Settings({
       setShowClearDeviceConfirm(false);
     } catch (err) {
       setStatus(`清除裝置資料失敗：${redactedError(err)}`);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!onClearDeviceData || !onReset) return;
+    setBusy('永久刪除帳戶');
+    setStatus('');
+    try {
+      // 1. Notion best-effort 歸檔
+      const privateTrips = (state.trips || []).filter(
+        t => t.supabaseId && t.sharing?.role === 'owner' && !t.sharing?.isShared
+      );
+      for (const trip of privateTrips) {
+        if (trip.notionPageId) {
+          const notionState = { ...state, activeTripId: trip.id };
+          // Archive trip page
+          await notionFetch(notionState, `/pages/${trip.notionPageId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ archived: true })
+          }).catch((e: any) => console.warn('[Notion] archive trip failed:', e));
+          
+          // Archive receipts
+          const receipts = state.receipts.filter(r => r.tripId === trip.id && r.notionPageId);
+          for (const receipt of receipts) {
+            await archiveReceipt(state, receipt).catch((e: any) => console.warn('[Notion] archive receipt failed:', e));
+          }
+        }
+      }
+
+      // 2. 呼叫 Supabase 註銷 RPC (會同時 trigger signOut)
+      await supabaseAuth.deleteUserAccount();
+
+      // 3. 清理本地所有資料
+      await onClearDeviceData();
+      
+      // 4. 重設 app 狀態為 blank state
+      await onReset();
+      setShowDeleteAccountConfirm(false);
+      setDeleteConfirmEmailInput('');
+      setStatus('帳戶及私有資料已永久刪除 💨');
+    } catch (err) {
+      console.error(err);
+      setStatus(err instanceof Error ? err.message : '刪除帳戶失敗，請重試');
     } finally {
       setBusy('');
     }
@@ -2140,6 +2189,11 @@ export function Settings({
                   <Trash2 size={18} /> 清除此裝置資料
                 </button>
               )}
+              {onClearDeviceData && onSignOut && (
+                <button className="danger" type="button" disabled={!!busy} style={{ background: '#dc2626', color: 'white' }} onClick={() => setShowDeleteAccountConfirm(true)} aria-label="永久刪除帳戶">
+                  <UserMinus size={18} /> 永久刪除帳戶
+                </button>
+              )}
             </div>
           </GlassCard>
           <div style={{ display: 'grid', gap: '12px', maxWidth: '380px', marginTop: '12px' }}>
@@ -2962,6 +3016,60 @@ export function Settings({
               </button>
               <button className="danger" type="button" disabled={!!busy} onClick={() => void handleClearLocalData()}>
                 <Trash2 size={18} /> Confirm local clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteAccountConfirm && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="永久刪除帳戶"
+          style={{ placeItems: 'center', zIndex: 9999, padding: '20px 20px max(110px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="modal settings-clear-device-modal">
+            <div className="settings-warning-icon" style={{ color: '#dc2626' }}>
+              <AlertTriangle size={30} />
+            </div>
+            <h2>⚠️ 永久刪除帳戶及資料？</h2>
+            <p style={{ color: '#dc2626', fontWeight: 600 }}>
+              呢個操作係絕對無得撤銷嘅！
+            </p>
+            <p>
+              如果確認，你嘅 Supabase 帳號、所有個人設定、未共享嘅私有旅程以及相關消費紀錄都會被徹底刪除。
+            </p>
+            <p className="muted" style={{ fontSize: '12px' }}>
+              💡 對於同其他人共享緊嘅旅程，相關嘅 Supabase 同 Notion 數據將會被保留，等其他成員仲可以繼續存取 shared trip 資訊。
+            </p>
+            <div style={{ marginTop: '12px', width: '100%' }}>
+              <label style={{ display: 'grid', gap: '4px', fontSize: '12px', fontWeight: 800, color: '#374151', textAlign: 'left' }}>
+                請輸入你嘅 Email 帳號以確認刪除:
+                <input
+                  type="text"
+                  value={deleteConfirmEmailInput}
+                  onChange={(e) => setDeleteConfirmEmailInput(e.target.value)}
+                  placeholder={userEmail || ''}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid rgba(220, 38, 38, 0.3)', borderRadius: '8px', fontSize: '13px', outline: 'none', background: 'white' }}
+                />
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button className="secondary" type="button" disabled={!!busy} onClick={() => {
+                setShowDeleteAccountConfirm(false);
+                setDeleteConfirmEmailInput('');
+              }}>
+                取消
+              </button>
+              <button
+                className="danger"
+                type="button"
+                disabled={!!busy || deleteConfirmEmailInput.trim().toLowerCase() !== (userEmail || '').trim().toLowerCase()}
+                onClick={() => void handleDeleteAccount()}
+              >
+                <Trash2 size={18} /> 確認永久刪除帳戶
               </button>
             </div>
           </div>

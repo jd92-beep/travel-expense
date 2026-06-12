@@ -111,7 +111,7 @@ function makeProxyUrl(proxy: string, target: string) {
   return proxy + target;
 }
 
-async function notionFetch<T>(state: AppState, path: string, init: RequestInit = {}): Promise<T> {
+export async function notionFetch<T>(state: AppState, path: string, init: RequestInit = {}): Promise<T> {
   const directToken = import.meta.env.DEV
     ? ((typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '') || getDirectNotionToken())
     : '';
