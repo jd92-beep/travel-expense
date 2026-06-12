@@ -436,7 +436,12 @@ export function Scan({
           <b>支援 18 種語言 · 多幣別</b>
         </div>
 
-        <div className="preview-scan-camera relative z-10 overflow-hidden" aria-label="收據取景框">
+        <div
+          className="preview-scan-camera relative z-10 overflow-hidden cursor-pointer"
+          aria-label="收據取景框"
+          onClick={triggerCamera}
+          style={{ cursor: 'pointer' }}
+        >
           {/* Laser scanning line */}
           <div className="scan-laser-line" />
           
@@ -448,12 +453,6 @@ export function Scan({
           <div className="preview-crop-corner preview-crop-corner--tr" aria-hidden="true" />
           <div className="preview-crop-corner preview-crop-corner--bl" aria-hidden="true" />
           <div className="preview-crop-corner preview-crop-corner--br" aria-hidden="true" />
-          <button className="preview-camera-tool preview-camera-tool--flash" type="button" aria-label="閃光">
-            <span>閃光</span>
-          </button>
-          <button className="preview-camera-tool preview-camera-tool--crop" type="button" aria-label="裁切">
-            <span>裁切</span>
-          </button>
           <div className="preview-receipt-paper" aria-hidden="true">
             <b>領 收 書</b>
             <span>○○商店</span>

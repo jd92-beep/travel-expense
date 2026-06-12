@@ -2613,107 +2613,6 @@ export function Settings({
             </div>
           </div>
         )}
-        {tripDraft && tripPreviewStats && tripDraftModalOpen && (
-          <div
-            className="modal-backdrop trip-confirm-backdrop"
-            role="presentation"
-            onClick={() => setTripDraftModalOpen(false)}
-          >
-            <section
-              className="modal trip-confirm-modal"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="trip-confirm-title"
-              aria-describedby="trip-confirm-description"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="modal-head trip-confirm-head">
-                <div>
-                  <span className="pill">Primary · {tripUpdateModelName} · {tripPreviewStats.sourceQuality}</span>
-                  <h2 id="trip-confirm-title">確認 AI 行程更新</h2>
-                  <h3>{tripDraft.trip.name}</h3>
-                  <p id="trip-confirm-description" className="muted">
-                    {tripDraft.trip.startDate} → {tripDraft.trip.endDate} · {tripDraft.trip.destinationSummary}
-                  </p>
-                </div>
-                <button className="icon-button" type="button" aria-label="關閉行程確認" onClick={() => setTripDraftModalOpen(false)}>
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="trip-confirm-summary">
-                <span><b>{tripPreviewStats.dayCount}</b><small>日程</small></span>
-                <span><b>{tripPreviewStats.spotCount}</b><small>景點</small></span>
-                <span><b>{tripPreviewStats.lodgingCount}</b><small>酒店</small></span>
-                <span><b>{tripPreviewStats.foodCount}</b><small>餐飲</small></span>
-                <span><b>{tripPreviewStats.transportCount}</b><small>交通</small></span>
-                <span><b>{tripPreviewStats.detailCount}</b><small>細節</small></span>
-              </div>
-
-              <div className="trip-confirm-notes">
-                <span>{tripDraft.summary}</span>
-                {!!tripPreviewStats.lodgingNames.length && <span>酒店：{tripPreviewStats.lodgingNames.join('、')}</span>}
-                {!!tripPreviewStats.foodNames.length && <span>餐飲：{tripPreviewStats.foodNames.join('、')}</span>}
-                {!!tripPreviewStats.missingCriticalFields.length && <span>未確認：{tripPreviewStats.missingCriticalFields.slice(0, 8).join('、')}</span>}
-                {!!tripPreviewStats.assumptions.length && <span>模型假設：{tripPreviewStats.assumptions.slice(0, 6).join('、')}</span>}
-                {tripDraft.warnings.map((warning, index) => <span key={`${warning}-${index}`}>Warning: {warning}</span>)}
-              </div>
-
-              {!!tripPreviewStats.organizedItinerary && (
-                <div className="trip-confirm-notes" aria-label="AI reorganized itinerary">
-                  <span>AI 重整行程：{tripPreviewStats.organizedItinerary.split('\n').slice(0, 10).join(' / ')}</span>
-                </div>
-              )}
-
-              <div className="trip-confirm-days" aria-label="AI extracted itinerary days">
-                {tripDraft.trip.itinerary.map((day) => (
-                  <article key={`${day.date}-${day.day}`} className="trip-confirm-day">
-                    <header>
-                      <div>
-                        <strong>Day {day.day} · {day.date}</strong>
-                        <span>{day.region || day.city || '未命名地區'}{day.city && day.city !== day.region ? ` · ${day.city}` : ''}{day.country ? ` · ${day.country}` : ''}</span>
-                      </div>
-                      <small>{day.currency || ''}{day.timezone ? ` · ${day.timezone}` : ''}</small>
-                    </header>
-                    {day.highlight && <p>{day.highlight}</p>}
-                    {day.note && <p style={{ fontSize: '0.82em', opacity: 0.8, marginTop: 4 }}>💡 {day.note}</p>}
-                    {day.lodging?.name && (
-                      <div className="trip-confirm-lodging">
-                        <b>🏨 酒店</b>
-                        <span>{day.lodging.name}</span>
-                        {day.lodging.address && <small>{day.lodging.address}</small>}
-                        {(day.lodging.checkIn || day.lodging.checkOut) && <small>🕐 {[day.lodging.checkIn, day.lodging.checkOut].filter(Boolean).join(' → ')}</small>}
-                        {day.lodging.bookingRef && <small>Ref: {day.lodging.bookingRef}</small>}
-                      </div>
-                    )}
-                    <div className="trip-confirm-spots">
-                      {(day.spots || []).map((spot, index) => (
-                        <div key={`${day.date}-${index}-${spot.time}-${spot.name}`} className="trip-confirm-spot">
-                          <time>{spot.time || '--:--'}{spot.timeEnd ? `-${spot.timeEnd}` : ''}</time>
-                          <div>
-                            <strong>{spot.name || '未命名地點'}</strong>
-                            <small>
-                              {spot.type === 'flight' ? '✈️' : spot.type === 'transport' ? '🚆' : spot.type === 'food' ? '🍽️' : spot.type === 'shopping' ? '🛍️' : spot.type === 'lodging' ? '🏨' : spot.type === 'sightseeing' ? '📸' : spot.type === 'ticket' ? '🎫' : spot.type === 'localtour' ? '🗺️' : '📍'}{' '}
-                              {spot.type || 'other'}
-                              {spot.address ? ` · ${spot.address}` : ''}
-                              {spot.note ? ` · ${spot.note}` : ''}
-                              {Number.isFinite(spot.lat) && Number.isFinite(spot.lon) ? ' · 📌' : ''}
-                            </small>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-
-              <div className="modal-actions trip-confirm-actions">
-                <button className="secondary" type="button" onClick={() => setTripDraftModalOpen(false)}>返回修改文字</button>
-                <button className="primary" type="button" onClick={() => applyTripDraft(tripDraft)}>確認並更新行程</button>
-              </div>
-            </section>
-          </div>
-        )}
       </AccordionCard>
 
       <AccordionCard id="settings-credentials" eyebrow="Server-side vault" title="Credentials & Connection" icon={<KeyRound />}>
@@ -3066,6 +2965,108 @@ export function Settings({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {tripDraft && tripPreviewStats && tripDraftModalOpen && (
+        <div
+          className="modal-backdrop trip-confirm-backdrop"
+          role="presentation"
+          onClick={() => setTripDraftModalOpen(false)}
+        >
+          <section
+            className="modal trip-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="trip-confirm-title"
+            aria-describedby="trip-confirm-description"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head trip-confirm-head">
+              <div>
+                <span className="pill">Primary · {tripUpdateModelName} · {tripPreviewStats.sourceQuality}</span>
+                <h2 id="trip-confirm-title">確認 AI 行程更新</h2>
+                <h3>{tripDraft.trip.name}</h3>
+                <p id="trip-confirm-description" className="muted">
+                  {tripDraft.trip.startDate} → {tripDraft.trip.endDate} · {tripDraft.trip.destinationSummary}
+                </p>
+              </div>
+              <button className="icon-button" type="button" aria-label="關閉行程確認" onClick={() => setTripDraftModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="trip-confirm-summary">
+              <span><b>{tripPreviewStats.dayCount}</b><small>日程</small></span>
+              <span><b>{tripPreviewStats.spotCount}</b><small>景點</small></span>
+              <span><b>{tripPreviewStats.lodgingCount}</b><small>酒店</small></span>
+              <span><b>{tripPreviewStats.foodCount}</b><small>餐飲</small></span>
+              <span><b>{tripPreviewStats.transportCount}</b><small>交通</small></span>
+              <span><b>{tripPreviewStats.detailCount}</b><small>細節</small></span>
+            </div>
+
+            <div className="trip-confirm-notes">
+              <span>{tripDraft.summary}</span>
+              {!!tripPreviewStats.lodgingNames.length && <span>酒店：{tripPreviewStats.lodgingNames.join('、')}</span>}
+              {!!tripPreviewStats.foodNames.length && <span>餐飲：{tripPreviewStats.foodNames.join('、')}</span>}
+              {!!tripPreviewStats.missingCriticalFields.length && <span>未確認：{tripPreviewStats.missingCriticalFields.slice(0, 8).join('、')}</span>}
+              {!!tripPreviewStats.assumptions.length && <span>模型假設：{tripPreviewStats.assumptions.slice(0, 6).join('、')}</span>}
+              {tripDraft.warnings.map((warning, index) => <span key={`${warning}-${index}`}>Warning: {warning}</span>)}
+            </div>
+
+            {!!tripPreviewStats.organizedItinerary && (
+              <div className="trip-confirm-notes" aria-label="AI reorganized itinerary">
+                <span>AI 重整行程：{tripPreviewStats.organizedItinerary.split('\n').slice(0, 10).join(' / ')}</span>
+              </div>
+            )}
+
+            <div className="trip-confirm-days" aria-label="AI extracted itinerary days">
+              {tripDraft.trip.itinerary.map((day) => (
+                <article key={`${day.date}-${day.day}`} className="trip-confirm-day">
+                  <header>
+                    <div>
+                      <strong>Day {day.day} · {day.date}</strong>
+                      <span>{day.region || day.city || '未命名地區'}{day.city && day.city !== day.region ? ` · ${day.city}` : ''}{day.country ? ` · ${day.country}` : ''}</span>
+                    </div>
+                    <small>{day.currency || ''}{day.timezone ? ` · ${day.timezone}` : ''}</small>
+                  </header>
+                  {day.highlight && <p>{day.highlight}</p>}
+                  {day.note && <p style={{ fontSize: '0.82em', opacity: 0.8, marginTop: 4 }}>💡 {day.note}</p>}
+                  {day.lodging?.name && (
+                    <div className="trip-confirm-lodging">
+                      <b>🏨 酒店</b>
+                      <span>{day.lodging.name}</span>
+                      {day.lodging.address && <small>{day.lodging.address}</small>}
+                      {(day.lodging.checkIn || day.lodging.checkOut) && <small>🕐 {[day.lodging.checkIn, day.lodging.checkOut].filter(Boolean).join(' → ')}</small>}
+                      {day.lodging.bookingRef && <small>Ref: {day.lodging.bookingRef}</small>}
+                    </div>
+                  )}
+                  <div className="trip-confirm-spots">
+                    {(day.spots || []).map((spot, index) => (
+                      <div key={`${day.date}-${index}-${spot.time}-${spot.name}`} className="trip-confirm-spot">
+                        <time>{spot.time || '--:--'}{spot.timeEnd ? `-${spot.timeEnd}` : ''}</time>
+                        <div>
+                          <strong>{spot.name || '未命名地點'}</strong>
+                          <small>
+                            {spot.type === 'flight' ? '✈️' : spot.type === 'transport' ? '🚆' : spot.type === 'food' ? '🍽️' : spot.type === 'shopping' ? '🛍️' : spot.type === 'lodging' ? '🏨' : spot.type === 'sightseeing' ? '📸' : spot.type === 'ticket' ? '🎫' : spot.type === 'localtour' ? '🗺️' : '📍'}{' '}
+                            {spot.type || 'other'}
+                            {spot.address ? ` · ${spot.address}` : ''}
+                            {spot.note ? ` · ${spot.note}` : ''}
+                            {Number.isFinite(spot.lat) && Number.isFinite(spot.lon) ? ' · 📌' : ''}
+                          </small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="modal-actions trip-confirm-actions">
+              <button className="secondary" type="button" onClick={() => setTripDraftModalOpen(false)}>返回修改文字</button>
+              <button className="primary" type="button" onClick={() => applyTripDraft(tripDraft)}>確認並更新行程</button>
+            </div>
+          </section>
         </div>
       )}
 
