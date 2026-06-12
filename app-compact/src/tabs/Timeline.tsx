@@ -1,12 +1,11 @@
 import type { CSSProperties, Dispatch, FormEvent, SetStateAction } from 'react';
 import { useEffect, useState } from 'react';
-import { CalendarDays, Home, MapPin, PencilLine, ReceiptText, RotateCcw, Umbrella } from 'lucide-react';
+import { CalendarDays, Home, MapPin, PencilLine, ReceiptText, RotateCcw } from 'lucide-react';
 import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
 import { ShineBorder } from '../components/ui/shine-border';
 import { categoryById, dayLooseReceipts, fmt, getItinerary, getScheduleSpots, hkd, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts } from '../lib/domain';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from '../lib/types';
-import { buildWeatherPackingRisks } from '../lib/travelDay';
 import { ReceiptRow } from './Dashboard';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
@@ -42,7 +41,6 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   const hasOpenModal = Boolean(editing || activeDay || viewPhoto);
   const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
   const liveContext = timelineLiveContext(state, itinerary, nowTick, tripWindow);
-  const weatherPackingRisks = buildWeatherPackingRisks(state, itinerary, nowTick);
   const commandDay = (liveContext.date ? itinerary.find((day) => day.date === liveContext.date) : null) || itinerary.find((day) => day.date === today) || itinerary[0];
   const commandDate = commandDay?.date ? new Date(`${commandDay.date}T00:00:00`) : null;
   const commandYear = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getFullYear()) : '----';
@@ -133,7 +131,6 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
         const dayDateNumber = dayDateValid ? String(dayDate.getDate()) : String(day.day);
         const dayMonth = dayDateValid ? `${dayDate.getMonth() + 1}月` : '';
         const dayWeekday = dayDateValid ? new Intl.DateTimeFormat('zh-HK', { weekday: 'short' }).format(dayDate) : '';
-        const packingRisk = weatherPackingRisks.find((risk) => risk.date === day.date);
         return (
         <Reveal key={day.date} className="timeline-day-reveal" delay={Math.min(0.18, day.day * 0.018)}>
         <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`}>
@@ -156,19 +153,6 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
               <span>{spots.length} 個點</span>
             </div>
           </div>
-          {packingRisk && (
-            <div className={`timeline-packing-risk tone-${packingRisk.tone}`} role="region" aria-label={`Weather packing risk for Day ${day.day}`}>
-              <span className="timeline-packing-icon" aria-hidden="true"><Umbrella size={15} /></span>
-              <div className="timeline-packing-copy">
-                <span>Weather pack</span>
-                <strong>{packingRisk.label}</strong>
-                <small>{packingRisk.detail}</small>
-              </div>
-              <div className="timeline-packing-items" aria-label={`Packing items for Day ${day.day}`}>
-                {packingRisk.items.map((item) => <em key={item}>{item}</em>)}
-              </div>
-            </div>
-          )}
           <TimelineRail className={[rail.isToday ? 'is-today' : '', rail.isOutsideTrip ? 'is-outside-trip' : ''].filter(Boolean).join(' ')} style={timelineRailStyle(rail)}>
             {rail.isToday && (
               <span className="timeline-now-marker" aria-hidden="true">
