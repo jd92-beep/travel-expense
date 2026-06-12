@@ -2,17 +2,18 @@
 
 ## Last Worked On
 - **Date**: 2026-06-12
-- **Focus**: Stray Settings Dot, Record Conflict Resolver & Itinerary Weather Pack Removal
+- **Focus**: Settings Version relocation, Weather Pack removal, Stray Dot, Conflict resolver
 - **Agent**: Antigravity 🦾
 
 ## What Was Done
 
-### Session 12 (Antigravity — commit `fc29376`)
+### Session 12 (Antigravity — commit `bf70321`)
 1. **Removed Stray Dot on Settings Tab**: Modified `app-compact/src/components/Shell.tsx` to only render the mobile header action button (`compact-mobile-action`) on the `dashboard` and `scan` tabs. This removes the non-functional vertical ellipsis button from other tabs, solving the stray black dot issue on the Settings tab.
 2. **Fixed Conflict Resolver for Synced Receipts**: Modified `app-compact/src/tabs/History.tsx` to hide receipts from the Offline Conflict Resolver if they already have `supabaseId` or `notionPageId` and no active retry item is in the sync queue. This prevents synced receipts for the Jeju 2026 trip from lingering in the resolver panel.
 3. **Removed Itinerary Weather Pack**: Completely removed the Weather Pack strip from the Itinerary tab (`app-compact/src/tabs/Timeline.tsx`), including variables, imports, and markup. Deleted the now obsolete helper file `app-compact/src/lib/travelDay.ts` where the packing risk logic resided.
-4. **Hardened Playwright Tests**: Fixed `tests/final-navigation-smoke.spec.cjs` and `tests/a11y-touch-smoke.spec.cjs` to align with the simplified PWA readiness strip (removed checks for obsolete Cache, Motion, and Update chips).
-5. **Verified & Deployed**: Ran `npm run smoke:production-gate` successfully (all typecheck, navigation, mobile-layout, a11y, contact-sheet, and security scans passed). Swapped the Vercel project link to `travel-expense-compact` and deployed the prebuilt output successfully to production. Pushed verified commits to GitHub.
+4. **Settings Version Bump & Relocation**: Bumped the version from `v0.1.0` to `v0.1.1` in `package.json` and `Settings.tsx`. Moved the version label from inside the "資料管理" (Data Management) card to the very bottom center of the Settings page footer.
+5. **Hardened Playwright Tests**: Fixed `tests/final-navigation-smoke.spec.cjs` and `tests/a11y-touch-smoke.spec.cjs` to align with the simplified PWA readiness strip (removed checks for obsolete Cache, Motion, and Update chips).
+6. **Verified & Deployed**: Ran `npm run smoke:production-gate` successfully (all typecheck, navigation, mobile-layout, a11y, contact-sheet, and security scans passed). Swapped the Vercel project link to `travel-expense-compact` and deployed the prebuilt output successfully to production. Pushed verified commits to GitHub.
 
 ### Session 11 (Antigravity — commit `8bdd813`)
 1. **Fixed OCR Payload Too Large Error**: Solved the issue where camera scans returned `OCR not completed, json payload too large`. Increased the `MAX_JSON_BYTES` constant from `900000` (900KB) to `4500000` (4.5MB) in `workers/credential-broker/src/index.js` to support larger base64 encoded photo uploads from client-side camera captures.
