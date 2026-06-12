@@ -129,10 +129,6 @@ export function Scan({
       setStatus('未收到圖片。相機無彈出時，請試相簿或手動記一筆。');
       return;
     }
-    if (file.size > 5_000_000) {
-      setStatus('圖片太大（超過 5MB），請先壓縮。');
-      return;
-    }
     if (!retry) setLastScanFile(file);
     setBusy('ocr');
     setStatus('讀取收據圖片…');
@@ -279,10 +275,6 @@ export function Scan({
     try {
       const receipts: Receipt[] = [];
       for (const file of list) {
-        if (file.size > 5_000_000) {
-          if (mountedRef.current) setStatus('圖片太大（超過 5MB），請先壓縮。');
-          continue;
-        }
         let localThumb: string | undefined = undefined;
         try {
           const dataUrl = await new Promise<string>((resolve, reject) => {
