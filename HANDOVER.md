@@ -15,6 +15,7 @@
 5. **Settings Sharing Management**: Added a collapsed `旅程共享` card to React and Compact Settings with role/backend status, invite creation, invite links, pending invite revoke, member role changes, and member removal controls.
 6. **Invite Acceptance Routing**: Added `#accept-invite?token=...` handling in React and Compact, including the local Supabase-session fallback used by smoke tests.
 7. **Regression Coverage**: Updated migration scanner, Settings smoke tests, React `smoke:welcome-guide` script, and shared-contract smoke data so both app surfaces understand the new sharing metadata.
+8. **Deploy Proof**: GitHub Pages workflow passed on `main`. React Vercel production was manually prebuilt/deployed as `dpl_7Fdo255fdUuP7G1jsp9EtjspKGHQ` and Compact Vercel production as `dpl_HaWHyHQATiY5X1vCJ1exXLsq67vP`; both aliases returned HTTP 200 after deploy.
 
 **Verified in this session**
 - `app-react npm run typecheck` ✅
@@ -32,6 +33,7 @@
 - The new Supabase sharing migration was applied live through the Supabase connector and verified in the migration list. No service-role key, DB URL, or raw secret was printed.
 - Server-side Supabase + Notion dual-write receipt mutations are still the next phase. The current browser receipt save path is compatible with shared metadata but does not yet route shared-trip receipt saves through a Trip Ledger Broker / Edge Function.
 - `trip_accounting_people` is read into app state, but full UI write/merge tooling for trip-scoped accounting people remains to be completed.
+- Vercel GitHub-triggered production builds had been failing with 0ms/root-directory style errors for both React and Compact. Manual prebuilt deploy from the correct cwd/root workaround succeeded; the project settings should still be reviewed later so future GitHub-triggered Vercel deploys stop producing failed runs.
 
 ### Session 7 (Antigravity — commit `5979505`)
 1. **Budget Calc & Percent Alignment**: Aligned the budget percentages and totals between `Dashboard.tsx` and `Stats.tsx` to be display-currency-aware and use `trueTotal` (which includes flight and lodging) in accordance with project rules.
