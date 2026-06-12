@@ -1,0 +1,49 @@
+name: Deploy Compact to Netlify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app-compact/**'
+      - '.github/workflows/deploy-compact-netlify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compact-netlify
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install compact app deps
+        working-directory: app-compact
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck compact app
+        working-directory: app-compact
+        run: npm run typecheck
+
+      - name: Build compact app for Netlify
+        working-directory: app-compact
+        env:
+          VITE_BASE_PATH: /
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+
+      - name: Deploy compact app to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_COMPACT_SITE_ID }}
+        run: npx --yes netlify-cli@26.1.0 deploy --prod --dir app-compact/dist --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN"
