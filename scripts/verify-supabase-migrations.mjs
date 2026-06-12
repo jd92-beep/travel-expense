@@ -9,6 +9,7 @@ const files = [
   'supabase/migrations/20260526094500_keep_notion_scope_private.sql',
   'supabase/migrations/20260526101000_tighten_shared_private_rows.sql',
   'supabase/migrations/20260612153000_trip_sharing_dual_backend.sql',
+  'supabase/migrations/20260612165000_shared_ledger_receipt_rpc.sql',
 ];
 
 const sql = files
@@ -95,6 +96,34 @@ const requiredPatterns = [
   {
     name: 'trip invite token hashes are stored instead of plaintext tokens',
     re: /token_hash text not null unique[\s\S]*?v_hash text := encode\(digest\(v_token, 'sha256'\), 'hex'\)/i,
+  },
+  {
+    name: 'shared ledger receipt upsert requires trip edit permission',
+    re: /create or replace function public\.upsert_shared_trip_receipt[\s\S]*?if not private\.can_edit_trip\(p_trip_id\) then[\s\S]*?Trip editor role required/i,
+  },
+  {
+    name: 'shared ledger receipt upsert only edits receipts owned by current user',
+    re: /if v_existing\.id is not null and v_existing\.owner_id <> v_user then[\s\S]*?Only the original receipt owner can update this receipt/i,
+  },
+  {
+    name: 'shared ledger receipt upsert creates Notion outbox jobs instead of fake sync',
+    re: /insert into public\.receipt_sync_jobs[\s\S]*?'notion'[\s\S]*?'upsert'[\s\S]*?'pending'/i,
+  },
+  {
+    name: 'shared ledger receipt delete only deletes receipts owned by current user',
+    re: /create or replace function public\.delete_shared_trip_receipt[\s\S]*?if v_receipt\.owner_id <> v_user then[\s\S]*?Only the original receipt owner can delete this receipt/i,
+  },
+  {
+    name: 'shared ledger receipt delete creates Notion delete outbox jobs',
+    re: /create or replace function public\.delete_shared_trip_receipt[\s\S]*?insert into public\.receipt_sync_jobs[\s\S]*?'notion'[\s\S]*?'delete'[\s\S]*?'pending'/i,
+  },
+  {
+    name: 'shared ledger receipt RPCs revoke public and anon execute',
+    re: /revoke execute on function public\.upsert_shared_trip_receipt\(uuid, jsonb, uuid, text, text\) from public, anon[\s\S]*?revoke execute on function public\.delete_shared_trip_receipt\(uuid, uuid, text, text\) from public, anon/i,
+  },
+  {
+    name: 'shared ledger receipt RPCs grant execute only to authenticated',
+    re: /grant execute on function public\.upsert_shared_trip_receipt\(uuid, jsonb, uuid, text, text\) to authenticated[\s\S]*?grant execute on function public\.delete_shared_trip_receipt\(uuid, uuid, text, text\) to authenticated/i,
   },
 ];
 

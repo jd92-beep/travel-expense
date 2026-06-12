@@ -37,6 +37,7 @@
     "smoke:broker-vault:guard": "node scripts/broker-vault-verify.mjs --expect-missing-session",
     "smoke:trip-update-live": "node scripts/trip-update-live-smoke.mjs",
     "smoke:shared-contract": "node scripts/shared-contract-smoke.mjs",
+    "smoke:shared-ledger": "node ../scripts/verify-shared-ledger-contract.mjs",
     "smoke:production-gate": "node scripts/compact-production-gate.mjs",
     "smoke:production-gate:full": "node scripts/compact-production-gate.mjs --full",
     "smoke:deploy-live": "node scripts/compact-live-verify.mjs",

@@ -2,6 +2,12 @@
 
 ## 2026-06-12
 
+- Added shared-trip receipt mutation RPCs in `20260612165000_shared_ledger_receipt_rpc.sql`: `upsert_shared_trip_receipt()` and `delete_shared_trip_receipt()` require authenticated editable trip membership, preserve stable `source_id`, block editors from editing/deleting another member's receipts, and create durable Notion `receipt_sync_jobs` outbox rows for trips with an active dual-write backend.
+- Applied the shared ledger RPC migration to live Supabase project `fbnnjoahvtdrnigevrtw`; Supabase lists it as `20260612084722_shared_ledger_receipt_rpc`.
+- Updated React and Compact receipt sync so shared-trip receipt save/delete goes through the shared ledger RPCs, while private trips keep the existing direct Supabase path.
+- Disabled browser-side Notion `pushReceipt()` / `archiveReceipt()` for shared-trip receipts so the frontend no longer tries to write the shared trip's Notion backend directly; shared Notion sync is now represented by the server-created pending outbox job.
+- Added `npm run smoke:shared-ledger` to React and Compact, backed by `scripts/verify-shared-ledger-contract.mjs`, to verify the SQL permission/outbox contract and both frontend routing paths.
+- Manually deployed the shared ledger builds to Vercel production: React `dpl_8HJ7a8U1ro5TyVAyx1nZtFfUdQyV` and Compact `dpl_FqMgNX5P9quAtmFW3Xj4ZPNxkADD`; both public aliases returned HTTP 200.
 - Added the first reliable trip-sharing foundation across React and Compact: shared member/invite/backend-health types, Welcome Guide sharing invite capture, Settings `旅程共享` management cards, invite-link acceptance routing, and shared-trip Supabase pull/merge support.
 - Added and applied Supabase migration `20260612153000_trip_sharing_dual_backend.sql` / live migration `20260612082134_trip_sharing_dual_backend` with `trip_invites`, `trip_backend_links`, `trip_accounting_people`, admin/member RPCs, RLS policies, invite token hashing, and select-only frontend grants for sensitive sharing/backend tables.
 - Hardened the Supabase migration policy scanner for the new sharing schema and extended the shared-contract smoke so React and Compact both preserve sharing metadata plus receipt ownership/sync fields.

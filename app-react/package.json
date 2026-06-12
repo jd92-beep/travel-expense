@@ -29,6 +29,7 @@
     "smoke:welcome-guide": "playwright test tests/welcome-guide-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:security": "playwright test tests/security-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:supabase-notion-mirror": "playwright test tests/supabase-notion-mirror-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:shared-ledger": "node ../scripts/verify-shared-ledger-contract.mjs",
     "smoke:mobile-layout": "playwright test tests/mobile-layout-stability-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:final-nav": "playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:trip-intelligence": "playwright test tests/trip-intelligence-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line"

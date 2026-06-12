@@ -46,6 +46,11 @@ function pendingCount(queue: SyncQueueItem[] = []) {
   return queue.filter((item) => item.status !== 'synced' && item.status !== 'failed' && item.status !== 'error').length;
 }
 
+function usesSharedLedger(state: AppState, receipt: Receipt): boolean {
+  const trip = (state.trips || []).find((candidate) => candidate.id === receipt.tripId);
+  return !!trip?.sharing?.isShared;
+}
+
 export function useSyncEngine(
   state: AppState,
   setState: Dispatch<SetStateAction<AppState>>,
@@ -128,7 +133,12 @@ export function useSyncEngine(
             syncStatus: hasSupabaseSession(supabaseSessionRef.current) || canUseNotionMirror(current, false, (supabaseSessionRef.current as any)?.user?.email || null) ? 'queued' : 'local',
           };
         }
-        return { ...candidate, ...receipt, syncStatus: 'synced' };
+        const nextSyncStatus = receipt.ledgerSyncStatus === 'notion_pending' || receipt.ledgerSyncStatus === 'queued'
+          ? 'queued'
+          : receipt.ledgerSyncStatus === 'notion_failed' || receipt.ledgerSyncStatus === 'conflict'
+            ? 'failed'
+            : 'synced';
+        return { ...candidate, ...receipt, syncStatus: nextSyncStatus };
       }),
     }));
   }, [setState]);
@@ -182,10 +192,11 @@ export function useSyncEngine(
     if (item.type === 'receipt') {
       const receipt = current.receipts.find((candidate) => candidate.id === item.entityId);
       if (!receipt) return;
+      const sharedLedger = usesSharedLedger(current, receipt);
       let synced = supabaseSession
         ? await upsertSupabaseReceipt(supabaseSession, current, { ...receipt, syncStatus: 'syncing' })
         : { ...receipt, syncStatus: 'syncing' as const };
-      if (hasNotionSync) {
+      if (hasNotionSync && !sharedLedger) {
         synced = await pushReceipt(current, synced);
         if (supabaseSession) {
           synced = await upsertSupabaseReceipt(supabaseSession, current, synced);
@@ -208,7 +219,7 @@ export function useSyncEngine(
         sourceId: rawReceiptSourceId(item.payload?.sourceId || item.entityId, item.payload?.tripId),
       } as Receipt;
       if (hasSupabaseSession(session)) await archiveSupabaseReceipt(session, current, tombstone);
-      if (hasNotionSync) await archiveReceipt(current, tombstone);
+      if (hasNotionSync && !usesSharedLedger(current, tombstone)) await archiveReceipt(current, tombstone);
       return;
     }
     if (item.type === 'trip') {

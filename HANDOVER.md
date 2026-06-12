@@ -2,12 +2,40 @@
 
 ## Last Worked On
 - **Date**: 2026-06-12
-- **Focus**: Trip Sharing Foundation + React/Compact Shared Contract
+- **Focus**: Shared Ledger Receipt RPC + React/Compact Dual-Backend Routing
 - **Agent**: Codex 🧭
 
 ## What Was Done
 
-### Session 8 (Codex — this commit)
+### Session 9 (Codex — this commit)
+1. **Shared Receipt Mutation RPCs**: Added `supabase/migrations/20260612165000_shared_ledger_receipt_rpc.sql` with `upsert_shared_trip_receipt()` and `delete_shared_trip_receipt()`. The RPCs require authenticated editable trip membership, preserve `source_id`, block editors from updating/deleting another member's receipts, and create durable Notion `receipt_sync_jobs` outbox rows when the trip has an active `trip_backend_links` dual-write backend.
+2. **Live Supabase Migration Applied**: Applied the new RPC migration to live Supabase project `fbnnjoahvtdrnigevrtw`; Supabase lists it as live migration `20260612084722_shared_ledger_receipt_rpc`.
+3. **React + Compact Shared Ledger Routing**: Updated both `app-react/src/lib/supabase.ts` and `app-compact/src/lib/supabase.ts` so shared-trip receipt saves/deletes call the new RPCs instead of direct browser table writes. Private trips keep the existing direct Supabase path.
+4. **Browser Notion Writes Disabled For Shared Trips**: Updated both sync engines so shared-trip receipt upsert/delete no longer calls browser-side `pushReceipt()` / `archiveReceipt()`. Notion for shared trips is now represented by the server-created pending outbox job instead of exposing or duplicating Notion writes in the frontend.
+5. **Shared Ledger Contract Smoke**: Added `scripts/verify-shared-ledger-contract.mjs` plus `npm run smoke:shared-ledger` in React and Compact. The smoke verifies the SQL permission/outbox contract, frontend RPC routing, and the shared-trip browser-Notion skip path.
+6. **Deploy Proof**: Manually prebuilt/deployed React Vercel production as `dpl_8HJ7a8U1ro5TyVAyx1nZtFfUdQyV` and Compact Vercel production as `dpl_FqMgNX5P9quAtmFW3Xj4ZPNxkADD`; both public aliases returned HTTP 200.
+
+**Verified in this session**
+- `app-react npm run typecheck` ✅
+- `app-compact npm run typecheck` ✅
+- `app-react npm run build` ✅
+- `app-compact npm run build` ✅
+- `app-react npm run db:policy:scan` ✅
+- `app-react npm run smoke:shared-ledger` ✅
+- `app-compact npm run smoke:shared-ledger` ✅
+- `app-compact npm run smoke:shared-contract` ✅
+- `app-react npm run security:scan` ✅
+- `app-compact npm run security:scan` ✅
+- `curl https://travel-expense-react.vercel.app/` ✅ (`200`)
+- `curl https://travel-expense-compact.vercel.app/` ✅ (`200`)
+- `git diff --check` ✅
+
+**Important limits / next phase**
+- This completes the shared-trip receipt RPC and durable Notion outbox enqueue step, but it does not yet run a deployed Notion worker/Trip Ledger Broker to consume `receipt_sync_jobs` and update Notion pages. Until that worker exists, shared receipts can show as saved in Supabase with Notion pending.
+- The RPCs intentionally use the existing owner-only receipt edit model: editors can add and edit their own shared-trip receipts, but they cannot rewrite another member's receipts.
+- Continue to keep React and Compact on one shared data/back-end contract whenever adding the worker, retry UI, or conflict/version handling.
+
+### Session 8 (Codex)
 1. **Supabase Sharing Foundation**: Added `supabase/migrations/20260612153000_trip_sharing_dual_backend.sql` for `trip_invites`, `trip_backend_links`, and `trip_accounting_people`, with forced RLS, select-only frontend grants for sensitive tables, invite token hashing, and RPCs for create/accept/revoke invites plus member role/remove/leave actions. Applied it to live Supabase project `fbnnjoahvtdrnigevrtw` as migration `20260612082134_trip_sharing_dual_backend`.
 2. **React + Compact Shared Types**: Added shared member, invite, backend-health, sharing-state, receipt ownership, version, and ledger sync status fields to both `app-react/src/lib/types.ts` and `app-compact/src/lib/types.ts`.
 3. **Shared Supabase Pull/Merge Support**: Updated both Supabase clients so pull reads all RLS-visible trips instead of owner-only trips, attaches member/invite/backend/accounting summaries, preserves shared-trip ownership, and avoids re-upserting the trip owner while saving shared receipts.

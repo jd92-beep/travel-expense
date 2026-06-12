@@ -64,6 +64,10 @@ type SupabaseReceiptRow = {
   map_url: string | null;
   notion_page_id: string | null;
   notion_database_id: string | null;
+  notion_sync_status?: string | null;
+  notion_sync_error?: string | null;
+  notion_last_synced_at?: string | null;
+  notion_last_queued_at?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -177,6 +181,24 @@ function sourceIdForTrip(trip: TripProfile): string {
 
 function sourceIdForReceipt(receipt: Receipt): string {
   return receipt.sourceId || receipt.id;
+}
+
+function isSharedLedgerTrip(trip?: TripProfile): boolean {
+  return !!trip?.sharing?.isShared;
+}
+
+function ledgerSyncStatusForRow(row: SupabaseReceiptRow): Receipt['ledgerSyncStatus'] {
+  if (row.notion_sync_status === 'pending' || row.notion_sync_status === 'syncing') return 'notion_pending';
+  if (row.notion_sync_status === 'failed') return 'notion_failed';
+  if (row.notion_sync_status === 'conflict') return 'conflict';
+  if (row.status === 'draft') return 'queued';
+  return 'synced';
+}
+
+function receiptSyncStatusForLedger(ledgerSyncStatus: Receipt['ledgerSyncStatus']): Receipt['syncStatus'] {
+  if (ledgerSyncStatus === 'notion_pending' || ledgerSyncStatus === 'queued') return 'queued';
+  if (ledgerSyncStatus === 'notion_failed' || ledgerSyncStatus === 'conflict') return 'failed';
+  return 'synced';
 }
 
 function jsonObject(value: unknown): Record<string, unknown> {
@@ -379,12 +401,13 @@ function rowToPulledReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupa
 }
 
 function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: TripProfile, localId?: string, currentUserId?: string): Receipt {
+  const ledgerSyncStatus = ledgerSyncStatusForRow(row);
   return stampReceiptForTrip(state, {
     id: localId || row.id,
     supabaseId: row.id,
     ownerId: row.owner_id,
     createdByLabel: row.owner_id === currentUserId ? 'You' : 'Trip member',
-    ledgerSyncStatus: row.status === 'draft' ? 'queued' : 'synced',
+    ledgerSyncStatus,
     tripId: trip.id,
     store: row.store,
     total: Number(row.amount) || 0,
@@ -404,7 +427,7 @@ function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: Tri
     itemsText: row.items_text || undefined,
     source: 'supabase',
     sourceId: row.source_id || row.id,
-    syncStatus: row.status === 'draft' ? 'queued' : 'synced',
+    syncStatus: receiptSyncStatusForLedger(ledgerSyncStatus),
     createdAt: msFromIso(row.created_at),
     updatedAt: msFromIso(row.updated_at),
   }, { preserveUpdatedAt: true });
@@ -744,6 +767,7 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
   const supabase = getSupabaseClient();
   if (!supabase) return receipt;
   const trip = state.trips?.find((candidate) => candidate.id === receipt.tripId) || activeTrip(state);
+  await ensureSupabaseProfile(session, state);
   const syncedTrip = cleanUuid(trip.supabaseId) && trip.sharing?.role && trip.sharing.role !== 'owner'
     ? trip
     : await upsertSupabaseTrip(session, state, trip);
@@ -781,6 +805,20 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     created_at: isoFromMs(receipt.createdAt),
     updated_at: isoFromMs(receipt.updatedAt),
   };
+  if (isSharedLedgerTrip(syncedTrip)) {
+    const { data, error } = await supabase
+      .rpc('upsert_shared_trip_receipt', {
+        p_trip_id: tripUuid,
+        p_receipt: row,
+        p_receipt_id: cleanUuid(receipt.supabaseId),
+        p_source_id: row.source_id,
+        p_idempotency_key: `${tripUuid}:${row.source_id}:upsert:${receipt.updatedAt || Date.now()}`,
+      })
+      .single();
+    if (error) throw error;
+    const tripBySupabaseId = new Map([[tripUuid, syncedTrip]]);
+    return rowToReceipt(data as SupabaseReceiptRow, { ...state, trips: (state.trips || []).map((item) => item.id === syncedTrip.id ? syncedTrip : item) }, tripBySupabaseId, receipt.id, userId);
+  }
   const { data, error } = await supabase
     .from('receipts')
     .upsert(row, { onConflict: 'id' })
@@ -794,12 +832,22 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
 export async function archiveSupabaseReceipt(session: Session, state: AppState, receipt: Receipt): Promise<void> {
   const supabase = getSupabaseClient();
   if (!supabase) return;
+  const trip = receipt.tripId ? state.trips?.find((candidate) => candidate.id === receipt.tripId) : undefined;
+  const tripUuid = cleanUuid(trip?.supabaseId) || await existingTripUuid(supabase, session.user.id, trip);
+  if (tripUuid && isSharedLedgerTrip(trip)) {
+    const { error } = await supabase.rpc('delete_shared_trip_receipt', {
+      p_trip_id: tripUuid,
+      p_receipt_id: cleanUuid(receipt.supabaseId),
+      p_source_id: sourceIdForReceipt(receipt),
+      p_idempotency_key: `${tripUuid}:${sourceIdForReceipt(receipt)}:delete:${receipt.updatedAt || Date.now()}`,
+    });
+    if (error) throw error;
+    return;
+  }
   let query = supabase.from('receipts').update({ deleted_at: new Date().toISOString(), status: 'deleted' });
   const id = cleanUuid(receipt.supabaseId);
   if (id) query = query.eq('id', id).eq('owner_id', session.user.id);
   else {
-    const trip = receipt.tripId ? state.trips?.find((candidate) => candidate.id === receipt.tripId) : undefined;
-    const tripUuid = cleanUuid(trip?.supabaseId) || await existingTripUuid(supabase, session.user.id, trip);
     if (!tripUuid) throw new Error('Supabase trip id missing for receipt delete');
     query = query.eq('owner_id', session.user.id).eq('source_id', sourceIdForReceipt(receipt));
     query = query.eq('trip_id', tripUuid);
