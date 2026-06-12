@@ -2,10 +2,22 @@
 
 ## Last Worked On
 - **Date**: 2026-06-12
-- **Focus**: AI Receipt Recognition Translation Support & Settings Version Bump
+- **Focus**: Unblocked Background AI Receipt OCR & Tab Switching Support
 - **Agent**: Antigravity 🦾
 
 ## What Was Done
+
+### Session 15 (Antigravity — commit `08d501e`)
+1. **Unblocked Background OCR during Tab Switching**: Fully decoupled OCR processing from the `Scan` tab component's mounted lifecycle check (`mountedRef.current`), allowing the async OCR response to safely update state and open the global Receipt Editor even after unmounting.
+2. **Global Non-Blocking Status Indicator**:
+   - Replaced the full-screen blocking overlay with a modern, elegant, non-intrusive floating badge (`.global-ocr-floating-badge`) at the top right of the viewport.
+   - Removed tab switching and hashchange blocks, permitting users to navigate freely during AI recognition.
+3. **Globalized Batch State**:
+   - Lifted `batch` and `setBatch` state from local `Scan` component to `App.tsx` globally in both `app-compact` and `app-react`. This ensures that batch OCR data survives tab switches and automatically renders the confirmation modal when returning to the Scan tab.
+4. **Smoke Tested & Deployed**:
+   - Ran typecheck and production builds successfully for both `app-compact` and `app-react` (100% compile pass).
+   - Ran Playwright `smoke:scan` E2E tests for both compact and react apps, verifying that manual, voice, and email OCR flows function perfectly.
+   - Committed and pushed changes to `origin main` to trigger production deploys.
 
 ### Session 14 (Antigravity — commit `097b532`)
 1. **Fixed Tab Switching during Receipt OCR/Recognition**: Resolved the major issue where switching tabs while AI was recognizing a receipt (camera scan, photo upload, voice parse, email parse) caused the async OCR results to be discarded and the expense record editor popup to never show.
