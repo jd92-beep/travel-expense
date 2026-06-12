@@ -2,6 +2,12 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+function expectedAuthRedirect() {
+  const configured = String(process.env.VITE_COMPACT_PUBLIC_URL || '').trim();
+  if (configured) return configured.endsWith('/') ? configured : `${configured}/`;
+  return 'http://localhost:8903/travel-expense/compact/';
+}
+
 function stateWithTrip(tripId = 'security_trip', lastTab = 'dashboard') {
   return {
     schemaVersion: 3,
@@ -127,7 +133,7 @@ test('Supabase magic-link redirect uses a clean app root without route hash', as
   await page.getByPlaceholder('you@example.com').fill('redirect-smoke@example.com');
   await page.getByRole('button', { name: /寄出登入連結/ }).click();
 
-  await expect.poll(() => redirectTo, { timeout: 10000 }).toBe('http://localhost:8903/travel-expense/compact/');
+  await expect.poll(() => redirectTo, { timeout: 10000 }).toBe(expectedAuthRedirect());
   expect(redirectTo).not.toContain('#');
   expect(redirectTo).not.toContain('access_token');
 });
@@ -157,7 +163,7 @@ test('Supabase Google OAuth starts with a clean app root redirect', async ({ pag
   await page.getByRole('button', { name: '使用 Google 帳號登入' }).click();
 
   await expect.poll(() => provider, { timeout: 10000 }).toBe('google');
-  expect(redirectTo).toBe('http://localhost:8903/travel-expense/compact/');
+  expect(redirectTo).toBe(expectedAuthRedirect());
   expect(redirectTo).not.toContain('#');
   expect(redirectTo).not.toContain('access_token');
 });

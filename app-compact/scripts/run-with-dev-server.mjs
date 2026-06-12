@@ -26,6 +26,7 @@ const allowedEnvNames = new Set([
   'TMPDIR',
   'USER',
   'VITE_BASE_PATH',
+  'VITE_COMPACT_PUBLIC_URL',
   'VITE_SUPABASE_PUBLISHABLE_KEY',
   'VITE_SUPABASE_URL',
   'npm_config_cache',
@@ -80,7 +81,7 @@ async function ensureServer() {
   server.stdout.on('data', (chunk) => { output += String(chunk); });
   server.stderr.on('data', (chunk) => { output += String(chunk); });
 
-  for (let i = 0; i < 80; i += 1) {
+  for (let i = 0; i < 160; i += 1) {
     if (await probe(baseUrl)) {
       console.log(`[compact-smoke] started dev server at ${baseUrl}`);
       return server;

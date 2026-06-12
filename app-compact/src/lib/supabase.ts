@@ -118,6 +118,7 @@ export type SupabasePullResult = {
 
 const rawUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim();
 const rawKey = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+const configuredPublicUrl = String(import.meta.env.VITE_COMPACT_PUBLIC_URL || '').trim();
 
 let client: SupabaseClient | null = null;
 
@@ -169,6 +170,9 @@ function canManageSharing(role?: TripMemberRole): boolean {
 }
 
 function publicOrigin(): string {
+  if (configuredPublicUrl) {
+    return configuredPublicUrl.endsWith('/') ? configuredPublicUrl : `${configuredPublicUrl}/`;
+  }
   if (typeof window === 'undefined') return '';
   const { origin, pathname } = window.location;
   if (pathname.includes('/compact')) {

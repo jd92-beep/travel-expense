@@ -5,6 +5,7 @@ publish = "dist"
 [build.environment]
 NODE_VERSION = "22"
 VITE_BASE_PATH = "/"
+VITE_COMPACT_PUBLIC_URL = "https://travel-expense-compact.netlify.app/"
 
 [[headers]]
 for = "/assets/*"
