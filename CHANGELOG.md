@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06-12
+
+- Fixed budget total spent discrepancy between the Home tab (`Dashboard.tsx`) and the Stats tab (`Stats.tsx`) in the compact app, ensuring both use `trueTotal` (without item filters) so that the displayed spent percentage aligns perfectly.
+- Implemented direct inline editing for the total budget on both the Home and Stats tabs. Users can now tap the "Edit" button next to the total budget and modify it directly on the active tab without being redirected to Settings, immediately updating and syncing the state.
+- Linked the `travel-expense-compact` project to the GitHub repository in the Vercel Dashboard, configuring Vercel to automatically build and deploy new pushes to the `main` branch.
+- Deployed the latest budget fixes and inline editing improvements to Vercel production.
+
 ## 2026-06-11
 
 - Completed Google OAuth setup for the compact app: the GCP OAuth web client and Supabase Google provider are configured for the public Supabase auth flow, with the OAuth secret kept out of the repo and terminal output.
