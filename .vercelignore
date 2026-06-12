@@ -1,10 +1,10 @@
 .git
 .vercel
 node_modules
-app
-app3
-app-admin-kanban
-graphify-out
+/app
+/app3
+/app-admin-kanban
+/graphify-out
 .gitnexus
 .playwright-mcp
 .mimocode
