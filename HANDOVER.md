@@ -2,10 +2,15 @@
 
 ## Last Worked On
 - **Date**: 2026-06-12
-- **Focus**: Shared Ledger Receipt RPC + React/Compact Dual-Backend Routing
-- **Agent**: Codex 🧭
+- **Focus**: Scan Tab Camera Photo Size Limit Fix, Vercel Deploy & Verification
+- **Agent**: Antigravity 🦾
 
 ## What Was Done
+
+### Session 10 (Antigravity — commit `d1d0967`)
+1. **Removed 5MB Camera Size Limit**: Removed the obsolete `file.size > 5_000_000` image file limit check from `handleImage` and `handleEmailImages` inside `app-compact/src/tabs/Scan.tsx`.
+2. **Client-Side Auto-Compression Preserved**: Verified that `prepareForOCR` and `compressPhoto` safely perform client-side Canvas-based resizing/compression (resizing to 2016px max width and 480px thumbnails) instantly upon capture, so raw large photos (>5MB) are safely downsized before uploading, matching the legacy version's behavior.
+3. **Smoke Tested & Deployed**: Verified that `npm run smoke:scan` passes 100%, successfully built, and deployed prebuilt output to `travel-expense-compact` production on Vercel.
 
 ### Session 9 (Codex — this commit)
 1. **Shared Receipt Mutation RPCs**: Added `supabase/migrations/20260612165000_shared_ledger_receipt_rpc.sql` with `upsert_shared_trip_receipt()` and `delete_shared_trip_receipt()`. The RPCs require authenticated editable trip membership, preserve `source_id`, block editors from updating/deleting another member's receipts, and create durable Notion `receipt_sync_jobs` outbox rows when the trip has an active `trip_backend_links` dual-write backend.
