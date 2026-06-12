@@ -7,7 +7,7 @@
 
 ## What Was Done
 
-### Session 15 (Antigravity — commit `d6e766b`)
+### Session 15 (Antigravity — commit `5c530ea`)
 1. **Unblocked Background OCR during Tab Switching**: Fully decoupled OCR processing from the `Scan` tab component's mounted lifecycle check (`mountedRef.current`), allowing the async OCR response to safely update state and open the global Receipt Editor even after unmounting.
 2. **Global Non-Blocking Status Indicator**:
    - Replaced the full-screen blocking overlay with a modern, elegant, non-intrusive floating badge (`.global-ocr-floating-badge`) at the top right of the viewport.
@@ -21,9 +21,13 @@
    - Wired `app-compact` build and copy scripts into `.github/workflows/deploy.yml` to deploy the compact React PWA to subdirectory `/compact/` on GitHub Pages (`https://jd92-beep.github.io/travel-expense/compact/`).
    - This bypasses Vercel's daily free deployment limit (100 deploys/day limit), ensuring updates deploy instantly.
 6. **Fixed Settings Version Label Text Color**: Modified `app-compact/src/tabs/Settings.tsx` to set the bottom build footer label text color to `#000000` (black) instead of the barely visible semi-translucent white.
-7. **Smoke Tested & Deployed**:
+7. **Auto-Scroll to Active Itinerary Spot**:
+   - Added a `useEffect` hook with `scrolledRef` in both compact and react `Timeline.tsx` components.
+   - When mounting the Timeline tab during active trip dates (`liveContext.mode === 'active'`), it automatically scrolls the viewport smoothly to center either the currently active hour spot (`.timeline-event.is-live`) or falls back to the day card.
+   - Out-of-trip dates (before/after the trip) are shown normally without triggering any auto-scroll, as requested.
+8. **Smoke Tested & Deployed**:
    - Ran typecheck and production builds successfully for both `app-compact` and `app-react` (100% compile pass).
-   - Ran Playwright `smoke:scan` E2E tests for both compact and react apps, verifying that manual, voice, and email OCR flows function perfectly.
+   - Ran Playwright `smoke:scan` and `smoke:timeline` (7/7 passed) E2E tests for the compact app, verifying that all manual, voice, email, and timeline highlight flows function perfectly.
    - Committed and pushed changes to `origin main` to trigger production deploys.
 
 ### Session 14 (Antigravity — commit `097b532`)
