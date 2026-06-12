@@ -8,7 +8,7 @@
 ## What Was Done
 
 ### Session 8 (Codex — this commit)
-1. **Supabase Sharing Foundation**: Added `supabase/migrations/20260612153000_trip_sharing_dual_backend.sql` for `trip_invites`, `trip_backend_links`, and `trip_accounting_people`, with forced RLS, select-only frontend grants for sensitive tables, invite token hashing, and RPCs for create/accept/revoke invites plus member role/remove/leave actions.
+1. **Supabase Sharing Foundation**: Added `supabase/migrations/20260612153000_trip_sharing_dual_backend.sql` for `trip_invites`, `trip_backend_links`, and `trip_accounting_people`, with forced RLS, select-only frontend grants for sensitive tables, invite token hashing, and RPCs for create/accept/revoke invites plus member role/remove/leave actions. Applied it to live Supabase project `fbnnjoahvtdrnigevrtw` as migration `20260612082134_trip_sharing_dual_backend`.
 2. **React + Compact Shared Types**: Added shared member, invite, backend-health, sharing-state, receipt ownership, version, and ledger sync status fields to both `app-react/src/lib/types.ts` and `app-compact/src/lib/types.ts`.
 3. **Shared Supabase Pull/Merge Support**: Updated both Supabase clients so pull reads all RLS-visible trips instead of owner-only trips, attaches member/invite/backend/accounting summaries, preserves shared-trip ownership, and avoids re-upserting the trip owner while saving shared receipts.
 4. **Welcome Guide Sharing Step**: Added invite capture to both Welcome Guide implementations, including email, display name, editor/viewer role, and optional accounting-person intent.
@@ -29,7 +29,7 @@
 - `app-compact npm run smoke:settings` ✅ (`9 passed, 1 skipped`)
 
 **Important limits / next phase**
-- The new Supabase migration is committed but was not applied live in this session because `SUPABASE_DB_URL` is not present in the shell. Apply it through the trusted Supabase pipeline before expecting live invite RPCs to work.
+- The new Supabase sharing migration was applied live through the Supabase connector and verified in the migration list. No service-role key, DB URL, or raw secret was printed.
 - Server-side Supabase + Notion dual-write receipt mutations are still the next phase. The current browser receipt save path is compatible with shared metadata but does not yet route shared-trip receipt saves through a Trip Ledger Broker / Edge Function.
 - `trip_accounting_people` is read into app state, but full UI write/merge tooling for trip-scoped accounting people remains to be completed.
 
