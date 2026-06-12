@@ -28,6 +28,8 @@ import { createTripProfile } from './domain/trip/normalize';
 import { hasDeviceTrust, clearDeviceTrust } from './security/deviceTrust';
 import { TripThemeProvider } from './theme/tripTheme';
 
+// Trigger Vercel build
+
 const Dashboard = lazy(() => import('./tabs/Dashboard').then((module) => ({ default: module.Dashboard })));
 const Scan = lazy(() => import('./tabs/Scan').then((module) => ({ default: module.Scan })));
 const Timeline = lazy(() => import('./tabs/Timeline').then((module) => ({ default: module.Timeline })));
