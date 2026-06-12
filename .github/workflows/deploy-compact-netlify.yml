@@ -43,7 +43,8 @@ jobs:
         run: npm run build
 
       - name: Deploy compact app to Netlify
+        working-directory: app-compact
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_COMPACT_SITE_ID }}
-        run: npx --yes netlify-cli@26.1.0 deploy --prod --dir app-compact/dist --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN"
+        run: npx --yes netlify-cli@26.1.0 deploy --prod --no-build --dir dist --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN"
