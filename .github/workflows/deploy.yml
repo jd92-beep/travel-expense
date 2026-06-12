@@ -51,9 +51,21 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build:pages
 
-      - name: Prepare _site (legacy at root, fresh React at /react/)
+      - name: Install compact React app deps
+        working-directory: app-compact
+        run: npm ci --no-audit --no-fund
+
+      - name: Build compact React app
+        working-directory: app-compact
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build:pages
+
+      - name: Prepare _site (legacy at root, fresh React at /react/, compact at /compact/)
         run: |
           mkdir -p _site/react
+          mkdir -p _site/compact
           # Legacy working app stays at root. Do not inject provider keys into
           # GitHub Pages output: Pages HTML is public, so credentials must come
           # from local-only settings on the device.
@@ -62,6 +74,8 @@ jobs:
           # app/ or app3/ implementations because their feature parity was
           # unreliable. The stable legacy app remains at the root.
           cp -r app-react/dist/* _site/react/
+          # Compact React UI.
+          cp -r app-compact/dist/* _site/compact/
 
       - name: Security scan Pages output
         working-directory: app-react

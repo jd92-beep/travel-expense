@@ -3284,7 +3284,7 @@ export function Settings({
       {status && <Toast tone={/失敗|未連線|暫停|請輸入/.test(status) ? 'warning' : 'success'}>{status}</Toast>}
 
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: '2rem', paddingBottom: '2rem' }}>
-        <span onClick={handleVersionClick} style={{ cursor: 'pointer', userSelect: 'none', color: 'rgba(255, 255, 255, 0.35)', fontSize: '12px', letterSpacing: '0.05em' }}>
+        <span onClick={handleVersionClick} style={{ cursor: 'pointer', userSelect: 'none', color: '#000000', fontSize: '12px', letterSpacing: '0.05em' }}>
           Build: {buildLabel} {clickCount > 0 ? `(${clickCount}/5)` : ''} {showStressPanel ? '🔓' : '🔒'}
         </span>
       </div>
