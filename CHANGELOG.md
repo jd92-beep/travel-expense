@@ -2,6 +2,10 @@
 
 ## 2026-06-12
 
+- Added bracketed translations to AI receipt scan (OCR) and text parsing results. The LLM prompts in `app-compact` and `app-react` now instruct the model to preserve foreign language values (such as Korean or Japanese) for fields like store, address, items, and notes, and append the English/Traditional Chinese translation in brackets right next to them (e.g., `편의점 (Convenience Store)`).
+- Bumped the app version to `0.1.2` in `app-compact/package.json` and updated the `buildLabel` to `v0.1.2` in Settings.
+- Verified compilation and ran Playwright smoke test suites (`smoke:production-gate` in `app-compact` and `smoke:ai-routing` in `app-react`) successfully.
+- Deployed the prebuilt output of the Compact app to production Vercel (`travel-expense-compact`), aliasing to `https://travel-expense-compact.vercel.app`.
 - Added shared-trip receipt mutation RPCs in `20260612165000_shared_ledger_receipt_rpc.sql`: `upsert_shared_trip_receipt()` and `delete_shared_trip_receipt()` require authenticated editable trip membership, preserve stable `source_id`, block editors from editing/deleting another member's receipts, and create durable Notion `receipt_sync_jobs` outbox rows for trips with an active dual-write backend.
 - Applied the shared ledger RPC migration to live Supabase project `fbnnjoahvtdrnigevrtw`; Supabase lists it as `20260612084722_shared_ledger_receipt_rpc`.
 - Updated React and Compact receipt sync so shared-trip receipt save/delete goes through the shared ledger RPCs, while private trips keep the existing direct Supabase path.

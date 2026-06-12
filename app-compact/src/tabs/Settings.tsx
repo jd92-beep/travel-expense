@@ -947,7 +947,7 @@ export function Settings({
   const notionMirrorDbLabel = notionMirrorReady ? resolvedNotionDb : 'Personal Notion 未連接';
   const notionActionDisabled = !!busy || publicSupabaseOnly;
   const directTokenEnabled = true;
-  const buildLabel = `v0.1.1`;
+  const buildLabel = `v0.1.2`;
   const tripDoctor = compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope);
   const syncReadiness = buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope);
   const tripScopeAudit = buildTripScopeAudit(state, currentTrip);
