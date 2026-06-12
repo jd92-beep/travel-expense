@@ -376,7 +376,19 @@ export async function scanReceiptImage(file: File, state: AppState): Promise<Rec
   const prompt = `Read this travel receipt (which may be in a foreign language like Japanese or Korean) and return JSON only:
 {"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","itemsText":string,"note":string}
 Use ${state.tripDateRange.start} if the year is missing.
-CRITICAL: For any fields like "store", "address", "itemsText", or "note" that contain foreign languages (like Japanese, Korean, etc.), you must preserve the original language text AND append its Cantonese translation in Traditional Chinese in brackets right next to it. For example, "편의점 (便利店)", "성산일출봉 (城山日出峰)", "マクドナルド (麥當勞)". Do not translate fields that are already in Chinese.`;
+
+CRITICAL TRANSLATION RULES:
+1. For any fields like "store", "address", "itemsText", or "note" containing foreign languages (Japanese, Korean, English, etc.), you MUST preserve the original language text AND append its Cantonese (廣東話) translation in Traditional Chinese (繁體中文) in brackets right next to it.
+2. Translation must use natural Hong Kong Cantonese terms. For example, use "凍美式咖啡" (not "冰美式咖啡"), "芝士" (not "起司/奶酪"), "的士" (not "出租車/計程車"), "巴士" (not "公車/公交車"), "士多啤梨" (not "草莓"), "薯仔" (not "土豆/馬鈴薯"), "雪糕" (not "冰淇淋"), "便利店" (not "便利店/超商").
+3. Do not translate fields that are already in Chinese.
+
+CRITICAL ITEMS FORMATTING RULES:
+1. For "itemsText", you MUST list all items/products/foods line-by-line in a highly readable and organized list.
+2. Format each item line exactly as:
+   - [Original Item Name] (Cantonese translation) x [Qty]: [Price] (e.g. ¥500 or ₩2,000)
+   Example:
+   - 牛乳 (牛奶) x 1: ¥180
+   - 삼각김밥 (三角飯糰) x 2: ₩2,400`;
   const parsed = await callPreferredJson(state, prompt, 'scan', imageForOCR) as Partial<Receipt>;
   return {
     id: `scan_${Date.now()}_${Math.random().toString(16).slice(2)}`,
@@ -404,7 +416,19 @@ export async function parseTextWithAi(text: string, state: AppState, source: str
 Each item: {"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","itemsText":string,"note":string}
 TEXT:
 ${text.slice(0, 12000)}
-CRITICAL: For any fields like "store", "address", "itemsText", or "note" that contain foreign languages (like Japanese, Korean, etc.), you must preserve the original language text AND append its Cantonese translation in Traditional Chinese in brackets right next to it. For example, "편의점 (便利店)", "성산일출봉 (城山日出峰)", "マクドナルド (麥當勞)". Do not translate fields that are already in Chinese.`;
+
+CRITICAL TRANSLATION RULES:
+1. For any fields like "store", "address", "itemsText", or "note" containing foreign languages (Japanese, Korean, English, etc.), you MUST preserve the original language text AND append its Cantonese (廣東話) translation in Traditional Chinese (繁體中文) in brackets right next to it.
+2. Translation must use natural Hong Kong Cantonese terms. For example, use "凍美式咖啡" (not "冰美式咖啡"), "芝士" (not "起司/奶酪"), "的士" (not "出租車/計程車"), "巴士" (not "公車/公交車"), "士多啤梨" (not "草莓"), "薯仔" (not "土豆/馬鈴薯"), "雪糕" (not "冰淇淋"), "便利店" (not "便利店/超商").
+3. Do not translate fields that are already in Chinese.
+
+CRITICAL ITEMS FORMATTING RULES:
+1. For "itemsText", you MUST list all items/products/foods line-by-line in a highly readable and organized list.
+2. Format each item line exactly as:
+   - [Original Item Name] (Cantonese translation) x [Qty]: [Price] (e.g. ¥500 or ₩2,000)
+   Example:
+   - 牛乳 (牛奶) x 1: ¥180
+   - 삼각김밥 (三角飯糰) x 2: ₩2,400`;
   let parsed: unknown;
   try {
     parsed = await callPreferredJson(state, prompt, source.includes('voice') ? 'voice' : 'email');
