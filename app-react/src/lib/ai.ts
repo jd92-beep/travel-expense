@@ -376,7 +376,7 @@ export async function scanReceiptImage(file: File, state: AppState): Promise<Rec
   const prompt = `Read this travel receipt (which may be in a foreign language like Japanese or Korean) and return JSON only:
 {"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","itemsText":string,"note":string}
 Use ${state.tripDateRange.start} if the year is missing.
-CRITICAL: For any fields like "store", "address", "itemsText", or "note" that contain foreign languages (like Japanese, Korean, etc.), you must preserve the original language text AND append its English/Traditional Chinese translation in brackets right next to it. For example, "편의점 (Convenience Store)", "성산일출봉 (Seongsan Ilchulbong)", "マクドナルド (McDonald's)". Do not translate fields that are already in English/Chinese.`;
+CRITICAL: For any fields like "store", "address", "itemsText", or "note" that contain foreign languages (like Japanese, Korean, etc.), you must preserve the original language text AND append its Cantonese translation in Traditional Chinese in brackets right next to it. For example, "편의점 (便利店)", "성산일출봉 (城山日出峰)", "マクドナルド (麥當勞)". Do not translate fields that are already in Chinese.`;
   const parsed = await callPreferredJson(state, prompt, 'scan', imageForOCR) as Partial<Receipt>;
   return {
     id: `scan_${Date.now()}_${Math.random().toString(16).slice(2)}`,
@@ -404,7 +404,7 @@ export async function parseTextWithAi(text: string, state: AppState, source: str
 Each item: {"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","itemsText":string,"note":string}
 TEXT:
 ${text.slice(0, 12000)}
-CRITICAL: For any fields like "store", "address", "itemsText", or "note" that contain foreign languages (like Japanese, Korean, etc.), you must preserve the original language text AND append its English/Traditional Chinese translation in brackets right next to it. For example, "편의점 (Convenience Store)", "성산일출봉 (Seongsan Ilchulbong)", "マクドナルド (McDonald's)". Do not translate fields that are already in English/Chinese.`;
+CRITICAL: For any fields like "store", "address", "itemsText", or "note" that contain foreign languages (like Japanese, Korean, etc.), you must preserve the original language text AND append its Cantonese translation in Traditional Chinese in brackets right next to it. For example, "편의점 (便利店)", "성산일출봉 (城山日出峰)", "マクドナルド (麥當勞)". Do not translate fields that are already in Chinese.`;
   let parsed: unknown;
   try {
     parsed = await callPreferredJson(state, prompt, source.includes('voice') ? 'voice' : 'email');
