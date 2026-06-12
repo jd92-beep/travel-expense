@@ -7,7 +7,7 @@
 
 ## What Was Done
 
-### Session 15 (Antigravity — commit `a5a6918`)
+### Session 15 (Antigravity — commit `d6e766b`)
 1. **Unblocked Background OCR during Tab Switching**: Fully decoupled OCR processing from the `Scan` tab component's mounted lifecycle check (`mountedRef.current`), allowing the async OCR response to safely update state and open the global Receipt Editor even after unmounting.
 2. **Global Non-Blocking Status Indicator**:
    - Replaced the full-screen blocking overlay with a modern, elegant, non-intrusive floating badge (`.global-ocr-floating-badge`) at the top right of the viewport.
@@ -17,7 +17,11 @@
 4. **Enhanced AI Prompts for Receipt Translation & Formatting**:
    - Updated the LLM prompts in `app-compact/src/lib/ai.ts` and `app-react/src/lib/ai.ts` to strictly format the `itemsText` field line-by-line (e.g., `- [Original Name] (Cantonese translation) x [Qty]: [Price]`).
    - Reinforced the translation rules to translate foreign products, items, and food names specifically into natural Hong Kong Cantonese terms in Traditional Chinese (e.g., "凍美式咖啡", "芝士", "的士", "士多啤梨", "薯仔", "雪糕").
-5. **Smoke Tested & Deployed**:
+5. **Configured GitHub Pages Hosting for Compact App**:
+   - Wired `app-compact` build and copy scripts into `.github/workflows/deploy.yml` to deploy the compact React PWA to subdirectory `/compact/` on GitHub Pages (`https://jd92-beep.github.io/travel-expense/compact/`).
+   - This bypasses Vercel's daily free deployment limit (100 deploys/day limit), ensuring updates deploy instantly.
+6. **Fixed Settings Version Label Text Color**: Modified `app-compact/src/tabs/Settings.tsx` to set the bottom build footer label text color to `#000000` (black) instead of the barely visible semi-translucent white.
+7. **Smoke Tested & Deployed**:
    - Ran typecheck and production builds successfully for both `app-compact` and `app-react` (100% compile pass).
    - Ran Playwright `smoke:scan` E2E tests for both compact and react apps, verifying that manual, voice, and email OCR flows function perfectly.
    - Committed and pushed changes to `origin main` to trigger production deploys.
