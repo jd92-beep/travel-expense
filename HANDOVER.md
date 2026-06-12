@@ -7,6 +7,21 @@
 
 ## What Was Done
 
+### Session 14 (Antigravity — commit `097b532`)
+1. **Fixed Tab Switching during Receipt OCR/Recognition**: Resolved the major issue where switching tabs while AI was recognizing a receipt (camera scan, photo upload, voice parse, email parse) caused the async OCR results to be discarded and the expense record editor popup to never show.
+2. **Global Busy Lock & Screen Blocking**:
+   - Added a `globalOcrBusy` state to `App.tsx` of both `app-compact` and `app-react`.
+   - Prevented tab switching in `changeTab` and reverted address-bar URL hash changes using `window.history.replaceState` if `globalOcrBusy` is active.
+   - Passed `onBusyChange` prop to the `Scan` component to update the parent `App` component's busy state during AI operations.
+3. **Premium Glassmorphism Overlay**:
+   - Added a fixed full-screen `.global-ocr-overlay` styled loader with a high `z-index: 99999` and `backdrop-filter` in both `styles.css` files.
+   - Renders a translucent dark glassmorphism card with a rotating gold-hued spinner matching the trip theme, blocking all pointer events (and thus tab switching) and displaying dynamic context-aware text (e.g. "AI 正在辨識收據...").
+4. **Build & Compiler Validation**:
+   - Ran `npm run typecheck` and `npm run build` in both directories, verifying 100% clean compiles.
+   - Checked and fixed trailing EOF whitespace issues.
+5. **Committed and Pushed**:
+   - Successfully committed and pushed the changes to remote `origin main` to trigger automatic Vercel production builds.
+
 ### Session 13 (Antigravity — commit `bcc6093`)
 1. **Added AI Receipt Translation in Brackets**: Updated the LLM prompts in `app-compact/src/lib/ai.ts` and `app-react/src/lib/ai.ts` for both `scanReceiptImage` (OCR) and `parseTextWithAi` (text/voice/email parsing) to automatically preserve the original foreign language text (e.g. Korean or Japanese) and append its translation in brackets right next to it (e.g. `편의점 (Convenience Store)`).
 2. **Fixed Settings AI Confirmation Modal Position**: Moved the `tripDraft` confirmation modal out of the nested `<AccordionCard id="settings-trip-update">` block and placed it at the root level of the `Settings.tsx` component. This prevents the modal from rendering at the bottom of the nested scrollable accordion context, allowing it to correctly overlay the viewport without requiring the user to scroll.
