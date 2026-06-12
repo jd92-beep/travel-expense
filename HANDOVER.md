@@ -2,15 +2,15 @@
 
 ## Last Worked On
 - **Date**: 2026-06-12
-- **Focus**: Stray Settings Dot, Record Conflict Resolver & Itinerary Weather Pack
+- **Focus**: Stray Settings Dot, Record Conflict Resolver & Itinerary Weather Pack Removal
 - **Agent**: Antigravity 🦾
 
 ## What Was Done
 
-### Session 12 (Antigravity — commit `c02da07`)
+### Session 12 (Antigravity — commit `fc29376`)
 1. **Removed Stray Dot on Settings Tab**: Modified `app-compact/src/components/Shell.tsx` to only render the mobile header action button (`compact-mobile-action`) on the `dashboard` and `scan` tabs. This removes the non-functional vertical ellipsis button from other tabs, solving the stray black dot issue on the Settings tab.
 2. **Fixed Conflict Resolver for Synced Receipts**: Modified `app-compact/src/tabs/History.tsx` to hide receipts from the Offline Conflict Resolver if they already have `supabaseId` or `notionPageId` and no active retry item is in the sync queue. This prevents synced receipts for the Jeju 2026 trip from lingering in the resolver panel.
-3. **Fixed Itinerary Weather Pack**: Modified `app-compact/src/lib/travelDay.ts` to implement `dayWeatherSignal()`. It resolves the day's coordinates using `coordForDay()` and retrieves the cached forecast from `localStorage` under `wx_react_v3_*` keys, evaluating the slots via `slotsForDate()`. This updates the Itinerary Weather Pack to dynamically use spot-specific forecasts instead of searching a single global cache.
+3. **Removed Itinerary Weather Pack**: Completely removed the Weather Pack strip from the Itinerary tab (`app-compact/src/tabs/Timeline.tsx`), including variables, imports, and markup. Deleted the now obsolete helper file `app-compact/src/lib/travelDay.ts` where the packing risk logic resided.
 4. **Hardened Playwright Tests**: Fixed `tests/final-navigation-smoke.spec.cjs` and `tests/a11y-touch-smoke.spec.cjs` to align with the simplified PWA readiness strip (removed checks for obsolete Cache, Motion, and Update chips).
 5. **Verified & Deployed**: Ran `npm run smoke:production-gate` successfully (all typecheck, navigation, mobile-layout, a11y, contact-sheet, and security scans passed). Swapped the Vercel project link to `travel-expense-compact` and deployed the prebuilt output successfully to production. Pushed verified commits to GitHub.
 
