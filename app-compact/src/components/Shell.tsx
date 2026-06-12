@@ -649,31 +649,12 @@ export function Shell({
             <Archive size={13} />
             Queue · {syncState?.pendingCount ? `${syncState.pendingCount} pending` : syncState?.status === 'offline' ? 'paused' : 'clear'}
           </span>
-          <span className="pwa-chip neutral">
-            <PackageCheck size={13} />
-            Cache · {cacheLabel}
-          </span>
-          <span className={`pwa-chip ${updateReady ? 'warning' : 'ok'}`}>
-            <RefreshCw size={13} />
-            Update · {updateReady ? 'ready' : 'current'}
-            {updateReady && <button type="button" onClick={() => location.reload()}>Reload</button>}
-          </span>
-          {updateReady && (
-            <button className="pwa-chip release-notes" type="button" onClick={handleReleaseNotesToggle}>
-              <Bell size={13} />
-              Release notes
-            </button>
-          )}
           {installReady && (
             <button className="pwa-chip install" type="button" onClick={handleInstallClick}>
               <Smartphone size={13} />
               Install
             </button>
           )}
-          <span className={`pwa-chip ${motionLabel === 'reduced' ? 'neutral' : 'ok'}`}>
-            <Gauge size={13} />
-            Motion · {motionLabel}
-          </span>
         </section>
       )}
       {active === 'settings' && updateReady && releaseNotesOpen && (

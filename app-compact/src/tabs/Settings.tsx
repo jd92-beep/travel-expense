@@ -927,7 +927,7 @@ export function Settings({
   const notionMirrorDbLabel = notionMirrorReady ? resolvedNotionDb : 'Personal Notion 未連接';
   const notionActionDisabled = !!busy || publicSupabaseOnly;
   const directTokenEnabled = true;
-  const buildLabel = `${import.meta.env.MODE} · React ${reactVersion}`;
+  const buildLabel = `v0.1.0`;
   const tripDoctor = compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope);
   const syncReadiness = buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope);
   const tripScopeAudit = buildTripScopeAudit(state, currentTrip);
@@ -1926,6 +1926,125 @@ export function Settings({
         </section>
       </GlassCard>)}
 
+      <AccordionCard id="settings-people" title="旅伴 / 分帳比例" meta={<span className="pill">{persons.length} 人</span>}>
+        {persons.map((p) => (
+          <div className="person-edit" key={p.id}>
+            <AvatarBadge person={p} />
+            <input value={p.name} onChange={(e) => updatePerson(p.id, { name: e.target.value })} aria-label={`${p.name} name`} />
+            <input type="color" value={p.color} onChange={(e) => updatePerson(p.id, { color: e.target.value })} aria-label={`${p.name} color`} />
+            <input type="number" min={0} value={shareRatios[p.id] ?? 1} onChange={(e) => updateState({ shareRatios: { ...shareRatios, [p.id]: clampFinite(e.target.value, 1, 0, 1000) } })} aria-label={`${p.name} ratio`} />
+            <button className="icon-btn" type="button" onClick={() => removePerson(p.id)} aria-label={`remove ${p.name}`}><Trash2 size={16} /></button>
+          </div>
+        ))}
+        <div className="person-add">
+          <input value={newPersonName} onChange={(e) => setNewPersonName(e.target.value)} placeholder="旅伴名字" />
+          <button className="primary" type="button" onClick={addPerson}><Plus size={18} /> 新增</button>
+        </div>
+        <div className="mini-list">
+          <span>比例總和：{ratioTotal || 0} · Shared ¥{Math.round(settlement.sharedTotal).toLocaleString()}</span>
+          {settlement.transfers.map((t) => <span key={`${t.from.id}-${t.to.id}`}>{t.from.name} → {t.to.name} ¥{Math.round(t.amount).toLocaleString()}</span>)}
+          {!settlement.transfers.length && <span>暫時唔需要互相轉帳</span>}
+          {settlement.balances.map((b) => <span key={b.id}>{b.name}: 已付 shared ¥{Math.round(b.paidShared).toLocaleString()} · 應付 ¥{Math.round(b.shouldPayShared).toLocaleString()}</span>)}
+          {settlement.crossPrivate.map((item) => <span key={item.id}>私人代付：{item.payer.name} 幫 {item.beneficiary.name} 付 ¥{Math.round(item.amount).toLocaleString()} · {item.store}</span>)}
+        </div>
+        <div className="action-row wrap">
+          <button className="secondary" type="button" onClick={resetShareRatios}>重設為均分</button>
+        </div>
+      </AccordionCard>
+
+      <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
+        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。如果失敗，會自動 fallback 到 contract default（Scan/Voice → Gemma 4 31B，Email/Trip → Kimi kimi-code），然後再 fallback 到其他備用模型。Provider keys 不會進入 React state。</p>
+        <div className="form-grid">
+          <label>Scan model
+            <select value={state.scanModel} onChange={(e) => updateState({ scanModel: e.target.value })}>
+              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+            </select>
+          </label>
+          <label>Voice model
+            <select value={state.voiceModel} onChange={(e) => updateState({ voiceModel: e.target.value })}>
+              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <label>Email model
+          <select value={state.emailModel} onChange={(e) => updateState({ emailModel: e.target.value })}>
+            {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+          </select>
+        </label>
+        <label>Trip update model
+          <select value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} onChange={(e) => updateState({ tripUpdateModel: e.target.value })}>
+            {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+          </select>
+        </label>
+        <label>Google backup model
+          <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
+        </label>
+      </AccordionCard>
+
+      {cloudSyncAvailable && updatePassword && (
+        <AccordionCard id="settings-supabase-account" eyebrow="Supabase Auth" title="雲端帳號與密碼設定 🔐" icon={<KeyRound />}>
+          <p className="muted">
+            你可以為目前嘅帳號設定或修改密碼。設定密碼後，你喺其他裝置登入時，除咗用 Email 連結之外，亦可以直接輸入 Email 同密碼登入！
+          </p>
+          <GlassCard className="settings-account-card">
+            <div className="settings-account-copy">
+              <span className="eyebrow">目前帳號</span>
+              <strong>{userEmail || 'Supabase 帳號'}</strong>
+              <small>帳號操作集中喺 Settings，避免主畫面右上角阻住 app 操作。</small>
+            </div>
+            <div className="action-row wrap">
+              {onSignOut && (
+                <button className="secondary" type="button" disabled={!!busy} onClick={() => void handleSupabaseSignOut()} aria-label="登出 Supabase">
+                  <LogOut size={18} /> 登出
+                </button>
+              )}
+              {onClearDeviceData && onSignOut && (
+                <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
+                  <Trash2 size={18} /> 清除此裝置資料
+                </button>
+              )}
+            </div>
+          </GlassCard>
+          <div style={{ display: 'grid', gap: '12px', maxWidth: '380px', marginTop: '12px' }}>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '12px', fontWeight: 800, color: '#374151' }}>
+              設定新密碼 (最少 6 位)
+              <input
+                type="password"
+                value={newPasswordInput}
+                onChange={(e) => setNewPasswordInput(e.target.value)}
+                placeholder="請輸入新密碼"
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid rgba(139, 115, 85, 0.22)', borderRadius: '8px', fontSize: '13px', outline: 'none', background: 'white' }}
+              />
+            </label>
+            <div className="action-row">
+              <button
+                className="primary"
+                type="button"
+                disabled={!!busy || newPasswordInput.length < 6}
+                onClick={() => void handleUpdatePassword()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '9px 16px',
+                  borderRadius: '10px',
+                  border: 0,
+                  background: !!busy || newPasswordInput.length < 6 ? '#9CA3AF' : 'linear-gradient(135deg, #CC2929, #E07B39)',
+                  color: 'white',
+                  fontSize: '13px',
+                  fontWeight: 900,
+                  cursor: !!busy || newPasswordInput.length < 6 ? 'default' : 'pointer',
+                  boxShadow: '0 4px 12px rgba(204, 41, 41, 0.15)',
+                }}
+              >
+                儲存雲端登入密碼 💾
+              </button>
+            </div>
+          </div>
+        </AccordionCard>
+      )}
+
       <AccordionCard id="settings-trip" eyebrow="Trip Manager" title="旅程管理器 🏯🌸" meta={<span className="pill">v{managedTrip.version}</span>}>
         <div style={{ marginBottom: '1.5rem', borderBottom: '1px dashed rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
           <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>選擇要編輯或管理嘅旅程：</label>
@@ -2336,41 +2455,6 @@ export function Settings({
         )}
       </AccordionCard>
 
-      {showStressPanel && (<AccordionCard id="settings-itinerary-json" title="行程 JSON" meta={<span className="pill">{getItinerary(state).length} 日</span>}>
-        <input ref={itineraryInput} hidden type="file" accept="application/json,.json" onChange={(e) => importItinerary(e.target.files?.[0])} />
-        <div className="action-row wrap">
-          <button className="secondary" type="button" onClick={() => downloadJson(`${state.tripName || 'trip'}-itinerary.json`, getItinerary(state))}><Download size={18} /> 匯出行程</button>
-          <button className="secondary" type="button" onClick={() => itineraryInput.current?.click()}><Upload size={18} /> 匯入行程</button>
-          <button className="danger" type="button" onClick={() => updateState({ customItinerary: null, itineraryOverrides: {}, tripDateRange: { start: ITINERARY[0].date, end: ITINERARY[ITINERARY.length - 1].date } })}><RotateCcw size={18} /> 還原預設</button>
-        </div>
-      </AccordionCard>)}
-
-      <AccordionCard id="settings-people" title="旅伴 / 分帳比例" meta={<span className="pill">{persons.length} 人</span>}>
-        {persons.map((p) => (
-          <div className="person-edit" key={p.id}>
-            <AvatarBadge person={p} />
-            <input value={p.name} onChange={(e) => updatePerson(p.id, { name: e.target.value })} aria-label={`${p.name} name`} />
-            <input type="color" value={p.color} onChange={(e) => updatePerson(p.id, { color: e.target.value })} aria-label={`${p.name} color`} />
-            <input type="number" min={0} value={shareRatios[p.id] ?? 1} onChange={(e) => updateState({ shareRatios: { ...shareRatios, [p.id]: clampFinite(e.target.value, 1, 0, 1000) } })} aria-label={`${p.name} ratio`} />
-            <button className="icon-btn" type="button" onClick={() => removePerson(p.id)} aria-label={`remove ${p.name}`}><Trash2 size={16} /></button>
-          </div>
-        ))}
-        <div className="person-add">
-          <input value={newPersonName} onChange={(e) => setNewPersonName(e.target.value)} placeholder="旅伴名字" />
-          <button className="primary" type="button" onClick={addPerson}><Plus size={18} /> 新增</button>
-        </div>
-        <div className="mini-list">
-          <span>比例總和：{ratioTotal || 0} · Shared ¥{Math.round(settlement.sharedTotal).toLocaleString()}</span>
-          {settlement.transfers.map((t) => <span key={`${t.from.id}-${t.to.id}`}>{t.from.name} → {t.to.name} ¥{Math.round(t.amount).toLocaleString()}</span>)}
-          {!settlement.transfers.length && <span>暫時唔需要互相轉帳</span>}
-          {settlement.balances.map((b) => <span key={b.id}>{b.name}: 已付 shared ¥{Math.round(b.paidShared).toLocaleString()} · 應付 ¥{Math.round(b.shouldPayShared).toLocaleString()}</span>)}
-          {settlement.crossPrivate.map((item) => <span key={item.id}>私人代付：{item.payer.name} 幫 {item.beneficiary.name} 付 ¥{Math.round(item.amount).toLocaleString()} · {item.store}</span>)}
-        </div>
-        <div className="action-row wrap">
-          <button className="secondary" type="button" onClick={resetShareRatios}>重設為均分</button>
-        </div>
-      </AccordionCard>
-
       <AccordionCard id="settings-credentials" eyebrow="Server-side vault" title="Credentials & Connection" icon={<KeyRound />}>
         <p className="muted">Notion、Kimi、Google、WeatherAPI keys 只喺 Credential Broker vault 入面。React 只保存短期 session；rotation input 唔會寫入 localStorage、IndexedDB、backup 或 Notion。</p>
         <label>Credential Broker URL
@@ -2450,349 +2534,6 @@ export function Settings({
           </button>
         </div>)}
       </AccordionCard>
-
-      <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
-        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。如果失敗，會自動 fallback 到 contract default（Scan/Voice → Gemma 4 31B，Email/Trip → Kimi kimi-code），然後再 fallback 到其他備用模型。Provider keys 不會進入 React state。</p>
-        <div className="form-grid">
-          <label>Scan model
-            <select value={state.scanModel} onChange={(e) => updateState({ scanModel: e.target.value })}>
-              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
-          <label>Voice model
-            <select value={state.voiceModel} onChange={(e) => updateState({ voiceModel: e.target.value })}>
-              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
-        </div>
-        <label>Email model
-          <select value={state.emailModel} onChange={(e) => updateState({ emailModel: e.target.value })}>
-            {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-          </select>
-        </label>
-        <label>Trip update model
-          <select value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} onChange={(e) => updateState({ tripUpdateModel: e.target.value })}>
-            {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-          </select>
-        </label>
-        <label>Google backup model
-          <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
-        </label>
-      </AccordionCard>
-
-      <AccordionCard id="settings-notion" title="Notion Sync" icon={<Cloud />}>
-        {cloudSyncAvailable && (
-          <p className="muted">Public Supabase mode 只會 mirror 到你自己設定嘅 Notion database。未設定前，app 只同步 Supabase，唔會使用預設共享 Notion notebook。</p>
-        )}
-        {cloudSyncAvailable && (
-          <div className="rotation-box">
-            <div className="section-head">
-              <h2>個人 Notion notebook</h2>
-              <span className={`pill ${personalNotionStatus?.status === 'connected' ? 'ok' : 'hot'}`}>
-                {personalNotionStatus?.status || 'not checked'}
-              </span>
-            </div>
-            <p className="muted">呢度只綁定目前 Supabase 帳號。Connector secret 會直接送去 Credential Broker 加密保存，唔會寫入 browser、backup、Supabase row 或 GitHub。</p>
-            <label>Personal Notion database ID
-              <input value={personalNotionDb} onChange={(e) => setPersonalNotionDb(e.target.value)} placeholder="你自己 Notion database ID" />
-            </label>
-            <label>Personal Notion connector secret
-              <input
-                type="password"
-                value={personalNotionToken}
-                onChange={(e) => setPersonalNotionToken(e.target.value)}
-                placeholder="貼上你自己 Notion connector secret"
-                autoComplete="off"
-              />
-            </label>
-            <div className="action-row wrap">
-              <button className="secondary" type="button" disabled={!!busy} onClick={() => void refreshPersonalNotion()}>
-                Check Personal Notion
-              </button>
-              <button className="primary" type="button" disabled={!!busy || !personalNotionToken.trim() || !personalNotionDb.trim()} onClick={() => void connectPersonalNotion()}>
-                <ShieldCheck size={18} /> Connect Personal Notion
-              </button>
-              <button className="danger" type="button" disabled={!!busy || personalNotionStatus?.status !== 'connected'} onClick={() => void disconnectPersonalNotion()}>
-                Disconnect
-              </button>
-            </div>
-          </div>
-        )}
-        {cloudSyncAvailable ? (
-          <label>Notion mirror database
-            <input value={notionMirrorDbLabel} disabled readOnly />
-          </label>
-        ) : (
-          <label>Database ID
-            <input value={state.notionDb} onChange={(e) => updateState({ notionDb: e.target.value })} />
-          </label>
-        )}
-        {directTokenEnabled && (
-          <>
-            <label>Local Notion connector secret (dev fallback)
-              <input
-                type="password"
-                value={directNotionToken}
-                onChange={(e) => {
-                  setDirectNotionToken(e.target.value);
-                  saveDirectNotionToken(e.target.value);
-                }}
-                placeholder="只供 local dev 使用"
-                autoComplete="off"
-              />
-            </label>
-            <p className="muted">呢個只係 local dev fallback。Production React app 一律經 Credential Broker，Notion token 唔會保存在 browser。</p>
-          </>
-        )}
-        <label className="check-row">
-          <input type="checkbox" checked={state.autoSync} onChange={(e) => updateState({ autoSync: e.target.checked })} />
-          儲存 receipt 後自動同步
-        </label>
-        {showStressPanel && (<div className="action-row wrap">
-          <button
-            className="secondary"
-            type="button"
-            disabled={notionActionDisabled}
-            onClick={() => {
-              if (!requireNotionMirror('診斷 Notion 資料庫')) return;
-              void run('診斷 Notion 資料庫', async () => {
-                const diag = await diagnoseNotionSchema(state);
-                setSchemaDiag(diag);
-                const unmapped = diag.filter((d) => !d.mapped);
-                return `發現 ${diag.length} 個欄位，${unmapped.length} 個未映射`;
-              });
-            }}
-          >
-            診斷資料庫結構
-          </button>
-          <button
-            className="secondary"
-            type="button"
-            disabled={notionActionDisabled}
-            onClick={() => {
-              if (!requireNotionMirror('檢查 Mapping')) return;
-              void run('檢查 Mapping', async () => {
-                const diag = await diagnoseReactReceiptMapping(state);
-                setMappingDiag(diag);
-                return `已掃描 ${diag.scanned} pages；候選 receipt ${diag.receiptCandidates}；skip ${diag.skipped}；issues ${diag.issues.length}`;
-              });
-            }}
-          >
-            檢查 Mapping
-          </button>
-        </div>)}
-        {showStressPanel && schemaDiag && (
-          <div style={{ marginTop: 12, overflow: 'auto' }}>
-            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #D9CFC2' }}>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Property</th>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Type</th>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Mapped</th>
-                </tr>
-              </thead>
-              <tbody>
-                {schemaDiag.map((d) => (
-                  <tr key={d.name} style={{ borderBottom: '1px solid #E8DDD0' }}>
-                    <td style={{ padding: '4px 8px' }}>{d.name}</td>
-                    <td style={{ padding: '4px 8px' }}>{d.type}</td>
-                    <td style={{ padding: '4px 8px' }}>
-                      {d.mapped ? (
-                        <span style={{ color: '#2D6E48' }}>✅ {d.mapped}</span>
-                      ) : (
-                        <span style={{ color: '#C23B5E' }}>❌ (not mapped)</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {showStressPanel && mappingDiag && (
-          <div style={{ marginTop: 12, overflow: 'auto' }}>
-            <div className="action-row wrap" style={{ marginBottom: 10 }}>
-              <span className="pill">Scanned {mappingDiag.scanned}</span>
-              <span className="pill">Receipts {mappingDiag.receiptCandidates}</span>
-              <span className="pill">Skipped {mappingDiag.skipped}</span>
-              <span className={`pill ${mappingDiag.counts['conflicting-duplicate'] ? 'hot' : ''}`}>Conflicts {mappingDiag.counts['conflicting-duplicate']}</span>
-              <span className="pill">Duplicate family {mappingDiag.counts['duplicate-family']}</span>
-              <span className="pill">Meta fallback {mappingDiag.counts['meta-fallback']}</span>
-            </div>
-            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #D9CFC2' }}>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Page</th>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Kind</th>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Field</th>
-                  <th style={{ textAlign: 'left', padding: '4px 8px' }}>Detail</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mappingDiag.issues.slice(0, 40).map((issue, index) => (
-                  <tr key={`${issue.pageId}-${issue.kind}-${issue.field}-${index}`} style={{ borderBottom: '1px solid #E8DDD0' }}>
-                    <td style={{ padding: '4px 8px' }}>{issue.title}</td>
-                    <td style={{ padding: '4px 8px' }}>{issue.kind}</td>
-                    <td style={{ padding: '4px 8px' }}>{issue.field}</td>
-                    <td style={{ padding: '4px 8px' }}>{issue.detail}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {mappingDiag.issues.length > 40 && <p className="muted" style={{ marginTop: 8 }}>只顯示首 40 項 issue。</p>}
-          </div>
-        )}
-        {showStressPanel && (<div className={`settings-sync-dry-run settings-sync-dry-run--${syncReadiness.tone}`} role="region" aria-label="Sync readiness dry run">
-          <div className="settings-restore-preview-head">
-            <span><Cloud size={15} /> Sync dry run</span>
-            <strong>{syncReadiness.statusLabel}</strong>
-          </div>
-          <p className="settings-post-trip-helper">{syncReadiness.helper}</p>
-          <div className="settings-restore-preview-grid">
-            {syncReadiness.items.map((item) => (
-              <span key={item.key}>
-                <small>{item.title}</small>
-                <strong>{item.value}</strong>
-                <small>{item.detail}</small>
-              </span>
-            ))}
-          </div>
-          <div className="settings-restore-preview-warnings">
-            {syncReadiness.warnings.map((warning) => (
-              <span key={warning}><ShieldCheck size={13} /> {warning}</span>
-            ))}
-          </div>
-          <div className="settings-trip-doctor-actions settings-sync-dry-run-actions">
-            <button type="button" onClick={() => changeTab?.('history')}>
-              <Copy size={14} />
-              <span>Review records</span>
-            </button>
-            <button type="button" onClick={() => openSettingsPanel('settings-data')}>
-              <Download size={14} />
-              <span>Backup first</span>
-            </button>
-          </div>
-        </div>)}
-        <div className="action-row wrap">
-          <StatefulActionButton className="secondary" type="button" disabled={!!busy} onClick={() => {
-            if (!requireBroker('Pull', true)) return;
-            void run('Pull', async () => {
-            await onPull?.();
-            return '已透過 Sync Engine 拉取雲端資料';
-            });
-          }}><Download size={18} /> {publicSupabaseOnly ? 'Pull Supabase' : 'Pull'}</StatefulActionButton>
-          <StatefulActionButton className="primary" type="button" disabled={!!busy} onClick={() => {
-            if (!requireBroker('Push', true)) return;
-            void run('Push', async () => {
-              await onPush?.();
-              return '已透過 Sync Engine 推送 pending queue';
-            });
-          }}>
-            <Upload size={18} /> {publicSupabaseOnly ? 'Push Supabase' : 'Push All'}
-          </StatefulActionButton>
-        </div>
-        {showStressPanel && (<div className="action-row wrap">
-          <button className="secondary" type="button" disabled={!!busy} onClick={saveLocalSettingsNow}>Save Local Settings</button>
-          <button className="secondary" type="button" disabled={notionActionDisabled} onClick={() => {
-            if (!requireNotionMirror('測試 Notion')) return;
-            void run('測試 Notion', async () => `連線正常：${await testNotion(state)}`);
-          }}>測試</button>
-          <button className="secondary" type="button" disabled={!!busy} onClick={() => {
-            saveLocalSettingsNow();
-            if (!requireBroker('Save & Push Settings', true)) return;
-            void run('Save & Push Settings', async () => {
-            if (onPushSettings) await onPushSettings();
-            else await pushSettingsMeta(state);
-            return '已推送 non-secret settings meta';
-            });
-          }}>{publicSupabaseOnly ? 'Save & Push Supabase Settings' : 'Save & Push Settings'}</button>
-          <button className="secondary" type="button" disabled={notionActionDisabled} onClick={() => {
-            if (!requireNotionMirror('Schema migrate')) return;
-            void run('Schema', async () => migrateNotionSchema(state));
-          }}>美化 Schema</button>
-        </div>)}
-      </AccordionCard>
-
-      <AccordionCard id="settings-email" title="Email / Shortcut" icon={<Copy />}>
-        <p className="muted">
-          {cloudSyncAvailable
-            ? 'Public Supabase mode 不使用共享 Gmail inbox。請喺 Scan 貼上 email 文字或截圖；如已連接個人 Notion，可拉取你自己 notebook 入面嘅待確認紀錄。'
-            : 'Forward email 去 ftjdfr+expense@gmail.com；或者用 Shortcut URL 將文字送入同一流程。'}
-        </p>
-        <div className="action-row wrap">
-          <button className="secondary" type="button" disabled={!!busy} onClick={() => void pullPendingEmail()}><Download size={18} /> Pull pending email</button>
-          {!cloudSyncAvailable && (
-            <>
-              <button className="secondary" type="button" onClick={copyShortcutUrl}><Copy size={18} /> 複製 Shortcut URL</button>
-              <button className="secondary" type="button" onClick={() => copyText('ftjdfr+expense@gmail.com', '已複製 Gmail 地址')}><Copy size={18} /> 複製 Gmail</button>
-            </>
-          )}
-        </div>
-      </AccordionCard>
-
-      {cloudSyncAvailable && updatePassword && (
-        <AccordionCard id="settings-supabase-account" eyebrow="Supabase Auth" title="雲端帳號與密碼設定 🔐" icon={<KeyRound />}>
-          <p className="muted">
-            你可以為目前嘅帳號設定或修改密碼。設定密碼後，你喺其他裝置登入時，除咗用 Email 連結之外，亦可以直接輸入 Email 同密碼登入！
-          </p>
-          <GlassCard className="settings-account-card">
-            <div className="settings-account-copy">
-              <span className="eyebrow">目前帳號</span>
-              <strong>{userEmail || 'Supabase 帳號'}</strong>
-              <small>帳號操作集中喺 Settings，避免主畫面右上角阻住 app 操作。</small>
-            </div>
-            <div className="action-row wrap">
-              {onSignOut && (
-                <button className="secondary" type="button" disabled={!!busy} onClick={() => void handleSupabaseSignOut()} aria-label="登出 Supabase">
-                  <LogOut size={18} /> 登出
-                </button>
-              )}
-              {onClearDeviceData && onSignOut && (
-                <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
-                  <Trash2 size={18} /> 清除此裝置資料
-                </button>
-              )}
-            </div>
-          </GlassCard>
-          <div style={{ display: 'grid', gap: '12px', maxWidth: '380px', marginTop: '12px' }}>
-            <label style={{ display: 'grid', gap: '4px', fontSize: '12px', fontWeight: 800, color: '#374151' }}>
-              設定新密碼 (最少 6 位)
-              <input
-                type="password"
-                value={newPasswordInput}
-                onChange={(e) => setNewPasswordInput(e.target.value)}
-                placeholder="請輸入新密碼"
-                style={{ width: '100%', padding: '9px 12px', border: '1px solid rgba(139, 115, 85, 0.22)', borderRadius: '8px', fontSize: '13px', outline: 'none', background: 'white' }}
-              />
-            </label>
-            <div className="action-row">
-              <button
-                className="primary"
-                type="button"
-                disabled={!!busy || newPasswordInput.length < 6}
-                onClick={() => void handleUpdatePassword()}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '9px 16px',
-                  borderRadius: '10px',
-                  border: 0,
-                  background: !!busy || newPasswordInput.length < 6 ? '#9CA3AF' : 'linear-gradient(135deg, #CC2929, #E07B39)',
-                  color: 'white',
-                  fontSize: '13px',
-                  fontWeight: 900,
-                  cursor: !!busy || newPasswordInput.length < 6 ? 'default' : 'pointer',
-                  boxShadow: '0 4px 12px rgba(204, 41, 41, 0.15)',
-                }}
-              >
-                儲存雲端登入密碼 💾
-              </button>
-            </div>
-          </div>
-        </AccordionCard>
-      )}
 
       <AccordionCard id="settings-data" title="資料管理" icon={<ShieldCheck />}>
         <input ref={backupInput} hidden type="file" accept="application/json,.json" onChange={(e) => importBackup(e.target.files?.[0])} />
@@ -2942,6 +2683,15 @@ export function Settings({
           </span>
         </div>
       </AccordionCard>
+
+      {showStressPanel && (<AccordionCard id="settings-itinerary-json" title="行程 JSON" meta={<span className="pill">{getItinerary(state).length} 日</span>}>
+        <input ref={itineraryInput} hidden type="file" accept="application/json,.json" onChange={(e) => importItinerary(e.target.files?.[0])} />
+        <div className="action-row wrap">
+          <button className="secondary" type="button" onClick={() => downloadJson(`${state.tripName || 'trip'}-itinerary.json`, getItinerary(state))}><Download size={18} /> 匯出行程</button>
+          <button className="secondary" type="button" onClick={() => itineraryInput.current?.click()}><Upload size={18} /> 匯入行程</button>
+          <button className="danger" type="button" onClick={() => updateState({ customItinerary: null, itineraryOverrides: {}, tripDateRange: { start: ITINERARY[0].date, end: ITINERARY[ITINERARY.length - 1].date } })}><RotateCcw size={18} /> 還原預設</button>
+        </div>
+      </AccordionCard>)}
 
       {showStressPanel && (
         <AccordionCard id="settings-stress-test" eyebrow="Stress Test Portal" title="極限壓力與故障測試面板 🚀" icon={<Sparkles />}>

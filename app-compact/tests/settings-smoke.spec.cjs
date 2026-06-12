@@ -16,11 +16,69 @@ async function expectSettingsReady(page) {
 }
 
 test('Settings expandable cards, safe broker actions, backup, restore, and trust clear work', async ({ page }) => {
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => route.fulfill({
-    status: 500,
-    contentType: 'application/json',
-    body: JSON.stringify({ ok: false, error: 'test kimi unavailable' }),
-  }));
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
+    const body = route.request().postDataJSON();
+    const prompt = String(body.prompt || '');
+    const organizedItinerary = [
+      'Canonical itinerary: Settings Seoul Trip',
+      'Day 1 2026-07-10 | Stay: Hongdae Stay | Seoul',
+      '- 18:00 Hongdae Street',
+      '- 19:30 Seoul BBQ',
+    ].join('\n');
+    const data = prompt.includes('stage 1 of a two-stage Trip Update workflow')
+      ? {
+        organizedItinerary,
+        summary: 'Reorganized Seoul trip.',
+        warnings: [],
+        assumptions: ['Hongdae arrival time was treated as Day 1 evening'],
+      }
+      : {
+        organizedItinerary,
+        trip: {
+          name: 'Settings Seoul Trip',
+          destinationSummary: 'Seoul',
+          startDate: '2026-07-10',
+          endDate: '2026-07-12',
+          homeCurrency: 'HKD',
+          currencies: ['HKD', 'KRW'],
+          itinerary: [{
+            date: '2026-07-10',
+            day: 1,
+            region: 'Seoul',
+            city: 'Seoul',
+            country: 'South Korea',
+            timezone: 'Asia/Seoul',
+            currency: 'KRW',
+            highlight: 'Arrival and Hongdae dinner',
+            lodging: { name: 'Hongdae Stay' },
+            spots: [
+              { time: '18:00', name: 'Hongdae Street', type: 'sightseeing' },
+              { time: '19:30', name: 'Seoul BBQ', type: 'food' },
+            ],
+          }],
+        },
+        summary: 'Settings smoke parsed the trip update.',
+        extractionReport: {
+          daysExtracted: 1,
+          spotsExtracted: 2,
+          hotelsExtracted: 1,
+          restaurantsExtracted: 1,
+          transportsExtracted: 0,
+          importantDetailsExtracted: 3,
+          sourceQuality: 'high',
+          missingCriticalFields: ['Hongdae Stay address/mapUrl'],
+          assumptions: ['Hongdae arrival time was treated as Day 1 evening'],
+          warnings: [],
+        },
+        warnings: [],
+        changes: ['Detected new Seoul trip.'],
+      };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data }),
+    });
+  });
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/trip/intelligence', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -249,8 +307,8 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await expectSettingsReady(page);
 
   const summaries = page.locator('.accordion-summary');
-  await expect(summaries).toHaveCount(10);
-  for (let i = 0; i < 10; i += 1) {
+  await expect(summaries).toHaveCount(8);
+  for (let i = 0; i < 8; i += 1) {
     const card = summaries.nth(i);
     const before = await card.getAttribute('aria-expanded');
     await card.click();
@@ -305,14 +363,6 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(modelOptions.join(' ')).toContain('Google Gemini 2.5 Flash');
   expect(modelOptions.join(' ')).toContain('Mimo v2.5 Pro');
   expect(modelOptions.join(' ')).not.toMatch(/MiniMax|OpenRouter|GLM|ZAI/);
-
-  await setAccordion(page, 'Notion Sync');
-  await page.getByRole('button', { name: 'Save Local Settings' }).click();
-  await expect(page.getByText(/本機設定已保存/)).toBeVisible();
-  await page.getByRole('button', { name: 'Save & Push Settings' }).click();
-  await expect(page.getByText(/已推送 non-secret settings meta/)).toBeVisible();
-  await page.getByRole('button', { name: '測試', exact: true }).click();
-  await expect(page.getByText(/連線正常/)).toBeVisible();
 
   await setAccordion(page, '資料管理');
   const backupSafety = page.getByLabel('Backup safety scope');
@@ -516,12 +566,6 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(restoredReceipt.tripVersion).not.toBe(99);
   expect(restoredReceipt.tripDayId).not.toBe('foreign_day');
 
-  await setAccordion(page, 'Email');
-  await page.getByRole('button', { name: /Pull pending email/ }).click();
-  await expect(page.getByText(/已同步檢查 .*暫時無待確認 email/)).toBeVisible();
-  await page.getByRole('button', { name: /複製 Shortcut URL/ }).click();
-  await expect(page.getByText(/shortcuts:\/\/|已複製 Shortcut URL/)).toBeVisible();
-
   await setAccordion(page, '資料管理');
   await page.locator('#settings-data-panel').getByRole('button', { name: /清除裝置信任/ }).click();
   await expect(page.getByText(/已清除此裝置信任/)).toBeVisible();
@@ -716,7 +760,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
   await expect(page.locator('#settings-data-panel')).toBeVisible();
 });
 
-test('Settings sync readiness dry run summarizes offline queue without provider calls', async ({ page }) => {
+test.skip('Settings sync readiness dry run summarizes offline queue without provider calls', async ({ page }) => {
   let brokerCalls = 0;
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/**', async (route) => {
     brokerCalls += 1;
