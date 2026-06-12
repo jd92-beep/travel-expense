@@ -32,6 +32,7 @@ export function Scan({
   onPull,
   cloudSyncAvailable = false,
   state,
+  onBusyChange,
 }: {
   onManual: () => void;
   onDraft: (receipt: Receipt) => void;
@@ -39,6 +40,7 @@ export function Scan({
   onPull?: () => Promise<void>;
   cloudSyncAvailable?: boolean;
   state: AppState;
+  onBusyChange?: (busy: string) => void;
 }) {
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const galleryRef = useRef<HTMLInputElement | null>(null);
@@ -46,6 +48,11 @@ export function Scan({
   const speechRef = useRef<any>(null);
   const mountedRef = useRef(true);
   const [busy, setBusy] = useState('');
+  const setBusyWithGlobal = useCallback((val: string) => {
+    setBusy(val);
+    onBusyChange?.(val);
+  }, [onBusyChange]);
+
   const [status, setStatus] = useState('');
   const [voiceText, setVoiceText] = useState('');
   const [emailText, setEmailText] = useState('');
@@ -99,7 +106,7 @@ export function Scan({
       return;
     }
     if (!retry) setLastScanFile(file);
-    setBusy('ocr');
+    setBusyWithGlobal('ocr');
     setStatus('讀取收據圖片…');
     let localThumb: string | undefined = undefined;
     try {
@@ -135,6 +142,7 @@ export function Scan({
       setStatus('未能自動 OCR，已開啟 React 確認表俾你手動補資料。');
     } finally {
       if (mountedRef.current) setBusy('');
+      onBusyChange?.('');
     }
   }, [openDraft, state]);
 
@@ -168,7 +176,7 @@ export function Scan({
 
   async function handleVoiceParse() {
     if (!voiceText.trim()) return;
-    setBusy('voice');
+    setBusyWithGlobal('voice');
     try {
       const receipts = await parseTextWithAi(voiceText, state, 'react-voice');
       if (!mountedRef.current) return;
@@ -183,6 +191,7 @@ export function Scan({
       setStatus(`語音解析失敗：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       if (mountedRef.current) setBusy('');
+      onBusyChange?.('');
     }
   }
 
@@ -218,7 +227,7 @@ export function Scan({
 
   async function handleEmailParse() {
     if (!emailText.trim()) return;
-    setBusy('email');
+    setBusyWithGlobal('email');
     try {
       const receipts = await parseTextWithAi(emailText, state, 'react-email');
       if (!mountedRef.current) return;
@@ -233,13 +242,14 @@ export function Scan({
       setStatus(`Email 解析失敗：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       if (mountedRef.current) setBusy('');
+      onBusyChange?.('');
     }
   }
 
   const handleEmailImages = useCallback(async (files?: Iterable<File> | null) => {
     const list = Array.from(files || []);
     if (!list.length) return;
-    setBusy('email-image');
+    setBusyWithGlobal('email-image');
     setStatus(`解析 ${list.length} 張 email 截圖…`);
     try {
       const receipts: Receipt[] = [];
@@ -295,6 +305,7 @@ export function Scan({
           if (mountedRef.current) setInputKey((key) => key + 1);
         }, 100);
       }
+      onBusyChange?.('');
     }
   }, [state]);
 
