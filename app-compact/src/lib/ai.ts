@@ -1,12 +1,12 @@
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
 import { resolveTripContext, tripIntelligencePromptContract } from '../domain/trip/context';
 import { brokerAiJson, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
-import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_KIMI_PRIMARY_MODEL_ID } from './constants';
+import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
 import { currentSupabaseAccessToken } from './supabase';
 
-const KIMI_API_MODEL = DEFAULT_KIMI_PRIMARY_MODEL_ID.replace(/^kimi\//, '');
+const KIMI_API_MODEL = 'kimi-code';
 const KIMI_NON_THINKING = { type: 'disabled' } as const;
 
 function extractJson(text: string): unknown {
@@ -655,42 +655,51 @@ function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' 
       ? state.voiceModel || ''
       : kind === 'email'
         ? state.emailModel || ''
-        : state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
+        : state.tripUpdateModel || 'mimo/mimo-v2.5-pro';
   const preferredAttempt = selectedModelAttempt(chosenModelId);
-  // Contract default: email/trip → Kimi kimi-code, scan/voice → Google Gemma 4 31B.
+  // Contract default: email/trip → Mimo v2.5 Pro, scan/voice → Google Gemma 4 31B.
   // Used as first fallback when user selects a different model.
   const contractDefault: ModelAttempt = kind === 'email' || kind === 'trip'
-    ? { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Contract Default)' }
+    ? { provider: 'mimo', model: 'mimo-v2.5-pro', label: 'Mimo v2.5 Pro (Contract Default)' }
     : { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Contract Default)' };
   // User's selection is the true primary; falls back to contract default if empty.
   const primary: ModelAttempt = preferredAttempt || contractDefault;
-  const baseAttempts: ModelAttempt[] = kind === 'email'
-    ? [
-        { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
-        { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (2nd Fallback)' },
-        { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (3rd Fallback)' },
-        { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (4th Fallback)' },
-      ]
-    : kind === 'trip'
-      ? [
-        { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (Fast Trip Fallback)' },
-        { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Trip Fallback)' },
-        { provider: 'google', model: 'gemini-2.5-flash', label: 'Google Gemini 2.5 Flash (Trip Fallback)' },
-        { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (Trip Fallback)' },
-        { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Trip Fallback)' },
-      ]
-    : [
-        { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
-        { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (2nd Fallback)' },
-        { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (3rd Fallback)' },
-        { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (4th Fallback)' },
-      ];
-
   const attempts: ModelAttempt[] = [primary];
   // Insert contract default as first fallback if user chose something different
   if (!sameModelAttempt(primary, contractDefault)) {
     attempts.push(contractDefault);
   }
+
+  let baseAttempts: ModelAttempt[] = [];
+  if (kind === 'trip') {
+    baseAttempts = [
+      { provider: 'kimi', model: 'kimi-code', label: 'Kimi kimi-code (1st Fallback)' },
+      { provider: 'google', model: 'gemma-4-31b-it', label: 'Google Gemma 4 31B (2nd Fallback)' },
+      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (3rd Fallback)' },
+    ];
+    for (const modelInfo of AI_MODELS) {
+      const attempt = selectedModelAttempt(modelInfo.id);
+      if (attempt) {
+        baseAttempts.push(attempt);
+      }
+    }
+  } else if (kind === 'email') {
+    baseAttempts = [
+      { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
+      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (2nd Fallback)' },
+      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (3rd Fallback)' },
+      { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (4th Fallback)' },
+    ];
+  } else {
+    // scan/voice
+    baseAttempts = [
+      { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
+      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (2nd Fallback)' },
+      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (3rd Fallback)' },
+      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (4th Fallback)' },
+    ];
+  }
+
   for (const base of baseAttempts) {
     if (!attempts.some((attempt) => sameModelAttempt(base, attempt))) attempts.push(base);
   }

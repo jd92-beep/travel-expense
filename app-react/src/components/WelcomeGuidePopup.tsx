@@ -60,7 +60,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   const [aiSummary, setAiSummary] = useState('');
   const [aiChanges, setAiChanges] = useState<string[]>([]);
 
-  // Call Kimi to parse trip text
+  // Call AI to parse trip text
   async function handleAiParse() {
     if (!tripText.trim()) return;
     setBusy(true);
@@ -68,16 +68,22 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
     setAiDraft(null);
     try {
       const result = await parseTripParagraph(tripText, state);
-      if (result && result.trip) {
+      const hasSpots = result && result.trip && Array.isArray(result.trip.itinerary) &&
+        result.trip.itinerary.some((day) => Array.isArray(day.spots) && day.spots.length > 0);
+      if (hasSpots) {
         setAiDraft(result.trip);
         setAiSummary(result.summary || '已成功分析您嘅行程計畫！');
         setAiChanges(result.changes || []);
       } else {
-        throw new Error('AI 解析結果格式不正確');
+        const warningMsg = (result && result.warnings && result.warnings.join(' | ')) || '';
+        throw new Error(warningMsg || 'AI 智能解析未成功提取任何日程景點，請檢查您貼入嘅文字內容是否包含行程細節。');
       }
     } catch (err) {
-      console.error('[WelcomeGuide] Kimi parse failed:', err);
-      setError(err instanceof Error ? err.message : 'Kimi 智能分析失敗，請檢查網路連線或嘗試手動輸入。');
+      console.error('[WelcomeGuide] AI parse failed:', err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(errorMsg);
+      const debugText = `--- AI PARSING FAILED ❌ ---\nError: ${errorMsg}\n\n如果您遇到此問題，請檢查 API 金鑰設定，或者切換到「手動輸入細節」建立旅程。`;
+      setTripText(debugText);
     } finally {
       setBusy(false);
     }
@@ -198,7 +204,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             }}
           >
             <Sparkles size={15} />
-            <span>🤖 Kimi 智能行程分析</span>
+            <span>🤖 AI 智能行程分析</span>
           </button>
           <button
             onClick={() => { setActiveTab('manual'); setError(''); }}
@@ -367,7 +373,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             {!aiDraft ? (
               <div style={{ display: 'grid', gap: '12px' }}>
                 <p style={{ margin: 0, fontSize: '12px', color: '#6B7280', lineHeight: 1.5 }}>
-                  複製並貼上您嘅機票、酒店訂單確認郵件，或者隨性嘅行程計畫大綱。Kimi 模型會自動為您填充時間、地點、預算及生成每日行程！
+                  複製並貼上您嘅機票、酒店訂單確認郵件，或者隨性嘅行程計畫大綱。AI 模型會自動為您填充時間、地點、預算及生成每日行程！
                 </p>
                 <textarea
                   value={tripText}
@@ -413,12 +419,12 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                   {busy ? (
                     <>
                       <Loader2 size={16} className="spin" />
-                      <span>正在靠 Kimi 智能分析中...</span>
+                      <span>正在靠 AI 智能分析中...</span>
                     </>
                   ) : (
                     <>
                       <Sparkles size={16} />
-                      <span>🤖 開始 Kimi 智能解析</span>
+                      <span>🤖 開始 AI 智能解析</span>
                     </>
                   )}
                 </button>
@@ -429,7 +435,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                 <div style={{ padding: '14px', background: 'rgba(52, 211, 153, 0.08)', border: '1px solid rgba(52, 211, 153, 0.25)', borderRadius: '12px', display: 'flex', gap: '8px', alignItems: 'start' }}>
                   <Check size={18} style={{ color: '#059669', flexShrink: 0, marginTop: '2px' }} />
                   <div>
-                    <strong style={{ display: 'block', fontSize: '13px', color: '#065F46', marginBottom: '2px' }}>Kimi 智能分析完成！</strong>
+                    <strong style={{ display: 'block', fontSize: '13px', color: '#065F46', marginBottom: '2px' }}>AI 智能分析完成！</strong>
                     <span style={{ fontSize: '12px', color: '#047857' }}>{aiSummary}</span>
                   </div>
                 </div>

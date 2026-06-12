@@ -1,17 +1,13 @@
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
-import { tripIntelligencePromptContract } from '../domain/trip/context';
-import { brokerAiJson, brokerTripIntelligence, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
-import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_KIMI_PRIMARY_MODEL_ID } from './constants';
-import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, TripDraft, TripIntelligence, TripProfile } from './types';
+import { resolveTripContext, tripIntelligencePromptContract } from '../domain/trip/context';
+import { brokerAiJson, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
+import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } from './constants';
+import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
 import { currentSupabaseAccessToken } from './supabase';
 
-const KIMI_API_MODEL = DEFAULT_KIMI_PRIMARY_MODEL_ID.replace(/^kimi\//, '');
+const KIMI_API_MODEL = 'kimi-code';
 const KIMI_NON_THINKING = { type: 'disabled' } as const;
-
-function isKimiModel(model?: string): boolean {
-  return /kimi/i.test(String(model || ''));
-}
 
 function extractJson(text: string): unknown {
   const cleaned = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
@@ -196,6 +192,11 @@ interface ModelAttempt {
   label: string;
 }
 
+const TRIP_PRIMARY_TIMEOUT_MS = 15_000;
+const TRIP_FALLBACK_TIMEOUT_MS = 12_000;
+const TRIP_NO_LOCAL_TIMEOUT_MS = 30_000;
+const TRIP_FAST_LOCAL_DEADLINE_MS = 25_000;
+
 function sameModelAttempt(a: ModelAttempt, b: ModelAttempt): boolean {
   return a.provider === b.provider && (a.model || '') === (b.model || '');
 }
@@ -208,6 +209,513 @@ function isQuotaOrRateLimitError(error: unknown): boolean {
 function isBrokerRouteUnavailable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || '');
   return /(?:\b404\b|not found|route|endpoint|Network error)/i.test(message);
+}
+
+function hasUsefulTripItinerary(draft: TripDraft): boolean {
+  return Array.isArray(draft.trip.itinerary)
+    && draft.trip.itinerary.some((day) => (day.spots || []).some((spot) => String(spot.name || '').trim()));
+}
+
+function configuredTripAttemptTimeoutMs(): number | null {
+  const source = globalThis as typeof globalThis & { __TRAVEL_TRIP_ATTEMPT_TIMEOUT_MS?: unknown };
+  const value = Number(source.__TRAVEL_TRIP_ATTEMPT_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? Math.max(100, Math.min(60_000, value)) : null;
+}
+
+function tripAttemptTimeoutMs(attempt: ModelAttempt, index: number, hasLocalDraft: boolean): number {
+  const override = configuredTripAttemptTimeoutMs();
+  if (override) return override;
+  if (!hasLocalDraft) return TRIP_NO_LOCAL_TIMEOUT_MS;
+  if (index === 0) return attempt.provider === 'mimo' ? 7_000 : TRIP_PRIMARY_TIMEOUT_MS;
+  return TRIP_FALLBACK_TIMEOUT_MS;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item || '').trim()).filter(Boolean);
+}
+
+function inferTripCurrencyFromText(text: string, fallback = 'JPY'): string {
+  if (/濟州|济州|韓國|韩国|south korea|korea|jeju|seoul|busan|krw/i.test(text)) return 'KRW';
+  if (/日本|japan|tokyo|osaka|nagoya|kyoto|okinawa|jpy|円|日圓|日元/i.test(text)) return 'JPY';
+  if (/台灣|台湾|taiwan|taipei|twd/i.test(text)) return 'TWD';
+  if (/singapore|新加坡|sgd/i.test(text)) return 'SGD';
+  if (/hong kong|香港|hkd/i.test(text)) return 'HKD';
+  return String(fallback || 'JPY').toUpperCase();
+}
+
+function inferTripYear(text: string, state: AppState): string {
+  const explicit = text.match(/\b(20\d{2})\b/);
+  if (explicit) return explicit[1];
+  return (activeTrip(state).startDate || state.tripDateRange.start || new Date().toISOString()).slice(0, 4);
+}
+
+function dateFromMonthDay(month: string, day: string, year: string): string {
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+const ENGLISH_MONTHS: Record<string, string> = {
+  jan: '01',
+  january: '01',
+  feb: '02',
+  february: '02',
+  mar: '03',
+  march: '03',
+  apr: '04',
+  april: '04',
+  may: '05',
+  jun: '06',
+  june: '06',
+  jul: '07',
+  july: '07',
+  aug: '08',
+  august: '08',
+  sep: '09',
+  sept: '09',
+  september: '09',
+  oct: '10',
+  october: '10',
+  nov: '11',
+  november: '11',
+  dec: '12',
+  december: '12',
+};
+
+function normalizeTripInputText(text: string): string {
+  return String(text || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
+}
+
+function normalizeTripTime(hour: string, minute: string, meridiem = ''): string {
+  let h = Number(hour);
+  const suffix = meridiem.toLowerCase();
+  if (suffix === 'pm' && h < 12) h += 12;
+  if (suffix === 'am' && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${minute.padStart(2, '0')}`;
+}
+
+function classifyTripSpot(name: string): ItineraryDay['spots'][number]['type'] {
+  if (/機場|airport|航班|起飛|抵達|還車|租車|check-?in|check out|退房|出發|回到|開車|搭船|船票|港/i.test(name)) return 'transport';
+  if (/hotel|resort|酒店|住宿|stanford|fine jeju/i.test(name)) return 'lodging';
+  if (/午餐|晚餐|早餐|cafe|coffee|donut|donuts|restaurant|市場|黑豬|麵|飯|豬腳|炸雞|甜點|pudding|starbucks|bakery|baguette|flowave|waboda|chita|安頓|風爐/i.test(name)) return 'food';
+  if (/mart|shopping|購物|免稅|手信|街|地下街|小店|emart|lotte|新羅|七星路|nuwemaru|blue elephant|the islander|moodjeju|randy/i.test(name)) return 'shopping';
+  if (/park|museum|planet|瀑布|山|峰|牛島|海岸|沙灘|公園|水族館|aqua|camellia|osulloc|9\.81|日出峰|自然|市場/i.test(name)) return 'sightseeing';
+  return 'other';
+}
+
+interface LocalDayHeader {
+  index: number;
+  dayNo: number;
+  date: string;
+  tail: string;
+}
+
+function collectLocalDayHeaders(text: string, year: string): LocalDayHeader[] {
+  const headers: LocalDayHeader[] = [];
+  const push = (index: number | undefined, dayNo: string, date: string, tail: string) => {
+    if (index == null) return;
+    headers.push({ index, dayNo: Number(dayNo) || headers.length + 1, date, tail: String(tail || '') });
+  };
+  const chinese = /(?:^|\n)\s*#{0,6}\s*Day\s*(\d+)\s*(?:[｜|\-–—]\s*)?(?:(20\d{2})[年\/.-]\s*)?(\d{1,2})\s*(?:月|\/|-)\s*(\d{1,2})\s*(?:日)?([^\n]*)/gi;
+  for (const match of text.matchAll(chinese)) {
+    push(match.index, match[1], dateFromMonthDay(match[3], match[4], match[2] || year), match[5] || '');
+  }
+  const english = /(?:^|\n)\s*#{0,6}\s*Day\s*(\d+)\s*[-–—]\s*([A-Za-z]{3,9})\s+(\d{1,2}),?\s*(20\d{2})([^\n]*)/gi;
+  for (const match of text.matchAll(english)) {
+    const month = ENGLISH_MONTHS[String(match[2] || '').toLowerCase()];
+    if (month) push(match.index, match[1], `${match[4]}-${month}-${match[3].padStart(2, '0')}`, match[5] || '');
+  }
+  return headers
+    .sort((a, b) => a.index - b.index)
+    .filter((header, index, list) => index === 0 || header.index !== list[index - 1].index);
+}
+
+function cleanLocalSpotName(value: string): string {
+  return String(value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\*\s*([^*]+?)\s*\*/g, '$1')
+    .replace(/^\s*(?:地點\s*\/\s*活動|建議停留|時間|類別)\s*$/i, '')
+    .replace(/\s*[—-]\s*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+}
+
+function localSpotFromParts(time: string, name: string, sourceText: string, category = ''): ItineraryDay['spots'][number] | null {
+  const cleanName = cleanLocalSpotName(name);
+  if (!cleanName || /^[:：-]+$/.test(cleanName) || /^(時間|類別|地點名稱|建議停留)$/i.test(cleanName)) return null;
+  const classifierText = `${category} ${cleanName}`;
+  return {
+    time,
+    name: cleanName,
+    type: classifyTripSpot(classifierText),
+    timezone: 'Asia/Seoul',
+    note: category ? cleanLocalSpotName(category) : cleanName,
+    sourceText: sourceText.trim(),
+    confidence: 'medium',
+  };
+}
+
+function computeTimeEnd(time: string, durationMinutes: number): string {
+  if (!durationMinutes || !time) return '';
+  const [h, m] = time.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
+  const totalMin = h * 60 + m + durationMinutes;
+  const endH = Math.floor(((totalMin % 1440) + 1440) % 1440 / 60);
+  const endM = ((totalMin % 60) + 60) % 60;
+  return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+}
+
+function parseDuration(raw: string, time = ''): { minutes: number; end: string; note: string } {
+  const clean = String(raw || '').replace(/[—–\-]/g, '–').trim();
+  if (!clean || clean === '—' || clean === '-') return { minutes: 0, end: '', note: '' };
+  const range = clean.match(/(?:約)?(\d+)\s*–\s*(\d+)\s*分鐘(?:車程|步程|停留)?/);
+  if (range) {
+    const avg = Math.round((Number(range[1]) + Number(range[2])) / 2);
+    return { minutes: avg, end: computeTimeEnd(time, avg), note: `${range[1]}–${range[2]}分鐘` };
+  }
+  const single = clean.match(/(\d+)\s*分鐘/);
+  if (single) {
+    const mins = Number(single[1]);
+    return { minutes: mins, end: computeTimeEnd(time, mins), note: `${single[1]}分鐘` };
+  }
+  return { minutes: 0, end: '', note: clean !== '—' ? clean : '' };
+}
+
+export function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
+  const spots: ItineraryDay['spots'] = [];
+  const seen = new Set<string>();
+  const add = (spot: ItineraryDay['spots'][number] | null) => {
+    if (!spot) return;
+    const key = `${spot.time}|${spot.name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    spots.push(spot);
+  };
+
+  for (const rawLine of block.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || /^[-|:\s]+$/.test(line)) continue;
+    if (/^\|/.test(line)) {
+      const cells = line.split('|').map((cell) => cell.trim()).filter(Boolean);
+      if (cells.length >= 2 && !cells.some((cell) => /^:?-{3,}:?$/.test(cell))) {
+        const timeMatch = cells[0].match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+        if (timeMatch) add(localSpotFromParts(`${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`, cells.slice(2).join(' / ') || cells[1], rawLine, cells[1]));
+      }
+      continue;
+    }
+    
+    const tabs = line.split(/\t| {3,}/).map(c => c.trim()).filter(Boolean);
+    if (tabs.length >= 2 && !line.includes('｜') && !line.includes('|')) {
+      const timeMatch = tabs[0].match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+      if (timeMatch) {
+        const time = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+        const name = tabs[1];
+        const duration = parseDuration(tabs[2] || '', time);
+        const spot = localSpotFromParts(time, name, rawLine);
+        if (spot) {
+          if (duration.end) spot.timeEnd = duration.end;
+          if (duration.note) spot.note = spot.note ? `${spot.note} (${duration.note})` : duration.note;
+          add(spot);
+        }
+        continue;
+      }
+    }
+
+    const plain = line.match(/^\s*(?:[-*]\s*)?([01]?\d|2[0-3]):([0-5]\d)\s*(AM|PM)?\s*[:：\-–—]?\s*(.+?)\s*$/i);
+    if (plain) {
+      add(localSpotFromParts(normalizeTripTime(plain[1], plain[2], plain[3]), plain[4], rawLine));
+    }
+  }
+  return spots;
+}
+
+function stringifyOrganizedItinerary(value: unknown, fallbackTrip?: Pick<TripProfile, 'name' | 'itinerary'>): string {
+  if (typeof value === 'string') return value.replace(/\s+\n/g, '\n').trim().slice(0, 12000);
+  if (Array.isArray(value) || (value && typeof value === 'object')) {
+    try {
+      const text = JSON.stringify(value);
+      if (text && text !== '{}') return text.slice(0, 12000);
+    } catch {
+      // Fall through to trip-derived summary.
+    }
+  }
+  const days = fallbackTrip?.itinerary || [];
+  if (!days.length) return '';
+  const lines = [`Canonical itinerary: ${fallbackTrip?.name || 'Trip'}`];
+  for (const day of days.slice(0, 12)) {
+    lines.push(`Day ${day.day} ${day.date} ${day.region || ''}${day.lodging?.name ? ` | Stay: ${day.lodging.name}` : ''}`.trim());
+    for (const spot of (day.spots || []).slice(0, 8)) {
+      lines.push(`- ${spot.time || '--:--'} ${spot.name}${spot.type ? ` (${spot.type})` : ''}`);
+    }
+  }
+  return lines.join('\n').slice(0, 12000);
+}
+
+function organizedItineraryFromModel(value: unknown, fallbackTrip?: Pick<TripProfile, 'name' | 'itinerary'>): string {
+  const record = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return stringifyOrganizedItinerary(
+    record.organizedItinerary || record.canonicalItinerary || record.canonicalTrip || record.organizedTrip || value,
+    fallbackTrip,
+  );
+}
+
+function localTripDraftFromParagraph(paragraph: string, state: AppState, warnings: string[] = []): TripDraft | null {
+  const text = normalizeTripInputText(paragraph);
+  if (!text) return null;
+  const year = inferTripYear(text, state);
+  const currency = inferTripCurrencyFromText(text, state.tripCurrency || 'JPY');
+  const context = resolveTripContext(text, currency);
+  const dayHeaders = collectLocalDayHeaders(text, year);
+  if (!dayHeaders.length) return null;
+
+  const itinerary: ItineraryDay[] = [];
+  for (let i = 0; i < dayHeaders.length; i += 1) {
+    const header = dayHeaders[i];
+    const next = dayHeaders[i + 1];
+    const block = text.slice(header.index, next?.index || text.length);
+    const dayNo = header.dayNo || i + 1;
+    const date = header.date;
+    const headerTail = String(header.tail || '').replace(/[｜|]/g, ' ').trim();
+    const lodgingMatch = block.match(/(?:住宿|住)[:：]?\s*([^\n｜|]+)/i);
+    const region = headerTail.replace(/(?:住宿|住)[:：]?\s+.*/i, '').replace(/^[：:\-–—\s]+/, '').trim()
+      || (context.weatherRegion || context.countryName || `Day ${dayNo}`);
+    const adviceLines: string[] = [];
+    for (const blockLine of block.split('\n')) {
+      const trimmed = blockLine.trim();
+      const adviceMatch = trimmed.match(/^建議[：:]\s*(.+)/);
+      if (adviceMatch) adviceLines.push(adviceMatch[1].trim());
+    }
+    const spots = extractLocalDaySpots(block)
+      .map((spot) => ({ ...spot, timezone: context.timezone || spot.timezone || 'Asia/Seoul' }))
+      .filter((spot) => spot.name && !/建議[:：]/.test(spot.name));
+    itinerary.push({
+      date,
+      day: dayNo,
+      region,
+      city: /濟州|jeju/i.test(text) ? 'Jeju' : context.weatherRegion || context.countryName || '',
+      country: context.countryName || '',
+      timezone: context.timezone || 'Asia/Seoul',
+      currency,
+      highlight: region,
+      note: adviceLines.join('；') || undefined,
+      lodging: lodgingMatch?.[1]?.trim() ? {
+        name: lodgingMatch[1].trim(),
+        confidence: 'medium',
+      } : undefined,
+      spots,
+    });
+  }
+
+  const usableDays = itinerary.filter((day) => day.spots.length);
+  if (!usableDays.length) return null;
+  return normalizeTripDraft({
+    trip: {
+      name: /濟州|jeju/i.test(text) ? '濟州2026' : `${context.weatherRegion || context.countryName || 'Trip'} ${year}`,
+      destinationSummary: context.weatherRegion || context.countryName || itinerary.map((day) => day.region).slice(0, 3).join(' / '),
+      startDate: itinerary[0].date,
+      endDate: itinerary[itinerary.length - 1].date,
+      homeCurrency: 'HKD',
+      currencies: Array.from(new Set(['HKD', currency])),
+      intelligence: {
+        countryCode: context.countryCode,
+        countryName: context.countryName,
+        primaryCurrency: currency,
+        themeKey: context.themeKey,
+        locale: context.locale,
+        timezone: context.timezone,
+        weatherRegion: context.weatherRegion,
+        confidence: 'medium',
+      },
+      itinerary,
+    },
+    extractionReport: {
+      daysExtracted: itinerary.length,
+      spotsExtracted: itinerary.reduce((sum, day) => sum + day.spots.length, 0),
+      hotelsExtracted: itinerary.filter((day) => day.lodging?.name).length,
+      restaurantsExtracted: itinerary.flatMap((day) => day.spots).filter((spot) => spot.type === 'food').length,
+      transportsExtracted: itinerary.flatMap((day) => day.spots).filter((spot) => spot.type === 'transport').length,
+      importantDetailsExtracted: itinerary.reduce((sum, day) => sum + day.spots.length + (day.lodging?.name ? 1 : 0), 0),
+      sourceQuality: 'medium',
+      missingCriticalFields: ['Some exact addresses/coordinates need confirmation'],
+      assumptions: [`Month/day dates interpreted as ${year}`, 'Local parser used after AI provider attempts did not produce a usable itinerary'],
+      warnings,
+    },
+    organizedItinerary: stringifyOrganizedItinerary(null, {
+      name: /濟州|jeju/i.test(text) ? '濟州2026' : `${context.weatherRegion || context.countryName || 'Trip'} ${year}`,
+      itinerary,
+    }),
+    summary: '已用本地 itinerary parser 抽取日程；請喺確認視窗檢查景點、酒店、餐廳同時間。',
+    warnings,
+    changes: ['已建立可確認嘅 day-by-day 行程草稿。'],
+  }, state, paragraph);
+}
+
+function normalizeSourceQuality(value: unknown): TripExtractionReport['sourceQuality'] {
+  return value === 'high' || value === 'medium' || value === 'low' ? value : 'medium';
+}
+
+function buildTripExtractionReport(raw: unknown, trip: TripProfile): TripExtractionReport {
+  const report = raw && typeof raw === 'object' ? raw as Partial<TripExtractionReport> & Record<string, unknown> : {};
+  const days = trip.itinerary || [];
+  const spots = days.flatMap((day) => day.spots || []);
+  const hotels = new Set<string>();
+  const restaurants = new Set<string>();
+  const transports = new Set<string>();
+  const important = new Set<string>();
+  const missing = new Set<string>(asStringList(report.missingCriticalFields));
+
+  for (const day of days) {
+    if (!day.date) missing.add('day.date');
+    if (!day.region) missing.add(`day ${day.day || '?'} region`);
+    if (!day.city) missing.add(`day ${day.day || '?'} city`);
+    if (!day.country) missing.add(`day ${day.day || '?'} country`);
+    if (!day.timezone) missing.add(`day ${day.day || '?'} timezone`);
+    if (!day.currency) missing.add(`day ${day.day || '?'} currency`);
+    if (day.highlight) important.add(day.highlight);
+    if (day.lodging?.name) {
+      hotels.add(day.lodging.name);
+      if (!day.lodging.address && !day.lodging.mapUrl) missing.add(`${day.lodging.name} address/mapUrl`);
+    }
+    for (const spot of day.spots || []) {
+      const name = String(spot.name || '').trim();
+      if (!name) continue;
+      if (spot.type === 'lodging' || /hotel|酒店|住宿|旅館/i.test(name)) hotels.add(name);
+      if (spot.type === 'food' || /restaurant|cafe|餐|飯|食|咖啡|壽司|拉麵|bbq/i.test(name)) restaurants.add(name);
+      if (spot.type === 'flight' || spot.type === 'transport') transports.add(name);
+      if (spot.note || spot.address || spot.mapUrl || spot.bookingRef || spot.time || spot.sourceText) important.add(name);
+      if (!spot.time) missing.add(`${name} time`);
+      if (!spot.address && !spot.mapUrl && (!Number.isFinite(spot.lat) || !Number.isFinite(spot.lon))) {
+        missing.add(`${name} location detail`);
+      }
+    }
+  }
+
+  if (!days.length) missing.add('itinerary days');
+  if (!spots.length) missing.add('itinerary spots');
+
+  return {
+    daysExtracted: Number(report.daysExtracted ?? report.dayCount) || days.length,
+    spotsExtracted: Number(report.spotsExtracted ?? report.spotCount) || spots.filter((spot) => String(spot.name || '').trim()).length,
+    hotelsExtracted: Number(report.hotelsExtracted ?? report.hotelCount) || hotels.size,
+    restaurantsExtracted: Number(report.restaurantsExtracted ?? report.restaurantCount) || restaurants.size,
+    transportsExtracted: Number(report.transportsExtracted ?? report.transportCount) || transports.size,
+    importantDetailsExtracted: Number(report.importantDetailsExtracted ?? report.detailCount) || important.size,
+    sourceQuality: normalizeSourceQuality(report.sourceQuality),
+    missingCriticalFields: Array.from(missing).slice(0, 20),
+    assumptions: asStringList(report.assumptions),
+    warnings: asStringList(report.warnings),
+  };
+}
+
+function selectedModelAttempt(chosenModelId: string): ModelAttempt | null {
+  if (!chosenModelId) return null;
+  const parts = chosenModelId.split('/');
+  if (parts.length === 2) {
+    const provider = parts[0] as 'kimi' | 'google' | 'mimo';
+    return {
+      provider,
+      model: parts[1],
+      label: `${provider === 'kimi' ? 'Kimi' : provider === 'mimo' ? 'Mimo' : 'Google'} (${parts[1]}) [Selected]`,
+    };
+  }
+  if (/kimi/i.test(chosenModelId)) {
+    return { provider: 'kimi', model: chosenModelId, label: `Kimi (${chosenModelId}) [Selected]` };
+  }
+  if (/mimo/i.test(chosenModelId)) {
+    return { provider: 'mimo', model: chosenModelId, label: `Mimo (${chosenModelId}) [Selected]` };
+  }
+  return { provider: 'google', model: chosenModelId, label: `Google (${chosenModelId}) [Selected]` };
+}
+
+function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' | 'trip'): ModelAttempt[] {
+  const chosenModelId = kind === 'scan'
+    ? state.scanModel || ''
+    : kind === 'voice'
+      ? state.voiceModel || ''
+      : kind === 'email'
+        ? state.emailModel || ''
+        : state.tripUpdateModel || 'mimo/mimo-v2.5-pro';
+  const preferredAttempt = selectedModelAttempt(chosenModelId);
+  // Contract default: email/trip → Mimo v2.5 Pro, scan/voice → Google Gemma 4 31B.
+  // Used as first fallback when user selects a different model.
+  const contractDefault: ModelAttempt = kind === 'email' || kind === 'trip'
+    ? { provider: 'mimo', model: 'mimo-v2.5-pro', label: 'Mimo v2.5 Pro (Contract Default)' }
+    : { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Contract Default)' };
+  // User's selection is the true primary; falls back to contract default if empty.
+  const primary: ModelAttempt = preferredAttempt || contractDefault;
+  const attempts: ModelAttempt[] = [primary];
+  // Insert contract default as first fallback if user chose something different
+  if (!sameModelAttempt(primary, contractDefault)) {
+    attempts.push(contractDefault);
+  }
+
+  let baseAttempts: ModelAttempt[] = [];
+  if (kind === 'trip') {
+    baseAttempts = [
+      { provider: 'kimi', model: 'kimi-code', label: 'Kimi kimi-code (1st Fallback)' },
+      { provider: 'google', model: 'gemma-4-31b-it', label: 'Google Gemma 4 31B (2nd Fallback)' },
+      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (3rd Fallback)' },
+    ];
+    for (const modelInfo of AI_MODELS) {
+      const attempt = selectedModelAttempt(modelInfo.id);
+      if (attempt) {
+        baseAttempts.push(attempt);
+      }
+    }
+  } else if (kind === 'email') {
+    baseAttempts = [
+      { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
+      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (2nd Fallback)' },
+      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (3rd Fallback)' },
+      { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (4th Fallback)' },
+    ];
+  } else {
+    // scan/voice
+    baseAttempts = [
+      { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
+      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (2nd Fallback)' },
+      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (3rd Fallback)' },
+      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (4th Fallback)' },
+    ];
+  }
+
+  for (const base of baseAttempts) {
+    if (!attempts.some((attempt) => sameModelAttempt(base, attempt))) attempts.push(base);
+  }
+  return attempts;
+}
+
+async function callModelAttemptJson(
+  state: AppState,
+  attempt: ModelAttempt,
+  prompt: string,
+  kind: 'scan' | 'voice' | 'email' | 'trip',
+  image?: { base64: string; mime: string },
+) {
+  if (attempt.provider === 'kimi') return callKimiJson(state, prompt, kind, image, attempt.model);
+  if (attempt.provider === 'mimo') return callMimoJson(state, prompt, kind, image, attempt.model);
+  return callGoogleJson(state, prompt, kind, image, attempt.model);
 }
 
 async function callGoogleJson(
@@ -248,94 +756,12 @@ async function callPreferredJson(
   kind: 'scan' | 'voice' | 'email' | 'trip',
   image?: { base64: string; mime: string }
 ) {
-  let chosenModelId = '';
-  if (kind === 'scan') {
-    chosenModelId = state.scanModel || '';
-  } else if (kind === 'voice') {
-    chosenModelId = state.voiceModel || '';
-  } else if (kind === 'email') {
-    chosenModelId = state.emailModel || '';
-  } else if (kind === 'trip') {
-    chosenModelId = state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
-  }
-
-  let preferredAttempt: ModelAttempt | null = null;
-  if (chosenModelId) {
-    const parts = chosenModelId.split('/');
-      if (parts.length === 2) {
-      preferredAttempt = {
-        provider: parts[0] as 'kimi' | 'google' | 'mimo',
-        model: parts[1],
-        label: `${parts[0] === 'kimi' ? 'Kimi' : parts[0] === 'mimo' ? 'Mimo' : 'Google'} (${parts[1]}) [Selected]`,
-      };
-    } else {
-      if (/kimi/i.test(chosenModelId)) {
-        preferredAttempt = {
-          provider: 'kimi',
-          model: chosenModelId,
-          label: `Kimi (${chosenModelId}) [Selected]`,
-        };
-      } else if (/mimo/i.test(chosenModelId)) {
-        preferredAttempt = {
-          provider: 'mimo',
-          model: chosenModelId,
-          label: `Mimo (${chosenModelId}) [Selected]`,
-        };
-      } else {
-        preferredAttempt = {
-          provider: 'google',
-          model: chosenModelId,
-          label: `Google (${chosenModelId}) [Selected]`,
-        };
-      }
-    }
-  }
-
-  const requiredPrimary: ModelAttempt = kind === 'email' || kind === 'trip'
-    ? { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (Required Primary)' }
-    : { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Required Primary)' };
-  let baseAttempts: ModelAttempt[] = [];
-  if (kind === 'email' || kind === 'trip') {
-    baseAttempts = [
-      { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
-      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (2nd Fallback)' },
-      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (3rd Fallback)' },
-      { provider: 'google', model: 'gemini-3.1-flash', label: 'Google Gemini 3.1 Flash (4th Fallback)' },
-      { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (5th Fallback)' },
-    ];
-  } else {
-    // voice 或 scan
-    baseAttempts = [
-      { provider: 'mimo', model: 'mimo-v2.5', label: 'Mimo v2.5 (1st Fallback)' },
-      { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (2nd Fallback)' },
-      { provider: 'kimi', model: KIMI_API_MODEL, label: 'Kimi kimi-code (3rd Fallback)' },
-      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (4th Fallback)' },
-    ];
-  }
-
-  const attempts: ModelAttempt[] = [requiredPrimary];
-  if (preferredAttempt && !sameModelAttempt(requiredPrimary, preferredAttempt)) {
-    attempts.push(preferredAttempt);
-  }
-
-  for (const base of baseAttempts) {
-    const isDup = attempts.some((attempt) => sameModelAttempt(base, attempt));
-    if (!isDup) {
-      attempts.push(base);
-    }
-  }
-
+  const attempts = modelAttemptsForKind(state, kind);
   let last: unknown;
   for (const attempt of attempts) {
     try {
       console.log(`[AI Routing] 正在嘗試調用: ${attempt.label}...`);
-      if (attempt.provider === 'kimi') {
-        return await callKimiJson(state, prompt, kind, image, attempt.model);
-      } else if (attempt.provider === 'mimo') {
-        return await callMimoJson(state, prompt, kind, image, attempt.model);
-      } else {
-        return await callGoogleJson(state, prompt, kind, image, attempt.model);
-      }
+      return await callModelAttemptJson(state, attempt, prompt, kind, image);
     } catch (error) {
       console.warn(`[AI Routing] ${attempt.label} 嘗試失敗:`, error);
       last = error;
@@ -369,7 +795,7 @@ export async function scanReceiptImage(file: File, state: AppState): Promise<Rec
   const image = await fileToBase64(file);
   // Prepare for OCR (resize large image to avoid timeout and save token)
   const imageForOCR = await prepareForOCR(image.base64, image.mime);
-  
+
   // Compress for local thumbnail storage (480px JPEG, ~30KB)
   const photoThumb = await compressPhoto(image.base64, image.mime, 480);
 
@@ -464,13 +890,24 @@ CRITICAL ITEMS FORMATTING RULES:
 
 function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): TripDraft {
   const current = activeTrip(state);
-  const value = raw && typeof raw === 'object' ? raw as Partial<TripDraft> & { trip?: Partial<TripProfile>; itinerary?: ItineraryDay[]; intelligence?: Partial<TripIntelligence> } : {};
+  const value = raw && typeof raw === 'object'
+    ? raw as Partial<TripDraft> & {
+      trip?: Partial<TripProfile>;
+      itinerary?: ItineraryDay[];
+      intelligence?: Partial<TripIntelligence>;
+      extractionReport?: unknown;
+      canonicalItinerary?: unknown;
+      canonicalTrip?: unknown;
+      organizedTrip?: unknown;
+    }
+    : {};
   const tripValue: Partial<TripProfile> = value.trip || {};
-  const itinerary = Array.isArray(tripValue.itinerary) && tripValue.itinerary.length
+  const itineraryProvided = Array.isArray(tripValue.itinerary)
     ? tripValue.itinerary
-    : Array.isArray(value.itinerary) && value.itinerary.length
+    : Array.isArray(value.itinerary)
       ? value.itinerary
-      : current.itinerary;
+      : null;
+  const itinerary = itineraryProvided || [];
   const startDate = String(tripValue.startDate || itinerary[0]?.date || current.startDate || state.tripDateRange.start);
   const endDate = String(tripValue.endDate || itinerary[itinerary.length - 1]?.date || current.endDate || state.tripDateRange.end);
   const destinationSummary = String(tripValue.destinationSummary || value.summary || itinerary.map((day: ItineraryDay) => day.region).slice(0, 6).join(' / ') || current.destinationSummary || '未設定目的地');
@@ -513,13 +950,99 @@ function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): T
     createdAt: isNewTrip ? Date.now() : current.createdAt,
     updatedAt: Date.now(),
   };
+  const extractionReport = buildTripExtractionReport(value.extractionReport, trip);
+  const organizedItinerary = stringifyOrganizedItinerary(
+    value.organizedItinerary || value.canonicalItinerary || value.canonicalTrip || value.organizedTrip,
+    trip,
+  );
   return {
     trip,
     summary: String(value.summary || `已分析 ${paragraph.slice(0, 80)}`),
-    warnings: Array.isArray(value.warnings) ? value.warnings.map(String) : [],
+    warnings: [
+      ...(Array.isArray(value.warnings) ? value.warnings.map(String) : []),
+      ...extractionReport.warnings,
+    ].filter(Boolean),
     changes: Array.isArray(value.changes) ? value.changes.map(String) : [
       isNewTrip ? '偵測到新日期或新目的地，建議建立新旅程。' : '偵測為現有旅程更新，會套用版本更新。',
     ],
+    organizedItinerary,
+    extractionReport,
+  };
+}
+
+function buildTripOrganizePrompt(paragraph: string, currentTrip: unknown): string {
+  return `Read and understand this travel itinerary text, then return JSON only.
+This is stage 1 of a two-stage Trip Update workflow. Do not extract app fields yet.
+Your job:
+1. Read the whole user text across Markdown tables, HTML-ish pasted text, plain timetables, Cantonese/Chinese/English/Korean names, duplicate lines, and mixed date formats.
+2. Infer the real travel plan and resolve conflicts by travel logic.
+3. Rewrite it into your own organizedItinerary: a clean canonical itinerary grouped day-by-day, with date, day number, lodging, transport, flights, meals, attractions, shopping, optional notes, timing, and important constraints.
+4. The organizedItinerary must be your own rewritten version. Do not copy-paste the raw input.
+
+Current trip JSON for date/year context only:
+${JSON.stringify(currentTrip).slice(0, 12000)}
+
+Return exactly:
+{"organizedItinerary":string,"summary":string,"warnings":string[],"assumptions":string[]}
+
+USER RAW ITINERARY:
+${paragraph.slice(0, 28000)}`;
+}
+
+function buildTripExtractionPrompt(organizedItinerary: string, currentTrip: unknown): string {
+  return `Extract app-ready trip data from this canonical itinerary and return JSON only.
+This is stage 2 of a two-stage Trip Update workflow.
+You must use only CANONICAL ORGANIZED ITINERARY below as the source of truth for trip.itinerary.
+Do not go back to the user's raw pasted text. Do not copy Current trip JSON as a successful extraction.
+The app will use trip.itinerary as the backbone for Timeline, Weather, Records, Stats, and sync.
+
+Current trip JSON for merge/date/year context only:
+${JSON.stringify(currentTrip).slice(0, 12000)}
+
+Return minimalist schema:
+{"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"lodging":{"name":string},"spots":[{"time":"HH:MM","timeEnd":"HH:MM","name":string,"note":string,"address":string,"bookingRef":string}]}]},"summary":string,"warnings":string[],"changes":string[]}
+
+organizedItinerary must match the canonical itinerary you used for extraction.
+Include lodging, arrival times, places, restaurants, transport/flight/train references, booking references.
+For each spot, estimate timeEnd from duration/stay information when available (e.g., "60分鐘" means timeEnd = time + 60min). If no duration info, omit timeEnd.
+Do not invent or guess any lat/lon coordinates. Frontend handles that.
+If the canonical itinerary has no usable trip data, return an empty itinerary.
+
+CANONICAL ORGANIZED ITINERARY:
+${organizedItinerary.slice(0, 28000)}`;
+}
+
+function mergeTripDrafts(llmDraft: TripDraft, localDraft: TripDraft | null): TripDraft {
+  if (!localDraft) return llmDraft;
+  const llmDays = llmDraft.trip.itinerary;
+  const localDays = localDraft.trip.itinerary;
+  if (llmDays.length >= localDays.length) return llmDraft;
+
+  const mergedDays: ItineraryDay[] = [];
+  const maxDays = Math.max(llmDays.length, localDays.length);
+  for (let i = 0; i < maxDays; i++) {
+    const llmDay = llmDays[i];
+    const localDay = localDays[i];
+    if (llmDay && localDay) {
+      const llmSpotNames = new Set((llmDay.spots || []).map(s => s.name));
+      const extraSpots = (localDay.spots || []).filter(s => !llmSpotNames.has(s.name));
+      mergedDays.push({
+        ...llmDay,
+        note: llmDay.note || localDay.note,
+        spots: [
+          ...(llmDay.spots || []).map(s => ({ ...s, timeEnd: s.timeEnd || localDay.spots?.find(ls => ls.name === s.name)?.timeEnd })),
+          ...extraSpots,
+        ],
+      });
+    } else {
+      mergedDays.push(llmDay || localDay!);
+    }
+  }
+
+  return {
+    ...llmDraft,
+    trip: { ...llmDraft.trip, itinerary: mergedDays },
+    warnings: [...llmDraft.warnings, ...(localDraft.warnings || [])].filter(Boolean),
   };
 }
 
@@ -533,33 +1056,94 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
     destinationSummary: current.destinationSummary,
     itinerary: current.itinerary,
   };
-  const prompt = `Analyze this travel itinerary paragraph and return JSON only.
-${tripIntelligencePromptContract()}
-Current trip JSON:
-${JSON.stringify(currentTrip).slice(0, 12000)}
-
-Return:
-{"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":"JP|KR|TW|GB|EU|GLOBAL","countryName":string,"primaryCurrency":string,"themeKey":"japan_washi|korea_editorial|taiwan_nightmarket|europe_rail|global_journal","locale":string,"timezone":string,"weatherRegion":string,"confidence":"low|medium|high"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"highlight":string,"lodging":{"name":string,"address":string,"mapUrl":string,"checkIn":string,"checkOut":string},"spots":[{"time":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other|sightseeing","address":string,"mapUrl":string,"note":string,"timezone":string,"lat":number,"lon":number}]}]},"summary":string,"warnings":string[],"changes":string[]}
-Include lodging, arrival times, places, Google Maps links when inferable from input. Do not invent API keys.
-Choose themeKey from destination context: Japan=japan_washi, Korea=korea_editorial, Taiwan=taiwan_nightmarket, Europe/UK=europe_rail, unknown=global_journal.
-
-USER PARAGRAPH:
-${paragraph.slice(0, 14000)}`;
+  const organizePrompt = buildTripOrganizePrompt(paragraph, currentTrip);
+  const startedAt = Date.now();
+  const fastLocalDraft = localTripDraftFromParagraph(paragraph, state);
+  const hasFastLocalDraft = !!fastLocalDraft && hasUsefulTripItinerary(fastLocalDraft);
+  const localDraftWithWarnings = (extraWarnings: string[]): TripDraft | null => {
+    if (!hasFastLocalDraft || !fastLocalDraft) return null;
+    const warnings = [...extraWarnings, ...fastLocalDraft.warnings].filter(Boolean);
+    const extractionReport = fastLocalDraft.extractionReport || buildTripExtractionReport(undefined, fastLocalDraft.trip);
+    return {
+      ...fastLocalDraft,
+      warnings,
+      extractionReport: {
+        ...extractionReport,
+        warnings: [...(extractionReport.warnings || []), ...extraWarnings].filter(Boolean).slice(0, 20),
+      },
+    };
+  };
   try {
-    let parsed: unknown;
-    try {
-      parsed = await brokerTripIntelligence(state, {
-        paragraph: paragraph.slice(0, 14000),
-        currentTrip,
-        model: KIMI_API_MODEL,
-      });
-    } catch (error) {
-      if (isQuotaOrRateLimitError(error) || !isBrokerRouteUnavailable(error)) throw error;
-      console.warn('[AI Routing] Trip intelligence backend unavailable, using legacy trip prompt:', error);
-      parsed = await callPreferredJson(state, prompt, 'trip');
+    const warnings: string[] = [];
+    const attempts = modelAttemptsForKind(state, 'trip');
+    let last: unknown;
+    for (const [index, attempt] of attempts.entries()) {
+      if (hasFastLocalDraft && Date.now() - startedAt > TRIP_FAST_LOCAL_DEADLINE_MS) {
+        warnings.push('AI provider analysis exceeded the fast response window; local itinerary extraction is ready for confirmation.');
+        const draft = localDraftWithWarnings(warnings);
+        if (draft) return draft;
+      }
+      try {
+        const timeoutMs = tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft);
+        const isGoogleModel = attempt.provider === 'google';
+        let organizedItinerary: string;
+        let extractionPrompt: string;
+
+        if (isGoogleModel) {
+          console.log(`[AI Routing] Google model — using single-stage extraction: ${attempt.label}...`);
+          organizedItinerary = paragraph.slice(0, 28000);
+          extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip);
+        } else {
+          console.log(`[AI Routing] 正在嘗試行程重整: ${attempt.label}...`);
+          const organizedRaw = await withTimeout(
+            callModelAttemptJson(state, attempt, organizePrompt, 'trip'),
+            timeoutMs,
+            `Trip organize ${attempt.label}`,
+          );
+          organizedItinerary = organizedItineraryFromModel(organizedRaw, fastLocalDraft?.trip);
+          if (!organizedItinerary || organizedItinerary.length < 20) {
+            warnings.push(`${attempt.label} returned no usable organized itinerary.`);
+            console.warn(`[AI Routing] ${attempt.label} returned no usable organized itinerary; trying next trip model.`);
+            continue;
+          }
+          console.log(`[AI Routing] 正在由重整行程抽取 app data: ${attempt.label}...`);
+          extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip);
+        }
+        const parsed = await withTimeout(
+          callModelAttemptJson(state, attempt, extractionPrompt, 'trip'),
+          timeoutMs,
+          `Trip extract ${attempt.label}`,
+        );
+        const parsedRecord = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? parsed as Record<string, unknown>
+          : {};
+        const draft = normalizeTripDraft({
+          ...parsedRecord,
+          organizedItinerary: parsedRecord.organizedItinerary || organizedItinerary,
+        }, state, organizedItinerary);
+        if (hasUsefulTripItinerary(draft)) {
+          const merged = mergeTripDrafts(draft, fastLocalDraft);
+          return {
+            ...merged,
+            warnings: [...warnings, ...merged.warnings].filter(Boolean),
+          };
+        }
+        warnings.push(`${attempt.label} returned no usable itinerary spots.`);
+        console.warn(`[AI Routing] ${attempt.label} returned no usable itinerary spots; trying next trip model.`);
+      } catch (error) {
+        last = error;
+        warnings.push(error instanceof Error ? error.message : String(error));
+        const routeLabel = isBrokerRouteUnavailable(error) ? 'backend unavailable' : 'attempt failed';
+        console.warn(`[AI Routing] Trip update ${attempt.label} ${routeLabel}, trying next model:`, error);
+      }
     }
-    return normalizeTripDraft(parsed, state, paragraph);
+    const localDraft = localDraftWithWarnings(warnings) || localTripDraftFromParagraph(paragraph, state, warnings);
+    if (localDraft && hasUsefulTripItinerary(localDraft)) return localDraft;
+    throw new Error([...warnings, last instanceof Error ? last.message : '', 'All trip LLM attempts returned no usable itinerary spots.'].filter(Boolean).join(' | '));
   } catch (error) {
+    const localDraft = localDraftWithWarnings([error instanceof Error ? error.message : String(error)])
+      || localTripDraftFromParagraph(paragraph, state, [error instanceof Error ? error.message : String(error)]);
+    if (localDraft && hasUsefulTripItinerary(localDraft)) return localDraft;
     const fallback = tripFromLegacyState({
       ...state,
       tripName: current.name,
@@ -567,7 +1151,7 @@ ${paragraph.slice(0, 14000)}`;
       customItinerary: current.itinerary,
     });
     return {
-      trip: { ...fallback, version: current.version + 1, updatedAt: Date.now() },
+      trip: { ...fallback, itinerary: [], version: current.version + 1, updatedAt: Date.now() },
       summary: 'AI 暫時未能完整分析，已保留現有旅程供手動修改。',
       warnings: [error instanceof Error ? error.message : String(error)],
       changes: ['沒有自動套用新資料。'],
