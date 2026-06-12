@@ -38,6 +38,7 @@ jobs:
         working-directory: app-compact
         env:
           VITE_BASE_PATH: /
+          VITE_COMPACT_AUTH_REDIRECT_URL: https://travel-expense-react.vercel.app/?compact_oauth=1
           VITE_COMPACT_PUBLIC_URL: https://travel-expense-compact.netlify.app/
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}

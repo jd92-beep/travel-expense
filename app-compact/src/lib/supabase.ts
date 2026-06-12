@@ -119,8 +119,19 @@ export type SupabasePullResult = {
 const rawUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim();
 const rawKey = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 const configuredPublicUrl = String(import.meta.env.VITE_COMPACT_PUBLIC_URL || '').trim();
+const configuredAuthRedirectUrl = String(import.meta.env.VITE_COMPACT_AUTH_REDIRECT_URL || '').trim();
 
 let client: SupabaseClient | null = null;
+
+function normalizedConfiguredUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    if (!url.pathname) url.pathname = '/';
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
 
 function isoFromMs(value: unknown, fallback = Date.now()): string {
   const n = Number(value) || fallback;
@@ -171,7 +182,7 @@ function canManageSharing(role?: TripMemberRole): boolean {
 
 function publicOrigin(): string {
   if (configuredPublicUrl) {
-    return configuredPublicUrl.endsWith('/') ? configuredPublicUrl : `${configuredPublicUrl}/`;
+    return normalizedConfiguredUrl(configuredPublicUrl);
   }
   if (typeof window === 'undefined') return '';
   const { origin, pathname } = window.location;
@@ -183,6 +194,13 @@ function publicOrigin(): string {
   }
   if (pathname.startsWith('/travel-expense')) return `${origin}/travel-expense/`;
   return `${origin}/`;
+}
+
+function authRedirectUrl(): string {
+  if (configuredAuthRedirectUrl) {
+    return normalizedConfiguredUrl(configuredAuthRedirectUrl);
+  }
+  return publicOrigin();
 }
 
 function sourceIdForTrip(trip: TripProfile): string {
@@ -542,7 +560,7 @@ export function useSupabaseAuth() {
       email: cleaned,
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: publicOrigin(),
+        emailRedirectTo: authRedirectUrl(),
       },
     });
     if (signInError) throw signInError;
@@ -588,7 +606,7 @@ export function useSupabaseAuth() {
     const { error: signInError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: publicOrigin(),
+        redirectTo: authRedirectUrl(),
       },
     });
     if (signInError) throw signInError;
