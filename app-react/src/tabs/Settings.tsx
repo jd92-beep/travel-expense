@@ -1649,8 +1649,8 @@ export function Settings({
               <span>{tripDraft.trip.startDate} → {tripDraft.trip.endDate}</span>
               <span>{tripDraft.trip.destinationSummary}</span>
               <span>{tripDraft.trip.itinerary.length} 日 · {tripDraft.trip.currencies.join(', ')}</span>
-              {tripDraft.changes.map((change) => <span key={change}>{change}</span>)}
-              {tripDraft.warnings.map((warning) => <span key={warning}>Warning: {warning}</span>)}
+              {tripDraft.changes.map((change, index) => <span key={`${change}-${index}`}>{change}</span>)}
+              {tripDraft.warnings.map((warning, index) => <span key={`${warning}-${index}`}>Warning: {warning}</span>)}
             </div>
             <div className="action-row wrap">
               <button className="primary" type="button" onClick={() => applyTripDraft(tripDraft)}>套用到 React</button>

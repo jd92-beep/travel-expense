@@ -2581,8 +2581,8 @@ export function Settings({
               {!!tripPreviewStats.missingCriticalFields.length && <span>未確認：{tripPreviewStats.missingCriticalFields.slice(0, 5).join('、')}</span>}
               {!!tripPreviewStats.assumptions.length && <span>模型假設：{tripPreviewStats.assumptions.slice(0, 4).join('、')}</span>}
               {!!tripPreviewStats.organizedItinerary && <span>AI 重整行程：{tripPreviewStats.organizedItinerary.split('\n').slice(0, 3).join(' / ')}</span>}
-              {tripDraft.changes.map((change) => <span key={change}>{change}</span>)}
-              {tripDraft.warnings.map((warning) => <span key={warning}>Warning: {warning}</span>)}
+              {tripDraft.changes.map((change, index) => <span key={`${change}-${index}`}>{change}</span>)}
+              {tripDraft.warnings.map((warning, index) => <span key={`${warning}-${index}`}>Warning: {warning}</span>)}
             </div>
             <div className="trip-preview-days">
               {tripPreviewStats.days.map((day) => (
@@ -2656,7 +2656,7 @@ export function Settings({
                 {!!tripPreviewStats.foodNames.length && <span>餐飲：{tripPreviewStats.foodNames.join('、')}</span>}
                 {!!tripPreviewStats.missingCriticalFields.length && <span>未確認：{tripPreviewStats.missingCriticalFields.slice(0, 8).join('、')}</span>}
                 {!!tripPreviewStats.assumptions.length && <span>模型假設：{tripPreviewStats.assumptions.slice(0, 6).join('、')}</span>}
-                {tripDraft.warnings.map((warning) => <span key={warning}>Warning: {warning}</span>)}
+                {tripDraft.warnings.map((warning, index) => <span key={`${warning}-${index}`}>Warning: {warning}</span>)}
               </div>
 
               {!!tripPreviewStats.organizedItinerary && (
