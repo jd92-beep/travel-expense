@@ -1,6 +1,7 @@
 import { activeTrip } from '../domain/trip/normalize';
 import { getScheduleSpots } from './domain';
 import type { AppState, ItineraryDay, ItinerarySpot } from './types';
+import { coordForDay, slotsForDate } from './weather';
 
 export type WeatherPackingTone = 'ready' | 'watch' | 'review' | 'risk';
 
@@ -18,10 +19,6 @@ const WEATHER_STALE_MS = 2 * 60 * 60 * 1000;
 const MIN_REASONABLE_TIMESTAMP = new Date('2020-01-01T00:00:00Z').getTime();
 
 export function buildWeatherPackingRisks(state: AppState, itinerary: ItineraryDay[], nowMs = Date.now()): WeatherPackingRisk[] {
-  const best = bestWeatherSignal((state as AppState & { weatherCache?: unknown }).weatherCache);
-  const hasWeather = isReasonableTimestamp(best.fetchedAt);
-  const ageMs = hasWeather ? nowMs - best.fetchedAt : Number.POSITIVE_INFINITY;
-  const weatherIsStale = !hasWeather || ageMs > WEATHER_STALE_MS;
   const intelligence = activeTrip(state).intelligence;
 
   return itinerary.map((day) => {
@@ -34,23 +31,25 @@ export function buildWeatherPackingRisks(state: AppState, itinerary: ItineraryDa
     let detail = `${location} · weather ready`;
     const items = new Set<string>(['Water', 'Receipts']);
 
-    if (weatherIsStale) {
+    const sig = dayWeatherSignal(day, nowMs);
+
+    if (sig.weatherIsStale) {
       tone = 'review';
       label = 'Refresh first';
-      detail = hasWeather ? `${formatFreshnessAge(ageMs)} old · refresh before leaving` : `${location} · weather missing`;
+      detail = sig.hasWeather ? `${formatFreshnessAge(sig.ageMs)} old · refresh before leaving` : `${location} · weather missing`;
       items.add('Update weather');
       items.add(outdoorSpot ? 'Outdoor layer' : 'Light bag');
-    } else if (best.rain >= 50) {
+    } else if (sig.rain >= 50) {
       tone = 'risk';
       label = '雨具 / Umbrella';
-      detail = `Rain ${Math.round(best.rain)}% · ${fmtMm(best.precipMm)}${outdoorSpot ? ` · ${outdoorSpot.name}` : ''}`;
+      detail = `Rain ${Math.round(sig.rain)}% · ${fmtMm(sig.precipMm)}${outdoorSpot ? ` · ${outdoorSpot.name}` : ''}`;
       items.add('Umbrella');
       items.add('Waterproof bag');
       if (outdoorSpot) items.add('Outdoor layer');
-    } else if (best.windSpeed >= 30) {
+    } else if (sig.windSpeed >= 30) {
       tone = 'watch';
       label = 'Wind layer';
-      detail = `Wind ${Math.round(best.windSpeed)} km/h${transportSpot ? ` · ${transportSpot.name}` : ''}`;
+      detail = `Wind ${Math.round(sig.windSpeed)} km/h${transportSpot ? ` · ${transportSpot.name}` : ''}`;
       items.add('Wind layer');
       if (transportSpot) items.add('Transit buffer');
     } else if (outdoorSpot || intelligence?.weatherPreference === 'rain') {
@@ -78,6 +77,55 @@ export function buildWeatherPackingRisks(state: AppState, itinerary: ItineraryDa
       items: Array.from(items).slice(0, 4),
     };
   });
+}
+
+function dayWeatherSignal(day: ItineraryDay, nowMs: number) {
+  let rain = 0;
+  let precipMm = 0;
+  let windSpeed = 0;
+  let fetchedAt = 0;
+  let hasWeather = false;
+
+  try {
+    const coord = coordForDay(day);
+    if (coord && Number.isFinite(coord.lat) && Number.isFinite(coord.lon)) {
+      const cacheKey = `wx_react_v3_${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`;
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(cacheKey) : null;
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (cached && typeof cached === 'object' && cached.data) {
+          const slots = slotsForDate(cached.data, day.date);
+          const hasData = slots.some((s) => s.rain != null || s.temp != null || s.windSpeed != null);
+          if (hasData) {
+            fetchedAt = Number(cached.ts) || 0;
+            hasWeather = isReasonableTimestamp(fetchedAt);
+            if (hasWeather) {
+              for (const slot of slots) {
+                if (slot.rain != null) rain = Math.max(rain, slot.rain);
+                if (slot.precipMm != null) precipMm = Math.max(precipMm, slot.precipMm);
+                if (slot.windSpeed != null) windSpeed = Math.max(windSpeed, slot.windSpeed);
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[WeatherPack] failed to read day weather signal:', e);
+  }
+
+  const ageMs = hasWeather ? nowMs - fetchedAt : Number.POSITIVE_INFINITY;
+  const weatherIsStale = !hasWeather || ageMs > WEATHER_STALE_MS;
+
+  return {
+    rain,
+    precipMm,
+    windSpeed,
+    fetchedAt,
+    hasWeather,
+    ageMs,
+    weatherIsStale,
+  };
 }
 
 function isOutdoorSpot(spot: ItinerarySpot): boolean {

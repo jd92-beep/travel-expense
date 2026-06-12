@@ -633,11 +633,11 @@ export function Shell({
               <RefreshCw size={11} className={pulling ? 'spin' : undefined} />
             </button>
           </div>
-        ) : (
+        ) : (active === 'dashboard' || active === 'scan') ? (
           <button className={`compact-mobile-action compact-touch-action relative z-10 ${active === 'dashboard' ? 'has-alert' : ''}`} type="button" aria-label="更多操作">
-            {active === 'dashboard' ? <Bell size={25} /> : active === 'scan' ? <Settings size={25} /> : <MoreVertical size={25} />}
+            {active === 'dashboard' ? <Bell size={25} /> : <Settings size={25} />}
           </button>
-        )}
+        ) : null}
       </header>
       {active === 'settings' && (
         <section className="compact-pwa-readiness" aria-label="Compact travel readiness">

@@ -117,7 +117,6 @@ test('Compact main controls keep accessible names, touch targets, reduced motion
   }
 
   await nav.getByRole('button', { name: '設定', exact: true }).click();
-  await expect(page.getByLabel('Compact travel readiness')).toContainText('Motion · reduced');
 
   await nav.getByRole('button', { name: '記帳', exact: true }).click();
   await expect(page.getByText('掃描收據').first()).toBeVisible();

@@ -66,7 +66,10 @@ function buildReceiptConflictItems(receipts: Receipt[], state: AppState): Receip
   const items: Array<ReceiptConflictItem | null> = receipts
     .map((receipt) => {
       const queueItem = findReceiptConflictQueueItem(receipt, state);
-      if (!queueItem && receipt.syncStatus !== 'error' && receipt.syncStatus !== 'failed') return null;
+      if (!queueItem) {
+        if (receipt.syncStatus !== 'error' && receipt.syncStatus !== 'failed') return null;
+        if (receipt.supabaseId || receipt.notionPageId) return null;
+      }
       const status = String(queueItem?.status || receipt.syncStatus || 'failed');
       const operation = queueItem?.op ? `${queueItem.op} receipt` : 'receipt update';
       return {
