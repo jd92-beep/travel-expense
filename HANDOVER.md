@@ -7,11 +7,12 @@
 
 ## What Was Done
 
-### Session 11 (Antigravity — commit `a781af6`)
+### Session 11 (Antigravity — commit `8bdd813`)
 1. **Fixed OCR Payload Too Large Error**: Solved the issue where camera scans returned `OCR not completed, json payload too large`. Increased the `MAX_JSON_BYTES` constant from `900000` (900KB) to `4500000` (4.5MB) in `workers/credential-broker/src/index.js` to support larger base64 encoded photo uploads from client-side camera captures.
-2. **Updated Test Coverage**: Modified `workers/credential-broker/test/self-test.mjs` to test payload rejection at `4500001` bytes instead of the old `900001` limit.
-3. **Validated & Deployed Worker**: Verified syntax via `npm run check`, confirmed all mock tests pass with `npm run self-test`, and successfully deployed the worker to production.
-4. **Git Push & Preflight checks**: Verified post-deploy health check (`version: 2026.06.12` is live) and successfully pushed the changes to GitHub `main` branch.
+2. **Fixed Notion File Upload Sync Failure**: Resolved the `有資料同步失敗，請檢查連線或設定` banner and Offline Conflict Resolver trigger when uploading receipts with photos. Added the missing `Authorization` and `Notion-Version` headers to the Notion file upload `fetch` request in `notionUploadFileWorker` inside `workers/credential-broker/src/index.js` to prevent Notion's API from rejecting S3 pre-signed upload requests with 401.
+3. **Updated Test Coverage**: Modified `workers/credential-broker/test/self-test.mjs` to test payload rejection at `4500001` bytes instead of the old `900001` limit.
+4. **Validated & Deployed Worker**: Verified syntax via `npm run check`, confirmed all mock tests pass with `npm run self-test`, and successfully deployed the worker to production.
+5. **Git Push & Preflight checks**: Verified post-deploy health check (`version: 2026.06.12` is live) and successfully pushed the changes to GitHub `main` branch.
 
 ### Session 10 (Antigravity — commit `d1d0967`)
 1. **Removed 5MB Camera Size Limit**: Removed the obsolete `file.size > 5_000_000` image file limit check from `handleImage` and `handleEmailImages` inside `app-compact/src/tabs/Scan.tsx`.
