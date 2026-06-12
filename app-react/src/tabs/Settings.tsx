@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, LogOut, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, LogOut, Mail, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
@@ -36,8 +36,9 @@ import {
   type ReactMappingDiagnostics,
 } from '../lib/notion';
 import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
-import type { AppState, Person, Receipt, SyncEngineState, SyncQueueItem, TripDraft, TripProfile } from '../lib/types';
+import type { AppState, Person, Receipt, SyncEngineState, SyncQueueItem, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
 import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
+import { createSupabaseTripInvite, inviteLinkForToken, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { GlassCard, StatefulActionButton, StatusPill, Toast } from '../components/ui';
@@ -195,6 +196,7 @@ export function Settings({
   onSignOut?: () => Promise<void> | void;
   onClearDeviceData?: () => Promise<void> | void;
 }) {
+  const supabaseAuth = useSupabaseAuth();
   const persons = getPersons(state);
   const currentTrip = activeTrip(state);
   const trips = state.trips?.length ? state.trips : [currentTrip];
@@ -225,6 +227,24 @@ export function Settings({
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);
+  const [sharingInviteEmail, setSharingInviteEmail] = useState('');
+  const [sharingInviteName, setSharingInviteName] = useState('');
+  const [sharingInviteRole, setSharingInviteRole] = useState<TripSharingInviteDraft['role']>('editor');
+  const [sharingInvitePerson, setSharingInvitePerson] = useState(true);
+  const [createdInviteLinks, setCreatedInviteLinks] = useState<Array<{ email: string; link: string }>>([]);
+  const tripSharing: TripSharingState = currentTrip.sharing || {
+    role: 'owner',
+    isShared: false,
+    memberCount: 1,
+    pendingInviteCount: 0,
+    members: [{ userId: 'owner', role: 'owner', status: 'active', displayName: userEmail || 'You' }],
+    invites: [],
+    backendHealth: { status: 'missing' },
+  };
+  const canManageTripSharing = tripSharing.role === 'owner' || tripSharing.role === 'admin';
+  const sharingMembers = tripSharing.members || [];
+  const sharingInvites = tripSharing.invites || [];
+  const sharingSession = supabaseAuth.session;
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -645,6 +665,123 @@ export function Settings({
   function resetShareRatios() {
     updateState({ shareRatios: Object.fromEntries(persons.map((person) => [person.id, 1])) });
     setStatus('已重設為均分比例');
+  }
+
+  function patchCurrentTripSharing(updater: (sharing: TripSharingState) => TripSharingState) {
+    setState((prev) => {
+      const now = Date.now();
+      const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
+      return migrateAppState({
+        ...prev,
+        trips: prevTrips.map((trip) => {
+          if (trip.id !== currentTrip.id) return trip;
+          const baseSharing: TripSharingState = trip.sharing || tripSharing;
+          return { ...trip, sharing: updater(baseSharing), updatedAt: now };
+        }),
+        settingsUpdatedAt: now,
+      });
+    });
+  }
+
+  async function createSharingInvite() {
+    const email = sharingInviteEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatus('請輸入有效 email。');
+      return;
+    }
+    if (!cloudSyncAvailable || !sharingSession) {
+      setStatus('旅程共享需要先登入 Supabase。');
+      return;
+    }
+    if (!canManageTripSharing) {
+      setStatus('只有 owner/admin 可以邀請新成員。');
+      return;
+    }
+    const draft: TripSharingInviteDraft = {
+      email,
+      role: sharingInviteRole,
+      displayName: sharingInviteName.trim() || undefined,
+      createAccountingPerson: sharingInvitePerson,
+    };
+    await run('建立旅程邀請', async () => {
+      const invite = await createSupabaseTripInvite(sharingSession, state, currentTrip, draft);
+      const link = invite.token ? inviteLinkForToken(invite.token) : '';
+      patchCurrentTripSharing((sharing) => {
+        const nextInvites = [
+          ...(sharing.invites || []).filter((item) => item.email.toLowerCase() !== invite.email.toLowerCase()),
+          invite,
+        ];
+        return {
+          ...sharing,
+          role: sharing.role || 'owner',
+          isShared: true,
+          invites: nextInvites,
+          pendingInviteCount: nextInvites.filter((item) => item.status === 'pending').length,
+        };
+      });
+      if (link) setCreatedInviteLinks((current) => [{ email: invite.email, link }, ...current.filter((item) => item.email !== invite.email)].slice(0, 6));
+      setSharingInviteEmail('');
+      setSharingInviteName('');
+      setSharingInviteRole('editor');
+      setSharingInvitePerson(true);
+      return link ? `已建立 ${invite.email} 邀請；可複製 invite link。` : `已建立 ${invite.email} 邀請。`;
+    });
+  }
+
+  async function revokeSharingInvite(invite: TripInviteSummary) {
+    if (!sharingSession) {
+      setStatus('請先登入 Supabase。');
+      return;
+    }
+    await run('撤回旅程邀請', async () => {
+      await revokeSupabaseTripInvite(sharingSession, invite.id);
+      patchCurrentTripSharing((sharing) => {
+        const nextInvites = (sharing.invites || []).filter((item) => item.id !== invite.id);
+        return {
+          ...sharing,
+          invites: nextInvites,
+          pendingInviteCount: nextInvites.filter((item) => item.status === 'pending').length,
+        };
+      });
+      setCreatedInviteLinks((current) => current.filter((item) => item.email !== invite.email));
+      return `已撤回 ${invite.email} 嘅邀請。`;
+    });
+  }
+
+  async function updateSharingMemberRole(userId: string, role: Exclude<TripMemberRole, 'owner'>) {
+    if (!sharingSession) {
+      setStatus('請先登入 Supabase。');
+      return;
+    }
+    await run('更新成員角色', async () => {
+      await updateSupabaseTripMemberRole(sharingSession, currentTrip, userId, role);
+      patchCurrentTripSharing((sharing) => ({
+        ...sharing,
+        members: (sharing.members || []).map((member) => member.userId === userId ? { ...member, role } : member),
+      }));
+      return '已更新成員角色。';
+    });
+  }
+
+  async function removeSharingMember(userId: string, label: string) {
+    if (!sharingSession) {
+      setStatus('請先登入 Supabase。');
+      return;
+    }
+    if (!window.confirm(`確定移除 ${label || 'this member'}？對方會即時失去此旅程存取權，但歷史記帳仍會保留。`)) return;
+    await run('移除旅程成員', async () => {
+      await removeSupabaseTripMember(sharingSession, currentTrip, userId);
+      patchCurrentTripSharing((sharing) => {
+        const nextMembers = (sharing.members || []).filter((member) => member.userId !== userId);
+        return {
+          ...sharing,
+          members: nextMembers,
+          memberCount: Math.max(1, nextMembers.length),
+          isShared: nextMembers.length > 1 || (sharing.invites || []).length > 0,
+        };
+      });
+      return `已移除 ${label || 'member'}。`;
+    });
   }
 
   function saveLocalSettingsNow() {
@@ -1354,6 +1491,130 @@ export function Settings({
             <input type="checkbox" checked={state.top10IncludeBigItems} onChange={(e) => updateState({ top10IncludeBigItems: e.target.checked })} />
             TOP 10 包括機票/住宿/大型交通
           </label>
+        </div>
+      </AccordionCard>
+
+      <AccordionCard
+        id="settings-trip-sharing"
+        eyebrow="Trip sharing"
+        title="旅程共享 👥"
+        icon={<Users />}
+        meta={<span className="pill">{tripSharing.isShared ? `${tripSharing.memberCount} members` : '只限自己'}{tripSharing.pendingInviteCount ? ` · ${tripSharing.pendingInviteCount} pending` : ''}</span>}
+      >
+        <div className="mini-list">
+          <span>目前角色：{tripSharing.role}</span>
+          <span>Backend：Supabase {cloudSyncAvailable ? 'connected' : 'not signed in'} · Notion {tripSharing.backendHealth?.status || 'missing'}</span>
+          <span>{canManageTripSharing ? '你可以邀請、撤回邀請、管理成員角色。' : '你可以查看共享狀態；只有 owner/admin 可以管理成員。'}</span>
+        </div>
+
+        <GlassCard className="settings-account-card">
+          <div className="settings-account-copy">
+            <span className="eyebrow">Invite people</span>
+            <strong>新增共享成員</strong>
+            <small>Editor 可以新增自己嘅 expense；Viewer 只可查看共享帳簿。</small>
+          </div>
+          <div className="form-grid">
+            <label>Email
+              <input value={sharingInviteEmail} onChange={(e) => setSharingInviteEmail(e.target.value)} placeholder="friend@example.com" type="email" />
+            </label>
+            <label>顯示名稱
+              <input value={sharingInviteName} onChange={(e) => setSharingInviteName(e.target.value)} placeholder="例如 Natalie" />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>Role
+              <select value={sharingInviteRole} onChange={(e) => setSharingInviteRole(e.target.value as TripSharingInviteDraft['role'])}>
+                <option value="editor">Editor · 可記帳</option>
+                <option value="viewer">Viewer · 只讀</option>
+              </select>
+            </label>
+            <label className="check-row" style={{ alignSelf: 'end' }}>
+              <input type="checkbox" checked={sharingInvitePerson} onChange={(e) => setSharingInvitePerson(e.target.checked)} />
+              同時加入分帳名單
+            </label>
+          </div>
+          <div className="action-row wrap">
+            <button className="primary" type="button" disabled={!!busy || !canManageTripSharing || !cloudSyncAvailable} onClick={() => void createSharingInvite()}>
+              <Mail size={18} /> 建立邀請
+            </button>
+            {onPull && (
+              <button className="secondary" type="button" disabled={!!busy || !cloudSyncAvailable} onClick={() => void onPull()}>
+                <RotateCcw size={18} /> Refresh sharing
+              </button>
+            )}
+          </div>
+        </GlassCard>
+
+        {!!createdInviteLinks.length && (
+          <div className="mini-list">
+            {createdInviteLinks.map((item) => (
+              <span key={item.email} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.email}</span>
+                <button className="secondary" type="button" onClick={() => copyText(item.link, `已複製 ${item.email} invite link`)}>
+                  <Copy size={14} /> Copy link
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="section-head">
+          <h2>Pending invites</h2>
+          <span className="pill">{sharingInvites.length} pending</span>
+        </div>
+        <div className="mini-list">
+          {sharingInvites.map((invite) => {
+            const generated = createdInviteLinks.find((item) => item.email === invite.email);
+            const inviteLink = invite.token ? inviteLinkForToken(invite.token) : generated?.link;
+            return (
+              <span key={invite.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', alignItems: 'center', gap: '8px' }}>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invite.email} · {invite.role}</span>
+                {inviteLink && (
+                  <button className="secondary" type="button" onClick={() => copyText(inviteLink, `已複製 ${invite.email} invite link`)}>
+                    <Copy size={14} /> Link
+                  </button>
+                )}
+                <button className="danger" type="button" disabled={!!busy || !canManageTripSharing} onClick={() => void revokeSharingInvite(invite)}>
+                  <Trash2 size={14} /> Revoke
+                </button>
+              </span>
+            );
+          })}
+          {!sharingInvites.length && <span>暫時沒有待接受邀請。</span>}
+        </div>
+
+        <div className="section-head">
+          <h2>Members</h2>
+          <span className="pill">{sharingMembers.length || 1} active</span>
+        </div>
+        <div className="mini-list">
+          {sharingMembers.map((member) => {
+            const label = member.email || member.displayName || (member.role === 'owner' ? 'Trip owner' : 'Trip member');
+            return (
+              <span key={`${member.userId}-${member.role}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 128px auto', alignItems: 'center', gap: '8px' }}>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                {member.role === 'owner' ? (
+                  <span className="pill ok">owner</span>
+                ) : (
+                  <select
+                    value={member.role}
+                    disabled={!!busy || !canManageTripSharing}
+                    onChange={(e) => void updateSharingMemberRole(member.userId, e.target.value as Exclude<TripMemberRole, 'owner'>)}
+                  >
+                    <option value="admin">admin</option>
+                    <option value="editor">editor</option>
+                    <option value="viewer">viewer</option>
+                  </select>
+                )}
+                {member.role !== 'owner' && (
+                  <button className="danger" type="button" disabled={!!busy || !canManageTripSharing} onClick={() => void removeSharingMember(member.userId, label)}>
+                    <UserMinus size={14} /> Remove
+                  </button>
+                )}
+              </span>
+            );
+          })}
+          {!sharingMembers.length && <span>登入並 pull cloud 後會顯示成員列表。</span>}
         </div>
       </AccordionCard>
 

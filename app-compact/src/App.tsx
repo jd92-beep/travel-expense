@@ -11,7 +11,7 @@ import { mergePulledData } from './lib/syncMerge';
 import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
 import { clearCredentialSession, clearStoredState } from './lib/storage';
-import type { Receipt, SyncQueueItem, TabId, TripProfile } from './lib/types';
+import type { Receipt, SyncQueueItem, TabId, TripInviteSummary, TripProfile } from './lib/types';
 import { TAB_MANIFEST } from './lib/tabs';
 import { isBoss } from './lib/constants';
 import { AuthGate } from './security/AuthGate';
@@ -19,7 +19,7 @@ import { HyperframeBackground } from './components/HyperframeBackground';
 import { fetchLiveCurrencySnapshot, loadCurrencySnapshot, usableSnapshot, type CurrencySnapshot } from './lib/currency';
 import { AnimatePresence, motion } from 'motion/react';
 import { shouldDisableHeavyEffects } from './lib/performance';
-import { hasSupabaseSession, useSupabaseAuth } from './lib/supabase';
+import { acceptSupabaseTripInvite, createSupabaseTripInvite, hasSupabaseSession, useSupabaseAuth } from './lib/supabase';
 import { SupabaseGate } from './security/SupabaseGate';
 import { clearIndexedState } from './storage/indexedDb';
 import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/WelcomeGuidePopup';
@@ -77,24 +77,45 @@ export function App() {
 
   const [skippedGuide, setSkippedGuide] = useState(false);
   const [isNewTripWizardOpen, setIsNewTripWizardOpen] = useState(false);
+  const [acceptedInviteToken, setAcceptedInviteToken] = useState('');
 
   const handleSaveGuideTrip = async (result: WelcomeGuideResult | TripProfile) => {
     const guide = 'trip' in result
       ? result
-      : { trip: result, persons: state.persons, shareRatios: state.shareRatios };
-    const { trip, persons, shareRatios } = guide;
+      : { trip: result, persons: state.persons, shareRatios: state.shareRatios, sharingInvites: [] };
+    const { trip, persons, shareRatios, sharingInvites } = guide;
     try {
       if (!supabaseAuth.session) throw new Error('Supabase session unavailable');
       const syncedTrip = await upsertSupabaseTrip(supabaseAuth.session, state, trip);
+      const createdInvites: TripInviteSummary[] = [];
+      for (const invite of sharingInvites || []) {
+        try {
+          createdInvites.push(await createSupabaseTripInvite(supabaseAuth.session, state, syncedTrip, invite));
+        } catch (inviteError) {
+          console.warn('[WelcomeGuide] Failed to create trip invite:', inviteError);
+        }
+      }
+      const visibleTrip = createdInvites.length
+        ? {
+          ...syncedTrip,
+          sharing: {
+            ...(syncedTrip.sharing || { role: 'owner' as const, memberCount: 1, pendingInviteCount: 0, isShared: false }),
+            role: syncedTrip.sharing?.role || 'owner',
+            isShared: true,
+            pendingInviteCount: (syncedTrip.sharing?.pendingInviteCount || 0) + createdInvites.length,
+            invites: [...(syncedTrip.sharing?.invites || []), ...createdInvites],
+          },
+        }
+        : syncedTrip;
       setState((prev) => ({
         ...prev,
-        trips: [syncedTrip],
-        activeTripId: syncedTrip.id,
-        tripName: syncedTrip.name,
-        tripDateRange: { start: syncedTrip.startDate, end: syncedTrip.endDate },
-        budget: syncedTrip.budget ?? prev.budget,
-        tripCurrency: syncedTrip.currencies?.find((currency) => currency !== 'HKD') || prev.tripCurrency,
-        customItinerary: syncedTrip.itinerary || [],
+        trips: [visibleTrip],
+        activeTripId: visibleTrip.id,
+        tripName: visibleTrip.name,
+        tripDateRange: { start: visibleTrip.startDate, end: visibleTrip.endDate },
+        budget: visibleTrip.budget ?? prev.budget,
+        tripCurrency: visibleTrip.currencies?.find((currency) => currency !== 'HKD') || prev.tripCurrency,
+        customItinerary: visibleTrip.itinerary || [],
         persons,
         shareRatios,
         settingsUpdatedAt: Date.now(),
@@ -160,8 +181,29 @@ export function App() {
   };
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const rawHash = window.location.hash.slice(1);
+    if (!rawHash.startsWith('accept-invite')) return;
+    const query = rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : '';
+    const token = new URLSearchParams(query).get('token')?.trim();
+    if (!token || token === acceptedInviteToken || !hasSupabaseSession(effectiveSupabaseSession)) return;
+    setAcceptedInviteToken(token);
+    acceptSupabaseTripInvite(effectiveSupabaseSession, token)
+      .then(async () => {
+        window.history.replaceState(null, '', '#settings');
+        setTab('settings');
+        await pull();
+      })
+      .catch((inviteError) => {
+        console.error('[TripInvite] accept failed:', inviteError);
+        updateState({ syncError: inviteError instanceof Error ? inviteError.message : 'Trip invite accept failed' });
+      });
+  }, [acceptedInviteToken, effectiveSupabaseSession, pull, updateState]);
+
+  useEffect(() => {
     const onHash = () => {
       const rawHash = window.location.hash.slice(1);
+      if (rawHash.startsWith('accept-invite')) return;
       const next = safeTabId(rawHash);
       // Fix Bug 9.1: Correct url hash address bar if corrupt
       if (rawHash && rawHash !== next) {

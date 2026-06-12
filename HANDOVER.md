@@ -2,10 +2,36 @@
 
 ## Last Worked On
 - **Date**: 2026-06-12
-- **Focus**: Budget Alignment, Inline Editing, Vercel Deploy & Git Push Verification
-- **Agent**: Antigravity 🦾
+- **Focus**: Trip Sharing Foundation + React/Compact Shared Contract
+- **Agent**: Codex 🧭
 
 ## What Was Done
+
+### Session 8 (Codex — this commit)
+1. **Supabase Sharing Foundation**: Added `supabase/migrations/20260612153000_trip_sharing_dual_backend.sql` for `trip_invites`, `trip_backend_links`, and `trip_accounting_people`, with forced RLS, select-only frontend grants for sensitive tables, invite token hashing, and RPCs for create/accept/revoke invites plus member role/remove/leave actions.
+2. **React + Compact Shared Types**: Added shared member, invite, backend-health, sharing-state, receipt ownership, version, and ledger sync status fields to both `app-react/src/lib/types.ts` and `app-compact/src/lib/types.ts`.
+3. **Shared Supabase Pull/Merge Support**: Updated both Supabase clients so pull reads all RLS-visible trips instead of owner-only trips, attaches member/invite/backend/accounting summaries, preserves shared-trip ownership, and avoids re-upserting the trip owner while saving shared receipts.
+4. **Welcome Guide Sharing Step**: Added invite capture to both Welcome Guide implementations, including email, display name, editor/viewer role, and optional accounting-person intent.
+5. **Settings Sharing Management**: Added a collapsed `旅程共享` card to React and Compact Settings with role/backend status, invite creation, invite links, pending invite revoke, member role changes, and member removal controls.
+6. **Invite Acceptance Routing**: Added `#accept-invite?token=...` handling in React and Compact, including the local Supabase-session fallback used by smoke tests.
+7. **Regression Coverage**: Updated migration scanner, Settings smoke tests, React `smoke:welcome-guide` script, and shared-contract smoke data so both app surfaces understand the new sharing metadata.
+
+**Verified in this session**
+- `app-react npm run typecheck` ✅
+- `app-compact npm run typecheck` ✅
+- `app-react npm run build` ✅
+- `app-compact npm run build` ✅
+- `app-react npm run db:policy:scan` ✅
+- `app-compact npm run smoke:shared-contract` ✅
+- `app-react npm run smoke:welcome-guide` ✅
+- `app-compact npm run smoke:welcome-guide` ✅
+- `app-react npm run smoke:settings` ✅ (`4 passed, 1 skipped`)
+- `app-compact npm run smoke:settings` ✅ (`9 passed, 1 skipped`)
+
+**Important limits / next phase**
+- The new Supabase migration is committed but was not applied live in this session because `SUPABASE_DB_URL` is not present in the shell. Apply it through the trusted Supabase pipeline before expecting live invite RPCs to work.
+- Server-side Supabase + Notion dual-write receipt mutations are still the next phase. The current browser receipt save path is compatible with shared metadata but does not yet route shared-trip receipt saves through a Trip Ledger Broker / Edge Function.
+- `trip_accounting_people` is read into app state, but full UI write/merge tooling for trip-scoped accounting people remains to be completed.
 
 ### Session 7 (Antigravity — commit `5979505`)
 1. **Budget Calc & Percent Alignment**: Aligned the budget percentages and totals between `Dashboard.tsx` and `Stats.tsx` to be display-currency-aware and use `trueTotal` (which includes flight and lodging) in accordance with project rules.

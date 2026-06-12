@@ -14,6 +14,9 @@ export type SplitMode = 'shared' | 'private';
 export type TripPhase = 'prep' | 'trip' | 'post';
 export type SyncStatus = 'local' | 'queued' | 'syncing' | 'synced' | 'error' | 'failed';
 export type GlobalSyncStatus = 'idle' | 'queued' | 'pushing' | 'pulling' | 'synced' | 'error' | 'offline';
+export type TripMemberRole = 'owner' | 'admin' | 'editor' | 'viewer';
+export type TripInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
+export type TripBackendStatus = 'active' | 'pending' | 'error' | 'disabled';
 export type TripThemeKey = 'japan_washi' | 'korea_editorial' | 'taiwan_nightmarket' | 'europe_rail' | 'global_journal';
 
 export interface TripIntelligence {
@@ -42,6 +45,11 @@ export interface Person {
 export interface Receipt {
   id: string;
   supabaseId?: string;
+  ownerId?: string;
+  createdByEmail?: string;
+  createdByLabel?: string;
+  version?: number;
+  ledgerSyncStatus?: 'synced' | 'queued' | 'notion_pending' | 'notion_failed' | 'conflict';
   store: string;
   total: number;
   originalAmount?: number;
@@ -154,8 +162,54 @@ export interface TripProfile {
   notionPageId?: string;
   sourceId?: string;
   notionDb?: string;
+  sharing?: TripSharingState;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface TripMemberSummary {
+  userId: string;
+  email?: string;
+  displayName?: string;
+  role: TripMemberRole;
+  status: 'active' | 'invited' | 'removed';
+  joinedAt?: string;
+  lastActiveAt?: string;
+  defaultPersonId?: string;
+}
+
+export interface TripInviteSummary {
+  id: string;
+  email: string;
+  role: Exclude<TripMemberRole, 'owner' | 'admin'>;
+  status: TripInviteStatus;
+  expiresAt: string;
+  createdAt: string;
+  token?: string;
+}
+
+export interface TripBackendHealth {
+  status: TripBackendStatus | 'missing';
+  syncMode?: 'dual_write';
+  lastHealthAt?: string;
+  lastError?: string;
+}
+
+export interface TripSharingState {
+  role: TripMemberRole;
+  isShared: boolean;
+  memberCount: number;
+  pendingInviteCount: number;
+  members?: TripMemberSummary[];
+  invites?: TripInviteSummary[];
+  backendHealth?: TripBackendHealth;
+}
+
+export interface TripSharingInviteDraft {
+  email: string;
+  role: Exclude<TripMemberRole, 'owner' | 'admin'>;
+  displayName?: string;
+  createAccountingPerson?: boolean;
 }
 
 export interface TripDraft {

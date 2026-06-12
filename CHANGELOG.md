@@ -2,6 +2,11 @@
 
 ## 2026-06-12
 
+- Added the first reliable trip-sharing foundation across React and Compact: shared member/invite/backend-health types, Welcome Guide sharing invite capture, Settings `旅程共享` management cards, invite-link acceptance routing, and shared-trip Supabase pull/merge support.
+- Added Supabase migration `20260612153000_trip_sharing_dual_backend.sql` with `trip_invites`, `trip_backend_links`, `trip_accounting_people`, admin/member RPCs, RLS policies, invite token hashing, and select-only frontend grants for sensitive sharing/backend tables.
+- Hardened the Supabase migration policy scanner for the new sharing schema and extended the shared-contract smoke so React and Compact both preserve sharing metadata plus receipt ownership/sync fields.
+- Verified the sharing foundation with React and Compact `npm run typecheck`, `npm run build`, `npm run db:policy:scan`, `npm run smoke:shared-contract`, `npm run smoke:welcome-guide`, and `npm run smoke:settings`.
+- Remaining sharing work: apply the new Supabase migration to the live project, then implement the server-side Trip Ledger Broker / Edge Function for Supabase + Notion dual-write mutations and durable Notion retry repair.
 - Fixed budget total spent discrepancy between the Home tab (`Dashboard.tsx`) and the Stats tab (`Stats.tsx`) in the compact app, ensuring both use `trueTotal` (without item filters) so that the displayed spent percentage aligns perfectly.
 - Implemented direct inline editing for the total budget on both the Home and Stats tabs. Users can now tap the "Edit" button next to the total budget and modify it directly on the active tab without being redirected to Settings, immediately updating and syncing the state.
 - Linked the `travel-expense-compact` project to the GitHub repository in the Vercel Dashboard, configuring Vercel to automatically build and deploy new pushes to the `main` branch.

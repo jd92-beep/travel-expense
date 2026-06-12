@@ -8,6 +8,7 @@ const files = [
   'supabase/migrations/20260526093000_scope_receipt_owner_updates.sql',
   'supabase/migrations/20260526094500_keep_notion_scope_private.sql',
   'supabase/migrations/20260526101000_tighten_shared_private_rows.sql',
+  'supabase/migrations/20260612153000_trip_sharing_dual_backend.sql',
 ];
 
 const sql = files
@@ -62,6 +63,38 @@ const requiredPatterns = [
   {
     name: 'receipt sync job select is owner-only',
     re: /create policy receipt_sync_jobs_select_own[\s\S]*?using\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)\s*\)/i,
+  },
+  {
+    name: 'trip sharing tables force RLS',
+    re: /alter table public\.trip_invites force row level security[\s\S]*?alter table public\.trip_backend_links force row level security[\s\S]*?alter table public\.trip_accounting_people force row level security/i,
+  },
+  {
+    name: 'trip invites only grant direct select to authenticated clients',
+    re: /grant select on table public\.trip_invites to authenticated/i,
+  },
+  {
+    name: 'trip backend links only grant direct select to authenticated clients',
+    re: /grant select on table public\.trip_backend_links to authenticated/i,
+  },
+  {
+    name: 'trip accounting people are trip member readable',
+    re: /create policy trip_accounting_people_select_members[\s\S]*?using\s*\(\s*private\.can_access_trip\(trip_id\)\s*\)/i,
+  },
+  {
+    name: 'trip invite accept marks expired without rolling back status update',
+    re: /if v_invite\.expires_at <= now\(\) then[\s\S]*?set status = 'expired'[\s\S]*?status := 'expired'[\s\S]*?return next;/i,
+  },
+  {
+    name: 'trip sharing security definer RPCs revoke public and anon execute',
+    re: /revoke execute on function public\.create_trip_invite\(uuid, text, text, integer\) from public, anon[\s\S]*?revoke execute on function public\.leave_trip\(uuid\) from public, anon/i,
+  },
+  {
+    name: 'trip sharing security definer RPCs grant execute only to authenticated',
+    re: /grant execute on function public\.create_trip_invite\(uuid, text, text, integer\) to authenticated[\s\S]*?grant execute on function public\.leave_trip\(uuid\) to authenticated/i,
+  },
+  {
+    name: 'trip invite token hashes are stored instead of plaintext tokens',
+    re: /token_hash text not null unique[\s\S]*?v_hash text := encode\(digest\(v_token, 'sha256'\), 'hex'\)/i,
   },
 ];
 

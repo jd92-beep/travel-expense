@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Compass, Sparkles, Calendar, DollarSign, MapPin, Loader2, ArrowRight, Info, Check } from 'lucide-react';
+import { Compass, Sparkles, Calendar, DollarSign, MapPin, Loader2, ArrowRight, Info, Check, Mail, Plus, Trash2, Users } from 'lucide-react';
 import { parseTripParagraph } from '../lib/ai';
 import { createTripProfile, normalizeTripIntelligence } from '../domain/trip/normalize';
-import type { AppState, Person, TripProfile } from '../lib/types';
+import type { AppState, Person, TripProfile, TripSharingInviteDraft } from '../lib/types';
 
 export type WelcomeGuideResult = {
   trip: TripProfile;
   persons: Person[];
   shareRatios: Record<string, number>;
+  sharingInvites: TripSharingInviteDraft[];
 };
 
 type WelcomeGuidePopupProps = {
@@ -68,6 +69,11 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   const [tripStyle, setTripStyle] = useState<(typeof TRIP_STYLE_OPTIONS)[number]['value']>('balanced');
   const [homeCity, setHomeCity] = useState('Hong Kong');
   const [weatherPreference, setWeatherPreference] = useState<(typeof WEATHER_PREFERENCE_OPTIONS)[number]['value']>('balanced');
+  const [sharingInvites, setSharingInvites] = useState<TripSharingInviteDraft[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<TripSharingInviteDraft['role']>('editor');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteCreatePerson, setInviteCreatePerson] = useState(true);
 
   // AI Analyzed Result Preview State
   const [aiDraft, setAiDraft] = useState<TripProfile | null>(null);
@@ -107,6 +113,35 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
     setGuidePersons((current) => current.map((person, idx) => idx === index ? { ...person, ...patch } : person));
   }
 
+  function addSharingInvite() {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('請輸入有效 email 才能加入共享邀請。');
+      return;
+    }
+    setError('');
+    setSharingInvites((current) => {
+      const withoutDuplicate = current.filter((invite) => invite.email.toLowerCase() !== email);
+      return [
+        ...withoutDuplicate,
+        {
+          email,
+          role: inviteRole,
+          displayName: inviteName.trim() || undefined,
+          createAccountingPerson: inviteCreatePerson,
+        },
+      ];
+    });
+    setInviteEmail('');
+    setInviteName('');
+    setInviteRole('editor');
+    setInviteCreatePerson(true);
+  }
+
+  function removeSharingInvite(email: string) {
+    setSharingInvites((current) => current.filter((invite) => invite.email !== email));
+  }
+
   function buildGuideResult(trip: TripProfile): WelcomeGuideResult {
     const persons = guidePersons.map((person, idx) => ({
       id: idx === 0 ? 'p_boss' : `p_trip_${idx + 1}`,
@@ -121,6 +156,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
         person.id,
         Math.max(0, Number(guidePersons[idx]?.ratio) || 0),
       ])),
+      sharingInvites,
     };
   }
 
@@ -294,6 +330,87 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
               </div>
             ))}
           </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: '12px', padding: '14px', background: 'rgba(45, 110, 72, 0.055)', border: '1px solid rgba(45, 110, 72, 0.14)', borderRadius: '16px', marginBottom: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: '#2D6E48', fontWeight: 900 }}>
+                <Users size={15} />
+                分享這個旅程
+              </strong>
+              <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 700 }}>邀請同行者登入後加入同一本共享記帳簿。</span>
+            </div>
+            <span style={{ padding: '5px 9px', borderRadius: '999px', background: 'white', border: '1px solid rgba(45, 110, 72, 0.14)', color: '#2D6E48', fontSize: '11px', fontWeight: 900 }}>{sharingInvites.length} invites</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 0.9fr) 96px', gap: '8px', alignItems: 'end' }}>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+              Email
+              <input
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                type="email"
+                placeholder="friend@example.com"
+                style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+              顯示名稱
+              <input
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+                type="text"
+                placeholder="例如 Natalie"
+                style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={addSharingInvite}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', minHeight: '38px', border: 0, borderRadius: '10px', background: '#2D6E48', color: 'white', fontSize: '12px', fontWeight: 900, cursor: 'pointer' }}
+            >
+              <Plus size={14} />
+              Add
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#4B5563', fontWeight: 800 }}>
+              <input
+                type="checkbox"
+                checked={inviteCreatePerson}
+                onChange={(e) => setInviteCreatePerson(e.target.checked)}
+              />
+              同時加入分帳名單
+            </label>
+            <select
+              aria-label="邀請角色"
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value as TripSharingInviteDraft['role'])}
+              style={{ padding: '8px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '12px', outline: 'none', background: 'white', fontWeight: 800 }}
+            >
+              <option value="editor">Editor · 可記帳</option>
+              <option value="viewer">Viewer · 只讀</option>
+            </select>
+          </div>
+          {sharingInvites.length > 0 && (
+            <div style={{ display: 'grid', gap: '8px' }}>
+              {sharingInvites.map((invite) => (
+                <div key={invite.email} style={{ display: 'grid', gridTemplateColumns: '18px minmax(0, 1fr) auto 30px', alignItems: 'center', gap: '8px', padding: '9px 10px', borderRadius: '12px', background: 'white', border: '1px solid rgba(45, 110, 72, 0.12)' }}>
+                  <Mail size={15} style={{ color: '#2D6E48' }} />
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '12px', color: '#1F2937', fontWeight: 800 }}>{invite.displayName || invite.email}</span>
+                  <span style={{ padding: '4px 8px', borderRadius: '999px', background: 'rgba(45, 110, 72, 0.08)', color: '#2D6E48', fontSize: '10px', fontWeight: 900 }}>{invite.role}</span>
+                  <button
+                    type="button"
+                    aria-label={`移除 ${invite.email}`}
+                    onClick={() => removeSharingInvite(invite.email)}
+                    style={{ width: '30px', height: '30px', border: 0, borderRadius: '9px', background: 'rgba(204, 41, 41, 0.08)', color: '#CC2929', display: 'grid', placeItems: 'center', cursor: 'pointer' }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div aria-label="First-run personalization" style={{ display: 'grid', gap: '12px', padding: '14px', background: 'rgba(204, 41, 41, 0.045)', border: '1px solid rgba(204, 41, 41, 0.12)', borderRadius: '16px', marginBottom: '18px' }}>

@@ -307,8 +307,8 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await expectSettingsReady(page);
 
   const summaries = page.locator('.accordion-summary');
-  await expect(summaries).toHaveCount(8);
-  for (let i = 0; i < 8; i += 1) {
+  await expect(summaries).toHaveCount(9);
+  for (let i = 0; i < 9; i += 1) {
     const card = summaries.nth(i);
     const before = await card.getAttribute('aria-expanded');
     await card.click();
