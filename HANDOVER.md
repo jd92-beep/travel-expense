@@ -7,7 +7,7 @@
 
 ## What Was Done
 
-### Session 13 (Antigravity — commit `pending`)
+### Session 13 (Antigravity — commit `2bff938`)
 1. **Added AI Receipt Translation in Brackets**: Updated the LLM prompts in `app-compact/src/lib/ai.ts` and `app-react/src/lib/ai.ts` for both `scanReceiptImage` (OCR) and `parseTextWithAi` (text/voice/email parsing) to automatically preserve the original foreign language text (e.g. Korean or Japanese) and append its translation in brackets right next to it (e.g. `편의점 (Convenience Store)`).
 2. **Settings Version Bump to v0.1.2**: Bumped version to `0.1.2` in `app-compact/package.json` and updated the `buildLabel` in `app-compact/src/tabs/Settings.tsx` to `v0.1.2`.
 3. **Verified and E2E Smoke Tested**: Successfully ran TypeScript typecheck and Vite build in both React and Compact subdirectories. Confirmed that both `smoke:production-gate` in `app-compact` and `smoke:ai-routing` in `app-react` pass 100% without regression.
