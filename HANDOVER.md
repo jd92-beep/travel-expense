@@ -2,10 +2,17 @@
 
 ## Last Worked On
 - **Date**: 2026-06-12
-- **Focus**: Scan Tab Camera Photo Size Limit Fix, Vercel Deploy & Verification
+- **Focus**: Stray Settings Dot, Record Conflict Resolver & Itinerary Weather Pack
 - **Agent**: Antigravity 🦾
 
 ## What Was Done
+
+### Session 12 (Antigravity — commit `c02da07`)
+1. **Removed Stray Dot on Settings Tab**: Modified `app-compact/src/components/Shell.tsx` to only render the mobile header action button (`compact-mobile-action`) on the `dashboard` and `scan` tabs. This removes the non-functional vertical ellipsis button from other tabs, solving the stray black dot issue on the Settings tab.
+2. **Fixed Conflict Resolver for Synced Receipts**: Modified `app-compact/src/tabs/History.tsx` to hide receipts from the Offline Conflict Resolver if they already have `supabaseId` or `notionPageId` and no active retry item is in the sync queue. This prevents synced receipts for the Jeju 2026 trip from lingering in the resolver panel.
+3. **Fixed Itinerary Weather Pack**: Modified `app-compact/src/lib/travelDay.ts` to implement `dayWeatherSignal()`. It resolves the day's coordinates using `coordForDay()` and retrieves the cached forecast from `localStorage` under `wx_react_v3_*` keys, evaluating the slots via `slotsForDate()`. This updates the Itinerary Weather Pack to dynamically use spot-specific forecasts instead of searching a single global cache.
+4. **Hardened Playwright Tests**: Fixed `tests/final-navigation-smoke.spec.cjs` and `tests/a11y-touch-smoke.spec.cjs` to align with the simplified PWA readiness strip (removed checks for obsolete Cache, Motion, and Update chips).
+5. **Verified & Deployed**: Ran `npm run smoke:production-gate` successfully (all typecheck, navigation, mobile-layout, a11y, contact-sheet, and security scans passed). Swapped the Vercel project link to `travel-expense-compact` and deployed the prebuilt output successfully to production. Pushed verified commits to GitHub.
 
 ### Session 11 (Antigravity — commit `8bdd813`)
 1. **Fixed OCR Payload Too Large Error**: Solved the issue where camera scans returned `OCR not completed, json payload too large`. Increased the `MAX_JSON_BYTES` constant from `900000` (900KB) to `4500000` (4.5MB) in `workers/credential-broker/src/index.js` to support larger base64 encoded photo uploads from client-side camera captures.
