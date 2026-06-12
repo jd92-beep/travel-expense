@@ -341,7 +341,7 @@ export function App() {
                   />
                 )}
                 {safeTab === 'weather' && <Weather state={state} />}
-                {safeTab === 'stats' && <Stats state={state} updateState={updateState} />}
+                {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} />}
                 {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
               </div>
             ) : (
@@ -388,7 +388,7 @@ export function App() {
                     />
                   )}
                   {safeTab === 'weather' && <Weather state={state} />}
-                  {safeTab === 'stats' && <Stats state={state} updateState={updateState} onTab={changeTab} />}
+                  {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} />}
                   {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
                 </motion.div>
               </AnimatePresence>

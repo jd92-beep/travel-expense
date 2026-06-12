@@ -5,6 +5,7 @@ import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, hkd, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
+import { amountToHkd, formatCurrencyAmount } from '../lib/currency';
 import { EmptyState, GlassCard, StatusPill } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { VisualIcon } from '../components/VisualIcon';
@@ -13,7 +14,7 @@ import '../styles/stats.css';
 
 type StatBucket = { id: string; name: string; color: string; total: number; icon?: string };
 
-export function Stats({ state, updateState, onTab }: { state: AppState; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
+export function Stats({ state, setState, updateState, onTab }: { state: AppState; setState?: any; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
   const trip = activeTrip(state);
   const scopedState = { ...state, receipts: scopedReceiptsForTrip(state, trip) };
   const settlement = computeSettlements(scopedState);
@@ -70,7 +71,7 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
             <StatusPill tone="info" icon={<ReceiptText size={14} />}>{analysisReceipts.length} 筆紀錄</StatusPill>
           </span>
         </div>
-        <SpendingCompass categories={catTotals} total={trueTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} updateState={updateState} onTab={onTab} />
+        <SpendingCompass categories={catTotals} total={trueTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} setState={setState} updateState={updateState} onTab={onTab} />
       </GlassCard>
 
       <DataPanel
@@ -246,45 +247,95 @@ export function Stats({ state, updateState, onTab }: { state: AppState; updateSt
   );
 }
 
-function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state, updateState, onTab }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
+function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state, setState, updateState, onTab }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState; setState?: any; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [editBudgetVal, setEditBudgetVal] = useState('');
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
-  const toHkd = (amt: number) => {
-    if (resolvedTripCurrency === 'HKD') return amt;
-    const rate = Math.max(
-      0.1,
-      Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
-      (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
-      20.36
-    );
-    return Math.round(amt / rate);
-  };
 
-  const slices = categorySlices(categories, total);
-  const top = slices[0];
-  const safeBudget = Math.max(0, Number(budget) || 0);
-  const usedPercent = safeBudget > 0 ? Math.round(total / safeBudget * 100) : 0;
-  const shownPercent = safeBudget > 0 ? `${usedPercent}%` : '--';
-  const remaining = Math.max(0, safeBudget - total);
-  const overBudget = safeBudget > 0 && total > safeBudget;
-  const ring = budgetRingGradient(usedPercent);
-  const delta = overBudget ? total - safeBudget : remaining;
+  const scopedReceipts = scopedReceiptsForTrip(state, trip);
+  const totalTrip = scopedReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
+  const totalHkd = scopedReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
+
   const displayCurrency = state.displayCurrency || 'HKD';
-  const isJpy = displayCurrency === 'JPY';
-  const currencySymbol = isJpy ? '¥' : 'HK$ ';
+  const showTripCurrency = displayCurrency !== 'HKD';
+
+  const activeTotal = showTripCurrency ? totalTrip : totalHkd;
+  const activeBudget = showTripCurrency
+    ? (Number(state.budget) || 0)
+    : Math.round(amountToHkd(Number(state.budget) || 0, resolvedTripCurrency, state));
+
+  const slices = categorySlices(categories, totalTrip);
+  const top = slices[0];
+  const safeBudget = Math.max(0, activeBudget);
+  const usedPercent = safeBudget > 0 ? Math.round(activeTotal / safeBudget * 100) : 0;
+  const shownPercent = safeBudget > 0 ? `${usedPercent}%` : '--';
+  const remaining = Math.max(0, safeBudget - activeTotal);
+  const overBudget = safeBudget > 0 && activeTotal > safeBudget;
+  const ring = budgetRingGradient(usedPercent);
+  const delta = overBudget ? activeTotal - safeBudget : remaining;
 
   const fmtValue = (amt: number) => {
-    if (isJpy) {
-      return `¥ ${fmt(amt)}`;
+    return formatCurrencyAmount(amt, displayCurrency);
+  };
+
+  const activeDailyBudget = showTripCurrency
+    ? dailyBudget
+    : Math.round(amountToHkd(dailyBudget, resolvedTripCurrency, state));
+
+  const activeDailyAverage = showTripCurrency
+    ? dailyAverage
+    : Math.round(amountToHkd(dailyAverage, resolvedTripCurrency, state));
+
+  const activeTopTotal = top
+    ? (showTripCurrency
+        ? top.total
+        : Math.round(amountToHkd(top.total, resolvedTripCurrency, state)))
+    : 0;
+
+  const handleUpdateBudget = (newBudgetVal: string) => {
+    const newBudget = Number(newBudgetVal) || 0;
+    if (setState) {
+      const now = Date.now();
+      const nextTrip = {
+        ...trip,
+        budget: newBudget,
+        version: (trip.version || 0) + 1,
+        updatedAt: now,
+      };
+
+      const queueItem = {
+        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+        type: 'trip' as const,
+        entityId: trip.id,
+        op: 'update' as const,
+        status: 'queued' as const,
+        attempts: 0,
+        createdAt: now,
+        updatedAt: now,
+        payload: {
+          sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
+          updatedAt: nextTrip.updatedAt,
+        },
+      };
+
+      setState((prev: AppState) => ({
+        ...prev,
+        budget: newBudget,
+        trips: (prev.trips || []).map((t) => t.id === trip.id ? nextTrip : t),
+        syncQueue: [
+          ...(prev.syncQueue || []),
+          queueItem,
+        ].slice(-500),
+      }));
     } else {
-      return `HK$ ${fmt(toHkd(amt))}`;
+      updateState({ budget: newBudget });
     }
+    setIsEditingBudget(false);
   };
 
   return (
-    <div className={`spending-compass ${overBudget ? 'is-over-budget' : ''}`.trim()} aria-label={`預算使用分析，已用 ${shownPercent}，支出 ${currencySymbol}${fmt(total)}，預算 ${currencySymbol}${fmt(safeBudget)}`} style={{ '--compass-ring': ring } as CSSProperties}>
+    <div className={`spending-compass ${overBudget ? 'is-over-budget' : ''}`.trim()} aria-label={`預算使用分析，已用 ${shownPercent}，支出 ${fmtValue(activeTotal)}，預算 ${fmtValue(safeBudget)}`} style={{ '--compass-ring': ring } as CSSProperties}>
       <div className="preview-budget-heading">
         <span>預算羅盤</span>
         <Info size={17} aria-hidden="true" />
@@ -297,11 +348,11 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
             HKD
           </span>
           <span
-            className={displayCurrency === 'JPY' ? 'is-active' : ''}
-            onClick={() => updateState({ displayCurrency: 'JPY' })}
+            className={displayCurrency === resolvedTripCurrency ? 'is-active' : ''}
+            onClick={() => updateState({ displayCurrency: resolvedTripCurrency })}
             style={{ cursor: 'pointer' }}
           >
-            JPY
+            {resolvedTripCurrency}
           </span>
         </div>
       </div>
@@ -312,7 +363,7 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
               <span>預算使用</span>
               <strong>{shownPercent}</strong>
               <small>{safeBudget > 0 ? (overBudget ? '已超預算' : '已使用') : '未設定預算'}</small>
-              <b>{fmtValue(total)}</b>
+              <b>{fmtValue(activeTotal)}</b>
             </div>
           </div>
           <div className="spending-compass-legend" aria-label="類別比例">
@@ -335,8 +386,7 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
                   onChange={(e) => setEditBudgetVal(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      updateState({ budget: Number(editBudgetVal) || 0 });
-                      setIsEditingBudget(false);
+                      handleUpdateBudget(editBudgetVal);
                     }
                   }}
                   autoFocus
@@ -345,8 +395,7 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
                   type="button"
                   className="text-xs bg-slate-800 text-white px-2 py-0.5 rounded"
                   onClick={() => {
-                    updateState({ budget: Number(editBudgetVal) || 0 });
-                    setIsEditingBudget(false);
+                    handleUpdateBudget(editBudgetVal);
                   }}
                 >
                   儲存
@@ -359,7 +408,7 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
                   type="button"
                   aria-label="編輯預算"
                   onClick={() => {
-                    setEditBudgetVal(String(safeBudget || ''));
+                    setEditBudgetVal(String(state.budget || ''));
                     setIsEditingBudget(true);
                   }}
                   style={{ cursor: 'pointer' }}
@@ -371,7 +420,7 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
           </div>
           <div className="preview-budget-row is-used">
             <span>已用</span>
-            <strong>{fmtValue(total)}</strong>
+            <strong>{fmtValue(activeTotal)}</strong>
           </div>
           <div className="preview-budget-row">
             <span>{overBudget ? '超出預算' : '尚餘預算'}</span>
@@ -379,14 +428,14 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
           </div>
           <div className="preview-budget-row preview-budget-stack">
             <span>每日預算</span>
-            <strong>{fmtValue(dailyBudget)}</strong>
+            <strong>{fmtValue(activeDailyBudget)}</strong>
             <span>日均結餘</span>
-            <strong>{fmtValue(Math.max(0, dailyBudget - dailyAverage))}</strong>
+            <strong>{fmtValue(Math.max(0, activeDailyBudget - activeDailyAverage))}</strong>
           </div>
           <div className="preview-budget-row preview-budget-stack">
             <span>最高類別</span>
             <strong>{top ? top.name : '未有分類'}</strong>
-            <small>{top ? fmtValue(top.total) : '新增 receipt 後顯示'}</small>
+            <small>{top ? fmtValue(activeTopTotal) : '新增 receipt 後顯示'}</small>
           </div>
         </div>
       </div>
@@ -395,7 +444,7 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
         onClick={() => onTab?.('settings')}
         style={{ cursor: 'pointer' }}
       >
-        <span>預算提醒：每日平均使用需 ≤ {fmtValue(dailyBudget || 0)}</span>
+        <span>預算提醒：每日平均使用需 ≤ {fmtValue(activeDailyBudget || 0)}</span>
         <ChevronRight size={20} aria-hidden="true" />
       </div>
     </div>

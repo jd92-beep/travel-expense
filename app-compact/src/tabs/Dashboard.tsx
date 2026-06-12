@@ -730,6 +730,48 @@ export function Dashboard({
   const showTripCurrency = activeDisplayCurrency !== 'HKD';
   const displayMoney = (amount: number, currency = activeDisplayCurrency || 'HKD') => formatCurrencyAmount(amount, currency);
 
+  const handleUpdateBudget = (newBudgetVal: string) => {
+    const newBudget = Number(newBudgetVal) || 0;
+    if (setState) {
+      const now = Date.now();
+      const nextTrip = {
+        ...trip,
+        budget: newBudget,
+        version: (trip.version || 0) + 1,
+        updatedAt: now,
+      };
+
+      const queueItem: SyncQueueItem = {
+        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+        type: 'trip' as const,
+        entityId: trip.id,
+        op: 'update' as const,
+        status: 'queued' as const,
+        attempts: 0,
+        createdAt: now,
+        updatedAt: now,
+        payload: {
+          tripId: trip.id,
+          sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
+          updatedAt: nextTrip.updatedAt,
+        },
+      };
+
+      setState((prev: AppState) => ({
+        ...prev,
+        budget: newBudget,
+        trips: (prev.trips || []).map((t) => t.id === trip.id ? nextTrip : t),
+        syncQueue: [
+          ...(prev.syncQueue || []),
+          queueItem,
+        ].slice(-500),
+      }));
+    } else {
+      updateState({ budget: newBudget });
+    }
+    setIsEditingBudget(false);
+  };
+
   // 統一口徑與過濾邏輯：
   // 總消費額永遠包含所有項目，確保預算使用比例不會因圖表篩選而被低估。
   // statsIncludeTransportLodging 只影響今日/日均與統計圖表的大額項目篩選。
@@ -755,7 +797,9 @@ export function Dashboard({
   const todayTotal = dailyReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
 
   const budgetHkd = Math.round(amountToHkd(Number(state.budget) || 0, resolvedTripCurrency, state));
-  const rawBudgetPct = budgetHkd > 0 ? (spentHkd / budgetHkd) * 100 : 0;
+  const currentBudget = showTripCurrency ? (Number(state.budget) || 0) : budgetHkd;
+  const currentSpent = showTripCurrency ? totalForBudget : spentHkd;
+  const rawBudgetPct = currentBudget > 0 ? (currentSpent / currentBudget) * 100 : 0;
   const budgetPct = Math.min(100, rawBudgetPct);
 
   const dailyBudget = Math.round((Number(state.budget) || 0) / Math.max(1, itinerary.length));
@@ -952,8 +996,7 @@ export function Dashboard({
                         onChange={(e) => setEditBudgetVal(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            updateState({ budget: Number(editBudgetVal) || 0 });
-                            setIsEditingBudget(false);
+                            handleUpdateBudget(editBudgetVal);
                           }
                         }}
                         autoFocus
@@ -962,8 +1005,7 @@ export function Dashboard({
                         type="button"
                         className="text-xs bg-slate-800 text-white px-2 py-0.5 rounded"
                         onClick={() => {
-                          updateState({ budget: Number(editBudgetVal) || 0 });
-                          setIsEditingBudget(false);
+                          handleUpdateBudget(editBudgetVal);
                         }}
                       >
                         儲存

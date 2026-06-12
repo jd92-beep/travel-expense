@@ -67,9 +67,9 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   const compass = page.locator('.spending-compass');
   await expect(compass).toBeVisible();
   await expect(compass).toContainText('預算使用');
-  await expect(compass).toContainText('69%');
+  await expect(compass).toContainText('309%');
   await expect(compass).toContainText('已用');
-  await expect(compass).toContainText('尚餘');
+  await expect(compass).toContainText(/(尚餘|超出)/);
   await expect(compass).toContainText('餐飲');
   await expect(compass).toContainText('最高');
   await expect(compass.locator('.spending-compass-slice')).toHaveCount(4);
