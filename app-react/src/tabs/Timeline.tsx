@@ -1,5 +1,5 @@
 import type { CSSProperties, Dispatch, FormEvent, SetStateAction } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, Home, MapPin, PencilLine, ReceiptText, RotateCcw } from 'lucide-react';
 import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
@@ -32,6 +32,31 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
     const timer = window.setInterval(() => setNowTick(Date.now()), 60 * 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const currentTripDay = itinerary.find((day) => {
+    const current = datePartsForZone(nowTick, normalizeTimelineTimezone(day.timezone));
+    return current?.date === day.date;
+  });
+
+  const scrolledRef = useRef(false);
+  useEffect(() => {
+    if (scrolledRef.current) return;
+    if (!currentTripDay) return;
+
+    scrolledRef.current = true;
+    const timer = window.setTimeout(() => {
+      const targetDate = currentTripDay.date;
+      let element = document.querySelector(`.timeline-day[data-date="${targetDate}"] .timeline-event.is-live`);
+      if (!element) {
+        element = document.querySelector(`.timeline-day[data-date="${targetDate}"]`);
+      }
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [currentTripDay]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('modal-open', hasOpenModal);
@@ -83,7 +108,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
         const rail = timelineRailMetrics(day.date, day.timezone, spots, nowTick, tripWindow);
         return (
         <Reveal key={day.date} className="timeline-day-reveal" delay={Math.min(0.18, day.day * 0.018)}>
-        <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`}>
+        <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`} data-date={day.date}>
           <div className="section-head timeline-day-head">
             <div className="timeline-day-title">
               <span className="timeline-day-number">Day {day.day}</span>
