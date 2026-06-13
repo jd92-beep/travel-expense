@@ -62,7 +62,15 @@ export function Weather({ state }: { state: AppState }) {
     () => displayItinerary.some((day) => (groupedCoordsByDay.get(day.date) || []).some((g) => g.missing)),
     [displayItinerary, groupedCoordsByDay],
   );
-  const leadDay = displayItinerary[0];
+  const activeWeatherDay = useMemo(() => {
+    if (!displayItinerary.length) return undefined;
+    const exact = displayItinerary.find((day) => day.date === today);
+    if (exact) return exact;
+    const future = displayItinerary.find((day) => day.date > today);
+    if (future) return future;
+    return hasEnded ? displayItinerary[displayItinerary.length - 1] : displayItinerary[0];
+  }, [displayItinerary, hasEnded, today]);
+  const leadDay = activeWeatherDay || displayItinerary[0];
   const leadRows = leadDay ? rows[leadDay.date] || [] : [];
   const leadSource = leadRows[0];
   const leadForecastDate = leadDay ? (hasEnded ? today : leadDay.date) : today;
@@ -142,6 +150,22 @@ export function Weather({ state }: { state: AppState }) {
     return () => { controller.abort(); };
   }, [itineraryKey]);
 
+  const autoJumpKeyRef = useRef('');
+  useEffect(() => {
+    if (!leadDay || busy) return;
+    const forecastDate = hasEnded ? today : leadDay.date;
+    const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || 'Asia/Tokyo');
+    const key = `${leadDay.date}:${forecastDate}:${liveHour ?? 'day'}:${Object.keys(rows).length}`;
+    if (autoJumpKeyRef.current === key) return;
+    autoJumpKeyRef.current = key;
+    window.setTimeout(() => {
+      const daySelector = `[data-weather-day="${leadDay.date}"]`;
+      const slotSelector = liveHour == null ? '' : ` [data-weather-hour="${liveHour}"]`;
+      const target = document.querySelector(`${daySelector}${slotSelector}`) || document.querySelector(daySelector);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    }, 120);
+  }, [busy, hasEnded, leadDay, rows, today]);
+
   return (
     <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto weather-screen" style={travelAtlasStyle}>
       <div className="japanese-sun-decor" />
@@ -204,7 +228,7 @@ export function Weather({ state }: { state: AppState }) {
         const missingAll = dayRows.length > 0 && dayRows.every((weather) => !weather.slots?.length);
         return (
           <Reveal key={day.date} className="weather-day-reveal" delay={Math.min(0.14, day.day * 0.02)}>
-          <GlassCard className="weather-day">
+          <GlassCard className="weather-day" data-weather-day={day.date}>
             <div className="section-head">
               <div><p className="eyebrow">{hasEnded ? `Current · ${today} · Trip Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
               <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{(groupedCoordsByDay.get(day.date) || []).map((g) => g.label).join(' / ') || day.region}</StatusPill>
@@ -236,6 +260,8 @@ export function Weather({ state }: { state: AppState }) {
                         <div
                           className={`weather-slot weather-slot-detailed ${live ? 'is-live' : ''}`}
                           key={slot.hour}
+                          data-weather-hour={slot.hour}
+                          data-weather-live={live ? 'true' : undefined}
                           style={{ '--weather-accent': weatherAccent(slot) } as CSSProperties}
                         >
                           <div className="weather-slot-header">

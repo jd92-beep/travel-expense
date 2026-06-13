@@ -2,6 +2,9 @@ import type { AdminKanbanSnapshot, AdminSession, DeletePreview } from './types';
 
 const SESSION_KEY = 'travel-expense-admin-kanban:session:v1';
 
+// Supabase anon key — used only to satisfy the gateway JWT format check
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZibm5qb2FodnRkcm5pZ2V2cnR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDY5OTksImV4cCI6MjA5NTI4Mjk5OX0.iDibnjCXwlwxeb1mAWy69RRh5gflh9pEsBIOI-P5INM';
+
 function apiBase(): string {
   return String(import.meta.env.VITE_ADMIN_API_URL || 'https://fbnnjoahvtdrnigevrtw.supabase.co/functions/v1/admin-kanban').replace(/\/+$/, '');
 }
@@ -79,7 +82,8 @@ export async function previewDeleteUser(session: AdminSession, userId: string): 
   const data = await parseJson<{ ok: boolean; preview: DeletePreview }>(await fetch(adminDataUrl('/api/delete-preview'), {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${session.token}`,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'X-Admin-Token': session.token,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ userId }),
@@ -97,7 +101,8 @@ export async function confirmDeleteUser(
     await fetch(adminDataUrl('/api/delete-user'), {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.token}`,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'X-Admin-Token': session.token,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ userId, confirmPhrase, adminPassphrase }),
@@ -115,7 +120,8 @@ export async function amendReceipt(
     await fetch(adminDataUrl('/api/amend-receipt'), {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.token}`,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'X-Admin-Token': session.token,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ receiptId, ...updates }),
@@ -128,7 +134,8 @@ export async function testProvider(session: AdminSession, provider: string): Pro
   const data = await parseJson<any>(await fetch(adminDataUrl('/api/test-provider'), {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${session.token}`,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'X-Admin-Token': session.token,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ provider }),

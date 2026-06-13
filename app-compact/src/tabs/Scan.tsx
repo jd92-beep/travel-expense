@@ -138,6 +138,7 @@ export function Scan({
   const [to, setTo] = useState('HKD');
   const [amount, setAmount] = useState('1000');
   const [fx, setFx] = useState<CurrencySnapshot | null>(() => loadCurrencySnapshot());
+  const fxAutoRefreshRef = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -164,6 +165,12 @@ export function Scan({
     const n = Number(amount) || 0;
     return convertAmount(n, from, to, state, fx);
   }, [amount, from, to, state, fx]);
+
+  useEffect(() => {
+    if (!fxOpen || fxAutoRefreshRef.current) return;
+    fxAutoRefreshRef.current = true;
+    void handleFxRefresh();
+  }, [fxOpen]);
 
   const batchQuality = useMemo(() => {
     const selected = batch.filter((row) => row.selected !== false).length;

@@ -60,21 +60,36 @@ async function readBody(req: Request) {
 }
 
 async function verifyAdmin(req: Request): Promise<string> {
-  const auth = req.headers.get("authorization") || "";
-  const token = auth.replace(/^Bearer\s+/i, "").trim();
-  if (!token) throw new Error("Missing authorization");
-
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://fbnnjoahvtdrnigevrtw.supabase.co";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const adminToken = Deno.env.get("ADMIN_TOKEN") || "";
 
-  // Path 0: Custom admin token via X-Admin-Token header (for compact app admin console)
+  // Path 0: Custom admin token via X-Admin-Token header (check FIRST, before Authorization)
   const adminHeader = req.headers.get("x-admin-token") || "";
   if (adminToken && adminHeader === adminToken) {
     return "admin-token";
   }
 
-  // Path 1: Service role key (direct admin access for trusted callers)
+  // Path 0.5: HMAC session token via X-Admin-Token header
+  if (adminHeader && adminHeader !== adminToken) {
+    try {
+      const verifyRes = await fetch(VERIFY_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${adminHeader}` },
+      });
+      const verifyData = await verifyRes.json().catch(() => ({}));
+      if (verifyRes.ok && verifyData?.ok !== false) {
+        return String(verifyData.adminSubject || "hmac-admin");
+      }
+    } catch { /* fall through */ }
+  }
+
+  // Now check Authorization header
+  const auth = req.headers.get("authorization") || "";
+  const token = auth.replace(/^Bearer\s+/i, "").trim();
+  if (!token) throw new Error("Missing authorization");
+
+  // Path 1: Service role key
   if (serviceKey && token === serviceKey) {
     return "service-role-admin";
   }

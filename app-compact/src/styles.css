@@ -10005,7 +10005,7 @@ textarea,
     font-weight: 750;
   }
 
-  .preview-dashboard-today-head > div {
+  .preview-dashboard-today-head > .preview-dashboard-weather-mini {
     grid-column: 2;
     grid-row: 1 / span 2;
     display: inline-flex;
@@ -10028,6 +10028,7 @@ textarea,
   .preview-dashboard-today-currency {
     grid-column: 1 / -1;
     justify-self: start;
+    grid-row: auto;
   }
 
   .preview-dashboard-today-chart {

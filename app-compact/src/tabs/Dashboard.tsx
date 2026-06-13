@@ -1087,7 +1087,7 @@ export function Dashboard({
               {resolvedTripCurrency}
             </button>
           </div>
-          <div><CloudSun size={22} /> -- <small>--</small></div>
+          <div className="preview-dashboard-weather-mini" aria-label="今日天氣摘要"><CloudSun size={22} /> -- <small>--</small></div>
         </div>
         <div className="preview-dashboard-today-chart" aria-label="每日預算使用率">
           <AnimatedCircularProgressBar
