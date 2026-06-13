@@ -240,18 +240,30 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   const trips = Array.isArray(state.trips) && state.trips.length ? state.trips : [];
   const originalTripId = receipt.tripId;
   let tripLinkSource: Receipt['tripLinkSource'] = receipt.tripLinkSource || (originalTripId ? 'explicit' : 'fallback-auto');
-  
-  // 智能配對重校對：
-  // 優先看日期是否能完美落入某個 active 旅程中。
-  // 這樣能保證 Notion 拉回的無 TripId 數據、或歷史 default 數據，
-  // 100% 能根據日期歸位到 Boss 嘅名古屋之旅！
+
+  // 一張收據如果已經有「明確且有效」嘅 tripId（例如用戶喺 editor 入面建立/編輯過），
+  // 就必須尊重佢 — 改其他欄位（例如日期）唔可以靜靜雞將佢搬去另一個旅程。
+  // 只有當 tripId 缺失 / 係 default / 失效（Notion 拉回、歷史數據）先做智能歸位。
+  const isDefaultOrEmptyTripId = !originalTripId
+    || originalTripId === 'trip_default'
+    || originalTripId === 'default'
+    || !trips.some((t) => t.id === originalTripId && !t.archived);
+
   let trip: TripProfile | undefined;
-  if (receipt.date) {
-    trip = trips.find((t) => receipt.date >= t.startDate && receipt.date <= t.endDate && !t.archived);
-    if (trip && !originalTripId) tripLinkSource = 'date-auto';
+
+  // 1) 尊重明確且有效嘅 tripId（最高優先）
+  if (!isDefaultOrEmptyTripId) {
+    trip = trips.find((t) => t.id === originalTripId && !t.archived);
+    if (trip) tripLinkSource = receipt.tripLinkSource || 'explicit';
   }
-  
-  // 增加 Prep-phase 大額預付項目智能歸位邏輯（升級版：覆蓋所有行前預付類別）：
+
+  // 2) 冇明確 tripId 先按日期歸位（Notion 拉回的無 TripId 數據、或歷史 default 數據）
+  if (!trip && receipt.date) {
+    trip = trips.find((t) => receipt.date >= t.startDate && receipt.date <= t.endDate && !t.archived);
+    if (trip) tripLinkSource = 'date-auto';
+  }
+
+  // 3) Prep-phase 大額預付項目智能歸位（行前 30 日窗口）
   if (!trip) {
     const active = activeTrip(state);
     const PREP_WINDOW_DAYS = 30;
@@ -259,20 +271,13 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
       ? localYmd(new Date(`${active.startDate}T00:00:00`).getTime() - PREP_WINDOW_DAYS * 86_400_000)
       : '';
     const isWithinPrepWindow = active && active.startDate && receipt.date && receipt.date >= prepStartDate && receipt.date <= active.endDate;
-    const isDefaultOrEmptyTripId = !receipt.tripId || receipt.tripId === 'trip_default' || receipt.tripId === 'default' || !trips.some(t => t.id === receipt.tripId && !t.archived);
     if (isWithinPrepWindow && isDefaultOrEmptyTripId && active) {
       trip = active;
-      if (!originalTripId || originalTripId === 'trip_default' || originalTripId === 'default') tripLinkSource = 'prep-auto';
+      tripLinkSource = 'prep-auto';
     }
   }
 
-  // 如果日期沒配上，才去看 receipt.tripId
-  if (!trip && receipt.tripId) {
-    trip = trips.find((t) => t.id === receipt.tripId && !t.archived);
-    if (trip && !receipt.tripLinkSource) tripLinkSource = 'explicit';
-  }
-
-  // 還是找不到就 fallback 到 activeTrip
+  // 4) 還是找不到就 fallback 到 activeTrip
   if (!trip) {
     trip = activeTrip(state);
   }
@@ -303,6 +308,10 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   return {
     ...receipt,
     category: normalizedReceiptCategory(receipt),
+    // Stamp a stable, unique sourceId once so identity never shifts across edits/pulls.
+    // Two receipts with the same store/photo keep distinct ids → distinct source_ids →
+    // both persist as separate rows (Supabase unique key is (trip_id, source_id)).
+    sourceId: receipt.sourceId || receipt.id,
     tripId: trip.id,
     tripLinkSource,
     tripVersion: receipt.tripVersion || trip.version,

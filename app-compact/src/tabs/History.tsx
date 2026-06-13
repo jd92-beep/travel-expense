@@ -62,24 +62,32 @@ function buildSafeReceiptPayload(receipt: Receipt, updatedAt: number): SyncQueue
   };
 }
 
+// A TRUE conflict = the cloud and local copies genuinely diverged (optimistic-lock
+// version mismatch), which needs the user to choose. A plain push failure (network,
+// schema, auth) is transient and just needs a retry — it must NOT show the "safe choice"
+// resolver, which previously fired on every transient error (the spurious "1 conflict").
+function isVersionConflictError(message?: string): boolean {
+  return !!message && /version conflict|conflict|40001/i.test(message);
+}
+
+function receiptHasTrueConflict(receipt: Receipt, state: AppState): boolean {
+  if (receipt.ledgerSyncStatus === 'conflict') return true;
+  const queueItem = findReceiptConflictQueueItem(receipt, state);
+  return !!queueItem && isVersionConflictError(queueItem.error);
+}
+
 function buildReceiptConflictItems(receipts: Receipt[], state: AppState): ReceiptConflictItem[] {
-  const items: Array<ReceiptConflictItem | null> = receipts
+  return receipts
+    .filter((receipt) => receiptHasTrueConflict(receipt, state))
     .map((receipt) => {
       const queueItem = findReceiptConflictQueueItem(receipt, state);
-      if (!queueItem) {
-        if (receipt.syncStatus !== 'error' && receipt.syncStatus !== 'failed') return null;
-        if (receipt.supabaseId || receipt.notionPageId) return null;
-      }
-      const status = String(queueItem?.status || receipt.syncStatus || 'failed');
-      const operation = queueItem?.op ? `${queueItem.op} receipt` : 'receipt update';
       return {
         receipt,
         queueItem,
-        status,
-        detail: `${operation} needs review before the next push.`,
+        status: String(queueItem?.status || receipt.ledgerSyncStatus || 'conflict'),
+        detail: '雲端同本機版本唔一致，請揀保留邊邊。',
       };
     });
-  return items.filter((item): item is ReceiptConflictItem => !!item);
 }
 
 function receiptHealthMarkers(
@@ -94,7 +102,8 @@ function receiptHealthMarkers(
   if (isReceiptPhotoExpected(receipt) && !photoSrc) markers.push({ key: 'photo-missing', label: 'photo missing', tone: 'warning' });
   if (receiptHasLargePhoto(receipt)) markers.push({ key: 'photo-large', label: 'photo large', tone: 'warning' });
   if (receiptPhotoNeedsSync(receipt)) markers.push({ key: 'photo-unsynced', label: 'photo unsynced', tone: 'info' });
-  if (receiptHasSyncConflict(receipt, state)) markers.push({ key: 'sync-conflict', label: 'sync conflict', tone: 'danger' });
+  if (receiptHasTrueConflict(receipt, state)) markers.push({ key: 'sync-conflict', label: 'sync conflict', tone: 'danger' });
+  else if (receiptHasSyncConflict(receipt, state)) markers.push({ key: 'sync-retry', label: 'sync retrying', tone: 'warning' });
   if ((receipt.supabaseId || receipt.notionPageId) && !receipt.sourceId) markers.push({ key: 'cloud-only', label: 'cloud-only', tone: 'info' });
   if (!receipt.supabaseId && !receipt.notionPageId) markers.push({ key: 'local-only', label: 'local-only', tone: 'neutral' });
   return markers;
@@ -342,8 +351,8 @@ export function History({
           <div className="history-conflict-head">
             <AlertTriangle size={18} aria-hidden="true" />
             <div>
-              <h2>Offline Conflict Resolver</h2>
-              <p>{conflictItems.length} conflicts need a safe choice</p>
+              <h2>同步衝突處理</h2>
+              <p>{conflictItems.length} 筆收據雲端同本機唔一致，請揀保留邊邊</p>
             </div>
           </div>
           <div className="history-conflict-grid">

@@ -75,6 +75,7 @@ export interface Receipt {
   _photoSyncedToNotion?: boolean;
   _photoBodyBlockAdded?: boolean;
   _photoSyncedToSupabase?: boolean;
+  _photoSyncAttempts?: number;
   supabasePhotoPath?: string;
   personId?: string;
   splitMode?: SplitMode;

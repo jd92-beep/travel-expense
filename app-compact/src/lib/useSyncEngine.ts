@@ -199,13 +199,19 @@ export function useSyncEngine(
       let synced = supabaseSession
         ? await upsertSupabaseReceipt(supabaseSession, current, { ...receipt, syncStatus: 'syncing' })
         : { ...receipt, syncStatus: 'syncing' as const };
+      let photoRetryNeeded = false;
       if (receipt.photoThumb && !receipt._photoSyncedToSupabase && supabaseSession) {
         try {
           const receiptUuid = synced.supabaseId || synced.id;
           const { publicUrl, storagePath } = await uploadReceiptPhoto(supabaseSession, receiptUuid, receipt.photoThumb);
-          synced = { ...synced, photoUrl: publicUrl, supabasePhotoPath: storagePath, _photoSyncedToSupabase: true };
+          synced = { ...synced, photoUrl: publicUrl, supabasePhotoPath: storagePath, _photoSyncedToSupabase: true, _photoSyncAttempts: 0 };
         } catch (photoErr) {
-          console.warn('[SyncEngine] Supabase photo upload failed:', photoErr);
+          // Don't swallow: track attempts and schedule a bounded retry so the photo
+          // eventually uploads, without making the (already-synced) receipt look failed.
+          const attempts = Number(receipt._photoSyncAttempts || 0) + 1;
+          synced = { ...synced, _photoSyncedToSupabase: false, _photoSyncAttempts: attempts };
+          photoRetryNeeded = attempts < MAX_RETRY_ATTEMPTS;
+          console.warn(`[SyncEngine] Supabase photo upload failed (attempt ${attempts}/${MAX_RETRY_ATTEMPTS}):`, photoErr);
         }
       }
       if (hasNotionSync && !sharedLedger) {
@@ -216,6 +222,28 @@ export function useSyncEngine(
         }
       }
       applyReceiptSyncResult(item, synced);
+      if (photoRetryNeeded && aliveRef.current) {
+        // Re-enqueue a photo-only retry (dedupeQueue collapses by type:entityId, so this
+        // never accumulates). Bounded by _photoSyncAttempts < MAX_RETRY_ATTEMPTS above.
+        const retryReceipt = synced;
+        setState((current) => ({
+          ...current,
+          syncQueue: [
+            ...(current.syncQueue || []),
+            {
+              id: `sync_photo_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+              type: 'receipt',
+              entityId: retryReceipt.id,
+              op: 'update',
+              status: 'queued',
+              attempts: 0,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              payload: { supabaseId: retryReceipt.supabaseId, sourceId: retryReceipt.sourceId, tripId: retryReceipt.tripId, updatedAt: retryReceipt.updatedAt },
+            },
+          ],
+        }));
+      }
       return;
     }
     if (item.type === 'delete-receipt') {
