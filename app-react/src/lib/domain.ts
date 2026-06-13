@@ -323,6 +323,9 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
 
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
+  // Scope to the active trip so settlements never leak across trips. Idempotent
+  // when callers already pre-scope receipts (Settings/Stats do).
+  const tripReceipts = scopedReceiptsForTrip(state, trip);
 
   const ratios = persons.map((p) => {
     const v = Number(state.shareRatios?.[p.id]);
@@ -336,7 +339,7 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   const crossPrivate: SettlementSnapshot['crossPrivate'] = [];
   let sharedTotal = 0;
 
-  for (const r of state.receipts) {
+  for (const r of tripReceipts) {
     const amount = getReceiptTripAmount(r, state, resolvedTripCurrency);
     if (amount <= 0) continue;
     const payerIdx = idxOf(r.personId || firstId);
