@@ -122,9 +122,9 @@ const icons: Record<TabId, ReactNode> = {
 };
 
 const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: string; status: string }> = {
-  dashboard: { title: 'Travel Ledger', mobileTitle: '日本東京之旅', subtitle: '2025年5月10日 - 5月17日', status: '進行中' },
+  dashboard: { title: 'Travel Ledger', mobileTitle: '我的旅程', subtitle: '開始記錄你的旅程', status: '進行中' },
   scan: { title: 'Receipt Studio', mobileTitle: '收據掃描工作室', subtitle: '掃描 · 辨識 · 記帳', status: '就緒 · 可掃描' },
-  timeline: { title: 'Trip Route', mobileTitle: '行程時間線', subtitle: '東京之旅 · 8天7夜', status: '地圖檢視' },
+  timeline: { title: 'Trip Route', mobileTitle: '行程時間線', subtitle: '行程時間線總覽', status: '地圖檢視' },
   history: { title: '紀錄中心', mobileTitle: '紀錄中心', subtitle: '管理所有收據與支出', status: '可同步' },
   weather: { title: 'Weather Window', mobileTitle: '天氣預報', subtitle: '旅程天氣 · 隨時掌握', status: '已更新' },
   stats: { title: 'Spend Flight Deck', mobileTitle: '預算使用分析', subtitle: 'Spend Cockpit', status: '統計中' },
@@ -212,8 +212,8 @@ export function Shell({
   };
 
   const trip = state ? activeTrip(state) : null;
-  const activeTripName = trip ? trip.name : '名古屋之旅 🏯';
-  const activeTripDates = trip ? `${trip.startDate} - ${trip.endDate}` : '2026年5月26日 - 6月5日';
+  const activeTripName = trip ? trip.name : '我的旅程 🧳';
+  const activeTripDates = trip ? `${trip.startDate} - ${trip.endDate}` : '尚未設定日期';
 
   const handleSwitchTrip = (tripId: string) => {
     if (!setState || !state) return;

@@ -126,9 +126,8 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
     } catch (err) {
       console.error('[WelcomeGuide] AI parse failed:', err);
       const errorMsg = err instanceof Error ? err.message : String(err);
-      setError(errorMsg);
-      const debugText = `--- AI PARSING FAILED ❌ ---\nError: ${errorMsg}\n\n如果您遇到此問題，請檢查 API 金鑰設定，或者切換到「手動輸入細節」建立旅程。`;
-      setTripText(debugText);
+      // Keep the user's pasted text intact — only surface the error in the banner.
+      setError(`${errorMsg}｜可檢查 API 金鑰設定，或改用下面「手動輸入旅行細節」建立旅程。`);
     } finally {
       setBusy(false);
     }
