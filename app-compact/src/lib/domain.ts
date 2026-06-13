@@ -450,7 +450,15 @@ export async function compressPhoto(base64: string, mime?: string, maxWOverride?
           return;
         }
         ctx.drawImage(img, 0, 0, c.width, c.height);
-        const dataUrl = c.toDataURL('image/jpeg', 0.65);
+        // Keep the thumbnail comfortably under sync payload limits even for large/complex
+        // images by stepping quality down until the base64 fits (~1MB binary).
+        const MAX_B64 = 1_400_000;
+        let quality = 0.65;
+        let dataUrl = c.toDataURL('image/jpeg', quality);
+        while (dataUrl.length > MAX_B64 && quality > 0.3) {
+          quality -= 0.15;
+          dataUrl = c.toDataURL('image/jpeg', quality);
+        }
         resolve(dataUrl.split(',')[1] || null);
       } catch (e) {
         console.warn('[compressPhoto] failed:', e instanceof Error ? e.message : String(e));

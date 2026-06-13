@@ -82,9 +82,14 @@ export function ReceiptEditor({
   }, [receipt?.id]);
 
   const set = <K extends keyof Receipt>(key: K, value: Receipt[K]) => setDraft((d) => {
-    if (key === 'date' && !receipt) {
-      const nextCurrency = currencyForDate(String(value || ''));
-      return { ...d, [key]: value, currency: nextCurrency, originalCurrency: nextCurrency };
+    if (key === 'date') {
+      const prevDayCurrency = currencyForDate(d.date);
+      const nextDayCurrency = currencyForDate(String(value || ''));
+      // Follow the new day's currency (e.g. JP day → KR day) — but only when the user hasn't
+      // manually diverged the currency from the previous day's. Never override a custom choice.
+      if (!d.currency || d.currency === prevDayCurrency) {
+        return { ...d, [key]: value, currency: nextDayCurrency, originalCurrency: nextDayCurrency };
+      }
     }
     return { ...d, [key]: value };
   });

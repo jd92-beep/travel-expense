@@ -74,7 +74,7 @@ export function Weather({ state }: { state: AppState }) {
   const leadRows = leadDay ? rows[leadDay.date] || [] : [];
   const leadSource = leadRows[0];
   const leadForecastDate = leadDay ? (hasEnded ? today : leadDay.date) : today;
-  const leadLiveHour = leadDay ? liveSlotHour(leadForecastDate, normalizedTimezone(leadDay.timezone) || 'Asia/Tokyo') : null;
+  const leadLiveHour = leadDay ? liveSlotHour(leadForecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong') : null;
   const leadSourceSlots = leadSource?.slots || [];
   const leadAllSlots = leadRows.flatMap((row) => row.slots || []);
   const leadSlot = (leadLiveHour != null ? leadSourceSlots.find((slot) => slot.hour === leadLiveHour && slot.temp != null) : undefined)
@@ -154,7 +154,7 @@ export function Weather({ state }: { state: AppState }) {
   useEffect(() => {
     if (!leadDay || busy) return;
     const forecastDate = hasEnded ? today : leadDay.date;
-    const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || 'Asia/Tokyo');
+    const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
     const key = `${leadDay.date}:${forecastDate}:${liveHour ?? 'day'}:${Object.keys(rows).length}`;
     if (autoJumpKeyRef.current === key) return;
     autoJumpKeyRef.current = key;
@@ -236,7 +236,7 @@ export function Weather({ state }: { state: AppState }) {
             {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
             {dayRows.map((weather) => {
               const emptyForecast = weather.slots?.length && weather.slots.every((slot) => slot.temp == null && slot.rain == null);
-              const liveHour = liveSlotHour(hasEnded ? today : day.date, normalizedTimezone(day.timezone) || 'Asia/Tokyo');
+              const liveHour = liveSlotHour(hasEnded ? today : day.date, normalizedTimezone(day.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
               return (
                 <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
                   <h3>{weather.coord.label}</h3>

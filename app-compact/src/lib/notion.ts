@@ -50,8 +50,11 @@ const N = {
   tripIntelligence: ['Trip Intelligence', 'Trip Context'],
   currency: ['Currency', '幣種'],
   originalAmount: ['Original Amount', 'Original'],
+  originalCurrency: ['Original Currency', '原始幣種', 'Orig Currency'],
   mapUrl: ['Map URL', 'Map', 'Map Link'],
   exchangeRate: ['Exchange Rate', '匯率', 'Rate', 'FX Rate'],
+  beneficiary: ['🎁 受惠人', '受惠人', 'Beneficiary', 'Paid For'],
+  tripDay: ['行程日', 'Trip Day', 'Day'],
 } as const;
 
 type SchemaMap = Record<keyof typeof N, string>;
@@ -185,7 +188,9 @@ async function ensureSchema(state: AppState): Promise<SchemaMap> {
       'store', 'amount', 'date', 'time', 'cat', 'pay', 'region', 'address',
       'bookingRef', 'items', 'note', 'photoUrl', 'person', 'hkd', 'split',
       // 3. Multi-currency
-      'currency', 'originalAmount', 'exchangeRate', 'mapUrl',
+      'currency', 'originalAmount', 'originalCurrency', 'exchangeRate', 'mapUrl',
+      // 3b. Accounting / itinerary detail (optional — only written when the column exists)
+      'beneficiary', 'tripDay',
       // 4. Trip-specific
       'tripId', 'tripName', 'destination', 'startDate', 'endDate',
       'homeCurrency', 'tripCurrencies', 'timezones', 'tripVersion',
@@ -296,11 +301,35 @@ function richTextChunks(value: string, chunkSize = 1800) {
   return chunks.slice(0, 80).map((content) => ({ text: { content } }));
 }
 
+const CRITICAL_NOTION_FIELDS: (keyof typeof N)[] = ['store', 'amount', 'date', 'cat', 'pay'];
+
+// Notion rejects a PATCH that references a property the database doesn't have, which would fail the
+// ENTIRE receipt push. Only send properties that actually exist; warn (don't crash) if a critical
+// column is missing so users with an incomplete database still sync the rest of the fields.
+function keepKnownProps(props: Record<string, any>, schema: SchemaMap): Record<string, any> {
+  const known = schemaCache?.propertyTypes;
+  if (!known || !Object.keys(known).length) return props; // schema unknown — can't validate, send as-is
+  const out: Record<string, any> = {};
+  for (const [name, value] of Object.entries(props)) {
+    if (name in known) out[name] = value;
+  }
+  const missingCritical = CRITICAL_NOTION_FIELDS
+    .map((k) => propName(schema, k))
+    .filter((name) => !(name in known));
+  if (missingCritical.length) {
+    console.warn('[notion] DB missing columns — these fields will not sync:', missingCritical.join(', '));
+  }
+  return out;
+}
+
 function buildProps(state: AppState, receipt: Receipt, schema: SchemaMap) {
   const cat = CATEGORIES.find((c) => c.id === receipt.category);
   const pay = PAYMENTS.find((p) => p.id === receipt.payment);
   const persons = getPersons(state);
   const person = persons.find((p) => p.id === receipt.personId) || persons[0];
+  const beneficiary = receipt.beneficiaryId ? persons.find((p) => p.id === receipt.beneficiaryId) : undefined;
+  const tripForReceipt = (state.trips || []).find((t) => t.id === receipt.tripId) || activeTrip(state);
+  const dayIdx = tripForReceipt.itinerary?.findIndex((d) => d.date === receipt.date) ?? -1;
 
   const photoCol = propName(schema, 'photoUrl');
   const photoType = schemaCache?.propertyTypes?.[photoCol];
@@ -324,7 +353,7 @@ function buildProps(state: AppState, receipt: Receipt, schema: SchemaMap) {
       }
     : { url: receipt.mapUrl || null };
 
-  return {
+  return keepKnownProps({
     [propName(schema, 'objectType')]: { select: { name: 'receipt' } },
     [propName(schema, 'store')]: { title: [{ text: { content: displayStore(receipt) || '未命名' } }] },
     [propName(schema, 'amount')]: { number: Number(receipt.total) || 0 },
@@ -342,13 +371,16 @@ function buildProps(state: AppState, receipt: Receipt, schema: SchemaMap) {
     [propName(schema, 'sourceId')]: { rich_text: [{ text: { content: receipt.sourceId || receipt.id } }] },
     [propName(schema, 'hkd')]: { number: receipt.hkdAmount ?? getReceiptHkdAmount(receipt, state) },
     [propName(schema, 'split')]: { select: { name: receipt.splitMode === 'private' ? '🔒 私人' : '👫 共同' } },
+    [propName(schema, 'beneficiary')]: { rich_text: [{ text: { content: beneficiary ? `${beneficiary.emoji} ${beneficiary.name}` : '' } }] },
+    [propName(schema, 'tripDay')]: { number: dayIdx >= 0 ? dayIdx + 1 : 0 },
     [propName(schema, 'tripId')]: { rich_text: [{ text: { content: receipt.tripId || activeTrip(state).id } }] },
     [propName(schema, 'tripVersion')]: { number: receipt.tripVersion || activeTrip(state).version },
     [propName(schema, 'currency')]: { select: { name: receipt.currency || receipt.originalCurrency || state.tripCurrency || 'JPY' } },
     [propName(schema, 'originalAmount')]: { number: Number(receipt.originalAmount ?? receipt.total) || 0 },
+    [propName(schema, 'originalCurrency')]: { select: { name: receipt.originalCurrency || receipt.currency || state.tripCurrency || 'JPY' } },
     [mapCol]: mapProp,
     [propName(schema, 'exchangeRate')]: { number: Number(receipt.exchangeRate) || 0 },
-  };
+  }, schema);
 }
 
 async function findPageBySourceId(state: AppState, schema: SchemaMap, sourceId: string, tripId?: string): Promise<string | null> {
@@ -406,7 +438,7 @@ function buildTripProps(trip: TripProfile, schema: SchemaMap) {
   if (schema.tripIntelligence) {
     props[schema.tripIntelligence] = { rich_text: richTextChunks(JSON.stringify(trip.intelligence || null)) };
   }
-  return props;
+  return keepKnownProps(props, schema);
 }
 
 function readText(prop: any, type: 'title' | 'rich_text') {
@@ -1067,8 +1099,11 @@ export async function migrateNotionSchema(state: AppState): Promise<string> {
     tripJson: { rich_text: {} },
     currency: { select: { options: ['JPY', 'HKD', 'USD', 'KRW', 'TWD', 'CNY', 'EUR', 'GBP', 'AUD', 'SGD', 'THB', 'MYR', 'VND'].map((name) => ({ name, color: 'default' })) } },
     originalAmount: { number: { format: 'number' } },
+    originalCurrency: { select: { options: ['JPY', 'HKD', 'USD', 'KRW', 'TWD', 'CNY', 'EUR', 'GBP', 'AUD', 'SGD', 'THB', 'MYR', 'VND'].map((name) => ({ name, color: 'default' })) } },
     mapUrl: { url: {} },
     exchangeRate: { number: { format: 'number' } },
+    beneficiary: { rich_text: {} },
+    tripDay: { number: { format: 'number' } },
     store: null, // Title property cannot be created, DB always has one
   };
 

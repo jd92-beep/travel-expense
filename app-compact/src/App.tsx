@@ -127,6 +127,10 @@ export function App() {
         settingsUpdatedAt: Date.now(),
       }));
     } catch {
+      // Cloud save failed — keep the trip locally but tell the user (don't fail silently).
+      const invitePart = (sharingInvites && sharingInvites.length)
+        ? '；分享邀請要重新連線後再喺設定度發送'
+        : '';
       setState((prev) => ({
         ...prev,
         trips: [trip],
@@ -139,6 +143,8 @@ export function App() {
         persons,
         shareRatios,
         settingsUpdatedAt: Date.now(),
+        syncError: `旅程已暫存本機，雲端同步未成功，會自動重試${invitePart}`,
+        globalSyncStatus: 'error',
       }));
     }
   };

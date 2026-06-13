@@ -1936,7 +1936,7 @@ export function Settings({
       });
       setStatus(`已匯入 ${result.itinerary.length} 日行程`);
     } catch (error) {
-      setStatus(`行程匯入失敗：${error instanceof Error ? error.message : String(error)}`);
+      setStatus(`行程匯入失敗：${redactedError(error)}`);
     } finally {
       if (itineraryInput.current) itineraryInput.current.value = '';
     }
@@ -1967,7 +1967,7 @@ export function Settings({
       setStatus(`Backup preview ready：${preview.receiptCount || state.receipts.length} 筆，確認後先匯入`);
     } catch (error) {
       setBackupPreview(null);
-      setStatus(`Backup 匯入失敗：${error instanceof Error ? error.message : String(error)}`);
+      setStatus(`Backup 匯入失敗：${redactedError(error)}`);
     } finally {
       if (backupInput.current) backupInput.current.value = '';
     }
@@ -2600,7 +2600,7 @@ export function Settings({
                 return `已分析：${draft.trip.name} · ${stats.dayCount} 日 · ${stats.spotCount} 景點 · ${stats.lodgingCount} 酒店 · ${stats.foodCount} 餐飲 · ${stats.transportCount} 交通 · ${stats.detailCount} 重要細節`;
               } catch (err) {
                 console.error('[Settings] AI parse failed:', err);
-                const errorMsg = err instanceof Error ? err.message : String(err);
+                const errorMsg = redactedError(err);
                 const debugText = `--- AI PARSING FAILED ❌ ---\nError: ${errorMsg}\n\n如果您遇到此問題，請檢查 API 金鑰設定，或者切換到手動輸入。`;
                 setTripParagraph(debugText);
                 throw err;

@@ -5,6 +5,7 @@ import { ShimmerButton } from '../components/ui/shimmer-button';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
 import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
 import { compressPhoto, getResolvedTripCurrency } from '../lib/domain';
+import { redactedError } from '../lib/credentialBroker';
 import type { AppState, Receipt } from '../lib/types';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
 import { activeTrip } from '../domain/trip/normalize';
@@ -218,7 +219,7 @@ export function Scan({
       const draft = {
         ...heuristicReceiptFromText(file.name, stateRef.current),
         store: safeFileStem(file),
-        note: `OCR 未完成：${error instanceof Error ? error.message : String(error)}`,
+        note: `OCR 未完成：${redactedError(error)}`,
         source: 'react-ocr-manual',
         photoThumb: localThumb,
       };
@@ -270,7 +271,7 @@ export function Scan({
       openDraft(receipts[0]);
       if (mountedRef.current) setStatus('語音文字已解析，請確認欄位。');
     } catch (error) {
-      if (mountedRef.current) setStatus(`語音解析失敗：${error instanceof Error ? error.message : String(error)}`);
+      if (mountedRef.current) setStatus(`語音解析失敗：${redactedError(error)}`);
     } finally {
       if (mountedRef.current) setBusy('');
       onBusyChange?.('');
@@ -319,7 +320,7 @@ export function Scan({
       setBatch(receipts.map((r) => ({ ...r, store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
       if (mountedRef.current) setStatus(`已解析 ${receipts.length} 筆，請喺 batch confirm 核對。`);
     } catch (error) {
-      if (mountedRef.current) setStatus(`Email 解析失敗：${error instanceof Error ? error.message : String(error)}`);
+      if (mountedRef.current) setStatus(`Email 解析失敗：${redactedError(error)}`);
     } finally {
       if (mountedRef.current) setBusy('');
       onBusyChange?.('');
@@ -361,7 +362,7 @@ export function Scan({
             payment: 'cash',
             personId: '',
             splitMode: 'shared',
-            note: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            note: `Error: ${redactedError(error)}`,
             source: 'react-email-image',
             photoThumb: localThumb,
             createdAt: Date.now(),
@@ -371,7 +372,7 @@ export function Scan({
       setBatch(receipts.map((r) => ({ ...r, source: 'react-email-image', store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
       if (mountedRef.current) setStatus(`已解析 ${receipts.length} 筆截圖，請核對後保存。`);
     } catch (error) {
-      if (mountedRef.current) setStatus(`截圖解析失敗：${error instanceof Error ? error.message : String(error)}`);
+      if (mountedRef.current) setStatus(`截圖解析失敗：${redactedError(error)}`);
     } finally {
       if (mountedRef.current) {
         setBusy('');
@@ -428,7 +429,7 @@ export function Scan({
       setStatus('已透過 Sync Engine 拉取雲端資料。');
     } catch (error) {
       if (!mountedRef.current) return;
-      setStatus(`雲端同步失敗：${error instanceof Error ? error.message : String(error)}`);
+      setStatus(`雲端同步失敗：${redactedError(error)}`);
     } finally {
       if (mountedRef.current) setBusy('');
     }
@@ -460,7 +461,7 @@ export function Scan({
       setStatus(destinationRate ? `已更新匯率：1 HKD = ${destinationRate.toFixed(2)} ${from}（${snapshot.source}）` : `已更新匯率（${snapshot.source}）`);
     } catch (error) {
       if (!mountedRef.current) return;
-      setStatus(`匯率更新失敗：${error instanceof Error ? error.message : String(error)}`);
+      setStatus(`匯率更新失敗：${redactedError(error)}`);
     } finally {
       if (mountedRef.current) setBusy('');
     }

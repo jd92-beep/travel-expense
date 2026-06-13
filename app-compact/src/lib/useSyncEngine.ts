@@ -9,6 +9,7 @@ import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } f
 import type { Session } from '@supabase/supabase-js';
 
 const MAX_RETRY_ATTEMPTS = 3;
+const QUEUE_MAX_AGE_MS = 14 * 86_400_000; // drop long-stuck error items after 14 days
 const DEBOUNCE_MS = 3000;
 const BACKGROUND_INTERVAL_MS = 120_000;
 const MIN_SYNC_INTERVAL_MS = 30_000;
@@ -203,7 +204,7 @@ export function useSyncEngine(
       if (receipt.photoThumb && !receipt._photoSyncedToSupabase && supabaseSession) {
         try {
           const receiptUuid = synced.supabaseId || synced.id;
-          const { publicUrl, storagePath } = await uploadReceiptPhoto(supabaseSession, receiptUuid, receipt.photoThumb);
+          const { publicUrl, storagePath } = await uploadReceiptPhoto(supabaseSession, receiptUuid, receipt.photoThumb, 'image/jpeg', receipt.supabasePhotoPath);
           synced = { ...synced, photoUrl: publicUrl, supabasePhotoPath: storagePath, _photoSyncedToSupabase: true, _photoSyncAttempts: 0 };
         } catch (photoErr) {
           // Don't swallow: track attempts and schedule a bounded retry so the photo
@@ -332,7 +333,10 @@ export function useSyncEngine(
       if (aliveRef.current) {
         setState((current) => ({
           ...current,
-          syncQueue: dedupeQueue(current.syncQueue || []).filter((item) => item.attempts < MAX_RETRY_ATTEMPTS).slice(-500),
+          syncQueue: dedupeQueue(current.syncQueue || [])
+            .filter((item) => item.attempts < MAX_RETRY_ATTEMPTS)
+            .filter((item) => !((item.status === 'error' || item.status === 'failed') && (item.updatedAt || item.createdAt || 0) < Date.now() - QUEUE_MAX_AGE_MS))
+            .slice(-500),
         }));
       }
       await yieldToStateFlush();
@@ -391,6 +395,15 @@ export function useSyncEngine(
         }
       }
       const nextSyncedAt = pullErrors.length ? stateRef.current.lastSyncedAt || 0 : mergedAt;
+      // Removed-member / deleted-trip purge: only when the Supabase pull SUCCEEDED, treat its
+      // trip list as authoritative. A locally cached cloud-backed trip (has supabaseId) that is
+      // absent from the authorized result means access was revoked or the trip was deleted — drop
+      // it (and its receipts) so a removed member doesn't keep stale shared data. Never purge on a
+      // failed pull or in Notion-only mode (guarded by cloudPullOk).
+      const cloudPullOk = !!cloudSession && supabaseResult.status === 'fulfilled';
+      const authorizedSupabaseIds = new Set(
+        supabaseData.trips.map((trip) => trip.supabaseId).filter((id): id is string => !!id),
+      );
       let computedPending = 0;
       if (aliveRef.current) {
         setState((current) => {
@@ -443,6 +456,27 @@ export function useSyncEngine(
                 settingsUpdatedAt: remoteTs,
                 settingsPulledAt: mergedAt,
               };
+            }
+          }
+          if (cloudPullOk) {
+            const purgedTripIds = new Set(
+              (finalState.trips || [])
+                .filter((trip) => trip.supabaseId && !authorizedSupabaseIds.has(trip.supabaseId))
+                .map((trip) => trip.id),
+            );
+            if (purgedTripIds.size) {
+              const remainingTrips = (finalState.trips || []).filter((trip) => !purgedTripIds.has(trip.id));
+              const activeStillValid = remainingTrips.some((trip) => trip.id === finalState.activeTripId && !trip.archived);
+              const nextActiveTripId = activeStillValid
+                ? finalState.activeTripId
+                : (remainingTrips.find((trip) => !trip.archived)?.id || remainingTrips[0]?.id || finalState.activeTripId);
+              finalState = {
+                ...finalState,
+                trips: remainingTrips,
+                receipts: (finalState.receipts || []).filter((receipt) => !receipt.tripId || !purgedTripIds.has(receipt.tripId)),
+                activeTripId: nextActiveTripId,
+              };
+              console.warn('[SyncEngine] purged revoked/deleted trips from local cache:', [...purgedTripIds]);
             }
           }
           const freshQueue = (current.syncQueue || []).filter((item) => !overwrittenIds.has(item.entityId));

@@ -959,14 +959,24 @@ export async function uploadReceiptPhoto(
   receiptId: string,
   base64: string,
   mime = 'image/jpeg',
+  existingPath?: string,
 ): Promise<{ storagePath: string; publicUrl: string }> {
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error('Supabase not configured');
   const bin = atob(base64.includes(',') ? base64.split(',')[1] : base64);
+  // Guard against an oversized payload (e.g. a raw uncompressed photo when compression failed)
+  // that could stall or crash the tab during upload.
+  if (bin.length > 6_000_000) throw new Error('Receipt photo too large to upload');
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   const blob = new Blob([bytes], { type: mime });
-  const storagePath = `${session.user.id}/${receiptId}.jpg`;
+  // Privacy: the receipt-photos bucket is public, so the object key must be UNGUESSABLE —
+  // a leaked receipt UUID alone must not let anyone fetch the photo. Keep the `${userId}/`
+  // folder (storage RLS requires foldername[1] = auth.uid()) but add a random filename suffix.
+  // Reuse the existing path on re-upload so retries/edits don't orphan objects in storage.
+  const storagePath = existingPath && existingPath.startsWith(`${session.user.id}/`)
+    ? existingPath
+    : `${session.user.id}/${receiptId}-${crypto.randomUUID().slice(0, 12)}.jpg`;
   const { error: uploadError } = await supabase.storage
     .from('receipt-photos')
     .upload(storagePath, blob, { upsert: true, contentType: mime });
