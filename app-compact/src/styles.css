@@ -9913,6 +9913,11 @@ textarea,
     box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 8px 18px rgba(61, 44, 25, .08);
   }
 
+  .preview-dashboard-budget-head .preview-dashboard-currency {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .preview-dashboard-currency button {
     min-width: 48px;
     min-height: 38px;

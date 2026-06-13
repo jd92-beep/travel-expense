@@ -300,7 +300,7 @@ async function brokerHealth(supabase: SupabaseClientAny) {
         .or("outcome.eq.error,event_name.like.provider_test_%");
       for (const row of errRows || []) {
         if (!row.provider) continue;
-        if (row.outcome === "error" || (row.event_name?.startsWith("provider_test_") && row.outcome === "error")) {
+        if (row.outcome === "error" && !row.event_name?.startsWith("provider_test_")) {
           errorMap.set(row.provider, (errorMap.get(row.provider) || 0) + 1);
         }
       }
@@ -355,7 +355,7 @@ async function snapshot(rangeDays: number) {
   const [users, trips, receipts, photos, integrations, jobs, usage, audits, rlsRpc, llm, profiles, tripMembers] = await Promise.all([
     listUsers(supabase),
     fetchRows(supabase, "trips", "id,owner_id,name,destination_summary,start_date,end_date,trip_currency,budget_amount,budget_currency,itinerary,timezones,active,archived,updated_at,app_metadata"),
-    fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,record_date,updated_at,notion_page_id,notion_sync_status,notion_last_synced_at"),
+    fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,category,record_date,updated_at,notion_page_id,notion_sync_status,notion_last_synced_at", 1000),
     fetchRows(supabase, "receipt_photos", "id,receipt_id,owner_id,storage_path"),
     fetchRows(supabase, "integrations", "id,user_id,provider,status,last_synced_at"),
     fetchRows(supabase, "receipt_sync_jobs", "id,owner_id,provider,status,last_error,created_at,updated_at"),
@@ -414,6 +414,9 @@ async function snapshot(rangeDays: number) {
       imageCount: photosByOwner.get(user.id) || 0,
       notionConnected: !!notionIntegration && notionIntegration.status === "connected",
       notionStatus: notionIntegration ? notionIntegration.status : "not_configured",
+      notionStatusLabel: notionIntegration
+        ? notionIntegration.status === "connected" ? "Connected" : notionIntegration.status === "syncing" ? "Syncing" : notionIntegration.status === "error" ? "Error" : notionIntegration.status
+        : "Not Configured",
       notionLastSyncedAt: notionIntegration?.last_synced_at || null,
       supabaseConnected: !!user.last_sign_in_at,
       syncJobCount: userSyncJobs.length,
@@ -455,6 +458,7 @@ async function snapshot(rangeDays: number) {
       ownerId: receipt.owner_id,
       store: receipt.store,
       status: receipt.status,
+      category: receipt.category || null,
       amount: Number(receipt.amount || 0),
       currency: receipt.currency || "JPY",
       recordDate: receipt.record_date,

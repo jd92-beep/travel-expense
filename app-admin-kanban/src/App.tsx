@@ -3,9 +3,11 @@ import {
   Activity,
   AlertTriangle,
   Bot,
+  ChevronDown,
   Cloud,
   Database,
   Eye,
+  FileText,
   Lock,
   LogOut,
   RefreshCw,
@@ -129,6 +131,7 @@ function EmptyState({ icon, title, detail }: { icon: ReactNode; title: string; d
 function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot; session: AdminSession }) {
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message?: string }>>({});
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [llmExpanded, setLlmExpanded] = useState(true);
 
   async function handleTest(providerKey: string) {
     setTestingProvider(providerKey);
@@ -155,7 +158,11 @@ function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot;
         </div>
         
         <div className="health-card">
-          <h3><Bot size={16} /> LLM Providers</h3>
+          <h3 className="collapsible" onClick={() => setLlmExpanded(!llmExpanded)}>
+            <Bot size={16} /> LLM Providers
+            <ChevronDown size={14} className={`chevron ${llmExpanded ? '' : 'collapsed'}`} />
+          </h3>
+          {llmExpanded && (
           <div className="llm-list">
             {snapshot.llm.map((provider) => (
               <div key={provider.provider} className="llm-item llm-item-expanded">
@@ -192,6 +199,7 @@ function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot;
               </div>
             ))}
           </div>
+          )}
         </div>
 
         <div className="health-card">
@@ -353,6 +361,72 @@ function QuickAmendModal({ session, receipt, onClose, onRefresh }: { session: Ad
   );
 }
 
+function ReceiptDetailModal({ receipt, snapshot, onClose, onAmend }: { receipt: AdminReceiptCard; snapshot: AdminKanbanSnapshot; onClose: () => void; onAmend: () => void }) {
+  const trip = snapshot.trips.find(t => t.id === receipt.tripId);
+  const owner = snapshot.users.find(u => u.id === receipt.ownerId);
+  const photoUrl = receipt.photoPath ? `https://fbnnjoahvtdrnigevrtw.supabase.co/storage/v1/object/public/receipt-photos/${receipt.photoPath}` : null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="detail-modal" onClick={e => e.stopPropagation()}>
+        <h3>Receipt Details</h3>
+        <div className="detail-grid">
+          <div className="detail-field">
+            <label>Store</label>
+            <span>{receipt.store}</span>
+          </div>
+          <div className="detail-field">
+            <label>Amount</label>
+            <span>{receipt.amount.toLocaleString()} {receipt.currency}</span>
+          </div>
+          <div className="detail-field">
+            <label>Currency</label>
+            <span>{receipt.currency}</span>
+          </div>
+          <div className="detail-field">
+            <label>Date</label>
+            <span>{receipt.recordDate}</span>
+          </div>
+          <div className="detail-field">
+            <label>Status</label>
+            <span>{receipt.status}</span>
+          </div>
+          <div className="detail-field">
+            <label>Category</label>
+            <span>{receipt.category || 'N/A'}</span>
+          </div>
+          <div className="detail-field">
+            <label>Trip</label>
+            <span>{trip?.name || receipt.tripId}</span>
+          </div>
+          <div className="detail-field">
+            <label>Owner</label>
+            <span>{owner?.email || receipt.ownerId}</span>
+          </div>
+          <div className="detail-field">
+            <label>Notion Synced</label>
+            <span>{receipt.notionSynced ? 'Yes' : 'No'}</span>
+          </div>
+          <div className="detail-field">
+            <label>Updated At</label>
+            <span>{fmtDate(receipt.updatedAt)}</span>
+          </div>
+          {photoUrl && (
+            <div className="detail-field full-width">
+              <label>Photo</label>
+              <img src={photoUrl} alt="Receipt" className="receipt-photo-preview" />
+            </div>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button className="primary-command" type="button" onClick={onAmend}><Pencil size={14} /> Amend</button>
+          <button className="ghost-command" type="button" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UserDetailsPanel({
   user,
   snapshot,
@@ -367,9 +441,13 @@ function UserDetailsPanel({
 }) {
   const userTrips = snapshot.trips.filter(t => t.ownerId === user.id);
   const userReceipts = snapshot.receipts.filter(r => r.ownerId === user.id);
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [amendReceiptItem, setAmendReceiptItem] = useState<AdminReceiptCard | null>(null);
   const [viewImageUrl, setViewImageUrl] = useState<string | null>(null);
   const [expandedItinerary, setExpandedItinerary] = useState<string | null>(null);
+  const [detailReceipt, setDetailReceipt] = useState<AdminReceiptCard | null>(null);
+
+  const filteredReceipts = selectedTripId ? userReceipts.filter(r => r.tripId === selectedTripId) : userReceipts;
 
   return (
     <div className="user-details-panel">
@@ -418,15 +496,17 @@ function UserDetailsPanel({
         <Metric label="AI Requests (Today)" value={user.aiRequestsToday} />
       </div>
 
-      <DeletePanel session={session} user={user} onDone={onRefresh} />
-
       <div className="user-lists">
         <div className="list-section">
           <h3>Trips ({userTrips.length})</h3>
           {userTrips.length > 0 ? (
             <div className="card-list">
               {userTrips.map(trip => (
-                <div key={trip.id} className="detail-card">
+                <div
+                  key={trip.id}
+                  className={`detail-card trip-card ${selectedTripId === trip.id ? 'trip-selected' : ''}`}
+                  onClick={() => setSelectedTripId(selectedTripId === trip.id ? null : trip.id)}
+                >
                   <strong>{trip.name}</strong>
                   <small>{trip.destination} · {trip.dateRange}</small>
                   <span>{trip.receiptCount} receipts · {trip.currency}</span>
@@ -440,7 +520,7 @@ function UserDetailsPanel({
                       <button
                         type="button"
                         className="itinerary-toggle"
-                        onClick={() => setExpandedItinerary(expandedItinerary === trip.id ? null : trip.id)}
+                        onClick={(e) => { e.stopPropagation(); setExpandedItinerary(expandedItinerary === trip.id ? null : trip.id); }}
                       >
                         <Calendar size={11} /> {trip.itinerary.length} day{trip.itinerary.length !== 1 ? 's' : ''} · {trip.itinerary.reduce((sum: number, d: any) => sum + (d?.spots?.length || 0), 0)} spots
                       </button>
@@ -477,11 +557,16 @@ function UserDetailsPanel({
         </div>
 
         <div className="list-section">
-          <h3>Receipts ({userReceipts.length})</h3>
-          {userReceipts.length > 0 ? (
+          <h3>
+            Receipts ({filteredReceipts.length})
+            {selectedTripId && (
+              <button type="button" className="show-all-btn" onClick={() => setSelectedTripId(null)}>Show All</button>
+            )}
+          </h3>
+          {filteredReceipts.length > 0 ? (
             <div className="card-list">
-              {userReceipts.map(receipt => (
-                <div key={receipt.id} className="detail-card" style={{position: 'relative'}}>
+              {filteredReceipts.map(receipt => (
+                <div key={receipt.id} className="detail-card" style={{position: 'relative', cursor: 'pointer'}} onClick={() => setDetailReceipt(receipt)}>
                   <strong>{receipt.store}</strong>
                   <small>{receipt.recordDate} · {receipt.status}</small>
                   <span>{receipt.amount.toLocaleString()} {receipt.currency}</span>
@@ -490,10 +575,12 @@ function UserDetailsPanel({
                     {receipt.notionSynced ? 'Notion Synced' : 'Notion Pending'}
                   </span>
                   <div className="detail-actions">
-                    {receipt.photoPath && (
-                      <button type="button" onClick={() => setViewImageUrl(`https://fbnnjoahvtdrnigevrtw.supabase.co/storage/v1/object/public/receipt-photos/${receipt.photoPath}`)} title="View Photo" className="icon-btn"><ImageIcon size={14} /></button>
+                    {receipt.photoPath ? (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setViewImageUrl(`https://fbnnjoahvtdrnigevrtw.supabase.co/storage/v1/object/public/receipt-photos/${receipt.photoPath}`); }} title="View Photo" className="icon-btn"><ImageIcon size={14} /></button>
+                    ) : (
+                      <span className="placeholder-icon" title="No photo"><ImageIcon size={14} /></span>
                     )}
-                    <button type="button" onClick={() => setAmendReceiptItem(receipt)} title="Amend" className="icon-btn"><Pencil size={14} /></button>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setAmendReceiptItem(receipt); }} title="Amend" className="icon-btn"><Pencil size={14} /></button>
                   </div>
                 </div>
               ))}
@@ -503,11 +590,22 @@ function UserDetailsPanel({
           )}
         </div>
       </div>
+
+      <DeletePanel session={session} user={user} onDone={onRefresh} />
+
       {amendReceiptItem && (
         <QuickAmendModal session={session} receipt={amendReceiptItem} onClose={() => setAmendReceiptItem(null)} onRefresh={onRefresh} />
       )}
       {viewImageUrl && (
         <ImageViewerModal url={viewImageUrl} onClose={() => setViewImageUrl(null)} />
+      )}
+      {detailReceipt && (
+        <ReceiptDetailModal
+          receipt={detailReceipt}
+          snapshot={snapshot}
+          onClose={() => setDetailReceipt(null)}
+          onAmend={() => { setAmendReceiptItem(detailReceipt); setDetailReceipt(null); }}
+        />
       )}
     </div>
   );

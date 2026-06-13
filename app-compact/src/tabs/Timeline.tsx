@@ -304,8 +304,8 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
     </section>
 
     {editing && (
-      <div ref={editingContainerRef} className="modal-backdrop" role="dialog" aria-modal="true">
-        <form className="modal sheet timeline-edit-sheet" onSubmit={saveSpot}>
+      <div ref={editingContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setEditing(null)}>
+        <form className="modal sheet timeline-edit-sheet" onClick={(event) => event.stopPropagation()} onSubmit={saveSpot}>
           <div className="modal-head">
             <h2>編輯行程點</h2>
             <button type="button" className="icon-btn" onClick={() => setEditing(null)}>×</button>
@@ -335,8 +335,8 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       </div>
     )}
     {activeDay && (
-      <div ref={dayReceiptsContainerRef} className="modal-backdrop" role="dialog" aria-modal="true">
-        <div className="modal sheet timeline-receipt-sheet">
+      <div ref={dayReceiptsContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setDayReceipts(null)}>
+        <div className="modal sheet timeline-receipt-sheet" onClick={(event) => event.stopPropagation()}>
           <div className="modal-head">
             <div>
               <h2>{activeDay.date} 消費</h2>

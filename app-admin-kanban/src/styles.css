@@ -681,6 +681,24 @@ button:disabled {
   gap: 6px;
 }
 
+.health-card h3.collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+
+.health-card h3.collapsible:hover {
+  color: var(--text);
+}
+
+.health-card h3 .chevron {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.health-card h3 .chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
 .llm-list {
   display: grid;
   gap: 6px;
@@ -1336,4 +1354,106 @@ button:disabled {
 .receipt-category {
   color: var(--purple) !important;
   font-weight: 600;
+}
+
+/* Trip filter */
+.detail-card.trip-selected {
+  border-color: var(--cyan);
+  background: rgba(34, 216, 255, 0.1);
+  box-shadow: 0 0 0 1px rgba(34, 216, 255, 0.2);
+}
+
+.detail-card.trip-card {
+  cursor: pointer;
+}
+
+.detail-card.trip-card:hover {
+  border-color: var(--line-strong);
+  background: rgba(34, 216, 255, 0.06);
+}
+
+.show-all-btn {
+  border: 1px solid rgba(126, 217, 255, 0.3);
+  border-radius: 4px;
+  color: var(--cyan);
+  background: rgba(34, 216, 255, 0.06);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.show-all-btn:hover {
+  background: rgba(34, 216, 255, 0.14);
+}
+
+/* Receipt detail modal */
+.detail-modal {
+  background: var(--panel);
+  padding: 24px;
+  border-radius: 8px;
+  width: 480px;
+  max-width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--line);
+}
+
+.detail-modal h3 {
+  margin: 0;
+  color: var(--cyan);
+  font-size: 16px;
+}
+
+.detail-modal .detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.detail-modal .detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-modal .detail-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.detail-modal .detail-field label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.detail-modal .detail-field span {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.detail-modal .receipt-photo-preview {
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid rgba(126, 217, 255, 0.2);
+  background: #fff;
+  padding: 4px;
+}
+
+.placeholder-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  background: rgba(126, 217, 255, 0.08);
+  color: var(--muted);
 }

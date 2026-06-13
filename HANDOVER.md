@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-13
-- **Focus**: Compact Home/Weather/Settings/Scan polish; current-time weather jump, cleaner settings layout, and live FX calculation
+- **Focus**: Compact modal/backdrop behavior and currency toggle layout polish
 - **Agent**: Codex 🤖
-- **App version**: Compact `0.2.7`; React unchanged in this pass
+- **App version**: Compact `0.2.8`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +18,21 @@
 
 ## What Was Done
 
-### Session 22 (Codex — current session)
+### Session 23 (Codex — current session)
+
+1. **Compact Scan FX modal layout**:
+   - Moved the `scan-fx-result` block above the amount/from/to controls so the final converted value appears before `金額`.
+   - Kept live conversion behavior intact; typing still recalculates immediately from the current/live FX snapshot.
+2. **Backdrop click-to-close behavior**:
+   - Added backdrop click close and inner-modal click stop-propagation to Compact Scan FX/batch modals, Receipt Editor/delete confirm, Timeline edit/day receipt sheets, and Settings confirmation modals.
+   - Existing Dashboard sheet, Receipt Photo modal, Welcome Guide, and Trip Update confirmation already had this behavior.
+3. **Currency layout polish**:
+   - Home `預算總覽` currency toggle now stacks the destination currency directly under `HKD`.
+   - Stats `預算羅盤` currency toggle now uses the same pill/button styling as the Top 10 expense toggle.
+4. **Versioning**:
+   - Bumped Compact `package.json`, `package-lock.json`, and `APP_VERSION` from `0.2.7` to `0.2.8`.
+
+### Session 22 (Codex — previous session)
 
 1. **Compact Home `今日狀態` layout fixed**:
    - The weather summary pill now has an explicit `.preview-dashboard-weather-mini` class.

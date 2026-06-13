@@ -110,9 +110,10 @@ export function ReceiptEditor({
 
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="receipt-editor-title">
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="receipt-editor-title" onClick={onCancel}>
       <form
         className="modal sheet"
+        onClick={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
           const total = validAmount(draft.total);
@@ -267,8 +268,9 @@ export function ReceiptEditor({
           aria-modal="true"
           aria-labelledby="receipt-delete-confirm-title"
           aria-describedby="receipt-delete-confirm-description"
+          onClick={() => setShowDeleteConfirm(false)}
         >
-          <div className="modal receipt-delete-confirm">
+          <div className="modal receipt-delete-confirm" onClick={(event) => event.stopPropagation()}>
             <div className="modal-head">
               <h2 id="receipt-delete-confirm-title">確認刪除紀錄</h2>
             </div>

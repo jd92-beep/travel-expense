@@ -2957,9 +2957,10 @@ export function Settings({
           role="dialog"
           aria-modal="true"
           aria-label="清除此裝置資料"
+          onClick={() => setShowClearDeviceConfirm(false)}
           style={{ placeItems: 'center', zIndex: 9999, padding: '20px 20px max(110px, env(safe-area-inset-bottom))' }}
         >
-          <div className="modal settings-clear-device-modal">
+          <div className="modal settings-clear-device-modal" onClick={(event) => event.stopPropagation()}>
             <div className="settings-warning-icon">
               <AlertTriangle size={30} />
             </div>
@@ -2988,9 +2989,10 @@ export function Settings({
           role="dialog"
           aria-modal="true"
           aria-label="Clear local data preview"
+          onClick={() => setShowClearLocalPreview(false)}
           style={{ placeItems: 'center', zIndex: 9999, padding: '20px 20px max(110px, env(safe-area-inset-bottom))' }}
         >
-          <div className="modal settings-clear-device-modal">
+          <div className="modal settings-clear-device-modal" onClick={(event) => event.stopPropagation()}>
             <div className="settings-warning-icon">
               <AlertTriangle size={30} />
             </div>
@@ -3033,9 +3035,13 @@ export function Settings({
           role="dialog"
           aria-modal="true"
           aria-label="永久刪除帳戶"
+          onClick={() => {
+            setShowDeleteAccountConfirm(false);
+            setDeleteConfirmEmailInput('');
+          }}
           style={{ placeItems: 'center', zIndex: 9999, padding: '20px 20px max(110px, env(safe-area-inset-bottom))' }}
         >
-          <div className="modal settings-clear-device-modal">
+          <div className="modal settings-clear-device-modal" onClick={(event) => event.stopPropagation()}>
             <div className="settings-warning-icon" style={{ color: '#dc2626' }}>
               <AlertTriangle size={30} />
             </div>
@@ -3195,6 +3201,7 @@ export function Settings({
         return (
           <div
             className="modal-backdrop"
+            onClick={() => setShowDeleteConfirm(false)}
             style={{
               display: 'grid',
               placeItems: 'center',
@@ -3206,6 +3213,7 @@ export function Settings({
           >
             <div
               className="modal"
+              onClick={(event) => event.stopPropagation()}
               style={{
                 width: 'min(480px, 95vw)',
                 background: 'rgba(30, 20, 20, 0.85)',

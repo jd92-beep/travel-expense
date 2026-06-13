@@ -731,14 +731,19 @@ export function Scan({
 
       {status && <Toast tone={/失敗|未能|error/i.test(status) ? 'warning' : 'info'}>{status}</Toast>}
       {fxOpen && (
-        <div ref={fxContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label="即時匯率">
-          <div className="modal sheet scan-fx-modal">
+        <div ref={fxContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label="即時匯率" onClick={() => setFxOpen(false)}>
+          <div className="modal sheet scan-fx-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-head">
               <div>
                 <h2>即時匯率</h2>
                 <p className="muted">Live currency exchange for this trip.</p>
               </div>
               <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setFxOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="scan-fx-result" aria-live="polite">
+              <span>{Number(amount) || 0} {from}</span>
+              <strong>{converted == null ? '需要更新匯率' : (Number(amount) || 0) === 0 ? '輸入金額以計算' : `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${to}`}</strong>
+              <small>{fx?.source ? `Source: ${fx.source}` : 'Using saved or fallback app rates'}</small>
             </div>
             <div className="scan-fx-panel">
               <label>
@@ -761,11 +766,6 @@ export function Scan({
                 </select>
               </label>
             </div>
-            <div className="scan-fx-result" aria-live="polite">
-              <span>{Number(amount) || 0} {from}</span>
-              <strong>{converted == null ? '需要更新匯率' : (Number(amount) || 0) === 0 ? '輸入金額以計算' : `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${to}`}</strong>
-              <small>{fx?.source ? `Source: ${fx.source}` : 'Using saved or fallback app rates'}</small>
-            </div>
             <div className="scan-fx-actions">
               <button className="secondary" type="button" onClick={() => { setFrom(mockReceipt.currency); setTo('HKD'); }}>使用旅程貨幣</button>
               <button className="primary" type="button" disabled={busy === 'fx'} onClick={handleFxRefresh}>
@@ -776,8 +776,8 @@ export function Scan({
         </div>
       )}
       {batch.length > 0 && (
-        <div ref={batchContainerRef} className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal sheet">
+        <div ref={batchContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setBatch([])}>
+          <div className="modal sheet" onClick={(event) => event.stopPropagation()}>
             <div className="modal-head">
               <div>
                 <h2>Batch Confirm</h2>
