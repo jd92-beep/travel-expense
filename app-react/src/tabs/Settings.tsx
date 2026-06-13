@@ -5,7 +5,7 @@ import { AccordionCard } from '../components/AccordionCard';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { parseTripParagraph, testGoogleBackupConnection, testKimiConnection } from '../lib/ai';
 import { activeTrip, createTripProfile, migrateAppState, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { AI_MODELS, DEFAULT_KIMI_PRIMARY_MODEL_ID, ITINERARY } from '../lib/constants';
+import { AI_MODELS, APP_VERSION, DEFAULT_KIMI_PRIMARY_MODEL_ID, ITINERARY } from '../lib/constants';
 import {
   brokerHealth,
   disconnectPersonalNotionIntegration,
@@ -355,7 +355,7 @@ export function Settings({
   const syncConfidence = syncConfidenceTone(syncState, cloudSyncAvailable);
   const syncConfidenceLabel = syncConfidence === 'ok' ? 'Ready' : syncConfidence === 'danger' ? 'Needs attention' : 'Watch';
   const directTokenEnabled = import.meta.env.DEV;
-  const buildLabel = `${import.meta.env.MODE} · React ${reactVersion}`;
+  const buildLabel = `v${APP_VERSION} · ${import.meta.env.MODE} · React ${reactVersion}`;
 
   // Local state for Trip Manager
   const [managerTripId, setManagerTripId] = useState(currentTrip.id);

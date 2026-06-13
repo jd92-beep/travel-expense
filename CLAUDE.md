@@ -233,6 +233,7 @@ git commit -m "type: description" # conventional commits (feat/fix/refactor/docs
 
 - 唔使等 Boss 問，做完自動 push
 - Push / hook 失敗要 report，唔好食晒
+- **改任何 code 一定要 bump build version**：`APP_VERSION`（`app-{react,compact}/src/lib/constants.ts`）+ 同步 `package.json` version，同一個 commit 入面改。詳見 HANDOVER.md「Build Versioning Rule」。
 
 ### Always merge to main (sticky standing order, confirmed Apr 25 2026)
 

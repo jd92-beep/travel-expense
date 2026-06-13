@@ -2,12 +2,32 @@
 
 ## Last Worked On
 - **Date**: 2026-06-13
-- **Focus**: Compact pending-task closure, live Supabase photo storage deployment, shared ledger hardening
-- **Agent**: Codex 🤖
+- **Focus**: Sync/sharing bug fixes + Notion/Supabase data reorg (Phases 1–3), build versioning rule
+- **Agent**: Claude Opus 4.8 🤖
+- **App version**: `0.2.0` (react + compact)
+
+## ⚙️ Build Versioning Rule (MANDATORY)
+
+**Every time you update the app or change any code, bump the build version number.**
+
+- Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
+- Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
+- Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently but are currently aligned at `0.2.0`.
+- Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 17 (Codex — current session)
+### Session 18 (Claude Opus 4.8 — current session)
+
+1. **Fixed cross-trip settlement leak** (`app-react` + `app-compact` `lib/domain.ts`): `computeSettlements()` iterated `state.receipts` (all trips) instead of trip-scoped receipts; now self-scopes via `scopedReceiptsForTrip` (idempotent for existing callers).
+2. **Fixed expired trip invites being accepted** (live Supabase): `accept_trip_invite()` expired branch used `return next` without `return`, so plpgsql fell through and still added the member + flipped status to `accepted` (client showed "expired" from the first result row while the DB granted access). New migration `supabase/migrations/20260613140000_fix_expired_invite_acceptance.sql`; **applied live** via Management API (history diverged — see Pending).
+3. **Reorg Phase 1 — Notion settings out of the 2000-char property** (`lib/notion.ts`, both apps): settings JSON now written to the `__meta_settings__` page's code block (page children have no 2000-char cap); pull reads block-first, falls back to the legacy `note` property. Fixes large `customItinerary`/trips truncation. Non-regressive.
+4. **Reorg Phase 2 — shared-trip party data now syncs** (`lib/supabase.ts`, both apps): `trip_accounting_people` (the only party/split table shared-trip members can read via RLS) was read-but-never-written — persons/ratios were trapped in the owner's private `app_settings` blob, so non-owners saw no participants. Added `upsertSupabaseAccountingPeople()` (owner/admin only, archives removed people, tolerates DBs predating the table), called from `pushSupabaseSettings`.
+5. **Reorg Phase 3 — budget/rate/currency**: reviewed; already correctly organized (`trips.*` authoritative per-trip, `state.budget`/`tripCurrency` are the intentional active-trip projection, `rate` is global FX). No change — ripping the blob copies would break initial-load budget display.
+6. **Build versioning**: added `APP_VERSION` constant + wired into the Settings build label (react had no app version; compact had a hardcoded `v0.1.2`). Both at `0.2.0`; `package.json` synced. See rule above.
+
+### Session 17 (Codex — previous session)
 
 1. **Deployed Supabase receipt photo storage live**:
    - Hardened `supabase/migrations/20260613000000_receipt_photo_storage.sql` so it is idempotent and can safely re-run.
@@ -51,12 +71,22 @@
 
 ## Pending Tasks
 
+### 🔴 HIGH PRIORITY
+1. **Reconcile Supabase migration history divergence**: The live project `fbnnjoahvtdrnigevrtw` has ~17 migrations in its `schema_migrations` table that are **not** in `supabase/migrations/`, and many repo migrations are not recorded as applied. `supabase db push` therefore refuses ("Remote migration versions not found in local migrations directory"). **Do NOT blind-push or blind-`migration repair`** — it could re-run old non-idempotent migrations on live data. Reconcile via `supabase db pull` into a branch, diff, then decide. Until then, apply single idempotent statements via the Management API (token in macOS keychain `security find-generic-password -s "Supabase CLI" -w`, `POST /v1/projects/<ref>/database/query`).
+
+### 🟡 NEEDS LIVE VERIFICATION (Session 18 changes)
+1. **Notion settings round-trip (Phase 1)**: Code path typechecks + builds, but a full write→read cycle needs a device with a real Notion token (not available in the dev session). Confirm a large itinerary survives push→pull via the new code block.
+2. **Shared-trip party data (Phase 2)**: Confirm that on a real shared trip, a non-owner member now sees the correct participants + split ratios (sourced from `trip_accounting_people`). Owner must push settings once after the update so the table is populated.
+
 ### 🟢 LOW PRIORITY
 1. **Dead code cleanup**: `extractJson()` in `ai.ts` and `pushAll()` in `notion.ts` are exported but not currently used by the active flows.
 2. **Unused import audit**: Re-run a focused lint/import pass if more modules are edited; previous notes mentioned possible `hkd` imports in History/Stats.
 3. **Stronger private photo sharing**: Current Storage bucket uses public URLs for rendering shared receipt photos. This is functional, but a later privacy upgrade could move to signed URLs scoped by `receipt_photos` RLS.
 
-### Session 16 (MiMo Code — current session)
+## Bugs Pending Fix
+- _None currently known._ All bugs found in Session 18 (cross-trip settlement leak, expired-invite acceptance, Notion 2000-char truncation, unwritten `trip_accounting_people`) were fixed. The Session 16 audit's Critical/High/Medium/Low items were all addressed in Sessions 16–17. Add new entries here as they are discovered, with file + symptom + severity.
+
+### Session 16 (MiMo Code — previous session)
 
 #### A. Comprehensive Bug Audit (64 bugs found)
 1. **Full codebase audit** with 3 parallel agents covering Core Data Layer, UI Components, and AI/Sync/Edge Cases.
