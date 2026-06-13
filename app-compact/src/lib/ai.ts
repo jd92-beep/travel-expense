@@ -362,19 +362,28 @@ function cleanLocalSpotName(value: string): string {
     .slice(0, 120);
 }
 
-function localSpotFromParts(time: string, name: string, sourceText: string, category = '', timezone = ''): ItineraryDay['spots'][number] | null {
-  const cleanName = cleanLocalSpotName(name);
-  if (!cleanName || /^[:：-]+$/.test(cleanName) || /^(時間|類別|地點名稱|建議停留)$/i.test(cleanName)) return null;
-  const classifierText = `${category} ${cleanName}`;
-  return {
-    time,
-    name: cleanName,
-    type: classifyTripSpot(classifierText),
-    timezone: timezone || 'Asia/Hong_Kong',
-    note: category ? cleanLocalSpotName(category) : cleanName,
-    sourceText: sourceText.trim(),
-    confidence: 'medium',
-  };
+function splitCompoundSpotName(name: string): string[] {
+  const stripped = name.replace(/^(早餐|午餐|晚餐|早午餐|下午茶|宵夜|brunch|lunch|dinner|breakfast)[：:·]\s*/gi, '');
+  const parts = stripped.split(/\s*[＋+\/、·&]\s*/).filter(p => p.trim().length > 0);
+  return parts.length > 1 ? parts.map(p => p.trim()) : [name.trim()];
+}
+
+function localSpotFromParts(time: string, name: string, sourceText: string, category = '', timezone = ''): ItineraryDay['spots'][number][] {
+  const names = splitCompoundSpotName(name);
+  return names.map(n => {
+    const cleanName = cleanLocalSpotName(n);
+    if (!cleanName || /^[:：-]+$/.test(cleanName) || /^(時間|類別|地點名稱|建議停留)$/i.test(cleanName)) return null;
+    const classifierText = `${category} ${cleanName}`;
+    return {
+      time,
+      name: cleanName,
+      type: classifyTripSpot(classifierText),
+      timezone: timezone || 'Asia/Hong_Kong',
+      note: category ? cleanLocalSpotName(category) : cleanName,
+      sourceText: sourceText.trim(),
+      confidence: 'medium' as const,
+    };
+  }).filter((s): s is NonNullable<typeof s> => s != null);
 }
 
 function computeTimeEnd(time: string, durationMinutes: number): string {
@@ -406,12 +415,14 @@ function parseDuration(raw: string, time = ''): { minutes: number; end: string; 
 export function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
   const spots: ItineraryDay['spots'] = [];
   const seen = new Set<string>();
-  const add = (spot: ItineraryDay['spots'][number] | null) => {
-    if (!spot) return;
+  const addOne = (spot: ItineraryDay['spots'][number]) => {
     const key = `${spot.time}|${spot.name}`;
     if (seen.has(key)) return;
     seen.add(key);
     spots.push(spot);
+  };
+  const add = (result: ItineraryDay['spots'][number][]) => {
+    for (const spot of result) addOne(spot);
   };
 
   for (const rawLine of block.split('\n')) {
@@ -433,11 +444,11 @@ export function extractLocalDaySpots(block: string): ItineraryDay['spots'] {
         const time = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
         const name = tabs[1];
         const duration = parseDuration(tabs[2] || '', time);
-        const spot = localSpotFromParts(time, name, rawLine);
-        if (spot) {
+        const spotList = localSpotFromParts(time, name, rawLine);
+        for (const spot of spotList) {
           if (duration.end) spot.timeEnd = duration.end;
           if (duration.note) spot.note = spot.note ? `${spot.note} (${duration.note})` : duration.note;
-          add(spot);
+          addOne(spot);
         }
         continue;
       }
@@ -1018,6 +1029,14 @@ Include lodging, arrival times, places, restaurants, transport/flight/train refe
 For each spot, estimate timeEnd from duration/stay information when available (e.g., "60分鐘" means timeEnd = time + 60min). If no duration info, omit timeEnd.
 Do not invent or guess any lat/lon coordinates. Frontend handles that.
 If the canonical itinerary has no usable trip data, return an empty itinerary.
+
+IMPORTANT SPLIT RULES:
+- If a single time slot contains multiple place names separated by '/', '＋', '+', '、', '·', '&' (or similar), you MUST create SEPARATE spot entries for EACH place, all sharing the same time.
+- Strip meal/activity prefixes like '午餐：', '晚餐：', '早餐：', 'brunch:', 'lunch:', 'dinner:' from place names.
+- Examples:
+  * '午餐：On-Off / Rodem Garden / 牛島炸醬麵' → 3 spots: {time:'12:00', name:'On-Off'}, {time:'12:00', name:'Rodem Garden'}, {time:'12:00', name:'牛島炸醬麵'}
+  * '道頭洞彩虹海岸道路＋石頭爺爺麥當勞' → 2 spots: {time:'...', name:'道頭洞彩虹海岸道路'}, {time:'...', name:'石頭爺爺麥當勞'}
+- Each spot should have its own name, address (if known), and can have its own note.
 
 CANONICAL ORGANIZED ITINERARY:
 ${organizedItinerary.slice(0, 28000)}`;

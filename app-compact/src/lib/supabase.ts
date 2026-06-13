@@ -8,6 +8,15 @@ import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, Tr
 const VALID_CATEGORIES = new Set(['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'other']);
 const VALID_PAYMENTS = new Set(['cash', 'credit', 'paypay', 'suica']);
 
+function withTimeout<T>(promise: PromiseLike<T>, ms = 30000): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Request timeout after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 function safeCategoryId(value: unknown): CategoryId {
   const v = String(value || 'other').toLowerCase();
   return VALID_CATEGORIES.has(v) ? v as CategoryId : 'other';
@@ -329,6 +338,7 @@ function sharingForTrip(
   memberRows: SupabaseTripMemberRow[] = [],
   inviteRows: SupabaseTripInviteRow[] = [],
   backendRows: SupabaseTripBackendLinkRow[] = [],
+  profileNames: Map<string, string> = new Map(),
 ): TripSharingState {
   const activeMembers = memberRows.filter((member) => member.trip_id === row.id && member.status === 'active');
   const ownMember = activeMembers.find((member) => member.user_id === userId);
@@ -336,12 +346,15 @@ function sharingForTrip(
   const role = isOwner ? 'owner' : cleanMemberRole(ownMember?.role);
   const pendingInvites = inviteRows.filter((invite) => invite.trip_id === row.id && invite.status === 'pending');
   const backend = backendRows.find((item) => item.trip_id === row.id);
+  const resolveDisplayName = (uid: string, fallback: string) => (
+    uid === userId ? 'You' : profileNames.get(uid) || fallback
+  );
   const memberSummaries: TripMemberSummary[] = [
     {
       userId: row.owner_id,
       role: 'owner',
       status: 'active',
-      displayName: row.owner_id === userId ? 'You' : 'Trip owner',
+      displayName: resolveDisplayName(row.owner_id, 'Trip owner'),
     },
     ...activeMembers
       .filter((member) => member.user_id !== row.owner_id)
@@ -349,7 +362,7 @@ function sharingForTrip(
         userId: member.user_id,
         role: cleanMemberRole(member.role),
         status: 'active' as const,
-        displayName: member.user_id === userId ? 'You' : 'Trip member',
+        displayName: resolveDisplayName(member.user_id, 'Trip member'),
         joinedAt: member.created_at || undefined,
         lastActiveAt: member.updated_at || undefined,
       })),
@@ -652,6 +665,7 @@ export async function ensureSupabaseProfile(session: Session, state: AppState): 
   const { error } = await supabase.from('profiles').upsert({
     id: user.id,
     display_name: displayName,
+    avatar_url: user.user_metadata?.avatar_url || null,
     home_currency: 'HKD',
     locale: navigator.language || 'zh-HK',
   }, { onConflict: 'id' });
@@ -662,10 +676,12 @@ export async function pushSupabaseSettings(session: Session, state: AppState): P
   const supabase = getSupabaseClient();
   if (!supabase) return;
   await ensureSupabaseProfile(session, state);
-  const { error } = await supabase
-    .from('profiles')
-    .update({ app_settings: buildAppSettings(state) })
-    .eq('id', session.user.id);
+  const { error } = await withTimeout(
+    supabase
+      .from('profiles')
+      .update({ app_settings: buildAppSettings(state) })
+      .eq('id', session.user.id)
+  );
   if (error) throw error;
 }
 
@@ -740,17 +756,17 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
   };
   const { owner_id: _ownerId, id: _rowId, created_at: _createdAt, ...sharedTripUpdate } = row;
   let { data, error } = explicitSharedTrip
-    ? await supabase
+    ? await withTimeout(supabase
       .from('trips')
       .update(sharedTripUpdate)
       .eq('id', id)
       .select('*')
-      .single()
-    : await supabase
+      .single())
+    : await withTimeout(supabase
       .from('trips')
       .upsert(row, { onConflict: 'id' })
       .select('*')
-      .single();
+      .single());
   if (error && /country_code|theme_key|weather_region|trip_intelligence|schema cache|column/i.test(error.message || '')) {
     const {
       country_code: _countryCode,
@@ -767,28 +783,28 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
       ...legacySharedUpdate
     } = legacyRow;
     const fallback = explicitSharedTrip
-      ? await supabase
+      ? await withTimeout(supabase
         .from('trips')
         .update(legacySharedUpdate)
         .eq('id', id)
         .select('*')
-        .single()
-      : await supabase
+        .single())
+      : await withTimeout(supabase
         .from('trips')
         .upsert(legacyRow, { onConflict: 'id' })
         .select('*')
-        .single();
+        .single());
     data = fallback.data;
     error = fallback.error;
   }
   if (error) throw error;
   if (row.active && !explicitSharedTrip) {
-    const { error: deactivateError } = await supabase
+    const { error: deactivateError } = await withTimeout(supabase
       .from('trips')
       .update({ active: false, updated_at: row.updated_at })
       .eq('owner_id', userId)
       .neq('id', id)
-      .eq('active', true);
+      .eq('active', true));
     if (deactivateError) throw deactivateError;
   }
   return rowToTrip(data as SupabaseTripRow, state, trip.sharing);
@@ -851,7 +867,7 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     updated_at: isoFromMs(receipt.updatedAt),
   };
   if (isSharedLedgerTrip(syncedTrip)) {
-    const { data, error } = await supabase
+    const { data, error } = await withTimeout(supabase
       .rpc('upsert_shared_trip_receipt', {
         p_trip_id: tripUuid,
         p_receipt: row,
@@ -859,16 +875,16 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
         p_source_id: row.source_id,
         p_idempotency_key: `${tripUuid}:${row.source_id}:upsert:${receipt.updatedAt || Date.now()}`,
       })
-      .single();
+      .single());
     if (error) throw error;
     const tripBySupabaseId = new Map([[tripUuid, syncedTrip]]);
     return rowToReceipt(data as SupabaseReceiptRow, { ...state, trips: (state.trips || []).map((item) => item.id === syncedTrip.id ? syncedTrip : item) }, tripBySupabaseId, receipt.id, userId);
   }
-  const { data, error } = await supabase
+  const { data, error } = await withTimeout(supabase
     .from('receipts')
     .upsert(row, { onConflict: 'id' })
     .select('*')
-    .single();
+    .single());
   if (error) throw error;
   const tripBySupabaseId = new Map([[tripUuid, syncedTrip]]);
   return rowToReceipt(data as SupabaseReceiptRow, { ...state, trips: (state.trips || []).map((item) => item.id === syncedTrip.id ? syncedTrip : item) }, tripBySupabaseId, receipt.id, userId);
@@ -905,16 +921,16 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   const supabase = getSupabaseClient();
   if (!supabase) return { trips: [], receipts: [] };
   await ensureSupabaseProfile(session, state);
-  const [profileResult, tripsResult] = await Promise.all([
+  const [profileResult, tripsResult] = await withTimeout(Promise.all([
     supabase.from('profiles').select('app_settings').eq('id', session.user.id).maybeSingle(),
     supabase.from('trips').select('*').order('start_date', { ascending: true }),
-  ]);
+  ]));
   if (profileResult.error) throw profileResult.error;
   if (tripsResult.error) throw tripsResult.error;
   const tripRows = (tripsResult.data || []) as SupabaseTripRow[];
   const tripIds = tripRows.map((row) => row.id).filter(Boolean);
   const emptyResult = { data: [], error: null };
-  const [receiptsResult, membersResult, invitesResult, backendResult, peopleResult] = await Promise.all([
+  const [receiptsResult, membersResult, invitesResult, backendResult, peopleResult, profilesResult] = await withTimeout(Promise.all([
     tripIds.length
       ? supabase.from('receipts').select('*').in('trip_id', tripIds).is('deleted_at', null).order('record_date', { ascending: false })
       : Promise.resolve(emptyResult),
@@ -930,7 +946,10 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
     tripIds.length
       ? supabase.from('trip_accounting_people').select('trip_id,person_id,name,emoji,color,share_ratio,archived').in('trip_id', tripIds).eq('archived', false)
       : Promise.resolve(emptyResult),
-  ]);
+    tripIds.length
+      ? supabase.from('profiles').select('id,display_name').in('id', [...new Set(tripRows.flatMap((row) => [row.owner_id]))])
+      : Promise.resolve(emptyResult),
+  ]));
   if (receiptsResult.error) throw receiptsResult.error;
   if (membersResult.error && !isMissingSharingTableError(membersResult.error)) throw membersResult.error;
   if (invitesResult.error && !isMissingSharingTableError(invitesResult.error)) throw invitesResult.error;
@@ -939,8 +958,19 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   const memberRows = (membersResult.error ? [] : membersResult.data || []) as SupabaseTripMemberRow[];
   const inviteRows = (invitesResult.error ? [] : invitesResult.data || []) as SupabaseTripInviteRow[];
   const backendRows = (backendResult.error ? [] : backendResult.data || []) as SupabaseTripBackendLinkRow[];
+  const allMemberUserIds = [...new Set(memberRows.map((m) => m.user_id))];
+  const memberProfilesResult = allMemberUserIds.length
+    ? await withTimeout(supabase.from('profiles').select('id,display_name').in('id', allMemberUserIds))
+    : emptyResult;
+  const profileNames = new Map<string, string>();
+  for (const row of (profilesResult.error ? [] : profilesResult.data || []) as { id: string; display_name: string }[]) {
+    if (row.display_name) profileNames.set(row.id, row.display_name);
+  }
+  for (const row of (memberProfilesResult as { data?: { id: string; display_name: string }[] | null }).data || []) {
+    if (row.display_name) profileNames.set(row.id, row.display_name);
+  }
   const peopleRows = (peopleResult.error ? [] : peopleResult.data || []) as SupabaseAccountingPersonRow[];
-  const trips = tripRows.map((row) => rowToTrip(row, state, sharingForTrip(row, session.user.id, memberRows, inviteRows, backendRows)));
+  const trips = tripRows.map((row) => rowToTrip(row, state, sharingForTrip(row, session.user.id, memberRows, inviteRows, backendRows, profileNames)));
   const tripBySupabaseId = new Map<string, TripProfile>();
   for (const trip of trips) {
     if (trip.supabaseId) tripBySupabaseId.set(trip.supabaseId, trip);

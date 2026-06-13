@@ -191,9 +191,18 @@ export function App() {
     if (!rawHash.startsWith('accept-invite')) return;
     const query = rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : '';
     const token = new URLSearchParams(query).get('token')?.trim();
-    if (!token || token === acceptedInviteToken || !hasSupabaseSession(effectiveSupabaseSession)) return;
-    setAcceptedInviteToken(token);
-    acceptSupabaseTripInvite(effectiveSupabaseSession, token)
+    if (!token || token === acceptedInviteToken) return;
+    if (!hasSupabaseSession(effectiveSupabaseSession)) {
+      localStorage.setItem('travel-expense:pending-invite-token', token);
+      window.history.replaceState(null, '', '#login');
+      return;
+    }
+    const pendingToken = localStorage.getItem('travel-expense:pending-invite-token');
+    const resolvedToken = token || pendingToken;
+    if (!resolvedToken) return;
+    localStorage.removeItem('travel-expense:pending-invite-token');
+    setAcceptedInviteToken(resolvedToken);
+    acceptSupabaseTripInvite(effectiveSupabaseSession, resolvedToken)
       .then(async () => {
         window.history.replaceState(null, '', '#settings');
         setTab('settings');
@@ -201,9 +210,37 @@ export function App() {
       })
       .catch((inviteError) => {
         console.error('[TripInvite] accept failed:', inviteError);
-        updateState({ syncError: inviteError instanceof Error ? inviteError.message : 'Trip invite accept failed' });
+        const msg = inviteError instanceof Error ? inviteError.message : 'Trip invite accept failed';
+        if (/expired/i.test(msg)) {
+          updateState({ syncError: '邀請已過期，請聯絡旅程管理員重新發送邀請。' });
+        } else {
+          updateState({ syncError: msg });
+        }
       });
   }, [acceptedInviteToken, effectiveSupabaseSession, pull, updateState]);
+
+  useEffect(() => {
+    if (!hasSupabaseSession(effectiveSupabaseSession)) return;
+    const pendingToken = localStorage.getItem('travel-expense:pending-invite-token');
+    if (!pendingToken || pendingToken === acceptedInviteToken) return;
+    localStorage.removeItem('travel-expense:pending-invite-token');
+    setAcceptedInviteToken(pendingToken);
+    acceptSupabaseTripInvite(effectiveSupabaseSession, pendingToken)
+      .then(async () => {
+        window.history.replaceState(null, '', '#settings');
+        setTab('settings');
+        await pull();
+      })
+      .catch((inviteError) => {
+        console.error('[TripInvite] pending accept failed:', inviteError);
+        const msg = inviteError instanceof Error ? inviteError.message : 'Trip invite accept failed';
+        if (/expired/i.test(msg)) {
+          updateState({ syncError: '邀請已過期，請聯絡旅程管理員重新發送邀請。' });
+        } else {
+          updateState({ syncError: msg });
+        }
+      });
+  }, [effectiveSupabaseSession, acceptedInviteToken, pull, updateState]);
 
   useEffect(() => {
     const onHash = () => {

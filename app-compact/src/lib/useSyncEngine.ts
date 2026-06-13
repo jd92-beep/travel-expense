@@ -43,7 +43,7 @@ function dedupeQueue(queue: SyncQueueItem[]) {
 }
 
 function pendingCount(queue: SyncQueueItem[] = []) {
-  return queue.filter((item) => item.status !== 'synced' && item.status !== 'failed').length;
+  return queue.filter((item) => item.status !== 'synced' && item.status !== 'failed' && item.status !== 'error').length;
 }
 
 function usesSharedLedger(state: AppState, receipt: Receipt): boolean {
@@ -264,7 +264,7 @@ export function useSyncEngine(
       let failures = 0;
       let lastError = '';
       for (const item of dedupeQueue(stateRef.current.syncQueue || [])) {
-        if (item.status === 'failed' || item.attempts >= MAX_RETRY_ATTEMPTS) continue;
+        if (item.status === 'failed' || item.status === 'error' || item.attempts >= MAX_RETRY_ATTEMPTS) continue;
         markQueueItem(item, { status: 'syncing' });
         try {
           await processItem(item);
@@ -285,15 +285,15 @@ export function useSyncEngine(
           });
 
           if (isAuthError) {
-            console.log('[SyncEngine] Auth error detected mid-push, halting queue');
-            break;
+            console.log('[SyncEngine] Auth error detected mid-push, skipping item');
+            continue;
           }
         }
       }
       if (aliveRef.current) {
         setState((current) => ({
           ...current,
-          syncQueue: dedupeQueue(current.syncQueue || []).slice(-500),
+          syncQueue: dedupeQueue(current.syncQueue || []).filter((item) => item.attempts < MAX_RETRY_ATTEMPTS).slice(-500),
         }));
       }
       await yieldToStateFlush();
@@ -417,11 +417,6 @@ export function useSyncEngine(
           };
         });
       }
-      updateSyncState({
-        status: pullErrors.length ? 'error' : (computedPending ? 'queued' : 'synced'),
-        lastSyncedAt: nextSyncedAt,
-        error: pullErrors.join(' | '),
-      });
       console.log(`[SyncEngine] pull() complete — trips: ${trips.length}, receipts: ${receipts.length}, settings: ${settings ? 'yes' : 'no'}, errors: ${pullErrors.length}`);
     } catch (error) {
       const message = redactError(error);

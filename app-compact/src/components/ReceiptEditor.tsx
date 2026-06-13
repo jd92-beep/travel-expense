@@ -212,7 +212,7 @@ export function ReceiptEditor({
           <input value={draft.address || ''} onChange={(e) => set('address', e.target.value)} placeholder="例：名古屋市中村区名駅4-6-25" />
         </label>
         <label>品項
-          <textarea value={draft.itemsText || ''} onChange={(e) => set('itemsText', e.target.value)} rows={3} />
+          <textarea value={draft.itemsText || ''} onChange={(e) => set('itemsText', e.target.value)} rows={6} />
         </label>
         <label>備註
           <textarea value={draft.note || ''} onChange={(e) => set('note', e.target.value)} rows={3} />
