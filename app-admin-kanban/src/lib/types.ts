@@ -50,6 +50,7 @@ export type AdminUserCard = {
   imageCount: number;
   notionConnected: boolean;
   notionStatus: string;
+  notionStatusLabel?: string;
   notionLastSyncedAt: string | null;
   supabaseConnected: boolean;
   syncJobCount: number;

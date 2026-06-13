@@ -933,11 +933,22 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     const tripBySupabaseId = new Map([[tripUuid, syncedTrip]]);
     return rowToReceipt(data as SupabaseReceiptRow, { ...state, trips: (state.trips || []).map((item) => item.id === syncedTrip.id ? syncedTrip : item) }, tripBySupabaseId, receipt.id, userId);
   }
-  const { data, error } = await withTimeout(supabase
+  let { data, error } = await withTimeout(supabase
     .from('receipts')
     .upsert(row, { onConflict: 'id' })
     .select('*')
     .single());
+  // Resilience: if the live schema is missing a newer optional column (schema drift),
+  // strip those columns and retry instead of hard-failing the whole receipt — mirrors
+  // the upsertSupabaseTrip fallback. Prevents one missing column from blocking all sync.
+  if (error && /column|schema cache/i.test(error.message || '')) {
+    const { version: _version, ...legacyRow } = row;
+    ({ data, error } = await withTimeout(supabase
+      .from('receipts')
+      .upsert(legacyRow, { onConflict: 'id' })
+      .select('*')
+      .single()));
+  }
   if (error) throw error;
   const tripBySupabaseId = new Map([[tripUuid, syncedTrip]]);
   return rowToReceipt(data as SupabaseReceiptRow, { ...state, trips: (state.trips || []).map((item) => item.id === syncedTrip.id ? syncedTrip : item) }, tripBySupabaseId, receipt.id, userId);

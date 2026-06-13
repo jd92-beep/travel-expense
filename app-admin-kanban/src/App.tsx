@@ -483,19 +483,6 @@ function UserDetailsPanel({
         </div>
       </div>
 
-      <div className="connection-status">
-        <h3>Connection Status</h3>
-        <Metric label="Supabase Health" value={statusText[user.health]} status={user.health} />
-        <Metric label="Supabase Connected" value={user.supabaseConnected ? 'Yes' : 'No'} status={user.supabaseConnected ? 'healthy' : 'warning'} />
-        <Metric label="Notion Integration" value={user.notionConnected ? 'Connected' : 'Not Connected'} status={user.notionConnected ? 'healthy' : 'warning'} />
-        <Metric label="Notion Status" value={user.notionStatus || 'N/A'} />
-        {user.notionLastSyncedAt && <Metric label="Notion Last Sync" value={fmtDate(user.notionLastSyncedAt)} />}
-        <Metric label="Last Sync" value={fmtDate(user.lastSyncAt)} />
-        <Metric label="Sync Jobs" value={user.syncJobCount} />
-        <Metric label="Failed Sync Jobs" value={user.failedSyncJobs} status={user.failedSyncJobs > 0 ? 'danger' : 'healthy'} />
-        <Metric label="AI Requests (Today)" value={user.aiRequestsToday} />
-      </div>
-
       <div className="user-lists">
         <div className="list-section">
           <h3>Trips ({userTrips.length})</h3>
@@ -571,9 +558,11 @@ function UserDetailsPanel({
                   <small>{receipt.recordDate} · {receipt.status}</small>
                   <span>{receipt.amount.toLocaleString()} {receipt.currency}</span>
                   {receipt.category && <small className="receipt-category">#{receipt.category}</small>}
-                  <span className={`sync-status ${receipt.notionSynced ? 'synced' : 'pending'}`}>
-                    {receipt.notionSynced ? 'Notion Synced' : 'Notion Pending'}
-                  </span>
+                  {receipt.notionSynced ? (
+                    <span className="sync-status synced">Notion Synced</span>
+                  ) : user.notionConnected ? (
+                    <span className="sync-status pending">Notion Pending</span>
+                  ) : null}
                   <div className="detail-actions">
                     {receipt.photoPath ? (
                       <button type="button" onClick={(e) => { e.stopPropagation(); setViewImageUrl(`https://fbnnjoahvtdrnigevrtw.supabase.co/storage/v1/object/public/receipt-photos/${receipt.photoPath}`); }} title="View Photo" className="icon-btn"><ImageIcon size={14} /></button>
@@ -589,6 +578,19 @@ function UserDetailsPanel({
             <p className="empty-text">No receipts found.</p>
           )}
         </div>
+      </div>
+
+      <div className="connection-status">
+        <h3>Connection Status</h3>
+        <Metric label="Supabase Health" value={statusText[user.health]} status={user.health} />
+        <Metric label="Supabase Connected" value={user.supabaseConnected ? 'Yes' : 'No'} status={user.supabaseConnected ? 'healthy' : 'warning'} />
+        <Metric label="Notion Integration" value={user.notionConnected ? 'Connected' : 'Not Connected'} status={user.notionConnected ? 'healthy' : 'warning'} />
+        <Metric label="Notion Status" value={user.notionStatusLabel || user.notionStatus || 'N/A'} />
+        {user.notionLastSyncedAt && <Metric label="Notion Last Sync" value={fmtDate(user.notionLastSyncedAt)} />}
+        <Metric label="Last Sync" value={fmtDate(user.lastSyncAt)} />
+        <Metric label="Sync Jobs" value={user.syncJobCount} />
+        <Metric label="Failed Sync Jobs" value={user.failedSyncJobs} status={user.failedSyncJobs > 0 ? 'danger' : 'healthy'} />
+        <Metric label="AI Requests (Today)" value={user.aiRequestsToday} />
       </div>
 
       <DeletePanel session={session} user={user} onDone={onRefresh} />
