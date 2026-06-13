@@ -85,7 +85,12 @@ begin
     end if;
   end loop;
 
-  -- 4. 物理刪除 auth.users 帳戶 (依賴 on delete cascade 自動清理 private profiles/trips/receipts)
+  -- 4. 清理唯一一個非 cascade 嘅 FK：private.notion_import_batches.target_owner_id
+  --    呢條 FK 係 ON DELETE RESTRICT，如果用戶有 import 紀錄，下面 delete auth.users 會 raise
+  --    foreign_key_violation，導致整個註銷 RPC 失敗。先手動清走。
+  delete from private.notion_import_batches where target_owner_id = current_user_id;
+
+  -- 5. 物理刪除 auth.users 帳戶 (依賴 on delete cascade 自動清理 private profiles/trips/receipts)
   delete from auth.users where id = current_user_id;
 end;
 $$ language plpgsql security definer;
