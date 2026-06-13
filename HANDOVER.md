@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-13
-- **Focus**: Compact Scan/Home UX polish; multilingual receipt preview, FX modal, and richer Home budget status
+- **Focus**: Compact Home/Weather/Settings/Scan polish; current-time weather jump, cleaner settings layout, and live FX calculation
 - **Agent**: Codex 🤖
-- **App version**: Compact `0.2.6`; React unchanged in this pass
+- **App version**: Compact `0.2.7`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +18,32 @@
 
 ## What Was Done
 
-### Session 21 (Codex — current session)
+### Session 22 (Codex — current session)
+
+1. **Compact Home `今日狀態` layout fixed**:
+   - The weather summary pill now has an explicit `.preview-dashboard-weather-mini` class.
+   - This stops the generic `> div` CSS from applying weather-pill positioning to the currency toggle, preventing the right weather icon from covering content.
+2. **Compact Weather current-time behavior improved**:
+   - The Weather tab now chooses the top preview day from the current trip date when available, then falls back to the next/upcoming or last trip day.
+   - Weather day cards now expose `data-weather-day` and hourly slots expose `data-weather-hour`, letting the tab auto-scroll to the current live slot/day.
+   - Weather row cache is now accepted only when cached labels match the active itinerary, preventing stale rows from another trip from appearing in the top weather card.
+3. **Compact Settings cards reorganized**:
+   - Supabase Auth is split into a clear account/actions card plus a password panel.
+   - Trip Manager is split into active-trip selection, new-trip creation, selected-trip editing, itinerary quick access, save/delete actions, and currency/statistics settings.
+   - New CSS classes replace several inline styles and keep the panels mobile-friendly.
+4. **Compact Scan live FX calculation polished**:
+   - Opening the `即時匯率` modal now automatically refreshes live FX once.
+   - The existing conversion calculation updates immediately while typing, using the refreshed live snapshot when available.
+5. **Coverage and versioning**:
+   - Weather and Settings smoke tests now deep-link to their tabs because the app intentionally opens on Scan by default.
+   - Weather smoke expectations were updated for the current Jeju default itinerary and known-region weather target resolution.
+   - Bumped Compact `package.json`, `package-lock.json`, and `APP_VERSION` from `0.2.6` to `0.2.7`.
+6. **Verification**:
+   - Passed `app-compact npm run typecheck`.
+   - Passed `app-compact npm run build` (Vite still reports a plugin timing warning only).
+   - Passed served Compact smokes for Dashboard, Scan, Weather, Settings, and mobile layout.
+
+### Session 21 (Codex — previous session)
 
 1. **Compact Scan tab cleaned up and localized**:
    - Removed the unused `Scan cockpit` panel that showed `辨識狀態`, `Batch`, `Recovery`, and `Attachment` under the mock receipt.

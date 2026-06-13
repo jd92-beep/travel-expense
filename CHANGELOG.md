@@ -2,6 +2,12 @@
 
 ## 2026-06-13
 
+- Fixed Compact Home `今日狀態` weather pill layout so the right-side weather icon no longer shares positioning styles with the currency toggle or covers nearby content.
+- Upgraded Compact Weather tab navigation: the top current-weather card now follows the current trip date/time, weather day cards expose live-hour anchors, and the tab auto-scrolls to the relevant day/hour card. Weather row cache is now itinerary-scoped so stale rows from another trip cannot appear on the current trip.
+- Reorganized Compact Settings Supabase Auth and Trip Manager cards into clearer account/password, active-trip, new-trip, edit-trip, and currency/statistics sections with mobile-friendly controls.
+- Improved Compact Scan live currency exchange: opening the FX modal automatically refreshes live rates, and typing an amount recalculates the conversion immediately without pressing the refresh button.
+- Updated Compact Weather/Settings smoke tests for Scan-first deep links, current Jeju default itinerary expectations, and known-region weather target resolution. Bumped Compact to `0.2.7`.
+- Verification passed with `app-compact npm run typecheck`, `app-compact npm run build`, and served Compact smokes for Dashboard, Scan, Weather, Settings, and mobile layout.
 - Upgraded the Compact Scan tab receipt/FX cockpit: removed the unused recovery/batch/attachment status chips, replaced the hardcoded Japanese receipt with a trip-aware multilingual mock receipt library keyed by destination currency, moved the exchange-rate tool into a wide button under Camera/Gallery, and redesigned exchange as an accessible modal.
 - Refined the Compact Home budget cards: removed the unused top-right dashboard bell/red dot and the `預算提醒` budget strip action, redesigned the currency toggle, added dual-currency daily budget/day balance display, and added a visible circular daily-budget usage chart to `今日狀態`.
 - Updated Compact Playwright coverage for the new Scan exchange modal, Home dual-currency/chart behavior, the Scan-first launch contract, and touch/mobile layout expectations. Bumped Compact to `0.2.6`.
