@@ -627,7 +627,7 @@ async function run() {
     assert.equal(restoreFetch.mimoBodies().at(-1).model, 'mimo-v2.5');
     assert.deepEqual(restoreFetch.mimoBodies().at(-1).thinking, { type: 'disabled' });
     assert.equal(restoreFetch.mimoBodies().at(-1).stream, false);
-    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 3500);
+    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 10000);
 
     const weatherApiRotate = await jsonFetch(env, '/credentials/rotate', {
       method: 'POST',

@@ -200,7 +200,10 @@ export function convertAmount(amount: number, from: string, to: string, state: A
   if (from === 'JPY' && to === 'HKD') return n / rate;
   if (from === 'HKD' && to === 'JPY') return n * rate;
   const rates = usableSnapshot(snapshot)?.rates;
-  if (!rates || !Number.isFinite(rates[from]) || !Number.isFinite(rates[to]) || rates[from] === 0 || rates[to] === 0) return null;
-  const hkd = n / Number(rates[from]);
-  return hkd * Number(rates[to]);
+  if (rates && Number.isFinite(rates[from]) && Number.isFinite(rates[to]) && rates[from] !== 0 && rates[to] !== 0) {
+    const hkd = n / Number(rates[from]);
+    return hkd * Number(rates[to]);
+  }
+  const viaHkd = amountToHkd(n, from, state);
+  return hkdToCurrency(viaHkd, to, state);
 }

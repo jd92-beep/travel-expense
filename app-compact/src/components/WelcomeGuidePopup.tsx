@@ -217,8 +217,8 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   }
 
   return (
-    <div className="modal-backdrop welcome-guide-backdrop" style={{ display: 'grid', placeItems: 'center', background: 'rgba(23, 18, 12, 0.6)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', zIndex: 1500 }}>
-      <div className="modal welcome-guide-modal" style={{ width: 'min(680px, 95vw)', maxHeight: '92vh', overflowY: 'auto', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid rgba(255, 255, 255, 0.6)', borderRadius: '24px', padding: '28px', boxShadow: '0 30px 70px rgba(42, 30, 18, 0.22)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', animation: 'page-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+    <div className="modal-backdrop welcome-guide-backdrop" style={{ display: 'grid', placeItems: 'center', background: 'rgba(23, 18, 12, 0.6)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', zIndex: 1500 }} onClick={onSkip}>
+      <div className="modal welcome-guide-modal" style={{ width: 'min(680px, 95vw)', maxHeight: '92vh', overflowY: 'auto', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid rgba(255, 255, 255, 0.6)', borderRadius: '24px', padding: '28px', boxShadow: '0 30px 70px rgba(42, 30, 18, 0.22)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', animation: 'page-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} onClick={(e) => e.stopPropagation()}>
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>

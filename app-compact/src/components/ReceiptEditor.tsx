@@ -77,9 +77,9 @@ export function ReceiptEditor({
       splitMode: 'shared',
       createdAt: Date.now(),
     });
-    // Only reset when the receipt being edited changes, not on every AppState update
+    // Only reset when the receipt ID changes, not on every AppState update or object reference change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [receipt]);
+  }, [receipt?.id]);
 
   const set = <K extends keyof Receipt>(key: K, value: Receipt[K]) => setDraft((d) => {
     if (key === 'date' && !receipt) {

@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ExternalLink } from 'lucide-react';
 import type { Receipt } from '../lib/types';
 import { safePhotoUrl } from '../lib/domain';
+import { useModalAccessibility } from '../lib/useModalAccessibility';
 
 export function ReceiptPhotoModal({ receipt, onClose }: { receipt: Receipt; onClose: () => void }) {
+  const stableOnClose = useCallback(() => onClose(), [onClose]);
+  const containerRef = useModalAccessibility(true, stableOnClose);
   const photoSrc = safePhotoUrl(receipt.photoUrl, receipt.photoThumb);
   const [imgSrc, setImgSrc] = useState(photoSrc);
   const [error, setError] = useState(!photoSrc);
@@ -29,6 +32,7 @@ export function ReceiptPhotoModal({ receipt, onClose }: { receipt: Receipt; onCl
 
   return createPortal(
     <div
+      ref={containerRef as React.RefObject<HTMLDivElement>}
       className="modal-backdrop"
       role="presentation"
       onClick={onClose}

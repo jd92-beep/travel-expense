@@ -14,6 +14,7 @@ const MIMO_PAYG_BASE = 'https://api.xiaomimimo.com/v1';
 const GOOGLE_DEFAULT_MODEL = 'gemma-4-31b-it';
 const RATE_WINDOW_MS = 1000 * 60 * 15;
 const DEFAULT_SUPABASE_AI_DAILY_LIMIT = 50;
+const BOSS_EMAIL = 'vc06456@gmail.com';
 const TRIP_THEME_KEYS = ['japan_washi', 'korea_editorial', 'taiwan_nightmarket', 'europe_rail', 'global_journal'];
 const TRIP_CONTEXTS = [
   { countryCode: 'JP', countryName: 'Japan', primaryCurrency: 'JPY', themeKey: 'japan_washi', locale: 'ja-JP', timezone: 'Asia/Tokyo', weatherRegion: 'Japan', pattern: /日本|東京|东京|大阪|名古屋|京都|札幌|沖繩|冲绳|japan|tokyo|osaka|nagoya|kyoto|sapporo|okinawa|jpy/i },
@@ -285,7 +286,7 @@ async function listTrustedDevices(request, env) {
   const devices = [];
   for (const item of keys.slice(0, 100)) {
     const record = await env.CREDENTIALS_VAULT.get(item.name, 'json');
-    if (!record || record.revokedAt || record.origin !== origin) continue;
+    if (!record || record.revokedAt || record.origin !== origin || Number(record.expiresAt || 0) <= Date.now()) continue;
     devices.push({
       deviceId: record.deviceId,
       deviceName: record.deviceName,
@@ -309,7 +310,7 @@ async function verifyPassword(password, hashSpec) {
   const [kind, iterationText, saltB64, hashB64] = String(hashSpec).split(':');
   if (kind !== 'pbkdf2' || !saltB64 || !hashB64) throw new Error('Password hash format invalid');
   const iterations = Number(iterationText) || 100000;
-  if (!Number.isInteger(iterations) || iterations < 1 || iterations > 100000) {
+  if (!Number.isInteger(iterations) || iterations < 10000 || iterations > 100000) {
     throw new Error('Password hash iteration count unsupported');
   }
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(password || '')), 'PBKDF2', false, ['deriveBits']);
@@ -519,8 +520,24 @@ function supabaseAiDailyLimit(env) {
   return DEFAULT_SUPABASE_AI_DAILY_LIMIT;
 }
 
-async function consumeSupabaseAiQuota(env, user, provider) {
-  if (!user?.id) return null;
+async function consumeSupabaseAiQuota(env, user, provider, request) {
+  if (!user?.id) {
+    const fallbackId = request?.headers?.get(SESSION_HEADER) || request?.headers?.get('CF-Connecting-IP') || 'anon';
+    const quotaKey = `ai-quota-fallback:${provider}:${await sha256Id(fallbackId)}`;
+    const now = Date.now();
+    const day = new Date(now).toISOString().slice(0, 10);
+    const key = `${quotaKey}:${day}`;
+    const current = await env.CREDENTIALS_VAULT.get(key, 'json');
+    const resetAt = current?.resetAt && current.resetAt > now ? current.resetAt : nextUtcMidnight(now);
+    const count = current?.resetAt && current.resetAt > now ? Number(current.count || 0) : 0;
+    const limit = supabaseAiDailyLimit(env);
+    if (count >= limit) throw new HttpError('AI daily quota exceeded', 429);
+    const next = { provider, count: count + 1, limit, resetAt, updatedAt: now };
+    await env.CREDENTIALS_VAULT.put(key, JSON.stringify(next), {
+      expirationTtl: Math.max(60, Math.ceil((resetAt - now) / 1000) + 3600),
+    });
+    return next;
+  }
   const now = Date.now();
   const day = new Date(now).toISOString().slice(0, 10);
   const key = `ai-quota:${day}:${provider}:${await sha256Id(user.id)}`;
@@ -649,7 +666,7 @@ async function upsertIntegrationMetadata(env, user, patch) {
 async function notionCredentialFor(env, user) {
   if (user?.id) {
     const credential = await readUserCredential(env, 'notion', user.id);
-    if (user?.email === 'vc06456@gmail.com') {
+    if (user?.email === BOSS_EMAIL) {
       if (credential?.secret) return credential;
     } else {
       if (!credential?.secret) throw new HttpError('Personal Notion credential missing', 401);
@@ -724,7 +741,7 @@ async function notionUploadFileWorker(env, base64, mime, filename, user) {
 async function fetchNotion(env, path, method, body, databaseId, user) {
   const credential = await notionCredentialFor(env, user);
   const notionPath = safeNotionPath(path);
-  const effectiveDatabaseId = (user?.id && user?.email !== 'vc06456@gmail.com') ? credential.extra?.databaseId : databaseId || credential.extra?.databaseId;
+  const effectiveDatabaseId = (user?.id && user?.email !== BOSS_EMAIL) ? credential.extra?.databaseId : databaseId || credential.extra?.databaseId;
   assertPersonalNotionScope(notionPath, body, databaseId, credential, user);
   const url = `https://api.notion.com/v1${notionPath}`;
   const response = await fetch(url, {
@@ -803,7 +820,7 @@ function assertSameNotionDatabase(candidate, registered) {
 
 function assertPersonalNotionScope(path, body, databaseId, credential, user) {
   if (!user?.id) return;
-  if (user?.email === 'vc06456@gmail.com') return;
+  if (user?.email === BOSS_EMAIL) return;
   const registeredDatabaseId = credential.extra?.databaseId;
   if (!registeredDatabaseId) throw new HttpError('Personal Notion database missing', 401);
   assertSameNotionDatabase(databaseId, registeredDatabaseId);
@@ -884,7 +901,7 @@ async function mimoJson(env, prompt, kind, image, requestedModel) {
     temperature: kind === 'test' ? 0 : 0.1,
     stream: false,
     thinking: { type: 'disabled' },
-    max_tokens: kind === 'trip' ? 3500 : 800,
+    max_tokens: kind === 'trip' ? 10000 : 800,
   });
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
 }
@@ -1295,28 +1312,28 @@ async function handleRequest(request, env) {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
-      await consumeSupabaseAiQuota(env, user, 'kimi');
+      await consumeSupabaseAiQuota(env, user, 'kimi', request);
       return json({ ok: true, data: await kimiJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
     }
     if (url.pathname === '/google/json') {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
-      await consumeSupabaseAiQuota(env, user, 'google');
+      await consumeSupabaseAiQuota(env, user, 'google', request);
       return json({ ok: true, data: await googleJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
     }
     if (url.pathname === '/mimo/json') {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
-      await consumeSupabaseAiQuota(env, user, 'mimo');
+      await consumeSupabaseAiQuota(env, user, 'mimo', request);
       return json({ ok: true, data: await mimoJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
     }
     if (url.pathname === '/trip/intelligence') {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
-      await consumeSupabaseAiQuota(env, user, 'kimi');
+      await consumeSupabaseAiQuota(env, user, 'kimi', request);
       const parsed = await kimiJson(env, tripAnalysisPrompt(body), 'trip', undefined, body.model || 'kimi-code');
       return json({ ok: true, data: normalizeTripAnalysis(parsed, body) }, 200, cors);
     }

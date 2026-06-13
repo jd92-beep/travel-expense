@@ -175,6 +175,23 @@ export function normalizeZone(value?: unknown): string {
   if (zone === 'HKT') return 'Asia/Hong_Kong';
   if (zone === 'KST') return 'Asia/Seoul';
   if (zone === 'CST') return 'Asia/Shanghai';
+  if (zone === 'SGT' || zone === 'SGT') return 'Asia/Singapore';
+  if (zone === 'PST' || zone === 'PDT') return 'America/Los_Angeles';
+  if (zone === 'EST' || zone === 'EDT') return 'America/New_York';
+  if (zone === 'CST-US' || zone === 'CDT') return 'America/Chicago';
+  if (zone === 'MST' || zone === 'MDT') return 'America/Denver';
+  if (zone === 'AKST' || zone === 'AKDT') return 'America/Anchorage';
+  if (zone === 'HST') return 'Pacific/Honolulu';
+  if (zone === 'GMT' || zone === 'BST') return 'Europe/London';
+  if (zone === 'CET' || zone === 'CEST') return 'Europe/Paris';
+  if (zone === 'IST') return 'Asia/Kolkata';
+  if (zone === 'AEST' || zone === 'AEDT') return 'Australia/Sydney';
+  if (zone === 'NZST' || zone === 'NZDT') return 'Pacific/Auckland';
+  if (zone === 'KST') return 'Asia/Seoul';
+  if (zone === 'WIB') return 'Asia/Jakarta';
+  if (zone === 'ICT') return 'Asia/Bangkok';
+  if (zone === 'MYT') return 'Asia/Kuala_Lumpur';
+  if (zone === 'PHT') return 'Asia/Manila';
   return zone;
 }
 

@@ -1,7 +1,7 @@
 import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS, normalizeAiModelSettings, isBoss } from './constants';
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { brokerNotionRequest, hasCredentialBrokerSession, brokerNotionUploadFile } from './credentialBroker';
-import { displayStore, getPersons, hkd, receiptRegion } from './domain';
+import { displayStore, getPersons, getReceiptHkdAmount, receiptRegion } from './domain';
 import { getDirectNotionToken } from './storage';
 import { isReceiptTombstoned } from './syncMerge';
 import { currentSupabaseUserEmail } from './supabase';
@@ -189,7 +189,7 @@ async function ensureSchema(state: AppState): Promise<SchemaMap> {
       // 4. Trip-specific
       'tripId', 'tripName', 'destination', 'startDate', 'endDate',
       'homeCurrency', 'tripCurrencies', 'timezones', 'tripVersion',
-      'updatedAt', 'active', 'tripJson',
+      'updatedAt', 'active', 'tripJson', 'tripIntelligence',
     ];
 
     for (const k of resolutionOrder) {
@@ -340,7 +340,7 @@ function buildProps(state: AppState, receipt: Receipt, schema: SchemaMap) {
     [photoCol]: photoProp,
     [propName(schema, 'person')]: { rich_text: [{ text: { content: person ? `${person.emoji} ${person.name}` : '' } }] },
     [propName(schema, 'sourceId')]: { rich_text: [{ text: { content: receipt.sourceId || receipt.id } }] },
-    [propName(schema, 'hkd')]: { number: receipt.hkdAmount ?? hkd(receipt.total, state) },
+    [propName(schema, 'hkd')]: { number: receipt.hkdAmount ?? getReceiptHkdAmount(receipt, state) },
     [propName(schema, 'split')]: { select: { name: receipt.splitMode === 'private' ? '🔒 私人' : '👫 共同' } },
     [propName(schema, 'tripId')]: { rich_text: [{ text: { content: receipt.tripId || activeTrip(state).id } }] },
     [propName(schema, 'tripVersion')]: { number: receipt.tripVersion || activeTrip(state).version },
@@ -497,9 +497,13 @@ function readNumberProp(props: Record<string, any>, key: keyof typeof N, schema?
     }
   }
   if (isVersionLike) {
+    for (const [name, p] of Object.entries(props)) {
+      const val = p?.number ?? p?.formula?.number ?? p?.rollup?.number;
+      if (typeof val === 'number' && /version|版|trip.*ver|行程.*版/i.test(name)) return val;
+    }
     for (const [, p] of Object.entries(props)) {
       const val = p?.number ?? p?.formula?.number ?? p?.rollup?.number;
-      if (typeof val === 'number') return val;
+      if (typeof val === 'number' && val > 0 && val < 1000) return val;
     }
   }
   return undefined;
@@ -1203,7 +1207,14 @@ export async function pushReceipt(state: AppState, receipt: Receipt): Promise<Re
 
   // 2. Append Image Block to Page Body for direct visualization in Notion App
   if (pageId) {
-    if (receipt.photoThumb && !receipt._photoBodyBlockAdded) {
+    let alreadyHasImageBlock = false;
+    try {
+      const existingBlocks = await notionFetch<{ results?: Array<{ type?: string }> }>(notionState, `/blocks/${pageId}/children?page_size=100`, { method: 'GET' });
+      alreadyHasImageBlock = (existingBlocks.results || []).some((block) => block.type === 'image');
+    } catch {
+      // If we can't query blocks, proceed with append (better duplicate than missing)
+    }
+    if (!alreadyHasImageBlock && receipt.photoThumb && !receipt._photoBodyBlockAdded) {
       try {
         console.log('[notionPush] Appending image block to page body...');
         const baseName = (receipt.store || 'receipt').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
@@ -1226,7 +1237,7 @@ export async function pushReceipt(state: AppState, receipt: Receipt): Promise<Re
       } catch (e: any) {
         console.warn('[notionPush] could not append photo block to page body:', e.message || e);
       }
-    } else if (receipt.photoUrl && !receipt._photoBodyBlockAdded) {
+    } else if (!alreadyHasImageBlock && receipt.photoUrl && !receipt._photoBodyBlockAdded) {
       try {
         console.log('[notionPush] Appending external image block to page body...');
         await notionFetch(notionState, `/blocks/${pageId}/children`, {
@@ -1428,15 +1439,20 @@ export async function archiveReceipt(state: AppState, receipt: Receipt) {
 
 export async function pushAll(state: AppState) {
   let ok = 0;
+  const failures: Array<{ id: string; error: string }> = [];
   for (const trip of state.trips || []) {
     await pushTripPage(state, trip);
   }
   for (const receipt of state.receipts) {
-    await pushReceipt(state, receipt);
-    ok += 1;
+    try {
+      await pushReceipt(state, receipt);
+      ok += 1;
+    } catch (err) {
+      failures.push({ id: receipt.id, error: String(err) });
+    }
   }
   await pushSettingsMeta(state);
-  return ok;
+  return { ok, failures };
 }
 
 export async function pullAll(state: AppState): Promise<Receipt[]> {

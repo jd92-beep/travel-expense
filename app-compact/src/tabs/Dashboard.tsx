@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
   ChevronDown,
@@ -43,7 +43,7 @@ import {
   getReceiptTripAmount,
   getResolvedTripCurrency
 } from '../lib/domain';
-import { activeTrip, createTripProfile, normalizeItinerary, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import { activeTrip, createTripProfile, normalizeItinerary, scopedReceiptsForTrip, switchTrip } from '../domain/trip/normalize';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt, SyncQueueItem, TabId, TripProfile } from '../lib/types';
 import { parseTripParagraph } from '../lib/ai';
 import { brokerAiJson, redactedError } from '../lib/credentialBroker';
@@ -459,6 +459,7 @@ export function Dashboard({
 
   // Dropdown & Wizard States
   const [isTripDropdownOpen, setIsTripDropdownOpen] = useState(false);
+  const tripDropdownRef = useRef<HTMLDivElement>(null);
   const [localIsWizardOpen, setLocalIsWizardOpen] = useState(false);
   const activeIsWizardOpen = isWizardOpen !== undefined ? isWizardOpen : localIsWizardOpen;
   const activeSetIsWizardOpen = setIsWizardOpen !== undefined ? setIsWizardOpen : setLocalIsWizardOpen;
@@ -490,6 +491,17 @@ export function Dashboard({
       }
     }
   }, [activeIsWizardOpen]);
+
+  useEffect(() => {
+    if (!isTripDropdownOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (tripDropdownRef.current && !tripDropdownRef.current.contains(e.target as Node)) {
+        setIsTripDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isTripDropdownOpen]);
 
   // 2. 🗺️ 目的地與結算幣種「智能自動聯動」
   useEffect(() => {
@@ -545,6 +557,41 @@ export function Dashboard({
     };
   }, [activeIsWizardOpen, newTripDestination]);
 
+  const closeWizard = useCallback(() => {
+    activeSetIsWizardOpen(false);
+    setWizardStep(1);
+    setNewTripName('');
+    setNewTripDestination('');
+    setNewTripStartDate('');
+    setNewTripEndDate('');
+    setNewTripBudget('');
+    setNewTripCurrency('JPY');
+    setNewTripDetails('');
+    setDestinationIdeas([]);
+    setDestinationIdeaStatus('idle');
+    setTripCreateStatus('idle');
+    setTripCreateError('');
+  }, [activeSetIsWizardOpen]);
+
+  const wizardContainerRef = useRef<HTMLDivElement>(null);
+  const prevFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!activeIsWizardOpen) return;
+    prevFocusRef.current = document.activeElement as HTMLElement;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeWizard(); }
+      if (e.key === 'Tab' && wizardContainerRef.current) {
+        const focusable = wizardContainerRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (!focusable.length) return;
+        const first = focusable[0]; const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => { document.removeEventListener('keydown', handleKeyDown); prevFocusRef.current?.focus?.(); };
+  }, [activeIsWizardOpen, closeWizard]);
+
   // Date duration auto-calc
   const calculatedDuration = useMemo(() => {
     if (!newTripStartDate || !newTripEndDate) return 0;
@@ -587,19 +634,8 @@ export function Dashboard({
   };
 
   const handleSwitchTrip = (tripId: string) => {
-    const target = state.trips?.find((t) => t.id === tripId && !t.archived);
-    if (!target) return;
-
-    setState((prev) => ({
-      ...prev,
-      activeTripId: tripId,
-      trips: (prev.trips || []).map((item) => ({ ...item, active: item.id === tripId && !item.archived })),
-      tripName: target.name,
-      budget: target.budget ?? prev.budget,
-      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || prev.tripCurrency,
-      customItinerary: target.itinerary || [],
-      tripDateRange: { start: target.startDate, end: target.endDate }
-    }));
+    const patch = switchTrip(state, tripId);
+    if (patch) setState((prev) => ({ ...prev, ...patch }));
   };
 
   const handleCreateTrip = async (overrideName?: string) => {
@@ -819,49 +855,7 @@ export function Dashboard({
   const dailyBurnHkd = Math.round(spentHkd / burnDays);
   const projectedSpendHkd = Math.round(dailyBurnHkd * length);
 
-  // 名古屋經典行程 Mockup Fallback — 如果今日無行程，為 Boss 展示極致精美嘅 dummy 行程
-  const displaySpots: ItinerarySpot[] = daySpots.length > 0 ? daySpots : [
-    {
-      id: 'demo-castle',
-      spotId: 'demo-castle',
-      time: '09:00',
-      name: 'Nagoya Castle',
-      type: 'sightseeing',
-      note: 'Historic landmark',
-      address: '1-1 Honmaru, Naka Ward, Nagoya',
-      mapUrl: 'https://maps.google.com/?q=Nagoya+Castle'
-    },
-    {
-      id: 'demo-lunch',
-      spotId: 'demo-lunch',
-      time: '12:30',
-      name: 'Lunch',
-      type: 'food',
-      note: 'Hitsumabushi',
-      address: 'Nagoya Station Area',
-      mapUrl: 'https://maps.google.com/?q=Hitsumabushi+Nagoya'
-    },
-    {
-      id: 'demo-osu',
-      spotId: 'demo-osu',
-      time: '15:00',
-      name: 'Osu Shopping District',
-      type: 'shopping',
-      note: 'Shopping · Souvenirs',
-      address: 'Osu, Naka Ward, Nagoya',
-      mapUrl: 'https://maps.google.com/?q=Osu+Shopping+District'
-    },
-    {
-      id: 'demo-onsen',
-      spotId: 'demo-onsen',
-      time: '18:30',
-      name: 'Atsuta Onsen',
-      type: 'other',
-      note: 'Relax & unwind',
-      address: 'Atsuta Ward, Nagoya',
-      mapUrl: 'https://maps.google.com/?q=Atsuta+Onsen'
-    }
-  ];
+  const displaySpots: ItinerarySpot[] = daySpots.length > 0 ? daySpots : [];
 
   return (
     <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto" aria-label="旅程總覽">
@@ -871,7 +865,7 @@ export function Dashboard({
 
       {/* 1. Header 標題與日曆按鈕 */}
       <div className="dashboard-trip-switcher flex justify-between items-start mb-6 z-10 relative">
-        <div className="flex flex-col relative z-30">
+        <div className="flex flex-col relative z-30" ref={tripDropdownRef}>
           <button
             className="flex items-center gap-1 text-[28px] font-black text-slate-800 tracking-tight font-serif border-none bg-transparent focus:outline-none"
             type="button"
@@ -951,20 +945,22 @@ export function Dashboard({
         <div className="preview-dashboard-budget-head">
           <h2>預算總覽 <Info size={20} aria-hidden="true" /></h2>
           <div className="preview-dashboard-currency" role="group" aria-label="顯示貨幣">
-            <span
+            <button
+              type="button"
               className={activeDisplayCurrency === 'HKD' ? 'is-active' : ''}
               onClick={() => updateState({ displayCurrency: 'HKD' })}
               style={{ cursor: 'pointer' }}
             >
               HKD
-            </span>
-            <span
+            </button>
+            <button
+              type="button"
               className={activeDisplayCurrency === resolvedTripCurrency ? 'is-active' : ''}
               onClick={() => updateState({ displayCurrency: resolvedTripCurrency })}
               style={{ cursor: 'pointer' }}
             >
               {resolvedTripCurrency}
-            </span>
+            </button>
           </div>
         </div>
 
@@ -1073,7 +1069,7 @@ export function Dashboard({
         <div className="preview-dashboard-today-head">
           <h3>今日狀態</h3>
           <span><CalendarDays size={18} /> {chineseDateLabel(displayDayDate)}</span>
-          <div><CloudSun size={22} /> 24°C <small>多雲</small></div>
+          <div><CloudSun size={22} /> -- <small>--</small></div>
         </div>
         <div className="preview-dashboard-today-grid">
           <div>
@@ -1106,11 +1102,18 @@ export function Dashboard({
           </div>
           <div className="flex items-center gap-1 px-3 py-1 bg-amber-50 border border-amber-200/60 rounded-full text-[11px] font-bold text-amber-700">
             <CloudSun size={14} />
-            <span>8°C</span>
+            <span>--</span>
           </div>
         </div>
 
         <div className="dashboard-compact-itinerary-list">
+          {displaySpots.length === 0 && (
+            <div className="text-center py-8 text-slate-400">
+              <MapPin size={24} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium">今日未有行程安排</p>
+              <p className="text-xs mt-1">可喺 Timeline 或 Settings 新增行程</p>
+            </div>
+          )}
           {displaySpots.map((spot, idx) => {
             const details = getSpotIconDetails(spot.type, spot.name);
             const spotKey = spot.id || spot.spotId || `${today}_${spot.time || 'time'}_${spot.name || idx}_${idx}`;
@@ -1350,7 +1353,7 @@ export function Dashboard({
       {/* 建立新旅程 Wizard 彈窗 */}
       {activeIsWizardOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-3xl border border-white/80 shadow-2xl p-6 relative overflow-hidden flex flex-col gap-4 scale-in">
+          <div ref={wizardContainerRef} className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-3xl border border-white/80 shadow-2xl p-6 relative overflow-hidden flex flex-col gap-4 scale-in">
             <div className="absolute -top-12 -right-12 w-28 h-28 bg-[#D94132]/5 rounded-full blur-xl pointer-events-none" />
             <div className="absolute -bottom-12 -left-12 w-28 h-28 bg-[#6D5643]/5 rounded-full blur-xl pointer-events-none" />
 
@@ -1366,10 +1369,7 @@ export function Dashboard({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  activeSetIsWizardOpen(false);
-                  setWizardStep(1);
-                }}
+                onClick={closeWizard}
                 className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-all border-none focus:outline-none cursor-pointer"
               >
                 ✕

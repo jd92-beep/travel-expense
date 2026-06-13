@@ -29,6 +29,7 @@ function extractJson(text: string): unknown {
     let endIdx = -1;
     for (let i = 0; i < str.length; i++) {
       const char = str[i];
+      // Skip the char immediately following a backslash (handles \", \\, \n, etc.)
       if (escape) { escape = false; continue; }
       if (char === '\\') { escape = true; continue; }
       if (char === '"') { inString = !inString; continue; }
@@ -47,7 +48,7 @@ function extractJson(text: string): unknown {
     if (endIdx !== -1) {
       str = str.slice(0, endIdx + 1);
     } else {
-      if (inString) str += '"';
+      if (inString) throw new Error('AI 回覆 JSON 含有未關閉嘅字串');
       while (stack.length > 0) str += stack.pop();
     }
     
@@ -91,8 +92,9 @@ function ymdFromText(text: string, fallback: string): string {
     const [y, m, d] = iso[0].split(/[-/.]/);
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
+  const year = (fallback || '').slice(0, 4) || String(new Date().getFullYear());
   const md = text.match(/(\d{1,2})\s*[月/]\s*(\d{1,2})\s*(?:日)?/);
-  if (md) return `${(fallback || '').slice(0, 4)}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`;
+  if (md) return `${year}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`;
   return fallback;
 }
 
@@ -163,6 +165,7 @@ export async function fileToBase64(file: File): Promise<{ base64: string; mime: 
     reader.readAsDataURL(file);
   });
   const [, meta = '', body = ''] = dataUrl.match(/^data:([^;]+);base64,(.*)$/) || [];
+  if (!body) throw new Error('無法將圖片轉換為 base64：data URL 格式不符預期');
   return { base64: body, mime: meta || file.type || 'image/jpeg' };
 }
 
@@ -314,10 +317,10 @@ function normalizeTripTime(hour: string, minute: string, meridiem = ''): string 
 
 function classifyTripSpot(name: string): ItineraryDay['spots'][number]['type'] {
   if (/機場|airport|航班|起飛|抵達|還車|租車|check-?in|check out|退房|出發|回到|開車|搭船|船票|港/i.test(name)) return 'transport';
-  if (/hotel|resort|酒店|住宿|stanford|fine jeju/i.test(name)) return 'lodging';
-  if (/午餐|晚餐|早餐|cafe|coffee|donut|donuts|restaurant|市場|黑豬|麵|飯|豬腳|炸雞|甜點|pudding|starbucks|bakery|baguette|flowave|waboda|chita|安頓|風爐/i.test(name)) return 'food';
-  if (/mart|shopping|購物|免稅|手信|街|地下街|小店|emart|lotte|新羅|七星路|nuwemaru|blue elephant|the islander|moodjeju|randy/i.test(name)) return 'shopping';
-  if (/park|museum|planet|瀑布|山|峰|牛島|海岸|沙灘|公園|水族館|aqua|camellia|osulloc|9\.81|日出峰|自然|市場/i.test(name)) return 'sightseeing';
+  if (/hotel|resort|酒店|住宿|inn|民宿/i.test(name)) return 'lodging';
+  if (/午餐|晚餐|早餐|cafe|coffee|restaurant|市場|麵|飯|甜點|bakery|lunch|dinner|breakfast|eat|food/i.test(name)) return 'food';
+  if (/mart|shopping|購物|免稅|手信|街|小店|market|shop|souvenir|outlet|mall/i.test(name)) return 'shopping';
+  if (/park|museum|瀑布|山|海岸|沙灘|公園|水族館|自然|castle|temple|shrine|garden|peak|island/i.test(name)) return 'sightseeing';
   return 'other';
 }
 
@@ -359,7 +362,7 @@ function cleanLocalSpotName(value: string): string {
     .slice(0, 120);
 }
 
-function localSpotFromParts(time: string, name: string, sourceText: string, category = ''): ItineraryDay['spots'][number] | null {
+function localSpotFromParts(time: string, name: string, sourceText: string, category = '', timezone = ''): ItineraryDay['spots'][number] | null {
   const cleanName = cleanLocalSpotName(name);
   if (!cleanName || /^[:：-]+$/.test(cleanName) || /^(時間|類別|地點名稱|建議停留)$/i.test(cleanName)) return null;
   const classifierText = `${category} ${cleanName}`;
@@ -367,7 +370,7 @@ function localSpotFromParts(time: string, name: string, sourceText: string, cate
     time,
     name: cleanName,
     type: classifyTripSpot(classifierText),
-    timezone: 'Asia/Seoul',
+    timezone: timezone || 'Asia/Hong_Kong',
     note: category ? cleanLocalSpotName(category) : cleanName,
     sourceText: sourceText.trim(),
     confidence: 'medium',
@@ -379,8 +382,8 @@ function computeTimeEnd(time: string, durationMinutes: number): string {
   const [h, m] = time.split(':').map(Number);
   if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
   const totalMin = h * 60 + m + durationMinutes;
-  const endH = Math.floor(((totalMin % 1440) + 1440) % 1440 / 60);
-  const endM = ((totalMin % 60) + 60) % 60;
+  const endH = Math.floor(totalMin / 60) % 24;
+  const endM = totalMin % 60;
   return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
 }
 
@@ -865,7 +868,15 @@ CRITICAL ITEMS FORMATTING RULES:
       note: `${text.slice(0, 450)}\n\nAI fallback: ${error instanceof Error ? error.message : String(error)}`,
     }];
   }
-  const rows = Array.isArray(parsed) ? parsed : [parsed];
+  if (!parsed) throw new Error('AI returned empty response');
+  const rows = Array.isArray(parsed) ? parsed.filter((r): r is NonNullable<typeof r> => r != null) : parsed ? [parsed] : [];
+  if (!rows.length) {
+    return [{
+      ...heuristicReceiptFromText(text, state),
+      source,
+      note: `${text.slice(0, 450)}\n\nAI fallback: AI returned empty or null result`,
+    }];
+  }
   return rows.map((row, i) => {
     const r = row as Partial<Receipt>;
     return {

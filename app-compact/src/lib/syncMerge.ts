@@ -22,11 +22,11 @@ function receiptTripSourceKey(receipt: Pick<Receipt, 'id' | 'sourceId' | 'tripId
 }
 
 function receiptUpdatedAt(receipt: Receipt, isLocal = false) {
-  return Number(receipt.updatedAt || receipt.createdAt || (isLocal ? Date.now() : 0));
+  return Number(receipt.updatedAt || receipt.createdAt || 0);
 }
 
 function tripUpdatedAt(trip: TripProfile, isLocal = false) {
-  return Number(trip.updatedAt || trip.createdAt || (isLocal ? Date.now() : 0));
+  return Number(trip.updatedAt || trip.createdAt || 0);
 }
 
 export function isReceiptTombstoned(

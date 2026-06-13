@@ -6,6 +6,7 @@ import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../
 import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
 import { compressPhoto } from '../lib/domain';
 import type { AppState, Receipt } from '../lib/types';
+import { useModalOpenClass } from '../lib/useModalOpenClass';
 import scanMasterpieceSuite from '../assets/scan/scan-masterpiece-suite.png';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
@@ -82,6 +83,8 @@ export function Scan({
   const [amount, setAmount] = useState('1000');
   const [fx, setFx] = useState<CurrencySnapshot | null>(() => loadCurrencySnapshot());
   const rate = Math.max(0.1, Number(state.rate) || 20.36);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -96,10 +99,7 @@ export function Scan({
     };
   }, []);
 
-  useEffect(() => {
-    document.documentElement.classList.toggle('modal-open', batch.length > 0);
-    return () => document.documentElement.classList.remove('modal-open');
-  }, [batch.length]);
+  useModalOpenClass(batch.length > 0);
 
   const converted = useMemo(() => {
     const n = Number(amount) || 0;
@@ -145,7 +145,6 @@ export function Scan({
     setStatus('讀取收據圖片…');
     let localThumb: string | undefined = undefined;
     try {
-      // Pre-compress photo to avoid losing it on OCR failure
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result || ''));
@@ -160,12 +159,12 @@ export function Scan({
     }
 
     try {
-      const receipt = await scanReceiptImage(file, state);
+      const receipt = await scanReceiptImage(file, stateRef.current);
       openDraft(receipt);
       if (mountedRef.current) setStatus('OCR 完成，請確認欄位。');
     } catch (error) {
       const draft = {
-        ...heuristicReceiptFromText(file.name, state),
+        ...heuristicReceiptFromText(file.name, stateRef.current),
         store: safeFileStem(file),
         note: `OCR 未完成：${error instanceof Error ? error.message : String(error)}`,
         source: 'react-ocr-manual',
@@ -177,7 +176,7 @@ export function Scan({
       if (mountedRef.current) setBusy('');
       onBusyChange?.('');
     }
-  }, [openDraft, state]);
+  }, [openDraft, setBusyWithGlobal, onBusyChange]);
 
   const handleCameraChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -413,6 +412,25 @@ export function Scan({
       if (mountedRef.current) setBusy('');
     }
   }
+
+  const batchContainerRef = useRef<HTMLDivElement>(null);
+  const batchPrevFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (batch.length === 0) return;
+    batchPrevFocusRef.current = document.activeElement as HTMLElement;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); setBatch([]); }
+      if (e.key === 'Tab' && batchContainerRef.current) {
+        const focusable = batchContainerRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (!focusable.length) return;
+        const first = focusable[0]; const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => { document.removeEventListener('keydown', handleKeyDown); batchPrevFocusRef.current?.focus?.(); };
+  }, [batch.length, setBatch]);
 
   return (
     <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto scan-screen" style={travelAtlasStyle}>
@@ -674,7 +692,7 @@ export function Scan({
                 </select>
               </div>
               <div className="text-center font-black text-2xl text-slate-900 bg-white/40 p-3 rounded-xl border border-white/50">
-                {Number(amount) || 0} {from} = <span className="text-blue-600">{converted == null ? '需要更新匯率' : converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} {to}</span>
+                {Number(amount) || 0} {from} = <span className="text-blue-600">{converted == null ? '需要更新匯率' : (Number(amount) || 0) === 0 ? '輸入金額以計算' : converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} {converted != null && (Number(amount) || 0) > 0 ? to : ''}</span>
               </div>
               <div className="flex justify-between items-center gap-2">
                 <span className="text-xs font-bold text-slate-600 bg-white/60 px-3 py-1.5 rounded-full">1 HKD = {rate.toFixed(2)} JPY</span>
@@ -690,14 +708,14 @@ export function Scan({
 
       {status && <Toast tone={/失敗|未能|error/i.test(status) ? 'warning' : 'info'}>{status}</Toast>}
       {batch.length > 0 && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
+        <div ref={batchContainerRef} className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal sheet">
             <div className="modal-head">
               <div>
                 <h2>Batch Confirm</h2>
                 <p className="muted">核對 email / 截圖解析結果，未勾選嘅唔會保存。</p>
               </div>
-              <button className="icon-btn" type="button" onClick={() => setBatch([])}>×</button>
+              <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setBatch([])}>×</button>
             </div>
             <div className="batch-recovery-bar" aria-label="Batch recovery summary">
               <span><b>{batchQuality.selected}</b> selected</span>

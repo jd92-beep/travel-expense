@@ -44,15 +44,23 @@ export function Weather({ state }: { state: AppState }) {
     }));
   }, [itinerary, hasEnded, today, trip]);
 
+  const groupedCoordsByDay = useMemo(() => {
+    const map = new Map<string, GroupedWeatherLocation[]>();
+    for (const day of displayItinerary) {
+      map.set(day.date, groupedCoordsForDay(day));
+    }
+    return map;
+  }, [displayItinerary]);
+
   const itineraryKey = displayItinerary.map((day) => {
-    const groups = groupedCoordsForDay(day);
+    const groups = groupedCoordsByDay.get(day.date) || [];
     const coords = groups.map((g) => `${g.label}:${g.lat}:${g.lon}`).join(',');
     return `${day.date}:${day.region}:${day.country || ''}:${hasEnded ? today : day.date}:${coords}`;
   }).join('|');
   const targetSummary = useMemo(() => weatherTargetSummary(displayItinerary, hasEnded, today), [displayItinerary, hasEnded, today]);
   const hasMissingTarget = useMemo(
-    () => displayItinerary.some((day) => groupedCoordsForDay(day).some((g) => g.missing)),
-    [displayItinerary],
+    () => displayItinerary.some((day) => (groupedCoordsByDay.get(day.date) || []).some((g) => g.missing)),
+    [displayItinerary, groupedCoordsByDay],
   );
   const leadDay = displayItinerary[0];
   const leadRows = leadDay ? rows[leadDay.date] || [] : [];
@@ -72,7 +80,7 @@ export function Weather({ state }: { state: AppState }) {
   const loadRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     async function load() {
       const cached = getCachedWeatherRows();
       if (cached && Object.keys(cached).length > 0) {
@@ -85,7 +93,7 @@ export function Weather({ state }: { state: AppState }) {
       try {
         const dayPromises = displayItinerary.map(async (day) => {
           const forecastDate = hasEnded ? today : day.date;
-          const groups = groupedCoordsForDay(day);
+          const groups = groupedCoordsByDay.get(day.date) || [];
           const coordPromises = groups.map(async (group) => {
             try {
               if (group.missing) {
@@ -94,7 +102,7 @@ export function Weather({ state }: { state: AppState }) {
               const coord: WeatherCoord = { label: group.label, lat: group.lat, lon: group.lon, timezone: group.timezone, origin: 'known-region' };
               const officialProvider = resolveOfficialWeatherProvider(coord, { country: day.country, region: day.region, city: day.city });
               const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', officialProvider, state, forecastDate);
-              if (cancelled) return null;
+              if (controller.signal.aborted) return null;
               return {
                 coord,
                 source: result.source,
@@ -105,7 +113,7 @@ export function Weather({ state }: { state: AppState }) {
                 slots: slotsForDate(result.data as Parameters<typeof slotsForDate>[0], forecastDate),
               };
             } catch (innerErr) {
-              if (cancelled) return null;
+              if (controller.signal.aborted) return null;
               console.warn(`[Weather] Load failed for ${group.label}:`, innerErr);
               return { coord: { label: group.label, lat: group.lat, lon: group.lon } as WeatherCoord, source: '拉取失敗', slots: [] };
             }
@@ -114,16 +122,16 @@ export function Weather({ state }: { state: AppState }) {
           return { date: day.date, rows: results };
         });
         const dayResults = await Promise.all(dayPromises);
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         const next: Record<string, DayWeather[]> = {};
         for (const { date, rows: dayRows } of dayResults) next[date] = dayRows;
         setRows(next);
         setCachedWeatherRows(next);
       } catch (err) {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : String(err));
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setBusy(false);
           setStale(false);
         }
@@ -131,7 +139,7 @@ export function Weather({ state }: { state: AppState }) {
     }
     loadRef.current = load;
     load();
-    return () => { cancelled = true; };
+    return () => { controller.abort(); };
   }, [itineraryKey]);
 
   return (
@@ -199,7 +207,7 @@ export function Weather({ state }: { state: AppState }) {
           <GlassCard className="weather-day">
             <div className="section-head">
               <div><p className="eyebrow">{hasEnded ? `Current · ${today} · Trip Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
-              <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{groupedCoordsForDay(day).map((g) => g.label).join(' / ') || day.region}</StatusPill>
+              <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{(groupedCoordsByDay.get(day.date) || []).map((g) => g.label).join(' / ') || day.region}</StatusPill>
             </div>
             {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
             {dayRows.map((weather) => {

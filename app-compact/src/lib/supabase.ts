@@ -5,6 +5,19 @@ import { tripIntelligenceColumns } from '../domain/trip/context';
 import { DEFAULT_NOTION_DB, normalizeAiModelSettings } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
 
+const VALID_CATEGORIES = new Set(['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'other']);
+const VALID_PAYMENTS = new Set(['cash', 'credit', 'paypay', 'suica']);
+
+function safeCategoryId(value: unknown): CategoryId {
+  const v = String(value || 'other').toLowerCase();
+  return VALID_CATEGORIES.has(v) ? v as CategoryId : 'other';
+}
+
+function safePaymentId(value: unknown): PaymentId {
+  const v = String(value || 'cash').toLowerCase();
+  return VALID_PAYMENTS.has(v) ? v as PaymentId : 'cash';
+}
+
 type SupabaseTripRow = {
   id: string;
   owner_id: string;
@@ -442,8 +455,8 @@ function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: Tri
     exchangeRate: Number(row.exchange_rate || 0) || undefined,
     date: row.record_date,
     time: row.record_time ? String(row.record_time).slice(0, 5) : undefined,
-    category: (row.category || 'other') as CategoryId,
-    payment: (row.payment_method || 'cash') as PaymentId,
+    category: safeCategoryId(row.category),
+    payment: safePaymentId(row.payment_method),
     address: row.address || undefined,
     mapUrl: row.map_url || undefined,
     bookingRef: row.booking_ref || undefined,

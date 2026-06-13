@@ -2,47 +2,48 @@ export interface GeoCoordinate {
   lat: number;
   lon: number;
   city: string;
+  country?: string;
 }
 
 export const GEO_DICTIONARY: { pattern: RegExp; geo: GeoCoordinate }[] = [
-  // Transport hubs
-  { pattern: /機場|airport/i, geo: { city: 'Jeju', lat: 33.5113, lon: 126.4930 } },
-  { pattern: /城山浦港|seongsan.*port/i, geo: { city: 'Seongsan', lat: 33.4600, lon: 126.9300 } },
-  // Hotels / Lodging
-  { pattern: /fine jeju/i, geo: { city: 'Seogwipo', lat: 33.2486, lon: 126.5683 } },
-  { pattern: /stanford/i, geo: { city: 'Aewol', lat: 33.4658, lon: 126.3722 } },
+  // Transport hubs (Jeju-specific)
+  { pattern: /機場|airport/i, geo: { city: 'Jeju', country: 'South Korea', lat: 33.5113, lon: 126.4930 } },
+  { pattern: /城山浦港|seongsan.*port/i, geo: { city: 'Seongsan', country: 'South Korea', lat: 33.4600, lon: 126.9300 } },
+  // Hotels / Lodging (Jeju-specific)
+  { pattern: /fine jeju/i, geo: { city: 'Seogwipo', country: 'South Korea', lat: 33.2486, lon: 126.5683 } },
+  { pattern: /stanford/i, geo: { city: 'Aewol', country: 'South Korea', lat: 33.4658, lon: 126.3722 } },
   // Jeju City area
-  { pattern: /東門市場|dongmun/i, geo: { city: 'Jeju', lat: 33.5126, lon: 126.5284 } },
-  { pattern: /七星路|chilseong/i, geo: { city: 'Jeju', lat: 33.5170, lon: 126.5200 } },
-  { pattern: /中央地下街/i, geo: { city: 'Jeju', lat: 33.5150, lon: 126.5250 } },
-  { pattern: /道頭洞|彩虹海岸|rainbow/i, geo: { city: 'Jeju', lat: 33.5100, lon: 126.5200 } },
-  { pattern: /蓮洞|nuwemaru/i, geo: { city: 'Jeju', lat: 33.4900, lon: 126.4900 } },
+  { pattern: /東門市場|dongmun/i, geo: { city: 'Jeju', country: 'South Korea', lat: 33.5126, lon: 126.5284 } },
+  { pattern: /七星路|chilseong/i, geo: { city: 'Jeju', country: 'South Korea', lat: 33.5170, lon: 126.5200 } },
+  { pattern: /中央地下街/i, geo: { city: 'Jeju', country: 'South Korea', lat: 33.5150, lon: 126.5250 } },
+  { pattern: /道頭洞|彩虹海岸|rainbow/i, geo: { city: 'Jeju', country: 'South Korea', lat: 33.5100, lon: 126.5200 } },
+  { pattern: /蓮洞|nuwemaru/i, geo: { city: 'Jeju', country: 'South Korea', lat: 33.4900, lon: 126.4900 } },
   // Seogwipo area
-  { pattern: /osulloc/i, geo: { city: 'Seogwipo', lat: 33.3060, lon: 126.2895 } },
-  { pattern: /camellia|山茶花/i, geo: { city: 'Seogwipo', lat: 33.2800, lon: 126.3600 } },
-  { pattern: /正房瀑布/i, geo: { city: 'Seogwipo', lat: 33.2300, lon: 126.5600 } },
-  { pattern: /天地淵/i, geo: { city: 'Seogwipo', lat: 33.2500, lon: 126.5600 } },
-  { pattern: /偶來市場/i, geo: { city: 'Seogwipo', lat: 33.2500, lon: 126.5600 } },
-  { pattern: /休愛里|sihori/i, geo: { city: 'Seogwipo', lat: 33.2500, lon: 126.5600 } },
-  { pattern: /牛沼端|suwol/i, geo: { city: 'Seogwipo', lat: 33.2400, lon: 126.6200 } },
+  { pattern: /osulloc/i, geo: { city: 'Seogwipo', country: 'South Korea', lat: 33.3060, lon: 126.2895 } },
+  { pattern: /camellia|山茶花/i, geo: { city: 'Seogwipo', country: 'South Korea', lat: 33.2800, lon: 126.3600 } },
+  { pattern: /正房瀑布/i, geo: { city: 'Seogwipo', country: 'South Korea', lat: 33.2300, lon: 126.5600 } },
+  { pattern: /天地淵/i, geo: { city: 'Seogwipo', country: 'South Korea', lat: 33.2500, lon: 126.5600 } },
+  { pattern: /偶來市場/i, geo: { city: 'Seogwipo', country: 'South Korea', lat: 33.2500, lon: 126.5600 } },
+  { pattern: /休愛里|sihori/i, geo: { city: 'Seogwipo', country: 'South Korea', lat: 33.2500, lon: 126.5600 } },
+  { pattern: /牛沼端|suwol/i, geo: { city: 'Seogwipo', country: 'South Korea', lat: 33.2400, lon: 126.6200 } },
   // Seongsan / East
-  { pattern: /日出峰|sunrise peak/i, geo: { city: 'Seongsan', lat: 33.4586, lon: 126.9423 } },
-  { pattern: /牛島|udo/i, geo: { city: 'Udo', lat: 33.5066, lon: 126.9534 } },
-  { pattern: /aqua planet/i, geo: { city: 'Seongsan', lat: 33.4312, lon: 126.9278 } },
-  { pattern: /涉地可支|seopjikoji/i, geo: { city: 'Seongsan', lat: 33.4300, lon: 126.9300 } },
+  { pattern: /日出峰|sunrise peak/i, geo: { city: 'Seongsan', country: 'South Korea', lat: 33.4586, lon: 126.9423 } },
+  { pattern: /牛島|udo/i, geo: { city: 'Udo', country: 'South Korea', lat: 33.5066, lon: 126.9534 } },
+  { pattern: /aqua planet/i, geo: { city: 'Seongsan', country: 'South Korea', lat: 33.4312, lon: 126.9278 } },
+  { pattern: /涉地可支|seopjikoji/i, geo: { city: 'Seongsan', country: 'South Korea', lat: 33.4300, lon: 126.9300 } },
   // Aewol / Northwest
-  { pattern: /9\.81/i, geo: { city: 'Jeju', lat: 33.3768, lon: 126.3575 } },
-  { pattern: /涯月|aewol/i, geo: { city: 'Aewol', lat: 33.4658, lon: 126.3100 } },
+  { pattern: /9\.81/i, geo: { city: 'Jeju', country: 'South Korea', lat: 33.3768, lon: 126.3575 } },
+  { pattern: /涯月|aewol/i, geo: { city: 'Aewol', country: 'South Korea', lat: 33.4658, lon: 126.3100 } },
   // Cafes / Restaurants (Jeju-specific)
-  { pattern: /橘子|gyulkkot|darak/i, geo: { city: 'Seogwipo', lat: 33.2600, lon: 126.5600 } },
-  { pattern: /李春玉|鯖魚/i, geo: { city: 'Jeju', lat: 33.4900, lon: 126.4900 } },
-  { pattern: /umu/i, geo: { city: 'Jeju', lat: 33.4800, lon: 126.4800 } },
-  { pattern: /風爐|풍로/i, geo: { city: 'Seogwipo', lat: 33.2500, lon: 126.5600 } },
-  { pattern: /黑沙灘|black sand/i, geo: { city: 'Udo', lat: 33.5066, lon: 126.9534 } },
-  { pattern: /西濱白沙|seobin/i, geo: { city: 'Udo', lat: 33.5100, lon: 126.9500 } },
-  { pattern: /blanc rocher/i, geo: { city: 'Udo', lat: 33.5080, lon: 126.9550 } },
-  { pattern: /randy.*donut/i, geo: { city: 'Aewol', lat: 33.4650, lon: 126.3200 } },
-  { pattern: /blue elephant/i, geo: { city: 'Aewol', lat: 33.4650, lon: 126.3150 } },
+  { pattern: /橘子|gyulkkot|darak/i, geo: { city: 'Seogwipo', country: 'South Korea', lat: 33.2600, lon: 126.5600 } },
+  { pattern: /李春玉|鯖魚/i, geo: { city: 'Jeju', country: 'South Korea', lat: 33.4900, lon: 126.4900 } },
+  { pattern: /umu/i, geo: { city: 'Jeju', country: 'South Korea', lat: 33.4800, lon: 126.4800 } },
+  { pattern: /風爐|풍로/i, geo: { city: 'Seogwipo', country: 'South Korea', lat: 33.2500, lon: 126.5600 } },
+  { pattern: /黑沙灘|black sand/i, geo: { city: 'Udo', country: 'South Korea', lat: 33.5066, lon: 126.9534 } },
+  { pattern: /西濱白沙|seobin/i, geo: { city: 'Udo', country: 'South Korea', lat: 33.5100, lon: 126.9500 } },
+  { pattern: /blanc rocher/i, geo: { city: 'Udo', country: 'South Korea', lat: 33.5080, lon: 126.9550 } },
+  { pattern: /randy.*donut/i, geo: { city: 'Aewol', country: 'South Korea', lat: 33.4650, lon: 126.3200 } },
+  { pattern: /blue elephant/i, geo: { city: 'Aewol', country: 'South Korea', lat: 33.4650, lon: 126.3150 } },
 ];
 
 export function resolveGeoCoordinate(name: string): GeoCoordinate | null {

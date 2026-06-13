@@ -102,7 +102,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   const [state, setState] = useState<AppState>(() => {
     return withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
   });
-  const [hydratedScope, setHydratedScope] = useState(storageScope);
+  const [hydratedScope, setHydratedScope] = useState('');
   const [indexedReadyScope, setIndexedReadyScope] = useState('');
 
   useLayoutEffect(() => {
@@ -115,12 +115,26 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     loadIndexedState(storageScope).then((indexed) => {
       if (!alive || !indexed) return;
       setState((prev) => {
-        const indexedWins = !hasPrimarySnapshot || (stateFreshness(indexed) > stateFreshness(prev));
-        if (indexedWins) {
-          console.log('[useAppState] Hydrated newer state from IndexedDB');
+        if (!hasPrimarySnapshot) {
+          console.log('[useAppState] Hydrated from IndexedDB (no primary snapshot)');
           return migrateScopedState({ ...prev, ...indexed }, storageScope, userEmail);
         }
-        return prev;
+        const indexedGlobal = stateFreshness(indexed);
+        const localGlobal = stateFreshness(prev);
+        if (indexedGlobal <= localGlobal) return prev;
+        const localReceiptsById = new Map(prev.receipts.map((r) => [r.id, r]));
+        const mergedReceipts = (indexed.receipts || []).map((remote) => {
+          const local = localReceiptsById.get(remote.id);
+          if (!local) return remote;
+          const localUpdated = Number(local.updatedAt || local.createdAt || 0);
+          const remoteUpdated = Number(remote.updatedAt || remote.createdAt || 0);
+          return remoteUpdated > localUpdated ? remote : local;
+        });
+        for (const [id, local] of localReceiptsById) {
+          if (!mergedReceipts.some((r) => r.id === id)) mergedReceipts.push(local);
+        }
+        console.log('[useAppState] Hydrated newer state from IndexedDB (per-receipt merge)');
+        return migrateScopedState({ ...prev, ...indexed, receipts: mergedReceipts }, storageScope, userEmail);
       });
     }).catch(() => {
       // localStorage remains the compatibility fallback.

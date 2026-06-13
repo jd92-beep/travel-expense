@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
-import { useEffect, useRef, useState, version as reactVersion } from 'react';
+import { useEffect, useMemo, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { parseTripParagraph, testGoogleBackupConnection, testKimiConnection } from '../lib/ai';
@@ -48,6 +48,7 @@ import { clearTrustedDevice } from '../security/trustedDevice';
 import { GlassCard, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
+import { useModalOpenClass } from '../lib/useModalOpenClass';
 
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
 const MAX_SAFE_AMOUNT = 1_000_000_000;
@@ -155,7 +156,7 @@ function sanitizeImportedTrips(input: unknown): TripProfile[] | undefined {
 
 function dateMs(ymd: string | undefined): number | null {
   if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
-  const value = new Date(`${ymd}T00:00:00Z`).getTime();
+  const value = new Date(`${ymd}T00:00:00`).getTime();
   return Number.isFinite(value) ? value : null;
 }
 
@@ -879,10 +880,7 @@ export function Settings({
   const sharingInvites = tripSharing.invites || [];
   const sharingSession = supabaseAuth.session;
 
-  useEffect(() => {
-    document.documentElement.classList.toggle('modal-open', tripDraftModalOpen);
-    return () => document.documentElement.classList.remove('modal-open');
-  }, [tripDraftModalOpen]);
+  useModalOpenClass(tripDraftModalOpen);
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -997,9 +995,9 @@ export function Settings({
   const notionActionDisabled = !!busy || publicSupabaseOnly;
   const directTokenEnabled = true;
   const buildLabel = `v0.1.2`;
-  const tripDoctor = compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope);
-  const syncReadiness = buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope);
-  const tripScopeAudit = buildTripScopeAudit(state, currentTrip);
+  const tripDoctor = useMemo(() => compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope), [state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope]);
+  const syncReadiness = useMemo(() => buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope), [state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope]);
+  const tripScopeAudit = useMemo(() => buildTripScopeAudit(state, currentTrip), [state, currentTrip]);
 
   // Local state for Trip Manager
   const [managerTripId, setManagerTripId] = useState(currentTrip.id);

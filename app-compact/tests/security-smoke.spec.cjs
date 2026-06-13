@@ -8,6 +8,10 @@ function expectedAuthRedirect() {
   return 'http://localhost:8903/travel-expense/compact/';
 }
 
+function grantDeviceTrust() {
+  localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+}
+
 function stateWithTrip(tripId = 'security_trip', lastTab = 'dashboard') {
   return {
     schemaVersion: 3,
@@ -125,6 +129,7 @@ test('Supabase magic-link redirect uses a clean app root without route hash', as
 
   await page.addInitScript(() => {
     localStorage.clear();
+    grantDeviceTrust();
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/#settings');
@@ -156,6 +161,7 @@ test('Supabase Google OAuth starts with a clean app root redirect', async ({ pag
 
   await page.addInitScript(() => {
     localStorage.clear();
+    grantDeviceTrust();
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/#settings');

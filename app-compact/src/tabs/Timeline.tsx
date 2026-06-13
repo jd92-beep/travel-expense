@@ -1,15 +1,16 @@
 import type { CSSProperties, Dispatch, FormEvent, SetStateAction } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CalendarDays, Home, MapPin, PencilLine, ReceiptText, RotateCcw } from 'lucide-react';
 import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
 import { ShineBorder } from '../components/ui/shine-border';
-import { categoryById, dayLooseReceipts, fmt, getItinerary, getScheduleSpots, hkd, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts } from '../lib/domain';
+import { categoryById, dayLooseReceipts, fmt, getItinerary, getReceiptHkdAmount, getScheduleSpots, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts } from '../lib/domain';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from '../lib/types';
 import { ReceiptRow } from './Dashboard';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryIconId } from '../lib/iconManifest';
+import { useModalOpenClass } from '../lib/useModalOpenClass';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 import '../styles/timeline.css';
 
@@ -73,10 +74,45 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
     return () => window.clearTimeout(timer);
   }, [liveContext.mode, liveContext.date]);
 
+  useModalOpenClass(hasOpenModal);
+
+  const editingContainerRef = useRef<HTMLDivElement>(null);
+  const editingPrevFocusRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    document.documentElement.classList.toggle('modal-open', hasOpenModal);
-    return () => document.documentElement.classList.remove('modal-open');
-  }, [hasOpenModal]);
+    if (!editing) return;
+    editingPrevFocusRef.current = document.activeElement as HTMLElement;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); setEditing(null); }
+      if (e.key === 'Tab' && editingContainerRef.current) {
+        const focusable = editingContainerRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (!focusable.length) return;
+        const first = focusable[0]; const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => { document.removeEventListener('keydown', handleKeyDown); editingPrevFocusRef.current?.focus?.(); };
+  }, [editing]);
+
+  const dayReceiptsContainerRef = useRef<HTMLDivElement>(null);
+  const dayReceiptsPrevFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!activeDay) return;
+    dayReceiptsPrevFocusRef.current = document.activeElement as HTMLElement;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); setDayReceipts(null); }
+      if (e.key === 'Tab' && dayReceiptsContainerRef.current) {
+        const focusable = dayReceiptsContainerRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (!focusable.length) return;
+        const first = focusable[0]; const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => { document.removeEventListener('keydown', handleKeyDown); dayReceiptsPrevFocusRef.current?.focus?.(); };
+  }, [activeDay]);
 
   function saveSpot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -135,7 +171,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
               </div>
               <div className="preview-timeline-stats">
                 <span><MapPin size={18} /> 行程 {getScheduleSpots(state, commandDay).length} 個景點</span>
-                <b><ReceiptText size={18} /> 支出 HK$ {fmt(hkd(dayLooseReceipts(state, commandDay).reduce((s, r) => s + r.total, 0), state))}</b>
+                <b><ReceiptText size={18} /> 支出 HK$ {fmt(dayLooseReceipts(state, commandDay).reduce((s, r) => s + getReceiptHkdAmount(r, state), 0))}</b>
               </div>
             </div>
           )}
@@ -230,7 +266,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
             </span>
             <span className="timeline-loose-total">
               ¥{fmt(loose.reduce((s, r) => s + r.total, 0))}
-              <small>HK$ {fmt(hkd(loose.reduce((s, r) => s + r.total, 0), state))}</small>
+              <small>HK$ {fmt(loose.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0))}</small>
             </span>
           </button>
         </GlassCard>
@@ -240,7 +276,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
     </section>
 
     {editing && (
-      <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div ref={editingContainerRef} className="modal-backdrop" role="dialog" aria-modal="true">
         <form className="modal sheet timeline-edit-sheet" onSubmit={saveSpot}>
           <div className="modal-head">
             <h2>編輯行程點</h2>
@@ -271,12 +307,12 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       </div>
     )}
     {activeDay && (
-      <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div ref={dayReceiptsContainerRef} className="modal-backdrop" role="dialog" aria-modal="true">
         <div className="modal sheet timeline-receipt-sheet">
           <div className="modal-head">
             <div>
               <h2>{activeDay.date} 消費</h2>
-              <p className="muted">{looseReceipts.length} 筆 · ¥{fmt(looseReceipts.reduce((s, r) => s + r.total, 0))} · HK$ {fmt(hkd(looseReceipts.reduce((s, r) => s + r.total, 0), state))}</p>
+              <p className="muted">{looseReceipts.length} 筆 · ¥{fmt(looseReceipts.reduce((s, r) => s + r.total, 0))} · HK$ {fmt(looseReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0))}</p>
             </div>
             <button type="button" className="icon-btn" onClick={() => setDayReceipts(null)}>×</button>
           </div>

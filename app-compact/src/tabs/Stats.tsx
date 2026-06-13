@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'motion/react';
 import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
@@ -14,7 +14,7 @@ import '../styles/stats.css';
 
 type StatBucket = { id: string; name: string; color: string; total: number; icon?: string };
 
-export function Stats({ state, setState, updateState, onTab }: { state: AppState; setState?: any; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
+export function Stats({ state, setState, updateState, onTab }: { state: AppState; setState?: Dispatch<SetStateAction<AppState>>; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
   const trip = activeTrip(state);
   const scopedState = { ...state, receipts: scopedReceiptsForTrip(state, trip) };
   const settlement = computeSettlements(scopedState);
@@ -247,7 +247,7 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
   );
 }
 
-function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state, setState, updateState, onTab }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState; setState?: any; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
+function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state, setState, updateState, onTab }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState; setState?: Dispatch<SetStateAction<AppState>>; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [editBudgetVal, setEditBudgetVal] = useState('');
   const trip = activeTrip(state);
@@ -340,20 +340,22 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
         <span>預算羅盤</span>
         <Info size={17} aria-hidden="true" />
         <div className="preview-budget-currency" role="group" aria-label="顯示貨幣">
-          <span
+          <button
+            type="button"
             className={displayCurrency === 'HKD' ? 'is-active' : ''}
             onClick={() => updateState({ displayCurrency: 'HKD' })}
             style={{ cursor: 'pointer' }}
           >
             HKD
-          </span>
-          <span
+          </button>
+          <button
+            type="button"
             className={displayCurrency === resolvedTripCurrency ? 'is-active' : ''}
             onClick={() => updateState({ displayCurrency: resolvedTripCurrency })}
             style={{ cursor: 'pointer' }}
           >
             {resolvedTripCurrency}
-          </span>
+          </button>
         </div>
       </div>
       <div className="preview-budget-overview">

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { TAB_MANIFEST } from '../lib/tabs';
-import type { SyncEngineState, TabId, AppState } from '../lib/types';
+import type { SyncEngineState, TabId, AppState, TripProfile } from '../lib/types';
 import { StatusPill } from './ui';
 import { WindmillTransition } from './WindmillTransition';
 import { FloatingDock } from './ui/floating-dock';
@@ -12,8 +12,101 @@ import { Particles } from './ui/particles';
 import { AuroraText } from './ui/aurora-text';
 import { SyncStatusIndicator } from './SyncStatusIndicator';
 import { shouldDisableHeavyEffects } from '../lib/performance';
-import { activeTrip } from '../domain/trip/normalize';
+import { activeTrip, switchTrip } from '../domain/trip/normalize';
 import compactJapanMark from '../assets/generated/compact-japan-mark.svg';
+
+function TripDropdown({
+  trips,
+  activeTripId,
+  onSelect,
+  onCreateNew,
+  label = '切換旅程 (Switch Trip)',
+  align = 'left',
+  className = '',
+  buttonClassName = '',
+  itemClassName = '',
+  activeItemClassName = '',
+}: {
+  trips: TripProfile[];
+  activeTripId: string;
+  onSelect: (tripId: string) => void;
+  onCreateNew?: () => void;
+  label?: string;
+  align?: 'left' | 'right';
+  className?: string;
+  buttonClassName?: string;
+  itemClassName?: string;
+  activeItemClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [open]);
+
+  return (
+    <div className={`relative ${className}`} ref={ref}>
+      <button
+        type="button"
+        className={buttonClassName || 'flex items-center gap-1.5 text-left border-none bg-transparent p-0 focus:outline-none cursor-pointer active:scale-98 transition-all'}
+        onClick={() => setOpen(!open)}
+      >
+        <ChevronDown size={18} className="text-[#C23B5E] dark:text-[#D4A843] shrink-0" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </button>
+      {open && (
+        <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} mt-2 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]`}>
+          <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            {label}
+          </div>
+          <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+            {trips.filter((t) => !t.archived).map((t) => {
+              const isActive = t.id === activeTripId;
+              return (
+                <button
+                  key={t.id}
+                  className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
+                    isActive
+                      ? activeItemClassName || 'bg-blue-50 text-blue-900 font-bold'
+                      : itemClassName || 'hover:bg-slate-50 text-slate-700 bg-transparent'
+                  }`}
+                  onClick={() => { setOpen(false); onSelect(t.id); }}
+                >
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm truncate">{t.name}</span>
+                    <span className="text-[10px] text-slate-400 truncate">
+                      {t.destinationSummary || '未設定目的地'} ({t.itinerary?.length || 0}天)
+                    </span>
+                  </div>
+                  {isActive && (
+                    <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {onCreateNew && (
+            <>
+              <div className="border-t border-slate-100 my-1" />
+              <button
+                type="button"
+                className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-[#C23B5E] hover:bg-[#A83030] text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm border-none cursor-pointer"
+                onClick={() => { setOpen(false); onCreateNew(); }}
+              >
+                <span>➕ ⛩️ 建立新旅程</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 
 const icons: Record<TabId, ReactNode> = {
@@ -97,9 +190,7 @@ export function Shell({
   const prefersReducedMotion = useReducedMotion();
   const richVisualEffects = !prefersReducedMotion && !stableMobileEffects;
 
-  const [isTripDropdownOpen, setIsTripDropdownOpen] = useState(false);
   const [pulling, setPulling] = useState(false);
-  const [isHeaderTripDropdownOpen, setIsHeaderTripDropdownOpen] = useState(false);
 
   const handlePullClick = async () => {
     if (!onPull) return;
@@ -119,19 +210,8 @@ export function Shell({
 
   const handleSwitchTrip = (tripId: string) => {
     if (!setState || !state) return;
-    const target = state.trips?.find((t) => t.id === tripId && !t.archived);
-    if (!target) return;
-
-    setState((prev) => ({
-      ...prev,
-      activeTripId: tripId,
-      trips: (prev.trips || []).map((item) => ({ ...item, active: item.id === tripId && !item.archived })),
-      tripName: target.name,
-      budget: target.budget ?? prev.budget,
-      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || prev.tripCurrency,
-      customItinerary: target.itinerary || [],
-      tripDateRange: { start: target.startDate, end: target.endDate }
-    }));
+    const patch = switchTrip(state, tripId);
+    if (patch) setState((prev) => ({ ...prev, ...patch }));
   };
 
   const activeCopy = {
@@ -336,71 +416,18 @@ export function Shell({
         <div className="topbar-title-block relative z-10">
           <img className="compact-topbar-mark" src={compactJapanMark} alt="" aria-hidden="true" />
           {active === 'dashboard' && state ? (
-            <div className="relative">
-              <button
-                type="button"
-                className="flex items-center gap-2 text-left border-none bg-transparent p-0 focus:outline-none cursor-pointer active:scale-98 transition-all"
-                onClick={() => setIsTripDropdownOpen(!isTripDropdownOpen)}
-                style={{ fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit', fontFamily: 'inherit' }}
-              >
-                <h1>
-                  {richVisualEffects
-                    ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeTripName}</AuroraText>
-                    : activeTripName}
-                </h1>
-                <ChevronDown size={22} className="text-[#C23B5E] dark:text-[#D4A843] shrink-0 mt-1" style={{ transform: isTripDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-              </button>
-              {isTripDropdownOpen && (
-                <div className="absolute left-0 mt-2 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]">
-                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    切換旅程 (Switch Trip)
-                  </div>
-                  <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
-                    {(state.trips || []).filter((t) => !t.archived).map((t) => {
-                      const isActive = t.id === (trip?.id || '');
-                      return (
-                        <button
-                          key={t.id}
-                          className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
-                            isActive
-                              ? 'bg-blue-50 text-blue-900 font-bold'
-                              : 'hover:bg-slate-50 text-slate-700 bg-transparent'
-                          }`}
-                          onClick={() => {
-                            setIsTripDropdownOpen(false);
-                            handleSwitchTrip(t.id);
-                          }}
-                        >
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-sm truncate">{t.name}</span>
-                            <span className="text-[10px] text-slate-400 truncate">
-                              {t.destinationSummary || '日本'} ({t.itinerary?.length || 0}天)
-                            </span>
-                          </div>
-                          {isActive && (
-                            <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {onOpenNewTripWizard && (
-                    <>
-                      <div className="border-t border-slate-100 my-1" />
-                      <button
-                        type="button"
-                        className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-[#C23B5E] hover:bg-[#A83030] text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm border-none cursor-pointer"
-                        onClick={() => {
-                          setIsTripDropdownOpen(false);
-                          onOpenNewTripWizard();
-                        }}
-                      >
-                        <span>➕ ⛩️ 建立新旅程</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
+            <div className="flex items-center gap-2">
+              <h1>
+                {richVisualEffects
+                  ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeTripName}</AuroraText>
+                  : activeTripName}
+              </h1>
+              <TripDropdown
+                trips={state.trips || []}
+                activeTripId={trip?.id || ''}
+                onSelect={handleSwitchTrip}
+                onCreateNew={onOpenNewTripWizard}
+              />
             </div>
           ) : (
             <h1>
@@ -417,49 +444,19 @@ export function Shell({
                 <button
                   className="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full px-3 py-1.5 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer focus:outline-none active:scale-95 text-xs"
                   type="button"
-                  onClick={() => setIsHeaderTripDropdownOpen(!isHeaderTripDropdownOpen)}
                 >
                   <CalendarDays size={14} aria-hidden="true" />
                   <span>{activeTripName}</span>
-                  <ChevronDown size={14} className={`text-blue-800/70 transition-transform duration-200 ${isHeaderTripDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
-
-                {isHeaderTripDropdownOpen && (
-                  <div className="absolute right-0 top-9 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]">
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      選擇旅程 (Select Trip)
-                    </div>
-                    <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
-                      {(state.trips || []).filter((t) => !t.archived).map((t) => {
-                        const isActive = t.id === (trip?.id || '');
-                        return (
-                          <button
-                            key={t.id}
-                            className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
-                              isActive
-                                ? 'bg-blue-50 text-blue-900 font-bold'
-                                : 'hover:bg-slate-50 text-slate-700 bg-transparent'
-                            }`}
-                            onClick={() => {
-                              setIsHeaderTripDropdownOpen(false);
-                              handleSwitchTrip(t.id);
-                            }}
-                          >
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-sm truncate">{t.name}</span>
-                              <span className="text-[10px] text-slate-400 truncate">
-                                {t.destinationSummary || '日本'} ({t.itinerary?.length || 0}天)
-                              </span>
-                            </div>
-                            {isActive && (
-                              <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                <TripDropdown
+                  trips={state.trips || []}
+                  activeTripId={trip?.id || ''}
+                  onSelect={handleSwitchTrip}
+                  label="選擇旅程 (Select Trip)"
+                  align="right"
+                  className="inline-block"
+                  buttonClassName="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full px-3 py-1.5 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer focus:outline-none active:scale-95 text-xs"
+                />
               </div>
 
               <button
@@ -473,16 +470,9 @@ export function Shell({
                 <RefreshCw size={14} className={pulling ? 'spin' : undefined} />
               </button>
             </div>
-          ) : (
-            <>
-              <span><ReceiptText size={16} /> 142 receipts</span>
-              <button type="button"><CalendarDays size={16} /> Apr 20 - Apr 30, 2025</button>
-              <button type="button"><Users size={16} /> All travelers</button>
-              <button type="button">JPY</button>
-              <button type="button"><Download size={16} /> Export</button>
-              <button type="button" aria-label="More controls"><MoreVertical size={18} /></button>
-            </>
-          )}
+          ) : state ? (
+            <span className="text-xs text-slate-500 font-medium">{activeCopy.subtitle}</span>
+          ) : null}
         </div>
         {syncState && (
           <div className={`compact-sync-slot relative z-10 ${syncState.status === 'error' ? 'has-error' : 'is-quiet'}`}>
@@ -503,67 +493,14 @@ export function Shell({
         </span>
         <div className="compact-mobile-heading relative z-10">
           {active === 'dashboard' && state ? (
-            <div className="relative">
-              <button
-                type="button"
-                className="flex items-center gap-1.5 text-left border-none bg-transparent p-0 focus:outline-none cursor-pointer active:scale-98 transition-all"
-                onClick={() => setIsTripDropdownOpen(!isTripDropdownOpen)}
-                style={{ fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit', fontFamily: 'inherit' }}
-              >
-                <span className="compact-mobile-title-art" data-title={activeTripName}>{activeTripName}</span>
-                <ChevronDown size={18} className="text-[#C23B5E] dark:text-[#D4A843] shrink-0" style={{ transform: isTripDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-              </button>
-              {isTripDropdownOpen && (
-                <div className="absolute left-0 mt-2 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]">
-                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    切換旅程 (Switch Trip)
-                  </div>
-                  <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
-                    {(state.trips || []).filter((t) => !t.archived).map((t) => {
-                      const isActive = t.id === (trip?.id || '');
-                      return (
-                        <button
-                          key={t.id}
-                          className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
-                            isActive
-                              ? 'bg-blue-50 text-blue-900 font-bold'
-                              : 'hover:bg-slate-50 text-slate-700 bg-transparent'
-                          }`}
-                          onClick={() => {
-                            setIsTripDropdownOpen(false);
-                            handleSwitchTrip(t.id);
-                          }}
-                        >
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-sm truncate">{t.name}</span>
-                            <span className="text-[10px] text-slate-400 truncate">
-                              {t.destinationSummary || '日本'} ({t.itinerary?.length || 0}天)
-                            </span>
-                          </div>
-                          {isActive && (
-                            <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {onOpenNewTripWizard && (
-                    <>
-                      <div className="border-t border-slate-100 my-1" />
-                      <button
-                        type="button"
-                        className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-[#C23B5E] hover:bg-[#A83030] text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm border-none cursor-pointer"
-                        onClick={() => {
-                          setIsTripDropdownOpen(false);
-                          onOpenNewTripWizard();
-                        }}
-                      >
-                        <span>➕ ⛩️ 建立新旅程</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
+            <div className="flex items-center gap-1.5">
+              <span className="compact-mobile-title-art" data-title={activeTripName}>{activeTripName}</span>
+              <TripDropdown
+                trips={state.trips || []}
+                activeTripId={trip?.id || ''}
+                onSelect={handleSwitchTrip}
+                onCreateNew={onOpenNewTripWizard}
+              />
             </div>
           ) : (
             <h1><span className="compact-mobile-title-art" data-title={activeCopy.mobileTitle}>{isMobile ? activeCopy.mobileTitle : ''}</span></h1>
@@ -573,54 +510,14 @@ export function Shell({
         <span className="compact-mobile-status relative z-10">{activeCopy.status}</span>
         {active === 'history' && state ? (
           <div className="compact-mobile-action-history flex items-center gap-1.5 relative z-20" style={{ marginRight: '4px' }}>
-            <div className="relative">
-              <button
-                className="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full px-2 py-1 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-0.5 cursor-pointer focus:outline-none active:scale-95 text-[10px]"
-                type="button"
-                onClick={() => setIsHeaderTripDropdownOpen(!isHeaderTripDropdownOpen)}
-              >
-                <CalendarDays size={11} aria-hidden="true" />
-                <span className="max-w-[55px] truncate">{activeTripName}</span>
-                <ChevronDown size={11} className={`text-blue-800/70 transition-transform duration-200 ${isHeaderTripDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {isHeaderTripDropdownOpen && (
-                <div className="absolute right-0 top-8 w-56 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]">
-                  <div className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                    選擇旅程 (Select Trip)
-                  </div>
-                  <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
-                    {(state.trips || []).filter((t) => !t.archived).map((t) => {
-                      const isActive = t.id === (trip?.id || '');
-                      return (
-                        <button
-                          key={t.id}
-                          className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
-                            isActive
-                              ? 'bg-blue-50 text-blue-900 font-bold'
-                              : 'hover:bg-slate-50 text-slate-700 bg-transparent'
-                          }`}
-                          onClick={() => {
-                            setIsHeaderTripDropdownOpen(false);
-                            handleSwitchTrip(t.id);
-                          }}
-                        >
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-xs truncate">{t.name}</span>
-                            <span className="text-[9px] text-slate-400 truncate">
-                              {t.destinationSummary || '日本'} ({t.itinerary?.length || 0}天)
-                            </span>
-                          </div>
-                          {isActive && (
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0 ml-1.5" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            <TripDropdown
+              trips={state.trips || []}
+              activeTripId={trip?.id || ''}
+              onSelect={handleSwitchTrip}
+              label="選擇旅程 (Select Trip)"
+              align="right"
+              buttonClassName="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full px-2 py-1 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-0.5 cursor-pointer focus:outline-none active:scale-95 text-[10px]"
+            />
 
             <button
               className="secondary history-refresh-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full p-1.5 font-semibold text-blue-900 transition-all shadow-sm flex items-center justify-center cursor-pointer active:scale-95"

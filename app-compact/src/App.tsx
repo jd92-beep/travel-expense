@@ -40,7 +40,6 @@ const Stats = lazy(() => import('./tabs/Stats').then((module) => ({ default: mod
 const Settings = lazy(() => import('./tabs/Settings').then((module) => ({ default: module.Settings })));
 
 const VALID_TABS = new Set<TabId>(TAB_MANIFEST.map((item) => item.id));
-const bootSyncKeys = new Set<string>();
 let bootCurrencyPromise: Promise<CurrencySnapshot> | null = null;
 
 function safeTabId(value: unknown): TabId {
@@ -81,19 +80,22 @@ export function App() {
   const [skippedGuide, setSkippedGuide] = useState(false);
   const [isNewTripWizardOpen, setIsNewTripWizardOpen] = useState(false);
   const [acceptedInviteToken, setAcceptedInviteToken] = useState('');
+  const bootSyncKeys = useRef(new Set<string>());
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const handleSaveGuideTrip = async (result: WelcomeGuideResult | TripProfile) => {
     const guide = 'trip' in result
       ? result
-      : { trip: result, persons: state.persons, shareRatios: state.shareRatios, sharingInvites: [] };
+      : { trip: result, persons: stateRef.current.persons, shareRatios: stateRef.current.shareRatios, sharingInvites: [] };
     const { trip, persons, shareRatios, sharingInvites } = guide;
     try {
       if (!supabaseAuth.session) throw new Error('Supabase session unavailable');
-      const syncedTrip = await upsertSupabaseTrip(supabaseAuth.session, state, trip);
+      const syncedTrip = await upsertSupabaseTrip(supabaseAuth.session, stateRef.current, trip);
       const createdInvites: TripInviteSummary[] = [];
       for (const invite of sharingInvites || []) {
         try {
-          createdInvites.push(await createSupabaseTripInvite(supabaseAuth.session, state, syncedTrip, invite));
+          createdInvites.push(await createSupabaseTripInvite(supabaseAuth.session, stateRef.current, syncedTrip, invite));
         } catch (inviteError) {
           console.warn('[WelcomeGuide] Failed to create trip invite:', inviteError);
         }
@@ -272,13 +274,13 @@ export function App() {
       hasSupabaseSession(supabaseAuth.session) ? `supabase:${supabaseAuth.session.user.id}` : hasCredentialBrokerSession(state) ? `broker:${state.credentialSessionExpiresAt || 0}` : 'local-dev-credential',
       receiptCountRef.current === 0 ? 'pull' : 'sync',
     ].join(':');
-    if (bootSyncKeys.has(bootSyncKey) || bootSyncScheduledKey.current === bootSyncKey) return;
+    if (bootSyncKeys.current.has(bootSyncKey) || bootSyncScheduledKey.current === bootSyncKey) return;
     bootSyncScheduledKey.current = bootSyncKey;
 
     const timer = window.setTimeout(() => {
       bootSyncScheduledKey.current = '';
-      if (bootSyncKeys.has(bootSyncKey) || bootSyncInitiated.current) return;
-      bootSyncKeys.add(bootSyncKey);
+      if (bootSyncKeys.current.has(bootSyncKey) || bootSyncInitiated.current) return;
+      bootSyncKeys.current.add(bootSyncKey);
       bootSyncInitiated.current = true;
       if (receiptCountRef.current === 0) {
         console.log('[App] Boot pull — no local receipts, fetching from configured cloud sources');
@@ -290,7 +292,7 @@ export function App() {
     }, 800);
     return () => {
       window.clearTimeout(timer);
-      if (!bootSyncKeys.has(bootSyncKey)) bootSyncScheduledKey.current = '';
+      if (!bootSyncKeys.current.has(bootSyncKey)) bootSyncScheduledKey.current = '';
     };
   }, [isHydratingScope, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, supabaseAuth.session]);
 
@@ -401,7 +403,7 @@ export function App() {
                   />
                 )}
                 {safeTab === 'weather' && <Weather state={state} />}
-                {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} />}
+                {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} />}
                 {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
               </div>
             ) : (

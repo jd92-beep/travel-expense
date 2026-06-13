@@ -297,10 +297,10 @@ export function safeExternalUrl(value: unknown, fallback = ''): string {
   return fallback;
 }
 
-export function safePhotoUrl(value: unknown, fallback = ''): string {
+export function safePhotoUrl(value: unknown, fallback = '', _depth = 0): string {
   let raw = String(value || '').trim();
   if (!raw) {
-    return fallback ? safePhotoUrl(fallback) : '';
+    return fallback && _depth < 2 ? safePhotoUrl(fallback, '', _depth + 1) : '';
   }
 
   // 1. Cleanup duplicate/nested data URL prefixes (e.g. data:image/jpeg;base64,data:image/jpeg;base64,...)
@@ -323,10 +323,10 @@ export function safePhotoUrl(value: unknown, fallback = ''): string {
       return url.href;
     }
   } catch {
-    return fallback ? safePhotoUrl(fallback) : '';
+    return fallback && _depth < 2 ? safePhotoUrl(fallback, '', _depth + 1) : '';
   }
 
-  return fallback ? safePhotoUrl(fallback) : '';
+  return fallback && _depth < 2 ? safePhotoUrl(fallback, '', _depth + 1) : '';
 }
 
 export function computeSettlements(state: AppState): SettlementSnapshot {
@@ -412,7 +412,7 @@ export function exportCsv(state: AppState): void {
       String(r.originalAmount ?? r.total ?? 0),
       r.originalCurrency || r.currency || state.tripCurrency,
       String(r.total || 0),
-      String(r.hkdAmount ?? hkd(r.total, state)),
+      String(r.hkdAmount ?? getReceiptHkdAmount(r, state)),
       person ? `${person.emoji} ${person.name}` : '',
       receiptRegion(state, r),
       r.address || '',

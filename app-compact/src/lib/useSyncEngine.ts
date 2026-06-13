@@ -43,7 +43,7 @@ function dedupeQueue(queue: SyncQueueItem[]) {
 }
 
 function pendingCount(queue: SyncQueueItem[] = []) {
-  return queue.filter((item) => item.status !== 'synced' && item.status !== 'failed' && item.status !== 'error').length;
+  return queue.filter((item) => item.status !== 'synced' && item.status !== 'failed').length;
 }
 
 function usesSharedLedger(state: AppState, receipt: Receipt): boolean {
@@ -119,6 +119,7 @@ export function useSyncEngine(
 
   const applyReceiptSyncResult = useCallback((item: SyncQueueItem, receipt: Receipt) => {
     if (!aliveRef.current) return;
+    const capturedSession = supabaseSessionRef.current;
     setState((current) => ({
       ...current,
       receipts: current.receipts.map((candidate) => {
@@ -130,7 +131,7 @@ export function useSyncEngine(
             ...candidate,
             notionPageId: receipt.notionPageId || candidate.notionPageId,
             sourceId: receipt.sourceId || candidate.sourceId,
-            syncStatus: hasSupabaseSession(supabaseSessionRef.current) || canUseNotionMirror(current, false, (supabaseSessionRef.current as any)?.user?.email || null) ? 'queued' : 'local',
+            syncStatus: hasSupabaseSession(capturedSession) || canUseNotionMirror(current, false, (capturedSession as any)?.user?.email || null) ? 'queued' : 'local',
           };
         }
         const nextSyncStatus = receipt.ledgerSyncStatus === 'notion_pending' || receipt.ledgerSyncStatus === 'queued'
@@ -197,8 +198,9 @@ export function useSyncEngine(
         ? await upsertSupabaseReceipt(supabaseSession, current, { ...receipt, syncStatus: 'syncing' })
         : { ...receipt, syncStatus: 'syncing' as const };
       if (hasNotionSync && !sharedLedger) {
+        const beforeNotionPageId = synced.notionPageId;
         synced = await pushReceipt(current, synced);
-        if (supabaseSession) {
+        if (supabaseSession && synced.notionPageId !== beforeNotionPageId) {
           synced = await upsertSupabaseReceipt(supabaseSession, current, synced);
         }
       }
@@ -262,7 +264,7 @@ export function useSyncEngine(
       let failures = 0;
       let lastError = '';
       for (const item of dedupeQueue(stateRef.current.syncQueue || [])) {
-        if (item.status === 'failed' || item.status === 'error' || item.attempts >= MAX_RETRY_ATTEMPTS) continue;
+        if (item.status === 'failed' || item.attempts >= MAX_RETRY_ATTEMPTS) continue;
         markQueueItem(item, { status: 'syncing' });
         try {
           await processItem(item);
@@ -349,10 +351,8 @@ export function useSyncEngine(
           overwrittenIds.add(remote.id);
         }
       }
-      const prePullQueue = stateRef.current.syncQueue || [];
-      const filteredQueue = prePullQueue.filter((item) => !overwrittenIds.has(item.entityId));
-      const pending = pendingCount(filteredQueue);
       const nextSyncedAt = pullErrors.length ? stateRef.current.lastSyncedAt || 0 : mergedAt;
+      let computedPending = 0;
       if (aliveRef.current) {
         setState((current) => {
           const mergedBase = mergePulledData(current, receipts, trips);
@@ -406,17 +406,19 @@ export function useSyncEngine(
               };
             }
           }
+          const freshQueue = (current.syncQueue || []).filter((item) => !overwrittenIds.has(item.entityId));
+          computedPending = pendingCount(freshQueue);
           return {
             ...finalState,
-            syncQueue: (current.syncQueue || []).filter((item) => !overwrittenIds.has(item.entityId)),
-            globalSyncStatus: pullErrors.length ? 'error' : (pending ? 'queued' : 'synced'),
+            syncQueue: freshQueue,
+            globalSyncStatus: pullErrors.length ? 'error' : (computedPending ? 'queued' : 'synced'),
             lastSyncedAt: nextSyncedAt,
             syncError: pullErrors.join(' | '),
           };
         });
       }
       updateSyncState({
-        status: pullErrors.length ? 'error' : (pending ? 'queued' : 'synced'),
+        status: pullErrors.length ? 'error' : (computedPending ? 'queued' : 'synced'),
         lastSyncedAt: nextSyncedAt,
         error: pullErrors.join(' | '),
       });

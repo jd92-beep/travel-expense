@@ -70,11 +70,7 @@ export function normalizeState(input: unknown): AppState {
   const parsed = input && typeof input === 'object' ? input as Partial<AppState> : {};
   const state: AppState = migrateAppState({
     ...parsed,
-    tripDateRange: { ...DEFAULT_STATE.tripDateRange, ...(parsed.tripDateRange || {}) },
-    persons: Array.isArray(parsed.persons) && parsed.persons.length ? parsed.persons : DEFAULT_STATE.persons,
     receipts: Array.isArray(parsed.receipts) ? parsed.receipts.filter((r) => r && r.id && r.store !== undefined) : [],
-    shareRatios: parsed.shareRatios && typeof parsed.shareRatios === 'object' ? parsed.shareRatios : {},
-    itineraryOverrides: parsed.itineraryOverrides && typeof parsed.itineraryOverrides === 'object' ? parsed.itineraryOverrides : {},
     notionDeletedIds: Array.isArray(parsed.notionDeletedIds) ? parsed.notionDeletedIds : [],
     notionDeletedSourceIds: Array.isArray(parsed.notionDeletedSourceIds) ? parsed.notionDeletedSourceIds : [],
   });

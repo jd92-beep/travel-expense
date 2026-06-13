@@ -202,6 +202,20 @@ export function activeTrip(state: AppState): TripProfile {
     || trips[0];
 }
 
+export function switchTrip(state: AppState, tripId: string): Partial<AppState> | null {
+  const target = state.trips?.find((t) => t.id === tripId && !t.archived);
+  if (!target) return null;
+  return {
+    activeTripId: tripId,
+    trips: (state.trips || []).map((item) => ({ ...item, active: item.id === tripId && !item.archived })),
+    tripName: target.name,
+    budget: target.budget ?? state.budget,
+    tripCurrency: target.currencies?.find((c) => c !== 'HKD') || state.tripCurrency,
+    customItinerary: target.itinerary || [],
+    tripDateRange: { start: target.startDate, end: target.endDate },
+  };
+}
+
 export function scopedReceiptsForTrip(state: AppState, trip: TripProfile = activeTrip(state)): Receipt[] {
   const receipts = Array.isArray(state.receipts) ? state.receipts : [];
   const hasMultipleTrips = (state.trips || []).length > 1;
@@ -240,9 +254,13 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   // 增加 Prep-phase 大額預付項目智能歸位邏輯（升級版：覆蓋所有行前預付類別）：
   if (!trip) {
     const active = activeTrip(state);
-    const isBeforeTripEnd = active && receipt.date && receipt.date <= active.endDate;
+    const PREP_WINDOW_DAYS = 30;
+    const prepStartDate = active?.startDate
+      ? localYmd(new Date(`${active.startDate}T00:00:00`).getTime() - PREP_WINDOW_DAYS * 86_400_000)
+      : '';
+    const isWithinPrepWindow = active && active.startDate && receipt.date && receipt.date >= prepStartDate && receipt.date <= active.endDate;
     const isDefaultOrEmptyTripId = !receipt.tripId || receipt.tripId === 'trip_default' || receipt.tripId === 'default' || !trips.some(t => t.id === receipt.tripId && !t.archived);
-    if (isBeforeTripEnd && isDefaultOrEmptyTripId && active) {
+    if (isWithinPrepWindow && isDefaultOrEmptyTripId && active) {
       trip = active;
       if (!originalTripId || originalTripId === 'trip_default' || originalTripId === 'default') tripLinkSource = 'prep-auto';
     }

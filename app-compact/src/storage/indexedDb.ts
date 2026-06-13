@@ -42,6 +42,11 @@ function openDb(): Promise<IDBDatabase> {
       const db = req.result;
       if (!db.objectStoreNames.contains(STATE_STORE)) db.createObjectStore(STATE_STORE);
     };
+    req.onblocked = () => {
+      const timer = setTimeout(() => reject(new Error('IndexedDB open blocked — timeout after 3s')), 3000);
+      req.onsuccess = () => { clearTimeout(timer); resolve(req.result); };
+      req.onerror = () => { clearTimeout(timer); reject(req.error || new Error('IndexedDB open failed')); };
+    };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error || new Error('IndexedDB open failed'));
   });
