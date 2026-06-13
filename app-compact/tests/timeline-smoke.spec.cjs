@@ -88,7 +88,7 @@ test('Timeline map links reject unsafe imported URLs and use Android intent fall
       receipts: [],
     }));
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
   await expect(page.getByText('行程時間線').first()).toBeVisible();
   const hrefs = await page.getByRole('link', { name: '地圖' }).evaluateAll((links) => links.map((link) => link.getAttribute('href') || ''));
   expect(hrefs.join(' ')).not.toMatch(/javascript:|evil\.example/i);
@@ -130,7 +130,7 @@ test('Timeline highlights live, passed, and future itinerary spots', async ({ pa
       receipts: [],
     }));
   }, fixed);
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
   await expect(page.getByText('行程時間線').first()).toBeVisible();
   await expect(page.locator('.timeline-event.is-passed')).toContainText('Breakfast Stop');
   await expect(page.locator('.timeline-event.is-passed')).toContainText('完成');
@@ -145,6 +145,73 @@ test('Timeline highlights live, passed, and future itinerary spots', async ({ pa
   await expect(page.locator('.timeline-route-actions').first().getByRole('link', { name: '地圖' })).toBeVisible();
   const liveGlint = await page.locator('.timeline-event.is-live').evaluate((node) => getComputedStyle(node, '::after').animationName);
   expect(liveGlint).toContain('route-glint');
+});
+
+test('Timeline tab entry scrolls to the current live itinerary spot', async ({ page }) => {
+  const fixed = new Date('2026-05-09T14:10:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: fixedNow + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'scan',
+      tripDateRange: { start: '2026-05-08', end: '2026-05-09' },
+      customItinerary: [
+        {
+          date: '2026-05-08',
+          day: 1,
+          region: 'Yesterday Route',
+          timezone: 'Asia/Tokyo',
+          spots: Array.from({ length: 8 }, (_, idx) => ({ time: `${String(9 + idx).padStart(2, '0')}:00`, name: `Past Stop ${idx + 1}`, type: 'ticket' })),
+        },
+        {
+          date: '2026-05-09',
+          day: 2,
+          region: 'Current Route',
+          timezone: 'Asia/Tokyo',
+          spots: [
+            { time: '08:00', name: 'Morning Pier', type: 'transport' },
+            { time: '10:00', name: 'Old Market', type: 'shopping' },
+            { time: '14:00', name: 'Live Garden Spot', type: 'ticket' },
+            { time: '17:00', name: 'Sunset Cafe', type: 'food' },
+          ],
+        },
+      ],
+      receipts: [],
+    }));
+  }, fixed);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByRole('heading', { name: '收據掃描' })).toBeVisible();
+  await page.locator('.app-floating-dock-mobile').getByRole('button', { name: '行程' }).click();
+  const liveSpot = page.locator('.timeline-event.is-live').filter({ hasText: 'Live Garden Spot' });
+  await expect(liveSpot).toBeVisible();
+  await page.waitForTimeout(500);
+
+  const metrics = await liveSpot.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      center: rect.top + rect.height / 2,
+      viewportHeight: window.innerHeight,
+      scrollY: window.scrollY,
+    };
+  });
+
+  expect(metrics.scrollY, JSON.stringify(metrics, null, 2)).toBeGreaterThan(240);
+  expect(metrics.center, JSON.stringify(metrics, null, 2)).toBeGreaterThan(160);
+  expect(metrics.center, JSON.stringify(metrics, null, 2)).toBeLessThan(metrics.viewportHeight - 160);
 });
 
 test('Timeline command card stays compact and day header shows one date', async ({ page }) => {
@@ -176,7 +243,7 @@ test('Timeline command card stays compact and day header shows one date', async 
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
   await expect(page.getByText('行程時間線').first()).toBeVisible();
   const command = page.locator('.timeline-command');
   await expect(command).not.toContainText('📍');
@@ -251,7 +318,7 @@ test('Timeline mobile rail shines independently without covering compact itinera
     }));
   }, fixed);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
   await expect(page.getByText('行程時間線').first()).toBeVisible();
   await expect(page.locator('.timeline-rail-beam')).toBeVisible();
 
@@ -324,7 +391,7 @@ test('Timeline rail progress follows the current itinerary spot instead of the w
     }));
   }, fixed);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
   await expect(page.getByRole('heading', { name: 'Current Day' })).toBeVisible();
   const todayRail = page.locator('.timeline-rail.is-today');
   await expect(todayRail.locator('.timeline-now-marker')).toContainText('09:30');
@@ -388,7 +455,7 @@ test('Timeline rail uses a lighter inactive colour when today is outside the tri
     }));
   }, fixed);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
   await expect(page.getByRole('heading', { name: 'Past Day Two' })).toBeVisible();
   await expect(page.locator('.timeline-rail.is-today')).toHaveCount(0);
   await expect(page.locator('.timeline-now-marker')).toHaveCount(0);

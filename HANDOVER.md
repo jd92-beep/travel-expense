@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-13
-- **Focus**: Launch default changed to Scan tab; version bumped to 0.2.1
+- **Focus**: Timeline tab now auto-scrolls to the current live itinerary spot; version bumped to 0.2.2
 - **Agent**: Codex 🤖
-- **App version**: `0.2.1` (react + compact)
+- **App version**: `0.2.2` (react + compact)
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,12 +13,27 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently but are currently aligned at `0.2.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently but are currently aligned at `0.2.2`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 19 (Codex — current session)
+### Session 20 (Codex — current session)
+
+1. **Timeline tab entry scroll fixed**:
+   - `app-compact/src/tabs/Timeline.tsx` and `app-react/src/tabs/Timeline.tsx` no longer rely on the old one-shot `scrolledRef` behavior.
+   - Entering the Timeline/行程 tab recalculates the current trip day and live itinerary spot, then scrolls the spot toward the center of the mobile viewport.
+   - The selector no longer depends on `GlassCard` forwarding `data-date`; each day card now has a hidden `.timeline-day-anchor[data-date]`.
+   - The scroll helper uses geometry-based `window.scrollTo()` with a follow-up correction because `scrollIntoView()` was unreliable inside the animated app shell.
+2. **Regression coverage**:
+   - Added Compact Playwright coverage that opens the app on Scan, taps 行程, and verifies the live spot is centered.
+   - Existing Timeline smokes now deep-link to `#timeline` where they are testing Timeline internals, matching the new Scan default.
+3. **Version bump**:
+   - `APP_VERSION` and both `package.json` versions bumped from `0.2.1` to `0.2.2`.
+4. **External pending changes preserved**:
+   - The workspace also contained an Admin Console draft in `app-compact` (`Admin` tab, admin API/types, shell tab entry, and `.mimocode` plan update). It typechecks/builds with this pass and was not reverted.
+
+### Session 19 (Codex — previous session)
 
 1. **Default app opening tab is now Scan**:
    - `app-compact/src/App.tsx` and `app-react/src/App.tsx` now use `scan` as the default launch tab.
@@ -65,6 +80,15 @@
    - The new tags are the Node 24-generation Pages actions and should stop the Node.js 20 deprecation annotation on the next Pages deploy.
 
 ## Verified
+- `app-compact npm run typecheck` ✅ (0.2.2 timeline fix)
+- `app-react npm run typecheck` ✅ (0.2.2 timeline fix)
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:timeline` ✅ (8/8, includes Scan → Timeline live-spot auto-scroll)
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:mobile-layout` ✅
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:final-nav` ✅ (8/8)
+- `app-compact npm run build` ✅
+- `app-react npm run build` ✅
+- `app-compact npm run security:scan` ✅
+- `git diff --check` ✅
 - Live Supabase migration list includes `20260613044116_receipt_photo_storage` ✅
 - Live Supabase migration list includes `20260613044208_harden_shared_invites_and_receipt_versions` ✅
 - `node scripts/verify-supabase-migrations.mjs` ✅

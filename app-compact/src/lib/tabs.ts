@@ -8,4 +8,5 @@ export const TAB_MANIFEST: Array<{ id: TabId; label: string }> = [
   { id: 'weather', label: '天氣' },
   { id: 'stats', label: '統計' },
   { id: 'settings', label: '設定' },
+  { id: 'admin', label: 'Console' },
 ];

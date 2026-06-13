@@ -1,5 +1,5 @@
 import type { CSSProperties, Dispatch, FormEvent, SetStateAction } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CalendarDays, Home, MapPin, PencilLine, ReceiptText, RotateCcw } from 'lucide-react';
 import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
@@ -38,25 +38,47 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
     return current?.date === day.date;
   });
 
-  const scrolledRef = useRef(false);
-  useEffect(() => {
-    if (scrolledRef.current) return;
-    if (!currentTripDay) return;
+  const scrollTargetDate = currentTripDay?.date || itinerary[0]?.date;
+  const lastAutoScrollKeyRef = useRef('');
+  const scrollToLiveTimelineSpot = useCallback((force = false) => {
+    if (typeof window === 'undefined') return;
+    if (!scrollTargetDate) return;
 
-    scrolledRef.current = true;
-    const timer = window.setTimeout(() => {
-      const targetDate = currentTripDay.date;
-      let element = document.querySelector(`.timeline-day[data-date="${targetDate}"] .timeline-event.is-live`);
-      if (!element) {
-        element = document.querySelector(`.timeline-day[data-date="${targetDate}"]`);
-      }
+    const scrollKey = scrollTargetDate;
+    if (!force && lastAutoScrollKeyRef.current === scrollKey) return;
+    lastAutoScrollKeyRef.current = scrollKey;
+
+    let attempts = 0;
+    const tryScroll = () => {
+      const element = selectTimelineAutoScrollTarget(scrollTargetDate);
       if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollTimelineElementIntoCenter(element);
+        return;
       }
-    }, 400);
+      attempts += 1;
+      if (attempts <= 8) window.setTimeout(tryScroll, 120);
+    };
 
-    return () => window.clearTimeout(timer);
-  }, [currentTripDay]);
+    window.setTimeout(tryScroll, force ? 80 : 180);
+  }, [scrollTargetDate]);
+
+  useLayoutEffect(() => {
+    scrollToLiveTimelineSpot();
+  }, [scrollToLiveTimelineSpot]);
+
+  useEffect(() => {
+    const handleTimelineEntry = () => {
+      if (window.location.hash.slice(1) !== 'timeline') return;
+      lastAutoScrollKeyRef.current = '';
+      scrollToLiveTimelineSpot(true);
+    };
+    window.addEventListener('hashchange', handleTimelineEntry);
+    window.addEventListener('popstate', handleTimelineEntry);
+    return () => {
+      window.removeEventListener('hashchange', handleTimelineEntry);
+      window.removeEventListener('popstate', handleTimelineEntry);
+    };
+  }, [scrollToLiveTimelineSpot]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('modal-open', hasOpenModal);
@@ -109,6 +131,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
         return (
         <Reveal key={day.date} className="timeline-day-reveal" delay={Math.min(0.18, day.day * 0.018)}>
         <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`} data-date={day.date}>
+          <span className="timeline-day-anchor" data-date={day.date} hidden />
           <div className="section-head timeline-day-head">
             <div className="timeline-day-title">
               <span className="timeline-day-number">Day {day.day}</span>
@@ -242,6 +265,33 @@ function spotStableKey(date: string, spot: ScheduleSpot, fallbackIdx: number): s
   if (spot.id) return `${date}:id:${spot.id}`;
   if (spot._spotIdx >= 0) return `${date}:planned:${spot._spotIdx}`;
   return `${date}:render:${fallbackIdx}`;
+}
+
+function selectTimelineAutoScrollTarget(date: string): Element | null {
+  const anchor = document.querySelector(`.timeline-day-anchor[data-date="${date}"]`);
+  const day = anchor?.closest('.timeline-day');
+  if (!day) return null;
+  const live = day.querySelector('.timeline-event.is-live');
+  if (live) return live;
+  const next = day.querySelector('.timeline-event.is-future');
+  if (next) return next;
+  const events = day.querySelectorAll('.timeline-event');
+  return events[events.length - 1] || day;
+}
+
+function scrollTimelineElementIntoCenter(element: Element) {
+  const scrollToElement = (behavior: ScrollBehavior) => {
+    const rect = element.getBoundingClientRect();
+    const targetTop = Math.max(0, window.scrollY + rect.top - window.innerHeight * 0.42);
+    window.scrollTo({ top: targetTop, behavior });
+  };
+
+  scrollToElement('smooth');
+  window.setTimeout(() => {
+    const rect = element.getBoundingClientRect();
+    const center = rect.top + rect.height / 2;
+    if (center < 150 || center > window.innerHeight - 150) scrollToElement('auto');
+  }, 320);
 }
 
 function timelineProgress(date: string, timezone: string | undefined, spots: Array<ItinerarySpot & { _spotIdx: number }>, idx: number, nowMs: number): 'is-passed' | 'is-live' | 'is-future' {

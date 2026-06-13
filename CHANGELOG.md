@@ -2,6 +2,8 @@
 
 ## 2026-06-13
 
+- Fixed React and Compact itinerary Timeline tab entry behavior so tapping the Itinerary/行程 tab scrolls to the current day and live itinerary spot instead of staying at the top of the trip. The scroll now uses a hidden day anchor plus a geometry-based center scroll, with fallback to the next/last spot when there is no live spot.
+- Added Compact Playwright coverage for entering Timeline from the Scan tab and verifying the live spot is centered on mobile. Bumped both app versions to `0.2.2`.
 - Changed React and Compact app launch behavior so opening the app without a URL hash starts on the Scan tab, even if older local state still has a previous `lastTab`; explicit hash deep links such as `#history` still open their requested tab. Bumped both app versions to `0.2.1`.
 - Upgraded the GitHub Pages workflow's official Pages actions to the Node 24 generation: `actions/configure-pages@v6`, `actions/upload-pages-artifact@v5`, and `actions/deploy-pages@v5`, removing the Node.js 20 deprecation warning from the Pages deploy path.
 - Completed the compact pending-task handoff from the external AI pass: the Supabase `receipt-photos` Storage bucket migration is now idempotent and applied to live project `fbnnjoahvtdrnigevrtw` as `20260613044116_receipt_photo_storage`.
