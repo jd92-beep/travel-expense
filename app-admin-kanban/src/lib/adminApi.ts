@@ -73,7 +73,7 @@ export async function loginAdmin(passphrase: string): Promise<AdminSession> {
 export async function fetchSnapshot(session: AdminSession, rangeDays: number): Promise<AdminKanbanSnapshot> {
   const params = new URLSearchParams({ range: `${rangeDays}d` });
   const data = await parseJson<{ ok: boolean; snapshot: AdminKanbanSnapshot }>(await fetch(adminDataUrl(`/api/snapshot?${params}`), {
-    headers: { Authorization: `Bearer ${session.token}` },
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
   }));
   return data.snapshot;
 }

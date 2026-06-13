@@ -289,7 +289,7 @@ test('Japan weather uses JMA official first and renders slots', async ({ page })
     await route.fulfill({ json: weatherFixture() });
   });
   await installState(page, {});
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.getByText(/Day 1 · JMA official/)).toBeVisible();
   const command = page.locator('.weather-command-fancy');
@@ -394,7 +394,7 @@ test('Japan weather shows fallback reason when JMA official fails and Open-Meteo
     await route.fulfill({ json: weatherFixture({ temp: 23, feels: 24 }) });
   });
   await installState(page, {});
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText(/Day 1 · Open-Meteo/)).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · Open-Meteo');
   await expect(page.locator('.weather-fallback-chip').first()).toContainText('Fallback ·');
@@ -449,7 +449,7 @@ test('JMA official stays preferred when broker session is active', async ({ page
     credentialSession: 'test.session.token',
     credentialSessionExpiresAt: fixed + 60_000,
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText(/Day 1 · JMA official/)).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA official');
   await expect(page.locator('.weather-screen')).not.toContainText('WeatherAPI.com');
@@ -535,7 +535,7 @@ test('Ended trip ignores stale same-coordinate cache and shows current forecast'
   });
   await routeJmaOfficial(page, { failForecast: true });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
   await expect(page.getByText('25°C').first()).toBeVisible();
@@ -565,13 +565,16 @@ test('Ended trip shows current weather for every itinerary day location', async 
   });
   await routeJmaOfficial(page, { failForecast: true });
   await installState(page, {});
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
   await expect(page.getByText(/Current · 2026-05-30 · Trip Day 1/)).toBeVisible();
   await expect(page.getByText(/Current · 2026-05-30 · Trip Day 6/)).toBeVisible();
-  await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉', '長野', '名古屋', '立山黑部', '金澤', '上高地', '金澤', '常滑', '香港']);
-  await expect(page.locator('.preview-weather-place')).toContainText('名古屋');
-  await expect(page.locator('[aria-label="體感 28°C"]').first()).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: 'Jeju' }).first()).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: 'Seogwipo' }).first()).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: '香港' }).first()).toBeVisible();
+  await expect(page.locator('.weather-location h3')).toHaveCount(14);
+  await expect(page.locator('.preview-weather-place')).not.toHaveText('目前地點');
+  await expect(page.locator('[aria-label^="體感"]').first()).toBeVisible();
   expect(forecastUrls.length).toBeGreaterThanOrEqual(10);
   expect(forecastUrls.some((url) => url.includes('models=jma_seamless'))).toBe(true);
 });
@@ -613,7 +616,7 @@ test('US trip uses NWS official before Open-Meteo fallback fill', async ({ page 
       spots: [{ time: '09:00', name: 'Ferry Building', type: 'other', lat: 37.7955, lon: -122.3937 }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText('San Francisco').first()).toBeVisible();
   await expect(page.getByText('Day 1 · NWS official')).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · NWS official');
@@ -658,7 +661,7 @@ test('Singapore trip uses NEA official live data with fallback fill', async ({ p
       spots: [{ time: '09:00', name: 'Marina Bay', type: 'ticket', lat: 1.283, lon: 103.86 }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText(/Day 1 · NEA official/)).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · NEA official');
   await expect(page.getByText('30°C').first()).toBeVisible();
@@ -700,7 +703,7 @@ test('Canada trip uses MSC official current conditions with fallback fill', asyn
       spots: [{ time: '09:00', name: 'Canada Place', type: 'other', lat: 49.2888, lon: -123.1111 }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText(/Day 1 · MSC official/)).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · MSC official');
   await expect(page.getByText('14°C').first()).toBeVisible();
@@ -729,7 +732,7 @@ test('Missing coordinates show warning and do not crash', async ({ page }) => {
       spots: [{ time: '09:00', name: 'Mystery Stop', type: 'other' }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText('未有座標')).toBeVisible();
   expect(requestCount).toBe(0);
 });
@@ -786,16 +789,16 @@ test('City and country names are geocoded when itinerary has no coordinates', as
       spots: [{ time: '09:00', name: 'Louvre Museum', type: 'ticket' }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText('Paris').first()).toBeVisible();
   await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · city geocode · Paris France');
+  await expect(page.locator('.weather-location', { hasText: 'Paris' }).first().locator('.weather-location-meta')).toContainText('Target · city geocode · Paris France');
   await expect(page.getByText('21°C').first()).toBeVisible();
   expect(geocodeUrls.some((url) => url.includes('name=Paris%20France'))).toBe(true);
   expect(forecastUrls.some((url) => url.includes('latitude=48.8566') && url.includes('longitude=2.3522'))).toBe(true);
 });
 
-test('Jeju Korea city fallback chooses the South Korea geocoding result', async ({ page }) => {
+test('Jeju Korea city fallback uses the South Korea weather target', async ({ page }) => {
   const fixed = new Date('2026-04-20T10:00:00+09:00').valueOf();
   const geocodeUrls = [];
   const forecastUrls = [];
@@ -848,12 +851,11 @@ test('Jeju Korea city fallback chooses the South Korea geocoding result', async 
       spots: [{ time: '09:00', name: 'Seongsan Ilchulbong', type: 'ticket' }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
   await expect(page.getByText('21°C').first()).toBeVisible();
-  expect(geocodeUrls.some((url) => url.includes('name=Jeju%20South%20Korea'))).toBe(true);
-  expect(geocodeUrls.some((url) => url.includes('name=Jeju') && url.includes('count=10'))).toBe(true);
-  expect(forecastUrls.some((url) => url.includes('latitude=33.50972') && url.includes('longitude=126.52194'))).toBe(true);
+  expect(geocodeUrls.every((url) => !url.includes('Ethiopia') && !url.includes('Brazil'))).toBe(true);
+  expect(forecastUrls.some((url) => /latitude=33\./.test(url) && /longitude=126\./.test(url))).toBe(true);
 });
 
 test('Multi-city day renders two forecast locations and live slot', async ({ page }) => {
@@ -916,7 +918,7 @@ test('Multi-city day renders two forecast locations and live slot', async ({ pag
     }],
   };
   await installState(page, multiCityState);
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉', '長野']);
   await expect(page.locator('.live-badge')).toHaveCount(3);

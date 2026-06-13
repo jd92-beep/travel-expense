@@ -2174,67 +2174,48 @@ export function Settings({
 
       {cloudSyncAvailable && updatePassword && (
         <AccordionCard id="settings-supabase-account" eyebrow="Supabase Auth" title="雲端帳號與密碼設定 🔐" icon={<KeyRound />}>
-          <p className="muted">
-            你可以為目前嘅帳號設定或修改密碼。設定密碼後，你喺其他裝置登入時，除咗用 Email 連結之外，亦可以直接輸入 Email 同密碼登入！
-          </p>
-          <GlassCard className="settings-account-card">
-            <div className="settings-account-copy">
-              <span className="eyebrow">目前帳號</span>
-              <strong>{userEmail || 'Supabase 帳號'}</strong>
-              <small>帳號操作集中喺 Settings，避免主畫面右上角阻住 app 操作。</small>
-            </div>
-            <div className="action-row wrap">
-              {onSignOut && (
-                <button className="secondary" type="button" disabled={!!busy} onClick={() => void handleSupabaseSignOut()} aria-label="登出 Supabase">
-                  <LogOut size={18} /> 登出
-                </button>
-              )}
-              {onClearDeviceData && onSignOut && (
-                <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
-                  <Trash2 size={18} /> 清除此裝置資料
-                </button>
-              )}
-              {onClearDeviceData && onSignOut && (
-                <button className="danger" type="button" disabled={!!busy} style={{ background: '#dc2626', color: 'white' }} onClick={() => setShowDeleteAccountConfirm(true)} aria-label="永久刪除帳戶">
-                  <UserMinus size={18} /> 永久刪除帳戶
-                </button>
-              )}
-            </div>
-          </GlassCard>
-          <div style={{ display: 'grid', gap: '12px', maxWidth: '380px', marginTop: '12px' }}>
-            <label style={{ display: 'grid', gap: '4px', fontSize: '12px', fontWeight: 800, color: '#374151' }}>
-              設定新密碼 (最少 6 位)
-              <input
-                type="password"
-                value={newPasswordInput}
-                onChange={(e) => setNewPasswordInput(e.target.value)}
-                placeholder="請輸入新密碼"
-                style={{ width: '100%', padding: '9px 12px', border: '1px solid rgba(139, 115, 85, 0.22)', borderRadius: '8px', fontSize: '13px', outline: 'none', background: 'white' }}
-              />
-            </label>
-            <div className="action-row">
+          <div className="settings-auth-layout">
+            <GlassCard className="settings-account-card">
+              <div className="settings-account-copy">
+                <span className="eyebrow">目前帳號</span>
+                <strong>{userEmail || 'Supabase 帳號'}</strong>
+                <small>帳號、密碼同本機資料操作集中管理。</small>
+              </div>
+              <div className="settings-account-actions">
+                {onSignOut && (
+                  <button className="secondary" type="button" disabled={!!busy} onClick={() => void handleSupabaseSignOut()} aria-label="登出 Supabase">
+                    <LogOut size={18} /> 登出
+                  </button>
+                )}
+                {onClearDeviceData && onSignOut && (
+                  <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
+                    <Trash2 size={18} /> 清除此裝置資料
+                  </button>
+                )}
+                {onClearDeviceData && onSignOut && (
+                  <button className="danger settings-danger-solid" type="button" disabled={!!busy} onClick={() => setShowDeleteAccountConfirm(true)} aria-label="永久刪除帳戶">
+                    <UserMinus size={18} /> 永久刪除帳戶
+                  </button>
+                )}
+              </div>
+            </GlassCard>
+            <div className="settings-password-panel">
+              <label>
+                <span>設定新密碼</span>
+                <input
+                  type="password"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  placeholder="最少 6 位"
+                />
+              </label>
               <button
                 className="primary"
                 type="button"
                 disabled={!!busy || newPasswordInput.length < 6}
                 onClick={() => void handleUpdatePassword()}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '9px 16px',
-                  borderRadius: '10px',
-                  border: 0,
-                  background: !!busy || newPasswordInput.length < 6 ? '#9CA3AF' : 'linear-gradient(135deg, #CC2929, #E07B39)',
-                  color: 'white',
-                  fontSize: '13px',
-                  fontWeight: 900,
-                  cursor: !!busy || newPasswordInput.length < 6 ? 'default' : 'pointer',
-                  boxShadow: '0 4px 12px rgba(204, 41, 41, 0.15)',
-                }}
               >
-                儲存雲端登入密碼 💾
+                <KeyRound size={17} /> 儲存雲端登入密碼
               </button>
             </div>
           </div>
@@ -2242,36 +2223,46 @@ export function Settings({
       )}
 
       <AccordionCard id="settings-trip" eyebrow="Trip Manager" title="旅程管理器 🏯🌸" meta={<span className="pill">v{managedTrip.version}</span>}>
-        <div style={{ marginBottom: '1.5rem', borderBottom: '1px dashed rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
-          <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>選擇要編輯或管理嘅旅程：</label>
+        <div className="settings-trip-manager">
+        <div className="settings-trip-panel settings-trip-panel--active">
+          <div className="settings-trip-panel-head">
+            <div>
+              <span className="eyebrow">Active trip</span>
+              <h3>{managedTrip.name}</h3>
+            </div>
+            <span className="pill">{mgrCurrency}</span>
+          </div>
+          <label>選擇旅程
           <select
             value={managerTripId}
             onChange={(e) => handleSelectManagedTrip(e.target.value)}
-            style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(30,30,40,0.6)', color: '#fff', fontSize: '1rem' }}
           >
             {trips.map((trip) => (
               <option key={trip.id} value={trip.id}>
-                {trip.id === currentTrip.id ? '🌟 [當前 Active] ' : ''}
-                {trip.archived ? '📁 [已封存] ' : ''}
+                {trip.id === currentTrip.id ? '[Active] ' : ''}
+                {trip.archived ? '[Archived] ' : ''}
                 {trip.name} ({trip.startDate || '未設定日期'})
               </option>
             ))}
           </select>
+          </label>
           {managerTripId !== currentTrip.id && (
             <button
               className="secondary"
               type="button"
               onClick={() => selectTrip(managerTripId)}
-              style={{ marginTop: '0.75rem', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
             >
               <Sparkles size={16} /> 切換為當前 Active 記帳旅程
             </button>
           )}
         </div>
 
-        <div style={{ marginBottom: '1.5rem', borderBottom: '1px dashed rgba(255,255,255,0.1)', paddingBottom: '1.5rem' }}>
-          <div className="section-head">
-            <h2>建立新旅程</h2>
+        <div className="settings-trip-panel">
+          <div className="settings-trip-panel-head">
+            <div>
+              <span className="eyebrow">New trip</span>
+              <h3>建立新旅程</h3>
+            </div>
             <span className="pill">Multi-trip</span>
           </div>
           <div className="form-grid">
@@ -2300,13 +2291,21 @@ export function Settings({
               </select>
             </label>
           </div>
-          <div className="action-row wrap" style={{ marginTop: '0.75rem' }}>
+          <div className="action-row wrap">
             <button className="primary" type="button" onClick={createManagedTrip}>
               <Plus size={18} /> 建立並切換
             </button>
           </div>
         </div>
 
+        <div className="settings-trip-panel settings-trip-panel--edit">
+        <div className="settings-trip-panel-head">
+          <div>
+            <span className="eyebrow">Edit selected trip</span>
+            <h3>旅程資料</h3>
+          </div>
+          <span className="pill">{mgrArchived ? 'Archived' : 'Active'}</span>
+        </div>
         <div className="form-grid">
           <label>旅程名
             <input value={mgrName} onChange={(e) => setMgrName(e.target.value)} placeholder="例如：名古屋 2026" />
@@ -2366,9 +2365,12 @@ export function Settings({
 
         {/* Quick Itinerary View / Edit - opens confirmation modal with current trip data */}
         {getItinerary(state).length > 0 && (
-          <div style={{ marginTop: '1rem', padding: '14px', borderRadius: '16px', border: '1px solid rgba(30, 77, 107, 0.16)', background: 'rgba(30, 77, 107, 0.04)' }}>
-            <div className="section-head">
-              <h2>📋 當前行程</h2>
+          <div className="settings-trip-itinerary-quick">
+            <div className="settings-trip-panel-head">
+              <div>
+                <span className="eyebrow">Itinerary</span>
+                <h3>當前行程</h3>
+              </div>
               <span className="pill">{getItinerary(state).length} 日 · {getItinerary(state).reduce((sum, day) => sum + (day.spots?.length || 0), 0)} 景點</span>
             </div>
             <p className="muted">查看或編輯目前旅程嘅每日行程安排、景點同住宿資料。</p>
@@ -2393,65 +2395,47 @@ export function Settings({
           </div>
         )}
 
-        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <div className="settings-trip-actions">
           <button
             className="primary"
             type="button"
             onClick={handleSaveManagedTrip}
-            style={{ flex: 1, minWidth: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem' }}
           >
             <CheckCircle2 size={18} /> 儲存旅程修改
           </button>
           <button
+            className="settings-trip-delete"
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
-            style={{
-              flex: 1,
-              minWidth: '150px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              padding: '0.75rem',
-              background: 'rgba(239, 68, 68, 0.15)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '8px',
-              color: '#EF4444',
-              cursor: 'pointer',
-              fontWeight: 700,
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
-              e.currentTarget.style.borderColor = '#EF4444';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-            }}
           >
             <Trash2 size={18} /> 刪除此旅程與資料
           </button>
         </div>
+        </div>
 
-        <div style={{ marginTop: '1.5rem', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
+        <div className="settings-trip-panel settings-trip-panel--compact">
+          <div className="settings-trip-panel-head">
+            <div>
+              <span className="eyebrow">Currency</span>
+              <h3>匯率與統計口徑</h3>
+            </div>
+          </div>
           <div className="form-grid">
-            <label>即時匯率（1 HKD = JPY）
+            <label>即時匯率（1 HKD = {mgrCurrency || '目的地貨幣'}）
               <input type="number" min="0.01" step="0.01" value={state.rate} onChange={(e) => {
                 const val = parseFloat(e.target.value);
                 const safe = Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : 20.36;
                 updateState({ rate: safe });
               }} />
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-              <button className="secondary" type="button" disabled={!!busy} onClick={refreshRate} style={{ width: '100%', height: '42px' }}>
+            <label>
+              <span>更新 live rate</span>
+              <button className="secondary" type="button" disabled={!!busy} onClick={refreshRate}>
                 {busy === '更新匯率' ? <RotateCcw size={18} className="spin" /> : <RotateCcw size={18} />} 更新匯率
               </button>
             </label>
           </div>
-        </div>
 
-        <div style={{ marginTop: '1rem' }}>
           <label className="check-row">
             <input type="checkbox" checked={state.statsIncludeTransportLodging} onChange={(e) => updateState({ statsIncludeTransportLodging: e.target.checked })} />
             反轉首頁統計：總消費排除機票/住宿，今日/日均包括全部
@@ -2460,6 +2444,7 @@ export function Settings({
             <input type="checkbox" checked={state.top10IncludeBigItems} onChange={(e) => updateState({ top10IncludeBigItems: e.target.checked })} />
             TOP 10 包括機票/住宿/大型交通
           </label>
+        </div>
         </div>
       </AccordionCard>
 

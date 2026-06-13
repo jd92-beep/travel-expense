@@ -303,7 +303,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
 
   const summaries = page.locator('.accordion-summary');
@@ -643,7 +643,7 @@ test('Settings protects broker URL and does not keep archived trip active', asyn
     }));
   }, trips);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
 
   await setAccordion(page, 'Credentials & Connection');
@@ -733,7 +733,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
 
   const doctor = page.getByLabel('Compact Trip Doctor');
@@ -904,7 +904,7 @@ test.skip('Settings sync readiness dry run summarizes offline queue without prov
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
   await setAccordion(page, 'Notion Sync');
 
@@ -1039,7 +1039,7 @@ test('Settings trip scope audit flags active trip boundaries without provider ca
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
 
   const audit = page.getByLabel('Trip scope audit');
@@ -1151,7 +1151,7 @@ test('Settings backup restore preview can be cancelled before mutating local sta
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
   await setAccordion(page, '資料管理');
 
@@ -1324,7 +1324,7 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
   await setAccordion(page, 'AI 行程更新');
   await page.getByPlaceholder(/下次/).fill('Day 1｜6月13日｜到步＋西線入住｜住 Hotel Fine Jeju\nDay 3｜6月15日｜牛島＋城山日出峰\nDay 8｜6月20日｜涯月慢遊＋機場回程');
@@ -1438,7 +1438,7 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
     '21:30 濟州起飛',
   ].join('\n');
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
   await setAccordion(page, 'AI 行程更新');
   await expect(page.locator('#settings-trip-update-panel')).toContainText('目前 primary：Mimo v2.5');
@@ -1548,7 +1548,7 @@ test('Trip update AI extracts markdown table itinerary when providers fail', asy
     '| 23:35 | 航班降落 | 香港國際機場 (HKG) |',
   ].join('\n');
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
   await setAccordion(page, 'AI 行程更新');
   await page.getByPlaceholder(/下次/).fill(markdownJeju);
@@ -1608,7 +1608,7 @@ test('Settings can connect a broker session without leaking the password into ap
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
   await setAccordion(page, 'Credentials & Connection');
 

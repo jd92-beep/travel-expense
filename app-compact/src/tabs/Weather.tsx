@@ -25,7 +25,7 @@ function WeatherIcon({ code, size = 18 }: { code?: number; size?: number }) {
 }
 
 export function Weather({ state }: { state: AppState }) {
-  const [rows, setRows] = useState<Record<string, DayWeather[]>>(() => getCachedWeatherRows() || {});
+  const [rows, setRows] = useState<Record<string, DayWeather[]>>({});
   const [busy, setBusy] = useState(false);
   const [stale, setStale] = useState(false);
   const [error, setError] = useState('');
@@ -91,7 +91,7 @@ export function Weather({ state }: { state: AppState }) {
     const controller = new AbortController();
     async function load() {
       const cached = getCachedWeatherRows();
-      if (cached && Object.keys(cached).length > 0) {
+      if (cached && cachedRowsMatchItinerary(cached, displayItinerary, groupedCoordsByDay)) {
         setRows(cached);
         setStale(true);
       } else {
@@ -374,6 +374,22 @@ function weatherTargetSummary(days: ItineraryDay[], hasEnded: boolean, today: st
       : `${days.length}日`;
   const visible = labels.slice(0, 3).join('/') || '未設定地點';
   return `${scope} · ${visible}${labels.length > 3 ? ` +${labels.length - 3}` : ''}`;
+}
+
+function cachedRowsMatchItinerary(
+  cached: Record<string, DayWeather[]> | null,
+  days: ItineraryDay[],
+  groupedCoordsByDay: Map<string, GroupedWeatherLocation[]>,
+): cached is Record<string, DayWeather[]> {
+  if (!cached || !days.length) return false;
+  return days.every((day) => {
+    const expectedLabels = (groupedCoordsByDay.get(day.date) || [])
+      .filter((group) => !group.missing)
+      .map((group) => group.label);
+    if (!expectedLabels.length) return true;
+    const actualLabels = (cached[day.date] || []).map((row) => row.coord?.label).filter(Boolean);
+    return expectedLabels.every((label) => actualLabels.includes(label));
+  });
 }
 
 function weatherProviderLabel(weather?: DayWeather): string {

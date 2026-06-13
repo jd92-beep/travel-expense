@@ -3224,6 +3224,15 @@ body {
   padding: 14px;
   border-radius: 18px;
 }
+.settings-auth-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(240px, .85fr);
+  gap: 14px;
+  align-items: stretch;
+}
+.settings-auth-layout .settings-account-card {
+  margin-top: 0;
+}
 .settings-account-copy {
   display: grid;
   gap: 3px;
@@ -3238,6 +3247,139 @@ body {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+.settings-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.settings-account-actions button,
+.settings-password-panel button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.settings-danger-solid {
+  background: #dc2626 !important;
+  color: #fff !important;
+}
+.settings-password-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, .08);
+  background: rgba(255, 253, 248, .82);
+}
+.settings-password-panel label {
+  display: grid;
+  gap: 6px;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 850;
+}
+.settings-password-panel input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(139, 115, 85, 0.22);
+  border-radius: 12px;
+  background: white;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+}
+.settings-trip-manager {
+  display: grid;
+  gap: 14px;
+}
+.settings-trip-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 18px;
+  background: rgba(255, 253, 248, .72);
+}
+.settings-trip-panel--active {
+  background: linear-gradient(135deg, rgba(239, 246, 255, .82), rgba(255, 253, 248, .9));
+}
+.settings-trip-panel--edit {
+  background: rgba(255, 255, 255, .72);
+}
+.settings-trip-panel--compact {
+  gap: 10px;
+}
+.settings-trip-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.settings-trip-panel-head h3 {
+  margin: 2px 0 0;
+  color: #111827;
+  font-size: 16px;
+  line-height: 1.15;
+  font-weight: 950;
+}
+.settings-trip-panel label {
+  min-width: 0;
+}
+.settings-trip-panel select,
+.settings-trip-panel input {
+  min-height: 42px;
+}
+.settings-trip-panel .secondary,
+.settings-trip-panel .primary,
+.settings-trip-delete {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.settings-trip-itinerary-quick {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid rgba(30, 77, 107, 0.16);
+  border-radius: 16px;
+  background: rgba(30, 77, 107, 0.04);
+}
+.settings-trip-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+.settings-trip-delete {
+  border: 1px solid rgba(239, 68, 68, .28);
+  border-radius: 12px;
+  background: rgba(239, 68, 68, .1);
+  color: #dc2626;
+  font-weight: 850;
+  cursor: pointer;
+}
+.settings-trip-delete:hover {
+  background: rgba(239, 68, 68, .18);
+  border-color: rgba(220, 38, 38, .58);
+}
+@media (max-width: 640px) {
+  .settings-auth-layout,
+  .settings-trip-actions {
+    grid-template-columns: 1fr;
+  }
+  .settings-account-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .settings-trip-panel-head {
+    align-items: flex-start;
+  }
 }
 .settings-clear-device-modal {
   width: min(430px, calc(100vw - 32px));
