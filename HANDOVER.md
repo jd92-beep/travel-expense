@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-13
-- **Focus**: Sync/sharing bug fixes + Notion/Supabase data reorg (Phases 1–3), build versioning rule
-- **Agent**: Claude Opus 4.8 🤖
-- **App version**: `0.2.0` (react + compact)
+- **Focus**: Launch default changed to Scan tab; version bumped to 0.2.1
+- **Agent**: Codex 🤖
+- **App version**: `0.2.1` (react + compact)
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +18,20 @@
 
 ## What Was Done
 
-### Session 18 (Claude Opus 4.8 — current session)
+### Session 19 (Codex — current session)
+
+1. **Default app opening tab is now Scan**:
+   - `app-compact/src/App.tsx` and `app-react/src/App.tsx` now use `scan` as the default launch tab.
+   - Opening the app with no URL hash shows Scan first, even if older local state has `lastTab: 'dashboard'`.
+   - Explicit deep links still work, e.g. `#history`, `#settings`, `#timeline`, and invite routes.
+2. **Default state updated**:
+   - `DEFAULT_STATE.lastTab` is now `scan` in both app surfaces.
+3. **Version bump**:
+   - `APP_VERSION` and both `package.json` versions bumped from `0.2.0` to `0.2.1`.
+4. **Smoke coverage**:
+   - Compact final-navigation smoke now asserts the root app opens on the Scan tab before exercising navigation.
+
+### Session 18 (Claude Opus 4.8 — previous session)
 
 1. **Fixed cross-trip settlement leak** (`app-react` + `app-compact` `lib/domain.ts`): `computeSettlements()` iterated `state.receipts` (all trips) instead of trip-scoped receipts; now self-scopes via `scopedReceiptsForTrip` (idempotent for existing callers).
 2. **Fixed expired trip invites being accepted** (live Supabase): `accept_trip_invite()` expired branch used `return next` without `return`, so plpgsql fell through and still added the member + flipped status to `accepted` (client showed "expired" from the first result row while the DB granted access). New migration `supabase/migrations/20260613140000_fix_expired_invite_acceptance.sql`; **applied live** via Management API (history diverged — see Pending).

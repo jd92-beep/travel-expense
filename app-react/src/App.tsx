@@ -38,11 +38,12 @@ const Stats = lazy(() => import('./tabs/Stats').then((module) => ({ default: mod
 const Settings = lazy(() => import('./tabs/Settings').then((module) => ({ default: module.Settings })));
 
 const VALID_TABS = new Set<TabId>(TAB_MANIFEST.map((item) => item.id));
+const DEFAULT_LAUNCH_TAB: TabId = 'scan';
 const bootSyncKeys = new Set<string>();
 let bootCurrencyPromise: Promise<CurrencySnapshot> | null = null;
 
 function safeTabId(value: unknown): TabId {
-  return typeof value === 'string' && VALID_TABS.has(value as TabId) ? value as TabId : 'dashboard';
+  return typeof value === 'string' && VALID_TABS.has(value as TabId) ? value as TabId : DEFAULT_LAUNCH_TAB;
 }
 
 function fetchBootCurrencySnapshot(): Promise<CurrencySnapshot> {
@@ -164,7 +165,7 @@ export function App() {
 
   const syncEngine = useSyncEngine(state, setState, effectiveSupabaseSession);
   const { pull, sync } = syncEngine;
-  const [tab, setTab] = useState<TabId>(() => safeTabId((typeof window !== 'undefined' && window.location.hash.slice(1)) || 'dashboard'));
+  const [tab, setTab] = useState<TabId>(() => safeTabId((typeof window !== 'undefined' && window.location.hash.slice(1)) || DEFAULT_LAUNCH_TAB));
   const [direction, setDirection] = useState<number>(0);
   const [editing, setEditing] = useState<Receipt | null | undefined>(undefined);
   const bootSyncScheduledKey = useRef('');
@@ -224,17 +225,16 @@ export function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, [updateState]);
 
-  // Fix Bug 9.2: Hydrate tab once from state on boot if no hash present
+  // Open the app on Scan unless the URL explicitly requests another tab.
   useEffect(() => {
     if (didHydrateTab.current) return;
-    if (state.lastTab) {
-      didHydrateTab.current = true;
-      const hash = window.location.hash.slice(1);
-      if (!hash) {
-        setTab(safeTabId(state.lastTab));
-      }
+    didHydrateTab.current = true;
+    const hash = window.location.hash.slice(1);
+    if (!hash) {
+      setTab(DEFAULT_LAUNCH_TAB);
+      if (state.lastTab !== DEFAULT_LAUNCH_TAB) updateState({ lastTab: DEFAULT_LAUNCH_TAB });
     }
-  }, [state.lastTab]);
+  }, [state.lastTab, updateState]);
 
   useEffect(() => {
     let alive = true;

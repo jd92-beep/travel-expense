@@ -51,6 +51,7 @@ for (const [name, viewport] of [
     const page = await context.newPage();
     await installTrust(page);
     await page.goto('http://localhost:8903/travel-expense/compact/');
+    await expect(page.getByText('掃描收據').first()).toBeVisible();
     if (viewport.width <= 390) {
       await expect(page.locator('.hyperframe-layer')).toHaveCount(2);
       await expect(page.locator('canvas')).toHaveCount(0);
@@ -175,7 +176,7 @@ test('Duplicate person ids do not create React key warnings', async ({ page }) =
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#stats');
   await expect(page.getByText('預算使用分析').first()).toBeVisible();
   await page.getByLabel('主要分頁').getByRole('button', { name: '設定', exact: true }).click();
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
@@ -344,7 +345,7 @@ test('Boot currency and sync effects run once without noisy mobile 403s', async 
       }]
     }));
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect.poll(() => notionPaths.filter((path) => path.includes('/query')).length).toBeGreaterThanOrEqual(2);
   await page.waitForTimeout(1200);
