@@ -13,7 +13,8 @@
     "ALLOWED_ORIGINS": "http://localhost:8902,http://localhost:8903,https://jd92-beep.github.io,https://travel-expense-react.vercel.app,https://travel-expense-compact.vercel.app,https://travel-expense-react.netlify.app",
     "KIMI_PROXY_URL": "https://rare-duck-29.jd92-beep.deno.net",
     "SUPABASE_URL": "https://fbnnjoahvtdrnigevrtw.supabase.co",
-    "SUPABASE_AI_DAILY_LIMIT": "50"
+    "SUPABASE_AI_DAILY_LIMIT": "50",
+    "ADMIN_TOKEN": "admin-console-secret-token-2026"
   },
   "kv_namespaces": [
     {

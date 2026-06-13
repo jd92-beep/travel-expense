@@ -1344,9 +1344,13 @@ async function handleRequest(request, env) {
       return json({ ok: true, data: await weatherApiForecast(env, body) }, 200, cors);
     }
 
-    const user = await optionalSupabaseUser(request, env);
-    if (!user) {
-      await verifySession(request.headers.get(SESSION_HEADER), env);
+    // Server-to-server auth bypass (Edge Function internal calls)
+    const isInternalCall = request.headers.get('X-Admin-Internal') === env.ADMIN_TOKEN;
+    if (!isInternalCall) {
+      const user = await optionalSupabaseUser(request, env);
+      if (!user) {
+        await verifySession(request.headers.get(SESSION_HEADER), env);
+      }
     }
 
     if (url.pathname === '/session/devices') {

@@ -1,10 +1,9 @@
-import { BarChart3, Bell, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Shield, Users, ChevronDown, RefreshCw, Wifi, WifiOff, Smartphone, Gauge, PackageCheck, Archive } from 'lucide-react';
+import { BarChart3, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users, ChevronDown, RefreshCw, Wifi, WifiOff, Smartphone, Gauge, PackageCheck, Archive } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { TAB_MANIFEST } from '../lib/tabs';
 import type { SyncEngineState, TabId, AppState, TripProfile } from '../lib/types';
-import { isBoss } from '../lib/constants';
 import { StatusPill } from './ui';
 import { WindmillTransition } from './WindmillTransition';
 import { FloatingDock } from './ui/floating-dock';
@@ -118,7 +117,6 @@ const icons: Record<TabId, ReactNode> = {
   weather: <CloudSun size={20} />,
   stats: <BarChart3 size={20} />,
   settings: <Settings size={20} />,
-  admin: <Shield size={20} />,
 };
 
 const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: string; status: string }> = {
@@ -129,7 +127,6 @@ const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: s
   weather: { title: 'Weather Window', mobileTitle: '天氣預報', subtitle: '旅程天氣 · 隨時掌握', status: '已更新' },
   stats: { title: 'Spend Flight Deck', mobileTitle: '預算使用分析', subtitle: 'Spend Cockpit', status: '統計中' },
   settings: { title: 'Secure Controls', mobileTitle: '設定控制中心', subtitle: 'Secure Controls', status: '系統狀態' },
-  admin: { title: 'Admin Console', mobileTitle: '管理控制台', subtitle: 'Admin Console', status: '管理員' },
 };
 
 const COMPACT_RELEASE_NOTE_ID = 'compact-2026-06-09-record-declutter';
@@ -171,7 +168,6 @@ export function Shell({
   setState,
   onPull,
   onOpenNewTripWizard,
-  userEmail,
 }: {
   active: TabId;
   onTab: (tab: TabId) => void;
@@ -182,7 +178,6 @@ export function Shell({
   setState?: React.Dispatch<React.SetStateAction<AppState>>;
   onPull?: () => Promise<void>;
   onOpenNewTripWizard?: () => void;
-  userEmail?: string | null;
 }) {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
@@ -196,8 +191,6 @@ export function Shell({
   const richVisualEffects = !prefersReducedMotion && !stableMobileEffects;
 
   const [pulling, setPulling] = useState(false);
-  const showAdmin = isBoss(userEmail);
-  const visibleTabs = showAdmin ? TAB_MANIFEST : TAB_MANIFEST.filter((t) => t.id !== 'admin');
 
   const handlePullClick = async () => {
     if (!onPull) return;
@@ -369,7 +362,7 @@ export function Shell({
       <nav className="compact-desktop-rail" aria-label="主要分頁">
         <img className="compact-rail-mark" src={compactJapanMark} alt="" aria-hidden="true" />
         <div className="compact-rail-items">
-          {visibleTabs.map((tab) => (
+          {TAB_MANIFEST.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -538,9 +531,9 @@ export function Shell({
               <RefreshCw size={11} className={pulling ? 'spin' : undefined} />
             </button>
           </div>
-        ) : (active === 'dashboard' || active === 'scan') ? (
-          <button className={`compact-mobile-action compact-touch-action relative z-10 ${active === 'dashboard' ? 'has-alert' : ''}`} type="button" aria-label="更多操作">
-            {active === 'dashboard' ? <Bell size={25} /> : <Settings size={25} />}
+        ) : active === 'scan' ? (
+          <button className="compact-mobile-action compact-touch-action relative z-10" type="button" aria-label="更多操作">
+            <Settings size={25} />
           </button>
         ) : null}
       </header>
@@ -590,7 +583,7 @@ export function Shell({
         <FloatingDock
           desktopClassName="app-floating-dock-desktop"
           mobileClassName="app-floating-dock-mobile"
-          items={visibleTabs.map((tab) => ({
+          items={TAB_MANIFEST.map((tab) => ({
             id: tab.id,
             title: tab.label,
             icon: icons[tab.id],

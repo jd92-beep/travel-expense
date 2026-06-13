@@ -38,7 +38,6 @@ const History = lazy(() => import('./tabs/History').then((module) => ({ default:
 const Weather = lazy(() => import('./tabs/Weather').then((module) => ({ default: module.Weather })));
 const Stats = lazy(() => import('./tabs/Stats').then((module) => ({ default: module.Stats })));
 const Settings = lazy(() => import('./tabs/Settings').then((module) => ({ default: module.Settings })));
-const Admin = lazy(() => import('./tabs/Admin').then((module) => ({ default: module.Admin })));
 
 const VALID_TABS = new Set<TabId>(TAB_MANIFEST.map((item) => item.id));
 const DEFAULT_LAUNCH_TAB: TabId = 'scan';
@@ -405,7 +404,7 @@ export function App() {
           </span>
         </div>
       )}
-      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)} userEmail={userEmail}>
+      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)}>
         <ErrorBoundary key={safeTab}>
           <Suspense fallback={<LoadingState label="載入分頁" />}>
             {disableHeavy ? (
@@ -443,7 +442,6 @@ export function App() {
                 {safeTab === 'weather' && <Weather state={state} />}
                 {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} />}
                 {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
-                {safeTab === 'admin' && isBoss(userEmail) && <Admin state={state} userEmail={userEmail} />}
               </div>
             ) : (
               <AnimatePresence mode="wait" initial={false}>
@@ -494,7 +492,6 @@ export function App() {
                   {safeTab === 'weather' && <Weather state={state} />}
                   {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} />}
                   {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
-                  {safeTab === 'admin' && isBoss(userEmail) && <Admin state={state} userEmail={userEmail} />}
                 </motion.div>
               </AnimatePresence>
             )}

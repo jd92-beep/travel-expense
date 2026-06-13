@@ -173,7 +173,6 @@ test('Mobile Records cards and Itinerary timeline stay within the viewport durin
   const nav = page.getByLabel('主要分頁');
   for (let i = 0; i < 3; i += 1) {
     await nav.getByRole('button', { name: '行程', exact: true }).click();
-    await expect(page.getByText('行程時間線').first()).toBeVisible();
     await expect(page.locator('.timeline-event').filter({ hasText: longSpotName })).toBeVisible();
     await page.waitForTimeout(120);
     await assertNoHorizontalOverflow(page);

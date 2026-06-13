@@ -25,16 +25,18 @@ import {
   loginAdmin,
   previewDeleteUser,
   amendReceipt,
+  testProvider,
 } from './lib/adminApi';
 import type {
   AdminKanbanSnapshot,
   AdminSession,
   AdminUserCard,
   AdminReceiptCard,
+  AdminProviderHealth,
   HealthState,
   DeletePreview,
 } from './lib/types';
-import { Pencil } from 'lucide-react';
+import { Pencil, MapPin, Calendar, Users as UsersIcon, Globe, Wallet, Clock, CheckCircle, XCircle, Zap } from 'lucide-react';
 
 const RANGE_OPTIONS = [1, 7, 30, 90];
 
@@ -124,7 +126,22 @@ function EmptyState({ icon, title, detail }: { icon: ReactNode; title: string; d
   );
 }
 
-function UniversalHealth({ snapshot }: { snapshot: AdminKanbanSnapshot }) {
+function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot; session: AdminSession }) {
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message?: string }>>({});
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+
+  async function handleTest(providerKey: string) {
+    setTestingProvider(providerKey);
+    try {
+      const result = await testProvider(session, providerKey);
+      setTestResults(prev => ({ ...prev, [providerKey]: { ok: result.ok, message: result.status?.message } }));
+    } catch (err) {
+      setTestResults(prev => ({ ...prev, [providerKey]: { ok: false, message: err instanceof Error ? err.message : 'Test failed' } }));
+    } finally {
+      setTestingProvider(null);
+    }
+  }
+
   return (
     <div className="universal-health">
       <h2>Universal App Health</h2>
@@ -141,9 +158,37 @@ function UniversalHealth({ snapshot }: { snapshot: AdminKanbanSnapshot }) {
           <h3><Bot size={16} /> LLM Providers</h3>
           <div className="llm-list">
             {snapshot.llm.map((provider) => (
-              <div key={provider.provider} className="llm-item">
-                <span>{provider.label} <small>({provider.model})</small></span>
-                <span className={classForHealth(provider.status)}>{statusText[provider.status]}</span>
+              <div key={provider.provider} className="llm-item llm-item-expanded">
+                <div className="llm-item-main">
+                  <div className="llm-item-header">
+                    <span className="llm-provider-label">{provider.label}</span>
+                    <span className={classForHealth(provider.status)}>{statusText[provider.status]}</span>
+                  </div>
+                  <div className="llm-item-details">
+                    {provider.modelName && <small className="llm-model-name"><Zap size={11} /> {provider.modelName}</small>}
+                    {provider.model && !provider.modelName && <small><Zap size={11} /> {provider.model}</small>}
+                    {provider.lastTestedAt && <small><Clock size={11} /> {fmtDate(provider.lastTestedAt)}</small>}
+                    {provider.latencyMs != null && <small>Latency: {provider.latencyMs}ms</small>}
+                    {typeof provider.errors24h === 'number' && provider.errors24h > 0 && (
+                      <small className="llm-errors-badge">{provider.errors24h} errors/24h</small>
+                    )}
+                    {provider.message && <small className="llm-message">{provider.message}</small>}
+                  </div>
+                  {testResults[provider.provider] && (
+                    <div className={`llm-test-result ${testResults[provider.provider].ok ? 'test-ok' : 'test-fail'}`}>
+                      {testResults[provider.provider].ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
+                      <span>{testResults[provider.provider].ok ? 'OK' : testResults[provider.provider].message}</span>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="test-provider-btn"
+                  disabled={testingProvider === provider.provider}
+                  onClick={() => void handleTest(provider.provider)}
+                >
+                  {testingProvider === provider.provider ? '...' : 'Test'}
+                </button>
               </div>
             ))}
           </div>
@@ -324,12 +369,22 @@ function UserDetailsPanel({
   const userReceipts = snapshot.receipts.filter(r => r.ownerId === user.id);
   const [amendReceiptItem, setAmendReceiptItem] = useState<AdminReceiptCard | null>(null);
   const [viewImageUrl, setViewImageUrl] = useState<string | null>(null);
+  const [expandedItinerary, setExpandedItinerary] = useState<string | null>(null);
 
   return (
     <div className="user-details-panel">
       <div className="panel-header">
-        <h2><UserRound size={20} /> {user.email}</h2>
+        <h2>
+          {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="user-avatar" /> : <UserRound size={20} />}
+          {user.displayName ? <span>{user.displayName} <small>({user.email})</small></span> : user.email}
+        </h2>
         <span className="last-seen">Last seen: {fmtDate(user.lastSeenAt)}</span>
+      </div>
+
+      <div className="user-profile-fields">
+        {user.locale && <span><Globe size={13} /> {user.locale}</span>}
+        {user.homeCurrency && <span><Wallet size={13} /> {user.homeCurrency}</span>}
+        {user.createdAt && <span><Clock size={13} /> Joined {fmtDate(user.createdAt)}</span>}
       </div>
 
       <div className="user-stats-grid">
@@ -353,7 +408,13 @@ function UserDetailsPanel({
       <div className="connection-status">
         <h3>Connection Status</h3>
         <Metric label="Supabase Health" value={statusText[user.health]} status={user.health} />
+        <Metric label="Supabase Connected" value={user.supabaseConnected ? 'Yes' : 'No'} status={user.supabaseConnected ? 'healthy' : 'warning'} />
         <Metric label="Notion Integration" value={user.notionConnected ? 'Connected' : 'Not Connected'} status={user.notionConnected ? 'healthy' : 'warning'} />
+        <Metric label="Notion Status" value={user.notionStatus || 'N/A'} />
+        {user.notionLastSyncedAt && <Metric label="Notion Last Sync" value={fmtDate(user.notionLastSyncedAt)} />}
+        <Metric label="Last Sync" value={fmtDate(user.lastSyncAt)} />
+        <Metric label="Sync Jobs" value={user.syncJobCount} />
+        <Metric label="Failed Sync Jobs" value={user.failedSyncJobs} status={user.failedSyncJobs > 0 ? 'danger' : 'healthy'} />
         <Metric label="AI Requests (Today)" value={user.aiRequestsToday} />
       </div>
 
@@ -369,6 +430,44 @@ function UserDetailsPanel({
                   <strong>{trip.name}</strong>
                   <small>{trip.destination} · {trip.dateRange}</small>
                   <span>{trip.receiptCount} receipts · {trip.currency}</span>
+                  {trip.budgetAmount != null && (
+                    <small className="trip-budget"><Wallet size={11} /> Budget: {trip.budgetAmount.toLocaleString()} {trip.budgetCurrency || trip.currency}</small>
+                  )}
+                  {trip.memberCount > 0 && <small><UsersIcon size={11} /> {trip.memberCount} member{trip.memberCount !== 1 ? 's' : ''}</small>}
+                  {trip.timezones && trip.timezones.length > 0 && <small><Globe size={11} /> {trip.timezones.join(', ')}</small>}
+                  {trip.itinerary && trip.itinerary.length > 0 && (
+                    <div className="itinerary-summary">
+                      <button
+                        type="button"
+                        className="itinerary-toggle"
+                        onClick={() => setExpandedItinerary(expandedItinerary === trip.id ? null : trip.id)}
+                      >
+                        <Calendar size={11} /> {trip.itinerary.length} day{trip.itinerary.length !== 1 ? 's' : ''} · {trip.itinerary.reduce((sum: number, d: any) => sum + (d?.spots?.length || 0), 0)} spots
+                      </button>
+                      {expandedItinerary === trip.id && (
+                        <div className="itinerary-viewer">
+                          {trip.itinerary.map((day: any, idx: number) => (
+                            <div key={idx} className="itinerary-day">
+                              <strong>Day {day.day || idx + 1}</strong>
+                              {day.spots && day.spots.length > 0 ? (
+                                <ul>
+                                  {day.spots.map((spot: any, si: number) => (
+                                    <li key={si}>
+                                      <MapPin size={10} />
+                                      <span>{spot.name || spot.title || `Spot ${si + 1}`}</span>
+                                      {spot.time && <small>{spot.time}</small>}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <small>No spots</small>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -386,6 +485,7 @@ function UserDetailsPanel({
                   <strong>{receipt.store}</strong>
                   <small>{receipt.recordDate} · {receipt.status}</small>
                   <span>{receipt.amount.toLocaleString()} {receipt.currency}</span>
+                  {receipt.category && <small className="receipt-category">#{receipt.category}</small>}
                   <span className={`sync-status ${receipt.notionSynced ? 'synced' : 'pending'}`}>
                     {receipt.notionSynced ? 'Notion Synced' : 'Notion Pending'}
                   </span>
@@ -456,7 +556,7 @@ function Board({
 
       <section className="dashboard-content">
         <div className="dashboard-left">
-          <UniversalHealth snapshot={snapshot} />
+          <UniversalHealth snapshot={snapshot} session={session} />
           
           <div className="users-list-container">
             <h2>Live Users ({visibleUsers.length})</h2>

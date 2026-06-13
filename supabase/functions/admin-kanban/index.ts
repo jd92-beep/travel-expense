@@ -1,6 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.87.0";
 
+export const config = { verify_jwt: false };
+
 type SupabaseClientAny = ReturnType<typeof createClient>;
 
 const VERIFY_URL = Deno.env.get("ADMIN_KANBAN_VERIFY_URL") || "https://travel-expense-admin-kanban.vercel.app/api/verify-session";
@@ -8,9 +10,16 @@ const LOGIN_URL = Deno.env.get("ADMIN_KANBAN_LOGIN_URL") || "https://travel-expe
 const CREDENTIAL_BROKER_URL = Deno.env.get("CREDENTIAL_BROKER_URL") || "https://travel-expense-credential-broker.ftjdfr.workers.dev";
 const ALLOWED_ORIGINS = new Set([
   "https://travel-expense-admin-kanban.vercel.app",
+  "https://travel-expense-compact.vercel.app",
+  "https://jd92-beep.github.io",
+  "http://localhost:8903",
+  "http://127.0.0.1:8903",
   "http://localhost:8904",
   "http://127.0.0.1:8904",
 ]);
+
+// In-memory cache for provider test results (survives within a single Edge Function instance)
+const providerTestCache = new Map<string, { status: string; message?: string; testedAt: number }>();
 
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
@@ -50,8 +59,42 @@ async function readBody(req: Request) {
   return text.trim() ? JSON.parse(text) : {};
 }
 
-async function verifyAdmin(req: Request) {
+async function verifyAdmin(req: Request): Promise<string> {
   const auth = req.headers.get("authorization") || "";
+  const token = auth.replace(/^Bearer\s+/i, "").trim();
+  if (!token) throw new Error("Missing authorization");
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://fbnnjoahvtdrnigevrtw.supabase.co";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const adminToken = Deno.env.get("ADMIN_TOKEN") || "";
+
+  // Path 0: Custom admin token via X-Admin-Token header (for compact app admin console)
+  const adminHeader = req.headers.get("x-admin-token") || "";
+  if (adminToken && adminHeader === adminToken) {
+    return "admin-token";
+  }
+
+  // Path 1: Service role key (direct admin access for trusted callers)
+  if (serviceKey && token === serviceKey) {
+    return "service-role-admin";
+  }
+
+  // Path 2: Supabase user JWT (for compact app admin console)
+  try {
+    if (serviceKey) {
+      const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: { "Authorization": `Bearer ${token}`, "apikey": serviceKey },
+      });
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        const email = (userData.email || "").toLowerCase();
+        const BOSS_EMAILS = ["vc06456@gmail.com"];
+        if (BOSS_EMAILS.includes(email)) return String(userData.id || email);
+      }
+    }
+  } catch { /* fall through to HMAC */ }
+
+  // Path 3: HMAC verification (for admin-kanban Vercel app)
   const response = await fetch(VERIFY_URL, {
     method: "POST",
     headers: { Authorization: auth },
@@ -170,38 +213,133 @@ function providerModel(provider: string) {
   }[provider];
 }
 
-async function brokerHealth() {
-  const providers = ["notion", "kimi", "google", "weatherapi", "mimo"];
+function providerModels(provider: string): Array<{ id: string; name: string }> {
+  const models: Record<string, Array<{ id: string; name: string }>> = {
+    kimi: [
+      { id: "kimi-code", name: "Kimi Code" },
+      { id: "kimi-8k", name: "Kimi 8K" },
+      { id: "kimi-32k", name: "Kimi 32K" },
+      { id: "kimi-k2.6", name: "Kimi K2.6" },
+      { id: "kimi-for-coding", name: "Kimi for Coding" },
+    ],
+    google: [
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+      { id: "gemini-3.1-flash", name: "Gemini 3.1 Flash" },
+      { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite" },
+      { id: "gemma-4-31b-it", name: "Gemma 4 31B" },
+      { id: "gemma-4-26b", name: "Gemma 4 26B" },
+    ],
+    mimo: [
+      { id: "mimo-v2.5", name: "Mimo v2.5" },
+      { id: "mimo-v2.5-pro", name: "Mimo v2.5 Pro" },
+    ],
+    weatherapi: [
+      { id: "forecast", name: "Weather Forecast" },
+    ],
+    notion: [
+      { id: "mirror", name: "Notion Mirror" },
+    ],
+  };
+  return models[provider] || [{ id: providerModel(provider) || provider, name: providerLabel(provider) }];
+}
+
+async function brokerHealth(supabase: SupabaseClientAny) {
+  const baseUrl = CREDENTIAL_BROKER_URL.replace(/\/+$/, "");
   try {
-    const response = await fetch(`${CREDENTIAL_BROKER_URL.replace(/\/+$/, "")}/health`);
-    if (!response.ok) throw new Error(`broker ${response.status}`);
-    return providers.map((provider) => ({
-      provider,
-      label: providerLabel(provider),
-      status: "healthy",
-      storedStatus: "broker_online",
-      model: providerModel(provider),
-      lastTestedAt: null,
-      errors24h: 0,
-    }));
-  } catch (error) {
-    return providers.map((provider) => ({
-      provider,
-      label: providerLabel(provider),
-      status: "warning",
-      storedStatus: "broker_unreachable",
-      model: providerModel(provider),
-      message: redact(error),
-      errors24h: 0,
-    }));
+    const statusRes = await fetch(`${baseUrl}/credentials/status`, {
+      headers: {
+        'Origin': 'https://travel-expense-compact.vercel.app',
+        'X-Admin-Internal': Deno.env.get('ADMIN_TOKEN') || '',
+      },
+    });
+    if (!statusRes.ok) throw new Error(`broker status ${statusRes.status}`);
+    const statusData = await statusRes.json();
+    const brokerProviders: any[] = statusData.providers || [];
+
+    // Use stored provider status for error detection
+    // If provider status is not "connected", count it as an error
+    let errorMap = new Map<string, number>();
+    for (const p of brokerProviders) {
+      const provider = p.provider || p.name || "";
+      const status = p.status || "";
+      if (status !== "connected" && status !== "healthy" && status !== "broker_online") {
+        errorMap.set(provider, 1);
+      }
+    }
+    // Check cached test results from "Test" button clicks
+    const now = Date.now();
+    for (const [provider, cached] of providerTestCache.entries()) {
+      if (now - cached.testedAt < 24 * 60 * 60 * 1000) { // within 24h
+        if (cached.status !== "connected" && cached.status !== "healthy") {
+          errorMap.set(provider, (errorMap.get(provider) || 0) + 1);
+        }
+      }
+    }
+    // Also check usage events for additional error data (including provider test results)
+    try {
+      const since = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+      const { data: errRows } = await supabase
+        .from("app_usage_events")
+        .select("provider, outcome, event_name")
+        .gte("created_at", since)
+        .or("outcome.eq.error,event_name.like.provider_test_%");
+      for (const row of errRows || []) {
+        if (!row.provider) continue;
+        if (row.outcome === "error" || (row.event_name?.startsWith("provider_test_") && row.outcome === "error")) {
+          errorMap.set(row.provider, (errorMap.get(row.provider) || 0) + 1);
+        }
+      }
+    } catch { /* ignore */ }
+
+    return brokerProviders.map((p: any) => {
+      const provider = p.provider || p.name || "";
+      // Expand provider into individual model entries
+      const models = providerModels(provider);
+      return models.map((modelEntry: any) => ({
+        provider,
+        label: p.label || providerLabel(provider),
+        status: p.hasKey || p.status === "connected" ? "healthy" : "warning",
+        storedStatus: p.status || (p.hasKey ? "connected" : "missing"),
+        model: modelEntry.id,
+        modelName: modelEntry.name,
+        lastTestedAt: p.lastTestedAt || p.last_tested_at || null,
+        errors24h: errorMap.get(provider) || 0,
+      }));
+    }).flat();
+  } catch {
+    try {
+      const response = await fetch(`${baseUrl}/health`);
+      if (!response.ok) throw new Error(`broker ${response.status}`);
+      const fallback = ["notion", "kimi", "google", "weatherapi", "mimo"];
+      return fallback.map((provider) => ({
+        provider,
+        label: providerLabel(provider),
+        status: "healthy",
+        storedStatus: "broker_online",
+        model: providerModel(provider),
+        lastTestedAt: null,
+        errors24h: 0,
+      }));
+    } catch (error) {
+      const fallback = ["notion", "kimi", "google", "weatherapi", "mimo"];
+      return fallback.map((provider) => ({
+        provider,
+        label: providerLabel(provider),
+        status: "warning",
+        storedStatus: "broker_unreachable",
+        model: providerModel(provider),
+        message: redact(error),
+        errors24h: 0,
+      }));
+    }
   }
 }
 
 async function snapshot(rangeDays: number) {
   const supabase = serviceClient();
-  const [users, trips, receipts, photos, integrations, jobs, usage, audits, rlsRpc, llm] = await Promise.all([
+  const [users, trips, receipts, photos, integrations, jobs, usage, audits, rlsRpc, llm, profiles, tripMembers] = await Promise.all([
     listUsers(supabase),
-    fetchRows(supabase, "trips", "id,owner_id,name,destination_summary,start_date,end_date,trip_currency,active,archived,updated_at,app_metadata"),
+    fetchRows(supabase, "trips", "id,owner_id,name,destination_summary,start_date,end_date,trip_currency,budget_amount,budget_currency,itinerary,timezones,active,archived,updated_at,app_metadata"),
     fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,record_date,updated_at,notion_page_id,notion_sync_status,notion_last_synced_at"),
     fetchRows(supabase, "receipt_photos", "id,receipt_id,owner_id,storage_path"),
     fetchRows(supabase, "integrations", "id,user_id,provider,status,last_synced_at"),
@@ -209,7 +347,9 @@ async function snapshot(rangeDays: number) {
     fetchRows(supabase, "app_usage_events", "user_id,session_id_hash,app_surface,event_name,provider,model,outcome,created_at", 1000),
     fetchRows(supabase, "admin_audit_events", "id,admin_subject_hash,action,target_type,target_id_hash,created_at", 50),
     safeRlsState(supabase),
-    brokerHealth(),
+    brokerHealth(supabase),
+    fetchRows(supabase, "profiles", "id,display_name,avatar_url,home_currency,locale"),
+    fetchRows(supabase, "trip_members", "trip_id,user_id"),
   ]);
   const counts = {
     authUsers: users.length,
@@ -226,26 +366,45 @@ async function snapshot(rangeDays: number) {
   const cutoff = Date.now() - Math.max(1, Number(rangeDays) || 7) * 24 * 60 * 60 * 1000;
   const rangedUsage = usage.filter((event: any) => Date.parse(event.created_at || "") >= cutoff);
   const userById = new Map(users.map((user: any) => [user.id, user]));
+  const profileById = new Map(profiles.map((p: any) => [p.id, p]));
   const tripsByOwner = groupCount(trips, "owner_id");
   const receiptsByOwner = groupCount(receipts, "owner_id");
   const photosByOwner = groupCount(photos, "owner_id");
+  const membersByTrip = groupCount(tripMembers, "trip_id");
   const usageByUser = groupBy(rangedUsage, "user_id");
   const userCards = users.map((user: any) => {
     const userUsage = usageByUser.get(user.id) || [];
     const lastSeenAt = userUsage.map((row) => row.created_at).sort().at(-1) || user.last_sign_in_at || null;
+    const profile = profileById.get(user.id) || {};
+    const userIntegrations = integrations.filter((row: any) => row.user_id === user.id);
+    const notionIntegration = userIntegrations.find((row: any) => row.provider === "notion");
+    const userSyncJobs = jobs.filter((row: any) => row.owner_id === user.id);
+    const failedJobs = userSyncJobs.filter((row: any) => row.status === "failed");
+    const lastSyncAt = userSyncJobs.map((row: any) => row.updated_at).sort().at(-1) || null;
     return {
       id: user.id,
       email: maskEmail(user.email),
+      displayName: profile.display_name || null,
+      avatarUrl: profile.avatar_url || null,
+      homeCurrency: profile.home_currency || null,
+      locale: profile.locale || null,
+      createdAt: user.created_at || null,
       joinedAt: user.created_at || null,
       lastSeenAt,
+      lastSyncAt,
       sessionCount: new Set(userUsage.map((row) => row.session_id_hash).filter(Boolean)).size,
       eventCount: userUsage.length,
       tripCount: tripsByOwner.get(user.id) || 0,
       receiptCount: receiptsByOwner.get(user.id) || 0,
       imageCount: photosByOwner.get(user.id) || 0,
-      notionConnected: integrations.some((row: any) => row.user_id === user.id && row.provider === "notion" && row.status === "connected"),
+      notionConnected: !!notionIntegration && notionIntegration.status === "connected",
+      notionStatus: notionIntegration ? notionIntegration.status : "not_configured",
+      notionLastSyncedAt: notionIntegration?.last_synced_at || null,
+      supabaseConnected: !!user.last_sign_in_at,
+      syncJobCount: userSyncJobs.length,
+      failedSyncJobs: failedJobs.length,
       aiRequestsToday: userUsage.filter((row) => /^ai_request/.test(row.event_name || "")).length,
-      health: "healthy",
+      health: failedJobs.length > 0 ? "warning" : "healthy",
     };
   });
   const receiptCountByTrip = groupCount(receipts, "trip_id");
@@ -261,6 +420,11 @@ async function snapshot(rangeDays: number) {
       dateRange: [trip.start_date, trip.end_date].filter(Boolean).join(" - ") || "No dates",
       countryCode: intelligence.countryCode || intelligence.country_code || "GLOBAL",
       currency: trip.trip_currency || intelligence.primaryCurrency || "JPY",
+      budgetAmount: trip.budget_amount != null ? Number(trip.budget_amount) : null,
+      budgetCurrency: trip.budget_currency || null,
+      itinerary: trip.itinerary || null,
+      timezones: trip.timezones || null,
+      memberCount: membersByTrip.get(trip.id) || 0,
       active: !!trip.active,
       archived: !!trip.archived,
       receiptCount: receiptCountByTrip.get(trip.id) || 0,
@@ -455,6 +619,40 @@ Deno.serve(async (req) => {
         result: { amended: true, updates },
       });
       return json(req, 200, { ok: true, id: data?.id });
+    }
+    if (req.method === "POST" && url.pathname.endsWith("/api/test-provider")) {
+      const body = await readBody(req) as any;
+      const provider = String(body.provider || "").trim();
+      if (!provider) throw new Error("Missing provider");
+      const brokerBase = CREDENTIAL_BROKER_URL.replace(/\/+$/, "");
+      const testRes = await fetch(`${brokerBase}/credentials/test?provider=${encodeURIComponent(provider)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'https://travel-expense-compact.vercel.app',
+          'X-Admin-Internal': Deno.env.get('ADMIN_TOKEN') || '',
+        },
+        body: JSON.stringify({ provider }),
+      });
+      const testData = await testRes.json().catch(() => ({ ok: false, error: "broker returned non-JSON" }));
+      // Store test result in app_usage_events for persistence
+      const testStatus = testData.status?.status || (testRes.ok ? "connected" : "error");
+      const testMessage = testData.status?.message || testData.error || "";
+      try {
+        const supabase = serviceClient();
+        await supabase.from("app_usage_events").insert({
+          user_id: "e6bd6e0a-4022-4491-95d3-e4b53ddc88f6", // vc06456@gmail.com (admin user)
+          session_id_hash: "admin-console-test",
+          event_name: `provider_test_${provider}`,
+          provider,
+          outcome: testStatus === "connected" ? "success" : "error",
+          metadata: { status: testStatus, message: testMessage },
+          app_surface: "compact",
+        });
+      } catch (e) { console.warn("Failed to store test result:", e); }
+      // Also cache in memory for this instance
+      providerTestCache.set(provider, { status: testStatus, message: testMessage, testedAt: Date.now() });
+      return json(req, testRes.ok ? 200 : testRes.status, { ok: testRes.ok, provider, ...testData });
     }
     return json(req, 404, { ok: false, error: "Admin KanBan route not found" });
   } catch (error) {

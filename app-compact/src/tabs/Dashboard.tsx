@@ -9,7 +9,6 @@ import {
   MapPin,
   NotebookPen,
   Pencil,
-  PieChart,
   Plus,
   X,
   Castle,
@@ -24,7 +23,7 @@ import {
 } from 'lucide-react';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
-import { AnimatedNumber, GlassCard, Reveal } from '../components/ui';
+import { GlassCard, Reveal } from '../components/ui';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
 import { amountToHkd, formatCurrencyAmount } from '../lib/currency';
 import {
@@ -839,8 +838,10 @@ export function Dashboard({
   const budgetPct = Math.min(100, rawBudgetPct);
 
   const dailyBudget = Math.round((Number(state.budget) || 0) / Math.max(1, itinerary.length));
-  const dailyAverage = Math.round(totalForBudget / Math.max(1, itinerary.length));
   const todayBudgetPct = dailyBudget > 0 ? (todayTotal / dailyBudget) * 100 : 0;
+  const todayBudgetPctCapped = Math.min(100, Math.max(0, Math.round(todayBudgetPct)));
+  const dailyBudgetHkd = Math.round(amountToHkd(dailyBudget, resolvedTripCurrency, state));
+  const dayRemainingTrip = Math.max(0, Math.round(dailyBudget - todayTotal));
   const day = itinerary.find((d) => d.date === today) || itinerary[0];
   const length = tripLength(trip.startDate, trip.endDate, itinerary.length);
   const displayDayDate = day?.date || today;
@@ -853,7 +854,12 @@ export function Dashboard({
   const recentReceipts = tripReceipts.slice().sort((a, b) => `${b.date} ${b.time || ''}`.localeCompare(`${a.date} ${a.time || ''}`));
   const burnDays = Math.max(1, Math.min(length, currentDayNumber));
   const dailyBurnHkd = Math.round(spentHkd / burnDays);
-  const projectedSpendHkd = Math.round(dailyBurnHkd * length);
+  const todaySpendPrimary = showTripCurrency ? displayMoney(todayTotal, resolvedTripCurrency) : displayMoney(todaySpentHkd, 'HKD');
+  const todaySpendSecondary = showTripCurrency ? displayMoney(todaySpentHkd, 'HKD') : displayMoney(todayTotal, resolvedTripCurrency);
+  const dailyBudgetPrimary = showTripCurrency ? displayMoney(dailyBudget, resolvedTripCurrency) : displayMoney(dailyBudgetHkd, 'HKD');
+  const dailyBudgetSecondary = showTripCurrency ? displayMoney(dailyBudgetHkd, 'HKD') : displayMoney(dailyBudget, resolvedTripCurrency);
+  const dayRemainingPrimary = showTripCurrency ? displayMoney(dayRemainingTrip, resolvedTripCurrency) : displayMoney(dayRemainingHkd, 'HKD');
+  const dayRemainingSecondary = showTripCurrency ? displayMoney(dayRemainingHkd, 'HKD') : displayMoney(dayRemainingTrip, resolvedTripCurrency);
 
   const displaySpots: ItinerarySpot[] = daySpots.length > 0 ? daySpots : [];
 
@@ -1037,19 +1043,15 @@ export function Dashboard({
                 <div>
                   <Wallet size={24} />
                   <span>每日預算</span>
-                  <strong>{showTripCurrency ? displayMoney(dailyBudget, resolvedTripCurrency) : displayMoney(Math.round(amountToHkd(dailyBudget, resolvedTripCurrency, state)), 'HKD')}</strong>
+                  <strong>{dailyBudgetPrimary}</strong>
+                  <small>{dailyBudgetSecondary}</small>
                 </div>
                 <div>
                   <CalendarDays size={24} />
                   <span>日均結餘</span>
-                  <strong>{showTripCurrency ? displayMoney(Math.max(0, dailyBudget - todayTotal), resolvedTripCurrency) : displayMoney(dayRemainingHkd, 'HKD')}</strong>
+                  <strong>{dayRemainingPrimary}</strong>
+                  <small>{dayRemainingSecondary}</small>
                 </div>
-                <button type="button" onClick={() => onTab('stats')}>
-                  <PieChart size={26} />
-                  <span>預算提醒</span>
-                  <small>已設定</small>
-                  <ChevronRight size={20} />
-                </button>
               </div>
 
               <button className="preview-dashboard-budget-tip" type="button" onClick={() => onTab('stats')}>
@@ -1069,23 +1071,58 @@ export function Dashboard({
         <div className="preview-dashboard-today-head">
           <h3>今日狀態</h3>
           <span><CalendarDays size={18} /> {chineseDateLabel(displayDayDate)}</span>
+          <div className="preview-dashboard-currency preview-dashboard-today-currency" role="group" aria-label="今日狀態顯示貨幣">
+            <button
+              type="button"
+              className={activeDisplayCurrency === 'HKD' ? 'is-active' : ''}
+              onClick={() => updateState({ displayCurrency: 'HKD' })}
+            >
+              HKD
+            </button>
+            <button
+              type="button"
+              className={activeDisplayCurrency === resolvedTripCurrency ? 'is-active' : ''}
+              onClick={() => updateState({ displayCurrency: resolvedTripCurrency })}
+            >
+              {resolvedTripCurrency}
+            </button>
+          </div>
           <div><CloudSun size={22} /> -- <small>--</small></div>
+        </div>
+        <div className="preview-dashboard-today-chart" aria-label="每日預算使用率">
+          <AnimatedCircularProgressBar
+            value={todayBudgetPctCapped}
+            gaugePrimaryColor={todayBudgetPct > 100 ? '#D94132' : '#3F6F49'}
+            gaugeSecondaryColor="rgba(122, 99, 67, 0.16)"
+            className="size-full"
+          >
+            <div className="preview-dashboard-today-chart-copy">
+              <strong>{Math.round(todayBudgetPct)}%</strong>
+              <span>每日預算使用</span>
+            </div>
+          </AnimatedCircularProgressBar>
+          <div className="preview-dashboard-today-chart-text">
+            <span>今日 vs 平均每日預算</span>
+            <strong>{todaySpendPrimary} / {dailyBudgetPrimary}</strong>
+            <small>{todayBudgetPct > 100 ? '今日已高於平均每日預算' : '仍在今日平均預算線內'} · {todaySpendSecondary}</small>
+          </div>
         </div>
         <div className="preview-dashboard-today-grid">
           <div>
             <span>今日支出</span>
-            <strong><AnimatedNumber value={Math.round(amountToHkd(todayTotal, resolvedTripCurrency, state))} prefix="HK$ " /></strong>
-            <small>已記 {dailyReceipts.length} 筆</small>
+            <strong>{todaySpendPrimary}</strong>
+            <small>{todaySpendSecondary} · 已記 {dailyReceipts.length} 筆</small>
           </div>
           <div>
             <span>每日預算使用</span>
             <strong>{Math.round(todayBudgetPct)}%</strong>
             <i><b style={{ width: `${Math.min(100, Math.round(todayBudgetPct))}%` }} /></i>
-            <small>目標：HK$ {fmt(Math.round(amountToHkd(dailyBudget, resolvedTripCurrency, state)))}</small>
+            <small>目標：{dailyBudgetPrimary} · {dailyBudgetSecondary}</small>
           </div>
           <div>
             <span>日均結餘</span>
-            <strong>HK$ {fmt(dayRemainingHkd)}</strong>
+            <strong>{dayRemainingPrimary}</strong>
+            <small>{dayRemainingSecondary}</small>
             <small>{dayRemainingHkd > 0 ? '狀態良好' : '需要留意'}</small>
           </div>
         </div>

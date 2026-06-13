@@ -103,10 +103,10 @@ test('Compact main controls keep accessible names, touch targets, reduced motion
   page.on('pageerror', (error) => consoleProblems.push(`pageerror: ${error.message}`));
 
   await seedCompactA11yState(page);
-  await page.goto(APP_URL);
+  await page.goto(`${APP_URL}#dashboard`);
 
   await expect(page.getByLabel('Compact travel readiness')).toHaveCount(0);
-  await expectTouchTarget(page.getByRole('button', { name: '更多操作' }), 'mobile header action', 40);
+  await expect(page.getByRole('button', { name: '更多操作' })).toHaveCount(0);
   await expectTouchTarget(page.getByRole('button', { name: 'Add Expense' }), 'add expense primary action');
   await expectTouchTarget(page.getByRole('button', { name: /查看完整行程/ }), 'view full itinerary action');
   await expectTouchTarget(page.getByRole('button', { name: 'View all' }), 'view all records action');
@@ -120,9 +120,11 @@ test('Compact main controls keep accessible names, touch targets, reduced motion
 
   await nav.getByRole('button', { name: '記帳', exact: true }).click();
   await expect(page.getByText('掃描收據').first()).toBeVisible();
+  await expectTouchTarget(page.getByRole('button', { name: '更多操作' }), 'scan mobile header action', 40);
   await expectTouchTarget(page.getByRole('button', { name: /相機/ }).first(), 'scan camera card', 80);
   await expectTouchTarget(page.getByRole('button', { name: /相簿/ }).first(), 'scan gallery card', 80);
-  for (const name of ['手動', '語音', 'Email', '匯率']) {
+  await expectTouchTarget(page.getByRole('button', { name: /匯率 Exchange Rate/ }), 'scan wide exchange action', 64);
+  for (const name of ['手動', '語音', 'Email']) {
     await expectTouchTarget(page.getByRole('button', { name, exact: true }), `scan utility ${name}`, 64);
   }
 

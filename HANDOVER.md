@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-13
-- **Focus**: Timeline tab now auto-scrolls to the current live itinerary spot; version bumped to 0.2.2
+- **Focus**: Compact Scan/Home UX polish; multilingual receipt preview, FX modal, and richer Home budget status
 - **Agent**: Codex 🤖
-- **App version**: `0.2.2` (react + compact)
+- **App version**: Compact `0.2.6`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +18,27 @@
 
 ## What Was Done
 
-### Session 20 (Codex — current session)
+### Session 21 (Codex — current session)
+
+1. **Compact Scan tab cleaned up and localized**:
+   - Removed the unused `Scan cockpit` panel that showed `辨識狀態`, `Batch`, `Recovery`, and `Attachment` under the mock receipt.
+   - Replaced the hardcoded Japanese mock receipt with a currency/destination-aware multilingual receipt library (`JPY`, `KRW`, `USD`, `EUR`, `GBP`, `CAD`, `AUD`, `SGD`, `TWD`, `CNY`, `THB`, `MYR`, `PHP`, `IDR`, `VND`, `MOP`, `HKD`, `NZD`, `CHF`, `SEK`, `NOK`, `DKK`, `INR`, `AED`, `TRY`, `MXN`, `BRL`, `ZAR`).
+   - The Scan preview now picks the receipt language using the active trip currency/context.
+2. **Compact exchange-rate UX redesigned**:
+   - Moved `匯率 / Exchange Rate` out of the small utility grid and into a wide button directly under Camera/Gallery.
+   - Added an accessible `即時匯率` modal with amount/from/to controls, swap, trip-currency reset, live refresh, and a large conversion result.
+3. **Compact Home budget/status refined**:
+   - Removed the useless Home top-right bell/red dot and the unused `預算提醒` action inside `預算總覽`.
+   - Redesigned the budget currency toggle styling and the two-column daily budget/day balance strip.
+   - Added `今日狀態` dual-currency toggle and a circular daily-budget usage chart comparing today's spend with the average daily budget.
+   - `今日支出`, `每日預算使用`, and `日均結餘` now show both HKD and destination currency.
+4. **Coverage and versioning**:
+   - Updated Scan, Dashboard, a11y touch, and mobile-layout smokes for the new UI.
+   - Bumped Compact `package.json`, `package-lock.json`, and `APP_VERSION` from `0.2.5` to `0.2.6`.
+5. **External pending changes preserved**:
+   - The workspace already contained other-agent changes in Admin/Supabase/Worker files before this session. They were not reverted.
+
+### Session 20 (Codex — previous session)
 
 1. **Timeline tab entry scroll fixed**:
    - `app-compact/src/tabs/Timeline.tsx` and `app-react/src/tabs/Timeline.tsx` no longer rely on the old one-shot `scrolledRef` behavior.
@@ -80,6 +100,12 @@
    - The new tags are the Node 24-generation Pages actions and should stop the Node.js 20 deprecation annotation on the next Pages deploy.
 
 ## Verified
+- `app-compact npm run typecheck` ✅ (0.2.6 Scan/Home polish)
+- `app-compact npm run build` ✅ (0.2.6 Scan/Home polish)
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:scan` ✅
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:dashboard` ✅ (7/7)
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:a11y-touch` ✅
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:mobile-layout` ✅
 - `app-compact npm run typecheck` ✅ (0.2.2 timeline fix)
 - `app-react npm run typecheck` ✅ (0.2.2 timeline fix)
 - `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:timeline` ✅ (8/8, includes Scan → Timeline live-spot auto-scroll)

@@ -39,3 +39,6 @@ secrets.local.js
 
 # Local Netlify folder
 .netlify
+
+# Supabase CLI local link metadata
+supabase/.temp/

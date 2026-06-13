@@ -1138,3 +1138,202 @@ button:disabled {
   background: rgba(34, 216, 255, 0.1);
   color: var(--cyan);
 }
+
+/* Test Provider Button */
+.test-provider-btn {
+  border: 1px solid rgba(34, 216, 255, 0.4);
+  border-radius: 4px;
+  color: var(--cyan);
+  background: rgba(34, 216, 255, 0.08);
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.test-provider-btn:hover {
+  background: rgba(34, 216, 255, 0.18);
+  border-color: var(--line-strong);
+}
+
+.test-provider-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* LLM Expanded Items */
+.llm-item-expanded {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.llm-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.llm-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.llm-provider-label {
+  font-weight: 700;
+}
+
+.llm-item-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.llm-item-details small {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* errors24h Red Badge */
+.llm-errors-badge {
+  color: var(--red) !important;
+  font-weight: 800;
+  background: rgba(255, 90, 104, 0.12);
+  border: 1px solid rgba(255, 90, 104, 0.35);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.llm-model-name {
+  color: var(--cyan) !important;
+  font-weight: 600;
+}
+
+.llm-message {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.llm-test-result {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.llm-test-result.test-ok {
+  color: var(--green);
+  background: rgba(67, 240, 108, 0.08);
+}
+
+.llm-test-result.test-fail {
+  color: var(--red);
+  background: rgba(255, 90, 104, 0.08);
+}
+
+/* User Profile Fields */
+.user-profile-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.user-profile-fields span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(34, 216, 255, 0.4);
+}
+
+/* Itinerary Viewer */
+.itinerary-summary {
+  margin-top: 4px;
+}
+
+.itinerary-toggle {
+  border: 1px solid rgba(126, 217, 255, 0.2);
+  border-radius: 4px;
+  color: var(--cyan);
+  background: rgba(34, 216, 255, 0.06);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.itinerary-toggle:hover {
+  background: rgba(34, 216, 255, 0.14);
+}
+
+.itinerary-viewer {
+  margin-top: 6px;
+  border: 1px solid rgba(126, 217, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.itinerary-day strong {
+  font-size: 12px;
+  color: var(--cyan);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.itinerary-day ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.itinerary-day li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+  padding: 2px 0;
+}
+
+.itinerary-day li small {
+  color: var(--muted);
+  margin-left: auto;
+}
+
+/* Trip Budget & Receipt Category */
+.trip-budget {
+  color: var(--amber) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 600;
+}
+
+.receipt-category {
+  color: var(--purple) !important;
+  font-weight: 600;
+}

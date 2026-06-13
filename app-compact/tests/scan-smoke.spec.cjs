@@ -68,27 +68,15 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.locator('.scan-card-copy').nth(2)).toHaveText(['手動記帳', 'Manual Entry'].join(''));
   await expect(page.locator('.scan-card-copy').nth(3)).toHaveText(['語音', 'Voice'].join(''));
   await expect(page.locator('.scan-card-copy').nth(4)).toHaveText(['Email', 'Email'].join(''));
-  await expect(page.locator('.scan-card-copy').nth(5)).toHaveText(['匯率', 'Exchange Rate'].join(''));
+  await expect(page.getByRole('button', { name: /匯率 Exchange Rate/ })).toBeVisible();
   await expect(page.locator('.scan-hero-card')).not.toContainText('智能辨識');
   await expect(page.locator('.scan-hero-card')).not.toContainText('從手機相簿選取');
   await expect(page.locator('.scan-function-art')).toHaveCount(6);
   await expect(page.locator('.scan-function-art svg, .scan-function-art img')).toHaveCount(0);
-  await expect(page.getByLabel('Scan cockpit')).toContainText('待掃描');
-  await expect(page.getByLabel('Scan cockpit')).toContainText('未有相片');
-  await expect(page.getByLabel('Photo compression guidance')).toContainText('Auto-compress');
-  await expect(page.getByLabel('Photo compression guidance')).toContainText('480px scan');
-  const cockpitMetrics = await page.evaluate(() => {
-    const cockpit = document.querySelector('[aria-label="Scan cockpit"]')?.getBoundingClientRect();
-    const compression = document.querySelector('[aria-label="Photo compression guidance"]')?.getBoundingClientRect();
-    return {
-      scrollWidth: document.documentElement.scrollWidth,
-      cockpitWidth: cockpit?.width || 0,
-      compressionWidth: compression?.width || 0,
-    };
-  });
-  expect(cockpitMetrics.scrollWidth).toBe(390);
-  expect(cockpitMetrics.cockpitWidth).toBeLessThanOrEqual(390);
-  expect(cockpitMetrics.compressionWidth).toBeGreaterThan(120);
+  await expect(page.getByLabel('Scan cockpit')).toHaveCount(0);
+  await expect(page.locator('.scan-hero-card')).not.toContainText('Recovery');
+  await expect(page.locator('.scan-hero-card')).not.toContainText('Attachment');
+  await expect(page.locator('.scan-hero-card')).not.toContainText('Batch');
   const heroCard = await page.locator('.scan-hero-card').boundingBox();
   const heroButton = await page.locator('.scan-hero-button').boundingBox();
   const galleryButton = await page.locator('.scan-secondary-button').boundingBox();
@@ -128,8 +116,8 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.getByText('編輯紀錄')).toBeVisible();
   await expect(page.getByLabel('店名 / 項目')).toHaveValue('m5-camera-receipt');
   await page.getByRole('button', { name: '取消' }).click();
-  await expect(page.getByLabel('Scan cockpit')).toContainText('可確認');
-  await expect(page.getByLabel('Scan cockpit')).toContainText('m5-camera-receipt.jpg');
+  await expect(page.getByLabel('Scan cockpit')).toHaveCount(0);
+  await expect(page.locator('.scan-retry-panel')).toContainText('m5-camera-receipt.jpg');
 
   await page.getByRole('button', { name: '手動', exact: true }).click();
   await page.getByLabel('店名 / 項目').fill('M5 手動測試');
@@ -189,9 +177,12 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await page.getByRole('button', { name: /全部儲存/ }).click();
   await expect(page.getByText('已儲存 1 筆 email 待確認紀錄。')).toBeVisible();
 
-  await page.getByRole('button', { name: '匯率' }).click();
-  await page.getByRole('textbox').first().fill('2000');
-  await expect(page.getByText(/2000 JPY =/)).toBeVisible();
+  await page.getByRole('button', { name: /匯率 Exchange Rate/ }).click();
+  const fxDialog = page.getByRole('dialog', { name: '即時匯率' });
+  await expect(fxDialog).toBeVisible();
+  await fxDialog.locator('input').first().fill('2000');
+  await expect(fxDialog).toContainText('2000 JPY');
+  await fxDialog.getByRole('button', { name: '關閉' }).click();
 
   await nav.getByRole('button', { name: '紀錄', exact: true }).click();
   await page.getByPlaceholder(/搜尋店名|搜尋店家/).fill('M5 Email');

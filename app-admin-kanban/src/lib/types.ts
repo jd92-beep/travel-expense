@@ -35,14 +35,25 @@ export type UsageSummary = {
 export type AdminUserCard = {
   id: string;
   email: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  locale: string | null;
+  homeCurrency: string | null;
   joinedAt: string | null;
+  createdAt: string | null;
   lastSeenAt: string | null;
+  lastSyncAt: string | null;
   sessionCount: number;
   eventCount: number;
   tripCount: number;
   receiptCount: number;
   imageCount: number;
   notionConnected: boolean;
+  notionStatus: string;
+  notionLastSyncedAt: string | null;
+  supabaseConnected: boolean;
+  syncJobCount: number;
+  failedSyncJobs: number;
   aiRequestsToday: number;
   health: HealthState;
 };
@@ -60,6 +71,11 @@ export type AdminTripCard = {
   archived: boolean;
   receiptCount: number;
   updatedAt: string | null;
+  budgetAmount: number | null;
+  budgetCurrency: string | null;
+  memberCount: number;
+  timezones: string[];
+  itinerary: any[] | null;
 };
 
 export type AdminReceiptCard = {
@@ -74,6 +90,7 @@ export type AdminReceiptCard = {
   updatedAt: string | null;
   notionSynced: boolean;
   photoPath: string | null;
+  category: string | null;
 };
 
 export type AdminNotionSummary = {
@@ -91,6 +108,7 @@ export type AdminProviderHealth = {
   status: HealthState;
   storedStatus: string;
   model?: string;
+  modelName: string | null;
   lastTestedAt?: string | null;
   latencyMs?: number | null;
   errors24h?: number;

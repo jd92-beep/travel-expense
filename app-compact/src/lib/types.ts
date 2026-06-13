@@ -311,7 +311,7 @@ export interface AppState {
   displayCurrency?: string;
 }
 
-export type TabId = 'dashboard' | 'scan' | 'timeline' | 'history' | 'weather' | 'stats' | 'settings' | 'admin';
+export type TabId = 'dashboard' | 'scan' | 'timeline' | 'history' | 'weather' | 'stats' | 'settings';
 
 export interface SettlementTransfer {
   from: Person;

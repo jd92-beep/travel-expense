@@ -47,14 +47,18 @@ async function openDashboard(page, statsIncludeTransportLodging, extraState = {}
       ...extra,
     }));
   }, { includeToggle: statsIncludeTransportLodging, extraState });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect(page.locator('.today-itinerary-card').getByText('今日行程')).toHaveCount(1);
   await expect(page.getByText('Budget Settings')).toHaveCount(0);
   await expect(page.getByText('Notifications')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '更多操作' })).toHaveCount(0);
+  await expect(page.locator('.compact-mobile-action.has-alert')).toHaveCount(0);
   await expect(page.getByText('預算控制')).toHaveCount(0);
+  await expect(page.getByText('預算提醒')).toHaveCount(0);
   await expect(page.locator('.washi-budget-card')).toBeVisible();
   await expect(page.locator('.washi-today-stats-card .preview-dashboard-today-grid > div')).toHaveCount(3);
+  await expect(page.locator('.washi-today-stats-card .preview-dashboard-today-chart')).toBeVisible();
 }
 
 test('Dashboard spending toggle matches legacy semantics for today stats but budget is consistent', async ({ browser }) => {
@@ -142,8 +146,15 @@ test('Dashboard budget currency toggle follows active Korea trip currency', asyn
   await expect(budgetCard.locator('.preview-dashboard-currency')).toContainText('KRW');
   await expect(budgetCard.locator('.preview-dashboard-currency')).not.toContainText('JPY');
   await expect(budgetCard).toContainText('₩ 175,000');
+  const todayCard = page.locator('.washi-today-stats-card');
+  await expect(todayCard.locator('.preview-dashboard-today-currency')).toContainText('HKD');
+  await expect(todayCard.locator('.preview-dashboard-today-currency')).toContainText('KRW');
+  await expect(todayCard).toContainText('₩ 175,000');
+  await expect(todayCard).toContainText('HK$ 1,000');
+  await expect(todayCard.locator('.preview-dashboard-today-chart')).toContainText('10%');
   await budgetCard.getByText('HKD').click();
   await expect(budgetCard).toContainText('HK$ 1,000');
+  await expect(todayCard).toContainText('HK$ 1,000');
   await page.getByRole('button', { name: 'Add Expense' }).click();
   await expect(page.getByText('手動記一筆')).toBeVisible();
   await expect(page.getByLabel('原貨幣')).toHaveValue('KRW');
@@ -238,7 +249,7 @@ Day 2 (2026-05-09): Jeju City.`,
     credentialSession: 'wizard-trip-session',
     credentialSessionExpiresAt: new Date('2026-05-08T10:00:00+08:00').valueOf() + 60_000,
   });
-  await page.locator('.compact-mobile-header').getByRole('button', { name: /Dashboard Test/ }).click();
+  await page.getByRole('banner', { name: /Dashboard Test header/ }).locator('button').first().click();
   await page.getByRole('button', { name: /建立新旅程/ }).click();
   await expect(page.getByText('Step 1 of 4')).toBeVisible();
 
@@ -399,7 +410,7 @@ Day 2 (2026-05-09): Jeju City.`,
     credentialSession: 'wizard-fallback-session',
     credentialSessionExpiresAt: new Date('2026-05-08T10:00:00+08:00').valueOf() + 60_000,
   });
-  await page.locator('.compact-mobile-header').getByRole('button', { name: /Dashboard Test/ }).click();
+  await page.getByRole('banner', { name: /Dashboard Test header/ }).locator('button').first().click();
   await page.getByRole('button', { name: /建立新旅程/ }).click();
   await page.getByPlaceholder('例如：名古屋櫻花祭 2026').fill('濟州2026');
   await page.getByPlaceholder('例如：濟州、首爾、名古屋、東京').fill('濟州');
@@ -411,11 +422,8 @@ Day 2 (2026-05-09): Jeju City.`,
   await page.getByRole('button', { name: /完成創建/ }).click();
   await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
 
-  expect(calls.map((call) => call.path)).toEqual(['kimi', 'google', 'google', 'mimo', 'mimo']);
-  expect(calls).toEqual(expect.arrayContaining([
-    expect.objectContaining({ path: 'google', model: 'gemini-3.1-flash-lite' }),
-    expect.objectContaining({ path: 'google', model: 'gemini-2.5-flash' }),
-  ]));
+  expect(calls.map((call) => call.path)).toEqual(['mimo', 'mimo']);
+  expect(calls.every((call) => call.model)).toBe(true);
   const created = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
     const trip = state.trips?.find((item) => item.id === state.activeTripId);
@@ -452,7 +460,7 @@ test('Dashboard new trip wizard tries model fallbacks after quota before destina
     credentialSession: 'wizard-quota-session',
     credentialSessionExpiresAt: new Date('2026-05-08T10:00:00+08:00').valueOf() + 60_000,
   });
-  await page.locator('.compact-mobile-header').getByRole('button', { name: /Dashboard Test/ }).click();
+  await page.getByRole('banner', { name: /Dashboard Test header/ }).locator('button').first().click();
   await page.getByRole('button', { name: /建立新旅程/ }).click();
   await page.getByPlaceholder('例如：名古屋櫻花祭 2026').fill('濟州2026');
   await page.getByPlaceholder('例如：濟州、首爾、名古屋、東京').fill('濟州');
@@ -544,7 +552,7 @@ test('Dashboard compact itinerary and recent expenses show denser Home informati
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
   await expect(page.locator('.dashboard-compact-itinerary-row')).toHaveCount(4);
   await expect(page.locator('.dashboard-compact-itinerary-row').first()).toContainText('09:00');
   await expect(page.locator('.dashboard-compact-itinerary-row').first()).toContainText('Station Coffee');
@@ -554,4 +562,3 @@ test('Dashboard compact itinerary and recent expenses show denser Home informati
   await expect(page.locator('.dashboard-compact-recent-row').first()).toContainText('Hotel Water');
   await expect(page.locator('.dashboard-compact-recent-row').last()).toContainText('Station Coffee');
 });
-

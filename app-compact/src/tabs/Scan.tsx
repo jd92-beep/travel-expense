@@ -1,22 +1,76 @@
-import { Camera, CheckCircle2, Mail, Mic, RefreshCw, Repeat2 } from 'lucide-react';
+import { Camera, CheckCircle2, Mail, Mic, RefreshCw, Repeat2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
 import { ActionRippleButton, GlassCard, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 import { ShimmerButton } from '../components/ui/shimmer-button';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
 import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
-import { compressPhoto } from '../lib/domain';
+import { compressPhoto, getResolvedTripCurrency } from '../lib/domain';
 import type { AppState, Receipt } from '../lib/types';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
+import { activeTrip } from '../domain/trip/normalize';
+import { resolveTripContext } from '../domain/trip/context';
 import scanMasterpieceSuite from '../assets/scan/scan-masterpiece-suite.png';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
-type ScanMode = 'scan' | 'voice' | 'email' | 'currency';
+type ScanMode = 'scan' | 'voice' | 'email';
 type BatchReceipt = Receipt & { selected?: boolean };
+type MockReceiptProfile = {
+  currency: string;
+  country: string;
+  locale: string;
+  title: string;
+  store: string;
+  address: string;
+  dateLine: string;
+  totalLabel: string;
+  total: string;
+  taxLine: string;
+  paymentLine: string;
+};
+
+const MOCK_RECEIPT_LIBRARY: Record<string, MockReceiptProfile> = {
+  HKD: { currency: 'HKD', country: 'Hong Kong', locale: 'zh-HK', title: '收 據', store: '海港茶餐廳', address: '香港中環德輔道中 88 號', dateLine: '2026年6月13日 12:45', totalLabel: '合計', total: 'HK$324.00', taxLine: '服務費　　　　　HK$29.45', paymentLine: '八達通　　　　　HK$324.00' },
+  JPY: { currency: 'JPY', country: 'Japan', locale: 'ja-JP', title: '領 収 書', store: '桜町商店', address: '東京都千代田区丸の内1-1-1', dateLine: '2026年6月13日（土）12:45', totalLabel: '合計', total: '¥3,240', taxLine: '（内）消費税 10%　¥294', paymentLine: '現金　　　　　　　¥3,240' },
+  KRW: { currency: 'KRW', country: 'South Korea', locale: 'ko-KR', title: '영 수 증', store: '동문시장 카페', address: '제주특별자치도 제주시 관덕로 14', dateLine: '2026년 6월 13일 12:45', totalLabel: '합계', total: '₩32,400', taxLine: '부가세 10%　　　₩2,945', paymentLine: '카드결제　　　　 ₩32,400' },
+  USD: { currency: 'USD', country: 'United States', locale: 'en-US', title: 'RECEIPT', store: 'Harbor Market', address: '120 Main Street, Seattle WA', dateLine: 'Jun 13, 2026 12:45 PM', totalLabel: 'TOTAL', total: 'US$32.40', taxLine: 'Sales tax　　　　US$2.95', paymentLine: 'Card　　　　　　US$32.40' },
+  CAD: { currency: 'CAD', country: 'Canada', locale: 'en-CA', title: 'RECEIPT', store: 'Maple Corner', address: '88 Queen Street, Toronto ON', dateLine: 'Jun 13, 2026 12:45 PM', totalLabel: 'TOTAL', total: 'CA$32.40', taxLine: 'HST　　　　　　CA$2.95', paymentLine: 'Debit　　　　　CA$32.40' },
+  AUD: { currency: 'AUD', country: 'Australia', locale: 'en-AU', title: 'RECEIPT', store: 'Harbour Grocer', address: '55 George Street, Sydney NSW', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'TOTAL', total: 'A$32.40', taxLine: 'GST included　　A$2.95', paymentLine: 'Card　　　　　 A$32.40' },
+  NZD: { currency: 'NZD', country: 'New Zealand', locale: 'en-NZ', title: 'RECEIPT', store: 'Koru Cafe', address: '12 Queen Street, Auckland', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'TOTAL', total: 'NZ$32.40', taxLine: 'GST included　 NZ$2.95', paymentLine: 'Card　　　　　NZ$32.40' },
+  GBP: { currency: 'GBP', country: 'United Kingdom', locale: 'en-GB', title: 'RECEIPT', store: 'Garden Lane Deli', address: '42 King Street, London', dateLine: '13 Jun 2026 12:45', totalLabel: 'TOTAL', total: '£32.40', taxLine: 'VAT included　　£2.95', paymentLine: 'Card　　　　　 £32.40' },
+  EUR: { currency: 'EUR', country: 'Euro Area', locale: 'fr-FR', title: 'REÇU', store: 'Café Lumière', address: '18 Rue Saint-Honoré, Paris', dateLine: '13 juin 2026 12:45', totalLabel: 'TOTAL', total: '€32,40', taxLine: 'TVA incluse　　 €2,95', paymentLine: 'Carte　　　　　€32,40' },
+  CHF: { currency: 'CHF', country: 'Switzerland', locale: 'de-CH', title: 'QUITTUNG', store: 'Alpen Markt', address: 'Bahnhofstrasse 18, Zürich', dateLine: '13.06.2026 12:45', totalLabel: 'TOTAL', total: 'CHF 32.40', taxLine: 'MwSt inkl.　　 CHF 2.95', paymentLine: 'Karte　　　　 CHF 32.40' },
+  SEK: { currency: 'SEK', country: 'Sweden', locale: 'sv-SE', title: 'KVITTO', store: 'Nord Café', address: 'Drottninggatan 12, Stockholm', dateLine: '2026-06-13 12:45', totalLabel: 'TOTALT', total: '32,40 kr', taxLine: 'Moms ingår　　 2,95 kr', paymentLine: 'Kort　　　　　32,40 kr' },
+  NOK: { currency: 'NOK', country: 'Norway', locale: 'nb-NO', title: 'KVITTERING', store: 'Fjord Bakeri', address: 'Karl Johans gate 20, Oslo', dateLine: '13.06.2026 12:45', totalLabel: 'TOTALT', total: 'kr 32,40', taxLine: 'MVA inkl.　　　kr 2,95', paymentLine: 'Kort　　　　　kr 32,40' },
+  DKK: { currency: 'DKK', country: 'Denmark', locale: 'da-DK', title: 'KVITTERING', store: 'Havn Bistro', address: 'Nyhavn 10, København', dateLine: '13.06.2026 12:45', totalLabel: 'TOTAL', total: '32,40 kr.', taxLine: 'Moms inkl.　　 2,95 kr.', paymentLine: 'Kort　　　　　32,40 kr.' },
+  SGD: { currency: 'SGD', country: 'Singapore', locale: 'en-SG', title: 'RECEIPT', store: 'Marina Food Hall', address: '10 Bayfront Avenue, Singapore', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'TOTAL', total: 'S$32.40', taxLine: 'GST included　 S$2.95', paymentLine: 'PayNow　　　　S$32.40' },
+  TWD: { currency: 'TWD', country: 'Taiwan', locale: 'zh-TW', title: '統 一 發 票', store: '島嶼咖啡館', address: '台北市中山區南京東路 88 號', dateLine: '2026年06月13日 12:45', totalLabel: '總計', total: 'NT$324', taxLine: '營業稅　　　　　NT$15', paymentLine: '悠遊卡　　　　　NT$324' },
+  CNY: { currency: 'CNY', country: 'China', locale: 'zh-CN', title: '销 售 小 票', store: '江南便利店', address: '上海市黄浦区南京东路 88 号', dateLine: '2026年06月13日 12:45', totalLabel: '合计', total: '¥324.00', taxLine: '税额　　　　　　¥29.45', paymentLine: '移动支付　　　　¥324.00' },
+  MOP: { currency: 'MOP', country: 'Macau', locale: 'zh-MO', title: '收 據', store: '澳門小食店', address: '澳門新馬路 28 號', dateLine: '2026年06月13日 12:45', totalLabel: '合計', total: 'MOP$324.00', taxLine: '服務費　　　　 MOP$29.45', paymentLine: '澳門通　　　　 MOP$324.00' },
+  THB: { currency: 'THB', country: 'Thailand', locale: 'th-TH', title: 'ใบเสร็จรับเงิน', store: 'ตลาดริมคลอง', address: 'ถนนสุขุมวิท กรุงเทพฯ', dateLine: '13 มิ.ย. 2026 12:45', totalLabel: 'รวม', total: '฿324.00', taxLine: 'ภาษี　　　　　฿29.45', paymentLine: 'บัตร　　　　　฿324.00' },
+  MYR: { currency: 'MYR', country: 'Malaysia', locale: 'ms-MY', title: 'RESIT', store: 'Kedai Kopi Sentral', address: 'Jalan Bukit Bintang, Kuala Lumpur', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'JUMLAH', total: 'RM32.40', taxLine: 'Cukai　　　　 RM2.95', paymentLine: 'Kad　　　　　 RM32.40' },
+  PHP: { currency: 'PHP', country: 'Philippines', locale: 'en-PH', title: 'RESIBO', store: 'Island Cafe', address: 'Roxas Boulevard, Manila', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'KABUUAN', total: '₱324.00', taxLine: 'VAT included　 ₱29.45', paymentLine: 'GCash　　　　 ₱324.00' },
+  IDR: { currency: 'IDR', country: 'Indonesia', locale: 'id-ID', title: 'STRUK', store: 'Warung Senja', address: 'Jl. Raya Ubud, Bali', dateLine: '13 Jun 2026 12:45', totalLabel: 'TOTAL', total: 'Rp324.000', taxLine: 'PPN termasuk　Rp29.455', paymentLine: 'Kartu　　　　Rp324.000' },
+  VND: { currency: 'VND', country: 'Vietnam', locale: 'vi-VN', title: 'HÓA ĐƠN', store: 'Quán Cà Phê Sông', address: 'Quận 1, Thành phố Hồ Chí Minh', dateLine: '13/06/2026 12:45', totalLabel: 'TỔNG', total: '₫324.000', taxLine: 'Thuế　　　　 ₫29.455', paymentLine: 'Thẻ　　　　　₫324.000' },
+  INR: { currency: 'INR', country: 'India', locale: 'en-IN', title: 'RECEIPT', store: 'Lotus Canteen', address: 'MG Road, Bengaluru', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'TOTAL', total: '₹324.00', taxLine: 'GST included　 ₹29.45', paymentLine: 'UPI　　　　　 ₹324.00' },
+  AED: { currency: 'AED', country: 'United Arab Emirates', locale: 'ar-AE', title: 'إيصال', store: 'مقهى الميناء', address: 'شارع الشيخ زايد، دبي', dateLine: '13 يونيو 2026 12:45', totalLabel: 'الإجمالي', total: 'AED 32.40', taxLine: 'ضريبة　　　　 AED 2.95', paymentLine: 'بطاقة　　　　 AED 32.40' },
+  TRY: { currency: 'TRY', country: 'Türkiye', locale: 'tr-TR', title: 'FİŞ', store: 'Sahil Lokantası', address: 'İstiklal Cd. 18, İstanbul', dateLine: '13.06.2026 12:45', totalLabel: 'TOPLAM', total: '₺324,00', taxLine: 'KDV dahil　　 ₺29,45', paymentLine: 'Kart　　　　　₺324,00' },
+  MXN: { currency: 'MXN', country: 'Mexico', locale: 'es-MX', title: 'RECIBO', store: 'Mercado Azul', address: 'Av. Reforma 120, CDMX', dateLine: '13 jun 2026 12:45', totalLabel: 'TOTAL', total: '$324.00 MXN', taxLine: 'IVA incluido　 $29.45', paymentLine: 'Tarjeta　　　 $324.00' },
+  BRL: { currency: 'BRL', country: 'Brazil', locale: 'pt-BR', title: 'RECIBO', store: 'Café do Porto', address: 'Rua das Flores 88, São Paulo', dateLine: '13 jun 2026 12:45', totalLabel: 'TOTAL', total: 'R$32,40', taxLine: 'Imposto　　　 R$2,95', paymentLine: 'Cartão　　　 R$32,40' },
+  ZAR: { currency: 'ZAR', country: 'South Africa', locale: 'en-ZA', title: 'RECEIPT', store: 'Cape Pantry', address: 'Long Street, Cape Town', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'TOTAL', total: 'R32.40', taxLine: 'VAT included　 R2.95', paymentLine: 'Card　　　　　R32.40' },
+};
 const CAMERA_INPUT_ID = 'scan-camera-input';
 const GALLERY_INPUT_ID = 'scan-gallery-input';
 const EMAIL_IMAGE_INPUT_ID = 'scan-email-image-input';
 const scanSuiteStyle = { backgroundImage: `url(${scanMasterpieceSuite})` };
 const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
+
+function mockReceiptForTrip(state: AppState): MockReceiptProfile {
+  const trip = activeTrip(state);
+  const tripCurrency = String(getResolvedTripCurrency(state, trip) || state.tripCurrency || 'JPY').toUpperCase();
+  const context = resolveTripContext(trip.destinationSummary || trip.name || '', tripCurrency, trip.intelligence?.countryCode || '');
+  const currency = String(context.primaryCurrency || tripCurrency).toUpperCase();
+  return MOCK_RECEIPT_LIBRARY[currency] || MOCK_RECEIPT_LIBRARY[tripCurrency] || MOCK_RECEIPT_LIBRARY.JPY;
+}
 
 function safeFileStem(file: File): string {
   return file.name
@@ -75,16 +129,21 @@ export function Scan({
 
   const [savingBatch, setSavingBatch] = useState(false);
   const [mode, setMode] = useState<ScanMode>('scan');
+  const [fxOpen, setFxOpen] = useState(false);
   const [inputKey, setInputKey] = useState(0);
   const [lastScanFile, setLastScanFile] = useState<File | null>(null);
   const [lastDraft, setLastDraft] = useState<Receipt | null>(null);
-  const [from, setFrom] = useState('JPY');
+  const mockReceipt = useMemo(() => mockReceiptForTrip(state), [state]);
+  const [from, setFrom] = useState(mockReceipt.currency);
   const [to, setTo] = useState('HKD');
   const [amount, setAmount] = useState('1000');
   const [fx, setFx] = useState<CurrencySnapshot | null>(() => loadCurrencySnapshot());
-  const rate = Math.max(0.1, Number(state.rate) || 20.36);
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  useEffect(() => {
+    setFrom((current) => current || mockReceipt.currency);
+  }, [mockReceipt.currency]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -99,14 +158,13 @@ export function Scan({
     };
   }, []);
 
-  useModalOpenClass(batch.length > 0);
+  useModalOpenClass(batch.length > 0 || fxOpen);
 
   const converted = useMemo(() => {
     const n = Number(amount) || 0;
     return convertAmount(n, from, to, state, fx);
   }, [amount, from, to, state, fx]);
 
-  const lastDraftNeedsReview = useMemo(() => lastDraft ? receiptNeedsReview(lastDraft) : false, [lastDraft]);
   const batchQuality = useMemo(() => {
     const selected = batch.filter((row) => row.selected !== false).length;
     const review = batch.filter(receiptNeedsReview).length;
@@ -117,19 +175,6 @@ export function Scan({
       review,
     };
   }, [batch]);
-  const scanConfidence = useMemo(() => {
-    if (busy === 'ocr' || busy === 'email-image') {
-      return { label: '辨識中', detail: '保持頁面開啟', tone: 'warning' as const };
-    }
-    if (lastDraft && lastDraftNeedsReview) {
-      return { label: '需補資料', detail: '已保存草稿相片', tone: 'warning' as const };
-    }
-    if (lastDraft) {
-      return { label: '可確認', detail: '上次草稿可重開', tone: 'ok' as const };
-    }
-    return { label: '待掃描', detail: '相機或相簿開始', tone: 'neutral' as const };
-  }, [busy, lastDraft, lastDraftNeedsReview]);
-
   const openDraft = useCallback((receipt: Receipt) => {
     if (mountedRef.current) setLastDraft(receipt);
     onDraft(receipt);
@@ -404,7 +449,8 @@ export function Scan({
       const snapshot = await fetchLiveCurrencySnapshot();
       if (!mountedRef.current) return;
       setFx(snapshot);
-      setStatus(`已更新匯率：1 HKD = ${snapshot.rates.JPY.toFixed(2)} JPY（${snapshot.source}）`);
+      const destinationRate = snapshot.rates[from] || snapshot.rates[mockReceipt.currency];
+      setStatus(destinationRate ? `已更新匯率：1 HKD = ${destinationRate.toFixed(2)} ${from}（${snapshot.source}）` : `已更新匯率（${snapshot.source}）`);
     } catch (error) {
       if (!mountedRef.current) return;
       setStatus(`匯率更新失敗：${error instanceof Error ? error.message : String(error)}`);
@@ -414,6 +460,7 @@ export function Scan({
   }
 
   const batchContainerRef = useRef<HTMLDivElement>(null);
+  const fxContainerRef = useRef<HTMLDivElement>(null);
   const batchPrevFocusRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (batch.length === 0) return;
@@ -431,6 +478,23 @@ export function Scan({
     document.addEventListener('keydown', handleKeyDown);
     return () => { document.removeEventListener('keydown', handleKeyDown); batchPrevFocusRef.current?.focus?.(); };
   }, [batch.length, setBatch]);
+
+  useEffect(() => {
+    if (!fxOpen) return;
+    batchPrevFocusRef.current = document.activeElement as HTMLElement;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); setFxOpen(false); }
+      if (e.key === 'Tab' && fxContainerRef.current) {
+        const focusable = fxContainerRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (!focusable.length) return;
+        const first = focusable[0]; const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => { document.removeEventListener('keydown', handleKeyDown); batchPrevFocusRef.current?.focus?.(); };
+  }, [fxOpen]);
 
   return (
     <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto scan-screen" style={travelAtlasStyle}>
@@ -478,47 +542,21 @@ export function Scan({
           <div className="preview-crop-corner preview-crop-corner--tr" aria-hidden="true" />
           <div className="preview-crop-corner preview-crop-corner--bl" aria-hidden="true" />
           <div className="preview-crop-corner preview-crop-corner--br" aria-hidden="true" />
-          <div className="preview-receipt-paper" aria-hidden="true">
-            <b>領 收 書</b>
-            <span>○○商店</span>
-            <small>東京都千代田區丸の內1-1-1</small>
-            <small>2025年 5月13日（火）12:45</small>
+          <div className="preview-receipt-paper" data-locale={mockReceipt.locale} aria-label={`${mockReceipt.country} ${mockReceipt.currency} mock receipt`}>
+            <b>{mockReceipt.title}</b>
+            <span>{mockReceipt.store}</span>
+            <small>{mockReceipt.address}</small>
+            <small>{mockReceipt.dateLine}</small>
             <i />
-            <strong><span>合計</span><span>¥3,240</span></strong>
-            <small>（內）消費稅 10%　¥294</small>
-            <small>現金　　　　　　　¥3,240</small>
+            <strong><span>{mockReceipt.totalLabel}</span><span>{mockReceipt.total}</span></strong>
+            <small>{mockReceipt.taxLine}</small>
+            <small>{mockReceipt.paymentLine}</small>
           </div>
         </div>
 
         <div className="preview-scan-tip relative z-10">
           <span>將收據置於框內以獲得最佳辨識效果</span>
           <b>自動拍攝：開啟</b>
-        </div>
-
-        <div className="scan-cockpit-panel relative z-10" aria-label="Scan cockpit">
-          <div>
-            <span>辨識狀態</span>
-            <strong>{scanConfidence.label}</strong>
-            <small>{scanConfidence.detail}</small>
-          </div>
-          <div>
-            <span>Batch</span>
-            <strong>{batchQuality.total ? `${batchQuality.selected}/${batchQuality.total}` : '未有'}</strong>
-            <small>{batchQuality.review ? `${batchQuality.review} 需補資料` : 'ready'}</small>
-          </div>
-          <div>
-            <span>Recovery</span>
-            <strong>{lastDraft ? '可重開' : '待建立'}</strong>
-            <small>{lastScanFile ? lastScanFile.name : '未有相片'}</small>
-          </div>
-          <div aria-label="Photo compression guidance">
-            <span>Attachment</span>
-            <strong>Auto-compress</strong>
-            <small>480px scan · 800px edit</small>
-          </div>
-          <StatusPill tone={scanConfidence.tone}>
-            {busy ? 'working' : lastDraftNeedsReview ? 'review' : 'ready'}
-          </StatusPill>
         </div>
 
         {/* MAIN SCAN MODES GRID */}
@@ -557,8 +595,22 @@ export function Scan({
           </button>
         </div>
 
+        <button
+          type="button"
+          className="scan-fx-wide-button relative z-10 mb-6"
+          aria-label="匯率 Exchange Rate"
+          onClick={() => setFxOpen(true)}
+        >
+          <span className="scan-function-art scan-function-art--currency" style={scanSuiteStyle} aria-hidden="true" />
+          <span>
+            <strong>匯率</strong>
+            <small>Exchange Rate</small>
+          </span>
+          <b>{from} → {to}</b>
+        </button>
+
         {/* OTHER UTILITY MODES GRID */}
-        <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
           <button
             type="button"
             onClick={onManual}
@@ -598,18 +650,6 @@ export function Scan({
             </div>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setMode('currency')}
-            aria-label="匯率"
-            className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'currency' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
-          >
-            <span className="scan-function-art scan-function-art--currency" style={scanSuiteStyle} aria-hidden="true" />
-            <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
-              <strong className="text-xs font-black text-slate-800">匯率</strong>
-              <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Exchange Rate</span>
-            </div>
-          </button>
         </div>
 
         {/* Embedded Workspaces */}
@@ -678,35 +718,56 @@ export function Scan({
               </div>
             </div>
           )}
-
-          {mode === 'currency' && (
-            <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm flex flex-col gap-4">
-              <div className="flex items-center gap-2">
-                <select className="bg-white rounded-lg p-2 font-bold text-black border border-white/60" value={from} onChange={(e) => setFrom(e.target.value)}>
-                  {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
-                </select>
-                <input className="flex-1 bg-white rounded-lg p-2 font-bold text-black border border-white/60 text-right" type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                <button className="icon-btn bg-white hover:bg-slate-100 p-2 rounded-lg" type="button" onClick={() => { setFrom(to); setTo(from); }}><Repeat2 size={18} /></button>
-                <select className="bg-white rounded-lg p-2 font-bold text-black border border-white/60" value={to} onChange={(e) => setTo(e.target.value)}>
-                  {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
-                </select>
-              </div>
-              <div className="text-center font-black text-2xl text-slate-900 bg-white/40 p-3 rounded-xl border border-white/50">
-                {Number(amount) || 0} {from} = <span className="text-blue-600">{converted == null ? '需要更新匯率' : (Number(amount) || 0) === 0 ? '輸入金額以計算' : converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} {converted != null && (Number(amount) || 0) > 0 ? to : ''}</span>
-              </div>
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-xs font-bold text-slate-600 bg-white/60 px-3 py-1.5 rounded-full">1 HKD = {rate.toFixed(2)} JPY</span>
-                <button className="secondary bg-white text-black font-bold px-4 py-1.5 rounded-full" type="button" disabled={busy === 'fx'} onClick={handleFxRefresh}>
-                  <RefreshCw size={14} className={busy === 'fx' ? 'spin' : ''} /> 更新
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </GlassCard>
       </Reveal>
 
       {status && <Toast tone={/失敗|未能|error/i.test(status) ? 'warning' : 'info'}>{status}</Toast>}
+      {fxOpen && (
+        <div ref={fxContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label="即時匯率">
+          <div className="modal sheet scan-fx-modal">
+            <div className="modal-head">
+              <div>
+                <h2>即時匯率</h2>
+                <p className="muted">Live currency exchange for this trip.</p>
+              </div>
+              <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setFxOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="scan-fx-panel">
+              <label>
+                <span>金額</span>
+                <input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              </label>
+              <label>
+                <span>From</span>
+                <select value={from} onChange={(e) => setFrom(e.target.value)}>
+                  {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
+                </select>
+              </label>
+              <button className="scan-fx-swap" type="button" aria-label="調轉貨幣" onClick={() => { setFrom(to); setTo(from); }}>
+                <Repeat2 size={20} />
+              </button>
+              <label>
+                <span>To</span>
+                <select value={to} onChange={(e) => setTo(e.target.value)}>
+                  {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="scan-fx-result" aria-live="polite">
+              <span>{Number(amount) || 0} {from}</span>
+              <strong>{converted == null ? '需要更新匯率' : (Number(amount) || 0) === 0 ? '輸入金額以計算' : `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${to}`}</strong>
+              <small>{fx?.source ? `Source: ${fx.source}` : 'Using saved or fallback app rates'}</small>
+            </div>
+            <div className="scan-fx-actions">
+              <button className="secondary" type="button" onClick={() => { setFrom(mockReceipt.currency); setTo('HKD'); }}>使用旅程貨幣</button>
+              <button className="primary" type="button" disabled={busy === 'fx'} onClick={handleFxRefresh}>
+                <RefreshCw size={16} className={busy === 'fx' ? 'spin' : ''} /> 更新匯率
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {batch.length > 0 && (
         <div ref={batchContainerRef} className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal sheet">

@@ -123,3 +123,15 @@ export async function amendReceipt(
   );
   return data;
 }
+
+export async function testProvider(session: AdminSession, provider: string): Promise<{ ok: boolean; provider: string; status?: { status: string; message?: string } }> {
+  const data = await parseJson<any>(await fetch(adminDataUrl('/api/test-provider'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ provider }),
+  }));
+  return data;
+}
