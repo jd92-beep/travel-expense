@@ -424,25 +424,23 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
               </select>
             </label>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '10px', alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#4B5563', fontWeight: 800, minWidth: 0 }}>
-              <input
-                type="checkbox"
-                checked={inviteCreatePerson}
-                onChange={(e) => setInviteCreatePerson(e.target.checked)}
-                style={{ flexShrink: 0 }}
-              />
-              同時加入分帳名單
-            </label>
-            <button
-              type="button"
-              onClick={addSharingInvite}
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', minHeight: '40px', padding: '0 18px', border: 0, borderRadius: '10px', background: '#2D6E48', color: 'white', fontSize: '13px', fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}
-            >
-              <Plus size={15} />
-              加入邀請
-            </button>
-          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#4B5563', fontWeight: 800 }}>
+            <input
+              type="checkbox"
+              checked={inviteCreatePerson}
+              onChange={(e) => setInviteCreatePerson(e.target.checked)}
+              style={{ flexShrink: 0, width: '16px', height: '16px' }}
+            />
+            <span>同時加入分帳名單</span>
+          </label>
+          <button
+            type="button"
+            onClick={addSharingInvite}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%', minHeight: '42px', border: 0, borderRadius: '10px', background: '#2D6E48', color: 'white', fontSize: '13px', fontWeight: 900, cursor: 'pointer' }}
+          >
+            <Plus size={15} />
+            加入邀請
+          </button>
           {sharingInvites.length > 0 && (
             <div style={{ display: 'grid', gap: '8px' }}>
               {sharingInvites.map((invite) => (

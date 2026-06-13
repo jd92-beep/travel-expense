@@ -151,10 +151,10 @@ export function App() {
     const end = d.toISOString().slice(0, 10);
     const placeholderTrip = createTripProfile({
       name: '我嘅新旅程 📓',
-      destinationSummary: '日本',
+      destinationSummary: '未設定目的地',
       startDate: today,
       endDate: end,
-      budget: 50000,
+      budget: 0,
       currency: 'JPY',
     });
     setSkippedGuide(true);
