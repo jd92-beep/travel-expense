@@ -27,6 +27,9 @@
 5. **Updated verification coverage**:
    - `scripts/verify-supabase-migrations.mjs` now checks receipt photo storage idempotency, role downgrade protection, and shared receipt version conflict/increment logic.
    - `scripts/verify-shared-ledger-contract.mjs` now checks the hardening migration and both app surfaces.
+6. **Removed GitHub Pages Node 20 action warning**:
+   - Upgraded `.github/workflows/deploy.yml` from `actions/configure-pages@v5`, `actions/upload-pages-artifact@v4`, and `actions/deploy-pages@v4` to `@v6`, `@v5`, and `@v5` respectively.
+   - The new tags are the Node 24-generation Pages actions and should stop the Node.js 20 deprecation annotation on the next Pages deploy.
 
 ## Verified
 - Live Supabase migration list includes `20260613044116_receipt_photo_storage` ✅
@@ -44,6 +47,7 @@
 - `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:history` ✅ (8/8)
 - `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:settings` ✅ (9 passed, 1 skipped)
 - `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:scan` ✅ (1/1)
+- Ruby/Psych YAML parse for `.github/workflows/*.yml` ✅
 
 ## Pending Tasks
 

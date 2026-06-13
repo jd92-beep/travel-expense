@@ -2,6 +2,7 @@
 
 ## 2026-06-13
 
+- Upgraded the GitHub Pages workflow's official Pages actions to the Node 24 generation: `actions/configure-pages@v6`, `actions/upload-pages-artifact@v5`, and `actions/deploy-pages@v5`, removing the Node.js 20 deprecation warning from the Pages deploy path.
 - Completed the compact pending-task handoff from the external AI pass: the Supabase `receipt-photos` Storage bucket migration is now idempotent and applied to live project `fbnnjoahvtdrnigevrtw` as `20260613044116_receipt_photo_storage`.
 - Added and applied shared-ledger hardening migration `20260613044208_harden_shared_invites_and_receipt_versions`: accepting duplicate trip invites no longer downgrades existing higher member roles, and shared receipt updates now reject stale versions with `Receipt version conflict` instead of last-writer-wins overwrites.
 - Updated Compact and React Supabase receipt payloads to send receipt `version` through the shared-trip RPC contract.
