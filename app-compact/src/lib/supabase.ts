@@ -673,6 +673,53 @@ export async function ensureSupabaseProfile(session: Session, state: AppState): 
   if (error) throw error;
 }
 
+// Persist party/split data into the trip-scoped table so shared-trip members
+// (who cannot read the owner's private profiles.app_settings blob) can see the
+// participants and ratios. RLS restricts writes to owners/admins; we mirror
+// that guard client-side and tolerate DBs that predate the table.
+async function upsertSupabaseAccountingPeople(
+  supabase: SupabaseClient,
+  state: AppState,
+  trip: TripProfile,
+): Promise<void> {
+  const tripUuid = cleanUuid(trip.supabaseId);
+  if (!tripUuid) return;
+  const role = trip.sharing?.role;
+  if (role && role !== 'owner' && role !== 'admin') return;
+  const persons = (state.persons || []).filter((person) => person.id);
+  if (!persons.length) return;
+  const nowIso = new Date().toISOString();
+  const rows = persons.map((person) => ({
+    trip_id: tripUuid,
+    person_id: person.id,
+    name: person.name || person.id,
+    emoji: person.emoji || null,
+    color: person.color || null,
+    share_ratio: Number(state.shareRatios?.[person.id] ?? 1),
+    archived: false,
+    updated_at: nowIso,
+  }));
+  const { error } = await withTimeout(
+    supabase
+      .from('trip_accounting_people')
+      .upsert(rows, { onConflict: 'trip_id,person_id' })
+  );
+  if (error) {
+    if (isMissingSharingTableError(error)) return;
+    throw error;
+  }
+  const activeIds = persons.map((person) => JSON.stringify(person.id)).join(',');
+  const { error: archiveError } = await withTimeout(
+    supabase
+      .from('trip_accounting_people')
+      .update({ archived: true, updated_at: nowIso })
+      .eq('trip_id', tripUuid)
+      .eq('archived', false)
+      .not('person_id', 'in', `(${activeIds})`)
+  );
+  if (archiveError && !isMissingSharingTableError(archiveError)) throw archiveError;
+}
+
 export async function pushSupabaseSettings(session: Session, state: AppState): Promise<void> {
   const supabase = getSupabaseClient();
   if (!supabase) return;
@@ -684,6 +731,10 @@ export async function pushSupabaseSettings(session: Session, state: AppState): P
       .eq('id', session.user.id)
   );
   if (error) throw error;
+  // Mirror party/split data to the trip-scoped table for shared-trip members.
+  await upsertSupabaseAccountingPeople(supabase, state, activeTrip(state)).catch((err) => {
+    console.warn('[supabase] accounting people sync failed:', err instanceof Error ? err.message : String(err));
+  });
 }
 
 async function findTripUuid(supabase: SupabaseClient, userId: string, trip: TripProfile): Promise<string> {
