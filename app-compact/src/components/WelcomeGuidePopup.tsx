@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Compass, Sparkles, Calendar, DollarSign, MapPin, Loader2, ArrowRight, Info, Check, Mail, Plus, Trash2, Users } from 'lucide-react';
+import { useState, type CSSProperties } from 'react';
+import { Compass, Sparkles, Calendar, DollarSign, MapPin, Loader2, ArrowRight, Info, Check, Mail, Plus, Minus, Trash2, Users } from 'lucide-react';
 import { parseTripParagraph } from '../lib/ai';
 import { createTripProfile, normalizeTripIntelligence } from '../domain/trip/normalize';
 import type { AppState, Person, TripProfile, TripSharingInviteDraft } from '../lib/types';
@@ -37,6 +37,32 @@ const WEATHER_PREFERENCE_OPTIONS = [
   { value: 'uv', label: 'UV · 防曬' },
 ] as const;
 
+// Shared field styling — full width + border-box so text never overflows a column.
+const fieldInputStyle: CSSProperties = {
+  width: '100%',
+  boxSizing: 'border-box',
+  minWidth: 0,
+  padding: '10px 12px',
+  border: '1px solid rgba(139, 115, 85, 0.25)',
+  borderRadius: '10px',
+  fontSize: '13px',
+  outline: 'none',
+  background: 'white',
+};
+
+const stepperBtnStyle = (disabled: boolean): CSSProperties => ({
+  width: '34px',
+  height: '34px',
+  display: 'grid',
+  placeItems: 'center',
+  border: '1px solid rgba(30, 77, 107, 0.2)',
+  borderRadius: '10px',
+  background: disabled ? 'rgba(0, 0, 0, 0.04)' : 'white',
+  color: disabled ? '#C5CBD2' : '#1E4D6B',
+  cursor: disabled ? 'default' : 'pointer',
+  flexShrink: 0,
+});
+
 function makeGuidePersons(count: number, current: Array<{ name: string; ratio: string }> = []) {
   return Array.from({ length: Math.max(1, Math.min(8, count)) }, (_, idx) => ({
     name: current[idx]?.name || `User ${idx + 1}`,
@@ -64,7 +90,6 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   });
   const [budget, setBudget] = useState('50000');
   const [currency, setCurrency] = useState('JPY');
-  const [partySize, setPartySize] = useState('1');
   const [guidePersons, setGuidePersons] = useState(() => makeGuidePersons(1));
   const [tripStyle, setTripStyle] = useState<(typeof TRIP_STYLE_OPTIONS)[number]['value']>('balanced');
   const [homeCity, setHomeCity] = useState('Hong Kong');
@@ -109,9 +134,9 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
     }
   }
 
-  function updatePartySize(value: string) {
-    const count = Math.max(1, Math.min(8, Number(value) || 1));
-    setPartySize(String(count));
+  const partyCount = guidePersons.length;
+  function setPartyCount(next: number) {
+    const count = Math.max(1, Math.min(8, Math.round(next) || 1));
     setGuidePersons((current) => makeGuidePersons(count, current));
   }
 
@@ -291,35 +316,46 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
           </div>
         )}
 
-        <div style={{ display: 'grid', gap: '12px', padding: '14px', background: 'rgba(30, 77, 107, 0.04)', border: '1px solid rgba(30, 77, 107, 0.10)', borderRadius: '16px', marginBottom: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-            <div>
+        <div style={{ display: 'grid', gap: '14px', padding: '16px', background: 'rgba(30, 77, 107, 0.04)', border: '1px solid rgba(30, 77, 107, 0.10)', borderRadius: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
               <strong style={{ display: 'block', fontSize: '13px', color: '#1E4D6B', fontWeight: 900 }}>旅伴與分帳比例</strong>
               <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 700 }}>共同支出會按比例自動計算，例如 1:1 或 2:1。</span>
             </div>
-            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800, minWidth: '88px' }}>
-              人數
-              <input
-                value={partySize}
-                onChange={(e) => updatePartySize(e.target.value)}
-                type="number"
-                min={1}
-                max={8}
-                style={{ padding: '8px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
-              />
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>人數</span>
+              <button
+                type="button"
+                aria-label="減少人數"
+                disabled={partyCount <= 1}
+                onClick={() => setPartyCount(partyCount - 1)}
+                style={stepperBtnStyle(partyCount <= 1)}
+              >
+                <Minus size={16} />
+              </button>
+              <span style={{ minWidth: '24px', textAlign: 'center', fontSize: '16px', fontWeight: 900, color: '#1E4D6B' }}>{partyCount}</span>
+              <button
+                type="button"
+                aria-label="增加人數"
+                disabled={partyCount >= 8}
+                onClick={() => setPartyCount(partyCount + 1)}
+                style={stepperBtnStyle(partyCount >= 8)}
+              >
+                <Plus size={16} />
+              </button>
+            </div>
           </div>
           <div style={{ display: 'grid', gap: '8px' }}>
             {guidePersons.map((person, idx) => (
-              <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 86px', gap: '8px', alignItems: 'end' }}>
-                <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+              <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 88px', gap: '8px', alignItems: 'end' }}>
+                <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800, minWidth: 0 }}>
                   {idx === 0 ? '你嘅顯示名稱' : `旅伴 ${idx + 1} 名稱`}
                   <input
                     value={person.name}
                     onChange={(e) => updateGuidePerson(idx, { name: e.target.value })}
                     type="text"
                     placeholder={`例如 User ${idx + 1}`}
-                    style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+                    style={fieldInputStyle}
                   />
                 </label>
                 <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
@@ -330,7 +366,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                     type="number"
                     min={0}
                     step="0.5"
-                    style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+                    style={fieldInputStyle}
                   />
                 </label>
               </div>
@@ -349,54 +385,63 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             </div>
             <span style={{ padding: '5px 9px', borderRadius: '999px', background: 'white', border: '1px solid rgba(45, 110, 72, 0.14)', color: '#2D6E48', fontSize: '11px', fontWeight: 900 }}>{sharingInvites.length} invites</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 0.9fr) 96px', gap: '8px', alignItems: 'end' }}>
-            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
-              Email
-              <input
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                type="email"
-                placeholder="friend@example.com"
-                style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
-              />
-            </label>
-            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+          <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
+            Email
+            <input
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSharingInvite(); } }}
+              type="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="friend@example.com"
+              style={fieldInputStyle}
+            />
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800, minWidth: 0 }}>
               顯示名稱
               <input
                 value={inviteName}
                 onChange={(e) => setInviteName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSharingInvite(); } }}
                 type="text"
                 placeholder="例如 Natalie"
-                style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+                style={fieldInputStyle}
               />
             </label>
-            <button
-              type="button"
-              onClick={addSharingInvite}
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', minHeight: '38px', border: 0, borderRadius: '10px', background: '#2D6E48', color: 'white', fontSize: '12px', fontWeight: 900, cursor: 'pointer' }}
-            >
-              <Plus size={14} />
-              Add
-            </button>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800, minWidth: 0 }}>
+              權限角色
+              <select
+                aria-label="邀請角色"
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as TripSharingInviteDraft['role'])}
+                style={{ ...fieldInputStyle, fontWeight: 800 }}
+              >
+                <option value="editor">Editor · 可記帳</option>
+                <option value="viewer">Viewer · 只讀</option>
+              </select>
+            </label>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#4B5563', fontWeight: 800 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '10px', alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#4B5563', fontWeight: 800, minWidth: 0 }}>
               <input
                 type="checkbox"
                 checked={inviteCreatePerson}
                 onChange={(e) => setInviteCreatePerson(e.target.checked)}
+                style={{ flexShrink: 0 }}
               />
               同時加入分帳名單
             </label>
-            <select
-              aria-label="邀請角色"
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as TripSharingInviteDraft['role'])}
-              style={{ padding: '8px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '12px', outline: 'none', background: 'white', fontWeight: 800 }}
+            <button
+              type="button"
+              onClick={addSharingInvite}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', minHeight: '40px', padding: '0 18px', border: 0, borderRadius: '10px', background: '#2D6E48', color: 'white', fontSize: '13px', fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}
             >
-              <option value="editor">Editor · 可記帳</option>
-              <option value="viewer">Viewer · 只讀</option>
-            </select>
+              <Plus size={15} />
+              加入邀請
+            </button>
           </div>
           {sharingInvites.length > 0 && (
             <div style={{ display: 'grid', gap: '8px' }}>
@@ -424,7 +469,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             <strong style={{ display: 'block', fontSize: '13px', color: '#A83030', fontWeight: 900 }}>個人化旅行偏好</strong>
             <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 700 }}>用嚟設定旅程風格、預設天氣提醒同出發城市；不會保存任何 API key。</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
             <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
               旅行風格
               <select
@@ -448,7 +493,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
               />
             </label>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
             <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
               天氣偏好
               <select
@@ -645,7 +690,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
         {/* Tab 2: Manual Form */}
         {activeTab === 'manual' && (
           <div style={{ display: 'grid', gap: '14px', animation: 'page-rise 0.2s ease-out' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
               <label style={{ display: 'grid', gap: '6px', fontSize: '12px', fontWeight: 800, color: '#374151' }}>
                 旅行名稱
                 <input
@@ -668,7 +713,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
               </label>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
               <label style={{ display: 'grid', gap: '6px', fontSize: '12px', fontWeight: 800, color: '#374151' }}>
                 開始日期
                 <input
@@ -689,7 +734,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
               </label>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
               <label style={{ display: 'grid', gap: '6px', fontSize: '12px', fontWeight: 800, color: '#374151' }}>
                 預算金額
                 <div style={{ position: 'relative' }}>
@@ -699,7 +744,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                     onChange={(e) => setBudget(e.target.value)}
                     type="number"
                     placeholder="50000"
-                    style={{ width: '100%', padding: '10px 12px 10px 24px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px 10px 24px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
                   />
                 </div>
               </label>
