@@ -41,7 +41,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
     schemaVersion: 3,
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#stats');
   await expect(page.getByText('預算使用分析').first()).toBeVisible();
   await expect(page.getByText('4 筆紀錄')).toBeVisible();
   await expect(page.locator('.stats-command-title-row')).toContainText('預算使用分析');
