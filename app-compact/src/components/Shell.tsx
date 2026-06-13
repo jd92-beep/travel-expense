@@ -427,6 +427,7 @@ export function Shell({
                 activeTripId={trip?.id || ''}
                 onSelect={handleSwitchTrip}
                 onCreateNew={onOpenNewTripWizard}
+                align="right"
               />
             </div>
           ) : (

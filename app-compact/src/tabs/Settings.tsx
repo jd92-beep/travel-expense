@@ -855,6 +855,7 @@ export function Settings({
   const [showClearLocalPreview, setShowClearLocalPreview] = useState(false);
   const [deleteConfirmEmailInput, setDeleteConfirmEmailInput] = useState('');
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState('');
   const [backupPreview, setBackupPreview] = useState<BackupImportPreview | null>(null);
   const [tripSharePreview, setTripSharePreview] = useState<TripSharePreview | null>(null);
   const [diagnosticsPreview, setDiagnosticsPreview] = useState<DiagnosticsPreview | null>(null);
@@ -926,24 +927,25 @@ export function Settings({
   };
 
   const handleDeleteAccount = async () => {
-    if (!onClearDeviceData || !onReset) return;
+    if (!onClearDeviceData || !onReset) {
+      setDeleteAccountError('缺少必要參數，無法刪除帳戶。');
+      return;
+    }
     setBusy('永久刪除帳戶');
     setStatus('');
+    setDeleteAccountError('');
     try {
-      // 1. Notion best-effort 歸檔
+      // 1. Notion best-effort 歸檔（只處理私有旅程）
       const privateTrips = (state.trips || []).filter(
         t => t.supabaseId && t.sharing?.role === 'owner' && !t.sharing?.isShared
       );
       for (const trip of privateTrips) {
         if (trip.notionPageId) {
           const notionState = { ...state, activeTripId: trip.id };
-          // Archive trip page
           await notionFetch(notionState, `/pages/${trip.notionPageId}`, {
             method: 'PATCH',
             body: JSON.stringify({ archived: true })
           }).catch((e: any) => console.warn('[Notion] archive trip failed:', e));
-          
-          // Archive receipts
           const receipts = state.receipts.filter(r => r.tripId === trip.id && r.notionPageId);
           for (const receipt of receipts) {
             await archiveReceipt(state, receipt).catch((e: any) => console.warn('[Notion] archive receipt failed:', e));
@@ -951,20 +953,25 @@ export function Settings({
         }
       }
 
-      // 2. 呼叫 Supabase 註銷 RPC (會同時 trigger signOut)
+      // 2. 呼叫 Supabase 註銷 RPC（會刪除 auth.users，共享旅程自動轉移擁有權）
       await supabaseAuth.deleteUserAccount();
 
-      // 3. 清理本地所有資料
+      // 3. 清理本地所有資料 + 重設 app 狀態
       await onClearDeviceData();
-      
-      // 4. 重設 app 狀態為 blank state
       await onReset();
+
+      // 4. 關閉 modal 並強制重新載入（確保 auth gate 重新評估）
       setShowDeleteAccountConfirm(false);
       setDeleteConfirmEmailInput('');
       setStatus('帳戶及私有資料已永久刪除 💨');
+
+      // 強制重新載入確保 auth 狀態同步
+      setTimeout(() => { window.location.reload(); }, 300);
     } catch (err) {
-      console.error(err);
-      setStatus(err instanceof Error ? err.message : '刪除帳戶失敗，請重試');
+      console.error('[DeleteAccount]', err);
+      const msg = err instanceof Error ? err.message : '刪除帳戶失敗，請重試';
+      setDeleteAccountError(msg);
+      setStatus(msg);
     } finally {
       setBusy('');
     }
@@ -3057,6 +3064,11 @@ export function Settings({
             <p className="muted" style={{ fontSize: '12px' }}>
               💡 對於同其他人共享緊嘅旅程，相關嘅 Supabase 同 Notion 數據將會被保留，等其他成員仲可以繼續存取 shared trip 資訊。
             </p>
+            {deleteAccountError && (
+              <p style={{ color: '#dc2626', fontWeight: 600, fontSize: '13px', background: 'rgba(220,38,38,0.08)', padding: '8px 12px', borderRadius: '8px', marginTop: '8px' }}>
+                ❌ {deleteAccountError}
+              </p>
+            )}
             <div style={{ marginTop: '12px', width: '100%' }}>
               <label style={{ display: 'grid', gap: '4px', fontSize: '12px', fontWeight: 800, color: '#374151', textAlign: 'left' }}>
                 請輸入你嘅 Email 帳號以確認刪除:

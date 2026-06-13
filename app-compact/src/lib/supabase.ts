@@ -638,7 +638,8 @@ export function useSupabaseAuth() {
     if (!supabase) throw new Error('Supabase is not configured');
     const { error: rpcError } = await supabase.rpc('delete_own_user_account');
     if (rpcError) throw rpcError;
-    await signOut();
+    // signOut is best-effort — user may already be deleted from auth
+    try { await signOut(); } catch { /* ignore — auth session already invalidated */ }
   }, [supabase, signOut]);
 
   return {
