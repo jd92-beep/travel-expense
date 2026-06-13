@@ -220,7 +220,7 @@ APP_BUILD    line 1774  — bump 一下會觸發更新提示
 4. **Last-write-wins** — 多 device 同時改有機會 overwrite，冇 conflict resolution
 5. **冇收據相留底** — Scan 完即 discard，唔上傳
 6. **Hardcoded ITINERARY** — 改寫死行程要直接編 constant；user override 經 `customItinerary` JSON
-7. **2000-char Notion meta limit** — 大 `customItinerary` push 唔晒，會標 `customItineraryTooLarge: true`
+7. ~~**2000-char Notion meta limit**~~ — 已修（2026-06-13）：settings JSON 而家寫入 `__meta_settings__` page 嘅 code block（page children 無 property 嘅 2000 字 cap），pull 時 block 優先、`note` property 做 fallback。React + Compact 兩邊都改咗。
 
 ## Git Workflow (MANDATORY)
 

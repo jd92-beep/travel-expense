@@ -1349,6 +1349,52 @@ export async function pushTripPage(state: AppState, trip: TripProfile): Promise<
   return { ...currentTrip, notionPageId: page.id };
 }
 
+// Settings payloads (esp. customItinerary) can exceed Notion's ~2000-char
+// rich_text property cap, which silently truncated the `note` field. Store the
+// full JSON in a page-level code block instead — page children have no such cap.
+async function replaceSettingsBlocks(state: AppState, pageId: string, json: string): Promise<void> {
+  try {
+    const existing = await notionFetch<{ results?: Array<{ id: string; type?: string }> }>(
+      state,
+      `/blocks/${pageId}/children?page_size=100`,
+      { method: 'GET' },
+    );
+    for (const block of existing.results || []) {
+      if (block.type === 'code') {
+        await notionFetch(state, `/blocks/${block.id}`, { method: 'DELETE' }).catch(() => null);
+      }
+    }
+  } catch (err) {
+    console.warn('[notion] settings block cleanup failed:', err);
+  }
+  await notionFetch(state, `/blocks/${pageId}/children`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      children: [{
+        object: 'block',
+        type: 'code',
+        code: { language: 'json', rich_text: richTextChunks(json) },
+      }],
+    }),
+  });
+}
+
+async function readSettingsBlocks(state: AppState, pageId: string): Promise<string> {
+  try {
+    const res = await notionFetch<{ results?: Array<{ type?: string; code?: { rich_text?: any[] } }> }>(
+      state,
+      `/blocks/${pageId}/children?page_size=100`,
+      { method: 'GET' },
+    );
+    const codeBlock = (res.results || []).find((block) => block.type === 'code' && block.code?.rich_text?.length);
+    if (!codeBlock?.code) return '';
+    return readAllText(codeBlock.code, 'rich_text');
+  } catch (err) {
+    console.warn('[notion] readSettingsBlocks failed:', err);
+    return '';
+  }
+}
+
 export async function pushSettingsMeta(state: AppState): Promise<void> {
   const activeDb = getActiveNotionDb(state);
   if (!activeDb) return;
@@ -1380,15 +1426,18 @@ export async function pushSettingsMeta(state: AppState): Promise<void> {
     [propName(schema, 'note')]: { rich_text: richTextChunks(JSON.stringify(payload)) },
     [propName(schema, 'updatedAt')]: { date: { start: new Date().toISOString() } },
   };
+  const fullJson = JSON.stringify(payload);
   const pageId = await findPageBySourceId(state, schema, '__meta_settings__').catch(() => null);
   if (pageId) {
     await notionFetch(state, `/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ properties }) });
+    await replaceSettingsBlocks(state, pageId, fullJson);
     return;
   }
-  await notionFetch(state, '/pages', {
+  const created = await notionFetch<{ id?: string }>(state, '/pages', {
     method: 'POST',
     body: JSON.stringify({ parent: { database_id: activeDb }, properties }),
   });
+  if (created?.id) await replaceSettingsBlocks(state, created.id, fullJson);
 }
 
 export async function pullSettingsMeta(state: AppState): Promise<Partial<AppState> | null> {
@@ -1400,7 +1449,12 @@ export async function pullSettingsMeta(state: AppState): Promise<Partial<AppStat
   try {
     const page = await notionFetch<{ properties?: Record<string, any> }>(state, `/pages/${pageId}`, { method: 'GET' });
     const props = page.properties || {};
-    const rawNote = readAllText(readProp(props, 'note', schema), 'rich_text');
+    // Prefer the full-fidelity code block; fall back to the legacy `note`
+    // property (which Notion may have truncated at ~2000 chars).
+    const blockJson = await readSettingsBlocks(state, pageId);
+    const rawNote = blockJson && blockJson.trim().startsWith('{')
+      ? blockJson
+      : readAllText(readProp(props, 'note', schema), 'rich_text');
     if (rawNote && rawNote.trim().startsWith('{')) {
       const payload = JSON.parse(rawNote);
       return normalizeAiModelSettings({
