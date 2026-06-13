@@ -10,6 +10,8 @@ const files = [
   'supabase/migrations/20260526101000_tighten_shared_private_rows.sql',
   'supabase/migrations/20260612153000_trip_sharing_dual_backend.sql',
   'supabase/migrations/20260612165000_shared_ledger_receipt_rpc.sql',
+  'supabase/migrations/20260613000000_receipt_photo_storage.sql',
+  'supabase/migrations/20260613001000_harden_shared_invites_and_receipt_versions.sql',
 ];
 
 const sql = files
@@ -86,6 +88,10 @@ const requiredPatterns = [
     re: /if v_invite\.expires_at <= now\(\) then[\s\S]*?set status = 'expired'[\s\S]*?status := 'expired'[\s\S]*?return next;/i,
   },
   {
+    name: 'trip invite accept keeps higher existing member roles',
+    re: /on conflict \(trip_id, user_id\)[\s\S]*?private\.trip_member_role_rank\(trip_members\.role\) >= private\.trip_member_role_rank\(excluded\.role\)[\s\S]*?then trip_members\.role/i,
+  },
+  {
     name: 'trip sharing security definer RPCs revoke public and anon execute',
     re: /revoke execute on function public\.create_trip_invite\(uuid, text, text, integer\) from public, anon[\s\S]*?revoke execute on function public\.leave_trip\(uuid\) from public, anon/i,
   },
@@ -106,8 +112,20 @@ const requiredPatterns = [
     re: /if v_existing\.id is not null and v_existing\.owner_id <> v_user then[\s\S]*?Only the original receipt owner can update this receipt/i,
   },
   {
+    name: 'shared ledger receipt upsert rejects stale expected versions',
+    re: /v_expected_version[\s\S]*?coalesce\(v_existing\.version, 1\) <> v_expected_version[\s\S]*?Receipt version conflict/i,
+  },
+  {
+    name: 'shared ledger receipt upsert increments receipt version on update',
+    re: /version\s*=\s*coalesce\(v_existing\.version, 1\) \+ 1/i,
+  },
+  {
     name: 'shared ledger receipt upsert creates Notion outbox jobs instead of fake sync',
     re: /insert into public\.receipt_sync_jobs[\s\S]*?'notion'[\s\S]*?'upsert'[\s\S]*?'pending'/i,
+  },
+  {
+    name: 'receipt photo storage bucket migration is idempotent',
+    re: /insert into storage\.buckets[\s\S]*?on conflict \(id\) do nothing[\s\S]*?drop policy if exists "receipt_photos_upload_own" on storage\.objects/i,
   },
   {
     name: 'shared ledger receipt delete only deletes receipts owned by current user',

@@ -863,6 +863,7 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     map_url: receipt.mapUrl || null,
     notion_page_id: null,
     notion_database_id: null,
+    version: Math.max(1, Number(receipt.version) || 1),
     deleted_at: null,
     created_at: isoFromMs(receipt.createdAt),
     updated_at: isoFromMs(receipt.updatedAt),
@@ -889,6 +890,34 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
   if (error) throw error;
   const tripBySupabaseId = new Map([[tripUuid, syncedTrip]]);
   return rowToReceipt(data as SupabaseReceiptRow, { ...state, trips: (state.trips || []).map((item) => item.id === syncedTrip.id ? syncedTrip : item) }, tripBySupabaseId, receipt.id, userId);
+}
+
+export async function uploadReceiptPhoto(
+  session: Session,
+  receiptId: string,
+  base64: string,
+  mime = 'image/jpeg',
+): Promise<{ storagePath: string; publicUrl: string }> {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error('Supabase not configured');
+  const bin = atob(base64.includes(',') ? base64.split(',')[1] : base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: mime });
+  const storagePath = `${session.user.id}/${receiptId}.jpg`;
+  const { error: uploadError } = await supabase.storage
+    .from('receipt-photos')
+    .upload(storagePath, blob, { upsert: true, contentType: mime });
+  if (uploadError) throw uploadError;
+  const { data: urlData } = supabase.storage
+    .from('receipt-photos')
+    .getPublicUrl(storagePath);
+  const { error: metadataError } = await supabase.from('receipt_photos').upsert(
+    { receipt_id: receiptId, owner_id: session.user.id, storage_bucket: 'receipt-photos', storage_path: storagePath, mime_type: mime, file_size: bytes.length },
+    { onConflict: 'receipt_id' },
+  );
+  if (metadataError) throw metadataError;
+  return { storagePath, publicUrl: urlData.publicUrl };
 }
 
 export async function archiveSupabaseReceipt(session: Session, state: AppState, receipt: Receipt): Promise<void> {
@@ -976,8 +1005,33 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   for (const trip of trips) {
     if (trip.supabaseId) tripBySupabaseId.set(trip.supabaseId, trip);
   }
-  const receipts = (receiptsResult.data || [])
-    .map((row) => rowToPulledReceipt(row as SupabaseReceiptRow, state, tripBySupabaseId, session.user.id))
+  const receiptRows = (receiptsResult.data || []) as SupabaseReceiptRow[];
+  const receiptIds = receiptRows.map((row) => row.id).filter(Boolean);
+  let photoMap = new Map<string, string>();
+  if (receiptIds.length) {
+    const { data: photoData, error: photoError } = await withTimeout(
+      supabase.from('receipt_photos').select('receipt_id,storage_path').in('receipt_id', receiptIds),
+    );
+    if (photoError && !isMissingSharingTableError(photoError)) throw photoError;
+    if (photoData) {
+      for (const row of photoData as { receipt_id: string; storage_path: string }[]) {
+        if (row.receipt_id && row.storage_path) photoMap.set(row.receipt_id, row.storage_path);
+      }
+    }
+  }
+  const receipts = receiptRows
+    .map((row) => {
+      const receipt = rowToPulledReceipt(row, state, tripBySupabaseId, session.user.id);
+      if (!receipt) return null;
+      const storagePath = photoMap.get(row.id);
+      if (storagePath) {
+        const { data: urlData } = supabase.storage.from('receipt-photos').getPublicUrl(storagePath);
+        receipt.photoUrl = urlData.publicUrl;
+        receipt._photoSyncedToSupabase = true;
+        receipt.supabasePhotoPath = storagePath;
+      }
+      return receipt;
+    })
     .filter((receipt): receipt is Receipt => !!receipt);
   let settings = rowToSettings(profileResult.data as SupabaseProfileRow | null);
   if (peopleRows.length) {

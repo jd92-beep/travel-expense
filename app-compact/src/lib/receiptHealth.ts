@@ -35,5 +35,6 @@ export function receiptHasLocalPhoto(receipt: Receipt): boolean {
 export function receiptPhotoNeedsSync(receipt: Receipt): boolean {
   if (!receiptHasLocalPhoto(receipt)) return false;
   if (receipt._photoSyncedToNotion || receipt.notionFileUploadId || /^https?:\/\//i.test(String(receipt.photoUrl || ''))) return false;
+  if (receipt._photoSyncedToSupabase || receipt.supabasePhotoPath) return false;
   return receipt.syncStatus !== 'synced' || !receipt.photoUrl;
 }

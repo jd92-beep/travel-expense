@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 import { activeTrip } from '../domain/trip/normalize';
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
-import { archiveSupabaseReceipt, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
+import { archiveSupabaseReceipt, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { mergePulledData } from './syncMerge';
 import { rawReceiptSourceId } from './syncMerge';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
@@ -131,6 +131,8 @@ export function useSyncEngine(
             ...candidate,
             notionPageId: receipt.notionPageId || candidate.notionPageId,
             sourceId: receipt.sourceId || candidate.sourceId,
+            _photoSyncedToSupabase: candidate._photoSyncedToSupabase || receipt._photoSyncedToSupabase,
+            supabasePhotoPath: receipt.supabasePhotoPath || candidate.supabasePhotoPath,
             syncStatus: hasSupabaseSession(capturedSession) || canUseNotionMirror(current, false, (capturedSession as any)?.user?.email || null) ? 'queued' : 'local',
           };
         }
@@ -139,7 +141,7 @@ export function useSyncEngine(
           : receipt.ledgerSyncStatus === 'notion_failed' || receipt.ledgerSyncStatus === 'conflict'
             ? 'failed'
             : 'synced';
-        return { ...candidate, ...receipt, syncStatus: nextSyncStatus };
+        return { ...candidate, ...receipt, _photoSyncedToSupabase: candidate._photoSyncedToSupabase || receipt._photoSyncedToSupabase, supabasePhotoPath: receipt.supabasePhotoPath || candidate.supabasePhotoPath, syncStatus: nextSyncStatus };
       }),
     }));
   }, [setState]);
@@ -197,6 +199,15 @@ export function useSyncEngine(
       let synced = supabaseSession
         ? await upsertSupabaseReceipt(supabaseSession, current, { ...receipt, syncStatus: 'syncing' })
         : { ...receipt, syncStatus: 'syncing' as const };
+      if (receipt.photoThumb && !receipt._photoSyncedToSupabase && supabaseSession) {
+        try {
+          const receiptUuid = synced.supabaseId || synced.id;
+          const { publicUrl, storagePath } = await uploadReceiptPhoto(supabaseSession, receiptUuid, receipt.photoThumb);
+          synced = { ...synced, photoUrl: publicUrl, supabasePhotoPath: storagePath, _photoSyncedToSupabase: true };
+        } catch (photoErr) {
+          console.warn('[SyncEngine] Supabase photo upload failed:', photoErr);
+        }
+      }
       if (hasNotionSync && !sharedLedger) {
         const beforeNotionPageId = synced.notionPageId;
         synced = await pushReceipt(current, synced);

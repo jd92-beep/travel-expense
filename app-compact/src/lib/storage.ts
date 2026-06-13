@@ -163,6 +163,8 @@ export function stripPortableBackupState(state: AppState): Partial<AppState> {
       notionFileUploadId: _notionFileUploadId,
       _photoSyncedToNotion,
       _photoBodyBlockAdded,
+      _photoSyncedToSupabase,
+      supabasePhotoPath,
       sourceId: _sourceId,
       syncStatus: _syncStatus,
       photoUrl: _photoUrl,

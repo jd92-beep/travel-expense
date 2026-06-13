@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-13
+
+- Completed the compact pending-task handoff from the external AI pass: the Supabase `receipt-photos` Storage bucket migration is now idempotent and applied to live project `fbnnjoahvtdrnigevrtw` as `20260613044116_receipt_photo_storage`.
+- Added and applied shared-ledger hardening migration `20260613044208_harden_shared_invites_and_receipt_versions`: accepting duplicate trip invites no longer downgrades existing higher member roles, and shared receipt updates now reject stale versions with `Receipt version conflict` instead of last-writer-wins overwrites.
+- Updated Compact and React Supabase receipt payloads to send receipt `version` through the shared-trip RPC contract.
+- Hardened Compact receipt photo sync so Storage upload metadata failures surface as real errors rather than fake successful sync.
+- Extended Supabase migration and shared-ledger contract verification scripts to cover receipt photo Storage idempotency, invite role protection, shared receipt version conflicts, and version increments.
+- Verification passed with live Supabase migration-list checks, `node scripts/verify-supabase-migrations.mjs`, `node scripts/verify-shared-ledger-contract.mjs`, `app-compact npm run typecheck`, `app-react npm run typecheck`, `app-compact npm run build`, `app-compact npm run security:scan`, `app-react npm run db:policy:scan`, `app-compact npm run smoke:shared-ledger`, and served Compact smokes for mobile layout, History, Settings, and Scan.
+
 ## 2026-06-12
 
 - Added bracketed translations to AI receipt scan (OCR) and text parsing results. The LLM prompts in `app-compact` and `app-react` now instruct the model to preserve foreign language values (such as Korean or Japanese) for fields like store, address, items, and notes, and append the English/Traditional Chinese translation in brackets right next to them (e.g., `편의점 (Convenience Store)`).

@@ -815,6 +815,7 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     map_url: receipt.mapUrl || null,
     notion_page_id: null,
     notion_database_id: null,
+    version: Math.max(1, Number(receipt.version) || 1),
     deleted_at: null,
     created_at: isoFromMs(receipt.createdAt),
     updated_at: isoFromMs(receipt.updatedAt),

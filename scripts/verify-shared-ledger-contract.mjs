@@ -20,6 +20,15 @@ const checks = [
       ['authenticated execute granted', /grant execute on function public\.upsert_shared_trip_receipt[\s\S]*?to authenticated[\s\S]*?grant execute on function public\.delete_shared_trip_receipt[\s\S]*?to authenticated/i],
     ],
   },
+  {
+    file: 'supabase/migrations/20260613001000_harden_shared_invites_and_receipt_versions.sql',
+    expectations: [
+      ['accept invite keeps higher existing member roles', /private\.trip_member_role_rank\(trip_members\.role\) >= private\.trip_member_role_rank\(excluded\.role\)/i],
+      ['upsert rejects stale receipt versions', /Receipt version conflict/i],
+      ['upsert increments receipt versions', /version\s*=\s*coalesce\(v_existing\.version, 1\) \+ 1/i],
+      ['upsert queues Notion outbox with version', /jsonb_build_object\([\s\S]*?'version', v_receipt\.version/i],
+    ],
+  },
   ...['app-react', 'app-compact'].flatMap((app) => [
     {
       file: `${app}/src/lib/supabase.ts`,
@@ -28,6 +37,7 @@ const checks = [
         ['ledger sync status maps Notion pending', /notion_sync_status === 'pending'[\s\S]*?return 'notion_pending'/i],
         ['receipt sync status preserves pending queue state', /ledgerSyncStatus === 'notion_pending'[\s\S]*?return 'queued'/i],
         ['shared upsert uses RPC', /\.rpc\('upsert_shared_trip_receipt'/i],
+        ['shared upsert sends receipt version', /version:\s*Math\.max\(1, Number\(receipt\.version\) \|\| 1\)/i],
         ['shared delete uses RPC', /\.rpc\('delete_shared_trip_receipt'/i],
         ['shared receipt save ensures profile exists for outbox owner', /await ensureSupabaseProfile\(session, state\);/i],
       ],
