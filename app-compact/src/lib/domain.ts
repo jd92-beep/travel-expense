@@ -371,7 +371,11 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   }
 
   const balances = persons.map((p, i) => {
-    const shouldPayShared = sumRatio > 0 ? sharedTotal * (ratios[i] / sumRatio) : 0;
+    // If every ratio is 0 (misconfigured), fall back to an equal split so shared expenses
+    // still settle (payers get reimbursed) instead of silently producing zero transfers.
+    const shouldPayShared = sumRatio > 0
+      ? sharedTotal * (ratios[i] / sumRatio)
+      : sharedTotal / persons.length;
     let balance = sharedByPayer[i] - shouldPayShared;
     for (const cp of crossPrivate) {
       if (cp.payerIdx === i) balance += cp.amount;

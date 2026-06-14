@@ -88,8 +88,10 @@ type SupabaseReceiptRow = {
   notion_database_id: string | null;
   notion_sync_status?: string | null;
   notion_sync_error?: string | null;
+  notion_sync_attempts?: number | null;
   notion_last_synced_at?: string | null;
   notion_last_queued_at?: string | null;
+  version?: number | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -477,6 +479,7 @@ function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: Tri
     itemsText: row.items_text || undefined,
     source: 'supabase',
     sourceId: row.source_id || row.id,
+    version: Number(row.version || 1),
     syncStatus: receiptSyncStatusForLedger(ledgerSyncStatus),
     createdAt: msFromIso(row.created_at),
     updatedAt: msFromIso(row.updated_at),
@@ -926,7 +929,7 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
         p_receipt: row,
         p_receipt_id: cleanUuid(receipt.supabaseId),
         p_source_id: row.source_id,
-        p_idempotency_key: `${tripUuid}:${row.source_id}:upsert:${receipt.updatedAt || Date.now()}`,
+        p_idempotency_key: `${tripUuid}:${row.source_id}:upsert:${receipt.updatedAt || receipt.createdAt || 0}`,
       })
       .single());
     if (error) throw error;

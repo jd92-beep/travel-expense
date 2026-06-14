@@ -199,6 +199,8 @@ export function activeTrip(state: AppState): TripProfile {
   return trips.find((trip) => trip.id === state.activeTripId && !trip.archived)
     || trips.find((trip) => trip.active && !trip.archived)
     || trips.find((trip) => !trip.archived)
+    // Last resort: prefer the active/selected trip even if archived, else first — never undefined.
+    || trips.find((trip) => trip.id === state.activeTripId)
     || trips[0];
 }
 
@@ -312,6 +314,8 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
     // Two receipts with the same store/photo keep distinct ids → distinct source_ids →
     // both persist as separate rows (Supabase unique key is (trip_id, source_id)).
     sourceId: receipt.sourceId || receipt.id,
+    // Ensure every receipt carries an explicit version for Supabase optimistic locking.
+    version: receipt.version || 1,
     tripId: trip.id,
     tripLinkSource,
     tripVersion: receipt.tripVersion || trip.version,

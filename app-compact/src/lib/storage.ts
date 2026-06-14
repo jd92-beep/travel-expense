@@ -137,7 +137,17 @@ export function stripSensitiveState<T extends Partial<AppState>>(state: T): T {
     credentialSessionExpiresAt: _credentialSessionExpiresAt,
     ...safeState
   } = state as T & LegacySecretFields;
-  return safeState as T;
+  // Also strip nested sharing-invite tokens — they grant trip access and must never be
+  // persisted to localStorage/IndexedDB. The link is shown once at creation time only.
+  const sanitized = safeState as T & Partial<AppState>;
+  if (Array.isArray(sanitized.trips)) {
+    sanitized.trips = sanitized.trips.map((trip) => {
+      const sharing = trip.sharing;
+      if (!sharing?.invites || !sharing.invites.length) return trip;
+      return { ...trip, sharing: { ...sharing, invites: sharing.invites.map(({ token: _token, ...rest }) => rest) } };
+    });
+  }
+  return sanitized as T;
 }
 
 export function stripPortableBackupState(state: AppState): Partial<AppState> {

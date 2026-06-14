@@ -145,7 +145,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
 
   function addSharingInvite() {
     const email = inviteEmail.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+(\.[^\s@]+)+$/.test(email)) {
       setError('請輸入有效 email 才能加入共享邀請。');
       return;
     }
@@ -220,6 +220,11 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
     if (activeTab === 'ai' && aiDraft) {
       onSave(buildGuideResult(personalizeTrip(aiDraft)));
     } else {
+      // Validate dates instead of letting createTripProfile silently swap them.
+      if (startDate && endDate && endDate < startDate) {
+        setError('結束日期唔可以早過開始日期');
+        return;
+      }
       // Manual creation
       const trip = createTripProfile({
         name: tripName,

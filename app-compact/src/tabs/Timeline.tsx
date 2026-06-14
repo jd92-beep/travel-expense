@@ -519,7 +519,9 @@ function normalizeTimelineTimezone(value?: string): string {
   const zone = String(value || '').trim();
   if (zone === 'JST') return 'Asia/Tokyo';
   if (zone === 'HKT') return 'Asia/Hong_Kong';
-  return zone || 'Asia/Tokyo';
+  if (zone === 'KST') return 'Asia/Seoul';
+  // Neutral home fallback rather than assuming Japan when a day has no timezone.
+  return zone || 'Asia/Hong_Kong';
 }
 
 function datePartsForZone(nowMs: number, timezone: string): { date: string; minutes: number } | null {

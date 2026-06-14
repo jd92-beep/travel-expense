@@ -891,7 +891,7 @@ function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt
     tripId,
     tripVersion: readNumberProp(props, 'tripVersion', schema, { allowLoose: false }),
     originalAmount: readNumberProp(props, 'originalAmount', schema, { allowLoose: false }),
-    originalCurrency: readSelectProp(props, 'currency', schema, { allowLoose: false }) || undefined,
+    originalCurrency: readSelectProp(props, 'originalCurrency', schema, { allowLoose: false }) || readSelectProp(props, 'currency', schema, { allowLoose: false }) || undefined,
     currency: readSelectProp(props, 'currency', schema, { allowLoose: false }) || undefined,
     hkdAmount: readNumberProp(props, 'hkd', schema, { allowLoose: false }),
     mapUrl: readUrlProp(props, 'mapUrl', schema, { allowLoose: false }),

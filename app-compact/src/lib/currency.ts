@@ -95,11 +95,16 @@ export function currencyPrefix(currency: string): string {
   return CURRENCY_PREFIX[code] || `${code} `;
 }
 
+// Currencies with no minor unit (whole-number only). Everything else shows 2 decimals.
+const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'TWD', 'HKD', 'HUF', 'CLP', 'IDR']);
+
 export function formatCurrencyAmount(amount: number, currency: string): string {
   const code = String(currency || '').toUpperCase();
   const prefix = currencyPrefix(code);
-  const rounded = Math.round(Number(amount) || 0).toLocaleString('en-US');
-  return prefix.endsWith(' ') ? `${prefix}${rounded}` : `${prefix} ${rounded}`;
+  const value = Number(amount) || 0;
+  const decimals = ZERO_DECIMAL_CURRENCIES.has(code) ? 0 : 2;
+  const formatted = value.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return prefix.endsWith(' ') ? `${prefix}${formatted}` : `${prefix} ${formatted}`;
 }
 
 export function isCurrencyCode(value: string): value is CurrencyCode {

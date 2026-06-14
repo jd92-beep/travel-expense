@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { SUPPORTED_CURRENCIES } from '../lib/currency';
 import { getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
+import { activeTrip } from '../domain/trip/normalize';
 import type { AppState, CategoryId, PaymentId, Receipt, SplitMode } from '../lib/types';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
 
@@ -32,6 +33,9 @@ export function ReceiptEditor({
   const persons = useMemo(() => getPersons(state), [state]);
   const first = persons[0] || { id: '', name: '' };
   const itinerary = useMemo(() => getItinerary(state), [state]);
+  // Viewers on a shared trip are read-only — they can't save or delete receipts (RLS enforces
+  // this server-side; this prevents a confusing failed write on the client).
+  const viewerReadOnly = activeTrip(state).sharing?.role === 'viewer';
   const currencyForDate = (date?: string) => (
     itinerary.find((day) => day.date === date)?.currency
     || state.tripCurrency
@@ -258,10 +262,12 @@ export function ReceiptEditor({
 
         <div className="modal-actions receipt-editor-actions">
           <div className="receipt-delete-slot">
-            {receipt && onDelete ? <button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button> : null}
+            {receipt && onDelete && !viewerReadOnly ? <button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button> : null}
           </div>
           <div className="receipt-final-actions">
-            <button type="submit" className="primary">儲存</button>
+            {viewerReadOnly
+              ? <span className="muted" style={{ fontSize: '12px', alignSelf: 'center' }}>只可檢視（Viewer 權限）</span>
+              : <button type="submit" className="primary">儲存</button>}
             <button type="button" className="secondary" onClick={onCancel}>取消</button>
           </div>
         </div>

@@ -49,6 +49,9 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
       await auth.signInWithGoogle();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Google 登入失敗');
+    } finally {
+      // Always clear busy — if the OAuth redirect is delayed or blocked the button
+      // would otherwise stay stuck in the loading state forever.
       setBusy(false);
     }
   }

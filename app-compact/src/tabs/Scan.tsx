@@ -269,7 +269,7 @@ export function Scan({
         return;
       }
       openDraft(receipts[0]);
-      if (mountedRef.current) setStatus('語音文字已解析，請確認欄位。');
+      if (mountedRef.current) { setVoiceText(''); setStatus('語音文字已解析，請確認欄位。'); }
     } catch (error) {
       if (mountedRef.current) setStatus(`語音解析失敗：${redactedError(error)}`);
     } finally {
@@ -318,7 +318,7 @@ export function Scan({
         return;
       }
       setBatch(receipts.map((r) => ({ ...r, store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
-      if (mountedRef.current) setStatus(`已解析 ${receipts.length} 筆，請喺 batch confirm 核對。`);
+      if (mountedRef.current) { setEmailText(''); setStatus(`已解析 ${receipts.length} 筆，請喺 batch confirm 核對。`); }
     } catch (error) {
       if (mountedRef.current) setStatus(`Email 解析失敗：${redactedError(error)}`);
     } finally {
@@ -407,12 +407,21 @@ export function Scan({
 
   function saveBatch() {
     if (savingBatch) return;
-    setSavingBatch(true);
     const selected = batch.filter((row) => row.selected !== false).map(({ selected: _selected, ...receipt }) => receipt);
-    onImport(selected);
+    // Block receipts missing store/date/amount even if manually re-selected; save the valid rest.
+    const valid = selected.filter((receipt) => !receiptNeedsReview(receipt));
+    const skipped = selected.length - valid.length;
+    if (!valid.length) {
+      setStatus(skipped ? `有 ${skipped} 筆缺少店名／日期／金額，未能儲存` : '未揀選任何紀錄');
+      return;
+    }
+    setSavingBatch(true);
+    onImport(valid);
     setBatch([]);
     setEmailText('');
-    setStatus(`已儲存 ${selected.length} 筆 email 待確認紀錄。`);
+    setStatus(skipped
+      ? `已儲存 ${valid.length} 筆；略過 ${skipped} 筆缺資料紀錄`
+      : `已儲存 ${valid.length} 筆 email 待確認紀錄。`);
     setSavingBatch(false);
   }
 

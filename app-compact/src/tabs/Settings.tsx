@@ -1009,6 +1009,8 @@ export function Settings({
   // Local state for Trip Manager
   const [managerTripId, setManagerTripId] = useState(currentTrip.id);
   const managedTrip = trips.find(t => t.id === managerTripId) || currentTrip;
+  // Only the owner/admin of a shared trip may delete it (RLS enforces this server-side too).
+  const canDeleteManagedTrip = !managedTrip.sharing || managedTrip.sharing.role === 'owner' || managedTrip.sharing.role === 'admin';
 
   const [mgrName, setMgrName] = useState(managedTrip.name);
   const [mgrDest, setMgrDest] = useState(managedTrip.destinationSummary || '');
@@ -1613,6 +1615,11 @@ export function Settings({
     const target = trips.find(t => t.id === managerTripId);
     if (!target) return;
 
+    if (mgrStart && mgrEnd && mgrEnd < mgrStart) {
+      setStatus('結束日期唔可以早過開始日期');
+      return;
+    }
+
     if (mgrArchived) {
       const activeTripsLeft = trips.filter(t => !t.archived && t.id !== managerTripId);
       if (activeTripsLeft.length === 0) {
@@ -1712,6 +1719,11 @@ export function Settings({
   function handleDeleteManagedTrip() {
     const target = trips.find(t => t.id === managerTripId);
     if (!target) return;
+    if (!canDeleteManagedTrip) {
+      setShowDeleteConfirm(false);
+      setStatus('只有旅程擁有者或管理員先可以刪除呢個共享旅程。');
+      return;
+    }
 
     const remainingTrips = trips.filter(t => t.id !== managerTripId);
     if (remainingTrips.length === 0) {
@@ -2406,6 +2418,8 @@ export function Settings({
           <button
             className="settings-trip-delete"
             type="button"
+            disabled={!canDeleteManagedTrip}
+            title={canDeleteManagedTrip ? undefined : '只有擁有者或管理員先可以刪除共享旅程'}
             onClick={() => setShowDeleteConfirm(true)}
           >
             <Trash2 size={18} /> 刪除此旅程與資料
@@ -2488,7 +2502,7 @@ export function Settings({
             </label>
           </div>
           <div className="action-row wrap">
-            <button className="primary" type="button" disabled={!!busy || !canManageTripSharing || !cloudSyncAvailable} onClick={() => void createSharingInvite()}>
+            <button className="primary" type="button" disabled={!!busy || !canManageTripSharing || !cloudSyncAvailable || !sharingInviteEmail.trim()} onClick={() => void createSharingInvite()}>
               <Mail size={18} /> 建立邀請
             </button>
             {onPull && (
@@ -2599,11 +2613,10 @@ export function Settings({
                 setTripDraftModalOpen(true);
                 return `已分析：${draft.trip.name} · ${stats.dayCount} 日 · ${stats.spotCount} 景點 · ${stats.lodgingCount} 酒店 · ${stats.foodCount} 餐飲 · ${stats.transportCount} 交通 · ${stats.detailCount} 重要細節`;
               } catch (err) {
+                // Keep the user's pasted paragraph intact — surface the error via run()'s
+                // status handler instead of overwriting their input with a debug dump.
                 console.error('[Settings] AI parse failed:', err);
-                const errorMsg = redactedError(err);
-                const debugText = `--- AI PARSING FAILED ❌ ---\nError: ${errorMsg}\n\n如果您遇到此問題，請檢查 API 金鑰設定，或者切換到手動輸入。`;
-                setTripParagraph(debugText);
-                throw err;
+                throw new Error(redactedError(err));
               }
             })}
           >
