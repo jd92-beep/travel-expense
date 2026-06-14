@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-06-13
-- **Focus**: Compact modal/backdrop behavior and currency toggle layout polish
+- **Date**: 2026-06-14
+- **Focus**: Compact Weather itinerary-language place labels
 - **Agent**: Codex 🤖
-- **App version**: Compact `0.2.8`; React unchanged in this pass
+- **App version**: Compact `0.7.1`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +18,25 @@
 
 ## What Was Done
 
-### Session 23 (Codex — current session)
+### Session 24 (Codex — current session)
+
+1. **Compact Weather place labels now follow itinerary language**:
+   - Weather target grouping still uses the resolved coordinates/city anchors for API accuracy, but UI labels now prefer the itinerary language instead of showing API/geocoder English names.
+   - Korea/Jeju weather locations translate known English target labels into Cantonese Traditional Chinese (`Jeju`/`Jeju City` → `濟州`, `Seogwipo` → `西歸浦`, `Aewol` → `涯月`, `Seongsan` → `城山`, `Udo` → `牛島`) while English-only itineraries such as San Francisco remain English.
+   - Geocoded city labels now run through the same display-name policy so `Jeju City` from Open-Meteo geocoding does not appear on Chinese/Cantonese itinerary weather cards.
+2. **Trip Update AI guidance tightened**:
+   - The trip intelligence prompt and stage-2 extraction prompt now explicitly tell the selected/fallback LLM to preserve user-pasted spot-name language.
+   - If a weather/geocoding/API-only English place name is needed for a non-English itinerary, the model should translate the display name into natural Hong Kong Cantonese Traditional Chinese while keeping coordinates/address data separate.
+3. **Coverage and versioning**:
+   - Weather smoke now asserts `濟州` / `西歸浦` and verifies `Jeju City` is not shown when geocoding returns the English API name.
+   - Bumped Compact `package.json`, `package-lock.json`, and `APP_VERSION` from `0.7.0` to `0.7.1`.
+4. **Verification**:
+   - Passed `app-compact npm run typecheck`.
+   - Passed `app-compact npm run build` (Vite plugin timing warning only).
+   - Passed `app-compact npm run security:scan`.
+   - Passed served Compact Weather smoke (`12 passed`) and mobile layout smoke.
+
+### Session 23 (Codex — previous session)
 
 1. **Compact Scan FX modal layout**:
    - Moved the `scan-fx-result` block above the amount/from/to controls so the final converted value appears before `金額`.

@@ -1026,6 +1026,7 @@ Return minimalist schema:
 
 organizedItinerary must match the canonical itinerary you used for extraction.
 Include lodging, arrival times, places, restaurants, transport/flight/train references, booking references.
+Preserve each spot.name in the same language/script as the canonical itinerary. If you only have an English API/geocoder city or place name for a Cantonese/Chinese itinerary, translate the display name into natural Hong Kong Cantonese Traditional Chinese; do not replace user-pasted Chinese place names with English API names.
 For each spot, estimate timeEnd from duration/stay information when available (e.g., "60分鐘" means timeEnd = time + 60min). If no duration info, omit timeEnd.
 Do not invent or guess any lat/lon coordinates. Frontend handles that.
 If the canonical itinerary has no usable trip data, return an empty itinerary.

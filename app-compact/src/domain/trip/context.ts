@@ -294,6 +294,7 @@ export function tripIntelligencePromptContract(): string {
     'Accept messy travel text: Markdown headings, pipe tables, pasted HTML <br> line breaks, Chinese dates like 6月13日, English dates like Jun 13, 2026, and plain timetable rows.',
     'For pipe tables, treat columns such as time/category/place/action as itinerary rows; extract each row as a spot, not as prose.',
     'For each Day section, extract the day number, date, lodging/hotel line, every timed activity, transport, flight, restaurant, shop, attraction, note, and optional/skip condition when present.',
+    'Preserve each itinerary spot name in the same language/script the user pasted. If a weather/geocoding/API source only gives an English city or place name for a non-English itinerary, translate that display name into natural Hong Kong Cantonese Traditional Chinese, while keeping address/map coordinates separate.',
     'Never copy the current itinerary as a successful extraction unless the user text explicitly contains those same days/spots.',
     'For every extracted place, include city, country, timezone, address/mapUrl when present, and lat/lon only when reasonably inferable; otherwise omit lat/lon and add a warning.',
     'Mark uncertain fields with confidence low and list assumptions/missingCriticalFields in extractionReport.',

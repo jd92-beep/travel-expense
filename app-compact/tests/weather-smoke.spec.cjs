@@ -567,10 +567,10 @@ test('Ended trip shows current weather for every itinerary day location', async 
   await installState(page, {});
   await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
-  await expect(page.getByText(/Current · 2026-05-30 · Trip Day 1/)).toBeVisible();
-  await expect(page.getByText(/Current · 2026-05-30 · Trip Day 6/)).toBeVisible();
-  await expect(page.locator('.weather-location h3').filter({ hasText: 'Jeju' }).first()).toBeVisible();
-  await expect(page.locator('.weather-location h3').filter({ hasText: 'Seogwipo' }).first()).toBeVisible();
+  await expect(page.getByText(/Day 1 · Open-Meteo/)).toBeVisible();
+  await expect(page.getByText(/Day 6 · Open-Meteo/)).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: '濟州' }).first()).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: '西歸浦' }).first()).toBeVisible();
   await expect(page.locator('.weather-location h3').filter({ hasText: '香港' }).first()).toBeVisible();
   await expect(page.locator('.weather-location h3')).toHaveCount(14);
   await expect(page.locator('.preview-weather-place')).not.toHaveText('目前地點');
@@ -853,6 +853,8 @@ test('Jeju Korea city fallback uses the South Korea weather target', async ({ pa
   });
   await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: '濟州' }).first()).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: 'Jeju City' })).toHaveCount(0);
   await expect(page.getByText('21°C').first()).toBeVisible();
   expect(geocodeUrls.every((url) => !url.includes('Ethiopia') && !url.includes('Brazil'))).toBe(true);
   expect(forecastUrls.some((url) => /latitude=33\./.test(url) && /longitude=126\./.test(url))).toBe(true);

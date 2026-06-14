@@ -2,6 +2,8 @@
 
 ## 2026-06-13
 
+- Fixed Compact Weather card place labels so weather targets keep the itinerary's pasted language instead of leaking English API/geocoder city names. Korea/Jeju weather groups now display Cantonese Traditional Chinese labels such as `濟州`, `西歸浦`, `城山`, `涯月`, and `牛島`, while English itineraries such as San Francisco remain English. Trip Update AI prompts now explicitly preserve user-pasted spot-name language and translate API-only English display names into natural Hong Kong Cantonese when the itinerary is Chinese. Bumped Compact to `0.7.1`.
+- Verification passed with `app-compact npm run typecheck`, `app-compact npm run build`, `app-compact npm run security:scan`, served Weather smoke (`12 passed`), and mobile layout smoke.
 - Refined Compact modal behavior and currency layouts: Scan live FX now shows the conversion result above the amount input, Compact popups close when tapping the backdrop while preserving inner-modal clicks, Home `預算總覽` stacks the destination currency directly under HKD, and Stats `預算羅盤` currency toggle now matches the Top 10 expense toggle style. Bumped Compact to `0.2.8`.
 - Fixed Compact Home `今日狀態` weather pill layout so the right-side weather icon no longer shares positioning styles with the currency toggle or covers nearby content.
 - Upgraded Compact Weather tab navigation: the top current-weather card now follows the current trip date/time, weather day cards expose live-hour anchors, and the tab auto-scrolls to the relevant day/hour card. Weather row cache is now itinerary-scoped so stale rows from another trip cannot appear on the current trip.

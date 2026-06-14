@@ -114,6 +114,17 @@ const REGION_COORDS: Record<string, WeatherCoord> = {
   SanFrancisco: { label: 'San Francisco', lat: 37.7749, lon: -122.4194 },
 };
 
+const CANTONESE_WEATHER_LABELS: Record<string, string> = {
+  Jeju: '濟州',
+  'Jeju City': '濟州',
+  Seogwipo: '西歸浦',
+  Aewol: '涯月',
+  Seongsan: '城山',
+  Udo: '牛島',
+  Seoul: '首爾',
+  Busan: '釜山',
+};
+
 const OFFICIAL_PROVIDER_SOURCE: Record<OfficialWeatherProviderId, string> = {
   jma: 'JMA official',
   'nea-sg': 'NEA official',
@@ -171,7 +182,7 @@ export function coordsForDay(day: ItineraryDay, limit = 2): WeatherCoord[] {
   if (!coords.length) {
     for (const entry of GEO_DICTIONARY) {
       if (entry.pattern.test(hay)) {
-        add({ label: entry.geo.city, lat: entry.geo.lat, lon: entry.geo.lon, timezone: day.timezone, origin: 'known-region' });
+        add({ label: itineraryWeatherLabel(day, entry.geo.city), lat: entry.geo.lat, lon: entry.geo.lon, timezone: day.timezone, origin: 'known-region' });
         if (coords.length >= limit) break;
       }
     }
@@ -238,7 +249,7 @@ export function groupedCoordsForDay(day: ItineraryDay): GroupedWeatherLocation[]
     for (const city of cityAnchors) {
       if (haversineKm(coord, city) <= GROUP_RADIUS_KM) {
         const key = city.label;
-        if (!groups.has(key)) groups.set(key, { label: city.label, lat: city.lat, lon: city.lon, spotNames: [], timezone: coord.timezone });
+        if (!groups.has(key)) groups.set(key, { label: itineraryWeatherLabel(day, city.label), lat: city.lat, lon: city.lon, spotNames: [], timezone: coord.timezone });
         groups.get(key)!.spotNames.push(coord.label);
         matched = true;
         break;
@@ -255,7 +266,10 @@ export function groupedCoordsForDay(day: ItineraryDay): GroupedWeatherLocation[]
     return [{ label: weatherLocationLabel(day), lat: Number.NaN, lon: Number.NaN, spotNames: [], missing: true, timezone: day.timezone }];
   }
 
-  return Array.from(groups.values());
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    label: itineraryWeatherLabel(day, group.label, group.spotNames),
+  }));
 }
 
 export async function resolveCoordsForDay(day: ItineraryDay, limit = 2): Promise<WeatherCoord[]> {
@@ -280,6 +294,34 @@ function weatherDataIncludesDate(data: unknown, targetDate?: string): boolean {
 
 function weatherLocationLabel(day: ItineraryDay): string {
   return [day.city, day.region, day.country].map((part) => String(part || '').trim()).find(Boolean) || '未設定座標';
+}
+
+function hasCjk(text: string): boolean {
+  return /[\u3400-\u9fff]/.test(text);
+}
+
+function itineraryLanguageHint(day: ItineraryDay): string {
+  return [
+    day.region,
+    day.city,
+    day.country,
+    day.lodging?.name,
+    ...(day.spots || []).flatMap((spot) => [spot.name, spot.address, spot.note, spot.sourceText]),
+  ].map((part) => String(part || '').trim()).filter(Boolean).join(' ');
+}
+
+function itineraryWeatherLabel(day: ItineraryDay, fallback: string, spotNames: string[] = []): string {
+  const cleanFallback = String(fallback || '').trim();
+  const hay = itineraryLanguageHint(day);
+  const country = String(day.country || '').trim();
+  const cjkSpot = spotNames.map((name) => String(name || '').trim()).find((name) => hasCjk(name));
+  if (cjkSpot && cleanFallback && !hasCjk(cleanFallback)) {
+    const translated = CANTONESE_WEATHER_LABELS[cleanFallback];
+    if (translated) return translated;
+  }
+  const translated = cleanFallback ? CANTONESE_WEATHER_LABELS[cleanFallback] : '';
+  if (translated && (hasCjk(hay) || /South Korea|Korea|KR|韓國|韩国/i.test(country))) return translated;
+  return cleanFallback || weatherLocationLabel(day);
 }
 
 function weatherLocationQueries(day: ItineraryDay): string[] {
@@ -333,7 +375,7 @@ async function geocodeWeatherLocation(query: string, country?: string, limit = 2
   const coords = scopedResults
     .slice(0, limit)
     .map((result) => ({
-      label: String(result.name || query),
+      label: geocodeDisplayLabel(query, String(result.name || query), country),
       lat: Number(result.latitude),
       lon: Number(result.longitude),
       timezone: typeof result.timezone === 'string' ? result.timezone : undefined,
@@ -342,6 +384,18 @@ async function geocodeWeatherLocation(query: string, country?: string, limit = 2
     }));
   localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), coords }));
   return coords;
+}
+
+function geocodeDisplayLabel(query: string, apiName: string, country?: string): string {
+  const cleanQuery = String(query || '').trim();
+  const cleanApiName = String(apiName || '').trim();
+  const translated = CANTONESE_WEATHER_LABELS[cleanApiName];
+  if (translated && (hasCjk(cleanQuery) || /South Korea|Korea|KR|韓國|韩国/i.test(String(country || '')))) return translated;
+  if (hasCjk(cleanQuery)) {
+    const first = cleanQuery.split(/\s+/).find((part) => hasCjk(part));
+    if (first) return first;
+  }
+  return cleanApiName || cleanQuery;
 }
 
 function normalizeWeatherTimezone(value?: string): string {
