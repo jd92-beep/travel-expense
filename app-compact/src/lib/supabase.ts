@@ -1030,35 +1030,93 @@ export async function drainSharedTripNotionOutbox(
     }
     if (!dbByTrip.size) return { processed: 0, failed: 0 };
 
+    const tripIdArray = [...dbByTrip.keys()];
+    let jobs: Array<Record<string, any>> | null = null;
     const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();
     const staleLockIso = new Date(nowMs - 120_000).toISOString();
-    const { data: jobs, error: jobsError } = await withTimeout(
-      supabase.from('receipt_sync_jobs')
-        .select('*')
-        .eq('provider', 'notion')
-        .in('trip_id', [...dbByTrip.keys()])
-        .in('status', ['pending', 'failed'])
-        .lte('next_attempt_at', nowIso)
-        .lt('attempts', 5)
-        .order('next_attempt_at', { ascending: true })
-        .limit(20),
+
+    // Try atomic RPC claim first (FOR UPDATE SKIP LOCKED).
+    const { data: rpcJobs, error: rpcError } = await withTimeout(
+      supabase.rpc('claim_receipt_sync_jobs', {
+        p_trip_ids: tripIdArray,
+        p_provider: 'notion',
+        p_worker: session.user.id,
+        p_limit: 20,
+      }),
     );
-    if (jobsError || !jobs?.length) return { processed: 0, failed: 0 };
+    if (!rpcError && rpcJobs?.length) {
+      jobs = rpcJobs as Array<Record<string, any>>;
+    } else {
+      // Fallback to non-atomic path for older schemas without the RPC.
+      const { data: legacyJobs, error: jobsError } = await withTimeout(
+        supabase.from('receipt_sync_jobs')
+          .select('*')
+          .eq('provider', 'notion')
+          .in('trip_id', tripIdArray)
+          .in('status', ['pending', 'failed'])
+          .lte('next_attempt_at', nowIso)
+          .lt('attempts', 5)
+          .order('next_attempt_at', { ascending: true })
+          .limit(20),
+      );
+      if (jobsError || !legacyJobs?.length) return { processed: 0, failed: 0 };
+      jobs = (legacyJobs as Array<Record<string, any>>).filter(
+        (job) => !job.locked_at || job.locked_at <= staleLockIso,
+      );
+      // Lock each job non-atomically (legacy path).
+      for (const job of jobs) {
+        await withTimeout(supabase.from('receipt_sync_jobs')
+          .update({ locked_at: nowIso, locked_by: session.user.id, updated_at: nowIso })
+          .eq('id', job.id)).catch(() => {});
+      }
+    }
+    if (!jobs?.length) return { processed: 0, failed: 0 };
 
     let processed = 0;
     let failed = 0;
     for (const job of jobs as Array<Record<string, any>>) {
-      if (job.locked_at && job.locked_at > staleLockIso) continue; // another device is processing it
       const notionDb = dbByTrip.get(job.trip_id);
       const trip = (state.trips || []).find((candidate) => cleanUuid(candidate.supabaseId) === job.trip_id);
       if (!notionDb || !trip) continue;
-      await withTimeout(supabase.from('receipt_sync_jobs')
-        .update({ locked_at: nowIso, locked_by: session.user.id, updated_at: nowIso })
-        .eq('id', job.id)).catch(() => {});
       try {
         if (job.operation === 'delete') {
-          // Deletions are archived through the normal delete path; just settle the mirror job.
+          const sourceId = String(job.payload?.sourceId || '').trim();
+          const receiptId = String(job.receipt_id || '').trim();
+          const notionState: AppState = {
+            ...state,
+            activeTripId: trip.id,
+            trips: (state.trips || []).map((candidate) =>
+              candidate.id === trip.id ? { ...candidate, notionDb } : candidate
+            ),
+          };
+          const tombstone = {
+            id: receiptId || sourceId,
+            sourceId: sourceId || receiptId,
+            tripId: trip.id,
+            store: '',
+            date: trip.startDate || state.tripDateRange.start,
+            total: 0,
+            category: 'other' as const,
+            payment: 'cash' as const,
+          } as Receipt;
+          try {
+            await push(notionState, tombstone);
+          } catch (archiveErr) {
+            const attempts = Number(job.attempts || 0) + 1;
+            const backoffMs = Math.min(60, 2 ** attempts) * 60_000;
+            await withTimeout(supabase.from('receipt_sync_jobs').update({
+              status: 'failed',
+              attempts,
+              next_attempt_at: new Date(Date.now() + backoffMs).toISOString(),
+              locked_at: null,
+              locked_by: null,
+              last_error: String((archiveErr as Error)?.message || archiveErr).slice(0, 300),
+              updated_at: new Date().toISOString(),
+            }).eq('id', job.id)).catch(() => {});
+            failed += 1;
+            continue;
+          }
           await withTimeout(supabase.from('receipt_sync_jobs')
             .update({ status: 'succeeded', locked_at: null, locked_by: null, last_error: null, updated_at: new Date().toISOString() })
             .eq('id', job.id));
@@ -1234,18 +1292,31 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
     .filter((receipt): receipt is Receipt => !!receipt);
   let settings = rowToSettings(profileResult.data as SupabaseProfileRow | null);
   if (peopleRows.length) {
-    const activeTripId = settings?.activeTripId || state.activeTripId;
-    const activeTripUuid = trips.find((trip) => trip.id === activeTripId)?.supabaseId;
-    const activePeople = activeTripUuid ? peopleRows.filter((person) => person.trip_id === activeTripUuid) : [];
-    if (activePeople.length) {
+    const peopleByTripId: Record<string, Person[]> = {};
+    const shareRatiosByTripId: Record<string, Record<string, number>> = {};
+    for (const trip of trips) {
+      if (!trip.supabaseId) continue;
+      const tripPeople = peopleRows.filter((row) => row.trip_id === trip.supabaseId && !row.archived);
+      if (tripPeople.length) {
+        peopleByTripId[trip.id] = tripPeople.map((person) => ({
+          id: person.person_id,
+          name: person.name,
+          emoji: person.emoji || '👤',
+          color: person.color || '#1E4D6B',
+        }));
+        shareRatiosByTripId[trip.id] = Object.fromEntries(tripPeople.map((person) => [person.person_id, Number(person.share_ratio ?? 1)]));
+      }
+    }
+    if (Object.keys(peopleByTripId).length) {
       settings ||= {};
-      settings.persons = activePeople.map((person) => ({
-        id: person.person_id,
-        name: person.name,
-        emoji: person.emoji || '👤',
-        color: person.color || '#1E4D6B',
-      }));
-      settings.shareRatios = Object.fromEntries(activePeople.map((person) => [person.person_id, Number(person.share_ratio ?? 1)]));
+      settings.peopleByTripId = peopleByTripId;
+      settings.shareRatiosByTripId = shareRatiosByTripId;
+      // Also project active trip into compatibility fields.
+      const activeTripId = settings?.activeTripId || state.activeTripId;
+      if (activeTripId && peopleByTripId[activeTripId]) {
+        settings.persons = peopleByTripId[activeTripId];
+        settings.shareRatios = shareRatiosByTripId[activeTripId];
+      }
     }
   }
   return { trips, receipts, settings };

@@ -1,7 +1,7 @@
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
 import { resolveTripContext, tripIntelligencePromptContract } from '../domain/trip/context';
 import { brokerAiJson, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
-import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } from './constants';
+import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS, emailTripDefaultModelId } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
 import { currentSupabaseAccessToken } from './supabase';
@@ -669,12 +669,13 @@ function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' 
       ? state.voiceModel || ''
       : kind === 'email'
         ? state.emailModel || ''
-        : state.tripUpdateModel || DEFAULT_TRIP_UPDATE_MODEL_ID;
+        : state.tripUpdateModel || emailTripDefaultModelId();
   const preferredAttempt = selectedModelAttempt(chosenModelId);
-  // Contract default: email/trip → Kimi kimi-code, scan/voice → Google Gemma 4 31B.
+  // Contract default: email/trip → date-based (Mimo before 2026-07-02, Kimi after), scan/voice → Google Gemma 4 31B.
   // Used as first fallback when user selects a different model.
+  const emailTripDefault = emailTripDefaultModelId();
   const contractDefault: ModelAttempt = kind === 'email' || kind === 'trip'
-    ? { provider: 'kimi', model: 'kimi-code', label: 'Kimi kimi-code (Contract Default)' }
+    ? selectedModelAttempt(emailTripDefault) || { provider: 'mimo', model: 'mimo-v2.5-pro', label: 'Mimo v2.5 Pro (Contract Default)' }
     : { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Contract Default)' };
   // User's selection is the true primary; falls back to contract default if empty.
   const primary: ModelAttempt = preferredAttempt || contractDefault;

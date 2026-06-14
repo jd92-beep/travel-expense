@@ -16,6 +16,7 @@ import {
   redactedError,
   registerPersonalNotionIntegration,
   rotateProviderCredential,
+  testProviderConnection,
   unlockCredentialBroker,
   type CredentialProvider,
   type ConnectionStatus,
@@ -842,6 +843,12 @@ export function Settings({
   const [rotationSecret, setRotationSecret] = useState('');
   const [rotationAdmin, setRotationAdmin] = useState('');
   const [rotationDb, setRotationDb] = useState(state.notionDb || '');
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [apiKeyProvider, setApiKeyProvider] = useState<CredentialProvider>('kimi');
+  const [apiKeySecret, setApiKeySecret] = useState('');
+  const [apiKeyAdmin, setApiKeyAdmin] = useState('');
+  const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [apiKeyMessage, setApiKeyMessage] = useState('');
   const [brokerPassword, setBrokerPassword] = useState('');
   const [directNotionToken, setDirectNotionToken] = useState(getDirectNotionToken);
   const [personalNotionToken, setPersonalNotionToken] = useState('');
@@ -2179,6 +2186,15 @@ export function Settings({
         <label>Google backup model
           <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
         </label>
+        <div style={{ marginTop: '0.75rem' }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setApiKeyModalOpen(true)}
+          >
+            <KeyRound size={14} /> Change API Key
+          </button>
+        </div>
       </AccordionCard>
 
       {cloudSyncAvailable && updatePassword && (
@@ -3219,6 +3235,123 @@ export function Settings({
             <div className="modal-actions trip-confirm-actions">
               <button className="secondary" type="button" onClick={() => setTripDraftModalOpen(false)}>返回修改文字</button>
               <button className="primary" type="button" onClick={() => applyTripDraft(tripDraft)}>確認並更新行程</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {apiKeyModalOpen && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => { setApiKeyModalOpen(false); setApiKeyStatus('idle'); setApiKeyMessage(''); }}
+        >
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="api-key-modal-title"
+            onClick={(event) => event.stopPropagation()}
+            style={{ maxWidth: '420px' }}
+          >
+            <div className="modal-head">
+              <div>
+                <h2 id="api-key-modal-title">Change API Key</h2>
+                <p className="muted">更新 LLM provider 嘅 API key。Key 會安全儲存喺 Credential Broker。</p>
+              </div>
+              <button className="icon-button" type="button" aria-label="Close" onClick={() => { setApiKeyModalOpen(false); setApiKeyStatus('idle'); setApiKeyMessage(''); }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="form-grid" style={{ gap: '0.75rem' }}>
+              <label>Provider
+                <select value={apiKeyProvider} onChange={(e) => { setApiKeyProvider(e.target.value as CredentialProvider); setApiKeyStatus('idle'); setApiKeyMessage(''); }}>
+                  <option value="kimi">Kimi (kimi-code, kimi-8k, kimi-32k, kimi-k2.6, kimi-for-coding)</option>
+                  <option value="google">Google (Gemini, Gemma — all Google models)</option>
+                  <option value="mimo">Mimo (Mimo v2.5, Mimo v2.5 Pro)</option>
+                  <option value="weatherapi">WeatherAPI (weather forecasts)</option>
+                </select>
+              </label>
+
+              <label>New API Key
+                <input
+                  type="password"
+                  value={apiKeySecret}
+                  onChange={(e) => setApiKeySecret(e.target.value)}
+                  placeholder="Enter new API key"
+                  autoComplete="off"
+                />
+              </label>
+
+              <label>Admin Passphrase
+                <input
+                  type="password"
+                  value={apiKeyAdmin}
+                  onChange={(e) => setApiKeyAdmin(e.target.value)}
+                  placeholder="Admin maintenance passphrase"
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+
+            {apiKeyStatus !== 'idle' && (
+              <div style={{
+                margin: '0.75rem 0',
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                background: apiKeyStatus === 'success' ? 'rgba(34,197,94,0.15)' : apiKeyStatus === 'error' ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                color: apiKeyStatus === 'success' ? '#22c55e' : apiKeyStatus === 'error' ? '#ef4444' : '#3b82f6',
+              }}>
+                {apiKeyStatus === 'testing' && '🔄 Testing API key...'}
+                {apiKeyStatus === 'success' && `✅ ${apiKeyMessage}`}
+                {apiKeyStatus === 'error' && `❌ ${apiKeyMessage}`}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => { setApiKeyModalOpen(false); setApiKeyStatus('idle'); setApiKeyMessage(''); }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={!apiKeySecret.trim() || !apiKeyAdmin.trim() || apiKeyStatus === 'testing'}
+                onClick={async () => {
+                  setApiKeyStatus('testing');
+                  setApiKeyMessage('Testing API key...');
+                  try {
+                    const testResult = await testProviderConnection(state, apiKeyProvider);
+                    if (testResult.includes('connected')) {
+                      setApiKeyMessage('Existing key still works. Rotating to new key...');
+                    }
+                  } catch {
+                    // Test with new key will happen during rotation
+                  }
+                  try {
+                    const result = await rotateProviderCredential(state, apiKeyProvider, apiKeySecret.trim(), apiKeyAdmin.trim(), {});
+                    if (result.status === 'connected') {
+                      setApiKeyStatus('success');
+                      setApiKeyMessage(`API key updated for ${apiKeyProvider}. All related models now use the new key.`);
+                      setApiKeySecret('');
+                      setApiKeyAdmin('');
+                    } else {
+                      setApiKeyStatus('error');
+                      setApiKeyMessage(`API key rotation returned status: ${result.status}. Key was not updated.`);
+                    }
+                  } catch (err) {
+                    setApiKeyStatus('error');
+                    setApiKeyMessage(`Failed to update API key: ${err instanceof Error ? err.message : 'Unknown error'}. The new key may not be working.`);
+                  }
+                }}
+              >
+                {apiKeyStatus === 'testing' ? 'Testing...' : 'Test & Save'}
+              </button>
             </div>
           </section>
         </div>
