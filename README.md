@@ -208,6 +208,15 @@ App 只會經 server-side Credential Broker 使用 AI。瀏覽器不應該存放
 - Notion 應該是每個人自己的同步筆記簿，不是一個大家共用的公開筆記簿。
 - 如果用共用裝置，登出前清除這部裝置的資料。
 
+## 新用戶註冊通知
+
+Supabase 已設定 `notify-new-user` Edge Function 和 `auth.users` 後置 trigger。
+當新用戶註冊時，資料庫會把事件寫入 `public.admin_signup_notifications`，然後用 private shared secret 呼叫 Edge Function。
+
+真正寄出 email 需要 Supabase Edge Function secret `RESEND_API_KEY`。沒有這個 secret 時，Function 會安全地回覆 `email_provider_missing`，不會假裝已經寄出。
+
+不要把 `SIGNUP_NOTIFY_SECRET`、`RESEND_API_KEY`、或任何 email provider key 寫入 repo。
+
 ## 如果出現問題
 
 - 看不到自己的資料：先確認是否用同一個 email 登入。

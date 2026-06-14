@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-14
+
+- Added a Supabase new-user signup notification backend. New `auth.users` rows now write to `public.admin_signup_notifications` and call the deployed `notify-new-user` Edge Function through `pg_net` with a private shared secret. The Edge Function is deployed live and rejects unsigned calls.
+- Live setup note: `ADMIN_SIGNUP_NOTIFY_EMAIL` and `SIGNUP_NOTIFY_SECRET` are configured in Supabase, but no `RESEND_API_KEY` is present yet, so the live signed smoke returns `202 email_provider_missing` instead of sending an email. Add the Resend secret to enable real email delivery.
+- Added `node scripts/verify-signup-notification-contract.mjs` to verify the migration/function contract and prove no email provider key or signup shared secret is committed.
+
 ## 2026-06-13
 
 - Fixed Compact Home trip switching so the trip name itself is the dropdown trigger, not only the chevron. The dashboard mobile/desktop header now wraps the trip name and arrow in one accessible button. Settings Trip Manager now keeps `New trip` and `Edit selected trip` collapsed by default with full-width expandable headers. Bumped Compact to `0.7.3`.

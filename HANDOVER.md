@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-06-14
-- **Focus**: Compact Home trip dropdown trigger and Settings Trip Manager collapsibles
+- **Focus**: Supabase new-user signup notification backend
 - **Agent**: Codex 🤖
 - **App version**: Compact `0.7.3`; React unchanged in this pass
 
@@ -18,7 +18,28 @@
 
 ## What Was Done
 
-### Session 26 (Codex — current session)
+### Session 27 (Codex — current session)
+
+1. **New-user registration notification backend**:
+   - Added Supabase Edge Function `notify-new-user` with custom `x-signup-notify-secret` auth and `verify_jwt=false`.
+   - Added idempotent migration `20260614184500_admin_signup_notifications.sql`.
+   - The migration creates `public.admin_signup_notifications`, private runtime config storage, and an `auth.users` `AFTER INSERT` trigger.
+   - The trigger writes an audit/queue row and uses `pg_net` to call the Edge Function without blocking signup.
+2. **Live Supabase setup**:
+   - Deployed `notify-new-user` to live project `fbnnjoahvtdrnigevrtw`.
+   - Applied the migration through the Supabase Management API because live migration history is diverged; do not use blind `db push`.
+   - Stored a generated `SIGNUP_NOTIFY_SECRET` both as an Edge Function secret and in `private.signup_notify_config`; no raw secret was printed or committed.
+   - Set `ADMIN_SIGNUP_NOTIFY_EMAIL` to Boss email in Edge Function secrets.
+3. **Important live limitation**:
+   - Supabase Edge secrets currently do **not** include `RESEND_API_KEY`.
+   - Live signed smoke therefore returns `202` with `email_provider_missing`; the trigger/function path is wired, but actual email delivery will start only after adding a real Resend key and verified sender if needed.
+4. **Verification**:
+   - Passed `node scripts/verify-signup-notification-contract.mjs`.
+   - Passed `git diff --check`.
+   - Live Edge smoke rejected unsigned POST with `401`.
+   - Live Edge smoke accepted signed POST with `202 email_provider_missing`, proving auth/config wiring while confirming the missing email provider.
+
+### Session 26 (Codex — previous session)
 
 1. **Home trip name now opens the trip dropdown**:
    - Compact Shell `TripDropdown` now accepts trigger content, so the dashboard trip name and chevron are one clickable button instead of an arrow-only trigger.
