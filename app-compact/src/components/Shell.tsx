@@ -26,6 +26,7 @@ function TripDropdown({
   buttonClassName = '',
   itemClassName = '',
   activeItemClassName = '',
+  children,
 }: {
   trips: TripProfile[];
   activeTripId: string;
@@ -37,6 +38,7 @@ function TripDropdown({
   buttonClassName?: string;
   itemClassName?: string;
   activeItemClassName?: string;
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -55,8 +57,12 @@ function TripDropdown({
       <button
         type="button"
         className={buttonClassName || 'flex items-center gap-1.5 text-left border-none bg-transparent p-0 focus:outline-none cursor-pointer active:scale-98 transition-all'}
+        aria-label={children ? undefined : label}
+        aria-expanded={open}
+        aria-haspopup="menu"
         onClick={() => setOpen(!open)}
       >
+        {children && <span className="shell-trip-trigger-content">{children}</span>}
         <ChevronDown size={18} className="text-[#C23B5E] dark:text-[#D4A843] shrink-0" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
       </button>
       {open && (
@@ -417,18 +423,20 @@ export function Shell({
           <img className="compact-topbar-mark" src={compactJapanMark} alt="" aria-hidden="true" />
           {active === 'dashboard' && state ? (
             <div className="flex items-center gap-2">
-              <h1>
-                {richVisualEffects
-                  ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeTripName}</AuroraText>
-                  : activeTripName}
-              </h1>
               <TripDropdown
                 trips={state.trips || []}
                 activeTripId={trip?.id || ''}
                 onSelect={handleSwitchTrip}
                 onCreateNew={onOpenNewTripWizard}
                 align="right"
-              />
+                buttonClassName="shell-trip-trigger topbar-trip-trigger"
+              >
+                <span className="topbar-trip-trigger-title" role="heading" aria-level={1}>
+                  {richVisualEffects
+                    ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeTripName}</AuroraText>
+                    : activeTripName}
+                </span>
+              </TripDropdown>
             </div>
           ) : (
             <h1>
@@ -495,13 +503,15 @@ export function Shell({
         <div className="compact-mobile-heading relative z-10">
           {active === 'dashboard' && state ? (
             <div className="flex items-center gap-1.5">
-              <span className="compact-mobile-title-art" data-title={activeTripName}>{activeTripName}</span>
               <TripDropdown
                 trips={state.trips || []}
                 activeTripId={trip?.id || ''}
                 onSelect={handleSwitchTrip}
                 onCreateNew={onOpenNewTripWizard}
-              />
+                buttonClassName="shell-trip-trigger compact-mobile-trip-trigger"
+              >
+                <span className="compact-mobile-title-art" data-title={activeTripName}>{activeTripName}</span>
+              </TripDropdown>
             </div>
           ) : (
             <h1><span className="compact-mobile-title-art" data-title={activeCopy.mobileTitle}>{isMobile ? activeCopy.mobileTitle : ''}</span></h1>

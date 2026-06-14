@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Cloud, Copy, Download, KeyRound, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Cloud, Copy, Download, KeyRound, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useMemo, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
@@ -1029,6 +1029,8 @@ export function Settings({
   const [newManagedTripEnd, setNewManagedTripEnd] = useState('');
   const [newManagedTripBudget, setNewManagedTripBudget] = useState('');
   const [newManagedTripCurrency, setNewManagedTripCurrency] = useState('JPY');
+  const [newTripPanelOpen, setNewTripPanelOpen] = useState(false);
+  const [editTripPanelOpen, setEditTripPanelOpen] = useState(false);
 
   // Sync state values when managed trip changes
   const handleSelectManagedTrip = (tripId: string) => {
@@ -2264,14 +2266,23 @@ export function Settings({
           )}
         </div>
 
-        <div className="settings-trip-panel">
+        <div className={`settings-trip-panel settings-trip-panel--collapsible ${newTripPanelOpen ? 'open' : ''}`}>
+          <button
+            className="settings-trip-panel-toggle"
+            type="button"
+            aria-expanded={newTripPanelOpen}
+            aria-controls="settings-trip-new-panel"
+            onClick={() => setNewTripPanelOpen((value) => !value)}
+          >
           <div className="settings-trip-panel-head">
             <div>
               <span className="eyebrow">New trip</span>
               <h3>建立新旅程</h3>
             </div>
-            <span className="pill">Multi-trip</span>
+            <span className="pill">Multi-trip <ChevronDown size={15} className="settings-trip-panel-chevron" /></span>
           </div>
+          </button>
+          {newTripPanelOpen && <div id="settings-trip-new-panel" className="settings-trip-panel-body">
           <div className="form-grid">
             <label>新旅程名
               <input value={newManagedTripName} onChange={(e) => setNewManagedTripName(e.target.value)} placeholder="例如：首爾 2026" />
@@ -2303,16 +2314,26 @@ export function Settings({
               <Plus size={18} /> 建立並切換
             </button>
           </div>
+          </div>}
         </div>
 
-        <div className="settings-trip-panel settings-trip-panel--edit">
+        <div className={`settings-trip-panel settings-trip-panel--edit settings-trip-panel--collapsible ${editTripPanelOpen ? 'open' : ''}`}>
+        <button
+          className="settings-trip-panel-toggle"
+          type="button"
+          aria-expanded={editTripPanelOpen}
+          aria-controls="settings-trip-edit-panel"
+          onClick={() => setEditTripPanelOpen((value) => !value)}
+        >
         <div className="settings-trip-panel-head">
           <div>
             <span className="eyebrow">Edit selected trip</span>
             <h3>旅程資料</h3>
           </div>
-          <span className="pill">{mgrArchived ? 'Archived' : 'Active'}</span>
+          <span className="pill">{mgrArchived ? 'Archived' : 'Active'} <ChevronDown size={15} className="settings-trip-panel-chevron" /></span>
         </div>
+        </button>
+        {editTripPanelOpen && <div id="settings-trip-edit-panel" className="settings-trip-panel-body">
         <div className="form-grid">
           <label>旅程名
             <input value={mgrName} onChange={(e) => setMgrName(e.target.value)} placeholder="例如：名古屋 2026" />
@@ -2420,6 +2441,7 @@ export function Settings({
             <Trash2 size={18} /> 刪除此旅程與資料
           </button>
         </div>
+        </div>}
         </div>
 
         <div className="settings-trip-panel settings-trip-panel--compact">

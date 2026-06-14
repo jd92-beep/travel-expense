@@ -93,6 +93,13 @@ test('Dashboard keeps Home simple without travel-day diagnostic cards', async ({
   await expect(page.locator('.today-itinerary-card')).toBeVisible();
 });
 
+test('Dashboard trip name opens the trip dropdown menu', async ({ page }) => {
+  await openDashboard(page, false);
+  await page.locator('.compact-mobile-heading').getByRole('button', { name: /Dashboard Test/ }).click();
+  await expect(page.getByText('切換旅程 (Switch Trip)')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Dashboard Test.*Dashboard Test/ })).toBeVisible();
+});
+
 test('Dashboard budget currency toggle follows active Korea trip currency', async ({ page }) => {
   await openDashboard(page, false, {
     budget: 1750000,

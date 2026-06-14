@@ -9,6 +9,11 @@ async function setAccordion(page, title, expanded = true) {
   if ((await button.getAttribute('aria-expanded')) !== String(expanded)) await button.click();
 }
 
+async function setTripManagerPanel(page, title, expanded = true) {
+  const button = page.locator('.settings-trip-panel-toggle', { hasText: new RegExp(title) }).first();
+  if ((await button.getAttribute('aria-expanded')) !== String(expanded)) await button.click();
+}
+
 async function expectSettingsReady(page) {
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
   await expect(page.locator('.settings-preview-controls')).toBeVisible();
@@ -318,6 +323,15 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   }
 
   await setAccordion(page, '旅程管理器');
+  const newTripToggle = page.locator('.settings-trip-panel-toggle', { hasText: /New trip/ }).first();
+  const editTripToggle = page.locator('.settings-trip-panel-toggle', { hasText: /Edit selected trip/ }).first();
+  await expect(newTripToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(editTripToggle).toHaveAttribute('aria-expanded', 'false');
+  await newTripToggle.click();
+  await expect(newTripToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByPlaceholder('例如：首爾 2026')).toBeVisible();
+  await newTripToggle.click();
+  await setTripManagerPanel(page, 'Edit selected trip');
   const tripNameInput = page.getByRole('textbox', { name: '旅程名', exact: true });
   await tripNameInput.fill('M10 Trip Updated');
   await page.getByLabel('預算 (目的地貨幣)').fill('123456');
@@ -655,6 +669,7 @@ test('Settings protects broker URL and does not keep archived trip active', asyn
   expect(storedCredentials).toContain(defaultBroker);
 
   await setAccordion(page, '旅程管理器');
+  await setTripManagerPanel(page, 'Edit selected trip');
   await expect(page.getByRole('textbox', { name: '旅程名', exact: true })).toHaveValue('Active Guard Trip');
   await page.getByLabel('旅程狀態').selectOption('archived');
   await page.getByRole('button', { name: /儲存旅程修改/ }).click();

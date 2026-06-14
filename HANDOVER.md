@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-14
-- **Focus**: Compact Weather live-card tab-entry jump
+- **Focus**: Compact Home trip dropdown trigger and Settings Trip Manager collapsibles
 - **Agent**: Codex 🤖
-- **App version**: Compact `0.7.2`; React unchanged in this pass
+- **App version**: Compact `0.7.3`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +18,28 @@
 
 ## What Was Done
 
-### Session 25 (Codex — current session)
+### Session 26 (Codex — current session)
+
+1. **Home trip name now opens the trip dropdown**:
+   - Compact Shell `TripDropdown` now accepts trigger content, so the dashboard trip name and chevron are one clickable button instead of an arrow-only trigger.
+   - The accessible button name now comes from the trip name when trigger content is present; arrow-only history triggers keep their explicit label.
+2. **Settings Trip Manager nested sections are collapsed by default**:
+   - Added local collapsed state for `New trip` and `Edit selected trip`.
+   - Both sections now use full-width expandable headers with rotating chevrons; active trip selection and currency/statistics remain visible.
+3. **Coverage and versioning**:
+   - Dashboard smoke now checks clicking the trip name opens the dropdown.
+   - Settings smoke now checks both Trip Manager sections default collapsed and expands `Edit selected trip` before editing.
+   - Bumped Compact `package.json`, `package-lock.json`, and `APP_VERSION` from `0.7.2` to `0.7.3`.
+4. **Verification**:
+   - Passed `app-compact npm run typecheck`.
+   - Passed served Compact Dashboard smoke (`8 passed`).
+   - Passed served Compact Settings smoke (`9 passed`, `1 skipped`).
+   - Passed `app-compact npm run build` (Vite plugin timing warning only).
+   - Passed `app-compact npm run security:scan`.
+   - Passed served Compact mobile layout smoke.
+   - Passed `git diff --check`.
+
+### Session 25 (Codex — previous session)
 
 1. **Compact Weather now jumps to the current live weather slot when entering the tab**:
    - `Weather.tsx` now prioritizes the rendered `data-weather-live="true"` card for the active trip date, then falls back to the matching weather hour/day.

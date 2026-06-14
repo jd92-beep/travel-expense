@@ -2,6 +2,8 @@
 
 ## 2026-06-13
 
+- Fixed Compact Home trip switching so the trip name itself is the dropdown trigger, not only the chevron. The dashboard mobile/desktop header now wraps the trip name and arrow in one accessible button. Settings Trip Manager now keeps `New trip` and `Edit selected trip` collapsed by default with full-width expandable headers. Bumped Compact to `0.7.3`.
+- Verification passed with `app-compact npm run typecheck`, served Dashboard smoke (`8 passed`), served Settings smoke (`9 passed`, `1 skipped`), `app-compact npm run build`, `app-compact npm run security:scan`, served mobile layout smoke, and `git diff --check`.
 - Fixed Compact Weather tab entry scrolling so tapping Weather from Scan/Home now repeatedly re-centers the current trip day's live weather slot after weather rows and entry animations settle. Added regression coverage for a Jeju Day 2 current-time jump from Scan to Weather. Bumped Compact to `0.7.2`.
 - Verification passed with `app-compact npm run typecheck`, served Weather smoke (`13 passed`), `app-compact npm run build`, `app-compact npm run security:scan`, `git diff --check`, and served mobile layout smoke.
 - Fixed Compact Weather card place labels so weather targets keep the itinerary's pasted language instead of leaking English API/geocoder city names. Korea/Jeju weather groups now display Cantonese Traditional Chinese labels such as `濟州`, `西歸浦`, `城山`, `涯月`, and `牛島`, while English itineraries such as San Francisco remain English. Trip Update AI prompts now explicitly preserve user-pasted spot-name language and translate API-only English display names into natural Hong Kong Cantonese when the itinerary is Chinese. Bumped Compact to `0.7.1`.

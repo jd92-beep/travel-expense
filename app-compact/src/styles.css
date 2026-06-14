@@ -2998,6 +2998,39 @@ body {
   font-size: clamp(22px, 5vw, 32px);
   line-height: 1.02;
 }
+.shell-trip-trigger {
+  min-width: 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.shell-trip-trigger-content {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.topbar-trip-trigger {
+  padding: 3px 4px 3px 0;
+  border-radius: 14px;
+}
+.topbar-trip-trigger:focus-visible,
+.compact-mobile-trip-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--screen-accent-2) 54%, white);
+  outline-offset: 3px;
+}
+.topbar-trip-trigger-title {
+  min-width: 0;
+  color: var(--screen-accent);
+  font-size: clamp(22px, 5vw, 32px);
+  line-height: 1.02;
+  font-weight: 950;
+}
 .topbar-tab-stamp {
   align-self: center;
   justify-self: start;
@@ -3311,6 +3344,36 @@ body {
 }
 .settings-trip-panel--compact {
   gap: 10px;
+}
+.settings-trip-panel--collapsible {
+  padding: 0;
+  overflow: hidden;
+}
+.settings-trip-panel-toggle {
+  width: 100%;
+  min-height: 58px;
+  padding: 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-trip-panel-toggle .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.settings-trip-panel-chevron {
+  transition: transform .18s ease;
+}
+.settings-trip-panel--collapsible.open .settings-trip-panel-chevron {
+  transform: rotate(180deg);
+}
+.settings-trip-panel-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
 }
 .settings-trip-panel-head {
   display: flex;
@@ -5809,6 +5872,11 @@ body {
 }
 
 .topbar-title-block h1 {
+  color: var(--compact-preview-ink);
+  font-size: clamp(30px, 3vw, 44px);
+  font-weight: 900;
+}
+.topbar-trip-trigger-title {
   color: var(--compact-preview-ink);
   font-size: clamp(30px, 3vw, 44px);
   font-weight: 900;
@@ -8564,6 +8632,12 @@ textarea,
     font-size: clamp(23px, 6.4vw, 31px) !important;
     font-weight: 950 !important;
     line-height: 1.02 !important;
+  }
+
+  .compact-mobile-trip-trigger {
+    max-width: 100%;
+    padding: 2px 2px 2px 0;
+    border-radius: 14px;
   }
 
   .app-shell--dashboard .compact-mobile-title-art,
