@@ -1,4 +1,4 @@
-import type { AppState } from './types';
+import type { AppState, ExchangeRateEntry } from './types';
 
 export const SUPPORTED_CURRENCIES = ['JPY', 'HKD', 'USD', 'KRW', 'TWD', 'CNY', 'EUR', 'GBP', 'AUD', 'SGD', 'THB', 'MYR', 'VND', 'CAD', 'NZD', 'CHF', 'PHP'] as const;
 
@@ -88,6 +88,31 @@ export function hkdToCurrency(amountHkd: number, currency: string, state: AppSta
   const value = Number(amountHkd) || 0;
   if (code === 'HKD') return value;
   return value * Math.max(0.01, perHkdForCurrency(state, code));
+}
+
+export function rateTableFromSnapshot(snapshot: CurrencySnapshot): Record<string, ExchangeRateEntry> {
+  const now = Number(snapshot.fetchedAt) || Date.now();
+  return Object.fromEntries(
+    Object.entries(snapshot.rates || {})
+      .filter(([code, rate]) => code && Number.isFinite(Number(rate)) && Number(rate) > 0)
+      .map(([code, rate]) => [
+        code.toUpperCase(),
+        {
+          currency: code.toUpperCase(),
+          perHkd: Number(rate),
+          source: snapshot.source || 'unknown',
+          fetchedAt: now,
+        },
+      ]),
+  );
+}
+
+export function appRatePatchFromSnapshot(snapshot: CurrencySnapshot): Partial<AppState> {
+  const rateTable = rateTableFromSnapshot(snapshot);
+  return {
+    rate: Number(snapshot.rates?.JPY?.toFixed?.(4) || snapshot.rates?.JPY || 20.36),
+    rateTable,
+  };
 }
 
 export function currencyPrefix(currency: string): string {

@@ -22,7 +22,7 @@ import {
   type PersonalNotionStatus,
   type ProviderStatus,
 } from '../lib/credentialBroker';
-import { fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
+import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
 import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, safePhotoUrl, validateItinerary } from '../lib/domain';
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 import { saveReceiptRepairIntent } from '../lib/repairIntent';
@@ -1321,7 +1321,7 @@ export function Settings({
   async function refreshRate() {
     await run('更新匯率', async () => {
       const snapshot = await fetchLiveCurrencySnapshot();
-      updateState({ rate: Number(snapshot.rates.JPY.toFixed(4)) });
+      updateState(appRatePatchFromSnapshot(snapshot));
       return `已更新：1 HKD = ${snapshot.rates.JPY.toFixed(2)} JPY（${snapshot.source}）`;
     });
   }

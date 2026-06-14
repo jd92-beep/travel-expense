@@ -86,7 +86,7 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
             <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
               <b>{idx + 1}</b>
               <span><VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {displayStore(r)}</span>
-              <strong>{r.currency === 'HKD' ? 'HK$' : (r.currency || resolvedTripCurrency === 'JPY' ? '¥' : r.currency || resolvedTripCurrency + ' ')}{fmt(r.total)}</strong>
+              <strong>{formatCurrencyAmount(r.total, r.currency || resolvedTripCurrency)}</strong>
             </motion.div>
           );
         }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}

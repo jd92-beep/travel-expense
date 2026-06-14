@@ -5,7 +5,7 @@ import { ReceiptEditor } from './components/ReceiptEditor';
 import { Shell } from './components/Shell';
 import { LoadingState } from './components/ui';
 import { Loader2 } from 'lucide-react';
-import { activeTrip, stampReceiptForTrip, stableSpotId } from './domain/trip/normalize';
+import { activeTrip, stampReceiptForTrip, stableDayId, stableSpotId } from './domain/trip/normalize';
 import { hasCredentialBrokerSession } from './lib/credentialBroker';
 import { canUseNotionMirror } from './lib/notionAccess';
 import { mergePulledData } from './lib/syncMerge';
@@ -17,7 +17,7 @@ import { TAB_MANIFEST } from './lib/tabs';
 import { isBoss } from './lib/constants';
 import { AuthGate } from './security/AuthGate';
 import { HyperframeBackground } from './components/HyperframeBackground';
-import { fetchLiveCurrencySnapshot, loadCurrencySnapshot, usableSnapshot, type CurrencySnapshot } from './lib/currency';
+import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, loadCurrencySnapshot, usableSnapshot, type CurrencySnapshot } from './lib/currency';
 import { AnimatePresence, motion } from 'motion/react';
 import { shouldDisableHeavyEffects } from './lib/performance';
 import { acceptSupabaseTripInvite, createSupabaseTripInvite, hasSupabaseSession, useSupabaseAuth } from './lib/supabase';
@@ -288,7 +288,7 @@ export function App() {
     fetchBootCurrencySnapshot().then(snapshot => {
       if (!alive) return;
       if (snapshot.rates.JPY) {
-        setState((current) => ({ ...current, rate: Number(snapshot.rates.JPY.toFixed(4)) }));
+        setState((current) => ({ ...current, ...appRatePatchFromSnapshot(snapshot) }));
         console.log('[App] Auto-updated live exchange rate:', snapshot.rates.JPY, 'from', snapshot.source);
       }
     }).catch(() => {
@@ -410,7 +410,7 @@ export function App() {
           </span>
         </div>
       )}
-      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)}>
+      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} updateState={updateState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)}>
         <ErrorBoundary key={safeTab}>
           <Suspense fallback={<LoadingState label="載入分頁" />}>
             {disableHeavy ? (
@@ -522,7 +522,21 @@ export function App() {
             setState((prev) => {
               const trip = activeTrip(prev);
               const now = Date.now();
-              const itinerary = trip.itinerary.map((day) => ({ ...day, spots: day.spots.map((spot) => ({ ...spot })) }));
+              const rawItinerary = Array.isArray(trip.itinerary) ? trip.itinerary : [];
+              let itinerary = rawItinerary.map((day) => ({ ...day, spots: day.spots.map((spot) => ({ ...spot })) }));
+              if (!itinerary.length) {
+                const fallbackDate = receipt.date || trip.startDate || prev.tripDateRange.start || new Date().toISOString().slice(0, 10);
+                itinerary = [{
+                  id: stableDayId(trip.id, fallbackDate),
+                  dayId: stableDayId(trip.id, fallbackDate),
+                  date: fallbackDate,
+                  day: 1,
+                  region: trip.destinationSummary || 'Trip',
+                  timezone: trip.timezones?.[0] || 'Asia/Hong_Kong',
+                  currency: trip.currencies?.find((c) => c !== 'HKD') || prev.tripCurrency || 'JPY',
+                  spots: [],
+                }];
+              }
               const targetIdx = Math.max(0, itinerary.findIndex((day) => day.date === receipt.date));
               const target = itinerary[targetIdx] || itinerary[0];
               const spot = {

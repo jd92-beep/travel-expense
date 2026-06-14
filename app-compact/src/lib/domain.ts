@@ -161,13 +161,13 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   const rate = Math.max(0.1, Number(r.exchangeRate) || perHkdForCurrency(state, cur));
 
   // 增加強大嘅自我修復 Self-Healing 校驗：
-  // 如果 hkdAmount 存在，但與依匯率計算出的金額偏差超過 40% (偏離過大說明數據有污染/被寫錯了)，
+  // 如果 hkdAmount 存在，但與依匯率計算出的金額偏差超過 10% (偏離過大說明數據有污染/被寫錯了)，
   // 或者當 total > 100 且 hkdAmount <= 5 (顯然比例不對) 時，我們強制重新計算！
   let isHkdAmountValid = false;
   if (typeof r.hkdAmount === 'number' && r.hkdAmount > 0) {
     const ratio = (Number(r.total) || 0) / r.hkdAmount;
     const percentDiff = Math.abs(ratio - rate) / rate;
-    if (percentDiff < 0.4) {
+    if (percentDiff < 0.1) {
       isHkdAmountValid = true;
     }
   }

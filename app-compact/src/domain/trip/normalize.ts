@@ -299,7 +299,7 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   if (hkdAmt > 0 && receipt.total) {
     const ratio = Number(receipt.total) / hkdAmt;
     const percentDiff = Math.abs(ratio - rate) / rate;
-    if (percentDiff < 0.4) {
+    if (percentDiff < 0.1) {
       isHkdAmountValid = true;
     }
   }
@@ -353,7 +353,7 @@ export function migrateAppState(input: unknown): AppState {
         itinerary: normalizeItinerary(
           item.itinerary?.length ? item.itinerary : Array.isArray(parsed.customItinerary) ? parsed.customItinerary : [],
           item.id,
-          parsed.tripCurrency || 'JPY',
+          item.currencies?.find((c) => c !== 'HKD') || parsed.tripCurrency || 'JPY',
         ),
         timezones: Array.isArray(item.timezones)
           ? Array.from(new Set(item.timezones.map(normalizeZone).filter(Boolean)))
@@ -390,10 +390,10 @@ export function migrateAppState(input: unknown): AppState {
     activeTripId: nextActiveId,
     trips: finalTrips,
     budget: resolvedBudget,
-    tripName: parsed.tripName || trip.name,
+    tripName: currentActiveTrip?.name || parsed.tripName || trip.name,
     tripDateRange: {
-      start: parsed.tripDateRange?.start || trip.startDate,
-      end: parsed.tripDateRange?.end || trip.endDate,
+      start: currentActiveTrip?.startDate || parsed.tripDateRange?.start || trip.startDate,
+      end: currentActiveTrip?.endDate || parsed.tripDateRange?.end || trip.endDate,
     },
     customItinerary: parsed.customItinerary || null,
     statsIncludeTransportLodging,

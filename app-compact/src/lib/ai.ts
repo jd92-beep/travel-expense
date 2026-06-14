@@ -669,12 +669,12 @@ function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' 
       ? state.voiceModel || ''
       : kind === 'email'
         ? state.emailModel || ''
-        : state.tripUpdateModel || 'mimo/mimo-v2.5-pro';
+        : state.tripUpdateModel || DEFAULT_TRIP_UPDATE_MODEL_ID;
   const preferredAttempt = selectedModelAttempt(chosenModelId);
-  // Contract default: email/trip → Mimo v2.5 Pro, scan/voice → Google Gemma 4 31B.
+  // Contract default: email/trip → Kimi kimi-code, scan/voice → Google Gemma 4 31B.
   // Used as first fallback when user selects a different model.
   const contractDefault: ModelAttempt = kind === 'email' || kind === 'trip'
-    ? { provider: 'mimo', model: 'mimo-v2.5-pro', label: 'Mimo v2.5 Pro (Contract Default)' }
+    ? { provider: 'kimi', model: 'kimi-code', label: 'Kimi kimi-code (Contract Default)' }
     : { provider: 'google', model: DEFAULT_GOOGLE_BACKUP_MODEL, label: 'Google Gemma 4 31B (Contract Default)' };
   // User's selection is the true primary; falls back to contract default if empty.
   const primary: ModelAttempt = preferredAttempt || contractDefault;

@@ -607,6 +607,9 @@ export function useSupabaseAuth() {
     const { error: signUpError } = await supabase.auth.signUp({
       email: cleaned,
       password,
+      options: {
+        emailRedirectTo: authRedirectUrl(),
+      },
     });
     if (signUpError) throw signUpError;
   }, [supabase]);
@@ -804,8 +807,8 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     ...tripIntelligenceColumns(normalizedIntelligence),
     version: Math.max(1, Number(trip.version) || 1),
     archived: !!trip.archived,
-    notion_page_id: null,
-    notion_database_id: null,
+    notion_page_id: trip.notionPageId || null,
+    notion_database_id: userScopedNotionDatabaseId(trip.notionDb) || null,
     created_at: isoFromMs(trip.createdAt),
     updated_at: isoFromMs(trip.updatedAt),
   };

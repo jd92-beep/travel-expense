@@ -172,6 +172,7 @@ export function Shell({
   onRetryFailed,
   state,
   setState,
+  updateState,
   onPull,
   onOpenNewTripWizard,
 }: {
@@ -182,6 +183,7 @@ export function Shell({
   onRetryFailed?: () => void;
   state?: AppState;
   setState?: React.Dispatch<React.SetStateAction<AppState>>;
+  updateState?: (patch: Partial<AppState>) => void;
   onPull?: () => Promise<void>;
   onOpenNewTripWizard?: () => void;
 }) {
@@ -215,9 +217,14 @@ export function Shell({
   const activeTripDates = trip ? `${trip.startDate} - ${trip.endDate}` : '尚未設定日期';
 
   const handleSwitchTrip = (tripId: string) => {
-    if (!setState || !state) return;
+    if (!state) return;
     const patch = switchTrip(state, tripId);
-    if (patch) setState((prev) => ({ ...prev, ...patch }));
+    if (!patch) return;
+    if (updateState) {
+      updateState(patch);
+    } else if (setState) {
+      setState((prev) => ({ ...prev, ...patch }));
+    }
   };
 
   const activeCopy = {
