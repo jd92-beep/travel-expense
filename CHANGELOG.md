@@ -2,6 +2,8 @@
 
 ## 2026-06-13
 
+- Fixed Compact Weather tab entry scrolling so tapping Weather from Scan/Home now repeatedly re-centers the current trip day's live weather slot after weather rows and entry animations settle. Added regression coverage for a Jeju Day 2 current-time jump from Scan to Weather. Bumped Compact to `0.7.2`.
+- Verification passed with `app-compact npm run typecheck`, served Weather smoke (`13 passed`), `app-compact npm run build`, `app-compact npm run security:scan`, `git diff --check`, and served mobile layout smoke.
 - Fixed Compact Weather card place labels so weather targets keep the itinerary's pasted language instead of leaking English API/geocoder city names. Korea/Jeju weather groups now display Cantonese Traditional Chinese labels such as `濟州`, `西歸浦`, `城山`, `涯月`, and `牛島`, while English itineraries such as San Francisco remain English. Trip Update AI prompts now explicitly preserve user-pasted spot-name language and translate API-only English display names into natural Hong Kong Cantonese when the itinerary is Chinese. Bumped Compact to `0.7.1`.
 - Verification passed with `app-compact npm run typecheck`, `app-compact npm run build`, `app-compact npm run security:scan`, served Weather smoke (`12 passed`), and mobile layout smoke.
 - Refined Compact modal behavior and currency layouts: Scan live FX now shows the conversion result above the amount input, Compact popups close when tapping the backdrop while preserving inner-modal clicks, Home `預算總覽` stacks the destination currency directly under HKD, and Stats `預算羅盤` currency toggle now matches the Top 10 expense toggle style. Bumped Compact to `0.2.8`.

@@ -29,7 +29,7 @@ function trustAndState(state) {
   return {
     ...state,
     schemaVersion: 3,
-    lastTab: 'weather',
+    lastTab: state.lastTab || 'weather',
     activeTripId: tripId,
     customItinerary: itinerary,
     trips,
@@ -266,6 +266,106 @@ async function installState(page, state) {
     localStorage.setItem('boss-japan-tracker', JSON.stringify(payload));
   }, trustAndState(state));
 }
+
+test('Weather tab auto-jumps from Scan to the current live day slot', async ({ page }) => {
+  const fixed = new Date('2026-06-14T14:20:00+09:00').valueOf();
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+  }, fixed);
+  await page.route('https://api.open-meteo.com/**', async (route) => {
+    await route.fulfill({
+      json: weatherFixture({
+        dates: ['2026-06-14', '2026-06-15'],
+        hourlyTemps: { 9: 22, 12: 27, 16: 25, 21: 23 },
+        hourlyFeels: { 9: 24, 12: 30, 16: 28, 21: 25 },
+      }),
+    });
+  });
+  await installState(page, {
+    lastTab: 'scan',
+    tripName: '濟州2026',
+    tripCurrency: 'KRW',
+    tripDateRange: { start: '2026-06-13', end: '2026-06-15' },
+    customItinerary: [
+      {
+        date: '2026-06-13',
+        day: 1,
+        region: '西歸浦',
+        city: 'Seogwipo',
+        country: 'South Korea',
+        timezone: 'Asia/Seoul',
+        currency: 'KRW',
+        spots: [
+          { time: '09:45', name: '道頭洞彩虹海岸道路', type: 'ticket', lat: 33.5152, lon: 126.4924 },
+          { time: '14:00', name: 'Osulloc Tea Museum', type: 'ticket', lat: 33.3059, lon: 126.2895 },
+        ],
+      },
+      {
+        date: '2026-06-14',
+        day: 2,
+        region: '南部花景＋西歸浦',
+        city: 'Seogwipo',
+        country: 'South Korea',
+        timezone: 'Asia/Seoul',
+        currency: 'KRW',
+        spots: [
+          { time: '09:15', name: 'Cafe Gyulkkot Darak 橘子咖啡廳', type: 'food', lat: 33.2887, lon: 126.4059 },
+          { time: '10:30', name: 'Camellia Hill 山茶花之丘', type: 'ticket', lat: 33.2899, lon: 126.3691 },
+          { time: '12:30', name: '風爐 西歸浦黑豬肉', type: 'food', lat: 33.2524, lon: 126.5618 },
+          { time: '15:15', name: '休愛里自然公園', type: 'ticket', lat: 33.3088, lon: 126.6358 },
+          { time: '18:15', name: '西歸浦每日偶來市場', type: 'food', lat: 33.2496, lon: 126.5638 },
+        ],
+      },
+      {
+        date: '2026-06-15',
+        day: 3,
+        region: '牛島＋城山日出峰',
+        city: 'Jeju',
+        country: 'South Korea',
+        timezone: 'Asia/Seoul',
+        currency: 'KRW',
+        spots: [
+          { time: '10:00', name: 'BLANC ROCHER', type: 'food', lat: 33.5001, lon: 126.9513 },
+          { time: '17:00', name: '城山日出峰', type: 'ticket', lat: 33.4591, lon: 126.9405 },
+        ],
+      },
+    ],
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await expect(page.getByRole('main').getByRole('heading', { name: /掃描收據/ })).toBeVisible();
+  await page.getByLabel('主要分頁').getByRole('button', { name: '天氣', exact: true }).click();
+  const liveSlot = page.locator('[data-weather-day="2026-06-14"] [data-weather-live="true"]').first();
+  await expect(liveSlot).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(1500);
+  const metrics = await liveSlot.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      scrollY: window.scrollY,
+      top: rect.top,
+      bottom: rect.bottom,
+      center: rect.top + rect.height / 2,
+      viewport: window.innerHeight,
+      activeDay: node.closest('[data-weather-day]')?.getAttribute('data-weather-day') || '',
+      text: node.textContent || '',
+    };
+  });
+  expect(metrics.activeDay, JSON.stringify(metrics, null, 2)).toBe('2026-06-14');
+  expect(metrics.text, JSON.stringify(metrics, null, 2)).toContain('LIVE');
+  expect(metrics.scrollY, JSON.stringify(metrics, null, 2)).toBeGreaterThan(240);
+  expect(metrics.center, JSON.stringify(metrics, null, 2)).toBeGreaterThan(110);
+  expect(metrics.center, JSON.stringify(metrics, null, 2)).toBeLessThan(metrics.viewport - 110);
+});
 
 test('Japan weather uses JMA official first and renders slots', async ({ page }) => {
   const fixed = new Date('2026-04-20T10:00:00+09:00').valueOf();

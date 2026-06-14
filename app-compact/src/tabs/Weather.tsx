@@ -157,15 +157,21 @@ export function Weather({ state }: { state: AppState }) {
     return () => { controller.abort(); };
   }, [itineraryKey]);
 
-  // Jump to the active day's card (live-hour slot if rendered). Centers with a top offset for the
-  // sticky command bar, then re-corrects after the Reveal animations settle (mirrors Timeline).
+  const scrollCorrectionHandlesRef = useRef<number[]>([]);
+
+  // Jump to the active day's card (live-hour slot if rendered). The Weather tab changes height
+  // while provider rows and reveal animations settle, so keep correcting briefly after entry.
   // Used by both the auto-jump effect and the manual "今日" button.
   const jumpToActiveDay = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (!leadDay) return;
+    scrollCorrectionHandlesRef.current.forEach((handle) => window.clearTimeout(handle));
+    scrollCorrectionHandlesRef.current = [];
     const forecastDate = forecastDateFor(leadDay.date);
     const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
     const findTarget = (): Element | null => {
       const daySelector = `[data-weather-day="${leadDay.date}"]`;
+      const liveMarker = document.querySelector(`${daySelector} [data-weather-live="true"]`);
+      if (liveMarker) return liveMarker;
       if (liveHour != null) {
         const liveSlot = document.querySelector(`${daySelector} [data-weather-hour="${liveHour}"]`);
         if (liveSlot) return liveSlot;
@@ -176,30 +182,39 @@ export function Weather({ state }: { state: AppState }) {
       const el = findTarget();
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const targetTop = Math.max(0, window.scrollY + rect.top - window.innerHeight * 0.4);
+      const targetTop = Math.max(0, window.scrollY + rect.top - window.innerHeight * 0.36);
       window.scrollTo({ top: targetTop, behavior: b });
       el.scrollIntoView({ behavior: b, block: 'center', inline: 'nearest' });
     };
     doScroll(behavior);
-    window.setTimeout(() => {
+    const correctionDelays = [90, 260, 520, 900, 1320];
+    scrollCorrectionHandlesRef.current = correctionDelays.map((delay) => window.setTimeout(() => {
       const el = findTarget();
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const center = rect.top + rect.height / 2;
-      if (center < 120 || center > window.innerHeight - 120) doScroll('auto');
-    }, 420);
+      if (center < 112 || center > window.innerHeight - 112) doScroll('auto');
+    }, delay));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadDay, today, trip]);
+
+  useEffect(() => () => {
+    scrollCorrectionHandlesRef.current.forEach((handle) => window.clearTimeout(handle));
+    scrollCorrectionHandlesRef.current = [];
+  }, []);
 
   const autoJumpKeyRef = useRef('');
   useEffect(() => {
     if (!leadDay || busy) return;
     const forecastDate = forecastDateFor(leadDay.date);
     const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
-    const key = `${leadDay.date}:${forecastDate}:${liveHour ?? 'day'}:${Object.keys(rows).length > 0}`;
+    const targetReady = typeof document === 'undefined'
+      ? false
+      : Boolean(document.querySelector(`[data-weather-day="${leadDay.date}"] ${liveHour != null ? `[data-weather-hour="${liveHour}"]` : '.weather-location'}`));
+    const key = `${leadDay.date}:${forecastDate}:${liveHour ?? 'day'}:${Object.keys(rows).length > 0}:${targetReady}`;
     if (autoJumpKeyRef.current === key) return;
     autoJumpKeyRef.current = key;
-    const t = window.setTimeout(() => jumpToActiveDay('smooth'), 240);
+    const t = window.setTimeout(() => jumpToActiveDay('smooth'), targetReady ? 180 : 360);
     return () => window.clearTimeout(t);
   }, [busy, leadDay, rows, today, jumpToActiveDay]);
 
@@ -270,43 +285,44 @@ export function Weather({ state }: { state: AppState }) {
         const dayCode = dayRows.flatMap((weather) => weather.slots || []).find((slot) => slot.code != null)?.code;
         return (
           <Reveal key={day.date} className="weather-day-reveal" delay={Math.min(0.14, day.day * 0.02)}>
-          <GlassCard className="weather-day" data-weather-day={day.date}>
-            <WeatherFX code={dayCode} tintOnly />
-            <div className="section-head">
-              <div><p className="eyebrow">{day.date < today ? `Current · ${today} · Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
-              <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{(groupedCoordsByDay.get(day.date) || []).map((g) => g.label).join(' / ') || day.region}</StatusPill>
-            </div>
-            {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
-            {dayRows.map((weather) => {
-              const emptyForecast = weather.slots?.length && weather.slots.every((slot) => slot.temp == null && slot.rain == null);
-              const liveHour = liveSlotHour(forecastDateFor(day.date), normalizedTimezone(day.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
-              return (
-                <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
-                  <h3>{weather.coord.label}</h3>
-                  <div className="weather-location-meta" aria-label={`Weather metadata for ${weather.coord.label}`}>
-                    <span>{weatherProviderLabel(weather)}</span>
-                    <span>{weatherFreshnessLabel(weather)}</span>
-                    <span>{weatherTargetOriginLabel(weather.coord)}</span>
-                    {weather.fallbackReason && <span className="weather-fallback-chip">{weatherFallbackLabel(weather.fallbackReason)}</span>}
-                  </div>
-                  {emptyForecast && <p className="notice">旅程日期超出目前預報範圍，會顯示佔位資料；稍後刷新會自動更新。</p>}
-                  <div className="weather-grid weather-grid-detailed">
-                    {(weather.slots || []).map((slot) => {
-                      const live = liveHour === slot.hour;
-                      const hasRain = slot.rain != null || slot.precipMm != null;
-                      const hasWind = slot.windSpeed != null || slot.windGust != null;
-                      const hasHumidity = slot.humidity != null;
-                      const hasSunUv = slot.uvIndex != null || slot.cloudCover != null;
-                      const feels = slot.feelsLike ?? slot.temp;
+            <div className="weather-day-anchor" data-weather-day={day.date}>
+              <GlassCard className="weather-day">
+                <WeatherFX code={dayCode} tintOnly />
+                <div className="section-head">
+                  <div><p className="eyebrow">{day.date < today ? `Current · ${today} · Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
+                  <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{(groupedCoordsByDay.get(day.date) || []).map((g) => g.label).join(' / ') || day.region}</StatusPill>
+                </div>
+                {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
+                {dayRows.map((weather) => {
+                  const emptyForecast = weather.slots?.length && weather.slots.every((slot) => slot.temp == null && slot.rain == null);
+                  const liveHour = liveSlotHour(forecastDateFor(day.date), normalizedTimezone(day.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
+                  return (
+                    <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
+                      <h3>{weather.coord.label}</h3>
+                      <div className="weather-location-meta" aria-label={`Weather metadata for ${weather.coord.label}`}>
+                        <span>{weatherProviderLabel(weather)}</span>
+                        <span>{weatherFreshnessLabel(weather)}</span>
+                        <span>{weatherTargetOriginLabel(weather.coord)}</span>
+                        {weather.fallbackReason && <span className="weather-fallback-chip">{weatherFallbackLabel(weather.fallbackReason)}</span>}
+                      </div>
+                      {emptyForecast && <p className="notice">旅程日期超出目前預報範圍，會顯示佔位資料；稍後刷新會自動更新。</p>}
+                      <div className="weather-grid weather-grid-detailed">
+                        {(weather.slots || []).map((slot) => {
+                          const live = liveHour === slot.hour;
+                          const hasRain = slot.rain != null || slot.precipMm != null;
+                          const hasWind = slot.windSpeed != null || slot.windGust != null;
+                          const hasHumidity = slot.humidity != null;
+                          const hasSunUv = slot.uvIndex != null || slot.cloudCover != null;
+                          const feels = slot.feelsLike ?? slot.temp;
 
-                      return (
-                        <div
-                          className={`weather-slot weather-slot-detailed ${live ? 'is-live' : ''}`}
-                          key={slot.hour}
-                          data-weather-hour={slot.hour}
-                          data-weather-live={live ? 'true' : undefined}
-                          style={{ '--weather-accent': weatherAccent(slot) } as CSSProperties}
-                        >
+                          return (
+                            <div
+                              className={`weather-slot weather-slot-detailed ${live ? 'is-live' : ''}`}
+                              key={slot.hour}
+                              data-weather-hour={slot.hour}
+                              data-weather-live={live ? 'true' : undefined}
+                              style={{ '--weather-accent': weatherAccent(slot) } as CSSProperties}
+                            >
                           <div className="weather-slot-header">
                             <div className="weather-time">
                               <span className="time-text">{formatHour(slot.hour)}</span>
@@ -378,14 +394,15 @@ export function Weather({ state }: { state: AppState }) {
                           <div className="weather-hint-container">
                             <p className="weather-hint">{weatherHint(slot)}</p>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </GlassCard>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </GlassCard>
+            </div>
           </Reveal>
         );
       })}

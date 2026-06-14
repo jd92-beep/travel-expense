@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-14
-- **Focus**: Compact Weather itinerary-language place labels
+- **Focus**: Compact Weather live-card tab-entry jump
 - **Agent**: Codex 🤖
-- **App version**: Compact `0.7.1`; React unchanged in this pass
+- **App version**: Compact `0.7.2`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +18,25 @@
 
 ## What Was Done
 
-### Session 24 (Codex — current session)
+### Session 25 (Codex — current session)
+
+1. **Compact Weather now jumps to the current live weather slot when entering the tab**:
+   - `Weather.tsx` now prioritizes the rendered `data-weather-live="true"` card for the active trip date, then falls back to the matching weather hour/day.
+   - The scroll correction runs several times after tab entry so provider rows, card heights, and Reveal animations cannot leave the viewport stuck above the live card.
+   - Auto-jump state now includes whether the target slot is actually rendered, so the first partial day-card jump does not block the later live-slot jump.
+2. **Regression coverage and versioning**:
+   - Added Weather smoke coverage for opening Compact on Scan, tapping `天氣`, and verifying Jeju Day 2 `LIVE` weather slot is centered in the mobile viewport.
+   - Bumped Compact `package.json`, `package-lock.json`, and `APP_VERSION` from `0.7.1` to `0.7.2`.
+3. **Verification**:
+   - Passed `app-compact npm run typecheck`.
+   - Passed served Compact Weather smoke (`13 passed`).
+   - Passed `app-compact npm run build` (Vite plugin timing warning only).
+   - Passed `app-compact npm run security:scan`.
+   - Passed `git diff --check`.
+   - Passed served Compact mobile layout smoke.
+   - GitNexus detect-changes reported HIGH because the compact `Weather` symbol participates in multiple date/itinerary flows; actual worktree scope is the expected Weather/test/version/docs set only.
+
+### Session 24 (Codex — previous session)
 
 1. **Compact Weather place labels now follow itinerary language**:
    - Weather target grouping still uses the resolved coordinates/city anchors for API accuracy, but UI labels now prefer the itinerary language instead of showing API/geocoder English names.
