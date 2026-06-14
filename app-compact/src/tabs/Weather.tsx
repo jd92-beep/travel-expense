@@ -1,7 +1,8 @@
-import { Cloud, CloudLightning, CloudRain, CloudSun, RefreshCw, Snowflake, Sun, Umbrella, Wind } from 'lucide-react';
+import { Cloud, CloudLightning, CloudRain, CloudSun, LocateFixed, RefreshCw, Snowflake, Sun, Umbrella, Wind } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GlassCard, LoadingState, Reveal, StatusPill, Toast } from '../components/ui';
+import { WeatherFX } from '../components/WeatherFX';
 import { Meteors } from '../components/ui/meteors';
 import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
@@ -156,16 +157,13 @@ export function Weather({ state }: { state: AppState }) {
     return () => { controller.abort(); };
   }, [itineraryKey]);
 
-  const autoJumpKeyRef = useRef('');
-  useEffect(() => {
-    if (!leadDay || busy) return;
+  // Jump to the active day's card (live-hour slot if rendered). Centers with a top offset for the
+  // sticky command bar, then re-corrects after the Reveal animations settle (mirrors Timeline).
+  // Used by both the auto-jump effect and the manual "今日" button.
+  const jumpToActiveDay = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    if (!leadDay) return;
     const forecastDate = forecastDateFor(leadDay.date);
     const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
-    // Re-jump only when the meaningful target changes (not on every background refresh).
-    const key = `${leadDay.date}:${forecastDate}:${liveHour ?? 'day'}:${Object.keys(rows).length > 0}`;
-    if (autoJumpKeyRef.current === key) return;
-    autoJumpKeyRef.current = key;
-
     const findTarget = (): Element | null => {
       const daySelector = `[data-weather-day="${leadDay.date}"]`;
       if (liveHour != null) {
@@ -174,27 +172,36 @@ export function Weather({ state }: { state: AppState }) {
       }
       return document.querySelector(daySelector);
     };
-    // Center the target with a top offset for the sticky command bar, then re-check after the
-    // Reveal animations settle and re-correct if it drifted (mirrors the Timeline "jump").
-    const scrollToTarget = (behavior: ScrollBehavior) => {
+    const doScroll = (b: ScrollBehavior) => {
       const el = findTarget();
-      if (!el) return false;
+      if (!el) return;
       const rect = el.getBoundingClientRect();
       const targetTop = Math.max(0, window.scrollY + rect.top - window.innerHeight * 0.4);
-      window.scrollTo({ top: targetTop, behavior });
-      el.scrollIntoView({ behavior, block: 'center', inline: 'nearest' });
-      return true;
+      window.scrollTo({ top: targetTop, behavior: b });
+      el.scrollIntoView({ behavior: b, block: 'center', inline: 'nearest' });
     };
-    const t1 = window.setTimeout(() => scrollToTarget('smooth'), 220);
-    const t2 = window.setTimeout(() => {
+    doScroll(behavior);
+    window.setTimeout(() => {
       const el = findTarget();
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const center = rect.top + rect.height / 2;
-      if (center < 120 || center > window.innerHeight - 120) scrollToTarget('auto');
-    }, 650);
-    return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
-  }, [busy, leadDay, rows, today]);
+      if (center < 120 || center > window.innerHeight - 120) doScroll('auto');
+    }, 420);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadDay, today, trip]);
+
+  const autoJumpKeyRef = useRef('');
+  useEffect(() => {
+    if (!leadDay || busy) return;
+    const forecastDate = forecastDateFor(leadDay.date);
+    const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
+    const key = `${leadDay.date}:${forecastDate}:${liveHour ?? 'day'}:${Object.keys(rows).length > 0}`;
+    if (autoJumpKeyRef.current === key) return;
+    autoJumpKeyRef.current = key;
+    const t = window.setTimeout(() => jumpToActiveDay('smooth'), 240);
+    return () => window.clearTimeout(t);
+  }, [busy, leadDay, rows, today, jumpToActiveDay]);
 
   return (
     <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto weather-screen" style={travelAtlasStyle}>
@@ -210,6 +217,9 @@ export function Weather({ state }: { state: AppState }) {
             <span className="weather-target-pill">
               <StatusPill tone={hasMissingTarget ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{targetSummary}</StatusPill>
             </span>
+            <button className="secondary weather-refresh-icon" type="button" aria-label="跳去今日天氣" title="跳去今日天氣" onClick={() => jumpToActiveDay('smooth')}>
+              <LocateFixed size={17} />
+            </button>
             <button className="secondary weather-refresh-icon" type="button" aria-label="刷新天氣" title="刷新天氣" disabled={busy} onClick={() => loadRef.current()}>
               <RefreshCw size={17} className={busy ? 'spin' : ''} />
             </button>
@@ -220,7 +230,8 @@ export function Weather({ state }: { state: AppState }) {
         {error && <Toast tone="warning">天氣拉取失敗：{error}</Toast>}
       </GlassCard>
       <GlassCard className="preview-weather-current-card">
-        <div className="preview-weather-source-strip" aria-label="Weather source status">
+        <WeatherFX code={leadSlot?.code} />
+        <div className="preview-weather-source-strip" aria-label="Weather source status" style={{ position: 'relative', zIndex: 2 }}>
           <span>{weatherProviderLabel(leadSource)}</span>
           <span>{weatherFreshnessLabel(leadSource)}</span>
           <span>{weatherTargetOriginLabel(leadSource?.coord)}</span>
@@ -256,9 +267,11 @@ export function Weather({ state }: { state: AppState }) {
       {displayItinerary.map((day) => {
         const dayRows = rows[day.date] || [];
         const missingAll = dayRows.length > 0 && dayRows.every((weather) => !weather.slots?.length);
+        const dayCode = dayRows.flatMap((weather) => weather.slots || []).find((slot) => slot.code != null)?.code;
         return (
           <Reveal key={day.date} className="weather-day-reveal" delay={Math.min(0.14, day.day * 0.02)}>
           <GlassCard className="weather-day" data-weather-day={day.date}>
+            <WeatherFX code={dayCode} tintOnly />
             <div className="section-head">
               <div><p className="eyebrow">{day.date < today ? `Current · ${today} · Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
               <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{(groupedCoordsByDay.get(day.date) || []).map((g) => g.label).join(' / ') || day.region}</StatusPill>

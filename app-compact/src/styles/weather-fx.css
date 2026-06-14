@@ -1,0 +1,138 @@
+/* ===== Animated weather FX — reflects the real weather code (GPU-friendly: transform/opacity) ===== */
+.wfx {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 0;
+}
+.wfx-tint {
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
+  transition: background 0.9s ease, opacity 0.9s ease;
+}
+.wfx-sun .wfx-tint { background: radial-gradient(120% 95% at 82% -12%, rgba(255, 210, 110, 0.5), transparent 60%); }
+.wfx-clouds .wfx-tint { background: linear-gradient(160deg, rgba(206, 222, 235, 0.4), transparent 66%); }
+.wfx-fog .wfx-tint { background: linear-gradient(180deg, rgba(220, 226, 232, 0.55), transparent 72%); }
+.wfx-rain .wfx-tint { background: linear-gradient(160deg, rgba(64, 104, 146, 0.36), transparent 72%); }
+.wfx-snow .wfx-tint { background: linear-gradient(160deg, rgba(198, 220, 242, 0.42), transparent 72%); }
+.wfx-storm .wfx-tint { background: linear-gradient(160deg, rgba(46, 56, 86, 0.5), transparent 74%); }
+
+/* Sun: soft pulsing glow + slowly rotating ray burst */
+.wfx-sun-glow {
+  position: absolute;
+  top: -34%;
+  right: -12%;
+  width: 64%;
+  height: 86%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 204, 88, 0.55), rgba(255, 204, 88, 0) 66%);
+  animation: wfx-pulse 5s ease-in-out infinite;
+}
+.wfx-sun-rays {
+  position: absolute;
+  top: -55%;
+  right: -35%;
+  width: 95%;
+  height: 150%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 214, 120, 0.22) 0deg 5deg, transparent 5deg 22deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 30%, #000 56%, transparent 78%);
+  mask: radial-gradient(circle, transparent 0 30%, #000 56%, transparent 78%);
+  opacity: 0.5;
+  animation: wfx-spin 42s linear infinite;
+}
+@keyframes wfx-pulse { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.12); opacity: 0.78; } }
+@keyframes wfx-spin { to { transform: rotate(360deg); } }
+
+/* Clouds: drifting soft blobs */
+.wfx-cloud {
+  position: absolute;
+  left: -45%;
+  width: 48%;
+  height: 36%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 52%, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0) 70%);
+  filter: blur(2px);
+  animation: wfx-drift linear infinite;
+}
+@keyframes wfx-drift { from { transform: translateX(0); } to { transform: translateX(360%); } }
+
+/* Fog: blurred drifting bands */
+.wfx-fog-band {
+  position: absolute;
+  left: -20%;
+  width: 140%;
+  height: 28%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  filter: blur(7px);
+  animation: wfx-fog ease-in-out infinite alternate;
+}
+@keyframes wfx-fog { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
+
+/* Rain: thin falling streaks */
+.wfx-drop {
+  position: absolute;
+  top: -14%;
+  width: 2px;
+  height: 16%;
+  background: linear-gradient(transparent, rgba(155, 195, 235, 0.9));
+  border-radius: 2px;
+  animation: wfx-fall linear infinite;
+}
+@keyframes wfx-fall { 0% { transform: translateY(-20%); } 100% { transform: translateY(820%); } }
+
+/* Storm: rain + occasional lightning flash */
+.wfx-flash {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.85);
+  opacity: 0;
+  mix-blend-mode: screen;
+  animation: wfx-lightning 8s linear infinite;
+}
+@keyframes wfx-lightning {
+  0%, 90%, 100% { opacity: 0; }
+  91% { opacity: 0.7; }
+  92% { opacity: 0.1; }
+  93% { opacity: 0.55; }
+  94% { opacity: 0; }
+}
+
+/* Snow: drifting swaying flakes */
+.wfx-flake {
+  position: absolute;
+  top: -8%;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+  animation: wfx-snow linear infinite;
+  will-change: transform;
+}
+@keyframes wfx-snow {
+  0% { transform: translate(0, -10%); }
+  50% { transform: translate(var(--wfx-sway, 8px), 420%); }
+  100% { transform: translate(0, 860%); }
+}
+
+.wfx-static .wfx-tint { opacity: 0.42; }
+
+/* Host cards: clip particles to the rounded card + keep content above the FX layer */
+.preview-weather-current-card,
+.weather-day { position: relative; overflow: hidden; }
+.weather-day > *:not(.wfx) { position: relative; z-index: 1; }
+.preview-weather-current-card > *:not(.wfx) { position: relative; z-index: 1; }
+
+/* Polish: gently floating hero icon + soft card lift on hover */
+.preview-weather-hero-icon { animation: wfx-float 6s ease-in-out infinite; will-change: transform; }
+@keyframes wfx-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.weather-day { transition: transform 0.3s ease, box-shadow 0.3s ease; }
+@media (hover: hover) {
+  .weather-day:hover { transform: translateY(-2px); box-shadow: 0 18px 40px rgba(30, 77, 107, 0.14); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wfx-cloud, .wfx-fog-band, .wfx-drop, .wfx-flake, .wfx-sun-rays, .wfx-sun-glow, .wfx-flash { animation: none !important; display: none; }
+  .preview-weather-hero-icon { animation: none !important; }
+}
