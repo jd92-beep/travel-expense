@@ -66,17 +66,28 @@ export function ReceiptPhotoModal({ receipt, onClose }: { receipt: Receipt; onCl
               <p className="text-white/70 text-sm mb-6 leading-relaxed">
                 Notion 嘅安全圖片連結已失效（過期1小時）。<br />請到「設定」重新同步以刷新連結！
               </p>
-              {photoSrc && (
-                <a
-                  href={photoSrc}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-600 text-white font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md"
-                >
-                  <ExternalLink size={16} />
-                  在新分頁打開原始相片
-                </a>
-              )}
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                {photoSrc && (
+                  <button
+                    type="button"
+                    onClick={() => { setFallbackAttempted(false); setError(false); setImgSrc(photoSrc); }}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/15 text-white font-semibold text-sm hover:bg-white/25 active:scale-95 transition-all shadow-md"
+                  >
+                    重試
+                  </button>
+                )}
+                {photoSrc && (
+                  <a
+                    href={photoSrc}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-600 text-white font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md"
+                  >
+                    <ExternalLink size={16} />
+                    在新分頁打開原始相片
+                  </a>
+                )}
+              </div>
             </div>
           )}
           <button

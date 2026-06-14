@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 import { activeTrip } from '../domain/trip/normalize';
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
-import { archiveSupabaseReceipt, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
+import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { mergePulledData } from './syncMerge';
 import { rawReceiptSourceId } from './syncMerge';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
@@ -38,7 +38,12 @@ function dedupeQueue(queue: SyncQueueItem[]) {
   const latest = new Map<string, SyncQueueItem>();
   for (const item of queue) {
     if (item.status === 'synced') continue;
-    latest.set(queueKey(item), item);
+    const prev = latest.get(queueKey(item));
+    // Keep the newest op but preserve earlier payload metadata (notionPageId/supabaseId/sourceId)
+    // so a fresh re-enqueue doesn't drop the link info an earlier item had captured.
+    latest.set(queueKey(item), prev
+      ? { ...item, payload: { ...prev.payload, ...item.payload } }
+      : item);
   }
   return [...latest.values()].sort((a, b) => a.createdAt - b.createdAt);
 }
@@ -541,6 +546,16 @@ export function useSyncEngine(
       }
       console.log('[SyncEngine] Running pull()...');
       await pull();
+      // Owner/admin drains the shared-trip Notion outbox (receipt_sync_jobs) when online with
+      // Notion connected. Fire-and-forget + never throws, so it can't block or fail the sync.
+      const cloudSession = hasSupabaseSession(supabaseSessionRef.current) ? supabaseSessionRef.current : null;
+      if (cloudSession && canUseNotionMirror(stateRef.current, true, cloudSession.user?.email || null)) {
+        await yieldToStateFlush();
+        const outbox = await drainSharedTripNotionOutbox(cloudSession, stateRef.current, pushReceipt).catch(() => null);
+        if (outbox && (outbox.processed || outbox.failed)) {
+          console.log(`[SyncEngine] Notion outbox drained: ${outbox.processed} ok, ${outbox.failed} failed`);
+        }
+      }
     } finally {
       syncingRef.current = false;
     }

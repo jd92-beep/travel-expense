@@ -64,7 +64,7 @@ const CACHE_KEY = 'boss-japan-tracker:react-currency';
 const MAX_AGE = 60 * 60 * 1000; // 1 hour cache
 
 function jpyPerHkd(state: AppState): number {
-  return Math.max(0.1, Number(state.rate) || 20.36);
+  return Math.max(0.01, Number(state.rate) || 20.36);
 }
 
 export function perHkdForCurrency(state: AppState, currency = 'JPY'): number {
@@ -80,14 +80,14 @@ export function amountToHkd(amount: number, currency: string, state: AppState): 
   const code = String(currency || 'JPY').toUpperCase();
   const value = Number(amount) || 0;
   if (code === 'HKD') return value;
-  return value / Math.max(0.1, perHkdForCurrency(state, code));
+  return value / Math.max(0.01, perHkdForCurrency(state, code));
 }
 
 export function hkdToCurrency(amountHkd: number, currency: string, state: AppState): number {
   const code = String(currency || 'JPY').toUpperCase();
   const value = Number(amountHkd) || 0;
   if (code === 'HKD') return value;
-  return value * Math.max(0.1, perHkdForCurrency(state, code));
+  return value * Math.max(0.01, perHkdForCurrency(state, code));
 }
 
 export function currencyPrefix(currency: string): string {

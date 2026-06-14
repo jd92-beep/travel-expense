@@ -88,11 +88,18 @@ export function normalizeState(input: unknown): AppState {
   return stripLegacyProviderSecrets(state);
 }
 
+// Prototype-pollution-safe parse: drop dangerous keys so a tampered localStorage/import blob
+// can never inject __proto__/constructor/prototype into app state.
+export function safeJsonParse(raw: string): unknown {
+  return JSON.parse(raw, (key, value) =>
+    key === '__proto__' || key === 'constructor' || key === 'prototype' ? undefined : value);
+}
+
 export function loadState(scope?: string): AppState {
   try {
     const raw = localStorage.getItem(scopedStateKey(scope));
     const credentials = scope && scope !== 'local' ? {} : loadCredentials();
-    return normalizeState({ ...(raw ? JSON.parse(raw) : null), ...credentials });
+    return normalizeState({ ...(raw ? safeJsonParse(raw) as object : null), ...credentials });
   } catch {
     return normalizeState({ ...DEFAULT_STATE, ...(scope && scope !== 'local' ? {} : loadCredentials()) });
   }

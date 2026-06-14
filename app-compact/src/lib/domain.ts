@@ -358,6 +358,9 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
     const payerIdx = idxOf(r.personId || firstId);
     if (payerIdx < 0) continue;
     if (r.splitMode === 'private') {
+      if (r.beneficiaryId && idxOf(r.beneficiaryId) < 0) {
+        console.warn(`[settlement] private receipt ${r.id} beneficiary ${r.beneficiaryId} not found — attributing to payer`);
+      }
       const benIdx = idxOf(r.beneficiaryId || r.personId || firstId);
       if (benIdx < 0 || benIdx === payerIdx) privateByOwner[payerIdx] += amount;
       else {

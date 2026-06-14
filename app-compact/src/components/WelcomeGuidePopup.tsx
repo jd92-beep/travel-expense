@@ -623,7 +623,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(139, 115, 85, 0.08)', paddingBottom: '8px' }}>
                     <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 800 }}>預算與幣別</span>
-                    <span style={{ fontSize: '13px', color: '#CC2929', fontWeight: 900 }}>💰 {aiDraft.budget?.toLocaleString()} {aiDraft.currencies?.[1] || 'JPY'}</span>
+                    <span style={{ fontSize: '13px', color: '#CC2929', fontWeight: 900 }}>💰 {aiDraft.budget?.toLocaleString()} {aiDraft.intelligence?.primaryCurrency || aiDraft.currencies?.find((c) => c !== 'HKD') || 'JPY'}</span>
                   </div>
                   {(aiDraft.itinerary?.length ?? 0) > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>

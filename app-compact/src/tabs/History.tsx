@@ -103,6 +103,7 @@ function receiptHealthMarkers(
   if (isReceiptPhotoExpected(receipt) && !photoSrc) markers.push({ key: 'photo-missing', label: 'photo missing', tone: 'warning' });
   if (receiptHasLargePhoto(receipt)) markers.push({ key: 'photo-large', label: 'photo large', tone: 'warning' });
   if (receiptPhotoNeedsSync(receipt)) markers.push({ key: 'photo-unsynced', label: 'photo unsynced', tone: 'info' });
+  if (receipt.ledgerSyncStatus === 'notion_failed') markers.push({ key: 'notion-failed', label: 'notion sync failed', tone: 'warning' });
   if (receiptHasTrueConflict(receipt, state)) markers.push({ key: 'sync-conflict', label: 'sync conflict', tone: 'danger' });
   else if (receiptHasSyncConflict(receipt, state)) markers.push({ key: 'sync-retry', label: 'sync retrying', tone: 'warning' });
   if ((receipt.supabaseId || receipt.notionPageId) && !receipt.sourceId) markers.push({ key: 'cloud-only', label: 'cloud-only', tone: 'info' });
@@ -171,7 +172,7 @@ export function History({
     (acc[r.date || 'no-date'] ||= []).push(r);
     return acc;
   }, {});
-  const pending = tripReceipts.filter((r) => r.store?.startsWith('⏳ '));
+  const pending = useMemo(() => tripReceipts.filter((r) => r.store?.startsWith('⏳ ')), [tripReceipts]);
   const people = getPersons(state);
   const conflictItems = useMemo(
     () => buildReceiptConflictItems(tripReceipts, state),
@@ -211,7 +212,7 @@ export function History({
       tripName: target.name,
       budget: target.budget ?? state.budget,
       tripCurrency: target.currencies?.find((c) => c !== 'HKD') || state.tripCurrency,
-      customItinerary: target.itinerary || [],
+      customItinerary: target.itinerary || null,
       tripDateRange: { start: target.startDate, end: target.endDate },
     });
   };

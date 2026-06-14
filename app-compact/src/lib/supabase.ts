@@ -995,6 +995,116 @@ export async function uploadReceiptPhoto(
   return { storagePath, publicUrl: urlData.publicUrl };
 }
 
+// Shared-trip Notion outbox drainer (client-side worker).
+// Shared-trip receipts are written by every member to Supabase via the RPC, which enqueues a
+// receipt_sync_jobs row for the Notion mirror. There is no server worker (the Notion token lives
+// only in the owner's credential-broker session, never in the DB), so the TRIP OWNER/ADMIN drains
+// the outbox here when online: claim a job, push the receipt to the trip's Notion backend DB
+// (idempotent — pushReceipt finds the page by sourceId), and mark the job done. Fail-safe: bounded
+// batch, owner-only, explicit backend DB (no DEFAULT fallback), never throws, never blocks sync.
+export async function drainSharedTripNotionOutbox(
+  session: Session,
+  state: AppState,
+  push: (state: AppState, receipt: Receipt) => Promise<Receipt>,
+): Promise<{ processed: number; failed: number }> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { processed: 0, failed: 0 };
+  try {
+    const adminTripUuids = (state.trips || [])
+      .filter((trip) => trip.supabaseId && (trip.sharing?.role === 'owner' || trip.sharing?.role === 'admin'))
+      .map((trip) => cleanUuid(trip.supabaseId))
+      .filter((id): id is string => !!id);
+    if (!adminTripUuids.length) return { processed: 0, failed: 0 };
+
+    // Resolve each shared trip's Notion backend database (explicit — never fall back to a default DB).
+    const { data: backendRows, error: backendError } = await withTimeout(
+      supabase.from('trip_backend_links').select('trip_id,notion_database_ref').in('trip_id', adminTripUuids),
+    );
+    if (backendError) return { processed: 0, failed: 0 };
+    const dbByTrip = new Map<string, string>();
+    for (const row of (backendRows || []) as { trip_id: string; notion_database_ref: string | null }[]) {
+      if (row.notion_database_ref) dbByTrip.set(row.trip_id, row.notion_database_ref);
+    }
+    if (!dbByTrip.size) return { processed: 0, failed: 0 };
+
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const staleLockIso = new Date(nowMs - 120_000).toISOString();
+    const { data: jobs, error: jobsError } = await withTimeout(
+      supabase.from('receipt_sync_jobs')
+        .select('*')
+        .eq('provider', 'notion')
+        .in('trip_id', [...dbByTrip.keys()])
+        .in('status', ['pending', 'failed'])
+        .lte('next_attempt_at', nowIso)
+        .lt('attempts', 5)
+        .order('next_attempt_at', { ascending: true })
+        .limit(20),
+    );
+    if (jobsError || !jobs?.length) return { processed: 0, failed: 0 };
+
+    let processed = 0;
+    let failed = 0;
+    for (const job of jobs as Array<Record<string, any>>) {
+      if (job.locked_at && job.locked_at > staleLockIso) continue; // another device is processing it
+      const notionDb = dbByTrip.get(job.trip_id);
+      const trip = (state.trips || []).find((candidate) => cleanUuid(candidate.supabaseId) === job.trip_id);
+      if (!notionDb || !trip) continue;
+      await withTimeout(supabase.from('receipt_sync_jobs')
+        .update({ locked_at: nowIso, locked_by: session.user.id, updated_at: nowIso })
+        .eq('id', job.id)).catch(() => {});
+      try {
+        if (job.operation === 'delete') {
+          // Deletions are archived through the normal delete path; just settle the mirror job.
+          await withTimeout(supabase.from('receipt_sync_jobs')
+            .update({ status: 'succeeded', locked_at: null, locked_by: null, last_error: null, updated_at: new Date().toISOString() })
+            .eq('id', job.id));
+          processed += 1;
+          continue;
+        }
+        const { data: receiptRow, error: receiptError } = await withTimeout(
+          supabase.from('receipts').select('*').eq('id', job.receipt_id).is('deleted_at', null).maybeSingle(),
+        );
+        if (receiptError) throw receiptError;
+        if (!receiptRow) {
+          await withTimeout(supabase.from('receipt_sync_jobs')
+            .update({ status: 'succeeded', locked_at: null, locked_by: null, updated_at: new Date().toISOString() })
+            .eq('id', job.id));
+          processed += 1;
+          continue;
+        }
+        const receipt = rowToReceiptForTrip(receiptRow as SupabaseReceiptRow, state, trip, undefined, session.user.id);
+        const notionState: AppState = {
+          ...state,
+          activeTripId: trip.id,
+          trips: (state.trips || []).map((candidate) => candidate.id === trip.id ? { ...candidate, notionDb } : candidate),
+        };
+        await push(notionState, { ...receipt, tripId: trip.id });
+        await withTimeout(supabase.from('receipt_sync_jobs')
+          .update({ status: 'succeeded', locked_at: null, locked_by: null, last_error: null, updated_at: new Date().toISOString() })
+          .eq('id', job.id));
+        processed += 1;
+      } catch (err) {
+        failed += 1;
+        const attempts = Number(job.attempts || 0) + 1;
+        const backoffMs = Math.min(60, 2 ** attempts) * 60_000;
+        await withTimeout(supabase.from('receipt_sync_jobs').update({
+          status: 'failed',
+          attempts,
+          next_attempt_at: new Date(Date.now() + backoffMs).toISOString(),
+          locked_at: null,
+          locked_by: null,
+          last_error: String((err as Error)?.message || err).slice(0, 300),
+          updated_at: new Date().toISOString(),
+        }).eq('id', job.id)).catch(() => {});
+      }
+    }
+    return { processed, failed };
+  } catch {
+    return { processed: 0, failed: 0 };
+  }
+}
+
 export async function archiveSupabaseReceipt(session: Session, state: AppState, receipt: Receipt): Promise<void> {
   const supabase = getSupabaseClient();
   if (!supabase) return;
@@ -1073,6 +1183,17 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   }
   for (const row of (memberProfilesResult as { data?: { id: string; display_name: string }[] | null }).data || []) {
     if (row.display_name) profileNames.set(row.id, row.display_name);
+  }
+  // Co-member names: profiles RLS only returns the caller's own row, so fetch the rest via a
+  // security-definer RPC scoped to trips the caller can access (so members see each other's names).
+  const memberTripIds = [...new Set(memberRows.map((m) => m.trip_id))];
+  if (memberTripIds.length) {
+    try {
+      const { data: nameRows } = await withTimeout(supabase.rpc('trip_member_display_names', { p_trip_ids: memberTripIds }));
+      for (const row of (nameRows || []) as { user_id: string; display_name: string }[]) {
+        if (row.display_name) profileNames.set(row.user_id, row.display_name);
+      }
+    } catch { /* non-critical — fall back to generic member labels */ }
   }
   const peopleRows = (peopleResult.error ? [] : peopleResult.data || []) as SupabaseAccountingPersonRow[];
   const trips = tripRows.map((row) => rowToTrip(row, state, sharingForTrip(row, session.user.id, memberRows, inviteRows, backendRows, profileNames)));

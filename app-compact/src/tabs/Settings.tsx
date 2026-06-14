@@ -1954,11 +1954,6 @@ export function Settings({
     }
   }
 
-  async function copyShortcutUrl() {
-    const url = `shortcuts://run-shortcut?name=${encodeURIComponent('Travel Expense Email')}&input=${encodeURIComponent('ftjdfr+expense@gmail.com')}`;
-    await copyText(url, '已複製 Shortcut URL 範本');
-  }
-
   async function copyText(text: string, ok: string) {
     try {
       if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');

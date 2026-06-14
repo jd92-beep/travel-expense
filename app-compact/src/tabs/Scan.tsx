@@ -117,6 +117,7 @@ export function Scan({
   const galleryRef = useRef<HTMLInputElement | null>(null);
   const emailImageRef = useRef<HTMLInputElement | null>(null);
   const speechRef = useRef<any>(null);
+  const [isListening, setIsListening] = useState(false);
   const mountedRef = useRef(true);
   const [busy, setBusy] = useState('');
   const setBusyWithGlobal = useCallback((val: string) => {
@@ -299,13 +300,16 @@ export function Scan({
     };
     rec.onerror = (event: any) => {
       if (!mountedRef.current) return;
+      setIsListening(false);
       setStatus(`語音失敗：${event.error || 'unknown'}`);
     };
     rec.onend = () => {
       if (speechRef.current === rec) speechRef.current = null;
+      if (mountedRef.current) setIsListening(false);
     };
     speechRef.current = rec;
     rec.start();
+    setIsListening(true);
   }
 
   async function handleEmailParse() {
@@ -691,7 +695,7 @@ export function Scan({
           {mode === 'voice' && (
             <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm flex flex-col gap-3">
               <div className="flex gap-2">
-                <button className="secondary bg-white text-black flex-1 font-bold" type="button" onClick={startSpeech}><Mic size={18} /> 開始聽</button>
+                <button className="secondary bg-white text-black flex-1 font-bold" type="button" onClick={startSpeech} disabled={isListening}><Mic size={18} className={isListening ? 'animate-pulse' : ''} /> {isListening ? '聆聽中…' : '開始聽'}</button>
                 <StatefulActionButton className="primary voice-sparkle-btn flex-1 font-bold shadow-md" type="button" disabled={!voiceText.trim() || busy === 'voice'} onClick={handleVoiceParse}>解析</StatefulActionButton>
               </div>
               <textarea className="bg-white/80 border-white/60 rounded-xl p-3 text-black font-medium" value={voiceText} onChange={(e) => setVoiceText(e.target.value)} rows={3} placeholder="例：喺全家買飯糰同飲品 580 yen，用 Suica" />
@@ -811,7 +815,7 @@ export function Scan({
                   </label>
                   <div className="form-grid">
                     <label>店名<input value={row.store} onChange={(e) => updateBatch(row.id, { store: e.target.value })} /></label>
-                    <label>金額<input type="text" inputMode="decimal" value={row.total || ''} onChange={(e) => updateBatch(row.id, { total: Number(e.target.value) || 0 })} /></label>
+                    <label>金額<input type="text" inputMode="decimal" value={row.total || ''} onChange={(e) => { const n = Number(e.target.value); updateBatch(row.id, { total: Number.isFinite(n) && n >= 0 ? Math.min(n, 1_000_000_000) : 0 }); }} /></label>
                     <label>日期<input type="date" value={row.date} onChange={(e) => updateBatch(row.id, { date: e.target.value })} /></label>
                     <label>Booking Ref<input value={row.bookingRef || ''} onChange={(e) => updateBatch(row.id, { bookingRef: e.target.value })} /></label>
                   </div>
