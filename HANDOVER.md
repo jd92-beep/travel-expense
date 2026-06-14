@@ -29,15 +29,15 @@
    - Deployed `notify-new-user` to live project `fbnnjoahvtdrnigevrtw`.
    - Applied the migration through the Supabase Management API because live migration history is diverged; do not use blind `db push`.
    - Stored a generated `SIGNUP_NOTIFY_SECRET` both as an Edge Function secret and in `private.signup_notify_config`; no raw secret was printed or committed.
-   - Set `ADMIN_SIGNUP_NOTIFY_EMAIL` to Boss email in Edge Function secrets.
+   - Set `RESEND_API_KEY`, `SIGNUP_NOTIFY_SECRET`, and `ADMIN_SIGNUP_NOTIFY_EMAIL` in Supabase Edge Function secrets.
 3. **Important live limitation**:
-   - Supabase Edge secrets currently do **not** include `RESEND_API_KEY`.
-   - Live signed smoke therefore returns `202` with `email_provider_missing`; the trigger/function path is wired, but actual email delivery will start only after adding a real Resend key and verified sender if needed.
+   - Resend is currently in testing-recipient mode, so `ADMIN_SIGNUP_NOTIFY_EMAIL` is set to the Resend account email that the provider allows.
+   - To send notifications to another email address, first verify a domain in Resend, then update `ADMIN_SIGNUP_NOTIFY_EMAIL` and `SIGNUP_NOTIFY_FROM`.
 4. **Verification**:
    - Passed `node scripts/verify-signup-notification-contract.mjs`.
    - Passed `git diff --check`.
    - Live Edge smoke rejected unsigned POST with `401`.
-   - Live Edge smoke accepted signed POST with `202 email_provider_missing`, proving auth/config wiring while confirming the missing email provider.
+   - Live Edge smoke accepted signed POST with `200 emailSent: true`.
 
 ### Session 26 (Codex — previous session)
 
