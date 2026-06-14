@@ -61,20 +61,32 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
       .map((receipt) => [receiptTripSourceKey(receipt), receipt.id] as const)
       .filter(([key]) => key),
   );
+  // Trip-agnostic raw sourceId fallback: a receipt pulled from Notion may have a valid sourceId
+  // but no tripId, so its trip-scoped key won't match. sourceId is unique per receipt (id-derived),
+  // so matching on the raw sourceId is collision-safe and prevents duplicate rows.
+  const rawKeyOf = (r: Pick<Receipt, 'id' | 'sourceId' | 'tripId'>) => rawReceiptSourceId(r.sourceId || r.id, r.tripId);
+  const idByRawSource = new Map(
+    state.receipts
+      .map((receipt) => [rawKeyOf(receipt), receipt.id] as const)
+      .filter(([key]) => key),
+  );
   for (const remoteReceipt of pulledReceipts) {
     if (isReceiptTombstoned(state, remoteReceipt)) continue;
     const tripSourceKey = receiptTripSourceKey(remoteReceipt);
+    const rawSourceKey = rawKeyOf(remoteReceipt);
     const matchedId = byId.has(remoteReceipt.id)
       ? remoteReceipt.id
       : (remoteReceipt.supabaseId ? idBySupabaseId.get(remoteReceipt.supabaseId) : undefined)
         || (remoteReceipt.notionPageId ? idByPageId.get(remoteReceipt.notionPageId) : undefined)
-        || idByTripSource.get(tripSourceKey);
+        || idByTripSource.get(tripSourceKey)
+        || (rawSourceKey ? idByRawSource.get(rawSourceKey) : undefined);
     const localReceipt = matchedId ? byId.get(matchedId) : undefined;
     if (!localReceipt) {
       byId.set(remoteReceipt.id, stampForRemote(state, { ...remoteReceipt, syncStatus: 'synced' }));
       if (remoteReceipt.supabaseId) idBySupabaseId.set(remoteReceipt.supabaseId, remoteReceipt.id);
       if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, remoteReceipt.id);
       if (tripSourceKey) idByTripSource.set(tripSourceKey, remoteReceipt.id);
+      if (rawSourceKey) idByRawSource.set(rawSourceKey, remoteReceipt.id);
       continue;
     }
     const localUpdated = receiptUpdatedAt(localReceipt, true);
@@ -94,6 +106,7 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
       if (remoteReceipt.supabaseId) idBySupabaseId.set(remoteReceipt.supabaseId, localReceipt.id);
       if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, localReceipt.id);
       if (tripSourceKey) idByTripSource.set(tripSourceKey, localReceipt.id);
+      if (rawSourceKey) idByRawSource.set(rawSourceKey, localReceipt.id);
     }
   }
   return [...byId.values()];
@@ -116,7 +129,7 @@ export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
         ...remoteTrip,
         itinerary: remoteTrip.itinerary?.length ? remoteTrip.itinerary : localTrip?.itinerary || remoteTrip.itinerary || [],
       });
-      if (remoteTrip.active && !remoteTrip.archived) activeTripId = remoteTrip.id;
+
     }
   }
   return {

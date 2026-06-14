@@ -26,6 +26,7 @@ type ReceiptConflictItem = {
 };
 
 function historyDateLabel(date: string): string {
+  if (date === 'no-date') return '未設定日期';
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
   const weekday = ['日', '一', '二', '三', '四', '五', '六'][parsed.getDay()];
@@ -112,6 +113,7 @@ function receiptHealthMarkers(
 export function History({
   state,
   setState,
+  updateState,
   onImport,
   onHydrate,
   onOpen,
@@ -121,6 +123,7 @@ export function History({
 }: {
   state: AppState;
   setState?: React.Dispatch<React.SetStateAction<AppState>>;
+  updateState?: (patch: Partial<AppState>) => void;
   onImport: (receipts: Receipt[]) => void;
   onHydrate?: (receipts: Receipt[], trips: TripProfile[]) => void;
   onOpen: (receipt: Receipt) => void;
@@ -143,7 +146,7 @@ export function History({
 
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
-  const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip), [state.receipts, trip.id]);
+  const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip), [state, trip]);
   const sourceIdCounts = useMemo(() => tripReceipts.reduce<Record<string, number>>((acc, receipt) => {
     if (receipt.sourceId) acc[receipt.sourceId] = (acc[receipt.sourceId] || 0) + 1;
     return acc;
@@ -165,7 +168,7 @@ export function History({
       });
   }, [tripReceipts, query, category]);
   const groups = receipts.reduce<Record<string, Receipt[]>>((acc, r) => {
-    (acc[r.date] ||= []).push(r);
+    (acc[r.date || 'no-date'] ||= []).push(r);
     return acc;
   }, {});
   const pending = tripReceipts.filter((r) => r.store?.startsWith('⏳ '));
@@ -193,20 +196,24 @@ export function History({
   const filterBadge = (category !== 'all' ? 1 : 0) + pending.length;
   const activeTripName = trip.name || state.tripName || '東京出張之旅';
   const handleSwitchTrip = (tripId: string) => {
-    if (!setState) return;
+    if (!updateState) return;
     const target = state.trips?.find((t) => t.id === tripId && !t.archived);
     if (!target) return;
 
-    setState((prev) => ({
-      ...prev,
-      activeTripId: tripId,
-      trips: (prev.trips || []).map((item) => ({ ...item, active: item.id === tripId && !item.archived })),
-      tripName: target.name,
-      budget: target.budget ?? prev.budget,
-      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || prev.tripCurrency,
-      customItinerary: target.itinerary || [],
-      tripDateRange: { start: target.startDate, end: target.endDate }
+    const trips = (state.trips || []).map((item) => ({
+      ...item,
+      active: item.id === tripId && !item.archived,
     }));
+
+    updateState({
+      activeTripId: tripId,
+      trips,
+      tripName: target.name,
+      budget: target.budget ?? state.budget,
+      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || state.tripCurrency,
+      customItinerary: target.itinerary || [],
+      tripDateRange: { start: target.startDate, end: target.endDate },
+    });
   };
 
   async function handlePull(mode: 'manual' | 'auto' = 'manual') {

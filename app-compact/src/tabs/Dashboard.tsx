@@ -634,7 +634,7 @@ export function Dashboard({
 
   const handleSwitchTrip = (tripId: string) => {
     const patch = switchTrip(state, tripId);
-    if (patch) setState((prev) => ({ ...prev, ...patch }));
+    if (patch) updateState(patch);
   };
 
   const handleCreateTrip = async (overrideName?: string) => {
@@ -759,9 +759,7 @@ export function Dashboard({
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
   const activeDisplayCurrency = !state.displayCurrency || state.displayCurrency === 'HKD'
     ? 'HKD'
-    : state.displayCurrency === resolvedTripCurrency
-      ? resolvedTripCurrency
-      : resolvedTripCurrency;
+    : state.displayCurrency;
   const showTripCurrency = activeDisplayCurrency !== 'HKD';
   const displayMoney = (amount: number, currency = activeDisplayCurrency || 'HKD') => formatCurrencyAmount(amount, currency);
 
@@ -873,7 +871,7 @@ export function Dashboard({
       <div className="dashboard-trip-switcher flex justify-between items-start mb-6 z-10 relative">
         <div className="flex flex-col relative z-30" ref={tripDropdownRef}>
           <button
-            className="flex items-center gap-1 text-[28px] font-black text-slate-800 tracking-tight font-serif border-none bg-transparent focus:outline-none"
+            className="flex items-center gap-1 text-[28px] font-black text-slate-800 tracking-tight font-serif border-none bg-transparent focus:outline-none cursor-pointer min-h-[44px] py-1"
             type="button"
             onClick={() => setIsTripDropdownOpen(!isTripDropdownOpen)}
           >
@@ -1234,7 +1232,7 @@ export function Dashboard({
                 <VisualIcon id={r.category as any} size="sm" className="dashboard-compact-recent-icon" />
                 <div className="dashboard-compact-recent-main">
                   <strong>{displayStore(r)}</strong>
-                  <span>{categoryById(r.category).name} · {r.date.split('-').slice(1).join('/')}</span>
+                  <span>{categoryById(r.category).name} · {(r.date || '').split('-').slice(1).join('/')}</span>
                 </div>
                 {photoSrc && (
                   <span
