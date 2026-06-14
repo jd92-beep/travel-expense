@@ -33,16 +33,18 @@ export function Weather({ state }: { state: AppState }) {
   const itinerary = useMemo(() => getItinerary(state), [state]);
   const today = todayYmd(normalizedTimezone(trip.timezones?.[0]) || 'Asia/Hong_Kong');
   const hasEnded = trip.endDate ? today > trip.endDate : false;
+  // Any PAST date (mid-trip or after the trip) shows the CURRENT weather at that location;
+  // today/future show the forecast for that date.
+  const forecastDateFor = (dayDate: string) => (dayDate && dayDate < today ? today : dayDate);
   const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
 
-  const displayItinerary = useMemo<ItineraryDay[]>(() => {
-    if (!hasEnded) return itinerary;
-    return itinerary.map((day, index) => ({
+  const displayItinerary = useMemo<ItineraryDay[]>(() =>
+    itinerary.map((day, index) => ({
       ...day,
       day: day.day || index + 1,
       timezone: day.timezone || trip.timezones?.[0] || 'Asia/Hong_Kong',
-    }));
-  }, [itinerary, hasEnded, today, trip]);
+    })),
+  [itinerary, trip]);
 
   const groupedCoordsByDay = useMemo(() => {
     const map = new Map<string, GroupedWeatherLocation[]>();
@@ -55,7 +57,7 @@ export function Weather({ state }: { state: AppState }) {
   const itineraryKey = displayItinerary.map((day) => {
     const groups = groupedCoordsByDay.get(day.date) || [];
     const coords = groups.map((g) => `${g.label}:${g.lat}:${g.lon}`).join(',');
-    return `${day.date}:${day.region}:${day.country || ''}:${hasEnded ? today : day.date}:${coords}`;
+    return `${day.date}:${day.region}:${day.country || ''}:${forecastDateFor(day.date)}:${coords}`;
   }).join('|');
   const targetSummary = useMemo(() => weatherTargetSummary(displayItinerary, hasEnded, today), [displayItinerary, hasEnded, today]);
   const hasMissingTarget = useMemo(
@@ -73,7 +75,7 @@ export function Weather({ state }: { state: AppState }) {
   const leadDay = activeWeatherDay || displayItinerary[0];
   const leadRows = leadDay ? rows[leadDay.date] || [] : [];
   const leadSource = leadRows[0];
-  const leadForecastDate = leadDay ? (hasEnded ? today : leadDay.date) : today;
+  const leadForecastDate = leadDay ? forecastDateFor(leadDay.date) : today;
   const leadLiveHour = leadDay ? liveSlotHour(leadForecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong') : null;
   const leadSourceSlots = leadSource?.slots || [];
   const leadAllSlots = leadRows.flatMap((row) => row.slots || []);
@@ -81,6 +83,10 @@ export function Weather({ state }: { state: AppState }) {
     || leadSourceSlots.find((slot) => slot.temp != null)
     || leadAllSlots.find((slot) => slot.temp != null)
     || leadAllSlots[0];
+  // Real daily high/low from the day's hourly slots (was previously faked as temp±offset).
+  const leadTemps = (leadSource?.slots || leadAllSlots).map((slot) => slot.temp).filter((t): t is number => t != null);
+  const leadHigh = leadTemps.length ? Math.round(Math.max(...leadTemps)) : (leadSlot?.temp != null ? Math.round(leadSlot.temp + 2) : 24);
+  const leadLow = leadTemps.length ? Math.round(Math.min(...leadTemps)) : (leadSlot?.temp != null ? Math.round(leadSlot.temp - 6) : 16);
   const previewHourlySlots = leadRows.flatMap((row) => row.slots || []).slice(0, 5);
   const previewHourlyFallback: WeatherSlot[] = WEATHER_SLOTS.slice(0, 5).map((hour) => ({ hour, code: 2 }));
   const previewHourly = previewHourlySlots.length ? previewHourlySlots : previewHourlyFallback;
@@ -100,7 +106,7 @@ export function Weather({ state }: { state: AppState }) {
       setError('');
       try {
         const dayPromises = displayItinerary.map(async (day) => {
-          const forecastDate = hasEnded ? today : day.date;
+          const forecastDate = forecastDateFor(day.date);
           const groups = groupedCoordsByDay.get(day.date) || [];
           const coordPromises = groups.map(async (group) => {
             try {
@@ -153,18 +159,42 @@ export function Weather({ state }: { state: AppState }) {
   const autoJumpKeyRef = useRef('');
   useEffect(() => {
     if (!leadDay || busy) return;
-    const forecastDate = hasEnded ? today : leadDay.date;
+    const forecastDate = forecastDateFor(leadDay.date);
     const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
-    const key = `${leadDay.date}:${forecastDate}:${liveHour ?? 'day'}:${Object.keys(rows).length}`;
+    // Re-jump only when the meaningful target changes (not on every background refresh).
+    const key = `${leadDay.date}:${forecastDate}:${liveHour ?? 'day'}:${Object.keys(rows).length > 0}`;
     if (autoJumpKeyRef.current === key) return;
     autoJumpKeyRef.current = key;
-    window.setTimeout(() => {
+
+    const findTarget = (): Element | null => {
       const daySelector = `[data-weather-day="${leadDay.date}"]`;
-      const slotSelector = liveHour == null ? '' : ` [data-weather-hour="${liveHour}"]`;
-      const target = document.querySelector(`${daySelector}${slotSelector}`) || document.querySelector(daySelector);
-      target?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-    }, 120);
-  }, [busy, hasEnded, leadDay, rows, today]);
+      if (liveHour != null) {
+        const liveSlot = document.querySelector(`${daySelector} [data-weather-hour="${liveHour}"]`);
+        if (liveSlot) return liveSlot;
+      }
+      return document.querySelector(daySelector);
+    };
+    // Center the target with a top offset for the sticky command bar, then re-check after the
+    // Reveal animations settle and re-correct if it drifted (mirrors the Timeline "jump").
+    const scrollToTarget = (behavior: ScrollBehavior) => {
+      const el = findTarget();
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      const targetTop = Math.max(0, window.scrollY + rect.top - window.innerHeight * 0.4);
+      window.scrollTo({ top: targetTop, behavior });
+      el.scrollIntoView({ behavior, block: 'center', inline: 'nearest' });
+      return true;
+    };
+    const t1 = window.setTimeout(() => scrollToTarget('smooth'), 220);
+    const t2 = window.setTimeout(() => {
+      const el = findTarget();
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const center = rect.top + rect.height / 2;
+      if (center < 120 || center > window.innerHeight - 120) scrollToTarget('auto');
+    }, 650);
+    return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
+  }, [busy, leadDay, rows, today]);
 
   return (
     <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto weather-screen" style={travelAtlasStyle}>
@@ -207,8 +237,8 @@ export function Weather({ state }: { state: AppState }) {
             <small>實際氣溫 {leadSlot?.temp != null ? Math.round(leadSlot.temp) : 22}°C · 體感 {leadSlot?.feelsLike != null ? Math.round(leadSlot.feelsLike) : 21}°C</small>
           </div>
           <div className="preview-weather-facts">
-            <span>最高 <b className="hot">{leadSlot?.temp != null ? Math.round(leadSlot.temp + 2) : 24}°C</b></span>
-            <span>最低 <b>{leadSlot?.temp != null ? Math.round(leadSlot.temp - 6) : 16}°C</b></span>
+            <span>最高 <b className="hot">{leadHigh}°C</b></span>
+            <span>最低 <b>{leadLow}°C</b></span>
             <span>濕度 <b>{leadSlot?.humidity ?? 56}%</b></span>
             <span>風速 <b>{leadSlot?.windSpeed ?? 3} m/s</b></span>
           </div>
@@ -230,13 +260,13 @@ export function Weather({ state }: { state: AppState }) {
           <Reveal key={day.date} className="weather-day-reveal" delay={Math.min(0.14, day.day * 0.02)}>
           <GlassCard className="weather-day" data-weather-day={day.date}>
             <div className="section-head">
-              <div><p className="eyebrow">{hasEnded ? `Current · ${today} · Trip Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
+              <div><p className="eyebrow">{day.date < today ? `Current · ${today} · Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
               <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{(groupedCoordsByDay.get(day.date) || []).map((g) => g.label).join(' / ') || day.region}</StatusPill>
             </div>
             {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
             {dayRows.map((weather) => {
               const emptyForecast = weather.slots?.length && weather.slots.every((slot) => slot.temp == null && slot.rain == null);
-              const liveHour = liveSlotHour(hasEnded ? today : day.date, normalizedTimezone(day.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
+              const liveHour = liveSlotHour(forecastDateFor(day.date), normalizedTimezone(day.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
               return (
                 <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
                   <h3>{weather.coord.label}</h3>
