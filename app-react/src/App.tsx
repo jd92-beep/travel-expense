@@ -387,6 +387,7 @@ export function App() {
                   <History
                     state={state}
                     setState={setState}
+                    updateState={updateState}
                     onOpen={setEditing}
                     onImport={importReceipts}
                     onHydrate={importRemoteData}
@@ -437,6 +438,7 @@ export function App() {
                     <History
                       state={state}
                       setState={setState}
+                      updateState={updateState}
                       onOpen={setEditing}
                       onImport={importReceipts}
                       onHydrate={importRemoteData}

@@ -15,6 +15,7 @@ import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 export function History({
   state,
   setState,
+  updateState,
   onImport,
   onHydrate,
   onOpen,
@@ -24,6 +25,7 @@ export function History({
 }: {
   state: AppState;
   setState?: React.Dispatch<React.SetStateAction<AppState>>;
+  updateState?: (patch: Partial<AppState>) => void;
   onImport: (receipts: Receipt[]) => void;
   onHydrate?: (receipts: Receipt[], trips: TripProfile[]) => void;
   onOpen: (receipt: Receipt) => void;
@@ -62,20 +64,24 @@ export function History({
   }, {});
   const pending = scopedReceiptsForTrip(state, trip).filter((r) => r.store?.startsWith('⏳ '));
   const handleSwitchTrip = (tripId: string) => {
-    if (!setState) return;
+    if (!updateState) return;
     const target = state.trips?.find((t) => t.id === tripId && !t.archived);
     if (!target) return;
-    
-    setState((prev) => ({
-      ...prev,
-      activeTripId: tripId,
-      trips: (prev.trips || []).map((item) => ({ ...item, active: item.id === tripId && !item.archived })),
-      tripName: target.name,
-      budget: target.budget ?? prev.budget,
-      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || prev.tripCurrency,
-      customItinerary: target.itinerary || [],
-      tripDateRange: { start: target.startDate, end: target.endDate }
+
+    const trips = (state.trips || []).map((item) => ({
+      ...item,
+      active: item.id === tripId && !item.archived,
     }));
+
+    updateState({
+      activeTripId: tripId,
+      trips,
+      tripName: target.name,
+      budget: target.budget ?? state.budget,
+      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || state.tripCurrency,
+      customItinerary: target.itinerary || [],
+      tripDateRange: { start: target.startDate, end: target.endDate },
+    });
   };
 
   async function handlePull(mode: 'manual' | 'auto' = 'manual') {

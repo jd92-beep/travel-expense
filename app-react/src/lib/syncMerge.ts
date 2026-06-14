@@ -116,7 +116,7 @@ export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
         ...remoteTrip,
         itinerary: remoteTrip.itinerary?.length ? remoteTrip.itinerary : localTrip?.itinerary || remoteTrip.itinerary || [],
       });
-      if (remoteTrip.active && !remoteTrip.archived) activeTripId = remoteTrip.id;
+
     }
   }
   return {

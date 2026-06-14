@@ -150,17 +150,21 @@ export function Dashboard({
   const handleSwitchTrip = (tripId: string) => {
     const target = state.trips?.find((t) => t.id === tripId && !t.archived);
     if (!target) return;
-    
-    setState((prev) => ({
-      ...prev,
-      activeTripId: tripId,
-      trips: (prev.trips || []).map((item) => ({ ...item, active: item.id === tripId && !item.archived })),
-      tripName: target.name,
-      budget: target.budget ?? prev.budget,
-      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || prev.tripCurrency,
-      customItinerary: target.itinerary || [],
-      tripDateRange: { start: target.startDate, end: target.endDate }
+
+    const trips = (state.trips || []).map((item) => ({
+      ...item,
+      active: item.id === tripId && !item.archived,
     }));
+
+    updateState({
+      activeTripId: tripId,
+      trips,
+      tripName: target.name,
+      budget: target.budget ?? state.budget,
+      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || state.tripCurrency,
+      customItinerary: target.itinerary || [],
+      tripDateRange: { start: target.startDate, end: target.endDate },
+    });
   };
 
   const handleCreateTrip = (overrideName?: string) => {
@@ -338,7 +342,7 @@ export function Dashboard({
       <div className="flex justify-between items-start mb-6 z-10 relative">
         <div className="flex flex-col relative z-30">
           <button 
-            className="flex items-center gap-1 text-[28px] font-black text-slate-800 tracking-tight font-serif border-none bg-transparent focus:outline-none" 
+            className="flex items-center gap-1 text-[28px] font-black text-slate-800 tracking-tight font-serif border-none bg-transparent focus:outline-none cursor-pointer min-h-[44px] py-1"
             type="button" 
             onClick={() => setIsTripDropdownOpen(!isTripDropdownOpen)}
           >
