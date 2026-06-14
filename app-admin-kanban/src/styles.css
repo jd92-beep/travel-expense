@@ -660,6 +660,42 @@ button:disabled {
   margin-top: 2px;
 }
 
+.fresh-pill.stale {
+  background: #fff3cd;
+  color: #664d03;
+  border-color: #ffecb5;
+}
+.fresh-pill.stale i {
+  background: #f59e0b;
+}
+
+.auto-refresh-on,
+.auto-refresh-off {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.auto-refresh-on {
+  color: #16a34a;
+  border-color: #bbf7d0;
+}
+.auto-refresh-off {
+  color: #6b7280;
+}
+.spin-slow {
+  animation: spin 3s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .dashboard-left {
   display: flex;
   flex-direction: column;

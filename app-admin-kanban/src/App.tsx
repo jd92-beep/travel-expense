@@ -159,8 +159,8 @@ function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot;
       <div className="health-grid">
         <div className="health-card">
           <h3><Database size={16} /> Database & Backend</h3>
-          <Metric label="Supabase Status" value={snapshot.supabase.status === 'healthy' ? 'ACTIVE_HEALTHY' : statusText[snapshot.supabase.status]} status={snapshot.supabase.status} />
-          <Metric label="RLS Force Enabled" value={snapshot.supabase.rls.every((row) => row.enabled && row.force) ? 'Yes' : 'No'} status={snapshot.supabase.rls.every((row) => row.enabled && row.force) ? 'healthy' : 'warning'} />
+          <Metric label="Supabase Status" value={snapshot.supabase.status === 'healthy' ? 'ACTIVE_HEALTHY' : snapshot.supabase.status === 'warning' ? 'DEGRADED' : 'DANGER'} status={snapshot.supabase.status} />
+          <Metric label="RLS Force Enabled" value={snapshot.supabase.rls.length === 0 ? 'Unavailable' : snapshot.supabase.rls.every((row) => row.enabled && row.force) ? 'Yes' : 'No'} status={snapshot.supabase.rls.length === 0 ? 'danger' : snapshot.supabase.rls.every((row) => row.enabled && row.force) ? 'healthy' : 'warning'} />
           <Metric label="Total Users" value={snapshot.supabase.counts.authUsers} />
           <Metric label="Events (Range)" value={snapshot.usage.events} />
         </div>
@@ -638,6 +638,8 @@ function Board({
   setRangeDays,
   onRefresh,
   onLogout,
+  autoRefresh,
+  setAutoRefresh,
 }: {
   snapshot: AdminKanbanSnapshot;
   session: AdminSession;
@@ -645,10 +647,22 @@ function Board({
   setRangeDays: (range: number) => void;
   onRefresh: () => void;
   onLogout: () => void;
+  autoRefresh: boolean;
+  setAutoRefresh: (v: boolean) => void;
 }) {
   const [search, setSearch] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const selectedUser = snapshot.users.find((user) => user.id === selectedUserId) || null;
+  const [isStale, setIsStale] = useState(false);
+
+  useEffect(() => {
+    const generatedMs = new Date(snapshot.generatedAt).getTime();
+    const staleMs = (snapshot.staleAfterSeconds || 60) * 1000;
+    const check = () => setIsStale(Date.now() - generatedMs > staleMs);
+    check();
+    const interval = setInterval(check, 5000);
+    return () => clearInterval(interval);
+  }, [snapshot.generatedAt, snapshot.staleAfterSeconds]);
 
   useEffect(() => {
     if (selectedUserId && !snapshot.users.find((user) => user.id === selectedUserId)) {
@@ -667,10 +681,13 @@ function Board({
         </div>
         <div className="command-row">
           <button type="button" onClick={onRefresh}><RefreshCw size={16} /> Refresh</button>
+          <button type="button" className={autoRefresh ? 'auto-refresh-on' : 'auto-refresh-off'} onClick={() => setAutoRefresh(!autoRefresh)} title={autoRefresh ? 'Auto-refresh ON (30s)' : 'Auto-refresh OFF'}>
+            <RefreshCw size={14} className={autoRefresh ? 'spin-slow' : ''} /> {autoRefresh ? 'Auto' : 'Manual'}
+          </button>
           <select value={rangeDays} onChange={(event) => setRangeDays(Number(event.target.value))}>
             {RANGE_OPTIONS.map((range) => <option key={range} value={range}>{range}d range</option>)}
           </select>
-          <span className="fresh-pill"><i /> Data fresh · {fmtDate(snapshot.generatedAt)}</span>
+          <span className={`fresh-pill ${isStale ? 'stale' : ''}`}><i /> {isStale ? 'Stale' : 'Data fresh'} · {fmtDate(snapshot.generatedAt)}</span>
           <label className="search-box">
             <Search size={16} />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users..." />
@@ -737,13 +754,15 @@ export function App() {
   const [rangeDays, setRangeDays] = useState(7);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   async function refresh() {
     if (!session) return;
     setLoading(true);
     setError('');
     try {
-      setSnapshot(await fetchSnapshot(session, rangeDays));
+      const fresh = await fetchSnapshot(session, rangeDays);
+      setSnapshot(fresh);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Snapshot failed');
     } finally {
@@ -754,6 +773,12 @@ export function App() {
   useEffect(() => {
     void refresh();
   }, [session, rangeDays]);
+
+  useEffect(() => {
+    if (!session || !autoRefresh) return;
+    const interval = setInterval(() => void refresh(), 30_000);
+    return () => clearInterval(interval);
+  }, [session, autoRefresh, rangeDays]);
 
   if (!session) return <LoginGate onLogin={setSession} />;
 
@@ -767,6 +792,8 @@ export function App() {
           setRangeDays={setRangeDays}
           onRefresh={() => void refresh()}
           onLogout={() => { clearSession(); setSession(null); setSnapshot(null); }}
+          autoRefresh={autoRefresh}
+          setAutoRefresh={setAutoRefresh}
         />
       ) : (
         <main className="login-screen">

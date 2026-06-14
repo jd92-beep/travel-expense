@@ -134,6 +134,11 @@ export type AdminKanbanSnapshot = {
     status: HealthState;
     counts: Record<SupabaseCountKey, number>;
     rls: SupabaseRlsState[];
+    readHealth?: {
+      errors: string[];
+      truncatedTables: string[];
+      rlsAvailable: boolean;
+    };
   };
   usage: UsageSummary;
   users: AdminUserCard[];

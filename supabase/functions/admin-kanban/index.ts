@@ -39,6 +39,16 @@ function json(req: Request, status: number, payload: Record<string, unknown>) {
   return new Response(JSON.stringify(payload), { status, headers: corsHeaders(req) });
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 5000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function redact(value: unknown) {
   return String(value || "")
     .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted-key]")
@@ -296,12 +306,12 @@ function providerModels(provider: string): Array<{ id: string; name: string }> {
 async function brokerHealth(supabase: SupabaseClientAny) {
   const baseUrl = CREDENTIAL_BROKER_URL.replace(/\/+$/, "");
   try {
-    const statusRes = await fetch(`${baseUrl}/credentials/status`, {
+    const statusRes = await fetchWithTimeout(`${baseUrl}/credentials/status`, {
       headers: {
         'Origin': 'https://travel-expense-compact.vercel.app',
         'X-Admin-Internal': Deno.env.get('ADMIN_TOKEN') || '',
       },
-    });
+    }, 5000);
     if (!statusRes.ok) throw new Error(`broker status ${statusRes.status}`);
     const statusData = await statusRes.json();
     const brokerProviders: any[] = statusData.providers || [];
@@ -335,7 +345,7 @@ async function brokerHealth(supabase: SupabaseClientAny) {
         .or("outcome.eq.error,event_name.like.provider_test_%");
       for (const row of errRows || []) {
         if (!row.provider) continue;
-        if (row.outcome === "error" && !row.event_name?.startsWith("provider_test_")) {
+        if (row.outcome === "error") {
           errorMap.set(row.provider, (errorMap.get(row.provider) || 0) + 1);
         }
       }
@@ -358,7 +368,7 @@ async function brokerHealth(supabase: SupabaseClientAny) {
     }).flat();
   } catch {
     try {
-      const response = await fetch(`${baseUrl}/health`);
+      const response = await fetchWithTimeout(`${baseUrl}/health`, {}, 5000);
       if (!response.ok) throw new Error(`broker ${response.status}`);
       const fallback = ["notion", "kimi", "google", "weatherapi", "mimo"];
       return fallback.map((provider) => ({
@@ -543,18 +553,28 @@ async function snapshot(rangeDays: number) {
     enabled: !!row.rls_enabled,
     force: !!row.force_rls,
   }));
+  const readErrors = tableReads.filter(({ res }) => res.error).map(({ name }) => name);
+  const truncatedTables = tableReads.filter(({ res }) => res.truncated).map(({ name }) => name);
+  const rlsAvailable = rlsRows.length > 0;
+  const supabaseStatus = readErrors.length > 0 || !rlsAvailable ? "danger" : truncatedTables.length > 0 || !counts.usageEvents ? "warning" : "healthy";
+
   const warningsSnapshot: string[] = warnings;
   if (!counts.usageEvents) warningsSnapshot.push("Usage telemetry table is ready, but no app usage events have been recorded yet.");
-  if (!rlsRows.length) warningsSnapshot.push("RLS runtime RPC is unavailable.");
+  if (!rlsAvailable) warningsSnapshot.push("RLS runtime RPC is unavailable.");
   return {
     generatedAt: new Date().toISOString(),
     staleAfterSeconds: 60,
     source: "live-edge",
     supabase: {
       projectRef: "fbnnjoahvtdrnigevrtw",
-      status: "healthy",
+      status: supabaseStatus,
       counts,
       rls: rlsRows,
+      readHealth: {
+        errors: readErrors,
+        truncatedTables,
+        rlsAvailable,
+      },
     },
     usage: {
       rangeDays,
@@ -747,7 +767,7 @@ Deno.serve(async (req) => {
       const provider = String(body.provider || "").trim();
       if (!provider) throw new Error("Missing provider");
       const brokerBase = CREDENTIAL_BROKER_URL.replace(/\/+$/, "");
-      const testRes = await fetch(`${brokerBase}/credentials/test?provider=${encodeURIComponent(provider)}`, {
+      const testRes = await fetchWithTimeout(`${brokerBase}/credentials/test?provider=${encodeURIComponent(provider)}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
