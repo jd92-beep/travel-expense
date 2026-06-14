@@ -168,6 +168,14 @@ export function coordsForDay(day: ItineraryDay, limit = 2): WeatherCoord[] {
     add({ ...REGION_COORDS[key], timezone: day.timezone, origin: 'known-region' });
     if (coords.length >= limit) break;
   }
+  if (!coords.length) {
+    for (const entry of GEO_DICTIONARY) {
+      if (entry.pattern.test(hay)) {
+        add({ label: entry.geo.city, lat: entry.geo.lat, lon: entry.geo.lon, timezone: day.timezone, origin: 'known-region' });
+        if (coords.length >= limit) break;
+      }
+    }
+  }
   if (coords.length) return coords.slice(0, limit);
   return [{ label: weatherLocationLabel(day), lat: Number.NaN, lon: Number.NaN, timezone: day.timezone, missing: true, origin: 'missing' }];
 }
