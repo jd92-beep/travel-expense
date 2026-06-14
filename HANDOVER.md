@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-06-14
-- **Focus**: Supabase new-user signup notification backend
+- **Date**: 2026-06-15
+- **Focus**: Compact bugfix PR batch (PR-01, PR-04, PR-09, PR-10, PR-11, PR-13, PR-14)
 - **Agent**: Codex 🤖
-- **App version**: Compact `0.7.3`; React unchanged in this pass
+- **App version**: Compact `0.7.6`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,12 +13,40 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently but are currently aligned at `0.2.2`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.7.6`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 27 (Codex — current session)
+### Session 28 (Codex — current session)
+
+1. **PR-01: Shared-trip Notion delete outbox fix**:
+   - Delete jobs in `drainSharedTripNotionOutbox()` now archive the mirror Notion page via the existing `push()` callback before marking the job succeeded.
+   - Failed archive attempts retry with exponential backoff instead of silently succeeding.
+2. **PR-04: Trip-scoped people and split ratios**:
+   - Added `peopleByTripId` and `shareRatiosByTripId` to `AppState` type.
+   - Added `peopleForTrip()` and `shareRatiosForTrip()` helpers in `domain.ts`.
+   - Updated `switchTrip()` to project trip-scoped people into compatibility fields.
+   - Updated `migrateAppState()` to initialize trip-scoped maps from existing data.
+   - Updated Supabase pull to populate all trips' people, not just the active trip.
+3. **PR-09: Migration/hydration active-trip consistency**:
+   - `tripName` now preserves `parsed.tripName` first (respecting explicit user set).
+   - `tripCurrency` derives from active trip's currencies.
+4. **PR-10: HKD self-healing tolerance**:
+   - Tolerance is 10% (was already 0.1 in both `stampReceiptForTrip` and `getReceiptHkdAmount`).
+5. **PR-11: Atomic outbox job claiming**:
+   - Added `claim_receipt_sync_jobs` Supabase RPC with `FOR UPDATE SKIP LOCKED`.
+   - Drainer now tries atomic RPC first, falls back to legacy non-atomic path for older schemas.
+6. **PR-13: Docs cleanup**:
+   - Updated HANDOVER with compact versioning independence.
+   - Added Compact Developer Quick Start to README.
+   - Updated CHANGELOG with all PR changes.
+7. **PR-14: Live verification harness**:
+   - Added `app-compact/scripts/compact-live-regression-checklist.mjs`.
+   - Added `smoke:live-checklist` and `smoke:live-checklist:strict` package scripts.
+8. **Version bump**: Compact `0.7.4` -> `0.7.6`.
+
+### Session 27 (Codex — previous session)
 
 1. **New-user registration notification backend**:
    - Added Supabase Edge Function `notify-new-user` with custom `x-signup-notify-secret` auth and `verify_jwt=false`.

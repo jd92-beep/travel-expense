@@ -292,6 +292,8 @@ export interface AppState {
   googleBackupModel?: string;
   persons: Person[];
   shareRatios: Record<string, number>;
+  peopleByTripId?: Record<string, Person[]>;
+  shareRatiosByTripId?: Record<string, Record<string, number>>;
   tripName: string;
   tripDateRange: { start: string; end: string };
   activeTripId?: string;

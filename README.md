@@ -23,6 +23,22 @@
 
 請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。Netlify project 也存在，但 `https://travel-expense-react.netlify.app` 目前顯示 `usage_exceeded`，暫時不是平常使用的入口。
 
+## Compact App Developer Quick Start
+
+```bash
+cd app-compact
+npm install
+npm run dev
+npm run typecheck
+npm run build
+npm run security:scan
+npm run smoke:mobile-layout
+npm run smoke:settings
+npm run smoke:production-gate
+```
+
+Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.7.6`。
+
 ## 第一次使用
 
 1. 打開主要公開 app 或 Compact app。

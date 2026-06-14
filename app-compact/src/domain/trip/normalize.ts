@@ -215,6 +215,8 @@ export function switchTrip(state: AppState, tripId: string): Partial<AppState> |
     tripCurrency: target.currencies?.find((c) => c !== 'HKD') || state.tripCurrency,
     customItinerary: target.itinerary || [],
     tripDateRange: { start: target.startDate, end: target.endDate },
+    persons: state.peopleByTripId?.[tripId] || state.persons,
+    shareRatios: state.shareRatiosByTripId?.[tripId] || state.shareRatios,
   };
 }
 
@@ -390,11 +392,12 @@ export function migrateAppState(input: unknown): AppState {
     activeTripId: nextActiveId,
     trips: finalTrips,
     budget: resolvedBudget,
-    tripName: currentActiveTrip?.name || parsed.tripName || trip.name,
+    tripName: parsed.tripName || currentActiveTrip?.name || trip.name,
     tripDateRange: {
       start: currentActiveTrip?.startDate || parsed.tripDateRange?.start || trip.startDate,
       end: currentActiveTrip?.endDate || parsed.tripDateRange?.end || trip.endDate,
     },
+    tripCurrency: currentActiveTrip?.currencies?.find((c) => c !== 'HKD') || parsed.tripCurrency || DEFAULT_STATE.tripCurrency,
     customItinerary: parsed.customItinerary || null,
     statsIncludeTransportLodging,
     syncQueue: Array.isArray(parsed.syncQueue) ? parsed.syncQueue : [],
@@ -403,6 +406,12 @@ export function migrateAppState(input: unknown): AppState {
     syncError: typeof parsed.syncError === 'string' ? parsed.syncError : '',
     settingsPulledAt: Number(parsed.settingsPulledAt) || 0,
   } as AppState;
+  if (!base.peopleByTripId && base.persons?.length && nextActiveId) {
+    base.peopleByTripId = { [nextActiveId]: base.persons };
+  }
+  if (!base.shareRatiosByTripId && base.shareRatios && nextActiveId) {
+    base.shareRatiosByTripId = { [nextActiveId]: base.shareRatios };
+  }
   base.receipts = (Array.isArray(parsed.receipts) ? parsed.receipts : [])
     .filter((r): r is Receipt => !!(r && r.id && r.store !== undefined))
     .filter((r) => !(typeof r.id === 'string' && r.id.startsWith('__meta_')))

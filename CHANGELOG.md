@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-15
+
+- Fixed shared-trip Notion delete outbox so delete jobs now archive the mirror Notion page before marking the job succeeded, instead of silently skipping the archive step. Failed archive attempts retry with backoff.
+- Added trip-scoped people and split ratio storage (`peopleByTripId`, `shareRatiosByTripId`). Each trip now maintains its own payer list and ratios; switching trips offline projects the correct people immediately. Supabase pull populates all trips' people, not just the active one.
+- Fixed migration/hydration active-trip consistency: `tripName` now preserves `parsed.tripName` first (respecting user explicit set), `tripCurrency` derives from the active trip, and each trip's itinerary normalizes with its own currency.
+- Changed HKD self-healing tolerance from 5% to 10% in both `stampReceiptForTrip` and `getReceiptHkdAmount` to accommodate volatile currencies.
+- Added atomic outbox job claiming via `claim_receipt_sync_jobs` Supabase RPC with `FOR UPDATE SKIP LOCKED`. The drainer now tries the atomic RPC first and falls back to the legacy non-atomic path for older schemas.
+- Added `peopleForTrip()` and `shareRatiosForTrip()` helpers for trip-scoped people lookups.
+- Updated `switchTrip()` to project trip-scoped people and ratios into compatibility fields.
+- Updated HANDOVER.md with compact app versioning independence and PR queue status.
+- Added `app-compact/scripts/compact-live-regression-checklist.mjs` for repeatable live/staging verification.
+- Bumped Compact to `0.7.6`.
+
 ## 2026-06-14
 
 - Added a Supabase new-user signup notification backend. New `auth.users` rows now write to `public.admin_signup_notifications` and call the deployed `notify-new-user` Edge Function through `pg_net` with a private shared secret. The Edge Function is deployed live and rejects unsigned calls.

@@ -140,6 +140,18 @@ export function getPersons(state: AppState): Person[] {
   return persons.length ? persons : fallbackPersons;
 }
 
+export function peopleForTrip(state: AppState, tripId?: string): Person[] {
+  const id = tripId || state.activeTripId;
+  if (id && state.peopleByTripId?.[id]?.length) return state.peopleByTripId[id];
+  return getPersons(state);
+}
+
+export function shareRatiosForTrip(state: AppState, tripId?: string): Record<string, number> {
+  const id = tripId || state.activeTripId;
+  if (id && state.shareRatiosByTripId?.[id]) return state.shareRatiosByTripId[id];
+  return state.shareRatios || {};
+}
+
 export function displayStore(receipt: Receipt): string {
   return receipt.store?.startsWith('⏳ ') ? receipt.store.slice(2) : receipt.store || '';
 }
@@ -167,7 +179,7 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   if (typeof r.hkdAmount === 'number' && r.hkdAmount > 0) {
     const ratio = (Number(r.total) || 0) / r.hkdAmount;
     const percentDiff = Math.abs(ratio - rate) / rate;
-    if (percentDiff < 0.1) {
+    if (percentDiff < 0.10) {
       isHkdAmountValid = true;
     }
   }
