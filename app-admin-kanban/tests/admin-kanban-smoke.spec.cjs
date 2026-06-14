@@ -37,6 +37,7 @@ const snapshot = {
     {
       id: 'user-a',
       email: 'vc***@g***.com',
+      displayName: 'Admin Boss',
       joinedAt: '2026-05-25T00:00:00Z',
       lastSeenAt: null,
       sessionCount: 0,
@@ -68,17 +69,30 @@ const snapshot = {
   receipts: [],
   notion: { connectedUsers: 0, integrationRows: 0, syncedReceipts: 0, failedJobs: 0, pendingJobs: 0, lastSyncedAt: null },
   llm: [
-    { provider: 'kimi', label: 'Kimi', status: 'healthy', storedStatus: 'broker_online', model: 'kimi-code', latencyMs: 742, errors24h: 0 },
-    { provider: 'google', label: 'Google Gemma', status: 'healthy', storedStatus: 'broker_online', model: 'gemma-4-31b', latencyMs: 691, errors24h: 0 },
-    { provider: 'mimo', label: 'Mimo v2.5', status: 'healthy', storedStatus: 'broker_online', model: 'mimo-v2.5', latencyMs: 812, errors24h: 0 },
-    { provider: 'weatherapi', label: 'WeatherAPI', status: 'healthy', storedStatus: 'broker_online', model: 'forecast', latencyMs: 318, errors24h: 0 },
-    { provider: 'notion', label: 'Notion', status: 'unknown', storedStatus: 'test_pending', model: 'mirror', errors24h: 0 },
+    { provider: 'kimi', label: 'Kimi', status: 'healthy', storedStatus: 'broker_online', model: 'kimi-code', modelName: 'Kimi Code', latencyMs: 742, errors24h: 0 },
+    { provider: 'kimi', label: 'Kimi', status: 'healthy', storedStatus: 'broker_online', model: 'kimi-8k', modelName: 'Kimi 8K', latencyMs: 500, errors24h: 0 },
+    { provider: 'google', label: 'Google Gemma', status: 'healthy', storedStatus: 'broker_online', model: 'gemma-4-31b', modelName: 'Gemma 4 31B', latencyMs: 691, errors24h: 0 },
+    { provider: 'mimo', label: 'Mimo v2.5', status: 'healthy', storedStatus: 'broker_online', model: 'mimo-v2.5', modelName: 'Mimo v2.5', latencyMs: 812, errors24h: 0 },
+    { provider: 'weatherapi', label: 'WeatherAPI', status: 'healthy', storedStatus: 'broker_online', model: 'forecast', modelName: 'Weather Forecast', latencyMs: 318, errors24h: 0 },
+    { provider: 'notion', label: 'Notion', status: 'unknown', storedStatus: 'test_pending', model: 'mirror', modelName: 'Notion Mirror', errors24h: 0 },
   ],
   audit: [],
   warnings: ['Usage telemetry table is ready, but no app usage events have been recorded yet.'],
 };
 
-async function mockAdminApi(page) {
+const rlsDownSnapshot = {
+  ...snapshot,
+  supabase: { ...snapshot.supabase, rls: [], status: 'danger' },
+  warnings: ['RLS runtime RPC is unavailable.'],
+};
+
+const staleSnapshot = {
+  ...snapshot,
+  generatedAt: new Date(Date.now() - 300_000).toISOString(),
+  warnings: [],
+};
+
+async function mockAdminApi(page, snap) {
   await page.route('**/api/session', async (route) => {
     await route.fulfill({
       status: 200,
@@ -94,7 +108,7 @@ async function mockAdminApi(page) {
     });
   });
   await page.route('**/api/snapshot?*', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, snapshot }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, snapshot: snap || snapshot }) });
   });
   await page.route('**/api/delete-preview', async (route) => {
     await route.fulfill({
@@ -125,20 +139,24 @@ async function mockAdminApi(page) {
   });
 }
 
-test('desktop board renders live snapshot and guarded delete flow', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await mockAdminApi(page);
-
+async function login(page, snap) {
+  await mockAdminApi(page, snap);
   await page.goto('http://localhost:8904/');
   await expect(page.getByRole('heading', { name: 'Travel Ops KanBan' })).toBeVisible();
   await page.getByPlaceholder('Required for cross-user visibility').fill('admin-pass');
   await page.getByRole('button', { name: /Enter board/ }).click();
-
   await expect(page.getByRole('heading', { name: 'Universal App Health' })).toBeVisible();
+}
+
+test('desktop board renders live snapshot and guarded delete flow', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+
   await expect(page.getByRole('heading', { name: 'Live Users (1)' })).toBeVisible();
   await expect(page.getByText('ACTIVE_HEALTHY')).toBeVisible();
   await expect(page.getByText('RLS Force Enabled')).toBeVisible();
-  await expect(page.getByText('Mimo v2.5')).toBeVisible();
+  await expect(page.getByText('Yes')).toBeVisible();
+  await expect(page.getByText('Mimo v2.5').first()).toBeVisible();
 
   await page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ }).click();
   await expect(page.getByRole('heading', { name: /vc\*\*\*@g\*\*\*\.com/ })).toBeVisible();
@@ -158,15 +176,10 @@ test('desktop board renders live snapshot and guarded delete flow', async ({ pag
 
 test('mobile board is scrollable and shows single column', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await mockAdminApi(page);
+  await login(page);
 
-  await page.goto('http://localhost:8904/');
-  await page.getByPlaceholder('Required for cross-user visibility').fill('admin-pass');
-  await page.getByRole('button', { name: /Enter board/ }).click();
-
-  await expect(page.getByRole('heading', { name: 'Universal App Health' })).toBeVisible();
   await expect(page.getByText('Google Gemma')).toBeVisible();
-  await expect(page.getByText('Mimo v2.5')).toBeVisible();
+  await expect(page.getByText('Mimo v2.5').first()).toBeVisible();
   await page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ }).click();
   await expect(page.getByRole('heading', { name: /vc\*\*\*@g\*\*\*\.com/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Preview delete scope/ })).toBeVisible();
@@ -182,4 +195,82 @@ test('mobile board is scrollable and shows single column', async ({ page }) => {
   expect(metrics.bodyScrollWidth).toBeLessThanOrEqual(390);
   expect(Number.parseInt(metrics.dashboardColumns, 10)).toBeLessThanOrEqual(390);
   expect(metrics.dashboardColumns.trim().split(/\s+/)).toHaveLength(1);
+});
+
+test('RLS unavailable shows danger, not false green', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page, rlsDownSnapshot);
+
+  await expect(page.getByText('DANGER')).toBeVisible();
+  await expect(page.getByText('Unavailable', { exact: true })).toBeVisible();
+  await expect(page.getByText('RLS runtime RPC is unavailable.')).toBeVisible();
+});
+
+test('stale data shows Stale pill after staleAfterSeconds', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page, staleSnapshot);
+
+  await expect(page.getByText('Stale')).toBeVisible({ timeout: 3000 });
+});
+
+test('LLM rows have unique keys and show separate model rows', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+
+  await expect(page.getByText('Kimi Code')).toBeVisible();
+  await expect(page.getByText('Kimi 8K')).toBeVisible();
+  await expect(page.getByText('Gemma 4 31B')).toBeVisible();
+  const llmRows = await page.locator('.llm-item-expanded').count();
+  expect(llmRows).toBe(6);
+});
+
+test('auto-refresh button is visible', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+
+  await expect(page.getByRole('button', { name: /Auto/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Refresh/ })).toBeVisible();
+});
+
+test('search matches display name and email', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+
+  await page.getByPlaceholder('Search users...').fill('Admin Boss');
+  await expect(page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ })).toBeVisible();
+
+  await page.getByPlaceholder('Search users...').fill('vc***');
+  await expect(page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ })).toBeVisible();
+
+  await page.getByPlaceholder('Search users...').fill('nonexistent');
+  await expect(page.getByText('No users found.')).toBeVisible();
+});
+
+test('receipt amend modal validates input', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const snapshotWithReceipts = {
+    ...snapshot,
+    receipts: [
+      { id: 'r1', tripId: 'trip-a', ownerId: 'user-a', store: 'Test Store', status: 'confirmed', amount: 5000, currency: 'JPY', recordDate: '2026-06-02', updatedAt: null, notionSynced: false, photoPath: null, category: 'food' },
+    ],
+  };
+  await login(page, snapshotWithReceipts);
+
+  await page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ }).click();
+  await page.waitForTimeout(300);
+  await expect(page.getByText('Test Store')).toBeVisible();
+
+  const amendBtn = page.locator('.icon-btn[title="Amend"]').first();
+  await expect(amendBtn).toBeVisible();
+  await amendBtn.click();
+  await expect(page.getByText('Amend Receipt')).toBeVisible();
+
+  await page.locator('.amend-modal input[type="number"]').fill('-5');
+  await page.getByRole('button', { name: /^Save$/ }).click();
+  await expect(page.getByText('finite non-negative')).toBeVisible();
+
+  await page.locator('.amend-modal input[type="number"]').fill('9999');
+  await page.getByRole('button', { name: /Cancel/ }).click();
+  await expect(page.getByText('Amend Receipt')).not.toBeVisible();
 });
