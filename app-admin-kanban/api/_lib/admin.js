@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 2;
+const MAX_JSON_BODY_BYTES = 64 * 1024;
 
 export function send(res, status, payload) {
   res.statusCode = status;
@@ -19,10 +20,21 @@ export function requireMethod(req, res, method) {
 
 export async function readJson(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let totalBytes = 0;
+  for await (const chunk of req) {
+    chunks.push(chunk);
+    totalBytes += chunk.length;
+    if (totalBytes > MAX_JSON_BODY_BYTES) {
+      throw new HttpError('JSON body too large', 413);
+    }
+  }
   const text = Buffer.concat(chunks).toString('utf8');
   if (!text.trim()) return {};
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new HttpError('Invalid JSON body', 400);
+  }
 }
 
 function base64url(input) {
@@ -37,18 +49,34 @@ function sign(payload) {
   return `${encoded}.${sig}`;
 }
 
+function safeTimingEqual(a, b) {
+  const left = Buffer.from(String(a || ''));
+  const right = Buffer.from(String(b || ''));
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function decodeSessionPayload(encoded) {
+  try {
+    return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+  } catch {
+    throw new HttpError('Admin session invalid', 401);
+  }
+}
+
 export function verifySession(req) {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
   if (!token) throw new HttpError('Admin session missing', 401);
   const secret = process.env.ADMIN_KANBAN_SESSION_SECRET;
   if (!secret) throw new Error('ADMIN_KANBAN_SESSION_SECRET missing');
-  const [encoded, sig] = token.split('.');
+  const parts = token.split('.');
+  if (parts.length !== 2) throw new HttpError('Admin session invalid', 401);
+  const [encoded, sig] = parts;
   if (!encoded || !sig) throw new HttpError('Admin session invalid', 401);
   const expected = crypto.createHmac('sha256', secret).update(encoded).digest('base64url');
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+  if (!safeTimingEqual(sig, expected)) {
     throw new HttpError('Admin session invalid', 401);
   }
-  const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+  const payload = decodeSessionPayload(encoded);
   if (!payload.exp || Number(payload.exp) <= Date.now()) throw new HttpError('Admin session expired', 401);
   return payload;
 }

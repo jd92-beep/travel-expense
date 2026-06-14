@@ -20,6 +20,9 @@ const ALLOWED_ORIGINS = new Set([
 
 // In-memory cache for provider test results (survives within a single Edge Function instance)
 const providerTestCache = new Map<string, { status: string; message?: string; testedAt: number }>();
+const MAX_JSON_BODY_BYTES = 64 * 1024;
+const RECEIPT_STATUSES = new Set(["draft", "pending", "confirmed"]);
+const CURRENCY_RE = /^[A-Z]{3}$/;
 
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
@@ -55,8 +58,20 @@ function serviceClient() {
 
 async function readBody(req: Request) {
   if (req.method === "GET") return {};
-  const text = await req.text();
-  return text.trim() ? JSON.parse(text) : {};
+  const raw = await req.text();
+  if (new TextEncoder().encode(raw).length > MAX_JSON_BODY_BYTES) {
+    const err = new Error("JSON body too large") as any;
+    err.status = 413;
+    throw err;
+  }
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const err = new Error("Invalid JSON body") as any;
+    err.status = 400;
+    throw err;
+  }
 }
 
 async function verifyAdmin(req: Request): Promise<string> {
@@ -155,13 +170,33 @@ async function safeCount(supabase: SupabaseClientAny, table: string, column?: st
   }
 }
 
+async function strictCount(supabase: SupabaseClientAny, table: string, column?: string, value?: string) {
+  const query = supabase.from(table).select("*", { count: "exact", head: true });
+  if (column && value) query.eq(column, value);
+  const { count, error } = await query;
+  if (error) throw new Error(`Delete preview count failed for ${table}: ${redact(error.message)}`);
+  return count || 0;
+}
+
 async function fetchRows(supabase: SupabaseClientAny, table: string, select: string, limit = 250) {
+  const PAGE_SIZE = 1000;
+  const MAX_ROWS = 10000;
+  const effectiveLimit = Math.min(limit, MAX_ROWS);
   try {
-    const { data, error } = await supabase.from(table).select(select).limit(limit);
-    if (error) throw error;
-    return data || [];
-  } catch {
-    return [];
+    const allRows: any[] = [];
+    let from = 0;
+    while (from < effectiveLimit) {
+      const pageSize = Math.min(PAGE_SIZE, effectiveLimit - from);
+      const { data, error } = await supabase.from(table).select(select).range(from, from + pageSize - 1);
+      if (error) throw error;
+      const rows = data || [];
+      allRows.push(...rows);
+      if (rows.length < pageSize) break;
+      from += pageSize;
+    }
+    return { data: allRows, error: undefined as string | undefined, truncated: allRows.length >= effectiveLimit };
+  } catch (err) {
+    return { data: [] as any[], error: redact(err), truncated: false };
   }
 }
 
@@ -352,7 +387,11 @@ async function brokerHealth(supabase: SupabaseClientAny) {
 
 async function snapshot(rangeDays: number) {
   const supabase = serviceClient();
-  const [users, trips, receipts, photos, integrations, jobs, usage, audits, rlsRpc, llm, profiles, tripMembers] = await Promise.all([
+  const [
+    users,
+    tripsRes, receiptsRes, photosRes, integrationsRes, jobsRes, usageRes, auditsRes,
+    rlsRpc, llm, profilesRes, tripMembersRes,
+  ] = await Promise.all([
     listUsers(supabase),
     fetchRows(supabase, "trips", "id,owner_id,name,destination_summary,start_date,end_date,trip_currency,budget_amount,budget_currency,itinerary,timezones,active,archived,updated_at,app_metadata"),
     fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,category,record_date,updated_at,notion_page_id,notion_sync_status,notion_last_synced_at", 1000),
@@ -366,6 +405,33 @@ async function snapshot(rangeDays: number) {
     fetchRows(supabase, "profiles", "id,display_name,avatar_url,home_currency,locale"),
     fetchRows(supabase, "trip_members", "trip_id,user_id"),
   ]);
+  const trips = tripsRes.data;
+  const receipts = receiptsRes.data;
+  const photos = photosRes.data;
+  const integrations = integrationsRes.data;
+  const jobs = jobsRes.data;
+  const usage = usageRes.data;
+  const audits = auditsRes.data;
+  const profiles = profilesRes.data;
+  const tripMembers = tripMembersRes.data;
+
+  const warnings: string[] = [];
+  const tableReads = [
+    { name: "Trips", res: tripsRes },
+    { name: "Receipts", res: receiptsRes },
+    { name: "Photos", res: photosRes },
+    { name: "Integrations", res: integrationsRes },
+    { name: "Sync jobs", res: jobsRes },
+    { name: "Usage events", res: usageRes },
+    { name: "Audit events", res: auditsRes },
+    { name: "Profiles", res: profilesRes },
+    { name: "Trip members", res: tripMembersRes },
+  ];
+  for (const { name, res } of tableReads) {
+    if (res.error) warnings.push(`${name} read failed: ${res.error}`);
+    if (res.truncated) warnings.push(`${name} read hit max row cap; counts may be partial.`);
+  }
+
   const counts = {
     authUsers: users.length,
     profiles: await safeCount(supabase, "profiles"),
@@ -477,9 +543,9 @@ async function snapshot(rangeDays: number) {
     enabled: !!row.rls_enabled,
     force: !!row.force_rls,
   }));
-  const warnings = [];
-  if (!counts.usageEvents) warnings.push("Usage telemetry table is ready, but no app usage events have been recorded yet.");
-  if (!rlsRows.length) warnings.push("RLS runtime RPC is unavailable.");
+  const warningsSnapshot: string[] = warnings;
+  if (!counts.usageEvents) warningsSnapshot.push("Usage telemetry table is ready, but no app usage events have been recorded yet.");
+  if (!rlsRows.length) warningsSnapshot.push("RLS runtime RPC is unavailable.");
   return {
     generatedAt: new Date().toISOString(),
     staleAfterSeconds: 60,
@@ -517,26 +583,28 @@ async function snapshot(rangeDays: number) {
       targetId: row.target_id_hash || null,
       createdAt: row.created_at,
     })),
-    warnings,
+    warnings: warningsSnapshot,
   };
 }
 
 async function deletePreview(userId: string) {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(userId)) throw new Error("Invalid user ID format");
   const supabase = serviceClient();
   const { data, error } = await supabase.auth.admin.getUserById(userId);
   if (error || !data?.user) throw new Error("User not found");
   const counts = {
     authUsers: 1,
-    profiles: await safeCount(supabase, "profiles", "id", userId),
-    trips: await safeCount(supabase, "trips", "owner_id", userId),
-    tripMembers: await safeCount(supabase, "trip_members", "user_id", userId),
-    receipts: await safeCount(supabase, "receipts", "owner_id", userId),
-    receiptItems: await safeCount(supabase, "receipt_items", "owner_id", userId),
-    receiptPhotos: await safeCount(supabase, "receipt_photos", "owner_id", userId),
-    integrations: await safeCount(supabase, "integrations", "user_id", userId),
-    receiptSyncJobs: await safeCount(supabase, "receipt_sync_jobs", "owner_id", userId),
-    usageEvents: await safeCount(supabase, "app_usage_events", "user_id", userId),
-    syncAttemptEvents: await safeCount(supabase, "sync_attempt_events", "user_id", userId),
+    profiles: await strictCount(supabase, "profiles", "id", userId),
+    trips: await strictCount(supabase, "trips", "owner_id", userId),
+    tripMembers: await strictCount(supabase, "trip_members", "user_id", userId),
+    receipts: await strictCount(supabase, "receipts", "owner_id", userId),
+    receiptItems: await strictCount(supabase, "receipt_items", "owner_id", userId),
+    receiptPhotos: await strictCount(supabase, "receipt_photos", "owner_id", userId),
+    integrations: await strictCount(supabase, "integrations", "user_id", userId),
+    receiptSyncJobs: await strictCount(supabase, "receipt_sync_jobs", "owner_id", userId),
+    usageEvents: await strictCount(supabase, "app_usage_events", "user_id", userId),
+    syncAttemptEvents: await strictCount(supabase, "sync_attempt_events", "user_id", userId),
   };
   const emailMasked = maskEmail(data.user.email);
   return {
@@ -558,7 +626,7 @@ async function writeAudit(supabase: SupabaseClientAny, entry: Record<string, any
     preview_counts: entry.previewCounts,
     result: entry.result,
   });
-  if (error) throw new Error("Admin audit unavailable");
+  if (error) throw new Error("Admin audit write failed; delete operation blocked for safety");
 }
 
 async function deleteUser(userId: string, confirmPhrase: string, adminPassphrase: string, adminSubject: string) {
@@ -576,14 +644,22 @@ async function deleteUser(userId: string, confirmPhrase: string, adminPassphrase
     previewCounts: preview.counts,
     result: { emailMasked: preview.emailMasked },
   });
-  const photos = await fetchRows(supabase, "receipt_photos", "owner_id,storage_bucket,storage_path", 1000);
-  const targetPhotos = photos.filter((row: any) => row.owner_id === userId && row.storage_bucket && row.storage_path);
+  const photosRes = await fetchRows(supabase, "receipt_photos", "owner_id,storage_bucket,storage_path", 1000);
+  const targetPhotos = photosRes.data.filter((row: any) => row.owner_id === userId && row.storage_bucket && row.storage_path);
+  let storageAttempted = 0;
+  let storageSucceeded = 0;
+  let storageFailed = 0;
   for (const [bucket, rows] of groupBy(targetPhotos, "storage_bucket")) {
-    await supabase.storage.from(bucket).remove(rows.map((row: any) => row.storage_path)).catch(() => null);
+    const paths = rows.map((row: any) => row.storage_path);
+    storageAttempted += paths.length;
+    const { error: removeErr } = await supabase.storage.from(bucket).remove(paths);
+    if (removeErr) storageFailed += paths.length;
+    else storageSucceeded += paths.length;
   }
   const { error } = await supabase.auth.admin.deleteUser(userId);
   if (error) throw error;
-  const postDeleteCounts = (await deletePreview(userId).catch(() => null))?.counts || {};
+  const postDelete = await deletePreview(userId).catch((err) => ({ userMissingAfterDelete: /not found/i.test(String(err?.message || err)) }));
+  const postDeleteCounts = (postDelete as any).counts || {};
   await writeAudit(supabase, {
     adminSubject,
     action: "delete_user_completed",
@@ -591,9 +667,15 @@ async function deleteUser(userId: string, confirmPhrase: string, adminPassphrase
     targetId: userId,
     requestId,
     previewCounts: preview.counts,
-    result: { postDeleteCounts, storageObjectsAttempted: targetPhotos.length },
+    result: {
+      postDeleteCounts,
+      storageObjectsAttempted: storageAttempted,
+      storageObjectsSucceeded: storageSucceeded,
+      storageObjectsFailed: storageFailed,
+      userMissingAfterDelete: !!(postDelete as any).userMissingAfterDelete,
+    },
   });
-  return { deleted: true, postDeleteCounts };
+  return { deleted: true, postDeleteCounts, storageObjectsAttempted: storageAttempted, storageObjectsSucceeded: storageSucceeded, storageObjectsFailed: storageFailed };
 }
 
 Deno.serve(async (req) => {
@@ -619,11 +701,29 @@ Deno.serve(async (req) => {
       if (!body.receiptId) throw new Error("Missing receiptId");
       const supabase = serviceClient();
       const updates: any = { updated_at: new Date().toISOString() };
-      if (body.store !== undefined) updates.store = body.store;
-      if (body.amount !== undefined) updates.amount = Number(body.amount);
-      if (body.currency !== undefined) updates.currency = body.currency;
-      if (body.status !== undefined) updates.status = body.status;
-      if (body.category !== undefined) updates.category = body.category;
+      if (body.store !== undefined) {
+        const trimmed = String(body.store).trim();
+        if (!trimmed) throw new Error("Store name cannot be empty");
+        updates.store = trimmed;
+      }
+      if (body.amount !== undefined) {
+        const amount = Number(body.amount);
+        if (!Number.isFinite(amount) || amount < 0) throw new Error("Amount must be a finite non-negative number");
+        updates.amount = amount;
+      }
+      if (body.currency !== undefined) {
+        const currency = String(body.currency).toUpperCase().trim();
+        if (!CURRENCY_RE.test(currency)) throw new Error("Currency must be a 3-letter uppercase code");
+        updates.currency = currency;
+      }
+      if (body.status !== undefined) {
+        const status = String(body.status).trim();
+        if (!RECEIPT_STATUSES.has(status)) throw new Error(`Status must be one of: ${[...RECEIPT_STATUSES].join(', ')}`);
+        updates.status = status;
+      }
+      if (body.category !== undefined) {
+        updates.category = body.category;
+      }
       
       const { data, error } = await supabase.from("receipts").update(updates).eq("id", body.receiptId).select("id").single();
       if (error) throw error;
@@ -635,7 +735,10 @@ Deno.serve(async (req) => {
         targetId: body.receiptId,
         requestId: crypto.randomUUID(),
         previewCounts: {},
-        result: { amended: true, updates },
+        result: {
+          amended: true,
+          fields: Object.keys(updates).filter((key) => key !== "updated_at"),
+        },
       });
       return json(req, 200, { ok: true, id: data?.id });
     }
@@ -659,15 +762,18 @@ Deno.serve(async (req) => {
       const testMessage = testData.status?.message || testData.error || "";
       try {
         const supabase = serviceClient();
-        await supabase.from("app_usage_events").insert({
-          user_id: "e6bd6e0a-4022-4491-95d3-e4b53ddc88f6", // vc06456@gmail.com (admin user)
-          session_id_hash: "admin-console-test",
-          event_name: `provider_test_${provider}`,
-          provider,
-          outcome: testStatus === "connected" ? "success" : "error",
-          metadata: { status: testStatus, message: testMessage },
-          app_surface: "compact",
-        });
+        const usageUserId = Deno.env.get("ADMIN_KANBAN_USAGE_USER_ID") || "";
+        if (usageUserId) {
+          await supabase.from("app_usage_events").insert({
+            user_id: usageUserId,
+            session_id_hash: "admin-console-test",
+            event_name: `provider_test_${provider}`,
+            provider,
+            outcome: testStatus === "connected" ? "success" : "error",
+            metadata: { status: testStatus, message: testMessage },
+            app_surface: "admin-kanban",
+          });
+        }
       } catch (e) { console.warn("Failed to store test result:", e); }
       // Also cache in memory for this instance
       providerTestCache.set(provider, { status: testStatus, message: testMessage, testedAt: Date.now() });
@@ -676,7 +782,8 @@ Deno.serve(async (req) => {
     return json(req, 404, { ok: false, error: "Admin KanBan route not found" });
   } catch (error) {
     const message = redact(error instanceof Error ? error.message : error);
-    const status = /session|auth|login/i.test(message) ? 401 : /confirm phrase|mismatch/i.test(message) ? 400 : /not found/i.test(message) ? 404 : 500;
+    const explicitStatus = Number((error as any)?.status || 0);
+    const status = explicitStatus || (/session|auth|login/i.test(message) ? 401 : /confirm phrase|mismatch/i.test(message) ? 400 : /not found/i.test(message) ? 404 : 500);
     return json(req, status, { ok: false, error: message });
   }
 });

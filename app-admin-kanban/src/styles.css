@@ -639,6 +639,27 @@ button:disabled {
   align-items: start;
 }
 
+.snapshot-warnings {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fff3cd;
+  color: #664d03;
+  border: 1px solid #ffecb5;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.snapshot-warnings ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.snapshot-warnings li + li {
+  margin-top: 2px;
+}
+
 .dashboard-left {
   display: flex;
   flex-direction: column;

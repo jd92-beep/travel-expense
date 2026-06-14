@@ -41,6 +41,8 @@ import type {
 import { Pencil, MapPin, Calendar, Users as UsersIcon, Globe, Wallet, Clock, CheckCircle, XCircle, Zap } from 'lucide-react';
 
 const RANGE_OPTIONS = [1, 7, 30, 90];
+const RECEIPT_STATUSES = new Set(['draft', 'pending', 'confirmed']);
+const CURRENCY_RE = /^[A-Z]{3}$/;
 
 const statusText: Record<HealthState, string> = {
   healthy: 'Healthy',
@@ -62,7 +64,9 @@ function classForHealth(status: HealthState): string {
 
 function matchesSearch(user: AdminUserCard, search: string): boolean {
   if (!search.trim()) return true;
-  return user.email.toLowerCase().includes(search.toLowerCase());
+  const needle = search.trim().toLowerCase();
+  const haystack = [user.email, user.displayName, user.id].filter(Boolean).join(' ').toLowerCase();
+  return haystack.includes(needle);
 }
 
 function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => void }) {
@@ -133,13 +137,17 @@ function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot;
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [llmExpanded, setLlmExpanded] = useState(true);
 
-  async function handleTest(providerKey: string) {
-    setTestingProvider(providerKey);
+  function providerRowKey(provider: AdminProviderHealth, index: number) {
+    return `${provider.provider}:${provider.model || provider.modelName || index}`;
+  }
+
+  async function handleTest(resultKey: string, providerKey: string) {
+    setTestingProvider(resultKey);
     try {
       const result = await testProvider(session, providerKey);
-      setTestResults(prev => ({ ...prev, [providerKey]: { ok: result.ok, message: result.status?.message } }));
+      setTestResults(prev => ({ ...prev, [resultKey]: { ok: result.ok, message: result.status?.message } }));
     } catch (err) {
-      setTestResults(prev => ({ ...prev, [providerKey]: { ok: false, message: err instanceof Error ? err.message : 'Test failed' } }));
+      setTestResults(prev => ({ ...prev, [resultKey]: { ok: false, message: err instanceof Error ? err.message : 'Test failed' } }));
     } finally {
       setTestingProvider(null);
     }
@@ -164,8 +172,10 @@ function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot;
           </h3>
           {llmExpanded && (
           <div className="llm-list">
-            {snapshot.llm.map((provider) => (
-              <div key={provider.provider} className="llm-item llm-item-expanded">
+            {snapshot.llm.map((provider, index) => {
+              const resultKey = providerRowKey(provider, index);
+              return (
+              <div key={resultKey} className="llm-item llm-item-expanded">
                 <div className="llm-item-main">
                   <div className="llm-item-header">
                     <span className="llm-provider-label">{provider.label}</span>
@@ -181,23 +191,24 @@ function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot;
                     )}
                     {provider.message && <small className="llm-message">{provider.message}</small>}
                   </div>
-                  {testResults[provider.provider] && (
-                    <div className={`llm-test-result ${testResults[provider.provider].ok ? 'test-ok' : 'test-fail'}`}>
-                      {testResults[provider.provider].ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
-                      <span>{testResults[provider.provider].ok ? 'OK' : testResults[provider.provider].message}</span>
+                  {testResults[resultKey] && (
+                    <div className={`llm-test-result ${testResults[resultKey].ok ? 'test-ok' : 'test-fail'}`}>
+                      {testResults[resultKey].ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
+                      <span>{testResults[resultKey].ok ? 'OK' : testResults[resultKey].message}</span>
                     </div>
                   )}
                 </div>
                 <button
                   type="button"
                   className="test-provider-btn"
-                  disabled={testingProvider === provider.provider}
-                  onClick={() => void handleTest(provider.provider)}
+                  disabled={testingProvider === resultKey}
+                  onClick={() => void handleTest(resultKey, provider.provider)}
                 >
-                  {testingProvider === provider.provider ? '...' : 'Test'}
+                  {testingProvider === resultKey ? '...' : 'Test'}
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
           )}
         </div>
@@ -330,7 +341,14 @@ function QuickAmendModal({ session, receipt, onClose, onRefresh }: { session: Ad
     setBusy(true);
     setError('');
     try {
-      await amendReceipt(session, receipt.id, { store, amount: Number(amount), currency, status });
+      const trimmedStore = store.trim();
+      if (!trimmedStore) throw new Error('Store name cannot be empty');
+      const parsedAmount = Number(amount);
+      if (!Number.isFinite(parsedAmount) || parsedAmount < 0) throw new Error('Amount must be a finite non-negative number');
+      const upperCurrency = currency.toUpperCase().trim();
+      if (!CURRENCY_RE.test(upperCurrency)) throw new Error('Currency must be a 3-letter uppercase code');
+      if (!RECEIPT_STATUSES.has(status)) throw new Error(`Status must be one of: ${[...RECEIPT_STATUSES].join(', ')}`);
+      await amendReceipt(session, receipt.id, { store: trimmedStore, amount: parsedAmount, currency: upperCurrency, status });
       onRefresh();
       onClose();
     } catch (err) {
@@ -629,7 +647,14 @@ function Board({
   onLogout: () => void;
 }) {
   const [search, setSearch] = useState('');
-  const [selectedUser, setSelectedUser] = useState<AdminUserCard | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const selectedUser = snapshot.users.find((user) => user.id === selectedUserId) || null;
+
+  useEffect(() => {
+    if (selectedUserId && !snapshot.users.find((user) => user.id === selectedUserId)) {
+      setSelectedUserId('');
+    }
+  }, [snapshot.users, selectedUserId]);
 
   const visibleUsers = snapshot.users.filter(u => matchesSearch(u, search));
 
@@ -655,6 +680,14 @@ function Board({
       </header>
 
       <section className="dashboard-content">
+        {snapshot.warnings && snapshot.warnings.length > 0 && (
+          <div className="snapshot-warnings" role="alert">
+            <AlertTriangle size={14} />
+            <ul>
+              {snapshot.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
+        )}
         <div className="dashboard-left">
           <UniversalHealth snapshot={snapshot} session={session} />
           
@@ -664,8 +697,8 @@ function Board({
               {visibleUsers.map(user => (
                 <button 
                   key={user.id} 
-                  className={`user-list-item ${selectedUser?.id === user.id ? 'active' : ''}`}
-                  onClick={() => setSelectedUser(user)}
+                  className={`user-list-item ${selectedUserId === user.id ? 'active' : ''}`}
+                  onClick={() => setSelectedUserId(user.id)}
                   type="button"
                 >
                   <UserRound size={16} />
