@@ -15,11 +15,16 @@
 - Local project directory: `/Users/tommy/Documents/Codex/travel-expense`.
 - GitHub repo: `https://github.com/jd92-beep/travel-expense`
 - GitHub connection: git remote `origin` uses `https://github.com/jd92-beep/travel-expense.git` for both fetch and push.
-- Live app: `https://jd92-beep.github.io/travel-expense/`
+- GitHub Pages legacy/root app: `https://jd92-beep.github.io/travel-expense/`
+- GitHub Pages React app: `https://jd92-beep.github.io/travel-expense/react/`
+- GitHub Pages Compact app: `https://jd92-beep.github.io/travel-expense/compact/`
 - Public React Vercel app: `https://travel-expense-react.vercel.app`
-- Public React Netlify app: `https://travel-expense-react.netlify.app` exists, but currently returns `503 usage_exceeded`; treat this as a Netlify account/usage gate until rechecked.
+- Public React Netlify app: `https://travel-expense-react.netlify.app`
+- Public Compact Vercel app: `https://travel-expense-compact.vercel.app`
+- Public Compact Netlify app: `https://travel-expense-compact.netlify.app`
 - GitNexus index is refreshed during handover work; run `npx gitnexus status` for the live indexed commit and counts before relying on them.
-- Latest pushed runtime commit is `4b17dbf` (`Clarify Supabase-only Notion settings`) as of 2026-05-26 HKT. GitHub Pages and Vercel React returned `200`; Netlify still returned `503 usage_exceeded` on the latest checks.
+- Latest pushed `main` commit is `36fc07d` (`Fix Edge auth catch block to return 401 for buffer length errors`) as of 2026-06-15 HKT.
+- Latest Compact app version is `0.7.9`. Live checks on 2026-06-15 HKT returned `200` for GitHub Pages root/React/Compact, React Vercel, React Netlify, Compact Vercel, and Compact Netlify.
 - The repo is public. Never commit real API keys, OAuth tokens, Notion tokens, injected `_site/` output, or local secrets.
 
 ## Read First
@@ -36,12 +41,14 @@
 
 - `index.html` is the legacy production app at GitHub Pages root. It is a large no-build HTML/CSS/JS PWA using Tailwind CDN, Chart.js CDN, vanilla JS, and `localStorage`.
 - `legacy-notion.js` is the extracted legacy Notion sync module for `index.html`; keep its global function contract compatible with the legacy page unless the user explicitly asks for a breaking refactor.
-- `app-react/` is the main public React 19 + Vite + TypeScript app, deployed under `/react/` on GitHub Pages and as the primary public Vercel app.
+- `app-react/` is the main public React 19 + Vite + TypeScript app, deployed under `/react/` on GitHub Pages and to the public React Vercel/Netlify apps.
+- `app-compact/` is the active Compact React + Vite + TypeScript app, deployed under `/compact/` on GitHub Pages and to the public Compact Vercel/Netlify apps. Prioritize this surface when Boss explicitly says Compact.
 - `app/` and `app3/` are older React attempts. Keep them for history, but do not use them as the source for new React work.
 - `email-to-notion.gs` is the Google Apps Script backend for Gmail label `travel-expense` -> AI parse -> Notion.
 - `workers/credential-broker/` is the Cloudflare Worker for app unlock, short sessions, encrypted provider credentials, and AI provider calls.
 - `supabase/migrations/` contains the public multi-user schema and RLS hardening.
-- `.github/workflows/deploy.yml` builds `app-react/`, then publishes legacy `index.html` at root plus the fresh React build at `/react/`.
+- `.github/workflows/deploy.yml` builds `app-react/` and `app-compact/`, then publishes legacy `index.html` at root plus the fresh builds at `/react/` and `/compact/`.
+- `.github/workflows/deploy-compact-netlify.yml` deploys `app-compact/` to the Compact Netlify production site when Compact files or the workflow change.
 - `README.md` is the simple user guide. Keep it understandable for non-technical users.
 - `HANDOVER.md` is the technical continuation guide for the next agent. Keep it current after meaningful work.
 
@@ -78,6 +85,18 @@ npx gitnexus analyze
 # Legacy app local smoke
 python3 -m http.server 8899
 # then open http://localhost:8899/index.html
+
+# Compact app
+cd app-compact
+npm run typecheck
+npm run build
+npm run security:scan
+npm run smoke:settings
+npm run smoke:timeline
+npm run smoke:dashboard
+npm run smoke:mobile-layout
+npm run smoke:deploy-live
+cd ..
 
 # Fresh React app
 cd app-react
@@ -168,13 +187,14 @@ npm run self-test
 - Normal deploy is pushing `main`; GitHub Pages builds from `.github/workflows/deploy.yml`.
 - If a pushed `main` commit does not create a GitHub Pages run, manually dispatch `Deploy to GitHub Pages` with `gh workflow run "Deploy to GitHub Pages" --ref main`.
 - If a Pages run fails before checkout while downloading an action archive from `codeload.github.com`, treat it as an external GitHub Actions download failure first; retry before changing app code.
-- For Vercel, the primary public app is the React project `travel-expense-react`, which is linked to the GitHub repo and should normally update from GitHub pushes instead of manual CLI deploys.
+- For Vercel, the public linked projects are `travel-expense-react` and `travel-expense-compact`; they should normally update from GitHub pushes instead of manual CLI deploys.
 - Treat the legacy/root Vercel project `travel-expense` as a private backup surface only. Do not use it as the main public app unless the user explicitly asks.
-- Netlify project `travel-expense-react` is configured from `netlify.toml`, but the public URL currently returns `usage_exceeded`; verify account/quota state before treating Netlify as production-ready.
+- Netlify project `travel-expense-react` is configured from `netlify.toml`. Compact Netlify is deployed through `.github/workflows/deploy-compact-netlify.yml`. Both public Netlify URLs returned `200` on 2026-06-15 HKT, but recheck live before promising production status.
 - If a manual Vercel deploy is unavoidable, be explicit about the target project before running anything:
   - `travel-expense-react` = public React app, rooted by Vercel project settings at `app-react/`
+  - `travel-expense-compact` = public Compact app, rooted by Vercel project settings at `app-compact/`
   - `travel-expense` = legacy/root backup project, should stay private
-- Do not run `vercel deploy` from `app-react/` when the linked Vercel project already has `rootDirectory=app-react`, because that can accidentally resolve to `app-react/app-react`.
+- Do not run `vercel deploy` from `app-react/` or `app-compact/` when the linked Vercel project already has a matching root directory, because that can accidentally resolve to nested paths such as `app-react/app-react` or `app-compact/app-compact`.
 - If Vercel CLI mutates root `.vercel/` or `.gitignore` during local login/linking, clean up those local-only changes unless the user explicitly asked to persist them.
 - Workflow injects only `MINIMAX_KEY` and `ZAI_KEY` placeholders into legacy HTML if repository secrets exist.
 - Apps Script deploy is separate and uses `clasp --user ftjdfr push --force`; never paste live credentials into tracked files.
