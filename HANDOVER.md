@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-15
-- **Focus**: Compact bugfix PR batch (PR-01, PR-04, PR-09, PR-10, PR-11, PR-13, PR-14)
-- **Agent**: Codex 🤖
-- **App version**: Compact `0.7.6`; React unchanged in this pass
+- **Focus**: Prevent crash in Record tab when date is missing, and align history tests
+- **Agent**: Antigravity 🤖
+- **App version**: Compact `0.7.7`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,12 +13,22 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.7.6`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.7.7`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 28 (Codex — current session)
+### Session 29 (Antigravity — current session)
+
+1. **Fixed Record Tab Crash (r.date Undefined Error)**:
+   - Fixed a crash in `History.tsx` where calling `r.date.slice(5)` threw `TypeError` for receipts with missing/undefined dates (e.g. pending OCR drafts, raw Notion imports). Safe guarded via `r.date ? r.date.slice(5).replace('-', '/') : ''`.
+2. **Aligned Playwright History Smoke Tests**:
+   - Appended `#history` hash to all `page.goto` calls since the app now launches to the `scan` tab by default.
+   - Updated mock queue items' error string to include `'version conflict'` to pass true-conflict resolver filters.
+   - Aligned English assertions with Cantonese UI translations (`'同步衝突處理'` and `'2 筆'`).
+3. **Version bump**: Compact `0.7.6` -> `0.7.7`.
+
+### Session 28 (Codex — previous session)
 
 1. **PR-01: Shared-trip Notion delete outbox fix**:
    - Delete jobs in `drainSharedTripNotionOutbox()` now archive the mirror Notion page via the existing `push()` callback before marking the job succeeded.
