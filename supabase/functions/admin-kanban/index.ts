@@ -1084,7 +1084,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     const message = redact(error instanceof Error ? error.message : error);
     const explicitStatus = Number((error as any)?.status || 0);
-    const status = explicitStatus || (/session|auth|login/i.test(message) ? 401 : /confirm phrase|mismatch/i.test(message) ? 400 : /not found/i.test(message) ? 404 : 500);
+    const status = explicitStatus || (/session|auth|login|buffer|byte length|invalid/i.test(message) ? 401 : /confirm phrase|mismatch/i.test(message) ? 400 : /not found/i.test(message) ? 404 : 500);
     return json(req, status, { ok: false, error: message });
   }
 });
