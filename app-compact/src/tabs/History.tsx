@@ -435,7 +435,7 @@ export function History({
                       {isPendingReceipt(r) && <span className="history-pending-mini">pending</span>}
                       {displayStore(r)}
                     </strong>
-                    <small>{[cat.name, r.date.slice(5).replace('-', '/'), r.region || r.regionSnapshot, person?.name].filter(Boolean).join(' · ')}</small>
+                    <small>{[cat.name, r.date ? r.date.slice(5).replace('-', '/') : '', r.region || r.regionSnapshot, person?.name].filter(Boolean).join(' · ')}</small>
                     {healthMarkers.length > 0 && (
                       <span className="history-health-markers" aria-label={`Receipt health markers for ${displayStore(r)}`}>
                         {healthMarkers.map((marker) => (
