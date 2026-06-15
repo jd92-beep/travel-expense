@@ -3,7 +3,7 @@ import type { AppState, ItineraryDay } from './types';
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.7.7';
+export const APP_VERSION = '0.7.8';
 
 export const STORAGE_KEY = 'boss-japan-tracker';
 export const DEFAULT_NOTION_DB = '3438d94d5f7c81878221fcda6d65d39d';
@@ -11,21 +11,13 @@ export const DEFAULT_CREDENTIAL_BROKER_URL = 'https://travel-expense-credential-
 export const ALLOWED_CREDENTIAL_BROKER_URLS = [DEFAULT_CREDENTIAL_BROKER_URL] as const;
 export const APP_SCHEMA_VERSION = 3;
 export const DEFAULT_GOOGLE_BACKUP_MODEL = 'gemma-4-31b-it';
-export const DEFAULT_SCAN_VOICE_MODEL_ID = `google/${DEFAULT_GOOGLE_BACKUP_MODEL}`;
+export const DEFAULT_SCAN_VOICE_MODEL_ID = 'mimo/mimo-v2.5';
 export const DEFAULT_KIMI_PRIMARY_MODEL_ID = 'kimi/kimi-code';
 export const DEFAULT_TRIP_UPDATE_MODEL_ID = 'mimo/mimo-v2.5-pro';
 
-const EMAIL_TRIP_CUTOFF = new Date('2026-07-02T00:00:00+08:00').getTime();
-
-export function emailTripDefaultModelId(): string {
-  return Date.now() >= EMAIL_TRIP_CUTOFF
-    ? DEFAULT_KIMI_PRIMARY_MODEL_ID
-    : DEFAULT_TRIP_UPDATE_MODEL_ID;
-}
-
 const STALE_GOOGLE_BACKUP_MODELS = new Set(['gemma-3-27b-it', 'gemma-4-31b', 'gemma-4-26b-a4b-it']);
-const LEGACY_SCAN_VOICE_DEFAULTS = new Set(['kimi/kimi-code', 'kimi-code', 'kimi/kimi-k2.6', 'kimi-k2.6']);
-const LEGACY_EMAIL_TRIP_DEFAULTS = new Set(['', 'kimi-code', 'kimi/kimi-for-coding', 'kimi-for-coding']);
+const LEGACY_SCAN_VOICE_DEFAULTS = new Set(['kimi/kimi-code', 'kimi-code', 'kimi/kimi-k2.6', 'kimi-k2.6', 'google/gemma-4-31b-it']);
+const LEGACY_EMAIL_TRIP_DEFAULTS = new Set(['', 'kimi-code', 'kimi/kimi-for-coding', 'kimi-for-coding', 'kimi/kimi-code']);
 
 export const AI_MODELS = [
   { id: 'kimi/kimi-code', name: 'Kimi (kimi-code)' },
@@ -54,10 +46,10 @@ export function normalizeAiModelSettings<T extends Partial<Pick<AppState, 'scanM
     next.voiceModel = DEFAULT_SCAN_VOICE_MODEL_ID;
   }
   if (!next.emailModel || LEGACY_EMAIL_TRIP_DEFAULTS.has(String(next.emailModel))) {
-    next.emailModel = emailTripDefaultModelId();
+    next.emailModel = DEFAULT_TRIP_UPDATE_MODEL_ID;
   }
   if (!next.tripUpdateModel || LEGACY_EMAIL_TRIP_DEFAULTS.has(String(next.tripUpdateModel))) {
-    next.tripUpdateModel = emailTripDefaultModelId();
+    next.tripUpdateModel = DEFAULT_TRIP_UPDATE_MODEL_ID;
   }
   return next;
 }
