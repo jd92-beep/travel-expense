@@ -1,6 +1,6 @@
 # Travel Expense Admin KanBan Architecture
 
-Last updated: 2026-06-02 HKT
+Last updated: 2026-06-15 HKT
 
 ## Objective
 
@@ -421,7 +421,7 @@ Data visualization choices:
 Avoid fake decorative charts. Every glowing element should correspond to a
 status, severity, freshness, or selected state.
 
-## Implementation Phases
+## Implementation Phases (Status: Fully Implemented & Deployed)
 
 ### Phase 1: Plan and concept
 

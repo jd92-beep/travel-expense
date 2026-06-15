@@ -2,8 +2,8 @@
 
 ## Last Worked On
 - **Date**: 2026-06-15
-- **Focus**: Compact Trip Update AI review modal redesign, Timeline edit time ranges, and Home budget currency toggle polish
-- **Agent**: Codex 🤖
+- **Focus**: Admin Console (Phases 1-7), Trip Update AI Partial vs Full replacement, and default model adjustments
+- **Agent**: Antigravity 🤖
 - **App version**: Compact `0.7.9`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
@@ -13,12 +13,25 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.7.7`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.7.9`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 30 (Codex — current session)
+### Session 31 (Antigravity — current session)
+
+1. **Admin Console (Phases 1-7)**:
+   - Deployed the complete cyber-themed independent admin KanBan board under `app-admin-kanban/`.
+   - Added telemetry migrations (`app_usage_events`, `admin_audit_events`), action framework, sync operations, data doctor, identity resolver, runtime monitor, support bundle, tab navigation, and count health UI.
+   - Connected everything through the server-side Supabase Edge Function API.
+2. **Trip Update AI: Partial vs Full Itinerary Detection**:
+   - Added `detectItineraryIntent()` to analyze pasted text day overlaps (over 80% triggers full replacement; under 80% updates only matching dates).
+   - Changed default model settings so Scan/Voice now defaults to `Mimo v2.5` (was Google Gemma), and cut off date-based logic was removed.
+   - Bumped Compact to `0.7.8`.
+3. **Docs Alignment**:
+   - Updated `admin-kanban-architecture.md`, `CHANGELOG.md`, and `HANDOVER.md` to match the newly landed console features.
+
+### Session 30 (Codex — previous session)
 
 1. **Trip Update AI confirmation modal rebuilt for readable review/editing**:
    - Replaced the debug-heavy confirmation popup with a clearer day-by-day review flow.

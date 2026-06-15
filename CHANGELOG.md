@@ -8,6 +8,9 @@
 - Removed the confusing `鬆散紀錄` text under the Timeline daily expense count while keeping the daily receipt sheet action.
 - Restored the Compact Home `預算總覽` HKD/destination-currency toggle to a horizontal pill layout.
 - Bumped Compact to `0.7.9` and synchronized `package-lock.json` after the prior `0.7.8` package-lock mismatch.
+- **Admin Console (Phases 1-7)**: Deployed a new cyber-themed independent admin KanBan board under `app-admin-kanban`. Implemented telemetry/audit table migrations (`app_usage_events`, `admin_audit_events`), action framework, sync operations, data doctor, identity resolver, runtime monitor, support bundle, tab navigation, and count health UI. Added full Edge Function integration and Playwright smoke tests.
+- **Trip Update AI: Partial vs Full Itinerary Detection**: Added smart itinerary parsing intent analysis. Pasted text covering >80% of existing days triggers a full replacement, while <80% day overlap triggers a partial update (replacing only matching dates and preserving other days).
+- **Mimo Default Model Alignment**: Updated Scan/Voice defaults to `Mimo v2.5` (was Google Gemma) for new users. Email/Trip defaults remain `Mimo v2.5 Pro`. Cut off date-based logic was removed, and existing users keep their chosen models. Bumped Compact to `0.7.8`.
 - Fixed a fatal runtime crash in the Record tab (`History.tsx`) when displaying receipts with missing/undefined dates by adding defensive checks before slicing `r.date`.
 - Aligned Playwright history smoke tests with the default-to-scan launch routing (appended `#history` hash to test URLs), version conflict detection, and Cantonese UI text expectations (`'同步衝突處理'`, `'2 筆'`).
 - Bumped Compact to `0.7.7`.
