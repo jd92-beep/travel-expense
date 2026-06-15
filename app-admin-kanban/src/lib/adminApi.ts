@@ -155,3 +155,63 @@ export async function fetchConfigHealth(session: AdminSession): Promise<{ config
   }));
   return data.config;
 }
+
+export async function previewAction(session: AdminSession, params: { action: string; targetType: string; targetId: string; preview?: any; payload?: any; reason?: string; idempotencyKey?: string }): Promise<any> {
+  const data = await parseJson<any>(await fetch(adminDataUrl('/api/actions/preview'), {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  }));
+  return data.action;
+}
+
+export async function commitAction(session: AdminSession, actionId: string): Promise<any> {
+  const data = await parseJson<any>(await fetch(adminDataUrl('/api/actions/commit'), {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actionId }),
+  }));
+  return data.action;
+}
+
+export async function fetchSyncJobs(session: AdminSession, params?: { status?: string; provider?: string; userId?: string; limit?: number }): Promise<any[]> {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set('status', params.status);
+  if (params?.provider) qs.set('provider', params.provider);
+  if (params?.userId) qs.set('userId', params.userId);
+  if (params?.limit) qs.set('limit', String(params.limit));
+  const data = await parseJson<{ ok: boolean; jobs: any[] }>(await fetch(adminDataUrl(`/api/sync/jobs?${qs}`), {
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
+  }));
+  return data.jobs;
+}
+
+export async function fetchIdentityDuplicates(session: AdminSession): Promise<Array<{ prefix: string; users: any[] }>> {
+  const data = await parseJson<{ ok: boolean; duplicates: Array<{ prefix: string; users: any[] }> }>(await fetch(adminDataUrl('/api/identity/duplicates'), {
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
+  }));
+  return data.duplicates;
+}
+
+export async function fetchRuntime(session: AdminSession): Promise<any> {
+  const data = await parseJson<{ ok: boolean; runtime: any }>(await fetch(adminDataUrl('/api/runtime'), {
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
+  }));
+  return data.runtime;
+}
+
+export async function fetchDataDoctor(session: AdminSession): Promise<{ issues: any[]; summary: { high: number; medium: number; low: number }; total: number }> {
+  const data = await parseJson<{ ok: boolean; issues: any[]; summary: { high: number; medium: number; low: number }; total: number }>(await fetch(adminDataUrl('/api/data-doctor'), {
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
+  }));
+  return { issues: data.issues, summary: data.summary, total: data.total };
+}
+
+export async function fetchSupportBundle(session: AdminSession, params: { userId?: string; tripId?: string; includeJobs?: boolean; includeDoctor?: boolean }): Promise<any> {
+  const data = await parseJson<{ ok: boolean; bundle: any }>(await fetch(adminDataUrl('/api/support-bundle'), {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  }));
+  return data.bundle;
+}

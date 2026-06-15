@@ -883,6 +883,203 @@ Deno.serve(async (req) => {
       providerTestCache.set(provider, { status: testStatus, message: testMessage, testedAt: Date.now() });
       return json(req, testRes.ok ? 200 : testRes.status, { ok: testRes.ok, provider, ...testData });
     }
+    // --- Action Framework ---
+    if (req.method === "POST" && url.pathname.endsWith("/api/actions/preview")) {
+      const body = await readBody(req) as any;
+      if (!body.action || !body.targetType || !body.targetId) throw new Error("Missing action, targetType, targetId");
+      const supabase = serviceClient();
+      const previewData = body.preview || {};
+      const idemKey = body.idempotencyKey || crypto.randomUUID();
+      const { data: existing } = await supabase.from("admin_action_requests").select("id, status, preview").eq("idempotency_key", idemKey).limit(1).single();
+      if (existing && existing.status === "committed") return json(req, 200, { ok: true, action: existing, reused: true });
+      const { data: actionRow, error: insertErr } = await supabase.from("admin_action_requests").insert({
+        action: body.action,
+        target_type: body.targetType,
+        target_id_hash: await hashId(body.targetId),
+        admin_subject_hash: await hashId(adminSubject),
+        idempotency_key: idemKey,
+        preview: previewData,
+        payload: body.payload || {},
+        reason: body.reason || null,
+        status: "previewed",
+      }).select("id, action, target_type, status, preview, created_at").single();
+      if (insertErr) throw insertErr;
+      return json(req, 200, { ok: true, action: actionRow });
+    }
+    if (req.method === "POST" && url.pathname.endsWith("/api/actions/commit")) {
+      const body = await readBody(req) as any;
+      if (!body.actionId) throw new Error("Missing actionId");
+      const supabase = serviceClient();
+      const { data: actionRow, error: fetchErr } = await supabase.from("admin_action_requests").select("*").eq("id", body.actionId).single();
+      if (fetchErr || !actionRow) throw new Error("Action not found");
+      if (actionRow.status === "committed") return json(req, 200, { ok: true, action: actionRow, reused: true });
+      if (actionRow.status !== "previewed") throw new Error(`Action status is ${actionRow.status}, cannot commit`);
+      let result: any = {};
+      try {
+        if (actionRow.action === "retry_sync_job") {
+          const jobId = actionRow.payload?.jobId;
+          if (jobId) {
+            await supabase.from("receipt_sync_jobs").update({ status: "pending", attempts: 0, last_error: null, updated_at: new Date().toISOString() }).eq("id", jobId);
+            result = { retried: true, jobId };
+          }
+        } else if (actionRow.action === "cancel_sync_job") {
+          const jobId = actionRow.payload?.jobId;
+          if (jobId) {
+            await supabase.from("receipt_sync_jobs").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", jobId);
+            result = { cancelled: true, jobId };
+          }
+        } else if (actionRow.action === "reassign_data") {
+          const { sourceUserId, targetUserId, tables } = actionRow.payload || {};
+          if (!sourceUserId || !targetUserId) throw new Error("Missing source/target user");
+          const reassignTables = tables || ["trips", "receipts", "receipt_photos", "receipt_sync_jobs"];
+          const reassigned: Record<string, number> = {};
+          for (const table of reassignTables) {
+            const ownerCol = table === "receipt_sync_jobs" ? "owner_id" : "owner_id";
+            const { count } = await supabase.from(table).select("*", { count: "exact", head: true }).eq(ownerCol, sourceUserId);
+            await supabase.from(table).update({ owner_id: targetUserId }).eq(ownerCol, sourceUserId);
+            reassigned[table] = count || 0;
+          }
+          await supabase.from("admin_identity_links").upsert({
+            primary_user_id: targetUserId,
+            linked_user_id: sourceUserId,
+            reason: `Reassigned by admin: ${actionRow.reason || 'identity merge'}`,
+            admin_subject_hash: await hashId(adminSubject),
+          }, { onConflict: "primary_user_id,linked_user_id" });
+          result = { reassigned };
+        } else {
+          result = { note: "Action type not implemented for commit; record only" };
+        }
+        await supabase.from("admin_action_requests").update({ status: "committed", result, committed_at: new Date().toISOString() }).eq("id", actionRow.id);
+        await writeAudit(supabase, { adminSubject, action: `commit_${actionRow.action}`, targetType: actionRow.target_type, targetId: actionRow.target_id_hash, requestId: crypto.randomUUID(), previewCounts: {}, result });
+      } catch (commitErr) {
+        await supabase.from("admin_action_requests").update({ status: "failed", error: redact(commitErr) }).eq("id", actionRow.id);
+        throw commitErr;
+      }
+      return json(req, 200, { ok: true, action: { ...actionRow, status: "committed", result } });
+    }
+    const actionIdMatch = url.pathname.match(/\/api\/actions\/([a-f0-9-]+)$/);
+    if (req.method === "GET" && actionIdMatch) {
+      const supabase = serviceClient();
+      const { data, error } = await supabase.from("admin_action_requests").select("*").eq("id", actionIdMatch[1]).single();
+      if (error || !data) throw new Error("Action not found");
+      return json(req, 200, { ok: true, action: data });
+    }
+    // --- Sync Jobs ---
+    if (req.method === "GET" && url.pathname.endsWith("/api/sync/jobs")) {
+      const supabase = serviceClient();
+      const statusFilter = url.searchParams.get("status") || undefined;
+      const providerFilter = url.searchParams.get("provider") || undefined;
+      const userFilter = url.searchParams.get("userId") || undefined;
+      const limit = Math.min(Number(url.searchParams.get("limit") || "50"), 200);
+      let query = supabase.from("receipt_sync_jobs").select("id,owner_id,provider,status,last_error,attempts,created_at,updated_at").order("updated_at", { ascending: false }).limit(limit);
+      if (statusFilter) query = query.eq("status", statusFilter);
+      if (providerFilter) query = query.eq("provider", providerFilter);
+      if (userFilter) query = query.eq("owner_id", userFilter);
+      const { data: jobs, error: jobsErr } = await query;
+      if (jobsErr) throw jobsErr;
+      return json(req, 200, { ok: true, jobs: jobs || [], total: jobs?.length || 0 });
+    }
+    // --- Identity Duplicates ---
+    if (req.method === "GET" && url.pathname.endsWith("/api/identity/duplicates")) {
+      const supabase = serviceClient();
+      const { data: allUsers } = await supabase.auth.admin.listUsers({ perPage: 10000 });
+      const users = allUsers?.users || [];
+      const profilesRes = await fetchRows(supabase, "profiles", "id,display_name,avatar_url", 10000);
+      const profileMap = new Map(profilesRes.data.map((p: any) => [p.id, p]));
+      const emailGroups = new Map<string, any[]>();
+      for (const user of users) {
+        const email = (user.email || "").toLowerCase();
+        const prefix = email.split("@")[0] || "";
+        if (!prefix) continue;
+        if (!emailGroups.has(prefix)) emailGroups.set(prefix, []);
+        emailGroups.get(prefix)!.push({ id: user.id, email: user.email, displayName: profileMap.get(user.id)?.display_name || null, createdAt: user.created_at });
+      }
+      const duplicates = [...emailGroups.entries()]
+        .filter(([, group]) => group.length > 1)
+        .map(([prefix, group]) => ({ prefix, users: group }));
+      return json(req, 200, { ok: true, duplicates });
+    }
+    // --- Runtime Status ---
+    if (req.method === "GET" && url.pathname.endsWith("/api/runtime")) {
+      const supabase = serviceClient();
+      const brokerVersion = await fetchWithTimeout(`${CREDENTIAL_BROKER_URL.replace(/\/+$/, "")}/health`, {}, 3000)
+        .then(r => r.json()).then(d => d.version || "unknown").catch(() => "unreachable");
+      const edgeDeployId = Deno.env.get("DENO_DEPLOYMENT_ID") || "local";
+      const { data: latestMigration } = await supabase.from("schema_migrations").select("version").order("version", { ascending: false }).limit(1).single().catch(() => ({ data: null }));
+      return json(req, 200, {
+        ok: true,
+        runtime: {
+          adminConsoleVersion: "0.3.0",
+          edgeDeployId,
+          edgeRouteVersion: "2026-06-15",
+          brokerVersion,
+          dbSchemaVersion: latestMigration?.version || "unknown",
+          supabaseUrl: "fbnnjoahvtdrnigevrtw",
+        },
+      });
+    }
+    // --- Data Doctor ---
+    if (req.method === "GET" && url.pathname.endsWith("/api/data-doctor")) {
+      const supabase = serviceClient();
+      const issues: Array<{ severity: string; category: string; message: string; entityId?: string }> = [];
+      const receiptsRes = await fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,amount,currency,status,source_id,notion_sync_status,record_date", 5000);
+      const receipts = receiptsRes.data;
+      for (const r of receipts) {
+        if (!r.trip_id) issues.push({ severity: "high", category: "receipt", message: `Receipt ${r.id} missing trip_id`, entityId: r.id });
+        if (!r.owner_id) issues.push({ severity: "high", category: "receipt", message: `Receipt ${r.id} missing owner_id`, entityId: r.id });
+        if (r.amount != null && (isNaN(Number(r.amount)) || Number(r.amount) < 0)) issues.push({ severity: "high", category: "receipt", message: `Receipt ${r.id} has invalid amount: ${r.amount}`, entityId: r.id });
+        if (r.currency && !/^[A-Z]{3}$/.test(r.currency)) issues.push({ severity: "medium", category: "receipt", message: `Receipt ${r.id} has invalid currency: ${r.currency}`, entityId: r.id });
+        if (r.notion_sync_status === "failed") issues.push({ severity: "medium", category: "sync", message: `Receipt ${r.id} Notion sync failed`, entityId: r.id });
+        if (r.status === "confirmed" && !r.store) issues.push({ severity: "low", category: "receipt", message: `Confirmed receipt ${r.id} missing store name`, entityId: r.id });
+      }
+      const tripsRes = await fetchRows(supabase, "trips", "id,owner_id,name,active,archived,start_date,end_date,itinerary", 2000);
+      const trips = tripsRes.data;
+      for (const t of trips) {
+        if (t.active && t.archived) issues.push({ severity: "high", category: "trip", message: `Trip ${t.id} is both active and archived`, entityId: t.id });
+      }
+      const jobsRes = await fetchRows(supabase, "receipt_sync_jobs", "id,status,last_error,updated_at", 1000);
+      const staleThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      for (const j of jobsRes.data) {
+        if (j.status === "processing" && j.updated_at && j.updated_at < staleThreshold) {
+          issues.push({ severity: "high", category: "sync", message: `Sync job ${j.id} stuck in processing since ${j.updated_at}`, entityId: j.id });
+        }
+      }
+      const photosRes = await fetchRows(supabase, "receipt_photos", "id,receipt_id", 5000);
+      const receiptIds = new Set(receipts.map((r: any) => r.id));
+      for (const p of photosRes.data) {
+        if (p.receipt_id && !receiptIds.has(p.receipt_id)) {
+          issues.push({ severity: "low", category: "photo", message: `Orphan photo ${p.id} references missing receipt ${p.receipt_id}`, entityId: p.id });
+        }
+      }
+      const bySeverity = { high: issues.filter(i => i.severity === "high").length, medium: issues.filter(i => i.severity === "medium").length, low: issues.filter(i => i.severity === "low").length };
+      return json(req, 200, { ok: true, issues, summary: bySeverity, total: issues.length });
+    }
+    // --- Support Bundle ---
+    if (req.method === "POST" && url.pathname.endsWith("/api/support-bundle")) {
+      const body = await readBody(req) as any;
+      const supabase = serviceClient();
+      const bundle: any = { generatedAt: new Date().toISOString(), requestedBy: adminSubject };
+      if (body.userId) {
+        const { data: user } = await supabase.auth.admin.getUserById(body.userId).catch(() => ({ data: null }));
+        bundle.user = user?.user ? { id: user.user.id, email: maskEmail(user.user.email), createdAt: user.user.created_at, lastSignIn: user.user.last_sign_in_at } : null;
+      }
+      if (body.tripId) {
+        const { data: trip } = await supabase.from("trips").select("id,name,destination_summary,start_date,end_date,trip_currency,active,archived").eq("id", body.tripId).single().catch(() => ({ data: null }));
+        bundle.trip = trip;
+      }
+      if (body.includeJobs) {
+        const jobsFilter = supabase.from("receipt_sync_jobs").select("id,provider,status,last_error,attempts,updated_at").order("updated_at", { ascending: false }).limit(20);
+        if (body.userId) jobsFilter.eq("owner_id", body.userId);
+        const { data: jobs } = await jobsFilter;
+        bundle.syncJobs = jobs;
+      }
+      if (body.includeDoctor) {
+        const doctorUrl = new URL(req.url);
+        doctorUrl.pathname = doctorUrl.pathname.replace(/\/api\/support-bundle$/, "/api/data-doctor");
+        bundle.doctor = { note: "Run /api/data-doctor separately for full results" };
+      }
+      return json(req, 200, { ok: true, bundle });
+    }
     return json(req, 404, { ok: false, error: "Admin KanBan route not found" });
   } catch (error) {
     const message = redact(error instanceof Error ? error.message : error);

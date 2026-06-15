@@ -29,6 +29,12 @@ import {
   previewDeleteUser,
   amendReceipt,
   testProvider,
+  fetchSyncJobs,
+  fetchDataDoctor,
+  fetchRuntime,
+  fetchIdentityDuplicates,
+  previewAction,
+  commitAction,
 } from './lib/adminApi';
 import type {
   AdminKanbanSnapshot,
@@ -41,7 +47,7 @@ import type {
   SurfaceScope,
   LiveState,
 } from './lib/types';
-import { Pencil, MapPin, Calendar, Users as UsersIcon, Globe, Wallet, Clock, CheckCircle, XCircle, Zap } from 'lucide-react';
+import { Pencil, MapPin, Calendar, Users as UsersIcon, Globe, Wallet, Clock, CheckCircle, XCircle, Zap, Activity as ActivityIcon, Wrench, Bug, Monitor, GitMerge } from 'lucide-react';
 
 const RANGE_OPTIONS = [1, 7, 30, 90];
 const SURFACE_OPTIONS: Array<{ value: SurfaceScope; label: string }> = [
@@ -51,6 +57,7 @@ const SURFACE_OPTIONS: Array<{ value: SurfaceScope; label: string }> = [
   { value: 'admin-kanban', label: 'Admin' },
   { value: 'all', label: 'All' },
 ];
+type ConsoleTab = 'overview' | 'sync' | 'doctor' | 'identity' | 'runtime';
 const RECEIPT_STATUSES = new Set(['draft', 'pending', 'confirmed']);
 const CURRENCY_RE = /^[A-Z]{3}$/;
 
@@ -174,8 +181,8 @@ function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot;
           <h3><Database size={16} /> Database & Backend</h3>
           <Metric label="Supabase Status" value={snapshot.supabase.status === 'healthy' ? 'ACTIVE_HEALTHY' : snapshot.supabase.status === 'warning' ? 'DEGRADED' : 'DANGER'} status={snapshot.supabase.status} />
           <Metric label="RLS Force Enabled" value={snapshot.supabase.rls.length === 0 ? 'Unavailable' : snapshot.supabase.rls.every((row) => row.enabled && row.force) ? 'Yes' : 'No'} status={snapshot.supabase.rls.length === 0 ? 'danger' : snapshot.supabase.rls.every((row) => row.enabled && row.force) ? 'healthy' : 'warning'} />
-          <Metric label="Total Users" value={snapshot.supabase.counts.authUsers} />
-          <Metric label="Events (Range)" value={snapshot.usage.events} />
+          <Metric label="Total Users" value={snapshot.supabase.countHealth?.authUsers === 'error' ? 'Unknown' : snapshot.supabase.counts.authUsers} status={snapshot.supabase.countHealth?.authUsers === 'error' ? 'warning' : undefined} />
+          <Metric label="Events (Range)" value={snapshot.supabase.countHealth?.usageEvents === 'error' ? 'Unknown' : snapshot.usage.events} status={snapshot.supabase.countHealth?.usageEvents === 'error' ? 'warning' : undefined} />
         </div>
         
         <div className="health-card">
@@ -659,6 +666,174 @@ function UserDetailsPanel({
   );
 }
 
+function SyncOpsTab({ session }: { session: AdminSession }) {
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [actionResult, setActionResult] = useState('');
+
+  async function loadJobs() {
+    setLoading(true);
+    try {
+      setJobs(await fetchSyncJobs(session, { status: statusFilter || undefined, limit: 100 }));
+    } catch { setJobs([]); }
+    finally { setLoading(false); }
+  }
+
+  async function handleAction(jobId: string, action: string) {
+    try {
+      const preview = await previewAction(session, { action: `${action}_sync_job`, targetType: 'sync_job', targetId: jobId, payload: { jobId }, reason: `Admin ${action}` });
+      const result = await commitAction(session, preview.id);
+      setActionResult(`${action} succeeded: ${JSON.stringify(result.result || {})}`);
+      void loadJobs();
+    } catch (err) { setActionResult(`${action} failed: ${err instanceof Error ? err.message : 'unknown'}`); }
+  }
+
+  useEffect(() => { void loadJobs(); }, [statusFilter]);
+
+  return (
+    <div className="ops-tab">
+      <h3><Wrench size={16} /> Sync Operations</h3>
+      <div className="ops-filters">
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <option value="">All statuses</option>
+          <option value="failed">Failed</option>
+          <option value="pending">Pending</option>
+          <option value="processing">Processing</option>
+        </select>
+        <button type="button" onClick={() => void loadJobs()} disabled={loading}>{loading ? '...' : 'Refresh'}</button>
+      </div>
+      {actionResult && <p className="status-line">{actionResult}</p>}
+      <div className="ops-table">
+        <div className="ops-row ops-header"><span>Provider</span><span>Status</span><span>Attempts</span><span>Error</span><span>Updated</span><span>Actions</span></div>
+        {jobs.map(job => (
+          <div key={job.id} className={`ops-row status-${job.status}`}>
+            <span>{job.provider}</span>
+            <span className={`badge-${job.status}`}>{job.status}</span>
+            <span>{job.attempts ?? 0}</span>
+            <span className="ops-error" title={job.last_error}>{job.last_error ? job.last_error.slice(0, 50) : '—'}</span>
+            <span>{fmtDate(job.updated_at)}</span>
+            <span className="ops-actions">
+              {job.status === 'failed' && <button type="button" onClick={() => void handleAction(job.id, 'retry')}>Retry</button>}
+              {(job.status === 'pending' || job.status === 'processing') && <button type="button" onClick={() => void handleAction(job.id, 'cancel')}>Cancel</button>}
+            </span>
+          </div>
+        ))}
+        {jobs.length === 0 && <p className="empty-text">No sync jobs found.</p>}
+      </div>
+    </div>
+  );
+}
+
+function DataDoctorTab({ session }: { session: AdminSession }) {
+  const [issues, setIssues] = useState<any[]>([]);
+  const [summary, setSummary] = useState<{ high: number; medium: number; low: number }>({ high: 0, medium: 0, low: 0 });
+  const [loading, setLoading] = useState(false);
+
+  async function runDoctor() {
+    setLoading(true);
+    try {
+      const result = await fetchDataDoctor(session);
+      setIssues(result.issues);
+      setSummary(result.summary);
+    } catch { setIssues([]); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="ops-tab">
+      <h3><Bug size={16} /> Data Doctor</h3>
+      <button type="button" onClick={() => void runDoctor()} disabled={loading}>{loading ? 'Scanning...' : 'Run Data Doctor'}</button>
+      {issues.length > 0 && (
+        <>
+          <div className="doctor-summary">
+            <span className="badge-high">{summary.high} High</span>
+            <span className="badge-medium">{summary.medium} Medium</span>
+            <span className="badge-low">{summary.low} Low</span>
+            <span>Total: {issues.length}</span>
+          </div>
+          <div className="ops-table">
+            <div className="ops-row ops-header"><span>Severity</span><span>Category</span><span>Issue</span><span>Entity</span></div>
+            {issues.slice(0, 100).map((issue, i) => (
+              <div key={i} className={`ops-row severity-${issue.severity}`}>
+                <span className={`badge-${issue.severity}`}>{issue.severity}</span>
+                <span>{issue.category}</span>
+                <span>{issue.message}</span>
+                <span className="ops-entity">{issue.entityId ? issue.entityId.slice(0, 8) : '—'}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {issues.length === 0 && !loading && <p className="empty-text">Click "Run Data Doctor" to scan for issues.</p>}
+    </div>
+  );
+}
+
+function RuntimeTab({ session }: { session: AdminSession }) {
+  const [runtime, setRuntime] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function loadRuntime() {
+    setLoading(true);
+    try { setRuntime(await fetchRuntime(session)); }
+    catch { setRuntime(null); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { void loadRuntime(); }, []);
+
+  return (
+    <div className="ops-tab">
+      <h3><Monitor size={16} /> Runtime Status</h3>
+      {runtime ? (
+        <div className="runtime-grid">
+          <Metric label="Admin Console" value={`v${runtime.adminConsoleVersion}`} />
+          <Metric label="Edge Deploy" value={runtime.edgeDeployId} />
+          <Metric label="Edge Route" value={runtime.edgeRouteVersion} />
+          <Metric label="Broker" value={runtime.brokerVersion} />
+          <Metric label="DB Schema" value={runtime.dbSchemaVersion} />
+          <Metric label="Supabase" value={runtime.supabaseUrl} />
+        </div>
+      ) : (
+        <button type="button" onClick={() => void loadRuntime()} disabled={loading}>{loading ? 'Loading...' : 'Load Runtime Status'}</button>
+      )}
+    </div>
+  );
+}
+
+function IdentityTab({ session }: { session: AdminSession }) {
+  const [duplicates, setDuplicates] = useState<Array<{ prefix: string; users: any[] }>>([]);
+  const [loading, setLoading] = useState(false);
+
+  async function loadDuplicates() {
+    setLoading(true);
+    try { setDuplicates(await fetchIdentityDuplicates(session)); }
+    catch { setDuplicates([]); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="ops-tab">
+      <h3><GitMerge size={16} /> Identity Resolver</h3>
+      <button type="button" onClick={() => void loadDuplicates()} disabled={loading}>{loading ? 'Scanning...' : 'Detect Duplicates'}</button>
+      {duplicates.length > 0 && (
+        <div className="ops-table">
+          <div className="ops-row ops-header"><span>Email Prefix</span><span>Accounts</span><span>Details</span></div>
+          {duplicates.map((dup, i) => (
+            <div key={i} className="ops-row">
+              <span>{dup.prefix}</span>
+              <span>{dup.users.length}</span>
+              <span>{dup.users.map(u => `${u.email} (${fmtDate(u.createdAt)})`).join(', ')}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {duplicates.length === 0 && !loading && <p className="empty-text">Click "Detect Duplicates" to scan for duplicate accounts.</p>}
+    </div>
+  );
+}
+
 function Board({
   snapshot,
   session,
@@ -688,6 +863,7 @@ function Board({
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const selectedUser = snapshot.users.find((user) => user.id === selectedUserId) || null;
   const [isStale, setIsStale] = useState(false);
+  const [activeTab, setActiveTab] = useState<ConsoleTab>('overview');
 
   useEffect(() => {
     const generatedMs = new Date(snapshot.generatedAt).getTime();
@@ -737,6 +913,19 @@ function Board({
         </div>
       </header>
 
+      <nav className="console-tabs">
+        <button type="button" className={activeTab === 'overview' ? 'tab-active' : ''} onClick={() => setActiveTab('overview')}><ActivityIcon size={14} /> Overview</button>
+        <button type="button" className={activeTab === 'sync' ? 'tab-active' : ''} onClick={() => setActiveTab('sync')}><Wrench size={14} /> Sync</button>
+        <button type="button" className={activeTab === 'doctor' ? 'tab-active' : ''} onClick={() => setActiveTab('doctor')}><Bug size={14} /> Doctor</button>
+        <button type="button" className={activeTab === 'identity' ? 'tab-active' : ''} onClick={() => setActiveTab('identity')}><GitMerge size={14} /> Identity</button>
+        <button type="button" className={activeTab === 'runtime' ? 'tab-active' : ''} onClick={() => setActiveTab('runtime')}><Monitor size={14} /> Runtime</button>
+      </nav>
+
+      {activeTab === 'sync' && <SyncOpsTab session={session} />}
+      {activeTab === 'doctor' && <DataDoctorTab session={session} />}
+      {activeTab === 'identity' && <IdentityTab session={session} />}
+      {activeTab === 'runtime' && <RuntimeTab session={session} />}
+      {activeTab === 'overview' && (
       <section className="dashboard-content">
         {snapshot.warnings && snapshot.warnings.length > 0 && (
           <div className="snapshot-warnings" role="alert">
@@ -785,6 +974,7 @@ function Board({
           )}
         </div>
       </section>
+      )}
     </main>
   );
 }
