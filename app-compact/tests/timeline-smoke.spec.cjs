@@ -33,14 +33,18 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
   expect(stableSpotKey).toBeTruthy();
   await firstEditableEvent.getByRole('button', { name: '編輯' }).click();
   await expect(page.getByText('編輯行程點')).toBeVisible();
+  await page.getByLabel('開始時間').fill('09:15');
+  await page.getByLabel('結束時間').fill('10:45');
   await page.getByLabel('名稱').fill('M6 Edited Spot');
   await page.getByRole('button', { name: '儲存' }).click();
   const editedEvent = page.locator('.timeline-event').filter({ hasText: 'M6 Edited Spot' });
   await expect(editedEvent).toBeVisible();
+  await expect(editedEvent.locator('.timeline-time')).toContainText('09:15 – 10:45');
   await expect(editedEvent).toHaveAttribute('data-spot-key', stableSpotKey || '');
   await page.reload();
   const reloadedEditedEvent = page.locator('.timeline-event').filter({ hasText: 'M6 Edited Spot' });
   await expect(reloadedEditedEvent).toBeVisible();
+  await expect(reloadedEditedEvent.locator('.timeline-time')).toContainText('09:15 – 10:45');
   await expect(reloadedEditedEvent).toHaveAttribute('data-spot-key', stableSpotKey || '');
   await reloadedEditedEvent.getByRole('button', { name: '編輯' }).click();
   await page.getByRole('button', { name: '還原' }).click();
@@ -53,6 +57,7 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
   await page.getByLabel('金額（legacy total）').fill('321');
   await page.getByRole('button', { name: '儲存' }).click();
   await nav.getByRole('button', { name: '行程' }).click();
+  await expect(page.getByText('鬆散紀錄')).toHaveCount(0);
   await page.locator('.timeline-day').first().getByRole('button', { name: /筆消費/ }).click();
   await expect(page.getByText('M6 Loose Receipt')).toBeVisible();
   await page.locator('.receipt-row').filter({ hasText: 'M6 Loose Receipt' }).click();

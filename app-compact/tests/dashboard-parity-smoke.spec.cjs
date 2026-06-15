@@ -152,6 +152,7 @@ test('Dashboard budget currency toggle follows active Korea trip currency', asyn
   await expect(budgetCard.locator('.preview-dashboard-currency')).toContainText('HKD');
   await expect(budgetCard.locator('.preview-dashboard-currency')).toContainText('KRW');
   await expect(budgetCard.locator('.preview-dashboard-currency')).not.toContainText('JPY');
+  await expect(budgetCard.locator('.preview-dashboard-budget-head .preview-dashboard-currency')).toHaveCSS('flex-direction', 'row');
   await expect(budgetCard).toContainText('₩ 175,000');
   const todayCard = page.locator('.washi-today-stats-card');
   await expect(todayCard.locator('.preview-dashboard-today-currency')).toContainText('HKD');

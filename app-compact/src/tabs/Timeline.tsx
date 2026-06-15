@@ -147,6 +147,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
     const data = new FormData(event.currentTarget);
     const patch: Partial<ItinerarySpot> = {
       time: String(data.get('time') || ''),
+      timeEnd: String(data.get('timeEnd') || '') || undefined,
       name: String(data.get('name') || ''),
       type: String(data.get('type') || 'other') as ItinerarySpot['type'],
       note: String(data.get('note') || ''),
@@ -290,7 +291,6 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
             <span className="timeline-loose-icon"><ReceiptText size={16} /></span>
             <span className="timeline-loose-copy">
               <strong>{loose.length} 筆消費</strong>
-              <small>鬆散紀錄</small>
             </span>
             <span className="timeline-loose-total">
               ¥{fmt(loose.reduce((s, r) => s + r.total, 0))}
@@ -311,7 +311,8 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
             <button type="button" className="icon-btn" onClick={() => setEditing(null)}>×</button>
           </div>
           <div className="form-grid">
-            <label>時間<input name="time" type="time" defaultValue={editing.original.time} /></label>
+            <label>開始時間<input name="time" type="time" defaultValue={editing.original.time} /></label>
+            <label>結束時間<input name="timeEnd" type="time" defaultValue={editing.original.timeEnd || ''} /></label>
             <label>類別
               <select name="type" defaultValue={editing.original.type}>
                 {['transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'other'].map((id) => <option key={id} value={id}>{categoryById(id).name}</option>)}

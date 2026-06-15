@@ -1609,7 +1609,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   width: min(940px, calc(100vw - 24px));
   max-height: min(92svh, 820px);
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto;
   gap: 12px;
   padding: 16px;
   border-radius: 18px;
@@ -1667,6 +1667,151 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   background: rgba(255,255,255,.6);
   color: var(--muted);
   font-size: 12px;
+}
+.trip-review-plain-summary {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(45, 110, 72, .18);
+  border-radius: 14px;
+  background: rgba(246, 253, 247, .72);
+}
+.trip-review-plain-summary strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+.trip-review-plain-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.trip-review-notices {
+  padding: 9px 11px;
+  border: 1px solid rgba(212, 168, 67, .28);
+  border-radius: 14px;
+  background: rgba(255, 249, 233, .72);
+}
+.trip-review-notices summary {
+  color: #6d5633;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.trip-review-notices div {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.trip-review-notices span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.trip-review-day-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 1px 8px;
+  scroll-snap-type: x proximity;
+}
+.trip-review-day-tabs button {
+  flex: 0 0 112px;
+  display: grid;
+  gap: 2px;
+  min-height: 72px;
+  padding: 9px 10px;
+  border: 1px solid rgba(139,115,85,.18);
+  border-radius: 14px;
+  background: rgba(255,255,255,.72);
+  color: var(--muted);
+  text-align: left;
+  scroll-snap-align: start;
+}
+.trip-review-day-tabs button b {
+  color: var(--ink);
+  font-size: 14px;
+}
+.trip-review-day-tabs button span,
+.trip-review-day-tabs button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.trip-review-day-tabs button.is-active {
+  border-color: rgba(45, 110, 72, .42);
+  background: linear-gradient(135deg, rgba(45,110,72,.12), rgba(212,168,67,.16));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.7), 0 10px 22px rgba(45, 110, 72, .12);
+}
+.trip-review-editor {
+  overflow: visible;
+}
+.trip-review-lodging-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid rgba(49, 94, 142, .16);
+  border-radius: 14px;
+  background: rgba(231, 240, 255, .58);
+}
+.trip-review-lodging-form > strong,
+.trip-review-toolbar {
+  grid-column: 1 / -1;
+}
+.trip-review-lodging-form label,
+.trip-review-spot-fields label,
+.trip-review-time-grid label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.trip-review-lodging-form input,
+.trip-review-spot-fields input,
+.trip-review-spot-fields select,
+.trip-review-time-grid input {
+  min-width: 0;
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid rgba(139,115,85,.18);
+  border-radius: 10px;
+  background: rgba(255,255,255,.86);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+}
+.trip-review-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.trip-review-toolbar span,
+.trip-review-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.trip-review-spot-editor {
+  grid-template-columns: 104px minmax(0, 1fr);
+  align-items: start;
+  background: rgba(251, 246, 239, .82);
+}
+.trip-review-time-grid,
+.trip-review-spot-fields {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.trip-review-spot-fields {
+  grid-template-columns: minmax(0, 1fr) minmax(110px, .42fr);
+}
+.trip-review-spot-fields label:nth-child(3),
+.trip-review-spot-fields label:nth-child(4),
+.trip-review-row-actions {
+  grid-column: 1 / -1;
 }
 .trip-confirm-days {
   min-height: 0;
@@ -1780,6 +1925,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
   .trip-confirm-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .trip-review-lodging-form,
+  .trip-review-spot-editor,
+  .trip-review-spot-fields {
+    grid-template-columns: 1fr;
+  }
+  .trip-review-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .trip-confirm-day header {
     grid-template-columns: 1fr;
@@ -9988,8 +10142,9 @@ textarea,
   }
 
   .preview-dashboard-budget-head .preview-dashboard-currency {
-    flex-direction: column;
+    flex-direction: row;
     align-items: stretch;
+    white-space: nowrap;
   }
 
   .preview-dashboard-currency button {

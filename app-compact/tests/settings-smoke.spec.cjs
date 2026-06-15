@@ -347,8 +347,11 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await expect(tripConfirm).toContainText('Settings Seoul Trip');
   await expect(tripConfirm).toContainText('Hongdae Stay');
   await expect(tripConfirm).toContainText('Seoul BBQ');
-  await expect(tripConfirm).toContainText('未確認：Hongdae Stay address/mapUrl');
-  await expect(tripConfirm).toContainText('模型假設：Hongdae arrival time was treated as Day 1 evening');
+  await expect(tripConfirm).toContainText('需要留意');
+  await expect(tripConfirm.locator('.trip-review-notices')).toContainText('Hongdae Stay address/mapUrl');
+  await expect(tripConfirm.locator('.trip-review-notices')).toContainText('Hongdae arrival time was treated as Day 1 evening');
+  await expect(tripConfirm).not.toContainText('模型假設：');
+  await expect(tripConfirm).not.toContainText('Warning:');
   await tripConfirm.getByRole('button', { name: '返回修改文字' }).click();
   await expect(page.getByRole('heading', { name: 'Settings Seoul Trip' })).toBeVisible();
 
@@ -1349,11 +1352,24 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
   await expect(modal).toBeVisible();
   await expect(modal).toContainText('濟州2026');
   await expect(modal).toContainText('Hotel Fine Jeju');
-  await expect(modal).toContainText('Stanford Hotel & Resort Jeju');
-  await expect(modal).toContainText('AI 重整行程');
+  await expect(modal).not.toContainText('AI 重整行程');
+  await expect(modal).not.toContainText('Warning:');
+  await expect(modal.locator('.trip-review-day-tabs').getByRole('tab', { name: /Day 3/ })).toBeVisible();
+  const noticeBox = modal.locator('.trip-review-notices');
+  await expect(noticeBox).toBeVisible();
+  expect(await noticeBox.evaluate((node) => node.hasAttribute('open'))).toBe(false);
+  await noticeBox.locator('summary').click();
+  await expect(noticeBox).toContainText('Some exact addresses omitted');
+  await modal.locator('.trip-review-day-tabs').getByRole('tab', { name: /Day 3/ }).click();
   await expect(modal).toContainText('Day 3 · 2026-06-15');
-  await expect(modal).toContainText('城山日出峰');
-  await expect(modal).toContainText('Some exact addresses omitted');
+  const day3Names = await modal.locator('.trip-review-spot-editor').evaluateAll((rows) => rows.map((row) => (row.querySelectorAll('input')[2] || {}).value || ''));
+  const seongsanIndex = day3Names.findIndex((name) => String(name).includes('城山日出峰'));
+  expect(seongsanIndex).toBeGreaterThanOrEqual(0);
+  const seongsanRow = modal.locator('.trip-review-spot-editor').nth(seongsanIndex);
+  await expect(seongsanRow.locator('input').nth(2)).toHaveValue('城山日出峰');
+  await seongsanRow.getByLabel('開始').fill('18:00');
+  await seongsanRow.getByLabel('結束').fill('19:15');
+  await seongsanRow.getByLabel('地點 / 活動').fill('城山日出峰 Sunset');
 
   await modal.getByRole('button', { name: '確認並更新行程' }).click();
   await expect(page.getByText('已套用旅程：濟州2026')).toBeVisible();
@@ -1362,14 +1378,17 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
   expect(stored.tripName).toBe('濟州2026');
   expect(stored.tripCurrency).toBe('KRW');
   expect(stored.customItinerary).toHaveLength(8);
-  expect(stored.customItinerary[2].spots.map((spot) => spot.name).join(' ')).toContain('城山日出峰');
+  expect(stored.customItinerary[2].spots.map((spot) => spot.name).join(' ')).toContain('城山日出峰 Sunset');
+  expect(stored.customItinerary[2].spots.find((spot) => spot.name === '城山日出峰 Sunset').timeEnd).toBe('19:15');
   expect(stored.trips.find((trip) => trip.active).itinerary).toHaveLength(8);
   expect(stored.syncQueue.some((item) => item.type === 'trip' && item.entityId === stored.activeTripId)).toBe(true);
   expect(stored.syncQueue.some((item) => item.type === 'settings' && item.entityId === 'app-settings')).toBe(true);
 
   await page.getByLabel('主要分頁').getByRole('button', { name: '行程', exact: true }).click();
   await expect(page.locator('.timeline-trip-days')).toContainText('8日');
-  await expect(page.getByText('城山日出峰')).toBeVisible();
+  const editedTimelineSpot = page.locator('.timeline-event').filter({ hasText: '城山日出峰 Sunset' });
+  await expect(editedTimelineSpot).toBeVisible();
+  await expect(editedTimelineSpot.locator('.timeline-time')).toContainText('18:00 – 19:15');
 });
 
 test('Trip update AI falls back to local parser and still opens confirmation modal', async ({ page }) => {
@@ -1463,8 +1482,10 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
   const modal = page.getByRole('dialog', { name: '確認 AI 行程更新' });
   await expect(modal).toBeVisible();
   await expect(modal).toContainText('濟州2026');
+  await modal.locator('.trip-review-day-tabs').getByRole('tab', { name: /Day 8/ }).click();
   await expect(modal).toContainText('Day 8 · 2026-06-20');
-  await expect(modal).toContainText('Aewol The Sunset');
+  const day8Names = await modal.locator('.trip-review-spot-editor').evaluateAll((rows) => rows.map((row) => (row.querySelectorAll('input')[2] || {}).value || ''));
+  expect(day8Names.join(' ')).toContain('Aewol The Sunset');
   await expect(modal).toContainText('Some exact addresses/coordinates need confirmation');
   await modal.getByRole('button', { name: '確認並更新行程' }).click();
   await expect(page.getByText('已套用旅程：濟州2026')).toBeVisible();
@@ -1574,8 +1595,10 @@ test('Trip update AI extracts markdown table itinerary when providers fail', asy
   await expect(modal).toContainText('濟州2026');
   await expect(modal).toContainText('Hotel Fine Jeju');
   await expect(modal).toContainText('Stanford Hotel & Resort Jeju');
+  await modal.locator('.trip-review-day-tabs').getByRole('tab', { name: /Day 8/ }).click();
   await expect(modal).toContainText('Day 8 · 2026-06-20');
-  await expect(modal).toContainText('PARIS BAGUETTE');
+  const markdownDay8Names = await modal.locator('.trip-review-spot-editor').evaluateAll((rows) => rows.map((row) => (row.querySelectorAll('input')[2] || {}).value || ''));
+  expect(markdownDay8Names.join(' ')).toContain('PARIS BAGUETTE');
   await modal.getByRole('button', { name: '確認並更新行程' }).click();
   await expect(page.getByText('已套用旅程：濟州2026')).toBeVisible();
 

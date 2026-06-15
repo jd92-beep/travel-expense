@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, ChevronDown, Cloud, Copy, Download, KeyRound, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, Cloud, Copy, Download, KeyRound, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useMemo, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
@@ -41,7 +41,7 @@ import {
   notionFetch,
 } from '../lib/notion';
 import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
-import type { AppState, Person, Receipt, SyncEngineState, SyncQueueItem, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
+import type { AppState, ItineraryDay, ItinerarySpot, Person, Receipt, SyncEngineState, SyncQueueItem, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
 import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
 import { createSupabaseTripInvite, inviteLinkForToken, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
 import { clearDeviceTrust } from '../security/deviceTrust';
@@ -283,6 +283,68 @@ function tripDraftPreviewStats(draft: TripDraft) {
       lodging: day.lodging?.name || '',
       spots: (day.spots || []).filter((spot) => String(spot.name || '').trim()).slice(0, 4),
     })),
+  };
+}
+
+const TRIP_REVIEW_SPOT_TYPES: ItinerarySpot['type'][] = ['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'sightseeing', 'other'];
+
+function cloneTripDraft(draft: TripDraft): TripDraft {
+  if (typeof structuredClone === 'function') return structuredClone(draft);
+  return JSON.parse(JSON.stringify(draft)) as TripDraft;
+}
+
+function cleanTripReviewText(value: unknown): string {
+  return String(value || '').trim();
+}
+
+function reviewNoticeText(value: string): string {
+  const text = cleanTripReviewText(value).replace(/^Warning:\s*/i, '');
+  if (!text) return '';
+  if (/address|地址/i.test(text)) return `有啲地址未確認：${text}`;
+  if (/assum|interpreted|估|理解/i.test(text)) return `AI 有一個理解假設：${text}`;
+  if (/time|時間/i.test(text)) return `有啲時間要望一眼：${text}`;
+  return text;
+}
+
+function tripReviewNotices(draft: TripDraft): string[] {
+  const report = draft.extractionReport;
+  const notices = [
+    ...(report?.missingCriticalFields || []),
+    ...(report?.assumptions || []),
+    ...(report?.warnings || []),
+    ...(draft.warnings || []),
+  ]
+    .map(reviewNoticeText)
+    .filter(Boolean);
+  return Array.from(new Set(notices)).slice(0, 12);
+}
+
+function updateDraftDayAt(draft: TripDraft, dayIndex: number, updater: (day: ItineraryDay) => ItineraryDay): TripDraft {
+  const next = cloneTripDraft(draft);
+  const days = next.trip.itinerary || [];
+  if (!days[dayIndex]) return next;
+  days[dayIndex] = updater({ ...days[dayIndex], spots: [...(days[dayIndex].spots || [])] });
+  next.trip.itinerary = days;
+  next.trip.updatedAt = Date.now();
+  return next;
+}
+
+function sortReviewSpots(spots: ItinerarySpot[]): ItinerarySpot[] {
+  return [...spots].sort((a, b) => {
+    const left = cleanTripReviewText(a.time) || '99:99';
+    const right = cleanTripReviewText(b.time) || '99:99';
+    return left.localeCompare(right);
+  });
+}
+
+function defaultReviewSpot(): ItinerarySpot {
+  return {
+    time: '09:00',
+    timeEnd: '',
+    name: '新地點',
+    type: 'other',
+    note: '',
+    address: '',
   };
 }
 
@@ -837,6 +899,8 @@ export function Settings({
   const [newPersonName, setNewPersonName] = useState('');
   const [tripParagraph, setTripParagraph] = useState('');
   const [tripDraft, setTripDraft] = useState<TripDraft | null>(null);
+  const [editableTripDraft, setEditableTripDraft] = useState<TripDraft | null>(null);
+  const [tripReviewDayIndex, setTripReviewDayIndex] = useState(0);
   const [tripDraftModalOpen, setTripDraftModalOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
   const [rotationProvider, setRotationProvider] = useState<CredentialProvider>('notion');
@@ -874,6 +938,11 @@ export function Settings({
   const tripUpdateModelId = state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
   const tripUpdateModelName = aiModelLabel(tripUpdateModelId);
   const tripPreviewStats = tripDraft ? tripDraftPreviewStats(tripDraft) : null;
+  const tripReviewDraft = editableTripDraft || tripDraft;
+  const tripReviewStats = tripReviewDraft ? tripDraftPreviewStats(tripReviewDraft) : null;
+  const tripReviewDays = tripReviewDraft?.trip.itinerary || [];
+  const tripReviewDay = tripReviewDays[Math.min(tripReviewDayIndex, Math.max(0, tripReviewDays.length - 1))];
+  const tripReviewWarnings = tripReviewDraft ? tripReviewNotices(tripReviewDraft) : [];
   const tripSharing: TripSharingState = currentTrip.sharing || {
     role: 'owner',
     isShared: false,
@@ -889,6 +958,12 @@ export function Settings({
   const sharingSession = supabaseAuth.session;
 
   useModalOpenClass(tripDraftModalOpen);
+
+  useEffect(() => {
+    if (!tripDraftModalOpen || !tripDraft) return;
+    setEditableTripDraft(cloneTripDraft(tripDraft));
+    setTripReviewDayIndex(0);
+  }, [tripDraft, tripDraftModalOpen]);
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -1605,8 +1680,60 @@ export function Settings({
       });
     });
     setTripDraft(null);
+    setEditableTripDraft(null);
     setTripDraftModalOpen(false);
     setStatus(`已套用旅程：${draft.trip.name}`);
+  }
+
+  function updateTripReviewDay(dayIndex: number, updater: (day: ItineraryDay) => ItineraryDay) {
+    setEditableTripDraft((draft) => draft ? updateDraftDayAt(draft, dayIndex, updater) : draft);
+  }
+
+  function updateTripReviewSpot(dayIndex: number, spotIndex: number, patch: Partial<ItinerarySpot>) {
+    updateTripReviewDay(dayIndex, (day) => {
+      const spots = [...(day.spots || [])];
+      const current = spots[spotIndex] || defaultReviewSpot();
+      spots[spotIndex] = { ...current, ...patch };
+      return { ...day, spots };
+    });
+  }
+
+  function addTripReviewSpot(dayIndex: number) {
+    updateTripReviewDay(dayIndex, (day) => ({
+      ...day,
+      spots: [...(day.spots || []), defaultReviewSpot()],
+    }));
+  }
+
+  function removeTripReviewSpot(dayIndex: number, spotIndex: number) {
+    updateTripReviewDay(dayIndex, (day) => ({
+      ...day,
+      spots: (day.spots || []).filter((_, index) => index !== spotIndex),
+    }));
+  }
+
+  function moveTripReviewSpot(dayIndex: number, spotIndex: number, direction: -1 | 1) {
+    updateTripReviewDay(dayIndex, (day) => {
+      const spots = [...(day.spots || [])];
+      const nextIndex = spotIndex + direction;
+      if (nextIndex < 0 || nextIndex >= spots.length) return day;
+      [spots[spotIndex], spots[nextIndex]] = [spots[nextIndex], spots[spotIndex]];
+      return { ...day, spots };
+    });
+  }
+
+  function sortTripReviewDay(dayIndex: number) {
+    updateTripReviewDay(dayIndex, (day) => ({ ...day, spots: sortReviewSpots(day.spots || []) }));
+  }
+
+  function updateTripReviewLodging(dayIndex: number, patch: Partial<NonNullable<ItineraryDay['lodging']>>) {
+    updateTripReviewDay(dayIndex, (day) => ({
+      ...day,
+      lodging: {
+        ...(day.lodging || { name: '', confidence: 'medium' as const }),
+        ...patch,
+      },
+    }));
   }
 
   function updateCurrentTrip(patch: Partial<TripProfile>) {
@@ -2681,12 +2808,7 @@ export function Settings({
               <span>{tripDraft.trip.itinerary.length} 日 · {currenciesForTrip(tripDraft.trip).join(', ')}</span>
               {!!tripPreviewStats.lodgingNames.length && <span>酒店：{tripPreviewStats.lodgingNames.join('、')}</span>}
               {!!tripPreviewStats.foodNames.length && <span>餐飲：{tripPreviewStats.foodNames.join('、')}</span>}
-              {!!tripPreviewStats.detailNames.length && <span>重要細節：{tripPreviewStats.detailNames.join('、')}</span>}
-              {!!tripPreviewStats.missingCriticalFields.length && <span>未確認：{tripPreviewStats.missingCriticalFields.slice(0, 5).join('、')}</span>}
-              {!!tripPreviewStats.assumptions.length && <span>模型假設：{tripPreviewStats.assumptions.slice(0, 4).join('、')}</span>}
-              {!!tripPreviewStats.organizedItinerary && <span>AI 重整行程：{tripPreviewStats.organizedItinerary.split('\n').slice(0, 3).join(' / ')}</span>}
-              {tripDraft.changes.map((change, index) => <span key={`${change}-${index}`}>{change}</span>)}
-              {tripDraft.warnings.map((warning, index) => <span key={`${warning}-${index}`}>Warning: {warning}</span>)}
+              <span>請開確認視窗逐日檢查；未按確認前唔會更新行程。</span>
             </div>
             <div className="trip-preview-days">
               {tripPreviewStats.days.map((day) => (
@@ -3138,7 +3260,7 @@ export function Settings({
         </div>
       )}
 
-      {tripDraft && tripPreviewStats && tripDraftModalOpen && (
+      {tripReviewDraft && tripReviewStats && tripDraftModalOpen && (
         <div
           className="modal-backdrop trip-confirm-backdrop"
           role="presentation"
@@ -3154,11 +3276,11 @@ export function Settings({
           >
             <div className="modal-head trip-confirm-head">
               <div>
-                <span className="pill">Primary · {tripUpdateModelName} · {tripPreviewStats.sourceQuality}</span>
+                <span className="pill">Primary · {tripUpdateModelName}</span>
                 <h2 id="trip-confirm-title">確認 AI 行程更新</h2>
-                <h3>{tripDraft.trip.name}</h3>
+                <h3>{tripReviewDraft.trip.name}</h3>
                 <p id="trip-confirm-description" className="muted">
-                  {tripDraft.trip.startDate} → {tripDraft.trip.endDate} · {tripDraft.trip.destinationSummary}
+                  {tripReviewDraft.trip.startDate} → {tripReviewDraft.trip.endDate} · {tripReviewDraft.trip.destinationSummary}
                 </p>
               </div>
               <button className="icon-button" type="button" aria-label="關閉行程確認" onClick={() => setTripDraftModalOpen(false)}>
@@ -3167,74 +3289,163 @@ export function Settings({
             </div>
 
             <div className="trip-confirm-summary">
-              <span><b>{tripPreviewStats.dayCount}</b><small>日程</small></span>
-              <span><b>{tripPreviewStats.spotCount}</b><small>景點</small></span>
-              <span><b>{tripPreviewStats.lodgingCount}</b><small>酒店</small></span>
-              <span><b>{tripPreviewStats.foodCount}</b><small>餐飲</small></span>
-              <span><b>{tripPreviewStats.transportCount}</b><small>交通</small></span>
-              <span><b>{tripPreviewStats.detailCount}</b><small>細節</small></span>
+              <span><b>{tripReviewStats.dayCount}</b><small>日程</small></span>
+              <span><b>{tripReviewStats.spotCount}</b><small>景點</small></span>
+              <span><b>{tripReviewStats.lodgingCount}</b><small>酒店</small></span>
+              <span><b>{tripReviewStats.foodCount}</b><small>餐飲</small></span>
+              <span><b>{tripReviewStats.transportCount}</b><small>交通</small></span>
+              <span><b>{tripReviewStats.detailCount}</b><small>細節</small></span>
             </div>
 
-            <div className="trip-confirm-notes">
-              <span>{tripDraft.summary}</span>
-              {!!tripPreviewStats.lodgingNames.length && <span>酒店：{tripPreviewStats.lodgingNames.join('、')}</span>}
-              {!!tripPreviewStats.foodNames.length && <span>餐飲：{tripPreviewStats.foodNames.join('、')}</span>}
-              {!!tripPreviewStats.missingCriticalFields.length && <span>未確認：{tripPreviewStats.missingCriticalFields.slice(0, 8).join('、')}</span>}
-              {!!tripPreviewStats.assumptions.length && <span>模型假設：{tripPreviewStats.assumptions.slice(0, 6).join('、')}</span>}
-              {tripDraft.warnings.map((warning, index) => <span key={`${warning}-${index}`}>Warning: {warning}</span>)}
+            <div className="trip-review-plain-summary">
+              <strong>AI 已經整理好行程，請逐日望一望。</strong>
+              <span>{tripReviewDraft.summary || '確認無誤後，行程、天氣和記帳預設會跟住呢份資料更新。'}</span>
             </div>
 
-            {!!tripPreviewStats.organizedItinerary && (
-              <div className="trip-confirm-notes" aria-label="AI reorganized itinerary">
-                <span>AI 重整行程：{tripPreviewStats.organizedItinerary.split('\n').slice(0, 10).join(' / ')}</span>
-              </div>
+            {tripReviewWarnings.length > 0 && (
+              <details className="trip-review-notices">
+                <summary>需要留意 ({tripReviewWarnings.length})</summary>
+                <div>
+                  {tripReviewWarnings.map((warning, index) => (
+                    <span key={`${warning}-${index}`}>{warning}</span>
+                  ))}
+                </div>
+              </details>
             )}
 
-            <div className="trip-confirm-days" aria-label="AI extracted itinerary days">
-              {tripDraft.trip.itinerary.map((day) => (
-                <article key={`${day.date}-${day.day}`} className="trip-confirm-day">
-                  <header>
-                    <div>
-                      <strong>Day {day.day} · {day.date}</strong>
-                      <span>{day.region || day.city || '未命名地區'}{day.city && day.city !== day.region ? ` · ${day.city}` : ''}{day.country ? ` · ${day.country}` : ''}</span>
-                    </div>
-                    <small>{day.currency || ''}{day.timezone ? ` · ${day.timezone}` : ''}</small>
-                  </header>
-                  {day.highlight && <p>{day.highlight}</p>}
-                  {day.note && <p style={{ fontSize: '0.82em', opacity: 0.8, marginTop: 4 }}>💡 {day.note}</p>}
-                  {day.lodging?.name && (
-                    <div className="trip-confirm-lodging">
-                      <b>🏨 酒店</b>
-                      <span>{day.lodging.name}</span>
-                      {day.lodging.address && <small>{day.lodging.address}</small>}
-                      {(day.lodging.checkIn || day.lodging.checkOut) && <small>🕐 {[day.lodging.checkIn, day.lodging.checkOut].filter(Boolean).join(' → ')}</small>}
-                      {day.lodging.bookingRef && <small>Ref: {day.lodging.bookingRef}</small>}
-                    </div>
-                  )}
-                  <div className="trip-confirm-spots">
-                    {(day.spots || []).map((spot, index) => (
-                      <div key={`${day.date}-${index}-${spot.time}-${spot.name}`} className="trip-confirm-spot">
-                        <time>{spot.time || '--:--'}{spot.timeEnd ? `-${spot.timeEnd}` : ''}</time>
-                        <div>
-                          <strong>{spot.name || '未命名地點'}</strong>
-                          <small>
-                            {spot.type === 'flight' ? '✈️' : spot.type === 'transport' ? '🚆' : spot.type === 'food' ? '🍽️' : spot.type === 'shopping' ? '🛍️' : spot.type === 'lodging' ? '🏨' : spot.type === 'sightseeing' ? '📸' : spot.type === 'ticket' ? '🎫' : spot.type === 'localtour' ? '🗺️' : '📍'}{' '}
-                            {spot.type || 'other'}
-                            {spot.address ? ` · ${spot.address}` : ''}
-                            {spot.note ? ` · ${spot.note}` : ''}
-                            {Number.isFinite(spot.lat) && Number.isFinite(spot.lon) ? ' · 📌' : ''}
-                          </small>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </article>
+            <div className="trip-review-day-tabs" role="tablist" aria-label="選擇行程日子">
+              {tripReviewDays.map((day, index) => (
+                <button
+                  key={`${day.date}-${day.day}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={index === tripReviewDayIndex}
+                  className={index === tripReviewDayIndex ? 'is-active' : ''}
+                  onClick={() => setTripReviewDayIndex(index)}
+                >
+                  <b>Day {day.day}</b>
+                  <span>{day.date}</span>
+                  <small>{day.region || day.city || '未命名'}</small>
+                </button>
               ))}
             </div>
 
+            {tripReviewDay && (
+              <article className="trip-confirm-day trip-review-editor">
+                <header>
+                  <div>
+                    <strong>Day {tripReviewDay.day} · {tripReviewDay.date}</strong>
+                    <span>{tripReviewDay.region || tripReviewDay.city || '未命名地區'}{tripReviewDay.city && tripReviewDay.city !== tripReviewDay.region ? ` · ${tripReviewDay.city}` : ''}{tripReviewDay.country ? ` · ${tripReviewDay.country}` : ''}</span>
+                  </div>
+                  <small>{tripReviewDay.currency || ''}{tripReviewDay.timezone ? ` · ${tripReviewDay.timezone}` : ''}</small>
+                </header>
+
+                <div className="trip-review-lodging-form">
+                  <strong>住宿</strong>
+                  <label>酒店名
+                    <input
+                      value={tripReviewDay.lodging?.name || ''}
+                      onChange={(event) => updateTripReviewLodging(tripReviewDayIndex, { name: event.target.value })}
+                      placeholder="例如 Hotel Fine Jeju"
+                    />
+                  </label>
+                  <label>地址
+                    <input
+                      value={tripReviewDay.lodging?.address || ''}
+                      onChange={(event) => updateTripReviewLodging(tripReviewDayIndex, { address: event.target.value })}
+                      placeholder="可留空"
+                    />
+                  </label>
+                  <label>入住
+                    <input
+                      type="time"
+                      value={tripReviewDay.lodging?.checkIn || ''}
+                      onChange={(event) => updateTripReviewLodging(tripReviewDayIndex, { checkIn: event.target.value })}
+                    />
+                  </label>
+                  <label>退房
+                    <input
+                      type="time"
+                      value={tripReviewDay.lodging?.checkOut || ''}
+                      onChange={(event) => updateTripReviewLodging(tripReviewDayIndex, { checkOut: event.target.value })}
+                    />
+                  </label>
+                </div>
+
+                <div className="trip-review-toolbar">
+                  <strong>{(tripReviewDay.spots || []).length} 個行程點</strong>
+                  <span>
+                    <button className="secondary mini" type="button" onClick={() => sortTripReviewDay(tripReviewDayIndex)}>按時間排序</button>
+                    <button className="secondary mini" type="button" onClick={() => addTripReviewSpot(tripReviewDayIndex)}><Plus size={14} /> 新增</button>
+                  </span>
+                </div>
+
+                <div className="trip-confirm-spots trip-review-spot-list">
+                  {(tripReviewDay.spots || []).map((spot, index) => (
+                    <div key={`${tripReviewDay.date}-${index}-${spot.id || spot.spotId || spot.name}`} className="trip-confirm-spot trip-review-spot-editor">
+                      <div className="trip-review-time-grid">
+                        <label>開始
+                          <input
+                            type="time"
+                            value={spot.time || ''}
+                            onChange={(event) => updateTripReviewSpot(tripReviewDayIndex, index, { time: event.target.value })}
+                          />
+                        </label>
+                        <label>結束
+                          <input
+                            type="time"
+                            value={spot.timeEnd || ''}
+                            onChange={(event) => updateTripReviewSpot(tripReviewDayIndex, index, { timeEnd: event.target.value })}
+                          />
+                        </label>
+                      </div>
+                      <div className="trip-review-spot-fields">
+                        <label>地點 / 活動
+                          <input
+                            value={spot.name || ''}
+                            onChange={(event) => updateTripReviewSpot(tripReviewDayIndex, index, { name: event.target.value })}
+                            placeholder="地點名稱"
+                          />
+                        </label>
+                        <label>類別
+                          <select
+                            value={spot.type || 'other'}
+                            onChange={(event) => updateTripReviewSpot(tripReviewDayIndex, index, { type: event.target.value as ItinerarySpot['type'] })}
+                          >
+                            {TRIP_REVIEW_SPOT_TYPES.map((type) => (
+                              <option key={type} value={type}>{categoryById(type).name}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>地址
+                          <input
+                            value={spot.address || ''}
+                            onChange={(event) => updateTripReviewSpot(tripReviewDayIndex, index, { address: event.target.value })}
+                            placeholder="可留空"
+                          />
+                        </label>
+                        <label>備註
+                          <input
+                            value={spot.note || ''}
+                            onChange={(event) => updateTripReviewSpot(tripReviewDayIndex, index, { note: event.target.value })}
+                            placeholder="例如 optional、已預約、注意事項"
+                          />
+                        </label>
+                        <div className="trip-review-row-actions">
+                          <button className="secondary mini" type="button" disabled={index === 0} onClick={() => moveTripReviewSpot(tripReviewDayIndex, index, -1)}><ArrowUp size={14} /> 上移</button>
+                          <button className="secondary mini" type="button" disabled={index === (tripReviewDay.spots || []).length - 1} onClick={() => moveTripReviewSpot(tripReviewDayIndex, index, 1)}><ArrowDown size={14} /> 下移</button>
+                          <button className="danger mini" type="button" onClick={() => removeTripReviewSpot(tripReviewDayIndex, index)}><Trash2 size={14} /> 刪除</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            )}
+
             <div className="modal-actions trip-confirm-actions">
               <button className="secondary" type="button" onClick={() => setTripDraftModalOpen(false)}>返回修改文字</button>
-              <button className="primary" type="button" onClick={() => applyTripDraft(tripDraft)}>確認並更新行程</button>
+              <button className="primary" type="button" onClick={() => applyTripDraft(tripReviewDraft)}>確認並更新行程</button>
             </div>
           </section>
         </div>

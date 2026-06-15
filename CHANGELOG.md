@@ -2,6 +2,12 @@
 
 ## 2026-06-15
 
+- Rebuilt the Compact Settings `Trip Update AI` confirmation modal into a readable day-by-day review editor. The popup now hides technical warnings inside a collapsed `需要留意` section, uses day chips/tabs, and lets users edit lodging plus each itinerary spot's start time, end time, name, category, address, and note before applying the trip.
+- Added Trip Update AI review controls for adding, deleting, moving, and sorting itinerary spots before confirmation. Confirming now applies the edited draft, while returning to the text keeps the pasted itinerary unchanged.
+- Fixed the Compact Timeline spot edit sheet so users can edit both start time and `結束時間` / `timeEnd`; the itinerary card now preserves and displays edited ranges such as `18:00 – 19:15`.
+- Removed the confusing `鬆散紀錄` text under the Timeline daily expense count while keeping the daily receipt sheet action.
+- Restored the Compact Home `預算總覽` HKD/destination-currency toggle to a horizontal pill layout.
+- Bumped Compact to `0.7.9` and synchronized `package-lock.json` after the prior `0.7.8` package-lock mismatch.
 - Fixed a fatal runtime crash in the Record tab (`History.tsx`) when displaying receipts with missing/undefined dates by adding defensive checks before slicing `r.date`.
 - Aligned Playwright history smoke tests with the default-to-scan launch routing (appended `#history` hash to test URLs), version conflict detection, and Cantonese UI text expectations (`'同步衝突處理'`, `'2 筆'`).
 - Bumped Compact to `0.7.7`.

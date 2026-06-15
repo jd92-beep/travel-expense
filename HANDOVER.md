@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-15
-- **Focus**: Prevent crash in Record tab when date is missing, and align history tests
-- **Agent**: Antigravity 🤖
-- **App version**: Compact `0.7.7`; React unchanged in this pass
+- **Focus**: Compact Trip Update AI review modal redesign, Timeline edit time ranges, and Home budget currency toggle polish
+- **Agent**: Codex 🤖
+- **App version**: Compact `0.7.9`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +18,24 @@
 
 ## What Was Done
 
-### Session 29 (Antigravity — current session)
+### Session 30 (Codex — current session)
+
+1. **Trip Update AI confirmation modal rebuilt for readable review/editing**:
+   - Replaced the debug-heavy confirmation popup with a clearer day-by-day review flow.
+   - Main modal now shows trip summary, extraction counts, day chips, and an editable active-day timetable.
+   - Technical missing-field / assumption / warning details are kept in a collapsed `需要留意` section instead of cluttering the main review.
+   - Users can edit spot start time, end time, name, category, address, note, lodging name/address, and check-in/check-out before confirming.
+   - Users can add, delete, move, and time-sort itinerary spots before applying the draft.
+2. **Timeline itinerary editing improved**:
+   - Timeline spot edit popup now supports `結束時間` / `timeEnd`.
+   - Saving a spot override preserves the time range shown on the itinerary card.
+   - Removed the confusing `鬆散紀錄` label under the daily expense count while keeping the receipt-sheet action intact.
+3. **Home budget currency toggle fixed**:
+   - `預算總覽` HKD/destination-currency toggle is horizontal again instead of stacked vertically.
+4. **Versioning**:
+   - Bumped Compact `package.json`, `package-lock.json`, and `APP_VERSION` from `0.7.8` to `0.7.9`.
+
+### Session 29 (Antigravity — previous session)
 
 1. **Fixed Record Tab Crash (r.date Undefined Error)**:
    - Fixed a crash in `History.tsx` where calling `r.date.slice(5)` threw `TypeError` for receipts with missing/undefined dates (e.g. pending OCR drafts, raw Notion imports). Safe guarded via `r.date ? r.date.slice(5).replace('-', '/') : ''`.
