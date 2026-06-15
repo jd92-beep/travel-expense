@@ -2,6 +2,9 @@
 
 ## 2026-06-15
 
+- Fixed a fatal runtime crash in the Record tab (`History.tsx`) when displaying receipts with missing/undefined dates by adding defensive checks before slicing `r.date`.
+- Aligned Playwright history smoke tests with the default-to-scan launch routing (appended `#history` hash to test URLs), version conflict detection, and Cantonese UI text expectations (`'同步衝突處理'`, `'2 筆'`).
+- Bumped Compact to `0.7.7`.
 - Fixed shared-trip Notion delete outbox so delete jobs now archive the mirror Notion page before marking the job succeeded, instead of silently skipping the archive step. Failed archive attempts retry with backoff.
 - Added trip-scoped people and split ratio storage (`peopleByTripId`, `shareRatiosByTripId`). Each trip now maintains its own payer list and ratios; switching trips offline projects the correct people immediately. Supabase pull populates all trips' people, not just the active one.
 - Fixed migration/hydration active-trip consistency: `tripName` now preserves `parsed.tripName` first (respecting user explicit set), `tripCurrency` derives from the active trip, and each trip's itinerary normalizes with its own currency.
