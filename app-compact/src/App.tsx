@@ -339,6 +339,26 @@ export function App() {
     };
   }, [isHydratingScope, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, supabaseAuth.session]);
 
+  // Auto-connect Notion for Boss when Supabase session is available
+  useEffect(() => {
+    if (!hasSupabaseSession(supabaseAuth.session)) return;
+    if (state.personalNotionConnected) return;
+    if (!isBoss(userEmail)) return;
+
+    const DEFAULT_NOTION_DB = '3438d94d5f7c81878221fcda6d65d39d';
+    const needsDb = !state.notionDb || state.notionDb !== DEFAULT_NOTION_DB;
+    const needsSync = !state.autoSync;
+
+    if (needsDb || needsSync) {
+      console.log('[App] Auto-connecting Notion for Boss...');
+      const patch: Record<string, unknown> = {};
+      if (needsDb) patch.notionDb = DEFAULT_NOTION_DB;
+      if (needsSync) patch.autoSync = true;
+      updateState(patch as Partial<AppState>);
+      console.log('[App] Notion auto-connected:', { notionDb: DEFAULT_NOTION_DB, autoSync: true });
+    }
+  }, [supabaseAuth.session, state.personalNotionConnected, state.notionDb, state.autoSync, userEmail, updateState]);
+
   const changeTab = (next: TabId) => {
     const normalized = safeTabId(next);
     const currentIndex = TAB_MANIFEST.findIndex((t) => t.id === safeTab);
