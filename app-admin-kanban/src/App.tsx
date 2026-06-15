@@ -24,6 +24,7 @@ import {
   confirmDeleteUser,
   currentSession,
   fetchSnapshot,
+  fetchReceiptPhoto,
   loginAdmin,
   previewDeleteUser,
   amendReceipt,
@@ -37,10 +38,19 @@ import type {
   AdminProviderHealth,
   HealthState,
   DeletePreview,
+  SurfaceScope,
+  LiveState,
 } from './lib/types';
 import { Pencil, MapPin, Calendar, Users as UsersIcon, Globe, Wallet, Clock, CheckCircle, XCircle, Zap } from 'lucide-react';
 
 const RANGE_OPTIONS = [1, 7, 30, 90];
+const SURFACE_OPTIONS: Array<{ value: SurfaceScope; label: string }> = [
+  { value: 'compact', label: 'Compact' },
+  { value: 'react', label: 'React' },
+  { value: 'legacy', label: 'Legacy' },
+  { value: 'admin-kanban', label: 'Admin' },
+  { value: 'all', label: 'All' },
+];
 const RECEIPT_STATUSES = new Set(['draft', 'pending', 'confirmed']);
 const CURRENCY_RE = /^[A-Z]{3}$/;
 
@@ -137,17 +147,20 @@ function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot;
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [llmExpanded, setLlmExpanded] = useState(true);
 
-  function providerRowKey(provider: AdminProviderHealth, index: number) {
-    return `${provider.provider}:${provider.model || provider.modelName || index}`;
+  const providerGroups = new Map<string, AdminProviderHealth[]>();
+  for (const row of snapshot.llm) {
+    const key = row.provider;
+    if (!providerGroups.has(key)) providerGroups.set(key, []);
+    providerGroups.get(key)!.push(row);
   }
 
-  async function handleTest(resultKey: string, providerKey: string) {
-    setTestingProvider(resultKey);
+  async function handleProviderTest(providerKey: string) {
+    setTestingProvider(providerKey);
     try {
       const result = await testProvider(session, providerKey);
-      setTestResults(prev => ({ ...prev, [resultKey]: { ok: result.ok, message: result.status?.message } }));
+      setTestResults(prev => ({ ...prev, [providerKey]: { ok: result.ok, message: result.status?.message } }));
     } catch (err) {
-      setTestResults(prev => ({ ...prev, [resultKey]: { ok: false, message: err instanceof Error ? err.message : 'Test failed' } }));
+      setTestResults(prev => ({ ...prev, [providerKey]: { ok: false, message: err instanceof Error ? err.message : 'Test failed' } }));
     } finally {
       setTestingProvider(null);
     }
@@ -172,39 +185,43 @@ function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot;
           </h3>
           {llmExpanded && (
           <div className="llm-list">
-            {snapshot.llm.map((provider, index) => {
-              const resultKey = providerRowKey(provider, index);
+            {[...providerGroups.entries()].map(([providerKey, rows]) => {
+              const firstRow = rows[0];
               return (
-              <div key={resultKey} className="llm-item llm-item-expanded">
+              <div key={providerKey} className="llm-item llm-item-expanded">
                 <div className="llm-item-main">
                   <div className="llm-item-header">
-                    <span className="llm-provider-label">{provider.label}</span>
-                    <span className={classForHealth(provider.status)}>{statusText[provider.status]}</span>
+                    <span className="llm-provider-label">{firstRow.label}</span>
+                    <span className={classForHealth(firstRow.status)}>{statusText[firstRow.status]}</span>
                   </div>
                   <div className="llm-item-details">
-                    {provider.modelName && <small className="llm-model-name"><Zap size={11} /> {provider.modelName}</small>}
-                    {provider.model && !provider.modelName && <small><Zap size={11} /> {provider.model}</small>}
-                    {provider.lastTestedAt && <small><Clock size={11} /> {fmtDate(provider.lastTestedAt)}</small>}
-                    {provider.latencyMs != null && <small>Latency: {provider.latencyMs}ms</small>}
-                    {typeof provider.errors24h === 'number' && provider.errors24h > 0 && (
-                      <small className="llm-errors-badge">{provider.errors24h} errors/24h</small>
+                    {rows.map((row, ri) => (
+                      <span key={ri} className="llm-model-chip">
+                        {row.modelName || row.model}
+                        {row.latencyMs != null && <small> {row.latencyMs}ms</small>}
+                      </span>
+                    ))}
+                    {firstRow.lastTestedAt && <small><Clock size={11} /> {fmtDate(firstRow.lastTestedAt)}</small>}
+                    {typeof firstRow.errors24h === 'number' && firstRow.errors24h > 0 && (
+                      <small className="llm-errors-badge">{firstRow.errors24h} errors/24h</small>
                     )}
-                    {provider.message && <small className="llm-message">{provider.message}</small>}
+                    {firstRow.message && <small className="llm-message">{firstRow.message}</small>}
                   </div>
-                  {testResults[resultKey] && (
-                    <div className={`llm-test-result ${testResults[resultKey].ok ? 'test-ok' : 'test-fail'}`}>
-                      {testResults[resultKey].ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
-                      <span>{testResults[resultKey].ok ? 'OK' : testResults[resultKey].message}</span>
+                  {testResults[providerKey] && (
+                    <div className={`llm-test-result ${testResults[providerKey].ok ? 'test-ok' : 'test-fail'}`}>
+                      {testResults[providerKey].ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
+                      <span>{testResults[providerKey].ok ? 'OK' : testResults[providerKey].message}</span>
                     </div>
                   )}
                 </div>
                 <button
                   type="button"
                   className="test-provider-btn"
-                  disabled={testingProvider === resultKey}
-                  onClick={() => void handleTest(resultKey, provider.provider)}
+                  disabled={testingProvider === providerKey}
+                  onClick={() => void handleProviderTest(providerKey)}
+                  title={`Test ${firstRow.label} credential`}
                 >
-                  {testingProvider === resultKey ? '...' : 'Test'}
+                  {testingProvider === providerKey ? '...' : 'Test'}
                 </button>
               </div>
               );
@@ -379,10 +396,20 @@ function QuickAmendModal({ session, receipt, onClose, onRefresh }: { session: Ad
   );
 }
 
-function ReceiptDetailModal({ receipt, snapshot, onClose, onAmend }: { receipt: AdminReceiptCard; snapshot: AdminKanbanSnapshot; onClose: () => void; onAmend: () => void }) {
+function ReceiptDetailModal({ receipt, snapshot, session, onClose, onAmend }: { receipt: AdminReceiptCard; snapshot: AdminKanbanSnapshot; session: AdminSession; onClose: () => void; onAmend: () => void }) {
   const trip = snapshot.trips.find(t => t.id === receipt.tripId);
   const owner = snapshot.users.find(u => u.id === receipt.ownerId);
-  const photoUrl = receipt.photoPath ? `https://fbnnjoahvtdrnigevrtw.supabase.co/storage/v1/object/public/receipt-photos/${receipt.photoPath}` : null;
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+
+  useEffect(() => {
+    if (!receipt.photoPath) return;
+    setPhotoLoading(true);
+    fetchReceiptPhoto(session, receipt.id)
+      .then(({ url }) => setPhotoUrl(url))
+      .catch(() => setPhotoUrl(null))
+      .finally(() => setPhotoLoading(false));
+  }, [receipt.id, receipt.photoPath, session]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -583,7 +610,7 @@ function UserDetailsPanel({
                   ) : null}
                   <div className="detail-actions">
                     {receipt.photoPath ? (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setViewImageUrl(`https://fbnnjoahvtdrnigevrtw.supabase.co/storage/v1/object/public/receipt-photos/${receipt.photoPath}`); }} title="View Photo" className="icon-btn"><ImageIcon size={14} /></button>
+                      <button type="button" onClick={async (e) => { e.stopPropagation(); try { const { url } = await fetchReceiptPhoto(session, receipt.id); setViewImageUrl(url); } catch { setViewImageUrl(null); } }} title="View Photo" className="icon-btn"><ImageIcon size={14} /></button>
                     ) : (
                       <span className="placeholder-icon" title="No photo"><ImageIcon size={14} /></span>
                     )}
@@ -623,6 +650,7 @@ function UserDetailsPanel({
         <ReceiptDetailModal
           receipt={detailReceipt}
           snapshot={snapshot}
+          session={session}
           onClose={() => setDetailReceipt(null)}
           onAmend={() => { setAmendReceiptItem(detailReceipt); setDetailReceipt(null); }}
         />
@@ -636,19 +664,25 @@ function Board({
   session,
   rangeDays,
   setRangeDays,
+  surface,
+  setSurface,
   onRefresh,
   onLogout,
   autoRefresh,
   setAutoRefresh,
+  liveState,
 }: {
   snapshot: AdminKanbanSnapshot;
   session: AdminSession;
   rangeDays: number;
   setRangeDays: (range: number) => void;
+  surface: SurfaceScope;
+  setSurface: (s: SurfaceScope) => void;
   onRefresh: () => void;
   onLogout: () => void;
   autoRefresh: boolean;
   setAutoRefresh: (v: boolean) => void;
+  liveState: LiveState;
 }) {
   const [search, setSearch] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -677,17 +711,24 @@ function Board({
       <header className="top-command">
         <div className="brand">
           <span className="brand-mark small"><Shield size={19} /></span>
-          <span><strong>Travel Ops Dashboard</strong><small>{session.adminSubject}</small></span>
+          <span><strong>Compact Ops Console</strong><small>{session.adminSubject}</small></span>
         </div>
         <div className="command-row">
           <button type="button" onClick={onRefresh}><RefreshCw size={16} /> Refresh</button>
           <button type="button" className={autoRefresh ? 'auto-refresh-on' : 'auto-refresh-off'} onClick={() => setAutoRefresh(!autoRefresh)} title={autoRefresh ? 'Auto-refresh ON (30s)' : 'Auto-refresh OFF'}>
             <RefreshCw size={14} className={autoRefresh ? 'spin-slow' : ''} /> {autoRefresh ? 'Auto' : 'Manual'}
           </button>
+          <select value={surface} onChange={(event) => setSurface(event.target.value as SurfaceScope)} title="Data scope">
+            {SURFACE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
           <select value={rangeDays} onChange={(event) => setRangeDays(Number(event.target.value))}>
             {RANGE_OPTIONS.map((range) => <option key={range} value={range}>{range}d range</option>)}
           </select>
-          <span className={`fresh-pill ${isStale ? 'stale' : ''}`}><i /> {isStale ? 'Stale' : 'Data fresh'} · {fmtDate(snapshot.generatedAt)}</span>
+          {surface === 'all' && <span className="surface-warning-badge">All surfaces</span>}
+          <span className={`fresh-pill ${isStale ? 'stale' : ''} ${liveState.status === 'error' ? 'error' : ''}`}>
+            <i /> {liveState.status === 'error' ? 'Refresh failed' : isStale ? 'Stale' : 'Data fresh'} · {fmtDate(snapshot.generatedAt)}
+          </span>
+          {liveState.error && <span className="live-error-hint" title={liveState.error}>⚠ {liveState.error.slice(0, 40)}</span>}
           <label className="search-box">
             <Search size={16} />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users..." />
@@ -752,19 +793,25 @@ export function App() {
   const [session, setSession] = useState<AdminSession | null>(() => currentSession());
   const [snapshot, setSnapshot] = useState<AdminKanbanSnapshot | null>(null);
   const [rangeDays, setRangeDays] = useState(7);
+  const [surface, setSurface] = useState<SurfaceScope>('compact');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [liveState, setLiveState] = useState<LiveState>({ status: 'loading' });
 
   async function refresh() {
     if (!session) return;
     setLoading(true);
-    setError('');
+    setLiveState(prev => ({ ...prev, status: 'loading', lastAttemptAt: Date.now() }));
     try {
-      const fresh = await fetchSnapshot(session, rangeDays);
+      const fresh = await fetchSnapshot(session, rangeDays, surface);
       setSnapshot(fresh);
+      setError('');
+      setLiveState({ status: 'live', lastSuccessAt: Date.now() });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Snapshot failed');
+      const msg = err instanceof Error ? err.message : 'Snapshot failed';
+      setError(msg);
+      setLiveState(prev => ({ ...prev, status: snapshot ? 'stale' : 'error', error: msg }));
     } finally {
       setLoading(false);
     }
@@ -772,13 +819,22 @@ export function App() {
 
   useEffect(() => {
     void refresh();
-  }, [session, rangeDays]);
+  }, [session, rangeDays, surface]);
 
   useEffect(() => {
     if (!session || !autoRefresh) return;
     const interval = setInterval(() => void refresh(), 30_000);
     return () => clearInterval(interval);
-  }, [session, autoRefresh, rangeDays]);
+  }, [session, autoRefresh, rangeDays, surface]);
+
+  useEffect(() => {
+    const handleOnline = () => setLiveState(prev => ({ ...prev, status: 'loading' }));
+    const handleOffline = () => setLiveState(prev => ({ ...prev, status: 'offline' }));
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    if (!navigator.onLine) setLiveState(prev => ({ ...prev, status: 'offline' }));
+    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
+  }, []);
 
   if (!session) return <LoginGate onLogin={setSession} />;
 
@@ -790,10 +846,13 @@ export function App() {
           session={session}
           rangeDays={rangeDays}
           setRangeDays={setRangeDays}
+          surface={surface}
+          setSurface={setSurface}
           onRefresh={() => void refresh()}
           onLogout={() => { clearSession(); setSession(null); setSnapshot(null); }}
           autoRefresh={autoRefresh}
           setAutoRefresh={setAutoRefresh}
+          liveState={liveState}
         />
       ) : (
         <main className="login-screen">

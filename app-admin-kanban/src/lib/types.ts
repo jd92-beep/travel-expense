@@ -1,5 +1,23 @@
 export type HealthState = 'healthy' | 'warning' | 'danger' | 'unknown';
 
+export type SurfaceScope = 'compact' | 'react' | 'legacy' | 'admin-kanban' | 'all';
+
+export type SnapshotScope = {
+  surface: SurfaceScope;
+  label: string;
+  filterApplied: boolean;
+  surfaceAttribution: 'strict' | 'usage-only' | 'mixed' | 'all';
+};
+
+export type LiveState = {
+  status: 'loading' | 'live' | 'stale' | 'error' | 'offline';
+  lastSuccessAt?: number;
+  lastAttemptAt?: number;
+  error?: string;
+};
+
+export type CountHealth = Record<string, 'ok' | 'error'>;
+
 export type AdminSession = {
   token: string;
   adminSubject: string;
@@ -129,10 +147,12 @@ export type AdminKanbanSnapshot = {
   generatedAt: string;
   staleAfterSeconds: number;
   source: 'live' | 'live-edge' | 'fixture' | 'configuration_error';
+  scope?: SnapshotScope;
   supabase: {
     projectRef: string;
     status: HealthState;
     counts: Record<SupabaseCountKey, number>;
+    countHealth?: CountHealth;
     rls: SupabaseRlsState[];
     readHealth?: {
       errors: string[];

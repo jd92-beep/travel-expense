@@ -213,7 +213,7 @@ test('stale data shows Stale pill after staleAfterSeconds', async ({ page }) => 
   await expect(page.getByText('Stale')).toBeVisible({ timeout: 3000 });
 });
 
-test('LLM rows have unique keys and show separate model rows', async ({ page }) => {
+test('LLM rows show provider-level grouping with model chips', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
 
@@ -221,7 +221,9 @@ test('LLM rows have unique keys and show separate model rows', async ({ page }) 
   await expect(page.getByText('Kimi 8K')).toBeVisible();
   await expect(page.getByText('Gemma 4 31B')).toBeVisible();
   const llmRows = await page.locator('.llm-item-expanded').count();
-  expect(llmRows).toBe(6);
+  expect(llmRows).toBe(5);
+  const testBtns = await page.locator('.test-provider-btn').count();
+  expect(testBtns).toBe(5);
 });
 
 test('auto-refresh button is visible', async ({ page }) => {
@@ -273,4 +275,41 @@ test('receipt amend modal validates input', async ({ page }) => {
   await page.locator('.amend-modal input[type="number"]').fill('9999');
   await page.getByRole('button', { name: /Cancel/ }).click();
   await expect(page.getByText('Amend Receipt')).not.toBeVisible();
+});
+
+test('default scope is compact and header says Compact Ops Console', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  let capturedSurface = null;
+  await page.route('**/api/session', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true, session: { token: 'test', adminSubject: 'admin', expiresAt: new Date(Date.now() + 60000).toISOString() },
+    })});
+  });
+  await page.route('**/api/snapshot?*', async (route) => {
+    const url = new URL(route.request().url());
+    capturedSurface = url.searchParams.get('surface');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, snapshot }) });
+  });
+
+  await page.goto('http://localhost:8904/');
+  await page.getByPlaceholder('Required for cross-user visibility').fill('pass');
+  await page.getByRole('button', { name: /Enter board/ }).click();
+  await expect(page.getByRole('heading', { name: 'Universal App Health' })).toBeVisible();
+
+  await expect(page.getByText('Compact Ops Console')).toBeVisible();
+  expect(capturedSurface).toBe('compact');
+
+  const scopeSelect = page.locator('select[title="Data scope"]');
+  await expect(scopeSelect).toBeVisible();
+  await expect(scopeSelect).toHaveValue('compact');
+});
+
+test('switching to all surface shows warning badge', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+
+  const scopeSelect = page.locator('select[title="Data scope"]');
+  await scopeSelect.selectOption('all');
+  await page.waitForTimeout(500);
+  await expect(page.getByText('All surfaces')).toBeVisible();
 });

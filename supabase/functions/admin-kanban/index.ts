@@ -395,11 +395,22 @@ async function brokerHealth(supabase: SupabaseClientAny) {
   }
 }
 
-async function snapshot(rangeDays: number) {
+async function snapshot(rangeDays: number, surface: string = "compact") {
   const supabase = serviceClient();
+  const sinceIso = new Date(Date.now() - Math.max(1, rangeDays) * 24 * 60 * 60 * 1000).toISOString();
+
+  const usageQuery = supabase
+    .from("app_usage_events")
+    .select("user_id,session_id_hash,app_surface,event_name,provider,model,outcome,created_at")
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: false })
+    .limit(5000);
+  if (surface !== "all") usageQuery.eq("app_surface", surface);
+  const { data: usageRows, error: usageError } = await usageQuery;
+
   const [
     users,
-    tripsRes, receiptsRes, photosRes, integrationsRes, jobsRes, usageRes, auditsRes,
+    tripsRes, receiptsRes, photosRes, integrationsRes, jobsRes, auditsRes,
     rlsRpc, llm, profilesRes, tripMembersRes,
   ] = await Promise.all([
     listUsers(supabase),
@@ -408,7 +419,6 @@ async function snapshot(rangeDays: number) {
     fetchRows(supabase, "receipt_photos", "id,receipt_id,owner_id,storage_path"),
     fetchRows(supabase, "integrations", "id,user_id,provider,status,last_synced_at"),
     fetchRows(supabase, "receipt_sync_jobs", "id,owner_id,provider,status,last_error,created_at,updated_at"),
-    fetchRows(supabase, "app_usage_events", "user_id,session_id_hash,app_surface,event_name,provider,model,outcome,created_at", 1000),
     fetchRows(supabase, "admin_audit_events", "id,admin_subject_hash,action,target_type,target_id_hash,created_at", 50),
     safeRlsState(supabase),
     brokerHealth(supabase),
@@ -420,19 +430,20 @@ async function snapshot(rangeDays: number) {
   const photos = photosRes.data;
   const integrations = integrationsRes.data;
   const jobs = jobsRes.data;
-  const usage = usageRes.data;
+  const usage = usageRows || [];
   const audits = auditsRes.data;
   const profiles = profilesRes.data;
   const tripMembers = tripMembersRes.data;
 
   const warnings: string[] = [];
+  if (usageError) warnings.push(`Usage events read failed: ${redact(usageError)}`);
+  if (usage.length >= 5000) warnings.push("Usage events hit 5000 row limit; counts may be partial.");
   const tableReads = [
     { name: "Trips", res: tripsRes },
     { name: "Receipts", res: receiptsRes },
     { name: "Photos", res: photosRes },
     { name: "Integrations", res: integrationsRes },
     { name: "Sync jobs", res: jobsRes },
-    { name: "Usage events", res: usageRes },
     { name: "Audit events", res: auditsRes },
     { name: "Profiles", res: profilesRes },
     { name: "Trip members", res: tripMembersRes },
@@ -442,20 +453,42 @@ async function snapshot(rangeDays: number) {
     if (res.truncated) warnings.push(`${name} read hit max row cap; counts may be partial.`);
   }
 
+  const countResults: Record<string, { count: number | null; error?: string }> = {};
+  const countKeys = [
+    ["profiles", "profiles"], ["trips", "trips"], ["receipts", "receipts"],
+    ["receiptItems", "receipt_items"], ["receiptPhotos", "receipt_photos"],
+    ["integrations", "integrations"], ["receiptSyncJobs", "receipt_sync_jobs"],
+    ["usageEvents", "app_usage_events"], ["auditEvents", "admin_audit_events"],
+  ] as const;
+  for (const [key, table] of countKeys) {
+    try {
+      const query = supabase.from(table).select("*", { count: "exact", head: true });
+      const { count, error } = await query;
+      if (error) throw error;
+      countResults[key] = { count: count || 0 };
+    } catch (err) {
+      countResults[key] = { count: null, error: redact(err) };
+    }
+  }
   const counts = {
     authUsers: users.length,
-    profiles: await safeCount(supabase, "profiles"),
-    trips: await safeCount(supabase, "trips"),
-    receipts: await safeCount(supabase, "receipts"),
-    receiptItems: await safeCount(supabase, "receipt_items"),
-    receiptPhotos: await safeCount(supabase, "receipt_photos"),
-    integrations: await safeCount(supabase, "integrations"),
-    receiptSyncJobs: await safeCount(supabase, "receipt_sync_jobs"),
-    usageEvents: await safeCount(supabase, "app_usage_events"),
-    auditEvents: await safeCount(supabase, "admin_audit_events"),
+    profiles: countResults.profiles.count ?? 0,
+    trips: countResults.trips.count ?? 0,
+    receipts: countResults.receipts.count ?? 0,
+    receiptItems: countResults.receiptItems.count ?? 0,
+    receiptPhotos: countResults.receiptPhotos.count ?? 0,
+    integrations: countResults.integrations.count ?? 0,
+    receiptSyncJobs: countResults.receiptSyncJobs.count ?? 0,
+    usageEvents: countResults.usageEvents.count ?? 0,
+    auditEvents: countResults.auditEvents.count ?? 0,
   };
+  const countHealth: Record<string, string> = {};
+  for (const [key, result] of Object.entries(countResults)) {
+    countHealth[key] = result.error ? "error" : "ok";
+    if (result.error) warnings.push(`Count failed for ${key}: ${result.error}`);
+  }
   const cutoff = Date.now() - Math.max(1, Number(rangeDays) || 7) * 24 * 60 * 60 * 1000;
-  const rangedUsage = usage.filter((event: any) => Date.parse(event.created_at || "") >= cutoff);
+  const rangedUsage = usage;
   const userById = new Map(users.map((user: any) => [user.id, user]));
   const profileById = new Map(profiles.map((p: any) => [p.id, p]));
   const tripsByOwner = groupCount(trips, "owner_id");
@@ -558,6 +591,8 @@ async function snapshot(rangeDays: number) {
   const rlsAvailable = rlsRows.length > 0;
   const supabaseStatus = readErrors.length > 0 || !rlsAvailable ? "danger" : truncatedTables.length > 0 || !counts.usageEvents ? "warning" : "healthy";
 
+  const surfaceLabel = surface === "compact" ? "Compact" : surface === "react" ? "React" : surface === "legacy" ? "Legacy" : surface === "admin-kanban" ? "Admin" : "All Surfaces";
+
   const warningsSnapshot: string[] = warnings;
   if (!counts.usageEvents) warningsSnapshot.push("Usage telemetry table is ready, but no app usage events have been recorded yet.");
   if (!rlsAvailable) warningsSnapshot.push("RLS runtime RPC is unavailable.");
@@ -565,10 +600,17 @@ async function snapshot(rangeDays: number) {
     generatedAt: new Date().toISOString(),
     staleAfterSeconds: 60,
     source: "live-edge",
+    scope: {
+      surface,
+      label: surfaceLabel,
+      filterApplied: surface !== "all",
+      surfaceAttribution: surface === "all" ? "all" : "usage-only",
+    },
     supabase: {
       projectRef: "fbnnjoahvtdrnigevrtw",
       status: supabaseStatus,
       counts,
+      countHealth,
       rls: rlsRows,
       readHealth: {
         errors: readErrors,
@@ -705,7 +747,49 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     if (req.method === "GET" && url.pathname.endsWith("/api/snapshot")) {
       const range = String(url.searchParams.get("range") || "7d").match(/^\d+/)?.[0] || "7";
-      return json(req, 200, { ok: true, snapshot: await snapshot(Number(range)) });
+      const surface = String(url.searchParams.get("surface") || "compact").toLowerCase();
+      return json(req, 200, { ok: true, snapshot: await snapshot(Number(range), surface) });
+    }
+    const photoMatch = url.pathname.match(/\/api\/receipts\/([^/]+)\/photo$/);
+    if (req.method === "GET" && photoMatch) {
+      const receiptId = photoMatch[1];
+      const supabase = serviceClient();
+      const { data: photoRow, error: photoErr } = await supabase
+        .from("receipt_photos")
+        .select("storage_path")
+        .eq("receipt_id", receiptId)
+        .limit(1)
+        .single();
+      if (photoErr || !photoRow?.storage_path) throw new Error("Receipt photo not found");
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://fbnnjoahvtdrnigevrtw.supabase.co";
+      const photoUrl = `${supabaseUrl}/storage/v1/object/public/receipt-photos/${photoRow.storage_path}`;
+      await writeAudit(supabase, {
+        adminSubject,
+        action: "view_receipt_photo",
+        targetType: "receipt",
+        targetId: receiptId,
+        requestId: crypto.randomUUID(),
+        previewCounts: {},
+        result: { viewed: true },
+      }).catch(() => {});
+      return json(req, 200, { ok: true, url: photoUrl });
+    }
+    if (req.method === "GET" && url.pathname.endsWith("/api/config-health")) {
+      const required = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
+      const optional = ["ADMIN_TOKEN", "ADMIN_CONSOLE_OWNER_EMAILS", "CREDENTIAL_BROKER_URL", "ADMIN_KANBAN_VERIFY_URL", "ADMIN_KANBAN_LOGIN_URL", "ADMIN_KANBAN_USAGE_USER_ID"];
+      const configured: string[] = [];
+      const missing: string[] = [];
+      const configWarnings: string[] = [];
+      for (const key of required) {
+        if (Deno.env.get(key)) configured.push(key);
+        else missing.push(key);
+      }
+      for (const key of optional) {
+        if (Deno.env.get(key)) configured.push(key);
+      }
+      if (!Deno.env.get("ADMIN_CONSOLE_OWNER_EMAILS")) configWarnings.push("ADMIN_CONSOLE_OWNER_EMAILS not set; using default allowlist.");
+      if (!Deno.env.get("ADMIN_KANBAN_USAGE_USER_ID")) configWarnings.push("ADMIN_KANBAN_USAGE_USER_ID not set; provider test telemetry will not be persisted.");
+      return json(req, 200, { ok: true, config: { configured, missing, warnings: configWarnings } });
     }
     if (req.method === "POST" && url.pathname.endsWith("/api/delete-preview")) {
       const body = await readBody(req);

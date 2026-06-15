@@ -1,9 +1,8 @@
-import type { AdminKanbanSnapshot, AdminSession, DeletePreview } from './types';
+import type { AdminKanbanSnapshot, AdminSession, DeletePreview, SurfaceScope } from './types';
 
 const SESSION_KEY = 'travel-expense-admin-kanban:session:v1';
 
-// Supabase anon key — used only to satisfy the gateway JWT format check
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZibm5qb2FodnRkcm5pZ2V2cnR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDY5OTksImV4cCI6MjA5NTI4Mjk5OX0.iDibnjCXwlwxeb1mAWy69RRh5gflh9pEsBIOI-P5INM';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZibm5qb2FodnRkcm5pZ2V2cnR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDY5OTksImV4cCI6MjA5NTI4Mjk5OX0.iDibnjCXwlwxeb1mAWy69RRh5gflh9pEsBIOI-P5INM';
 
 function apiBase(): string {
   return String(import.meta.env.VITE_ADMIN_API_URL || 'https://fbnnjoahvtdrnigevrtw.supabase.co/functions/v1/admin-kanban').replace(/\/+$/, '');
@@ -70,8 +69,8 @@ export async function loginAdmin(passphrase: string): Promise<AdminSession> {
   return data.session;
 }
 
-export async function fetchSnapshot(session: AdminSession, rangeDays: number): Promise<AdminKanbanSnapshot> {
-  const params = new URLSearchParams({ range: `${rangeDays}d` });
+export async function fetchSnapshot(session: AdminSession, rangeDays: number, surface: SurfaceScope = 'compact'): Promise<AdminKanbanSnapshot> {
+  const params = new URLSearchParams({ range: `${rangeDays}d`, surface });
   const data = await parseJson<{ ok: boolean; snapshot: AdminKanbanSnapshot }>(await fetch(adminDataUrl(`/api/snapshot?${params}`), {
     headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
   }));
@@ -141,4 +140,18 @@ export async function testProvider(session: AdminSession, provider: string): Pro
     body: JSON.stringify({ provider }),
   }));
   return data;
+}
+
+export async function fetchReceiptPhoto(session: AdminSession, receiptId: string): Promise<{ url: string }> {
+  const data = await parseJson<{ ok: boolean; url: string }>(await fetch(adminDataUrl(`/api/receipts/${encodeURIComponent(receiptId)}/photo`), {
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
+  }));
+  return { url: data.url };
+}
+
+export async function fetchConfigHealth(session: AdminSession): Promise<{ configured: string[]; missing: string[]; warnings: string[] }> {
+  const data = await parseJson<{ ok: boolean; config: { configured: string[]; missing: string[]; warnings: string[] } }>(await fetch(adminDataUrl('/api/config-health'), {
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
+  }));
+  return data.config;
 }
