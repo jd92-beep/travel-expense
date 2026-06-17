@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-18
+
+- Started the Compact Android build track in an isolated `codex/android-compact-shell` worktree so the live Compact web app on `main` can remain stable while Android work begins.
+- Added a Capacitor Android shell for `app-compact` with app id `com.ftjdfr.travelexpensecompact`, version `0.8.0` / `versionCode 800`, internet/camera/image-library permissions, and Android backup disabled for expense-data privacy.
+- Added Android helper scripts: `android:sync`, `android:debug`, `android:bundle`, and `android:open`.
+- Added `app-compact/ANDROID.md` with branch safety rules, Android commands, debug APK path, and release-signing notes.
+- Upgraded Compact Vite to `8.0.16`, added `@types/node`, fixed a type-only `AppState` import, and adjusted brittle smoke selectors/default broker smoke origin so the production gate passes on the Android branch.
+- Verification passed with `app-compact npm run smoke:production-gate`, `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`, `npm audit --omit=dev`, `npm audit`, and `git diff --check`.
+
 ## 2026-06-15
 
 - Rebuilt the Compact Settings `Trip Update AI` confirmation modal into a readable day-by-day review editor. The popup now hides technical warnings inside a collapsed `需要留意` section, uses day chips/tabs, and lets users edit lodging plus each itinerary spot's start time, end time, name, category, address, and note before applying the trip.

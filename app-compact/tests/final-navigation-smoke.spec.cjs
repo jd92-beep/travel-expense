@@ -64,6 +64,8 @@ for (const [name, viewport] of [
       } else if (viewport.width <= 390 && expectedText === '設定控制中心') {
         await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
         await expect(page.locator('.settings-preview-controls')).toBeVisible();
+      } else if (expectedText === '行程時間線') {
+        await expect(page.locator('.timeline-command-title')).toBeVisible();
       } else {
         await expect(page.getByText(expectedText).first()).toBeVisible();
       }

@@ -37,7 +37,26 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.7.6`。
+Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.8.0`。
+
+## Compact Android Developer Quick Start
+
+Android app 目前在獨立分支 `codex/android-compact-shell` 建立，避免影響正在使用的 Compact web app。
+
+```bash
+cd app-compact
+npm install
+npm run android:sync
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug
+```
+
+Debug APK 會輸出到：
+
+```text
+app-compact/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+正式上架前仍需要處理 release signing、Play Store metadata、native camera/gallery QA、offline sync QA、以及 Android 真機回歸測試。
 
 ## 第一次使用
 

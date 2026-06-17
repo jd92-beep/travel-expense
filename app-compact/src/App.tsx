@@ -12,7 +12,7 @@ import { mergePulledData } from './lib/syncMerge';
 import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
 import { clearCredentialSession, clearStoredState } from './lib/storage';
-import type { Receipt, SyncQueueItem, TabId, TripInviteSummary, TripProfile } from './lib/types';
+import type { AppState, Receipt, SyncQueueItem, TabId, TripInviteSummary, TripProfile } from './lib/types';
 import { TAB_MANIFEST } from './lib/tabs';
 import { isBoss } from './lib/constants';
 import { AuthGate } from './security/AuthGate';

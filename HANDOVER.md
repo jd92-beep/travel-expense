@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-06-15
-- **Focus**: Admin Console (Phases 1-7), Trip Update AI Partial vs Full replacement, and default model adjustments
-- **Agent**: Antigravity 🤖
-- **App version**: Compact `0.7.9`; React unchanged in this pass
+- **Date**: 2026-06-18
+- **Focus**: Isolated Compact Android shell bootstrap on feature branch
+- **Agent**: Codex
+- **App version**: Compact `0.8.0`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,10 +13,34 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.7.9`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 32 (Codex — current Android branch)
+
+1. **Isolated Android build track**:
+   - Created separate worktree `/Users/tommy/Documents/Codex/travel-expense-android-shell` on branch `codex/android-compact-shell`.
+   - Kept the live Compact web app and `main` branch untouched during Android bootstrap.
+   - Added `app-compact/ANDROID.md` with branch safety rules, commands, APK path, native scope, and release-signing notes.
+2. **Capacitor Android shell**:
+   - Added Capacitor dependencies and generated `app-compact/android/`.
+   - Added `capacitor.config.ts` for app id `com.ftjdfr.travelexpensecompact`, app name `Travel Expense Compact`, and `dist` web assets.
+   - Added Android commands: `android:sync`, `android:debug`, `android:bundle`, and `android:open`.
+   - Configured native permissions for internet, camera, and image library access; Android backup is disabled for expense-data privacy.
+   - Set Android version to `0.8.0` / `versionCode 800`.
+3. **Build/tooling fixes**:
+   - Upgraded Vite to `8.0.16` to clear the npm audit vulnerability.
+   - Added `@types/node` so production-gate TypeScript checks pass.
+   - Fixed a Compact type-only import for `AppState`.
+   - Updated brittle smoke selectors so Timeline navigation checks target the visible `.timeline-command-title` instead of hidden text.
+   - Changed broker smoke defaults from the Netlify origin to the working Compact Vercel origin.
+4. **Verification**:
+   - Passed `npm run smoke:production-gate`.
+   - Passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`.
+   - Passed `npm audit --omit=dev`, `npm audit`, and `git diff --check`.
+   - Debug APK output: `app-compact/android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ### Session 31 (Antigravity — current session)
 

@@ -275,6 +275,8 @@ async function captureTabs() {
       await nav.getByRole('button', { name: tab.label, exact: true }).click();
       if (tab.expected === '紀錄中心' || tab.expected === '設定控制中心') {
         await page.locator('.compact-mobile-title-art').waitFor({ state: 'visible', timeout: 7000 });
+      } else if (tab.expected === '行程時間線') {
+        await page.locator('.timeline-command-title').waitFor({ state: 'visible', timeout: 7000 });
       } else {
         await page.getByText(tab.expected).first().waitFor({ state: 'visible', timeout: 7000 });
       }

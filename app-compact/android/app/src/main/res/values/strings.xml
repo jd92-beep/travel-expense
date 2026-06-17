@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Travel Expense Compact</string>
+    <string name="title_activity_main">Travel Expense Compact</string>
+    <string name="package_name">com.ftjdfr.travelexpensecompact</string>
+    <string name="custom_url_scheme">com.ftjdfr.travelexpensecompact</string>
+</resources>
