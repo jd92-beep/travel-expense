@@ -7,7 +7,8 @@
       "namespace": "android_app",
       "package_name": "com.ftjdfr.travelexpensecompact",
       "sha256_cert_fingerprints": [
-        "AE:F5:88:1E:0B:9F:94:6E:F4:21:27:8F:E5:71:48:BE:3E:50:0B:72:EE:E0:65:B4:9F:77:76:D7:C9:68:6E:92"
+        "AE:F5:88:1E:0B:9F:94:6E:F4:21:27:8F:E5:71:48:BE:3E:50:0B:72:EE:E0:65:B4:9F:77:76:D7:C9:68:6E:92",
+        "30:E9:9F:89:AA:66:E3:8E:9A:C8:C7:0D:92:6A:38:30:9A:29:66:5C:3F:15:78:7B:BA:21:7C:22:01:11:F9:9B"
       ]
     }
   }

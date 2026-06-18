@@ -194,6 +194,12 @@ export function Scan({
       setStatus('未收到圖片。相機無彈出時，請試相簿或手動記一筆。');
       return;
     }
+    // Guard oversized images: decoding a huge file can OOM a low-RAM phone's WebView.
+    const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+    if (file.size > MAX_IMAGE_BYTES) {
+      setStatus(`圖片太大（${(file.size / 1024 / 1024).toFixed(1)}MB），請揀細過 25MB 嘅相。`);
+      return;
+    }
     if (!retry) setLastScanFile(file);
     setBusyWithGlobal('ocr');
     setStatus('讀取收據圖片…');
@@ -282,7 +288,11 @@ export function Scan({
   async function startSpeech() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setStatus('呢個瀏覽器唔支援 Web Speech API，可以直接貼語音文字。');
+      const nativeAndroid = /Android/i.test(navigator.userAgent)
+        && !!(window as any).Capacitor?.isNativePlatform?.();
+      setStatus(nativeAndroid
+        ? 'Android App 內置 WebView 唔支援語音識別，請用鍵盤輸入或直接貼文字。'
+        : '呢個瀏覽器唔支援 Web Speech API，可以直接貼語音文字。');
       return;
     }
     if (speechRef.current) {

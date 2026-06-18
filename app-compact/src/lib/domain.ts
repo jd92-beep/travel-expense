@@ -73,13 +73,37 @@ export function validateItinerary(input: unknown): { ok: true; itinerary: Itiner
   return { ok: true, itinerary: days };
 }
 
-export function downloadJson(filename: string, value: unknown): void {
-  const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json;charset=utf-8' });
+// Save a text file. On a Capacitor native shell the browser blob+anchor download is a silent
+// no-op, so write to the app cache and open the OS share sheet instead. Web path is unchanged.
+export async function saveFile(filename: string, mimeType: string, content: string): Promise<void> {
+  const cap = (typeof window !== 'undefined'
+    ? (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor
+    : undefined);
+  if (cap?.isNativePlatform?.()) {
+    try {
+      const [{ Filesystem, Directory, Encoding }, { Share }] = await Promise.all([
+        import('@capacitor/filesystem'),
+        import('@capacitor/share'),
+      ]);
+      await Filesystem.writeFile({ path: filename, data: content, directory: Directory.Cache, encoding: Encoding.UTF8 });
+      const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
+      await Share.share({ title: filename, url: uri });
+      return;
+    } catch (err) {
+      console.error('[saveFile] native save/share failed:', err);
+      return; // don't fall through to a blob download that can't work in the WebView
+    }
+  }
+  const blob = new Blob([content], { type: mimeType });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;
   a.click();
   window.setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
+export function downloadJson(filename: string, value: unknown): void {
+  void saveFile(filename, 'application/json;charset=utf-8', JSON.stringify(value, null, 2));
 }
 
 export function todayYmd(timeZone = 'Asia/Hong_Kong'): string {
@@ -444,12 +468,8 @@ export function exportCsv(state: AppState): void {
     ]);
   }
   const csv = '\uFEFF' + rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${(currentTrip.name || 'travel-expense').replace(/[^\w\u4e00-\u9fff-]+/g, '-')}-receipts-${todayYmd()}.csv`;
-  a.click();
-  window.setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  const filename = `${(currentTrip.name || 'travel-expense').replace(/[^\w\u4e00-\u9fff-]+/g, '-')}-receipts-${todayYmd()}.csv`;
+  void saveFile(filename, 'text/csv;charset=utf-8', csv);
 }
 
 export async function compressPhoto(base64: string, mime?: string, maxWOverride?: number): Promise<string | null> {
@@ -576,6 +596,20 @@ export function openMapExternal(mapUrl: string | undefined, name: string, addres
         targetUrl = `intent://www.google.com/maps/search/?api=1&query=${qMatch[1]}#Intent;scheme=https;package=com.google.android.apps.maps;S.browser_fallback_url=${fallback};end`;
       }
     }
+  }
+
+  // Native (Capacitor): hand the URL to the OS instead of opening a _blank tab that strands the
+  // user inside the WebView. Web behaviour below is untouched (only runs when not native).
+  const cap = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  if (cap?.isNativePlatform?.()) {
+    if (targetUrl.startsWith('intent://')) {
+      window.location.href = targetUrl; // Capacitor's URL interceptor dispatches intent:// to the native app
+    } else {
+      void import('@capacitor/browser')
+        .then(({ Browser }) => Browser.open({ url: targetUrl }))
+        .catch((err) => { console.error('[openMapExternal] Browser.open failed:', err); window.location.href = targetUrl; });
+    }
+    return;
   }
 
   // 3. Double-channel navigation to bypass popup blocker with strict page visibility fallback

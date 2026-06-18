@@ -99,9 +99,13 @@ export function App() {
 
     let cancelled = false;
     let removeAppUrlListener: (() => void) | undefined;
+    // Dedupe: a cold-start deep link is delivered by BOTH getLaunchUrl() and appUrlOpen.
+    // Processing the same URL twice would, under a PKCE flow, fail the single-use code exchange.
+    const processedUrls = new Set<string>();
 
     const processUrl = async (url?: string) => {
-      if (!url) return;
+      if (!url || processedUrls.has(url)) return;
+      processedUrls.add(url);
       try {
         const handled = await handleNativeAuthRedirectUrl(url);
         if (!handled) return;
@@ -121,18 +125,20 @@ export function App() {
 
     void (async () => {
       const { App: CapacitorApp } = await import('@capacitor/app');
-      const launch = await CapacitorApp.getLaunchUrl().catch(() => null);
-      await processUrl(launch?.url);
+      // Register the listener BEFORE draining the launch URL so a deep link arriving
+      // during init isn't dropped; the dedupe set guards against double-handling.
       const listener = await CapacitorApp.addListener('appUrlOpen', (event) => {
         void processUrl(event.url);
       });
       if (cancelled) {
         await listener.remove();
-      } else {
-        removeAppUrlListener = () => {
-          void listener.remove();
-        };
+        return;
       }
+      removeAppUrlListener = () => {
+        void listener.remove();
+      };
+      const launch = await CapacitorApp.getLaunchUrl().catch(() => null);
+      await processUrl(launch?.url);
     })().catch((nativeAuthInitError) => {
       console.warn('[NativeAuth] Android listener unavailable:', nativeAuthInitError);
     });
@@ -431,6 +437,76 @@ export function App() {
       window.history.pushState(null, '', hash);
     }
   };
+
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+  const wizardOpenRef = useRef(isNewTripWizardOpen);
+  wizardOpenRef.current = isNewTripWizardOpen;
+  const safeTabRef = useRef(safeTab);
+  safeTabRef.current = safeTab;
+  const changeTabRef = useRef(changeTab);
+  changeTabRef.current = changeTab;
+
+  // Android hardware back button: dismiss an open editor/wizard/overlay → return to the home
+  // tab → press-again-to-exit. Native-only (guarded); web/browser back behaviour is untouched.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const capacitor = (window as Window & {
+      Capacitor?: { getPlatform?: () => string; isNativePlatform?: () => boolean };
+    }).Capacitor;
+    const nativeAndroid = capacitor?.getPlatform?.() === 'android'
+      || (!!capacitor?.isNativePlatform?.() && /android/i.test(window.navigator.userAgent || ''));
+    if (!nativeAndroid) return undefined;
+
+    let cancelled = false;
+    let removeListener: (() => void) | undefined;
+    let exitArmed = false;
+    let exitTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const hint = (message: string) => {
+      const el = document.createElement('div');
+      el.textContent = message;
+      el.setAttribute('role', 'status');
+      el.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9999;background:rgba(20,20,20,.92);color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;pointer-events:none;transition:opacity .3s;opacity:0';
+      document.body.appendChild(el);
+      requestAnimationFrame(() => { el.style.opacity = '1'; });
+      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 1600);
+    };
+
+    void (async () => {
+      const { App: CapacitorApp } = await import('@capacitor/app');
+      const listener = await CapacitorApp.addListener('backButton', () => {
+        // 1) Custom full-screen overlays (not Radix — won't respond to Escape).
+        if (editingRef.current !== undefined) { setEditing(undefined); return; }
+        if (wizardOpenRef.current) { setIsNewTripWizardOpen(false); return; }
+        // 2) Any open Radix/Vaul overlay (Settings dialogs, drawers) → close topmost via Escape.
+        const overlay = document.querySelector(
+          '[role="dialog"][data-state="open"],[role="alertdialog"][data-state="open"],[vaul-drawer][data-state="open"],[data-radix-popper-content-wrapper]'
+        );
+        if (overlay) {
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          return;
+        }
+        // 3) Not on the home tab → go home.
+        if (safeTabRef.current !== DEFAULT_LAUNCH_TAB) { changeTabRef.current(DEFAULT_LAUNCH_TAB); return; }
+        // 4) Home tab → press back twice within 2s to exit.
+        if (exitArmed) { void CapacitorApp.exitApp(); return; }
+        exitArmed = true;
+        hint('再撳一次返回鍵離開');
+        exitTimer = setTimeout(() => { exitArmed = false; }, 2000);
+      });
+      if (cancelled) { await listener.remove(); return; }
+      removeListener = () => { void listener.remove(); };
+    })().catch((backButtonError) => {
+      console.warn('[BackButton] listener unavailable:', backButtonError);
+    });
+
+    return () => {
+      cancelled = true;
+      if (exitTimer) clearTimeout(exitTimer);
+      removeListener?.();
+    };
+  }, []);
 
   const importReceipts = (receipts: Receipt[]) => {
     for (const receipt of receipts) {

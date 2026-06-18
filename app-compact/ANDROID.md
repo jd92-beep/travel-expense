@@ -34,19 +34,31 @@ cd app-compact
 npm run android:bundle
 ```
 
-The release AAB still needs proper signing before Play Store upload.
+`bundleRelease` produces a **signed** AAB (see Release Signing below).
+
+## Release Signing
+
+- Keystore: `android/keystore/release.jks`, alias `release` (RSA 2048, 10000-day validity).
+- Credentials live in `android/keystore.properties` (gitignored). `app/build.gradle` loads it and
+  signs the `release` build type; if the file is absent the release build is simply unsigned (so CI
+  without the keystore still builds).
+- **BACK UP BOTH `release.jks` AND `keystore.properties` off this machine.** Neither is in git. Losing
+  the keystore means you can never push an update to the same Play Store listing.
+- Release App Link SHA-256: `30:E9:9F:89:AA:66:E3:8E:9A:C8:C7:0D:92:6A:38:30:9A:29:66:5C:3F:15:78:7B:BA:21:7C:22:01:11:F9:9B`
+  (already added to `public/.well-known/assetlinks.json` alongside the debug fingerprint).
 
 ## Current Native Scope
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.8.1` / versionCode `801`.
+- Version: `0.8.2` / versionCode `802`.
 - Permissions: internet and camera only. The camera hardware feature is marked `required=false` so the app remains installable on devices without a camera.
 - Broad storage/media read permissions were removed. Android's normal system file picker should handle gallery input without library-wide read access.
 - Android backup and device-transfer extraction are explicitly disabled because the app contains travel expense data.
 - Google/Supabase native login returns through `https://travel-expense-compact.vercel.app/android-auth`.
-- Debug App Link SHA-256 is configured in `public/.well-known/assetlinks.json`.
-- Release App Link SHA-256 still needs to be added after a real release keystore is created.
+- Debug + release App Link SHA-256 fingerprints are both configured in `public/.well-known/assetlinks.json`.
+  This file must also be served (as `application/json`) at `https://travel-expense-compact.vercel.app/.well-known/assetlinks.json`
+  from the production (`main`) deploy for App Links to verify.
 
 ## Android QA
 

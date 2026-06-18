@@ -45,8 +45,14 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
   async function handleGoogleLogin() {
     setBusy(true);
     setStatus('');
+    const nativeAndroid = typeof window !== 'undefined'
+      && !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+      && /Android/i.test(navigator.userAgent || '');
     try {
       await auth.signInWithGoogle();
+      // On native the call resolves once the system browser opens; auth completes after the
+      // deep-link returns. Tell the user so the screen doesn't look frozen.
+      if (nativeAndroid) setStatus('已開啟瀏覽器，完成 Google 登入後會自動返回 App…');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Google 登入失敗');
     } finally {
