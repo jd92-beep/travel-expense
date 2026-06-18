@@ -2,9 +2,51 @@
 
 ## Last Worked On
 - **Date**: 2026-06-18
-- **Focus**: Isolated Compact Android shell bug audit and polish on feature branch
-- **Agent**: Codex
-- **App version**: Compact `0.8.1`; React unchanged in this pass
+- **Focus**: Android shell production-readiness — release signing, native login fix, WebView bug fixes
+- **Agent**: Claude (Oscar)
+- **App version**: Compact/Android `0.8.2` (versionCode `802`); React unchanged
+
+## 🚧 PENDING — Android v0.8.2 go-live (for the next agent)
+
+Code is done, committed, and builds a **signed AAB**; emulator QA passes. But native login
+does **not** work end-to-end until the two infra steps below are done. They are not code —
+they require deploying and a dashboard change, so a prior agent could not finish them.
+
+**Context:** native Google + magic-link login returns through an Android App Link to
+`https://travel-expense-compact.vercel.app/android-auth`. For Android to (a) verify the App
+Link and (b) be allowed by Supabase, both of these must be live:
+
+1. **Deploy `main` to Vercel** (commit `36f6f97` on `main`, already pushed). It adds, on the
+   production domain only and invisibly to the web UI:
+   - `/.well-known/assetlinks.json` served as real `application/json` (debug **and** release
+     SHA-256 fingerprints).
+   - a standalone `/android-auth` handoff page (does not boot the SPA).
+   - Verify after deploy:
+     `curl -sI https://travel-expense-compact.vercel.app/.well-known/assetlinks.json`
+     must return `content-type: application/json` (NOT `text/html`).
+2. **Supabase dashboard** → Auth → URL Configuration → Redirect URLs: add
+   `https://travel-expense-compact.vercel.app/android-auth` (or confirm `…/**` already covers it).
+   Without this, Supabase rejects the redirect and every native login fails.
+
+**Then verify on a real device / `npm run android:qa`:** Google AND magic-link login round-trip
+back into the app and land signed-in (cold-start + warm-start).
+
+**Build/run notes for a fresh checkout of this worktree** (`travel-expense-android-shell`,
+branch `codex/android-compact-shell`):
+- `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`
+- `app-compact/android/local.properties` is gitignored — create it with
+  `sdk.dir=/opt/homebrew/share/android-commandlinetools`.
+- Signing creds: `app-compact/android/keystore.properties` + `keystore/release.jks` are
+  **gitignored and NOT in the repo** — they live only on Boss's machine. A different machine
+  needs Boss to copy them in, or `bundleRelease` produces an unsigned AAB.
+- `cd app-compact && npm run android:debug` (debug APK) / `npm run android:bundle` (signed AAB).
+
+**Optional, not a bug:** the AAB is ~65MB, almost all from `app-compact/public/bg-loop.mp4`
+(39MB). Excluding that asset from the native build would shrink the download a lot.
+
+**Do NOT merge `codex/android-compact-shell` into `main`** — it shares `app-compact/src/` with
+the live web app. All native changes are guarded by a Capacitor native check; only the
+experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -17,6 +59,37 @@
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 34 (Claude/Oscar — Android production-readiness, v0.8.2)
+
+Full review (direct reading + 2 review agents) + fixes. All native-only changes are guarded by a
+Capacitor native check, so the live web app is unchanged. Branch stays off `main`.
+
+1. **Release signing (was missing → blocked any shippable build):** generated
+   `android/keystore/release.jks` (alias `release`), creds in gitignored `android/keystore.properties`;
+   `app/build.gradle` loads it and signs the `release` build type. `bundleRelease` now emits a signed
+   AAB (`jar verified`). Release SHA-256 added to `assetlinks.json` alongside debug. Documented in `ANDROID.md`.
+2. **Native login App Links (was broken end-to-end):** the redirect domain served the SPA for both
+   `/.well-known/assetlinks.json` (so App Links couldn't verify) and `/android-auth` (so the implicit-flow
+   token got consumed in-browser). Fixed on `main` (commit `36f6f97`): assetlinks served as JSON + a
+   standalone `/android-auth` handoff page + a vercel rewrite above the SPA catch-all. See PENDING above
+   for the deploy + Supabase steps.
+3. **Redirect handler hardening** (`src/App.tsx`): register the `appUrlOpen` listener before draining
+   `getLaunchUrl()`, and dedupe processed URLs so a cold-start deep link isn't handled twice.
+4. **Hardware back button** (`src/App.tsx`): was unhandled → instantly exited the app. Now: close an open
+   editor/wizard/overlay → return to home tab → press-again-to-exit.
+5. **CSV/JSON export** (`src/lib/domain.ts`): blob+anchor download is a silent no-op in a WebView. On
+   native, write to cache + open the OS share sheet via `@capacitor/filesystem` + `@capacitor/share`
+   (two new deps).
+6. **External/map links** (`src/lib/domain.ts` `openMapExternal`): hand off to the OS (`intent://`
+   interceptor / `@capacitor/browser`) instead of a `_blank` tab that strands the user in the WebView.
+7. **Polish:** clarify the Android voice-unsupported message (`src/tabs/Scan.tsx`), a "waiting for browser"
+   login state (`src/security/SupabaseGate.tsx`), and an oversized-image guard before decode (Scan).
+8. **Discounted as false positives:** `updateState`-in-deps re-subscribe (it's `useCallback`-stable),
+   geolocation permission (not used), broker CORS (native origin `https://localhost` returns 204).
+9. **Verified:** `typecheck`, `assembleDebug`, signed `bundleRelease`, and `npm run android:qa` on
+   `codex_api36_pixel_8` all pass — Scan camera tap triggers the runtime permission dialog, no crash.
+10. **Versioning:** Compact/Android bumped to `0.8.2` / versionCode `802`.
 
 ### Session 33 (Codex — current Android branch)
 
