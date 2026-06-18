@@ -2,34 +2,40 @@
 
 ## Last Worked On
 - **Date**: 2026-06-18
-- **Focus**: Android shell production-readiness — release signing, native login fix, WebView bug fixes
-- **Agent**: Claude (Oscar)
+- **Focus**: Android shell production-readiness — release signing, native login fix, WebView bug fixes, go-live infra verification
+- **Agent**: Codex + Claude/Oscar
 - **App version**: Compact/Android `0.8.2` (versionCode `802`); React unchanged
 
-## 🚧 PENDING — Android v0.8.2 go-live (for the next agent)
+## ✅ Android v0.8.2 go-live infra status
 
-Code is done, committed, and builds a **signed AAB**; emulator QA passes. But native login
-does **not** work end-to-end until the two infra steps below are done. They are not code —
-they require deploying and a dashboard change, so a prior agent could not finish them.
+Code is done, committed, and builds a **signed AAB**; emulator QA passes. The two live
+infra blockers from the previous handover were completed/verified on 2026-06-18:
 
 **Context:** native Google + magic-link login returns through an Android App Link to
 `https://travel-expense-compact.vercel.app/android-auth`. For Android to (a) verify the App
 Link and (b) be allowed by Supabase, both of these must be live:
 
-1. **Deploy `main` to Vercel** (commit `36f6f97` on `main`, already pushed). It adds, on the
-   production domain only and invisibly to the web UI:
-   - `/.well-known/assetlinks.json` served as real `application/json` (debug **and** release
-     SHA-256 fingerprints).
-   - a standalone `/android-auth` handoff page (does not boot the SPA).
-   - Verify after deploy:
-     `curl -sI https://travel-expense-compact.vercel.app/.well-known/assetlinks.json`
-     must return `content-type: application/json` (NOT `text/html`).
-2. **Supabase dashboard** → Auth → URL Configuration → Redirect URLs: add
-   `https://travel-expense-compact.vercel.app/android-auth` (or confirm `…/**` already covers it).
-   Without this, Supabase rejects the redirect and every native login fails.
+1. **Vercel production App Links are live**:
+   - `/.well-known/assetlinks.json` returns `HTTP/2 200` and `content-type:
+     application/json; charset=utf-8`.
+   - The body includes debug SHA-256 `AE:F5:88:1E:0B:9F:94:6E:F4:21:27:8F:E5:71:48:BE:3E:50:0B:72:EE:E0:65:B4:9F:77:76:D7:C9:68:6E:92`
+     and release SHA-256 `30:E9:9F:89:AA:66:E3:8E:9A:C8:C7:0D:92:6A:38:30:9A:29:66:5C:3F:15:78:7B:BA:21:7C:22:01:11:F9:9B`.
+   - `/android-auth` returns `HTTP/2 200` and `content-type: text/html; charset=utf-8`
+     from standalone `android-auth.html`, not the SPA shell.
+2. **Supabase Auth redirect allow list is live**:
+   - Project `fbnnjoahvtdrnigevrtw` now has exact
+     `https://travel-expense-compact.vercel.app/android-auth` in `uri_allow_list`.
+   - Existing Netlify/Vercel redirect entries were preserved, including
+     `https://travel-expense-compact.vercel.app/**`.
+3. **Android emulator QA passed after the infra update**:
+   - Command: `cd app-compact && JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa`.
+   - Result: `status=passed`, `appLinksVerified=true`, AVD `codex_api36_pixel_8`, serial
+     `emulator-5554`.
+   - Artifact folder: `/tmp/travel-expense-android-qa-2026-06-18T10-12-30-397Z`.
 
-**Then verify on a real device / `npm run android:qa`:** Google AND magic-link login round-trip
-back into the app and land signed-in (cold-start + warm-start).
+**Still recommended before Play Store / production invitation:** verify Google AND magic-link
+login on a real Android device, because the automated QA verifies App Link association and
+native launch but does not complete a real inbox/OAuth round-trip with a human account.
 
 **Build/run notes for a fresh checkout of this worktree** (`travel-expense-android-shell`,
 branch `codex/android-compact-shell`):
@@ -55,10 +61,23 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.1`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.2`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 35 (Codex — Android go-live infra verification)
+
+1. **Vercel App Links live check passed:** verified `assetlinks.json` is served as real JSON from
+   `travel-expense-compact.vercel.app`, and `/android-auth` is served by the standalone handoff page.
+2. **Supabase redirect allow list completed:** used the Supabase Management API with the local CLI
+   keychain token to preserve the existing allow list and add the exact Android auth redirect URL:
+   `https://travel-expense-compact.vercel.app/android-auth`.
+3. **Android QA passed after the live config update:** `npm run android:qa` built the debug APK,
+   installed it on `codex_api36_pixel_8`, launched the app on the Scan tab, verified App Links, and
+   captured camera/gallery tap smoke artifacts without crash.
+4. **Main worktree safety:** main still has unrelated local edits from another agent
+   (`AGENTS.md`, `CLAUDE.md`, `.mimocode/plans/...`); they were not touched.
 
 ### Session 34 (Claude/Oscar — Android production-readiness, v0.8.2)
 
