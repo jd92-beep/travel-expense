@@ -42,10 +42,19 @@ branch `codex/android-compact-shell`):
 - `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`
 - `app-compact/android/local.properties` is gitignored — create it with
   `sdk.dir=/opt/homebrew/share/android-commandlinetools`.
+- **`app-compact/.env.local` is gitignored and REQUIRED** — `VITE_SUPABASE_URL` +
+  `VITE_SUPABASE_PUBLISHABLE_KEY` (public key). The native binary bakes env in at build time; without
+  it the APK/AAB cannot log in or sync. See `app-compact/ANDROID.md` → "Build environment".
 - Signing creds: `app-compact/android/keystore.properties` + `keystore/release.jks` are
   **gitignored and NOT in the repo** — they live only on Boss's machine. A different machine
   needs Boss to copy them in, or `bundleRelease` produces an unsigned AAB.
 - `cd app-compact && npm run android:debug` (debug APK) / `npm run android:bundle` (signed AAB).
+
+**Emulator verification already done (2026-06-19, codex_api36_pixel_8):** App Link domain shows
+`verified` against the live assetlinks; a fired deep link routes into the app and reaches the JS
+`appUrlOpen` handler; with `.env.local` present the Supabase login gate renders (Google + email +
+magic-link); signed AAB rebuilt with env baked in (`jar verified`, Supabase URL embedded). **Only a
+real-device Google login round-trip remains** (emulator has no real Google account).
 
 **Optional, not a bug:** the AAB is ~65MB, almost all from `app-compact/public/bg-loop.mp4`
 (39MB). Excluding that asset from the native build would shrink the download a lot.

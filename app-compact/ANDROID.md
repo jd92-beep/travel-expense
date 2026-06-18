@@ -36,6 +36,21 @@ npm run android:bundle
 
 `bundleRelease` produces a **signed** AAB (see Release Signing below).
 
+## Build environment (REQUIRED — or the app can't log in)
+
+Unlike the web deploy (Vercel/Netlify inject env at build time), the Android binary bakes in
+whatever `VITE_*` env exists when `vite build` runs. **Without Supabase env the shipped APK/AAB has
+no client and cannot log in or sync.** Create a gitignored `app-compact/.env.local`:
+
+```
+VITE_SUPABASE_URL=https://fbnnjoahvtdrnigevrtw.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<public sb_publishable_… key>
+```
+
+The publishable key is the public client key (same one already shipped in the live web bundle) — safe
+to bake into the binary. Verify it landed: after `npm run android:sync`, the URL above should appear in
+`dist/assets/*.js`.
+
 ## Release Signing
 
 - Keystore: `android/keystore/release.jks`, alias `release` (RSA 2048, 10000-day validity).
