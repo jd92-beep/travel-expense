@@ -37,7 +37,7 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.8.0`。
+Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.8.1`。
 
 ## Compact Android Developer Quick Start
 
@@ -48,6 +48,7 @@ cd app-compact
 npm install
 npm run android:sync
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug
+npm run android:qa
 ```
 
 Debug APK 會輸出到：
@@ -57,6 +58,8 @@ app-compact/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 正式上架前仍需要處理 release signing、Play Store metadata、native camera/gallery QA、offline sync QA、以及 Android 真機回歸測試。
+
+Android Google/Supabase login uses the App Link callback `https://travel-expense-compact.vercel.app/android-auth`. The debug certificate SHA-256 is already listed in `app-compact/public/.well-known/assetlinks.json`; add the release SHA-256 after creating the release keystore.
 
 ## 第一次使用
 

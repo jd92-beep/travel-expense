@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-18
-- **Focus**: Isolated Compact Android shell bootstrap on feature branch
+- **Focus**: Isolated Compact Android shell bug audit and polish on feature branch
 - **Agent**: Codex
-- **App version**: Compact `0.8.0`; React unchanged in this pass
+- **App version**: Compact `0.8.1`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,10 +13,32 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.1`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 33 (Codex — current Android branch)
+
+1. **Android manifest/privacy fixes**:
+   - Added `<uses-feature android:name="android.hardware.camera" android:required="false" />` to fix the current Android lint failure.
+   - Removed broad `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE` permissions; WebView file input should use Android's system picker instead of library-wide read access.
+   - Added `backup_rules.xml` and `data_extraction_rules.xml` to explicitly exclude files, databases, shared preferences, root, and external data from backup/device transfer.
+2. **Native auth/App Links**:
+   - Added `@capacitor/app` and `@capacitor/browser`.
+   - Added App Link intent handling for `https://travel-expense-compact.vercel.app/android-auth`.
+   - Added `public/.well-known/assetlinks.json` with the current local debug SHA-256 for `com.ftjdfr.travelexpensecompact`.
+   - Added native Supabase redirect handling so Android Google OAuth opens in the system browser and returned `code` or token URLs become the normal Supabase session.
+3. **Android polish and QA harness**:
+   - Added Android status/nav bar colors and a monochrome launcher icon resource.
+   - Added `smoke:android-broker-origin` to report candidate Capacitor WebView origins for the Credential Broker CORS preflight.
+   - Added `android:qa` to build, install, launch, seed the local trusted-device flag through debug WebView CDP, capture screenshot/UI tree/logcat, and lightly probe Scan camera/gallery buttons on `codex_api36_pixel_8`.
+4. **Versioning**:
+   - Bumped Compact to `0.8.1` and Android to `versionCode 801`.
+5. **Important branch safety**:
+   - This work remains on `codex/android-compact-shell`.
+   - Do not merge to `main`, dispatch Pages, or trigger Vercel/Netlify production deployment until Boss approves.
+   - Release signing is not done yet; add the release SHA-256 to `assetlinks.json` after a real release keystore exists.
 
 ### Session 32 (Codex — current Android branch)
 

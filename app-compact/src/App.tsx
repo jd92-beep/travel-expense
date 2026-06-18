@@ -20,7 +20,7 @@ import { HyperframeBackground } from './components/HyperframeBackground';
 import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, loadCurrencySnapshot, usableSnapshot, type CurrencySnapshot } from './lib/currency';
 import { AnimatePresence, motion } from 'motion/react';
 import { shouldDisableHeavyEffects } from './lib/performance';
-import { acceptSupabaseTripInvite, createSupabaseTripInvite, hasSupabaseSession, useSupabaseAuth } from './lib/supabase';
+import { acceptSupabaseTripInvite, createSupabaseTripInvite, handleNativeAuthRedirectUrl, hasSupabaseSession, useSupabaseAuth } from './lib/supabase';
 import { SupabaseGate } from './security/SupabaseGate';
 import { clearIndexedState } from './storage/indexedDb';
 import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/WelcomeGuidePopup';
@@ -84,6 +84,64 @@ export function App() {
   const bootSyncKeys = useRef(new Set<string>());
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const capacitor = (window as Window & {
+      Capacitor?: {
+        getPlatform?: () => string;
+        isNativePlatform?: () => boolean;
+      };
+    }).Capacitor;
+    const nativeAndroid = capacitor?.getPlatform?.() === 'android'
+      || (!!capacitor?.isNativePlatform?.() && /android/i.test(window.navigator.userAgent || ''));
+    if (!nativeAndroid) return undefined;
+
+    let cancelled = false;
+    let removeAppUrlListener: (() => void) | undefined;
+
+    const processUrl = async (url?: string) => {
+      if (!url) return;
+      try {
+        const handled = await handleNativeAuthRedirectUrl(url);
+        if (!handled) return;
+        try {
+          const { Browser } = await import('@capacitor/browser');
+          await Browser.close();
+        } catch {
+          // Android system-browser close is best-effort; auth state is already set.
+        }
+      } catch (nativeAuthError) {
+        console.error('[NativeAuth] Android redirect handling failed:', nativeAuthError);
+        updateState({
+          syncError: nativeAuthError instanceof Error ? nativeAuthError.message : 'Android 登入回跳未成功，請再試一次。',
+        });
+      }
+    };
+
+    void (async () => {
+      const { App: CapacitorApp } = await import('@capacitor/app');
+      const launch = await CapacitorApp.getLaunchUrl().catch(() => null);
+      await processUrl(launch?.url);
+      const listener = await CapacitorApp.addListener('appUrlOpen', (event) => {
+        void processUrl(event.url);
+      });
+      if (cancelled) {
+        await listener.remove();
+      } else {
+        removeAppUrlListener = () => {
+          void listener.remove();
+        };
+      }
+    })().catch((nativeAuthInitError) => {
+      console.warn('[NativeAuth] Android listener unavailable:', nativeAuthInitError);
+    });
+
+    return () => {
+      cancelled = true;
+      removeAppUrlListener?.();
+    };
+  }, [updateState]);
 
   const handleSaveGuideTrip = async (result: WelcomeGuideResult | TripProfile) => {
     const guide = 'trip' in result

@@ -17,6 +17,8 @@ npm run typecheck
 npm run build:root
 npm run android:sync
 npm run android:debug
+npm run android:qa
+npm run smoke:android-broker-origin
 ```
 
 The debug APK is created at:
@@ -38,6 +40,22 @@ The release AAB still needs proper signing before Play Store upload.
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.8.0` / versionCode `800`.
-- Permissions: internet, camera, image library access.
-- Android backup disabled because the app contains travel expense data.
+- Version: `0.8.1` / versionCode `801`.
+- Permissions: internet and camera only. The camera hardware feature is marked `required=false` so the app remains installable on devices without a camera.
+- Broad storage/media read permissions were removed. Android's normal system file picker should handle gallery input without library-wide read access.
+- Android backup and device-transfer extraction are explicitly disabled because the app contains travel expense data.
+- Google/Supabase native login returns through `https://travel-expense-compact.vercel.app/android-auth`.
+- Debug App Link SHA-256 is configured in `public/.well-known/assetlinks.json`.
+- Release App Link SHA-256 still needs to be added after a real release keystore is created.
+
+## Android QA
+
+```bash
+cd app-compact
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ./gradlew -p android lintDebug --console=plain
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ./gradlew -p android testDebugUnitTest --console=plain
+npm run android:qa
+```
+
+`android:qa` targets the `codex_api36_pixel_8` emulator by default, installs the debug APK, launches the app, seeds the local trusted-device flag through debug WebView CDP, probes Scan camera/gallery entry points, and writes screenshot/UI/logcat artifacts to `/tmp/travel-expense-android-qa-*`.

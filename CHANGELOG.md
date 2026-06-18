@@ -2,6 +2,12 @@
 
 ## 2026-06-18
 
+- Polished the isolated Compact Android shell on branch `codex/android-compact-shell` without merging to `main` or deploying production web builds.
+- Fixed Android lint's camera hardware warning by declaring `android.hardware.camera` with `required=false`, removed broad storage/media read permissions, and added explicit backup/device-transfer exclusion XML for expense-data privacy.
+- Added Android App Links for Supabase/Google login through `https://travel-expense-compact.vercel.app/android-auth`, plus a public `assetlinks.json` containing the local debug SHA-256 for `com.ftjdfr.travelexpensecompact`.
+- Added native auth bridge logic using `@capacitor/app` and `@capacitor/browser`: Google login opens in the system browser on Android, then app-link URLs are converted back into the existing Supabase session flow.
+- Added Android status/nav bar color polish, a monochrome launcher icon resource, `smoke:android-broker-origin`, and `android:qa` for emulator install/launch/screenshot/UI/logcat capture.
+- Bumped Compact Android branch version to `0.8.1` / Android `versionCode 801`.
 - Started the Compact Android build track in an isolated `codex/android-compact-shell` worktree so the live Compact web app on `main` can remain stable while Android work begins.
 - Added a Capacitor Android shell for `app-compact` with app id `com.ftjdfr.travelexpensecompact`, version `0.8.0` / `versionCode 800`, internet/camera/image-library permissions, and Android backup disabled for expense-data privacy.
 - Added Android helper scripts: `android:sync`, `android:debug`, `android:bundle`, and `android:open`.

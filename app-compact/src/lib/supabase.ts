@@ -143,6 +143,7 @@ export type SupabasePullResult = {
 const rawUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim();
 const rawKey = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 const configuredPublicUrl = String(import.meta.env.VITE_COMPACT_PUBLIC_URL || '').trim();
+const ANDROID_AUTH_URL = 'https://travel-expense-compact.vercel.app/android-auth';
 
 let client: SupabaseClient | null = null;
 
@@ -219,8 +220,73 @@ function publicOrigin(): string {
   return `${origin}/`;
 }
 
+type CapacitorWindow = Window & {
+  Capacitor?: {
+    getPlatform?: () => string;
+    isNativePlatform?: () => boolean;
+  };
+};
+
+export function isNativeAndroidShell(): boolean {
+  if (typeof window === 'undefined') return false;
+  const capacitor = (window as CapacitorWindow).Capacitor;
+  const platform = capacitor?.getPlatform?.();
+  if (platform === 'android') return true;
+  return !!capacitor?.isNativePlatform?.() && /android/i.test(window.navigator.userAgent || '');
+}
+
 function authRedirectUrl(): string {
-  return publicOrigin();
+  return isNativeAndroidShell() ? ANDROID_AUTH_URL : publicOrigin();
+}
+
+function authParamsFromUrl(raw: string): URLSearchParams {
+  const url = new URL(raw);
+  const params = new URLSearchParams(url.search);
+  const hash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
+  const hashParams = new URLSearchParams(hash);
+  hashParams.forEach((value, key) => {
+    if (!params.has(key)) params.set(key, value);
+  });
+  return params;
+}
+
+export async function handleNativeAuthRedirectUrl(raw: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.origin !== 'https://travel-expense-compact.vercel.app' || !url.pathname.startsWith('/android-auth')) {
+    return false;
+  }
+
+  const params = authParamsFromUrl(raw);
+  const authError = params.get('error_description') || params.get('error');
+  if (authError) throw new Error(authError);
+
+  const code = params.get('code');
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+    return true;
+  }
+
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (accessToken && refreshToken) {
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (error) throw error;
+    return true;
+  }
+
+  return false;
 }
 
 function sourceIdForTrip(trip: TripProfile): string {
@@ -631,13 +697,20 @@ export function useSupabaseAuth() {
 
   const signInWithGoogle = useCallback(async () => {
     if (!supabase) throw new Error('Supabase is not configured');
-    const { error: signInError } = await supabase.auth.signInWithOAuth({
+    const { data, error: signInError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: authRedirectUrl(),
+        skipBrowserRedirect: isNativeAndroidShell(),
       },
     });
     if (signInError) throw signInError;
+    if (isNativeAndroidShell()) {
+      const url = data?.url;
+      if (!url) throw new Error('Google OAuth URL was not returned');
+      const { Browser } = await import('@capacitor/browser');
+      await Browser.open({ url });
+    }
   }, [supabase]);
 
   const deleteUserAccount = useCallback(async () => {

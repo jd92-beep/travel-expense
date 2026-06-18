@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.ftjdfr.travelexpensecompact",
+      "sha256_cert_fingerprints": [
+        "AE:F5:88:1E:0B:9F:94:6E:F4:21:27:8F:E5:71:48:BE:3E:50:0B:72:EE:E0:65:B4:9F:77:76:D7:C9:68:6E:92"
+      ]
+    }
+  }
+]
