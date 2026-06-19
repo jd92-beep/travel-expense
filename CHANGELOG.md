@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-19
+
+- Fixed the Compact Phase 0 security finding from the Splitwise roadmap: `app-compact/scripts/verify-notion-connection.mjs` no longer contains a hardcoded broker passphrase, reads the unlock password from local environment variables only, and uses the current broker `password` payload plus `X-Travel-Session` session header.
+- Rotated the live Credential Broker `APP_UNLOCK_HASH` and `APP_SESSION_SECRET`; the new unlock passphrase is stored in macOS Keychain, and the updated verification script confirms broker unlock plus Notion status/test still pass.
+- Added a security scan rule that fails on inline broker/admin passphrase assignments, restored the Compact typecheck gate by declaring the missing Node type dependency and `AppState` type import, patched Vite via `npm audit fix`, synchronized Compact package-lock/version docs, and bumped Compact to `0.8.1`.
+
 ## 2026-06-15
 
 - Rebuilt the Compact Settings `Trip Update AI` confirmation modal into a readable day-by-day review editor. The popup now hides technical warnings inside a collapsed `需要留意` section, uses day chips/tabs, and lets users edit lodging plus each itinerary spot's start time, end time, name, category, address, and note before applying the trip.

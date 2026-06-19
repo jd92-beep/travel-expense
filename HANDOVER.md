@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-06-15
-- **Focus**: Admin Console (Phases 1-7), Trip Update AI Partial vs Full replacement, and default model adjustments
-- **Agent**: Antigravity 🤖
-- **App version**: Compact `0.7.9`; React unchanged in this pass
+- **Date**: 2026-06-19
+- **Focus**: Splitwise roadmap Phase 0 security/release hygiene
+- **Agent**: Codex
+- **App version**: Compact `0.8.1`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,12 +13,24 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.7.9`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.1`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 31 (Antigravity — current session)
+### Session 32 (Codex — current session)
+
+1. **Splitwise roadmap Phase 0 security fix**:
+   - Reviewed `/Users/tommy/Downloads/temp can delete/travel_expense_splitwise_super_app_roadmap(1).md` and confirmed the hardcoded broker/admin passphrase finding existed in `app-compact/scripts/verify-notion-connection.mjs`.
+   - Removed the inline passphrase and made the script require `BROKER_UNLOCK_PASSWORD` or legacy `BROKER_ADMIN_PASSPHRASE` from the local environment.
+   - Updated the script to match the live Credential Broker contract: `/session/unlock` receives `{ password }`, returns a session string, and authenticated calls send `X-Travel-Session`.
+   - Rotated the live Credential Broker `APP_UNLOCK_HASH` and `APP_SESSION_SECRET`; the new unlock passphrase is stored in macOS Keychain service `travel-expense credential broker unlock`.
+   - Verified the new unlock path with `BROKER_UNLOCK_PASSWORD="$(security find-generic-password -a tommy -s 'travel-expense credential broker unlock' -w)" node app-compact/scripts/verify-notion-connection.mjs`, which passed broker health, session unlock, Notion credential status, and Notion test.
+   - Added a `security:scan` pattern for inline broker/admin passphrase assignments.
+   - Restored the Compact typecheck gate by adding the missing Node type dependency and importing the existing `AppState` type in `App.tsx`; `npm audit fix` also patched the Vite high-severity audit finding.
+   - Synced README/package-lock version drift and bumped Compact to `0.8.1`.
+
+### Session 31 (Antigravity — previous session)
 
 1. **Admin Console (Phases 1-7)**:
    - Deployed the complete cyber-themed independent admin KanBan board under `app-admin-kanban/`.
