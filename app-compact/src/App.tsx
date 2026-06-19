@@ -487,9 +487,9 @@ export function App() {
         // Fallback for any overlay that doesn't use `.modal-backdrop`.
         if (editingRef.current !== undefined) { setEditing(undefined); return; }
         if (wizardOpenRef.current) { setIsNewTripWizardOpen(false); return; }
-        // 3) Not on the home tab → go home.
+        // 2) Not on the home tab → go home.
         if (safeTabRef.current !== DEFAULT_LAUNCH_TAB) { changeTabRef.current(DEFAULT_LAUNCH_TAB); return; }
-        // 4) Home tab → press back twice within 2s to exit.
+        // 3) Home tab → press back twice within 2s to exit.
         if (exitArmed) { void CapacitorApp.exitApp(); return; }
         exitArmed = true;
         hint('再撳一次返回鍵離開');

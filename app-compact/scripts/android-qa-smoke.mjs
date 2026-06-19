@@ -162,15 +162,19 @@ async function webViewTarget(serial) {
 async function seedTrustedDevice(serial) {
   const { pid, page } = await webViewTarget(serial);
   const exp = Date.now() + 1000 * 60 * 60 * 24 * 365;
-  await cdpEvaluate(page.webSocketDebuggerUrl, `
+  const result = await cdpEvaluate(page.webSocketDebuggerUrl, `
+    const bodyText = document.body ? document.body.innerText : '';
+    const needsReload = /先解鎖再使用|Travel Expense unlock/i.test(bodyText);
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: ${exp} }));
     localStorage.removeItem('boss-japan-tracker:credential-session:v1');
-    location.hash = '';
-    location.reload();
-    true;
+    if (needsReload) {
+      location.hash = '';
+      location.reload();
+    }
+    ({ needsReload, url: location.href });
   `);
-  await delay(5000);
-  return { pid, targetUrl: page.url };
+  await delay(result?.needsReload ? 5000 : 800);
+  return { pid, targetUrl: result?.url || page.url, reloaded: Boolean(result?.needsReload) };
 }
 
 async function currentWebViewText(serial) {
@@ -279,7 +283,8 @@ const crashLines = logcat
 const crashPath = path.join(artifactDir, 'logcat-crash-filter.txt');
 await fsp.writeFile(crashPath, crashLines);
 const packageCrashPattern = new RegExp(`Process:\\s*${escapeRegex(packageName)}\\b`);
-if (/FATAL EXCEPTION/i.test(crashLines) || packageCrashPattern.test(crashLines)) {
+const packageAnrPattern = new RegExp(`ANR in\\s+${escapeRegex(packageName)}\\b|Input dispatching timed out.*${escapeRegex(packageName)}`, 'i');
+if (/FATAL EXCEPTION/i.test(crashLines) || packageCrashPattern.test(crashLines) || packageAnrPattern.test(crashLines)) {
   throw new Error(`Android crash signal detected. See ${crashPath}`);
 }
 

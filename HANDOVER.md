@@ -1,12 +1,12 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-06-18
-- **Focus**: Android shell production-readiness — release signing, native login fix, WebView bug fixes, go-live infra verification, QA harness stability
-- **Agent**: Codex + Claude/Oscar
-- **App version**: Compact/Android `0.8.3` (versionCode `803`); React unchanged
+- **Date**: 2026-06-19
+- **Focus**: Android shell production-readiness — open-code-review cleanup, QA ANR hardening, version metadata consistency
+- **Agent**: Codex + open-code-review
+- **App version**: Compact/Android `0.8.5` (versionCode `805`); React unchanged
 
-## ✅ Android v0.8.2 go-live infra status
+## ✅ Android v0.8.5 go-live infra status
 
 Code is done, committed, and builds a **signed AAB**; emulator QA passes. The two live
 infra blockers from the previous handover were completed/verified on 2026-06-18:
@@ -70,10 +70,22 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.3`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.5`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 38 (Codex + open-code-review — Android QA hardening, v0.8.5)
+
+1. **Open-code-review pass:** `ocr review --audience agent` reviewed the latest Android branch diff and found only one low-risk cleanup: back-button comment numbering in `App.tsx` jumped from `1)` to `3)`. Fixed it.
+2. **Version metadata consistency:** previous Android v0.8.4 work updated `package.json`, `APP_VERSION`, and Gradle, but left `package-lock.json` at `0.8.3`. Bumped Compact/Android consistently to `0.8.5` / versionCode `805`.
+3. **Android QA ANR hardening:** found that the QA artifact could contain an Android `ANR` while the script still reported pass. The cause was the QA harness always forcing a WebView `location.reload()` after CDP trust seeding. `seedTrustedDevice()` now reloads only when the local unlock gate is actually visible, and `android:qa` now fails on package-specific ANR signals.
+4. **Verification:** passed `typecheck`, `build:root`, Gradle `lintDebug`, Gradle `testDebugUnitTest`, signed `android:bundle` with OpenJDK 21, `jarsigner -verify`, `android:qa`, `npm audit --omit=dev`, and full `npm audit`.
+
+### Session 37 (Claude/Oscar — Android hardware back modal polish, v0.8.4)
+
+1. **Hardware back modal handling:** Android back now closes the top-most custom `.modal-backdrop` first, so nested confirmation dialogs close before their parent editor/modal.
+2. **Versioning:** Compact/Android bumped to `0.8.4` / versionCode `804`.
 
 ### Session 36 (Codex — Android production polish, v0.8.3)
 
