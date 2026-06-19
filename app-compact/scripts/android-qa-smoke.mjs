@@ -75,15 +75,32 @@ async function ensureDevice() {
   return waitForBoot();
 }
 
-function captureScreenshot(serial, name) {
-  const result = spawnSync('adb', ['-s', serial, 'exec-out', 'screencap', '-p'], {
-    cwd: appRoot,
-    encoding: null,
-  });
-  if (result.status !== 0) throw new Error(`screencap failed: ${String(result.stderr || '')}`);
+async function captureScreenshot(serial, name) {
+  let lastError = '';
   const file = path.join(artifactDir, name);
-  fs.writeFileSync(file, result.stdout);
-  return file;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const result = spawnSync('adb', ['-s', serial, 'exec-out', 'screencap', '-p'], {
+      cwd: appRoot,
+      encoding: null,
+    });
+    if (result.status === 0 && result.stdout?.length > 8) {
+      fs.writeFileSync(file, result.stdout);
+      return file;
+    }
+    lastError = result.stderr?.length ? String(result.stderr) : `status=${result.status} bytes=${result.stdout?.length || 0}`;
+    try {
+      // ponytail: exec-out screencap flakes on this emulator; shell+pull is the smallest reliable fallback.
+      const remote = `/sdcard/travel-expense-qa-${attempt}.png`;
+      adb(serial, ['shell', 'screencap', '-p', remote]);
+      run('adb', ['-s', serial, 'pull', remote, file]);
+      adb(serial, ['shell', 'rm', '-f', remote]);
+      if (fs.existsSync(file) && fs.statSync(file).size > 8) return file;
+    } catch (error) {
+      lastError = error?.message || String(error);
+    }
+    await delay(800);
+  }
+  throw new Error(`screencap failed after 3 attempts: ${lastError}`);
 }
 
 function dumpUi(serial, name) {
@@ -205,7 +222,7 @@ async function tryTap(serial, uiPath, labels, slug, fallbackRatio) {
   if (!node) return { slug, tapped: false, reason: `No accessible node for ${labels.join('/')}` };
   adb(serial, ['shell', 'input', 'tap', String(node.x), String(node.y)]);
   await delay(2500);
-  const screenshot = captureScreenshot(serial, `${slug}.png`);
+  const screenshot = await captureScreenshot(serial, `${slug}.png`);
   const ui = dumpUi(serial, `${slug}.xml`);
   adb(serial, ['shell', 'input', 'keyevent', '4']);
   await delay(1000);
@@ -231,20 +248,26 @@ adb(serial, ['shell', 'am', 'start', '-W', '-n', `${packageName}/.MainActivity`]
 await delay(6000);
 
 const trustedSeed = await seedTrustedDevice(serial);
-const launchScreenshot = captureScreenshot(serial, 'scan-launch.png');
+const launchScreenshot = await captureScreenshot(serial, 'scan-launch.png');
 const launchUi = dumpUi(serial, 'scan-launch.xml');
 const launchXml = await fsp.readFile(launchUi, 'utf8');
 const launchText = await currentWebViewText(serial);
+const launchBody = `${launchXml}\n${launchText}`;
 if (/先解鎖再使用|Travel Expense unlock/i.test(launchXml)) {
   throw new Error(`Android QA could not bypass the local unlock gate through WebView CDP. See ${launchUi}`);
 }
-if (!/掃描收據|相機|Camera|Scan/i.test(`${launchXml}\n${launchText}`)) {
-  throw new Error(`Android QA did not land on the Scan experience after trusted-device seed. See ${launchUi}`);
+const scanVisible = /掃描收據|相機|Camera|Scan/i.test(launchBody);
+const loginVisible = /旅程雲端登入|使用 Google 帳號登入|帳號密碼登入|magic-link/i.test(launchBody);
+if (!scanVisible && !loginVisible) {
+  throw new Error(`Android QA landed on neither login nor Scan after trusted-device seed. See ${launchUi}`);
 }
-const pickerChecks = [
-  await tryTap(serial, launchUi, ['相機', 'Camera'], 'after-camera-tap', { x: 0.28, y: 0.61 }),
-  await tryTap(serial, dumpUi(serial, 'after-camera-back.xml'), ['相簿', 'Album', 'Gallery'], 'after-gallery-tap', { x: 0.74, y: 0.61 }),
-];
+const launchMode = scanVisible ? 'scan' : 'login';
+const pickerChecks = scanVisible
+  ? [
+      await tryTap(serial, launchUi, ['相機', 'Camera'], 'after-camera-tap', { x: 0.28, y: 0.61 }),
+      await tryTap(serial, dumpUi(serial, 'after-camera-back.xml'), ['相簿', 'Album', 'Gallery'], 'after-gallery-tap', { x: 0.74, y: 0.61 }),
+    ]
+  : [];
 
 const logcat = adb(serial, ['logcat', '-d', '-t', '3000']);
 const logcatPath = path.join(artifactDir, 'logcat-tail.txt');
@@ -270,6 +293,7 @@ console.log(JSON.stringify({
   avdName,
   packageName,
   appLinksVerified,
+  launchMode,
   trustedSeed,
   launchTextSample: launchText.slice(0, 400),
   artifacts: {

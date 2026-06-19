@@ -66,7 +66,7 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.8.2` / versionCode `802`.
+- Version: `0.8.3` / versionCode `803`.
 - Permissions: internet and camera only. The camera hardware feature is marked `required=false` so the app remains installable on devices without a camera.
 - Broad storage/media read permissions were removed. Android's normal system file picker should handle gallery input without library-wide read access.
 - Android backup and device-transfer extraction are explicitly disabled because the app contains travel expense data.
@@ -85,4 +85,4 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ./gradl
 npm run android:qa
 ```
 
-`android:qa` targets the `codex_api36_pixel_8` emulator by default, installs the debug APK, launches the app, seeds the local trusted-device flag through debug WebView CDP, probes Scan camera/gallery entry points, and writes screenshot/UI/logcat artifacts to `/tmp/travel-expense-android-qa-*`.
+`android:qa` targets the `codex_api36_pixel_8` emulator by default, installs the debug APK, launches the app, seeds the local trusted-device flag through debug WebView CDP, accepts the Supabase login gate for a signed-out build, probes Scan camera/gallery only when a signed-in/local session reaches Scan, and writes screenshot/UI/logcat artifacts to `/tmp/travel-expense-android-qa-*`.

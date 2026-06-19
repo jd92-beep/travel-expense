@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-18
-- **Focus**: Android shell production-readiness — release signing, native login fix, WebView bug fixes, go-live infra verification
+- **Focus**: Android shell production-readiness — release signing, native login fix, WebView bug fixes, go-live infra verification, QA harness stability
 - **Agent**: Codex + Claude/Oscar
-- **App version**: Compact/Android `0.8.2` (versionCode `802`); React unchanged
+- **App version**: Compact/Android `0.8.3` (versionCode `803`); React unchanged
 
 ## ✅ Android v0.8.2 go-live infra status
 
@@ -70,10 +70,20 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.2`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.3`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 36 (Codex — Android production polish, v0.8.3)
+
+1. **QA harness stability:** `android:qa` found an emulator `exec-out screencap` failure after launch
+   despite a successful build/install. `captureScreenshot()` now retries and falls back to
+   `adb shell screencap` + `adb pull`, so production QA is less flaky while still surfacing real
+   screenshot failures.
+   It also now treats the Supabase login gate as the expected signed-out first screen; Scan
+   camera/gallery probes only run when the test session actually reaches Scan.
+2. **Versioning:** Compact/Android bumped to `0.8.3` / versionCode `803`.
 
 ### Session 35 (Codex — Android go-live infra verification)
 
