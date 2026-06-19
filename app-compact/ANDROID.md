@@ -66,7 +66,7 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.8.3` / versionCode `803`.
+- Version: `0.8.4` / versionCode `804`.
 - Permissions: internet and camera only. The camera hardware feature is marked `required=false` so the app remains installable on devices without a camera.
 - Broad storage/media read permissions were removed. Android's normal system file picker should handle gallery input without library-wide read access.
 - Android backup and device-transfer extraction are explicitly disabled because the app contains travel expense data.

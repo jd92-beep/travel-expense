@@ -476,17 +476,17 @@ export function App() {
     void (async () => {
       const { App: CapacitorApp } = await import('@capacitor/app');
       const listener = await CapacitorApp.addListener('backButton', () => {
-        // 1) Custom full-screen overlays (not Radix — won't respond to Escape).
+        // 1) Close the top-most open overlay. The app's modals are custom `.modal-backdrop`
+        //    elements whose backdrop onClick dismisses them; click the top-most visible one.
+        //    DOM order = stacking order, so the last match is the top-most (a delete-confirm
+        //    nested inside the editor closes before the editor itself). getClientRects() is the
+        //    visibility test because offsetParent is unreliable for position:fixed elements.
+        const backdrops = Array.from(document.querySelectorAll<HTMLElement>('.modal-backdrop'))
+          .filter((el) => el.getClientRects().length > 0);
+        if (backdrops.length) { backdrops[backdrops.length - 1].click(); return; }
+        // Fallback for any overlay that doesn't use `.modal-backdrop`.
         if (editingRef.current !== undefined) { setEditing(undefined); return; }
         if (wizardOpenRef.current) { setIsNewTripWizardOpen(false); return; }
-        // 2) Any open Radix/Vaul overlay (Settings dialogs, drawers) → close topmost via Escape.
-        const overlay = document.querySelector(
-          '[role="dialog"][data-state="open"],[role="alertdialog"][data-state="open"],[vaul-drawer][data-state="open"],[data-radix-popper-content-wrapper]'
-        );
-        if (overlay) {
-          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-          return;
-        }
         // 3) Not on the home tab → go home.
         if (safeTabRef.current !== DEFAULT_LAUNCH_TAB) { changeTabRef.current(DEFAULT_LAUNCH_TAB); return; }
         // 4) Home tab → press back twice within 2s to exit.
