@@ -15,6 +15,7 @@ import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
 type ScanMode = 'scan' | 'voice' | 'email';
 type BatchReceipt = Receipt & { selected?: boolean };
+type NativePhotoSource = 'camera' | 'gallery';
 type MockReceiptProfile = {
   currency: string;
   country: string;
@@ -80,6 +81,47 @@ function safeFileStem(file: File): string {
     .replace(/[\u0000-\u001F\u007F]/g, '')
     .trim()
     .slice(0, 120) || '掃描收據';
+}
+
+function isNativeAndroidApp(): boolean {
+  if (typeof window === 'undefined') return false;
+  const capacitor = (window as any).Capacitor;
+  const platform = typeof capacitor?.getPlatform === 'function' ? capacitor.getPlatform() : '';
+  const native = typeof capacitor?.isNativePlatform === 'function' ? capacitor.isNativePlatform() : false;
+  return platform === 'android' && native === true;
+}
+
+function nativePhotoMime(format?: string, blobType?: string): string {
+  if (blobType) return blobType;
+  const normalized = String(format || '').toLowerCase();
+  if (normalized === 'png') return 'image/png';
+  if (normalized === 'webp') return 'image/webp';
+  if (normalized === 'gif') return 'image/gif';
+  return 'image/jpeg';
+}
+
+function nativePhotoExtension(format?: string, mime?: string): string {
+  const normalizedFormat = String(format || '').toLowerCase();
+  if (normalizedFormat === 'jpeg') return 'jpg';
+  if (normalizedFormat) return normalizedFormat.replace(/[^a-z0-9]/g, '') || 'jpg';
+  const normalizedMime = String(mime || '').toLowerCase();
+  if (normalizedMime.includes('png')) return 'png';
+  if (normalizedMime.includes('webp')) return 'webp';
+  if (normalizedMime.includes('gif')) return 'gif';
+  return 'jpg';
+}
+
+async function nativePhotoToFile(
+  photo: { webPath?: string; format?: string },
+  source: NativePhotoSource,
+): Promise<File> {
+  if (!photo.webPath) throw new Error('Native photo did not include a webPath');
+  const response = await fetch(photo.webPath);
+  if (!response.ok && response.status !== 0) throw new Error(`Native photo fetch failed (${response.status})`);
+  const blob = await response.blob();
+  const mime = nativePhotoMime(photo.format, blob.type);
+  const ext = nativePhotoExtension(photo.format, mime);
+  return new File([blob], `android-${source}-${Date.now()}.${ext}`, { type: mime });
 }
 
 function receiptNeedsReview(receipt: Partial<Receipt>): boolean {
@@ -238,6 +280,35 @@ export function Scan({
     }
   }, [openDraft, setBusyWithGlobal, onBusyChange]);
 
+  const tryNativeAndroidPhoto = useCallback(async (source: NativePhotoSource): Promise<boolean> => {
+    if (!isNativeAndroidApp()) return false;
+    const sourceLabel = source === 'camera' ? '相機' : '相簿';
+    try {
+      const { Camera: CapacitorCamera, CameraResultType, CameraSource } = await import('@capacitor/camera');
+      setStatus(`開啟 Android ${sourceLabel}…`);
+      const photo = await CapacitorCamera.getPhoto({
+        quality: 88,
+        allowEditing: false,
+        correctOrientation: true,
+        resultType: CameraResultType.Uri,
+        source: source === 'camera' ? CameraSource.Camera : CameraSource.Photos,
+        saveToGallery: false,
+      });
+      const file = await nativePhotoToFile(photo, source);
+      await handleImage(file);
+      return true;
+    } catch (error) {
+      const message = redactedError(error);
+      if (/cancel|cancelled|canceled|dismiss|abort|user/i.test(message)) {
+        if (mountedRef.current) setStatus('已取消選擇圖片。');
+        return true;
+      }
+      console.warn('Native Android photo selection failed:', error);
+      if (mountedRef.current) setStatus(`Android ${sourceLabel}未能啟動，改用系統選擇器。`);
+      return false;
+    }
+  }, [handleImage]);
+
   const handleCameraChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
@@ -253,18 +324,22 @@ export function Scan({
   const triggerCamera = useCallback(() => {
     setMode('scan');
     setInputKey((k) => k + 1);
-    if (busy !== 'ocr') {
-      Promise.resolve().then(() => cameraRef.current?.click());
-    }
-  }, [busy]);
+    if (busy === 'ocr') return;
+    void (async () => {
+      const handled = await tryNativeAndroidPhoto('camera');
+      if (!handled && mountedRef.current) cameraRef.current?.click();
+    })();
+  }, [busy, tryNativeAndroidPhoto]);
 
   const triggerGallery = useCallback(() => {
     setMode('scan');
     setInputKey((k) => k + 1);
-    if (busy !== 'ocr') {
-      Promise.resolve().then(() => galleryRef.current?.click());
-    }
-  }, [busy]);
+    if (busy === 'ocr') return;
+    void (async () => {
+      const handled = await tryNativeAndroidPhoto('gallery');
+      if (!handled && mountedRef.current) galleryRef.current?.click();
+    })();
+  }, [busy, tryNativeAndroidPhoto]);
 
   async function handleVoiceParse() {
     if (!voiceText.trim()) return;

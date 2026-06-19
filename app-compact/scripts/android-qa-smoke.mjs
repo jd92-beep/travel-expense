@@ -245,7 +245,16 @@ if (!fs.existsSync(apkPath)) throw new Error(`Debug APK not found at ${apkPath}`
 
 console.log(JSON.stringify({ step: 'install', apkPath }));
 adb(serial, ['install', '-r', apkPath]);
-adb(serial, ['logcat', '-c']);
+let logcatClearWarning = '';
+try {
+  adb(serial, ['logcat', '-c']);
+} catch (error) {
+  logcatClearWarning = error?.message || String(error);
+  console.warn(JSON.stringify({
+    step: 'logcat-clear-warning',
+    message: logcatClearWarning.split('\n').filter(Boolean).slice(-1)[0] || 'Unable to clear Android logcat; continuing with tail filtering.',
+  }));
+}
 adb(serial, ['shell', 'am', 'force-stop', packageName]);
 console.log(JSON.stringify({ step: 'launch' }));
 adb(serial, ['shell', 'am', 'start', '-W', '-n', `${packageName}/.MainActivity`]);
@@ -300,6 +309,7 @@ console.log(JSON.stringify({
   appLinksVerified,
   launchMode,
   trustedSeed,
+  logcatClearWarning: logcatClearWarning || null,
   launchTextSample: launchText.slice(0, 400),
   artifacts: {
     artifactDir,

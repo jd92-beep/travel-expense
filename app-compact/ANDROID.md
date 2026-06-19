@@ -66,9 +66,10 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.8.5` / versionCode `805`.
+- Version: `0.8.6` / versionCode `806`.
 - Permissions: internet and camera only. The camera hardware feature is marked `required=false` so the app remains installable on devices without a camera.
-- Broad storage/media read permissions were removed. Android's normal system file picker should handle gallery input without library-wide read access.
+- Scan camera/gallery actions use Capacitor Camera on native Android, then pass the selected image back into the existing Compact OCR draft flow. Web keeps the hidden file-input fallback.
+- Broad storage/media read permissions were removed. Android's normal system picker should handle gallery input without library-wide read access.
 - Android backup and device-transfer extraction are explicitly disabled because the app contains travel expense data.
 - Google/Supabase native login returns through `https://travel-expense-compact.vercel.app/android-auth`.
 - Debug + release App Link SHA-256 fingerprints are both configured in `public/.well-known/assetlinks.json`.

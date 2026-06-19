@@ -1,12 +1,12 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-06-19
-- **Focus**: Android shell production-readiness — open-code-review cleanup, QA ANR hardening, version metadata consistency
-- **Agent**: Codex + open-code-review
-- **App version**: Compact/Android `0.8.5` (versionCode `805`); React unchanged
+- **Date**: 2026-06-20
+- **Focus**: Android native camera/gallery bridge for Compact Scan
+- **Agent**: Codex
+- **App version**: Compact/Android `0.8.6` (versionCode `806`); React unchanged
 
-## ✅ Android v0.8.5 go-live infra status
+## ✅ Android v0.8.6 go-live infra status
 
 Code is done, committed, and builds a **signed AAB**; emulator QA passes. The two live
 infra blockers from the previous handover were completed/verified on 2026-06-18:
@@ -70,10 +70,18 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.5`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.6`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 39 (Codex — Android native camera/gallery bridge, v0.8.6)
+
+1. **Native Scan capture:** added `@capacitor/camera` and routed Compact Scan camera/gallery taps through Capacitor Camera on native Android only.
+2. **Existing OCR flow preserved:** native `Photo.webPath` is fetched into a browser `File`, then passed into the existing `handleImage()` path, keeping thumbnail compression, AI OCR, and manual-draft fallback unchanged.
+3. **Web fallback preserved:** non-native web builds and native plugin failures still fall back to the existing hidden file inputs.
+4. **Android QA hardening:** `android:qa` now treats emulator `adb logcat -c` clear failures as warnings and still performs launch/logcat tail crash filtering.
+5. **Versioning:** Compact/Android bumped to `0.8.6` / versionCode `806`.
 
 ### Session 38 (Codex + open-code-review — Android QA hardening, v0.8.5)
 

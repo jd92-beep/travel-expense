@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-compact",
   "private": true,
-  "version": "0.8.5",
+  "version": "0.8.6",
   "type": "module",
   "engines": {
     "node": "22.x"
@@ -58,6 +58,7 @@
     "@capacitor/android": "^8.4.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/browser": "^8.0.3",
+    "@capacitor/camera": "^8.2.0",
     "@capacitor/core": "^8.4.0",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/share": "^8.0.1",

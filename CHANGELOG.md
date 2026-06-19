@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-20
+
+- Added native Android Scan camera/gallery capture on the isolated `codex/android-compact-shell` branch using Capacitor Camera, while preserving the existing Compact OCR draft flow and web file-input fallback.
+- Hardened the Android QA smoke so emulator `adb logcat -c` clear failures do not abort before launch; the smoke still captures the logcat tail and package crash filter.
+- Bumped Compact Android branch version to `0.8.6` / Android `versionCode 806`.
+
 ## 2026-06-18
 
 - Polished the isolated Compact Android shell on branch `codex/android-compact-shell` without merging to `main` or deploying production web builds.
