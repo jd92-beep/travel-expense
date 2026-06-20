@@ -151,7 +151,8 @@ async function cdpEvaluate(wsUrl, expression) {
 async function webViewTarget(serial) {
   const pid = adb(serial, ['shell', 'pidof', packageName]).trim();
   if (!pid) throw new Error(`${packageName} is not running; cannot attach WebView devtools`);
-  run('adb', ['-s', serial, 'forward', '--remove', `tcp:${cdpPort}`], { stdio: 'ignore' });
+  // `forward --remove` exits 1 when there is no existing forward to remove; that's not fatal.
+  try { run('adb', ['-s', serial, 'forward', '--remove', `tcp:${cdpPort}`], { stdio: 'ignore' }); } catch { /* nothing to remove */ }
   run('adb', ['-s', serial, 'forward', `tcp:${cdpPort}`, `localabstract:webview_devtools_remote_${pid}`]);
   const targets = await fetch(`http://127.0.0.1:${cdpPort}/json/list`).then((response) => response.json());
   const page = targets.find((target) => target.type === 'page' && target.webSocketDebuggerUrl);
