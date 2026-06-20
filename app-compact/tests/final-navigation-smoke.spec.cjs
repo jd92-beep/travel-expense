@@ -76,6 +76,7 @@ for (const [name, viewport] of [
 
 test('Final lock gate smoke without trusted device', async ({ page }) => {
   await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
     localStorage.clear();
     localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify({
       access_token: 'fake-access-token',

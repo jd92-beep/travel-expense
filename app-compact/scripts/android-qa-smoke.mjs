@@ -12,6 +12,57 @@ const apkPath = path.join(appRoot, 'android/app/build/outputs/apk/debug/app-debu
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const artifactDir = process.env.ANDROID_QA_ARTIFACT_DIR || path.join('/tmp', `travel-expense-android-qa-${stamp}`);
 const cdpPort = Number(process.env.ANDROID_QA_CDP_PORT || 9223);
+const nativeVisualState = {
+  schemaVersion: 3,
+  lastTab: 'dashboard',
+  budget: 120000,
+  rate: 20,
+  autoSync: false,
+  tripCurrency: 'JPY',
+  tripName: 'Android QA 名古屋',
+  tripDateRange: { start: '2026-04-20', end: '2026-04-21' },
+  activeTripId: 'android_qa_trip',
+  persons: [
+    { id: 'p_boss', name: 'Boss', emoji: '👤', color: '#CC2929' },
+    { id: 'p_friend', name: 'Friend', emoji: '🙂', color: '#2563eb' },
+  ],
+  shareRatios: { p_boss: 1, p_friend: 1 },
+  receipts: [
+    { id: 'qa_food', sourceId: 'qa_food', store: '名古屋咖啡', total: 3200, date: '2026-04-20', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1, updatedAt: 1 },
+    { id: 'qa_train', sourceId: 'qa_train', store: 'JR 名古屋', total: 1800, date: '2026-04-20', category: 'transport', payment: 'suica', personId: 'p_friend', splitMode: 'shared', createdAt: 2, updatedAt: 2 },
+  ],
+  trips: [{
+    id: 'android_qa_trip',
+    name: 'Android QA 名古屋',
+    destinationSummary: '日本名古屋',
+    startDate: '2026-04-20',
+    endDate: '2026-04-21',
+    homeCurrency: 'HKD',
+    currencies: ['JPY', 'HKD'],
+    timezones: ['Asia/Tokyo'],
+    version: 1,
+    active: true,
+    itinerary: [
+      { date: '2026-04-20', day: 1, region: '名古屋', city: 'Nagoya', country: 'Japan', timezone: 'Asia/Tokyo', spots: [{ time: '09:00', name: '名古屋站', type: 'transport', lat: 35.1815, lon: 136.9066 }] },
+      { date: '2026-04-21', day: 2, region: '常滑', city: 'Tokoname', country: 'Japan', timezone: 'Asia/Tokyo', spots: [{ time: '11:00', name: '常滑', type: 'shopping', lat: 34.8871, lon: 136.8356 }] },
+    ],
+    createdAt: 1,
+    updatedAt: 1,
+  }],
+  customItinerary: null,
+  syncQueue: [],
+  globalSyncStatus: 'idle',
+  syncError: '',
+};
+const nativeVisualTabs = [
+  ['dashboard', 'native-dashboard', /預算總覽|旅程總覽/],
+  ['history', 'native-history', /紀錄中心/],
+  ['timeline', 'native-timeline', /行程時間線/],
+  ['scan', 'native-scan', /掃描收據/],
+  ['weather', 'native-weather', /天氣預報/],
+  ['stats', 'native-stats', /預算使用分析|統計/],
+  ['settings', 'native-settings', /設定控制中心|安全設定主控台/],
+];
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -23,6 +74,7 @@ function run(command, args, options = {}) {
     env: { ...process.env, FORCE_COLOR: '0', ...(options.env || {}) },
     encoding: options.encoding === null ? null : 'utf8',
     stdio: options.stdio || 'pipe',
+    timeout: options.timeout || 60000,
   });
   if (result.status !== 0) {
     const stdout = result.stdout ? String(result.stdout) : '';
@@ -32,8 +84,8 @@ function run(command, args, options = {}) {
   return result.stdout ? String(result.stdout) : '';
 }
 
-function adb(serial, args) {
-  return run('adb', ['-s', serial, ...args]);
+function adb(serial, args, options = {}) {
+  return run('adb', ['-s', serial, ...args], options);
 }
 
 function escapeRegex(value) {
@@ -105,7 +157,7 @@ async function captureScreenshot(serial, name) {
 
 function dumpUi(serial, name) {
   const remote = '/sdcard/travel-expense-compact-ui.xml';
-  adb(serial, ['shell', 'uiautomator', 'dump', remote]);
+  adb(serial, ['shell', 'uiautomator', 'dump', remote], { timeout: 15000 });
   const file = path.join(artifactDir, name);
   run('adb', ['-s', serial, 'pull', remote, file]);
   return file;
@@ -115,10 +167,24 @@ async function cdpEvaluate(wsUrl, expression) {
   if (typeof WebSocket === 'undefined') throw new Error('Node WebSocket global is unavailable for CDP');
   return await new Promise((resolve, reject) => {
     const socket = new WebSocket(wsUrl);
+    let settled = false;
     const timer = setTimeout(() => {
-      socket.close();
-      reject(new Error('Timed out waiting for WebView CDP evaluation'));
+      fail(new Error('Timed out waiting for WebView CDP evaluation'));
     }, 10000);
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { socket.close(); } catch { /* already closed */ }
+      reject(error);
+    };
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { socket.close(); } catch { /* already closed */ }
+      resolve(value);
+    };
     socket.addEventListener('open', () => {
       socket.send(JSON.stringify({
         id: 1,
@@ -133,19 +199,25 @@ async function cdpEvaluate(wsUrl, expression) {
     socket.addEventListener('message', (event) => {
       const data = JSON.parse(String(event.data));
       if (data.id !== 1) return;
-      clearTimeout(timer);
-      socket.close();
       if (data.error || data.result?.exceptionDetails) {
-        reject(new Error(JSON.stringify(data.error || data.result.exceptionDetails)));
+        fail(new Error(JSON.stringify(data.error || data.result.exceptionDetails)));
       } else {
-        resolve(data.result?.result?.value);
+        done(data.result?.result?.value);
       }
     });
-    socket.addEventListener('error', (event) => {
-      clearTimeout(timer);
-      reject(new Error(`WebView CDP socket error: ${event.message || 'unknown'}`));
-    });
+    socket.addEventListener('error', (event) => fail(new Error(`WebView CDP socket error: ${event.message || 'unknown'}`)));
+    socket.addEventListener('close', () => fail(new Error('WebView CDP socket closed before evaluation result')));
   });
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal }).then((response) => response.json());
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function webViewTarget(serial) {
@@ -154,7 +226,7 @@ async function webViewTarget(serial) {
   // `forward --remove` exits 1 when there is no existing forward to remove; that's not fatal.
   try { run('adb', ['-s', serial, 'forward', '--remove', `tcp:${cdpPort}`], { stdio: 'ignore' }); } catch { /* nothing to remove */ }
   run('adb', ['-s', serial, 'forward', `tcp:${cdpPort}`, `localabstract:webview_devtools_remote_${pid}`]);
-  const targets = await fetch(`http://127.0.0.1:${cdpPort}/json/list`).then((response) => response.json());
+  const targets = await fetchJsonWithTimeout(`http://127.0.0.1:${cdpPort}/json/list`);
   const page = targets.find((target) => target.type === 'page' && target.webSocketDebuggerUrl);
   if (!page) throw new Error(`No debuggable WebView page found for ${packageName}`);
   return { pid, page };
@@ -168,12 +240,11 @@ async function seedTrustedDevice(serial) {
     const needsReload = /先解鎖再使用|Travel Expense unlock/i.test(bodyText);
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: ${exp} }));
     localStorage.removeItem('boss-japan-tracker:credential-session:v1');
-    if (needsReload) {
-      location.hash = '';
-      location.reload();
-    }
     ({ needsReload, url: location.href });
   `);
+  if (result?.needsReload) {
+    await cdpEvaluate(page.webSocketDebuggerUrl, `setTimeout(() => { location.hash = ''; location.reload(); }, 0); true;`);
+  }
   await delay(result?.needsReload ? 5000 : 800);
   return { pid, targetUrl: result?.url || page.url, reloaded: Boolean(result?.needsReload) };
 }
@@ -181,6 +252,96 @@ async function seedTrustedDevice(serial) {
 async function currentWebViewText(serial) {
   const { page } = await webViewTarget(serial);
   return String(await cdpEvaluate(page.webSocketDebuggerUrl, 'document.body ? document.body.innerText : ""') || '');
+}
+
+async function bringAppToFront(serial) {
+  adb(serial, ['shell', 'am', 'start', '-W', '-n', `${packageName}/.MainActivity`]);
+  await delay(1200);
+}
+
+async function setNativeHash(serial, hash) {
+  await bringAppToFront(serial);
+  const { page } = await webViewTarget(serial);
+  await cdpEvaluate(page.webSocketDebuggerUrl, `location.hash = ${JSON.stringify(hash)}; true;`);
+  await delay(2500);
+}
+
+function foregroundWindow(serial) {
+  return adb(serial, ['shell', 'dumpsys', 'window']).split('\n')
+    .filter((line) => /mCurrentFocus|mFocusedApp/.test(line))
+    .join('\n');
+}
+
+async function clickWebButton(serial, labels) {
+  const { page } = await webViewTarget(serial);
+  const pattern = labels.map(escapeRegex).join('|');
+  const clicked = await cdpEvaluate(page.webSocketDebuggerUrl, `
+    (() => {
+      const re = new RegExp(${JSON.stringify(pattern)}, 'i');
+      const button = Array.from(document.querySelectorAll('button')).find((candidate) => {
+        const label = [candidate.innerText, candidate.getAttribute('aria-label')].filter(Boolean).join(' ');
+        const rect = candidate.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && re.test(label);
+      });
+      if (!button) return null;
+      button.scrollIntoView({ block: 'center', inline: 'center' });
+      const rect = button.getBoundingClientRect();
+      button.click();
+      return {
+        label: [button.innerText, button.getAttribute('aria-label')].filter(Boolean).join(' ').trim(),
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+      };
+    })()
+  `);
+  if (!clicked) throw new Error(`No visible web button found for ${labels.join('/')}`);
+  return clicked;
+}
+
+async function tryNativePhotoAction(serial, labels, slug) {
+  const clicked = await clickWebButton(serial, labels);
+  await delay(3500);
+  const foreground = foregroundWindow(serial);
+  const screenshot = await captureScreenshot(serial, `${slug}.png`);
+  if (foreground.includes(packageName)) {
+    throw new Error(`Native ${slug} stayed inside ${packageName} after clicking ${clicked.label}. See ${screenshot}`);
+  }
+  adb(serial, ['shell', 'input', 'keyevent', '4']);
+  await delay(1500);
+  return { slug, tapped: true, clicked, foreground, screenshot };
+}
+
+async function captureNativeVisualTabs(serial) {
+  const visualStateJson = JSON.stringify(nativeVisualState);
+  await bringAppToFront(serial);
+  {
+    const { page } = await webViewTarget(serial);
+    await cdpEvaluate(page.webSocketDebuggerUrl, `
+      localStorage.setItem('boss-japan-tracker', ${JSON.stringify(visualStateJson)});
+      localStorage.removeItem('travel-expense:supabase-auth:v1');
+      localStorage.removeItem('boss-japan-tracker:credential-session:v1');
+      location.hash = 'dashboard';
+      location.reload();
+      true;
+    `);
+    await delay(5000);
+  }
+  const checks = [];
+  for (const [hash, slug, expected] of nativeVisualTabs) {
+    await setNativeHash(serial, hash);
+    const text = await currentWebViewText(serial);
+    if (!expected.test(text)) throw new Error(`Native visual check for ${hash} did not find expected heading. Saw: ${text.slice(0, 180)}`);
+    if (/有資料同步失敗|FATAL EXCEPTION|Something went wrong/i.test(text)) {
+      throw new Error(`Native visual check for ${hash} found an error banner. Saw: ${text.slice(0, 180)}`);
+    }
+    checks.push({
+      hash,
+      screenshot: await captureScreenshot(serial, `${slug}.png`),
+      ui: dumpUi(serial, `${slug}.xml`),
+      textSample: text.slice(0, 180),
+    });
+  }
+  return checks;
 }
 
 function attr(node, name) {
@@ -213,7 +374,17 @@ function screenSize(serial) {
   return match ? { width: Number(match[1]), height: Number(match[2]) } : { width: 1080, height: 2400 };
 }
 
-async function tryTap(serial, uiPath, labels, slug, fallbackRatio) {
+function appLinksState(serial) {
+  const output = adb(serial, ['shell', 'pm', 'get-app-links', packageName]);
+  const domainLine = output.split('\n').find((line) => line.includes('travel-expense-compact.vercel.app')) || '';
+  return {
+    output,
+    domainLine,
+    verified: /\bverified\b|STATE_SUCCESS/i.test(domainLine),
+  };
+}
+
+async function tryTap(serial, uiPath, labels, slug, fallbackRatio, options = {}) {
   const xml = await fsp.readFile(uiPath, 'utf8');
   let node = findNodeCenter(xml, labels);
   if (!node && fallbackRatio) {
@@ -228,19 +399,31 @@ async function tryTap(serial, uiPath, labels, slug, fallbackRatio) {
   adb(serial, ['shell', 'input', 'tap', String(node.x), String(node.y)]);
   await delay(2500);
   const screenshot = await captureScreenshot(serial, `${slug}.png`);
-  const ui = dumpUi(serial, `${slug}.xml`);
+  let ui = '';
+  let uiWarning = '';
+  if (options.dumpUi !== false) {
+    try {
+      ui = dumpUi(serial, `${slug}.xml`);
+    } catch (error) {
+      uiWarning = error?.message || String(error);
+    }
+  }
   adb(serial, ['shell', 'input', 'keyevent', '4']);
   await delay(1000);
-  return { slug, tapped: true, node, screenshot, ui };
+  return { slug, tapped: true, node, screenshot, ui, uiWarning };
 }
 
 await fsp.mkdir(artifactDir, { recursive: true });
 console.log(JSON.stringify({ step: 'ensure-device', avdName, artifactDir }));
 const serial = await ensureDevice();
 console.log(JSON.stringify({ step: 'build-debug-apk', serial }));
+const buildEnv = {
+  ...(process.env.JAVA_HOME ? {} : { JAVA_HOME: '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home' }),
+  ...(process.env.ANDROID_QA_DISABLE_SUPABASE === '1' ? { VITE_SUPABASE_URL: '', VITE_SUPABASE_PUBLISHABLE_KEY: '' } : {}),
+};
 run('npm', ['run', 'android:debug'], {
   stdio: 'inherit',
-  env: process.env.JAVA_HOME ? {} : { JAVA_HOME: '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home' },
+  env: buildEnv,
 });
 if (!fs.existsSync(apkPath)) throw new Error(`Debug APK not found at ${apkPath}`);
 
@@ -261,7 +444,9 @@ console.log(JSON.stringify({ step: 'launch' }));
 adb(serial, ['shell', 'am', 'start', '-W', '-n', `${packageName}/.MainActivity`]);
 await delay(6000);
 
+console.log(JSON.stringify({ step: 'seed-trusted-device' }));
 const trustedSeed = await seedTrustedDevice(serial);
+console.log(JSON.stringify({ step: 'capture-launch' }));
 const launchScreenshot = await captureScreenshot(serial, 'scan-launch.png');
 const launchUi = dumpUi(serial, 'scan-launch.xml');
 const launchXml = await fsp.readFile(launchUi, 'utf8');
@@ -276,11 +461,18 @@ if (!scanVisible && !loginVisible) {
   throw new Error(`Android QA landed on neither login nor Scan after trusted-device seed. See ${launchUi}`);
 }
 const launchMode = scanVisible ? 'scan' : 'login';
+console.log(JSON.stringify({ step: 'native-visual-tabs', launchMode }));
+const nativeVisualChecks = scanVisible ? await captureNativeVisualTabs(serial) : [];
+console.log(JSON.stringify({ step: 'native-picker-checks', launchMode }));
 const pickerChecks = scanVisible
-  ? [
-      await tryTap(serial, launchUi, ['相機', 'Camera'], 'after-camera-tap', { x: 0.28, y: 0.61 }),
-      await tryTap(serial, dumpUi(serial, 'after-camera-back.xml'), ['相簿', 'Album', 'Gallery'], 'after-gallery-tap', { x: 0.74, y: 0.61 }),
-    ]
+  ? await (async () => {
+      await setNativeHash(serial, 'scan');
+      dumpUi(serial, 'picker-scan.xml');
+      const camera = await tryNativePhotoAction(serial, ['相機', 'Camera'], 'after-camera-tap');
+      await setNativeHash(serial, 'scan');
+      const gallery = await tryNativePhotoAction(serial, ['相簿', 'Album', 'Gallery'], 'after-gallery-tap');
+      return [camera, gallery];
+    })()
   : [];
 
 const logcat = adb(serial, ['logcat', '-d', '-t', '3000']);
@@ -301,7 +493,13 @@ if (/FATAL EXCEPTION/i.test(crashLines) || packageCrashPattern.test(crashLines) 
 const packageInfo = execFileSync('adb', ['-s', serial, 'shell', 'dumpsys', 'package', packageName], {
   encoding: 'utf8',
 });
-const appLinksVerified = /travel-expense-compact\.vercel\.app/.test(packageInfo);
+const appLinks = appLinksState(serial);
+const appLinksPath = path.join(artifactDir, 'app-links.txt');
+await fsp.writeFile(appLinksPath, appLinks.output);
+if (!appLinks.verified) {
+  throw new Error(`Android App Links are not verified for travel-expense-compact.vercel.app. See ${appLinksPath}`);
+}
+const appLinksVerified = /travel-expense-compact\.vercel\.app/.test(packageInfo) && appLinks.verified;
 console.log(JSON.stringify({
   status: 'passed',
   serial,
@@ -318,6 +516,9 @@ console.log(JSON.stringify({
     launchUi,
     logcatPath,
     crashPath,
+    appLinksPath,
+    nativeVisualChecks: nativeVisualChecks.map((check) => ({ hash: check.hash, screenshot: check.screenshot, ui: check.ui })),
   },
   pickerChecks,
+  nativeVisualChecks,
 }, null, 2));

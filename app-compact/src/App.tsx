@@ -97,6 +97,7 @@ export function App() {
     const nativeAndroid = capacitor?.getPlatform?.() === 'android'
       || (!!capacitor?.isNativePlatform?.() && /android/i.test(window.navigator.userAgent || ''));
     if (!nativeAndroid) return undefined;
+    document.body.classList.add('compact-native-android');
 
     let cancelled = false;
     let removeAppUrlListener: (() => void) | undefined;
@@ -146,6 +147,7 @@ export function App() {
 
     return () => {
       cancelled = true;
+      document.body.classList.remove('compact-native-android');
       removeAppUrlListener?.();
     };
   }, [updateState]);

@@ -7,7 +7,7 @@ import { Meteors } from '../components/ui/meteors';
 import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import { coordForDay, coordsForDay, fetchWeather, getCachedWeatherRows, groupedCoordsForDay, resolveOfficialWeatherProvider, setCachedWeatherRows, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type GroupedWeatherLocation, type WeatherCoord, type WeatherSlot } from '../lib/weather';
+import { coordForDay, coordsForDay, fetchWeather, getCachedWeatherRows, groupedCoordsForDay, resolveGroupedCoordsForDay, resolveOfficialWeatherProvider, setCachedWeatherRows, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type GroupedWeatherLocation, type WeatherCoord, type WeatherSlot } from '../lib/weather';
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
@@ -108,13 +108,13 @@ export function Weather({ state }: { state: AppState }) {
       try {
         const dayPromises = displayItinerary.map(async (day) => {
           const forecastDate = forecastDateFor(day.date);
-          const groups = groupedCoordsByDay.get(day.date) || [];
+          const groups = await resolveGroupedCoordsForDay(day);
           const coordPromises = groups.map(async (group) => {
             try {
               if (group.missing) {
                 return { coord: group as WeatherCoord, source: '缺少座標', slots: [] };
               }
-              const coord: WeatherCoord = { label: group.label, lat: group.lat, lon: group.lon, timezone: group.timezone, origin: 'known-region' };
+              const coord: WeatherCoord = { label: group.label, lat: group.lat, lon: group.lon, timezone: group.timezone, origin: group.origin || 'known-region', query: group.query };
               const officialProvider = resolveOfficialWeatherProvider(coord, { country: day.country, region: day.region, city: day.city });
               const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', officialProvider, state, forecastDate);
               if (controller.signal.aborted) return null;

@@ -136,6 +136,7 @@ export function foldLineItemsToSplits(
     }
     assignedTotal += item.amount;
   }
+  if (assignedTotal > Math.round(total)) throw new Error('itemized line items cannot exceed total');
   const unassigned = Math.max(0, Math.round(total) - assignedTotal);
   if (unassigned > 0) {
     const share = Math.floor(unassigned / personIds.length);

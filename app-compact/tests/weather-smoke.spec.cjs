@@ -667,12 +667,12 @@ test('Ended trip shows current weather for every itinerary day location', async 
   await installState(page, {});
   await page.goto('http://localhost:8903/travel-expense/compact/#weather');
   await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
-  await expect(page.getByText(/Day 1 · Open-Meteo/)).toBeVisible();
-  await expect(page.getByText(/Day 6 · Open-Meteo/)).toBeVisible();
+  await expect(page.getByText(/Day 1 · JMA/)).toBeVisible();
+  await expect(page.getByText(/Day 6 · JMA/)).toBeVisible();
   await expect(page.locator('.weather-location h3').filter({ hasText: '濟州' }).first()).toBeVisible();
-  await expect(page.locator('.weather-location h3').filter({ hasText: '西歸浦' }).first()).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: '常滑' }).first()).toBeVisible();
   await expect(page.locator('.weather-location h3').filter({ hasText: '香港' }).first()).toBeVisible();
-  await expect(page.locator('.weather-location h3')).toHaveCount(14);
+  await expect(page.locator('.weather-location h3')).toHaveCount(13);
   await expect(page.locator('.preview-weather-place')).not.toHaveText('目前地點');
   await expect(page.locator('[aria-label^="體感"]').first()).toBeVisible();
   expect(forecastUrls.length).toBeGreaterThanOrEqual(10);

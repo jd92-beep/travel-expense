@@ -269,6 +269,7 @@ export function useSyncEngine(
         supabaseId: item.payload?.supabaseId,
         tripId: item.payload?.tripId,
         sourceId: rawReceiptSourceId(item.payload?.sourceId || item.entityId, item.payload?.tripId),
+        updatedAt: item.payload?.updatedAt || item.updatedAt || item.createdAt,
       } as Receipt;
       if (hasSupabaseSession(session)) await archiveSupabaseReceipt(session, current, tombstone);
       if (hasNotionSync && !usesSharedLedger(current, tombstone)) await archiveReceipt(current, tombstone);
@@ -561,7 +562,7 @@ export function useSyncEngine(
       const cloudSession = hasSupabaseSession(supabaseSessionRef.current) ? supabaseSessionRef.current : null;
       if (cloudSession && canUseNotionMirror(stateRef.current, true, cloudSession.user?.email || null)) {
         await yieldToStateFlush();
-        const outbox = await drainSharedTripNotionOutbox(cloudSession, stateRef.current, pushReceipt).catch(() => null);
+        const outbox = await drainSharedTripNotionOutbox(cloudSession, stateRef.current, pushReceipt, archiveReceipt).catch(() => null);
         if (outbox && (outbox.processed || outbox.failed)) {
           console.log(`[SyncEngine] Notion outbox drained: ${outbox.processed} ok, ${outbox.failed} failed`);
         }

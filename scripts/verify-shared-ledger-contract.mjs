@@ -52,6 +52,21 @@ const checks = [
       ],
     },
   ]),
+  {
+    file: 'app-compact/src/lib/useSyncEngine.ts',
+    expectations: [
+      ['shared outbox passes archiveReceipt for delete jobs', /drainSharedTripNotionOutbox\(cloudSession,\s*stateRef\.current,\s*pushReceipt,\s*archiveReceipt\)/i],
+      ['delete tombstone preserves stable updatedAt', /updatedAt:\s*item\.payload\?\.updatedAt\s*\|\|\s*item\.updatedAt\s*\|\|\s*item\.createdAt/i],
+    ],
+  },
+  {
+    file: 'app-compact/src/lib/supabase.ts',
+    expectations: [
+      ['shared Notion delete jobs archive instead of upsert', /job\.operation === 'delete'[\s\S]*?await archive\(notionState,\s*tombstone\)/i],
+      ['shared Notion jobs clear pending receipt status after success', /notion_sync_status:\s*'synced'[\s\S]*?notion_last_synced_at:\s*syncedAt/i],
+      ['shared delete idempotency does not fall back to Date.now', /p_idempotency_key:\s*`\$\{tripUuid\}:\$\{sourceIdForReceipt\(receipt\)\}:delete:\$\{receipt\.updatedAt \|\| receipt\.createdAt \|\| 0\}`/i],
+    ],
+  },
 ];
 
 const failures = [];

@@ -66,7 +66,7 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.8.16` / versionCode `816`.
+- Version: `0.12.3` / versionCode `1203`.
 - Permissions: internet and camera only. The camera hardware feature is marked `required=false` so the app remains installable on devices without a camera.
 - Scan camera/gallery actions use Capacitor Camera on native Android, then pass the selected image back into the existing Compact OCR draft flow. Web keeps the hidden file-input fallback.
 - Broad storage/media read permissions were removed. Android's normal system picker should handle gallery input without library-wide read access.
@@ -86,4 +86,16 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ./gradl
 npm run android:qa
 ```
 
-`android:qa` targets the `codex_api36_pixel_8` emulator by default, installs the debug APK, launches the app, seeds the local trusted-device flag through debug WebView CDP, accepts the Supabase login gate for a signed-out build, probes Scan camera/gallery only when a signed-in/local session reaches Scan, and writes screenshot/UI/logcat artifacts to `/tmp/travel-expense-android-qa-*`.
+`android:qa` targets the `codex_api36_pixel_8` emulator by default, installs the debug APK, launches
+the app, verifies `travel-expense-compact.vercel.app` App Links, seeds the local trusted-device flag
+through debug WebView CDP, accepts the Supabase login gate for a signed-out configured build, and
+writes screenshot/UI/logcat artifacts to `/tmp/travel-expense-android-qa-*`.
+
+For local visual coverage without Supabase login, run:
+
+```bash
+ANDROID_QA_DISABLE_SUPABASE=1 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa
+```
+
+That mode launches into Scan, captures all 7 native tabs, and asserts Camera/Gallery taps open the
+Android `CaptureActivity` / `PhotoPicker` instead of merely tapping web buttons.

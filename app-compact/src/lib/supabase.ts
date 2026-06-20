@@ -1123,6 +1123,7 @@ export async function drainSharedTripNotionOutbox(
   session: Session,
   state: AppState,
   push: (state: AppState, receipt: Receipt) => Promise<Receipt>,
+  archive: (state: AppState, receipt: Receipt) => Promise<void>,
 ): Promise<{ processed: number; failed: number }> {
   const supabase = getSupabaseClient();
   if (!supabase) return { processed: 0, failed: 0 };
@@ -1215,7 +1216,7 @@ export async function drainSharedTripNotionOutbox(
             payment: 'cash' as const,
           } as Receipt;
           try {
-            await push(notionState, tombstone);
+            await archive(notionState, tombstone);
           } catch (archiveErr) {
             const attempts = Number(job.attempts || 0) + 1;
             const backoffMs = Math.min(60, 2 ** attempts) * 60_000;
@@ -1231,8 +1232,12 @@ export async function drainSharedTripNotionOutbox(
             failed += 1;
             continue;
           }
+          const syncedAt = new Date().toISOString();
+          await withTimeout(supabase.from('receipts')
+            .update({ notion_sync_status: 'synced', notion_sync_error: null, notion_last_synced_at: syncedAt, updated_at: syncedAt })
+            .eq('id', job.receipt_id));
           await withTimeout(supabase.from('receipt_sync_jobs')
-            .update({ status: 'succeeded', locked_at: null, locked_by: null, last_error: null, updated_at: new Date().toISOString() })
+            .update({ status: 'succeeded', locked_at: null, locked_by: null, last_error: null, updated_at: syncedAt })
             .eq('id', job.id));
           processed += 1;
           continue;
@@ -1255,8 +1260,12 @@ export async function drainSharedTripNotionOutbox(
           trips: (state.trips || []).map((candidate) => candidate.id === trip.id ? { ...candidate, notionDb } : candidate),
         };
         await push(notionState, { ...receipt, tripId: trip.id });
+        const syncedAt = new Date().toISOString();
+        await withTimeout(supabase.from('receipts')
+          .update({ notion_sync_status: 'synced', notion_sync_error: null, notion_last_synced_at: syncedAt, updated_at: syncedAt })
+          .eq('id', job.receipt_id));
         await withTimeout(supabase.from('receipt_sync_jobs')
-          .update({ status: 'succeeded', locked_at: null, locked_by: null, last_error: null, updated_at: new Date().toISOString() })
+          .update({ status: 'succeeded', locked_at: null, locked_by: null, last_error: null, updated_at: syncedAt })
           .eq('id', job.id));
         processed += 1;
       } catch (err) {
@@ -1290,7 +1299,7 @@ export async function archiveSupabaseReceipt(session: Session, state: AppState, 
       p_trip_id: tripUuid,
       p_receipt_id: cleanUuid(receipt.supabaseId),
       p_source_id: sourceIdForReceipt(receipt),
-      p_idempotency_key: `${tripUuid}:${sourceIdForReceipt(receipt)}:delete:${receipt.updatedAt || Date.now()}`,
+      p_idempotency_key: `${tripUuid}:${sourceIdForReceipt(receipt)}:delete:${receipt.updatedAt || receipt.createdAt || 0}`,
     });
     if (error) throw error;
     return;

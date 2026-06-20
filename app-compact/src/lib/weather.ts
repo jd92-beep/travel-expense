@@ -202,6 +202,8 @@ export interface GroupedWeatherLocation {
   spotNames: string[];
   timezone?: string;
   missing?: boolean;
+  origin?: WeatherCoord['origin'];
+  query?: string;
 }
 
 function haversineKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
@@ -234,14 +236,13 @@ function getCityAnchors() {
   return _cityAnchorsCache;
 }
 
-export function groupedCoordsForDay(day: ItineraryDay): GroupedWeatherLocation[] {
-  const rawCoords = coordsForDay(day, 99);
+function groupWeatherCoords(day: ItineraryDay, rawCoords: WeatherCoord[]): GroupedWeatherLocation[] {
   if (rawCoords.length === 0 || (rawCoords.length === 1 && rawCoords[0].missing)) {
     return [{ label: weatherLocationLabel(day), lat: Number.NaN, lon: Number.NaN, spotNames: [], missing: true, timezone: day.timezone }];
   }
 
   const cityAnchors = getCityAnchors();
-  const groups = new Map<string, { label: string; lat: number; lon: number; spotNames: string[]; timezone?: string }>();
+  const groups = new Map<string, { label: string; lat: number; lon: number; spotNames: string[]; timezone?: string; origin?: WeatherCoord['origin']; query?: string }>();
 
   for (const coord of rawCoords) {
     if (coord.missing) continue;
@@ -249,7 +250,7 @@ export function groupedCoordsForDay(day: ItineraryDay): GroupedWeatherLocation[]
     for (const city of cityAnchors) {
       if (haversineKm(coord, city) <= GROUP_RADIUS_KM) {
         const key = city.label;
-        if (!groups.has(key)) groups.set(key, { label: itineraryWeatherLabel(day, city.label), lat: city.lat, lon: city.lon, spotNames: [], timezone: coord.timezone });
+        if (!groups.has(key)) groups.set(key, { label: itineraryWeatherLabel(day, city.label), lat: city.lat, lon: city.lon, spotNames: [], timezone: coord.timezone, origin: coord.origin, query: coord.query });
         groups.get(key)!.spotNames.push(coord.label);
         matched = true;
         break;
@@ -257,7 +258,7 @@ export function groupedCoordsForDay(day: ItineraryDay): GroupedWeatherLocation[]
     }
     if (!matched) {
       const key = `${coord.lat.toFixed(2)}_${coord.lon.toFixed(2)}`;
-      if (!groups.has(key)) groups.set(key, { label: coord.label, lat: coord.lat, lon: coord.lon, spotNames: [], timezone: coord.timezone });
+      if (!groups.has(key)) groups.set(key, { label: coord.label, lat: coord.lat, lon: coord.lon, spotNames: [], timezone: coord.timezone, origin: coord.origin, query: coord.query });
       groups.get(key)!.spotNames.push(coord.label);
     }
   }
@@ -270,6 +271,14 @@ export function groupedCoordsForDay(day: ItineraryDay): GroupedWeatherLocation[]
     ...group,
     label: itineraryWeatherLabel(day, group.label, group.spotNames),
   }));
+}
+
+export function groupedCoordsForDay(day: ItineraryDay): GroupedWeatherLocation[] {
+  return groupWeatherCoords(day, coordsForDay(day, 99));
+}
+
+export async function resolveGroupedCoordsForDay(day: ItineraryDay): Promise<GroupedWeatherLocation[]> {
+  return groupWeatherCoords(day, await resolveCoordsForDay(day, 99));
 }
 
 export async function resolveCoordsForDay(day: ItineraryDay, limit = 2): Promise<WeatherCoord[]> {

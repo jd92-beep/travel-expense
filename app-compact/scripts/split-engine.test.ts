@@ -159,5 +159,10 @@ console.log('split-engine: all settlement / simplify assertions passed ✅');
   const sum = splits.reduce((acc, s) => acc + (s.amount || 0), 0);
   assert.equal(sum, 1000, 'unallocated fold: remainder distributed, sum = total');
 }
+assert.throws(
+  () => foldLineItemsToSplits([{ id: 'a', desc: 'Too much', amount: 1200, assignedTo: ['p1'] }], ['p1', 'p2'], 1000),
+  /cannot exceed total/,
+  'over-total itemized lines are rejected before settlement math',
+);
 
 console.log('split-engine: all foldLineItemsToSplits assertions passed ✅');

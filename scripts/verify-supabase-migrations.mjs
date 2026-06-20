@@ -12,6 +12,7 @@ const files = [
   'supabase/migrations/20260612165000_shared_ledger_receipt_rpc.sql',
   'supabase/migrations/20260613000000_receipt_photo_storage.sql',
   'supabase/migrations/20260613001000_harden_shared_invites_and_receipt_versions.sql',
+  'supabase/migrations/20260620235000_fix_expense_comments_insert_membership.sql',
 ];
 
 const sql = files
@@ -142,6 +143,10 @@ const requiredPatterns = [
   {
     name: 'shared ledger receipt RPCs grant execute only to authenticated',
     re: /grant execute on function public\.upsert_shared_trip_receipt\(uuid, jsonb, uuid, text, text\) to authenticated[\s\S]*?grant execute on function public\.delete_shared_trip_receipt\(uuid, uuid, text, text\) to authenticated/i,
+  },
+  {
+    name: 'expense comments inserts require active trip membership',
+    re: /create policy "expense_comments_insert_own_trip_members"[\s\S]*?with check[\s\S]*?user_id\s*=\s*auth\.uid\(\)[\s\S]*?join public\.trip_members tm[\s\S]*?tm\.status\s*=\s*'active'/i,
   },
 ];
 

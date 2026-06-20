@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-21 HKT (Android review fixes)
+
+- **v0.12.3 / versionCode 1203.** Fixed confirmed Android-branch review issues after the v0.12.2 full emulator pass.
+- Restored the standalone `/android-auth` handoff page and Vercel rewrite on the Android branch so preview/future deploys do not fall back to the SPA during Google/magic-link return.
+- Hardened shared-trip Notion outbox draining: delete jobs now archive Notion pages, successful jobs clear `notion_pending`, and shared delete idempotency no longer falls back to `Date.now()`.
+- Tightened `expense_comments` insert RLS so comment authors must also be active members of the receipt's trip.
+- Blocked over-total itemized split saves and made the pure item-folding helper reject line-item sums above the receipt total.
+- Fixed native Android safe-area spacing: the Capacitor shell now hides the web mock status bar, keeps titles below the real Android status bar, and gives the fixed bottom nav enough scroll padding.
+- Android QA now fails if `pm get-app-links` does not report `travel-expense-compact.vercel.app` as verified, captures all 7 native tabs in local visual mode, and proves Camera/Gallery launch real Android activities (`CaptureActivity` / `PhotoPicker`) instead of treating a plain tap as success.
+- Verification artifacts: local visual Android QA `/tmp/travel-expense-android-qa-2026-06-20T17-01-16-339Z`; configured Supabase login/App Links Android QA `/tmp/travel-expense-android-qa-2026-06-20T17-06-53-591Z`.
+
 ## 2026-06-20 (Polish + full emulator verification)
 
 - **v0.12.2 / versionCode 1202.** Polish pass after a full on-device (emulator) test of every function.

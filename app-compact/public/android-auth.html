@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#f7f2ea" />
+    <title>返回 App...</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0; min-height: 100vh; padding: 24px;
+        display: flex; align-items: center; justify-content: center;
+        background: #f7f2ea; color: #2a2a2a; text-align: center;
+        font-family: -apple-system, BlinkMacSystemFont, "Noto Sans JP", "Noto Sans TC", sans-serif;
+      }
+      .card { max-width: 360px; }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { font-size: 14px; line-height: 1.6; opacity: 0.85; margin: 8px 0; }
+      .btn {
+        display: inline-block; margin-top: 16px; padding: 12px 22px;
+        border-radius: 12px; background: #c8102e; color: #fff; border: 0;
+        font-size: 16px; font-weight: 600; text-decoration: none; cursor: pointer;
+      }
+      .hint { margin-top: 16px; font-size: 12px; opacity: 0.6; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>正在返回 App...</h1>
+      <p>如果冇自動跳返，請撳下面個掣完成登入。</p>
+      <a class="btn" id="open" href="#">開啟 Travel Expense</a>
+      <p class="hint">未安裝 App？請喺部機度開返 Travel Expense 再登入一次。</p>
+    </div>
+    <!--
+      Standalone App Links fallback page. Intentionally does NOT boot the SPA, so the
+      OAuth token in the URL hash is never consumed in a browser session. When the App
+      Link is verified, Android opens the native app directly and this page is skipped.
+      Tokens arrive in the hash (implicit flow); we fold them into the query so the
+      intent: redirect preserves them for the native handler (which reads both).
+    -->
+    <script>
+      (function () {
+        var PKG = 'com.ftjdfr.travelexpensecompact';
+        var HOST = 'travel-expense-compact.vercel.app';
+        var params = new URLSearchParams((location.search || '').replace(/^\?/, ''));
+        var hash = (location.hash || '').replace(/^#/, '');
+        if (hash) {
+          new URLSearchParams(hash).forEach(function (value, key) {
+            if (!params.has(key)) params.set(key, value);
+          });
+        }
+        var qs = params.toString();
+        var appUrl = 'intent://' + HOST + '/android-auth' + (qs ? '?' + qs : '') +
+          '#Intent;scheme=https;package=' + PKG + ';end';
+        document.getElementById('open').setAttribute('href', appUrl);
+        try { window.location.href = appUrl; } catch (e) { /* manual button remains */ }
+      })();
+    </script>
+  </body>
+</html>

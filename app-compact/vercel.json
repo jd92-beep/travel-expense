@@ -35,6 +35,10 @@
   ],
   "rewrites": [
     {
+      "source": "/android-auth",
+      "destination": "/android-auth.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

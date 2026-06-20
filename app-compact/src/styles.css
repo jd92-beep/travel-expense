@@ -14623,3 +14623,29 @@ input[type="checkbox"] {
     font-size: 14px !important;
   }
 }
+
+@media (max-width: 767px) {
+  body.compact-native-android .app-shell {
+    padding-bottom: calc(136px + env(safe-area-inset-bottom)) !important;
+  }
+
+  body.compact-native-android .compact-mobile-header {
+    min-height: 220px !important;
+    padding-top: 84px !important;
+  }
+
+  body.compact-native-android .compact-mobile-header::before,
+  body.compact-native-android .compact-mobile-header::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  body.compact-native-android .japanese-washi-bg,
+  body.compact-native-android .content > .stack {
+    padding-bottom: calc(176px + env(safe-area-inset-bottom)) !important;
+  }
+
+  body.compact-native-android .fixed-tab-bar {
+    padding-bottom: max(18px, env(safe-area-inset-bottom)) !important;
+  }
+}

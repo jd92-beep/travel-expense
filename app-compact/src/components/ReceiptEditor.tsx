@@ -284,6 +284,13 @@ export function ReceiptEditor({
             return;
           }
           const keepSplits = draft.splitMode !== 'private' && selectedSplitType !== 'equal';
+          if (selectedSplitType === 'itemized' && hasLineItems) {
+            const lineTotal = draft.lineItems!.reduce((sum, item) => sum + item.amount, 0);
+            if (lineTotal > Math.round(totalForSplit)) {
+              alert(`品項金額超出總額 ¥${(lineTotal - Math.round(totalForSplit)).toLocaleString()}`);
+              return;
+            }
+          }
           const finalSplits = selectedSplitType === 'itemized' && hasLineItems
             ? foldLineItemsToSplits(draft.lineItems!, persons.map((p) => p.id), totalForSplit)
             : splitRows;

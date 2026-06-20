@@ -43,6 +43,7 @@ function stateWithTrip(tripId = 'security_trip', lastTab = 'dashboard') {
 test('Sensitive legacy fields are stripped from localStorage, IndexedDB, and service workers', async ({ page }) => {
   test.skip(process.env.SUPABASE_REDIRECT_SMOKE === '1', 'Run this local-storage security smoke without Supabase env.');
   await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
     localStorage.clear();
     indexedDB.deleteDatabase('travel-expense-react');
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
@@ -63,8 +64,8 @@ test('Sensitive legacy fields are stripped from localStorage, IndexedDB, and ser
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await expect(page.getByText(/安全設定主控台|設定控制中心/).first()).toBeVisible();
   await page.waitForTimeout(500);
 
   const mainStore = await page.evaluate(() => localStorage.getItem('boss-japan-tracker') || '');
@@ -212,7 +213,7 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
   page.on('dialog', (dialog) => dialog.accept());
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByLabel('旅程總覽')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /掃描收據/ })).toBeVisible();
   await expect(page.locator('.supabase-session-actions')).toHaveCount(0);
 
   await page.evaluate(async ({ scopedStorageKey, scopedIndexedKey }) => {
