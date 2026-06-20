@@ -264,7 +264,7 @@ user only corrects. *Acceptance:* AI proposes a plausible assignment that the us
 - [x] **T0.4** `computeSettlements` consumes `splits`/`payers` with fallback to today's model — **M** `[T0.1,T0.2]`
 
 ### Phase 1 — Split flexibility (F1, F2)
-- [ ] **T1.1** Split-mode `SegmentedControl` + progressive disclosure in `ReceiptEditor.tsx` — **M** `[T0.1]`
+- [x] **T1.1** Split-mode `SegmentedControl` + progressive disclosure in `ReceiptEditor.tsx` — **M** `[T0.1]`
 - [ ] **T1.2** Per-person split rows + live Σ-validation pill (exact/percent/shares/adjustment) — **M** `[T1.1]`
 - [ ] **T1.3** Multiple-payers reveal + per-payer amount + validation — **M** `[T0.4,T1.1]`
 - [ ] **T1.4** Supabase `splits/split_type/payers` columns via Management API (no blind push) — **S**

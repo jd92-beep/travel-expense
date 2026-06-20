@@ -3,11 +3,19 @@ import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { SUPPORTED_CURRENCIES } from '../lib/currency';
 import { getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import type { AppState, CategoryId, PaymentId, Receipt, SplitMode } from '../lib/types';
+import type { AppState, CategoryId, PaymentId, Receipt, SplitMode, SplitType } from '../lib/types';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
+import { SegmentedControl } from './ui';
 
 const newId = () => `manual_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const MAX_RECEIPT_AMOUNT = 1_000_000_000;
+const SPLIT_TYPE_OPTIONS: Array<{ value: SplitType; label: string }> = [
+  { value: 'equal', label: '均分' },
+  { value: 'shares', label: '份數' },
+  { value: 'exact', label: '實額' },
+  { value: 'percent', label: '百分比' },
+  { value: 'adjustment', label: '加減' },
+];
 
 function validAmount(value: unknown): number | null {
   const amount = Number(value);
@@ -58,6 +66,9 @@ export function ReceiptEditor({
     splitMode: 'shared',
     createdAt: Date.now(),
   });
+  const selectedSplitType = SPLIT_TYPE_OPTIONS.some((option) => option.value === draft.splitType)
+    ? draft.splitType as SplitType
+    : 'equal';
 
   useEffect(() => {
     mountedRef.current = true;
@@ -217,6 +228,17 @@ export function ReceiptEditor({
               {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
+        )}
+        {draft.splitMode !== 'private' && (
+          <details className="receipt-split-disclosure">
+            <summary>進階拆數</summary>
+            <SegmentedControl
+              ariaLabel="選擇拆數方式"
+              value={selectedSplitType}
+              options={SPLIT_TYPE_OPTIONS}
+              onChange={(value) => set('splitType', value)}
+            />
+          </details>
         )}
         <label>地址 / 地圖搜尋
           <input value={draft.address || ''} onChange={(e) => set('address', e.target.value)} placeholder="例：名古屋市中村区名駅4-6-25" />

@@ -156,7 +156,7 @@ test('Mobile Records cards and Itinerary timeline stay within the viewport durin
       body: JSON.stringify({ ok: true, data }),
     });
   });
-  await page.route('https://test-travel-expense.supabase.co/**', async (route) => {
+  await page.route(/https:\/\/[^/]+\.supabase\.co\/.*/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

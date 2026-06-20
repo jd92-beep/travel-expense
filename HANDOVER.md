@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Super-app roadmap Phase 0 split-array enabler
+- **Focus**: Super-app roadmap Phase 1 split-mode disclosure
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.8.9` (versionCode `809`); React unchanged
+- **App version**: Compact/Android `0.8.10` (versionCode `810`); React unchanged
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -20,7 +20,8 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
   `computeSettlements` consume them with fallback to today's model. Integer minor units +
   largest-remainder rounding. Ride the receipt sync pipeline (don't add new tables); add Supabase
   columns + Notion props via the drift-tolerant resolver; **no blind live-DB push**.
-- **Phase 0 shipped in v0.8.9:** types + `computeShares()` + settlement fallback are in place; next work starts at Phase 1 UI/sync.
+- **Phase 0 shipped in v0.8.9:** types + `computeShares()` + settlement fallback are in place.
+- **Phase 1 started in v0.8.10:** `ReceiptEditor` now has the split-type segmented control behind `進階拆數`; next work starts at T1.2 per-person rows + validation.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -88,10 +89,17 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.9`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.10`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 41 (Codex — Phase 1 split-mode disclosure, v0.8.10)
+
+1. **Progressive split UI:** added `ReceiptEditor` `進階拆數` disclosure using the existing `SegmentedControl`.
+2. **Split modes surfaced:** users can select `均分`, `份數`, `實額`, `百分比`, or `加減`; default remains equal + single payer and no settlement math was changed.
+3. **Smoke coverage:** extended the Scan/manual-entry smoke to open the disclosure and assert the selected split mode tab state.
+4. **Versioning:** Compact/Android bumped to `0.8.10` / versionCode `810`; package-lock metadata synced.
 
 ### Session 40 (Codex — Phase 0 split-array enabler, v0.8.9)
 

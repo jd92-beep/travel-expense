@@ -2,6 +2,7 @@
 
 ## 2026-06-20
 
+- Started Phase 1 split flexibility on `codex/android-compact-shell`: `ReceiptEditor` now reveals a `進階拆數` split-mode selector for `均分`, `份數`, `實額`, `百分比`, and `加減` while keeping the default add-expense flow equal + single payer. Bumped Compact Android branch version to `0.8.10` / Android `versionCode 810`.
 - Shipped Phase 0 of the super-app roadmap on `codex/android-compact-shell`: optional receipt `splitType`, `splits`, `payers`, and `lineItems`; `computeShares()` with largest-remainder rounding; and `computeSettlements()` support for explicit splits/multiple payers with legacy fallback.
 - Added split-engine unit coverage plus a settle-up smoke case for explicit split + multi-payer balances. Bumped Compact Android branch version to `0.8.9` / Android `versionCode 809`.
 - Added native Android Scan camera/gallery capture on the isolated `codex/android-compact-shell` branch using Capacitor Camera, while preserving the existing Compact OCR draft flow and web file-input fallback.

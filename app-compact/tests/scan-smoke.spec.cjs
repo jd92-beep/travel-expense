@@ -120,6 +120,11 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.locator('.scan-retry-panel')).toContainText('m5-camera-receipt.jpg');
 
   await page.getByRole('button', { name: '手動', exact: true }).click();
+  const manualDialog = page.getByRole('dialog', { name: '手動記一筆' });
+  await manualDialog.locator('summary').filter({ hasText: '進階拆數' }).click();
+  await expect(manualDialog.getByRole('tab', { name: '均分' })).toHaveAttribute('aria-selected', 'true');
+  await manualDialog.getByRole('tab', { name: '實額' }).click();
+  await expect(manualDialog.getByRole('tab', { name: '實額' })).toHaveAttribute('aria-selected', 'true');
   await page.getByLabel('店名 / 項目').fill('M5 手動測試');
   await page.getByLabel('金額（legacy total）').fill('456');
   await page.getByLabel('時間').fill('10:10');

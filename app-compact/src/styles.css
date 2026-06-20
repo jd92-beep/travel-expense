@@ -2609,6 +2609,26 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .receipt-final-actions .secondary {
   min-width: 84px;
 }
+.receipt-split-disclosure {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.46);
+}
+.receipt-split-disclosure summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  list-style-position: inside;
+}
+.receipt-split-disclosure .segmented-control {
+  grid-auto-flow: column;
+  margin-top: 2px;
+}
 .receipt-delete-confirm-backdrop {
   z-index: 1200;
   place-items: center;
