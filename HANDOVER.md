@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Super-app roadmap Phase 1 Notion split round-trip
+- **Focus**: Super-app roadmap Phase 1 split-editor E2E
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.8.14` (versionCode `814`); React unchanged
+- **App version**: Compact/Android `0.8.15` (versionCode `815`); React unchanged
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -21,7 +21,7 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
   largest-remainder rounding. Ride the receipt sync pipeline (don't add new tables); add Supabase
   columns + Notion props via the drift-tolerant resolver; **no blind live-DB push**.
 - **Phase 0 shipped in v0.8.9:** types + `computeShares()` + settlement fallback are in place.
-- **Phase 1 in progress through v0.8.14:** `ReceiptEditor` now has the split UI; Supabase has nullable `split_type`, `splits`, and `payers` columns applied through the Management API; Notion now round-trips split metadata through the note field. Next work starts at T1.6 split-editor E2E.
+- **Phase 1 in progress through v0.8.15:** `ReceiptEditor` now has split UI, multiple payers, Supabase storage, Notion round-trip, and E2E coverage for all split modes. Next work starts at T1.7 final version/commit tick.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -89,10 +89,17 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.14`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.15`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 46 (Codex — Phase 1 split-editor E2E, v0.8.15)
+
+1. **E2E coverage:** added `tests/split-editor-smoke.spec.cjs` to create equal, shares, exact, percent, adjustment, and multi-payer receipts through the real `ReceiptEditor`.
+2. **Balance assertion:** the smoke verifies stored split metadata and confirms Stats emits the expected single transfer (`Friend → Boss ¥270`).
+3. **Script:** added `npm run smoke:split-editor` for repeatable Phase 1 regression coverage.
+4. **Versioning:** Compact/Android bumped to `0.8.15` / versionCode `815`; package-lock metadata synced.
 
 ### Session 45 (Codex — Phase 1 Notion split round-trip, v0.8.14)
 
