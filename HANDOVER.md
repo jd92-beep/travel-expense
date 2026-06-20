@@ -4,12 +4,12 @@
 - **Date**: 2026-06-21 HKT
 - **Focus**: Android super-app review fixes after v0.12.2
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.12.5` (versionCode `1205`); React unchanged
-- **Latest pushed code commit**: `9a81a62` (`fix(android): stabilize native visual qa`)
-- **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`. All roadmap phases are complete. v0.12.5 Android native visual-stability fix plus Android QA harness hardening is committed/pushed; latest emulator visual QA is clean.
-- **Latest verification evidence**: v0.12.5 passed `npm run typecheck`, `node --check app-compact/scripts/android-qa-smoke.mjs`, wrapped Timeline smoke (`8 passed`), wrapped Weather smoke (`13 passed`), wrapped mobile-layout smoke (`1 passed`), and `git diff --check`. Earlier v0.12.4 live Supabase SQL check confirmed `expense_comments` table/RLS/policies/grants, with local `npm run db:policy:scan` green. v0.12.3 previously passed the broader build/security/smoke/audit suite listed below.
-- **Latest Android QA evidence**: configured Supabase build passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=login`, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`. Latest post-push local visual build also passed `ANDROID_QA_DISABLE_SUPABASE=1 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs captured, native Camera/Gallery foreground checks, clean app-specific ANR/crash grep, and manual screenshot inspection clean; artifact folder `/tmp/travel-expense-android-qa-2026-06-20T18-40-52-435Z`.
-- **Current known verification blockers**: no known emulator visual blocker remains after v0.12.5. Real-device Google/magic-link login still needs a human account/device round-trip.
+- **App version**: Compact/Android `0.12.7` (versionCode `1207`); React unchanged
+- **Latest pushed branch commit**: `3d0234a` (`docs: record latest android visual qa rerun`). Latest pushed code commit before the local v0.12.7 work is `9a81a62` (`fix(android): stabilize native visual qa`).
+- **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`. All roadmap phases are complete. Local v0.12.7 work fixes the configured-login safe-area console error, native picker cancel console errors, and two Android QA harness flakes; commit/push that work after final checks if this handover is read before the next git operation.
+- **Latest verification evidence**: v0.12.7 passed `npm run typecheck`, `node --check app-compact/scripts/android-qa-smoke.mjs`, configured Supabase `android:qa`, local visual `ANDROID_QA_DISABLE_SUPABASE=1 ... npm run android:qa`, targeted log grep, and `git diff --check`. v0.12.5 previously passed wrapped Timeline smoke (`8 passed`), wrapped Weather smoke (`13 passed`), wrapped mobile-layout smoke (`1 passed`), and `git diff --check`. Earlier v0.12.4 live Supabase SQL check confirmed `expense_comments` table/RLS/policies/grants, with local `npm run db:policy:scan` green. v0.12.3 previously passed the broader build/security/smoke/audit suite listed below.
+- **Latest Android QA evidence**: configured Supabase build passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=login`, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T22-41-03-660Z`; targeted grep found no `Error injecting safe area CSS`, no `E Capacitor/Console`, no app fatal, no app ANR. Latest local visual build passed `ANDROID_QA_DISABLE_SUPABASE=1 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs captured, native Camera/Gallery foreground checks, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T22-38-40-896Z`, and targeted grep found no app-side error strings. Broad error grep only found emulator Camera service lines, not app failures.
+- **Current known verification blockers**: no known emulator visual/logcat blocker remains after v0.12.7. Real-device Google/magic-link login still needs a human account/device round-trip.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -98,11 +98,11 @@ This section records the latest review state after the v0.12.2 polish commit, so
 not restart from stale Phase 5 notes.
 
 1. **Branch/version confirmed:** `codex/android-compact-shell` tracks
-   `origin/codex/android-compact-shell`; latest v0.12.5 code commit is `9a81a62`
-   (`fix(android): stabilize native visual qa`). The pushed fix touches Android/Compact Timeline/Weather
-   native visual handling, native Timeline CSS, Android QA harness timing/ANR guards, version metadata,
-   changelog, and this handover. `app-compact/package.json`, `APP_VERSION`, `ANDROID.md`, and
-   Gradle now report `0.12.5` / versionCode `1205`.
+   `origin/codex/android-compact-shell`; latest pushed branch commit is `3d0234a`
+   (`docs: record latest android visual qa rerun`) and latest pushed code commit before local v0.12.7
+   work is `9a81a62` (`fix(android): stabilize native visual qa`). Current local metadata in
+   `app-compact/package.json`, `APP_VERSION`, `ANDROID.md`, and Gradle reports `0.12.7` /
+   versionCode `1207`.
 2. **Sync/data fixes complete:** shared-trip Notion delete jobs now use `archiveReceipt`,
    successful shared Notion outbox jobs clear `notion_sync_status` to `synced`, delete idempotency
    uses stable receipt timestamps, and shared delete tombstones preserve `updatedAt`. Contract
@@ -127,16 +127,15 @@ not restart from stale Phase 5 notes.
 6. **Known smoke status:** full History and Timeline suites had dev-server/timeout flakes, but each
    failed case passed when rerun individually. Weather smoke is now green after aligning the JMA
    grouped-location expectation to the current 13-location contract.
-7. **Android QA completed on `codex_api36_pixel_8`:** configured Supabase build passed with
+7. **Android QA completed on `codex_api36_pixel_8`:** latest configured Supabase build passed with
    `appLinksVerified=true`, `launchMode=login`, artifact folder
-   `/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`. Local visual build re-ran with
-   `ANDROID_QA_DISABLE_SUPABASE=1`, `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs
+   `/tmp/travel-expense-android-qa-2026-06-20T22-41-03-660Z`; app-specific grep found no
+   `Error injecting safe area CSS`, `E Capacitor/Console`, fatal exception, or package ANR. Latest local visual build re-ran
+   with `ANDROID_QA_DISABLE_SUPABASE=1`, `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs
    captured (`dashboard`, `history`, `timeline`, `scan`, `weather`, `stats`, `settings`), and native
-   Camera/Gallery foreground proof (`CaptureActivity` / `PhotoPicker`). Latest post-push artifact folder
-   is `/tmp/travel-expense-android-qa-2026-06-20T18-40-52-435Z`. App-specific crash/ANR grep stayed clean;
-   broad error grep only found emulator system Camera/Bluetooth service lines, not app failures. Manual
-   screenshot inspection of Dashboard, History, Timeline, Scan, Weather, Stats, Settings, Camera, and
-   Gallery is clean.
+   Camera/Gallery foreground proof (`CaptureActivity` / `PhotoPicker`). Latest local visual artifact
+   folder is `/tmp/travel-expense-android-qa-2026-06-20T22-38-40-896Z`; targeted grep found no
+   app-side error strings. Broad error grep only found emulator Camera service lines, not app failures.
 8. **v0.12.5 native visual fix complete locally:** GitNexus impact checks for `Timeline`,
    `scrollTimelineElementIntoCenter`, `scrollToLiveTimelineSpot`, `Weather`, `jumpToActiveDay`,
    `tryNativePhotoAction`, `captureNativeVisualTabs`, and `dumpUi` were LOW. The pushed fix keeps native
@@ -144,17 +143,18 @@ not restart from stale Phase 5 notes.
    snapshots, disables Weather auto-jump on native Android to prevent blank preserved offsets, and
    hardens `android:qa` to wait for native tab headings and fail on visible Android ANR dialogs.
 9. **Current visual blocker:** resolved in latest artifact
-   `/tmp/travel-expense-android-qa-2026-06-20T18-40-52-435Z`. Timeline no longer shows the previous
-   duplicated/ghost cards near the Android status/header area, and Weather no longer captures as blank.
+   `/tmp/travel-expense-android-qa-2026-06-20T22-38-40-896Z`. Timeline no longer shows the previous
+   duplicated/ghost cards near the Android status/header area, Weather no longer captures as blank, and
+   configured-login no longer logs the prior Capacitor SystemBars `Error injecting safe area CSS`.
+   Native Camera/Gallery cancel probes no longer emit `E Capacitor/Console: [object Object]`.
    Remaining verification gap is real-device Google/magic-link login, which needs a human account/device
    round-trip outside emulator automation.
 10. **Final local audit status:** latest GitNexus `detect-changes --repo
-   /Users/tommy/Documents/Codex/travel-expense-android-shell` reported `high` for the expected
-   Android/Compact workset (11 files / 27 symbols / 14 flows), mainly Timeline, Weather, Android QA,
-   versioning, and docs. v0.12.5 passed `typecheck`, Android QA script syntax, wrapped Timeline smoke,
-   wrapped Weather smoke, wrapped mobile-layout smoke, clean final Android visual QA, final GitNexus
-   change detection, and `git diff --check`; keep the real-device Google/magic-link login round-trip
-   as the remaining check before production invitation.
+   /Users/tommy/Documents/Codex/travel-expense-android-shell` for v0.12.5 reported `high` for the
+   expected Android/Compact workset (11 files / 27 symbols / 14 flows), mainly Timeline, Weather,
+   Android QA, versioning, and docs. v0.12.7 has passed `typecheck`, Android QA script syntax,
+   configured Android QA, and local visual Android QA; rerun `git diff --check` and GitNexus change
+   detection before committing the v0.12.7 SystemBars/Scan/QA harness/version/docs work.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -163,10 +163,37 @@ not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.5`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.7`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 58 (Codex — v0.12.7 Android log cleanup + QA hardening)
+
+1. **Version metadata updated locally:** Compact/Android is now `0.12.7` / versionCode `1207`
+   across `APP_VERSION`, `package.json`, `package-lock.json`, Gradle, and `ANDROID.md`.
+2. **Configured-login safe-area console error fixed:** disabled Capacitor SystemBars CSS inset injection
+   through `capacitor.config.ts` because configured Supabase cold start logged
+   `Error injecting safe area CSS` before `document.documentElement` was ready. The app already uses
+   `env(safe-area-inset-*)` and native CSS guards, so the change removes the log error without changing
+   the intended layout model.
+3. **Native picker cancel console errors fixed:** Capacitor Camera returns normal user cancels as plugin
+   rejects, and the Capacitor native bridge logs rejects before app-level `catch` runs. `Scan` now treats
+   Camera/Gallery user cancels as handled and temporarily silences bridge result logging only around the
+   native picker call; true non-cancel errors still restore logging and warn as strings.
+4. **Android QA harness hardened:** raised the debug build timeout from 60s to 180s, and `dumpUi()` now
+   trusts a successfully pulled XML file so harmless `uiautomator dump` status-137 exits after writing XML
+   do not kill visual QA.
+5. **Configured Android QA passed:** `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa`
+   passed with `appLinksVerified=true`, `launchMode=login`, artifact folder
+   `/tmp/travel-expense-android-qa-2026-06-20T22-41-03-660Z`, and no safe-area injection error,
+   `E Capacitor/Console`, app fatal, or package ANR in the targeted grep.
+6. **Local visual Android QA passed:** latest local visual rerun passed with `appLinksVerified=true`,
+   `launchMode=scan`, all 7 native tabs captured, Camera/Gallery foreground proof, and no app-side error
+   strings in `/tmp/travel-expense-android-qa-2026-06-20T22-38-40-896Z`. Broad error grep only found
+   emulator Camera service lines, not app failures.
+7. **Remaining follow-up:** real-device Google/magic-link login round-trip still requires a human
+   account/device.
 
 ### Session 57 (Codex — v0.12.5 native Android visual stabilization)
 

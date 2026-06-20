@@ -158,9 +158,22 @@ async function captureScreenshot(serial, name) {
 
 function dumpUi(serial, name) {
   const remote = '/sdcard/travel-expense-compact-ui.xml';
-  adb(serial, ['shell', 'uiautomator', 'dump', remote], { timeout: 30000 });
+  let dumpError = '';
+  try {
+    adb(serial, ['shell', 'uiautomator', 'dump', remote], { timeout: 30000 });
+  } catch (error) {
+    // ponytail: uiautomator sometimes exits 137 after writing XML; the pulled file is the truth.
+    dumpError = error?.message || String(error);
+  }
   const file = path.join(artifactDir, name);
-  run('adb', ['-s', serial, 'pull', remote, file]);
+  try {
+    run('adb', ['-s', serial, 'pull', remote, file]);
+  } catch (error) {
+    throw new Error(dumpError || error?.message || String(error));
+  }
+  if (!fs.existsSync(file) || fs.statSync(file).size < 8) {
+    throw new Error(dumpError || `uiautomator dump produced an empty file: ${file}`);
+  }
   return file;
 }
 
@@ -466,6 +479,7 @@ const buildEnv = {
 run('npm', ['run', 'android:debug'], {
   stdio: 'inherit',
   env: buildEnv,
+  timeout: 180000,
 });
 if (!fs.existsSync(apkPath)) throw new Error(`Debug APK not found at ${apkPath}`);
 

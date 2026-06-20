@@ -7,6 +7,12 @@ const config: CapacitorConfig = {
   android: {
     path: 'android',
   },
+  plugins: {
+    SystemBars: {
+      // ponytail: app already uses env(safe-area-inset-*); avoid early WebView CSS injection errors.
+      insetsHandling: 'disable',
+    },
+  },
 };
 
 export default config;

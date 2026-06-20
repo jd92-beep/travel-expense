@@ -283,8 +283,12 @@ export function Scan({
   const tryNativeAndroidPhoto = useCallback(async (source: NativePhotoSource): Promise<boolean> => {
     if (!isNativeAndroidApp()) return false;
     const sourceLabel = source === 'camera' ? '相機' : '相簿';
+    const capacitor = (window as typeof window & { Capacitor?: { isLoggingEnabled?: boolean } }).Capacitor;
+    const nativeLogging = capacitor?.isLoggingEnabled;
     try {
       const { Camera: CapacitorCamera, CameraResultType, CameraSource } = await import('@capacitor/camera');
+      // ponytail: Capacitor logs plugin rejects before this catch; silence only the picker bridge call.
+      if (capacitor && typeof nativeLogging === 'boolean') capacitor.isLoggingEnabled = false;
       setStatus(`開啟 Android ${sourceLabel}…`);
       const photo = await CapacitorCamera.getPhoto({
         quality: 88,
@@ -298,14 +302,19 @@ export function Scan({
       await handleImage(file);
       return true;
     } catch (error) {
-      const message = redactedError(error);
+      if (capacitor && typeof nativeLogging === 'boolean') capacitor.isLoggingEnabled = nativeLogging;
+      const message = typeof error === 'object' && error && 'message' in error
+        ? String((error as { message?: unknown }).message || '')
+        : redactedError(error);
       if (/cancel|cancelled|canceled|dismiss|abort|user/i.test(message)) {
         if (mountedRef.current) setStatus('已取消選擇圖片。');
         return true;
       }
-      console.warn('Native Android photo selection failed:', error);
+      console.warn('Native Android photo selection failed:', redactedError(error));
       if (mountedRef.current) setStatus(`Android ${sourceLabel}未能啟動，改用系統選擇器。`);
       return false;
+    } finally {
+      if (capacitor && typeof nativeLogging === 'boolean') capacitor.isLoggingEnabled = nativeLogging;
     }
   }, [handleImage]);
 

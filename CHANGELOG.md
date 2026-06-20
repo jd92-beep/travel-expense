@@ -2,6 +2,8 @@
 
 ## 2026-06-21 HKT (Android review fixes)
 
+- **v0.12.7 / versionCode 1207.** Treated Capacitor Camera's normal Android photo-picker cancellation as a handled cancel path and temporarily silenced Capacitor bridge result logging only around native picker calls, so Camera/Gallery cancel probes no longer emit `E Capacitor/Console: [object Object]`. Also raised the Android QA debug-build timeout from 60s to 180s and made UI dump validation trust a successfully pulled XML file, so clean local builds and harmless `uiautomator` status-137 exits are not killed before visual checks.
+- **v0.12.6 / versionCode 1206.** Disabled Capacitor SystemBars CSS inset injection on Android because the configured-login cold start logged `Error injecting safe area CSS` before `document.documentElement` was ready. The app already uses `env(safe-area-inset-*)` and native CSS guards, so this removes the log error without changing UI layout.
 - **v0.12.5 / versionCode 1205.** Stabilized native Android visual QA after the v0.12.4 review pass.
 - Fixed the native Timeline screenshot blocker by disabling forced Timeline auto-scroll in the Android WebView while keeping the existing web behavior; latest emulator screenshots no longer show duplicated/ghost receipt cards or previous day content under the status/header area.
 - Fixed the native Weather blank-screenshot case by disabling the Weather auto-jump in the Android WebView; users can still use the manual jump/refresh controls.
