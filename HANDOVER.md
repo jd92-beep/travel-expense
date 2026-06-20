@@ -2,12 +2,13 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Super-app roadmap Phase 5 complete (ALL PHASES DONE)
+- **Focus**: Android super-app follow-up review + handover refresh after v0.12.2
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.12.0` (versionCode `1200`); React unchanged
-- **Latest pushed branch commit**: `5224ded` (`feat(robust): complete phase 4 robustness & reach v0.11.0`)
-- **Current branch state**: `codex/android-compact-shell` with all 5 phases complete. Ready for Play Store submission.
-- **Final Phase 2 verification passed**: `npm run typecheck`, `npm run build`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `npm run smoke:split-editor`, `npm run smoke:scan`, `npm run security:scan`, `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`, and `git diff --check`.
+- **App version**: Compact/Android `0.12.2` (versionCode `1202`); React unchanged
+- **Latest pushed branch commit**: `8023937` (`fix(polish): mask JWT errors + repair 3 stale smokes; full emulator verification v0.12.2`)
+- **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`. All roadmap phases are complete; v0.12.1/v0.12.2 follow-ups fixed real sync retry behavior and refreshed stale smoke/emulator evidence.
+- **Latest verification evidence**: v0.12.2 has full emulator coverage in `CHANGELOG.md` (all 7 tabs, login, onboarding, History, Stats, settle-up, split editor, FX, voice, email, manual entry, native camera; no logcat crashes). Current Codex review re-ran and passed `npm run typecheck`, `npm run build`, `npm run security:scan`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `node --experimental-strip-types scripts/sync-backoff.test.ts`, `npm run db:policy:scan`, `npm run smoke:shared-ledger`, `npm audit --omit=dev`, `npm audit`, and `git diff --check`.
+- **Current known verification blocker**: `npm run smoke:shared-contract` currently fails before testing app behavior because local `app-react` dependencies are missing (`@tailwindcss/vite` / `vite` resolution from the parent temp Vite path). Run `npm ci` in `app-react/`, then re-run the shared-contract smoke.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -27,8 +28,9 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
 - **Phase 1 complete through v0.8.16:** `ReceiptEditor` has split UI, multiple payers, Supabase storage, Notion round-trip, and E2E coverage for all split modes.
 - **Phase 2 complete through v0.9.0:** AI receipt itemization (F3) is done. `scanReceiptImage` returns structured `lineItems[]` with `desc`, `amount`, `qty`. `ReceiptEditor` has an item-assignment sheet with per-item `AvatarBadge` toggles, "一鍵均分所有人" / "清除全部分配" quick actions, and live Σ-validation. `foldLineItemsToSplits` in `splitEngine.ts` converts item assignments into per-person `splits[]` with largest-remainder rounding. Unit tests cover 6 fold scenarios + existing settlement tests. E2E split-editor smoke passes.
 - **Phase 3 complete through v0.10.0:** FX snapshot (F4) auto-populates `exchangeRate` + `hkdAmount` on save (ReceiptEditor, scan, voice/email). Comments (F5) via `expense_comments` Supabase table with RLS, comment UI in ReceiptEditor, and activity feed in History tab.
-- **Phase 4 complete through v0.11.0:** Durable offline outbox (F6) with explicit `idempotencyKey` on every queue item. Identity unification (F8) auto-creates Person entries for shared trip members not yet in accounting people. Recurring expenses (F7) with `RecurringRule` type, `processRecurringRules` client scheduler, and Settings UI for manage/toggle/delete.
+- **Phase 4 complete through v0.11.0; follow-up fixed in v0.12.1:** Durable offline outbox (F6) with explicit `idempotencyKey` on every queue item. Identity unification (F8) auto-creates Person entries for shared trip members not yet in accounting people. Recurring expenses (F7) with `RecurringRule` type, `processRecurringRules` client scheduler, and Settings UI for manage/toggle/delete. v0.12.1 fixed the missed real auto-retry/backoff bug so transient push failures retry automatically instead of parking after one failure.
 - **Phase 5 complete through v0.12.0:** Onboarding tip card on Dashboard (3-tap scan→split→settle). Play Store listing copy created (`PLAY_STORE_LISTING.md`). Release signing verified — keystore wired in gradle, assetlinks.json has both debug + release SHA-256. **ALL ROADMAP PHASES COMPLETE.**
+- **Polish/review pass complete through v0.12.2:** JWT/JWS parse errors are masked into a friendly re-login sync banner; 3 stale Playwright smokes were repaired to match current UI/conflict semantics; full emulator verification covered every major Android function with no logcat crashes.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -89,6 +91,26 @@ real-device Google login round-trip remains** (emulator has no real Google accou
 the live web app. All native changes are guarded by a Capacitor native check; only the
 experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 
+## 🔎 Current Progress (2026-06-20 Codex review)
+
+This section records the latest review state after the v0.12.2 polish commit, so the next agent does
+not restart from stale Phase 5 notes.
+
+1. **Branch/version confirmed:** `codex/android-compact-shell` was clean and aligned with origin before
+   this handover refresh. `app-compact/package.json`, `APP_VERSION`, and Gradle all report
+   `0.12.2` / versionCode `1202`.
+2. **Automated gates re-run and passed:** `typecheck`, `build`, `security:scan`, `test:split-engine`,
+   `test:notion-split-meta`, `sync-backoff.test.ts`, `db:policy:scan`, `smoke:shared-ledger`,
+   `npm audit --omit=dev`, full `npm audit`, and `git diff --check`.
+3. **Shared sync contract status:** `smoke:shared-contract` is blocked by missing local `app-react`
+   install state, not by a Compact runtime assertion. Reinstall `app-react` dependencies and rerun it
+   before calling cross-surface sync fully re-verified.
+4. **Android visual evidence already landed in v0.12.2:** emulator `codex_api36_pixel_8` verified all
+   7 tabs plus login, onboarding, History, Stats exact settlement math, settle-up, split editor, FX,
+   voice, email, manual entry, and native camera permission → `CaptureActivity`. Keep the real-device
+   Google/magic-link login round-trip as the only production-invitation check that automation cannot
+   replace.
+
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
 **Every time you update the app or change any code, bump the build version number.**
@@ -96,10 +118,33 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.16`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.2`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 53 (Codex — v0.12.2 polish + full emulator verification)
+
+1. **JWT error masking:** `redactError` now maps malformed/expired JWT/JWS parse errors (including
+   "Expected 3 parts in JWT; got 1") to a friendly re-login sync message instead of exposing raw
+   Supabase internals.
+2. **Stale smoke repair:** fixed 3 existing Playwright smoke scripts whose assertions had drifted from
+   current June-14 UI/conflict semantics; these were test drift issues, not app regressions.
+3. **Full emulator verification:** verified all 7 tabs, login, onboarding, History, Stats settlement
+   math, settle-up E2E, split editor modes, FX live rate, voice, email, manual entry, and native camera
+   permission → `CaptureActivity` on `codex_api36_pixel_8`; no app crashes appeared in logcat.
+4. **Versioning:** Compact/Android bumped to `0.12.2` / versionCode `1202`; package-lock metadata synced.
+
+### Session 52 (Codex — Phase 4 sync backoff follow-up, v0.12.1)
+
+1. **Real retry/backoff fix:** `useSyncEngine.push()` no longer parks transient push failures as
+   permanent errors after one attempt. Transient failures now retry with exponential backoff
+   (30s → 2m, capped 15m), while auth failures and exhausted attempts still require manual action.
+2. **Backoff wake-up:** added a timer so 30s/2m retry windows fire promptly instead of waiting for the
+   120s background interval.
+3. **Pure helper coverage:** extracted `syncBackoffMs` and `queueItemReady` to `src/lib/syncBackoff.ts`
+   and covered backoff windows, eligibility, and failure progression in `scripts/sync-backoff.test.ts`.
+4. **Versioning:** Compact/Android bumped to `0.12.1` / versionCode `1201`; signed AAB build was verified.
 
 ### Session 51 (Codex — Phase 5 polish & GTM, v0.12.0 — ALL PHASES COMPLETE)
 
