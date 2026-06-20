@@ -3,7 +3,7 @@ import { createClient, type Session, type SupabaseClient, type User } from '@sup
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, stampReceiptForTrip } from '../domain/trip/normalize';
 import { tripIntelligenceColumns } from '../domain/trip/context';
 import { DEFAULT_NOTION_DB, normalizeAiModelSettings } from './constants';
-import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
+import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, ReceiptPayer, ReceiptSplit, SplitType, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
 
 const VALID_CATEGORIES = new Set(['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'other']);
 const VALID_PAYMENTS = new Set(['cash', 'credit', 'paypay', 'suica']);
@@ -25,6 +25,38 @@ function safeCategoryId(value: unknown): CategoryId {
 function safePaymentId(value: unknown): PaymentId {
   const v = String(value || 'cash').toLowerCase();
   return VALID_PAYMENTS.has(v) ? v as PaymentId : 'cash';
+}
+
+function safeSplitType(value: unknown): SplitType | undefined {
+  const v = String(value || '');
+  return ['equal', 'shares', 'exact', 'percent', 'adjustment', 'itemized'].includes(v) ? v as SplitType : undefined;
+}
+
+function safeReceiptSplits(value: unknown): ReceiptSplit[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value.map((raw) => {
+    const row = raw as any;
+    return {
+      personId: String(row?.personId || ''),
+      weight: Number.isFinite(Number(row?.weight)) ? Number(row.weight) : undefined,
+      amount: Number.isFinite(Number(row?.amount)) ? Number(row.amount) : undefined,
+      pct: Number.isFinite(Number(row?.pct)) ? Number(row.pct) : undefined,
+      adjust: Number.isFinite(Number(row?.adjust)) ? Number(row.adjust) : undefined,
+    };
+  }).filter((row) => row.personId);
+  return rows.length ? rows : undefined;
+}
+
+function safeReceiptPayers(value: unknown): ReceiptPayer[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value.map((raw) => {
+    const row = raw as any;
+    return {
+      personId: String(row?.personId || ''),
+      amount: Number(row?.amount) || 0,
+    };
+  }).filter((row) => row.personId && row.amount >= 0);
+  return rows.length ? rows : undefined;
 }
 
 type SupabaseTripRow = {
@@ -84,6 +116,9 @@ type SupabaseReceiptRow = {
   status: string;
   confidence: string | null;
   map_url: string | null;
+  split_type?: string | null;
+  splits?: unknown;
+  payers?: unknown;
   notion_page_id: string | null;
   notion_database_id: string | null;
   notion_sync_status?: string | null;
@@ -543,6 +578,9 @@ function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: Tri
     bookingRef: row.booking_ref || undefined,
     note: row.note || undefined,
     itemsText: row.items_text || undefined,
+    splitType: safeSplitType(row.split_type),
+    splits: safeReceiptSplits(row.splits),
+    payers: safeReceiptPayers(row.payers),
     source: 'supabase',
     sourceId: row.source_id || row.id,
     version: Number(row.version || 1),
@@ -991,6 +1029,9 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     status: receipt.syncStatus === 'failed' || receipt.syncStatus === 'error' ? 'draft' : 'confirmed',
     confidence: null,
     map_url: receipt.mapUrl || null,
+    split_type: receipt.splitType || null,
+    splits: receipt.splits?.length ? receipt.splits : null,
+    payers: receipt.payers?.length ? receipt.payers : null,
     notion_page_id: null,
     notion_database_id: null,
     version: Math.max(1, Number(receipt.version) || 1),
@@ -1021,7 +1062,7 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
   // strip those columns and retry instead of hard-failing the whole receipt — mirrors
   // the upsertSupabaseTrip fallback. Prevents one missing column from blocking all sync.
   if (error && /column|schema cache/i.test(error.message || '')) {
-    const { version: _version, ...legacyRow } = row;
+    const { version: _version, split_type: _splitType, splits: _splits, payers: _payers, ...legacyRow } = row;
     ({ data, error } = await withTimeout(supabase
       .from('receipts')
       .upsert(legacyRow, { onConflict: 'id' })
