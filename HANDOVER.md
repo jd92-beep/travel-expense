@@ -147,13 +147,13 @@ not restart from stale Phase 5 notes.
    duplicated/ghost cards near the Android status/header area, and Weather no longer captures as blank.
    Remaining verification gap is real-device Google/magic-link login, which needs a human account/device
    round-trip outside emulator automation.
-10. **Final local audit status:** GitNexus `detect-changes` completed and reported `critical` because
-   the expected review workset touches broad flows (`App`, `ReceiptEditor`, `Weather`, sync, Android
-   QA, and docs: 25 files / 69 symbols / 30 flows). Targeted gates above passed and `git diff --check`
-   was clean at the v0.12.4 code commit. v0.12.5 also passed `typecheck`, Android QA script
-   syntax, wrapped Timeline smoke, wrapped Weather smoke, wrapped mobile-layout smoke, clean final
-   Android visual QA, final GitNexus change detection, and `git diff --check`; keep the real-device
-   Google/magic-link login round-trip as the remaining check before production invitation.
+10. **Final local audit status:** latest GitNexus `detect-changes --repo
+   /Users/tommy/Documents/Codex/travel-expense-android-shell` reported `high` for the expected
+   Android/Compact workset (11 files / 27 symbols / 14 flows), mainly Timeline, Weather, Android QA,
+   versioning, and docs. v0.12.5 passed `typecheck`, Android QA script syntax, wrapped Timeline smoke,
+   wrapped Weather smoke, wrapped mobile-layout smoke, clean final Android visual QA, final GitNexus
+   change detection, and `git diff --check`; keep the real-device Google/magic-link login round-trip
+   as the remaining check before production invitation.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
