@@ -8,7 +8,7 @@
 - **Latest pushed code commit**: `9a81a62` (`fix(android): stabilize native visual qa`)
 - **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`. All roadmap phases are complete. v0.12.5 Android native visual-stability fix plus Android QA harness hardening is committed/pushed; latest emulator visual QA is clean.
 - **Latest verification evidence**: v0.12.5 passed `npm run typecheck`, `node --check app-compact/scripts/android-qa-smoke.mjs`, wrapped Timeline smoke (`8 passed`), wrapped Weather smoke (`13 passed`), wrapped mobile-layout smoke (`1 passed`), and `git diff --check`. Earlier v0.12.4 live Supabase SQL check confirmed `expense_comments` table/RLS/policies/grants, with local `npm run db:policy:scan` green. v0.12.3 previously passed the broader build/security/smoke/audit suite listed below.
-- **Latest Android QA evidence**: configured Supabase build passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=login`, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`. Latest local visual build also passed `ANDROID_QA_DISABLE_SUPABASE=1 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs captured, native Camera/Gallery foreground checks, clean ANR/error text grep, and manual screenshot inspection clean; artifact folder `/tmp/travel-expense-android-qa-2026-06-20T18-26-36-711Z`.
+- **Latest Android QA evidence**: configured Supabase build passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=login`, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`. Latest post-push local visual build also passed `ANDROID_QA_DISABLE_SUPABASE=1 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs captured, native Camera/Gallery foreground checks, clean app-specific ANR/crash grep, and manual screenshot inspection clean; artifact folder `/tmp/travel-expense-android-qa-2026-06-20T18-40-52-435Z`.
 - **Current known verification blockers**: no known emulator visual blocker remains after v0.12.5. Real-device Google/magic-link login still needs a human account/device round-trip.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
@@ -132,10 +132,11 @@ not restart from stale Phase 5 notes.
    `/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`. Local visual build re-ran with
    `ANDROID_QA_DISABLE_SUPABASE=1`, `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs
    captured (`dashboard`, `history`, `timeline`, `scan`, `weather`, `stats`, `settings`), and native
-   Camera/Gallery foreground proof (`CaptureActivity` / `PhotoPicker`). Latest artifact folder is
-   `/tmp/travel-expense-android-qa-2026-06-20T18-26-36-711Z`. Grep over the final artifact XML/logs found
-   no ANR, fatal exception, loading-page, or visible app error strings. Manual screenshot inspection of
-   Dashboard, History, Timeline, Scan, Weather, Stats, and Settings is clean.
+   Camera/Gallery foreground proof (`CaptureActivity` / `PhotoPicker`). Latest post-push artifact folder
+   is `/tmp/travel-expense-android-qa-2026-06-20T18-40-52-435Z`. App-specific crash/ANR grep stayed clean;
+   broad error grep only found emulator system Camera/Bluetooth service lines, not app failures. Manual
+   screenshot inspection of Dashboard, History, Timeline, Scan, Weather, Stats, Settings, Camera, and
+   Gallery is clean.
 8. **v0.12.5 native visual fix complete locally:** GitNexus impact checks for `Timeline`,
    `scrollTimelineElementIntoCenter`, `scrollToLiveTimelineSpot`, `Weather`, `jumpToActiveDay`,
    `tryNativePhotoAction`, `captureNativeVisualTabs`, and `dumpUi` were LOW. The pushed fix keeps native
@@ -143,7 +144,7 @@ not restart from stale Phase 5 notes.
    snapshots, disables Weather auto-jump on native Android to prevent blank preserved offsets, and
    hardens `android:qa` to wait for native tab headings and fail on visible Android ANR dialogs.
 9. **Current visual blocker:** resolved in latest artifact
-   `/tmp/travel-expense-android-qa-2026-06-20T18-26-36-711Z`. Timeline no longer shows the previous
+   `/tmp/travel-expense-android-qa-2026-06-20T18-40-52-435Z`. Timeline no longer shows the previous
    duplicated/ghost cards near the Android status/header area, and Weather no longer captures as blank.
    Remaining verification gap is real-device Google/magic-link login, which needs a human account/device
    round-trip outside emulator automation.
@@ -185,9 +186,9 @@ not restart from stale Phase 5 notes.
    wrapped Timeline smoke (`8 passed`), wrapped Weather smoke (`13 passed`), wrapped mobile-layout smoke
    (`1 passed`), `git diff --check`, and local visual
    `ANDROID_QA_DISABLE_SUPABASE=1 ... npm run android:qa`.
-6. **Latest artifact:** `/tmp/travel-expense-android-qa-2026-06-20T18-26-36-711Z` passed automation with
+6. **Latest artifact:** `/tmp/travel-expense-android-qa-2026-06-20T18-40-52-435Z` passed automation with
    `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs captured, Camera/Gallery foreground
-   proof, clean ANR/error text grep, and clean manual screenshot inspection.
+   proof, clean app-specific ANR/crash grep, and clean manual screenshot inspection.
 7. **Still pending before production invitation:** real-device Google/magic-link login round-trip with
    a human account/device.
 
