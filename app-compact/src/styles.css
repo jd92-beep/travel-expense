@@ -2661,6 +2661,73 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.receipt-itemized-editor {
+  display: grid;
+  gap: 8px;
+}
+.receipt-itemized-editor .status-pill {
+  justify-self: start;
+}
+.receipt-itemized-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.receipt-itemized-assign-all {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+.receipt-itemized-rows {
+  display: grid;
+  gap: 6px;
+}
+.receipt-itemized-row {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.58);
+}
+.receipt-itemized-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.receipt-itemized-desc {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.receipt-itemized-amount {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--red);
+  white-space: nowrap;
+}
+.receipt-itemized-avatars {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.receipt-itemized-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  opacity: .4;
+  transition: opacity .15s, border-color .15s;
+}
+.receipt-itemized-toggle.is-on {
+  opacity: 1;
+  border-color: var(--red);
+}
 .receipt-multi-payer-toggle {
   margin-top: 2px;
 }

@@ -2,7 +2,7 @@ import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLega
 import { resolveTripContext, tripIntelligencePromptContract } from '../domain/trip/context';
 import { brokerAiJson, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
 import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } from './constants';
-import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
+import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, ReceiptLineItem, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
 import { currentSupabaseAccessToken } from './supabase';
 
@@ -805,22 +805,54 @@ export async function testGoogleBackupConnection(state: AppState): Promise<strin
     : `指定 backup model 未喺 models.list 出現，會暫用：${selected}`;
 }
 
+function parseLineItems(raw: unknown): ReceiptLineItem[] {
+  if (!Array.isArray(raw)) return [];
+  const items: ReceiptLineItem[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const r = entry as Record<string, unknown>;
+    const desc = String(r.desc || r.name || r.description || '').trim();
+    const amount = Math.round(Number(r.amount ?? r.price ?? r.total));
+    if (!desc || !Number.isFinite(amount) || amount < 0) continue;
+    items.push({
+      id: `li_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      desc,
+      amount,
+      qty: Number.isFinite(Number(r.qty)) && Number(r.qty) > 0 ? Math.round(Number(r.qty)) : undefined,
+    });
+  }
+  return items;
+}
+
+function deriveItemsText(lineItems: ReceiptLineItem[]): string {
+  if (!lineItems.length) return '';
+  return lineItems.map((item) => {
+    const qty = item.qty && item.qty > 1 ? ` x ${item.qty}` : '';
+    return `- ${item.desc}${qty}: ¥${item.amount.toLocaleString()}`;
+  }).join('\n');
+}
+
 export async function scanReceiptImage(file: File, state: AppState): Promise<Receipt> {
   const image = await fileToBase64(file);
-  // Prepare for OCR (resize large image to avoid timeout and save token)
   const imageForOCR = await prepareForOCR(image.base64, image.mime);
-
-  // Compress for local thumbnail storage (480px JPEG, ~30KB)
   const photoThumb = await compressPhoto(image.base64, image.mime, 480);
 
   const prompt = `Read this travel receipt (which may be in a foreign language like Japanese or Korean) and return JSON only:
-{"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","itemsText":string,"note":string}
+{"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","itemsText":string,"note":string,"lineItems":[{"desc":string,"amount":number,"qty":number}],"tax":number,"tip":number}
 Use ${state.tripDateRange.start} if the year is missing.
 
 CRITICAL TRANSLATION RULES:
 1. For any fields like "store", "address", "itemsText", or "note" containing foreign languages (Japanese, Korean, English, etc.), you MUST preserve the original language text AND append its Cantonese (廣東話) translation in Traditional Chinese (繁體中文) in brackets right next to it.
 2. Translation must use natural Hong Kong Cantonese terms. For example, use "凍美式咖啡" (not "冰美式咖啡"), "芝士" (not "起司/奶酪"), "的士" (not "出租車/計程車"), "巴士" (not "公車/公交車"), "士多啤梨" (not "草莓"), "薯仔" (not "土豆/馬鈴薯"), "雪糕" (not "冰淇淋"), "便利店" (not "便利店/超商").
 3. Do not translate fields that are already in Chinese.
+
+CRITICAL LINEITEMS RULES:
+1. "lineItems" MUST be a structured array of every purchased item on the receipt.
+2. Each entry: {"desc":"[Original] (Cantonese translation)","amount":integer in receipt currency minor units,"qty":integer>=1}
+3. "amount" is the LINE TOTAL (qty × unit price). If a line shows "x2: ¥600", amount=600.
+4. "tax" is the total tax amount if shown on the receipt; "tip" is the tip amount. Set to 0 if not present.
+5. The SUM of all lineItems amounts + tax + tip should equal "total".
+6. If the receipt has no itemized lines (e.g. a taxi fare), return "lineItems":[].
 
 CRITICAL ITEMS FORMATTING RULES:
 1. For "itemsText", you MUST list all items/products/foods line-by-line in a highly readable and organized list.
@@ -829,7 +861,14 @@ CRITICAL ITEMS FORMATTING RULES:
    Example:
    - 牛乳 (牛奶) x 1: ¥180
    - 삼각김밥 (三角飯糰) x 2: ₩2,400`;
-  const parsed = await callPreferredJson(state, prompt, 'scan', imageForOCR) as Partial<Receipt>;
+  const parsed = await callPreferredJson(state, prompt, 'scan', imageForOCR) as Partial<Receipt> & {
+    lineItems?: unknown;
+    tax?: unknown;
+    tip?: unknown;
+  };
+  const lineItems = parseLineItems(parsed.lineItems);
+  const itemsTextRaw = String(parsed.itemsText || '');
+  const itemsText = lineItems.length > 0 ? deriveItemsText(lineItems) : itemsTextRaw;
   return {
     id: `scan_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     store: String(parsed.store || file.name.replace(/\.[^.]+$/, '') || '掃描收據'),
@@ -840,7 +879,8 @@ CRITICAL ITEMS FORMATTING RULES:
     bookingRef: String(parsed.bookingRef || ''),
     category: validCategory(parsed.category),
     payment: validPayment(parsed.payment),
-    itemsText: String(parsed.itemsText || ''),
+    itemsText,
+    lineItems: lineItems.length > 0 ? lineItems : undefined,
     note: String(parsed.note || ''),
     personId: state.persons?.[0]?.id || '',
     splitMode: 'shared',

@@ -2,12 +2,12 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Super-app roadmap Phase 1 complete
+- **Focus**: Super-app roadmap Phase 2 complete
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.8.16` (versionCode `816`); React unchanged
+- **App version**: Compact/Android `0.9.0` (versionCode `900`); React unchanged
 - **Latest pushed branch commit**: `ae1de9e` (`chore(split): complete phase 1 version v0.8.16`)
-- **Current branch state**: `codex/android-compact-shell` clean and aligned with `origin/codex/android-compact-shell` as of the last Codex check.
-- **Final Phase 1 verification passed**: `npm run typecheck`, `npm run build`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `npm run smoke:split-editor`, `npm run smoke:scan`, `npm run smoke:mobile-layout`, `npm audit --omit=dev`, `npm audit`, `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`, `git diff --check`, and GitNexus detect (`low`, affected processes `0`).
+- **Current branch state**: `codex/android-compact-shell` with Phase 2 (AI itemization) committed locally.
+- **Final Phase 2 verification passed**: `npm run typecheck`, `npm run build`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `npm run smoke:split-editor`, `npm run smoke:scan`, `npm run security:scan`, `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`, and `git diff --check`.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -24,7 +24,8 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
   largest-remainder rounding. Ride the receipt sync pipeline (don't add new tables); add Supabase
   columns + Notion props via the drift-tolerant resolver; **no blind live-DB push**.
 - **Phase 0 shipped in v0.8.9:** types + `computeShares()` + settlement fallback are in place.
-- **Phase 1 complete through v0.8.16:** `ReceiptEditor` has split UI, multiple payers, Supabase storage, Notion round-trip, and E2E coverage for all split modes. Next work starts at Phase 2 / T2.1 structured OCR `lineItems[]`.
+- **Phase 1 complete through v0.8.16:** `ReceiptEditor` has split UI, multiple payers, Supabase storage, Notion round-trip, and E2E coverage for all split modes.
+- **Phase 2 complete through v0.9.0:** AI receipt itemization (F3) is done. `scanReceiptImage` returns structured `lineItems[]` with `desc`, `amount`, `qty`. `ReceiptEditor` has an item-assignment sheet with per-item `AvatarBadge` toggles, "一鍵均分所有人" / "清除全部分配" quick actions, and live Σ-validation. `foldLineItemsToSplits` in `splitEngine.ts` converts item assignments into per-person `splits[]` with largest-remainder rounding. Unit tests cover 6 fold scenarios + existing settlement tests. E2E split-editor smoke passes. Next work starts at Phase 3 / T3.1 per-expense-date FX snapshot.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -96,6 +97,16 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 48 (Codex — Phase 2 AI itemization, v0.9.0)
+
+1. **T2.1 structured OCR:** `scanReceiptImage` prompt now requests `lineItems: [{desc, amount, qty}]` + `tax` + `tip`. `parseLineItems()` validates and normalizes the AI response. `Receipt.lineItems` stores structured items when available.
+2. **T2.2 derived itemsText:** when `lineItems` are present, `itemsText` is auto-derived via `deriveItemsText()`. Original `itemsText` preserved as fallback when no structured items returned.
+3. **T2.3 item-assignment sheet:** `ReceiptEditor` gains an "品項" split mode (only when `lineItems` exist). Each line item shows as a row with `AvatarBadge` toggles — tap to assign/unassign a person to that item. Default = all people assigned. CSS: `.receipt-itemized-*` classes.
+4. **T2.4 fold engine:** `foldLineItemsToSplits()` moved to `splitEngine.ts` (pure, no React imports). Converts item assignments into per-person `splits[]` using largest-remainder rounding. Unallocated remainder (lineItems sum < total) distributed evenly.
+5. **T2.5 quick actions:** "一鍵均分所有人" (assign all items to everyone) and "清除全部分配" (unassign all) buttons in the itemized editor.
+6. **T2.6 test coverage:** 6 new unit tests for `foldLineItemsToSplits` (basic even, uneven assignment, rounding, odd amounts, empty assignedTo, unallocated total). All existing tests pass: `split-engine`, `notion-split-meta`, `split-editor` E2E, `scan` E2E.
+7. **Versioning:** Compact/Android bumped to `0.9.0` / versionCode `900`; package-lock metadata synced.
 
 ### Session 47 (Codex — Phase 1 final version tick, v0.8.16)
 
@@ -540,37 +551,15 @@ Capacitor native check, so the live web app is unchanged. Branch stays off `main
    - The new tags are the Node 24-generation Pages actions and should stop the Node.js 20 deprecation annotation on the next Pages deploy.
 
 ## Verified
-- `app-compact npm run typecheck` ✅ (0.2.6 Scan/Home polish)
-- `app-compact npm run build` ✅ (0.2.6 Scan/Home polish)
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:scan` ✅
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:dashboard` ✅ (7/7)
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:a11y-touch` ✅
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:mobile-layout` ✅
-- `app-compact npm run typecheck` ✅ (0.2.2 timeline fix)
-- `app-react npm run typecheck` ✅ (0.2.2 timeline fix)
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:timeline` ✅ (8/8, includes Scan → Timeline live-spot auto-scroll)
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:mobile-layout` ✅
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:final-nav` ✅ (8/8)
-- `app-compact npm run build` ✅
-- `app-react npm run build` ✅
-- `app-compact npm run security:scan` ✅
-- `git diff --check` ✅
-- Live Supabase migration list includes `20260613044116_receipt_photo_storage` ✅
-- Live Supabase migration list includes `20260613044208_harden_shared_invites_and_receipt_versions` ✅
-- `node scripts/verify-supabase-migrations.mjs` ✅
-- `node scripts/verify-shared-ledger-contract.mjs` ✅
-- `git diff --check` ✅
-- `app-compact npm run typecheck` ✅
-- `app-react npm run typecheck` ✅
-- `app-compact npm run build` ✅
-- `app-compact npm run security:scan` ✅
-- `app-react npm run db:policy:scan` ✅
-- `app-compact npm run smoke:shared-ledger` ✅
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:mobile-layout` ✅
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:history` ✅ (8/8)
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:settings` ✅ (9 passed, 1 skipped)
+- `app-compact npm run typecheck` ✅ (0.9.0 Phase 2 AI itemization)
+- `app-compact npm run build` ✅ (0.9.0 Phase 2)
+- `app-compact npm run test:split-engine` ✅ (includes 6 foldLineItemsToSplits tests)
+- `app-compact npm run test:notion-split-meta` ✅
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:split-editor` ✅ (1/1)
 - `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:scan` ✅ (1/1)
-- Ruby/Psych YAML parse for `.github/workflows/*.yml` ✅
+- `app-compact npm run security:scan` ✅
+- `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug` ✅ (BUILD SUCCESSFUL)
+- `git diff --check` ✅
 
 ## Pending Tasks
 

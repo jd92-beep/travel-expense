@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-20 (Phase 2)
+
+- **Phase 2 AI itemization (F3) complete on `codex/android-compact-shell`, v0.9.0 / versionCode 900.**
+- `scanReceiptImage` now requests structured `lineItems: [{desc, amount, qty}]` plus `tax`/`tip` from the AI; `parseLineItems()` validates and normalizes the response. `itemsText` is auto-derived from `lineItems` when available, preserving the free-text fallback for non-itemized receipts.
+- `ReceiptEditor` gains an "品項" split mode (visible only when `lineItems` exist). Each line item shows as a row with `AvatarBadge` toggles — tap to assign/unassign a person. "一鍵均分所有人" and "清除全部分配" quick-action buttons included. Live Σ-validation shows whether line items match the total.
+- `foldLineItemsToSplits()` (pure, in `splitEngine.ts`) converts item assignments into per-person `splits[]` using largest-remainder rounding. Unallocated remainder (lineItems sum < total) is distributed evenly across all people. The result feeds into the existing `computeSettlements` flow.
+- Added 6 unit tests for `foldLineItemsToSplits`: basic even split, uneven assignment, rounding correctness, odd amounts, empty assignedTo (defaults to all), and unallocated total distribution.
+- All existing tests pass: `split-engine`, `notion-split-meta`, `split-editor` E2E, `scan` E2E, `security:scan`, and Android debug build.
+
 ## 2026-06-20
 
 - Completed Phase 1 split flexibility on the Android branch and performed the final roadmap version tick. Compact Android branch is now `0.8.16` / Android `versionCode 816`; Phase 2 AI itemization remains untouched.

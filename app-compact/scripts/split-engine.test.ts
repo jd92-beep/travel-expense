@@ -1,7 +1,7 @@
 // Unit test for the pure settlement/simplify math. Run: node --experimental-strip-types
 // scripts/split-engine.test.ts  (Node 22.18+ strips TS types natively). No test framework.
 import assert from 'node:assert/strict';
-import { computeShares, simplifyDebts, type IndexTransfer } from '../src/lib/splitEngine.ts';
+import { computeShares, simplifyDebts, foldLineItemsToSplits, type IndexTransfer } from '../src/lib/splitEngine.ts';
 
 function applyTransfers(balances: number[], transfers: IndexTransfer[]): number[] {
   const out = balances.slice();
@@ -92,3 +92,72 @@ assert.equal(simplifyDebts([0, 0, 0]).length, 0, 'balanced -> no transfers');
 }
 
 console.log('split-engine: all settlement / simplify assertions passed ✅');
+
+// --- foldLineItemsToSplits tests ---
+{
+  // Basic: 2 items, 2 people, all assigned to both -> equal fold
+  const items = [
+    { id: 'a', desc: 'Coffee', amount: 600, assignedTo: ['p1', 'p2'] },
+    { id: 'b', desc: 'Cake', amount: 400, assignedTo: ['p1', 'p2'] },
+  ];
+  const splits = foldLineItemsToSplits(items, ['p1', 'p2'], 1000);
+  const byId = Object.fromEntries(splits.map((s) => [s.personId, s.amount]));
+  assert.equal(byId.p1, 500, 'item fold: p1 gets 500');
+  assert.equal(byId.p2, 500, 'item fold: p2 gets 500');
+  assert.equal(byId.p1 + byId.p2, 1000, 'item fold: shares sum to total');
+}
+{
+  // Uneven assignment: p1 gets item A only, p2 gets item B only
+  const items = [
+    { id: 'a', desc: 'Steak', amount: 800, assignedTo: ['p1'] },
+    { id: 'b', desc: 'Salad', amount: 200, assignedTo: ['p2'] },
+  ];
+  const splits = foldLineItemsToSplits(items, ['p1', 'p2'], 1000);
+  const byId = Object.fromEntries(splits.map((s) => [s.personId, s.amount]));
+  assert.equal(byId.p1, 800, 'uneven fold: p1 gets 800');
+  assert.equal(byId.p2, 200, 'uneven fold: p2 gets 200');
+  assert.equal(byId.p1 + byId.p2, 1000, 'uneven fold: shares sum to total');
+}
+{
+  // Rounding: 3 items of 100 split among 2 people -> 50 each per item
+  const items = [
+    { id: 'a', desc: 'A', amount: 100, assignedTo: ['p1', 'p2'] },
+    { id: 'b', desc: 'B', amount: 100, assignedTo: ['p1', 'p2'] },
+    { id: 'c', desc: 'C', amount: 100, assignedTo: ['p1', 'p2'] },
+  ];
+  const splits = foldLineItemsToSplits(items, ['p1', 'p2'], 300);
+  const sum = splits.reduce((acc, s) => acc + (s.amount || 0), 0);
+  assert.equal(sum, 300, 'rounding fold: shares sum exactly to 300');
+}
+{
+  // Odd amount: 1001 split between 2 people across 1 item
+  const items = [
+    { id: 'a', desc: 'Odd', amount: 1001, assignedTo: ['p1', 'p2'] },
+  ];
+  const splits = foldLineItemsToSplits(items, ['p1', 'p2'], 1001);
+  const sum = splits.reduce((acc, s) => acc + (s.amount || 0), 0);
+  assert.equal(sum, 1001, 'odd fold: shares sum exactly to 1001');
+  const byId = Object.fromEntries(splits.map((s) => [s.personId, s.amount]));
+  assert.equal(byId.p1 + byId.p2, 1001, 'odd fold: p1+p2 = 1001');
+}
+{
+  // Unassigned items: items with empty assignedTo default to all people
+  const items = [
+    { id: 'a', desc: 'Tax', amount: 100, assignedTo: [] },
+  ];
+  const splits = foldLineItemsToSplits(items, ['p1', 'p2'], 100);
+  const byId = Object.fromEntries(splits.map((s) => [s.personId, s.amount]));
+  assert.equal(byId.p1, 50, 'unassigned fold: defaults to all people');
+  assert.equal(byId.p2, 50, 'unassigned fold: defaults to all people');
+}
+{
+  // Unallocated total: lineItems sum < total -> remainder split evenly
+  const items = [
+    { id: 'a', desc: 'Food', amount: 800, assignedTo: ['p1', 'p2'] },
+  ];
+  const splits = foldLineItemsToSplits(items, ['p1', 'p2'], 1000);
+  const sum = splits.reduce((acc, s) => acc + (s.amount || 0), 0);
+  assert.equal(sum, 1000, 'unallocated fold: remainder distributed, sum = total');
+}
+
+console.log('split-engine: all foldLineItemsToSplits assertions passed ✅');

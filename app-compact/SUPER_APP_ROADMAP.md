@@ -273,12 +273,12 @@ user only corrects. *Acceptance:* AI proposes a plausible assignment that the us
 - [x] **T1.7** Bump `APP_VERSION` + package.json + gradle; commit — **S**
 
 ### Phase 2 — AI itemization (F3) ⭐
-- [ ] **T2.1** F3a: structured `lineItems[]` from `scanReceiptImage` + `Receipt.lineItems` — **M**
-- [ ] **T2.2** F3a: keep `itemsText` derived; total reconciliation guard — **S** `[T2.1]`
-- [ ] **T2.3** F3b: item-assignment sheet (face toggles, split-evenly default, tax/tip pro-rata) — **L** `[T2.1,T0.2]`
-- [ ] **T2.4** F3b: fold `lineItems → splits` via the engine; unassigned-item warning — **M** `[T2.3]`
-- [ ] **T2.5** F3c: AI auto-assign suggestions + one-tap accept — **M** `[T2.3]`
-- [ ] **T2.6** Unit (item fold + tax pro-rata) + E2E (scan-mock → assign → balances) — **M** `[T2.4]`
+- [x] **T2.1** F3a: structured `lineItems[]` from `scanReceiptImage` + `Receipt.lineItems` — **M**
+- [x] **T2.2** F3a: keep `itemsText` derived; total reconciliation guard — **S** `[T2.1]`
+- [x] **T2.3** F3b: item-assignment sheet (face toggles, split-evenly default, tax/tip pro-rata) — **L** `[T2.1,T0.2]`
+- [x] **T2.4** F3b: fold `lineItems → splits` via the engine; unassigned-item warning — **M** `[T2.3]`
+- [x] **T2.5** F3c: AI auto-assign suggestions + one-tap accept — **M** `[T2.3]`
+- [x] **T2.6** Unit (item fold + tax pro-rata) + E2E (scan-mock → assign → balances) — **M** `[T2.4]`
 
 ### Phase 3 — Accuracy & social (F4, F5)
 - [ ] **T3.1** Per-expense-date FX snapshot on `Receipt`; getters prefer it — **S**

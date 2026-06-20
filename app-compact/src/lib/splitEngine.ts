@@ -1,7 +1,7 @@
 // Pure split / settlement math — intentionally has no runtime app imports so it can be unit-tested in
 // isolation (see scripts/split-engine.test.ts). domain.ts's computeSettlements delegates the
 // debt-simplification step here. Keep this file dependency-free.
-import type { ReceiptSplit, SplitType } from './types';
+import type { ReceiptLineItem, ReceiptSplit, SplitType } from './types';
 
 export interface IndexTransfer {
   from: number;
@@ -115,4 +115,34 @@ export function simplifyDebts(balances: number[], epsilon = 0.5): IndexTransfer[
     transfers.push({ from: debtor.idx, to: creditor.idx, amount: Math.round(amount) });
   }
   return transfers;
+}
+
+export function foldLineItemsToSplits(
+  lineItems: ReceiptLineItem[],
+  personIds: string[],
+  total: number,
+): ReceiptSplit[] {
+  if (!lineItems.length || !personIds.length) return [];
+  const perPerson = new Map<string, number>();
+  for (const pid of personIds) perPerson.set(pid, 0);
+  let assignedTotal = 0;
+  for (const item of lineItems) {
+    const assigned = item.assignedTo?.length ? item.assignedTo : personIds;
+    if (!assigned.length) continue;
+    const share = Math.floor(item.amount / assigned.length);
+    let leftover = item.amount - share * assigned.length;
+    for (const pid of assigned) {
+      perPerson.set(pid, (perPerson.get(pid) || 0) + share + (leftover-- > 0 ? 1 : 0));
+    }
+    assignedTotal += item.amount;
+  }
+  const unassigned = Math.max(0, Math.round(total) - assignedTotal);
+  if (unassigned > 0) {
+    const share = Math.floor(unassigned / personIds.length);
+    let leftover = unassigned - share * personIds.length;
+    for (const pid of personIds) {
+      perPerson.set(pid, (perPerson.get(pid) || 0) + share + (leftover-- > 0 ? 1 : 0));
+    }
+  }
+  return personIds.map((pid) => ({ personId: pid, amount: perPerson.get(pid) || 0 }));
 }

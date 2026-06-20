@@ -3,21 +3,23 @@ import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { SUPPORTED_CURRENCIES } from '../lib/currency';
 import { getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import type { AppState, CategoryId, PaymentId, Person, Receipt, ReceiptPayer, ReceiptSplit, SplitMode, SplitType } from '../lib/types';
+import type { AppState, CategoryId, PaymentId, Person, Receipt, ReceiptLineItem, ReceiptPayer, ReceiptSplit, SplitMode, SplitType } from '../lib/types';
 import { AvatarBadge } from './AvatarBadge';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
 import { SegmentedControl, StatusPill } from './ui';
+import { foldLineItemsToSplits } from '../lib/splitEngine';
 
 const newId = () => `manual_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const MAX_RECEIPT_AMOUNT = 1_000_000_000;
 type SplitField = 'weight' | 'amount' | 'pct' | 'adjust';
-const SPLIT_TYPE_OPTIONS: Array<{ value: SplitType; label: string }> = [
+const BASE_SPLIT_TYPE_OPTIONS: Array<{ value: SplitType; label: string }> = [
   { value: 'equal', label: '均分' },
   { value: 'shares', label: '份數' },
   { value: 'exact', label: '實額' },
   { value: 'percent', label: '百分比' },
   { value: 'adjustment', label: '加減' },
 ];
+const ITEMIZED_SPLIT_OPTION: { value: SplitType; label: string } = { value: 'itemized', label: '品項' };
 
 function splitFieldFor(type: SplitType): SplitField | null {
   if (type === 'shares') return 'weight';
@@ -162,7 +164,12 @@ export function ReceiptEditor({
     splitMode: 'shared',
     createdAt: Date.now(),
   });
-  const selectedSplitType = SPLIT_TYPE_OPTIONS.some((option) => option.value === draft.splitType)
+  const hasLineItems = Boolean(draft.lineItems?.length);
+  const splitTypeOptions = useMemo(
+    () => hasLineItems ? [...BASE_SPLIT_TYPE_OPTIONS, ITEMIZED_SPLIT_OPTION] : BASE_SPLIT_TYPE_OPTIONS,
+    [hasLineItems],
+  );
+  const selectedSplitType = splitTypeOptions.some((option) => option.value === draft.splitType)
     ? draft.splitType as SplitType
     : 'equal';
   const totalForSplit = validAmount(draft.total) ?? 0;
@@ -276,7 +283,10 @@ export function ReceiptEditor({
             return;
           }
           const keepSplits = draft.splitMode !== 'private' && selectedSplitType !== 'equal';
-          if (keepSplits && !splitValidation.valid) {
+          const finalSplits = selectedSplitType === 'itemized' && hasLineItems
+            ? foldLineItemsToSplits(draft.lineItems!, persons.map((p) => p.id), totalForSplit)
+            : splitRows;
+          if (keepSplits && selectedSplitType !== 'itemized' && !splitValidation.valid) {
             alert(`拆數未對數：${splitValidation.label}`);
             return;
           }
@@ -295,7 +305,8 @@ export function ReceiptEditor({
             personId: draft.personId || first?.id || '',
             splitMode: draft.splitMode || 'shared',
             splitType: keepSplits ? selectedSplitType : undefined,
-            splits: keepSplits ? splitRows : undefined,
+            splits: keepSplits ? finalSplits : undefined,
+            lineItems: hasLineItems ? draft.lineItems : undefined,
             payers: keepPayers ? payerRows.filter((row) => splitValue(row.amount) > 0) : undefined,
           });
         }}
@@ -384,10 +395,10 @@ export function ReceiptEditor({
             <SegmentedControl
               ariaLabel="選擇拆數方式"
               value={selectedSplitType}
-              options={SPLIT_TYPE_OPTIONS}
+              options={splitTypeOptions}
               onChange={(value) => setDraft((d) => ({ ...d, splitType: value, splits: value === 'equal' ? undefined : d.splits }))}
             />
-            {selectedSplitType !== 'equal' && (
+            {selectedSplitType !== 'equal' && selectedSplitType !== 'itemized' && (
               <div className="receipt-split-editor">
                 <StatusPill tone={splitValidation.valid ? 'ok' : 'warning'}>{splitValidation.label}</StatusPill>
                 <div className="receipt-split-rows">
@@ -413,6 +424,86 @@ export function ReceiptEditor({
                     );
                   })}
                 </div>
+              </div>
+            )}
+            {selectedSplitType === 'itemized' && hasLineItems && (
+              <div className="receipt-split-editor receipt-itemized-editor">
+                <div className="receipt-itemized-actions">
+                  <button
+                    type="button"
+                    className="secondary receipt-itemized-assign-all"
+                    onClick={() => {
+                      setDraft((d) => ({
+                        ...d,
+                        lineItems: (d.lineItems || []).map((li) => ({
+                          ...li,
+                          assignedTo: persons.map((p) => p.id),
+                        })),
+                      }));
+                    }}
+                  >一鍵均分所有人</button>
+                  <button
+                    type="button"
+                    className="secondary receipt-itemized-assign-all"
+                    onClick={() => {
+                      setDraft((d) => ({
+                        ...d,
+                        lineItems: (d.lineItems || []).map((li) => ({
+                          ...li,
+                          assignedTo: [],
+                        })),
+                      }));
+                    }}
+                  >清除全部分配</button>
+                </div>
+                <div className="receipt-itemized-rows">
+                  {draft.lineItems!.map((item, idx) => {
+                    const assigned = new Set(item.assignedTo?.length ? item.assignedTo : persons.map((p) => p.id));
+                    return (
+                      <div key={item.id || idx} className="receipt-itemized-row">
+                        <div className="receipt-itemized-info">
+                          <span className="receipt-itemized-desc">{item.desc}</span>
+                          <span className="receipt-itemized-amount">¥{item.amount.toLocaleString()}{item.qty && item.qty > 1 ? ` ×${item.qty}` : ''}</span>
+                        </div>
+                        <div className="receipt-itemized-avatars">
+                          {persons.map((person) => {
+                            const isOn = assigned.has(person.id);
+                            return (
+                              <button
+                                key={person.id}
+                                type="button"
+                                className={`receipt-itemized-toggle ${isOn ? 'is-on' : ''}`}
+                                aria-label={`${person.name} ${isOn ? '已分配' : '未分配'}`}
+                                onClick={() => {
+                                  setDraft((d) => {
+                                    const items = (d.lineItems || []).map((li, liIdx) => {
+                                      if (liIdx !== idx) return li;
+                                      const prev = new Set(li.assignedTo?.length ? li.assignedTo : persons.map((p) => p.id));
+                                      if (prev.has(person.id)) prev.delete(person.id);
+                                      else prev.add(person.id);
+                                      return { ...li, assignedTo: persons.filter((p) => prev.has(p.id)).map((p) => p.id) };
+                                    });
+                                    return { ...d, lineItems: items };
+                                  });
+                                }}
+                              >
+                                <AvatarBadge person={person} size="sm" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {(() => {
+                  const lineTotal = draft.lineItems!.reduce((sum, item) => sum + item.amount, 0);
+                  const gap = Math.round(totalForSplit) - lineTotal;
+                  if (gap !== 0) {
+                    return <StatusPill tone="warning">{gap > 0 ? `未分配 ¥${gap.toLocaleString()}` : `超出 ¥${Math.abs(gap).toLocaleString()}`}</StatusPill>;
+                  }
+                  return <StatusPill tone="ok">品項已對數</StatusPill>;
+                })()}
               </div>
             )}
             <label className="check-row receipt-multi-payer-toggle">
