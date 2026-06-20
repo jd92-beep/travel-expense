@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Super-app roadmap Phase 1 Supabase split columns
+- **Focus**: Super-app roadmap Phase 1 Notion split round-trip
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.8.13` (versionCode `813`); React unchanged
+- **App version**: Compact/Android `0.8.14` (versionCode `814`); React unchanged
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -21,7 +21,7 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
   largest-remainder rounding. Ride the receipt sync pipeline (don't add new tables); add Supabase
   columns + Notion props via the drift-tolerant resolver; **no blind live-DB push**.
 - **Phase 0 shipped in v0.8.9:** types + `computeShares()` + settlement fallback are in place.
-- **Phase 1 in progress through v0.8.13:** `ReceiptEditor` now has the split UI; Supabase has nullable `split_type`, `splits`, and `payers` columns applied through the Management API; next work starts at T1.5 Notion serialize/parse.
+- **Phase 1 in progress through v0.8.14:** `ReceiptEditor` now has the split UI; Supabase has nullable `split_type`, `splits`, and `payers` columns applied through the Management API; Notion now round-trips split metadata through the note field. Next work starts at T1.6 split-editor E2E.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -89,10 +89,17 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.13`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.14`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 45 (Codex — Phase 1 Notion split round-trip, v0.8.14)
+
+1. **Notion marker:** `pushReceipt()` now serializes `splitType`, `splits`, and `payers` into the existing note rich-text field with a versioned marker, so databases without new columns still preserve split metadata.
+2. **Pull parsing:** Notion receipt import strips the marker back out of the visible note and restores the split arrays before trip stamping.
+3. **Coverage:** added `npm run test:notion-split-meta` for a focused split metadata round-trip assertion.
+4. **Versioning:** Compact/Android bumped to `0.8.14` / versionCode `814`; package-lock metadata synced.
 
 ### Session 44 (Codex — Phase 1 Supabase split columns, v0.8.13)
 

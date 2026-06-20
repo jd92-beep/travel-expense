@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-compact",
   "private": true,
-  "version": "0.8.13",
+  "version": "0.8.14",
   "type": "module",
   "engines": {
     "node": "22.x"
@@ -19,6 +19,7 @@
     "preview": "vite preview --host 0.0.0.0 --port 4175",
     "typecheck": "tsc --noEmit",
     "test:split-engine": "node --experimental-strip-types scripts/split-engine.test.ts",
+    "test:notion-split-meta": "node --experimental-strip-types scripts/notion-split-meta.test.ts",
     "parity:tabs": "node ../scripts/tab-parity.mjs",
     "security:scan": "node ../scripts/security-scan.mjs",
     "db:policy:scan": "node ../scripts/verify-supabase-migrations.mjs",

@@ -2,6 +2,7 @@ import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS, normalizeAiModelSettings, isBo
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { brokerNotionRequest, hasCredentialBrokerSession, brokerNotionUploadFile } from './credentialBroker';
 import { displayStore, getPersons, getReceiptHkdAmount, receiptRegion } from './domain';
+import { parseNotionSplitNote, serializeNotionSplitNote } from './notionSplitMeta';
 import { getDirectNotionToken } from './storage';
 import { isReceiptTombstoned } from './syncMerge';
 import { currentSupabaseUserEmail } from './supabase';
@@ -365,7 +366,7 @@ function buildProps(state: AppState, receipt: Receipt, schema: SchemaMap) {
     [propName(schema, 'address')]: { rich_text: [{ text: { content: (receipt.address || '').slice(0, 500) } }] },
     [propName(schema, 'bookingRef')]: { rich_text: [{ text: { content: (receipt.bookingRef || '').slice(0, 200) } }] },
     [propName(schema, 'items')]: { rich_text: [{ text: { content: (receipt.itemsText || '').slice(0, 1900) } }] },
-    [propName(schema, 'note')]: { rich_text: [{ text: { content: (receipt.note || '').slice(0, 1900) } }] },
+    [propName(schema, 'note')]: { rich_text: [{ text: { content: serializeNotionSplitNote(receipt) } }] },
     [photoCol]: photoProp,
     [propName(schema, 'person')]: { rich_text: [{ text: { content: person ? `${person.emoji} ${person.name}` : '' } }] },
     [propName(schema, 'sourceId')]: { rich_text: [{ text: { content: receipt.sourceId || receipt.id } }] },
@@ -858,7 +859,8 @@ function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt
   const personText = readRichTextProp(props, 'person', schema, { allowLoose: false });
   const rawNote = readRichTextProp(props, 'note', schema, { allowLoose: false });
   const rawItems = readRichTextProp(props, 'items', schema, { allowLoose: false });
-  const parsedMeta = parseStructuredNoteMeta(rawNote);
+  const splitMeta = parseNotionSplitNote(rawNote);
+  const parsedMeta = parseStructuredNoteMeta(splitMeta.note);
   const persons = getPersons(state);
   const tripId = readRichTextProp(props, 'tripId', schema, { allowLoose: false }) || undefined;
   const appDb = String(state.notionDb || '').trim();
@@ -882,6 +884,9 @@ function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt
     bookingRef: readRichTextProp(props, 'bookingRef', schema, { allowLoose: false }) || parsedMeta.bookingRef,
     itemsText: rawItems,
     note: parsedMeta.note,
+    splitType: splitMeta.splitType,
+    splits: splitMeta.splits,
+    payers: splitMeta.payers,
     photoUrl: readUrlProp(props, 'photoUrl', schema, { allowLoose: false }),
     personId: personIdFromText(personText, persons),
     splitMode: String(readSelectProp(props, 'split', schema, { allowLoose: false }) || '').includes('私人') ? 'private' as const : 'shared' as const,

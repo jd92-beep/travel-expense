@@ -2,6 +2,7 @@
 
 ## 2026-06-20
 
+- Added Phase 1 Notion split round-trip support on the Android branch: split metadata is embedded in the existing Notion note field with a versioned marker, parsed back into `splitType`, `splits`, and `payers`, and covered by a focused node self-check. Bumped Compact Android branch version to `0.8.14` / Android `versionCode 814`.
 - Applied Phase 1 Supabase split storage on the Android branch: live `receipts` now has nullable `split_type`, `splits`, and `payers` columns via Management API, shared-trip RPC preserves them, and the Compact client writes/pulls the fields. Bumped Compact Android branch version to `0.8.13` / Android `versionCode 813`.
 - Added Phase 1 multiple-payer editing in `ReceiptEditor`: a `多人付款` reveal, per-person payer amount rows, and validation that requires two positive payers and a total matching the receipt amount. Bumped Compact Android branch version to `0.8.12` / Android `versionCode 812`.
 - Added Phase 1 per-person split rows in `ReceiptEditor` for shares, exact, percent, and adjustment modes, with a live `已對數` / gap validation pill that blocks invalid advanced splits. Bumped Compact Android branch version to `0.8.11` / Android `versionCode 811`.
