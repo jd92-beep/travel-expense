@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-06-20 (Polish + full emulator verification)
+
+- **v0.12.2 / versionCode 1202.** Polish pass after a full on-device (emulator) test of every function.
+- **JWT error masking:** a malformed/expired auth token surfaced a cryptic supabase-js error
+  ("Expected 3 parts in JWT; got 1") in the sync banner. `redactError` now maps JWT/JWS parse errors
+  to a friendly "登入憑證已失效，請重新登入後再同步".
+- **Fixed 3 pre-existing stale Playwright smokes** (June-14 UI drift, not app bugs; verified the app
+  behaves correctly):
+  - `history-smoke`: plain push failures correctly show the "sync retrying" marker (not "sync conflict",
+    which is reserved for true version conflicts since the June-14 true-conflict-only resolver); the
+    conflict-resolver count renders in Cantonese ("1 筆收據"); the legacy "cloud-only" marker is
+    unreachable (normalize assigns a sourceId to every receipt) so the test now asserts the cloud
+    receipt simply renders. **8/8 green.**
+  - `welcome-guide`: party size is a +/- stepper now (not a number input) so ratio inputs shifted to
+    nth 0–2; onboarding lands on the Scan tab so the test navigates to 主頁 before asserting the
+    dashboard. **green.**
+- **Weather "Provider · / Target · / Fallback ·" strip is intentional** (tested source-transparency
+  feature) — left as-is; it only looked sparse on a trip with no destination/coords.
+- **Emulator verification (codex_api36_pixel_8, v0.12.2):** all 7 tabs, login, onboarding, History
+  (settlement excluded), Stats settlement math (exact), settle-up E2E, split editor (5 modes), FX live
+  rate, voice, email, manual entry, and native camera (permission → CaptureActivity) all confirmed
+  working. No crashes in logcat.
+
 ## 2026-06-20 (Phase 4 follow-up — real sync auto-retry/backoff)
 
 - **v0.12.1 / versionCode 1201 on `codex/android-compact-shell`.** Fixes a genuine offline-reliability

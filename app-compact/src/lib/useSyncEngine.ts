@@ -23,6 +23,11 @@ function redactError(error: unknown) {
   } else {
     raw = String(error || 'Sync failed');
   }
+  // A malformed/expired auth token surfaces a cryptic supabase-js parse error
+  // ("Expected 3 parts in JWT; got 1") — show a friendly re-login hint instead.
+  if (/expected\s+\d+\s+parts\s+in\s+jwt|jwt\s*(expired|malformed|invalid)|invalid\s*jwt|jws\b/i.test(raw)) {
+    return '登入憑證已失效，請重新登入後再同步';
+  }
   return raw
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]')
     .replace(/ntn_[A-Za-z0-9._-]+/g, '[redacted-notion-token]')

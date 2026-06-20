@@ -40,11 +40,13 @@ test('New Supabase account guide captures trip members and split ratios', async 
   await page.goto('http://localhost:8903/travel-expense/compact/');
 
   await expect(page.getByText('旅伴與分帳比例')).toBeVisible();
-  await expect(page.getByLabel('人數')).toBeVisible();
+  await expect(page.getByRole('button', { name: '增加人數' })).toBeVisible();
   await expect(page.getByLabel('你嘅顯示名稱')).toBeVisible();
   await expect(page.getByLabel('First-run personalization')).toBeVisible();
 
-  await page.getByLabel('人數').fill('3');
+  // Party size is a +/- stepper (not a number input): click "增加人數" from 1 → 3.
+  await page.getByRole('button', { name: '增加人數' }).click();
+  await page.getByRole('button', { name: '增加人數' }).click();
   await expect(page.getByLabel('旅伴 3 名稱')).toBeVisible();
   await page.getByLabel('你嘅顯示名稱').fill('User 1');
   await page.getByLabel('旅伴 2 名稱').fill('May');
@@ -54,16 +56,20 @@ test('New Supabase account guide captures trip members and split ratios', async 
   await page.getByLabel('天氣偏好').selectOption('rain');
   await page.getByLabel('偏好貨幣').selectOption('KRW');
 
+  // Party size is now a +/- stepper (no number input), so the 3 ratio inputs are nth 0,1,2
+  // (previously nth 1,2,3 because the old "人數" number input occupied nth 0).
   const ratioInputs = page.locator('.welcome-guide-modal input[type="number"]');
-  await ratioInputs.nth(1).fill('2');
-  await ratioInputs.nth(2).fill('1');
-  await ratioInputs.nth(3).fill('0.5');
+  await ratioInputs.nth(0).fill('2');
+  await ratioInputs.nth(1).fill('1');
+  await ratioInputs.nth(2).fill('0.5');
 
   await page.getByRole('button', { name: /手動輸入旅行細節/ }).click();
   await page.getByLabel('旅行名稱').fill('Guide Smoke Trip');
   await page.getByLabel('目的地國家/城市').fill('Seoul Korea');
   await page.getByRole('button', { name: /建立並進入 App/ }).click();
 
+  // Onboarding lands on the default Scan tab; navigate to the Dashboard to verify the new trip.
+  await page.getByRole('button', { name: '主頁' }).first().click();
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect.poll(async () => page.evaluate((key) => {
     const raw = localStorage.getItem(key);

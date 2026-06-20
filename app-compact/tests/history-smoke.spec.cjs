@@ -279,8 +279,11 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   await expect(page.getByLabel('Receipt health markers for M7 Photo Missing')).toContainText('photo missing');
   await expect(page.getByLabel('Receipt health markers for M7 Duplicate A')).toContainText('duplicate');
   await expect(page.getByLabel('Receipt health markers for M7 Duplicate B')).toContainText('duplicate');
-  await expect(page.getByLabel('Receipt health markers for M7 Sync Failed')).toContainText('sync conflict');
-  await expect(page.getByLabel('Receipt health markers for M7 Cloud Only')).toContainText('cloud-only');
+  await expect(page.getByLabel('Receipt health markers for M7 Sync Failed')).toContainText('sync retrying');
+  // Normalize assigns a local sourceId to every receipt (incl. cloud-pulled ones), so the legacy
+  // "cloud-only" marker (supabaseId && !sourceId) is now unreachable. The user-facing guarantee is
+  // that a cloud-sourced receipt still renders — assert that instead of the dead marker.
+  await expect(page.getByRole('button', { name: /M7 Cloud Only/ })).toBeVisible();
   await expect(page.getByLabel('Receipt health markers for M7 Pending')).toContainText('pending');
   const commandMetrics = await page.evaluate(() => {
     const card = document.querySelector('[aria-label="紀錄中心 header"]')?.getBoundingClientRect();
@@ -531,7 +534,7 @@ test('History offline conflict resolver reviews and resolves local/cloud receipt
   await page.getByRole('dialog', { name: '編輯紀錄' }).getByRole('button', { name: '取消' }).click();
 
   await localConflict.getByRole('button', { name: 'Keep local' }).click();
-  await expect(resolver).toContainText('1 conflicts');
+  await expect(resolver).toContainText('1 筆收據');
   await expect(resolver).not.toContainText('Offline Noodles');
   const keepLocalState = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
   const keptLocalReceipt = keepLocalState.receipts.find((receipt) => receipt.id === 'conflict_local');
