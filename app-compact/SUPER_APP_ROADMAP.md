@@ -281,9 +281,9 @@ user only corrects. *Acceptance:* AI proposes a plausible assignment that the us
 - [x] **T2.6** Unit (item fold + tax pro-rata) + E2E (scan-mock → assign → balances) — **M** `[T2.4]`
 
 ### Phase 3 — Accuracy & social (F4, F5)
-- [ ] **T3.1** Per-expense-date FX snapshot on `Receipt`; getters prefer it — **S**
-- [ ] **T3.2** `expense_comments` table + comment UI on a receipt — **M**
-- [ ] **T3.3** Activity projection + feed surface (shared trips) — **M** `[T3.2]`
+- [x] **T3.1** Per-expense-date FX snapshot on `Receipt`; getters prefer it — **S**
+- [x] **T3.2** `expense_comments` table + comment UI on a receipt — **M**
+- [x] **T3.3** Activity projection + feed surface (shared trips) — **M** `[T3.2]`
 
 ### Phase 4 — Robustness & reach (F6, F8, F7)
 - [ ] **T4.1** Durable offline outbox: idempotency key + ordered replay + backoff — **M**

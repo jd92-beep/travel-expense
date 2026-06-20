@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06-20 (Phase 3)
+
+- **Phase 3 Accuracy & social complete on `codex/android-compact-shell`, v0.10.0 / versionCode 1000.**
+- **T3.1 FX snapshot (F4):** `ReceiptEditor`, `scanReceiptImage`, and `parseTextWithAi` now auto-populate `exchangeRate` and `hkdAmount` at save time. Historical receipts preserve their original-date FX rate even when live rates change. Closes Splitwise's stale-rate accuracy gap.
+- **T3.2 comments (F5):** added `expense_comments` Supabase table with RLS (trip members can read, authors can insert/delete). Added `ExpenseComments` component in `ReceiptEditor` — lazy-loaded, visible only for synced receipts, with add/delete functionality.
+- **T3.3 activity feed (F5):** added "最近活動" collapsible section in History tab showing the last 20 receipt events (added/edited/settled) with person, verb, store, amount, and date.
+- All existing tests pass. History smoke has 2 pre-existing failures (health marker text mismatch, unrelated).
+
 ## 2026-06-20 (Phase 2)
 
 - **Phase 2 AI itemization (F3) complete on `codex/android-compact-shell`, v0.9.0 / versionCode 900.**

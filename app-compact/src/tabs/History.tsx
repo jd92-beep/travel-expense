@@ -398,6 +398,32 @@ export function History({
           </button>
         </section>
       )}
+      {tripReceipts.length > 0 && (
+        <details className="card history-activity-feed">
+          <summary>最近活動</summary>
+          <div className="history-activity-list">
+            {tripReceipts
+              .slice()
+              .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+              .slice(0, 20)
+              .map((r) => {
+                const person = people.find((p) => p.id === r.personId) || people[0];
+                const isEdited = r.updatedAt && r.createdAt && r.updatedAt - r.createdAt > 60_000;
+                const verb = isSettlementReceipt(r) ? '結咗' : isEdited ? '改咗' : '加咗';
+                const amount = isSettlementReceipt(r) ? '' : ` ¥${fmt(getReceiptTripAmount(r, state, resolvedTripCurrency))}`;
+                return (
+                  <div key={r.id} className="history-activity-row">
+                    <span className="history-activity-person">{person.emoji} {person.name}</span>
+                    <span className="history-activity-verb">{verb}</span>
+                    <span className="history-activity-store">{displayStore(r)}</span>
+                    <span className="history-activity-amount">{amount}</span>
+                    <span className="history-activity-date">{r.date?.slice(5) || ''}</span>
+                  </div>
+                );
+              })}
+          </div>
+        </details>
+      )}
       {Object.keys(groups).length === 0 && (
         <p className="empty card">
           未有紀錄

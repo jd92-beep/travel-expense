@@ -4,6 +4,7 @@ import { brokerAiJson, hasCredentialBrokerSession, testProviderConnection } from
 import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, ReceiptLineItem, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
+import { perHkdForCurrency } from './currency';
 import { currentSupabaseAccessToken } from './supabase';
 
 const KIMI_API_MODEL = 'kimi-code';
@@ -869,11 +870,15 @@ CRITICAL ITEMS FORMATTING RULES:
   const lineItems = parseLineItems(parsed.lineItems);
   const itemsTextRaw = String(parsed.itemsText || '');
   const itemsText = lineItems.length > 0 ? deriveItemsText(lineItems) : itemsTextRaw;
+  const receiptDate = ymdFromText(String(parsed.date || ''), state.tripDateRange.start);
+  const receiptCurrency = state.tripCurrency || 'JPY';
+  const fxRate = receiptCurrency === 'HKD' ? undefined : perHkdForCurrency(state, receiptCurrency);
+  const receiptTotal = Number(parsed.total) || 0;
   return {
     id: `scan_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     store: String(parsed.store || file.name.replace(/\.[^.]+$/, '') || '掃描收據'),
-    total: Number(parsed.total) || 0,
-    date: ymdFromText(String(parsed.date || ''), state.tripDateRange.start),
+    total: receiptTotal,
+    date: receiptDate,
     time: String(parsed.time || ''),
     address: String(parsed.address || ''),
     bookingRef: String(parsed.bookingRef || ''),
@@ -887,6 +892,10 @@ CRITICAL ITEMS FORMATTING RULES:
     source: 'react-ocr',
     photoThumb: photoThumb || undefined,
     createdAt: Date.now(),
+    currency: receiptCurrency,
+    originalCurrency: receiptCurrency,
+    exchangeRate: fxRate,
+    hkdAmount: fxRate ? Math.round(receiptTotal / Math.max(0.1, fxRate)) : undefined,
   };
 }
 
@@ -930,10 +939,13 @@ CRITICAL ITEMS FORMATTING RULES:
   }
   return rows.map((row, i) => {
     const r = row as Partial<Receipt>;
+    const receiptTotal = Number(r.total) || 0;
+    const receiptCurrency = state.tripCurrency || 'JPY';
+    const fxRate = receiptCurrency === 'HKD' ? undefined : perHkdForCurrency(state, receiptCurrency);
     return {
       id: `${source}_${Date.now()}_${i}_${Math.random().toString(16).slice(2)}`,
       store: String(r.store || '文字匯入'),
-      total: Number(r.total) || 0,
+      total: receiptTotal,
       date: ymdFromText(String(r.date || ''), state.tripDateRange.start),
       time: String(r.time || ''),
       address: String(r.address || ''),
@@ -946,6 +958,10 @@ CRITICAL ITEMS FORMATTING RULES:
       splitMode: 'shared',
       source,
       createdAt: Date.now(),
+      currency: receiptCurrency,
+      originalCurrency: receiptCurrency,
+      exchangeRate: fxRate,
+      hkdAmount: fxRate ? Math.round(receiptTotal / Math.max(0.1, fxRate)) : undefined,
     };
   });
 }

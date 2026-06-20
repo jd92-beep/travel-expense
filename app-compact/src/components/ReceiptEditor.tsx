@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { SUPPORTED_CURRENCIES } from '../lib/currency';
 import { getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
+import { perHkdForCurrency } from '../lib/currency';
 import { activeTrip } from '../domain/trip/normalize';
 import type { AppState, CategoryId, PaymentId, Person, Receipt, ReceiptLineItem, ReceiptPayer, ReceiptSplit, SplitMode, SplitType } from '../lib/types';
 import { AvatarBadge } from './AvatarBadge';
@@ -295,13 +296,17 @@ export function ReceiptEditor({
             alert(`付款未對數：${payerValidation.label}`);
             return;
           }
+          const savedCurrency = draft.currency || draft.originalCurrency || currencyForDate(draft.date);
+          const fxRate = savedCurrency === 'HKD' ? undefined : perHkdForCurrency(state, savedCurrency);
           onSave({
             ...draft,
             store: draft.store.trim() || '未命名',
             total,
             originalAmount,
             originalCurrency: draft.originalCurrency || draft.currency || currencyForDate(draft.date),
-            currency: draft.currency || draft.originalCurrency || currencyForDate(draft.date),
+            currency: savedCurrency,
+            exchangeRate: fxRate ?? draft.exchangeRate,
+            hkdAmount: fxRate ? Math.round(total / Math.max(0.1, fxRate)) : draft.hkdAmount,
             personId: draft.personId || first?.id || '',
             splitMode: draft.splitMode || 'shared',
             splitType: keepSplits ? selectedSplitType : undefined,
@@ -556,6 +561,9 @@ export function ReceiptEditor({
         <label>備註
           <textarea value={draft.note || ''} onChange={(e) => set('note', e.target.value)} rows={3} />
         </label>
+        {receipt?.supabaseId && (
+          <ExpenseComments receiptSupabaseId={receipt.supabaseId} />
+        )}
         <input ref={photoRef} hidden type="file" accept="image/*" onChange={(e) => attachPhoto(e.target.files?.[0])} />
         <div className="photo-tools">
           {(draft.photoThumb || draft.photoUrl) && (
@@ -631,5 +639,81 @@ export function ReceiptEditor({
         <ReceiptPhotoModal receipt={viewPhoto} onClose={() => setViewPhoto(null)} />
       )}
     </div>
+  );
+}
+
+function ExpenseComments({ receiptSupabaseId }: { receiptSupabaseId: string }) {
+  const [comments, setComments] = useState<Array<{ id: string; user_id: string; content: string; created_at: string }>>([]);
+  const [newComment, setNewComment] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { fetchExpenseComments } = await import('../lib/supabase');
+        const data = await fetchExpenseComments(receiptSupabaseId);
+        if (!cancelled) setComments(data);
+      } catch {
+        // silently ignore — comments are optional
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [receiptSupabaseId]);
+
+  async function addComment() {
+    const text = newComment.trim();
+    if (!text) return;
+    setLoading(true);
+    setError('');
+    try {
+      const { insertExpenseComment } = await import('../lib/supabase');
+      const comment = await insertExpenseComment(receiptSupabaseId, text);
+      setComments((prev) => [...prev, comment]);
+      setNewComment('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '留言失敗');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function removeComment(id: string) {
+    try {
+      const { deleteExpenseComment } = await import('../lib/supabase');
+      await deleteExpenseComment(id);
+      setComments((prev) => prev.filter((c) => c.id !== id));
+    } catch {
+      // silently ignore
+    }
+  }
+
+  return (
+    <details className="receipt-comments-disclosure">
+      <summary>留言 ({comments.length})</summary>
+      <div className="receipt-comments-list">
+        {comments.map((c) => (
+          <div key={c.id} className="receipt-comment-row">
+            <span className="receipt-comment-text">{c.content}</span>
+            <button type="button" className="icon-btn receipt-comment-delete" onClick={() => removeComment(c.id)} aria-label="刪除留言">×</button>
+          </div>
+        ))}
+        {comments.length === 0 && <p className="muted receipt-comments-empty">暫無留言</p>}
+      </div>
+      <div className="receipt-comment-input-row">
+        <input
+          type="text"
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          placeholder="寫個留言…"
+          maxLength={2000}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addComment(); } }}
+          disabled={loading}
+        />
+        <button type="button" className="primary" onClick={addComment} disabled={loading || !newComment.trim()}>送出</button>
+      </div>
+      {error && <p className="muted" style={{ color: 'var(--red)' }}>{error}</p>}
+    </details>
   );
 }

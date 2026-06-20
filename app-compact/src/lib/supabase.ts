@@ -1504,3 +1504,45 @@ export async function removeSupabaseTripMember(_session: Session, trip: TripProf
   const { error } = await supabase.rpc('remove_trip_member', { p_trip_id: tripUuid, p_user_id: userId });
   if (error) throw error;
 }
+
+export interface ExpenseComment {
+  id: string;
+  receipt_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  display_name?: string;
+}
+
+export async function fetchExpenseComments(receiptSupabaseId: string): Promise<ExpenseComment[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('expense_comments')
+    .select('id, receipt_id, user_id, content, created_at')
+    .eq('receipt_id', receiptSupabaseId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data || []) as ExpenseComment[];
+}
+
+export async function insertExpenseComment(receiptSupabaseId: string, content: string): Promise<ExpenseComment> {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { data, error } = await supabase
+    .from('expense_comments')
+    .insert({ receipt_id: receiptSupabaseId, user_id: user.id, content })
+    .select('id, receipt_id, user_id, content, created_at')
+    .single();
+  if (error) throw error;
+  return data as ExpenseComment;
+}
+
+export async function deleteExpenseComment(commentId: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.from('expense_comments').delete().eq('id', commentId);
+  if (error) throw error;
+}

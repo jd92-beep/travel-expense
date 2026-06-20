@@ -2,11 +2,11 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Super-app roadmap Phase 2 complete
+- **Focus**: Super-app roadmap Phase 3 complete
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.9.0` (versionCode `900`); React unchanged
-- **Latest pushed branch commit**: `ae1de9e` (`chore(split): complete phase 1 version v0.8.16`)
-- **Current branch state**: `codex/android-compact-shell` with Phase 2 (AI itemization) committed locally.
+- **App version**: Compact/Android `0.10.0` (versionCode `1000`); React unchanged
+- **Latest pushed branch commit**: `35d1a32` (`feat(itemize): complete phase 2 AI itemization v0.9.0`)
+- **Current branch state**: `codex/android-compact-shell` with Phase 3 (Accuracy & social) committed locally.
 - **Final Phase 2 verification passed**: `npm run typecheck`, `npm run build`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `npm run smoke:split-editor`, `npm run smoke:scan`, `npm run security:scan`, `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`, and `git diff --check`.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
@@ -25,7 +25,8 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
   columns + Notion props via the drift-tolerant resolver; **no blind live-DB push**.
 - **Phase 0 shipped in v0.8.9:** types + `computeShares()` + settlement fallback are in place.
 - **Phase 1 complete through v0.8.16:** `ReceiptEditor` has split UI, multiple payers, Supabase storage, Notion round-trip, and E2E coverage for all split modes.
-- **Phase 2 complete through v0.9.0:** AI receipt itemization (F3) is done. `scanReceiptImage` returns structured `lineItems[]` with `desc`, `amount`, `qty`. `ReceiptEditor` has an item-assignment sheet with per-item `AvatarBadge` toggles, "一鍵均分所有人" / "清除全部分配" quick actions, and live Σ-validation. `foldLineItemsToSplits` in `splitEngine.ts` converts item assignments into per-person `splits[]` with largest-remainder rounding. Unit tests cover 6 fold scenarios + existing settlement tests. E2E split-editor smoke passes. Next work starts at Phase 3 / T3.1 per-expense-date FX snapshot.
+- **Phase 2 complete through v0.9.0:** AI receipt itemization (F3) is done. `scanReceiptImage` returns structured `lineItems[]` with `desc`, `amount`, `qty`. `ReceiptEditor` has an item-assignment sheet with per-item `AvatarBadge` toggles, "一鍵均分所有人" / "清除全部分配" quick actions, and live Σ-validation. `foldLineItemsToSplits` in `splitEngine.ts` converts item assignments into per-person `splits[]` with largest-remainder rounding. Unit tests cover 6 fold scenarios + existing settlement tests. E2E split-editor smoke passes.
+- **Phase 3 complete through v0.10.0:** FX snapshot (F4) auto-populates `exchangeRate` + `hkdAmount` on save (ReceiptEditor, scan, voice/email). Comments (F5) via `expense_comments` Supabase table with RLS, comment UI in ReceiptEditor, and activity feed in History tab. Next work starts at Phase 4 / T4.1 durable offline outbox.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -97,6 +98,13 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 49 (Codex — Phase 3 accuracy & social, v0.10.0)
+
+1. **T3.1 FX snapshot:** `ReceiptEditor`, `scanReceiptImage`, and `parseTextWithAi` now auto-populate `exchangeRate` (per-HKD rate) and `hkdAmount` when the receipt currency is not HKD. `getReceiptHkdAmount` already prefers `r.exchangeRate`, so historical receipts keep their original-date rate.
+2. **T3.2 comments:** added `expense_comments` Supabase migration (append-only, RLS: trip members read, authors insert/delete). Added `fetchExpenseComments`, `insertExpenseComment`, `deleteExpenseComment` in `supabase.ts`. Added `ExpenseComments` component in `ReceiptEditor` (lazy-loaded, shows when `receipt.supabaseId` exists).
+3. **T3.3 activity feed:** added "最近活動" collapsible section in History tab showing last 20 receipt events (added/edited/settled) with person emoji, verb, store, amount, date.
+4. **Versioning:** Compact/Android bumped to `0.10.0` / versionCode `1000`; package-lock metadata synced.
 
 ### Session 48 (Codex — Phase 2 AI itemization, v0.9.0)
 

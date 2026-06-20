@@ -2731,6 +2731,63 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .receipt-multi-payer-toggle {
   margin-top: 2px;
 }
+.receipt-comments-disclosure {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.46);
+}
+.receipt-comments-disclosure summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  list-style-position: inside;
+}
+.receipt-comments-list {
+  display: grid;
+  gap: 4px;
+}
+.receipt-comment-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,.58);
+  font-size: 13px;
+}
+.receipt-comment-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+.receipt-comment-delete {
+  font-size: 14px;
+  padding: 2px 6px;
+  color: var(--muted);
+}
+.receipt-comments-empty {
+  font-size: 12px;
+  text-align: center;
+  margin: 4px 0;
+}
+.receipt-comment-input-row {
+  display: flex;
+  gap: 6px;
+}
+.receipt-comment-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+.receipt-comment-input-row .primary {
+  white-space: nowrap;
+  padding: 6px 14px;
+}
 .receipt-multi-payer-toggle input {
   accent-color: var(--red);
 }
@@ -4525,6 +4582,57 @@ body {
 .history-review-item button:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--screen-accent-2) 44%, transparent);
   outline-offset: 2px;
+}
+.history-activity-feed {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+}
+.history-activity-feed summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  list-style-position: inside;
+}
+.history-activity-list {
+  display: grid;
+  gap: 3px;
+}
+.history-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink);
+  background: rgba(255,255,255,.35);
+}
+.history-activity-person {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.history-activity-verb {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.history-activity-store {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-activity-amount {
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--red);
+}
+.history-activity-date {
+  color: var(--muted);
+  white-space: nowrap;
+  font-size: 11px;
 }
 .history-conflict-resolver {
   display: grid;
