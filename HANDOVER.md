@@ -2,9 +2,26 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Android native camera/gallery bridge for Compact Scan
-- **Agent**: Codex
-- **App version**: Compact/Android `0.8.6` (versionCode `806`); React unchanged
+- **Focus**: Splitwise-class "settle up" feature + super-app roadmap (Claude); native camera bridge (Codex)
+- **Agent**: Claude (Oscar) + Codex (concurrent on this branch — `git fetch` before every commit)
+- **App version**: Compact/Android `0.8.8` (versionCode `808`); React unchanged
+
+## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
+
+Deep Splitwise research + a code audit (2026-06-20) produced `app-compact/SUPER_APP_ROADMAP.md` — the
+canonical roadmap to a "super expense app." Key conclusions for the next agent:
+- We already match/beat Splitwise on balances, simplify-debts, **settle-up (v0.8.7)**, multi-currency,
+  OCR, **budget pacing**, and sync. Real gaps: per-receipt exact/%/itemized splits, multiple payers,
+  comments/activity, recurring.
+- **Standout wedge:** AI receipt **itemization + auto-split** — even paid Splitwise can't assign items
+  to people. Build on the existing OCR.
+- **Key enabler (do first):** lift the one-payer/one-total `Receipt` constraint with optional,
+  backward-compatible arrays — `splits[]`, `payers[]`, `lineItems[]`, `splitType` — and have
+  `computeSettlements` consume them with fallback to today's model. Integer minor units +
+  largest-remainder rounding. Ride the receipt sync pipeline (don't add new tables); add Supabase
+  columns + Notion props via the drift-tolerant resolver; **no blind live-DB push**.
+- Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
+  split-engine package, push/FCM, generic non-trip groups.
 
 ## ✅ Android v0.8.6 go-live infra status
 
