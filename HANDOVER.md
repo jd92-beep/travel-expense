@@ -4,12 +4,12 @@
 - **Date**: 2026-06-21 HKT
 - **Focus**: Android super-app review fixes after v0.12.2
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.12.4` (versionCode `1204`); React unchanged
-- **Latest code commit before this handover refresh**: `3215aad` (`fix(supabase): apply live comments RLS grants`)
-- **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`. All roadmap phases are complete; v0.12.1/v0.12.2 follow-ups fixed real sync retry behavior and refreshed stale smoke/emulator evidence. v0.12.4 adds the live comments-schema/grant follow-up on top of the v0.12.3 review fixes. The newest local visual Android audit found one native Timeline layout issue still pending.
-- **Latest verification evidence**: v0.12.4 live Supabase SQL check confirmed `expense_comments` table/RLS/policies/grants. Local `npm run typecheck`, `npm run db:policy:scan`, and `git diff --check` passed. v0.12.3 previously re-ran and passed `npm run build`, `npm run security:scan`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `node --experimental-strip-types scripts/sync-backoff.test.ts`, `npm run smoke:shared-ledger`, `npm run smoke:shared-contract` after `app-react npm ci`, `npm run smoke:settle-up`, `npm run smoke:settings`, `npm run smoke:dashboard`, `npm run smoke:stats`, `npm run smoke:scan`, `npm run smoke:split-editor`, `npm run smoke:weather`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run smoke:welcome-guide`, `npm run smoke:security`, `SUPABASE_REDIRECT_SMOKE=1 ... npm run smoke:security`, `npm run smoke:a11y-touch`, `npm run smoke:trip-intelligence`, `node --check app-compact/scripts/android-qa-smoke.mjs`, `npm audit --omit=dev`, `npm audit`, `npx gitnexus detect-changes`, and `git diff --check`.
-- **Latest Android QA evidence**: configured Supabase build passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=login`, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`. Local visual build re-ran and passed `ANDROID_QA_DISABLE_SUPABASE=1 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with all 7 native tabs captured and native Camera/Gallery foreground checks, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T17-29-38-692Z`.
-- **Current known verification blockers**: local visual QA found a native Timeline layout bug (`native-timeline.png` shows the day/date card too close to/overlapping the Android status bar and loose receipt summary cards visually overlaying the timeline rail area). Live Supabase `expense_comments` base/RLS/grant migrations are applied and verified. Real-device Google/magic-link login still needs a human account/device round-trip.
+- **App version**: Compact/Android `0.12.5` (versionCode `1205`) local WIP; React unchanged
+- **Latest pushed commit before this handover refresh**: `3c2af9c` (`docs: refresh android handover after visual qa`)
+- **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`. All roadmap phases are complete. v0.12.5 is a local uncommitted Android native visual-stability fix plus Android QA harness hardening; latest emulator visual QA is clean, but the work still needs a final commit/push.
+- **Latest verification evidence**: v0.12.5 passed `npm run typecheck`, `node --check app-compact/scripts/android-qa-smoke.mjs`, wrapped Timeline smoke (`8 passed`), wrapped Weather smoke (`13 passed`), wrapped mobile-layout smoke (`1 passed`), and `git diff --check`. Earlier v0.12.4 live Supabase SQL check confirmed `expense_comments` table/RLS/policies/grants, with local `npm run db:policy:scan` green. v0.12.3 previously passed the broader build/security/smoke/audit suite listed below.
+- **Latest Android QA evidence**: configured Supabase build passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=login`, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`. Latest local visual build also passed `ANDROID_QA_DISABLE_SUPABASE=1 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs captured, native Camera/Gallery foreground checks, clean ANR/error text grep, and manual screenshot inspection clean; artifact folder `/tmp/travel-expense-android-qa-2026-06-20T18-26-36-711Z`.
+- **Current known verification blockers**: no known emulator visual blocker remains after v0.12.5. Real-device Google/magic-link login still needs a human account/device round-trip. Before shipping the current local WIP, commit/push it and rerun final GitNexus change detection if continuing the broader review workflow.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -98,10 +98,12 @@ This section records the latest review state after the v0.12.2 polish commit, so
 not restart from stale Phase 5 notes.
 
 1. **Branch/version confirmed:** `codex/android-compact-shell` tracks
-   `origin/codex/android-compact-shell`; latest pushed branch commit is `2d72bb5`
-   (`docs: refresh android handover progress`) before this v0.12.3 review workset.
-   `app-compact/package.json`, `APP_VERSION`, and Gradle now report `0.12.4` / versionCode `1204`.
-2. **Sync/data fixes in progress:** shared-trip Notion delete jobs now use `archiveReceipt`,
+   `origin/codex/android-compact-shell`; latest pushed branch commit is `3c2af9c`
+   (`docs: refresh android handover after visual qa`). Local WIP currently touches Android/Compact
+   Timeline/Weather native visual handling, native Timeline CSS, Android QA harness timing/ANR guards,
+   version metadata, and this handover. `app-compact/package.json`, `APP_VERSION`, `ANDROID.md`, and
+   Gradle now report `0.12.5` / versionCode `1205`.
+2. **Sync/data fixes complete:** shared-trip Notion delete jobs now use `archiveReceipt`,
    successful shared Notion outbox jobs clear `notion_sync_status` to `synced`, delete idempotency
    uses stable receipt timestamps, and shared delete tombstones preserve `updatedAt`. Contract
    coverage was extended in `scripts/verify-shared-ledger-contract.mjs`.
@@ -110,7 +112,7 @@ not restart from stale Phase 5 notes.
    both `user_id = auth.uid()` and active trip membership. Live Supabase now has the base
    `expense_comments` table, the membership insert policy, and restricted direct grants
    (`authenticated`: select/insert/delete only; `anon`: none).
-4. **Split/weather/Auth fixes in progress:** itemized line items can no longer exceed receipt totals;
+4. **Split/weather/Auth fixes complete:** itemized line items can no longer exceed receipt totals;
    `/android-auth` is restored on the Android branch through `app-compact/public/android-auth.html`
    plus the Vercel rewrite; Weather now geocodes city/country-only itinerary days through
    `resolveGroupedCoordsForDay()` before fetching forecasts.
@@ -130,20 +132,28 @@ not restart from stale Phase 5 notes.
    `/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`. Local visual build re-ran with
    `ANDROID_QA_DISABLE_SUPABASE=1`, `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs
    captured (`dashboard`, `history`, `timeline`, `scan`, `weather`, `stats`, `settings`), and native
-   Camera/Gallery foreground proof (`CaptureActivity` / `PhotoPicker`), artifact folder
-   `/tmp/travel-expense-android-qa-2026-06-20T17-29-38-692Z`.
-8. **New visual follow-up:** inspected native screenshots show Dashboard, History, Scan, Weather,
-   Stats, and Settings without visible error banners or status/header overlap. Timeline still needs a
-   native layout fix: `/tmp/travel-expense-android-qa-2026-06-20T17-29-38-692Z/native-timeline.png`
-   shows the top day/date card entering the Android status-bar region and loose receipt summary cards
-   visually overlaying the timeline rail/events. Start with `Timeline.tsx` auto-scroll safe-area
-   offset and the native Timeline CSS overrides.
-9. **Final local audit status:** GitNexus `detect-changes` completed and reported `critical` because
+   Camera/Gallery foreground proof (`CaptureActivity` / `PhotoPicker`). Latest artifact folder is
+   `/tmp/travel-expense-android-qa-2026-06-20T18-26-36-711Z`. Grep over the final artifact XML/logs found
+   no ANR, fatal exception, loading-page, or visible app error strings. Manual screenshot inspection of
+   Dashboard, History, Timeline, Scan, Weather, Stats, and Settings is clean.
+8. **v0.12.5 native visual fix complete locally:** GitNexus impact checks for `Timeline`,
+   `scrollTimelineElementIntoCenter`, `scrollToLiveTimelineSpot`, `Weather`, `jumpToActiveDay`,
+   `tryNativePhotoAction`, `captureNativeVisualTabs`, and `dumpUi` were LOW. The local WIP keeps native
+   Timeline CSS guards, disables Timeline auto-scroll on native Android to prevent ghost/overlap
+   snapshots, disables Weather auto-jump on native Android to prevent blank preserved offsets, and
+   hardens `android:qa` to wait for native tab headings and fail on visible Android ANR dialogs.
+9. **Current visual blocker:** resolved in latest artifact
+   `/tmp/travel-expense-android-qa-2026-06-20T18-26-36-711Z`. Timeline no longer shows the previous
+   duplicated/ghost cards near the Android status/header area, and Weather no longer captures as blank.
+   Remaining verification gap is real-device Google/magic-link login, which needs a human account/device
+   round-trip outside emulator automation.
+10. **Final local audit status:** GitNexus `detect-changes` completed and reported `critical` because
    the expected review workset touches broad flows (`App`, `ReceiptEditor`, `Weather`, sync, Android
    QA, and docs: 25 files / 69 symbols / 30 flows). Targeted gates above passed and `git diff --check`
-   was clean at the v0.12.4 code commit. The live Supabase comment migrations are now applied and
-   verified; keep the Timeline native visual fix and real-device Google/magic-link login round-trip as
-   the remaining checks before production invitation.
+   was clean at the v0.12.4 code commit. v0.12.5 local WIP also passed `typecheck`, Android QA script
+   syntax, wrapped Timeline smoke, wrapped Weather smoke, wrapped mobile-layout smoke, clean final
+   Android visual QA, and `git diff --check`; keep final GitNexus change detection, commit/push, and
+   real-device Google/magic-link login round-trip as the remaining checks before production invitation.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -152,14 +162,38 @@ not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.4`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.5`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
+### Session 57 (Codex — v0.12.5 native Android visual stabilization)
+
+1. **Version metadata updated:** Compact/Android local WIP is now `0.12.5` / versionCode `1205`
+   across `APP_VERSION`, `package.json`, `package-lock.json`, Gradle, and `ANDROID.md`.
+2. **Timeline native visual blocker fixed:** kept the native Android Timeline CSS guards and disabled
+   Timeline auto-scroll on native Android after screenshots showed receipt cards and previous day
+   content entering the Android status/header area. Latest `native-timeline.png` no longer shows the
+   duplicated/ghost overlay blocker.
+3. **Weather native visual blocker fixed:** disabled Weather auto-jump on native Android after a clean
+   QA pass exposed a blank preserved-offset Weather screenshot. Latest `native-weather.png` renders the
+   Weather header, provider controls, current card, and forecast content correctly.
+4. **Android QA harness hardened:** `uiautomator dump` timeout is now 30s; local visual tab capture now
+   waits for each expected tab heading, avoids capturing while the page still says `Loading page`,
+   force-stops stale picker apps before launch, and fails if a visible Android ANR dialog appears.
+5. **Checks already passed:** `npm run typecheck`, `node --check app-compact/scripts/android-qa-smoke.mjs`,
+   wrapped Timeline smoke (`8 passed`), wrapped Weather smoke (`13 passed`), wrapped mobile-layout smoke
+   (`1 passed`), `git diff --check`, and local visual
+   `ANDROID_QA_DISABLE_SUPABASE=1 ... npm run android:qa`.
+6. **Latest artifact:** `/tmp/travel-expense-android-qa-2026-06-20T18-26-36-711Z` passed automation with
+   `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs captured, Camera/Gallery foreground
+   proof, clean ANR/error text grep, and clean manual screenshot inspection.
+7. **Still pending before production invitation:** final commit/push of the local v0.12.5 WIP and a
+   real-device Google/magic-link login round-trip with a human account/device.
+
 ### Session 56 (Codex — current handover refresh after v0.12.4 visual audit)
 
-1. **Current branch recorded:** branch head is `3215aad` on `codex/android-compact-shell`, aligned with
+1. **Current branch recorded:** branch head is `3c2af9c` on `codex/android-compact-shell`, aligned with
    `origin/codex/android-compact-shell` before this docs-only update.
 2. **Latest local visual QA recorded:** `ANDROID_QA_DISABLE_SUPABASE=1 ... npm run android:qa` passed
    with all 7 native tabs and Camera/Gallery foreground checks captured in

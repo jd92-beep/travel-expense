@@ -206,6 +206,8 @@ export function Weather({ state }: { state: AppState }) {
   const autoJumpKeyRef = useRef('');
   useEffect(() => {
     if (!leadDay || busy) return;
+    // ponytail: native WebView can preserve bad scroll offsets during auto-jump; keep entry stable.
+    if (document.body.classList.contains('compact-native-android')) return;
     const forecastDate = forecastDateFor(leadDay.date);
     const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
     const targetReady = typeof document === 'undefined'

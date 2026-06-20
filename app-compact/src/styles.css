@@ -14645,6 +14645,30 @@ input[type="checkbox"] {
     padding-bottom: calc(176px + env(safe-area-inset-bottom)) !important;
   }
 
+  body.compact-native-android .app-shell--timeline .timeline-screen {
+    padding-top: calc(44px + env(safe-area-inset-top)) !important;
+    scroll-padding-top: calc(112px + env(safe-area-inset-top));
+  }
+
+  body.compact-native-android .app-shell--timeline .timeline-day-reveal,
+  body.compact-native-android .app-shell--timeline .timeline-loose-receipts {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+
+  body.compact-native-android .app-shell--timeline .timeline-loose-receipts {
+    position: relative;
+    z-index: 2;
+  }
+
+  body.compact-native-android .app-shell--timeline .timeline-screen .timeline-day,
+  body.compact-native-android .app-shell--timeline .timeline-loose-receipts {
+    background: #fffdf8 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
   body.compact-native-android .fixed-tab-bar {
     padding-bottom: max(18px, env(safe-area-inset-bottom)) !important;
   }

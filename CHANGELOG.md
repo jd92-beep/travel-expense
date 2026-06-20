@@ -2,6 +2,11 @@
 
 ## 2026-06-21 HKT (Android review fixes)
 
+- **v0.12.5 / versionCode 1205.** Stabilized native Android visual QA after the v0.12.4 review pass.
+- Fixed the native Timeline screenshot blocker by disabling forced Timeline auto-scroll in the Android WebView while keeping the existing web behavior; latest emulator screenshots no longer show duplicated/ghost receipt cards or previous day content under the status/header area.
+- Fixed the native Weather blank-screenshot case by disabling the Weather auto-jump in the Android WebView; users can still use the manual jump/refresh controls.
+- Hardened `android:qa`: longer UI dump timeout, waits for expected native tab headings before screenshots, fails on visible Android ANR dialogs, and force-stops stale PhotoPicker/Photos state before app launch.
+- Verification passed: `typecheck`, Android QA script syntax check, wrapped Timeline smoke (`8 passed`), wrapped Weather smoke (`13 passed`), wrapped mobile-layout smoke (`1 passed`), `git diff --check`, and local visual Android QA with all 7 native tabs clean (`/tmp/travel-expense-android-qa-2026-06-20T18-26-36-711Z`).
 - **v0.12.4 / versionCode 1204.** Applied the live Supabase `expense_comments` migrations that were missing from production, then tightened direct table grants so `authenticated` has only `SELECT`, `INSERT`, and `DELETE`; `anon` has no direct access.
 - Verified live `expense_comments` has RLS enabled, active-trip-membership insert policy installed, old owner-only insert policy removed, and no direct `UPDATE` privilege.
 - Verification passed: `typecheck`, `db:policy:scan`, `git diff --check`, and configured Android QA with App Links verified (`/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`).

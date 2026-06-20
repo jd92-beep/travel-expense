@@ -57,6 +57,8 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   const lastAutoScrollKeyRef = useRef('');
   const scrollToLiveTimelineSpot = useCallback((force = false) => {
     if (typeof window === 'undefined') return;
+    // ponytail: native WebView snapshots can smear during forced scroll; keep the tab stable there.
+    if (document.body.classList.contains('compact-native-android')) return;
     const targetDate = liveContext.date || commandDay?.date;
     if (!targetDate) return;
 

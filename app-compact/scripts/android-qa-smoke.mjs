@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
 const packageName = 'com.ftjdfr.travelexpensecompact';
+const externalPickerPackages = ['com.google.android.photopicker', 'com.google.android.apps.photos'];
 const avdName = process.env.ANDROID_QA_AVD || 'codex_api36_pixel_8';
 const apkPath = path.join(appRoot, 'android/app/build/outputs/apk/debug/app-debug.apk');
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -157,10 +158,37 @@ async function captureScreenshot(serial, name) {
 
 function dumpUi(serial, name) {
   const remote = '/sdcard/travel-expense-compact-ui.xml';
-  adb(serial, ['shell', 'uiautomator', 'dump', remote], { timeout: 15000 });
+  adb(serial, ['shell', 'uiautomator', 'dump', remote], { timeout: 30000 });
   const file = path.join(artifactDir, name);
   run('adb', ['-s', serial, 'pull', remote, file]);
   return file;
+}
+
+function hasSystemAnrDialog(text) {
+  return /Application Not Responding|isn(?:'|&apos;)t responding|android:id\/aerr_(?:close|wait)|\bClose app\b/i.test(text);
+}
+
+function assertNoSystemAnrDialog(text, context) {
+  if (hasSystemAnrDialog(text)) throw new Error(`${context} found a visible Android ANR dialog`);
+}
+
+async function dismissSystemAnrDialog(serial, label) {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const ui = dumpUi(serial, `${label}-anr-check-${attempt}.xml`);
+    const xml = await fsp.readFile(ui, 'utf8');
+    if (!hasSystemAnrDialog(xml)) return false;
+    const node = findNodeCenter(xml, ['Wait']) || findNodeCenter(xml, ['Close app']);
+    if (!node) return true;
+    adb(serial, ['shell', 'input', 'tap', String(node.x), String(node.y)]);
+    await delay(1000);
+  }
+  return true;
+}
+
+function stopExternalPickers(serial) {
+  for (const stalePackage of externalPickerPackages) {
+    try { adb(serial, ['shell', 'am', 'force-stop', stalePackage]); } catch { /* package may not exist */ }
+  }
 }
 
 async function cdpEvaluate(wsUrl, expression) {
@@ -303,6 +331,10 @@ async function tryNativePhotoAction(serial, labels, slug) {
   await delay(3500);
   const foreground = foregroundWindow(serial);
   const screenshot = await captureScreenshot(serial, `${slug}.png`);
+  if (hasSystemAnrDialog(foreground)) {
+    await dismissSystemAnrDialog(serial, `${slug}-foreground`);
+    throw new Error(`Native ${slug} opened an Android ANR dialog after clicking ${clicked.label}. See ${screenshot}`);
+  }
   if (foreground.includes(packageName)) {
     throw new Error(`Native ${slug} stayed inside ${packageName} after clicking ${clicked.label}. See ${screenshot}`);
   }
@@ -329,15 +361,25 @@ async function captureNativeVisualTabs(serial) {
   const checks = [];
   for (const [hash, slug, expected] of nativeVisualTabs) {
     await setNativeHash(serial, hash);
-    const text = await currentWebViewText(serial);
+    let text = '';
+    for (let attempt = 1; attempt <= 16; attempt += 1) {
+      text = await currentWebViewText(serial);
+      if (expected.test(text) && !/載入分頁|Loading page/i.test(text)) break;
+      await delay(500);
+    }
     if (!expected.test(text)) throw new Error(`Native visual check for ${hash} did not find expected heading. Saw: ${text.slice(0, 180)}`);
+    if (/載入分頁|Loading page/i.test(text)) throw new Error(`Native visual check for ${hash} did not finish loading. Saw: ${text.slice(0, 180)}`);
     if (/有資料同步失敗|FATAL EXCEPTION|Something went wrong/i.test(text)) {
       throw new Error(`Native visual check for ${hash} found an error banner. Saw: ${text.slice(0, 180)}`);
     }
+    const ui = dumpUi(serial, `${slug}.xml`);
+    const xml = await fsp.readFile(ui, 'utf8');
+    assertNoSystemAnrDialog(xml, `Native visual check for ${hash}`);
+    await delay(700);
     checks.push({
       hash,
       screenshot: await captureScreenshot(serial, `${slug}.png`),
-      ui: dumpUi(serial, `${slug}.xml`),
+      ui,
       textSample: text.slice(0, 180),
     });
   }
@@ -439,6 +481,8 @@ try {
     message: logcatClearWarning.split('\n').filter(Boolean).slice(-1)[0] || 'Unable to clear Android logcat; continuing with tail filtering.',
   }));
 }
+stopExternalPickers(serial);
+await dismissSystemAnrDialog(serial, 'pre-launch');
 adb(serial, ['shell', 'am', 'force-stop', packageName]);
 console.log(JSON.stringify({ step: 'launch' }));
 adb(serial, ['shell', 'am', 'start', '-W', '-n', `${packageName}/.MainActivity`]);
