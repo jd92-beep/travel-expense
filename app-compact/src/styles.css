@@ -2661,6 +2661,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.receipt-multi-payer-toggle {
+  margin-top: 2px;
+}
+.receipt-multi-payer-toggle input {
+  accent-color: var(--red);
+}
 .receipt-delete-confirm-backdrop {
   z-index: 1200;
   place-items: center;

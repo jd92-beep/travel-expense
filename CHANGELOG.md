@@ -2,6 +2,7 @@
 
 ## 2026-06-20
 
+- Added Phase 1 multiple-payer editing in `ReceiptEditor`: a `多人付款` reveal, per-person payer amount rows, and validation that requires two positive payers and a total matching the receipt amount. Bumped Compact Android branch version to `0.8.12` / Android `versionCode 812`.
 - Added Phase 1 per-person split rows in `ReceiptEditor` for shares, exact, percent, and adjustment modes, with a live `已對數` / gap validation pill that blocks invalid advanced splits. Bumped Compact Android branch version to `0.8.11` / Android `versionCode 811`.
 - Started Phase 1 split flexibility on `codex/android-compact-shell`: `ReceiptEditor` now reveals a `進階拆數` split-mode selector for `均分`, `份數`, `實額`, `百分比`, and `加減` while keeping the default add-expense flow equal + single payer. Bumped Compact Android branch version to `0.8.10` / Android `versionCode 810`.
 - Shipped Phase 0 of the super-app roadmap on `codex/android-compact-shell`: optional receipt `splitType`, `splits`, `payers`, and `lineItems`; `computeShares()` with largest-remainder rounding; and `computeSettlements()` support for explicit splits/multiple payers with legacy fallback.

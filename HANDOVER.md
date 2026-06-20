@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Super-app roadmap Phase 1 per-person split rows
+- **Focus**: Super-app roadmap Phase 1 multiple-payer editor
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.8.11` (versionCode `811`); React unchanged
+- **App version**: Compact/Android `0.8.12` (versionCode `812`); React unchanged
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -21,7 +21,7 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
   largest-remainder rounding. Ride the receipt sync pipeline (don't add new tables); add Supabase
   columns + Notion props via the drift-tolerant resolver; **no blind live-DB push**.
 - **Phase 0 shipped in v0.8.9:** types + `computeShares()` + settlement fallback are in place.
-- **Phase 1 in progress through v0.8.11:** `ReceiptEditor` now has the split-type segmented control, per-person rows for advanced split modes, and live validation; next work starts at T1.3 multiple payers.
+- **Phase 1 in progress through v0.8.12:** `ReceiptEditor` now has the split-type segmented control, per-person split rows, live validation, and multiple-payer rows; next work starts at T1.4 Supabase columns via Management API.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -89,10 +89,17 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.11`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.12`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 43 (Codex — Phase 1 multiple-payer editor, v0.8.12)
+
+1. **Multiple-payer reveal:** `ReceiptEditor` now has a `多人付款` checkbox inside `進階拆數`.
+2. **Per-payer rows:** each person gets a payer amount row; valid saves write `payers[]`, invalid sums or one-person-only payer states are blocked.
+3. **Smoke coverage:** added `tests/split-payer-smoke.spec.cjs` for two-payer validation and save.
+4. **Versioning:** Compact/Android bumped to `0.8.12` / versionCode `812`; package-lock metadata synced.
 
 ### Session 42 (Codex — Phase 1 per-person split rows, v0.8.11)
 

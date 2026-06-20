@@ -3,7 +3,7 @@ import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { SUPPORTED_CURRENCIES } from '../lib/currency';
 import { getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import type { AppState, CategoryId, PaymentId, Person, Receipt, ReceiptSplit, SplitMode, SplitType } from '../lib/types';
+import type { AppState, CategoryId, PaymentId, Person, Receipt, ReceiptPayer, ReceiptSplit, SplitMode, SplitType } from '../lib/types';
 import { AvatarBadge } from './AvatarBadge';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
 import { SegmentedControl, StatusPill } from './ui';
@@ -102,6 +102,23 @@ function validateSplitRows(splitType: SplitType, total: number, rows: ReceiptSpl
   return diff === 0 ? { valid: true, label: '已對數' } : { valid: false, label: diff > 0 ? `差 ¥${formatDelta(diff)}` : `多 ¥${formatDelta(Math.abs(diff))}` };
 }
 
+function payerRowsFor(persons: Person[], payers: ReceiptPayer[] | undefined, total: number, fallbackPersonId: string): ReceiptPayer[] {
+  const byId = new Map((payers || []).map((payer) => [payer.personId, payer]));
+  return persons.map((person) => ({
+    personId: person.id,
+    amount: person.id === fallbackPersonId ? Math.round(Math.max(0, total)) : 0,
+    ...byId.get(person.id),
+  }));
+}
+
+function validatePayers(total: number, rows: ReceiptPayer[]) {
+  const sum = rows.reduce((acc, row) => acc + splitValue(row.amount), 0);
+  const positive = rows.filter((row) => splitValue(row.amount) > 0).length;
+  if (Math.round(total) > 0 && positive < 2) return { valid: false, label: '至少兩位付款' };
+  const diff = Math.round(total) - Math.round(sum);
+  return diff === 0 ? { valid: true, label: '已對數' } : { valid: false, label: diff > 0 ? `差 ¥${formatDelta(diff)}` : `多 ¥${formatDelta(Math.abs(diff))}` };
+}
+
 export function ReceiptEditor({
   state,
   receipt,
@@ -157,6 +174,15 @@ export function ReceiptEditor({
     () => validateSplitRows(selectedSplitType, totalForSplit, splitRows),
     [selectedSplitType, splitRows, totalForSplit],
   );
+  const multiPayerEnabled = draft.splitMode !== 'private' && Boolean(draft.payers?.length);
+  const payerRows = useMemo(
+    () => payerRowsFor(persons, draft.payers, totalForSplit, draft.personId || first.id),
+    [draft.payers, draft.personId, first.id, persons, totalForSplit],
+  );
+  const payerValidation = useMemo(
+    () => validatePayers(totalForSplit, payerRows),
+    [payerRows, totalForSplit],
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -208,6 +234,14 @@ export function ReceiptEditor({
     }));
   };
 
+  const setPayerValue = (personId: string, raw: string) => {
+    setDraft((d) => ({
+      ...d,
+      payers: payerRowsFor(persons, d.payers, validAmount(d.total) ?? 0, d.personId || first.id)
+        .map((row) => row.personId === personId ? { ...row, amount: splitValue(raw) } : row),
+    }));
+  };
+
   async function attachPhoto(file?: File) {
     if (!file) return;
     const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -246,6 +280,11 @@ export function ReceiptEditor({
             alert(`拆數未對數：${splitValidation.label}`);
             return;
           }
+          const keepPayers = draft.splitMode !== 'private' && multiPayerEnabled;
+          if (keepPayers && !payerValidation.valid) {
+            alert(`付款未對數：${payerValidation.label}`);
+            return;
+          }
           onSave({
             ...draft,
             store: draft.store.trim() || '未命名',
@@ -257,6 +296,7 @@ export function ReceiptEditor({
             splitMode: draft.splitMode || 'shared',
             splitType: keepSplits ? selectedSplitType : undefined,
             splits: keepSplits ? splitRows : undefined,
+            payers: keepPayers ? payerRows.filter((row) => splitValue(row.amount) > 0) : undefined,
           });
         }}
       >
@@ -322,7 +362,10 @@ export function ReceiptEditor({
             </select>
           </label>
           <label>分帳
-            <select value={draft.splitMode || 'shared'} onChange={(e) => set('splitMode', e.target.value as SplitMode)}>
+            <select value={draft.splitMode || 'shared'} onChange={(e) => setDraft((d) => {
+              const splitMode = e.target.value as SplitMode;
+              return { ...d, splitMode, payers: splitMode === 'private' ? undefined : d.payers };
+            })}>
               <option value="shared">Shared</option>
               <option value="private">私人 / 代付</option>
             </select>
@@ -365,6 +408,45 @@ export function ReceiptEditor({
                           inputMode="decimal"
                           value={splitValue(row[field])}
                           onChange={(event) => setSplitValue(row.personId, event.target.value)}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <label className="check-row receipt-multi-payer-toggle">
+              <input
+                type="checkbox"
+                checked={multiPayerEnabled}
+                onChange={(event) => setDraft((d) => ({
+                  ...d,
+                  payers: event.target.checked
+                    ? payerRowsFor(persons, d.payers, validAmount(d.total) ?? 0, d.personId || first.id)
+                    : undefined,
+                }))}
+              />
+              <span>多人付款</span>
+            </label>
+            {multiPayerEnabled && (
+              <div className="receipt-split-editor receipt-payer-editor">
+                <StatusPill tone={payerValidation.valid ? 'ok' : 'warning'}>{payerValidation.label}</StatusPill>
+                <div className="receipt-split-rows">
+                  {payerRows.map((row) => {
+                    const person = persons.find((p) => p.id === row.personId);
+                    if (!person) return null;
+                    return (
+                      <label key={row.personId} className="receipt-split-row">
+                        <span className="receipt-split-person">
+                          <AvatarBadge person={person} size="sm" />
+                          <span>{person.name}</span>
+                        </span>
+                        <input
+                          aria-label={`${person.name} 付款`}
+                          type="text"
+                          inputMode="decimal"
+                          value={splitValue(row.amount)}
+                          onChange={(event) => setPayerValue(row.personId, event.target.value)}
                         />
                       </label>
                     );
