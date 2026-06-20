@@ -1,8 +1,8 @@
 import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
 import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { simplifyDebts } from './splitEngine';
-import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, TripPhase } from './types';
+import { computeShares, simplifyDebts } from './splitEngine';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, ReceiptPayer, SettlementSnapshot, TripPhase } from './types';
 
 export const fmt = (n: number | string | undefined) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -396,6 +396,7 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   const firstId = persons[0].id;
   const idxOf = (id?: string) => persons.findIndex((p) => p.id === id);
   const sharedByPayer = persons.map(() => 0);
+  const explicitShouldPayShared = persons.map(() => 0);
   const privateByOwner = persons.map(() => 0);
   const crossPrivate: SettlementSnapshot['crossPrivate'] = [];
   // Recorded "settle up" payments: debtor (personId) paid creditor (beneficiaryId) `total` in the
@@ -403,6 +404,18 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   const settleAdjust = persons.map(() => 0);
   let settledTotal = 0;
   let sharedTotal = 0;
+  let ratioSharedTotal = 0;
+
+  const addSharedPayers = (payers: ReceiptPayer[] | undefined, amount: number, fallbackPayerIdx: number): boolean => {
+    if (!payers?.length) return false;
+    const valid = payers
+      .map((payer) => ({ idx: idxOf(payer.personId), amount: Math.round(Number(payer.amount) || 0) }))
+      .filter((payer) => payer.idx >= 0 && payer.amount > 0);
+    const paidTotal = valid.reduce((sum, payer) => sum + payer.amount, 0);
+    if (paidTotal !== Math.round(amount)) return false;
+    for (const payer of valid) sharedByPayer[payer.idx] += payer.amount;
+    return fallbackPayerIdx >= 0 || valid.length > 0;
+  };
 
   for (const r of tripReceipts) {
     if (isSettlementReceipt(r)) {
@@ -431,7 +444,22 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
         crossPrivate.push({ payerIdx, benIdx, amount, payer: persons[payerIdx], beneficiary: persons[benIdx], store: r.store, date: r.date, id: r.id });
       }
     } else {
-      sharedByPayer[payerIdx] += amount;
+      if (!addSharedPayers(r.payers, amount, payerIdx)) sharedByPayer[payerIdx] += amount;
+      if (r.splits?.length) {
+        try {
+          const shares = computeShares(amount, r.splitType || 'equal', r.splits);
+          for (const [personId, owed] of shares) {
+            const idx = idxOf(personId);
+            if (idx < 0) throw new Error(`split person ${personId} not found`);
+            explicitShouldPayShared[idx] += owed;
+          }
+        } catch (error) {
+          console.warn(`[settlement] receipt ${r.id} invalid splits — falling back to trip ratios`, error);
+          ratioSharedTotal += amount;
+        }
+      } else {
+        ratioSharedTotal += amount;
+      }
       sharedTotal += amount;
     }
   }
@@ -440,14 +468,16 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
     // If every ratio is 0 (misconfigured), fall back to an equal split so shared expenses
     // still settle (payers get reimbursed) instead of silently producing zero transfers.
     const shouldPayShared = sumRatio > 0
-      ? sharedTotal * (ratios[i] / sumRatio)
-      : sharedTotal / persons.length;
-    let balance = sharedByPayer[i] - shouldPayShared + settleAdjust[i];
+      ? ratioSharedTotal * (ratios[i] / sumRatio)
+      : ratioSharedTotal / persons.length;
+    const explicitShouldPay = explicitShouldPayShared[i];
+    const totalShouldPayShared = shouldPayShared + explicitShouldPay;
+    let balance = sharedByPayer[i] - totalShouldPayShared + settleAdjust[i];
     for (const cp of crossPrivate) {
       if (cp.payerIdx === i) balance += cp.amount;
       if (cp.benIdx === i) balance -= cp.amount;
     }
-    return { ...p, balance, paidShared: sharedByPayer[i], shouldPayShared };
+    return { ...p, balance, paidShared: sharedByPayer[i], shouldPayShared: totalShouldPayShared };
   });
 
   const transfers: SettlementSnapshot['transfers'] = simplifyDebts(balances.map((b) => b.balance))

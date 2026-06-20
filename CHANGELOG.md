@@ -2,6 +2,8 @@
 
 ## 2026-06-20
 
+- Shipped Phase 0 of the super-app roadmap on `codex/android-compact-shell`: optional receipt `splitType`, `splits`, `payers`, and `lineItems`; `computeShares()` with largest-remainder rounding; and `computeSettlements()` support for explicit splits/multiple payers with legacy fallback.
+- Added split-engine unit coverage plus a settle-up smoke case for explicit split + multi-payer balances. Bumped Compact Android branch version to `0.8.9` / Android `versionCode 809`.
 - Added native Android Scan camera/gallery capture on the isolated `codex/android-compact-shell` branch using Capacitor Camera, while preserving the existing Compact OCR draft flow and web file-input fallback.
 - Hardened the Android QA smoke so emulator `adb logcat -c` clear failures do not abort before launch; the smoke still captures the logcat tail and package crash filter.
 - Bumped Compact Android branch version to `0.8.6` / Android `versionCode 806`.

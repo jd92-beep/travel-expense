@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Splitwise-class "settle up" feature + super-app roadmap (Claude); native camera bridge (Codex)
-- **Agent**: Claude (Oscar) + Codex (concurrent on this branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.8.8` (versionCode `808`); React unchanged
+- **Focus**: Super-app roadmap Phase 0 split-array enabler
+- **Agent**: Codex (concurrent branch — `git fetch` before every commit)
+- **App version**: Compact/Android `0.8.9` (versionCode `809`); React unchanged
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -20,6 +20,7 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
   `computeSettlements` consume them with fallback to today's model. Integer minor units +
   largest-remainder rounding. Ride the receipt sync pipeline (don't add new tables); add Supabase
   columns + Notion props via the drift-tolerant resolver; **no blind live-DB push**.
+- **Phase 0 shipped in v0.8.9:** types + `computeShares()` + settlement fallback are in place; next work starts at Phase 1 UI/sync.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -87,10 +88,18 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.6`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.9`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 40 (Codex — Phase 0 split-array enabler, v0.8.9)
+
+1. **Receipt array model:** added optional `splitType`, `splits`, `payers`, and `lineItems` fields, leaving old receipts unchanged.
+2. **Pure split math:** added `computeShares()` with equal/shares/exact/percent/adjustment/itemized modes and largest-remainder rounding so shares sum exactly.
+3. **Settlement fallback:** `computeSettlements()` now consumes valid `splits`/`payers` and falls back to trip ratios for old or invalid split data.
+4. **Coverage:** extended `scripts/split-engine.test.ts` for split modes/validation and `settle-up-smoke` for explicit split + multi-payer balances.
+5. **Versioning:** Compact/Android bumped to `0.8.9` / versionCode `809`; package-lock metadata synced.
 
 ### Session 39 (Codex — Android native camera/gallery bridge, v0.8.6)
 

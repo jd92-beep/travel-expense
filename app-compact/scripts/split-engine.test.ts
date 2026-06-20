@@ -1,7 +1,7 @@
 // Unit test for the pure settlement/simplify math. Run: node --experimental-strip-types
 // scripts/split-engine.test.ts  (Node 22.18+ strips TS types natively). No test framework.
 import assert from 'node:assert/strict';
-import { simplifyDebts, type IndexTransfer } from '../src/lib/splitEngine.ts';
+import { computeShares, simplifyDebts, type IndexTransfer } from '../src/lib/splitEngine.ts';
 
 function applyTransfers(balances: number[], transfers: IndexTransfer[]): number[] {
   const out = balances.slice();
@@ -23,6 +23,39 @@ function assertSettlesExactly(balances: number[], label: string): IndexTransfer[
   assert.ok(transfers.length <= Math.max(0, balances.length - 1), `${label}: ${transfers.length} > n-1 transfers`);
   return transfers;
 }
+
+function sharesObject(map: Map<string, number>): Record<string, number> {
+  return Object.fromEntries([...map.entries()].sort(([a], [b]) => a.localeCompare(b)));
+}
+
+assert.deepEqual(
+  sharesObject(computeShares(101, 'equal', [{ personId: 'a' }, { personId: 'b' }, { personId: 'c' }])),
+  { a: 34, b: 34, c: 33 },
+  'equal split distributes rounding by deterministic id order',
+);
+assert.deepEqual(
+  sharesObject(computeShares(120, 'shares', [{ personId: 'a', weight: 1 }, { personId: 'b', weight: 2 }, { personId: 'c', weight: 3 }])),
+  { a: 20, b: 40, c: 60 },
+  'weighted shares split by ratio',
+);
+assert.deepEqual(
+  sharesObject(computeShares(100, 'exact', [{ personId: 'a', amount: 30 }, { personId: 'b', amount: 70 }])),
+  { a: 30, b: 70 },
+  'exact split preserves entered amounts',
+);
+assert.deepEqual(
+  sharesObject(computeShares(101, 'percent', [{ personId: 'a', pct: 50 }, { personId: 'b', pct: 50 }])),
+  { a: 51, b: 50 },
+  'percent split rounds back to total',
+);
+assert.deepEqual(
+  sharesObject(computeShares(100, 'adjustment', [{ personId: 'a', adjust: 10 }, { personId: 'b' }])),
+  { a: 55, b: 45 },
+  'adjustment split adds extras on top of equal base',
+);
+assert.equal([...computeShares(999, 'equal', [{ personId: 'a' }, { personId: 'b' }]).values()].reduce((a, b) => a + b, 0), 999, 'shares sum exactly');
+assert.throws(() => computeShares(100, 'exact', [{ personId: 'a', amount: 40 }, { personId: 'b', amount: 40 }]), /must equal 100/);
+assert.throws(() => computeShares(100, 'percent', [{ personId: 'a', pct: 60 }, { personId: 'b', pct: 30 }]), /must equal 100/);
 
 // 2 participants — exact direction/amount (欣欣 owes Boss 500)
 const t2 = assertSettlesExactly([500, -500], '2p');

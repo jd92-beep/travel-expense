@@ -30,6 +30,43 @@ const firstPercent = async (locator) => {
   return (text.match(/\d+%/) || ['n/a'])[0];
 };
 
+test('Balances consume explicit splits and multiple payers', async ({ page }) => {
+  await page.addInitScript((payload) => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify(payload));
+  }, {
+    lastTab: 'stats',
+    persons,
+    shareRatios: { p_boss: 1, p_xinxin: 1 },
+    receipts: [
+      { id: 'legacy_equal', store: 'Legacy meal', total: 100, date: '2026-04-20', category: 'food', payment: 'cash', personId: 'p_boss', splitMode: 'shared', createdAt: 1 },
+      {
+        id: 'exact_multi_payer',
+        store: 'Exact split meal',
+        total: 100,
+        date: '2026-04-20',
+        category: 'food',
+        payment: 'cash',
+        splitMode: 'shared',
+        splitType: 'exact',
+        splits: [{ personId: 'p_boss', amount: 25 }, { personId: 'p_xinxin', amount: 75 }],
+        payers: [{ personId: 'p_boss', amount: 60 }, { personId: 'p_xinxin', amount: 40 }],
+        createdAt: 2,
+      },
+    ],
+    budget: 2400,
+    statsIncludeTransportLodging: false,
+    top10IncludeBigItems: true,
+    schemaVersion: 3,
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/#stats');
+  await expect(page.locator('.transfer-modern')).toHaveCount(1);
+  await expect(page.locator('.transfer-modern')).toContainText('¥85');
+});
+
 test('Settle up records a payment that zeroes the balance without touching spending', async ({ page }) => {
   await page.addInitScript((payload) => {
     window.__disable_supabase_configured = true;

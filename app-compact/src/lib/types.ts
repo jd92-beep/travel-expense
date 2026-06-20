@@ -11,6 +11,7 @@ export type CategoryId =
 
 export type PaymentId = 'cash' | 'credit' | 'paypay' | 'suica';
 export type SplitMode = 'shared' | 'private';
+export type SplitType = 'equal' | 'shares' | 'exact' | 'percent' | 'adjustment' | 'itemized';
 export type TripPhase = 'prep' | 'trip' | 'post';
 export type SyncStatus = 'local' | 'queued' | 'syncing' | 'synced' | 'error' | 'failed';
 export type GlobalSyncStatus = 'idle' | 'queued' | 'pushing' | 'pulling' | 'synced' | 'error' | 'offline';
@@ -42,6 +43,27 @@ export interface Person {
   color: string;
 }
 
+export interface ReceiptSplit {
+  personId: string;
+  weight?: number;
+  amount?: number;
+  pct?: number;
+  adjust?: number;
+}
+
+export interface ReceiptPayer {
+  personId: string;
+  amount: number;
+}
+
+export interface ReceiptLineItem {
+  id: string;
+  desc: string;
+  amount: number;
+  qty?: number;
+  assignedTo?: string[];
+}
+
 export interface Receipt {
   id: string;
   supabaseId?: string;
@@ -69,6 +91,7 @@ export interface Receipt {
   bookingRef?: string;
   note?: string;
   itemsText?: string;
+  lineItems?: ReceiptLineItem[];
   photoThumb?: string;
   photoUrl?: string;
   notionFileUploadId?: string;
@@ -79,6 +102,9 @@ export interface Receipt {
   supabasePhotoPath?: string;
   personId?: string;
   splitMode?: SplitMode;
+  splitType?: SplitType;
+  splits?: ReceiptSplit[];
+  payers?: ReceiptPayer[];
   beneficiaryId?: string;
   /** True when this receipt is a recorded "settle up" payment, not an expense. */
   isSettlement?: boolean;

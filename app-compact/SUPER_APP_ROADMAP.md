@@ -258,10 +258,10 @@ user only corrects. *Acceptance:* AI proposes a plausible assignment that the us
 > Legend: effort **S/M/L**; `[deps]`. Tick as shipped. Each ticked task = a commit on the android branch.
 
 ### Phase 0 — Split-array enabler  *(unblocks F1/F2/F3)*
-- [ ] **T0.1** Add `SplitType`, `ReceiptSplit`, `Receipt.splitType?/splits?/payers?/lineItems?` to `types.ts` — **S**
-- [ ] **T0.2** `splitEngine.computeShares(total, splitType, splits)` + largest-remainder rounding — **M**
-- [ ] **T0.3** Unit tests for `computeShares` (5 modes + rounding + validation) in `scripts/split-engine.test.ts` — **S** `[T0.2]`
-- [ ] **T0.4** `computeSettlements` consumes `splits`/`payers` with fallback to today's model — **M** `[T0.1,T0.2]`
+- [x] **T0.1** Add `SplitType`, `ReceiptSplit`, `Receipt.splitType?/splits?/payers?/lineItems?` to `types.ts` — **S**
+- [x] **T0.2** `splitEngine.computeShares(total, splitType, splits)` + largest-remainder rounding — **M**
+- [x] **T0.3** Unit tests for `computeShares` (5 modes + rounding + validation) in `scripts/split-engine.test.ts` — **S** `[T0.2]`
+- [x] **T0.4** `computeSettlements` consumes `splits`/`payers` with fallback to today's model — **M** `[T0.1,T0.2]`
 
 ### Phase 1 — Split flexibility (F1, F2)
 - [ ] **T1.1** Split-mode `SegmentedControl` + progressive disclosure in `ReceiptEditor.tsx` — **M** `[T0.1]`

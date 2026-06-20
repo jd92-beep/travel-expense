@@ -1,11 +1,93 @@
-// Pure split / settlement math — intentionally has NO app imports so it can be unit-tested in
+// Pure split / settlement math — intentionally has no runtime app imports so it can be unit-tested in
 // isolation (see scripts/split-engine.test.ts). domain.ts's computeSettlements delegates the
 // debt-simplification step here. Keep this file dependency-free.
+import type { ReceiptSplit, SplitType } from './types';
 
 export interface IndexTransfer {
   from: number;
   to: number;
   amount: number;
+}
+
+type ShareRow = { personId: string; raw: number };
+
+function assertFiniteAmount(value: unknown, label: string): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw new Error(`${label} must be finite`);
+  return n;
+}
+
+function assertWholeNonNegative(value: unknown, label: string): number {
+  const n = Math.round(assertFiniteAmount(value, label));
+  if (n < 0) throw new Error(`${label} must be non-negative`);
+  return n;
+}
+
+function assertClose(actual: number, expected: number, label: string, epsilon = 1e-6) {
+  if (Math.abs(actual - expected) > epsilon) throw new Error(`${label} must equal ${expected}`);
+}
+
+function splitRows(splits: ReceiptSplit[]): ReceiptSplit[] {
+  const rows = splits.filter((split) => split.personId);
+  if (!rows.length) throw new Error('At least one split participant is required');
+  return rows;
+}
+
+function largestRemainder(total: number, rows: ShareRow[]): Map<string, number> {
+  const roundedTotal = Math.round(total);
+  const parts = rows.map((row, index) => {
+    if (row.raw < 0 || !Number.isFinite(row.raw)) throw new Error('Share amount must be non-negative');
+    const floored = Math.floor(row.raw);
+    return { ...row, index, amount: floored, remainder: row.raw - floored };
+  });
+  let leftover = roundedTotal - parts.reduce((sum, row) => sum + row.amount, 0);
+  const order = parts.slice().sort((a, b) =>
+    b.remainder - a.remainder || a.personId.localeCompare(b.personId) || a.index - b.index,
+  );
+  for (let i = 0; leftover > 0 && order.length; i += 1, leftover -= 1) {
+    order[i % order.length].amount += 1;
+  }
+  if (leftover !== 0) throw new Error('Unable to distribute split rounding residual');
+  return parts.reduce((map, row) => map.set(row.personId, (map.get(row.personId) || 0) + row.amount), new Map<string, number>());
+}
+
+export function computeShares(total: number, splitType: SplitType, splits: ReceiptSplit[]): Map<string, number> {
+  const roundedTotal = assertWholeNonNegative(total, 'total');
+  const rows = splitRows(splits);
+  if (splitType === 'exact' || splitType === 'itemized') {
+    const out = new Map<string, number>();
+    for (const split of rows) out.set(split.personId, (out.get(split.personId) || 0) + assertWholeNonNegative(split.amount, 'split amount'));
+    const sum = [...out.values()].reduce((a, b) => a + b, 0);
+    if (sum !== roundedTotal) throw new Error(`exact split total ${sum} must equal ${roundedTotal}`);
+    return out;
+  }
+  if (splitType === 'percent') {
+    const pctTotal = rows.reduce((sum, split) => sum + assertFiniteAmount(split.pct, 'split percent'), 0);
+    assertClose(pctTotal, 100, 'split percent total');
+    return largestRemainder(roundedTotal, rows.map((split) => ({
+      personId: split.personId,
+      raw: roundedTotal * (assertFiniteAmount(split.pct, 'split percent') / 100),
+    })));
+  }
+  if (splitType === 'adjustment') {
+    const adjustments = rows.map((split) => assertWholeNonNegative(split.adjust || 0, 'split adjustment'));
+    const adjustmentTotal = adjustments.reduce((a, b) => a + b, 0);
+    if (adjustmentTotal > roundedTotal) throw new Error('split adjustments cannot exceed total');
+    const equalBase = (roundedTotal - adjustmentTotal) / rows.length;
+    return largestRemainder(roundedTotal, rows.map((split, index) => ({
+      personId: split.personId,
+      raw: equalBase + adjustments[index],
+    })));
+  }
+  const weights = rows.map((split) => splitType === 'shares'
+    ? assertWholeNonNegative(split.weight ?? 0, 'split weight')
+    : 1);
+  const weightTotal = weights.reduce((a, b) => a + b, 0);
+  if (weightTotal <= 0) throw new Error('split weights must be positive');
+  return largestRemainder(roundedTotal, rows.map((split, index) => ({
+    personId: split.personId,
+    raw: roundedTotal * (weights[index] / weightTotal),
+  })));
 }
 
 /**
