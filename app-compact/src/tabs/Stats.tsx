@@ -16,10 +16,13 @@ type StatBucket = { id: string; name: string; color: string; total: number; icon
 
 export function Stats({ state, setState, updateState, onTab, upsertReceipt, deleteReceipt }: { state: AppState; setState?: Dispatch<SetStateAction<AppState>>; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void; upsertReceipt?: (r: Receipt) => void; deleteReceipt?: (r: Receipt) => void }) {
   const trip = activeTrip(state);
-  const scopedState = { ...state, receipts: scopedReceiptsForTrip(state, trip) };
-  const settlement = computeSettlements(scopedState);
+  // Settlements must reach the balance engine but never the spending charts/trend, so split the
+  // scoped receipts into the full set (for computeSettlements) and a spending-only set (everything else).
+  const fullScopedReceipts = scopedReceiptsForTrip(state, trip);
+  const settlement = computeSettlements({ ...state, receipts: fullScopedReceipts });
   const persons = getPersons(state);
-  const settlementRecords = scopedState.receipts.filter(isSettlementReceipt);
+  const settlementRecords = fullScopedReceipts.filter(isSettlementReceipt);
+  const scopedState = { ...state, receipts: fullScopedReceipts.filter((r) => !isSettlementReceipt(r)) };
   const [settleDraft, setSettleDraft] = useState<{ fromId: string; toId: string; amount: string; note: string } | null>(null);
   const openSettle = (fromId: string, toId: string, amount: number) =>
     setSettleDraft({ fromId, toId, amount: String(Math.round(amount)), note: '' });
