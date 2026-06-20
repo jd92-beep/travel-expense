@@ -2,11 +2,11 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Super-app roadmap Phase 3 complete
+- **Focus**: Super-app roadmap Phase 4 complete
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.10.0` (versionCode `1000`); React unchanged
-- **Latest pushed branch commit**: `35d1a32` (`feat(itemize): complete phase 2 AI itemization v0.9.0`)
-- **Current branch state**: `codex/android-compact-shell` with Phase 3 (Accuracy & social) committed locally.
+- **App version**: Compact/Android `0.11.0` (versionCode `1100`); React unchanged
+- **Latest pushed branch commit**: `116c1ac` (`feat(social): complete phase 3 accuracy & social v0.10.0`)
+- **Current branch state**: `codex/android-compact-shell` with Phase 4 (Robustness & reach) committed locally.
 - **Final Phase 2 verification passed**: `npm run typecheck`, `npm run build`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `npm run smoke:split-editor`, `npm run smoke:scan`, `npm run security:scan`, `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`, and `git diff --check`.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
@@ -26,7 +26,8 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
 - **Phase 0 shipped in v0.8.9:** types + `computeShares()` + settlement fallback are in place.
 - **Phase 1 complete through v0.8.16:** `ReceiptEditor` has split UI, multiple payers, Supabase storage, Notion round-trip, and E2E coverage for all split modes.
 - **Phase 2 complete through v0.9.0:** AI receipt itemization (F3) is done. `scanReceiptImage` returns structured `lineItems[]` with `desc`, `amount`, `qty`. `ReceiptEditor` has an item-assignment sheet with per-item `AvatarBadge` toggles, "一鍵均分所有人" / "清除全部分配" quick actions, and live Σ-validation. `foldLineItemsToSplits` in `splitEngine.ts` converts item assignments into per-person `splits[]` with largest-remainder rounding. Unit tests cover 6 fold scenarios + existing settlement tests. E2E split-editor smoke passes.
-- **Phase 3 complete through v0.10.0:** FX snapshot (F4) auto-populates `exchangeRate` + `hkdAmount` on save (ReceiptEditor, scan, voice/email). Comments (F5) via `expense_comments` Supabase table with RLS, comment UI in ReceiptEditor, and activity feed in History tab. Next work starts at Phase 4 / T4.1 durable offline outbox.
+- **Phase 3 complete through v0.10.0:** FX snapshot (F4) auto-populates `exchangeRate` + `hkdAmount` on save (ReceiptEditor, scan, voice/email). Comments (F5) via `expense_comments` Supabase table with RLS, comment UI in ReceiptEditor, and activity feed in History tab.
+- **Phase 4 complete through v0.11.0:** Durable offline outbox (F6) with explicit `idempotencyKey` on every queue item. Identity unification (F8) auto-creates Person entries for shared trip members not yet in accounting people. Recurring expenses (F7) with `RecurringRule` type, `processRecurringRules` client scheduler, and Settings UI for manage/toggle/delete. Next work starts at Phase 5 / T5.1 onboarding.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -98,6 +99,13 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 50 (Codex — Phase 4 robustness & reach, v0.11.0)
+
+1. **T4.1 outbox hardening:** added explicit `idempotencyKey` field to `SyncQueueItem` type. `queueItem()` now generates `type:entityId:op:timestamp` keys. Existing deduplication (`dedupeQueue`) + exponential backoff (`syncBackoffMs`) + ordered replay already covered.
+2. **T4.2 identity unification:** `pullSupabaseData` now auto-creates `Person` entries for shared trip members not yet in `trip_accounting_people`. Members get `defaultPersonId || member_{userId}` as their person ID, with default emoji/color. Share ratios default to 1.
+3. **T4.3 recurring expenses:** added `RecurringRule` type (store, total, category, payment, frequency, nextRun, active). Added `processRecurringRules()` in domain.ts that spawns receipts for due rules on app load. Added "定期消費" AccordionCard in Settings with toggle/delete. `AppState.recurringRules` persists via existing sync.
+4. **Versioning:** Compact/Android bumped to `0.11.0` / versionCode `1100`; package-lock metadata synced.
 
 ### Session 49 (Codex — Phase 3 accuracy & social, v0.10.0)
 

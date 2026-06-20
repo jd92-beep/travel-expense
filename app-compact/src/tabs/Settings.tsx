@@ -2921,6 +2921,22 @@ export function Settings({
         </div>)}
       </AccordionCard>
 
+      <AccordionCard id="settings-recurring" eyebrow="Automation" title="定期消費" icon={<Sparkles />}>
+        {(state.recurringRules || []).length === 0 && <p className="muted" style={{ fontSize: '13px' }}>暫無定期消費。你可以喺收據編輯器設定每月租金、訂閱等。</p>}
+        {(state.recurringRules || []).map((rule) => (
+          <div key={rule.id} className="recurring-rule-row">
+            <div className="recurring-rule-info">
+              <span className="recurring-rule-store">{rule.store}</span>
+              <span className="recurring-rule-meta">{rule.frequency === 'daily' ? '每日' : rule.frequency === 'weekly' ? '每週' : '每月'} · ¥{rule.total.toLocaleString()} · 下次: {rule.nextRun}</span>
+            </div>
+            <div className="recurring-rule-actions">
+              <button type="button" className="secondary" style={{ fontSize: '11px', padding: '2px 8px' }} onClick={() => updateState({ recurringRules: (state.recurringRules || []).map((r) => r.id === rule.id ? { ...r, active: !r.active, updatedAt: Date.now() } : r) })}>{rule.active ? '暫停' : '啟用'}</button>
+              <button type="button" className="danger" style={{ fontSize: '11px', padding: '2px 8px' }} onClick={() => updateState({ recurringRules: (state.recurringRules || []).filter((r) => r.id !== rule.id) })}>刪除</button>
+            </div>
+          </div>
+        ))}
+      </AccordionCard>
+
       <AccordionCard id="settings-data" title="資料管理" icon={<ShieldCheck />}>
         <input ref={backupInput} hidden type="file" accept="application/json,.json" onChange={(e) => importBackup(e.target.files?.[0])} />
         <div className="action-row wrap">

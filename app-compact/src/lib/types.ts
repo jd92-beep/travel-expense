@@ -280,6 +280,8 @@ export interface SyncQueueItem {
   status: SyncStatus;
   attempts: number;
   error?: string;
+  nextRetryAt?: number;
+  idempotencyKey?: string;
   createdAt: number;
   updatedAt: number;
   payload?: {
@@ -297,6 +299,24 @@ export interface SyncEngineState {
   lastSyncedAt: number;
   pendingCount: number;
   error?: string;
+}
+
+export type RecurringFrequency = 'daily' | 'weekly' | 'monthly';
+
+export interface RecurringRule {
+  id: string;
+  store: string;
+  total: number;
+  category: CategoryId;
+  payment: PaymentId;
+  currency?: string;
+  personId?: string;
+  splitMode?: SplitMode;
+  frequency: RecurringFrequency;
+  nextRun: string;
+  active: boolean;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface AppState {
@@ -334,6 +354,7 @@ export interface AppState {
   notionDeletedIds?: string[];
   notionDeletedSourceIds?: string[];
   syncQueue?: SyncQueueItem[];
+  recurringRules?: RecurringRule[];
   settingsUpdatedAt?: number;
   lastSyncedAt?: number;
   globalSyncStatus?: GlobalSyncStatus;

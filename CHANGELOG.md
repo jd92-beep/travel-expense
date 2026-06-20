@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06-20 (Phase 4)
+
+- **Phase 4 Robustness & reach complete on `codex/android-compact-shell`, v0.11.0 / versionCode 1100.**
+- **T4.1 outbox hardening (F6):** added explicit `idempotencyKey` field to `SyncQueueItem`. Every queue item now carries a `type:entityId:op:timestamp` key. Existing exponential backoff, ordered replay, and deduplication confirmed working.
+- **T4.2 identity unification (F8):** Supabase pull now auto-creates `Person` entries for shared trip members who aren't yet in `trip_accounting_people`. Members automatically appear in split UIs with default emoji/color. Share ratios default to 1.
+- **T4.3 recurring expenses (F7):** added `RecurringRule` type with daily/weekly/monthly frequency. `processRecurringRules()` spawns receipts for due rules on app load. Settings "定期消費" card shows all rules with toggle/delete controls.
+- All existing tests pass. Build verified.
+
 ## 2026-06-20 (Phase 3)
 
 - **Phase 3 Accuracy & social complete on `codex/android-compact-shell`, v0.10.0 / versionCode 1000.**

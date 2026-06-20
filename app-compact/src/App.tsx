@@ -6,6 +6,7 @@ import { Shell } from './components/Shell';
 import { LoadingState } from './components/ui';
 import { Loader2 } from 'lucide-react';
 import { activeTrip, stampReceiptForTrip, stableDayId, stableSpotId } from './domain/trip/normalize';
+import { processRecurringRules } from './lib/domain';
 import { hasCredentialBrokerSession } from './lib/credentialBroker';
 import { canUseNotionMirror } from './lib/notionAccess';
 import { mergePulledData } from './lib/syncMerge';
@@ -402,6 +403,20 @@ export function App() {
       if (!bootSyncKeys.current.has(bootSyncKey)) bootSyncScheduledKey.current = '';
     };
   }, [isHydratingScope, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, supabaseAuth.session]);
+
+  // Process recurring rules on mount
+  useEffect(() => {
+    if (!state.recurringRules?.length) return;
+    const { receipts: newReceipts, updatedRules } = processRecurringRules(state);
+    if (newReceipts.length) {
+      updateState({
+        receipts: [...state.receipts, ...newReceipts],
+        recurringRules: updatedRules,
+      });
+      console.log(`[App] Recurring: spawned ${newReceipts.length} receipt(s) from ${updatedRules.length} rule(s)`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-connect Notion for Boss when Supabase session is available
   useEffect(() => {

@@ -1425,6 +1425,31 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
       settings ||= {};
       settings.peopleByTripId = peopleByTripId;
       settings.shareRatiosByTripId = shareRatiosByTripId;
+      // Auto-add trip members who aren't yet in accounting people so they appear in split UIs.
+      for (const trip of trips) {
+        if (!trip.supabaseId || !trip.sharing?.isShared) continue;
+        const existing = peopleByTripId[trip.id] || [];
+        const existingIds = new Set(existing.map((p) => p.id));
+        const members = (trip.sharing.members || []).filter((m) => m.status === 'active' && m.userId);
+        for (const member of members) {
+          const personId = member.defaultPersonId || `member_${member.userId.slice(0, 8)}`;
+          if (existingIds.has(personId)) continue;
+          existing.push({
+            id: personId,
+            name: member.displayName || member.email?.split('@')[0] || '成員',
+            emoji: '👤',
+            color: '#1E4D6B',
+          });
+          existingIds.add(personId);
+        }
+        if (existing.length > (peopleByTripId[trip.id]?.length || 0)) {
+          peopleByTripId[trip.id] = existing;
+          if (!shareRatiosByTripId[trip.id]) shareRatiosByTripId[trip.id] = {};
+          for (const person of existing) {
+            if (!(person.id in shareRatiosByTripId[trip.id])) shareRatiosByTripId[trip.id][person.id] = 1;
+          }
+        }
+      }
       // Also project active trip into compatibility fields.
       const activeTripId = settings?.activeTripId || state.activeTripId;
       if (activeTripId && peopleByTripId[activeTripId]) {

@@ -2,7 +2,7 @@ import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
 import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { computeShares, simplifyDebts } from './splitEngine';
-import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, ReceiptPayer, SettlementSnapshot, TripPhase } from './types';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, ReceiptPayer, RecurringRule, SettlementSnapshot, TripPhase } from './types';
 
 export const fmt = (n: number | string | undefined) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -718,4 +718,45 @@ export function openMapExternal(mapUrl: string | undefined, name: string, addres
       window.open(fallbackUrl, '_blank');
     }
   }, 1200);
+}
+
+function nextRunDate(current: string, frequency: RecurringRule['frequency']): string {
+  const d = new Date(current + 'T00:00:00');
+  if (frequency === 'daily') d.setDate(d.getDate() + 1);
+  else if (frequency === 'weekly') d.setDate(d.getDate() + 7);
+  else d.setMonth(d.getMonth() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+export function processRecurringRules(state: AppState): { receipts: Receipt[]; updatedRules: RecurringRule[] } {
+  const rules = state.recurringRules || [];
+  if (!rules.length) return { receipts: [], updatedRules: rules };
+  const today = new Date().toISOString().slice(0, 10);
+  const newReceipts: Receipt[] = [];
+  const updatedRules: RecurringRule[] = [];
+  for (const rule of rules) {
+    if (!rule.active || rule.nextRun > today) {
+      updatedRules.push(rule);
+      continue;
+    }
+    newReceipts.push({
+      id: `recurring_${rule.id}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      store: rule.store,
+      total: rule.total,
+      date: rule.nextRun,
+      category: rule.category,
+      payment: rule.payment,
+      currency: rule.currency || state.tripCurrency || 'JPY',
+      personId: rule.personId || state.persons?.[0]?.id || '',
+      splitMode: rule.splitMode || 'shared',
+      source: 'recurring',
+      createdAt: Date.now(),
+    });
+    updatedRules.push({
+      ...rule,
+      nextRun: nextRunDate(rule.nextRun, rule.frequency),
+      updatedAt: Date.now(),
+    });
+  }
+  return { receipts: newReceipts, updatedRules };
 }

@@ -286,9 +286,9 @@ user only corrects. *Acceptance:* AI proposes a plausible assignment that the us
 - [x] **T3.3** Activity projection + feed surface (shared trips) — **M** `[T3.2]`
 
 ### Phase 4 — Robustness & reach (F6, F8, F7)
-- [ ] **T4.1** Durable offline outbox: idempotency key + ordered replay + backoff — **M**
-- [ ] **T4.2** Unify `Person` ↔ Supabase `member` identity; per-user balances — **L**
-- [ ] **T4.3** Recurring rules + client scheduler — **M** `[T4.2]`
+- [x] **T4.1** Durable offline outbox: idempotency key + ordered replay + backoff — **M**
+- [x] **T4.2** Unify `Person` ↔ Supabase `member` identity; per-user balances — **L**
+- [x] **T4.3** Recurring rules + client scheduler — **M** `[T4.2]`
 
 ### Phase 5 — Polish & GTM
 - [ ] **T5.1** Onboarding that teaches scan→split→settle in 3 taps — **M**

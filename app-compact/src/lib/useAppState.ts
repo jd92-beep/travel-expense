@@ -20,6 +20,7 @@ function queueItem(type: SyncQueueItem['type'], entityId: string, op: SyncQueueI
     op,
     status: 'queued',
     attempts: 0,
+    idempotencyKey: `${type}:${entityId}:${op}:${now}`,
     createdAt: now,
     updatedAt: now,
     payload,
