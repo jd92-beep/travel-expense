@@ -2629,6 +2629,38 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   grid-auto-flow: column;
   margin-top: 2px;
 }
+.receipt-split-editor {
+  display: grid;
+  gap: 8px;
+}
+.receipt-split-editor .status-pill {
+  justify-self: start;
+}
+.receipt-split-rows {
+  display: grid;
+  gap: 8px;
+}
+.receipt-split-row {
+  grid-template-columns: minmax(0, 1fr) minmax(96px, 120px);
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.58);
+}
+.receipt-split-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink);
+}
+.receipt-split-person > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .receipt-delete-confirm-backdrop {
   z-index: 1200;
   place-items: center;

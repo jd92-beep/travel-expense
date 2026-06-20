@@ -3,12 +3,14 @@ import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { SUPPORTED_CURRENCIES } from '../lib/currency';
 import { getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import type { AppState, CategoryId, PaymentId, Receipt, SplitMode, SplitType } from '../lib/types';
+import type { AppState, CategoryId, PaymentId, Person, Receipt, ReceiptSplit, SplitMode, SplitType } from '../lib/types';
+import { AvatarBadge } from './AvatarBadge';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
-import { SegmentedControl } from './ui';
+import { SegmentedControl, StatusPill } from './ui';
 
 const newId = () => `manual_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const MAX_RECEIPT_AMOUNT = 1_000_000_000;
+type SplitField = 'weight' | 'amount' | 'pct' | 'adjust';
 const SPLIT_TYPE_OPTIONS: Array<{ value: SplitType; label: string }> = [
   { value: 'equal', label: '均分' },
   { value: 'shares', label: '份數' },
@@ -17,10 +19,87 @@ const SPLIT_TYPE_OPTIONS: Array<{ value: SplitType; label: string }> = [
   { value: 'adjustment', label: '加減' },
 ];
 
+function splitFieldFor(type: SplitType): SplitField | null {
+  if (type === 'shares') return 'weight';
+  if (type === 'exact') return 'amount';
+  if (type === 'percent') return 'pct';
+  if (type === 'adjustment') return 'adjust';
+  return null;
+}
+
+function splitInputLabel(type: SplitType) {
+  if (type === 'shares') return '份數';
+  if (type === 'exact') return '實額';
+  if (type === 'percent') return '百分比';
+  return '加減';
+}
+
 function validAmount(value: unknown): number | null {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount < 0 || amount > MAX_RECEIPT_AMOUNT) return null;
   return amount;
+}
+
+function splitValue(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function splitEvenly(total: number, count: number) {
+  const rounded = Math.round(Math.max(0, total));
+  const base = Math.floor(rounded / Math.max(1, count));
+  let leftover = rounded - base * count;
+  return Array.from({ length: count }, () => base + (leftover-- > 0 ? 1 : 0));
+}
+
+function percentEvenly(count: number) {
+  const base = Math.floor(10000 / Math.max(1, count));
+  let leftover = 10000 - base * count;
+  return Array.from({ length: count }, () => (base + (leftover-- > 0 ? 1 : 0)) / 100);
+}
+
+function defaultSplits(persons: Person[], splitType: SplitType, total: number): ReceiptSplit[] {
+  const amounts = splitEvenly(total, persons.length);
+  const percents = percentEvenly(persons.length);
+  return persons.map((person, index) => ({
+    personId: person.id,
+    weight: splitType === 'shares' ? 1 : undefined,
+    amount: splitType === 'exact' ? amounts[index] : undefined,
+    pct: splitType === 'percent' ? percents[index] : undefined,
+    adjust: splitType === 'adjustment' ? 0 : undefined,
+  }));
+}
+
+function splitRowsFor(persons: Person[], splits: ReceiptSplit[] | undefined, splitType: SplitType, total: number): ReceiptSplit[] {
+  const byId = new Map((splits || []).map((split) => [split.personId, split]));
+  return defaultSplits(persons, splitType, total).map((split) => ({
+    ...split,
+    ...byId.get(split.personId),
+    personId: split.personId,
+  }));
+}
+
+function formatDelta(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
+}
+
+function validateSplitRows(splitType: SplitType, total: number, rows: ReceiptSplit[]) {
+  const field = splitFieldFor(splitType);
+  if (!field) return { valid: true, label: '已對數' };
+  const sum = rows.reduce((acc, row) => acc + splitValue(row[field]), 0);
+  if (splitType === 'shares') {
+    return sum > 0 ? { valid: true, label: '已對數' } : { valid: false, label: '份數要大過 0' };
+  }
+  if (splitType === 'percent') {
+    const diff = 100 - sum;
+    if (Math.abs(diff) < 0.01) return { valid: true, label: '已對數' };
+    return { valid: false, label: diff > 0 ? `差 ${formatDelta(diff)}%` : `多 ${formatDelta(Math.abs(diff))}%` };
+  }
+  const diff = Math.round(total) - Math.round(sum);
+  if (splitType === 'adjustment') {
+    return diff >= 0 ? { valid: true, label: '已對數' } : { valid: false, label: `多 ¥${formatDelta(Math.abs(diff))}` };
+  }
+  return diff === 0 ? { valid: true, label: '已對數' } : { valid: false, label: diff > 0 ? `差 ¥${formatDelta(diff)}` : `多 ¥${formatDelta(Math.abs(diff))}` };
 }
 
 export function ReceiptEditor({
@@ -69,6 +148,15 @@ export function ReceiptEditor({
   const selectedSplitType = SPLIT_TYPE_OPTIONS.some((option) => option.value === draft.splitType)
     ? draft.splitType as SplitType
     : 'equal';
+  const totalForSplit = validAmount(draft.total) ?? 0;
+  const splitRows = useMemo(
+    () => splitRowsFor(persons, draft.splits, selectedSplitType, totalForSplit),
+    [draft.splits, persons, selectedSplitType, totalForSplit],
+  );
+  const splitValidation = useMemo(
+    () => validateSplitRows(selectedSplitType, totalForSplit, splitRows),
+    [selectedSplitType, splitRows, totalForSplit],
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -109,6 +197,17 @@ export function ReceiptEditor({
     return { ...d, [key]: value };
   });
 
+  const setSplitValue = (personId: string, raw: string) => {
+    const field = splitFieldFor(selectedSplitType);
+    if (!field) return;
+    setDraft((d) => ({
+      ...d,
+      splitType: selectedSplitType,
+      splits: splitRowsFor(persons, d.splits, selectedSplitType, validAmount(d.total) ?? 0)
+        .map((row) => row.personId === personId ? { ...row, [field]: splitValue(raw) } : row),
+    }));
+  };
+
   async function attachPhoto(file?: File) {
     if (!file) return;
     const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -142,6 +241,11 @@ export function ReceiptEditor({
             alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
             return;
           }
+          const keepSplits = draft.splitMode !== 'private' && selectedSplitType !== 'equal';
+          if (keepSplits && !splitValidation.valid) {
+            alert(`拆數未對數：${splitValidation.label}`);
+            return;
+          }
           onSave({
             ...draft,
             store: draft.store.trim() || '未命名',
@@ -151,6 +255,8 @@ export function ReceiptEditor({
             currency: draft.currency || draft.originalCurrency || currencyForDate(draft.date),
             personId: draft.personId || first?.id || '',
             splitMode: draft.splitMode || 'shared',
+            splitType: keepSplits ? selectedSplitType : undefined,
+            splits: keepSplits ? splitRows : undefined,
           });
         }}
       >
@@ -236,8 +342,36 @@ export function ReceiptEditor({
               ariaLabel="選擇拆數方式"
               value={selectedSplitType}
               options={SPLIT_TYPE_OPTIONS}
-              onChange={(value) => set('splitType', value)}
+              onChange={(value) => setDraft((d) => ({ ...d, splitType: value, splits: value === 'equal' ? undefined : d.splits }))}
             />
+            {selectedSplitType !== 'equal' && (
+              <div className="receipt-split-editor">
+                <StatusPill tone={splitValidation.valid ? 'ok' : 'warning'}>{splitValidation.label}</StatusPill>
+                <div className="receipt-split-rows">
+                  {splitRows.map((row) => {
+                    const field = splitFieldFor(selectedSplitType);
+                    const person = persons.find((p) => p.id === row.personId);
+                    if (!field || !person) return null;
+                    const label = splitInputLabel(selectedSplitType);
+                    return (
+                      <label key={row.personId} className="receipt-split-row">
+                        <span className="receipt-split-person">
+                          <AvatarBadge person={person} size="sm" />
+                          <span>{person.name}</span>
+                        </span>
+                        <input
+                          aria-label={`${person.name} ${label}`}
+                          type="text"
+                          inputMode="decimal"
+                          value={splitValue(row[field])}
+                          onChange={(event) => setSplitValue(row.personId, event.target.value)}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </details>
         )}
         <label>地址 / 地圖搜尋
