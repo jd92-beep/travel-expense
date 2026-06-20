@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06-20 (Phase 5 — ALL PHASES COMPLETE)
+
+- **Phase 5 Polish & GTM complete on `codex/android-compact-shell`, v0.12.0 / versionCode 1200. ALL ROADMAP PHASES (0-5) NOW COMPLETE.**
+- **T5.1 onboarding:** added dismissible "3 步記帳" tip card on Dashboard for new users. Teaches scan→split→settle workflow. Dismissed via × button, persists in localStorage.
+- **T5.2 Play Store listing:** created `PLAY_STORE_LISTING.md` with full store copy, short description, keywords, and "free where Splitwise charges" positioning.
+- **T5.3 signed release verified:** release keystore wired in gradle, `assetlinks.json` includes both debug and release SHA-256 fingerprints. Ready for signed AAB production build.
+- All tests pass: typecheck, build, split-engine, security scan.
+
 ## 2026-06-20 (Phase 4)
 
 - **Phase 4 Robustness & reach complete on `codex/android-compact-shell`, v0.11.0 / versionCode 1100.**

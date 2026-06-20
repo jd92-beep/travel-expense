@@ -868,6 +868,21 @@ export function Dashboard({
       <div className="japanese-sun-decor" />
       <div className="japanese-sakura-decor" />
 
+      {/* Onboarding tip */}
+      {state.receipts.length === 0 && !localStorage.getItem('onboarding-dismissed') && (
+        <div className="card onboarding-tip" style={{ marginBottom: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+            <div>
+              <strong style={{ fontSize: '14px' }}>3 步記帳：掃描 → 分帳 → 結清</strong>
+              <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '4px 0 0' }}>
+                📷 拍收據自動辨識 → 👥 揀邊個人分幾多 → 💰 結清付款
+              </p>
+            </div>
+            <button type="button" className="icon-btn" onClick={() => localStorage.setItem('onboarding-dismissed', '1')} aria-label="關閉">×</button>
+          </div>
+        </div>
+      )}
+
       {/* 1. Header 標題與日曆按鈕 */}
       <div className="dashboard-trip-switcher flex justify-between items-start mb-6 z-10 relative">
         <div className="flex flex-col relative z-30" ref={tripDropdownRef}>

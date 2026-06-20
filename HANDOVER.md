@@ -2,11 +2,11 @@
 
 ## Last Worked On
 - **Date**: 2026-06-20
-- **Focus**: Super-app roadmap Phase 4 complete
+- **Focus**: Super-app roadmap Phase 5 complete (ALL PHASES DONE)
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.11.0` (versionCode `1100`); React unchanged
-- **Latest pushed branch commit**: `116c1ac` (`feat(social): complete phase 3 accuracy & social v0.10.0`)
-- **Current branch state**: `codex/android-compact-shell` with Phase 4 (Robustness & reach) committed locally.
+- **App version**: Compact/Android `0.12.0` (versionCode `1200`); React unchanged
+- **Latest pushed branch commit**: `5224ded` (`feat(robust): complete phase 4 robustness & reach v0.11.0`)
+- **Current branch state**: `codex/android-compact-shell` with all 5 phases complete. Ready for Play Store submission.
 - **Final Phase 2 verification passed**: `npm run typecheck`, `npm run build`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `npm run smoke:split-editor`, `npm run smoke:scan`, `npm run security:scan`, `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`, and `git diff --check`.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
@@ -27,7 +27,8 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
 - **Phase 1 complete through v0.8.16:** `ReceiptEditor` has split UI, multiple payers, Supabase storage, Notion round-trip, and E2E coverage for all split modes.
 - **Phase 2 complete through v0.9.0:** AI receipt itemization (F3) is done. `scanReceiptImage` returns structured `lineItems[]` with `desc`, `amount`, `qty`. `ReceiptEditor` has an item-assignment sheet with per-item `AvatarBadge` toggles, "一鍵均分所有人" / "清除全部分配" quick actions, and live Σ-validation. `foldLineItemsToSplits` in `splitEngine.ts` converts item assignments into per-person `splits[]` with largest-remainder rounding. Unit tests cover 6 fold scenarios + existing settlement tests. E2E split-editor smoke passes.
 - **Phase 3 complete through v0.10.0:** FX snapshot (F4) auto-populates `exchangeRate` + `hkdAmount` on save (ReceiptEditor, scan, voice/email). Comments (F5) via `expense_comments` Supabase table with RLS, comment UI in ReceiptEditor, and activity feed in History tab.
-- **Phase 4 complete through v0.11.0:** Durable offline outbox (F6) with explicit `idempotencyKey` on every queue item. Identity unification (F8) auto-creates Person entries for shared trip members not yet in accounting people. Recurring expenses (F7) with `RecurringRule` type, `processRecurringRules` client scheduler, and Settings UI for manage/toggle/delete. Next work starts at Phase 5 / T5.1 onboarding.
+- **Phase 4 complete through v0.11.0:** Durable offline outbox (F6) with explicit `idempotencyKey` on every queue item. Identity unification (F8) auto-creates Person entries for shared trip members not yet in accounting people. Recurring expenses (F7) with `RecurringRule` type, `processRecurringRules` client scheduler, and Settings UI for manage/toggle/delete.
+- **Phase 5 complete through v0.12.0:** Onboarding tip card on Dashboard (3-tap scan→split→settle). Play Store listing copy created (`PLAY_STORE_LISTING.md`). Release signing verified — keystore wired in gradle, assetlinks.json has both debug + release SHA-256. **ALL ROADMAP PHASES COMPLETE.**
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -99,6 +100,14 @@ experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 51 (Codex — Phase 5 polish & GTM, v0.12.0 — ALL PHASES COMPLETE)
+
+1. **T5.1 onboarding:** added dismissible onboarding tip card on Dashboard. Shows when `receipts.length === 0` and not dismissed. Teaches "3 步記帳：掃描 → 分帳 → 結清". Dismiss persists in `localStorage`.
+2. **T5.2 Play Store listing:** created `PLAY_STORE_LISTING.md` with app name, short/full description, keywords, and "free where Splitwise charges" positioning.
+3. **T5.3 signed release verified:** confirmed keystore wiring in `build.gradle`, assetlinks.json has both debug SHA-256 (`AE:F5:...`) and release SHA-256 (`30:E9:...`). Ready for signed AAB build.
+4. **Versioning:** Compact/Android bumped to `0.12.0` / versionCode `1200`; package-lock metadata synced.
+5. **ALL ROADMAP PHASES (0-5) NOW COMPLETE.**
 
 ### Session 50 (Codex — Phase 4 robustness & reach, v0.11.0)
 

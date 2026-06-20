@@ -291,9 +291,9 @@ user only corrects. *Acceptance:* AI proposes a plausible assignment that the us
 - [x] **T4.3** Recurring rules + client scheduler — **M** `[T4.2]`
 
 ### Phase 5 — Polish & GTM
-- [ ] **T5.1** Onboarding that teaches scan→split→settle in 3 taps — **M**
-- [ ] **T5.2** Play Store listing + "free where Splitwise charges" positioning — **S**
-- [ ] **T5.3** Signed release (keystore already wired) + assetlinks release SHA verified — **S**
+- [x] **T5.1** Onboarding that teaches scan→split→settle in 3 taps — **M**
+- [x] **T5.2** Play Store listing + "free where Splitwise charges" positioning — **S**
+- [x] **T5.3** Signed release (keystore already wired) + assetlinks release SHA verified — **S**
 
 ---
 
