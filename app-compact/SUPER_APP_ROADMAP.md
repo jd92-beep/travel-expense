@@ -270,7 +270,7 @@ user only corrects. *Acceptance:* AI proposes a plausible assignment that the us
 - [x] **T1.4** Supabase `splits/split_type/payers` columns via Management API (no blind push) — **S**
 - [x] **T1.5** Notion serialize/parse `splits` through the drift-tolerant resolver — **S** `[T1.4]`
 - [x] **T1.6** E2E `tests/split-editor-smoke.spec.cjs` (each mode + multi-payer → balances) — **M** `[T1.2,T1.3]`
-- [ ] **T1.7** Bump `APP_VERSION` + package.json + gradle; commit — **S**
+- [x] **T1.7** Bump `APP_VERSION` + package.json + gradle; commit — **S**
 
 ### Phase 2 — AI itemization (F3) ⭐
 - [ ] **T2.1** F3a: structured `lineItems[]` from `scanReceiptImage` + `Receipt.lineItems` — **M**

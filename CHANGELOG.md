@@ -2,6 +2,7 @@
 
 ## 2026-06-20
 
+- Completed Phase 1 split flexibility on the Android branch and performed the final roadmap version tick. Compact Android branch is now `0.8.16` / Android `versionCode 816`; Phase 2 AI itemization remains untouched.
 - Added Phase 1 split-editor E2E coverage on the Android branch: the smoke creates equal, shares, exact, percent, adjustment, and multi-payer receipts through the real `ReceiptEditor`, then verifies Stats balances. Bumped Compact Android branch version to `0.8.15` / Android `versionCode 815`.
 - Added Phase 1 Notion split round-trip support on the Android branch: split metadata is embedded in the existing Notion note field with a versioned marker, parsed back into `splitType`, `splits`, and `payers`, and covered by a focused node self-check. Bumped Compact Android branch version to `0.8.14` / Android `versionCode 814`.
 - Applied Phase 1 Supabase split storage on the Android branch: live `receipts` now has nullable `split_type`, `splits`, and `payers` columns via Management API, shared-trip RPC preserves them, and the Compact client writes/pulls the fields. Bumped Compact Android branch version to `0.8.13` / Android `versionCode 813`.
