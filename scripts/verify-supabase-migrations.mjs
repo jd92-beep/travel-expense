@@ -13,6 +13,7 @@ const files = [
   'supabase/migrations/20260613000000_receipt_photo_storage.sql',
   'supabase/migrations/20260613001000_harden_shared_invites_and_receipt_versions.sql',
   'supabase/migrations/20260620235000_fix_expense_comments_insert_membership.sql',
+  'supabase/migrations/20260621013000_limit_expense_comments_grants.sql',
 ];
 
 const sql = files
@@ -147,6 +148,10 @@ const requiredPatterns = [
   {
     name: 'expense comments inserts require active trip membership',
     re: /create policy "expense_comments_insert_own_trip_members"[\s\S]*?with check[\s\S]*?user_id\s*=\s*auth\.uid\(\)[\s\S]*?join public\.trip_members tm[\s\S]*?tm\.status\s*=\s*'active'/i,
+  },
+  {
+    name: 'expense comments grants only allow select insert delete to authenticated clients',
+    re: /revoke all privileges on table public\.expense_comments from authenticated[\s\S]*?grant select, insert, delete on table public\.expense_comments to authenticated/i,
   },
 ];
 

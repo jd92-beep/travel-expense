@@ -2,6 +2,9 @@
 
 ## 2026-06-21 HKT (Android review fixes)
 
+- **v0.12.4 / versionCode 1204.** Applied the live Supabase `expense_comments` migrations that were missing from production, then tightened direct table grants so `authenticated` has only `SELECT`, `INSERT`, and `DELETE`; `anon` has no direct access.
+- Verified live `expense_comments` has RLS enabled, active-trip-membership insert policy installed, old owner-only insert policy removed, and no direct `UPDATE` privilege.
+- Verification passed: `typecheck`, `db:policy:scan`, `git diff --check`, and configured Android QA with App Links verified (`/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`).
 - **v0.12.3 / versionCode 1203.** Fixed confirmed Android-branch review issues after the v0.12.2 full emulator pass.
 - Restored the standalone `/android-auth` handoff page and Vercel rewrite on the Android branch so preview/future deploys do not fall back to the SPA during Google/magic-link return.
 - Hardened shared-trip Notion outbox draining: delete jobs now archive Notion pages, successful jobs clear `notion_pending`, and shared delete idempotency no longer falls back to `Date.now()`.

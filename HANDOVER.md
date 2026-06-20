@@ -4,12 +4,12 @@
 - **Date**: 2026-06-21 HKT
 - **Focus**: Android super-app review fixes after v0.12.2
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.12.3` (versionCode `1203`); React unchanged
+- **App version**: Compact/Android `0.12.4` (versionCode `1204`); React unchanged
 - **Latest pushed branch commit before current fixes**: `2d72bb5` (`docs: refresh android handover progress`)
-- **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`. All roadmap phases are complete; v0.12.1/v0.12.2 follow-ups fixed real sync retry behavior and refreshed stale smoke/emulator evidence. v0.12.3 review fixes and QA hardening are the current workset.
-- **Latest verification evidence**: v0.12.3 re-ran and passed `npm run typecheck`, `npm run build`, `npm run security:scan`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `node --experimental-strip-types scripts/sync-backoff.test.ts`, `npm run db:policy:scan`, `npm run smoke:shared-ledger`, `npm run smoke:shared-contract` after `app-react npm ci`, `npm run smoke:settle-up`, `npm run smoke:settings`, `npm run smoke:dashboard`, `npm run smoke:stats`, `npm run smoke:scan`, `npm run smoke:split-editor`, `npm run smoke:weather`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run smoke:welcome-guide`, `npm run smoke:security`, `SUPABASE_REDIRECT_SMOKE=1 ... npm run smoke:security`, `npm run smoke:a11y-touch`, `npm run smoke:trip-intelligence`, `node --check app-compact/scripts/android-qa-smoke.mjs`, `npm audit --omit=dev`, `npm audit`, `npx gitnexus detect-changes`, and `git diff --check`.
-- **Latest Android QA evidence**: configured Supabase build passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=login`, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T17-06-53-591Z`. Local visual build passed `ANDROID_QA_DISABLE_SUPABASE=1 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with all 7 native tabs captured, safe-area/status-bar screenshots inspected, and native Camera/Gallery foreground checks, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T17-01-16-339Z`.
-- **Current known verification blocker**: no local code/test blocker remains from the final audit. The new Supabase comment-RLS migration is present in the repo but has **not** been applied to the live project, and real-device Google/magic-link login still needs a human account/device round-trip.
+- **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`. All roadmap phases are complete; v0.12.1/v0.12.2 follow-ups fixed real sync retry behavior and refreshed stale smoke/emulator evidence. v0.12.4 adds the live comments-schema/grant follow-up on top of the v0.12.3 review fixes.
+- **Latest verification evidence**: v0.12.4 live Supabase SQL check confirmed `expense_comments` table/RLS/policies/grants. Local `npm run typecheck`, `npm run db:policy:scan`, and `git diff --check` passed. v0.12.3 previously re-ran and passed `npm run build`, `npm run security:scan`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `node --experimental-strip-types scripts/sync-backoff.test.ts`, `npm run smoke:shared-ledger`, `npm run smoke:shared-contract` after `app-react npm ci`, `npm run smoke:settle-up`, `npm run smoke:settings`, `npm run smoke:dashboard`, `npm run smoke:stats`, `npm run smoke:scan`, `npm run smoke:split-editor`, `npm run smoke:weather`, `npm run smoke:mobile-layout`, `npm run smoke:final-nav`, `npm run smoke:welcome-guide`, `npm run smoke:security`, `SUPABASE_REDIRECT_SMOKE=1 ... npm run smoke:security`, `npm run smoke:a11y-touch`, `npm run smoke:trip-intelligence`, `node --check app-compact/scripts/android-qa-smoke.mjs`, `npm audit --omit=dev`, `npm audit`, `npx gitnexus detect-changes`, and `git diff --check`.
+- **Latest Android QA evidence**: configured Supabase build passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=login`, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T17-24-34-472Z`. Local visual build passed `ANDROID_QA_DISABLE_SUPABASE=1 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with all 7 native tabs captured, safe-area/status-bar screenshots inspected, and native Camera/Gallery foreground checks, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T17-01-16-339Z`.
+- **Current known verification blocker**: no local code/test blocker remains from the final audit. Live Supabase `expense_comments` base/RLS/grant migrations are now applied and verified. Real-device Google/magic-link login still needs a human account/device round-trip.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -100,15 +100,16 @@ not restart from stale Phase 5 notes.
 1. **Branch/version confirmed:** `codex/android-compact-shell` tracks
    `origin/codex/android-compact-shell`; latest pushed branch commit is `2d72bb5`
    (`docs: refresh android handover progress`) before this v0.12.3 review workset.
-   `app-compact/package.json`, `APP_VERSION`, and Gradle now report `0.12.3` / versionCode `1203`.
+   `app-compact/package.json`, `APP_VERSION`, and Gradle now report `0.12.4` / versionCode `1204`.
 2. **Sync/data fixes in progress:** shared-trip Notion delete jobs now use `archiveReceipt`,
    successful shared Notion outbox jobs clear `notion_sync_status` to `synced`, delete idempotency
    uses stable receipt timestamps, and shared delete tombstones preserve `updatedAt`. Contract
    coverage was extended in `scripts/verify-shared-ledger-contract.mjs`.
-3. **Security/data integrity fixes in progress:** added migration
+3. **Security/data integrity fixes complete:** added migration
    `20260620235000_fix_expense_comments_insert_membership.sql` so `expense_comments` inserts require
-   both `user_id = auth.uid()` and active trip membership. This migration is present in the repo but
-   has **not** been applied to the live Supabase project yet.
+   both `user_id = auth.uid()` and active trip membership. Live Supabase now has the base
+   `expense_comments` table, the membership insert policy, and restricted direct grants
+   (`authenticated`: select/insert/delete only; `anon`: none).
 4. **Split/weather/Auth fixes in progress:** itemized line items can no longer exceed receipt totals;
    `/android-auth` is restored on the Android branch through `app-compact/public/android-auth.html`
    plus the Vercel rewrite; Weather now geocodes city/country-only itinerary days through
@@ -135,8 +136,8 @@ not restart from stale Phase 5 notes.
 8. **Final local audit status:** GitNexus `detect-changes` completed and reported `critical` because
    the expected review workset touches broad flows (`App`, `ReceiptEditor`, `Weather`, sync, Android
    QA, and docs: 25 files / 69 symbols / 30 flows). Targeted gates above passed and `git diff --check`
-   is clean. Keep the new Supabase comment-RLS migration unapplied live until a safe live DB path is
-   explicitly chosen, and keep the real-device Google/magic-link login round-trip as the only
+   is clean. The live Supabase comment migrations are now applied and verified; keep the real-device
+   Google/magic-link login round-trip as the only
    production-invitation check that automation cannot replace.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
@@ -146,10 +147,18 @@ not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.3`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.4`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 55 (Codex — live Supabase comments migration, v0.12.4)
+
+1. **Live comments schema applied:** applied the missing live `expense_comments` base migration through the Supabase connector, not `db push`.
+2. **Live comment insert RLS tightened:** applied `fix_expense_comments_insert_membership` so inserts require the author to be an active member of the receipt's trip.
+3. **Direct grants tightened:** added and applied `limit_expense_comments_grants`; `anon` has no direct `expense_comments` privileges and `authenticated` has only `select`, `insert`, and `delete`.
+4. **Verification:** live SQL check confirmed table exists, RLS is enabled, old owner-only insert policy is gone, membership insert policy is present, `authenticated.update=false`, and `anon` direct privileges are all false. Local `typecheck`, `db:policy:scan`, `git diff --check`, and configured Android `android:qa` pass.
+5. **Versioning:** Compact/Android bumped to `0.12.4` / versionCode `1204`; package-lock metadata synced.
 
 ### Session 54 (Codex — Android review fixes, v0.12.3)
 
