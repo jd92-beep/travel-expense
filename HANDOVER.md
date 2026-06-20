@@ -5,6 +5,9 @@
 - **Focus**: Super-app roadmap Phase 1 complete
 - **Agent**: Codex (concurrent branch — `git fetch` before every commit)
 - **App version**: Compact/Android `0.8.16` (versionCode `816`); React unchanged
+- **Latest pushed branch commit**: `ae1de9e` (`chore(split): complete phase 1 version v0.8.16`)
+- **Current branch state**: `codex/android-compact-shell` clean and aligned with `origin/codex/android-compact-shell` as of the last Codex check.
+- **Final Phase 1 verification passed**: `npm run typecheck`, `npm run build`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `npm run smoke:split-editor`, `npm run smoke:scan`, `npm run smoke:mobile-layout`, `npm audit --omit=dev`, `npm audit`, `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`, `git diff --check`, and GitNexus detect (`low`, affected processes `0`).
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
