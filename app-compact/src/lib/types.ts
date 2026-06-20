@@ -60,7 +60,7 @@ export interface Receipt {
   rateSource?: string;
   date: string;
   time?: string;
-  category: CategoryId;
+  category: CategoryId | 'settlement';
   payment: PaymentId;
   region?: string;
   regionSnapshot?: string;
@@ -80,6 +80,8 @@ export interface Receipt {
   personId?: string;
   splitMode?: SplitMode;
   beneficiaryId?: string;
+  /** True when this receipt is a recorded "settle up" payment, not an expense. */
+  isSettlement?: boolean;
   phase?: TripPhase;
   createdAt?: number;
   notionPageId?: string;
@@ -325,6 +327,8 @@ export interface SettlementTransfer {
 export interface SettlementSnapshot {
   transfers: SettlementTransfer[];
   balances: Array<Person & { balance: number; paidShared: number; shouldPayShared: number }>;
+  /** Total of recorded "settle up" payments already applied to the balances (trip currency). */
+  settledTotal: number;
   sharedTotal: number;
   sharedByPayer: number[];
   privateByOwner: number[];

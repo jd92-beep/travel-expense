@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-compact",
   "private": true,
-  "version": "0.8.6",
+  "version": "0.8.7",
   "type": "module",
   "engines": {
     "node": "22.x"
@@ -18,6 +18,7 @@
     "android:qa": "node scripts/android-qa-smoke.mjs",
     "preview": "vite preview --host 0.0.0.0 --port 4175",
     "typecheck": "tsc --noEmit",
+    "test:split-engine": "node --experimental-strip-types scripts/split-engine.test.ts",
     "parity:tabs": "node ../scripts/tab-parity.mjs",
     "security:scan": "node ../scripts/security-scan.mjs",
     "db:policy:scan": "node ../scripts/verify-supabase-migrations.mjs",

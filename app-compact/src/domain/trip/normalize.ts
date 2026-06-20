@@ -227,7 +227,7 @@ export function scopedReceiptsForTrip(state: AppState, trip: TripProfile = activ
 }
 
 function normalizedReceiptCategory(receipt: Receipt): CategoryId {
-  const category = receipt.category || 'other';
+  const category: CategoryId = receipt.category && receipt.category !== 'settlement' ? receipt.category : 'other';
   if (category !== 'transport' && category !== 'other') return category;
   const text = [
     receipt.store,

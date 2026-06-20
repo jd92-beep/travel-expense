@@ -601,7 +601,7 @@ export function App() {
                   />
                 )}
                 {safeTab === 'weather' && <Weather state={state} />}
-                {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} />}
+                {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} upsertReceipt={upsertReceipt} deleteReceipt={deleteReceipt} />}
                 {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
               </div>
             ) : (
@@ -652,7 +652,7 @@ export function App() {
                     />
                   )}
                   {safeTab === 'weather' && <Weather state={state} />}
-                  {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} />}
+                  {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} upsertReceipt={upsertReceipt} deleteReceipt={deleteReceipt} />}
                   {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
                 </motion.div>
               </AnimatePresence>
@@ -698,7 +698,7 @@ export function App() {
                 spotId: stableSpotId(trip.id, target.date, target.spots.length, { time: receipt.time || '12:00', name: receipt.store || '新增行程' }),
                 time: receipt.time || '12:00',
                 name: receipt.store || '新增行程',
-                type: receipt.category || 'other',
+                type: receipt.category && receipt.category !== 'settlement' ? receipt.category : 'other',
                 note: receipt.note || receipt.bookingRef || '',
                 address: receipt.address || '',
                 mapUrl: receipt.mapUrl || '',

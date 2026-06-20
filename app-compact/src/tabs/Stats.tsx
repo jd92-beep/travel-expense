@@ -2,8 +2,8 @@ import { useState, type CSSProperties, type Dispatch, type ReactNode, type SetSt
 import { motion } from 'motion/react';
 import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
-import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, hkd, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
+import { activeTrip, scopedReceiptsForTrip, stampReceiptForTrip } from '../domain/trip/normalize';
+import { categoryById, computeSettlements, createSettlementReceipt, displayStore, fmt, getItinerary, getPersons, hkd, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency, isSettlementReceipt, todayYmd } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { amountToHkd, formatCurrencyAmount } from '../lib/currency';
 import { EmptyState, GlassCard, StatusPill } from '../components/ui';
@@ -14,11 +14,31 @@ import '../styles/stats.css';
 
 type StatBucket = { id: string; name: string; color: string; total: number; icon?: string };
 
-export function Stats({ state, setState, updateState, onTab }: { state: AppState; setState?: Dispatch<SetStateAction<AppState>>; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
+export function Stats({ state, setState, updateState, onTab, upsertReceipt, deleteReceipt }: { state: AppState; setState?: Dispatch<SetStateAction<AppState>>; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void; upsertReceipt?: (r: Receipt) => void; deleteReceipt?: (r: Receipt) => void }) {
   const trip = activeTrip(state);
   const scopedState = { ...state, receipts: scopedReceiptsForTrip(state, trip) };
   const settlement = computeSettlements(scopedState);
   const persons = getPersons(state);
+  const settlementRecords = scopedState.receipts.filter(isSettlementReceipt);
+  const [settleDraft, setSettleDraft] = useState<{ fromId: string; toId: string; amount: string; note: string } | null>(null);
+  const openSettle = (fromId: string, toId: string, amount: number) =>
+    setSettleDraft({ fromId, toId, amount: String(Math.round(amount)), note: '' });
+  const confirmSettle = () => {
+    if (!settleDraft || !upsertReceipt) { setSettleDraft(null); return; }
+    const from = persons.find((p) => p.id === settleDraft.fromId);
+    const to = persons.find((p) => p.id === settleDraft.toId);
+    const amount = Math.round(Number(settleDraft.amount) || 0);
+    if (!from || !to || from.id === to.id || amount <= 0) { setSettleDraft(null); return; }
+    const receipt = createSettlementReceipt({
+      from, to, amount,
+      currency: resolvedTripCurrency,
+      hkdAmount: toHkd(amount),
+      date: todayYmd(),
+      note: settleDraft.note,
+    });
+    upsertReceipt(stampReceiptForTrip(state, receipt));
+    setSettleDraft(null);
+  };
   const itinerary = getItinerary(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
   const toHkd = (amt: number) => {
@@ -198,16 +218,47 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
                   <b className="text-gray-400 shrink-0">→</b>
                   <span className="stats-transfer-person"><AvatarBadge person={t.to} size="sm" /> <span>{t.to.name}</span></span>
                 </div>
-                <div className="flex flex-col items-end shrink-0 leading-none">
-                  <strong className="text-[15px] font-extrabold text-blue-900">HK$ {fmt(toHkd(t.amount))}</strong>
-                  <span className="text-[10px] text-slate-400 font-bold mt-1">
-                    {resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}{fmt(t.amount)}
-                  </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-col items-end leading-none">
+                    <strong className="text-[15px] font-extrabold text-blue-900">HK$ {fmt(toHkd(t.amount))}</strong>
+                    <span className="text-[10px] text-slate-400 font-bold mt-1">
+                      {resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}{fmt(t.amount)}
+                    </span>
+                  </div>
+                  {upsertReceipt && (
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg bg-[#2D6E48] px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm transition active:scale-95"
+                      onClick={() => openSettle(t.from.id, t.to.id, t.amount)}
+                    >
+                      結清
+                    </button>
+                  )}
                 </div>
               </motion.div>
             ))}
           </>
         ) : <EmptyState title="暫時唔需要互相轉帳" description="所有共同支出與代付已經平衡。" />}
+        {settlementRecords.length > 0 && (
+          <div className="settlement-records mt-3 pt-3 border-t border-stone-200/60">
+            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">已結算記錄</div>
+            {settlementRecords.map((s) => {
+              const from = persons.find((p) => p.id === s.personId);
+              const to = persons.find((p) => p.id === s.beneficiaryId);
+              return (
+                <div key={s.id} className="flex items-center justify-between gap-2 text-xs py-1">
+                  <span className="min-w-0 truncate text-slate-600">{from?.name || '?'} → {to?.name || '?'} · {s.date}</span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <b className="text-[#2D6E48]">{resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}{fmt(s.total)}</b>
+                    {deleteReceipt && (
+                      <button type="button" aria-label="刪除結算記錄" className="text-slate-400 transition hover:text-rose-500" onClick={() => deleteReceipt(s)}>✕</button>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </DataPanel>
 
       <DataPanel className="payer-panel" icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全 receipts</StatusPill>}>
@@ -243,6 +294,47 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
         </div>
       </GlassCard>
       </div>
+
+      {settleDraft && (() => {
+        const from = persons.find((p) => p.id === settleDraft.fromId);
+        const to = persons.find((p) => p.id === settleDraft.toId);
+        if (!from || !to) return null;
+        return (
+          <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="記錄結算" onClick={() => setSettleDraft(null)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(360px, 92vw)', background: '#FAF7F0', borderRadius: 20, padding: 22, border: '1px solid rgba(0,0,0,0.06)' }}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#2A2A2A' }}>記錄結算</h3>
+              <div className="flex items-center justify-center gap-3 my-4">
+                <span className="flex items-center gap-1.5 text-sm font-bold text-slate-700"><AvatarBadge person={from} size="sm" /> {from.name}</span>
+                <b className="text-[#C23B5E]">→</b>
+                <span className="flex items-center gap-1.5 text-sm font-bold text-slate-700"><AvatarBadge person={to} size="sm" /> {to.name}</span>
+              </div>
+              <label className="block text-xs font-bold text-slate-500 mb-3">
+                金額（{resolvedTripCurrency}）
+                <input
+                  type="number" inputMode="numeric" min={0} autoFocus
+                  className="mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-base font-extrabold text-slate-800 outline-none focus:border-[#2D6E48]"
+                  value={settleDraft.amount}
+                  onChange={(e) => setSettleDraft({ ...settleDraft, amount: e.target.value })}
+                />
+              </label>
+              <label className="block text-xs font-bold text-slate-500 mb-4">
+                備註（可選）
+                <input
+                  type="text" maxLength={80}
+                  className="mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2D6E48]"
+                  value={settleDraft.note}
+                  onChange={(e) => setSettleDraft({ ...settleDraft, note: e.target.value })}
+                  placeholder="現金 / PayPay / 轉數快…"
+                />
+              </label>
+              <div className="flex gap-2">
+                <button type="button" className="flex-1 rounded-xl bg-stone-200 px-3 py-2.5 text-sm font-bold text-slate-600 transition active:scale-95" onClick={() => setSettleDraft(null)}>取消</button>
+                <button type="button" className="flex-1 rounded-xl bg-[#2D6E48] px-3 py-2.5 text-sm font-bold text-white transition active:scale-95 disabled:opacity-40" disabled={!(Number(settleDraft.amount) > 0)} onClick={confirmSettle}>確認結算</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </section>
   );
 }

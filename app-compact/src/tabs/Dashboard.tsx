@@ -40,7 +40,8 @@ import {
   safePhotoUrl,
   getReceiptHkdAmount,
   getReceiptTripAmount,
-  getResolvedTripCurrency
+  getResolvedTripCurrency,
+  isSettlementReceipt
 } from '../lib/domain';
 import { activeTrip, createTripProfile, normalizeItinerary, scopedReceiptsForTrip, switchTrip } from '../domain/trip/normalize';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt, SyncQueueItem, TabId, TripProfile } from '../lib/types';
@@ -754,7 +755,7 @@ export function Dashboard({
 
   const trip = activeTrip(state);
   const itinerary = getItinerary(state);
-  const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip), [state, trip]);
+  const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip).filter((r) => !isSettlementReceipt(r)), [state, trip]);
   const today = todayForReceipts(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
   const activeDisplayCurrency = !state.displayCurrency || state.displayCurrency === 'HKD'

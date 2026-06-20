@@ -9,7 +9,7 @@ import { takeReceiptRepairIntent } from '../lib/repairIntent';
 import type { AppState, CategoryId, Receipt, SyncQueueItem, TripProfile } from '../lib/types';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
-import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
+import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, isSettlementReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 
 type ReceiptHealthMarker = {
@@ -147,7 +147,7 @@ export function History({
 
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
-  const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip), [state, trip]);
+  const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip).filter((r) => !isSettlementReceipt(r)), [state, trip]);
   const sourceIdCounts = useMemo(() => tripReceipts.reduce<Record<string, number>>((acc, receipt) => {
     if (receipt.sourceId) acc[receipt.sourceId] = (acc[receipt.sourceId] || 0) + 1;
     return acc;

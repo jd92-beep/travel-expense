@@ -1,6 +1,7 @@
 import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
 import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import { simplifyDebts } from './splitEngine';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, TripPhase } from './types';
 
 export const fmt = (n: number | string | undefined) =>
@@ -189,7 +190,17 @@ export function hkd(jpy: number, state: AppState): number {
   return Math.round((Number(jpy) || 0) / rate);
 }
 
+// A settlement is a recorded cash/transfer payment between two people (Splitwise "settle up"),
+// not an expense. It is stored as a private receipt (payer=debtor, beneficiary=creditor) so it
+// rides the existing sync pipeline, but it must never count as spending. The category marker
+// survives Supabase/Notion round-trips even if the boolean flag is dropped.
+export const SETTLEMENT_CATEGORY = 'settlement';
+export function isSettlementReceipt(r: Pick<Receipt, 'isSettlement' | 'category'>): boolean {
+  return r.isSettlement === true || r.category === SETTLEMENT_CATEGORY;
+}
+
 export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
+  if (isSettlementReceipt(r)) return 0; // settlements are transfers, never spending
   const cur = r.currency || 'JPY';
   if (cur === 'HKD') {
     return Number(r.total) || 0;
@@ -216,6 +227,7 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
 }
 
 export function getReceiptTripAmount(r: Receipt, state: AppState, resolvedTripCurrency: string): number {
+  if (isSettlementReceipt(r)) return 0; // settlements are transfers, never spending
   const cur = r.currency || 'JPY';
   if (cur === resolvedTripCurrency) {
     return Number(r.total) || 0;
@@ -303,7 +315,7 @@ export function getScheduleSpots(state: AppState, day: ItineraryDay): Array<Itin
 export function dayLooseReceipts(state: AppState, day: ItineraryDay): Receipt[] {
   const trip = activeTrip(state);
   const spotIds = new Set(getScheduleSpots(state, day).map((s) => s.receiptId).filter(Boolean));
-  return scopedReceiptsForTrip(state, trip).filter((r) => r.date === day.date && !spotIds.has(r.id));
+  return scopedReceiptsForTrip(state, trip).filter((r) => r.date === day.date && !spotIds.has(r.id) && !isSettlementReceipt(r));
 }
 
 export function mapsUrl(name: string, address?: string): string {
@@ -367,7 +379,7 @@ export function safePhotoUrl(value: unknown, fallback = '', _depth = 0): string 
 
 export function computeSettlements(state: AppState): SettlementSnapshot {
   const persons = getPersons(state);
-  const empty: SettlementSnapshot = { transfers: [], balances: [], sharedTotal: 0, sharedByPayer: [], privateByOwner: [], crossPrivate: [] };
+  const empty: SettlementSnapshot = { transfers: [], balances: [], sharedTotal: 0, sharedByPayer: [], privateByOwner: [], crossPrivate: [], settledTotal: 0 };
   if (persons.length < 2) return empty;
 
   const trip = activeTrip(state);
@@ -386,9 +398,24 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   const sharedByPayer = persons.map(() => 0);
   const privateByOwner = persons.map(() => 0);
   const crossPrivate: SettlementSnapshot['crossPrivate'] = [];
+  // Recorded "settle up" payments: debtor (personId) paid creditor (beneficiaryId) `total` in the
+  // trip currency. They cancel out outstanding balances without being spending.
+  const settleAdjust = persons.map(() => 0);
+  let settledTotal = 0;
   let sharedTotal = 0;
 
   for (const r of tripReceipts) {
+    if (isSettlementReceipt(r)) {
+      const fromIdx = idxOf(r.personId || firstId);
+      const toIdx = idxOf(r.beneficiaryId);
+      const amt = Number(r.total) || 0;
+      if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx && amt > 0) {
+        settleAdjust[fromIdx] += amt; // the payer reduces what they owe
+        settleAdjust[toIdx] -= amt;   // the receiver reduces what they are owed
+        settledTotal += amt;
+      }
+      continue;
+    }
     const amount = getReceiptTripAmount(r, state, resolvedTripCurrency);
     if (amount <= 0) continue;
     const payerIdx = idxOf(r.personId || firstId);
@@ -415,7 +442,7 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
     const shouldPayShared = sumRatio > 0
       ? sharedTotal * (ratios[i] / sumRatio)
       : sharedTotal / persons.length;
-    let balance = sharedByPayer[i] - shouldPayShared;
+    let balance = sharedByPayer[i] - shouldPayShared + settleAdjust[i];
     for (const cp of crossPrivate) {
       if (cp.payerIdx === i) balance += cp.amount;
       if (cp.benIdx === i) balance -= cp.amount;
@@ -423,20 +450,40 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
     return { ...p, balance, paidShared: sharedByPayer[i], shouldPayShared };
   });
 
-  const work = balances.map((b) => ({ ...b }));
-  const transfers: SettlementSnapshot['transfers'] = [];
-  for (let safety = 0; safety < 100; safety++) {
-    work.sort((a, b) => a.balance - b.balance);
-    const debtor = work[0];
-    const creditor = work[work.length - 1];
-    if (!debtor || !creditor || debtor.balance >= -0.5 || creditor.balance <= 0.5) break;
-    const amount = Math.min(-debtor.balance, creditor.balance);
-    debtor.balance += amount;
-    creditor.balance -= amount;
-    transfers.push({ from: debtor, to: creditor, amount: Math.round(amount) });
-  }
+  const transfers: SettlementSnapshot['transfers'] = simplifyDebts(balances.map((b) => b.balance))
+    .map((t) => ({ from: balances[t.from], to: balances[t.to], amount: t.amount }));
 
-  return { transfers, balances, sharedTotal, sharedByPayer, privateByOwner, crossPrivate };
+  return { transfers, balances, sharedTotal, sharedByPayer, privateByOwner, crossPrivate, settledTotal };
+}
+
+// Build a settlement receipt: `from` pays `to` `amount` (in trip currency). It records a real
+// payment that cancels outstanding debt; it is excluded from spending and labelled as a settlement.
+export function createSettlementReceipt(opts: {
+  from: Person;
+  to: Person;
+  amount: number;
+  currency: string;
+  hkdAmount: number;
+  date: string;
+  note?: string;
+}): Receipt {
+  const rand = Math.random().toString(36).slice(2, 8);
+  return {
+    id: `r_${Date.now()}_${rand}`,
+    store: `結算 · ${opts.from.name} → ${opts.to.name}`,
+    total: Math.round(opts.amount),
+    currency: opts.currency,
+    hkdAmount: Math.round(opts.hkdAmount),
+    date: opts.date,
+    category: SETTLEMENT_CATEGORY,
+    payment: 'cash',
+    personId: opts.from.id,
+    beneficiaryId: opts.to.id,
+    splitMode: 'private',
+    isSettlement: true,
+    note: opts.note?.trim() || undefined,
+    createdAt: Date.now(),
+  } as Receipt;
 }
 
 export function exportCsv(state: AppState): void {
