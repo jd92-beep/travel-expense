@@ -5,10 +5,10 @@ import { canUseNotionMirror } from './notionAccess';
 import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { mergePulledData } from './syncMerge';
 import { rawReceiptSourceId } from './syncMerge';
+import { MAX_RETRY_ATTEMPTS, queueItemReady, syncBackoffMs } from './syncBackoff';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
 import type { Session } from '@supabase/supabase-js';
 
-const MAX_RETRY_ATTEMPTS = 3;
 const QUEUE_MAX_AGE_MS = 14 * 86_400_000; // drop long-stuck error items after 14 days
 const DEBOUNCE_MS = 3000;
 const BACKGROUND_INTERVAL_MS = 120_000;
@@ -308,14 +308,14 @@ export function useSyncEngine(
     try {
       let failures = 0;
       let lastError = '';
+      const pushStartedAt = Date.now();
       for (const item of dedupeQueue(stateRef.current.syncQueue || [])) {
-        if (item.status === 'failed' || item.status === 'error' || item.attempts >= MAX_RETRY_ATTEMPTS) continue;
+        if (!queueItemReady(item, pushStartedAt, MAX_RETRY_ATTEMPTS)) continue;
         markQueueItem(item, { status: 'syncing' });
         try {
           await processItem(item);
           removeQueueItem(item);
         } catch (error) {
-          failures += 1;
           lastError = redactError(error);
           const nextAttempts = item.attempts + 1;
           const isAuthError = lastError.toLowerCase().includes('session') ||
@@ -323,15 +323,20 @@ export function useSyncEngine(
                               lastError.toLowerCase().includes('unauthorized') ||
                               lastError.toLowerCase().includes('expired');
 
-          markQueueItem(item, {
-            status: 'error', // Keep as error status, do not drop!
-            attempts: nextAttempts,
-            error: lastError,
-          });
-
-          if (isAuthError) {
-            console.log('[SyncEngine] Auth error detected mid-push, skipping item');
-            continue;
+          if (isAuthError || nextAttempts >= MAX_RETRY_ATTEMPTS) {
+            // Auth failures need re-login; exhausted retries park for manual "重試" (kept, not dropped).
+            failures += 1;
+            markQueueItem(item, { status: 'error', attempts: nextAttempts, error: lastError });
+            if (isAuthError) console.log('[SyncEngine] Auth error detected mid-push, skipping item');
+          } else {
+            // Transient failure (flaky network / server hiccup): stay retriable with exponential
+            // backoff so the receipt self-heals instead of stranding as local-only.
+            markQueueItem(item, {
+              status: 'queued',
+              attempts: nextAttempts,
+              error: lastError,
+              nextRetryAt: Date.now() + syncBackoffMs(nextAttempts),
+            });
           }
         }
       }
@@ -339,7 +344,7 @@ export function useSyncEngine(
         setState((current) => ({
           ...current,
           syncQueue: dedupeQueue(current.syncQueue || [])
-            .filter((item) => item.attempts < MAX_RETRY_ATTEMPTS)
+            // Keep parked 'error'/'failed' items so manual retry works; only age-out truly stale ones.
             .filter((item) => !((item.status === 'error' || item.status === 'failed') && (item.updatedAt || item.createdAt || 0) < Date.now() - QUEUE_MAX_AGE_MS))
             .slice(-500),
         }));
@@ -567,7 +572,7 @@ export function useSyncEngine(
       ...current,
       syncQueue: (current.syncQueue || []).map((item) =>
         item.status === 'failed' || item.status === 'error'
-          ? { ...item, status: 'queued', attempts: 0, error: undefined }
+          ? { ...item, status: 'queued', attempts: 0, error: undefined, nextRetryAt: undefined }
           : item
       ),
     }));
@@ -606,6 +611,23 @@ export function useSyncEngine(
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
   }, [push, state.autoSync, state.credentialSession, state.credentialSessionExpiresAt, state.syncQueue, supabaseSession]);
+
+  // Backoff wake-up: when an item is waiting on its backoff window, schedule a push at the soonest
+  // nextRetryAt so a 30s/2m retry self-heals promptly instead of waiting for the 120s interval.
+  useEffect(() => {
+    if (!state.autoSync) return;
+    const now = Date.now();
+    const soonest = (state.syncQueue || []).reduce((min, item) => (
+      item.nextRetryAt && item.nextRetryAt > now && item.attempts < MAX_RETRY_ATTEMPTS
+        && item.status !== 'error' && item.status !== 'failed'
+        ? Math.min(min, item.nextRetryAt)
+        : min
+    ), Infinity);
+    if (!Number.isFinite(soonest)) return;
+    const delay = Math.min(Math.max(soonest - now, 0), BACKGROUND_INTERVAL_MS);
+    const timer = window.setTimeout(() => { void push(); }, delay);
+    return () => window.clearTimeout(timer);
+  }, [push, state.autoSync, state.syncQueue]);
 
   useEffect(() => {
     const onOnline = () => {

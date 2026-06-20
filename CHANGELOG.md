@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-06-20 (Phase 4 follow-up — real sync auto-retry/backoff)
+
+- **v0.12.1 / versionCode 1201 on `codex/android-compact-shell`.** Fixes a genuine offline-reliability
+  bug the Phase 4 T4.1 work missed: despite the changelog claiming "existing exponential backoff …
+  confirmed working", `useSyncEngine.push()` actually parked an item as `'error'` after a **single**
+  transient failure and the loop then skipped all `'error'` items forever — so a receipt that failed to
+  push on flaky hotel/airport wifi was stranded as local-only until a manual "重試" tap.
+- **Fix:** transient failures now stay retriable with true exponential backoff (30s → 2m, capped 15m)
+  and auto-retry; only auth failures (need re-login) or exhausted attempts (≥3) park for manual retry.
+  Parked items are no longer silently dropped at MAX attempts. Added a backoff wake-up timer so a 30s/2m
+  retry fires promptly instead of waiting for the 120s background interval.
+- Pure helpers `syncBackoffMs` / `queueItemReady` extracted to `src/lib/syncBackoff.ts`, unit-tested in
+  `scripts/sync-backoff.test.ts` (backoff windows, eligibility gate, failure→backoff→park progression).
+- All tests pass: typecheck, split-engine, foldLineItems, notion-split-meta, sync-backoff; signed AAB builds.
+
 ## 2026-06-20 (Phase 5 — ALL PHASES COMPLETE)
 
 - **Phase 5 Polish & GTM complete on `codex/android-compact-shell`, v0.12.0 / versionCode 1200. ALL ROADMAP PHASES (0-5) NOW COMPLETE.**
