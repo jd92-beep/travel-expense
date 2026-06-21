@@ -2246,7 +2246,45 @@ export function Settings({
               <ShieldCheck size={14} />
               <span>Data safety</span>
             </button>
-            <button type="button" onClick={() => openSettingsPanel('settings-notion')}>
+            <button type="button" onClick={() => openSettingsPanel('settings-credentials')}>
+              <Cloud size={14} />
+              <span>Sync settings</span>
+            </button>
+          </div>
+        </section>
+      </GlassCard>)}
+
+      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-sync-readiness settings-sync-readiness--${syncReadiness.tone}`}>
+        <section role="region" aria-label="Sync readiness dry run">
+          <div className="settings-trip-doctor-head">
+            <span><Cloud size={16} /> Sync dry run</span>
+            <strong>{syncReadiness.statusLabel}</strong>
+          </div>
+          <p className="settings-post-trip-helper">{syncReadiness.helper}</p>
+          <div className="settings-trip-doctor-grid">
+            {syncReadiness.items.map((item) => (
+              <div className="settings-trip-doctor-item" key={item.key}>
+                <span>{item.title}</span>
+                <strong>{item.value}</strong>
+                <small>{item.detail}</small>
+              </div>
+            ))}
+          </div>
+          <div className="settings-restore-preview-warnings">
+            {syncReadiness.warnings.map((warning) => (
+              <span key={warning}><AlertTriangle size={13} /> {warning}</span>
+            ))}
+          </div>
+          <div className="settings-trip-doctor-actions">
+            <button type="button" onClick={() => changeTab?.('history')}>
+              <Copy size={14} />
+              <span>Review records</span>
+            </button>
+            <button type="button" onClick={() => openSettingsPanel('settings-data')}>
+              <ShieldCheck size={14} />
+              <span>Backup first</span>
+            </button>
+            <button type="button" onClick={() => openSettingsPanel('settings-credentials')}>
               <Cloud size={14} />
               <span>Sync settings</span>
             </button>

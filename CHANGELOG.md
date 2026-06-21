@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-06-21 HKT (Android online/offline reliability)
+
+- **v0.12.12 / versionCode 1212.** Offline/online reliability pass for the Android shell after the
+  finished super-app roadmap. Fixed 3 remaining QA gaps:
+  - **[MED] Native Android could report `Network · online` while the emulator had no route.**
+    Capacitor's `https://localhost` WebView can keep `navigator.onLine=true` in airplane mode, so the
+    shell now performs a native-only reachability probe against the `/android-auth` App Link endpoint and
+    marks Settings/status UI offline when the probe times out or fails. (`Shell.tsx`)
+  - **[LOW] Settings Trip Doctor `Sync settings` action opened a missing panel.** It pointed at
+    `settings-notion`, which is no longer a real Settings panel id; it now opens `settings-credentials`.
+    (`Settings.tsx`)
+  - **[LOW] The sync-readiness dry run existed in code but was not rendered or tested.** The developer
+    Trip Doctor panel now shows the dry-run queue/readiness summary and actions for records, backup, and
+    sync settings; the previously skipped smoke is active and verifies offline mode without Credential
+    Broker calls. (`Settings.tsx`, `settings-smoke.spec.cjs`)
+  - Synced Compact/Android version metadata, including `package-lock.json`, to `0.12.12` / `1212`.
+  - Verified: `typecheck`, production `build`, `security:scan`, unit/self-checks
+    (`test:split-engine`, `test:notion-split-meta`, `sync-backoff.test.ts`), targeted Settings sync
+    readiness smoke, full Settings smoke (`10/10`), final navigation smoke (`8/8`), configured Android
+    QA (`launchMode=login`, App Links verified), and true airplane-mode Android QA
+    (`launchMode=scan`, all 7 native tabs captured, Camera/Gallery picker proof, Settings text sample
+    shows `Network · offline`, no crash/ANR).
+
 ## 2026-06-21 HKT (Data-integrity audit — person/trip deletion)
 
 - **v0.12.11 / versionCode 1211.** Dynamic pass (live dev server: dashboard/history/timeline/stats/

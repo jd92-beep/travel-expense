@@ -780,7 +780,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
   await expect(page.locator('#settings-data-panel')).toBeVisible();
 });
 
-test.skip('Settings sync readiness dry run summarizes offline queue without provider calls', async ({ page }) => {
+test('Settings sync readiness dry run summarizes offline queue without provider calls', async ({ page, context }) => {
   let brokerCalls = 0;
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/**', async (route) => {
     brokerCalls += 1;
@@ -925,7 +925,9 @@ test.skip('Settings sync readiness dry run summarizes offline queue without prov
 
   await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expectSettingsReady(page);
-  await setAccordion(page, 'Notion Sync');
+  await context.setOffline(true);
+  await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await expect(page.getByText('離線模式：資料會繼續保存在本機')).toBeVisible();
 
   const dryRun = page.getByLabel('Sync readiness dry run');
   await expect(dryRun).toBeVisible();
@@ -955,7 +957,6 @@ test.skip('Settings sync readiness dry run summarizes offline queue without prov
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
   await page.getByRole('button', { name: /設定/ }).click();
   await expectSettingsReady(page);
-  await setAccordion(page, 'Notion Sync');
   await page.getByLabel('Sync readiness dry run').getByRole('button', { name: /Backup first/ }).click();
   await expect(page.locator('[aria-controls="settings-data-panel"]')).toHaveAttribute('aria-expanded', 'true');
   expect(brokerCalls).toBe(0);

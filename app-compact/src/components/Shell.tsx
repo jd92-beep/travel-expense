@@ -142,6 +142,8 @@ const COMPACT_RELEASE_NOTES = [
   { title: 'Offline conflict resolver', detail: 'History can review failed local/cloud receipt conflicts without exposing provider payloads.' },
 ];
 const COMPACT_RELEASE_NOTES_SEEN_KEY = 'travel-expense-compact:release-notes-seen';
+const NATIVE_REACHABILITY_URL = 'https://travel-expense-compact.vercel.app/android-auth';
+const NATIVE_REACHABILITY_TIMEOUT_MS = 2500;
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -162,6 +164,27 @@ function relativeFreshness(value: number) {
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.round(hours / 24)}d`;
+}
+
+function isNativeWebViewOrigin() {
+  return window.location.protocol === 'https:' && window.location.hostname === 'localhost';
+}
+
+async function checkNativeReachability() {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), NATIVE_REACHABILITY_TIMEOUT_MS);
+  try {
+    await fetch(`${NATIVE_REACHABILITY_URL}?reachability=${Date.now()}`, {
+      cache: 'no-store',
+      mode: 'no-cors',
+      signal: controller.signal,
+    });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 export function Shell({
@@ -235,7 +258,21 @@ export function Shell({
   };
 
   useEffect(() => {
-    const onOnline = () => setOnline(true);
+    let alive = true;
+    const nativeReachability = isNativeWebViewOrigin();
+    const refreshOnline = async () => {
+      if (!navigator.onLine) {
+        if (alive) setOnline(false);
+        return;
+      }
+      if (!nativeReachability) {
+        if (alive) setOnline(true);
+        return;
+      }
+      const reachable = await checkNativeReachability();
+      if (alive) setOnline(reachable);
+    };
+    const onOnline = () => { void refreshOnline(); };
     const onOffline = () => setOnline(false);
     const onControllerChange = () => {
       setUpdateReady(true);
@@ -254,11 +291,17 @@ export function Shell({
     window.addEventListener('offline', onOffline);
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
     navigator.serviceWorker?.addEventListener('controllerchange', onControllerChange);
+    void refreshOnline();
+    const reachabilityTimer = nativeReachability
+      ? window.setInterval(() => { void refreshOnline(); }, 30_000)
+      : null;
     return () => {
+      alive = false;
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange);
+      if (reachabilityTimer) window.clearInterval(reachabilityTimer);
     };
   }, []);
 
