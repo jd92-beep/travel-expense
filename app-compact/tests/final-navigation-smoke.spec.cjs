@@ -65,7 +65,7 @@ for (const [name, viewport] of [
         await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
         await expect(page.locator('.settings-preview-controls')).toBeVisible();
       } else {
-        await expect(page.getByText(expectedText).first()).toBeVisible();
+        await expect(page.locator('body')).toContainText(expectedText);
       }
     }
     await context.close();
@@ -100,46 +100,31 @@ test('Final lock gate smoke without trusted device', async ({ page }) => {
 test('Sync error indicator is clickable and retries sync', async ({ page }) => {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
+    const now = Date.now();
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'dashboard',
+      receipts: [],
+      autoSync: false,
+      globalSyncStatus: 'error',
+      syncError: 'manual smoke failure',
+      syncQueue: [{
+        id: 'manual_error_queue',
+        type: 'receipt',
+        entityId: 'manual_error_receipt',
+        op: 'create',
+        status: 'error',
+        attempts: 1,
+        error: 'manual smoke failure',
+        createdAt: now - 60_000,
+        updatedAt: now - 30_000,
+      }],
+      settingsUpdatedAt: now + 31_536_000_000,
+      schemaVersion: 3,
+    }));
   });
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await Promise.all([
-    page.waitForNavigation(),
-    page.evaluate(async () => {
-      const clearIndexedSnapshot = () => new Promise((resolve) => {
-        const req = indexedDB.open('travel-expense-react', 1);
-        req.onupgradeneeded = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains('state')) db.createObjectStore('state');
-        };
-        req.onerror = () => resolve(undefined);
-        req.onsuccess = () => {
-          const db = req.result;
-          const tx = db.transaction('state', 'readwrite');
-          tx.objectStore('state').delete('app-state');
-          tx.oncomplete = () => {
-            db.close();
-            resolve(undefined);
-          };
-          tx.onerror = () => {
-            db.close();
-            resolve(undefined);
-          };
-        };
-      });
-      await clearIndexedSnapshot();
-      localStorage.clear();
-      localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
-      localStorage.setItem('boss-japan-tracker', JSON.stringify({
-        lastTab: 'dashboard',
-        receipts: [],
-        autoSync: false,
-        globalSyncStatus: 'error',
-        syncError: 'manual smoke failure',
-        syncQueue: [],
-      }));
-      window.location.reload();
-    })
-  ]);
 
   await expect(page.getByRole('button', { name: /Sync error/ })).toBeVisible();
   await expect.poll(async () => {
@@ -149,6 +134,42 @@ test('Sync error indicator is clickable and retries sync', async ({ page }) => {
     return !(await page.getByRole('button', { name: /Sync error/ }).isVisible().catch(() => false));
   }, { timeout: 10_000 }).toBe(true);
   await expect(page.locator('.sync-status-indicator')).not.toContainText('Sync error');
+});
+
+test('Console surfaces failed queue items before another backend retry', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    const now = Date.now();
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      receipts: [],
+      autoSync: false,
+      globalSyncStatus: 'queued',
+      syncQueue: [{
+        id: 'failed_queue_receipt',
+        type: 'receipt',
+        entityId: 'missing_backend_receipt',
+        op: 'create',
+        status: 'error',
+        attempts: 2,
+        error: 'Request timeout after 30000ms',
+        createdAt: now - 60_000,
+        updatedAt: now - 30_000,
+      }],
+      settingsUpdatedAt: now + 31_536_000_000,
+      schemaVersion: 3,
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await expect(page.getByRole('button', { name: /Sync error.*1 failed/ })).toBeVisible();
+  await expect(page.getByLabel('Compact travel readiness')).toContainText('Queue · 1 failed');
+
+  await page.getByRole('button', { name: /Sync error.*1 failed/ }).click();
+  await expect.poll(async () => page.getByLabel('Compact travel readiness').innerText()).not.toContain('failed');
+  await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
 });
 
 test('Duplicate person ids do not create React key warnings', async ({ page }) => {

@@ -21,17 +21,21 @@ function relativeTime(value: number) {
 }
 
 export function SyncStatusIndicator({ state, onRetry }: { state: SyncEngineState; onRetry?: () => void }) {
-  const item = config[state.status] || config.idle;
+  const hasFailures = state.status === 'error' || state.failedCount > 0;
+  const effectiveStatus = hasFailures && state.status !== 'pushing' && state.status !== 'pulling' && state.status !== 'offline'
+    ? 'error'
+    : state.status;
+  const item = config[effectiveStatus] || config.idle;
   const Icon = item.icon;
-  const title = `${item.label} · ${relativeTime(state.lastSyncedAt)}${state.pendingCount ? ` · ${state.pendingCount} pending` : ''}${state.error ? ` · ${state.error}` : ''}`;
+  const title = `${item.label} · ${relativeTime(state.lastSyncedAt)}${state.pendingCount ? ` · ${state.pendingCount} pending` : ''}${state.failedCount ? ` · ${state.failedCount} failed` : ''}${state.error ? ` · ${state.error}` : ''}`;
   const content = (
     <>
       <Icon size={14} className={state.status === 'pushing' || state.status === 'pulling' ? 'spin' : ''} />
       <span>{item.label}</span>
-      {state.pendingCount > 0 && <b>{state.pendingCount}</b>}
+      {state.failedCount > 0 ? <b>{state.failedCount}!</b> : state.pendingCount > 0 && <b>{state.pendingCount}</b>}
     </>
   );
-  if (state.status === 'error' && onRetry) {
+  if (hasFailures && onRetry && effectiveStatus === 'error') {
     return (
       <button
         type="button"

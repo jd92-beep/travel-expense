@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-21
+
+- Polished the Compact console/backend sync status: failed queue items now surface clearly in the header, Settings status pills, and Settings readiness strip instead of appearing as a clear queue.
+- Hardened Compact account sync reliability by preventing overlapping pull/push races, aligning the sync engine with the effective Supabase account session used for scoped storage, and ignoring expired stored Supabase sessions during boot.
+- Added a regression smoke for failed queue visibility and retry behavior, and bumped Compact to `0.8.2`.
+
 ## 2026-06-19
 
 - Fixed the Compact Phase 0 security finding from the Splitwise roadmap: `app-compact/scripts/verify-notion-connection.mjs` no longer contains a hardcoded broker passphrase, reads the unlock password from local environment variables only, and uses the current broker `password` payload plus `X-Travel-Session` session header.

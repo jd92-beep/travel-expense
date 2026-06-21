@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-06-19
-- **Focus**: Splitwise roadmap Phase 0 security/release hygiene
+- **Date**: 2026-06-21
+- **Focus**: Compact console/backend sync reliability polish
 - **Agent**: Codex
-- **App version**: Compact `0.8.1`; React unchanged in this pass
+- **App version**: Compact `0.8.2`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +18,17 @@
 
 ## What Was Done
 
-### Session 32 (Codex — current session)
+### Session 33 (Codex — current session)
+
+1. **Compact console/backend sync reliability polish**:
+   - Added failed-queue accounting to the Compact sync engine so console/status UI no longer reports `Queue · clear` while failed/error queue items still need attention.
+   - Hardened sync reliability by preventing overlapping pull/push operations from racing each other, and aligned the sync engine with the same effective Supabase session used for account-scoped storage.
+   - Ignored expired stored Supabase sessions during boot so stale local auth cannot make the app select a cloud account scope that is no longer valid.
+   - Updated header, Settings status pills, and Settings readiness console to show failed vs pending queue counts clearly.
+   - Added a final-navigation smoke covering failed queue visibility and retry transition back to pending.
+   - Bumped Compact to `0.8.2`.
+
+### Session 32 (Codex — previous session)
 
 1. **Splitwise roadmap Phase 0 security fix**:
    - Reviewed `/Users/tommy/Downloads/temp can delete/travel_expense_splitwise_super_app_roadmap(1).md` and confirmed the hardcoded broker/admin passphrase finding existed in `app-compact/scripts/verify-notion-connection.mjs`.

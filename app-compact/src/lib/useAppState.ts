@@ -228,5 +228,15 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     setState(withoutPublicDemoTrip({ ...DEFAULT_STATE, receipts: [] }, storageScope, userEmail));
   }, [storageScope, userEmail]);
 
-  return { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, hydratedScope, isHydratingScope: hydratedScope !== storageScope };
+  return {
+    state,
+    setState,
+    updateState,
+    upsertReceipt,
+    deleteReceipt,
+    resetLocal,
+    hydratedScope,
+    isHydratingScope: hydratedScope !== storageScope,
+    isStorageReady: hydratedScope === storageScope && indexedReadyScope === storageScope,
+  };
 }

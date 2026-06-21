@@ -52,6 +52,10 @@ function pendingCount(queue: SyncQueueItem[] = []) {
   return queue.filter((item) => item.status !== 'synced' && item.status !== 'failed' && item.status !== 'error').length;
 }
 
+function failedCount(queue: SyncQueueItem[] = []) {
+  return queue.filter((item) => item.status === 'failed' || item.status === 'error').length;
+}
+
 function usesSharedLedger(state: AppState, receipt: Receipt): boolean {
   const trip = (state.trips || []).find((candidate) => candidate.id === receipt.tripId);
   return !!trip?.sharing?.isShared;
@@ -70,6 +74,9 @@ export function useSyncEngine(
   const lastPulledTripIdRef = useRef('');
   const lastPushSucceededRef = useRef(true);
   const syncingRef = useRef(false);
+  const pullingRef = useRef(false);
+  const needsSyncAfterCurrentRef = useRef(false);
+  const syncRef = useRef<() => Promise<void>>(async () => {});
   const aliveRef = useRef(true);
 
   stateRef.current = state;
@@ -81,15 +88,30 @@ export function useSyncEngine(
     return () => {
       aliveRef.current = false;
       processingRef.current = false;
+      pullingRef.current = false;
       syncingRef.current = false;
+      needsSyncAfterCurrentRef.current = false;
       if (tripPullDebounceRef.current) window.clearTimeout(tripPullDebounceRef.current);
     };
+  }, []);
+
+  const scheduleSyncAfterCurrent = useCallback(() => {
+    needsSyncAfterCurrentRef.current = true;
+  }, []);
+
+  const runDeferredSync = useCallback(() => {
+    if (!aliveRef.current || processingRef.current || pullingRef.current || syncingRef.current || !needsSyncAfterCurrentRef.current) return;
+    needsSyncAfterCurrentRef.current = false;
+    window.setTimeout(() => {
+      if (aliveRef.current) void syncRef.current();
+    }, 0);
   }, []);
 
   const engineState = useMemo<SyncEngineState>(() => ({
     status: state.globalSyncStatus || 'idle',
     lastSyncedAt: state.lastSyncedAt || 0,
     pendingCount: pendingCount(state.syncQueue),
+    failedCount: failedCount(state.syncQueue),
     error: state.syncError || undefined,
   }), [state.globalSyncStatus, state.lastSyncedAt, state.syncQueue, state.syncError]);
 
@@ -288,7 +310,13 @@ export function useSyncEngine(
     console.log('[SyncEngine] push() started');
     if (processingRef.current) {
       lastPushSucceededRef.current = false;
+      scheduleSyncAfterCurrent();
       console.log('[SyncEngine] push() skipped — already processing');
+      return;
+    }
+    if (pullingRef.current) {
+      scheduleSyncAfterCurrent();
+      console.log('[SyncEngine] push() skipped — pull in progress');
       return;
     }
     if (!navigator.onLine) {
@@ -349,11 +377,22 @@ export function useSyncEngine(
       settlePushStatus(failures, lastError || undefined);
     } finally {
       processingRef.current = false;
+      runDeferredSync();
     }
-  }, [markQueueItem, updateSyncState, processItem, removeQueueItem, settlePushStatus, setState, yieldToStateFlush]);
+  }, [markQueueItem, updateSyncState, processItem, removeQueueItem, settlePushStatus, setState, yieldToStateFlush, scheduleSyncAfterCurrent, runDeferredSync]);
 
   const pull = useCallback(async () => {
     console.log('[SyncEngine] pull() started');
+    if (pullingRef.current) {
+      scheduleSyncAfterCurrent();
+      console.log('[SyncEngine] pull() skipped — already pulling');
+      return;
+    }
+    if (processingRef.current) {
+      scheduleSyncAfterCurrent();
+      console.log('[SyncEngine] pull() skipped — push in progress');
+      return;
+    }
     if (!navigator.onLine) {
       updateSyncState({ status: 'offline', error: '' });
       console.log('[SyncEngine] pull() skipped — offline');
@@ -364,6 +403,7 @@ export function useSyncEngine(
       console.log('[SyncEngine] pull() skipped — no broker session');
       return;
     }
+    pullingRef.current = true;
     updateSyncState({ status: 'pulling', error: '' });
     try {
       const cloudSession = hasSupabaseSession(supabaseSessionRef.current) ? supabaseSessionRef.current : null;
@@ -406,6 +446,7 @@ export function useSyncEngine(
       // it (and its receipts) so a removed member doesn't keep stale shared data. Never purge on a
       // failed pull or in Notion-only mode (guarded by cloudPullOk).
       const cloudPullOk = !!cloudSession && supabaseResult.status === 'fulfilled';
+      const cloudPullAuthoritative = cloudPullOk && supabaseData.trips.length > 0;
       const authorizedSupabaseIds = new Set(
         supabaseData.trips.map((trip) => trip.supabaseId).filter((id): id is string => !!id),
       );
@@ -463,7 +504,7 @@ export function useSyncEngine(
               };
             }
           }
-          if (cloudPullOk) {
+          if (cloudPullAuthoritative) {
             const purgedTripIds = new Set(
               (finalState.trips || [])
                 .filter((trip) => trip.supabaseId && !authorizedSupabaseIds.has(trip.supabaseId))
@@ -500,8 +541,11 @@ export function useSyncEngine(
       const message = redactError(error);
       console.log('[SyncEngine] pull() error:', message);
       updateSyncState({ status: 'error', error: message });
+    } finally {
+      pullingRef.current = false;
+      runDeferredSync();
     }
-  }, [updateSyncState, setState]);
+  }, [updateSyncState, setState, scheduleSyncAfterCurrent, runDeferredSync]);
 
   const pushSettings = useCallback(async () => {
     const current = stateRef.current;
@@ -558,8 +602,10 @@ export function useSyncEngine(
       }
     } finally {
       syncingRef.current = false;
+      runDeferredSync();
     }
   }, [pull, push, yieldToStateFlush]);
+  syncRef.current = sync;
 
   const retryFailedItems = useCallback(() => {
     if (!aliveRef.current) return;

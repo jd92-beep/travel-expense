@@ -61,7 +61,12 @@ function storedSupabaseSession(): Session | null {
     const raw = localStorage.getItem('travel-expense:supabase-auth:v1');
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed?.user?.id && parsed?.access_token ? parsed as Session : null;
+    const expiresAt = Number(parsed?.expires_at || 0);
+    if (!parsed?.user?.id || !parsed?.access_token || (expiresAt && expiresAt <= Math.floor(Date.now() / 1000) + 30)) {
+      localStorage.removeItem('travel-expense:supabase-auth:v1');
+      return null;
+    }
+    return parsed as Session;
   } catch {
     return null;
   }
@@ -74,7 +79,7 @@ export function App() {
   const isCloudSyncActive = hasSupabaseSession(effectiveSupabaseSession);
   const userEmail = effectiveSupabaseSession?.user?.email || null;
   const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';
-  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope } = useAppState(isCloudSyncActive, storageScope, userEmail);
+  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope, isStorageReady } = useAppState(isCloudSyncActive, storageScope, userEmail);
 
   const [globalOcrBusy, setGlobalOcrBusy] = useState('');
   const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
@@ -170,10 +175,10 @@ export function App() {
     hasSupabaseSession(effectiveSupabaseSession) &&
     !isBoss(userEmail) &&
     (state.trips || []).length === 0 &&
-    !isHydratingScope &&
+    isStorageReady &&
     !skippedGuide;
 
-  const syncEngine = useSyncEngine(state, setState, supabaseAuth.session);
+  const syncEngine = useSyncEngine(state, setState, effectiveSupabaseSession);
   const { pull, sync } = syncEngine;
   const [tab, setTab] = useState<TabId>(() => safeTabId((typeof window !== 'undefined' && window.location.hash.slice(1)) || DEFAULT_LAUNCH_TAB));
   const [direction, setDirection] = useState<number>(0);
@@ -309,12 +314,12 @@ export function App() {
   // Fix Bug 8.1: Lock automatic bootPull/bootSync logic behind bootSyncInitiated.current
   useEffect(() => {
     if (bootSyncInitiated.current) return;
-    if (isHydratingScope) return;
+    if (!isStorageReady) return;
     if (!navigator.onLine) return;
-    if (!hasSupabaseSession(supabaseAuth.session) && !canUseNotionMirror(state, false, userEmail)) return;
+    if (!hasSupabaseSession(effectiveSupabaseSession) && !canUseNotionMirror(state, false, userEmail)) return;
 
     const bootSyncKey = [
-      hasSupabaseSession(supabaseAuth.session) ? `supabase:${supabaseAuth.session.user.id}` : hasCredentialBrokerSession(state) ? `broker:${state.credentialSessionExpiresAt || 0}` : 'local-dev-credential',
+      hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : hasCredentialBrokerSession(state) ? `broker:${state.credentialSessionExpiresAt || 0}` : 'local-dev-credential',
       receiptCountRef.current === 0 ? 'pull' : 'sync',
     ].join(':');
     if (bootSyncKeys.current.has(bootSyncKey) || bootSyncScheduledKey.current === bootSyncKey) return;
@@ -337,7 +342,7 @@ export function App() {
       window.clearTimeout(timer);
       if (!bootSyncKeys.current.has(bootSyncKey)) bootSyncScheduledKey.current = '';
     };
-  }, [isHydratingScope, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, supabaseAuth.session]);
+  }, [isStorageReady, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, effectiveSupabaseSession, userEmail]);
 
   // Auto-connect Notion for Boss when Supabase session is available
   useEffect(() => {

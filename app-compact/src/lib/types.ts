@@ -268,6 +268,7 @@ export interface SyncEngineState {
   status: GlobalSyncStatus;
   lastSyncedAt: number;
   pendingCount: number;
+  failedCount: number;
   error?: string;
 }
 

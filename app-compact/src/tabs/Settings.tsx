@@ -168,6 +168,16 @@ function inclusiveTripDayCount(trip: TripProfile): number {
   return Math.max(1, Math.round((end - start) / 86_400_000) + 1);
 }
 
+function syncQueueSummary(queue: SyncQueueItem[] = []) {
+  const active = queue.filter((item) => item.status !== 'synced');
+  const failed = active.filter((item) => item.status === 'error' || item.status === 'failed');
+  return {
+    active,
+    failed,
+    pending: active.filter((item) => item.status !== 'error' && item.status !== 'failed'),
+  };
+}
+
 function compactTripDoctor(
   state: AppState,
   trip: TripProfile,
@@ -186,9 +196,10 @@ function compactTripDoctor(
   const unsyncedPhotos = tripReceipts.filter(receiptPhotoNeedsSync).length;
   const attachmentIssues = largePhotos + missingPhotos + unsyncedPhotos;
   const dataIssues = pendingOcr + missingPayer;
-  const queue = state.syncQueue || [];
-  const pendingQueue = Math.max(syncState?.pendingCount || 0, queue.filter((item) => item.status !== 'synced').length);
-  const failedQueue = queue.filter((item) => item.status === 'error' || item.status === 'failed').length + (syncState?.status === 'error' ? 1 : 0);
+  const queue = syncQueueSummary(state.syncQueue);
+  const pendingQueue = Math.max(syncState?.pendingCount || 0, queue.pending.length);
+  const failedQueueCount = Math.max(syncState?.failedCount || 0, queue.failed.length);
+  const failedQueue = failedQueueCount + (syncState?.status === 'error' && !failedQueueCount ? 1 : 0);
   const expectedDays = inclusiveTripDayCount(trip);
   const plannedDates = new Set((trip.itinerary || []).map((day) => day.date).filter(Boolean));
   const plannedDays = Math.min(expectedDays, Math.max(0, plannedDates.size || (trip.itinerary?.length || 0)));
@@ -210,8 +221,8 @@ function compactTripDoctor(
       {
         key: 'sync',
         title: 'Sync queue',
-        value: pendingQueue ? `${pendingQueue} pending` : 'Clear',
-        detail: failedQueue ? `${failedQueue} failed · ${storageLabel}` : storageLabel,
+        value: failedQueue ? `${failedQueue} failed` : pendingQueue ? `${pendingQueue} pending` : 'Clear',
+        detail: [pendingQueue ? `${pendingQueue} pending` : '', storageLabel].filter(Boolean).join(' · '),
       },
       {
         key: 'attachments',
@@ -550,10 +561,10 @@ function buildDiagnosticsPreview(
   storageScope: string,
 ): DiagnosticsPreview {
   const tripReceipts = scopedReceiptsForTrip(state, trip);
-  const queue = state.syncQueue || [];
-  const pendingQueue = queue.filter((item) => item.status !== 'synced');
-  const failedQueue = pendingQueue.filter((item) => item.status === 'error' || item.status === 'failed');
-  const deleteQueue = pendingQueue.filter((item) => item.op === 'delete' || item.type === 'delete-receipt');
+  const queue = syncQueueSummary(state.syncQueue);
+  const failedQueue = queue.failed;
+  const pendingQueue = queue.pending;
+  const deleteQueue = queue.active.filter((item) => item.op === 'delete' || item.type === 'delete-receipt');
   const validPersonIds = new Set(persons.map((person) => person.id));
   const categories = tripReceipts.reduce<Record<string, number>>((counts, receipt) => {
     const label = categoryById(receipt.category).name || 'Other';
@@ -620,7 +631,7 @@ function buildDiagnosticsPreview(
     },
     checks: [
       { label: 'Trip scope', status: tripReceipts.length === (state.receipts || []).length ? 'single-trip' : 'multi-trip', detail: `${tripReceipts.length} current-trip receipts` },
-      { label: 'Sync queue', status: pendingQueue.length ? 'pending' : 'clear', detail: `${failedQueue.length} failed · ${deleteQueue.length} delete queued` },
+      { label: 'Sync queue', status: failedQueue.length ? 'failed' : pendingQueue.length ? 'pending' : 'clear', detail: `${pendingQueue.length} pending · ${failedQueue.length} failed · ${deleteQueue.length} delete queued` },
       { label: 'Data quality', status: pendingOcr + missingPayer + syncErrors ? 'review' : 'clean', detail: `${pendingOcr} pending OCR · ${missingPayer} missing payer · ${syncErrors} sync errors` },
       { label: 'Backup safety', status: 'safe-preview', detail: 'No raw IDs, tokens, photos, or queue payloads included' },
     ],
@@ -712,7 +723,7 @@ function buildSyncReadinessDryRun(
 ) {
   const tripReceipts = scopedReceiptsForTrip(state, trip);
   const tripReceiptIds = new Set(tripReceipts.map((receipt) => receipt.id));
-  const queue = (state.syncQueue || []).filter((item) => item.status !== 'synced');
+  const queue = syncQueueSummary(state.syncQueue).active;
   const relevantQueue = queue.filter((item) => (
     item.type === 'settings'
     || item.entityId === trip.id
@@ -720,6 +731,7 @@ function buildSyncReadinessDryRun(
     || tripReceiptIds.has(item.entityId)
   ));
   const failedQueue = relevantQueue.filter((item) => item.status === 'error' || item.status === 'failed');
+  const pendingQueue = relevantQueue.filter((item) => item.status !== 'error' && item.status !== 'failed');
   const destructiveQueue = relevantQueue.filter((item) => item.op === 'delete' || item.type === 'delete-receipt');
   const receiptQueue = relevantQueue.filter((item) => item.type === 'receipt' || item.type === 'delete-receipt');
   const tripQueue = relevantQueue.filter((item) => item.type === 'trip');
@@ -755,8 +767,8 @@ function buildSyncReadinessDryRun(
     items: [
       {
         key: 'pending',
-        title: 'Pending changes',
-        value: relevantQueue.length ? `${relevantQueue.length} pending` : 'None',
+        title: 'Queued changes',
+        value: failedQueue.length ? `${failedQueue.length} failed` : pendingQueue.length ? `${pendingQueue.length} pending` : 'None',
         detail: `${receiptQueue.length} receipt · ${tripQueue.length} trip · ${settingsQueue.length} settings`,
       },
       {
@@ -1087,6 +1099,14 @@ export function Settings({
   const tripDoctor = useMemo(() => compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope), [state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope]);
   const syncReadiness = useMemo(() => buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope), [state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope]);
   const tripScopeAudit = useMemo(() => buildTripScopeAudit(state, currentTrip), [state, currentTrip]);
+  const failedSyncCount = syncState?.failedCount || 0;
+  const pendingSyncCount = syncState?.pendingCount || 0;
+  const syncPillTone = syncState?.status === 'error' || failedSyncCount ? 'danger' : pendingSyncCount ? 'warning' : 'ok';
+  const syncPillDetail = failedSyncCount
+    ? ` · ${failedSyncCount} failed${pendingSyncCount ? ` · ${pendingSyncCount} pending` : ''}`
+    : pendingSyncCount
+      ? ` · ${pendingSyncCount}`
+      : '';
 
   // Local state for Trip Manager
   const [managerTripId, setManagerTripId] = useState(currentTrip.id);
@@ -2160,9 +2180,9 @@ export function Settings({
               {syncState && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span><StatusPill tone={syncState.status === 'error' ? 'danger' : syncState.pendingCount ? 'warning' : 'ok'}><Cloud size={14} /> Sync {syncState.status}{syncState.pendingCount ? ` · ${syncState.pendingCount}` : ''}</StatusPill></span>
+                    <span><StatusPill tone={syncPillTone}><Cloud size={14} /> Sync {syncState.status}{syncPillDetail}</StatusPill></span>
                   </TooltipTrigger>
-                  <TooltipContent>雲端同步狀態與等待上傳隊列</TooltipContent>
+                  <TooltipContent>雲端同步狀態、等待上傳隊列與失敗重試數</TooltipContent>
                 </Tooltip>
               )}
               <Tooltip>
