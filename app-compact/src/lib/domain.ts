@@ -77,6 +77,14 @@ export function validateItinerary(input: unknown): { ok: true; itinerary: Itiner
 // Save a text file. On a Capacitor native shell the browser blob+anchor download is a silent
 // no-op, so write to the app cache and open the OS share sheet instead. Web path is unchanged.
 export async function saveFile(filename: string, mimeType: string, content: string): Promise<void> {
+  // Centralized filename hardening at the single choke point: Filesystem.writeFile treats the name
+  // as a path, so a trip name with "/" or ":" (e.g. "Osaka/Kyoto", "名古屋/中部") would write to a
+  // non-existent subdir and silently fail on native. Sanitize here so every caller is safe — not
+  // just exportCsv, which had its own ad-hoc sanitizer that the backup/itinerary exports forgot.
+  const safeName = (filename || 'export')
+    .replace(/[/\\:*?"<>|\x00-\x1f]+/g, '-')
+    .replace(/^\.+/, '')
+    .trim() || 'export';
   const cap = (typeof window !== 'undefined'
     ? (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor
     : undefined);
@@ -86,9 +94,9 @@ export async function saveFile(filename: string, mimeType: string, content: stri
         import('@capacitor/filesystem'),
         import('@capacitor/share'),
       ]);
-      await Filesystem.writeFile({ path: filename, data: content, directory: Directory.Cache, encoding: Encoding.UTF8 });
-      const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
-      await Share.share({ title: filename, url: uri });
+      await Filesystem.writeFile({ path: safeName, data: content, directory: Directory.Cache, encoding: Encoding.UTF8 });
+      const { uri } = await Filesystem.getUri({ path: safeName, directory: Directory.Cache });
+      await Share.share({ title: safeName, url: uri });
       return;
     } catch (err) {
       console.error('[saveFile] native save/share failed:', err);
@@ -98,7 +106,7 @@ export async function saveFile(filename: string, mimeType: string, content: stri
   const blob = new Blob([content], { type: mimeType });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = filename;
+  a.download = safeName;
   a.click();
   window.setTimeout(() => URL.revokeObjectURL(a.href), 1500);
 }

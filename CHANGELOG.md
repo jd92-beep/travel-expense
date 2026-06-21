@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-06-21 HKT (Native device-path audit)
+
+- **v0.12.10 / versionCode 1210.** Deep blue-army audit of device-only paths (smokes don't cover
+  native). Audited 9 areas — division/FX (guarded), JSON.parse (all wrapped), camera, back-button,
+  recurring, syncMerge, settlement, AI-response parsing — all clean. Fixed 1 genuine device-only bug:
+  - **[MED] Backup / Itinerary export silently failed on Android when the trip name contained a
+    filesystem-special char** (`/`, `:`, `*`, `?`, …). On native, `saveFile` passes the filename
+    straight to `Filesystem.writeFile` as a *path*, so a trip named e.g. "Osaka/Kyoto" or "名古屋/中部"
+    wrote to a non-existent subdir → the `catch` swallowed it → nothing shared. `exportCsv` had its
+    own ad-hoc name sanitizer but the `downloadJson` callers (Backup, Itinerary) didn't. **Root-cause
+    fix:** sanitize once at the `saveFile` choke point (strips path separators + illegal chars, keeps
+    the extension dot and CJK), so every current and future caller is covered. (`domain.ts`)
+  - Verified: sanitizer self-check 7/7, typecheck, unit tests (split-engine 3/3 + notion round-trip).
+
 ## 2026-06-21 HKT (Final review — verification-workflow fixes)
 
 - **v0.12.9 / versionCode 1209.** Inline final review (UTC-date sweep) + an adversarial verification
