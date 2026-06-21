@@ -125,6 +125,17 @@ export function todayYmd(timeZone = 'Asia/Hong_Kong'): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+// Add days to a YYYY-MM-DD string. Pure date math (no "now"), so it's timezone-safe — pair it with
+// todayYmd() instead of `new Date().toISOString()` which yields yesterday before 08:00 HKT.
+export function addDaysYmd(date: string, days: number): string {
+  const [y, m, d] = String(date).split('-').map(Number);
+  if (!y || !m || !d) return date;
+  const parsed = new Date(Date.UTC(y, m - 1, d));
+  if (Number.isNaN(parsed.getTime())) return date;
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
 export function todayForReceipts(state: AppState): string {
   const hkt = todayYmd('Asia/Hong_Kong');
   const trip = activeTrip(state);
@@ -226,14 +237,27 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   return Math.round((Number(r.total) || 0) / rate);
 }
 
+// Unrounded HKD value (locked rate + self-heal, no final round) so getReceiptTripAmount can convert
+// ONCE instead of double-rounding through an integer-HKD intermediate — the old path drifted ~2-3%
+// and rounded sub-HKD foreign amounts to 0. getReceiptHkdAmount keeps its own rounded display path.
+function receiptHkdUnrounded(r: Receipt, state: AppState): number {
+  const cur = r.currency || 'JPY';
+  if (cur === 'HKD') return Number(r.total) || 0;
+  const rate = Math.max(0.1, Number(r.exchangeRate) || perHkdForCurrency(state, cur));
+  if (typeof r.hkdAmount === 'number' && r.hkdAmount > 0) {
+    const ratio = (Number(r.total) || 0) / r.hkdAmount;
+    if (Math.abs(ratio - rate) / rate < 0.10) return r.hkdAmount;
+  }
+  return (Number(r.total) || 0) / rate;
+}
+
 export function getReceiptTripAmount(r: Receipt, state: AppState, resolvedTripCurrency: string): number {
   if (isSettlementReceipt(r)) return 0; // settlements are transfers, never spending
   const cur = r.currency || 'JPY';
   if (cur === resolvedTripCurrency) {
     return Number(r.total) || 0;
   }
-  const hkdAmt = getReceiptHkdAmount(r, state);
-  return Math.round(hkdToCurrency(hkdAmt, resolvedTripCurrency, state));
+  return Math.round(hkdToCurrency(receiptHkdUnrounded(r, state), resolvedTripCurrency, state));
 }
 
 export function getResolvedTripCurrency(state: AppState, trip: any): string {
@@ -458,7 +482,11 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
           // currency equals the trip currency, receiptTotal === amount and this is an identity.
           const receiptShares = computeShares(receiptTotal > 0 ? receiptTotal : amount, r.splitType || 'equal', r.splits);
           const sumW = [...receiptShares].reduce((acc, [, w]) => acc + w, 0);
-          const shares = receiptTotal > 0 && receiptTotal !== amount && sumW > 0
+          // If the receipt's own-currency total rounds to ~0 (sub-unit) while the converted trip
+          // amount is > 0, the share weights are all 0 — fall back to ratios so the debit still
+          // balances the credit instead of silently leaving the payer owed with no debtor.
+          if (sumW <= 0) throw new Error('receipt total rounds to zero — using trip ratios');
+          const shares = receiptTotal > 0 && receiptTotal !== amount
             ? computeShares(amount, 'shares', [...receiptShares].map(([personId, owed]) => ({ personId, weight: owed })))
             : receiptShares;
           for (const [personId, owed] of shares) {
@@ -737,7 +765,14 @@ function nextRunDate(current: string, frequency: RecurringRule['frequency']): st
   const d = new Date(current + 'T00:00:00');
   if (frequency === 'daily') d.setDate(d.getDate() + 1);
   else if (frequency === 'weekly') d.setDate(d.getDate() + 7);
-  else d.setMonth(d.getMonth() + 1);
+  else {
+    // Clamp to the target month's last day so the 29th/30th/31st don't overflow (Jan 31 → Mar 3).
+    const day = d.getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + 1);
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(day, daysInMonth));
+  }
   // Local YMD — toISOString() shifts the date by the UTC offset (one day earlier in HKT),
   // which left daily rules' nextRun stuck on the same day → unbounded duplicate spawns.
   const y = d.getFullYear();
@@ -762,7 +797,7 @@ export function processRecurringRules(state: AppState): { receipts: Receipt[]; u
     // never re-spawns the same date on the next launch.
     let nextRun = rule.nextRun;
     let spawned = 0;
-    while (nextRun <= today && spawned < 400) {
+    while (/^\d{4}-\d{2}-\d{2}$/.test(nextRun) && nextRun <= today && spawned < 400) {
       newReceipts.push({
         id: `recurring_${rule.id}_${nextRun}_${Math.random().toString(16).slice(2)}`,
         store: rule.store,

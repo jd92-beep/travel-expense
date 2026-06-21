@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Compass, Sparkles, Calendar, DollarSign, MapPin, Loader2, ArrowRight, Info, Check, Mail, Plus, Minus, Trash2, Users } from 'lucide-react';
 import { parseTripParagraph } from '../lib/ai';
+import { addDaysYmd, todayYmd } from '../lib/domain';
 import { createTripProfile, normalizeTripIntelligence } from '../domain/trip/normalize';
 import type { AppState, Person, TripProfile, TripSharingInviteDraft } from '../lib/types';
 
@@ -79,15 +80,8 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   // Manual Form States
   const [tripName, setTripName] = useState('新旅行 2026');
   const [location, setLocation] = useState('東京');
-  const [startDate, setStartDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().slice(0, 10);
-  });
-  const [endDate, setEndDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 5);
-    return d.toISOString().slice(0, 10);
-  });
+  const [startDate, setStartDate] = useState(() => todayYmd());
+  const [endDate, setEndDate] = useState(() => addDaysYmd(todayYmd(), 5));
   const [budget, setBudget] = useState('50000');
   const [currency, setCurrency] = useState('JPY');
   const [guidePersons, setGuidePersons] = useState(() => makeGuidePersons(1));

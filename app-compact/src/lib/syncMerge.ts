@@ -94,7 +94,7 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
     const remoteHasMissingLink = !localReceipt.notionPageId && !!remoteReceipt.notionPageId
       || !localReceipt.sourceId && !!remoteReceipt.sourceId;
     const photoUrlChanged = !!remoteReceipt.photoUrl && remoteReceipt.photoUrl !== localReceipt.photoUrl;
-    if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink) || photoUrlChanged) {
+    if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
       byId.set(localReceipt.id, stampForRemote(state, {
         ...localReceipt,
         ...remoteReceipt,
@@ -107,6 +107,21 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
       if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, localReceipt.id);
       if (tripSourceKey) idByTripSource.set(tripSourceKey, localReceipt.id);
       if (rawSourceKey) idByRawSource.set(rawSourceKey, localReceipt.id);
+    } else if (photoUrlChanged) {
+      // photoUrl comes from a separate table and changes WITHOUT bumping the receipt row's
+      // updated_at. Adopt ONLY the photo + identity-link fields — never the money/content fields,
+      // which would clobber a newer-but-unpushed local edit (and then push the stale value back).
+      byId.set(localReceipt.id, {
+        ...localReceipt,
+        photoUrl: remoteReceipt.photoUrl || localReceipt.photoUrl,
+        supabasePhotoPath: remoteReceipt.supabasePhotoPath || localReceipt.supabasePhotoPath,
+        _photoSyncedToSupabase: localReceipt._photoSyncedToSupabase || remoteReceipt._photoSyncedToSupabase,
+        supabaseId: localReceipt.supabaseId || remoteReceipt.supabaseId,
+        notionPageId: localReceipt.notionPageId || remoteReceipt.notionPageId,
+        sourceId: localReceipt.sourceId || remoteReceipt.sourceId,
+      });
+      if (remoteReceipt.supabaseId) idBySupabaseId.set(remoteReceipt.supabaseId, localReceipt.id);
+      if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, localReceipt.id);
     }
   }
   return [...byId.values()];

@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-06-21 HKT (Final review — verification-workflow fixes)
+
+- **v0.12.9 / versionCode 1209.** Inline final review (UTC-date sweep) + an adversarial verification
+  workflow (3 independent reviewers) on the v0.12.8 build. Fixed 10 findings:
+  - **[CRITICAL] Photo sync could clobber a newer local edit (data loss).** `mergePulledReceipts`
+    OR'd `photoUrlChanged` into the full-overwrite condition with no `updatedAt` guard; since photoUrl
+    comes from a separate table and doesn't bump the row's `updated_at`, a photo finishing upload could
+    overwrite a newer-but-unpushed local amount edit — then push the stale value back. Now a photo-only
+    change adopts ONLY photo + identity-link fields, never money/content. (`syncMerge.ts`)
+  - **[HIGH] Spurious "login failed" right after a successful Android login.** The native deep-link
+    effect depended on `updateState`, whose identity flips on login (storageScope change), so it re-ran
+    and re-drained the single-use PKCE launch URL → `exchangeCodeForSession` threw on the consumed code.
+    Effect is now mount-once via a `updateStateRef`. (`App.tsx`)
+  - **[MED] Cross-currency amounts double-rounded** through an integer-HKD intermediate (~2–3% drift;
+    sub-HKD foreign amounts dropped to 0). `getReceiptTripAmount` now converts once via an unrounded
+    HKD helper; `getReceiptHkdAmount` (HKD display) left untouched. (`domain.ts`)
+  - **[MED] Transient sync errors mis-parked as auth errors** — bare `session`/`expired` substring
+    match now tightened to specific auth signals (401/unauthorized/jwt/…), so flaky-network failures
+    fall through to backoff retry. (`useSyncEngine.ts`)
+  - **[LOW] UTC "today" off-by-one** (yesterday before 08:00 HKT) across wizard/guide/placeholder
+    dates, receipt fallback, and Stats remaining-days → `todayYmd()` + new pure `addDaysYmd()`.
+    **Monthly recurring** clamped to month-end (no Jan-31→Mar-3 drift). Recurring loop guards a
+    malformed `nextRun`; cross-currency sub-unit split now falls back to ratios (stays balanced);
+    recurring runs after hydration; tombstone caps raised 500→5000. (`domain.ts`, `App.tsx`, etc.)
+  - Deferred (documented, low value/risk): simplifyDebts sub-unit dust (inherent integer-settlement
+    tradeoff), recovery-link → reset-password routing (recovery still authenticates).
+  - Verified: typecheck, unit (incl. cross-currency), smokes (settle-up, split-editor, split-payer,
+    history 8/8, scan, welcome-guide).
+
 ## 2026-06-21 HKT (Android review fixes)
 
 - **v0.12.8 / versionCode 1208 — 3-agent review fix pass (11 bugs).** Found via parallel money/UI/native review of the v0.12.7 build; all verified on the emulator + smokes.

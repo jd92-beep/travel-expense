@@ -326,10 +326,15 @@ export function useSyncEngine(
         } catch (error) {
           lastError = redactError(error);
           const nextAttempts = item.attempts + 1;
-          const isAuthError = lastError.toLowerCase().includes('session') ||
-                              lastError.includes('401') ||
-                              lastError.toLowerCase().includes('unauthorized') ||
-                              lastError.toLowerCase().includes('expired');
+          // Match auth failures specifically — bare "session"/"expired" substrings misclassified
+          // transient network/Notion errors as auth and parked them without backoff retry.
+          const lowerError = lastError.toLowerCase();
+          const isAuthError = lowerError.includes('401') ||
+                              lowerError.includes('unauthorized') ||
+                              lowerError.includes('jwt') ||
+                              lowerError.includes('invalid token') ||
+                              lowerError.includes('token expired') ||
+                              lastError.includes('登入憑證'); // redactError's friendly auth message
 
           if (isAuthError || nextAttempts >= MAX_RETRY_ATTEMPTS) {
             // Auth failures need re-login; exhausted retries park for manual "重試" (kept, not dropped).

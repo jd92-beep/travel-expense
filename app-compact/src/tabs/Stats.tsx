@@ -632,7 +632,7 @@ function buildSettlementActionPlan(
 }
 
 function remainingTripDays(tripDayCount: number, trend: Array<[string, number]>, itinerary: ReturnType<typeof getItinerary>) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayYmd();
   const dates = (itinerary.length ? itinerary.map((day) => day.date) : trend.map(([date]) => date)).filter(Boolean).sort();
   if (!dates.length) return Math.max(1, tripDayCount);
   const elapsed = today < dates[0]

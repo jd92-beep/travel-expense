@@ -6,7 +6,7 @@ import { Shell } from './components/Shell';
 import { LoadingState } from './components/ui';
 import { Loader2 } from 'lucide-react';
 import { activeTrip, stampReceiptForTrip, stableDayId, stableSpotId } from './domain/trip/normalize';
-import { processRecurringRules } from './lib/domain';
+import { addDaysYmd, processRecurringRules, todayYmd } from './lib/domain';
 import { hasCredentialBrokerSession } from './lib/credentialBroker';
 import { canUseNotionMirror } from './lib/notionAccess';
 import { mergePulledData } from './lib/syncMerge';
@@ -81,6 +81,10 @@ export function App() {
   const userEmail = effectiveSupabaseSession?.user?.email || null;
   const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';
   const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope } = useAppState(isCloudSyncActive, storageScope, userEmail);
+  // Stable ref so the mount-once native deep-link effect doesn't re-run when updateState's identity
+  // changes on login (storageScope flip) — re-running would re-drain the single-use PKCE launch URL.
+  const updateStateRef = useRef(updateState);
+  updateStateRef.current = updateState;
 
   const [globalOcrBusy, setGlobalOcrBusy] = useState('');
   const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
@@ -124,7 +128,7 @@ export function App() {
         }
       } catch (nativeAuthError) {
         console.error('[NativeAuth] Android redirect handling failed:', nativeAuthError);
-        updateState({
+        updateStateRef.current({
           syncError: nativeAuthError instanceof Error ? nativeAuthError.message : 'Android 登入回跳未成功，請再試一次。',
         });
       }
@@ -155,7 +159,10 @@ export function App() {
       document.body.classList.remove('compact-native-android');
       removeAppUrlListener?.();
     };
-  }, [updateState]);
+    // Mount-once: updateState is read via updateStateRef so a login-time identity change can't
+    // re-run this effect and re-process the single-use launch URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSaveGuideTrip = async (result: WelcomeGuideResult | TripProfile) => {
     const guide = 'trip' in result
@@ -222,10 +229,8 @@ export function App() {
   };
 
   const handleSkipGuide = async () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const d = new Date();
-    d.setDate(d.getDate() + 5);
-    const end = d.toISOString().slice(0, 10);
+    const today = todayYmd();
+    const end = addDaysYmd(today, 5);
     const placeholderTrip = createTripProfile({
       name: '我嘅新旅程 📓',
       destinationSummary: '未設定目的地',
@@ -411,9 +416,11 @@ export function App() {
     };
   }, [isHydratingScope, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, supabaseAuth.session]);
 
-  // Process recurring rules on mount
+  // Process recurring rules once the scope's state has finished hydrating (localStorage is sync but
+  // IndexedDB merges async — running on bare mount could miss rules that arrive from IndexedDB).
+  // processRecurringRules is idempotent (it advances nextRun), so a re-run after a scope change is safe.
   useEffect(() => {
-    if (!state.recurringRules?.length) return;
+    if (isHydratingScope || !state.recurringRules?.length) return;
     const { receipts: newReceipts, updatedRules } = processRecurringRules(state);
     if (newReceipts.length) {
       // Route through upsertReceipt so each spawned receipt is stamped + enqueued for cloud sync —
@@ -423,7 +430,7 @@ export function App() {
       console.log(`[App] Recurring: spawned ${newReceipts.length} receipt(s) from ${updatedRules.length} rule(s)`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isHydratingScope]);
 
   // Auto-connect Notion for Boss when Supabase session is available
   useEffect(() => {
@@ -703,7 +710,7 @@ export function App() {
               const rawItinerary = Array.isArray(trip.itinerary) ? trip.itinerary : [];
               let itinerary = rawItinerary.map((day) => ({ ...day, spots: day.spots.map((spot) => ({ ...spot })) }));
               if (!itinerary.length) {
-                const fallbackDate = receipt.date || trip.startDate || prev.tripDateRange.start || new Date().toISOString().slice(0, 10);
+                const fallbackDate = receipt.date || trip.startDate || prev.tripDateRange.start || todayYmd();
                 itinerary = [{
                   id: stableDayId(trip.id, fallbackDate),
                   dayId: stableDayId(trip.id, fallbackDate),

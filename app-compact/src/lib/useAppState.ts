@@ -202,10 +202,10 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
       ...prev,
       receipts: prev.receipts.filter((r) => r.id !== receipt.id),
       notionDeletedIds: receipt.notionPageId
-        ? [...(prev.notionDeletedIds || []), receipt.notionPageId].slice(-500)
+        ? [...(prev.notionDeletedIds || []), receipt.notionPageId].slice(-5000)
         : prev.notionDeletedIds,
       notionDeletedSourceIds: tombstoneKey
-        ? [...(prev.notionDeletedSourceIds || []), tombstoneKey].slice(-500)
+        ? [...(prev.notionDeletedSourceIds || []), tombstoneKey].slice(-5000)
         : prev.notionDeletedSourceIds,
       syncQueue: prev.autoSync && (syncAvailable || hasCredentialBrokerSession(prev) || hasDirectNotionToken())
         ? enqueueSyncItem(prev.syncQueue, queueItem('delete-receipt', receipt.id, 'delete', {

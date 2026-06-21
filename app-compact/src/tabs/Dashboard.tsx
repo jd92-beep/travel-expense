@@ -37,6 +37,7 @@ import {
   openMapExternal,
   safeExternalUrl,
   todayForReceipts,
+  todayYmd,
   safePhotoUrl,
   getReceiptHkdAmount,
   getReceiptTripAmount,
@@ -483,10 +484,8 @@ export function Dashboard({
   useEffect(() => {
     if (activeIsWizardOpen) {
       if (!newTripStartDate && !newTripEndDate) {
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const futureDate = new Date();
-        futureDate.setDate(futureDate.getDate() + 6); // 7天 (today + 6 days)
-        const futureStr = futureDate.toISOString().slice(0, 10);
+        const todayStr = todayYmd();
+        const futureStr = addDaysToIsoDate(todayStr, 6); // 7天 (today + 6 days)
         setNewTripStartDate(todayStr);
         setNewTripEndDate(futureStr);
       }
@@ -612,7 +611,7 @@ export function Dashboard({
 
   const applyTripDuration = (days: number, baseDate = newTripStartDate) => {
     const duration = normalizeTripDurationDays(days);
-    const start = baseDate || new Date().toISOString().slice(0, 10);
+    const start = baseDate || todayYmd();
     setNewTripStartDate(start);
     setNewTripEndDate(addDaysToIsoDate(start, duration - 1));
   };
