@@ -41,6 +41,7 @@ import {
   notionFetch,
 } from '../lib/notion';
 import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
+import { receiptSourceTombstoneKey } from '../lib/syncMerge';
 import type { AppState, ItineraryDay, ItinerarySpot, Person, Receipt, SyncEngineState, SyncQueueItem, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
 import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
 import { createSupabaseTripInvite, inviteLinkForToken, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
@@ -1454,11 +1455,28 @@ export function Settings({
       ...prev,
       persons: persons.filter((p) => p.id !== id),
       shareRatios,
-      receipts: prev.receipts.map((r) => ({
-        ...r,
-        personId: r.personId === id ? fallback.id : r.personId,
-        beneficiaryId: r.beneficiaryId === id ? undefined : r.beneficiaryId,
-      })),
+      receipts: prev.receipts.map((r) => {
+        const next: Receipt = {
+          ...r,
+          personId: r.personId === id ? fallback.id : r.personId,
+          beneficiaryId: r.beneficiaryId === id ? undefined : r.beneficiaryId,
+        };
+        // A removed person can also be referenced deep inside splits[]/payers[]/lineItems. Leaving
+        // those orphan ids silently corrupts settlement: the engine throws on an unknown split
+        // person (→ ratio fallback, exact/% split lost) and drops unknown payers (→ rebalance off
+        // by the removed person's contribution). Can't keep an N-way split once a party is gone, so
+        // revert affected receipts to a clean shared split + strip the dangling itemized assignment.
+        if (r.splits?.some((s) => s.personId === id) || r.payers?.some((p) => p.personId === id)) {
+          next.splitType = undefined;
+          next.splits = undefined;
+          next.payers = undefined;
+        }
+        if (r.lineItems?.some((li) => li.assignedTo?.includes(id))) {
+          next.lineItems = r.lineItems.map((li) =>
+            li.assignedTo?.includes(id) ? { ...li, assignedTo: li.assignedTo.filter((p) => p !== id) } : li);
+        }
+        return next;
+      }),
     }));
     setStatus('已移除旅伴，相關 receipt 已轉到第一位旅伴');
   }
@@ -1877,6 +1895,17 @@ export function Settings({
       const patch: Partial<AppState> = {
         trips: updatedTrips,
         receipts: remainingReceipts,
+        // Tombstone the cascade-deleted receipts, exactly like single-receipt deleteReceipt does.
+        // Without this, an autoSync pull that races ahead of the queued deletes finds the rows still
+        // present remotely and re-adds them (now orphaned, since their trip is gone).
+        notionDeletedSourceIds: [
+          ...(prev.notionDeletedSourceIds || []),
+          ...deletedReceipts.map((r) => receiptSourceTombstoneKey(r)).filter(Boolean),
+        ].slice(-5000),
+        notionDeletedIds: [
+          ...(prev.notionDeletedIds || []),
+          ...deletedReceipts.map((r) => r.notionPageId).filter((id): id is string => !!id),
+        ].slice(-5000),
       };
 
       if (isActive) {

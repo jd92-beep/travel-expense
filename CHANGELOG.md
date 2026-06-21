@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06-21 HKT (Data-integrity audit — person/trip deletion)
+
+- **v0.12.11 / versionCode 1211.** Dynamic pass (live dev server: dashboard/history/timeline/stats/
+  split-editor/welcome-guide smokes 8+8+8+1+1+1 green; a runtime-error walker over all 7 tabs + the
+  editor with multi-currency / exact / %-split / multi-payer / private / settlement / itemized stress
+  data found no exceptions) plus a mutation-orphan audit. Fixed 2 data-integrity bugs:
+  - **[MED] Removing a travel companion left orphan references in `splits[]` / `payers[]` /
+    `lineItems[].assignedTo`.** `removePerson` only remapped the top-level `personId` and cleared
+    `beneficiaryId`; a removed person still inside a receipt's exact/%/multi-payer split silently
+    corrupted settlement — the engine throws on an unknown split person (→ ratio fallback, the exact
+    split lost) and drops unknown payers (→ balances off by that person's contribution). Now affected
+    receipts revert to a clean shared split and dangling itemized assignments are stripped. (`Settings.tsx`)
+  - **[MED] Deleting a trip could resurrect its receipts.** The cascade delete removed the trip's
+    receipts and queued remote deletes but — unlike single-receipt `deleteReceipt` — never wrote
+    tombstones, so an autoSync pull racing ahead of the queue re-added the rows (now orphaned, their
+    trip gone). Trip deletion now tombstones every cascade-deleted receipt
+    (`notionDeletedSourceIds` / `notionDeletedIds`, capped 5000). (`Settings.tsx`)
+  - Verified: typecheck, unit tests (split-engine 3/3 + notion round-trip), UI smokes green.
+
 ## 2026-06-21 HKT (Native device-path audit)
 
 - **v0.12.10 / versionCode 1210.** Deep blue-army audit of device-only paths (smokes don't cover
