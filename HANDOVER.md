@@ -2,14 +2,16 @@
 
 ## Last Worked On
 - **Date**: 2026-06-21 HKT
-- **Focus**: Android super-app review fixes after v0.12.2
-- **Agent**: Codex (concurrent branch — `git fetch` before every commit)
-- **App version**: Compact/Android `0.12.7` (versionCode `1207`); React unchanged
-- **Latest pushed branch commit**: `3d0234a` (`docs: record latest android visual qa rerun`). Latest pushed code commit before the local v0.12.7 work is `9a81a62` (`fix(android): stabilize native visual qa`).
-- **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`. All roadmap phases are complete. Local v0.12.7 work fixes the configured-login safe-area console error, native picker cancel console errors, and two Android QA harness flakes; commit/push that work after final checks if this handover is read before the next git operation.
-- **Latest verification evidence**: v0.12.7 passed `npm run typecheck`, `node --check app-compact/scripts/android-qa-smoke.mjs`, configured Supabase `android:qa`, local visual `ANDROID_QA_DISABLE_SUPABASE=1 ... npm run android:qa`, targeted log grep, and `git diff --check`. v0.12.5 previously passed wrapped Timeline smoke (`8 passed`), wrapped Weather smoke (`13 passed`), wrapped mobile-layout smoke (`1 passed`), and `git diff --check`. Earlier v0.12.4 live Supabase SQL check confirmed `expense_comments` table/RLS/policies/grants, with local `npm run db:policy:scan` green. v0.12.3 previously passed the broader build/security/smoke/audit suite listed below.
-- **Latest Android QA evidence**: configured Supabase build passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=login`, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T22-41-03-660Z`; targeted grep found no `Error injecting safe area CSS`, no `E Capacitor/Console`, no app fatal, no app ANR. Latest local visual build passed `ANDROID_QA_DISABLE_SUPABASE=1 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa` with `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs captured, native Camera/Gallery foreground checks, artifact folder `/tmp/travel-expense-android-qa-2026-06-20T22-38-40-896Z`, and targeted grep found no app-side error strings. Broad error grep only found emulator Camera service lines, not app failures.
-- **Current known verification blockers**: no known emulator visual/logcat blocker remains after v0.12.7. Real-device Google/magic-link login still needs a human account/device round-trip.
+- **Focus**: Two bug-review fix passes on the v0.12.7 build (v0.12.8 + v0.12.9)
+- **Agent**: Oscar (Claude Code) on the isolated android worktree; Codex contributed the v0.12.7 polish
+- **App version**: Compact/Android `0.12.9` (versionCode `1209`); React unchanged
+- **Latest pushed branch commit**: `3129aba` (`fix(review): final-review + verification-workflow fixes (data-loss, auth, currency) v0.12.9`), pushed and in sync with `origin/codex/android-compact-shell`. Preceded by `8ddcc78` (v0.12.8, 11-bug review pass) and `55846df`/`3d0234a` (v0.12.7 polish).
+- **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`, clean working tree, local == upstream. All roadmap phases remain complete; the two latest commits are pure bug-fix passes on top of the finished roadmap. **Do not merge to `main`** (friend uses the live compact web served from main).
+- **What v0.12.8 + v0.12.9 fixed** (full list in `CHANGELOG.md`):
+  - **v0.12.8 — 11 bugs, 3-agent review:** recurring-rule UTC duplicate spawning; decimal point un-typable in split/payer/amount inputs (new shared `NumberTextInput`); recurring receipts never reaching cloud; stale stored session shown as "synced"; magic-link/email-confirm native stranding (`verifyOtp`); cross-currency multi-payer mis-settlement.
+  - **v0.12.9 — 10 findings, adversarial verification workflow:** [CRITICAL] photo-sync clobbering a newer local money edit (`syncMerge.ts`); [HIGH] spurious "login failed" from PKCE launch-URL re-consumption (mount-once `updateStateRef`); [MED] cross-currency double-rounding; [MED] transient sync errors mis-parked as auth errors; [LOW] UTC "today" off-by-one sweep (8 sites → `todayYmd()` + new `addDaysYmd()`), monthly-recurring month-end clamp, tombstone caps 500→5000. Two findings deferred with documented rationale (simplifyDebts dust; recovery-link routing).
+- **Latest verification evidence**: v0.12.9 passed `npm run typecheck`, unit tests (incl. new cross-currency split test), and smokes (settle-up, split-editor, split-payer, history 8/8, scan, welcome-guide). `android:qa` BUILD SUCCESSFUL, installed + launched on emulator, MainActivity focused, no logcat FATAL/ANR; CDP driver confirmed "Build: v0.12.9" in Settings and Dashboard rendering. (The lone `android:qa` CDP `AbortError` observed was a harness WebSocket timeout on the seed step — app stayed alive, not a crash.)
+- **Current known verification blockers / pending**: none on the emulator. **Pending:** a fresh **signed release AAB at v0.12.9** has not yet been built (the previously signed AAB was v0.12.8); real-device Google/magic-link login still needs a human account/device round-trip.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -32,6 +34,7 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
 - **Phase 4 complete through v0.11.0; follow-up fixed in v0.12.1:** Durable offline outbox (F6) with explicit `idempotencyKey` on every queue item. Identity unification (F8) auto-creates Person entries for shared trip members not yet in accounting people. Recurring expenses (F7) with `RecurringRule` type, `processRecurringRules` client scheduler, and Settings UI for manage/toggle/delete. v0.12.1 fixed the missed real auto-retry/backoff bug so transient push failures retry automatically instead of parking after one failure.
 - **Phase 5 complete through v0.12.0:** Onboarding tip card on Dashboard (3-tap scan→split→settle). Play Store listing copy created (`PLAY_STORE_LISTING.md`). Release signing verified — keystore wired in gradle, assetlinks.json has both debug + release SHA-256. **ALL ROADMAP PHASES COMPLETE.**
 - **Polish/review pass complete through v0.12.2:** JWT/JWS parse errors are masked into a friendly re-login sync banner; 3 stale Playwright smokes were repaired to match current UI/conflict semantics; full emulator verification covered every major Android function with no logcat crashes.
+- **Bug-review fix passes v0.12.7 → v0.12.9 (post-roadmap hardening):** v0.12.7 Codex polish (configured-login safe-area + native picker console cleanup, QA harness flakes). v0.12.8 fixed 11 bugs from a 3-agent review (recurring UTC dupes, decimal-input stripping, recurring-not-syncing, stale session, magic-link stranding, cross-currency mis-split). v0.12.9 fixed 10 findings from an adversarial verification workflow (the critical photo-sync data-loss, PKCE re-consumption login failure, double-rounding, auth-error mis-parking, UTC off-by-one sweep, tombstone caps). All on the finished roadmap — no new features. See `CHANGELOG.md`.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -92,10 +95,12 @@ real-device Google login round-trip remains** (emulator has no real Google accou
 the live web app. All native changes are guarded by a Capacitor native check; only the
 experience-neutral web-deploy assets (commit `36f6f97`) belong on `main`.
 
-## 🔎 Current Progress (2026-06-21 Codex review)
+## 🔎 v0.12.7 Review Snapshot (2026-06-21 Codex review)
 
-This section records the latest review state after the v0.12.2 polish commit, so the next agent does
-not restart from stale Phase 5 notes.
+> Superseded by the **Last Worked On** block above (now at v0.12.9). Kept as the v0.12.7 review record.
+
+This section records the review state after the v0.12.2 polish commit through v0.12.7, so the next
+agent does not restart from stale Phase 5 notes.
 
 1. **Branch/version confirmed:** `codex/android-compact-shell` tracks
    `origin/codex/android-compact-shell`; latest pushed branch commit is `3d0234a`
@@ -163,10 +168,18 @@ not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.7`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.9`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 59 (Oscar/Claude Code — v0.12.8 + v0.12.9 bug-review fix passes)
+
+1. **Version metadata:** Compact/Android bumped to `0.12.9` / versionCode `1209` across `APP_VERSION`, `package.json`, Gradle, `ANDROID.md`. (v0.12.8 / 1208 was the intermediate commit.)
+2. **v0.12.8 — 11 bugs from a 3-agent review** (commit `8ddcc78`): recurring-rule UTC duplicate spawning (local YMD + `todayYmd()` + bounded catch-up loop); decimal point un-typable in split/payer/amount/batch inputs (new shared `NumberTextInput` keeping the raw typed string); recurring receipts never reaching cloud (routed via `upsertReceipt`); stale stored session shown as "synced" (`storedSupabaseSession` rejects expired `expires_at`); magic-link/email-confirm native stranding (`handleNativeAuthRedirectUrl` handles `token_hash`/`type` via `verifyOtp`); cross-currency multi-payer mis-settlement (redistribute converted total by `computeShares('shares')`, locked with a unit test).
+3. **v0.12.9 — 10 findings from an adversarial verification workflow** (commit `3129aba`): **[CRITICAL]** photo-sync clobbering a newer local money edit — `mergePulledReceipts` OR'd `photoUrlChanged` into full-overwrite with no `updatedAt` guard; now a photo-only change adopts ONLY photo + identity-link fields (`syncMerge.ts`). **[HIGH]** spurious "login failed" right after a successful Android login — deep-link effect re-consumed the single-use PKCE launch URL on the login-triggered re-render; made mount-once via `updateStateRef` (`App.tsx`). **[MED]** cross-currency double-rounding through integer-HKD intermediate → unrounded helper (`domain.ts`); transient sync errors mis-parked as auth errors → tightened to specific auth signals (`useSyncEngine.ts`). **[LOW]** UTC "today" off-by-one across 8 sites → `todayYmd()` + new pure `addDaysYmd()`; monthly-recurring month-end clamp (no Jan-31→Mar-3); recurring runs after IndexedDB hydration; cross-currency sub-unit split falls back to ratios; tombstone caps 500→5000. **Deferred** (documented): simplifyDebts sub-unit dust (inherent integer-settlement tradeoff); recovery-link → reset-password routing (recovery still authenticates).
+4. **Verification:** `typecheck`, unit tests (incl. new cross-currency split test), smokes (settle-up, split-editor, split-payer, history 8/8, scan, welcome-guide; 3 stale June-14-drift smokes repaired). `android:qa` BUILD SUCCESSFUL, installed + launched, no logcat FATAL/ANR; CDP driver confirmed "Build: v0.12.9" in Settings + Dashboard render.
+5. **Pending for next agent:** build a fresh **signed release AAB at v0.12.9** (prior signed AAB was v0.12.8) for Play submission; real-device login round-trip still needs a human.
 
 ### Session 58 (Codex — v0.12.7 Android log cleanup + QA hardening)
 
