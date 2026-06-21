@@ -2,6 +2,9 @@
 
 ## 2026-06-21
 
+- Added Compact console diagnostics for account/backend stability: Settings now has Account Sync Health and Sync Queue Inspector cards that show active account scope, session expiry, backend target, last push/pull age, queue counts, and sanitized queue rows.
+- Added an account-switch watchdog smoke so Compact verifies Supabase-scoped storage changes from one backend account to another without leaking the prior account's trip state.
+- Bumped Compact to `0.8.3`.
 - Polished the Compact console/backend sync status: failed queue items now surface clearly in the header, Settings status pills, and Settings readiness strip instead of appearing as a clear queue.
 - Hardened Compact account sync reliability by preventing overlapping pull/push races, aligning the sync engine with the effective Supabase account session used for scoped storage, and ignoring expired stored Supabase sessions during boot.
 - Added a regression smoke for failed queue visibility and retry behavior, and bumped Compact to `0.8.2`.

@@ -98,12 +98,13 @@ test('Final lock gate smoke without trusted device', async ({ page }) => {
 });
 
 test('Sync error indicator is clickable and retries sync', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.__disable_supabase_configured = true;
-    const now = Date.now();
-    localStorage.clear();
-    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
-    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+	  await page.addInitScript(() => {
+	    window.__disable_supabase_configured = true;
+	    const now = Date.now();
+	    localStorage.clear();
+	    localStorage.setItem('__stress_panel_unlocked', 'true');
+	    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+	    localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'dashboard',
       receipts: [],
       autoSync: false,
@@ -139,9 +140,10 @@ test('Sync error indicator is clickable and retries sync', async ({ page }) => {
 test('Console surfaces failed queue items before another backend retry', async ({ page }) => {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
-    const now = Date.now();
-    localStorage.clear();
-    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+	  const now = Date.now();
+	  localStorage.clear();
+	  localStorage.setItem('__stress_panel_unlocked', 'true');
+	  localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'settings',
       receipts: [],
@@ -163,13 +165,80 @@ test('Console surfaces failed queue items before another backend retry', async (
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
-  await expect(page.getByRole('button', { name: /Sync error.*1 failed/ })).toBeVisible();
-  await expect(page.getByLabel('Compact travel readiness')).toContainText('Queue · 1 failed');
+	  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+	  await expect(page.getByRole('button', { name: /Sync error.*1 failed/ })).toBeVisible();
+	  await expect(page.getByLabel('Compact travel readiness')).toContainText('Queue · 1 failed');
+	  const queueInspector = page.getByRole('region', { name: 'Sync Queue Inspector' });
+	  await expect(queueInspector).toContainText('1 active');
+	  await expect(queueInspector).toContainText('receipt · create · error');
 
-  await page.getByRole('button', { name: /Sync error.*1 failed/ }).click();
-  await expect.poll(async () => page.getByLabel('Compact travel readiness').innerText()).not.toContain('failed');
-  await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
+	  await page.getByRole('button', { name: /Sync error.*1 failed/ }).click();
+	  await expect.poll(async () => page.getByLabel('Compact travel readiness').innerText()).not.toContain('failed');
+	  await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
+	});
+
+test('Account switch watchdog keeps Compact console scoped to the active backend account', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    const now = Date.now();
+    const stateFor = (id, tripName) => JSON.stringify({
+      lastTab: 'settings',
+      autoSync: false,
+      activeTripId: `${id}-trip`,
+      tripName,
+      trips: [{
+        id: `${id}-trip`,
+        name: tripName,
+        destinationSummary: tripName,
+        startDate: '2026-07-01',
+        endDate: '2026-07-02',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: true,
+        itinerary: [],
+        createdAt: now,
+        updatedAt: now,
+      }],
+      receipts: [],
+      schemaVersion: 3,
+      settingsUpdatedAt: now + 31_536_000_000,
+    });
+    const sessionFor = (id, email) => JSON.stringify({
+      access_token: `fake-${id}`,
+      refresh_token: `refresh-${id}`,
+      token_type: 'bearer',
+      expires_in: 3600,
+      expires_at: Math.floor(now / 1000) + 3600,
+      user: { id, aud: 'authenticated', role: 'authenticated', email, app_metadata: {}, user_metadata: {}, created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString() },
+    });
+    const alphaId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const betaId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    if (localStorage.getItem('__account_switch_watchdog_seeded') !== 'true') {
+      localStorage.clear();
+      localStorage.setItem('__account_switch_watchdog_seeded', 'true');
+      localStorage.setItem(`boss-japan-tracker:state:supabase:${alphaId}`, stateFor(alphaId, 'Alpha Scoped Trip'));
+      localStorage.setItem(`boss-japan-tracker:state:supabase:${betaId}`, stateFor(betaId, 'Beta Scoped Trip'));
+      localStorage.setItem('travel-expense:supabase-auth:v1', sessionFor(alphaId, 'alpha@example.com'));
+    }
+    localStorage.setItem('__stress_panel_unlocked', 'true');
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    window.__sessionForBeta = sessionFor(betaId, 'beta@example.com');
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  const health = page.getByLabel('Account Sync Health');
+  await expect(health).toContainText('alpha@example.com');
+  await expect(health).toContainText('Alpha Scoped Trip');
+
+  await page.evaluate(() => localStorage.setItem('travel-expense:supabase-auth:v1', window.__sessionForBeta));
+  await page.reload();
+  const nextHealth = page.getByLabel('Account Sync Health');
+  await expect(nextHealth).toContainText('beta@example.com');
+  await expect(nextHealth).toContainText('Beta Scoped Trip');
+  await expect(nextHealth).not.toContainText('Alpha Scoped Trip');
 });
 
 test('Duplicate person ids do not create React key warnings', async ({ page }) => {

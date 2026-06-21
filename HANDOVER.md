@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-06-21
-- **Focus**: Compact console/backend sync reliability polish
+- **Focus**: Compact console diagnostics and account-switch watchdog
 - **Agent**: Codex
-- **App version**: Compact `0.8.2`; React unchanged in this pass
+- **App version**: Compact `0.8.3`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,12 +13,21 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.1`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.3`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 33 (Codex — current session)
+### Session 34 (Codex — current session)
+
+1. **Compact console diagnostics and account-switch watchdog**:
+   - Added Settings console cards for `Account Sync Health` and `Sync Queue Inspector`.
+   - Account health now surfaces active account, scoped storage, backend target, session expiry, last push/pull age, and active trip without exposing tokens.
+   - Queue inspector shows pending/failed/oldest queue state plus sanitized queue rows and copyable diagnostics.
+   - Added a final-navigation account-switch watchdog smoke to prove Compact swaps Supabase-scoped state between backend accounts without leaking the previous account's active trip.
+   - Bumped Compact to `0.8.3`.
+
+### Session 33 (Codex — previous session)
 
 1. **Compact console/backend sync reliability polish**:
    - Added failed-queue accounting to the Compact sync engine so console/status UI no longer reports `Queue · clear` while failed/error queue items still need attention.

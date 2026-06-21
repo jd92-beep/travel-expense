@@ -712,6 +712,19 @@ function formatSyncAge(timestamp: number): string {
   return `${Math.floor(hours / 24)}d old`;
 }
 
+function formatSessionExpiry(expiresAt: number): string {
+  if (!expiresAt || !Number.isFinite(expiresAt)) return 'none';
+  const leftMs = expiresAt - Date.now();
+  if (leftMs <= 0) return 'expired';
+  const minutes = Math.ceil(leftMs / 60_000);
+  if (minutes < 60) return `${minutes}m left`;
+  return `${Math.ceil(minutes / 60)}h left`;
+}
+
+function shortId(value: string): string {
+  return value && value.length > 14 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value || 'none';
+}
+
 function buildSyncReadinessDryRun(
   state: AppState,
   trip: TripProfile,
@@ -860,6 +873,8 @@ export function Settings({
   onPushSettings,
   cloudSyncAvailable = false,
   storageScope = 'local',
+  supabaseAccountId = '',
+  supabaseSessionExpiresAt = 0,
   changeTab,
   updatePassword,
   userEmail = null,
@@ -876,6 +891,8 @@ export function Settings({
   onPushSettings?: () => Promise<void>;
   cloudSyncAvailable?: boolean;
   storageScope?: string;
+  supabaseAccountId?: string;
+  supabaseSessionExpiresAt?: number;
   changeTab?: (tabId: any) => void;
   updatePassword?: (password: string) => Promise<void>;
   userEmail?: string | null;
@@ -1107,6 +1124,38 @@ export function Settings({
     : pendingSyncCount
       ? ` · ${pendingSyncCount}`
       : '';
+  const queueSummary = syncQueueSummary(state.syncQueue);
+  const queuePendingCount = Math.max(pendingSyncCount, queueSummary.pending.length);
+  const queueFailedCount = Math.max(failedSyncCount, queueSummary.failed.length);
+  const syncTarget = cloudSyncAvailable ? (notionMirrorReady ? 'Supabase + Notion' : 'Supabase only') : (brokerReady ? 'Broker / Notion' : storageScope);
+  const storageAccountId = storageScope.startsWith('supabase:') ? storageScope.slice('supabase:'.length) : '';
+  const accountSyncHealth = [
+    { key: 'account', title: 'Account', value: userEmail ? 'Signed in' : 'Local device', detail: userEmail || shortId(supabaseAccountId || storageAccountId) },
+    { key: 'session', title: 'Session', value: cloudSyncAvailable ? formatSessionExpiry(supabaseSessionExpiresAt) : 'Local', detail: brokerReady ? 'Broker active' : 'Broker missing' },
+    { key: 'storage', title: 'Storage scope', value: storageAccountId ? 'Supabase scoped' : 'Local', detail: storageAccountId ? shortId(storageAccountId) : storageScope },
+    { key: 'backend', title: 'Backend target', value: syncTarget, detail: syncState?.status || state.globalSyncStatus || 'local' },
+    { key: 'trip', title: 'Active trip', value: currentTrip.name || 'Current trip', detail: shortId(currentTrip.id || state.activeTripId || '') },
+    { key: 'push', title: 'Last push', value: formatSyncAge(syncState?.lastSyncedAt || state.lastSyncedAt || 0), detail: `${queuePendingCount} pending · ${queueFailedCount} failed` },
+    { key: 'pull', title: 'Last pull', value: formatSyncAge(state.settingsPulledAt || 0), detail: `Auto sync ${state.autoSync ? 'on' : 'off'}` },
+  ];
+  const activeQueue = queueSummary.active;
+  const queueReportText = JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    storageScope,
+    account: userEmail || shortId(supabaseAccountId || storageAccountId),
+    syncStatus: syncState?.status || state.globalSyncStatus || 'local',
+    pending: queuePendingCount,
+    failed: queueFailedCount,
+    queue: activeQueue.map((item) => ({
+      type: item.type,
+      op: item.op,
+      status: item.status,
+      attempts: item.attempts,
+      age: formatSyncAge(item.updatedAt || item.createdAt),
+      entity: shortId(item.entityId),
+      error: item.error || '',
+    })),
+  }, null, 2);
 
   // Local state for Trip Manager
   const [managerTripId, setManagerTripId] = useState(currentTrip.id);
@@ -2120,6 +2169,10 @@ export function Settings({
     }
   }
 
+  async function copyQueueReport() {
+    await copyText(queueReportText, '已複製 sync queue report');
+  }
+
   async function importBackup(file?: File) {
     if (!file) return;
     try {
@@ -2243,10 +2296,74 @@ export function Settings({
             </button>
           </div>
         </section>
-      </GlassCard>)}
+	      </GlassCard>)}
 
-      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${tripScopeAudit.tone}`}>
-        <section role="region" aria-label="Trip scope audit">
+	      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${queueFailedCount ? 'warning' : 'ok'}`}>
+	        <section role="region" aria-label="Account Sync Health">
+	          <div className="settings-trip-doctor-head">
+	            <span><Server size={16} /> Account Sync Health</span>
+	            <strong>{queueFailedCount ? `${queueFailedCount} failed` : syncState?.status || 'local'}</strong>
+	          </div>
+	          <div className="settings-trip-doctor-grid">
+	            {accountSyncHealth.map((item) => (
+	              <div className="settings-trip-doctor-item" key={item.key}>
+	                <span>{item.title}</span>
+	                <strong>{item.value}</strong>
+	                <small>{item.detail}</small>
+	              </div>
+	            ))}
+	          </div>
+	        </section>
+	      </GlassCard>)}
+
+	      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${queueFailedCount ? 'warning' : 'ok'}`}>
+	        <section role="region" aria-label="Sync Queue Inspector">
+	          <div className="settings-trip-doctor-head">
+	            <span><Cloud size={16} /> Sync Queue Inspector</span>
+	            <strong>{activeQueue.length ? `${activeQueue.length} active` : 'clear'}</strong>
+	          </div>
+	          <div className="settings-trip-doctor-grid">
+	            <div className="settings-trip-doctor-item">
+	              <span>Pending</span>
+	              <strong>{queuePendingCount}</strong>
+	              <small>Ready for retry</small>
+	            </div>
+	            <div className="settings-trip-doctor-item">
+	              <span>Failed</span>
+	              <strong>{queueFailedCount}</strong>
+	              <small>{syncState?.error || 'No engine error'}</small>
+	            </div>
+	            <div className="settings-trip-doctor-item">
+	              <span>Oldest</span>
+	              <strong>{activeQueue[0] ? formatSyncAge(activeQueue[0].createdAt) : 'none'}</strong>
+	              <small>{activeQueue[0]?.type || 'Queue clear'}</small>
+	            </div>
+	          </div>
+	          <div className="mini-list" aria-label="Sync Queue Inspector Items">
+	            {activeQueue.slice(0, 6).map((item) => (
+	              <span key={item.id}>{item.type} · {item.op} · {item.status} · {item.attempts} tries · {shortId(item.entityId)}</span>
+	            ))}
+	            {!activeQueue.length && <span>Queue clear</span>}
+	          </div>
+	          <div className="settings-trip-doctor-actions">
+	            <button type="button" disabled={!onPush || !activeQueue.length} onClick={() => void onPush?.()}>
+	              <RotateCcw size={14} />
+	              <span>Retry queue</span>
+	            </button>
+	            <button type="button" onClick={() => void copyQueueReport()}>
+	              <Copy size={14} />
+	              <span>Copy report</span>
+	            </button>
+	            <button type="button" disabled={!onPull} onClick={() => void onPull?.()}>
+	              <Cloud size={14} />
+	              <span>Pull now</span>
+	            </button>
+	          </div>
+	        </section>
+	      </GlassCard>)}
+
+	      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${tripScopeAudit.tone}`}>
+	        <section role="region" aria-label="Trip scope audit">
           <div className="settings-trip-doctor-head">
             <span><ShieldCheck size={16} /> Trip Scope Audit</span>
             <strong>{tripScopeAudit.statusLabel}</strong>

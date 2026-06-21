@@ -473,7 +473,7 @@ export function App() {
                 )}
                 {safeTab === 'weather' && <Weather state={state} />}
                 {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} />}
-                {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
+                {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} supabaseAccountId={effectiveSupabaseSession?.user?.id || ''} supabaseSessionExpiresAt={(effectiveSupabaseSession?.expires_at || 0) * 1000} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
               </div>
             ) : (
               <AnimatePresence mode="wait" initial={false}>
@@ -524,7 +524,7 @@ export function App() {
                   )}
                   {safeTab === 'weather' && <Weather state={state} />}
                   {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} />}
-                  {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
+                  {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} supabaseAccountId={effectiveSupabaseSession?.user?.id || ''} supabaseSessionExpiresAt={(effectiveSupabaseSession?.expires_at || 0) * 1000} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
                 </motion.div>
               </AnimatePresence>
             )}
