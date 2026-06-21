@@ -7,7 +7,7 @@ import { activeTrip } from '../domain/trip/normalize';
 import type { AppState, CategoryId, PaymentId, Person, Receipt, ReceiptLineItem, ReceiptPayer, ReceiptSplit, SplitMode, SplitType } from '../lib/types';
 import { AvatarBadge } from './AvatarBadge';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
-import { SegmentedControl, StatusPill } from './ui';
+import { NumberTextInput, SegmentedControl, StatusPill } from './ui';
 import { foldLineItemsToSplits } from '../lib/splitEngine';
 
 const newId = () => `manual_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -341,10 +341,7 @@ export function ReceiptEditor({
         </div>
         <div className="form-grid">
           <label>金額（legacy total）
-            <input type="text" inputMode="decimal" value={draft.total || ''} onChange={(e) => {
-              const parsed = parseFloat(e.target.value);
-              set('total', !isNaN(parsed) && parsed >= 0 ? Math.min(parsed, MAX_RECEIPT_AMOUNT) : 0);
-            }} />
+            <NumberTextInput value={draft.total} max={MAX_RECEIPT_AMOUNT} blankZero onValue={(n) => set('total', n)} />
           </label>
           <label>原貨幣
             <select value={draft.originalCurrency || draft.currency || currencyForDate(draft.date)} onChange={(e) => {
@@ -357,10 +354,7 @@ export function ReceiptEditor({
         </div>
         <div className="form-grid">
           <label>原金額
-            <input type="text" inputMode="decimal" value={draft.originalAmount ?? draft.total ?? ''} onChange={(e) => {
-              const parsed = parseFloat(e.target.value);
-              set('originalAmount', !isNaN(parsed) && parsed >= 0 ? Math.min(parsed, MAX_RECEIPT_AMOUNT) : 0);
-            }} />
+            <NumberTextInput value={draft.originalAmount ?? draft.total} max={MAX_RECEIPT_AMOUNT} blankZero onValue={(n) => set('originalAmount', n)} />
           </label>
           <label>Booking Ref
             <input value={draft.bookingRef || ''} onChange={(e) => set('bookingRef', e.target.value)} placeholder="KNR358047 / booking id" />
@@ -425,12 +419,10 @@ export function ReceiptEditor({
                           <AvatarBadge person={person} size="sm" />
                           <span>{person.name}</span>
                         </span>
-                        <input
+                        <NumberTextInput
                           aria-label={`${person.name} ${label}`}
-                          type="text"
-                          inputMode="decimal"
                           value={splitValue(row[field])}
-                          onChange={(event) => setSplitValue(row.personId, event.target.value)}
+                          onValue={(n) => setSplitValue(row.personId, String(n))}
                         />
                       </label>
                     );
@@ -544,12 +536,10 @@ export function ReceiptEditor({
                           <AvatarBadge person={person} size="sm" />
                           <span>{person.name}</span>
                         </span>
-                        <input
+                        <NumberTextInput
                           aria-label={`${person.name} 付款`}
-                          type="text"
-                          inputMode="decimal"
                           value={splitValue(row.amount)}
-                          onChange={(event) => setPayerValue(row.personId, event.target.value)}
+                          onValue={(n) => setPayerValue(row.personId, String(n))}
                         />
                       </label>
                     );

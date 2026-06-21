@@ -62,7 +62,12 @@ function storedSupabaseSession(): Session | null {
     const raw = localStorage.getItem('travel-expense:supabase-auth:v1');
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed?.user?.id && parsed?.access_token ? parsed as Session : null;
+    if (!(parsed?.user?.id && parsed?.access_token)) return null;
+    // Reject an expired stored session so the app doesn't render as "cloud sync active" against a
+    // dead token (which would just spew auth-failed sync items). supabaseAuth refreshes the real one.
+    const expEpoch = Number(parsed.expires_at) * 1000;
+    if (Number.isFinite(expEpoch) && expEpoch > 0 && expEpoch <= Date.now()) return null;
+    return parsed as Session;
   } catch {
     return null;
   }
@@ -411,10 +416,10 @@ export function App() {
     if (!state.recurringRules?.length) return;
     const { receipts: newReceipts, updatedRules } = processRecurringRules(state);
     if (newReceipts.length) {
-      updateState({
-        receipts: [...state.receipts, ...newReceipts],
-        recurringRules: updatedRules,
-      });
+      // Route through upsertReceipt so each spawned receipt is stamped + enqueued for cloud sync —
+      // updateState only queues settings, so the old path left recurring receipts local-only.
+      newReceipts.forEach((r) => upsertReceipt(r));
+      updateState({ recurringRules: updatedRules });
       console.log(`[App] Recurring: spawned ${newReceipts.length} receipt(s) from ${updatedRules.length} rule(s)`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -498,7 +503,9 @@ export function App() {
         //    DOM order = stacking order, so the last match is the top-most (a delete-confirm
         //    nested inside the editor closes before the editor itself). getClientRects() is the
         //    visibility test because offsetParent is unreliable for position:fixed elements.
-        const backdrops = Array.from(document.querySelectorAll<HTMLElement>('.modal-backdrop'))
+        // Exclude the welcome guide: its backdrop onClick is "skip" which provisions a placeholder
+        // trip — hardware-back should not silently commit that. Back falls through to exit instead.
+        const backdrops = Array.from(document.querySelectorAll<HTMLElement>('.modal-backdrop:not(.welcome-guide-backdrop)'))
           .filter((el) => el.getClientRects().length > 0);
         if (backdrops.length) { backdrops[backdrops.length - 1].click(); return; }
         // Fallback for any overlay that doesn't use `.modal-backdrop`.

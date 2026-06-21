@@ -1,6 +1,6 @@
 import { Camera, CheckCircle2, Mail, Mic, RefreshCw, Repeat2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
-import { ActionRippleButton, GlassCard, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
+import { ActionRippleButton, GlassCard, NumberTextInput, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 import { ShimmerButton } from '../components/ui/shimmer-button';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
 import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
@@ -909,7 +909,7 @@ export function Scan({
                   </label>
                   <div className="form-grid">
                     <label>店名<input value={row.store} onChange={(e) => updateBatch(row.id, { store: e.target.value })} /></label>
-                    <label>金額<input type="text" inputMode="decimal" value={row.total || ''} onChange={(e) => { const n = Number(e.target.value); updateBatch(row.id, { total: Number.isFinite(n) && n >= 0 ? Math.min(n, 1_000_000_000) : 0 }); }} /></label>
+                    <label>金額<NumberTextInput value={row.total} max={1_000_000_000} blankZero onValue={(n) => updateBatch(row.id, { total: n })} /></label>
                     <label>日期<input type="date" value={row.date} onChange={(e) => updateBatch(row.id, { date: e.target.value })} /></label>
                     <label>Booking Ref<input value={row.bookingRef || ''} onChange={(e) => updateBatch(row.id, { bookingRef: e.target.value })} /></label>
                   </div>

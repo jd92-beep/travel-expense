@@ -143,6 +143,8 @@ export function useSyncEngine(
             notionPageId: receipt.notionPageId || candidate.notionPageId,
             sourceId: receipt.sourceId || candidate.sourceId,
             _photoSyncedToSupabase: candidate._photoSyncedToSupabase || receipt._photoSyncedToSupabase,
+            _photoSyncAttempts: receipt._photoSyncAttempts ?? candidate._photoSyncAttempts,
+            photoUrl: receipt.photoUrl || candidate.photoUrl,
             supabasePhotoPath: receipt.supabasePhotoPath || candidate.supabasePhotoPath,
             syncStatus: hasSupabaseSession(capturedSession) || canUseNotionMirror(current, false, (capturedSession as any)?.user?.email || null) ? 'queued' : 'local',
           };

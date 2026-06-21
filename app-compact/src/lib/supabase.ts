@@ -321,6 +321,19 @@ export async function handleNativeAuthRedirectUrl(raw: string): Promise<boolean>
     return true;
   }
 
+  // Magic-link / email-confirm / recovery templates that emit {{ .TokenHash }} land here as
+  // ?token_hash=...&type=...; verify the OTP so those flows aren't silently stuck on the gate.
+  const tokenHash = params.get('token_hash');
+  const otpType = params.get('type');
+  if (tokenHash && otpType) {
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: otpType as 'email' | 'magiclink' | 'recovery' | 'signup' | 'invite' | 'email_change',
+    });
+    if (error) throw error;
+    return true;
+  }
+
   return false;
 }
 

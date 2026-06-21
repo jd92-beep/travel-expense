@@ -166,3 +166,19 @@ assert.throws(
 );
 
 console.log('split-engine: all foldLineItemsToSplits assertions passed ✅');
+
+// Cross-currency settlement foundation: computeSettlements redistributes a converted trip-currency
+// total by each person's receipt-currency share via computeShares('shares', weights).
+{
+  const weights = [{ personId: 'a', weight: 2000 }, { personId: 'b', weight: 6000 }];
+  // Same-currency case: total === Σweights → returns weights unchanged (no behaviour change for JPY trips).
+  const same = computeShares(8000, 'shares', weights);
+  assert.equal(same.get('a'), 2000, 'same-currency identity a');
+  assert.equal(same.get('b'), 6000, 'same-currency identity b');
+  // Cross-currency: 8000 receipt-cur → 400 trip-cur, distributed 1:3 with an exact sum.
+  const converted = computeShares(400, 'shares', weights);
+  assert.equal(converted.get('a'), 100, 'converted share a (1:3)');
+  assert.equal(converted.get('b'), 300, 'converted share b (1:3)');
+  assert.equal((converted.get('a') || 0) + (converted.get('b') || 0), 400, 'converted shares sum exactly to trip total');
+}
+console.log('split-engine: cross-currency redistribution assertions passed ✅');

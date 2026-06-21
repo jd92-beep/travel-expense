@@ -406,14 +406,18 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   let sharedTotal = 0;
   let ratioSharedTotal = 0;
 
-  const addSharedPayers = (payers: ReceiptPayer[] | undefined, amount: number, fallbackPayerIdx: number): boolean => {
+  const addSharedPayers = (payers: ReceiptPayer[] | undefined, amount: number, receiptTotal: number, fallbackPayerIdx: number): boolean => {
     if (!payers?.length) return false;
     const valid = payers
-      .map((payer) => ({ idx: idxOf(payer.personId), amount: Math.round(Number(payer.amount) || 0) }))
+      .map((payer) => ({ idx: idxOf(payer.personId), amount: Number(payer.amount) || 0 }))
       .filter((payer) => payer.idx >= 0 && payer.amount > 0);
     const paidTotal = valid.reduce((sum, payer) => sum + payer.amount, 0);
-    if (paidTotal !== Math.round(amount)) return false;
-    for (const payer of valid) sharedByPayer[payer.idx] += payer.amount;
+    // payers are entered in the receipt currency → validate against the receipt total, then credit
+    // the trip-currency `amount` split by each payer's share (identity when currencies match).
+    const base = receiptTotal > 0 ? receiptTotal : amount;
+    if (Math.round(paidTotal) !== Math.round(base)) return false;
+    const credited = computeShares(amount, 'shares', valid.map((payer) => ({ personId: String(payer.idx), weight: payer.amount })));
+    for (const [key, credit] of credited) sharedByPayer[Number(key)] += credit;
     return fallbackPayerIdx >= 0 || valid.length > 0;
   };
 
@@ -444,10 +448,19 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
         crossPrivate.push({ payerIdx, benIdx, amount, payer: persons[payerIdx], beneficiary: persons[benIdx], store: r.store, date: r.date, id: r.id });
       }
     } else {
-      if (!addSharedPayers(r.payers, amount, payerIdx)) sharedByPayer[payerIdx] += amount;
+      const receiptTotal = Number(r.total) || 0;
+      if (!addSharedPayers(r.payers, amount, receiptTotal, payerIdx)) sharedByPayer[payerIdx] += amount;
       if (r.splits?.length) {
         try {
-          const shares = computeShares(amount, r.splitType || 'equal', r.splits);
+          // Splits are entered in the receipt's own currency (they sum to r.total). Compute shares
+          // there, then redistribute the receipt's trip-currency `amount` by those shares with
+          // largest-remainder so cross-currency receipts keep their exact/% split. When the receipt
+          // currency equals the trip currency, receiptTotal === amount and this is an identity.
+          const receiptShares = computeShares(receiptTotal > 0 ? receiptTotal : amount, r.splitType || 'equal', r.splits);
+          const sumW = [...receiptShares].reduce((acc, [, w]) => acc + w, 0);
+          const shares = receiptTotal > 0 && receiptTotal !== amount && sumW > 0
+            ? computeShares(amount, 'shares', [...receiptShares].map(([personId, owed]) => ({ personId, weight: owed })))
+            : receiptShares;
           for (const [personId, owed] of shares) {
             const idx = idxOf(personId);
             if (idx < 0) throw new Error(`split person ${personId} not found`);
@@ -725,38 +738,50 @@ function nextRunDate(current: string, frequency: RecurringRule['frequency']): st
   if (frequency === 'daily') d.setDate(d.getDate() + 1);
   else if (frequency === 'weekly') d.setDate(d.getDate() + 7);
   else d.setMonth(d.getMonth() + 1);
-  return d.toISOString().slice(0, 10);
+  // Local YMD — toISOString() shifts the date by the UTC offset (one day earlier in HKT),
+  // which left daily rules' nextRun stuck on the same day → unbounded duplicate spawns.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export function processRecurringRules(state: AppState): { receipts: Receipt[]; updatedRules: RecurringRule[] } {
   const rules = state.recurringRules || [];
   if (!rules.length) return { receipts: [], updatedRules: rules };
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayYmd();
+  const now = Date.now();
   const newReceipts: Receipt[] = [];
   const updatedRules: RecurringRule[] = [];
   for (const rule of rules) {
-    if (!rule.active || rule.nextRun > today) {
+    if (!rule.active) {
       updatedRules.push(rule);
       continue;
     }
-    newReceipts.push({
-      id: `recurring_${rule.id}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      store: rule.store,
-      total: rule.total,
-      date: rule.nextRun,
-      category: rule.category,
-      payment: rule.payment,
-      currency: rule.currency || state.tripCurrency || 'JPY',
-      personId: rule.personId || state.persons?.[0]?.id || '',
-      splitMode: rule.splitMode || 'shared',
-      source: 'recurring',
-      createdAt: Date.now(),
-    });
-    updatedRules.push({
-      ...rule,
-      nextRun: nextRunDate(rule.nextRun, rule.frequency),
-      updatedAt: Date.now(),
-    });
+    // Catch up every due occurrence (bounded), advancing nextRun each time so a missed-day rule
+    // never re-spawns the same date on the next launch.
+    let nextRun = rule.nextRun;
+    let spawned = 0;
+    while (nextRun <= today && spawned < 400) {
+      newReceipts.push({
+        id: `recurring_${rule.id}_${nextRun}_${Math.random().toString(16).slice(2)}`,
+        store: rule.store,
+        total: rule.total,
+        date: nextRun,
+        category: rule.category,
+        payment: rule.payment,
+        currency: rule.currency || state.tripCurrency || 'JPY',
+        personId: rule.personId || state.persons?.[0]?.id || '',
+        splitMode: rule.splitMode || 'shared',
+        tripId: state.activeTripId,
+        source: 'recurring',
+        createdAt: now,
+        updatedAt: now,
+      });
+      nextRun = nextRunDate(nextRun, rule.frequency);
+      spawned += 1;
+    }
+    updatedRules.push(spawned ? { ...rule, nextRun, updatedAt: now } : rule);
   }
   return { receipts: newReceipts, updatedRules };
 }

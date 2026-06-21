@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
@@ -23,6 +23,42 @@ const glassSurface = cva('glass-card liquid-surface', {
     tone: 'default',
   },
 });
+
+// Numeric input that keeps the RAW typed string while editing and commits the parsed value on each
+// change. A plain value={Number(...)} controlled input strips a trailing "." on re-render, making
+// decimals (e.g. 33.34) and clearing impossible — this fixes that for amounts/splits/percentages.
+export function NumberTextInput({
+  value,
+  onValue,
+  max,
+  blankZero,
+  ...rest
+}: {
+  value: number | undefined;
+  onValue: (n: number) => void;
+  max?: number;
+  blankZero?: boolean; // show '' instead of '0' for an empty amount field (split/payer rows keep '0')
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+  const [raw, setRaw] = useState<string | null>(null);
+  const display = raw ?? (value == null || (blankZero && value === 0) ? '' : String(value));
+  return (
+    <input
+      {...rest}
+      type="text"
+      inputMode="decimal"
+      value={display}
+      onChange={(e) => {
+        const next = e.target.value;
+        if (next !== '' && !/^\d*\.?\d*$/.test(next)) return; // digits + a single optional dot only
+        setRaw(next);
+        const parsed = next === '' || next === '.' ? 0 : Number(next);
+        const safe = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+        onValue(max != null ? Math.min(safe, max) : safe);
+      }}
+      onBlur={() => setRaw(null)}
+    />
+  );
+}
 
 export function GlassCard({
   as = 'section',

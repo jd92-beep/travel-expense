@@ -454,6 +454,7 @@ export function Dashboard({
 }) {
   const [sheet, setSheet] = useState<{ kind: 'day-receipts' } | { kind: 'spot'; spot: ItinerarySpot } | null>(null);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => !!localStorage.getItem('onboarding-dismissed'));
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [editBudgetVal, setEditBudgetVal] = useState('');
 
@@ -869,7 +870,7 @@ export function Dashboard({
       <div className="japanese-sakura-decor" />
 
       {/* Onboarding tip */}
-      {state.receipts.length === 0 && !localStorage.getItem('onboarding-dismissed') && (
+      {state.receipts.length === 0 && !onboardingDismissed && (
         <div className="card onboarding-tip" style={{ marginBottom: '12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
             <div>
@@ -878,7 +879,7 @@ export function Dashboard({
                 📷 拍收據自動辨識 → 👥 揀邊個人分幾多 → 💰 結清付款
               </p>
             </div>
-            <button type="button" className="icon-btn" onClick={() => localStorage.setItem('onboarding-dismissed', '1')} aria-label="關閉">×</button>
+            <button type="button" className="icon-btn" onClick={() => { localStorage.setItem('onboarding-dismissed', '1'); setOnboardingDismissed(true); }} aria-label="關閉">×</button>
           </div>
         </div>
       )}
@@ -1739,7 +1740,7 @@ export function ReceiptRow({
               <button
                 type="button"
                 className="flex-shrink-0 flex items-center text-[#D94132]"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onViewPhoto ? onViewPhoto(receipt) : window.open(photoSrc, '_blank', 'noopener,noreferrer'); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onViewPhoto?.(receipt); }}
                 style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
               >
                 <Camera size={14} className="w-4 h-4 text-[#D94132]" />
