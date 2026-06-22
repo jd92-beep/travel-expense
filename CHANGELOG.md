@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-06-22 HKT (Android binary slim-down + export hygiene — council review)
+
+- **v0.12.13 / versionCode 1213.** Multi-perspective ("council") review of the Android shell. Two fixes:
+  - **[HIGH] APK was 66 MB; 39 MB of it was `bg-loop.mp4`, referenced nowhere in the codebase.** The
+    file shipped via `public/` → Capacitor copy but no `.ts/.tsx/.css/.html` ever loaded it
+    (`HyperframeBackground` only uses `wallpapers/bg-*.png`). Deleted it → **release APK 66 MB → 28 MB
+    (−58%)**. Zero behaviour change (unreferenced asset).
+  - **[MED] Exported CSV/JSON expense ledgers lingered in `Directory.Cache` indefinitely.** `saveFile`
+    wrote then `Share.share`'d but never cleaned up. Deleting right after share races the receiving app
+    reading the content URI, so instead the next export sweeps the previous one (`exports/` subdir,
+    `rmdir` recursive before write). At most one stale export lingers; cache is backup-excluded.
+    (`domain.ts`)
+  - **Investigated but deliberately NOT changed:** trimming FileProvider `external-path "."` — verified
+    `@capacitor/camera` (`CameraUtils.java`) writes captured photos to `getExternalFilesDir(PICTURES)`
+    and shares them via this app's FileProvider, so removing `external-path` would break camera capture.
+
 ## 2026-06-21 HKT (Android online/offline reliability)
 
 - **v0.12.12 / versionCode 1212.** Offline/online reliability pass for the Android shell after the

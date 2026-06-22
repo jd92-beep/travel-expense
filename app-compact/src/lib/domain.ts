@@ -94,8 +94,14 @@ export async function saveFile(filename: string, mimeType: string, content: stri
         import('@capacitor/filesystem'),
         import('@capacitor/share'),
       ]);
-      await Filesystem.writeFile({ path: safeName, data: content, directory: Directory.Cache, encoding: Encoding.UTF8 });
-      const { uri } = await Filesystem.getUri({ path: safeName, directory: Directory.Cache });
+      // Sweep the *previous* export before writing a new one. Deleting right after Share.share()
+      // races the receiving app still reading the content URI, so instead we clear last time's file
+      // at the start of the next export. ponytail: at most one stale export lingers in cache, and it
+      // never ships the full expense ledger to cloud backup (cache dir is backup-excluded).
+      await Filesystem.rmdir({ path: 'exports', directory: Directory.Cache, recursive: true }).catch(() => {});
+      const exportPath = `exports/${safeName}`;
+      await Filesystem.writeFile({ path: exportPath, data: content, directory: Directory.Cache, encoding: Encoding.UTF8, recursive: true });
+      const { uri } = await Filesystem.getUri({ path: exportPath, directory: Directory.Cache });
       await Share.share({ title: safeName, url: uri });
       return;
     } catch (err) {
