@@ -11,6 +11,7 @@ export function syncBackoffMs(attempts: number): number {
 }
 
 type QueueItemReadiness = { status: string; attempts: number; nextRetryAt?: number };
+type ReconnectQueueItem = QueueItemReadiness & { error?: string; updatedAt?: number };
 
 // Is this queue item eligible to attempt right now? Parked items (auth/exhausted → 'error'/'failed')
 // and not-yet-elapsed backoff windows are skipped; a stuck 'syncing' (push died mid-flight) stays
@@ -24,4 +25,27 @@ export function queueItemReady(
   if (item.attempts >= maxAttempts) return false;
   if (item.nextRetryAt && item.nextRetryAt > now) return false;
   return true;
+}
+
+export function releaseReconnectBackoff<T extends ReconnectQueueItem>(
+  queue: T[] = [],
+  now: number = Date.now(),
+  maxAttempts: number = MAX_RETRY_ATTEMPTS,
+): T[] {
+  let changed = false;
+  const next = queue.map((item) => {
+    // Only future backoff windows block an otherwise queued retry. Items without nextRetryAt, or with an
+    // elapsed nextRetryAt, are already eligible through queueItemReady; active syncing/parked items stay put.
+    if (
+      item.status === 'queued' &&
+      item.nextRetryAt &&
+      item.nextRetryAt > now &&
+      item.attempts < maxAttempts
+    ) {
+      changed = true;
+      return { ...item, status: 'queued', nextRetryAt: undefined, error: undefined, updatedAt: now };
+    }
+    return item;
+  });
+  return changed ? next as T[] : queue;
 }

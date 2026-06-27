@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-06-27 HKT (Android reconnect sync hardening — Ponytail + Open Code Review)
+
+- **v0.12.14 / versionCode 1214.** Reviewed the Android shell again with Ponytail + Open Code Review,
+  then fixed one reconnect-sync edge case:
+  - **[MED] Android native reachability could recover before the sync queue retried.** A mid-upload
+    disconnect correctly left the receipt queue in transient backoff, but Capacitor WebView may not emit a
+    reliable browser `online` event because `navigator.onLine` can stay true. `Shell` now emits a native
+    reachability-restored event when the `/android-auth` probe flips offline→online; `useSyncEngine`
+    listens for it, releases only queued transient backoff items with a `flushSync` state/ref update, and
+    debounces the immediate sync trigger. Active in-flight, parked auth, and exhausted errors are not reset.
+    (`Shell.tsx`, `useSyncEngine.ts`,
+    `syncBackoff.ts`)
+  - Added regression coverage for the "disconnect during upload" shape: a queued receipt with
+    `Failed to fetch` + future `nextRetryAt` is released on native reconnect without resetting attempts,
+    dropping the queue item, touching active `syncing` items, or retrying parked auth errors. (`sync-backoff.test.ts`,
+    `final-navigation-smoke.spec.cjs`)
+  - Synced Compact/Android version metadata to `0.12.14` / `1214`; this also fixes the v0.12.13
+    `package-lock.json` metadata that was still at `0.12.12`.
+  - Verified: Open Code Review latest-commit pass (no high/medium sync findings) plus working-diff review
+    of the reconnect race fix, GitNexus impact LOW
+    for `Shell` and `useSyncEngine`, `sync-backoff.test.ts`, `typecheck`, production `build`,
+    `security:scan`, targeted native reconnect smoke, full final navigation smoke (`9/9`), History
+    duplicate marker smoke, History offline conflict/attachment health smokes, configured Android QA
+    (`launchMode=login`, App Links verified), and true airplane-mode Android QA (`ping` failed as
+    expected, `launchMode=scan`, all 7 native tabs, Camera/Gallery picker proof, Settings
+    `Network · offline`, no crash/ANR).
+
 ## 2026-06-22 HKT (Android binary slim-down + export hygiene — council review)
 
 - **v0.12.13 / versionCode 1213.** Multi-perspective ("council") review of the Android shell. Two fixes:

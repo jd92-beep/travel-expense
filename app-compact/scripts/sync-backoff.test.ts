@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types scripts/sync-backoff.test.ts
 import assert from 'node:assert/strict';
-import { MAX_RETRY_ATTEMPTS, queueItemReady, syncBackoffMs } from '../src/lib/syncBackoff.ts';
+import { MAX_RETRY_ATTEMPTS, queueItemReady, releaseReconnectBackoff, syncBackoffMs } from '../src/lib/syncBackoff.ts';
 
 // --- exponential backoff windows ---
 assert.equal(syncBackoffMs(1), 30_000, '1st retry ~30s');
@@ -42,5 +42,29 @@ assert.deepEqual(
   ['queued@30000', 'queued@120000', 'error', 'error'],
   'two transient backoffs then park at MAX',
 );
+
+// --- native reconnect releases transient outage backoff, but not parked/auth failures ---
+const outageQueue = [{
+  id: 'upload_midflight',
+  status: 'queued',
+  attempts: 1,
+  nextRetryAt: NOW + 120_000,
+  error: 'Failed to fetch',
+  updatedAt: NOW - 1,
+}];
+const released = releaseReconnectBackoff(outageQueue, NOW);
+assert.notEqual(released, outageQueue, 'future backoff queue gets a new array on reconnect');
+assert.equal(released[0].status, 'queued');
+assert.equal(released[0].attempts, 1, 'reconnect does not hide prior failed attempts');
+assert.equal(released[0].nextRetryAt, undefined, 'reconnect clears stale outage backoff');
+assert.equal(released[0].error, undefined, 'transient outage error is cleared for retry');
+assert.equal(released[0].updatedAt, NOW);
+
+const parkedError = [{ id: 'auth_error', status: 'error', attempts: 1, nextRetryAt: NOW + 120_000 }];
+assert.equal(releaseReconnectBackoff(parkedError, NOW), parkedError, 'parked errors still require manual retry');
+const exhausted = [{ id: 'exhausted', status: 'queued', attempts: MAX_RETRY_ATTEMPTS, nextRetryAt: NOW + 120_000 }];
+assert.equal(releaseReconnectBackoff(exhausted, NOW), exhausted, 'exhausted transient retries remain parked');
+const activeSync = [{ id: 'active_sync', status: 'syncing', attempts: 1, nextRetryAt: NOW + 120_000 }];
+assert.equal(releaseReconnectBackoff(activeSync, NOW), activeSync, 'currently syncing items are not reset during reconnect');
 
 console.log('sync-backoff: all backoff + eligibility assertions passed ✅');

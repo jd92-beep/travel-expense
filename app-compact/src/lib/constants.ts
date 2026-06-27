@@ -3,12 +3,13 @@ import type { AppState, ItineraryDay } from './types';
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.12.13';
+export const APP_VERSION = '0.12.14';
 
 export const STORAGE_KEY = 'boss-japan-tracker';
 export const DEFAULT_NOTION_DB = '3438d94d5f7c81878221fcda6d65d39d';
 export const DEFAULT_CREDENTIAL_BROKER_URL = 'https://travel-expense-credential-broker.ftjdfr.workers.dev';
 export const ALLOWED_CREDENTIAL_BROKER_URLS = [DEFAULT_CREDENTIAL_BROKER_URL] as const;
+export const NATIVE_REACHABILITY_ONLINE_EVENT = 'travel-expense:native-reachability-online';
 export const APP_SCHEMA_VERSION = 3;
 export const DEFAULT_GOOGLE_BACKUP_MODEL = 'gemma-4-31b-it';
 export const DEFAULT_SCAN_VOICE_MODEL_ID = 'mimo/mimo-v2.5';

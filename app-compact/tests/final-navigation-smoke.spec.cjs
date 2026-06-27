@@ -274,6 +274,60 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
   await context.close();
 });
 
+test('Native reachability restore releases queued upload backoff for immediate retry', async ({ page }) => {
+  const retryAt = Date.now() + 10 * 60_000;
+  await page.addInitScript((retryAt) => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      autoSync: true,
+      globalSyncStatus: 'error',
+      syncError: 'Failed to fetch',
+      receipts: [],
+      syncQueue: [{
+        id: 'upload_midflight',
+        type: 'receipt',
+        entityId: 'receipt_midflight',
+        op: 'create',
+        status: 'queued',
+        attempts: 1,
+        nextRetryAt: retryAt,
+        error: 'Failed to fetch',
+        createdAt: Date.now() - 1000,
+        updatedAt: Date.now() - 1000,
+      }],
+      schemaVersion: 3,
+    }));
+  }, retryAt);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
+  await page.evaluate(() => window.dispatchEvent(new Event('travel-expense:native-reachability-online')));
+  await expect.poll(() => page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
+    const item = state.syncQueue?.[0] || {};
+    return {
+      status: item.status,
+      attempts: item.attempts,
+      nextRetryAt: item.nextRetryAt ?? null,
+      error: item.error ?? null,
+      globalSyncStatus: state.globalSyncStatus,
+      syncError: state.syncError ?? null,
+      queueLength: state.syncQueue?.length || 0,
+    };
+  }), { timeout: 5000 }).toEqual({
+    status: 'queued',
+    attempts: 1,
+    nextRetryAt: null,
+    error: null,
+    globalSyncStatus: 'queued',
+    syncError: '',
+    queueLength: 1,
+  });
+});
+
 test('Boot currency and sync effects run once without noisy mobile 403s', async ({ page }) => {
   const consoleEvents = [];
   const notionPaths = [];

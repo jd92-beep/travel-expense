@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { flushSync } from 'react-dom';
 import { activeTrip } from '../domain/trip/normalize';
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
 import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { mergePulledData } from './syncMerge';
 import { rawReceiptSourceId } from './syncMerge';
-import { MAX_RETRY_ATTEMPTS, queueItemReady, syncBackoffMs } from './syncBackoff';
+import { MAX_RETRY_ATTEMPTS, queueItemReady, releaseReconnectBackoff, syncBackoffMs } from './syncBackoff';
+import { NATIVE_REACHABILITY_ONLINE_EVENT } from './constants';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
 import type { Session } from '@supabase/supabase-js';
 
@@ -13,6 +15,7 @@ const QUEUE_MAX_AGE_MS = 14 * 86_400_000; // drop long-stuck error items after 1
 const DEBOUNCE_MS = 3000;
 const BACKGROUND_INTERVAL_MS = 120_000;
 const MIN_SYNC_INTERVAL_MS = 30_000;
+const RECONNECT_DEBOUNCE_MS = 100;
 
 function redactError(error: unknown) {
   let raw = 'Sync failed';
@@ -75,6 +78,7 @@ export function useSyncEngine(
   const lastPulledTripIdRef = useRef('');
   const lastPushSucceededRef = useRef(true);
   const syncingRef = useRef(false);
+  const reconnectSyncTimerRef = useRef<number | null>(null);
   const aliveRef = useRef(true);
 
   stateRef.current = state;
@@ -87,6 +91,7 @@ export function useSyncEngine(
       aliveRef.current = false;
       processingRef.current = false;
       syncingRef.current = false;
+      if (reconnectSyncTimerRef.current) window.clearTimeout(reconnectSyncTimerRef.current);
       if (tripPullDebounceRef.current) window.clearTimeout(tripPullDebounceRef.current);
     };
   }, []);
@@ -643,8 +648,30 @@ export function useSyncEngine(
   }, [push, state.autoSync, state.syncQueue]);
 
   useEffect(() => {
-    const onOnline = () => {
-      if (stateRef.current.autoSync) void sync();
+    const scheduleReconnectSync = () => {
+      if (reconnectSyncTimerRef.current) window.clearTimeout(reconnectSyncTimerRef.current);
+      reconnectSyncTimerRef.current = window.setTimeout(() => {
+        reconnectSyncTimerRef.current = null;
+        if (stateRef.current.autoSync) void sync();
+      }, RECONNECT_DEBOUNCE_MS);
+    };
+    const onReconnect = () => {
+      if (!stateRef.current.autoSync) return;
+      flushSync(() => {
+        setState((current) => {
+          const currentQueue = current.syncQueue || [];
+          const nextQueue = releaseReconnectBackoff(currentQueue);
+          if (nextQueue === currentQueue) return current;
+          const nextPendingCount = pendingCount(nextQueue);
+          return {
+            ...current,
+            syncQueue: nextQueue,
+            globalSyncStatus: nextPendingCount ? 'queued' : current.globalSyncStatus,
+            syncError: nextPendingCount ? '' : current.syncError,
+          };
+        });
+      });
+      scheduleReconnectSync();
     };
     const onVisibility = () => {
       if (!document.hidden && stateRef.current.autoSync && Date.now() - (stateRef.current.lastSyncedAt || 0) >= MIN_SYNC_INTERVAL_MS) void sync();
@@ -652,11 +679,14 @@ export function useSyncEngine(
     const timer = window.setInterval(() => {
       if (stateRef.current.autoSync && Date.now() - (stateRef.current.lastSyncedAt || 0) >= MIN_SYNC_INTERVAL_MS) void sync();
     }, BACKGROUND_INTERVAL_MS);
-    window.addEventListener('online', onOnline);
+    window.addEventListener('online', onReconnect);
+    window.addEventListener(NATIVE_REACHABILITY_ONLINE_EVENT, onReconnect);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener('online', onOnline);
+      if (reconnectSyncTimerRef.current) window.clearTimeout(reconnectSyncTimerRef.current);
+      window.removeEventListener('online', onReconnect);
+      window.removeEventListener(NATIVE_REACHABILITY_ONLINE_EVENT, onReconnect);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [sync]);

@@ -1,19 +1,19 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-06-21 HKT
-- **Focus**: Android online/offline reliability pass (v0.12.12) after the finished super-app roadmap
+- **Date**: 2026-06-27 HKT
+- **Focus**: Android reconnect sync hardening review (v0.12.14) after another AI update
 - **Agent**: Codex on the isolated android worktree
-- **App version**: Compact/Android `0.12.12` (versionCode `1212`); React unchanged
-- **Latest branch work**: v0.12.12 fixes are the current branch-head work for `codex/android-compact-shell`; previous pushed head was `eacaa2e` (`fix(data): clean orphan refs on person removal + tombstone trip-cascade deletes v0.12.11`).
+- **App version**: Compact/Android `0.12.14` (versionCode `1214`); React unchanged
+- **Latest branch work**: v0.12.14 fixes are current local branch-head work for `codex/android-compact-shell`. Previous pushed head was `9ce635e` (`perf(android): drop 39MB unused bg-loop.mp4 + sweep stale cache exports v0.12.13`).
 - **Current branch state**: `codex/android-compact-shell` tracking `origin/codex/android-compact-shell`. All roadmap phases remain complete; latest commits are post-roadmap reliability bug-fix passes. **Do not merge to `main`** (friend uses the live compact web served from main).
-- **What v0.12.12 fixed** (full list in `CHANGELOG.md`):
-  - **Native online/offline truth:** Android WebView could still show `Network · online` in true airplane mode because `navigator.onLine` is unreliable for Capacitor `https://localhost`. `Shell.tsx` now performs a native-only reachability probe against `/android-auth`; airplane-mode QA shows Settings `Network · offline`.
-  - **Settings Trip Doctor action:** `Sync settings` pointed to removed panel id `settings-notion`; it now opens `settings-credentials`.
-  - **Sync-readiness dry run:** existing readiness logic is now rendered in the developer Trip Doctor panel and covered by an active smoke that forces offline mode and proves no Credential Broker calls occur.
-  - **Version hygiene:** Compact/Android bumped to `0.12.12` / versionCode `1212`; `package-lock.json` metadata is in sync.
-- **Latest verification evidence**: v0.12.12 passed `npm run typecheck`, `npm run build`, `npm run security:scan`, `npm run test:split-engine`, `npm run test:notion-split-meta`, `node --experimental-strip-types scripts/sync-backoff.test.ts`, targeted Settings sync-readiness smoke, full `smoke:settings` (`10/10`), and `smoke:final-nav` (`8/8`). Android emulator QA passed online/configured (`launchMode=login`, App Links verified, artifact `/tmp/travel-expense-android-qa-2026-06-21T11-47-04-234Z`) and true airplane-mode offline (`launchMode=scan`, all 7 native tabs, Camera/Gallery picker proof, Settings `Network · offline`, artifact `/tmp/travel-expense-android-qa-2026-06-21T11-49-05-565Z`).
-- **Current known verification blockers / pending**: Real-device Google/magic-link login still needs a human account/device round-trip. No automated online/offline Android blocker remains. Build Versioning Rule "currently at": v0.12.12 / versionCode 1212.
+- **What v0.12.14 fixed** (full list in `CHANGELOG.md`):
+  - **Native reconnect sync:** `Shell.tsx` already knew true Android reachability through the `/android-auth` probe, but `useSyncEngine` still waited on browser `online`/backoff timing. Native offline→online now emits `travel-expense:native-reachability-online`; the sync engine releases only queued transient backoff items with a `flushSync` state/ref update, debounces duplicate reconnect events, and schedules sync immediately.
+  - **Mid-upload disconnect coverage:** regression tests seed a queued receipt with `Failed to fetch` + future `nextRetryAt`, then verify native reconnect clears stale outage backoff without resetting attempts, dropping the queue item, touching active `syncing` items, or retrying parked auth/exhausted errors.
+  - **Version hygiene:** Compact/Android bumped to `0.12.14` / versionCode `1214`; `package-lock.json` metadata is now corrected from the stale `0.12.12` value left after v0.12.13.
+  - **v0.12.13 context:** previous pushed head removed the unused 39MB `bg-loop.mp4` from native assets and swept stale cache exports; behavior-neutral for sync.
+- **Latest verification evidence**: v0.12.14 passed Open Code Review latest-commit review (no high/medium sync findings) plus working-diff review of the reconnect race fix, GitNexus LOW impact for `Shell` and `useSyncEngine`, `node --experimental-strip-types scripts/sync-backoff.test.ts`, `npm run typecheck`, `npm run build`, `npm run security:scan`, targeted native reconnect smoke, full `smoke:final-nav` (`9/9`), History duplicate marker smoke, History offline conflict/attachment health smokes, Settings offline queue dry-run. Android emulator QA passed online/configured (`launchMode=login`, App Links verified, artifact `/tmp/travel-expense-android-qa-2026-06-27T12-28-13-666Z`) and true airplane-mode offline (`ping` failed as expected, `launchMode=scan`, all 7 native tabs, Camera/Gallery picker proof, Settings `Network · offline`, artifact `/tmp/travel-expense-android-qa-2026-06-27T12-29-08-455Z`).
+- **Current known verification blockers / pending**: Real-device Google/magic-link login still needs a human account/device round-trip. No automated online/offline Android blocker remains. Build Versioning Rule "currently at": v0.12.14 / versionCode 1214.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -36,7 +36,7 @@ canonical roadmap to a "super expense app." Key conclusions for the next agent:
 - **Phase 4 complete through v0.11.0; follow-up fixed in v0.12.1:** Durable offline outbox (F6) with explicit `idempotencyKey` on every queue item. Identity unification (F8) auto-creates Person entries for shared trip members not yet in accounting people. Recurring expenses (F7) with `RecurringRule` type, `processRecurringRules` client scheduler, and Settings UI for manage/toggle/delete. v0.12.1 fixed the missed real auto-retry/backoff bug so transient push failures retry automatically instead of parking after one failure.
 - **Phase 5 complete through v0.12.0:** Onboarding tip card on Dashboard (3-tap scan→split→settle). Play Store listing copy created (`PLAY_STORE_LISTING.md`). Release signing verified — keystore wired in gradle, assetlinks.json has both debug + release SHA-256. **ALL ROADMAP PHASES COMPLETE.**
 - **Polish/review pass complete through v0.12.2:** JWT/JWS parse errors are masked into a friendly re-login sync banner; 3 stale Playwright smokes were repaired to match current UI/conflict semantics; full emulator verification covered every major Android function with no logcat crashes.
-- **Bug-review fix passes v0.12.7 → v0.12.12 (post-roadmap hardening):** v0.12.7 Codex polish (configured-login safe-area + native picker console cleanup, QA harness flakes). v0.12.8 fixed 11 bugs from a 3-agent review (recurring UTC dupes, decimal-input stripping, recurring-not-syncing, stale session, magic-link stranding, cross-currency mis-split). v0.12.9 fixed 10 findings from an adversarial verification workflow (photo-sync data-loss, PKCE re-consumption, double-rounding, auth-error mis-parking, UTC off-by-one sweep, tombstone caps). v0.12.10 fixed native export filename silent failure. v0.12.11 fixed mutation-orphan bugs (person removal + trip cascade tombstones). v0.12.12 fixed Android online/offline truth, Settings sync-action routing, and sync-readiness dry-run coverage. All on the finished roadmap — no new features. See `CHANGELOG.md`.
+- **Bug-review fix passes v0.12.7 → v0.12.14 (post-roadmap hardening):** v0.12.7 Codex polish (configured-login safe-area + native picker console cleanup, QA harness flakes). v0.12.8 fixed 11 bugs from a 3-agent review (recurring UTC dupes, decimal-input stripping, recurring-not-syncing, stale session, magic-link stranding, cross-currency mis-split). v0.12.9 fixed 10 findings from an adversarial verification workflow (photo-sync data-loss, PKCE re-consumption, double-rounding, auth-error mis-parking, UTC off-by-one sweep, tombstone caps). v0.12.10 fixed native export filename silent failure. v0.12.11 fixed mutation-orphan bugs (person removal + trip cascade tombstones). v0.12.12 fixed Android online/offline truth, Settings sync-action routing, and sync-readiness dry-run coverage. v0.12.13 slimmed native assets and export cache behavior. v0.12.14 fixed native reconnect sync/backoff release. All on the finished roadmap — no new features. See `CHANGELOG.md`.
 - Deliberately deferred (over-engineering): native Kotlin rewrite, 15-table schema overhaul, monorepo
   split-engine package, push/FCM, generic non-trip groups.
 
@@ -170,10 +170,34 @@ agent does not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.12`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.14`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 61 (Codex — v0.12.14 Android reconnect sync hardening)
+
+1. **Version metadata:** Compact/Android bumped to `0.12.14` / versionCode `1214` across
+   `APP_VERSION`, `package.json`, `package-lock.json`, Gradle, and `ANDROID.md`.
+2. **Review tools:** used Ponytail and Open Code Review. OCR reviewed the v0.12.13 latest-commit diff
+   and only reported low-priority export cleanup readability/logging comments; the working-diff review
+   then caught reconnect race risks, which were fixed before commit. GitNexus impact for `Shell` and
+   `useSyncEngine` was LOW.
+3. **Native reconnect sync fixed:** `Shell` emits `travel-expense:native-reachability-online` when the
+   Android `/android-auth` reachability probe flips offline→online. `useSyncEngine` listens for it,
+   clears only queued transient `nextRetryAt` backoff, keeps attempts, leaves active `syncing` and parked
+   auth/error items alone, synchronizes React state + `stateRef` with `flushSync`, debounces duplicate reconnect events, and schedules
+   sync immediately.
+4. **Extreme-condition coverage:** added pure and browser smoke coverage for the mid-upload disconnect
+   shape (`Failed to fetch`, future `nextRetryAt`) and verified duplicate receipt health markers plus
+   offline conflict resolver behavior.
+5. **Verification:** `sync-backoff.test.ts`, `typecheck`, production `build`, `security:scan`, targeted
+   native reconnect smoke, full `smoke:final-nav` (`9/9`), History duplicate marker smoke, History
+   offline conflict/attachment health smokes, Settings offline queue dry-run, configured Android QA
+   (`/tmp/travel-expense-android-qa-2026-06-27T12-28-13-666Z`, `launchMode=login`), and true
+   airplane-mode Android QA (`/tmp/travel-expense-android-qa-2026-06-27T12-29-08-455Z`,
+   `launchMode=scan`, all 7 native tabs, Camera/Gallery picker proof, Settings `Network · offline`).
+6. **Remaining follow-up:** real-device Google/magic-link login still requires a human account/device.
 
 ### Session 60 (Codex — v0.12.12 Android online/offline reliability)
 

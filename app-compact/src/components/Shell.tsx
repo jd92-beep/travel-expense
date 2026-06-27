@@ -12,6 +12,7 @@ import { Particles } from './ui/particles';
 import { AuroraText } from './ui/aurora-text';
 import { SyncStatusIndicator } from './SyncStatusIndicator';
 import { shouldDisableHeavyEffects } from '../lib/performance';
+import { NATIVE_REACHABILITY_ONLINE_EVENT } from '../lib/constants';
 import { activeTrip, switchTrip } from '../domain/trip/normalize';
 import compactJapanMark from '../assets/generated/compact-japan-mark.svg';
 
@@ -260,20 +261,29 @@ export function Shell({
   useEffect(() => {
     let alive = true;
     const nativeReachability = isNativeWebViewOrigin();
+    let lastReachable = navigator.onLine;
+    const updateReachability = (next: boolean) => {
+      if (!alive) return;
+      setOnline(next);
+      if (nativeReachability && !lastReachable && next) {
+        window.dispatchEvent(new Event(NATIVE_REACHABILITY_ONLINE_EVENT));
+      }
+      lastReachable = next;
+    };
     const refreshOnline = async () => {
       if (!navigator.onLine) {
-        if (alive) setOnline(false);
+        updateReachability(false);
         return;
       }
       if (!nativeReachability) {
-        if (alive) setOnline(true);
+        updateReachability(true);
         return;
       }
       const reachable = await checkNativeReachability();
-      if (alive) setOnline(reachable);
+      updateReachability(reachable);
     };
     const onOnline = () => { void refreshOnline(); };
-    const onOffline = () => setOnline(false);
+    const onOffline = () => updateReachability(false);
     const onControllerChange = () => {
       setUpdateReady(true);
       try {
