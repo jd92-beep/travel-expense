@@ -325,7 +325,10 @@ export async function handleNativeAuthRedirectUrl(raw: string): Promise<boolean>
   // ?token_hash=...&type=...; verify the OTP so those flows aren't silently stuck on the gate.
   const tokenHash = params.get('token_hash');
   const otpType = params.get('type');
-  if (tokenHash && otpType) {
+  // Allowlist the OTP type instead of blind-casting an attacker-controllable deep-link param into
+  // verifyOtp — a crafted App Link otherwise picks which OTP flow (e.g. recovery) runs in-app.
+  const ALLOWED_OTP_TYPES = new Set(['email', 'magiclink', 'recovery', 'signup', 'invite', 'email_change']);
+  if (tokenHash && otpType && ALLOWED_OTP_TYPES.has(otpType)) {
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type: otpType as 'email' | 'magiclink' | 'recovery' | 'signup' | 'invite' | 'email_change',

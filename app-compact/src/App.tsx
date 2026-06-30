@@ -7,7 +7,7 @@ import { LoadingState } from './components/ui';
 import { Loader2 } from 'lucide-react';
 import { activeTrip, stampReceiptForTrip, stableDayId, stableSpotId } from './domain/trip/normalize';
 import { addDaysYmd, processRecurringRules, todayYmd } from './lib/domain';
-import { hasCredentialBrokerSession } from './lib/credentialBroker';
+import { hasCredentialBrokerSession, redactedError } from './lib/credentialBroker';
 import { canUseNotionMirror } from './lib/notionAccess';
 import { mergePulledData } from './lib/syncMerge';
 import { useAppState } from './lib/useAppState';
@@ -108,6 +108,19 @@ export function App() {
     if (!nativeAndroid) return undefined;
     document.body.classList.add('compact-native-android');
 
+    // targetSdk 35+ forces edge-to-edge and ignores the android:statusBarColor / windowLightStatusBar
+    // theme attrs at runtime, so the status-bar icons can render invisible on a light bar. Set the
+    // appearance via the plugin (WindowInsetsController) instead. Best-effort, native-only.
+    void (async () => {
+      try {
+        const { StatusBar, Style } = await import('@capacitor/status-bar');
+        await StatusBar.setStyle({ style: Style.Light }); // dark icons for the light washi bar
+        await StatusBar.setBackgroundColor({ color: '#F8F3EA' }).catch(() => {});
+      } catch {
+        // @capacitor/status-bar unavailable (web / plugin missing) — theme attrs remain the fallback.
+      }
+    })();
+
     let cancelled = false;
     let removeAppUrlListener: (() => void) | undefined;
     // Dedupe: a cold-start deep link is delivered by BOTH getLaunchUrl() and appUrlOpen.
@@ -127,7 +140,7 @@ export function App() {
           // Android system-browser close is best-effort; auth state is already set.
         }
       } catch (nativeAuthError) {
-        console.error('[NativeAuth] Android redirect handling failed:', nativeAuthError);
+        console.error('[NativeAuth] Android redirect handling failed:', redactedError(nativeAuthError));
         updateStateRef.current({
           syncError: nativeAuthError instanceof Error ? nativeAuthError.message : 'Android 登入回跳未成功，請再試一次。',
         });
@@ -293,7 +306,7 @@ export function App() {
         await pull();
       })
       .catch((inviteError) => {
-        console.error('[TripInvite] accept failed:', inviteError);
+        console.error('[TripInvite] accept failed:', redactedError(inviteError));
         const msg = inviteError instanceof Error ? inviteError.message : 'Trip invite accept failed';
         if (/expired/i.test(msg)) {
           updateState({ syncError: '邀請已過期，請聯絡旅程管理員重新發送邀請。' });
@@ -316,7 +329,7 @@ export function App() {
         await pull();
       })
       .catch((inviteError) => {
-        console.error('[TripInvite] pending accept failed:', inviteError);
+        console.error('[TripInvite] pending accept failed:', redactedError(inviteError));
         const msg = inviteError instanceof Error ? inviteError.message : 'Trip invite accept failed';
         if (/expired/i.test(msg)) {
           updateState({ syncError: '邀請已過期，請聯絡旅程管理員重新發送邀請。' });

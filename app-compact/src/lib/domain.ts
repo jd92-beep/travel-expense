@@ -730,17 +730,25 @@ export function openMapExternal(mapUrl: string | undefined, name: string, addres
     }
   }
 
-  // Native (Capacitor): hand the URL to the OS instead of opening a _blank tab that strands the
-  // user inside the WebView. Web behaviour below is untouched (only runs when not native).
+  // Native (Capacitor): open a Custom Tab with a vetted https URL instead of navigating the WebView to
+  // a raw intent:// / custom scheme. A receipt's mapUrl can come from another shared-trip member, so an
+  // attacker-controlled intent:// could otherwise launch arbitrary intents or strand the user on a
+  // "scheme not supported" WebView error (intent:// browser_fallback_url is a Chrome feature, not a
+  // WebView one). Chrome's Custom Tab still hands off to the Maps app itself when it's installed.
   const cap = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
   if (cap?.isNativePlatform?.()) {
+    let httpsUrl = targetUrl;
     if (targetUrl.startsWith('intent://')) {
-      window.location.href = targetUrl; // Capacitor's URL interceptor dispatches intent:// to the native app
-    } else {
-      void import('@capacitor/browser')
-        .then(({ Browser }) => Browser.open({ url: targetUrl }))
-        .catch((err) => { console.error('[openMapExternal] Browser.open failed:', err); window.location.href = targetUrl; });
+      const fb = targetUrl.match(/S\.browser_fallback_url=([^;]+)/);
+      httpsUrl = fb && fb[1] ? decodeURIComponent(fb[1]) : '';
     }
+    if (!httpsUrl.startsWith('https://')) {
+      const q = [name, address].filter(Boolean).join(' ') || name || address || '';
+      httpsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+    }
+    void import('@capacitor/browser')
+      .then(({ Browser }) => Browser.open({ url: httpsUrl }))
+      .catch((err) => { console.error('[openMapExternal] Browser.open failed:', err); });
     return;
   }
 

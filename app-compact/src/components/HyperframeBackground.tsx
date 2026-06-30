@@ -1,7 +1,7 @@
 import { useMemo, type CSSProperties } from 'react';
 import { shouldDisableHeavyEffects } from '../lib/performance';
 
-const WALLPAPERS = Array.from({ length: 9 }, (_, i) => `wallpapers/bg-${i + 1}.png`);
+const WALLPAPERS = Array.from({ length: 9 }, (_, i) => `wallpapers/bg-${i + 1}.webp`);
 
 const ALL_LAYERS = [
   { index: 0, className: 'hyperframe-layer hyperframe-layer--base' },
@@ -10,7 +10,9 @@ const ALL_LAYERS = [
   { index: 7, className: 'hyperframe-layer hyperframe-layer--paper' },
 ];
 
-const LOW_PERF_LAYERS = ALL_LAYERS.slice(0, 2); // Only base + sun if system requires low performance mode
+// ponytail: low-RAM devices decode only the base wallpaper (~335KB) instead of 2 layers — the CSS
+// washi backdrop already covers the rest; cuts cold-start image decode without a visible change.
+const LOW_PERF_LAYERS = ALL_LAYERS.slice(0, 1);
 
 export function HyperframeBackground() {
   const disableHeavy = shouldDisableHeavyEffects();

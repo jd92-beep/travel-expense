@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-06-30 HKT (Android polish — council of 3 specialist agents)
+
+- **v0.12.15 / versionCode 1215.** Parallel read-only review by 3 specialist agents (native UX, perf/size,
+  security) on top of the v0.12.14 reconnect-sync work. Applied the safe, high-value findings:
+  - **[PERF] Release APK 28.2 MB → 9.1 MB (−68%).** Wallpapers were 66% of the binary (18.5 MB of
+    uncompressed PNG). Converted `public/wallpapers/bg-1..9` PNG→WebP q88 (18.5 MB → 2.0 MB) and
+    `scan-masterpiece-suite` PNG→WebP (677 KB → 56 KB); deleted 4 grep-verified dead assets
+    (`budget-card-bg{,-light}.png`, `images/sakura-bg.{mp4,webp}`, 1.66 MB). WebP is native in the
+    Android System WebView. (`HyperframeBackground.tsx`, `Scan.tsx`)
+  - **[PERF] Low-RAM cold start.** `HyperframeBackground` low-perf path rendered 2 wallpaper layers
+    (~5 MB decode); now renders 1 (the CSS washi backdrop covers the rest).
+  - **[PERF] Camera OOM guard.** `Camera.getPhoto` had no capture size cap → a 12 MP photo decoded to
+    ~48 MB RGBA in the WebView heap. Added `width: 1600` (native-layer downscale); OCR upload is capped
+    at 2016px downstream so accuracy is unchanged. (`Scan.tsx`)
+  - **[NATIVE-UX] Status bar.** targetSdk 36 forces edge-to-edge and ignores `android:statusBarColor`
+    /`windowLightStatusBar` at runtime → icons could render invisible on the light bar. Added
+    `@capacitor/status-bar`, set `Style.Light` + bg on native boot (best-effort, guarded). (`App.tsx`)
+  - **[NATIVE-UX] Soft keyboard.** Added `interactive-widget=resizes-content` to the viewport so the IME
+    shrinks the layout viewport — the receipt-editor save button is no longer hidden behind the keyboard.
+    (`index.html`)
+  - **[NATIVE-UX] Reachability probe** now gates on `Capacitor.isNativePlatform()` instead of a brittle
+    `hostname === 'localhost'` check, so the offline pill stays correct if the WebView origin changes.
+    (`Shell.tsx`)
+  - **[SEC] Deep-link map injection + WebView strand.** `openMapExternal` on native now opens a vetted
+    **https** URL in a Custom Tab instead of navigating the WebView to a raw `intent://`/custom scheme —
+    a `mapUrl` from another shared-trip member can no longer launch arbitrary intents or strand the user
+    on a "scheme not supported" page. (`domain.ts`)
+  - **[SEC] OTP type allowlist.** `handleNativeAuthRedirectUrl` now allowlists the deep-link `type`
+    before `verifyOtp` instead of blind-casting an attacker-controllable param. (`supabase.ts`)
+  - **[SEC] Log redaction parity.** Native-auth + trip-invite `console.error`s now route through
+    `redactedError()` like the rest of the app, so no raw auth/token strings reach logcat. (`App.tsx`)
+  - **Surfaced but NOT auto-applied (judgment calls):** plain Sign Out keeps the local ledger
+    (offline-first vs shared-device privacy); hardware-back doesn't close the budget-edit modal /
+    trip dropdown; OCR result can be lost if the app is killed while backgrounded mid-capture.
+
 ## 2026-06-27 HKT (Android reconnect sync hardening — Ponytail + Open Code Review)
 
 - **v0.12.14 / versionCode 1214.** Reviewed the Android shell again with Ponytail + Open Code Review,

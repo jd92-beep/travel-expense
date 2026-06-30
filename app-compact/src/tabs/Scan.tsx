@@ -10,7 +10,7 @@ import type { AppState, Receipt } from '../lib/types';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
 import { activeTrip } from '../domain/trip/normalize';
 import { resolveTripContext } from '../domain/trip/context';
-import scanMasterpieceSuite from '../assets/scan/scan-masterpiece-suite.png';
+import scanMasterpieceSuite from '../assets/scan/scan-masterpiece-suite.webp';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
 type ScanMode = 'scan' | 'voice' | 'email';
@@ -292,6 +292,10 @@ export function Scan({
       setStatus(`開啟 Android ${sourceLabel}…`);
       const photo = await CapacitorCamera.getPhoto({
         quality: 88,
+        // Downscale at the native layer so the WebView never decodes a full 12MP bitmap (~48MB RGBA)
+        // into JS heap → avoids GC stalls / OOM-kill mid-scan on low-RAM devices. OCR upload is capped
+        // at 2016px downstream (prepareForOCR), so 1600 here loses no recognition accuracy.
+        width: 1600,
         allowEditing: false,
         correctOrientation: true,
         resultType: CameraResultType.Uri,

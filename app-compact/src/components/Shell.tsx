@@ -168,7 +168,10 @@ function relativeFreshness(value: number) {
 }
 
 function isNativeWebViewOrigin() {
-  return window.location.protocol === 'https:' && window.location.hostname === 'localhost';
+  // Use the Capacitor platform flag rather than assuming the default https://localhost origin — if the
+  // WebView scheme/hostname is ever customized the localhost heuristic silently disables the active
+  // reachability probe, leaving the offline pill to trust navigator.onLine (wrong on captive WiFi).
+  return !!(window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
 }
 
 async function checkNativeReachability() {
