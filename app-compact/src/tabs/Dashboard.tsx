@@ -503,6 +503,19 @@ export function Dashboard({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [isTripDropdownOpen]);
 
+  // Android hardware back closes a transient overlay (trip dropdown / inline budget edit) before the
+  // app-level handler navigates home. preventDefault signals "I handled it". Native-only (the event is
+  // only dispatched by App's native backButton handler), so web/browser behaviour is untouched.
+  useEffect(() => {
+    if (!isTripDropdownOpen && !isEditingBudget) return undefined;
+    const onBack = (e: Event) => {
+      if (isTripDropdownOpen) { setIsTripDropdownOpen(false); e.preventDefault(); return; }
+      if (isEditingBudget) { setIsEditingBudget(false); e.preventDefault(); }
+    };
+    window.addEventListener('app:hardware-back', onBack);
+    return () => window.removeEventListener('app:hardware-back', onBack);
+  }, [isTripDropdownOpen, isEditingBudget]);
+
   // 2. 🗺️ 目的地與結算幣種「智能自動聯動」
   useEffect(() => {
     const dest = newTripDestination.trim().toLowerCase();

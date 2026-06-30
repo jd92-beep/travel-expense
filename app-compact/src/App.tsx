@@ -531,6 +531,12 @@ export function App() {
         // Fallback for any overlay that doesn't use `.modal-backdrop`.
         if (editingRef.current !== undefined) { setEditing(undefined); return; }
         if (wizardOpenRef.current) { setIsNewTripWizardOpen(false); return; }
+        // Let feature components claim back for their own transient overlays (e.g. Dashboard's trip
+        // dropdown / inline budget edit) — they listen and preventDefault if they closed something.
+        // These are popovers/inline editors that don't use the .modal-backdrop convention.
+        const featureBack = new CustomEvent('app:hardware-back', { cancelable: true });
+        window.dispatchEvent(featureBack);
+        if (featureBack.defaultPrevented) return;
         // 2) Not on the home tab → go home.
         if (safeTabRef.current !== DEFAULT_LAUNCH_TAB) { changeTabRef.current(DEFAULT_LAUNCH_TAB); return; }
         // 3) Home tab → press back twice within 2s to exit.

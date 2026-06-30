@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-06-30 HKT (Android polish round 2 — the two opted-in judgment calls)
+
+- **v0.12.16 / versionCode 1216.** Applied the two judgment-call fixes Boss opted into from the council
+  review (the sign-out-wipe option was declined to keep offline-first behavior):
+  - **[NATIVE-UX] Hardware back closes the trip dropdown / inline budget edit.** These are a popover and
+    an inline editor that don't use the `.modal-backdrop` convention, so back skipped them and navigated
+    home instead. App's native back handler now dispatches a cancelable `app:hardware-back` event before
+    its go-home step; Dashboard listens and `preventDefault()`s if it closed an open overlay. Decoupled,
+    no stacking-context risk, web untouched (event only fires from the native handler). (`App.tsx`,
+    `Dashboard.tsx`)
+  - **[RELIABILITY] Scan survives an app-kill mid-OCR.** A native capture is now marked pending in
+    localStorage across the fetch/OCR window (where a low-RAM device is most likely reaped); the next
+    Scan mount re-fetches the on-disk capture and resumes OCR instead of silently dropping the receipt.
+    Cleared on completion/cancel; stale entries (>10 min) ignored. (`Scan.tsx`)
+  - Verified: typecheck + dashboard smoke (8/8, incl. trip-dropdown) + scan smoke green.
+
 ## 2026-06-30 HKT (Android polish — council of 3 specialist agents)
 
 - **v0.12.15 / versionCode 1215.** Parallel read-only review by 3 specialist agents (native UX, perf/size,

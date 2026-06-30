@@ -111,6 +111,12 @@ function nativePhotoExtension(format?: string, mime?: string): string {
   return 'jpg';
 }
 
+// Crash-recovery slot for a native capture in flight (cleared on completion/cancel). If Android kills
+// the app during the fetch/OCR window — the multi-second network call where a low-RAM device is most
+// likely to be reaped — the next Scan mount resumes from the on-disk cache file instead of silently
+// dropping the receipt.
+const PENDING_SCAN_KEY = 'travel-expense:pending-native-scan';
+
 async function nativePhotoToFile(
   photo: { webPath?: string; format?: string },
   source: NativePhotoSource,
@@ -302,10 +308,15 @@ export function Scan({
         source: source === 'camera' ? CameraSource.Camera : CameraSource.Photos,
         saveToGallery: false,
       });
+      // Mark this capture pending before the fetch/OCR window so an app-kill mid-flight can recover it.
+      try { localStorage.setItem(PENDING_SCAN_KEY, JSON.stringify({ webPath: photo.webPath, source, ts: Date.now() })); } catch { /* quota — recovery is best-effort */ }
       const file = await nativePhotoToFile(photo, source);
       await handleImage(file);
+      try { localStorage.removeItem(PENDING_SCAN_KEY); } catch { /* ignore */ }
       return true;
     } catch (error) {
+      // Cancel / fetch-fail are not process kills — drop the pending slot so we don't pointlessly resume.
+      try { localStorage.removeItem(PENDING_SCAN_KEY); } catch { /* ignore */ }
       if (capacitor && typeof nativeLogging === 'boolean') capacitor.isLoggingEnabled = nativeLogging;
       const message = typeof error === 'object' && error && 'message' in error
         ? String((error as { message?: unknown }).message || '')
@@ -321,6 +332,31 @@ export function Scan({
       if (capacitor && typeof nativeLogging === 'boolean') capacitor.isLoggingEnabled = nativeLogging;
     }
   }, [handleImage]);
+
+  // Resume a capture interrupted by an app-kill mid-OCR (see PENDING_SCAN_KEY). The Uri-result webPath
+  // points at the on-disk cache file, which survives a restart, so we can re-fetch and re-run OCR.
+  useEffect(() => {
+    if (!isNativeAndroidApp()) return;
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(PENDING_SCAN_KEY); } catch { return; }
+    if (!raw) return;
+    let pending: { webPath?: string; source?: NativePhotoSource; ts?: number };
+    try { pending = JSON.parse(raw); } catch { try { localStorage.removeItem(PENDING_SCAN_KEY); } catch { /* ignore */ } return; }
+    const stale = !pending?.webPath || (pending.ts ? Date.now() - pending.ts > 600_000 : false);
+    if (stale) { try { localStorage.removeItem(PENDING_SCAN_KEY); } catch { /* ignore */ } return; }
+    void (async () => {
+      try {
+        if (mountedRef.current) setStatus('正在恢復上次未完成嘅掃描…');
+        const file = await nativePhotoToFile({ webPath: pending.webPath }, pending.source || 'camera');
+        await handleImage(file);
+      } catch {
+        if (mountedRef.current) setStatus('上次掃描嘅相已失效，請重新影一次。');
+      } finally {
+        try { localStorage.removeItem(PENDING_SCAN_KEY); } catch { /* ignore */ }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCameraChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
