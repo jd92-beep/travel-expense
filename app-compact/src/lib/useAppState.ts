@@ -38,6 +38,7 @@ const CLOUD_SETTINGS_KEYS = new Set<keyof AppState>([
   'budget',
   'rate',
   'rateMode',
+  'rateTable',
   'tripCurrency',
   'notionDb',
   'personalNotionConnected',

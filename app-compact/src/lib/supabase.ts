@@ -404,6 +404,7 @@ function buildAppSettings(state: AppState) {
     budget: state.budget,
     rate: state.rate,
     rateMode: state.rateMode,
+    rateTable: state.rateTable,
     tripCurrency: state.tripCurrency,
     notionDb: profileNotionDatabaseId(state),
     autoSync: state.autoSync,
@@ -432,6 +433,7 @@ function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState> | und
     budget: typeof payload.budget === 'number' ? payload.budget : undefined,
     rate: typeof payload.rate === 'number' ? payload.rate : undefined,
     rateMode: (payload.rateMode === 'fixed' || payload.rateMode === 'live' ? payload.rateMode : undefined) as 'fixed' | 'live' | undefined,
+    rateTable: optionalRecord(payload.rateTable) as AppState['rateTable'] | undefined,
     tripCurrency: typeof payload.tripCurrency === 'string' ? payload.tripCurrency : undefined,
     notionDb: typeof payload.notionDb === 'string' ? userScopedNotionDatabaseId(payload.notionDb) || undefined : undefined,
     autoSync: typeof payload.autoSync === 'boolean' ? payload.autoSync : undefined,
@@ -1554,6 +1556,16 @@ export async function removeSupabaseTripMember(_session: Session, trip: TripProf
   const tripUuid = cleanUuid(trip.supabaseId);
   if (!supabase || !tripUuid) throw new Error('Supabase trip id missing');
   const { error } = await supabase.rpc('remove_trip_member', { p_trip_id: tripUuid, p_user_id: userId });
+  if (error) throw error;
+}
+
+// Self-service leave for a non-owner member. The RPC itself blocks the owner (raises an exception),
+// so no client-side owner check is needed here.
+export async function leaveSupabaseTrip(_session: Session, trip: TripProfile): Promise<void> {
+  const supabase = getSupabaseClient();
+  const tripUuid = cleanUuid(trip.supabaseId);
+  if (!supabase || !tripUuid) throw new Error('Supabase trip id missing');
+  const { error } = await supabase.rpc('leave_trip', { p_trip_id: tripUuid });
   if (error) throw error;
 }
 

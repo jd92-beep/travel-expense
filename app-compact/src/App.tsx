@@ -571,6 +571,14 @@ export function App() {
   }, []);
 
   const importReceipts = (receipts: Receipt[]) => {
+    // Scan/OCR/voice/email and any bulk-import path funnel through here. ReceiptEditor already blocks
+    // manual add/edit for a 'viewer' role, but this choke point had no equivalent guard — a viewer
+    // could complete a full scan, see it "saved" locally, and only discover later (via a generic sync
+    // error) that Supabase RLS silently rejected the write. Reject immediately with a clear message.
+    if (activeTrip(state).sharing?.role === 'viewer') {
+      updateState({ syncError: '你係呢個旅程嘅檢視者（viewer），冇權新增收據。' });
+      return;
+    }
     for (const receipt of receipts) {
       upsertReceipt(stampReceiptForTrip(state, receipt));
     }

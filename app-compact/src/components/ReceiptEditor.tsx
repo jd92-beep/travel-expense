@@ -559,7 +559,7 @@ export function ReceiptEditor({
           <textarea value={draft.note || ''} onChange={(e) => set('note', e.target.value)} rows={3} />
         </label>
         {receipt?.supabaseId && (
-          <ExpenseComments receiptSupabaseId={receipt.supabaseId} />
+          <ExpenseComments receiptSupabaseId={receipt.supabaseId} readOnly={viewerReadOnly} />
         )}
         <input ref={photoRef} hidden type="file" accept="image/*" onChange={(e) => attachPhoto(e.target.files?.[0])} />
         <div className="photo-tools">
@@ -639,7 +639,7 @@ export function ReceiptEditor({
   );
 }
 
-function ExpenseComments({ receiptSupabaseId }: { receiptSupabaseId: string }) {
+function ExpenseComments({ receiptSupabaseId, readOnly }: { receiptSupabaseId: string; readOnly?: boolean }) {
   const [comments, setComments] = useState<Array<{ id: string; user_id: string; content: string; created_at: string }>>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(false);
@@ -693,23 +693,27 @@ function ExpenseComments({ receiptSupabaseId }: { receiptSupabaseId: string }) {
         {comments.map((c) => (
           <div key={c.id} className="receipt-comment-row">
             <span className="receipt-comment-text">{c.content}</span>
-            <button type="button" className="icon-btn receipt-comment-delete" onClick={() => removeComment(c.id)} aria-label="刪除留言">×</button>
+            {!readOnly && <button type="button" className="icon-btn receipt-comment-delete" onClick={() => removeComment(c.id)} aria-label="刪除留言">×</button>}
           </div>
         ))}
         {comments.length === 0 && <p className="muted receipt-comments-empty">暫無留言</p>}
       </div>
-      <div className="receipt-comment-input-row">
-        <input
-          type="text"
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="寫個留言…"
-          maxLength={2000}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addComment(); } }}
-          disabled={loading}
-        />
-        <button type="button" className="primary" onClick={addComment} disabled={loading || !newComment.trim()}>送出</button>
-      </div>
+      {readOnly ? (
+        <p className="muted">檢視模式：只可以睇留言，唔可以新增或刪除。</p>
+      ) : (
+        <div className="receipt-comment-input-row">
+          <input
+            type="text"
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="寫個留言…"
+            maxLength={2000}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addComment(); } }}
+            disabled={loading}
+          />
+          <button type="button" className="primary" onClick={addComment} disabled={loading || !newComment.trim()}>送出</button>
+        </div>
+      )}
       {error && <p className="muted" style={{ color: 'var(--red)' }}>{error}</p>}
     </details>
   );

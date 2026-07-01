@@ -5,7 +5,7 @@ import { AccordionCard } from '../components/AccordionCard';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { parseTripParagraph, testGoogleBackupConnection, testKimiConnection } from '../lib/ai';
 import { activeTrip, createTripProfile, migrateAppState, normalizeTripIntelligence, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { AI_MODELS, APP_VERSION, DEFAULT_KIMI_PRIMARY_MODEL_ID, ITINERARY } from '../lib/constants';
+import { AI_MODELS, APP_VERSION, CATEGORIES, DEFAULT_KIMI_PRIMARY_MODEL_ID, ITINERARY, PAYMENTS } from '../lib/constants';
 import {
   brokerHealth,
   disconnectPersonalNotionIntegration,
@@ -24,7 +24,7 @@ import {
   type ProviderStatus,
 } from '../lib/credentialBroker';
 import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
-import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, safePhotoUrl, validateItinerary } from '../lib/domain';
+import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, safePhotoUrl, todayYmd, validateItinerary } from '../lib/domain';
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 import { saveReceiptRepairIntent } from '../lib/repairIntent';
 import {
@@ -42,9 +42,9 @@ import {
 } from '../lib/notion';
 import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
 import { receiptSourceTombstoneKey } from '../lib/syncMerge';
-import type { AppState, ItineraryDay, ItinerarySpot, Person, Receipt, SyncEngineState, SyncQueueItem, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, RecurringRule, SyncEngineState, SyncQueueItem, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
 import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
-import { createSupabaseTripInvite, inviteLinkForToken, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
+import { createSupabaseTripInvite, inviteLinkForToken, leaveSupabaseTrip, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { GlassCard, SegmentedControl, StatefulActionButton, StatusPill, Toast } from '../components/ui';
@@ -936,6 +936,12 @@ export function Settings({
   const [sharingInviteRole, setSharingInviteRole] = useState<TripSharingInviteDraft['role']>('editor');
   const [sharingInvitePerson, setSharingInvitePerson] = useState(true);
   const [createdInviteLinks, setCreatedInviteLinks] = useState<Array<{ email: string; link: string }>>([]);
+  const [newRuleStore, setNewRuleStore] = useState('');
+  const [newRuleTotal, setNewRuleTotal] = useState('');
+  const [newRuleCategory, setNewRuleCategory] = useState<CategoryId>('other');
+  const [newRulePayment, setNewRulePayment] = useState<PaymentId>('cash');
+  const [newRuleFrequency, setNewRuleFrequency] = useState<RecurringRule['frequency']>('monthly');
+  const [newRuleNextRun, setNewRuleNextRun] = useState(() => todayYmd());
   const tripUpdateModelId = state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
   const tripUpdateModelName = aiModelLabel(tripUpdateModelId);
   const tripPreviewStats = tripDraft ? tripDraftPreviewStats(tripDraft) : null;
@@ -1404,7 +1410,10 @@ export function Settings({
   async function refreshRate() {
     await run('更新匯率', async () => {
       const snapshot = await fetchLiveCurrencySnapshot();
-      updateState(appRatePatchFromSnapshot(snapshot));
+      // Re-check rateMode at apply time via the functional updater, not the closed-over `state` from
+      // when this async function started — the user could have switched to Fixed (and typed a manual
+      // rate) while this fetch was in flight; a stale live response must not silently overwrite that.
+      setState((current) => current.rateMode === 'fixed' ? current : { ...current, ...appRatePatchFromSnapshot(snapshot) });
       return `已更新：1 HKD = ${snapshot.rates.JPY.toFixed(2)} JPY（${snapshot.source}）`;
     });
   }
@@ -1600,6 +1609,48 @@ export function Settings({
         };
       });
       return `已移除 ${label || 'member'}。`;
+    });
+  }
+
+  // Self-service leave for a non-owner member — mirrors the backend's own guard (leave_trip raises if
+  // called by the owner) so the UI never even shows the button for one. Unlike deleting a trip you
+  // own, leaving does NOT delete/tombstone receipts: the trip and its data still belong to the other
+  // members, this device just stops tracking it locally (membership status flips to 'removed' server-side).
+  async function handleLeaveTrip() {
+    if (!sharingSession) {
+      setStatus('請先登入 Supabase。');
+      return;
+    }
+    if (tripSharing.role === 'owner') {
+      setStatus('擁有者要先轉移擁有權，先可以離開旅程。');
+      return;
+    }
+    if (!window.confirm(`確定離開「${currentTrip.name}」？你會即時失去呢個旅程嘅存取權，其他成員嘅記帳資料唔會受影響。`)) return;
+    await run('離開旅程', async () => {
+      await leaveSupabaseTrip(sharingSession, currentTrip);
+      setState((prev) => {
+        const remainingTrips = (prev.trips || []).filter((t) => t.id !== currentTrip.id);
+        const remainingReceipts = (prev.receipts || []).filter((r) => r.tripId !== currentTrip.id);
+        const patch: Partial<AppState> = { trips: remainingTrips, receipts: remainingReceipts };
+        if (prev.activeTripId === currentTrip.id) {
+          const nextActive = remainingTrips.find((t) => !t.archived) || remainingTrips[0];
+          if (nextActive) {
+            patch.activeTripId = nextActive.id;
+            patch.tripName = nextActive.name;
+            patch.tripDateRange = { start: nextActive.startDate, end: nextActive.endDate };
+            patch.tripCurrency = nonHomeCurrencyForTrip(nextActive, prev.tripCurrency);
+            patch.budget = nextActive.budget || 0;
+            patch.customItinerary = nextActive.itinerary;
+            patch.trips = remainingTrips.map((t) => ({ ...t, active: t.id === nextActive.id }));
+          } else {
+            // No trips left — clear activeTripId so showGuide (trips.length === 0) can re-trigger
+            // the welcome/new-trip flow, same as a brand-new account.
+            patch.activeTripId = '';
+          }
+        }
+        return migrateAppState({ ...prev, ...patch });
+      });
+      return `已離開「${currentTrip.name}」。`;
     });
   }
 
@@ -2728,6 +2779,14 @@ export function Settings({
           <span>{canManageTripSharing ? '你可以邀請、撤回邀請、管理成員角色。' : '你可以查看共享狀態；只有 owner/admin 可以管理成員。'}</span>
         </div>
 
+        {tripSharing.isShared && tripSharing.role !== 'owner' && (
+          <div className="action-row wrap">
+            <button className="danger" type="button" disabled={!!busy || !cloudSyncAvailable} onClick={() => void handleLeaveTrip()}>
+              <UserMinus size={18} /> 離開此旅程
+            </button>
+          </div>
+        )}
+
         <GlassCard className="settings-account-card">
           <div className="settings-account-copy">
             <span className="eyebrow">Invite people</span>
@@ -3015,7 +3074,68 @@ export function Settings({
       </AccordionCard>
 
       <AccordionCard id="settings-recurring" eyebrow="Automation" title="定期消費" icon={<Sparkles />}>
-        {(state.recurringRules || []).length === 0 && <p className="muted" style={{ fontSize: '13px' }}>暫無定期消費。你可以喺收據編輯器設定每月租金、訂閱等。</p>}
+        <div className="form-grid">
+          <label>店名 / 項目
+            <input value={newRuleStore} onChange={(e) => setNewRuleStore(e.target.value)} placeholder="例如：Wifi 蛋租借" />
+          </label>
+          <label>金額 (¥)
+            <input type="number" min="0" step="1" value={newRuleTotal} onChange={(e) => setNewRuleTotal(e.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>類別
+            <select value={newRuleCategory} onChange={(e) => setNewRuleCategory(e.target.value as CategoryId)}>
+              {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label>支付方式
+            <select value={newRulePayment} onChange={(e) => setNewRulePayment(e.target.value as PaymentId)}>
+              {PAYMENTS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>頻率
+            <select value={newRuleFrequency} onChange={(e) => setNewRuleFrequency(e.target.value as RecurringRule['frequency'])}>
+              <option value="daily">每日</option>
+              <option value="weekly">每週</option>
+              <option value="monthly">每月</option>
+            </select>
+          </label>
+          <label>首次執行日期
+            <input type="date" value={newRuleNextRun} onChange={(e) => setNewRuleNextRun(e.target.value)} />
+          </label>
+        </div>
+        <div className="action-row wrap">
+          <button
+            className="primary"
+            type="button"
+            disabled={!newRuleStore.trim() || !(Number(newRuleTotal) > 0) || !newRuleNextRun}
+            onClick={() => {
+              const now = Date.now();
+              const rule: RecurringRule = {
+                id: `recurring_${now}_${Math.random().toString(16).slice(2)}`,
+                store: newRuleStore.trim(),
+                total: Math.round(Number(newRuleTotal)),
+                category: newRuleCategory,
+                payment: newRulePayment,
+                frequency: newRuleFrequency,
+                nextRun: newRuleNextRun,
+                active: true,
+                createdAt: now,
+                updatedAt: now,
+              };
+              updateState({ recurringRules: [...(state.recurringRules || []), rule] });
+              setNewRuleStore('');
+              setNewRuleTotal('');
+              setNewRuleNextRun(todayYmd());
+              setStatus(`已新增定期消費：${rule.store}`);
+            }}
+          >
+            <Plus size={18} /> 新增定期消費
+          </button>
+        </div>
+        {(state.recurringRules || []).length === 0 && <p className="muted" style={{ fontSize: '13px' }}>暫無定期消費。填好上面表格再撳「新增定期消費」。</p>}
         {(state.recurringRules || []).map((rule) => (
           <div key={rule.id} className="recurring-rule-row">
             <div className="recurring-rule-info">

@@ -1443,6 +1443,10 @@ export async function pushSettingsMeta(state: AppState): Promise<void> {
     budget: state.budget,
     rate: state.rate,
     rateMode: state.rateMode,
+    // rateTable is what perHkdForCurrency actually reads first (before falling back to `rate`) --
+    // without syncing it too, a device that pulls a synced `rate`/`rateMode:'fixed'` keeps using its
+    // own stale rateTable entry, silently showing a different converted amount than the Settings screen.
+    rateTable: state.rateTable,
     tripCurrency: state.tripCurrency,
     autoSync: state.autoSync,
     activeTripId: state.activeTripId,
@@ -1502,6 +1506,7 @@ export async function pullSettingsMeta(state: AppState): Promise<Partial<AppStat
         budget: payload.budget,
         rate: payload.rate,
         rateMode: payload.rateMode,
+        rateTable: (payload.rateTable && typeof payload.rateTable === 'object') ? payload.rateTable : undefined,
         tripCurrency: payload.tripCurrency,
         autoSync: payload.autoSync,
         activeTripId: payload.activeTripId,

@@ -1,5 +1,60 @@
 # Changelog
 
+## 2026-07-01 HKT (6-agent completeness audit — both apps, own-scope)
+
+- **v0.12.19 / versionCode 1219.** Ran a 6-agent parallel audit split 3-and-3 across `main` (compact
+  web) and this Android worktree, each side reviewed within its OWN feature set (main lacks the
+  Splitwise-class rewrite entirely — multi-payer, itemized splits, recurring, comments, debt-simplify
+  settlement all only exist on this branch; confirmed as a known/accepted divergence, not a bug).
+  Fixed all 7 must-fix findings plus the viewer-permission gaps (skipped the itemized-split silent-reset
+  guard and settle-up double-settlement protection for a later pass).
+  - **[CRITICAL, self-inflicted] `rateTable` never synced via Notion/Supabase** — only `rate`/`rateMode`
+    did. A device pulling a correctly-synced `rate`/`rateMode:'fixed'` kept using its own stale
+    `rateTable[JPY]` (checked first by `perHkdForCurrency`), silently showing a different converted
+    amount than the Settings screen. Reproduced live: Dashboard showed HK$4,072 instead of the correct
+    HK$5,221. Added `rateTable` to the full sync surface (Notion push/pull, Supabase build/parse,
+    `useSyncEngine.ts` merge, `CLOUD_SETTINGS_KEYS`).
+  - **[CRITICAL, self-inflicted] `refreshRate()` had no `rateMode` re-check after its async fetch
+    resolved** — unlike the boot effect, which correctly re-checks. Switching Live→Fixed while a
+    refresh was in flight let the stale live response silently overwrite the just-set fixed rate,
+    directly defeating the feature's core promise. Reproduced live via a delayed-response Playwright
+    test. Fixed with the same re-check pattern as the boot effect.
+  - **[completeness] Recurring expense rules had no "create" UI at all.** The spawn/pause/delete engine
+    was fully correct (fixed twice already this session), but nothing in the app ever let a user
+    construct a first rule — the feature was a dead end. Added a minimal add-rule form (store, amount,
+    category, payment, frequency, first run date) to Settings' 定期消費 panel.
+  - **[completeness] No self-service "leave shared trip."** The backend `leave_trip` RPC already
+    existed and correctly blocked the owner — the frontend never called it, so a non-owner member had
+    no way to leave without an admin removing them. Added a "離開此旅程" button (non-owner only) in
+    Settings' 旅程共享 panel; leaving clears the trip locally (no tombstone/delete — the data still
+    belongs to the other members) and falls back to another trip or re-triggers the welcome flow.
+  - **[permission] Viewers could post/delete expense comments** despite being read-only everywhere
+    else. Fixed at both layers: `ReceiptEditor`'s `ExpenseComments` now hides compose/delete for
+    viewers (read-only view), AND the Supabase RLS policies for insert/delete now require
+    `private.can_edit_trip()` (same helper `receipts` policies already use) — client-side gating alone
+    isn't a real boundary. Applied live via Management API (`apply_migration`, not `db push`), verified
+    via a direct policy-definition query.
+  - **[permission] Viewer role wasn't enforced on the Scan/OCR/voice/email import path.** `ReceiptEditor`
+    already blocked manual add/edit for viewers, but the bulk-import choke point (`importReceipts` in
+    `App.tsx`, shared by Scan and History) had no equivalent guard — a viewer could complete a full scan
+    and see it "saved" locally, only for Supabase RLS to silently reject it on sync. Now rejected
+    immediately with a clear message at the shared choke point.
+  - **[pre-existing, main only] Hydration-flash bug** — `App.tsx` gated the "載入帳號資料" loading
+    screen with `isHydratingScope`, which flips false before the async IndexedDB merge lands (a
+    correctly-computed `isStorageReady` flag already existed and is used elsewhere). Switched the gate.
+  - **[pre-existing, main only] "清除裝置信任" didn't revoke the live broker session** — only cleared
+    device-trust storage, leaving an active broker session token usable until its own TTL expired. Now
+    also clears the credential session.
+  - **[pre-existing, main only] FX quick-reference calculator ignored the freshly-fetched live rate for
+    JPY↔HKD** — `convertAmount` special-cased that pair to always use the persisted `state.rate`,
+    ignoring the snapshot it was just given, so "更新匯率" showed a new-rate toast with no change to the
+    displayed number for the app's single most common conversion. Fixed to prefer the live snapshot when
+    present (only caller is this calculator, so zero risk elsewhere).
+  - Verified: typecheck clean, all 3 unit-test scripts green, full smoke suites green on both apps
+    (main: 10/11 settings + 1/1 stats + 8/8 dashboard + 1/1 scan; android: 11/11 settings + 1/1
+    split-editor + 2/2 settle-up). Signed APK rebuilt (9.1 MB). Live RLS policy change verified via
+    direct query, not just static review.
+
 ## 2026-07-01 HKT (feature: fixed vs live exchange rate mode)
 
 - **v0.12.18 / versionCode 1218.** New feature requested by Boss: a Live/Fixed toggle for the exchange
