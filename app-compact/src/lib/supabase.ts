@@ -286,6 +286,7 @@ function buildAppSettings(state: AppState) {
   return {
     budget: state.budget,
     rate: state.rate,
+    rateMode: state.rateMode,
     tripCurrency: state.tripCurrency,
     notionDb: profileNotionDatabaseId(state),
     autoSync: state.autoSync,
@@ -313,6 +314,7 @@ function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState> | und
   return normalizeAiModelSettings({
     budget: typeof payload.budget === 'number' ? payload.budget : undefined,
     rate: typeof payload.rate === 'number' ? payload.rate : undefined,
+    rateMode: (payload.rateMode === 'fixed' || payload.rateMode === 'live' ? payload.rateMode : undefined) as 'fixed' | 'live' | undefined,
     tripCurrency: typeof payload.tripCurrency === 'string' ? payload.tripCurrency : undefined,
     notionDb: typeof payload.notionDb === 'string' ? userScopedNotionDatabaseId(payload.notionDb) || undefined : undefined,
     autoSync: typeof payload.autoSync === 'boolean' ? payload.autoSync : undefined,

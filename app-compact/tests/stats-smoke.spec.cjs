@@ -8,6 +8,13 @@ test.beforeEach(async ({ page }) => {
     contentType: 'application/javascript',
     body: 'window.DEV_SECRETS = {};',
   }));
+  // Block live FX-rate lookups so state.rate stays pinned to the seeded/default value. Without this,
+  // App's boot-time live-rate patch (fetchBootCurrencySnapshot) silently overwrites the budget
+  // percentage with whatever the CURRENT market JPY/HKD rate is, making the hardcoded percentage
+  // assertions below flaky as the real rate drifts over time (observed: recorded 309% became 311%).
+  await page.route('**/open.er-api.com/**', (route) => route.abort());
+  await page.route('**/visa.com.tw/**', (route) => route.abort());
+  await page.route('**/corsproxy.io/**', (route) => route.abort());
 });
 
 const persons = [
@@ -67,7 +74,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   const compass = page.locator('.spending-compass');
   await expect(compass).toBeVisible();
   await expect(compass).toContainText('預算使用');
-  await expect(compass).toContainText('309%');
+  await expect(compass).toContainText('306%'); // deterministic once the live-rate fetch is blocked above
   await expect(compass).toContainText('已用');
   await expect(compass).toContainText(/(尚餘|超出)/);
   await expect(compass).toContainText('餐飲');
@@ -135,7 +142,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(actionPlan).toContainText('Xinxin Wong → User 1 Cheung');
   await expect(actionPlan).toContainText('¥2,850');
   await expect(actionPlan).toContainText('Total to settle');
-  await expect(actionPlan).toContainText('HK$ 139');
+  await expect(actionPlan).toContainText('HK$ 140'); // deterministic once the live-rate fetch is blocked above
   await expect(actionPlan).toContainText('Private repay');
   await expect(actionPlan).toContainText('¥300');
   const actionMetrics = await actionPlan.evaluate((node) => {

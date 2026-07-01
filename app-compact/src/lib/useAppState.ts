@@ -36,6 +36,7 @@ function enqueueSyncItem(queue: SyncQueueItem[] | undefined, item: SyncQueueItem
 const CLOUD_SETTINGS_KEYS = new Set<keyof AppState>([
   'budget',
   'rate',
+  'rateMode',
   'tripCurrency',
   'notionDb',
   'personalNotionConnected',
