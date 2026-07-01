@@ -74,9 +74,21 @@ export function validateItinerary(input: unknown): { ok: true; itinerary: Itiner
   return { ok: true, itinerary: days };
 }
 
+// Serialize native exports through a single chain: doSaveFile's rmdir-then-write-then-share would
+// otherwise race if two exports fire close together (double-tap, or two export buttons in quick
+// succession) — the second call's rmdir can delete the first call's file between its write and its
+// Share.share(), handing the OS share sheet a URI to a file that no longer exists.
+let saveFileChain: Promise<void> = Promise.resolve();
+
 // Save a text file. On a Capacitor native shell the browser blob+anchor download is a silent
 // no-op, so write to the app cache and open the OS share sheet instead. Web path is unchanged.
-export async function saveFile(filename: string, mimeType: string, content: string): Promise<void> {
+export function saveFile(filename: string, mimeType: string, content: string): Promise<void> {
+  const run = saveFileChain.then(() => doSaveFile(filename, mimeType, content));
+  saveFileChain = run.catch(() => {}); // keep the chain alive even if one export throws
+  return run;
+}
+
+async function doSaveFile(filename: string, mimeType: string, content: string): Promise<void> {
   // Centralized filename hardening at the single choke point: Filesystem.writeFile treats the name
   // as a path, so a trip name with "/" or ":" (e.g. "Osaka/Kyoto", "名古屋/中部") would write to a
   // non-existent subdir and silently fail on native. Sanitize here so every caller is safe — not
@@ -783,17 +795,20 @@ export function openMapExternal(mapUrl: string | undefined, name: string, addres
   }, 1200);
 }
 
-function nextRunDate(current: string, frequency: RecurringRule['frequency']): string {
+function nextRunDate(current: string, frequency: RecurringRule['frequency'], anchorDay: number): string {
   const d = new Date(current + 'T00:00:00');
   if (frequency === 'daily') d.setDate(d.getDate() + 1);
   else if (frequency === 'weekly') d.setDate(d.getDate() + 7);
   else {
-    // Clamp to the target month's last day so the 29th/30th/31st don't overflow (Jan 31 → Mar 3).
-    const day = d.getDate();
+    // Clamp against a FIXED anchor day (the rule's originally-configured day-of-month), not the
+    // previous occurrence's date. Deriving "day" from the previous run compounds permanently: once a
+    // short month clamps 31→28, every later 31-day month keeps clamping to 28 too — the rule can never
+    // recover its intended day. Clamping against a fixed anchor lets a 31st-of-month rule correctly
+    // skip only the short months, not degrade forever.
     d.setDate(1);
     d.setMonth(d.getMonth() + 1);
     const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    d.setDate(Math.min(day, daysInMonth));
+    d.setDate(Math.min(anchorDay, daysInMonth));
   }
   // Local YMD — toISOString() shifts the date by the UTC offset (one day earlier in HKT),
   // which left daily rules' nextRun stuck on the same day → unbounded duplicate spawns.
@@ -819,7 +834,17 @@ export function processRecurringRules(state: AppState): { receipts: Receipt[]; u
     // never re-spawns the same date on the next launch.
     let nextRun = rule.nextRun;
     let spawned = 0;
+    // Anchor day is captured once per rule per call, from the rule's day-of-month at the start of
+    // processing — every monthly advance within this batch clamps against the SAME anchor, so a
+    // multi-month catch-up run doesn't ratchet the day down further with each iteration.
+    const anchorDay = new Date(rule.nextRun + 'T00:00:00').getDate();
     while (/^\d{4}-\d{2}-\d{2}$/.test(nextRun) && nextRun <= today && spawned < 400) {
+      const receiptCurrency = rule.currency || state.tripCurrency || 'JPY';
+      // Stamp the FX rate at spawn time, same as every other receipt-creation path (scan/voice/email/
+      // manual) — otherwise this receipt has no stored exchangeRate/hkdAmount and re-prices itself at
+      // whatever the LIVE rate happens to be whenever a budget/settlement view renders, drifting from
+      // its manually-entered/scanned siblings as the rate moves.
+      const fxRate = receiptCurrency === 'HKD' ? undefined : perHkdForCurrency(state, receiptCurrency);
       newReceipts.push({
         id: `recurring_${rule.id}_${nextRun}_${Math.random().toString(16).slice(2)}`,
         store: rule.store,
@@ -827,7 +852,10 @@ export function processRecurringRules(state: AppState): { receipts: Receipt[]; u
         date: nextRun,
         category: rule.category,
         payment: rule.payment,
-        currency: rule.currency || state.tripCurrency || 'JPY',
+        currency: receiptCurrency,
+        originalCurrency: receiptCurrency,
+        exchangeRate: fxRate,
+        hkdAmount: fxRate ? Math.round(rule.total / Math.max(0.1, fxRate)) : undefined,
         personId: rule.personId || state.persons?.[0]?.id || '',
         splitMode: rule.splitMode || 'shared',
         tripId: state.activeTripId,
@@ -835,7 +863,7 @@ export function processRecurringRules(state: AppState): { receipts: Receipt[]; u
         createdAt: now,
         updatedAt: now,
       });
-      nextRun = nextRunDate(nextRun, rule.frequency);
+      nextRun = nextRunDate(nextRun, rule.frequency, anchorDay);
       spawned += 1;
     }
     updatedRules.push(spawned ? { ...rule, nextRun, updatedAt: now } : rule);

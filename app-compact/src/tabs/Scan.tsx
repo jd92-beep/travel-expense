@@ -116,6 +116,13 @@ function nativePhotoExtension(format?: string, mime?: string): string {
 // likely to be reaped — the next Scan mount resumes from the on-disk cache file instead of silently
 // dropping the receipt.
 const PENDING_SCAN_KEY = 'travel-expense:pending-native-scan';
+// Scan is conditionally rendered per-tab (App.tsx), so it unmounts/remounts on every tab switch —
+// but unmounting does NOT cancel the original in-flight handleImage() call (JS doesn't cancel async
+// work on unmount). Without this module-level gate, switching away from Scan mid-OCR and back would
+// re-process the same still-pending capture a second time (duplicate draft/receipt). Module state only
+// resets on a true process restart (cold start after an app-kill), which is exactly the one case this
+// resume logic should run for.
+let pendingScanCheckedThisSession = false;
 
 async function nativePhotoToFile(
   photo: { webPath?: string; format?: string },
@@ -337,6 +344,8 @@ export function Scan({
   // points at the on-disk cache file, which survives a restart, so we can re-fetch and re-run OCR.
   useEffect(() => {
     if (!isNativeAndroidApp()) return;
+    if (pendingScanCheckedThisSession) return; // already checked this app launch — avoid re-processing
+    pendingScanCheckedThisSession = true;      // a still-in-flight capture on a tab-switch remount.
     let raw: string | null = null;
     try { raw = localStorage.getItem(PENDING_SCAN_KEY); } catch { return; }
     if (!raw) return;
@@ -489,7 +498,7 @@ export function Scan({
         }
 
         try {
-          receipts.push(await scanReceiptImage(file, state));
+          receipts.push(await scanReceiptImage(file, stateRef.current));
         } catch (error) {
           receipts.push({
             id: `email_img_${Date.now()}_${Math.random().toString(16).slice(2)}`,

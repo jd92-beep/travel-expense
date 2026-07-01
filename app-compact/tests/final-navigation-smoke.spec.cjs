@@ -53,7 +53,9 @@ for (const [name, viewport] of [
     await page.goto('http://localhost:8903/travel-expense/compact/');
     await expect(page.getByText('掃描收據').first()).toBeVisible();
     if (viewport.width <= 390) {
-      await expect(page.locator('.hyperframe-layer')).toHaveCount(2);
+      // Low-perf mode (narrow/coarse-pointer viewports) renders only the base wallpaper layer — cut
+      // from 2 to 1 as a low-RAM cold-start optimization; the CSS washi backdrop covers the rest.
+      await expect(page.locator('.hyperframe-layer')).toHaveCount(1);
       await expect(page.locator('canvas')).toHaveCount(0);
     }
     const nav = page.getByLabel('主要分頁');

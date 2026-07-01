@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-07-01 HKT (comprehensive bug hunt — 3 parallel review agents + self-audit)
+
+- **v0.12.17 / versionCode 1217.** "Find all bugs" pass: ran a dynamic runtime-error walk + full smoke
+  suite myself, plus 3 parallel read-only review agents (self-audit of v0.12.13-16, React state/hooks
+  correctness, money-engine correctness). Every finding below was verified against the actual code
+  before fixing — none applied on agent say-so alone.
+  - **[HIGH] Recurring-rule receipts never stamped `exchangeRate`/`hkdAmount`.** Every other
+    receipt-creation path (scan/voice/email/manual) stamps the FX rate at creation time; recurring
+    spawns didn't, so they silently re-priced at whatever the *live* rate was whenever a
+    budget/settlement view happened to render — drifting from every sibling receipt as the rate moved.
+    Now stamped at spawn time, matching the existing pattern. (`domain.ts`)
+  - **[HIGH] Monthly recurring rule's day-of-month clamp compounded permanently.** `nextRunDate` derived
+    the target day from the *previous* occurrence instead of a fixed anchor — once a short month clamped
+    31→28, the rule was stuck on "the 28th" forever, never returning to the 31st in a later 31-day month.
+    Fixed by capturing the anchor day once per rule per processing batch. (`domain.ts`)
+  - **[HIGH — introduced this session, caught before it shipped] Scan could double-process a capture on
+    tab switch.** The v0.12.16 crash-recovery resume effect ran on every `Scan` mount, not just app cold
+    start — but `Scan` unmounts/remounts on every tab switch, and unmounting doesn't cancel the original
+    in-flight OCR call. Switching away from Scan mid-OCR and back would re-process the same still-pending
+    capture, producing a duplicate draft. Fixed with a module-level "checked this session" gate that only
+    resets on a true process restart. (`Scan.tsx`)
+  - **[MED] `isHydratingScope` flipped `false` before the async IndexedDB merge completed**, letting the
+    welcome-guide flash for a returning user and deferring a recurring rule's catch-up by one full mount.
+    Now folds in the IndexedDB-ready flag too. (`useAppState.ts`)
+  - **[MED] Multi-file email-screenshot batches read stale `state` mid-loop** (closure capture instead of
+    the ref every other OCR path uses) — a settings/trip change mid-batch could scan later files in the
+    same batch against the wrong context. (`Scan.tsx`)
+  - **[MED] `pull()` had no re-entrancy guard** (unlike `push()`/`sync()`), so a background sync tick
+    overlapping a manual refresh tap fired two full concurrent network round-trips computing merge state
+    against different intermediate snapshots. Added a `pullingRef` guard mirroring the existing pattern.
+    (`useSyncEngine.ts`)
+  - **[MED] Concurrent exports could race and hand the OS share sheet a deleted file** — two
+    `saveFile` calls close together (double-tap, or two export buttons in quick succession) could have
+    one's cache-sweep delete the other's just-written file. Serialized through a single promise chain.
+    (`domain.ts`)
+  - **[LOW] AI-parsed receipt totals had no non-negative guard** (manual entry already blocks negative
+    totals; line-item amounts already do too) — a misread refund/credit line as the grand total would
+    silently reduce Dashboard's spend total while contributing nothing to settlement math (`computeSettlements`
+    skips amount≤0 entirely). Normalized with the same invariant used elsewhere. (`ai.ts`)
+  - **Test-suite fixes (not app bugs):** `stats-smoke.spec.cjs` hardcoded a budget percentage/HKD amount
+    computed against the *live* JPY/HKD rate with no mock — now blocks the live-rate network calls so the
+    assertions are deterministic. `final-navigation-smoke.spec.cjs` asserted the OLD low-perf wallpaper
+    layer count (2) from before the v0.12.15 low-RAM optimization (cut to 1) — updated to match the
+    already-shipped, intentional behavior.
+  - Verified: typecheck clean, all 3 unit-test scripts green, full smoke suite green (dashboard/history/
+    scan/split-editor/timeline/stats/welcome-guide/settings/settle-up/final-nav, the last re-run 3x for
+    stability), runtime-error walker shows only the pre-existing benign baseline. Signed APK built.
+
 ## 2026-06-30 HKT (Android polish round 2 — the two opted-in judgment calls)
 
 - **v0.12.16 / versionCode 1216.** Applied the two judgment-call fixes Boss opted into from the council

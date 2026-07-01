@@ -78,6 +78,7 @@ export function useSyncEngine(
   const lastPulledTripIdRef = useRef('');
   const lastPushSucceededRef = useRef(true);
   const syncingRef = useRef(false);
+  const pullingRef = useRef(false);
   const reconnectSyncTimerRef = useRef<number | null>(null);
   const aliveRef = useRef(true);
 
@@ -91,6 +92,7 @@ export function useSyncEngine(
       aliveRef.current = false;
       processingRef.current = false;
       syncingRef.current = false;
+      pullingRef.current = false;
       if (reconnectSyncTimerRef.current) window.clearTimeout(reconnectSyncTimerRef.current);
       if (tripPullDebounceRef.current) window.clearTimeout(tripPullDebounceRef.current);
     };
@@ -377,6 +379,14 @@ export function useSyncEngine(
 
   const pull = useCallback(async () => {
     console.log('[SyncEngine] pull() started');
+    // pull() is exposed to 4+ independent UI triggers plus the internal call inside sync() — without
+    // this guard, e.g. the 120s background sync's pull overlapping a manual refresh tap fires two full
+    // concurrent network round-trips, each computing its own overwrittenIds snapshot against a different
+    // intermediate state before merging (mirrors push()'s existing processingRef guard).
+    if (pullingRef.current) {
+      console.log('[SyncEngine] pull() skipped — already pulling');
+      return;
+    }
     if (!navigator.onLine) {
       updateSyncState({ status: 'offline', error: '' });
       console.log('[SyncEngine] pull() skipped — offline');
@@ -387,6 +397,7 @@ export function useSyncEngine(
       console.log('[SyncEngine] pull() skipped — no broker session');
       return;
     }
+    pullingRef.current = true;
     updateSyncState({ status: 'pulling', error: '' });
     try {
       const cloudSession = hasSupabaseSession(supabaseSessionRef.current) ? supabaseSessionRef.current : null;
@@ -523,6 +534,8 @@ export function useSyncEngine(
       const message = redactError(error);
       console.log('[SyncEngine] pull() error:', message);
       updateSyncState({ status: 'error', error: message });
+    } finally {
+      pullingRef.current = false;
     }
   }, [updateSyncState, setState]);
 

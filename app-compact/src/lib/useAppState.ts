@@ -229,5 +229,10 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     setState(withoutPublicDemoTrip({ ...DEFAULT_STATE, receipts: [] }, storageScope, userEmail));
   }, [storageScope, userEmail]);
 
-  return { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, hydratedScope, isHydratingScope: hydratedScope !== storageScope };
+  // Both the sync localStorage load (hydratedScope) AND the async IndexedDB merge (indexedReadyScope)
+  // must catch up to the current scope before hydration is done — IndexedDB access is never synchronous,
+  // so gating on hydratedScope alone flips this false for at least one render while the merge is still
+  // in flight, letting the welcome-guide/recurring-rules effects act on a pre-merge, possibly-empty state.
+  const isHydratingScope = hydratedScope !== storageScope || indexedReadyScope !== storageScope;
+  return { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, hydratedScope, isHydratingScope };
 }

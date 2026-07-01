@@ -873,7 +873,11 @@ CRITICAL ITEMS FORMATTING RULES:
   const receiptDate = ymdFromText(String(parsed.date || ''), state.tripDateRange.start);
   const receiptCurrency = state.tripCurrency || 'JPY';
   const fxRate = receiptCurrency === 'HKD' ? undefined : perHkdForCurrency(state, receiptCurrency);
-  const receiptTotal = Number(parsed.total) || 0;
+  // Manual entry blocks a negative total outright (ReceiptEditor validAmount); AI parsing has no such
+  // guard, so a misread refund/credit line as the grand total would otherwise silently flow into
+  // computeSettlements, which skips amount<=0 entirely — the receipt would still reduce Dashboard's
+  // spend total but contribute nothing to anyone's settlement balance. Normalize to the same invariant.
+  const receiptTotal = Math.abs(Number(parsed.total) || 0);
   return {
     id: `scan_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     store: String(parsed.store || file.name.replace(/\.[^.]+$/, '') || '掃描收據'),
@@ -939,7 +943,7 @@ CRITICAL ITEMS FORMATTING RULES:
   }
   return rows.map((row, i) => {
     const r = row as Partial<Receipt>;
-    const receiptTotal = Number(r.total) || 0;
+    const receiptTotal = Math.abs(Number(r.total) || 0); // same non-negative invariant as manual entry
     const receiptCurrency = state.tripCurrency || 'JPY';
     const fxRate = receiptCurrency === 'HKD' ? undefined : perHkdForCurrency(state, receiptCurrency);
     return {
