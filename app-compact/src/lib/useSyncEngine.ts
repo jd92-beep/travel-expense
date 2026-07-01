@@ -475,6 +475,10 @@ export function useSyncEngine(
                 budget: settings.budget ?? finalState.budget,
                 rate: settings.rate ?? finalState.rate,
                 rateMode: settings.rateMode ?? finalState.rateMode,
+                // rateTable must travel with rate/rateMode: perHkdForCurrency checks rateTable[code]
+                // BEFORE falling back to `rate`, so pulling a newer rate/rateMode without also pulling
+                // rateTable would leave this device's stale local table entry silently winning.
+                rateTable: settings.rateTable ?? finalState.rateTable,
                 tripCurrency: settings.tripCurrency ?? finalState.tripCurrency,
                 notionDb: settings.notionDb ?? finalState.notionDb,
                 personalNotionConnected: settings.personalNotionConnected ?? finalState.personalNotionConnected,

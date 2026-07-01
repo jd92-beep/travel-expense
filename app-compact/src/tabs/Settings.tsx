@@ -1472,7 +1472,10 @@ export function Settings({
   async function refreshRate() {
     await run('更新匯率', async () => {
       const snapshot = await fetchLiveCurrencySnapshot();
-      updateState(appRatePatchFromSnapshot(snapshot));
+      // Re-check rateMode at apply time via the functional updater, not the closed-over `state` from
+      // when this async function started — the user could have switched to Fixed (and typed a manual
+      // rate) while this fetch was in flight; a stale live response must not silently overwrite that.
+      setState((current) => current.rateMode === 'fixed' ? current : { ...current, ...appRatePatchFromSnapshot(snapshot) });
       return `已更新：1 HKD = ${snapshot.rates.JPY.toFixed(2)} JPY（${snapshot.source}）`;
     });
   }
@@ -3096,7 +3099,7 @@ export function Settings({
           <button className="secondary" type="button" onClick={previewTripShareExport}><Copy size={18} /> Preview trip share</button>
           <button className="secondary" type="button" onClick={previewDiagnosticsExport}><ShieldCheck size={18} /> Preview diagnostics</button>
           <button className="danger" type="button" onClick={() => { clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); }}><KeyRound size={18} /> 清除 broker session</button>
-          <button className="danger" type="button" onClick={() => { clearDeviceTrust(); void clearTrustedDevice(); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
+          <button className="danger" type="button" onClick={() => { clearDeviceTrust(); void clearTrustedDevice(); clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
         </div>)}
         {showStressPanel && tripSharePreview && (
           <div className="settings-trip-share-preview" role="region" aria-label="Private trip-share preview">

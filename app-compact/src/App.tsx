@@ -79,7 +79,7 @@ export function App() {
   const isCloudSyncActive = hasSupabaseSession(effectiveSupabaseSession);
   const userEmail = effectiveSupabaseSession?.user?.email || null;
   const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';
-  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope, isStorageReady } = useAppState(isCloudSyncActive, storageScope, userEmail);
+  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isStorageReady } = useAppState(isCloudSyncActive, storageScope, userEmail);
 
   const [globalOcrBusy, setGlobalOcrBusy] = useState('');
   const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
@@ -624,7 +624,11 @@ export function App() {
   );
 
   if (supabaseAuth.configured) {
-    if (hasSupabaseSession(supabaseAuth.session) && isHydratingScope) {
+    // isStorageReady (not isHydratingScope) is the correct gate here: isHydratingScope flips false
+    // right after the synchronous localStorage read, before the async IndexedDB merge lands, letting
+    // the app render with a pre-merge (possibly stale/incomplete) snapshot for one paint. isStorageReady
+    // additionally waits for indexedReadyScope, matching how showGuide already gates below.
+    if (hasSupabaseSession(supabaseAuth.session) && !isStorageReady) {
       return <LoadingState label="載入帳號資料" />;
     }
     return <SupabaseGate auth={supabaseAuth}>{appContent}</SupabaseGate>;

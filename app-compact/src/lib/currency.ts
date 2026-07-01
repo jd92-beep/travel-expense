@@ -226,7 +226,12 @@ export function usableSnapshot(snapshot: CurrencySnapshot | null): CurrencySnaps
 export function convertAmount(amount: number, from: string, to: string, state: AppState, snapshot: CurrencySnapshot | null): number | null {
   const n = Number(amount) || 0;
   if (from === to) return n;
-  const rate = jpyPerHkd(state);
+  // Prefer a freshly-fetched snapshot's JPY rate over the persisted state.rate for this pair — the
+  // one caller (Scan's FX quick-reference calculator) fetches `snapshot` on demand specifically so
+  // "更新匯率" shows an up-to-date number; without this, the success toast would quote a new rate
+  // while the displayed converted amount silently kept using the old persisted rate.
+  const liveJpy = usableSnapshot(snapshot)?.rates?.JPY;
+  const rate = Number.isFinite(liveJpy) && Number(liveJpy) > 0 ? Number(liveJpy) : jpyPerHkd(state);
   if (from === 'JPY' && to === 'HKD') return n / rate;
   if (from === 'HKD' && to === 'JPY') return n * rate;
   const rates = usableSnapshot(snapshot)?.rates;
