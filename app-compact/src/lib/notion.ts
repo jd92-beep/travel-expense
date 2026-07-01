@@ -1442,6 +1442,7 @@ export async function pushSettingsMeta(state: AppState): Promise<void> {
   const payload = {
     budget: state.budget,
     rate: state.rate,
+    rateMode: state.rateMode,
     tripCurrency: state.tripCurrency,
     autoSync: state.autoSync,
     activeTripId: state.activeTripId,
@@ -1500,6 +1501,7 @@ export async function pullSettingsMeta(state: AppState): Promise<Partial<AppStat
       return normalizeAiModelSettings({
         budget: payload.budget,
         rate: payload.rate,
+        rateMode: payload.rateMode,
         tripCurrency: payload.tripCurrency,
         autoSync: payload.autoSync,
         activeTripId: payload.activeTripId,

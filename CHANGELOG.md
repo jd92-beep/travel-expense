@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-07-01 HKT (feature: fixed vs live exchange rate mode)
+
+- **v0.12.18 / versionCode 1218.** New feature requested by Boss: a Live/Fixed toggle for the exchange
+  rate, since he usually pre-exchanges some foreign currency before the trip and wants the app to use
+  that locked-in rate instead of the fluctuating live one. Implemented in **both** `app-compact` (main,
+  the live web deploy) and this Android worktree, verified independently in each.
+  - Added `SegmentedControl` toggle ("即時 (Visa)" / "固定匯率") in Settings' 旅程管理器 accordion, next
+    to the existing manual rate input.
+  - New optional `AppState.rateMode: 'live' | 'fixed'` (default live, backward compatible). Syncs via
+    Notion/Supabase settings alongside `rate`.
+  - Fixed mode skips the boot-time live-rate fetch entirely (not just discards its result) — no wasted
+    network call on every launch while locked. Defense-in-depth re-check inside the state updater in
+    case the user switches modes while a fetch is mid-flight.
+  - **Fixed a latent bug in the pre-existing manual rate input** while building this: it only wrote
+    `state.rate`, but `perHkdForCurrency` (used by Dashboard/Stats/ReceiptEditor) checks
+    `rateTable[code]` FIRST — so a manual edit was silently ignored by most of the app's money math
+    whenever a live-fetched table entry already existed. Now the input stamps both together, keyed on
+    `state.tripCurrency` (what `perHkdForCurrency` actually reads), not the Trip Manager's local
+    `mgrCurrency` form variable.
+  - Switching back to Live triggers an immediate refresh.
+  - Also fixed the same pre-existing flaky `stats-smoke` assertion (hardcoded budget % computed against
+    the unmocked live FX rate) here as on `main`, discovered while verifying this feature.
+  - Verified: typecheck clean, all 3 unit-test scripts green, full `settings-smoke` suite (11/11).
+    Signed APK built (9.1 MB).
+
 ## 2026-07-01 HKT (comprehensive bug hunt — 3 parallel review agents + self-audit)
 
 - **v0.12.17 / versionCode 1217.** "Find all bugs" pass: ran a dynamic runtime-error walk + full smoke

@@ -374,11 +374,20 @@ export function App() {
   }, [state.lastTab, updateState]);
 
   useEffect(() => {
+    // Fixed mode: the user pre-exchanged currency before the trip and locked in that rate — skip the
+    // background live-rate fetch entirely (not just discard its result), so fixed mode also means no
+    // wasted network call on every boot. `state` here is the mount-time value (this effect's dep array
+    // is stable), which is correct: rateMode loads synchronously from localStorage before first render.
+    if (state.rateMode === 'fixed') return undefined;
     let alive = true;
     fetchBootCurrencySnapshot().then(snapshot => {
       if (!alive) return;
       if (snapshot.rates.JPY) {
-        setState((current) => ({ ...current, ...appRatePatchFromSnapshot(snapshot) }));
+        setState((current) => {
+          // Re-check: the user could have switched to fixed mode while this fetch was in flight.
+          if (current.rateMode === 'fixed') return current;
+          return { ...current, ...appRatePatchFromSnapshot(snapshot) };
+        });
         console.log('[App] Auto-updated live exchange rate:', snapshot.rates.JPY, 'from', snapshot.source);
       }
     }).catch(() => {
@@ -388,6 +397,9 @@ export function App() {
     return () => {
       alive = false;
     };
+    // Mount-once by design (boot-time fetch); rateMode is read from the mount-time closure, which is
+    // correct since it loads synchronously from localStorage before first render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setState]);
 
   useEffect(() => {

@@ -467,6 +467,7 @@ export function useSyncEngine(
                 ...finalState,
                 budget: settings.budget ?? finalState.budget,
                 rate: settings.rate ?? finalState.rate,
+                rateMode: settings.rateMode ?? finalState.rateMode,
                 tripCurrency: settings.tripCurrency ?? finalState.tripCurrency,
                 notionDb: settings.notionDb ?? finalState.notionDb,
                 personalNotionConnected: settings.personalNotionConnected ?? finalState.personalNotionConnected,

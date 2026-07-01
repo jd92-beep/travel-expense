@@ -1662,3 +1662,75 @@ test('Settings can connect a broker session without leaking the password into ap
   expect(storageSnapshot).not.toContain('broker-pass');
   expect(await page.getByLabel('Broker password').count()).toBe(0);
 });
+
+test('Fixed exchange rate mode locks the rate against live auto-refresh', async ({ page }) => {
+  // Stub the live-rate endpoint so the test is deterministic (real network otherwise) and so a
+  // switch back to live mode has a known value to assert against.
+  await page.route('**/open.er-api.com/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ result: 'success', provider: 'test-stub', rates: { JPY: 25, HKD: 1 } }) });
+  });
+  await page.route('**/corsproxy.io/**', (route) => route.abort());
+
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'settings',
+      budget: 101800,
+      rate: 20.36,
+      rateTable: { JPY: { currency: 'JPY', perHkd: 20.36, source: 'test-seed', fetchedAt: Date.now() } },
+      tripCurrency: 'JPY',
+      autoSync: false,
+      persons: [{ id: 'p_boss', name: 'Boss' }],
+      shareRatios: { p_boss: 1 },
+      receipts: [],
+      schemaVersion: 3,
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await expectSettingsReady(page);
+  await setAccordion(page, '旅程管理器');
+
+  const rateLabel = page.locator('label', { hasText: '匯率（1 HKD' });
+  const rateInput = rateLabel.locator('input[type="number"]');
+  const refreshButton = page.getByRole('button', { name: /更新 live rate/ });
+
+  // Default is live mode: refresh button present, label says 即時.
+  await expect(rateLabel).toContainText('即時匯率');
+  await expect(refreshButton).toBeVisible();
+
+  // Switch to fixed mode and enter a manually pre-exchanged rate.
+  await page.getByRole('tab', { name: '固定匯率' }).click();
+  await expect(rateLabel).toContainText('固定匯率');
+  await expect(refreshButton).toHaveCount(0);
+  await expect(page.getByText(/已鎖定手動匯率/)).toBeVisible();
+
+  await rateInput.fill('19.5');
+  await rateInput.blur();
+
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
+  expect(stored.rate).toBe(19.5);
+  expect(stored.rateTable.JPY.perHkd).toBe(19.5); // must also patch rateTable so perHkdForCurrency isn't overridden by the stale seeded entry
+  expect(stored.rateMode).toBe('fixed');
+
+  // Reload — simulating an app relaunch that would normally trigger the boot live-rate fetch. The
+  // behavioral contract that matters: the persisted rate must survive a boot untouched while fixed
+  // (whether or not a background fetch fires underneath is an implementation detail).
+  await page.reload();
+  await expectSettingsReady(page);
+  await setAccordion(page, '旅程管理器');
+  await page.waitForTimeout(500); // let the boot currency effect have a chance to fire
+  await expect(rateInput).toHaveValue('19.5');
+  const afterReload = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
+  expect(afterReload.rate).toBe(19.5); // still not overwritten
+  expect(afterReload.rateTable.JPY.perHkd).toBe(19.5);
+
+  // Switching back to live mode triggers an immediate refresh and re-enables the button.
+  await page.getByRole('tab', { name: '即時 (Visa)' }).click();
+  await expect(refreshButton).toBeVisible();
+  await expect(rateInput).toHaveValue('25');
+  const afterLive = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
+  expect(afterLive.rateMode).toBe('live');
+});

@@ -47,7 +47,7 @@ import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, sa
 import { createSupabaseTripInvite, inviteLinkForToken, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
-import { GlassCard, StatefulActionButton, StatusPill, Toast } from '../components/ui';
+import { GlassCard, SegmentedControl, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
@@ -2661,21 +2661,47 @@ export function Settings({
               <h3>匯率與統計口徑</h3>
             </div>
           </div>
+          <SegmentedControl
+            ariaLabel="匯率模式"
+            value={state.rateMode === 'fixed' ? 'fixed' : 'live'}
+            options={[
+              { value: 'live', label: '即時 (Visa)' },
+              { value: 'fixed', label: '固定匯率' },
+            ]}
+            onChange={(mode) => {
+              updateState({ rateMode: mode });
+              if (mode === 'live') void refreshRate();
+            }}
+          />
           <div className="form-grid">
-            <label>即時匯率（1 HKD = {mgrCurrency || '目的地貨幣'}）
+            <label>{state.rateMode === 'fixed' ? '固定' : '即時'}匯率（1 HKD = {mgrCurrency || '目的地貨幣'}）
               <input type="number" min="0.01" step="0.01" value={state.rate} onChange={(e) => {
                 const val = parseFloat(e.target.value);
                 const safe = Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : 20.36;
-                updateState({ rate: safe });
+                // Also stamp rateTable[code] so perHkdForCurrency (used by Dashboard/Stats/ReceiptEditor)
+                // picks up the same value — it checks rateTable before falling back to state.rate, so
+                // without this a stale live-fetched table entry would silently override a manual edit.
+                // Keyed on state.tripCurrency (what perHkdForCurrency actually reads), not mgrCurrency
+                // (a Trip Manager form-local variable that can diverge while editing a different trip).
+                const code = String(state.tripCurrency || 'JPY').toUpperCase();
+                updateState({
+                  rate: safe,
+                  rateTable: { ...state.rateTable, [code]: { currency: code, perHkd: safe, source: 'manual', fetchedAt: Date.now() } },
+                });
               }} />
             </label>
-            <label>
-              <span>更新 live rate</span>
-              <button className="secondary" type="button" disabled={!!busy} onClick={refreshRate}>
-                {busy === '更新匯率' ? <RotateCcw size={18} className="spin" /> : <RotateCcw size={18} />} 更新匯率
-              </button>
-            </label>
+            {state.rateMode !== 'fixed' && (
+              <label>
+                <span>更新 live rate</span>
+                <button className="secondary" type="button" disabled={!!busy} onClick={refreshRate}>
+                  {busy === '更新匯率' ? <RotateCcw size={18} className="spin" /> : <RotateCcw size={18} />} 更新匯率
+                </button>
+              </label>
+            )}
           </div>
+          {state.rateMode === 'fixed' && (
+            <p className="muted">已鎖定手動匯率 — 出發前兌換嘅價錢唔會被即時匯率覆蓋。想返去自動更新，撳返「即時 (Visa)」。</p>
+          )}
 
           <label className="check-row">
             <input type="checkbox" checked={state.statsIncludeTransportLodging} onChange={(e) => updateState({ statsIncludeTransportLodging: e.target.checked })} />

@@ -325,6 +325,10 @@ export interface AppState {
   budget: number;
   rate: number;
   rateTable?: Record<string, ExchangeRateEntry>;
+  // Absent/'live' = today's behavior (auto-refresh from Visa/open.er-api on boot + manual refresh).
+  // 'fixed' = the user pre-exchanged currency before the trip and locked in that rate; nothing
+  // auto-overwrites `rate`/`rateTable[tripCurrency]` until they switch back to 'live'.
+  rateMode?: 'live' | 'fixed';
   tripCurrency: string;
   autoSync: boolean;
   proxy: string;
