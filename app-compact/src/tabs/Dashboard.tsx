@@ -1181,10 +1181,12 @@ export function Dashboard({
           {displaySpots.map((spot, idx) => {
             const details = getSpotIconDetails(spot.type, spot.name);
             const spotKey = spot.id || spot.spotId || `${today}_${spot.time || 'time'}_${spot.name || idx}_${idx}`;
-            const matchedReceipt = dailyReceipts.find(
-              (r) => displayStore(r).toLowerCase().includes(spot.name.toLowerCase()) ||
-                     spot.name.toLowerCase().includes(displayStore(r).toLowerCase())
-            );
+            // Empty names must not match: ''.includes(x)/x.includes('') would attach one receipt to every spot.
+            const spotName = spot.name.trim().toLowerCase();
+            const matchedReceipt = spotName ? dailyReceipts.find((r) => {
+              const store = displayStore(r).trim().toLowerCase();
+              return store ? (store.includes(spotName) || spotName.includes(store)) : false;
+            }) : undefined;
             const spotMeta = [spot.note, spot.address].filter(Boolean).join(' · ');
             return (
               <article

@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-07-02 HKT (deferred-findings sweep — every flagged item closed)
+
+- **v0.12.22 / versionCode 1222.** Closed out everything the Jul-1 audit flagged but deferred,
+  including the two items previously skipped by choice:
+  - **Itemized split silent reset** — deselecting the last person on a line item produced
+    `assignedTo: []`, which both the engine and the UI treat as "everyone", so all avatars silently
+    flipped back on. The toggle now keeps at least one person selected; removed the misleading
+    「清除全部分配」 button (it was a no-op identical to 一鍵均分 under the empty-means-everyone rule).
+  - **Settle-up double-fire guard** — double-tapping 確認結算 before React re-rendered recorded the
+    settlement twice. Added a ref guard armed on confirm, reset on open.
+  - **Itinerary currency divergence** — `getItinerary` picked `trip.currencies[1]` while
+    `getResolvedTripCurrency` picks the first non-HKD entry; the default trip is `['JPY','HKD']`, so
+    the itinerary was normalized as HKD. Now both use the resolver.
+  - **Timeline orphan receipts** — receipts dated outside every itinerary day never appeared on the
+    Timeline tab at all. Added a 行程日期以外 card listing them (settlements excluded).
+  - **Fixed-rate ↔ trip-currency guard** — switching trip currency while in fixed mode silently used a
+    hardcoded fallback rate; the rate input also kept showing the old currency's number. The input now
+    reads `rateTable[tripCurrency]` first and a warning appears when no fixed rate is set for the
+    current currency.
+  - **Dashboard spot matching** — a receipt with an empty store name matched every itinerary spot via
+    `includes('')`; both sides of the match now require non-empty names.
+  - **Trip create date validation** — 新增旅程 now rejects end date before start date (edit path
+    already did).
+  - **清除裝置資料 reload** — in-memory state survived the wipe and the persistence effect wrote it
+    straight back; the page now reloads after clearing (same pattern as delete-account).
+  - **Boot-sync account switch** — completed boot-sync keys are cleared on storage-scope change, so
+    signing out and back into the same account re-triggers the boot pull instead of skipping it.
+  - **Settlement payer warn** — receipts whose payer was removed from the trip were silently excluded
+    from settlement; now logged like the missing-beneficiary case.
+  - Removed dead `WEATHER_LOCATIONS_PER_DAY` constant.
+  - Evidence: typecheck clean, split-engine + notion-split-meta unit tests pass, smokes green
+    (dashboard 8, timeline 8, split-editor 1, settings 11, stats 1, settle-up 2, weather 13).
+
 ## 2026-07-01 HKT (6-agent completeness audit — both apps, own-scope)
 
 - **v0.12.19 / versionCode 1219.** Ran a 6-agent parallel audit split 3-and-3 across `main` (compact

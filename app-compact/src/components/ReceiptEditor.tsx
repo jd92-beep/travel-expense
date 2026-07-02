@@ -446,19 +446,6 @@ export function ReceiptEditor({
                       }));
                     }}
                   >一鍵均分所有人</button>
-                  <button
-                    type="button"
-                    className="secondary receipt-itemized-assign-all"
-                    onClick={() => {
-                      setDraft((d) => ({
-                        ...d,
-                        lineItems: (d.lineItems || []).map((li) => ({
-                          ...li,
-                          assignedTo: [],
-                        })),
-                      }));
-                    }}
-                  >清除全部分配</button>
                 </div>
                 <div className="receipt-itemized-rows">
                   {draft.lineItems!.map((item, idx) => {
@@ -483,6 +470,9 @@ export function ReceiptEditor({
                                     const items = (d.lineItems || []).map((li, liIdx) => {
                                       if (liIdx !== idx) return li;
                                       const prev = new Set(li.assignedTo?.length ? li.assignedTo : persons.map((p) => p.id));
+                                      // Empty assignedTo means "everyone" (engine convention), so deselecting the last
+                                      // person would silently flip the item back to split-among-all — block it instead.
+                                      if (prev.has(person.id) && prev.size === 1) return li;
                                       if (prev.has(person.id)) prev.delete(person.id);
                                       else prev.add(person.id);
                                       return { ...li, assignedTo: persons.filter((p) => prev.has(p.id)).map((p) => p.id) };

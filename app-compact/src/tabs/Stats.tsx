@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'motion/react';
 import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
@@ -24,9 +24,14 @@ export function Stats({ state, setState, updateState, onTab, upsertReceipt, dele
   const settlementRecords = fullScopedReceipts.filter(isSettlementReceipt);
   const scopedState = { ...state, receipts: fullScopedReceipts.filter((r) => !isSettlementReceipt(r)) };
   const [settleDraft, setSettleDraft] = useState<{ fromId: string; toId: string; amount: string; note: string } | null>(null);
-  const openSettle = (fromId: string, toId: string, amount: number) =>
+  // Double-tapping 確認結算 before React re-renders would record the settlement twice.
+  const settleFiredRef = useRef(false);
+  const openSettle = (fromId: string, toId: string, amount: number) => {
+    settleFiredRef.current = false;
     setSettleDraft({ fromId, toId, amount: String(Math.round(amount)), note: '' });
+  };
   const confirmSettle = () => {
+    if (settleFiredRef.current) return;
     if (!settleDraft || !upsertReceipt) { setSettleDraft(null); return; }
     const from = persons.find((p) => p.id === settleDraft.fromId);
     const to = persons.find((p) => p.id === settleDraft.toId);
@@ -39,6 +44,7 @@ export function Stats({ state, setState, updateState, onTab, upsertReceipt, dele
       date: todayYmd(),
       note: settleDraft.note,
     });
+    settleFiredRef.current = true;
     upsertReceipt(stampReceiptForTrip(state, receipt));
     setSettleDraft(null);
   };

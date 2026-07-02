@@ -405,6 +405,9 @@ export function App() {
   useEffect(() => {
     bootSyncInitiated.current = false;
     bootSyncScheduledKey.current = '';
+    // Also forget completed boot-sync keys: signing out of A and back into A within one app
+    // session must re-trigger the boot pull, not silently skip it.
+    bootSyncKeys.current.clear();
     if (supabaseAuth.configured) clearCredentialSession();
   }, [storageScope, supabaseAuth.configured]);
 

@@ -4,7 +4,8 @@ import { CalendarDays, Home, MapPin, PencilLine, ReceiptText, RotateCcw } from '
 import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
 import { ShineBorder } from '../components/ui/shine-border';
-import { categoryById, dayLooseReceipts, fmt, getItinerary, getReceiptHkdAmount, getScheduleSpots, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts } from '../lib/domain';
+import { categoryById, dayLooseReceipts, fmt, getItinerary, getReceiptHkdAmount, getScheduleSpots, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts, isSettlementReceipt } from '../lib/domain';
+import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from '../lib/types';
 import { ReceiptRow } from './Dashboard';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
@@ -302,6 +303,21 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
         </GlassCard>
         </Reveal>
       );})}
+      {(() => {
+        // Receipts dated outside every itinerary day used to silently vanish from this tab.
+        const dayDates = new Set(itinerary.map((d) => d.date));
+        const orphans = scopedReceiptsForTrip(state, activeTrip(state)).filter((r) => r.date && !dayDates.has(r.date) && !isSettlementReceipt(r));
+        if (!orphans.length) return null;
+        return (
+          <GlassCard className="timeline-day">
+            <div className="section-head timeline-day-head">
+              <div className="timeline-day-title"><h2>行程日期以外</h2></div>
+              <div className="timeline-day-status"><span>{orphans.length} 筆</span></div>
+            </div>
+            {orphans.map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} onViewPhoto={setViewPhoto} />)}
+          </GlassCard>
+        );
+      })()}
       </div>
     </section>
 
