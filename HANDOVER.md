@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-06-21
-- **Focus**: Compact console diagnostics and account-switch watchdog
+- **Date**: 2026-07-02
+- **Focus**: Admin Console `0.7.0`, Compact `0.8.7` sync/photo repair, and docs/lockfile alignment
 - **Agent**: Codex
-- **App version**: Compact `0.8.3`; React unchanged in this pass
+- **App version**: Compact `0.8.7`; Admin Console `0.7.0`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,12 +13,22 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.3`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.7`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 34 (Codex — current session)
+### Session 35 (Codex — current session)
+
+1. **Oscar console update verification and docs alignment**:
+   - Verified Oscar's pushed console work through commit `2eaaea7`: Admin Console is `0.7.0`, Compact is `0.8.7`.
+   - Admin Console now includes richer Notion/Supabase reconciliation, mirror repair, photo viewing, runtime status, sync jobs, data doctor, and identity tools.
+   - Compact sync now includes Supabase backfill/photo recovery for receipts that never reached Supabase or whose storage photo disappeared server-side.
+   - Fixed the committed `workers/credential-broker/package.json` / `package-lock.json` mismatch in commit `0caab16`.
+   - Verification passed: `app-admin-kanban` typecheck/build/smoke, `app-compact` typecheck/build/security/settings smoke, focused Supabase backfill smoke, and Credential Broker check/self-test.
+   - Live checks on 2026-07-02 returned `200` for Admin Vercel, Compact Vercel, Compact GitHub Pages, React Netlify, and Compact Netlify. GitHub Pages deploy succeeded; Compact Netlify workflow is still blocked by Netlify account credits.
+
+### Session 34 (Codex — previous session)
 
 1. **Compact console diagnostics and account-switch watchdog**:
    - Added Settings console cards for `Account Sync Health` and `Sync Queue Inspector`.

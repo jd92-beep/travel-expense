@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-02
+
+- Verified Oscar's console update on `main`: Admin Console is live as `0.7.0` at `https://travel-expense-admin-kanban.vercel.app`, and Compact is `0.8.7`.
+- Admin Console gained Notion/Supabase reconciliation, mirror repair, receipt-photo viewing, runtime status, sync job controls, data doctor, and identity merge tooling.
+- Compact sync was hardened with Supabase backfill/photo recovery so local or Notion-era receipts that never reached Supabase are re-queued, and server-missing receipt photos are uploaded again from local thumbnails.
+- Synchronized `workers/credential-broker/package-lock.json` with the committed `wrangler` dev dependency in `workers/credential-broker/package.json`.
+- Verification passed for `app-admin-kanban` typecheck/build/smoke, `app-compact` typecheck/build/security/settings smoke, the focused Supabase backfill smoke, and Credential Broker check/self-test.
+- Live checks returned `200` for Admin Vercel, Compact Vercel, Compact GitHub Pages, React Netlify, and Compact Netlify. GitHub Pages deploy succeeded; Compact Netlify deploy workflow is still blocked by Netlify account credits.
+
 ## 2026-06-21
 
 - Added Compact console diagnostics for account/backend stability: Settings now has Account Sync Health and Sync Queue Inspector cards that show active account scope, session expiry, backend target, last push/pull age, queue counts, and sanitized queue rows.

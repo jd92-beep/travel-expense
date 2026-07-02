@@ -19,6 +19,7 @@ workers/**/.dev.vars*
 # Claude Code internal
 .claude/
 .playwright-mcp/
+.mimocode/
 
 # Test/temp artifacts
 smoke_test.jpg

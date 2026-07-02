@@ -18,10 +18,11 @@
 
 - 主要公開 app: https://travel-expense-react.vercel.app
 - Compact app: https://travel-expense-compact.vercel.app
+- Admin Console: https://travel-expense-admin-kanban.vercel.app
 - GitHub Pages React app: https://jd92-beep.github.io/travel-expense/react/
 - 舊版備用 app: https://jd92-beep.github.io/travel-expense/
 
-請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。Netlify project 也存在，但 `https://travel-expense-react.netlify.app` 目前顯示 `usage_exceeded`，暫時不是平常使用的入口。
+請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。React 和 Compact Netlify public URLs 在 2026-07-02 live check 均回 `200`；Compact Netlify 的 GitHub deploy workflow 仍受 Netlify account credit block 影響，所以平常仍以 Vercel/GitHub Pages 作最新確認入口。
 
 ## Compact App Developer Quick Start
 
@@ -37,7 +38,7 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.8.3`。
+Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.8.7`。Admin Console 目前版本：`0.7.0`。
 
 ## 第一次使用
 

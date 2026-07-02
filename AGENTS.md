@@ -9,6 +9,19 @@
 - Use English only for code, commands, file paths, API names, exact model names, and technical identifiers.
 - At the start of a task, use the Codex app `using-superpowers` / `Using Superpowers` skill when available, then continue with the relevant project skill or workflow.
 
+## Oscar (Claude Code)
+
+- `Oscar` 🤖: Claude Code agent.
+  - Global main folder: `/Users/tommy/.claude`
+  - Project folders:
+    - `/Users/tommy/Documents/Codex/Openclaw tommy`
+    - `/Users/tommy/Documents/Codex/Hermes agent`
+    - `/Users/tommy/Documents/Codex/Codex setting`
+    - `/Users/tommy/Documents/Codex/travel-expense`
+    - `/Users/tommy/Documents/Codex/Google Cloud and ai studio`
+    - `/Users/tommy/Documents/Codex/Kin Mac`
+    - `/Users/tommy/Documents/Codex/Yanyan app`
+
 ## Project Scope
 
 - This file applies only to `/Users/tommy/Documents/Codex/travel-expense`.
@@ -23,8 +36,8 @@
 - Public Compact Vercel app: `https://travel-expense-compact.vercel.app`
 - Public Compact Netlify app: `https://travel-expense-compact.netlify.app`
 - GitNexus index is refreshed during handover work; run `npx gitnexus status` for the live indexed commit and counts before relying on them.
-- Latest pushed `main` commit is `36fc07d` (`Fix Edge auth catch block to return 401 for buffer length errors`) as of 2026-06-15 HKT.
-- Latest Compact app version is `0.7.9`. Live checks on 2026-06-15 HKT returned `200` for GitHub Pages root/React/Compact, React Vercel, React Netlify, Compact Vercel, and Compact Netlify.
+- Latest pushed `main` commit is `0caab16` (`Sync credential broker lockfile`) as of 2026-07-02.
+- Latest Compact app version is `0.8.7`; latest Admin Console version is `0.7.0`. Live checks on 2026-07-02 returned `200` for Admin Vercel, Compact Vercel, Compact GitHub Pages, React Netlify, and Compact Netlify. GitHub Pages deploy succeeded; Compact Netlify workflow remains blocked by Netlify account credits.
 - The repo is public. Never commit real API keys, OAuth tokens, Notion tokens, injected `_site/` output, or local secrets.
 
 ## Read First
@@ -189,7 +202,7 @@ npm run self-test
 - If a Pages run fails before checkout while downloading an action archive from `codeload.github.com`, treat it as an external GitHub Actions download failure first; retry before changing app code.
 - For Vercel, the public linked projects are `travel-expense-react` and `travel-expense-compact`; they should normally update from GitHub pushes instead of manual CLI deploys.
 - Treat the legacy/root Vercel project `travel-expense` as a private backup surface only. Do not use it as the main public app unless the user explicitly asks.
-- Netlify project `travel-expense-react` is configured from `netlify.toml`. Compact Netlify is deployed through `.github/workflows/deploy-compact-netlify.yml`. Both public Netlify URLs returned `200` on 2026-06-15 HKT, but recheck live before promising production status.
+- Netlify project `travel-expense-react` is configured from `netlify.toml`. Compact Netlify is deployed through `.github/workflows/deploy-compact-netlify.yml`. Both public Netlify URLs returned `200` on 2026-07-02, but Compact Netlify deploy workflow is blocked by account credits until the hosting account is topped up.
 - If a manual Vercel deploy is unavoidable, be explicit about the target project before running anything:
   - `travel-expense-react` = public React app, rooted by Vercel project settings at `app-react/`
   - `travel-expense-compact` = public Compact app, rooted by Vercel project settings at `app-compact/`
@@ -212,7 +225,7 @@ npm run self-test
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **travel-expense** (6077 symbols, 14564 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **travel-expense** (6158 symbols, 15088 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -221,8 +234,9 @@ This project is indexed by GitNexus as **travel-expense** (6077 symbols, 14564 r
 - **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
 - **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
 
 ## Never Do
 

@@ -8,6 +8,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## Repository Layout — READ FIRST
+
+> ⚠️ 呢個 repo 已經由「單一 `index.html`」演化成 **multi-app Vite/TypeScript monorepo**。下面大部分 `index.html` line-number 細節係 **legacy 單檔版** 嘅參考；日常開發主要喺 `app-react/` 同 `app-compact/`。
+
+| 目錄 | package name | port | 角色 |
+|---|---|---|---|
+| `app-react/` | `travel-expense-react-fresh` | 8902 | React 重寫版，最完整 smoke-test 套件 |
+| `app-compact/` | `travel-expense-compact` | 8903 | **現役部署版**（目前 `v0.8.7`），有 production-gate scripts |
+| `app-admin-kanban/` | `travel-expense-admin-kanban` | 8904 | Admin 管理 console（目前 `v0.7.0`，有 `api/`） |
+| `app/`, `app3/` | — | 5173 | 其他 Vite 變體 / 實驗 |
+| `index.html` | — | — | Legacy 單檔 app（CDN Tailwind + vanilla JS，~10k 行）；下面 §Architecture Overview 講緊呢個 |
+| `supabase/` | — | — | DB migrations（RLS、receipt-photo storage bucket） |
+| `workers/` + `wrangler.toml` | — | — | Cloudflare Workers（Notion / AI proxy） |
+| `scripts/` | — | — | 共用 node scripts：`tab-parity.mjs`、`security-scan.mjs`、`verify-supabase-migrations.mjs`、`verify-shared-ledger-contract.mjs` |
+
+每個 React app 有自己嘅 `ARCHITECTURE.md`、`HANDOVER.md`、`DESIGN.md` — 改該 app 前先讀。
+
+### Commands（Vite apps）
+
+由對應 app 目錄入面行（例：`cd app-compact`）：
+
+```sh
+npm run dev          # vite dev server（react=8902, compact=8903, admin=8904）
+npm run build        # tsc -b && vite build
+npm run typecheck    # tsc --noEmit
+npm run smoke:scan   # 單個 playwright smoke（其他 tab 同款：smoke:dashboard / :history / :stats …）
+npm run security:scan        # 靜態 secret/安全掃描
+npm run db:rls:smoke         # Supabase RLS policy smoke
+```
+
+`app-compact` 額外有 production-gate：`npm run smoke:production-gate`（`:full` / `:deploy-live` 做 live 驗證）。Build 版本規則見 `HANDOVER.md`「Build Versioning Rule」：改邊個 app 就 bump 嗰個 `APP_VERSION`（`app-{react,compact}/src/lib/constants.ts`）+ 同步 `package.json`，同一 commit。
+
+下面係 **legacy `index.html` 單檔版** 嘅深入文件（仍然有效，但只描述 root `index.html`）。
+
 ## Project Context
 
 - **User:** Boss (Tony) — 香港入境處主任、期貨交易員，HKT 時區
@@ -275,7 +309,7 @@ claude
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **travel-expense** (6077 symbols, 14564 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **travel-expense** (6158 symbols, 15088 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -284,8 +318,9 @@ This project is indexed by GitNexus as **travel-expense** (6077 symbols, 14564 r
 - **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
 - **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
 
 ## Never Do
 
