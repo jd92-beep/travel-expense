@@ -2,8 +2,8 @@
 
 ## Last Worked On
 - **Date**: 2026-07-02 HKT
-- **Focus**: Deferred-findings sweep — closed every item the Jul-1 audit flagged but deferred, including the two previously skipped by choice (itemized-split silent reset guard, settle-up double-fire guard), plus itinerary-currency resolver divergence, Timeline orphan-receipts card, fixed-rate↔trip-currency guard, Dashboard empty-name spot matching, trip-create date validation, clear-device reload, boot-sync account-switch key reset, settlement payer warn. Same fixes applied independently on `main` (v0.8.8) where applicable. Full list in `CHANGELOG.md` (v0.12.22).
-- **App version (this sweep)**: Compact/Android `0.12.22` (versionCode `1222`); compact web (main) `0.8.8`
+- **Focus (latest)**: Multi-currency display sweep (v0.12.23 / main v0.8.9) — replaced every hardcoded ¥ amount prefix with `currencyPrefix()` keyed to the receipt/trip currency (Dashboard, Timeline, History, Settings settlement + recurring, ReceiptEditor labels). Earlier same day: deferred-findings sweep — closed every item the Jul-1 audit flagged but deferred, including the two previously skipped by choice (itemized-split silent reset guard, settle-up double-fire guard), plus itinerary-currency resolver divergence, Timeline orphan-receipts card, fixed-rate↔trip-currency guard, Dashboard empty-name spot matching, trip-create date validation, clear-device reload, boot-sync account-switch key reset, settlement payer warn. Same fixes applied independently on `main` (v0.8.8) where applicable. Full list in `CHANGELOG.md` (v0.12.22).
+- **App version (this sweep)**: Compact/Android `0.12.23` (versionCode `1223`); compact web (main) `0.8.9`
 - **Verification (this sweep)**: typecheck clean both branches; android unit tests pass; smokes green — android: dashboard 8, timeline 8, split-editor 1, settings 11, stats 1, settle-up 2, weather 13; main: dashboard 8, timeline 8, settings 10+1skip, stats 1, weather 9.
 
 ### Previous session (2026-07-01)

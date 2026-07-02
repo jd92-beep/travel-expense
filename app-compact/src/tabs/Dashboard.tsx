@@ -25,7 +25,7 @@ import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { GlassCard, Reveal } from '../components/ui';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
-import { amountToHkd, formatCurrencyAmount } from '../lib/currency';
+import { amountToHkd, currencyPrefix, formatCurrencyAmount } from '../lib/currency';
 import {
   categoryById,
   displayStore,
@@ -1213,7 +1213,7 @@ export function Dashboard({
                         onOpen(matchedReceipt);
                       }}
                     >
-                      ¥{fmt(matchedReceipt.total)}
+                      {currencyPrefix(matchedReceipt.currency || 'JPY')}{fmt(matchedReceipt.total)}
                     </button>
                   ) : (
                     <span><MapPin size={14} /> 地圖</span>

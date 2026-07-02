@@ -4,7 +4,8 @@ import { CalendarDays, Home, MapPin, PencilLine, ReceiptText, RotateCcw } from '
 import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
 import { ShineBorder } from '../components/ui/shine-border';
-import { categoryById, dayLooseReceipts, fmt, getItinerary, getReceiptHkdAmount, getScheduleSpots, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts, isSettlementReceipt } from '../lib/domain';
+import { categoryById, dayLooseReceipts, fmt, getItinerary, getReceiptHkdAmount, getResolvedTripCurrency, getScheduleSpots, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts, isSettlementReceipt } from '../lib/domain';
+import { currencyPrefix } from '../lib/currency';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from '../lib/types';
 import { ReceiptRow } from './Dashboard';
@@ -32,6 +33,7 @@ type TimelineLiveContext = {
 
 export function Timeline({ state, setState, onOpen }: { state: AppState; setState: Dispatch<SetStateAction<AppState>>; onOpen: (receipt: Receipt) => void }) {
   const today = todayForReceipts(state);
+  const tripPrefix = currencyPrefix(getResolvedTripCurrency(state, activeTrip(state)));
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [editing, setEditing] = useState<{ date: string; idx: number; original: ItinerarySpot } | null>(null);
   const [dayReceipts, setDayReceipts] = useState<string | null>(null);
@@ -296,7 +298,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
               <strong>{loose.length} 筆消費</strong>
             </span>
             <span className="timeline-loose-total">
-              ¥{fmt(loose.reduce((s, r) => s + r.total, 0))}
+              {tripPrefix}{fmt(loose.reduce((s, r) => s + r.total, 0))}
               <small>HK$ {fmt(loose.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0))}</small>
             </span>
           </button>
@@ -359,7 +361,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
           <div className="modal-head">
             <div>
               <h2>{activeDay.date} 消費</h2>
-              <p className="muted">{looseReceipts.length} 筆 · ¥{fmt(looseReceipts.reduce((s, r) => s + r.total, 0))} · HK$ {fmt(looseReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0))}</p>
+              <p className="muted">{looseReceipts.length} 筆 · {tripPrefix}{fmt(looseReceipts.reduce((s, r) => s + r.total, 0))} · HK$ {fmt(looseReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0))}</p>
             </div>
             <button type="button" className="icon-btn" onClick={() => setDayReceipts(null)}>×</button>
           </div>

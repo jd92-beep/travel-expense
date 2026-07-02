@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
-import { SUPPORTED_CURRENCIES } from '../lib/currency';
+import { currencyPrefix, SUPPORTED_CURRENCIES } from '../lib/currency';
 import { getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
 import { perHkdForCurrency } from '../lib/currency';
 import { activeTrip } from '../domain/trip/normalize';
@@ -86,7 +86,7 @@ function formatDelta(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
 }
 
-function validateSplitRows(splitType: SplitType, total: number, rows: ReceiptSplit[]) {
+function validateSplitRows(splitType: SplitType, total: number, rows: ReceiptSplit[], prefix = '¥') {
   const field = splitFieldFor(splitType);
   if (!field) return { valid: true, label: '已對數' };
   const sum = rows.reduce((acc, row) => acc + splitValue(row[field]), 0);
@@ -100,9 +100,9 @@ function validateSplitRows(splitType: SplitType, total: number, rows: ReceiptSpl
   }
   const diff = Math.round(total) - Math.round(sum);
   if (splitType === 'adjustment') {
-    return diff >= 0 ? { valid: true, label: '已對數' } : { valid: false, label: `多 ¥${formatDelta(Math.abs(diff))}` };
+    return diff >= 0 ? { valid: true, label: '已對數' } : { valid: false, label: `多 ${prefix}${formatDelta(Math.abs(diff))}` };
   }
-  return diff === 0 ? { valid: true, label: '已對數' } : { valid: false, label: diff > 0 ? `差 ¥${formatDelta(diff)}` : `多 ¥${formatDelta(Math.abs(diff))}` };
+  return diff === 0 ? { valid: true, label: '已對數' } : { valid: false, label: diff > 0 ? `差 ${prefix}${formatDelta(diff)}` : `多 ${prefix}${formatDelta(Math.abs(diff))}` };
 }
 
 function payerRowsFor(persons: Person[], payers: ReceiptPayer[] | undefined, total: number, fallbackPersonId: string): ReceiptPayer[] {
@@ -114,12 +114,12 @@ function payerRowsFor(persons: Person[], payers: ReceiptPayer[] | undefined, tot
   }));
 }
 
-function validatePayers(total: number, rows: ReceiptPayer[]) {
+function validatePayers(total: number, rows: ReceiptPayer[], prefix = '¥') {
   const sum = rows.reduce((acc, row) => acc + splitValue(row.amount), 0);
   const positive = rows.filter((row) => splitValue(row.amount) > 0).length;
   if (Math.round(total) > 0 && positive < 2) return { valid: false, label: '至少兩位付款' };
   const diff = Math.round(total) - Math.round(sum);
-  return diff === 0 ? { valid: true, label: '已對數' } : { valid: false, label: diff > 0 ? `差 ¥${formatDelta(diff)}` : `多 ¥${formatDelta(Math.abs(diff))}` };
+  return diff === 0 ? { valid: true, label: '已對數' } : { valid: false, label: diff > 0 ? `差 ${prefix}${formatDelta(diff)}` : `多 ${prefix}${formatDelta(Math.abs(diff))}` };
 }
 
 export function ReceiptEditor({
@@ -174,13 +174,14 @@ export function ReceiptEditor({
     ? draft.splitType as SplitType
     : 'equal';
   const totalForSplit = validAmount(draft.total) ?? 0;
+  const editPrefix = currencyPrefix(draft.currency || draft.originalCurrency || currencyForDate(draft.date));
   const splitRows = useMemo(
     () => splitRowsFor(persons, draft.splits, selectedSplitType, totalForSplit),
     [draft.splits, persons, selectedSplitType, totalForSplit],
   );
   const splitValidation = useMemo(
-    () => validateSplitRows(selectedSplitType, totalForSplit, splitRows),
-    [selectedSplitType, splitRows, totalForSplit],
+    () => validateSplitRows(selectedSplitType, totalForSplit, splitRows, editPrefix),
+    [selectedSplitType, splitRows, totalForSplit, editPrefix],
   );
   const multiPayerEnabled = draft.splitMode !== 'private' && Boolean(draft.payers?.length);
   const payerRows = useMemo(
@@ -188,8 +189,8 @@ export function ReceiptEditor({
     [draft.payers, draft.personId, first.id, persons, totalForSplit],
   );
   const payerValidation = useMemo(
-    () => validatePayers(totalForSplit, payerRows),
-    [payerRows, totalForSplit],
+    () => validatePayers(totalForSplit, payerRows, editPrefix),
+    [payerRows, totalForSplit, editPrefix],
   );
 
   useEffect(() => {
@@ -287,7 +288,7 @@ export function ReceiptEditor({
           if (selectedSplitType === 'itemized' && hasLineItems) {
             const lineTotal = draft.lineItems!.reduce((sum, item) => sum + item.amount, 0);
             if (lineTotal > Math.round(totalForSplit)) {
-              alert(`品項金額超出總額 ¥${(lineTotal - Math.round(totalForSplit)).toLocaleString()}`);
+              alert(`品項金額超出總額 ${editPrefix}${(lineTotal - Math.round(totalForSplit)).toLocaleString()}`);
               return;
             }
           }
@@ -454,7 +455,7 @@ export function ReceiptEditor({
                       <div key={item.id || idx} className="receipt-itemized-row">
                         <div className="receipt-itemized-info">
                           <span className="receipt-itemized-desc">{item.desc}</span>
-                          <span className="receipt-itemized-amount">¥{item.amount.toLocaleString()}{item.qty && item.qty > 1 ? ` ×${item.qty}` : ''}</span>
+                          <span className="receipt-itemized-amount">{editPrefix}{item.amount.toLocaleString()}{item.qty && item.qty > 1 ? ` ×${item.qty}` : ''}</span>
                         </div>
                         <div className="receipt-itemized-avatars">
                           {persons.map((person) => {
@@ -494,7 +495,7 @@ export function ReceiptEditor({
                   const lineTotal = draft.lineItems!.reduce((sum, item) => sum + item.amount, 0);
                   const gap = Math.round(totalForSplit) - lineTotal;
                   if (gap !== 0) {
-                    return <StatusPill tone="warning">{gap > 0 ? `未分配 ¥${gap.toLocaleString()}` : `超出 ¥${Math.abs(gap).toLocaleString()}`}</StatusPill>;
+                    return <StatusPill tone="warning">{gap > 0 ? `未分配 ${editPrefix}${gap.toLocaleString()}` : `超出 ${editPrefix}${Math.abs(gap).toLocaleString()}`}</StatusPill>;
                   }
                   return <StatusPill tone="ok">品項已對數</StatusPill>;
                 })()}

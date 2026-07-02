@@ -10,6 +10,7 @@ import type { AppState, CategoryId, Receipt, SyncQueueItem, TripProfile } from '
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, isSettlementReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
+import { currencyPrefix } from '../lib/currency';
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 
 type ReceiptHealthMarker = {
@@ -410,7 +411,7 @@ export function History({
                 const person = people.find((p) => p.id === r.personId) || people[0];
                 const isEdited = r.updatedAt && r.createdAt && r.updatedAt - r.createdAt > 60_000;
                 const verb = isSettlementReceipt(r) ? '結咗' : isEdited ? '改咗' : '加咗';
-                const amount = isSettlementReceipt(r) ? '' : ` ¥${fmt(getReceiptTripAmount(r, state, resolvedTripCurrency))}`;
+                const amount = isSettlementReceipt(r) ? '' : ` ${currencyPrefix(resolvedTripCurrency)}${fmt(getReceiptTripAmount(r, state, resolvedTripCurrency))}`;
                 return (
                   <div key={r.id} className="history-activity-row">
                     <span className="history-activity-person">{person.emoji} {person.name}</span>
@@ -489,7 +490,7 @@ export function History({
                     )}
                   </span>
                   <span className="amount history-ledger-amount">
-                    <strong>{r.currency === 'HKD' ? 'HK$' : (r.currency || '¥')}{fmt(r.total)}</strong>
+                    <strong>{currencyPrefix(r.currency || 'JPY')}{fmt(r.total)}</strong>
                     <small>HKD ${fmt(getReceiptHkdAmount(r, state))}</small>
                   </span>
                   <ChevronRight className="history-row-chevron" size={21} aria-hidden="true" />

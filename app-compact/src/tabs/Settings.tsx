@@ -23,8 +23,8 @@ import {
   type PersonalNotionStatus,
   type ProviderStatus,
 } from '../lib/credentialBroker';
-import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
-import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, isPendingReceipt, safePhotoUrl, todayYmd, validateItinerary } from '../lib/domain';
+import { appRatePatchFromSnapshot, currencyPrefix, fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
+import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, getResolvedTripCurrency, isPendingReceipt, safePhotoUrl, todayYmd, validateItinerary } from '../lib/domain';
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 import { saveReceiptRepairIntent } from '../lib/repairIntent';
 import {
@@ -887,6 +887,7 @@ export function Settings({
     receipts: scopedReceiptsForTrip(state, currentTrip),
   };
   const settlement = computeSettlements(activeTripSettlementState);
+  const tripPrefix = currencyPrefix(getResolvedTripCurrency(state, currentTrip));
   const shareRatios = state.shareRatios || {};
   const ratioTotal = persons.reduce((sum, person) => sum + Math.max(0, Number(shareRatios[person.id]) || 0), 0);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
@@ -2400,11 +2401,11 @@ export function Settings({
           <button className="primary" type="button" onClick={addPerson}><Plus size={18} /> 新增</button>
         </div>
         <div className="mini-list">
-          <span>比例總和：{ratioTotal || 0} · Shared ¥{Math.round(settlement.sharedTotal).toLocaleString()}</span>
-          {settlement.transfers.map((t) => <span key={`${t.from.id}-${t.to.id}`}>{t.from.name} → {t.to.name} ¥{Math.round(t.amount).toLocaleString()}</span>)}
+          <span>比例總和：{ratioTotal || 0} · Shared {tripPrefix}{Math.round(settlement.sharedTotal).toLocaleString()}</span>
+          {settlement.transfers.map((t) => <span key={`${t.from.id}-${t.to.id}`}>{t.from.name} → {t.to.name} {tripPrefix}{Math.round(t.amount).toLocaleString()}</span>)}
           {!settlement.transfers.length && <span>暫時唔需要互相轉帳</span>}
-          {settlement.balances.map((b) => <span key={b.id}>{b.name}: 已付 shared ¥{Math.round(b.paidShared).toLocaleString()} · 應付 ¥{Math.round(b.shouldPayShared).toLocaleString()}</span>)}
-          {settlement.crossPrivate.map((item) => <span key={item.id}>私人代付：{item.payer.name} 幫 {item.beneficiary.name} 付 ¥{Math.round(item.amount).toLocaleString()} · {item.store}</span>)}
+          {settlement.balances.map((b) => <span key={b.id}>{b.name}: 已付 shared {tripPrefix}{Math.round(b.paidShared).toLocaleString()} · 應付 {tripPrefix}{Math.round(b.shouldPayShared).toLocaleString()}</span>)}
+          {settlement.crossPrivate.map((item) => <span key={item.id}>私人代付：{item.payer.name} 幫 {item.beneficiary.name} 付 {tripPrefix}{Math.round(item.amount).toLocaleString()} · {item.store}</span>)}
         </div>
         <div className="action-row wrap">
           <button className="secondary" type="button" onClick={resetShareRatios}>重設為均分</button>
@@ -3088,7 +3089,7 @@ export function Settings({
           <label>店名 / 項目
             <input value={newRuleStore} onChange={(e) => setNewRuleStore(e.target.value)} placeholder="例如：Wifi 蛋租借" />
           </label>
-          <label>金額 (¥)
+          <label>金額 ({String(state.tripCurrency || 'JPY').toUpperCase()})
             <input type="number" min="0" step="1" value={newRuleTotal} onChange={(e) => setNewRuleTotal(e.target.value)} />
           </label>
         </div>
@@ -3150,7 +3151,7 @@ export function Settings({
           <div key={rule.id} className="recurring-rule-row">
             <div className="recurring-rule-info">
               <span className="recurring-rule-store">{rule.store}</span>
-              <span className="recurring-rule-meta">{rule.frequency === 'daily' ? '每日' : rule.frequency === 'weekly' ? '每週' : '每月'} · ¥{rule.total.toLocaleString()} · 下次: {rule.nextRun}</span>
+              <span className="recurring-rule-meta">{rule.frequency === 'daily' ? '每日' : rule.frequency === 'weekly' ? '每週' : '每月'} · {tripPrefix}{rule.total.toLocaleString()} · 下次: {rule.nextRun}</span>
             </div>
             <div className="recurring-rule-actions">
               <button type="button" className="secondary" style={{ fontSize: '11px', padding: '2px 8px' }} onClick={() => updateState({ recurringRules: (state.recurringRules || []).map((r) => r.id === rule.id ? { ...r, active: !r.active, updatedAt: Date.now() } : r) })}>{rule.active ? '暫停' : '啟用'}</button>

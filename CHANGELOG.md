@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-07-02 HKT (multi-currency display sweep)
+
+- **v0.12.23 / versionCode 1223.** The app supports multi-currency trips (rateTable /
+  resolvedTripCurrency), but many amount displays still hardcoded `¥` — wrong symbol everywhere on a
+  non-JPY trip. Replaced with the existing `currencyPrefix()` helper:
+  - Dashboard matched-receipt amount (receipt currency)
+  - Timeline per-day loose totals + day-receipts sheet summary (trip currency)
+  - History activity-feed day amounts + ledger row symbol (the row previously showed the raw code,
+    e.g. `JPY3,240`, whenever `receipt.currency` was set)
+  - Settings settlement mini-panel (shared total / transfers / balances / 代付)
+  - Settings recurring-rule form label + rule meta (trip currency)
+  - ReceiptEditor itemized line amounts, over-total alert, 未分配/超出 pill, and the split/payer
+    validation labels (threaded a prefix param through `validateSplitRows`/`validatePayers`,
+    keyed to the receipt's own currency)
+  - Evidence: typecheck clean both branches; smokes green (android: dashboard 8, timeline 8,
+    history 8, settings 11, split-editor 1, settle-up 2; main: dashboard 8, timeline 8, history 6,
+    settings 10+1skip); split-engine unit tests pass. Same fix applied to `main` as v0.8.9
+    (main's simpler ReceiptEditor had no hardcoded ¥).
+
 ## 2026-07-02 HKT (deferred-findings sweep — every flagged item closed)
 
 - **v0.12.22 / versionCode 1222.** Closed out everything the Jul-1 audit flagged but deferred,
