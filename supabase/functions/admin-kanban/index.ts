@@ -355,10 +355,12 @@ async function brokerHealth(supabase: SupabaseClientAny) {
       const provider = p.provider || p.name || "";
       // Expand provider into individual model entries
       const models = providerModels(provider);
+      // hasKey alone is not health — an invalid/expired key must show as warning
+      const connected = p.status === "connected" || p.status === "healthy";
       return models.map((modelEntry: any) => ({
         provider,
         label: p.label || providerLabel(provider),
-        status: p.hasKey || p.status === "connected" ? "healthy" : "warning",
+        status: connected ? "healthy" : p.hasKey ? "warning" : "danger",
         storedStatus: p.status || (p.hasKey ? "connected" : "missing"),
         model: modelEntry.id,
         modelName: modelEntry.name,
@@ -1005,15 +1007,24 @@ Deno.serve(async (req) => {
       const brokerVersion = await fetchWithTimeout(`${CREDENTIAL_BROKER_URL.replace(/\/+$/, "")}/health`, {}, 3000)
         .then(r => r.json()).then(d => d.version || "unknown").catch(() => "unreachable");
       const edgeDeployId = Deno.env.get("DENO_DEPLOYMENT_ID") || "local";
-      const { data: latestMigration } = await supabase.from("schema_migrations").select("version").order("version", { ascending: false }).limit(1).single().catch(() => ({ data: null }));
+      // PostgrestBuilder has no .catch(); schema_migrations is not exposed via PostgREST anyway
+      let dbSchemaVersion = "unknown";
+      try {
+        const { data: latestMigration } = await supabase.from("schema_migrations").select("version").order("version", { ascending: false }).limit(1).maybeSingle();
+        dbSchemaVersion = (latestMigration as any)?.version || "unknown";
+      } catch { /* table not exposed */ }
+      const frontendOrigin = new URL(VERIFY_URL).origin;
+      const vercelFrontend = await fetchWithTimeout(`${frontendOrigin}/api/health`, {}, 3000)
+        .then(r => r.ok ? "healthy" : `error ${r.status}`).catch(() => "unreachable");
       return json(req, 200, {
         ok: true,
         runtime: {
-          adminConsoleVersion: "0.3.0",
+          adminConsoleVersion: "0.5.0",
           edgeDeployId,
-          edgeRouteVersion: "2026-06-15",
+          edgeRouteVersion: "2026-07-02",
           brokerVersion,
-          dbSchemaVersion: latestMigration?.version || "unknown",
+          vercelFrontend,
+          dbSchemaVersion,
           supabaseUrl: "fbnnjoahvtdrnigevrtw",
         },
       });

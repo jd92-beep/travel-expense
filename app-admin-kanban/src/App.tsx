@@ -791,7 +791,8 @@ function RuntimeTab({ session }: { session: AdminSession }) {
           <Metric label="Admin Console" value={`v${runtime.adminConsoleVersion}`} />
           <Metric label="Edge Deploy" value={runtime.edgeDeployId} />
           <Metric label="Edge Route" value={runtime.edgeRouteVersion} />
-          <Metric label="Broker" value={runtime.brokerVersion} />
+          <Metric label="Broker" value={runtime.brokerVersion} status={runtime.brokerVersion === 'unreachable' ? 'danger' : 'healthy'} />
+          <Metric label="Vercel Frontend" value={runtime.vercelFrontend || 'unknown'} status={runtime.vercelFrontend === 'healthy' ? 'healthy' : runtime.vercelFrontend ? 'danger' : 'unknown'} />
           <Metric label="DB Schema" value={runtime.dbSchemaVersion} />
           <Metric label="Supabase" value={runtime.supabaseUrl} />
         </div>

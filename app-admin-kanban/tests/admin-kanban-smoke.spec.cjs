@@ -304,6 +304,53 @@ test('default scope is compact and header says Compact Ops Console', async ({ pa
   await expect(scopeSelect).toHaveValue('compact');
 });
 
+test('runtime tab shows service health including vercel frontend', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  await page.route('**/api/runtime', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true,
+      runtime: {
+        adminConsoleVersion: '0.5.0',
+        edgeDeployId: 'dpl-test',
+        edgeRouteVersion: '2026-07-02',
+        brokerVersion: '1.2.3',
+        vercelFrontend: 'healthy',
+        dbSchemaVersion: '20260613140000',
+        supabaseUrl: 'fbnnjoahvtdrnigevrtw',
+      },
+    })});
+  });
+  await page.getByRole('button', { name: /Runtime/ }).click();
+  await expect(page.getByText('Runtime Status')).toBeVisible();
+  await expect(page.getByText('v0.5.0')).toBeVisible();
+  await expect(page.getByText('Vercel Frontend')).toBeVisible();
+  await expect(page.getByText('healthy', { exact: true })).toBeVisible();
+});
+
+test('sync tab loads jobs and doctor tab scans', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  await page.route('**/api/sync/jobs*', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, jobs: [
+      { id: 'job-1', provider: 'notion', status: 'failed', attempts: 3, last_error: 'timeout', updated_at: '2026-07-01T00:00:00Z' },
+    ], total: 1 })});
+  });
+  await page.route('**/api/data-doctor', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, issues: [
+      { severity: 'high', category: 'receipt', message: 'Receipt r1 missing trip_id', entityId: 'r1' },
+    ], summary: { high: 1, medium: 0, low: 0 }, total: 1 })});
+  });
+  await page.getByRole('button', { name: /Sync/ }).click();
+  await expect(page.getByText('Sync Operations')).toBeVisible();
+  await expect(page.getByText('timeout')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Retry/ })).toBeVisible();
+  await page.getByRole('button', { name: /Doctor/ }).click();
+  await page.getByRole('button', { name: /Run Data Doctor/ }).click();
+  await expect(page.getByText('1 High')).toBeVisible();
+  await expect(page.getByText(/missing trip_id/)).toBeVisible();
+});
+
 test('switching to all surface shows warning badge', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);

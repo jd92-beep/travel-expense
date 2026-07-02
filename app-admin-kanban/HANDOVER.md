@@ -1,5 +1,10 @@
 # Admin Kanban / User Dashboard Handover
 
+## ⚠️ 2026-07-02 — Deployment is MANUAL, not git-triggered
+Vercel deploys for this app are done by CLI (`npx vercel deploy --prod --yes` from `app-admin-kanban/`), NOT by git push. Production went stale from Jun 10 → Jul 2 because nobody ran it after the Phase 1 / Phases 2-7 commits — that was the "console functions not working" incident. **After any admin-console change: (1) `npx supabase functions deploy admin-kanban --no-verify-jwt --project-ref fbnnjoahvtdrnigevrtw`, (2) `npx vercel deploy --prod --yes`.** Verify with `GET /api/health` (Vercel) and `GET /api/runtime` (edge, needs admin token) — Runtime tab shows both.
+
+v0.5.0 fixes: `/api/runtime` crash (`.single().catch()` on PostgrestBuilder), LLM provider status no longer reports "healthy" on hasKey alone (invalid keys now show warning), new unauthenticated `/api/health` Vercel probe, Runtime tab shows Vercel/broker health, smoke tests for Runtime/Sync/Doctor tabs. Known config gap: `ADMIN_KANBAN_USAGE_USER_ID` edge secret unset → provider-test telemetry not persisted (in-memory only per edge instance).
+
 This file details the handover status of the `app-admin-kanban` directory after its transition from a Kanban layout to a User-Centric Dashboard.
 
 Last updated: 2026-06-03
