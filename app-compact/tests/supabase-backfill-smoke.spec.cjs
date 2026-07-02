@@ -130,6 +130,9 @@ test('backfill sweep pushes local receipts that never reached Supabase', async (
       receipts: [
         { id: 'r_stuck_synced', tripId: 'trip_backfill', store: '味仙', total: 2400, date: '2026-04-21', category: 'food', payment: 'cash', currency: 'JPY', syncStatus: 'synced', createdAt: now - 100000, updatedAt: now - 100000 },
         { id: 'r_stuck_local', tripId: 'trip_backfill', store: '驛麵通', total: 980, date: '2026-04-22', category: 'food', payment: 'suica', currency: 'JPY', syncStatus: 'local', photoThumb: tinyPng, createdAt: now - 50000, updatedAt: now - 50000 },
+        // Stale flag: local state believes the photo was uploaded, but the server pull
+        // returns no receipt_photos row — the engine must clear the flag and re-upload.
+        { id: 'r_stale_photo', tripId: 'trip_backfill', store: '大須唐揚', total: 650, date: '2026-04-23', category: 'food', payment: 'cash', currency: 'JPY', syncStatus: 'synced', supabaseId: '44444444-4444-4444-8444-444444444444', photoThumb: tinyPng, _photoSyncedToSupabase: true, createdAt: now - 30000, updatedAt: now - 30000 },
       ],
       syncQueue: [],
     }));
@@ -142,6 +145,8 @@ test('backfill sweep pushes local receipts that never reached Supabase', async (
   const stores = receiptPosts.map((row) => row.store);
   expect(stores).toContain('味仙');
   expect(stores).toContain('驛麵通');
-  // Photo of the local receipt must reach storage too
-  await expect.poll(() => storagePosts.length, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
+  // Photos: the local receipt AND the stale-flag receipt (server photo missing) must both upload
+  await expect.poll(() => storagePosts.length, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
+  const stalePhotoUpload = storagePosts.some((url) => url.includes('44444444-4444-4444-8444-444444444444'));
+  expect(stalePhotoUpload).toBe(true);
 });

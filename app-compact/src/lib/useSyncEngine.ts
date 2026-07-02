@@ -523,6 +523,23 @@ export function useSyncEngine(
               console.warn('[SyncEngine] purged revoked/deleted trips from local cache:', [...purgedTripIds]);
             }
           }
+          // Server truth beats the local flag: if this pull shows no storage photo for a
+          // receipt we thought was uploaded, the object was deleted server-side (storage wipe,
+          // account migration). Clear the flag so the sweep re-uploads from photoThumb.
+          if (cloudPullOk) {
+            const serverPhotoSupabaseIds = new Set(
+              supabaseData.receipts
+                .filter((receipt) => receipt.supabasePhotoPath && receipt.supabaseId)
+                .map((receipt) => receipt.supabaseId as string),
+            );
+            finalState = {
+              ...finalState,
+              receipts: (finalState.receipts || []).map((receipt) =>
+                receipt.photoThumb && receipt._photoSyncedToSupabase && receipt.supabaseId && !serverPhotoSupabaseIds.has(receipt.supabaseId)
+                  ? { ...receipt, _photoSyncedToSupabase: false, _photoSyncAttempts: 0 }
+                  : receipt),
+            };
+          }
           let freshQueue = (current.syncQueue || []).filter((item) => !overwrittenIds.has(item.entityId));
           // Backfill sweep (ported from main v0.8.6): heal receipts that never reached
           // Supabase — created before cloud login, marked synced in the Notion-only era,
