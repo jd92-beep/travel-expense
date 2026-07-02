@@ -456,7 +456,7 @@ async function snapshot(rangeDays: number, surface: string = "compact") {
   ] = await Promise.all([
     listUsers(supabase),
     fetchRows(supabase, "trips", "id,owner_id,name,destination_summary,start_date,end_date,trip_currency,budget_amount,budget_currency,itinerary,timezones,active,archived,updated_at,app_metadata"),
-    fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,category,payment_method,record_date,record_time,note,items_text,address,booking_ref,original_amount,original_currency,exchange_rate,home_amount,created_at,updated_at,notion_page_id,notion_sync_status,notion_last_synced_at", 1000),
+    fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,category,payment_method,record_date,record_time,note,items_text,address,booking_ref,original_amount,original_currency,exchange_rate,home_amount,created_at,updated_at,deleted_at,notion_page_id,notion_sync_status,notion_last_synced_at", 1000),
     fetchRows(supabase, "receipt_photos", "id,receipt_id,owner_id,storage_path"),
     fetchRows(supabase, "integrations", "id,user_id,provider,status,last_synced_at"),
     fetchRows(supabase, "receipt_sync_jobs", "id,owner_id,provider,status,last_error,created_at,updated_at"),
@@ -467,7 +467,8 @@ async function snapshot(rangeDays: number, surface: string = "compact") {
     fetchRows(supabase, "trip_members", "trip_id,user_id"),
   ]);
   const trips = tripsRes.data;
-  const receipts = receiptsRes.data;
+  // Soft-deleted receipts must not appear in the console
+  const receipts = receiptsRes.data.filter((row: any) => !row.deleted_at);
   const photos = photosRes.data;
   const integrations = integrationsRes.data;
   const jobs = jobsRes.data;
@@ -1117,7 +1118,7 @@ Deno.serve(async (req) => {
       return json(req, 200, {
         ok: true,
         runtime: {
-          adminConsoleVersion: "0.6.0",
+          adminConsoleVersion: "0.7.0",
           edgeDeployId,
           edgeRouteVersion: "2026-07-02",
           brokerVersion,
@@ -1162,6 +1163,183 @@ Deno.serve(async (req) => {
       }
       const bySeverity = { high: issues.filter(i => i.severity === "high").length, medium: issues.filter(i => i.severity === "medium").length, low: issues.filter(i => i.severity === "low").length };
       return json(req, 200, { ok: true, issues, summary: bySeverity, total: issues.length });
+    }
+    // --- Notion Mirror Repair (link pages / recover photos / create missing pages) ---
+    if (req.method === "POST" && url.pathname.endsWith("/api/notion/repair")) {
+      const body = await readBody(req) as any;
+      const dryRun = !!body.dryRun;
+      const supabase = serviceClient();
+      const defaultNotionDb = Deno.env.get("ADMIN_DEFAULT_NOTION_DB") || "3438d94d5f7c81878221fcda6d65d39d";
+      const CATEGORY_ZH: Record<string, string> = { flight: "機票", transport: "交通", food: "餐飲", shopping: "購物", lodging: "住宿", ticket: "門票", localtour: "當地旅遊", medicine: "藥品", other: "其他" };
+      const PAYMENT_ZH: Record<string, string> = { cash: "現金", credit: "信用卡", paypay: "PayPay", suica: "Suica" };
+
+      const receiptsRes = await fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,amount,currency,category,payment_method,record_date,record_time,note,items_text,address,booking_ref,original_amount,original_currency,exchange_rate,home_amount,source_id,notion_page_id,deleted_at", 10000);
+      const receipts = receiptsRes.data.filter((row: any) => !row.deleted_at && row.source_id);
+      const tripsRes = await fetchRows(supabase, "trips", "id,name,app_metadata", 500);
+      const tripById = new Map(tripsRes.data.map((trip: any) => [trip.id, trip]));
+      const photosRes = await fetchRows(supabase, "receipt_photos", "receipt_id,storage_path,storage_bucket", 10000);
+      const photoByReceipt = new Map(photosRes.data.map((row: any) => [row.receipt_id, row]));
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://fbnnjoahvtdrnigevrtw.supabase.co";
+
+      // Notion pages: sourceId -> { pageId, photo file URL (fresh signed) }
+      const notionPages = new Map<string, { pageId: string; fileUrl: string | null }>();
+      let cursor: string | undefined = undefined;
+      let guard = 0;
+      do {
+        const resp: any = await brokerNotionRequest(`/databases/${defaultNotionDb}/query`, "POST", {
+          page_size: 100,
+          ...(cursor ? { start_cursor: cursor } : {}),
+        }, defaultNotionDb);
+        for (const page of resp?.results || []) {
+          const props = page?.properties || {};
+          const src = (props.SourceID?.rich_text || []).map((t: any) => t?.plain_text || "").join("").trim();
+          if (!src || src.startsWith("__") || src.startsWith("trip_")) continue;
+          let fileUrl: string | null = null;
+          const filesProp = props["📷 收據相片"];
+          if (filesProp?.type === "files" && filesProp.files?.length) {
+            const file = filesProp.files[0];
+            fileUrl = file?.file?.url || file?.external?.url || null;
+          }
+          // Duplicate pages exist (historical double-pushes) — prefer the copy that has a photo
+          const existingPage = notionPages.get(src);
+          if (!existingPage || (!existingPage.fileUrl && fileUrl)) notionPages.set(src, { pageId: page.id, fileUrl });
+        }
+        cursor = resp?.has_more ? resp.next_cursor : undefined;
+      } while (cursor && ++guard < 30);
+
+      // Phase 1: link notion_page_id where a matching page exists
+      let linked = 0;
+      for (const receipt of receipts) {
+        if (receipt.notion_page_id) continue;
+        const page = notionPages.get(String(receipt.source_id));
+        if (!page) continue;
+        if (!dryRun) {
+          await supabase.from("receipts").update({
+            notion_page_id: page.pageId,
+            notion_database_id: defaultNotionDb,
+            notion_sync_status: "synced",
+          }).eq("id", receipt.id);
+        }
+        receipt.notion_page_id = page.pageId;
+        linked += 1;
+      }
+
+      // Phase 2: recover photos — Notion has the file, Supabase storage does not
+      const PHOTO_CAP = 40;
+      let photosRecovered = 0;
+      let photosFailed = 0;
+      let photosRemaining = 0;
+      for (const receipt of receipts) {
+        if (photoByReceipt.has(receipt.id)) continue;
+        const page = notionPages.get(String(receipt.source_id));
+        if (!page?.fileUrl) continue;
+        if (photosRecovered + photosFailed >= PHOTO_CAP) { photosRemaining += 1; continue; }
+        if (dryRun) { photosRecovered += 1; continue; }
+        try {
+          const imgRes = await fetchWithTimeout(page.fileUrl, {}, 20000);
+          if (!imgRes.ok) throw new Error(`fetch ${imgRes.status}`);
+          const bytes = new Uint8Array(await imgRes.arrayBuffer());
+          if (bytes.length > 6_000_000) throw new Error("photo too large");
+          const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+          const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
+          // Unguessable suffix — bucket is public, keys must not be derivable
+          const path = `${receipt.owner_id}/${receipt.id}-notionrepair-${crypto.randomUUID().slice(0, 8)}.${ext}`;
+          const { error: upErr } = await supabase.storage.from("receipt-photos").upload(path, bytes, { contentType: mime, upsert: true });
+          if (upErr) throw upErr;
+          const { error: rowErr } = await supabase.from("receipt_photos").insert({
+            receipt_id: receipt.id,
+            owner_id: receipt.owner_id,
+            storage_bucket: "receipt-photos",
+            storage_path: path,
+            mime_type: mime,
+            file_size: bytes.length,
+          });
+          if (rowErr) throw rowErr;
+          photosRecovered += 1;
+        } catch (err) {
+          console.warn(`photo recovery failed for ${receipt.id}:`, redact(err));
+          photosFailed += 1;
+        }
+      }
+
+      // Phase 3: create Notion pages for receipts with no mirror at all
+      const CREATE_CAP = 50;
+      let pagesCreated = 0;
+      let createFailed = 0;
+      let createRemaining = 0;
+      for (const receipt of receipts) {
+        if (receipt.notion_page_id || notionPages.has(String(receipt.source_id))) continue;
+        if (pagesCreated + createFailed >= CREATE_CAP) { createRemaining += 1; continue; }
+        if (dryRun) { pagesCreated += 1; continue; }
+        try {
+          const trip = tripById.get(receipt.trip_id) as any;
+          const tripSourceId = trip?.app_metadata?.sourceId || (trip ? `trip_${trip.id}` : "");
+          const photoRow = photoByReceipt.get(receipt.id) as any;
+          const text = (value: unknown) => ({ rich_text: value ? [{ text: { content: String(value).slice(0, 1900) } }] : [] });
+          const properties: Record<string, unknown> = {
+            "店名": { title: [{ text: { content: receipt.store || "未命名" } }] },
+            "金額": { number: Number(receipt.amount || 0) },
+            "日期": receipt.record_date ? { date: { start: receipt.record_date } } : { date: null },
+            "類別": { select: { name: CATEGORY_ZH[receipt.category] || "其他" } },
+            "支付": { select: { name: PAYMENT_ZH[receipt.payment_method] || "現金" } },
+            "Currency": { select: { name: receipt.currency || "JPY" } },
+            "SourceID": text(receipt.source_id),
+            "TripID": text(tripSourceId),
+            "Object Type": { select: { name: "receipt" } },
+            "品項": text(receipt.items_text),
+            "備註": text(receipt.note),
+            "⏰ 時間": text(receipt.record_time ? String(receipt.record_time).slice(0, 5) : ""),
+            "🗺️ 地址": text(receipt.address),
+            "🎫 Booking Ref": text(receipt.booking_ref),
+            "HKD": { number: receipt.home_amount != null ? Number(receipt.home_amount) : null },
+            "Original Amount": { number: receipt.original_amount != null ? Number(receipt.original_amount) : null },
+            "Original Currency": receipt.original_currency ? { select: { name: receipt.original_currency } } : { select: null },
+            "Exchange Rate": { number: receipt.exchange_rate != null ? Number(receipt.exchange_rate) : null },
+          };
+          if (photoRow?.storage_path) {
+            properties["📷 相片 URL"] = { url: `${supabaseUrl}/storage/v1/object/public/${photoRow.storage_bucket || "receipt-photos"}/${photoRow.storage_path}` };
+          }
+          const created: any = await brokerNotionRequest("/pages", "POST", {
+            parent: { database_id: defaultNotionDb },
+            properties,
+          }, defaultNotionDb);
+          if (created?.id) {
+            await supabase.from("receipts").update({
+              notion_page_id: created.id,
+              notion_database_id: defaultNotionDb,
+              notion_sync_status: "synced",
+            }).eq("id", receipt.id);
+            pagesCreated += 1;
+          } else {
+            createFailed += 1;
+          }
+        } catch (err) {
+          console.warn(`notion page create failed for ${receipt.id}:`, redact(err));
+          createFailed += 1;
+        }
+      }
+
+      await writeAudit(supabase, {
+        adminSubject,
+        action: "notion_mirror_repair",
+        targetType: "notion_db",
+        targetId: defaultNotionDb,
+        requestId: crypto.randomUUID(),
+        previewCounts: {},
+        result: { dryRun, linked, photosRecovered, photosFailed, photosRemaining, pagesCreated, createFailed, createRemaining },
+      }).catch(() => {});
+      return json(req, 200, {
+        ok: true,
+        dryRun,
+        linked,
+        photosRecovered,
+        photosFailed,
+        photosRemaining,
+        pagesCreated,
+        createFailed,
+        createRemaining,
+        notionPagesScanned: notionPages.size,
+      });
     }
     // --- Notion <-> Supabase Reconciler ---
     if (req.method === "GET" && url.pathname.endsWith("/api/reconcile")) {

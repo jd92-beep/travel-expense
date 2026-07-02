@@ -929,6 +929,13 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     created_at: isoFromMs(receipt.createdAt),
     updated_at: isoFromMs(receipt.updatedAt),
   };
+  // Persist the Notion linkage — this was hardcoded null, so the admin console's
+  // Notion↔Supabase reconciler always saw supabaseSyncedToNotion = 0
+  if (receipt.notionPageId) {
+    (row as any).notion_page_id = receipt.notionPageId;
+    (row as any).notion_database_id = userScopedNotionDatabaseId(trip.notionDb) || userScopedNotionDatabaseId(state.notionDb);
+    (row as any).notion_sync_status = 'synced';
+  }
   if (isSharedLedgerTrip(syncedTrip)) {
     const { data, error } = await withTimeout(supabase
       .rpc('upsert_shared_trip_receipt', {

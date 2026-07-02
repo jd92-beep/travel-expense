@@ -219,6 +219,18 @@ export async function fetchReconcile(session: AdminSession): Promise<{ generated
   return { generatedAt: data.generatedAt, trips: data.trips };
 }
 
+export async function runNotionRepair(session: AdminSession, dryRun = false): Promise<{
+  linked: number; photosRecovered: number; photosFailed: number; photosRemaining: number;
+  pagesCreated: number; createFailed: number; createRemaining: number; notionPagesScanned: number; dryRun: boolean;
+}> {
+  const data = await parseJson<any>(await fetch(adminDataUrl('/api/notion/repair'), {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dryRun }),
+  }));
+  return data;
+}
+
 export async function fetchSupportBundle(session: AdminSession, params: { userId?: string; tripId?: string; includeJobs?: boolean; includeDoctor?: boolean }): Promise<any> {
   const data = await parseJson<{ ok: boolean; bundle: any }>(await fetch(adminDataUrl('/api/support-bundle'), {
     method: 'POST',

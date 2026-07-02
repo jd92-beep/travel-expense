@@ -1734,3 +1734,4 @@ button:disabled {
 .reconcile-mismatch { background: rgba(255, 170, 60, 0.08); }
 .reconcile-notion_unreachable { background: rgba(255, 80, 80, 0.08); }
 @media (max-width: 640px) { .amend-grid { grid-template-columns: 1fr; } }
+.repair-btn { background: rgba(109, 211, 168, 0.15); border-color: rgba(109, 211, 168, 0.4); }

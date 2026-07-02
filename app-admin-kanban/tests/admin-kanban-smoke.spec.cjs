@@ -335,12 +335,23 @@ test('reconcile tab runs Notion↔Supabase 對數 and identity tab offers merge'
     })});
   });
 
+  await page.route('**/api/notion/repair', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true, dryRun: false, linked: 5, photosRecovered: 3, photosFailed: 0, photosRemaining: 0,
+      pagesCreated: 2, createFailed: 0, createRemaining: 0, notionPagesScanned: 158,
+    })});
+  });
+  page.on('dialog', (dialog) => void dialog.accept());
+
   await page.getByRole('button', { name: /對數/ }).click();
   await page.getByRole('button', { name: /Run 對數/ }).click();
   await expect(page.getByText('名古屋 2026')).toBeVisible();
   await expect(page.getByText('⚠️ 有差異')).toBeVisible();
   await expect(page.getByText('✅ 平衡')).toBeVisible();
   await expect(page.getByText('缺 Notion 2 / 缺 Supabase 1')).toBeVisible();
+
+  await page.getByRole('button', { name: /修復 Mirror/ }).click();
+  await expect(page.getByText(/連結 5 筆 · 補相 3 張/)).toBeVisible();
 
   await page.getByRole('button', { name: /Identity/ }).click();
   await page.getByRole('button', { name: /Detect Duplicates/ }).click();

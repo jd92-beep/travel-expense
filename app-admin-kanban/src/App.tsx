@@ -34,6 +34,7 @@ import {
   fetchRuntime,
   fetchIdentityDuplicates,
   fetchReconcile,
+  runNotionRepair,
   previewAction,
   commitAction,
 } from './lib/adminApi';
@@ -241,7 +242,14 @@ function UniversalHealth({ snapshot, session }: { snapshot: AdminKanbanSnapshot;
 
         <div className="health-card">
           <h3><Cloud size={16} /> Notion Integration</h3>
-          <Metric label="Connected Users" value={snapshot.notion.connectedUsers} />
+          {(() => {
+            // Mirror connection = broker's Notion credential; the integrations table only
+            // tracks per-user Personal Notion OAuth, which is a different (optional) thing
+            const broker = snapshot.llm.find((row) => row.provider === 'notion');
+            const mirrorOk = broker?.storedStatus === 'connected' || broker?.status === 'healthy';
+            return <Metric label="Mirror (Broker)" value={mirrorOk ? 'Connected' : broker?.storedStatus || 'Unknown'} status={mirrorOk ? 'healthy' : 'danger'} />;
+          })()}
+          <Metric label="Personal OAuth Users" value={snapshot.notion.connectedUsers} />
           <Metric label="Synced Receipts" value={snapshot.notion.syncedReceipts} />
           <Metric label="Pending Jobs" value={snapshot.notion.pendingJobs} status={snapshot.notion.pendingJobs ? 'warning' : 'healthy'} />
           <Metric label="Failed Jobs" value={snapshot.notion.failedJobs} status={snapshot.notion.failedJobs ? 'danger' : 'healthy'} />
@@ -996,6 +1004,8 @@ function ReconcileTab({ session }: { session: AdminSession }) {
   const [generatedAt, setGeneratedAt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [repairing, setRepairing] = useState(false);
+  const [repairResult, setRepairResult] = useState('');
 
   async function run() {
     setLoading(true);
@@ -1010,6 +1020,19 @@ function ReconcileTab({ session }: { session: AdminSession }) {
     } finally { setLoading(false); }
   }
 
+  async function repair() {
+    if (!window.confirm('修復 Mirror 會:①補回 notion_page_id 連結 ②由 Notion 下載相片補入 Supabase storage ③幫未 mirror 嘅記錄開 Notion page。繼續?')) return;
+    setRepairing(true);
+    setRepairResult('');
+    try {
+      const r = await runNotionRepair(session);
+      setRepairResult(`連結 ${r.linked} 筆 · 補相 ${r.photosRecovered} 張 (失敗 ${r.photosFailed}, 剩 ${r.photosRemaining}) · 開 Notion page ${r.pagesCreated} 頁 (失敗 ${r.createFailed}, 剩 ${r.createRemaining}) · 掃描咗 ${r.notionPagesScanned} 頁`);
+      void run();
+    } catch (err) {
+      setRepairResult(`修復失敗: ${err instanceof Error ? err.message : 'unknown'}`);
+    } finally { setRepairing(false); }
+  }
+
   const statusBadge: Record<string, string> = {
     balanced: '✅ 平衡',
     mismatch: '⚠️ 有差異',
@@ -1020,7 +1043,11 @@ function ReconcileTab({ session }: { session: AdminSession }) {
   return (
     <div className="ops-tab">
       <h3><Scale size={16} /> Notion ↔ Supabase 對數器</h3>
-      <button type="button" onClick={() => void run()} disabled={loading}>{loading ? '對數中...' : 'Run 對數'}</button>
+      <div className="ops-filters">
+        <button type="button" onClick={() => void run()} disabled={loading}>{loading ? '對數中...' : 'Run 對數'}</button>
+        <button type="button" className="repair-btn" onClick={() => void repair()} disabled={repairing}>{repairing ? '修復中...' : '🔧 修復 Mirror'}</button>
+      </div>
+      {repairResult && <p className="status-line">{repairResult}</p>}
       {generatedAt && <small className="status-line">Generated: {fmtDate(generatedAt)}</small>}
       {error && <p className="error-line">{error}</p>}
       {entries.length > 0 && (
