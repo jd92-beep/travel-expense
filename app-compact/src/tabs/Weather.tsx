@@ -11,7 +11,6 @@ import { coordForDay, coordsForDay, fetchWeather, getCachedWeatherRows, groupedC
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
-const WEATHER_LOCATIONS_PER_DAY = 6;
 
 function WeatherIcon({ code, size = 18 }: { code?: number; size?: number }) {
   if (code == null) return <CloudSun size={size} />;

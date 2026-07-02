@@ -1030,6 +1030,9 @@ export function Settings({
       await onClearDeviceData();
       await onSignOut();
       setShowClearDeviceConfirm(false);
+      // In-memory state still holds the wiped data and the persistence effect would write it
+      // straight back — reload so the wipe actually sticks (same pattern as delete-account).
+      setTimeout(() => { window.location.reload(); }, 300);
     } catch (err) {
       setStatus(`清除裝置資料失敗：${redactedError(err)}`);
     } finally {
@@ -2020,6 +2023,10 @@ export function Settings({
       setStatus('請先輸入新旅程名稱');
       return;
     }
+    if (newManagedTripStart && newManagedTripEnd && newManagedTripEnd < newManagedTripStart) {
+      setStatus('結束日期唔可以早過開始日期');
+      return;
+    }
     const now = Date.now();
     const newTrip = createTripProfile({
       name,
@@ -2748,7 +2755,7 @@ export function Settings({
           />
           <div className="form-grid">
             <label>{state.rateMode === 'fixed' ? '固定' : '即時'}匯率（1 HKD = {mgrCurrency || '目的地貨幣'}）
-              <input type="number" min="0.01" step="0.01" value={state.rate} onChange={(e) => {
+              <input type="number" min="0.01" step="0.01" value={state.rateTable?.[String(state.tripCurrency || 'JPY').toUpperCase()]?.perHkd || state.rate} onChange={(e) => {
                 const val = parseFloat(e.target.value);
                 const safe = Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : 20.36;
                 // Also stamp rateTable[code] so perHkdForCurrency (used by Dashboard/Stats/ReceiptEditor)
@@ -2774,6 +2781,9 @@ export function Settings({
           </div>
           {state.rateMode === 'fixed' && (
             <p className="muted">已鎖定手動匯率 — 出發前兌換嘅價錢唔會被即時匯率覆蓋。想返去自動更新，撳返「即時 (Visa)」。</p>
+          )}
+          {state.rateMode === 'fixed' && !state.rateTable?.[String(state.tripCurrency || 'JPY').toUpperCase()] && (
+            <p className="muted">⚠️ 未為 {String(state.tripCurrency || 'JPY').toUpperCase()} 設定固定匯率 — 而家用緊內置近似值，請喺上面輸入你實際兌換到嘅匯率。</p>
           )}
 
           <label className="check-row">

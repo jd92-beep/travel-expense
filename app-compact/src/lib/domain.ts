@@ -14,7 +14,8 @@ export const paymentById = (id: PaymentId | string | undefined) =>
 
 export function getItinerary(state: AppState): ItineraryDay[] {
   const trip = activeTrip(state);
-  if (trip?.itinerary?.length) return normalizeItinerary(trip.itinerary, trip.id, trip.currencies?.[1] || state.tripCurrency || 'JPY');
+  // Must match getResolvedTripCurrency: currencies[] order is not guaranteed (default trip is ['JPY','HKD']).
+  if (trip?.itinerary?.length) return normalizeItinerary(trip.itinerary, trip.id, getResolvedTripCurrency(state, trip));
   if (state.customItinerary && state.customItinerary.length) return normalizeItinerary(state.customItinerary, state.activeTripId || 'trip_default', state.tripCurrency);
   // Fallback: always normalize the constant ITINERARY to ensure stable dayId/spotId
   return normalizeItinerary(ITINERARY, state.activeTripId || 'trip_default', state.tripCurrency || 'JPY');
@@ -368,7 +369,10 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
     const amount = getReceiptTripAmount(r, state, resolvedTripCurrency);
     if (amount <= 0) continue;
     const payerIdx = idxOf(r.personId || firstId);
-    if (payerIdx < 0) continue;
+    if (payerIdx < 0) {
+      console.warn(`[settlement] receipt ${r.id} payer ${r.personId} not found — excluded from settlement`);
+      continue;
+    }
     if (r.splitMode === 'private') {
       if (r.beneficiaryId && idxOf(r.beneficiaryId) < 0) {
         console.warn(`[settlement] private receipt ${r.id} beneficiary ${r.beneficiaryId} not found — attributing to payer`);
