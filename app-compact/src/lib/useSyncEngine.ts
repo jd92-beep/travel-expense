@@ -5,7 +5,7 @@ import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, push
 import { canUseNotionMirror } from './notionAccess';
 import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { mergePulledData } from './syncMerge';
-import { rawReceiptSourceId } from './syncMerge';
+import { isReceiptTombstoned, rawReceiptSourceId } from './syncMerge';
 import { MAX_RETRY_ATTEMPTS, queueItemReady, releaseReconnectBackoff, syncBackoffMs } from './syncBackoff';
 import { NATIVE_REACHABILITY_ONLINE_EVENT } from './constants';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
@@ -523,7 +523,45 @@ export function useSyncEngine(
               console.warn('[SyncEngine] purged revoked/deleted trips from local cache:', [...purgedTripIds]);
             }
           }
-          const freshQueue = (current.syncQueue || []).filter((item) => !overwrittenIds.has(item.entityId));
+          let freshQueue = (current.syncQueue || []).filter((item) => !overwrittenIds.has(item.entityId));
+          // Backfill sweep (ported from main v0.8.6): heal receipts that never reached
+          // Supabase — created before cloud login, marked synced in the Notion-only era,
+          // or whose queue item was dropped after MAX_RETRY_ATTEMPTS. After merge, anything
+          // still missing supabaseId (or with an un-uploaded photo) is provably absent
+          // server-side, so re-queue it. Push is idempotent (findReceiptUuid matches by
+          // trip+source_id), so this never duplicates.
+          // ponytail: unbounded photo re-tries are rate-limited to one attempt per pull cycle.
+          if (cloudPullOk && finalState.autoSync) {
+            const queuedIds = new Set(freshQueue.filter((item) => item.type === 'receipt').map((item) => item.entityId));
+            const needsBackfill = (finalState.receipts || []).filter((receipt) =>
+              !queuedIds.has(receipt.id)
+              && !isReceiptTombstoned(finalState, receipt)
+              && (!receipt.supabaseId || (!!receipt.photoThumb && !receipt._photoSyncedToSupabase)));
+            if (needsBackfill.length) {
+              console.log(`[SyncEngine] backfill sweep: ${needsBackfill.length} receipt(s) missing from Supabase — re-queueing`);
+              const now = Date.now();
+              freshQueue = [
+                ...freshQueue,
+                ...needsBackfill.slice(0, 200).map((receipt, idx) => ({
+                  id: `sync_backfill_${now}_${idx}_${Math.random().toString(16).slice(2)}`,
+                  type: 'receipt' as const,
+                  entityId: receipt.id,
+                  op: 'update' as const,
+                  status: 'queued' as const,
+                  attempts: 0,
+                  createdAt: now,
+                  updatedAt: now,
+                  payload: {
+                    supabaseId: receipt.supabaseId,
+                    notionPageId: receipt.notionPageId,
+                    sourceId: receipt.sourceId || receipt.id,
+                    tripId: receipt.tripId,
+                    updatedAt: receipt.updatedAt,
+                  },
+                })),
+              ];
+            }
+          }
           computedPending = pendingCount(freshQueue);
           return {
             ...finalState,

@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-compact",
   "private": true,
-  "version": "0.12.19",
+  "version": "0.12.20",
   "type": "module",
   "engines": {
     "node": "22.x"
@@ -39,6 +39,7 @@
     "smoke:a11y-touch": "playwright test tests/a11y-touch-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:security": "node scripts/run-with-dev-server.mjs -- playwright test tests/security-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:supabase-notion-mirror": "playwright test tests/supabase-notion-mirror-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:supabase-backfill": "playwright test tests/supabase-backfill-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:broker-live": "node scripts/broker-live-preflight.mjs",
     "smoke:android-broker-origin": "node scripts/android-broker-origin-smoke.mjs",
     "broker-vault:prepare": "node scripts/broker-vault-prepare.mjs",
