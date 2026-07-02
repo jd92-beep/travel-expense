@@ -428,8 +428,14 @@ async function notionReceiptSourceIds(databaseId: string): Promise<string[]> {
     for (const page of resp?.results || []) {
       const prop = page?.properties?.SourceID;
       const text = (prop?.rich_text || []).map((t: any) => t?.plain_text || "").join("").trim();
-      // Receipts only — skip settings meta rows and trip pages
-      if (text && !text.startsWith("__") && !text.startsWith("trip_")) sourceIds.push(text);
+      if (!text || text.startsWith("__") || text.startsWith("trip_")) continue; // settings meta / trip pages
+      // Itinerary-update notices from the email pipeline (店名 starts with "🗓 行程更新：") are
+      // not real expenses and are never pushed to Supabase by design — counting them as
+      // reconciler "orphans" was a false positive. Title, not amount: a real $0 receipt (free
+      // sample etc.) does have a Supabase counterpart and must still reconcile normally.
+      const title = (page?.properties?.["店名"]?.title || []).map((t: any) => t?.plain_text || "").join("");
+      if (title.startsWith("🗓")) continue;
+      sourceIds.push(text);
     }
     cursor = resp?.has_more ? resp.next_cursor : undefined;
   } while (cursor && ++guard < 20);
@@ -1118,7 +1124,7 @@ Deno.serve(async (req) => {
       return json(req, 200, {
         ok: true,
         runtime: {
-          adminConsoleVersion: "0.7.0",
+          adminConsoleVersion: "0.7.1",
           edgeDeployId,
           edgeRouteVersion: "2026-07-02",
           brokerVersion,
