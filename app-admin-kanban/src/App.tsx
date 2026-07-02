@@ -33,6 +33,7 @@ import {
   fetchDataDoctor,
   fetchRuntime,
   fetchIdentityDuplicates,
+  fetchReconcile,
   previewAction,
   commitAction,
 } from './lib/adminApi';
@@ -46,8 +47,9 @@ import type {
   DeletePreview,
   SurfaceScope,
   LiveState,
+  ReconcileTripEntry,
 } from './lib/types';
-import { Pencil, MapPin, Calendar, Users as UsersIcon, Globe, Wallet, Clock, CheckCircle, XCircle, Zap, Activity as ActivityIcon, Wrench, Bug, Monitor, GitMerge } from 'lucide-react';
+import { Pencil, MapPin, Calendar, Users as UsersIcon, Globe, Wallet, Clock, CheckCircle, XCircle, Zap, Activity as ActivityIcon, Wrench, Bug, Monitor, GitMerge, Scale } from 'lucide-react';
 
 const RANGE_OPTIONS = [1, 7, 30, 90];
 const SURFACE_OPTIONS: Array<{ value: SurfaceScope; label: string }> = [
@@ -57,7 +59,7 @@ const SURFACE_OPTIONS: Array<{ value: SurfaceScope; label: string }> = [
   { value: 'admin-kanban', label: 'Admin' },
   { value: 'all', label: 'All' },
 ];
-type ConsoleTab = 'overview' | 'sync' | 'doctor' | 'identity' | 'runtime';
+type ConsoleTab = 'overview' | 'sync' | 'doctor' | 'identity' | 'reconcile' | 'runtime';
 const RECEIPT_STATUSES = new Set(['draft', 'pending', 'confirmed']);
 const CURRENCY_RE = /^[A-Z]{3}$/;
 
@@ -353,11 +355,26 @@ function ImageViewerModal({ url, onClose }: { url: string; onClose: () => void }
   );
 }
 
+const RECEIPT_CATEGORIES = ['transport', 'food', 'shopping', 'lodging', 'ticket', 'medicine', 'other'];
+const RECEIPT_PAYMENTS = ['cash', 'credit', 'paypay', 'suica'];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 function QuickAmendModal({ session, receipt, onClose, onRefresh }: { session: AdminSession, receipt: AdminReceiptCard, onClose: () => void, onRefresh: () => void }) {
   const [store, setStore] = useState(receipt.store);
   const [amount, setAmount] = useState(receipt.amount.toString());
   const [currency, setCurrency] = useState(receipt.currency);
   const [status, setStatus] = useState(receipt.status);
+  const [recordDate, setRecordDate] = useState(receipt.recordDate || '');
+  const [recordTime, setRecordTime] = useState((receipt.recordTime || '').slice(0, 5));
+  const [category, setCategory] = useState(receipt.category || 'other');
+  const [payment, setPayment] = useState(receipt.payment || 'cash');
+  const [originalAmount, setOriginalAmount] = useState(receipt.originalAmount != null ? String(receipt.originalAmount) : '');
+  const [originalCurrency, setOriginalCurrency] = useState(receipt.originalCurrency || '');
+  const [exchangeRate, setExchangeRate] = useState(receipt.exchangeRate != null ? String(receipt.exchangeRate) : '');
+  const [itemsText, setItemsText] = useState(receipt.itemsText || '');
+  const [note, setNote] = useState(receipt.note || '');
+  const [address, setAddress] = useState(receipt.address || '');
+  const [bookingRef, setBookingRef] = useState(receipt.bookingRef || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -372,7 +389,27 @@ function QuickAmendModal({ session, receipt, onClose, onRefresh }: { session: Ad
       const upperCurrency = currency.toUpperCase().trim();
       if (!CURRENCY_RE.test(upperCurrency)) throw new Error('Currency must be a 3-letter uppercase code');
       if (!RECEIPT_STATUSES.has(status)) throw new Error(`Status must be one of: ${[...RECEIPT_STATUSES].join(', ')}`);
-      await amendReceipt(session, receipt.id, { store: trimmedStore, amount: parsedAmount, currency: upperCurrency, status });
+      if (!DATE_RE.test(recordDate)) throw new Error('Date must be YYYY-MM-DD');
+      if (originalAmount.trim() && (!Number.isFinite(Number(originalAmount)) || Number(originalAmount) < 0)) throw new Error('Original amount must be a non-negative number');
+      if (originalCurrency.trim() && !CURRENCY_RE.test(originalCurrency.toUpperCase().trim())) throw new Error('Original currency must be a 3-letter code');
+      if (exchangeRate.trim() && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) throw new Error('Exchange rate must be a positive number');
+      await amendReceipt(session, receipt.id, {
+        store: trimmedStore,
+        amount: parsedAmount,
+        currency: upperCurrency,
+        status,
+        recordDate,
+        recordTime: recordTime.trim(),
+        category,
+        payment,
+        originalAmount: originalAmount.trim() ? Number(originalAmount) : null,
+        originalCurrency: originalCurrency.toUpperCase().trim() || null,
+        exchangeRate: exchangeRate.trim() ? Number(exchangeRate) : null,
+        itemsText,
+        note,
+        address,
+        bookingRef,
+      });
       onRefresh();
       onClose();
     } catch (err) {
@@ -385,14 +422,31 @@ function QuickAmendModal({ session, receipt, onClose, onRefresh }: { session: Ad
     <div className="modal-overlay">
       <div className="modal-content amend-modal">
         <h3 style={{marginTop: 0}}>Amend Receipt</h3>
-        <label>Store Name <input value={store} onChange={e => setStore(e.target.value)} /></label>
-        <label>Amount <input type="number" value={amount} onChange={e => setAmount(e.target.value)} /></label>
-        <label>Currency <input value={currency} onChange={e => setCurrency(e.target.value)} /></label>
-        <label>Status <select value={status} onChange={e => setStatus(e.target.value)}>
-          <option value="draft">draft</option>
-          <option value="pending">pending</option>
-          <option value="confirmed">confirmed</option>
-        </select></label>
+        <div className="amend-grid">
+          <label>Store Name <input value={store} onChange={e => setStore(e.target.value)} /></label>
+          <label>Amount <input type="number" value={amount} onChange={e => setAmount(e.target.value)} /></label>
+          <label>Currency <input value={currency} onChange={e => setCurrency(e.target.value)} /></label>
+          <label>Status <select value={status} onChange={e => setStatus(e.target.value)}>
+            <option value="draft">draft</option>
+            <option value="pending">pending</option>
+            <option value="confirmed">confirmed</option>
+          </select></label>
+          <label>Date <input type="date" value={recordDate} onChange={e => setRecordDate(e.target.value)} /></label>
+          <label>Time <input type="time" value={recordTime} onChange={e => setRecordTime(e.target.value)} /></label>
+          <label>Category <select value={category} onChange={e => setCategory(e.target.value)}>
+            {RECEIPT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select></label>
+          <label>Payment <select value={payment} onChange={e => setPayment(e.target.value)}>
+            {RECEIPT_PAYMENTS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select></label>
+          <label>Original Amount <input type="number" value={originalAmount} onChange={e => setOriginalAmount(e.target.value)} placeholder="optional" /></label>
+          <label>Original Currency <input value={originalCurrency} onChange={e => setOriginalCurrency(e.target.value)} placeholder="e.g. JPY" /></label>
+          <label>Exchange Rate <input type="number" step="any" value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} placeholder="optional" /></label>
+          <label>Booking Ref <input value={bookingRef} onChange={e => setBookingRef(e.target.value)} placeholder="optional" /></label>
+          <label className="amend-full">Items <textarea value={itemsText} onChange={e => setItemsText(e.target.value)} rows={2} /></label>
+          <label className="amend-full">Note <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} /></label>
+          <label className="amend-full">Address <input value={address} onChange={e => setAddress(e.target.value)} /></label>
+        </div>
         {error && <p className="error-line">{error}</p>}
         <div className="modal-actions">
           <button className="primary-command" disabled={busy} onClick={() => void save()}>Save</button>
@@ -499,7 +553,46 @@ function UserDetailsPanel({
   const [expandedItinerary, setExpandedItinerary] = useState<string | null>(null);
   const [detailReceipt, setDetailReceipt] = useState<AdminReceiptCard | null>(null);
 
+  const [photoError, setPhotoError] = useState('');
   const filteredReceipts = selectedTripId ? userReceipts.filter(r => r.tripId === selectedTripId) : userReceipts;
+
+  // Compact-style grouping: newest date first, receipts within a day by time desc
+  const receiptsByDate = new Map<string, AdminReceiptCard[]>();
+  for (const receipt of filteredReceipts) {
+    const key = receipt.recordDate || 'Unknown date';
+    if (!receiptsByDate.has(key)) receiptsByDate.set(key, []);
+    receiptsByDate.get(key)!.push(receipt);
+  }
+  const dateGroups = [...receiptsByDate.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  for (const [, group] of dateGroups) {
+    group.sort((a, b) => String(b.recordTime || '').localeCompare(String(a.recordTime || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  }
+
+  function dayLabel(date: string): string {
+    const parsed = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return date;
+    const weekday = parsed.toLocaleDateString('zh-HK', { weekday: 'short' });
+    return `${date} (${weekday})`;
+  }
+
+  function dayTotals(group: AdminReceiptCard[]): string {
+    const byCurrency = new Map<string, number>();
+    for (const receipt of group) {
+      byCurrency.set(receipt.currency, (byCurrency.get(receipt.currency) || 0) + receipt.amount);
+    }
+    return [...byCurrency.entries()].map(([currency, total]) => `${total.toLocaleString()} ${currency}`).join(' + ');
+  }
+
+  async function viewPhoto(receipt: AdminReceiptCard) {
+    setPhotoError('');
+    try {
+      const { url } = await fetchReceiptPhoto(session, receipt.id);
+      setViewImageUrl(url);
+    } catch (err) {
+      setViewImageUrl(null);
+      setPhotoError(`相片載入失敗 (${receipt.store}): ${err instanceof Error ? err.message : 'unknown error'}`);
+    }
+  }
 
   return (
     <div className="user-details-panel">
@@ -602,27 +695,44 @@ function UserDetailsPanel({
               <button type="button" className="show-all-btn" onClick={() => setSelectedTripId(null)}>Show All</button>
             )}
           </h3>
+          {photoError && <p className="error-line" role="alert">{photoError}</p>}
           {filteredReceipts.length > 0 ? (
-            <div className="card-list">
-              {filteredReceipts.map(receipt => (
-                <div key={receipt.id} className="detail-card" style={{position: 'relative', cursor: 'pointer'}} onClick={() => setDetailReceipt(receipt)}>
-                  <strong>{receipt.store}</strong>
-                  <small>{receipt.recordDate} · {receipt.status}</small>
-                  <span>{receipt.amount.toLocaleString()} {receipt.currency}</span>
-                  {receipt.category && <small className="receipt-category">#{receipt.category}</small>}
-                  {receipt.notionSynced ? (
-                    <span className="sync-status synced">Notion Synced</span>
-                  ) : user.notionConnected ? (
-                    <span className="sync-status pending">Notion Pending</span>
-                  ) : null}
-                  <div className="detail-actions">
-                    {receipt.photoPath ? (
-                      <button type="button" onClick={async (e) => { e.stopPropagation(); try { const { url } = await fetchReceiptPhoto(session, receipt.id); setViewImageUrl(url); } catch { setViewImageUrl(null); } }} title="View Photo" className="icon-btn"><ImageIcon size={14} /></button>
-                    ) : (
-                      <span className="placeholder-icon" title="No photo"><ImageIcon size={14} /></span>
-                    )}
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setAmendReceiptItem(receipt); }} title="Amend" className="icon-btn"><Pencil size={14} /></button>
+            <div className="card-list receipts-by-date">
+              {dateGroups.map(([date, group]) => (
+                <div key={date} className="receipt-date-group">
+                  <div className="receipt-date-header">
+                    <Calendar size={12} />
+                    <strong>{dayLabel(date)}</strong>
+                    <span>{group.length} 筆 · {dayTotals(group)}</span>
                   </div>
+                  {group.map(receipt => (
+                    <div key={receipt.id} className="detail-card" style={{position: 'relative', cursor: 'pointer'}} onClick={() => setDetailReceipt(receipt)}>
+                      <strong>{receipt.store}</strong>
+                      <small>
+                        {receipt.recordTime ? `${String(receipt.recordTime).slice(0, 5)} · ` : ''}
+                        {receipt.status}
+                        {receipt.payment ? ` · ${receipt.payment}` : ''}
+                      </small>
+                      <span>{receipt.amount.toLocaleString()} {receipt.currency}</span>
+                      {receipt.category && <small className="receipt-category">#{receipt.category}</small>}
+                      {receipt.note && <small className="receipt-note">{receipt.note.slice(0, 60)}</small>}
+                      {receipt.notionSynced ? (
+                        <span className="sync-status synced">Notion Synced</span>
+                      ) : user.notionConnected ? (
+                        <span className="sync-status pending">Notion Pending</span>
+                      ) : null}
+                      <div className="detail-actions">
+                        {receipt.photoPath ? (
+                          <button type="button" onClick={(e) => { e.stopPropagation(); void viewPhoto(receipt); }} title="View Photo" className="icon-btn has-photo"><ImageIcon size={14} /></button>
+                        ) : (
+                          // Placeholder must not bubble to the card click — that opened the
+                          // details modal and read as "image button shows details" bug
+                          <button type="button" disabled onClick={(e) => e.stopPropagation()} title="無相片" className="icon-btn no-photo"><ImageIcon size={14} /></button>
+                        )}
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setAmendReceiptItem(receipt); }} title="Amend" className="icon-btn"><Pencil size={14} /></button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -806,6 +916,9 @@ function RuntimeTab({ session }: { session: AdminSession }) {
 function IdentityTab({ session }: { session: AdminSession }) {
   const [duplicates, setDuplicates] = useState<Array<{ prefix: string; users: any[] }>>([]);
   const [loading, setLoading] = useState(false);
+  const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({});
+  const [mergingPrefix, setMergingPrefix] = useState('');
+  const [mergeResult, setMergeResult] = useState('');
 
   async function loadDuplicates() {
     setLoading(true);
@@ -814,23 +927,120 @@ function IdentityTab({ session }: { session: AdminSession }) {
     finally { setLoading(false); }
   }
 
+  async function mergeGroup(dup: { prefix: string; users: any[] }) {
+    const targetId = mergeTargets[dup.prefix] || dup.users[0]?.id;
+    const target = dup.users.find(u => u.id === targetId);
+    const sources = dup.users.filter(u => u.id !== targetId);
+    if (!target || sources.length === 0) return;
+    if (!window.confirm(`Merge ${sources.map(u => u.email).join(', ')} → ${target.email}?\n所有 trips/receipts/photos/sync jobs 會改 owner 做 ${target.email}。`)) return;
+    setMergingPrefix(dup.prefix);
+    setMergeResult('');
+    try {
+      const outcomes: string[] = [];
+      for (const source of sources) {
+        const preview = await previewAction(session, {
+          action: 'reassign_data',
+          targetType: 'user',
+          targetId: target.id,
+          payload: { sourceUserId: source.id, targetUserId: target.id },
+          reason: `Identity merge: ${source.email} -> ${target.email}`,
+        });
+        const committed = await commitAction(session, preview.id);
+        outcomes.push(`${source.email}: ${JSON.stringify(committed.result?.reassigned || {})}`);
+      }
+      setMergeResult(`Merged into ${target.email} — ${outcomes.join(' | ')}`);
+      void loadDuplicates();
+    } catch (err) {
+      setMergeResult(`Merge failed: ${err instanceof Error ? err.message : 'unknown'}`);
+    } finally {
+      setMergingPrefix('');
+    }
+  }
+
   return (
     <div className="ops-tab">
       <h3><GitMerge size={16} /> Identity Resolver</h3>
       <button type="button" onClick={() => void loadDuplicates()} disabled={loading}>{loading ? 'Scanning...' : 'Detect Duplicates'}</button>
+      {mergeResult && <p className="status-line">{mergeResult}</p>}
       {duplicates.length > 0 && (
         <div className="ops-table">
-          <div className="ops-row ops-header"><span>Email Prefix</span><span>Accounts</span><span>Details</span></div>
+          <div className="ops-row ops-header"><span>Email Prefix</span><span>Accounts</span><span>Details</span><span>Merge</span></div>
           {duplicates.map((dup, i) => (
             <div key={i} className="ops-row">
               <span>{dup.prefix}</span>
               <span>{dup.users.length}</span>
               <span>{dup.users.map(u => `${u.email} (${fmtDate(u.createdAt)})`).join(', ')}</span>
+              <span className="ops-actions merge-controls">
+                <select
+                  value={mergeTargets[dup.prefix] || dup.users[0]?.id}
+                  onChange={(e) => setMergeTargets(prev => ({ ...prev, [dup.prefix]: e.target.value }))}
+                  title="Merge target (keeps this account)"
+                >
+                  {dup.users.map(u => <option key={u.id} value={u.id}>→ {u.email}</option>)}
+                </select>
+                <button type="button" disabled={mergingPrefix === dup.prefix} onClick={() => void mergeGroup(dup)}>
+                  {mergingPrefix === dup.prefix ? 'Merging...' : 'Merge'}
+                </button>
+              </span>
             </div>
           ))}
         </div>
       )}
       {duplicates.length === 0 && !loading && <p className="empty-text">Click "Detect Duplicates" to scan for duplicate accounts.</p>}
+    </div>
+  );
+}
+
+function ReconcileTab({ session }: { session: AdminSession }) {
+  const [entries, setEntries] = useState<ReconcileTripEntry[]>([]);
+  const [generatedAt, setGeneratedAt] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function run() {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await fetchReconcile(session);
+      setEntries(result.trips);
+      setGeneratedAt(result.generatedAt);
+    } catch (err) {
+      setEntries([]);
+      setError(err instanceof Error ? err.message : 'Reconcile failed');
+    } finally { setLoading(false); }
+  }
+
+  const statusBadge: Record<string, string> = {
+    balanced: '✅ 平衡',
+    mismatch: '⚠️ 有差異',
+    no_notion_db: '— 未連 Notion',
+    notion_unreachable: '❌ Notion 不可達',
+  };
+
+  return (
+    <div className="ops-tab">
+      <h3><Scale size={16} /> Notion ↔ Supabase 對數器</h3>
+      <button type="button" onClick={() => void run()} disabled={loading}>{loading ? '對數中...' : 'Run 對數'}</button>
+      {generatedAt && <small className="status-line">Generated: {fmtDate(generatedAt)}</small>}
+      {error && <p className="error-line">{error}</p>}
+      {entries.length > 0 && (
+        <div className="ops-table">
+          <div className="ops-row ops-header"><span>Trip</span><span>Owner</span><span>Supabase</span><span>Notion</span><span>差異</span><span>Status</span></div>
+          {entries.map((entry) => (
+            <div key={entry.tripId} className={`ops-row reconcile-${entry.status}`}>
+              <span>{entry.tripName}</span>
+              <span>{entry.ownerEmail}</span>
+              <span>{entry.supabaseReceipts} 筆 ({entry.supabaseSyncedToNotion} synced)</span>
+              <span>{entry.notionReceipts != null ? `${entry.notionReceipts} 筆` : '—'}</span>
+              <span title={entry.orphanSamples?.join(', ') || ''}>
+                {entry.missingInNotion != null ? `缺 Notion ${entry.missingInNotion} / 缺 Supabase ${entry.orphanInNotion}` : entry.error || '—'}
+              </span>
+              <span>{statusBadge[entry.status] || entry.status}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {entries.length === 0 && !loading && <p className="empty-text">撳「Run 對數」逐 trip 對比 Notion mirror 同 Supabase 數目。</p>}
     </div>
   );
 }
@@ -919,12 +1129,14 @@ function Board({
         <button type="button" className={activeTab === 'sync' ? 'tab-active' : ''} onClick={() => setActiveTab('sync')}><Wrench size={14} /> Sync</button>
         <button type="button" className={activeTab === 'doctor' ? 'tab-active' : ''} onClick={() => setActiveTab('doctor')}><Bug size={14} /> Doctor</button>
         <button type="button" className={activeTab === 'identity' ? 'tab-active' : ''} onClick={() => setActiveTab('identity')}><GitMerge size={14} /> Identity</button>
+        <button type="button" className={activeTab === 'reconcile' ? 'tab-active' : ''} onClick={() => setActiveTab('reconcile')}><Scale size={14} /> 對數</button>
         <button type="button" className={activeTab === 'runtime' ? 'tab-active' : ''} onClick={() => setActiveTab('runtime')}><Monitor size={14} /> Runtime</button>
       </nav>
 
       {activeTab === 'sync' && <SyncOpsTab session={session} />}
       {activeTab === 'doctor' && <DataDoctorTab session={session} />}
       {activeTab === 'identity' && <IdentityTab session={session} />}
+      {activeTab === 'reconcile' && <ReconcileTab session={session} />}
       {activeTab === 'runtime' && <RuntimeTab session={session} />}
       {activeTab === 'overview' && (
       <section className="dashboard-content">

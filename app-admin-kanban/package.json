@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-admin-kanban",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -10,7 +10,8 @@
     "dev": "vite --host 0.0.0.0 --port 8904",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "smoke": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line"
+    "smoke": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line",
+    "deploy": "npm run typecheck && npm run smoke && npx vercel deploy --prod --yes"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

@@ -1294,8 +1294,10 @@ async function handleRequest(request, env) {
       return json({ ok: true, status: result }, 200, cors);
     }
     if (url.pathname === '/notion/request') {
-      const user = await optionalSupabaseUser(request, env);
-      if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
+      // Server-to-server: admin-kanban Edge Function reconciler calls with X-Admin-Internal
+      const internalNotionCall = request.headers.get('X-Admin-Internal') === env.ADMIN_TOKEN;
+      const user = internalNotionCall ? null : await optionalSupabaseUser(request, env);
+      if (!user && !internalNotionCall) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
       const data = await fetchNotion(env, body.path, body.method, body.body, body.databaseId, user);
       return json({ ok: true, data }, 200, cors);

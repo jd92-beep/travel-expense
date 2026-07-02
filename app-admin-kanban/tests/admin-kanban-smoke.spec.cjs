@@ -268,13 +268,85 @@ test('receipt amend modal validates input', async ({ page }) => {
   await amendBtn.click();
   await expect(page.getByText('Amend Receipt')).toBeVisible();
 
-  await page.locator('.amend-modal input[type="number"]').fill('-5');
+  // Full-edit modal exposes every compact-editable field
+  await expect(page.locator('.amend-modal input[type="date"]')).toBeVisible();
+  await expect(page.locator('.amend-modal input[type="time"]')).toBeVisible();
+  await expect(page.locator('.amend-modal select')).toHaveCount(3); // status + category + payment
+  await expect(page.locator('.amend-modal textarea')).toHaveCount(2); // items + note
+
+  await page.locator('.amend-modal input[type="number"]').first().fill('-5');
   await page.getByRole('button', { name: /^Save$/ }).click();
   await expect(page.getByText('finite non-negative')).toBeVisible();
 
-  await page.locator('.amend-modal input[type="number"]').fill('9999');
+  await page.locator('.amend-modal input[type="number"]').first().fill('9999');
   await page.getByRole('button', { name: /Cancel/ }).click();
   await expect(page.getByText('Amend Receipt')).not.toBeVisible();
+});
+
+test('receipts group by date with day totals; no-photo button does not open details', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const snapshotWithReceipts = {
+    ...snapshot,
+    receipts: [
+      { id: 'r1', tripId: 'trip-a', ownerId: 'user-a', store: 'Late Store', status: 'confirmed', amount: 3000, currency: 'JPY', recordDate: '2026-06-03', recordTime: '19:30', payment: 'cash', updatedAt: null, notionSynced: false, photoPath: null, category: 'food' },
+      { id: 'r2', tripId: 'trip-a', ownerId: 'user-a', store: 'Early Store', status: 'confirmed', amount: 2000, currency: 'JPY', recordDate: '2026-06-02', recordTime: '09:00', payment: 'suica', updatedAt: null, notionSynced: false, photoPath: 'user-a/x.jpg', category: 'transport' },
+    ],
+  };
+  await login(page, snapshotWithReceipts);
+  await page.getByRole('button', { name: /vc\*\*\*@g\*\*\*\.com/ }).click();
+
+  // Newest date group first, headers show count + per-day total
+  const headers = page.locator('.receipt-date-header');
+  await expect(headers).toHaveCount(2);
+  await expect(headers.first()).toContainText('2026-06-03');
+  await expect(headers.first()).toContainText('1 筆');
+  await expect(headers.first()).toContainText('3,000 JPY');
+
+  // No-photo icon is disabled and must NOT open the receipt detail modal
+  const noPhotoBtn = page.locator('.icon-btn.no-photo').first();
+  await expect(noPhotoBtn).toBeDisabled();
+  await noPhotoBtn.click({ force: true });
+  await expect(page.getByText('Receipt Details')).not.toBeVisible();
+
+  // Photo icon exists for the receipt that has a photo
+  await expect(page.locator('.icon-btn.has-photo')).toHaveCount(1);
+});
+
+test('reconcile tab runs Notion↔Supabase 對數 and identity tab offers merge', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  await page.route('**/api/reconcile', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true,
+      generatedAt: new Date().toISOString(),
+      trips: [
+        { tripId: 't1', tripName: '名古屋 2026', ownerEmail: 'boss@example.com', notionDatabaseId: 'db1', supabaseReceipts: 12, supabaseSyncedToNotion: 10, notionReceipts: 11, missingInNotion: 2, orphanInNotion: 1, orphanSamples: ['r_x'], status: 'mismatch' },
+        { tripId: 't2', tripName: '濟州2026', ownerEmail: 'boss@example.com', notionDatabaseId: 'db1', supabaseReceipts: 4, supabaseSyncedToNotion: 4, notionReceipts: 4, missingInNotion: 0, orphanInNotion: 0, status: 'balanced' },
+      ],
+    })});
+  });
+  await page.route('**/api/identity/duplicates', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true,
+      duplicates: [{ prefix: 'vc06456', users: [
+        { id: 'u-1', email: 'vc06456@gmail.com', displayName: 'Boss', createdAt: '2026-05-26T00:00:00Z' },
+        { id: 'u-2', email: 'vc06456@hotmail.com', displayName: null, createdAt: '2026-06-01T00:00:00Z' },
+      ]}],
+    })});
+  });
+
+  await page.getByRole('button', { name: /對數/ }).click();
+  await page.getByRole('button', { name: /Run 對數/ }).click();
+  await expect(page.getByText('名古屋 2026')).toBeVisible();
+  await expect(page.getByText('⚠️ 有差異')).toBeVisible();
+  await expect(page.getByText('✅ 平衡')).toBeVisible();
+  await expect(page.getByText('缺 Notion 2 / 缺 Supabase 1')).toBeVisible();
+
+  await page.getByRole('button', { name: /Identity/ }).click();
+  await page.getByRole('button', { name: /Detect Duplicates/ }).click();
+  await expect(page.getByText('vc06456@gmail.com (')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Merge' })).toBeVisible();
+  await expect(page.locator('.merge-controls select')).toBeVisible();
 });
 
 test('default scope is compact and header says Compact Ops Console', async ({ page }) => {

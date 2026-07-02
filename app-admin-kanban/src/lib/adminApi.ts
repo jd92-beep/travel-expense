@@ -113,7 +113,12 @@ export async function confirmDeleteUser(
 export async function amendReceipt(
   session: AdminSession,
   receiptId: string,
-  updates: { store?: string; amount?: number; currency?: string; status?: string; category?: string }
+  updates: {
+    store?: string; amount?: number; currency?: string; status?: string; category?: string;
+    payment?: string; recordDate?: string; recordTime?: string;
+    note?: string; itemsText?: string; address?: string; bookingRef?: string;
+    originalAmount?: number | null; originalCurrency?: string | null; exchangeRate?: number | null;
+  }
 ): Promise<{ id: string }> {
   const data = await parseJson<{ ok: boolean; id: string }>(
     await fetch(adminDataUrl('/api/amend-receipt'), {
@@ -205,6 +210,13 @@ export async function fetchDataDoctor(session: AdminSession): Promise<{ issues: 
     headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
   }));
   return { issues: data.issues, summary: data.summary, total: data.total };
+}
+
+export async function fetchReconcile(session: AdminSession): Promise<{ generatedAt: string; trips: import('./types').ReconcileTripEntry[] }> {
+  const data = await parseJson<{ ok: boolean; generatedAt: string; trips: import('./types').ReconcileTripEntry[] }>(await fetch(adminDataUrl('/api/reconcile'), {
+    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
+  }));
+  return { generatedAt: data.generatedAt, trips: data.trips };
 }
 
 export async function fetchSupportBundle(session: AdminSession, params: { userId?: string; tripId?: string; includeJobs?: boolean; includeDoctor?: boolean }): Promise<any> {

@@ -106,10 +106,36 @@ export type AdminReceiptCard = {
   amount: number;
   currency: string;
   recordDate: string;
+  recordTime?: string | null;
+  payment?: string | null;
+  note?: string | null;
+  itemsText?: string | null;
+  address?: string | null;
+  bookingRef?: string | null;
+  originalAmount?: number | null;
+  originalCurrency?: string | null;
+  exchangeRate?: number | null;
+  homeAmount?: number | null;
+  createdAt?: string | null;
   updatedAt: string | null;
   notionSynced: boolean;
   photoPath: string | null;
   category: string | null;
+};
+
+export type ReconcileTripEntry = {
+  tripId: string;
+  tripName: string;
+  ownerEmail: string;
+  notionDatabaseId: string | null;
+  supabaseReceipts: number;
+  supabaseSyncedToNotion: number;
+  notionReceipts?: number;
+  missingInNotion?: number;
+  orphanInNotion?: number;
+  orphanSamples?: string[];
+  status: 'balanced' | 'mismatch' | 'no_notion_db' | 'notion_unreachable';
+  error?: string;
 };
 
 export type AdminNotionSummary = {

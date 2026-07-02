@@ -23,6 +23,10 @@ const providerTestCache = new Map<string, { status: string; message?: string; te
 const MAX_JSON_BODY_BYTES = 64 * 1024;
 const RECEIPT_STATUSES = new Set(["draft", "pending", "confirmed"]);
 const CURRENCY_RE = /^[A-Z]{3}$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+const RECEIPT_CATEGORIES = new Set(["transport", "food", "shopping", "lodging", "ticket", "medicine", "other"]);
+const RECEIPT_PAYMENTS = new Set(["cash", "credit", "paypay", "suica"]);
 
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
@@ -397,6 +401,41 @@ async function brokerHealth(supabase: SupabaseClientAny) {
   }
 }
 
+async function brokerNotionRequest(path: string, method: string, body?: unknown, databaseId?: string) {
+  const res = await fetchWithTimeout(`${CREDENTIAL_BROKER_URL.replace(/\/+$/, "")}/notion/request`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Origin": "https://travel-expense-compact.vercel.app",
+      "X-Admin-Internal": Deno.env.get("ADMIN_TOKEN") || "",
+    },
+    body: JSON.stringify({ path, method, body, databaseId }),
+  }, 15000);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.ok === false) throw new Error(redact(data?.error || `broker notion ${res.status}`));
+  return data.data;
+}
+
+async function notionReceiptSourceIds(databaseId: string): Promise<string[]> {
+  const sourceIds: string[] = [];
+  let cursor: string | undefined = undefined;
+  let guard = 0;
+  do {
+    const resp: any = await brokerNotionRequest(`/databases/${databaseId}/query`, "POST", {
+      page_size: 100,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    }, databaseId);
+    for (const page of resp?.results || []) {
+      const prop = page?.properties?.SourceID;
+      const text = (prop?.rich_text || []).map((t: any) => t?.plain_text || "").join("").trim();
+      // Receipts only — skip settings meta rows and trip pages
+      if (text && !text.startsWith("__") && !text.startsWith("trip_")) sourceIds.push(text);
+    }
+    cursor = resp?.has_more ? resp.next_cursor : undefined;
+  } while (cursor && ++guard < 20);
+  return sourceIds;
+}
+
 async function snapshot(rangeDays: number, surface: string = "compact") {
   const supabase = serviceClient();
   const sinceIso = new Date(Date.now() - Math.max(1, rangeDays) * 24 * 60 * 60 * 1000).toISOString();
@@ -417,7 +456,7 @@ async function snapshot(rangeDays: number, surface: string = "compact") {
   ] = await Promise.all([
     listUsers(supabase),
     fetchRows(supabase, "trips", "id,owner_id,name,destination_summary,start_date,end_date,trip_currency,budget_amount,budget_currency,itinerary,timezones,active,archived,updated_at,app_metadata"),
-    fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,category,record_date,updated_at,notion_page_id,notion_sync_status,notion_last_synced_at", 1000),
+    fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,category,payment_method,record_date,record_time,note,items_text,address,booking_ref,original_amount,original_currency,exchange_rate,home_amount,created_at,updated_at,notion_page_id,notion_sync_status,notion_last_synced_at", 1000),
     fetchRows(supabase, "receipt_photos", "id,receipt_id,owner_id,storage_path"),
     fetchRows(supabase, "integrations", "id,user_id,provider,status,last_synced_at"),
     fetchRows(supabase, "receipt_sync_jobs", "id,owner_id,provider,status,last_error,created_at,updated_at"),
@@ -570,9 +609,20 @@ async function snapshot(rangeDays: number, surface: string = "compact") {
       store: receipt.store,
       status: receipt.status,
       category: receipt.category || null,
+      payment: receipt.payment_method || null,
       amount: Number(receipt.amount || 0),
       currency: receipt.currency || "JPY",
       recordDate: receipt.record_date,
+      recordTime: receipt.record_time || null,
+      note: receipt.note || null,
+      itemsText: receipt.items_text || null,
+      address: receipt.address || null,
+      bookingRef: receipt.booking_ref || null,
+      originalAmount: receipt.original_amount != null ? Number(receipt.original_amount) : null,
+      originalCurrency: receipt.original_currency || null,
+      exchangeRate: receipt.exchange_rate != null ? Number(receipt.exchange_rate) : null,
+      homeAmount: receipt.home_amount != null ? Number(receipt.home_amount) : null,
+      createdAt: receipt.created_at || null,
       updatedAt: receipt.updated_at || null,
       notionSynced: !!receipt.notion_page_id || receipt.notion_sync_status === "synced",
       photoPath: rPhotos.length > 0 ? rPhotos[0].storage_path : null,
@@ -756,15 +806,19 @@ Deno.serve(async (req) => {
     if (req.method === "GET" && photoMatch) {
       const receiptId = photoMatch[1];
       const supabase = serviceClient();
-      const { data: photoRow, error: photoErr } = await supabase
+      // No .single(): a receipt can have multiple photo rows — .single() errors on >1
+      const { data: photoRows, error: photoErr } = await supabase
         .from("receipt_photos")
-        .select("storage_path")
+        .select("storage_path,storage_bucket")
         .eq("receipt_id", receiptId)
-        .limit(1)
-        .single();
+        .limit(10);
+      const photoRow = (photoRows || [])[0];
       if (photoErr || !photoRow?.storage_path) throw new Error("Receipt photo not found");
+      const bucket = photoRow.storage_bucket || "receipt-photos";
+      // Signed URL works whether or not the bucket is public
+      const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(photoRow.storage_path, 3600);
       const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://fbnnjoahvtdrnigevrtw.supabase.co";
-      const photoUrl = `${supabaseUrl}/storage/v1/object/public/receipt-photos/${photoRow.storage_path}`;
+      const photoUrl = signed?.signedUrl || `${supabaseUrl}/storage/v1/object/public/${bucket}/${photoRow.storage_path}`;
       await writeAudit(supabase, {
         adminSubject,
         action: "view_receipt_photo",
@@ -828,9 +882,53 @@ Deno.serve(async (req) => {
         updates.status = status;
       }
       if (body.category !== undefined) {
-        updates.category = body.category;
+        const category = String(body.category).trim();
+        if (!RECEIPT_CATEGORIES.has(category)) throw new Error(`Category must be one of: ${[...RECEIPT_CATEGORIES].join(', ')}`);
+        updates.category = category;
       }
-      
+      if (body.payment !== undefined) {
+        const payment = String(body.payment).trim();
+        if (!RECEIPT_PAYMENTS.has(payment)) throw new Error(`Payment must be one of: ${[...RECEIPT_PAYMENTS].join(', ')}`);
+        updates.payment_method = payment;
+      }
+      if (body.recordDate !== undefined) {
+        const recordDate = String(body.recordDate).trim();
+        if (!DATE_RE.test(recordDate)) throw new Error("recordDate must be YYYY-MM-DD");
+        updates.record_date = recordDate;
+      }
+      if (body.recordTime !== undefined) {
+        const recordTime = String(body.recordTime || "").trim();
+        if (recordTime && !TIME_RE.test(recordTime)) throw new Error("recordTime must be HH:MM");
+        updates.record_time = recordTime || null;
+      }
+      // Free-text fields: trim, empty -> null
+      for (const [key, column] of [["note", "note"], ["itemsText", "items_text"], ["address", "address"], ["bookingRef", "booking_ref"]] as const) {
+        if (body[key] !== undefined) updates[column] = String(body[key] || "").trim() || null;
+      }
+      if (body.originalAmount !== undefined) {
+        const raw = body.originalAmount;
+        if (raw === null || raw === "") updates.original_amount = null;
+        else {
+          const originalAmount = Number(raw);
+          if (!Number.isFinite(originalAmount) || originalAmount < 0) throw new Error("originalAmount must be a finite non-negative number");
+          updates.original_amount = originalAmount;
+        }
+      }
+      if (body.originalCurrency !== undefined) {
+        const originalCurrency = String(body.originalCurrency || "").toUpperCase().trim();
+        if (originalCurrency && !CURRENCY_RE.test(originalCurrency)) throw new Error("originalCurrency must be a 3-letter code");
+        updates.original_currency = originalCurrency || null;
+      }
+      if (body.exchangeRate !== undefined) {
+        const raw = body.exchangeRate;
+        if (raw === null || raw === "") updates.exchange_rate = null;
+        else {
+          const exchangeRate = Number(raw);
+          if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw new Error("exchangeRate must be a positive number");
+          updates.exchange_rate = exchangeRate;
+        }
+      }
+
       const { data, error } = await supabase.from("receipts").update(updates).eq("id", body.receiptId).select("id").single();
       if (error) throw error;
       
@@ -1019,7 +1117,7 @@ Deno.serve(async (req) => {
       return json(req, 200, {
         ok: true,
         runtime: {
-          adminConsoleVersion: "0.5.0",
+          adminConsoleVersion: "0.6.0",
           edgeDeployId,
           edgeRouteVersion: "2026-07-02",
           brokerVersion,
@@ -1064,6 +1162,61 @@ Deno.serve(async (req) => {
       }
       const bySeverity = { high: issues.filter(i => i.severity === "high").length, medium: issues.filter(i => i.severity === "medium").length, low: issues.filter(i => i.severity === "low").length };
       return json(req, 200, { ok: true, issues, summary: bySeverity, total: issues.length });
+    }
+    // --- Notion <-> Supabase Reconciler ---
+    if (req.method === "GET" && url.pathname.endsWith("/api/reconcile")) {
+      const supabase = serviceClient();
+      const tripsRes = await fetchRows(supabase, "trips", "id,name,owner_id,notion_database_id", 500);
+      const receiptsRes = await fetchRows(supabase, "receipts", "id,trip_id,source_id,notion_page_id,notion_sync_status,notion_database_id,deleted_at", 10000);
+      const receipts = receiptsRes.data.filter((row: any) => !row.deleted_at);
+      const receiptsByTrip = groupBy(receipts, "trip_id");
+      const userById = new Map((await listUsers(supabase)).map((u: any) => [u.id, u]));
+      const results: any[] = [];
+      // Same default as compact's DEFAULT_NOTION_DB — trips rarely carry an explicit binding.
+      // Multiple trips can share one Notion DB, so cache per-db page ids and compute
+      // orphans against the UNION of all Supabase source_ids (per-trip orphan would lie).
+      const defaultNotionDb = Deno.env.get("ADMIN_DEFAULT_NOTION_DB") || "3438d94d5f7c81878221fcda6d65d39d";
+      const notionCache = new Map<string, { ids: string[] } | { error: string }>();
+      async function notionIdsFor(dbId: string) {
+        if (!notionCache.has(dbId)) {
+          try {
+            notionCache.set(dbId, { ids: await notionReceiptSourceIds(dbId) });
+          } catch (err) {
+            notionCache.set(dbId, { error: redact(err instanceof Error ? err.message : err) });
+          }
+        }
+        return notionCache.get(dbId)!;
+      }
+      const allSupabaseSourceIds = new Set(receipts.map((row: any) => String(row.source_id || "")).filter(Boolean));
+      for (const trip of tripsRes.data) {
+        const rows = receiptsByTrip.get(trip.id) || [];
+        const dbId = trip.notion_database_id || rows.find((row: any) => row.notion_database_id)?.notion_database_id || defaultNotionDb;
+        const supabaseSourceIds = new Set(rows.map((row: any) => String(row.source_id || "")).filter(Boolean));
+        const entry: any = {
+          tripId: trip.id,
+          tripName: trip.name,
+          ownerEmail: maskEmail((userById.get(trip.owner_id) as any)?.email),
+          notionDatabaseId: dbId,
+          supabaseReceipts: rows.length,
+          supabaseSyncedToNotion: rows.filter((row: any) => row.notion_page_id).length,
+        };
+        const notion = await notionIdsFor(dbId);
+        if ("error" in notion) {
+          entry.status = "notion_unreachable";
+          entry.error = notion.error;
+        } else {
+          const notionSet = new Set(notion.ids);
+          const missingInNotion = [...supabaseSourceIds].filter((id) => !notionSet.has(id));
+          const orphanInNotion = notion.ids.filter((id) => !allSupabaseSourceIds.has(id));
+          entry.notionReceipts = notion.ids.length;
+          entry.missingInNotion = missingInNotion.length;
+          entry.orphanInNotion = orphanInNotion.length;
+          entry.orphanSamples = orphanInNotion.slice(0, 10);
+          entry.status = missingInNotion.length === 0 && orphanInNotion.length === 0 ? "balanced" : "mismatch";
+        }
+        results.push(entry);
+      }
+      return json(req, 200, { ok: true, generatedAt: new Date().toISOString(), trips: results });
     }
     // --- Support Bundle ---
     if (req.method === "POST" && url.pathname.endsWith("/api/support-bundle")) {

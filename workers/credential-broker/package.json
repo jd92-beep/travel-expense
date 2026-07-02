@@ -9,5 +9,7 @@
     "seed:vault": "node scripts/seed-vault.mjs",
     "self-test": "node test/self-test.mjs"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "wrangler": "^4.106.0"
+  }
 }
