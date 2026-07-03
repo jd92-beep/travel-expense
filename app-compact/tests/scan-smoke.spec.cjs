@@ -121,13 +121,13 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
 
   await page.getByRole('button', { name: '手動', exact: true }).click();
   await page.getByLabel('店名 / 項目').fill('M5 手動測試');
-  await page.getByLabel('金額（legacy total）').fill('456');
+  await page.getByLabel('金額', { exact: true }).fill('456');
   await page.getByLabel('時間').fill('10:10');
   await page.getByRole('button', { name: '儲存' }).click();
   await nav.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first()).toBeVisible();
   await page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first().click();
-  await page.getByLabel('金額（legacy total）').fill('789');
+  await page.getByLabel('金額', { exact: true }).fill('789');
   await page.getByRole('button', { name: '儲存' }).click();
   await expect(page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first()).toContainText('789');
   await page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first().click();
@@ -140,7 +140,7 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await page.getByPlaceholder('例：喺全家買飯糰同飲品 580 yen，用 Suica').fill('2026-05-08 喺 M5 Voice Cafe 1234 yen，用 Suica，09:30');
   await page.getByRole('button', { name: '解析' }).click();
   await expect(page.getByText('編輯紀錄')).toBeVisible();
-  await expect(page.getByLabel('金額（legacy total）')).toHaveValue('1234');
+  await expect(page.getByLabel('金額', { exact: true })).toHaveValue('1234');
   await page.getByRole('button', { name: '取消' }).click();
   const fileChooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: '相機' }).first().click();

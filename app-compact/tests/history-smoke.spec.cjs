@@ -357,7 +357,7 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   const itineraryButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '加入行程');
   expect(deletePhotoButton.left).toBeLessThan(itineraryButton.left);
   expect(coffeeEditorMetrics.scrollWidth).toBe(390);
-  await page.getByLabel('金額（legacy total）').fill('444');
+  await page.getByLabel('金額', { exact: true }).fill('444');
   await page.getByRole('button', { name: '儲存' }).click();
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toContainText(/(?:¥|JPY)444/);
 

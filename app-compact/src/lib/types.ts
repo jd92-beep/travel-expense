@@ -42,6 +42,13 @@ export interface Person {
   color: string;
 }
 
+export interface ReceiptLineItem {
+  id: string;
+  desc: string;
+  amount: number;
+  qty?: number;
+}
+
 export interface Receipt {
   id: string;
   supabaseId?: string;
@@ -69,6 +76,7 @@ export interface Receipt {
   bookingRef?: string;
   note?: string;
   itemsText?: string;
+  lineItems?: ReceiptLineItem[];
   photoThumb?: string;
   photoUrl?: string;
   notionFileUploadId?: string;
