@@ -96,19 +96,25 @@ function serializeLineItems(items: ReceiptLineItem[], prefix: string): string {
   }).join('\n');
 }
 
-function parseItemsText(text: string): ReceiptLineItem[] | null {
+function parseItemsText(text: string): ReceiptLineItem[] {
   const lines = String(text || '').split('\n').map((line) => line.trim()).filter(Boolean);
-  if (!lines.length) return [];
   const out: ReceiptLineItem[] = [];
   for (const [idx, line] of lines.entries()) {
-    const m = line.match(/^-?\s*(.+?)(?:\s+[x×]\s*(\d+))?[:：]\s*(?:HK\$|NT\$|US\$|[¥₩€£$])?\s*([\d,]+(?:\.\d+)?)\s*$/);
-    if (!m) return null; // any unparseable line → caller falls back to the free-text editor
-    out.push({
-      id: `li_parsed_${idx}`,
-      desc: m[1].trim(),
-      qty: m[2] ? Number(m[2]) : undefined,
-      amount: Number(m[3].replace(/,/g, '')),
-    });
+    // Lenient by design: EVERY non-empty line becomes one item so existing receipts (whose
+    // itemsText was free-form OCR text, not our `- desc: ¥n` shape) still render as rows.
+    // Try to peel a trailing amount (optional currency symbol); if none, the whole line is the name.
+    const m = line.match(/^-?\s*(.+?)(?:\s+[x×]\s*(\d+))?\s*[:：]?\s*(?:HK\$|NT\$|US\$|[¥₩€£$])\s*([\d,]+(?:\.\d+)?)\s*$/);
+    if (m) {
+      out.push({ id: `li_parsed_${idx}`, desc: m[1].trim(), qty: m[2] ? Number(m[2]) : undefined, amount: Number(m[3].replace(/,/g, '')) });
+      continue;
+    }
+    // No currency symbol — try `name: 1234` / `name 1234` with a trailing bare number.
+    const bare = line.match(/^-?\s*(.+?)(?:\s+[x×]\s*(\d+))?\s*[:：]\s*([\d,]+(?:\.\d+)?)\s*$/);
+    if (bare) {
+      out.push({ id: `li_parsed_${idx}`, desc: bare[1].trim(), qty: bare[2] ? Number(bare[2]) : undefined, amount: Number(bare[3].replace(/,/g, '')) });
+      continue;
+    }
+    out.push({ id: `li_parsed_${idx}`, desc: line.replace(/^-\s*/, ''), amount: 0 });
   }
   return out;
 }
@@ -118,7 +124,8 @@ function hydratedLineItems(receipt: Receipt | null | undefined): ReceiptLineItem
   if (!receipt) return undefined;
   if (receipt.lineItems?.length) return receipt.lineItems;
   if (!receipt.itemsText?.trim()) return undefined;
-  return parseItemsText(receipt.itemsText) || undefined;
+  const parsed = parseItemsText(receipt.itemsText);
+  return parsed.length ? parsed : undefined;
 }
 
 // One combined line per item: `name␣␣␣¥1,018␣␣␣HK$49.51` (three-space separator, Boss spec).
