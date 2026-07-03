@@ -165,7 +165,7 @@ test('Dashboard budget currency toggle follows active Korea trip currency', asyn
   await expect(todayCard).toContainText('HK$ 1,000');
   await page.getByRole('button', { name: 'Add Expense' }).click();
   await expect(page.getByText('手動記一筆')).toBeVisible();
-  await expect(page.getByLabel('原貨幣')).toHaveValue('KRW');
+  await expect(page.getByRole('dialog', { name: '手動記一筆' }).getByLabel('貨幣', { exact: true })).toHaveValue('KRW');
 });
 
 test('Dashboard new trip wizard lets users choose trip days on step two', async ({ page }) => {

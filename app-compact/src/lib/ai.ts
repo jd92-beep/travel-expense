@@ -90,6 +90,16 @@ function coerceModelJson(raw: unknown): unknown {
   return typeof raw === 'string' ? extractJson(raw) : raw;
 }
 
+// Same, but never throws — trip stages have their own fallback chain, so an unparseable
+// string is passed through (stage 1 can still use it as free text).
+function coerceModelJsonSafe(raw: unknown): unknown {
+  try {
+    return coerceModelJson(raw);
+  } catch {
+    return raw;
+  }
+}
+
 function slug(value: string): string {
   return String(value || '')
     .toLowerCase()
@@ -1152,6 +1162,10 @@ The app will merge your result with the existing itinerary automatically.`
 
   return `Read and understand this travel itinerary text, then return JSON only.
 This is stage 1 of a two-stage Trip Update workflow. Do not extract app fields yet.
+
+OUTPUT CONTRACT — FOLLOW EXACTLY:
+1. Return ONE JSON object ONLY. No markdown, no code fences, no text before or after, no trailing commas.
+2. If something is unknown, use "" or [] — never invent data.
 Your job:
 1. Read the whole user text across Markdown tables, HTML-ish pasted text, plain timetables, Cantonese/Chinese/English/Korean names, duplicate lines, and mixed date formats.
 2. Infer the real travel plan and resolve conflicts by travel logic.
@@ -1184,8 +1198,14 @@ The app will merge your result with the existing itinerary automatically.
 Do NOT change trip.startDate or trip.endDate unless the organized itinerary explicitly changes them.`
     : `\nThis is a FULL REPLACEMENT. Return all days from the organized itinerary.`;
 
-  return `Extract app-ready trip data from this canonical itinerary and return JSON only.
+  return `You are a trip-itinerary extraction API. Extract app-ready trip data from this canonical itinerary and return JSON only.
 This is stage 2 of a two-stage Trip Update workflow.
+
+OUTPUT CONTRACT — FOLLOW EXACTLY:
+1. Return ONE JSON object ONLY. No markdown, no code fences, no explanations before or after, no trailing commas.
+2. All dates must be "YYYY-MM-DD" (convert 4月21日-style dates; take the year from Current trip JSON when missing).
+3. All times must be 24-hour half-width "HH:MM" (convert 9時30分 / ９：３０ / 9:30pm). Omit timeEnd when unknown.
+4. "day" must be a plain number (1, 2, 3...). If a value is unknown, use "" for strings — never invent data.
 You must use only CANONICAL ORGANIZED ITINERARY below as the source of truth for trip.itinerary.
 Do not go back to the user's raw pasted text. Do not copy Current trip JSON as a successful extraction.
 The app will use trip.itinerary as the backbone for Timeline, Weather, Records, Stats, and sync.
@@ -1195,7 +1215,12 @@ Current trip JSON for merge/date/year context only:
 ${JSON.stringify(currentTrip).slice(0, 12000)}
 
 Return minimalist schema:
-{"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"lodging":{"name":string},"spots":[{"time":"HH:MM","timeEnd":"HH:MM","name":string,"note":string,"address":string,"bookingRef":string}]}]},"summary":string,"warnings":string[],"changes":string[]}
+{"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"lodging":{"name":string},"spots":[{"time":"HH:MM","timeEnd":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|sightseeing|other","note":string,"address":string,"bookingRef":string}]}]},"summary":string,"warnings":string[],"changes":string[]}
+
+"type" classifies each spot: restaurants/cafes/meals → "food"; hotels/check-in → "lodging"; flights → "flight"; trains/buses/taxis → "transport"; temples/parks/viewpoints/museums → "sightseeing"; markets/malls → "shopping"; day tours → "localtour"; admission-based attractions → "ticket"; otherwise "other".
+
+EXAMPLE OUTPUT (structure reference only — extract the actual values from the canonical itinerary):
+{"organizedItinerary":"Day 1 (2026-04-20) 名古屋...","trip":{"name":"名古屋之旅","destinationSummary":"名古屋 / 中部","startDate":"2026-04-20","endDate":"2026-04-21","itinerary":[{"date":"2026-04-20","day":1,"region":"名古屋","lodging":{"name":"名古屋王子酒店"},"spots":[{"time":"09:30","timeEnd":"10:30","name":"名古屋城","type":"sightseeing","note":"","address":"愛知県名古屋市中区本丸1-1","bookingRef":""},{"time":"12:00","name":"矢場とん (味噌豬扒)","type":"food","note":"午餐","address":"","bookingRef":""}]}]},"summary":"已整理 2 日名古屋行程","warnings":[],"changes":["更新 Day 1 行程"]}
 
 organizedItinerary must match the canonical itinerary you used for extraction.
 Include lodging, arrival times, places, restaurants, transport/flight/train references, booking references.
@@ -1342,7 +1367,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
             timeoutMs,
             `Trip organize ${attempt.label}`,
           );
-          organizedItinerary = organizedItineraryFromModel(organizedRaw, fastLocalDraft?.trip);
+          organizedItinerary = organizedItineraryFromModel(coerceModelJsonSafe(organizedRaw), fastLocalDraft?.trip);
           if (!organizedItinerary || organizedItinerary.length < 20) {
             warnings.push(`${attempt.label} returned no usable organized itinerary.`);
             console.warn(`[AI Routing] ${attempt.label} returned no usable organized itinerary; trying next trip model.`);
@@ -1351,11 +1376,11 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
           console.log(`[AI Routing] 正在由重整行程抽取 app data: ${attempt.label}...`);
           extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip, intent, current.itinerary || []);
         }
-        const parsed = await withTimeout(
+        const parsed = coerceModelJsonSafe(await withTimeout(
           callModelAttemptJson(state, attempt, extractionPrompt, 'trip'),
           timeoutMs,
           `Trip extract ${attempt.label}`,
-        );
+        ));
         const parsedRecord = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
           ? parsed as Record<string, unknown>
           : {};

@@ -495,7 +495,9 @@ export function ReceiptEditor({
             <NumberTextInput value={draft.total} max={MAX_RECEIPT_AMOUNT} blankZero onValue={(n) => set('total', n)} />
           </label>
           <label>貨幣
-            <select value={draft.originalCurrency || draft.currency || currencyForDate(draft.date)} onChange={(e) => {
+            {/* Explicit aria-label: a wrapping <label> gives the select an accessible name polluted
+                with every <option> text (貨幣JPYHKD...), breaking exact a11y queries. */}
+            <select aria-label="貨幣" value={draft.originalCurrency || draft.currency || currencyForDate(draft.date)} onChange={(e) => {
               set('originalCurrency', e.target.value);
               set('currency', e.target.value);
             }}>
