@@ -10,10 +10,15 @@ import { currentSupabaseAccessToken } from './supabase';
 const KIMI_API_MODEL = 'kimi-code';
 const KIMI_NON_THINKING = { type: 'disabled' } as const;
 
+// Remove trailing commas before } or ] — the single most common JSON error from weak models.
+function repairJson(text: string): string {
+  return text.replace(/,\s*([}\]])/g, '$1');
+}
+
 function extractJson(text: string): unknown {
   const cleaned = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
   try {
-    return JSON.parse(cleaned);
+    return JSON.parse(repairJson(cleaned));
   } catch {
     const firstBrace = cleaned.indexOf('{');
     const firstBracket = cleaned.indexOf('[');
@@ -54,11 +59,35 @@ function extractJson(text: string): unknown {
     }
     
     try {
-      return JSON.parse(str);
+      return JSON.parse(repairJson(str));
     } catch {
       throw new Error('AI 回覆唔係 JSON');
     }
   }
+}
+
+// Weak models return "¥3,240", "３２４０円", "2,400" — normalize any of it to a plain number.
+function toHalfWidthDigits(text: string): string {
+  return text.replace(/[０-９．]/g, (ch) => (ch === '．' ? '.' : String.fromCharCode(ch.charCodeAt(0) - 0xfee0)));
+}
+
+function coerceAmount(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? Math.abs(value) : 0;
+  const digits = toHalfWidthDigits(String(value ?? '')).replace(/[^\d.]/g, '');
+  if (!digits) return 0;
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) ? Math.abs(parsed) : 0;
+}
+
+function coerceTime(value: unknown): string {
+  const m = toHalfWidthDigits(String(value ?? '')).match(/([01]?\d|2[0-3])[:：時]([0-5]\d)/);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+}
+
+// The broker normally returns parsed JSON, but if any provider path hands back raw text
+// (fences, prose, trailing commas), extract it client-side instead of failing the scan.
+function coerceModelJson(raw: unknown): unknown {
+  return typeof raw === 'string' ? extractJson(raw) : raw;
 }
 
 function slug(value: string): string {
@@ -87,7 +116,10 @@ function validPayment(value: unknown): PaymentId {
   return 'cash';
 }
 
-function ymdFromText(text: string, fallback: string): string {
+function ymdFromText(rawText: string, fallback: string): string {
+  const text = toHalfWidthDigits(String(rawText || ''));
+  const cjk = text.match(/(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})/);
+  if (cjk) return `${cjk[1]}-${cjk[2].padStart(2, '0')}-${cjk[3].padStart(2, '0')}`;
   const iso = text.match(/20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}/);
   if (iso) {
     const [y, m, d] = iso[0].split(/[-/.]/);
@@ -813,13 +845,15 @@ function parseLineItems(raw: unknown): ReceiptLineItem[] {
     if (!entry || typeof entry !== 'object') continue;
     const r = entry as Record<string, unknown>;
     const desc = String(r.desc || r.name || r.description || '').trim();
-    const amount = Math.round(Number(r.amount ?? r.price ?? r.total));
-    if (!desc || !Number.isFinite(amount) || amount < 0) continue;
+    // coerceAmount tolerates weak-model output: "¥1,580", "１５８０円", numeric strings.
+    const amount = Math.round(coerceAmount(r.amount ?? r.price ?? r.total));
+    if (!desc) continue;
+    const qty = Math.round(coerceAmount(r.qty));
     items.push({
       id: `li_${Date.now()}_${Math.random().toString(16).slice(2)}`,
       desc,
       amount,
-      qty: Number.isFinite(Number(r.qty)) && Number(r.qty) > 0 ? Math.round(Number(r.qty)) : undefined,
+      qty: qty > 0 ? qty : undefined,
     });
   }
   return items;
@@ -838,9 +872,24 @@ export async function scanReceiptImage(file: File, state: AppState): Promise<Rec
   const imageForOCR = await prepareForOCR(image.base64, image.mime);
   const photoThumb = await compressPhoto(image.base64, image.mime, 480);
 
-  const prompt = `Read this travel receipt (which may be in a foreign language like Japanese or Korean) and return JSON only:
+  const prompt = `You are a receipt-scanning API. Read this travel receipt image (it may be in Japanese, Korean, Chinese or English).
+
+OUTPUT CONTRACT — FOLLOW EXACTLY:
+1. Return ONE JSON object ONLY. No markdown, no code fences, no explanations before or after, no trailing commas.
+2. Every number must be plain half-width digits: no currency symbols, no thousands commas, no ０-９. Example: 3240 (not "¥3,240").
+3. If a value is unknown, use "" for strings and 0 for numbers. Never invent data.
+
+JSON shape:
 {"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","itemsText":string,"note":string,"lineItems":[{"desc":string,"amount":number,"qty":number}],"tax":number,"tip":number}
-Use ${state.tripDateRange.start} if the year is missing.
+
+FIELD RULES:
+- "total" is the grand total actually paid.
+- "date": convert Japanese era years (令和8年 = 2026, 平成/昭和 likewise). Use year ${(state.tripDateRange.start || '').slice(0, 4) || new Date().getFullYear()} if the receipt omits the year.
+- "time": 24-hour HH:MM from the receipt timestamp; "" if absent.
+- "category" and "payment" MUST be one of the listed values exactly.
+
+EXAMPLE OUTPUT (structure reference only — read the actual values from the image):
+{"store":"桜町商店 (櫻町商店)","total":3240,"date":"2026-04-21","time":"12:45","address":"東京都千代田区丸の内1-1-1 (東京都千代田區丸之內1-1-1)","bookingRef":"","category":"food","payment":"cash","itemsText":"- 天ぷら定食 (天婦羅定食) x 1: ¥1580\\n- ビール (啤酒) x 2: ¥1660","note":"","lineItems":[{"desc":"天ぷら定食 (天婦羅定食)","amount":1580,"qty":1},{"desc":"ビール (啤酒)","amount":1660,"qty":2}],"tax":0,"tip":0}
 
 CRITICAL TRANSLATION RULES:
 1. For any fields like "store", "address", "itemsText", or "note" containing foreign languages (Japanese, Korean, English, etc.), you MUST preserve the original language text AND append its Cantonese (廣東話) translation in Traditional Chinese (繁體中文) in brackets right next to it.
@@ -862,7 +911,7 @@ CRITICAL ITEMS FORMATTING RULES:
    Example:
    - 牛乳 (牛奶) x 1: ¥180
    - 삼각김밥 (三角飯糰) x 2: ₩2,400`;
-  const parsed = await callPreferredJson(state, prompt, 'scan', imageForOCR) as Partial<Receipt> & {
+  const parsed = coerceModelJson(await callPreferredJson(state, prompt, 'scan', imageForOCR)) as Partial<Receipt> & {
     lineItems?: unknown;
     tax?: unknown;
     tip?: unknown;
@@ -877,13 +926,13 @@ CRITICAL ITEMS FORMATTING RULES:
   // guard, so a misread refund/credit line as the grand total would otherwise silently flow into
   // computeSettlements, which skips amount<=0 entirely — the receipt would still reduce Dashboard's
   // spend total but contribute nothing to anyone's settlement balance. Normalize to the same invariant.
-  const receiptTotal = Math.abs(Number(parsed.total) || 0);
+  const receiptTotal = coerceAmount(parsed.total);
   return {
     id: `scan_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     store: String(parsed.store || file.name.replace(/\.[^.]+$/, '') || '掃描收據'),
     total: receiptTotal,
     date: receiptDate,
-    time: String(parsed.time || ''),
+    time: coerceTime(parsed.time),
     address: String(parsed.address || ''),
     bookingRef: String(parsed.bookingRef || ''),
     category: validCategory(parsed.category),
@@ -905,7 +954,7 @@ CRITICAL ITEMS FORMATTING RULES:
 
 
 export async function parseTextWithAi(text: string, state: AppState, source: string): Promise<Receipt[]> {
-  const prompt = `Extract travel expense receipts from the text. Return JSON array only.
+  const prompt = `Extract travel expense receipts from the text. Return a JSON array ONLY — no markdown, no code fences, no explanations, no trailing commas. Numbers must be plain half-width digits (no currency symbols, no commas). Use "" / 0 for unknown values.
 Each item: {"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","itemsText":string,"note":string}
 TEXT:
 ${text.slice(0, 12000)}
@@ -924,7 +973,7 @@ CRITICAL ITEMS FORMATTING RULES:
    - 삼각김밥 (三角飯糰) x 2: ₩2,400`;
   let parsed: unknown;
   try {
-    parsed = await callPreferredJson(state, prompt, source.includes('voice') ? 'voice' : 'email');
+    parsed = coerceModelJson(await callPreferredJson(state, prompt, source.includes('voice') ? 'voice' : 'email'));
   } catch (error) {
     return [{
       ...heuristicReceiptFromText(text, state),
@@ -943,7 +992,7 @@ CRITICAL ITEMS FORMATTING RULES:
   }
   return rows.map((row, i) => {
     const r = row as Partial<Receipt>;
-    const receiptTotal = Math.abs(Number(r.total) || 0); // same non-negative invariant as manual entry
+    const receiptTotal = coerceAmount(r.total); // same non-negative invariant as manual entry
     const receiptCurrency = state.tripCurrency || 'JPY';
     const fxRate = receiptCurrency === 'HKD' ? undefined : perHkdForCurrency(state, receiptCurrency);
     return {
