@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-03
+
+- Fixed Compact `0.9.1` itinerary recovery for the default Nagoya trip (`2026-04-20` to `2026-04-25`): if a backend/account sync returns a partial active-trip itinerary, the Timeline now restores the missing canonical Nagoya days instead of hiding them.
+- Clamped Compact itinerary display to the active trip date range, so scenery spots from dates outside the trip no longer appear in the Itinerary/Timeline tab.
+- Hardened Compact trip pull/import merging so a newer remote trip with only partial itinerary days no longer overwrites complete local days; same-date remote updates still apply while missing days are preserved.
+- Added a Timeline regression smoke that seeds a broken Nagoya state with only `2026-04-20`, `2026-04-25`, and an out-of-range `2026-04-26` scenery spot, then verifies the app shows all six Nagoya dates and hides the out-of-range spot.
+- Verification passed for Compact `typecheck`, served `smoke:timeline` (`9 passed`), production `build`, `security:scan`, and served `smoke:mobile-layout`.
+
 ## 2026-07-02
 
 - Verified Oscar's console update on `main`: Admin Console is live as `0.7.0` at `https://travel-expense-admin-kanban.vercel.app`, and Compact is `0.8.7`.

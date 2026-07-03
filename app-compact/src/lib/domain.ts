@@ -1,7 +1,7 @@
 import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
 import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, TripPhase } from './types';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, TripPhase, TripProfile } from './types';
 
 export const fmt = (n: number | string | undefined) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -12,13 +12,104 @@ export const categoryById = (id: CategoryId | string | undefined) =>
 export const paymentById = (id: PaymentId | string | undefined) =>
   PAYMENTS.find((p) => p.id === id) || PAYMENTS[0];
 
+const DEFAULT_NAGOYA_START = '2026-04-20';
+const DEFAULT_NAGOYA_END = '2026-04-25';
+
+function isIsoDate(value: string | undefined): value is string {
+  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function itineraryRangeForTrip(state: AppState, trip: TripProfile): { start: string; end: string } | null {
+  const start = trip.startDate || state.tripDateRange?.start;
+  const end = trip.endDate || state.tripDateRange?.end;
+  if (!isIsoDate(start) || !isIsoDate(end) || end < start) return null;
+  return { start, end };
+}
+
+function dateSeries(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(last.getTime()) || cursor > last) return dates;
+  while (cursor <= last) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function isDefaultNagoyaTrip(state: AppState, trip: TripProfile): boolean {
+  const range = itineraryRangeForTrip(state, trip);
+  const text = `${trip.id} ${trip.name} ${trip.destinationSummary || ''} ${state.tripName || ''}`;
+  return !!range
+    && range.start === DEFAULT_NAGOYA_START
+    && range.end === DEFAULT_NAGOYA_END
+    && /nagoya|名古屋/i.test(text);
+}
+
+function mergeItineraryDay(primary: ItineraryDay | undefined, fallback: ItineraryDay | undefined, date: string, idx: number, currency: string): ItineraryDay {
+  const base = fallback || primary;
+  return {
+    ...base,
+    ...primary,
+    date,
+    day: idx + 1,
+    region: primary?.region || fallback?.region || `Day ${idx + 1}`,
+    timezone: primary?.timezone || fallback?.timezone || 'Asia/Tokyo',
+    currency: primary?.currency || fallback?.currency || currency,
+    highlight: primary?.highlight || fallback?.highlight || '',
+    lodging: primary?.lodging?.name ? primary.lodging : fallback?.lodging,
+    spots: primary?.spots?.length ? primary.spots : fallback?.spots || [],
+  };
+}
+
+function repairItineraryForTrip(state: AppState, trip: TripProfile, source: ItineraryDay[], currency: string): ItineraryDay[] {
+  const range = itineraryRangeForTrip(state, trip);
+  const normalized = normalizeItinerary(source, trip.id, currency);
+  if (!range) return normalized;
+
+  const inRange = normalized.filter((day) => day.date >= range.start && day.date <= range.end);
+  const dates = dateSeries(range.start, range.end);
+  if (!dates.length) return inRange;
+
+  if (isDefaultNagoyaTrip(state, trip)) {
+    const primaryByDate = new Map(inRange.map((day) => [day.date, day]));
+    const customByDate = new Map(normalizeItinerary(state.customItinerary || [], trip.id, currency)
+      .filter((day) => day.date >= range.start && day.date <= range.end)
+      .map((day) => [day.date, day]));
+    const defaultByDate = new Map(normalizeItinerary(ITINERARY, trip.id, currency)
+      .filter((day) => day.date >= range.start && day.date <= range.end)
+      .map((day) => [day.date, day]));
+    return dates
+      .map((date, idx) => mergeItineraryDay(
+        primaryByDate.get(date) || customByDate.get(date),
+        defaultByDate.get(date),
+        date,
+        idx,
+        currency,
+      ))
+      .filter((day) => day.spots.length || day.region);
+  }
+
+  if (inRange.length) return inRange.map((day, idx) => ({ ...day, day: idx + 1 }));
+  return dates.map((date, idx) => ({
+    date,
+    day: idx + 1,
+    region: trip.destinationSummary || trip.name || `Day ${idx + 1}`,
+    timezone: trip.timezones?.[0] || 'Asia/Tokyo',
+    currency,
+    spots: [],
+  }));
+}
+
 export function getItinerary(state: AppState): ItineraryDay[] {
   const trip = activeTrip(state);
+  const currency = getResolvedTripCurrency(state, trip);
   // Must match getResolvedTripCurrency: currencies[] order is not guaranteed (default trip is ['JPY','HKD']).
-  if (trip?.itinerary?.length) return normalizeItinerary(trip.itinerary, trip.id, getResolvedTripCurrency(state, trip));
-  if (state.customItinerary && state.customItinerary.length) return normalizeItinerary(state.customItinerary, state.activeTripId || 'trip_default', state.tripCurrency);
+  if (trip?.itinerary?.length) return repairItineraryForTrip(state, trip, trip.itinerary, currency);
+  if (state.customItinerary && state.customItinerary.length) return repairItineraryForTrip(state, trip, state.customItinerary, currency);
   // Fallback: always normalize the constant ITINERARY to ensure stable dayId/spotId
-  return normalizeItinerary(ITINERARY, state.activeTripId || 'trip_default', state.tripCurrency || 'JPY');
+  return repairItineraryForTrip(state, trip, isDefaultNagoyaTrip(state, trip) ? ITINERARY : [], currency || state.tripCurrency || 'JPY');
 }
 
 export function validateItinerary(input: unknown): { ok: true; itinerary: ItineraryDay[] } | { ok: false; error: string } {

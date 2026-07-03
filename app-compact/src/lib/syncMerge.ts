@@ -29,6 +29,50 @@ function tripUpdatedAt(trip: TripProfile, isLocal = false) {
   return Number(trip.updatedAt || trip.createdAt || 0);
 }
 
+function validTripRange(trip: TripProfile, fallback?: TripProfile): { start: string; end: string } | null {
+  const start = String(trip.startDate || fallback?.startDate || '');
+  const end = String(trip.endDate || fallback?.endDate || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '') || end < start) return null;
+  return { start, end };
+}
+
+function inTripRange(day: TripProfile['itinerary'][number], range: { start: string; end: string } | null): boolean {
+  if (!range) return true;
+  return day.date >= range.start && day.date <= range.end;
+}
+
+function mergeItineraryDay(remote: TripProfile['itinerary'][number] | undefined, local: TripProfile['itinerary'][number] | undefined): TripProfile['itinerary'][number] | null {
+  const base = remote || local;
+  if (!base) return null;
+  return {
+    ...local,
+    ...remote,
+    date: remote?.date || local?.date || base.date,
+    day: Number(remote?.day || local?.day || base.day) || 1,
+    region: remote?.region || local?.region || base.region,
+    lodging: remote?.lodging?.name ? remote.lodging : local?.lodging,
+    spots: remote?.spots?.length ? remote.spots : local?.spots || [],
+  };
+}
+
+function mergeTripItinerary(remoteTrip: TripProfile, localTrip?: TripProfile): TripProfile['itinerary'] {
+  const range = validTripRange(remoteTrip, localTrip);
+  const remoteDays = (remoteTrip.itinerary || []).filter((day) => inTripRange(day, range));
+  const localDays = (localTrip?.itinerary || []).filter((day) => inTripRange(day, range));
+  if (!remoteDays.length) return localDays;
+  if (!localDays.length) return remoteDays;
+
+  const remoteByDate = new Map(remoteDays.map((day) => [day.date, day]));
+  const localByDate = new Map(localDays.map((day) => [day.date, day]));
+  const dates = Array.from(new Set([...localDays, ...remoteDays].map((day) => day.date))).sort();
+  return dates
+    .map((date, idx) => {
+      const day = mergeItineraryDay(remoteByDate.get(date), localByDate.get(date));
+      return day ? { ...day, day: idx + 1 } : null;
+    })
+    .filter((day): day is TripProfile['itinerary'][number] => !!day);
+}
+
 export function isReceiptTombstoned(
   state: Pick<AppState, 'notionDeletedIds' | 'notionDeletedSourceIds' | 'trips'>,
   receipt: Pick<Receipt, 'id' | 'sourceId' | 'notionPageId' | 'tripId'>,
@@ -127,7 +171,7 @@ export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
       byId.set(remoteTrip.id, {
         ...localTrip,
         ...remoteTrip,
-        itinerary: remoteTrip.itinerary?.length ? remoteTrip.itinerary : localTrip?.itinerary || remoteTrip.itinerary || [],
+        itinerary: mergeTripItinerary(remoteTrip, localTrip),
       });
 
     }

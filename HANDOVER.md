@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-02
-- **Focus**: Admin Console `0.7.0`, Compact `0.8.7` sync/photo repair, and docs/lockfile alignment
+- **Date**: 2026-07-03
+- **Focus**: Compact `0.9.1` Nagoya itinerary recovery and partial-sync guardrails
 - **Agent**: Codex
-- **App version**: Compact `0.8.7`; Admin Console `0.7.0`; React unchanged in this pass
+- **App version**: Compact `0.9.1`; Admin Console `0.7.0`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,12 +13,23 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.8.7`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.9.1`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 35 (Codex — current session)
+### Session 36 (Codex — current session)
+
+1. **Compact Nagoya itinerary recovery**:
+   - Root cause: the canonical `ITINERARY` still contained all six Nagoya dates (`2026-04-20` to `2026-04-25`), but `getItinerary()` trusted any non-empty active-trip `itinerary`. A backend/account sync or AI update that returned only a partial trip itinerary could therefore hide the missing days.
+   - `app-compact/src/lib/domain.ts` now repairs the default Nagoya trip by clamping display to the active trip date range, backfilling missing canonical Nagoya dates, and dropping scenery spots outside `2026-04-20` to `2026-04-25`.
+   - `app-compact/src/lib/syncMerge.ts` now deep-merges pulled trip itineraries by date. A partial remote trip can update matching dates, but it cannot erase complete local dates or keep out-of-range itinerary days.
+   - Added `Timeline restores Nagoya canonical days and hides out-of-range scenery after partial trip sync` to `app-compact/tests/timeline-smoke.spec.cjs`.
+   - Bumped Compact to `0.9.1` and synchronized `package-lock.json`.
+   - Verification passed: `npm run typecheck`, served `npm run smoke:timeline` (`9 passed`), `npm run build`, `npm run security:scan`, served `npm run smoke:mobile-layout`.
+   - GitNexus note: `node .gitnexus/run.cjs analyze` repaired the missing LadybugDB native dependency but the full analyze hung; impact was run against the existing index with repo/path disambiguation. `getItinerary` returned CRITICAL blast radius; `mergePulledTrips` returned LOW.
+
+### Session 35 (Codex — previous session)
 
 1. **Oscar console update verification and docs alignment**:
    - Verified Oscar's pushed console work through commit `2eaaea7`: Admin Console is `0.7.0`, Compact is `0.8.7`.

@@ -288,6 +288,60 @@ test('Timeline command card stays compact and day header shows one date', async 
   await expect(firstDay.locator('.timeline-day-status')).not.toContainText('2026-05-08');
 });
 
+test('Timeline restores Nagoya canonical days and hides out-of-range scenery after partial trip sync', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'timeline',
+      activeTripId: 'trip_2026_04_nagoya',
+      tripName: '名古屋 2026',
+      tripCurrency: 'JPY',
+      tripDateRange: { start: '2026-04-20', end: '2026-04-25' },
+      customItinerary: null,
+      trips: [{
+        id: 'trip_2026_04_nagoya',
+        name: '名古屋 2026',
+        destinationSummary: '日本名古屋、飛驒高山、白川鄉、金澤、常滑',
+        startDate: '2026-04-20',
+        endDate: '2026-04-25',
+        homeCurrency: 'HKD',
+        currencies: ['JPY', 'HKD'],
+        timezones: ['Asia/Tokyo'],
+        version: 3,
+        active: true,
+        itinerary: [
+          { date: '2026-04-20', day: 1, region: '名古屋市區', timezone: 'Asia/Tokyo', spots: [{ time: '09:00', name: '名古屋站', type: 'transport' }] },
+          { date: '2026-04-25', day: 6, region: '常滑 → 機場', timezone: 'Asia/Tokyo', spots: [{ time: '12:00', name: '中部國際機場', type: 'transport' }] },
+          { date: '2026-04-26', day: 7, region: '行程外', timezone: 'Asia/Tokyo', spots: [{ time: '10:00', name: '不存在行程以外日子的景點', type: 'sightseeing' }] },
+        ],
+        sourceId: 'trip_trip_2026_04_nagoya',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }],
+      receipts: [],
+    }));
+  });
+
+  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
+  await expect(page.locator('.timeline-command')).toBeVisible();
+  await expect(page.locator('.timeline-trip-days')).toHaveText('6日');
+  await expect(page.locator('.timeline-day')).toHaveCount(6);
+  await expect(page.locator('.timeline-day-date-primary')).toHaveText([
+    '2026-04-20',
+    '2026-04-21',
+    '2026-04-22',
+    '2026-04-23',
+    '2026-04-24',
+    '2026-04-25',
+  ]);
+  await expect(page.locator('.timeline-event').filter({ hasText: '白川鄉 合掌村' })).toBeVisible();
+  await expect(page.locator('.timeline-event').filter({ hasText: '雪之大谷' })).toBeVisible();
+  await expect(page.locator('.timeline-event').filter({ hasText: '鳥開總本家' })).toBeVisible();
+  await expect(page.getByText('不存在行程以外日子的景點')).toHaveCount(0);
+});
+
 test('Timeline mobile rail shines independently without covering compact itinerary cards', async ({ page }) => {
   const fixed = new Date('2026-05-08T12:30:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {
