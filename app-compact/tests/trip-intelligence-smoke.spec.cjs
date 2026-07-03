@@ -56,7 +56,7 @@ test('Trip intelligence drives the shared destination theme contract', async ({ 
     localStorage.setItem('boss-japan-tracker', JSON.stringify(payload));
   }, seededState);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
 
   const theme = await page.evaluate(() => ({

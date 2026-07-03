@@ -76,6 +76,21 @@ function normalizeItineraryDate(rawDate: unknown, fallbackYear: number): string 
   return raw;
 }
 
+// Weak trip-update models emit "9時30分", "９：３０", "9:30:00", "9.30am" — Timeline sorting and
+// the rail clock need clean 24-hour half-width HH:MM (minutesForTime treats junk as Infinity).
+function normalizeSpotTime(value: unknown): string {
+  const raw = String(value ?? '')
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/：/g, ':')
+    .trim();
+  if (!raw) return '';
+  const m = raw.match(/([01]?\d|2[0-3])\s*[:時.]\s*([0-5]\d)/);
+  if (!m) return '';
+  let hour = Number(m[1]);
+  if (/pm|下午|晚上/i.test(raw) && hour < 12) hour += 12;
+  return `${String(hour).padStart(2, '0')}:${m[2]}`;
+}
+
 export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fallbackCurrency = 'JPY'): ItineraryDay[] {
   const fallbackYear = inferItineraryYear(itinerary, tripId);
   return itinerary.map((day, dayIdx) => {
@@ -98,6 +113,8 @@ export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fa
         return {
           ...spot,
           name,
+          time: normalizeSpotTime(spot.time) || spot.time,
+          timeEnd: normalizeSpotTime(spot.timeEnd) || spot.timeEnd,
           type: spot.type || resolveCategory(name),
           id: spot.spotId || spot.id || stableSpotId(tripId, safeDate, spotIdx, spot),
           spotId: spot.spotId || spot.id || stableSpotId(tripId, safeDate, spotIdx, spot),
