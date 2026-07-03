@@ -126,7 +126,7 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await manualDialog.getByRole('tab', { name: '實額' }).click();
   await expect(manualDialog.getByRole('tab', { name: '實額' })).toHaveAttribute('aria-selected', 'true');
   await page.getByLabel('店名 / 項目').fill('M5 手動測試');
-  await page.getByLabel('金額（legacy total）').fill('456');
+  await page.getByLabel('金額', { exact: true }).fill('456');
   await expect(manualDialog.getByLabel('User 1 實額')).toHaveValue('456');
   await manualDialog.getByLabel('User 1 實額').fill('1');
   await expect(manualDialog.getByText('差 ¥455')).toBeVisible();
@@ -138,7 +138,7 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first()).toBeVisible();
   await page.locator('.receipt-row').filter({ hasText: 'M5 手動測試' }).first().click();
   const editDialog = page.getByRole('dialog', { name: '編輯紀錄' });
-  await page.getByLabel('金額（legacy total）').fill('789');
+  await page.getByLabel('金額', { exact: true }).fill('789');
   await editDialog.locator('summary').filter({ hasText: '進階拆數' }).click();
   await editDialog.getByLabel('User 1 實額').fill('789');
   await page.getByRole('button', { name: '儲存' }).click();
@@ -153,7 +153,7 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await page.getByPlaceholder('例：喺全家買飯糰同飲品 580 yen，用 Suica').fill('2026-05-08 喺 M5 Voice Cafe 1234 yen，用 Suica，09:30');
   await page.getByRole('button', { name: '解析' }).click();
   await expect(page.getByText('編輯紀錄')).toBeVisible();
-  await expect(page.getByLabel('金額（legacy total）')).toHaveValue('1234');
+  await expect(page.getByLabel('金額', { exact: true })).toHaveValue('1234');
   await page.getByRole('button', { name: '取消' }).click();
   const fileChooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: '相機' }).first().click();

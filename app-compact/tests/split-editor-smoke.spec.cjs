@@ -23,7 +23,7 @@ async function addManualReceipt(page, nav, config) {
   await expect(dialog).toBeVisible();
   await page.getByLabel('店名 / 項目').fill(config.store);
   await page.getByLabel('日期').fill('2026-04-20');
-  await page.getByLabel('金額（legacy total）').fill(String(config.total));
+  await page.getByLabel('金額', { exact: true }).fill(String(config.total));
   if (config.payerId) {
     await dialog.locator('label').filter({ hasText: '付款人' }).locator('select').selectOption(config.payerId);
   }

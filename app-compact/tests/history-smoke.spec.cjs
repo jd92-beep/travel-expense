@@ -353,14 +353,14 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   const deleteButton = coffeeEditorMetrics.footerButtons.find((button) => button.text === '刪除');
   const saveButton = coffeeEditorMetrics.footerButtons.find((button) => button.text === '儲存');
   const cancelButton = coffeeEditorMetrics.footerButtons.find((button) => button.text === '取消');
-  expect(deleteButton.left).toBeLessThan(saveButton.left);
+  // Boss-specified order (2026-07-03 sketch): 儲存 → 取消 → 刪除, and photo row 加入行程 → 刪除相片.
   expect(saveButton.left).toBeLessThan(cancelButton.left);
-  expect(cancelButton.right).toBeGreaterThan(saveButton.right);
+  expect(cancelButton.left).toBeLessThan(deleteButton.left);
   const deletePhotoButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '刪除相片');
   const itineraryButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '加入行程');
-  expect(deletePhotoButton.left).toBeLessThan(itineraryButton.left);
+  expect(itineraryButton.left).toBeLessThan(deletePhotoButton.left);
   expect(coffeeEditorMetrics.scrollWidth).toBe(390);
-  await page.getByLabel('金額（legacy total）').fill('444');
+  await page.getByLabel('金額', { exact: true }).fill('444');
   await page.getByRole('button', { name: '儲存' }).click();
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toContainText(/(?:¥|JPY)444/);
 

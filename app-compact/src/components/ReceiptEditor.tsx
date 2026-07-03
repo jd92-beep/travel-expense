@@ -86,6 +86,41 @@ function formatDelta(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
 }
 
+// 品項 rows ⇄ itemsText round-trip. Serialized format is `- desc x N: ¥1,234` (same shape the
+// OCR pipeline emits), so receipts synced from other devices — where structured lineItems are
+// not persisted — still hydrate back into editable rows.
+function serializeLineItems(items: ReceiptLineItem[], prefix: string): string {
+  return items.map((item) => {
+    const qty = item.qty && item.qty > 1 ? ` x ${item.qty}` : '';
+    return `- ${item.desc}${qty}: ${prefix}${item.amount.toLocaleString()}`;
+  }).join('\n');
+}
+
+function parseItemsText(text: string): ReceiptLineItem[] | null {
+  const lines = String(text || '').split('\n').map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const out: ReceiptLineItem[] = [];
+  for (const [idx, line] of lines.entries()) {
+    const m = line.match(/^-?\s*(.+?)(?:\s+[x×]\s*(\d+))?[:：]\s*(?:HK\$|NT\$|US\$|[¥₩€£$])?\s*([\d,]+(?:\.\d+)?)\s*$/);
+    if (!m) return null; // any unparseable line → caller falls back to the free-text editor
+    out.push({
+      id: `li_parsed_${idx}`,
+      desc: m[1].trim(),
+      qty: m[2] ? Number(m[2]) : undefined,
+      amount: Number(m[3].replace(/,/g, '')),
+    });
+  }
+  return out;
+}
+
+// Hydrate structured rows for a receipt that only carries itemsText (e.g. pulled from cloud).
+function hydratedLineItems(receipt: Receipt | null | undefined): ReceiptLineItem[] | undefined {
+  if (!receipt) return undefined;
+  if (receipt.lineItems?.length) return receipt.lineItems;
+  if (!receipt.itemsText?.trim()) return undefined;
+  return parseItemsText(receipt.itemsText) || undefined;
+}
+
 function validateSplitRows(splitType: SplitType, total: number, rows: ReceiptSplit[], prefix = '¥') {
   const field = splitFieldFor(splitType);
   if (!field) return { valid: true, label: '已對數' };
@@ -152,7 +187,7 @@ export function ReceiptEditor({
   const mountedRef = useRef(true);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [draft, setDraft] = useState<Receipt>(() => receipt || {
+  const [draft, setDraft] = useState<Receipt>(() => (receipt ? { ...receipt, lineItems: hydratedLineItems(receipt) } : null) || {
     id: newId(),
     store: '',
     total: 0,
@@ -175,6 +210,29 @@ export function ReceiptEditor({
     : 'equal';
   const totalForSplit = validAmount(draft.total) ?? 0;
   const editPrefix = currencyPrefix(draft.currency || draft.originalCurrency || currencyForDate(draft.date));
+  // 品項 rows: structured lineItems are the source of truth; legacy free-text receipts whose
+  // itemsText can't be parsed keep the old textarea instead.
+  const itemRowsMode = Boolean(draft.lineItems?.length) || !draft.itemsText?.trim();
+  const [newItem, setNewItem] = useState<{ desc: string; amount: number }>({ desc: '', amount: 0 });
+  const editPerHkd = Math.max(0.1, perHkdForCurrency(state, draft.currency || draft.originalCurrency || currencyForDate(draft.date)));
+  const hkdOfItem = (amount: number) => Math.round((amount / editPerHkd) * 100) / 100;
+  const fromHkdAmount = (hkdValue: number) => Math.round(hkdValue * editPerHkd * 100) / 100;
+  const updateItem = (idx: number, patch: Partial<ReceiptLineItem>) => setDraft((d) => ({
+    ...d,
+    lineItems: (d.lineItems || []).map((item, i) => (i === idx ? { ...item, ...patch } : item)),
+  }));
+  const removeItem = (idx: number) => setDraft((d) => ({
+    ...d,
+    lineItems: (d.lineItems || []).filter((_, i) => i !== idx),
+  }));
+  const appendNewItem = () => {
+    if (!newItem.desc.trim() && !newItem.amount) return;
+    setDraft((d) => ({
+      ...d,
+      lineItems: [...(d.lineItems || []), { id: newId(), desc: newItem.desc.trim() || '未命名品項', amount: newItem.amount }],
+    }));
+    setNewItem({ desc: '', amount: 0 });
+  };
   const splitRows = useMemo(
     () => splitRowsFor(persons, draft.splits, selectedSplitType, totalForSplit),
     [draft.splits, persons, selectedSplitType, totalForSplit],
@@ -202,7 +260,7 @@ export function ReceiptEditor({
 
   useEffect(() => {
     setShowDeleteConfirm(false);
-    setDraft(receipt || {
+    setDraft((receipt ? { ...receipt, lineItems: hydratedLineItems(receipt) } : null) || {
       id: newId(),
       store: '',
       total: 0,
@@ -279,7 +337,8 @@ export function ReceiptEditor({
         onSubmit={(event) => {
           event.preventDefault();
           const total = validAmount(draft.total);
-          const originalAmount = validAmount(draft.originalAmount ?? draft.total);
+          // 原金額 UI field was removed — the schema field now simply mirrors 金額.
+          const originalAmount = total;
           if (total == null || originalAmount == null) {
             alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
             return;
@@ -304,6 +363,11 @@ export function ReceiptEditor({
             alert(`付款未對數：${payerValidation.label}`);
             return;
           }
+          // A filled 加新品項 row the user never confirmed with ＋ still counts.
+          const pendingNewItem = (newItem.desc.trim() || newItem.amount)
+            ? [{ id: newId(), desc: newItem.desc.trim() || '未命名品項', amount: newItem.amount }]
+            : [];
+          const finalLineItems = [...(draft.lineItems || []), ...pendingNewItem];
           const savedCurrency = draft.currency || draft.originalCurrency || currencyForDate(draft.date);
           const fxRate = savedCurrency === 'HKD' ? undefined : perHkdForCurrency(state, savedCurrency);
           onSave({
@@ -319,7 +383,10 @@ export function ReceiptEditor({
             splitMode: draft.splitMode || 'shared',
             splitType: keepSplits ? selectedSplitType : undefined,
             splits: keepSplits ? finalSplits : undefined,
-            lineItems: hasLineItems ? draft.lineItems : undefined,
+            lineItems: finalLineItems.length ? finalLineItems : undefined,
+            itemsText: itemRowsMode
+              ? (finalLineItems.length ? serializeLineItems(finalLineItems, editPrefix) : '')
+              : draft.itemsText,
             payers: keepPayers ? payerRows.filter((row) => splitValue(row.amount) > 0) : undefined,
           });
         }}
@@ -341,10 +408,10 @@ export function ReceiptEditor({
           </label>
         </div>
         <div className="form-grid">
-          <label>金額（legacy total）
+          <label>金額
             <NumberTextInput value={draft.total} max={MAX_RECEIPT_AMOUNT} blankZero onValue={(n) => set('total', n)} />
           </label>
-          <label>原貨幣
+          <label>貨幣
             <select value={draft.originalCurrency || draft.currency || currencyForDate(draft.date)} onChange={(e) => {
               set('originalCurrency', e.target.value);
               set('currency', e.target.value);
@@ -353,14 +420,9 @@ export function ReceiptEditor({
             </select>
           </label>
         </div>
-        <div className="form-grid">
-          <label>原金額
-            <NumberTextInput value={draft.originalAmount ?? draft.total} max={MAX_RECEIPT_AMOUNT} blankZero onValue={(n) => set('originalAmount', n)} />
-          </label>
-          <label>Booking Ref
-            <input value={draft.bookingRef || ''} onChange={(e) => set('bookingRef', e.target.value)} placeholder="KNR358047 / booking id" />
-          </label>
-        </div>
+        <label>Booking Ref
+          <input value={draft.bookingRef || ''} onChange={(e) => set('bookingRef', e.target.value)} placeholder="KNR358047 / booking id" />
+        </label>
         <div className="form-grid">
           <label>類別
             <select value={draft.category} onChange={(e) => set('category', e.target.value as CategoryId)}>
@@ -543,9 +605,72 @@ export function ReceiptEditor({
         <label>地址 / 地圖搜尋
           <input value={draft.address || ''} onChange={(e) => set('address', e.target.value)} placeholder="例：名古屋市中村区名駅4-6-25" />
         </label>
-        <label>品項
-          <textarea value={draft.itemsText || ''} onChange={(e) => set('itemsText', e.target.value)} rows={6} />
-        </label>
+        {itemRowsMode ? (
+          <div className="receipt-items-editor">
+            <span className="receipt-items-label">品項</span>
+            {(draft.lineItems || []).map((item, idx) => (
+              <div className="receipt-item-row" key={item.id || idx}>
+                <input
+                  className="receipt-item-desc"
+                  value={item.desc}
+                  aria-label={`品項 ${idx + 1} 名稱`}
+                  onChange={(e) => updateItem(idx, { desc: e.target.value })}
+                />
+                <span className="receipt-item-cur">{editPrefix}</span>
+                <NumberTextInput
+                  className="receipt-item-amount"
+                  aria-label={`品項 ${idx + 1} 金額`}
+                  value={item.amount}
+                  blankZero
+                  max={MAX_RECEIPT_AMOUNT}
+                  onValue={(n) => updateItem(idx, { amount: n })}
+                />
+                <span className="receipt-item-cur">≈ HK$</span>
+                <NumberTextInput
+                  className="receipt-item-amount"
+                  aria-label={`品項 ${idx + 1} 港幣`}
+                  value={hkdOfItem(item.amount)}
+                  blankZero
+                  max={MAX_RECEIPT_AMOUNT}
+                  onValue={(n) => updateItem(idx, { amount: fromHkdAmount(n) })}
+                />
+                <button type="button" className="icon-btn receipt-item-remove" aria-label={`刪除品項 ${idx + 1}`} onClick={() => removeItem(idx)}>×</button>
+              </div>
+            ))}
+            <div className="receipt-item-row receipt-item-row--new">
+              <input
+                className="receipt-item-desc"
+                value={newItem.desc}
+                placeholder="加新品項…"
+                aria-label="新品項名稱"
+                onChange={(e) => setNewItem((n) => ({ ...n, desc: e.target.value }))}
+              />
+              <span className="receipt-item-cur">{editPrefix}</span>
+              <NumberTextInput
+                className="receipt-item-amount"
+                aria-label="新品項金額"
+                value={newItem.amount}
+                blankZero
+                max={MAX_RECEIPT_AMOUNT}
+                onValue={(n) => setNewItem((prev) => ({ ...prev, amount: n }))}
+              />
+              <span className="receipt-item-cur">≈ HK$</span>
+              <NumberTextInput
+                className="receipt-item-amount"
+                aria-label="新品項港幣"
+                value={newItem.amount ? hkdOfItem(newItem.amount) : 0}
+                blankZero
+                max={MAX_RECEIPT_AMOUNT}
+                onValue={(n) => setNewItem((prev) => ({ ...prev, amount: fromHkdAmount(n) }))}
+              />
+              <button type="button" className="icon-btn receipt-item-add" aria-label="新增品項" disabled={!newItem.desc.trim() && !newItem.amount} onClick={appendNewItem}>＋</button>
+            </div>
+          </div>
+        ) : (
+          <label>品項
+            <textarea value={draft.itemsText || ''} onChange={(e) => set('itemsText', e.target.value)} rows={6} />
+          </label>
+        )}
         <label>備註
           <textarea value={draft.note || ''} onChange={(e) => set('note', e.target.value)} rows={3} />
         </label>
@@ -569,31 +694,27 @@ export function ReceiptEditor({
               />
             </button>
           )}
-          <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>
-          {((draft.photoThumb || draft.photoUrl) || onAddToItinerary) && (
-            <div className="photo-secondary-actions">
-              {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>刪除相片</button>}
-              {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
-                const total = validAmount(draft.total);
-                if (total == null) {
-                  alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
-                  return;
-                }
-                onAddToItinerary({ ...draft, store: draft.store.trim() || '未命名', total });
-              }}>加入行程</button>}
-            </div>
-          )}
+          <div className="photo-tool-buttons">
+            <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>
+            {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
+              const total = validAmount(draft.total);
+              if (total == null) {
+                alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
+                return;
+              }
+              onAddToItinerary({ ...draft, store: draft.store.trim() || '未命名', total });
+            }}>加入行程</button>}
+            {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>刪除相片</button>}
+          </div>
         </div>
 
         <div className="modal-actions receipt-editor-actions">
-          <div className="receipt-delete-slot">
-            {receipt && onDelete && !viewerReadOnly ? <button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button> : null}
-          </div>
           <div className="receipt-final-actions">
             {viewerReadOnly
               ? <span className="muted" style={{ fontSize: '12px', alignSelf: 'center' }}>只可檢視（Viewer 權限）</span>
               : <button type="submit" className="primary">儲存</button>}
             <button type="button" className="secondary" onClick={onCancel}>取消</button>
+            {receipt && onDelete && !viewerReadOnly ? <button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button> : null}
           </div>
         </div>
       </form>

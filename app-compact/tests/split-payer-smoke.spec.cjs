@@ -32,7 +32,7 @@ test('manual entry validates multiple payers', async ({ page }) => {
 
   const dialog = page.getByRole('dialog', { name: '手動記一筆' });
   await page.getByLabel('店名 / 項目').fill('多人付款測試');
-  await page.getByLabel('金額（legacy total）').fill('100');
+  await page.getByLabel('金額', { exact: true }).fill('100');
   await dialog.locator('summary').filter({ hasText: '進階拆數' }).click();
   await dialog.getByLabel('多人付款').check();
   await expect(dialog.getByText('至少兩位付款')).toBeVisible();
