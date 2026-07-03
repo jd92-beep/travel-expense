@@ -278,7 +278,9 @@ async function captureTabs() {
       } else if (tab.expected === '行程時間線') {
         await page.locator('.timeline-command-title').waitFor({ state: 'visible', timeout: 7000 });
       } else {
-        await page.getByText(tab.expected).first().waitFor({ state: 'visible', timeout: 7000 });
+        // filter(visible) — plain .first() used to lock onto the HIDDEN Shell subtitle
+        // (行程時間線總覽) that precedes the visible heading in the DOM, deadlocking the wait.
+        await page.getByText(tab.expected).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 7000 });
       }
       await page.locator(tab.selector).first().waitFor({ state: 'visible', timeout: 9000 });
       await page.waitForTimeout(tab.id === 'stats' ? 900 : 300);
