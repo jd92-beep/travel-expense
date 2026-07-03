@@ -49,6 +49,82 @@ function hydratedLineItems(receipt: Receipt | null | undefined): ReceiptLineItem
   return parseItemsText(receipt.itemsText) || undefined;
 }
 
+// One combined line per item: `name␣␣␣¥1,018␣␣␣HK$49.51` (three-space separator, Boss spec).
+// The full item name stays visible instead of being squeezed by separate amount inputs.
+function formatItemLine(item: { desc: string; amount: number; qty?: number }, prefix: string, hkdOf: (n: number) => number): string {
+  const qty = item.qty && item.qty > 1 ? ` x ${item.qty}` : '';
+  const amountPart = item.amount ? `${prefix}${item.amount.toLocaleString()}` : prefix;
+  const hkdPart = item.amount ? `HK$${hkdOf(item.amount).toLocaleString()}` : 'HK$';
+  return `${item.desc}${qty}   ${amountPart}   ${hkdPart}`;
+}
+
+// Parse a combined line back. Segments split on 2+ spaces (forgiving). A segment containing
+// "HK" is the HKD side; the other numeric segment is the destination amount. Whichever number
+// the user actually changed drives the item amount (the other is recomputed).
+function parseItemLine(
+  text: string,
+  prev: { desc: string; amount: number; qty?: number },
+  hkdOf: (n: number) => number,
+  fromHkd: (n: number) => number,
+): { desc: string; amount: number; qty?: number } {
+  const segments = String(text || '').split(/\s{2,}|\t/).map((seg) => seg.trim()).filter(Boolean);
+  if (!segments.length) return { ...prev, desc: '' };
+  let desc = segments[0];
+  let qty = prev.qty;
+  const qtyMatch = desc.match(/^(.*?)\s+[x×]\s*(\d+)$/);
+  if (qtyMatch) {
+    desc = qtyMatch[1].trim();
+    qty = Number(qtyMatch[2]) || undefined;
+  }
+  let destAmount: number | null = null;
+  let hkdAmount: number | null = null;
+  for (const seg of segments.slice(1)) {
+    const digits = seg.replace(/[^\d.]/g, '');
+    if (!digits) continue;
+    const value = Number(digits);
+    if (!Number.isFinite(value) || value < 0) continue;
+    if (/HK/i.test(seg)) hkdAmount = value;
+    else if (destAmount == null) destAmount = value;
+    else if (hkdAmount == null) hkdAmount = value;
+  }
+  let amount = prev.amount;
+  const destChanged = destAmount != null && Math.round(destAmount) !== Math.round(prev.amount);
+  const hkdChanged = hkdAmount != null && Math.abs(hkdAmount - hkdOf(prev.amount)) > 0.01;
+  if (destChanged) amount = Math.min(destAmount as number, MAX_RECEIPT_AMOUNT);
+  else if (hkdChanged) amount = Math.min(fromHkd(hkdAmount as number), MAX_RECEIPT_AMOUNT);
+  else if (destAmount != null) amount = Math.min(destAmount, MAX_RECEIPT_AMOUNT);
+  return { desc, amount, qty };
+}
+
+// Free-typing wrapper: keeps the raw text while focused, parses + reformats on blur so the
+// caret never jumps mid-edit and both currencies re-derive from whichever number changed.
+function ItemLineInput({ item, prefix, hkdOf, fromHkd, onCommit, placeholder, ariaLabel }: {
+  item: { desc: string; amount: number; qty?: number };
+  prefix: string;
+  hkdOf: (n: number) => number;
+  fromHkd: (n: number) => number;
+  onCommit: (next: { desc: string; amount: number; qty?: number }) => void;
+  placeholder?: string;
+  ariaLabel: string;
+}) {
+  const [raw, setRaw] = useState<string | null>(null);
+  const isBlankNew = !item.desc && !item.amount;
+  const display = raw ?? (isBlankNew ? '' : formatItemLine(item, prefix, hkdOf));
+  return (
+    <input
+      className="receipt-item-line"
+      value={display}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      onChange={(e) => setRaw(e.target.value)}
+      onBlur={() => {
+        if (raw != null) onCommit(parseItemLine(raw, item, hkdOf, fromHkd));
+        setRaw(null);
+      }}
+    />
+  );
+}
+
 export function ReceiptEditor({
   state,
   receipt,
@@ -289,58 +365,26 @@ export function ReceiptEditor({
             <span className="receipt-items-label">品項</span>
             {(draft.lineItems || []).map((item, idx) => (
               <div className="receipt-item-row" key={item.id || idx}>
-                <input
-                  className="receipt-item-desc"
-                  value={item.desc}
-                  aria-label={`品項 ${idx + 1} 名稱`}
-                  onChange={(e) => updateItem(idx, { desc: e.target.value })}
-                />
-                <span className="receipt-item-cur">{editPrefix}</span>
-                <input
-                  className="receipt-item-amount"
-                  type="text"
-                  inputMode="decimal"
-                  aria-label={`品項 ${idx + 1} 金額`}
-                  value={item.amount || ''}
-                  onChange={(e) => updateItem(idx, { amount: parseAmountInput(e.target.value) })}
-                />
-                <span className="receipt-item-cur">≈ HK$</span>
-                <input
-                  className="receipt-item-amount"
-                  type="text"
-                  inputMode="decimal"
-                  aria-label={`品項 ${idx + 1} 港幣`}
-                  value={item.amount ? hkdOfItem(item.amount) : ''}
-                  onChange={(e) => updateItem(idx, { amount: fromHkdAmount(parseAmountInput(e.target.value)) })}
+                <ItemLineInput
+                  item={item}
+                  prefix={editPrefix}
+                  hkdOf={hkdOfItem}
+                  fromHkd={fromHkdAmount}
+                  ariaLabel={`品項 ${idx + 1}`}
+                  onCommit={(next) => updateItem(idx, next)}
                 />
                 <button type="button" className="icon-btn receipt-item-remove" aria-label={`刪除品項 ${idx + 1}`} onClick={() => removeItem(idx)}>×</button>
               </div>
             ))}
             <div className="receipt-item-row receipt-item-row--new">
-              <input
-                className="receipt-item-desc"
-                value={newItem.desc}
-                placeholder="加新品項…"
-                aria-label="新品項名稱"
-                onChange={(e) => setNewItem((n) => ({ ...n, desc: e.target.value }))}
-              />
-              <span className="receipt-item-cur">{editPrefix}</span>
-              <input
-                className="receipt-item-amount"
-                type="text"
-                inputMode="decimal"
-                aria-label="新品項金額"
-                value={newItem.amount || ''}
-                onChange={(e) => setNewItem((prev) => ({ ...prev, amount: parseAmountInput(e.target.value) }))}
-              />
-              <span className="receipt-item-cur">≈ HK$</span>
-              <input
-                className="receipt-item-amount"
-                type="text"
-                inputMode="decimal"
-                aria-label="新品項港幣"
-                value={newItem.amount ? hkdOfItem(newItem.amount) : ''}
-                onChange={(e) => setNewItem((prev) => ({ ...prev, amount: fromHkdAmount(parseAmountInput(e.target.value)) }))}
+              <ItemLineInput
+                item={newItem}
+                prefix={editPrefix}
+                hkdOf={hkdOfItem}
+                fromHkd={fromHkdAmount}
+                ariaLabel="新品項"
+                placeholder={`加新品項…   ${editPrefix}金額   HK$`}
+                onCommit={(next) => setNewItem({ desc: next.desc, amount: next.amount })}
               />
               <button type="button" className="icon-btn receipt-item-add" aria-label="新增品項" disabled={!newItem.desc.trim() && !newItem.amount} onClick={appendNewItem}>＋</button>
             </div>
