@@ -8,9 +8,13 @@ import { isReceiptTombstoned } from './syncMerge';
 import { currentSupabaseUserEmail } from './supabase';
 
 export function hasDirectNotionToken(): boolean {
-  return !!(typeof window !== 'undefined' && (
-    (window as any).DEV_SECRETS?.notionToken || getDirectNotionToken()
-  ));
+  if (typeof window === 'undefined') return false;
+  // Test mode (__disable_supabase_configured) must disable the Notion mirror too:
+  // otherwise dev-server smokes pick up DEV_SECRETS and sync against the REAL Notion
+  // DB mid-test — racing live pulls that overwrite seeded fixtures (and risking
+  // pushes of fake test receipts into production data).
+  if ((window as any).__disable_supabase_configured === true) return false;
+  return !!((window as any).DEV_SECRETS?.notionToken || getDirectNotionToken());
 }
 import type { AppState, CategoryId, PaymentId, Receipt, TripProfile } from './types';
 

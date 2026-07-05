@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, type ComponentPropsWithoutRef } from "react
 import { useInView, useMotionValue, useReducedMotion, useSpring } from "motion/react"
 
 import { cn } from "@/lib/cn"
-import { shouldDisableHeavyEffects } from "../../lib/performance"
 
 interface NumberTickerProps extends ComponentPropsWithoutRef<"span"> {
   value: number
@@ -26,12 +25,15 @@ export function NumberTicker({
   ...props
 }: NumberTickerProps) {
   const ref = useRef<HTMLSpanElement>(null)
-  const disableHeavy = shouldDisableHeavyEffects()
-  const reducedMotion = (useReducedMotion() ?? false) || disableHeavy
+  // Ticking only rewrites textContent — no compositing layers — so it's cheap enough
+  // to keep on mobile/WebView; only the OS-level reduced-motion preference disables it.
+  const reducedMotion = useReducedMotion() ?? false
   const motionValue = useMotionValue(direction === "down" ? value : startValue)
+  // Snappy settle (~1s even for 5-digit values): sluggish tickers read as lag,
+  // and UI smokes assert on the final text within a few seconds.
   const springValue = useSpring(motionValue, {
-    damping: 60,
-    stiffness: 100,
+    damping: 42,
+    stiffness: 320,
   })
   const isInView = useInView(ref, { once: true, margin: "0px" })
   const formatter = useMemo(
