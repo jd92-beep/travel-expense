@@ -1253,7 +1253,10 @@
 
 .stats-tab.stats-cockpit .spending-compass {
   width: 100% !important;
-  max-width: 460px;
+  /* Was capped at 460px, narrower than the 2-column overview — the donut and numbers overlapped.
+     Fill the content column and become a query container so the overview lays out by CARD width. */
+  max-width: 100%;
+  container-type: inline-size;
 }
 
 @media (max-width: 620px) {
@@ -1333,10 +1336,17 @@
 
 .stats-tab.stats-cockpit .preview-budget-overview {
   display: grid;
-  grid-template-columns: minmax(270px, .96fr) minmax(260px, 1fr);
-  gap: 28px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
   align-items: center;
   margin-top: 22px;
+}
+
+@container (min-width: 560px) {
+  .stats-tab.stats-cockpit .preview-budget-overview {
+    grid-template-columns: minmax(220px, .9fr) minmax(240px, 1fr);
+    gap: 28px;
+  }
 }
 
 .stats-tab.stats-cockpit .preview-budget-main {
@@ -1901,9 +1911,9 @@
 
   .app-shell--stats .preview-stats-grid {
     display: grid !important;
-    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
-    gap: clamp(14px, 1.2vw, 18px) !important;
-    align-items: start !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 16px !important;
+    align-items: stretch !important;
     border: 0 !important;
   }
 
@@ -1919,7 +1929,7 @@
 
   .app-shell--stats .preview-stats-budget,
   .app-shell--stats .preview-daily-pace {
-    grid-column: span 6 !important;
+    grid-column: 1 / -1 !important;
     min-height: 0 !important;
     padding: clamp(20px, 1.7vw, 26px) !important;
   }
@@ -1946,18 +1956,12 @@
     box-shadow: 0 10px 24px rgba(67, 46, 24, .045) !important;
   }
 
-  .app-shell--stats .settlement-card {
-    grid-column: span 4 !important;
-  }
-
-  .app-shell--stats .top-expenses-panel {
-    grid-column: span 8 !important;
-  }
-
+  .app-shell--stats .settlement-card,
+  .app-shell--stats .top-expenses-panel,
   .app-shell--stats .payer-panel,
   .app-shell--stats .category-panel,
   .app-shell--stats .payment-panel {
-    grid-column: span 4 !important;
+    grid-column: 1 / -1 !important;
   }
 
   .app-shell--stats .stats-controls {
@@ -1978,9 +1982,9 @@
 
   .app-shell--stats .stats-tab.stats-cockpit .preview-budget-overview {
     display: grid !important;
-    grid-template-columns: minmax(176px, 220px) minmax(0, 1fr) !important;
-    gap: clamp(16px, 1.4vw, 22px) !important;
-    align-items: center !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 20px !important;
+    align-items: stretch !important;
     width: 100% !important;
     max-width: 100% !important;
     margin-top: 18px !important;
@@ -2121,36 +2125,20 @@
 
   /* Beat the older preview-wide 4-column rules without touching mobile. */
   .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid {
-    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     grid-auto-flow: row !important;
   }
 
   .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .preview-stats-budget,
-  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .preview-daily-pace {
-    grid-column: span 6 !important;
-    grid-row: auto !important;
-  }
-
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .preview-daily-pace,
   .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .preview-stats-metrics,
-  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .stats-controls {
-    grid-column: 1 / -1 !important;
-    grid-row: auto !important;
-  }
-
-  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .settlement-card {
-    grid-column: span 4 !important;
-    grid-row: auto !important;
-  }
-
-  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .top-expenses-panel {
-    grid-column: span 8 !important;
-    grid-row: auto !important;
-  }
-
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .stats-controls,
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .settlement-card,
+  .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .top-expenses-panel,
   .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .payer-panel,
   .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .category-panel,
   .app-shell--stats .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .payment-panel {
-    grid-column: span 4 !important;
+    grid-column: 1 / -1 !important;
     grid-row: auto !important;
   }
 }
