@@ -1,7 +1,8 @@
 import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
 import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { computeShares, simplifyDebts } from './splitEngine';
+import { computeShares, roundZeroSum, sharePercents, simplifyDebts } from './splitEngine';
+export { roundZeroSum, sharePercents } from './splitEngine';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, ReceiptPayer, RecurringRule, SettlementSnapshot, TripPhase } from './types';
 
 export const fmt = (n: number | string | undefined) =>
@@ -439,10 +440,16 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   // when callers already pre-scope receipts (Settings/Stats do).
   const tripReceipts = scopedReceiptsForTrip(state, trip);
 
-  const ratios = persons.map((p) => {
+  // A person with NO shareRatios entry defaults to the mean of the participating (positive) ratios,
+  // NOT a hardcoded 1 — otherwise, once anyone uses percentage-scale weights (e.g. 50/50), a missing
+  // person would be charged 1/(101) instead of a fair share. An explicit 0 stays 0 (opted out).
+  const rawRatios = persons.map((p) => {
     const v = Number(state.shareRatios?.[p.id]);
-    return Number.isFinite(v) && v >= 0 ? v : 1;
+    return Number.isFinite(v) && v >= 0 ? v : null;
   });
+  const positiveRatios = rawRatios.filter((v): v is number => v !== null && v > 0);
+  const meanRatio = positiveRatios.length ? positiveRatios.reduce((a, b) => a + b, 0) / positiveRatios.length : 1;
+  const ratios = rawRatios.map((v) => (v === null ? meanRatio : v));
   const sumRatio = ratios.reduce((a, b) => a + b, 0);
   const firstId = persons[0].id;
   const idxOf = (id?: string) => persons.findIndex((p) => p.id === id);
@@ -551,10 +558,15 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
     return { ...p, balance, paidShared: sharedByPayer[i], shouldPayShared: totalShouldPayShared };
   });
 
-  const transfers: SettlementSnapshot['transfers'] = simplifyDebts(balances.map((b) => b.balance))
-    .map((t) => ({ from: balances[t.from], to: balances[t.to], amount: t.amount }));
+  // Round each net balance to whole units while preserving the zero-sum invariant BEFORE
+  // simplifying debts. Passing raw floats made per-transfer Math.round accumulate up to ~2 units
+  // of residual on the last-settled person (visible on HKD/USD trips). Integer balances settle exactly.
+  const roundedBalanceVals = roundZeroSum(balances.map((b) => b.balance));
+  const roundedBalances = balances.map((b, i) => ({ ...b, balance: roundedBalanceVals[i] }));
+  const transfers: SettlementSnapshot['transfers'] = simplifyDebts(roundedBalances.map((b) => b.balance))
+    .map((t) => ({ from: roundedBalances[t.from], to: roundedBalances[t.to], amount: t.amount }));
 
-  return { transfers, balances, sharedTotal, sharedByPayer, privateByOwner, crossPrivate, settledTotal };
+  return { transfers, balances: roundedBalances, sharedTotal, sharedByPayer, privateByOwner, crossPrivate, settledTotal };
 }
 
 // Build a settlement receipt: `from` pays `to` `amount` (in trip currency). It records a real

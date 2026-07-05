@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-07-05 HKT (percentage sharing + 3-agent sharing audit)
+
+- **v0.12.29 / versionCode 1229.** Ran a 3-persona parallel audit of the whole sharing system
+  (owner→invite, editor→accept+entry+sync, settlement math) and shipped percentage-based sharing.
+  - **[Part 3] Percentage sharing.** Settings 旅伴/分帳比例 and the onboarding WelcomeGuidePopup now
+    take PERCENTAGES: you enter each person's %, the LAST person auto-fills to 100 − Σ(others)
+    (read-only), default is equal. `sharePercents()` normalizes any stored ratios (legacy weights of
+    1 → 50/50) to integers summing to exactly 100; the editors always persist a complete N-person
+    vector so the engine never sees a missing entry.
+  - **[HIGH] Missing-ratio person charged unfairly.** A person with no shareRatios entry defaulted to
+    weight 1 → once anyone used percentage-scale weights (50/50) they paid 1/(101) instead of a fair
+    share (¥577 vs ¥10000 on a ¥60000 6-person meal). Now defaults to the mean of the participating
+    (positive) ratios; `sharePercents` uses the same rule so the displayed % matches what's charged.
+  - **[MED] Settlement rounding drift.** Net balances went to debt-settling as raw floats, so
+    per-transfer rounding drifted up to ~2 units onto the last person (wrong on HKD/USD trips). New
+    `roundZeroSum()` rounds balances to integers preserving the zero-sum invariant before settling →
+    transfers are exact.
+  - **[HIGH] Concurrent-edit data loss.** Two editors editing the same shared receipt: the RPC raises
+    a 40001 version conflict, which the sync loop retried with the same stale version then silently
+    parked and overwrote on next pull. Now a version conflict is surfaced with a clear message
+    (「有人啱啱改咗呢筆單…」) instead of a futile stale retry, so the losing edit is visible, not lost.
+  - **6-person correctness proof.** `split-engine.test.ts` gains roundZeroSum + sharePercents + a
+    6-person settlement scenario (hand-worked + 50k random fractional trials → all settle to exact
+    zero, ≤ n−1 transfers). New `six-person-share-smoke` seeds a 6-person trip (two 50%% ratios, four
+    missing) and asserts every person is charged the fair ¥10000 with percentages summing to 100.
+  - Verdict on the user's question — **YES, a trip shared by 6 (or any N) settles correctly**:
+    balances sum to zero, transfers are net-neutral and minimal, who-pays-who matches hand calc.
+  - Deferred (documented, not silently dropped): the invite form's 「同時加入分帳名單」checkbox +
+    display-name are still dropped at invite time (the accounting person only materializes after the
+    invitee accepts) — a proper fix needs placeholder-vs-member dedup to avoid duplicate persons; the
+    security/RLS boundary itself is sound. Plus LOW cosmetics (member list shows display-name not
+    email; duplicate-invite race self-corrects).
+  - Evidence: typecheck clean both branches; split-engine unit test green; smokes green — android:
+    six-person 1, settings 11, split-editor 1, settle-up 2, split-payer 1, stats 1; main: six-person
+    1, settings 10+1skip, stats 1. Same fixes on `main` as v0.9.6.
+
 ## 2026-07-02 HKT (multi-currency display sweep)
 
 - **v0.12.23 / versionCode 1223.** The app supports multi-currency trips (rateTable /

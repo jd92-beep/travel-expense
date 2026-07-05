@@ -51,6 +51,39 @@ function largestRemainder(total: number, rows: ShareRow[]): Map<string, number> 
   return parts.reduce((map, row) => map.set(row.personId, (map.get(row.personId) || 0) + row.amount), new Map<string, number>());
 }
 
+// Round a (near) zero-sum float array to integers that STILL sum to the same rounded total,
+// via largest-remainder on the fractional parts. Used to make settlement transfers exact.
+export function roundZeroSum(values: number[]): number[] {
+  const floors = values.map((v) => Math.floor(v));
+  const target = Math.round(values.reduce((a, b) => a + b, 0));
+  let residual = target - floors.reduce((a, b) => a + b, 0);
+  const order = values
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
+  for (let k = 0; residual > 0 && k < order.length; k += 1, residual -= 1) floors[order[k].i] += 1;
+  return floors;
+}
+
+// Normalize stored shareRatios (any scale — legacy weights of 1, or percentages) into integer
+// percentages for `personIds` that sum to exactly 100. Legacy {1,1} -> [50,50]; all-unset -> equal.
+// The Settings/Welcome ratio editors use this so the last person is always 100 - sum(others).
+export function sharePercents(personIds: string[], shareRatios?: Record<string, number>): number[] {
+  const n = personIds.length;
+  if (n === 0) return [];
+  const raw = personIds.map((id) => {
+    const v = Number(shareRatios?.[id]);
+    return Number.isFinite(v) && v >= 0 ? v : null; // null = unset
+  });
+  // Unset persons default to the mean of the participating (positive) ratios — SAME rule as the
+  // settlement engine — so the displayed % always matches what each person is actually charged.
+  const positive = raw.filter((v): v is number => v !== null && v > 0);
+  const meanPositive = positive.length ? positive.reduce((a, b) => a + b, 0) / positive.length : 1;
+  const filled = raw.map((v) => (v === null ? meanPositive : v));
+  const sum = filled.reduce((a, b) => a + b, 0);
+  const base = sum > 0 ? filled.map((v) => (v / sum) * 100) : filled.map(() => 100 / n);
+  return roundZeroSum(base);
+}
+
 export function computeShares(total: number, splitType: SplitType, splits: ReceiptSplit[]): Map<string, number> {
   const roundedTotal = assertWholeNonNegative(total, 'total');
   const rows = splitRows(splits);

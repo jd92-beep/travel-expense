@@ -342,8 +342,22 @@ export function useSyncEngine(
                               lowerError.includes('invalid token') ||
                               lowerError.includes('token expired') ||
                               lastError.includes('登入憑證'); // redactError's friendly auth message
+          // A concurrent editor bumped the server version (RPC raises 40001). Retrying with our now-stale
+          // version is futile AND dangerous: it silently parks then gets overwritten on the next pull,
+          // losing this edit without a word. Park it immediately with a VISIBLE, accurate message so the
+          // user knows to re-apply after the next pull brings the other person's version.
+          const isVersionConflict = lowerError.includes('40001') ||
+                                    lowerError.includes('version conflict') ||
+                                    lastError.includes('版本衝突');
 
-          if (isAuthError || nextAttempts >= MAX_RETRY_ATTEMPTS) {
+          if (isVersionConflict) {
+            failures += 1;
+            markQueueItem(item, {
+              status: 'error',
+              attempts: nextAttempts,
+              error: '有人啱啱改咗呢筆單，你嘅修改未有套用。請下拉同步後再改一次。',
+            });
+          } else if (isAuthError || nextAttempts >= MAX_RETRY_ATTEMPTS) {
             // Auth failures need re-login; exhausted retries park for manual "重試" (kept, not dropped).
             failures += 1;
             markQueueItem(item, { status: 'error', attempts: nextAttempts, error: lastError });

@@ -19,7 +19,7 @@ function assertSettlesExactly(balances: number[], label: string): IndexTransfer[
   const residual = applyTransfers(balances, transfers);
   const after = residual.reduce((a, b) => a + b, 0);
   assert.ok(Math.abs(before - after) < 1e-9, `${label}: net changed ${before} -> ${after}`);
-  for (const r of residual) assert.equal(r, 0, `${label}: residual ${r} not fully settled`);
+  for (const r of residual) assert.ok(r === 0, `${label}: residual ${r} not fully settled`);
   assert.ok(transfers.length <= Math.max(0, balances.length - 1), `${label}: ${transfers.length} > n-1 transfers`);
   return transfers;
 }
@@ -182,3 +182,57 @@ console.log('split-engine: all foldLineItemsToSplits assertions passed ✅');
   assert.equal((converted.get('a') || 0) + (converted.get('b') || 0), 400, 'converted shares sum exactly to trip total');
 }
 console.log('split-engine: cross-currency redistribution assertions passed ✅');
+
+// ── Percentage sharing + zero-sum rounding + 6-person settlement (v0.12.29) ──────────────
+import { roundZeroSum, sharePercents } from '../src/lib/splitEngine.ts';
+
+// roundZeroSum: integers must sum to the SAME rounded total (0 here) with no lost/created units.
+for (const vals of [
+  [0.5, 0.5, -1.0],
+  [2666.67, 666.67, -833.33, 1166.67, -633.33, -3033.33],
+  [984.53, 131.51, 760.58, 535.53, 754.70, -3166.85],
+  [33.4, 33.3, 33.3],
+]) {
+  const rounded = roundZeroSum(vals);
+  assert.ok(rounded.reduce((a, b) => a + b, 0) === Math.round(vals.reduce((a, b) => a + b, 0)), `roundZeroSum preserves total for ${vals}`);
+  rounded.forEach((v) => assert.ok(Number.isInteger(v), `roundZeroSum yields integers for ${vals}`));
+}
+console.log('split-engine: roundZeroSum assertions passed ✅');
+
+// sharePercents: always sums to exactly 100. Legacy weights, explicit %, equal default.
+assert.deepEqual(sharePercents(['a', 'b'], { a: 1, b: 1 }), [50, 50], 'legacy 1:1 → 50/50');
+assert.deepEqual(sharePercents(['a', 'b', 'c'], { a: 50, b: 30, c: 20 }), [50, 30, 20], 'explicit % preserved');
+for (const n of [2, 3, 5, 6, 7]) {
+  const ids = Array.from({ length: n }, (_, i) => `p${i}`);
+  const eq = sharePercents(ids, {});
+  assert.equal(eq.reduce((a, b) => a + b, 0), 100, `equal split of ${n} sums to 100`);
+  assert.ok(Math.max(...eq) - Math.min(...eq) <= 1, `equal split of ${n} is balanced (±1)`);
+}
+console.log('split-engine: sharePercents assertions passed ✅');
+
+// 6-person settlement (Agent-3 walk): fractional net balances must round zero-sum then settle EXACTLY,
+// with ≤ n−1 transfers. This is the "who pays who how much" guarantee for a many-person shared trip.
+{
+  const balances6 = [2666.67, 666.67, -833.33, 1166.67, -633.33, -3033.33];
+  const rounded = roundZeroSum(balances6);
+  const transfers = assertSettlesExactly(rounded, '6-person fractional settlement');
+  assert.ok(transfers.length <= 5, `6-person: ${transfers.length} transfers ≤ 5`);
+  // Regression guard for the drift bug: rounding FIRST leaves zero residual on every person.
+  const residual = applyTransfers(rounded, transfers);
+  residual.forEach((r, i) => assert.ok(r === 0, `6-person person ${i} residual ${r} != 0`));
+}
+// 50k random 6-person fractional trials: rounded balances always settle exactly (no ~2-unit drift).
+{
+  let seed = 12345;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  for (let t = 0; t < 50000; t++) {
+    const raw = Array.from({ length: 6 }, () => Math.round(rnd() * 100000) / 100 - 500);
+    const drift = raw.reduce((a, b) => a + b, 0);
+    raw[0] -= drift; // force zero-sum like real balances
+    const rounded = roundZeroSum(raw);
+    const transfers = simplifyDebts(rounded);
+    const residual = applyTransfers(rounded, transfers);
+    for (const r of residual) assert.ok(r === 0, `random 6-person trial ${t}: residual ${r} != 0`);
+  }
+}
+console.log('split-engine: 6-person settlement assertions passed ✅');
