@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Compass, Sparkles, Calendar, DollarSign, MapPin, Loader2, ArrowRight, Info, Check, Mail, Plus, Minus, Trash2, Users } from 'lucide-react';
 import { parseTripParagraph } from '../lib/ai';
+import { sharePercents } from '../lib/domain';
 import { createTripProfile, normalizeTripIntelligence } from '../domain/trip/normalize';
 import type { AppState, Person, TripProfile, TripSharingInviteDraft } from '../lib/types';
 
@@ -141,6 +142,26 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
 
   function updateGuidePerson(index: number, patch: Partial<{ name: string; ratio: string }>) {
     setGuidePersons((current) => current.map((person, idx) => idx === index ? { ...person, ...patch } : person));
+  }
+
+  // Percentage sharing in onboarding: guidePersons[].ratio holds each person's percentage.
+  // Edit all but the LAST; the last auto-fills to 100 − Σ(others). Default = equal.
+  const guidePercents = sharePercents(
+    guidePersons.map((_, idx) => String(idx)),
+    Object.fromEntries(guidePersons.map((person, idx) => [String(idx), Number(person.ratio) || 0])),
+  );
+  function setGuidePercent(index: number, rawValue: string) {
+    const lastIdx = guidePersons.length - 1;
+    if (index === lastIdx || lastIdx < 1) return;
+    const next = guidePercents.slice();
+    next[index] = Math.max(0, Math.min(100, Math.round(Number(rawValue) || 0)));
+    let sumOthers = next.reduce((acc, v, idx) => (idx === lastIdx ? acc : acc + v), 0);
+    if (sumOthers > 100) {
+      next[index] = Math.max(0, next[index] - (sumOthers - 100));
+      sumOthers = next.reduce((acc, v, idx) => (idx === lastIdx ? acc : acc + v), 0);
+    }
+    next[lastIdx] = Math.max(0, 100 - sumOthers);
+    setGuidePersons((current) => current.map((person, idx) => ({ ...person, ratio: String(next[idx]) })));
   }
 
   function addSharingInvite() {
@@ -324,7 +345,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
               <strong style={{ display: 'block', fontSize: '13px', color: '#1E4D6B', fontWeight: 900 }}>旅伴與分帳比例</strong>
-              <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 700 }}>共同支出會按比例自動計算，例如 1:1 或 2:1。</span>
+              <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 700 }}>共同支出會按百分比自動計算，最後一位自動填。預設均分。</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>人數</span>
@@ -350,7 +371,9 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             </div>
           </div>
           <div style={{ display: 'grid', gap: '8px' }}>
-            {guidePersons.map((person, idx) => (
+            {guidePersons.map((person, idx) => {
+              const isLast = idx === guidePersons.length - 1 && guidePersons.length > 1;
+              return (
               <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 88px', gap: '8px', alignItems: 'end' }}>
                 <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800, minWidth: 0 }}>
                   {idx === 0 ? '你嘅顯示名稱' : `旅伴 ${idx + 1} 名稱`}
@@ -363,18 +386,20 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                   />
                 </label>
                 <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
-                  比例
+                  {isLast ? '分帳 %（自動）' : '分帳 %'}
                   <input
-                    value={person.ratio}
-                    onChange={(e) => updateGuidePerson(idx, { ratio: e.target.value })}
+                    value={guidePercents[idx] ?? 0}
+                    onChange={(e) => setGuidePercent(idx, e.target.value)}
                     type="number"
                     min={0}
-                    step="0.5"
-                    style={fieldInputStyle}
+                    max={100}
+                    readOnly={isLast}
+                    style={{ ...fieldInputStyle, textAlign: 'right', ...(isLast ? { background: 'rgba(0,0,0,0.04)', color: '#8a7f72' } : {}) }}
                   />
                 </label>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

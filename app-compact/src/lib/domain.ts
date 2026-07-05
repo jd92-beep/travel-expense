@@ -433,6 +433,39 @@ export function safePhotoUrl(value: unknown, fallback = '', _depth = 0): string 
   return fallback && _depth < 2 ? safePhotoUrl(fallback, '', _depth + 1) : '';
 }
 
+// Round a (near) zero-sum float array to integers that STILL sum to the same rounded total,
+// via largest-remainder on the fractional parts. Used to make settlement transfers exact.
+export function roundZeroSum(values: number[]): number[] {
+  const floors = values.map((v) => Math.floor(v));
+  const target = Math.round(values.reduce((a, b) => a + b, 0));
+  let residual = target - floors.reduce((a, b) => a + b, 0);
+  const order = values
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
+  for (let k = 0; residual > 0 && k < order.length; k += 1, residual -= 1) floors[order[k].i] += 1;
+  return floors;
+}
+
+// Normalize stored shareRatios (any scale — legacy weights of 1, or percentages) into integer
+// percentages for `personIds` that sum to exactly 100. Legacy {1,1} → [50,50]; all-unset → equal.
+// The Settings/Welcome ratio editors use this so the last person is always 100 − Σ(others).
+export function sharePercents(personIds: string[], shareRatios?: Record<string, number>): number[] {
+  const n = personIds.length;
+  if (n === 0) return [];
+  const raw = personIds.map((id) => {
+    const v = Number(shareRatios?.[id]);
+    return Number.isFinite(v) && v >= 0 ? v : null; // null = unset
+  });
+  // Unset persons default to the mean of the participating (positive) ratios — SAME rule as the
+  // settlement engine — so the displayed % always matches what each person is actually charged.
+  const positive = raw.filter((v): v is number => v !== null && v > 0);
+  const meanPositive = positive.length ? positive.reduce((a, b) => a + b, 0) / positive.length : 1;
+  const filled = raw.map((v) => (v === null ? meanPositive : v));
+  const sum = filled.reduce((a, b) => a + b, 0);
+  const base = sum > 0 ? filled.map((v) => (v / sum) * 100) : filled.map(() => 100 / n);
+  return roundZeroSum(base);
+}
+
 export function computeSettlements(state: AppState): SettlementSnapshot {
   const persons = getPersons(state);
   const empty: SettlementSnapshot = { transfers: [], balances: [], sharedTotal: 0, sharedByPayer: [], privateByOwner: [], crossPrivate: [] };
@@ -444,10 +477,16 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   // when callers already pre-scope receipts (Settings/Stats do).
   const tripReceipts = scopedReceiptsForTrip(state, trip);
 
-  const ratios = persons.map((p) => {
+  // A person with NO shareRatios entry defaults to the mean of the participating (positive) ratios,
+  // NOT a hardcoded 1 — otherwise, once anyone uses percentage-scale weights (e.g. 50/50), a missing
+  // person would be charged 1/(101) instead of a fair share. An explicit 0 stays 0 (opted out).
+  const rawRatios = persons.map((p) => {
     const v = Number(state.shareRatios?.[p.id]);
-    return Number.isFinite(v) && v >= 0 ? v : 1;
+    return Number.isFinite(v) && v >= 0 ? v : null;
   });
+  const positiveRatios = rawRatios.filter((v): v is number => v !== null && v > 0);
+  const meanRatio = positiveRatios.length ? positiveRatios.reduce((a, b) => a + b, 0) / positiveRatios.length : 1;
+  const ratios = rawRatios.map((v) => (v === null ? meanRatio : v));
   const sumRatio = ratios.reduce((a, b) => a + b, 0);
   const firstId = persons[0].id;
   const idxOf = (id?: string) => persons.findIndex((p) => p.id === id);
@@ -494,7 +533,12 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
     return { ...p, balance, paidShared: sharedByPayer[i], shouldPayShared };
   });
 
-  const work = balances.map((b) => ({ ...b }));
+  // Round each net balance to whole units while preserving the zero-sum invariant BEFORE
+  // settling debts, so transfers are exact instead of drifting up to ~2 units on the last person.
+  const roundedBalanceVals = roundZeroSum(balances.map((b) => b.balance));
+  const roundedBalances = balances.map((b, i) => ({ ...b, balance: roundedBalanceVals[i] }));
+
+  const work = roundedBalances.map((b) => ({ ...b }));
   const transfers: SettlementSnapshot['transfers'] = [];
   for (let safety = 0; safety < 100; safety++) {
     work.sort((a, b) => a.balance - b.balance);
@@ -507,7 +551,7 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
     transfers.push({ from: debtor, to: creditor, amount: Math.round(amount) });
   }
 
-  return { transfers, balances, sharedTotal, sharedByPayer, privateByOwner, crossPrivate };
+  return { transfers, balances: roundedBalances, sharedTotal, sharedByPayer, privateByOwner, crossPrivate };
 }
 
 export function exportCsv(state: AppState): void {

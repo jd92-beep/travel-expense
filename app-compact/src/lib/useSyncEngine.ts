@@ -350,11 +350,17 @@ export function useSyncEngine(
                               lastError.includes('401') ||
                               lastError.toLowerCase().includes('unauthorized') ||
                               lastError.toLowerCase().includes('expired');
+          // Concurrent-edit version conflict (RPC raises 40001) — surface a clear, accurate message
+          // instead of a raw error so the user knows their edit didn't overwrite the newer server copy.
+          const lowerError = lastError.toLowerCase();
+          const isVersionConflict = lowerError.includes('40001') ||
+                                    lowerError.includes('version conflict') ||
+                                    lastError.includes('版本衝突');
 
           markQueueItem(item, {
             status: 'error', // Keep as error status, do not drop!
             attempts: nextAttempts,
-            error: lastError,
+            error: isVersionConflict ? '有人啱啱改咗呢筆單，你嘅修改未有套用。請下拉同步後再改一次。' : lastError,
           });
 
           if (isAuthError) {
