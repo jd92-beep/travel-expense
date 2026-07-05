@@ -6507,23 +6507,19 @@ body {
     gap: 20px;
   }
 
+  /* The content column is capped (see .stack.w-full above), so lay Stats panels out as a single
+     vertical column rather than a 12-col desktop grid that would cram every panel into ~55px cells. */
   .app-shell--stats .stats-tab.stats-cockpit > .stack {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .app-shell--stats .stats-command,
   .app-shell--stats .stats-metrics,
   .app-shell--stats .trend-panel,
-  .app-shell--stats .stats-controls {
-    grid-column: 1 / -1;
-  }
-
-  .app-shell--stats .stats-panel:not(.trend-panel):not(.settlement-card) {
-    grid-column: span 6;
-  }
-
+  .app-shell--stats .stats-controls,
+  .app-shell--stats .stats-panel,
   .app-shell--stats .settlement-card {
-    grid-column: span 6;
+    grid-column: 1 / -1;
   }
 }
 
@@ -7646,6 +7642,14 @@ body {
     min-height: 100svh;
     margin: 0 !important;
     padding: 0 0 40px 76px !important;
+  }
+
+  /* Constrain the actual content column inside the full-bleed desktop shell so mobile-first
+     components (donuts, budget cockpit, cards) render at their designed size instead of blowing up
+     — one consistent, centred column across every tab and every screen ratio. */
+  .app-shell .stack.w-full {
+    max-width: 760px !important;
+    margin-inline: auto !important;
   }
 
   .app-shell::before,
