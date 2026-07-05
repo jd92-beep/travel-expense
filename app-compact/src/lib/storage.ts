@@ -85,6 +85,16 @@ export function normalizeState(input: unknown): AppState {
     state.persons = [DEFAULT_STATE.persons[0], ...state.persons];
   }
   state.receipts = state.receipts.filter((r) => !(typeof r.id === 'string' && r.id.startsWith('__meta_')));
+  // Sync status is transient runtime state: a stale persisted 'error' (or a queue item
+  // stuck in error/syncing when the app was killed) must not resurrect the error banner
+  // on next launch. Reset on hydrate; failed items get a fresh retry cycle instead of
+  // waiting forever for the manual-retry button.
+  state.globalSyncStatus = 'idle';
+  state.syncError = '';
+  state.syncQueue = (state.syncQueue || []).map((item) =>
+    item.status === 'error' || item.status === 'failed' || item.status === 'syncing'
+      ? { ...item, status: 'queued' as const, attempts: 0, error: undefined }
+      : item);
   return stripLegacyProviderSecrets(state);
 }
 

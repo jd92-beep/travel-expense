@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
-import { GlassCard, Reveal } from '../components/ui';
+import { GlassCard, Reveal, TickerMoney } from '../components/ui';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
 import { amountToHkd, currencyPrefix, formatCurrencyAmount } from '../lib/currency';
 import {
@@ -979,7 +979,7 @@ export function Dashboard({
                   className="size-full"
                 >
                   <div className="preview-dashboard-ring-copy flex flex-col items-center justify-center">
-                    <strong className="text-2xl font-bold leading-none" style={{ color: 'var(--compact-ink)', fontFamily: '"Noto Serif JP", serif' }}>{Math.round(rawBudgetPct)}%</strong>
+                    <strong className="text-2xl font-bold leading-none" style={{ color: 'var(--compact-ink)', fontFamily: '"Noto Serif JP", serif' }}><TickerMoney text={`${Math.round(rawBudgetPct)}%`} /></strong>
                     <span className="text-[10px] text-gray-400 mt-1" style={{ color: 'var(--muted)', fontWeight: 600 }}>已使用</span>
                   </div>
                 </AnimatedCircularProgressBar>
@@ -1023,11 +1023,11 @@ export function Dashboard({
                 </div>
                 <div className="preview-dashboard-budget-row is-used">
                   <span>已使用</span>
-                  <strong>{showTripCurrency ? displayMoney(totalForBudget, resolvedTripCurrency) : displayMoney(spentHkd, 'HKD')}</strong>
+                  <strong><TickerMoney text={showTripCurrency ? displayMoney(totalForBudget, resolvedTripCurrency) : displayMoney(spentHkd, 'HKD')} /></strong>
                 </div>
                 <div className="preview-dashboard-budget-row is-left">
                   <span>剩餘預算</span>
-                  <strong>{showTripCurrency ? displayMoney(Math.max(0, state.budget - totalForBudget), resolvedTripCurrency) : displayMoney(remainingBudgetHkd, 'HKD')}</strong>
+                  <strong><TickerMoney text={showTripCurrency ? displayMoney(Math.max(0, state.budget - totalForBudget), resolvedTripCurrency) : displayMoney(remainingBudgetHkd, 'HKD')} /></strong>
                 </div>
               </div>
             </div>
@@ -1095,7 +1095,7 @@ export function Dashboard({
             className="size-full"
           >
             <div className="preview-dashboard-today-chart-copy">
-              <strong>{Math.round(todayBudgetPct)}%</strong>
+              <strong><TickerMoney text={`${Math.round(todayBudgetPct)}%`} /></strong>
               <span>每日預算使用</span>
             </div>
           </AnimatedCircularProgressBar>
@@ -1108,7 +1108,7 @@ export function Dashboard({
         <div className="preview-dashboard-today-grid">
           <div>
             <span>今日支出</span>
-            <strong>{todaySpendPrimary}</strong>
+            <strong><TickerMoney text={todaySpendPrimary} /></strong>
             <small>{todaySpendSecondary} · 已記 {dailyReceipts.length} 筆</small>
           </div>
           <div>

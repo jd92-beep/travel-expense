@@ -228,6 +228,29 @@ export function LoadingState({ label = '載入中' }: { label?: string }) {
   );
 }
 
+// Skeleton placeholder shown while a lazy tab chunk loads — shaped like the
+// card column every tab renders, so content appears to "fill in" rather than pop.
+export function TabSkeleton({ label = '載入分頁' }: { label?: string }) {
+  return (
+    <div className="tab-skeleton" role="status" aria-label={label}>
+      <i /><i /><i />
+    </div>
+  );
+}
+
+// Renders an already-formatted money/percent string (e.g. "HK$ 1,234", "¥5,600", "87%")
+// as an animated NumberTicker, keeping the prefix/suffix static. Falls back to plain
+// text when the string has no leading number to tick.
+export function TickerMoney({ text, className }: { text: string | number; className?: string }) {
+  const raw = String(text);
+  const match = raw.match(/^([^\d-]*)(-?[\d,]+(?:\.\d+)?)(.*)$/);
+  if (!match) return <>{raw}</>;
+  const value = Number(match[2].replace(/,/g, ''));
+  if (!Number.isFinite(value)) return <>{raw}</>;
+  const decimalPlaces = match[2].includes('.') ? match[2].split('.')[1].length : 0;
+  return <NumberTicker value={value} decimalPlaces={decimalPlaces} prefix={match[1]} suffix={match[3]} className={cn('ticker-money text-inherit', className)} />;
+}
+
 export function EmptyState({
   title,
   description,

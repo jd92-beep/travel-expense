@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { ErrorBoundary } from './app/ErrorBoundary';
 import { ReceiptEditor } from './components/ReceiptEditor';
 import { Shell } from './components/Shell';
-import { LoadingState } from './components/ui';
+import { LoadingState, TabSkeleton } from './components/ui';
 import { Loader2 } from 'lucide-react';
 import { activeTrip, stampReceiptForTrip, stableDayId, stableSpotId } from './domain/trip/normalize';
 import { hasCredentialBrokerSession } from './lib/credentialBroker';
@@ -452,7 +452,7 @@ export function App() {
       )}
       <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} updateState={updateState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)}>
         <ErrorBoundary key={safeTab}>
-          <Suspense fallback={<LoadingState label="載入分頁" />}>
+          <Suspense fallback={<TabSkeleton label="載入分頁" />}>
             {disableHeavy ? (
               <div className="w-full h-full">
                 {safeTab === 'dashboard' && <Dashboard state={state} setState={setState} updateState={updateState} onOpen={setEditing} onTab={changeTab} onManual={() => setEditing(null)} isWizardOpen={isNewTripWizardOpen} setIsWizardOpen={setIsNewTripWizardOpen} />}

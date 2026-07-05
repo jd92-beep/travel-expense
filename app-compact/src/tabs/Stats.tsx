@@ -6,7 +6,7 @@ import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, hkd, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { amountToHkd, formatCurrencyAmount } from '../lib/currency';
-import { EmptyState, GlassCard, StatusPill } from '../components/ui';
+import { EmptyState, GlassCard, StatusPill, TickerMoney } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryIconId } from '../lib/iconManifest';
@@ -363,9 +363,9 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
           <div className="spending-compass-ring" aria-hidden="true">
             <div className="spending-compass-copy">
               <span>預算使用</span>
-              <strong>{shownPercent}</strong>
+              <strong>{safeBudget > 0 ? <TickerMoney text={shownPercent} /> : shownPercent}</strong>
               <small>{safeBudget > 0 ? (overBudget ? '已超預算' : '已使用') : '未設定預算'}</small>
-              <b>{fmtValue(activeTotal)}</b>
+              <b><TickerMoney text={fmtValue(activeTotal)} /></b>
             </div>
           </div>
           <div className="spending-compass-legend" aria-label="類別比例">
@@ -422,11 +422,11 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
           </div>
           <div className="preview-budget-row is-used">
             <span>已用</span>
-            <strong>{fmtValue(activeTotal)}</strong>
+            <strong><TickerMoney text={fmtValue(activeTotal)} /></strong>
           </div>
           <div className="preview-budget-row">
             <span>{overBudget ? '超出預算' : '尚餘預算'}</span>
-            <strong>{fmtValue(delta)}</strong>
+            <strong><TickerMoney text={fmtValue(delta)} /></strong>
           </div>
           <div className="preview-budget-row preview-budget-stack">
             <span>每日預算</span>
@@ -592,8 +592,8 @@ function BudgetPaceChart({ trend, dailyBudget, dailyAverage, state }: { trend: A
   return (
     <div className="budget-pace" aria-label={`每日 Budget Pace，超支 ${overDays.length} 日，日均 ${currencySymbol}${fmt(dailyAverage)}`}>
       <div className="budget-pace-summary">
-        <span><b>{overDays.length}</b><small>超支日</small></span>
-        <span><b>{currencySymbol}{fmt(dailyBudget)}</b><small>每日預算線</small></span>
+        <span><b><TickerMoney text={overDays.length} /></b><small>超支日</small></span>
+        <span><b><TickerMoney text={`${currencySymbol}${fmt(dailyBudget)}`} /></b><small>每日預算線</small></span>
         <span><b>{peak ? peak[0] : '-'}</b><small>最高支出日</small></span>
       </div>
       <div className="budget-pace-chart" style={{ '--budget-line': `${budgetLine}%` } as CSSProperties}>
@@ -675,8 +675,10 @@ function budgetRingGradient(usedPercent: number): string {
   const used = Math.max(0, Math.min(100, usedPercent));
   const usedDeg = used * 3.6;
   if (used <= 0) return 'conic-gradient(rgba(232,221,208,.84) 0deg 360deg)';
-  if (usedPercent >= 100) return 'conic-gradient(#C23B5E 0deg 360deg)';
-  return `conic-gradient(#C23B5E 0deg ${usedDeg.toFixed(1)}deg, #D4A843 ${usedDeg.toFixed(1)}deg 360deg)`;
+  // --compass-reveal (0→1, animated in styles.css) sweeps the ring open on entry.
+  if (usedPercent >= 100) return 'conic-gradient(#C23B5E 0deg calc(360deg * var(--compass-reveal, 1)), rgba(232,221,208,.84) calc(360deg * var(--compass-reveal, 1)) 360deg)';
+  const stop = `calc(${usedDeg.toFixed(1)}deg * var(--compass-reveal, 1))`;
+  return `conic-gradient(#C23B5E 0deg ${stop}, #D4A843 ${stop} 360deg)`;
 }
 
 function Bar({ label, leading, value, state, color, max }: { label: string; leading?: ReactNode; value: number; state: AppState; color: string; max?: number }) {
@@ -706,8 +708,9 @@ function Bar({ label, leading, value, state, color, max }: { label: string; lead
       <div className="bar-track">
         <motion.i
           style={{ width: `${Math.min(100, value / total * 100)}%`, background: color }}
+          initial={{ width: 0 }}
           animate={{ width: `${Math.min(100, value / total * 100)}%` }}
-          transition={{ duration: 0.38, ease: 'easeOut' }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         />
       </div>
     </div>
