@@ -1,9 +1,9 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-03
-- **Focus**: Compact `0.9.1` Nagoya itinerary recovery and partial-sync guardrails
-- **Agent**: Codex
+- **Date**: 2026-07-06
+- **Focus**: Compact Stats/Weather/GEO bug fixes + HKO official weather provider
+- **Agent**: Antigravity
 - **App version**: Compact `0.9.1`; Admin Console `0.7.0`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
@@ -18,7 +18,33 @@
 
 ## What Was Done
 
-### Session 36 (Codex — current session)
+### Session 37 (Antigravity — current session)
+
+1. **Stats budget currency edit fix**:
+   - When `displayCurrency` is HKD, the budget edit field now pre-fills the HKD-converted value and converts user input back to the trip's native currency via `hkdToCurrency()` before saving.
+   - Files changed: `app-compact/src/tabs/Stats.tsx`.
+
+2. **Weather tab date display improvement**:
+   - Added `formatWeatherDate()` helper that renders `7月12日 (六)` style dates.
+   - New `.weather-day-date` element at 15px desktop / 13px mobile replaces the invisible `Day X` eyebrow.
+   - Files changed: `app-compact/src/tabs/Weather.tsx`, `app-compact/src/styles.css`.
+
+3. **GEO_DICTIONARY cross-trip contamination fix**:
+   - Replaced generic `/機場|airport/` pattern → `/濟州機場|jeju.*airport/` (Jeju-specific only).
+   - Added 13 Japan/Nagoya landmarks to prevent Nagoya trips from resolving to Jeju coordinates.
+   - Files changed: `app-compact/src/lib/geo.ts`.
+
+4. **Hong Kong Observatory (HKO) official weather provider**:
+   - Added `'hko'` to `OfficialWeatherProviderId` type union.
+   - Routes HK by country text (`香港`/`Hong Kong`/`HK`), city/region keywords, and geo bounding box (22.15°-22.56°N, 113.82°-114.44°E).
+   - `fetchHkoOfficialWeather()` combines HKO `rhrread` (live temp/humidity/UV/rainfall from nearest station) with `fnd` (9-day daily forecast distributed across 4 display slots).
+   - HKO icon codes (50-93) mapped to WMO weather codes; Beaufort force wind text parsed to km/h; PSR mapped to rain percentage.
+   - Added 11 HK landmarks to `GEO_DICTIONARY` (airport, Victoria Peak, TST, Mong Kok, Causeway Bay, Central, Sha Tin, Lantau, Sai Kung, Disneyland, Ocean Park).
+   - Files changed: `app-compact/src/lib/weather.ts`, `app-compact/src/lib/geo.ts`.
+
+5. **Verification**: `typecheck` ✅, `build` ✅ (959ms). Commits: `a977efe`, `463421d`.
+
+### Session 36 (Codex — previous session)
 
 1. **Compact Nagoya itinerary recovery**:
    - Root cause: the canonical `ITINERARY` still contained all six Nagoya dates (`2026-04-20` to `2026-04-25`), but `getItinerary()` trusted any non-empty active-trip `itinerary`. A backend/account sync or AI update that returned only a partial trip itinerary could therefore hide the missing days.

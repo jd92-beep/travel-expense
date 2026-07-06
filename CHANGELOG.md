@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-06
+
+- Fixed Compact Stats budget editing currency bug: when `displayCurrency` is HKD, user input is now correctly converted back to the trip's native currency via `hkdToCurrency()` before saving, and the edit field pre-fills the correctly converted HKD amount.
+- Improved Compact Weather tab date visibility: each day's weather card now shows the actual date prominently (e.g. `7月12日 (六)`) via a new `.weather-day-date` element at 15px desktop / 13px mobile, replacing the previous barely-visible `Day X` eyebrow.
+- Fixed GEO_DICTIONARY cross-trip contamination: replaced the overly-broad `/機場|airport/` pattern (which mapped any airport to Jeju coordinates) with Jeju-specific patterns, and added 13 Japan/Nagoya landmarks to prevent Nagoya trips showing Jeju weather data.
+- Added Hong Kong Observatory (HKO) as an official weather provider for the Compact app. HKO combines `rhrread` (live temperature, humidity, UV, rainfall from HK Observatory stations) with `fnd` (9-day daily forecast distributed across display slots). Routing supports `香港`/`Hong Kong`/`HK` keywords plus a geo bounding box for the HK SAR area. Added 11 Hong Kong landmark entries to `GEO_DICTIONARY`.
+- Verification passed for Compact `typecheck` and production `build`.
+
 ## 2026-07-03
 
 - Fixed Compact `0.9.1` itinerary recovery for the default Nagoya trip (`2026-04-20` to `2026-04-25`): if a backend/account sync returns a partial active-trip itinerary, the Timeline now restores the missing canonical Nagoya days instead of hiding them.
