@@ -20,6 +20,18 @@ export const GEO_DICTIONARY: { pattern: RegExp; geo: GeoCoordinate }[] = [
   { pattern: /上高地|kamikochi/i, geo: { city: 'Matsumoto', country: 'Japan', lat: 36.2497, lon: 137.6343 } },
   { pattern: /金沢|金澤|kanazawa/i, geo: { city: 'Kanazawa', country: 'Japan', lat: 36.5613, lon: 136.6562 } },
   { pattern: /常滑|tokoname/i, geo: { city: 'Tokoname', country: 'Japan', lat: 34.8871, lon: 136.8356 } },
+  // ─── Hong Kong SAR ───
+  { pattern: /香港機場|赤鱲角|hk.*airport|chek lap kok/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.3080, lon: 113.9185 } },
+  { pattern: /太平山|victoria peak|山頂/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.2759, lon: 114.1455 } },
+  { pattern: /尖沙咀|tsim sha tsui|tst/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.2988, lon: 114.1722 } },
+  { pattern: /旺角|mong kok/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.3193, lon: 114.1694 } },
+  { pattern: /銅鑼灣|causeway bay/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.2800, lon: 114.1840 } },
+  { pattern: /中環|central/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.2816, lon: 114.1585 } },
+  { pattern: /沙田|sha tin/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.3813, lon: 114.1880 } },
+  { pattern: /大嶼山|lantau/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.2580, lon: 113.9425 } },
+  { pattern: /西貢|sai kung/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.3813, lon: 114.2700 } },
+  { pattern: /迪士尼|disneyland/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.3130, lon: 114.0413 } },
+  { pattern: /海洋公園|ocean park/i, geo: { city: 'Hong Kong', country: 'Hong Kong', lat: 22.2394, lon: 114.1748 } },
   // ─── South Korea: Jeju ───
   { pattern: /濟州機場|제주공항|jeju.*airport/i, geo: { city: 'Jeju', country: 'South Korea', lat: 33.5113, lon: 126.4930 } },
   { pattern: /城山浦港|seongsan.*port/i, geo: { city: 'Seongsan', country: 'South Korea', lat: 33.4600, lon: 126.9300 } },

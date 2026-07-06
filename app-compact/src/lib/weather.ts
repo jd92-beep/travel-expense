@@ -68,7 +68,7 @@ type WeatherFetchResult = {
   fallbackReason?: string;
 };
 
-export type OfficialWeatherProviderId = 'jma' | 'nea-sg' | 'nws-us' | 'msc-ca';
+export type OfficialWeatherProviderId = 'jma' | 'hko' | 'nea-sg' | 'nws-us' | 'msc-ca';
 
 export type OfficialWeatherContext = {
   country?: string;
@@ -127,6 +127,7 @@ const CANTONESE_WEATHER_LABELS: Record<string, string> = {
 
 const OFFICIAL_PROVIDER_SOURCE: Record<OfficialWeatherProviderId, string> = {
   jma: 'JMA official',
+  hko: 'HKO official',
   'nea-sg': 'NEA official',
   'nws-us': 'NWS official',
   'msc-ca': 'MSC official',
@@ -135,6 +136,7 @@ const OFFICIAL_PROVIDER_SOURCE: Record<OfficialWeatherProviderId, string> = {
 export function resolveOfficialWeatherProvider(coord: WeatherCoord, context: OfficialWeatherContext = {}): OfficialWeatherProviderId | null {
   const country = String(context.country || '').trim();
   if (country) {
+    if (/香港|Hong\s*Kong|HK\b/i.test(country)) return 'hko';
     if (/日本|Japan|JP|JPN/i.test(country)) return 'jma';
     if (/Singapore|SG|新加坡|星加坡|Singapura/i.test(country)) return 'nea-sg';
     if (/United States|USA|U\.S\.|US\b|美國|美国/i.test(country)) return 'nws-us';
@@ -142,10 +144,13 @@ export function resolveOfficialWeatherProvider(coord: WeatherCoord, context: Off
     return null;
   }
   const hay = [context.region, context.city, coord.label, coord.query].map((part) => String(part || '')).join(' ');
+  if (/香港|Hong\s*Kong|HK\b/i.test(hay)) return 'hko';
   if (/日本|Japan|JP|JPN|名古屋|金澤|金沢|長野|高山|白川|常滑|上高地|立山|東京|京都|大阪/i.test(hay)) return 'jma';
   if (/Singapore|SG|新加坡|星加坡|Singapura/i.test(hay)) return 'nea-sg';
   if (/United States|USA|U\.S\.|US\b|美國|美国/i.test(hay)) return 'nws-us';
   if (/Canada|CA\b|加拿大/i.test(hay)) return 'msc-ca';
+  // Geo bounding boxes — HK must be checked before JMA since HK lat ~22 is outside JMA's 24-46 box anyway
+  if (coord.lat >= 22.15 && coord.lat <= 22.56 && coord.lon >= 113.82 && coord.lon <= 114.44) return 'hko';
   if (coord.lat >= 24 && coord.lat <= 46 && coord.lon >= 122 && coord.lon <= 146) return 'jma';
   if (coord.lat >= 1.13 && coord.lat <= 1.48 && coord.lon >= 103.55 && coord.lon <= 104.15) return 'nea-sg';
   if (coord.lat >= 41 && coord.lat <= 84 && coord.lon >= -141 && coord.lon <= -52) return 'msc-ca';
@@ -788,12 +793,176 @@ async function fetchMscOfficialWeather(coord: WeatherCoord, timezone: string, ta
   return { data, source: 'MSC official', provider: 'MSC official', cached: false, fetchedAt: Date.now() };
 }
 
+// ── Hong Kong Observatory (HKO) ──────────────────────────────────────────────
+// Combines rhrread (live current readings) + fnd (9-day daily forecast).
+// HKO does NOT provide hourly forecasts, so daily min/max are distributed
+// across the 4 display slots and the fallback chain fills gaps (via merge).
+
+type HkoForecastDay = {
+  forecastDate?: string;
+  forecastMaxtemp?: { value?: number };
+  forecastMintemp?: { value?: number };
+  forecastMaxrh?: { value?: number };
+  forecastMinrh?: { value?: number };
+  ForecastIcon?: number;
+  forecastWind?: string;
+  PSR?: string;
+};
+
+type HkoRhrData = {
+  temperature?: { data?: Array<{ place?: string; value?: number }> };
+  humidity?: { data?: Array<{ place?: string; value?: number }> };
+  rainfall?: { data?: Array<{ unit?: string; place?: string; max?: number; min?: number }> };
+  uvindex?: { data?: Array<{ place?: string; value?: number }> };
+  icon?: number[];
+};
+
+function hkoIconToWmo(icon?: number): number | undefined {
+  if (icon == null) return undefined;
+  if (icon === 50) return 0;   // Sunny
+  if (icon === 51) return 1;   // Sunny Periods
+  if (icon === 52) return 2;   // Sunny Intervals
+  if (icon === 53) return 61;  // Sunny Periods with A Few Showers
+  if (icon === 54) return 61;  // Sunny Intervals with Showers
+  if (icon === 60) return 3;   // Cloudy
+  if (icon === 61) return 3;   // Overcast
+  if (icon === 62) return 51;  // Light Rain
+  if (icon === 63) return 61;  // Rain
+  if (icon === 64) return 65;  // Heavy Rain
+  if (icon === 65) return 95;  // Thunderstorms
+  if (icon === 70) return 0;   // Fine (Night)
+  if (icon === 71) return 1;   // Fine (Night) Periods
+  if (icon === 72) return 2;   // Fine (Night) Intervals
+  if (icon === 73) return 61;  // Fine (Night) with showers
+  if (icon === 74) return 61;  // Fine (Night) with showers
+  if (icon === 75) return 3;   // Cloudy (Night)
+  if (icon === 76) return 3;   // Overcast (Night)
+  if (icon === 77) return 51;  // Light Rain (Night)
+  if (icon === 80) return 95;  // Windy
+  if (icon === 81) return 61;  // Dry
+  if (icon === 82) return 95;  // Humid
+  if (icon === 83) return 45;  // Fog
+  if (icon === 84) return 45;  // Mist
+  if (icon === 85) return 95;  // Haze
+  if (icon === 90) return 0;   // Hot
+  if (icon === 91) return 0;   // Warm
+  if (icon === 92) return 2;   // Cool
+  if (icon === 93) return 3;   // Cold
+  return 2;
+}
+
+function hkoPsrToRainPercent(psr?: string): number | undefined {
+  if (!psr) return undefined;
+  const map: Record<string, number> = {
+    'Low': 10, 'Medium Low': 30, 'Medium': 50,
+    'Medium High': 70, 'High': 85,
+  };
+  return map[psr] ?? undefined;
+}
+
+function hkoWindToMs(windText?: string): number | undefined {
+  if (!windText) return undefined;
+  // "South force 4 to 5" → extract the higher force number, convert Beaufort to m/s
+  const forceMatch = windText.match(/force\s+(\d+)(?:\s+to\s+(\d+))?/i);
+  if (!forceMatch) return undefined;
+  const force = Number(forceMatch[2] || forceMatch[1]);
+  // Beaufort to m/s (approximate midpoints)
+  const beaufort = [0, 0.8, 2.4, 4.3, 6.7, 9.3, 12.3, 15.5, 18.9, 22.6, 26.4, 30.5, 33];
+  return beaufort[Math.min(force, 12)];
+}
+
+function findHkoReading<T extends { place?: string; value?: number }>(items: T[] | undefined, preferred: string[]): number | undefined {
+  if (!items?.length) return undefined;
+  for (const name of preferred) {
+    const match = items.find((item) => item.place === name);
+    if (match?.value != null) return match.value;
+  }
+  return items[0]?.value;
+}
+
+async function fetchHkoOfficialWeather(coord: WeatherCoord, timezone: string, targetDate?: string): Promise<WeatherFetchResult> {
+  const safeTimezone = timezone === 'auto' ? 'Asia/Hong_Kong' : timezone;
+  const date = targetDate || currentYmdInTimezone(safeTimezone);
+  const data = emptyWeatherDataForDate(date);
+
+  // Fetch both endpoints in parallel
+  const [fndJson, rhrJson] = await Promise.all([
+    fetchJson('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=fnd&lang=en') as Promise<{ weatherForecast?: HkoForecastDay[] }>,
+    fetchJson('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=en').catch(() => null) as Promise<HkoRhrData | null>,
+  ]);
+
+  // ── 9-day forecast: find the matching date ──
+  const forecast = fndJson.weatherForecast || [];
+  const dateCompact = date.replace(/-/g, '');
+  const dayForecast = forecast.find((d) => d.forecastDate === dateCompact);
+
+  if (dayForecast) {
+    const maxTemp = dayForecast.forecastMaxtemp?.value;
+    const minTemp = dayForecast.forecastMintemp?.value;
+    const maxRh = dayForecast.forecastMaxrh?.value;
+    const minRh = dayForecast.forecastMinrh?.value;
+    const wmo = hkoIconToWmo(dayForecast.ForecastIcon);
+    const rainPct = hkoPsrToRainPercent(dayForecast.PSR);
+    const windMs = hkoWindToMs(dayForecast.forecastWind);
+
+    // Distribute across 4 slots [9, 12, 16, 21]
+    // Morning uses min temp, afternoon uses max, evening interpolates
+    const tempDistrib = (maxTemp != null && minTemp != null)
+      ? [minTemp, maxTemp, Math.round((maxTemp + minTemp) / 2 * 10) / 10, minTemp]
+      : [maxTemp ?? minTemp, maxTemp ?? minTemp, maxTemp ?? minTemp, minTemp ?? maxTemp];
+    const rhDistrib = (maxRh != null && minRh != null)
+      ? [Math.round((maxRh + minRh) / 2), minRh, Math.round((maxRh + minRh) / 2), maxRh]
+      : [maxRh ?? minRh, maxRh ?? minRh, maxRh ?? minRh, maxRh ?? minRh];
+
+    for (let i = 0; i < WEATHER_SLOTS.length; i++) {
+      setHourlyValue(data, 'temperature_2m', i, tempDistrib[i]);
+      setHourlyValue(data, 'apparent_temperature', i, tempDistrib[i]);
+      setHourlyValue(data, 'weather_code', i, wmo);
+      setHourlyValue(data, 'precipitation_probability', i, rainPct);
+      setHourlyValue(data, 'relative_humidity_2m', i, rhDistrib[i]);
+      if (windMs != null) setHourlyValue(data, 'wind_speed_10m', i, Math.round(windMs * 3.6 * 10) / 10); // m/s → km/h
+    }
+  }
+
+  // ── Current readings: overlay onto the live slot ──
+  const isToday = currentYmdInTimezone(safeTimezone) === date;
+  if (isToday && rhrJson) {
+    const slotIndex = liveSlotIndexForDate(date, safeTimezone);
+    if (slotIndex >= 0) {
+      const preferredStations = ['Hong Kong Observatory', "King's Park", 'Tsim Sha Tsui', 'Sha Tin', 'Tuen Mun'];
+      const currentTemp = findHkoReading(rhrJson.temperature?.data, preferredStations);
+      const currentHumidity = findHkoReading(rhrJson.humidity?.data, ['Hong Kong Observatory']);
+      const currentUv = rhrJson.uvindex?.data?.[0]?.value;
+      const currentIcon = rhrJson.icon?.[0];
+
+      setHourlyValue(data, 'temperature_2m', slotIndex, currentTemp);
+      setHourlyValue(data, 'apparent_temperature', slotIndex, currentTemp);
+      setHourlyValue(data, 'relative_humidity_2m', slotIndex, currentHumidity);
+      setHourlyValue(data, 'uv_index', slotIndex, currentUv);
+      setHourlyValue(data, 'weather_code', slotIndex, hkoIconToWmo(currentIcon));
+
+      // Rainfall: find by area closest to HK island/Kowloon
+      const rainAreas = rhrJson.rainfall?.data || [];
+      const rainPreferred = ['Yau Tsim Mong', 'Wan Chai', 'Kowloon City', 'Eastern District', 'Sham Shui Po'];
+      const rainEntry = rainPreferred.map((name) => rainAreas.find((r) => r.place === name)).find((r) => r != null);
+      if (rainEntry) {
+        const mm = rainEntry.max ?? rainEntry.min ?? 0;
+        setHourlyValue(data, 'precipitation', slotIndex, mm);
+      }
+    }
+  }
+
+  if (!hasMeaningfulWeatherData(data)) throw new Error('HKO official returned no matching weather values');
+  return { data, source: 'HKO official', provider: 'HKO official', cached: false, fetchedAt: Date.now() };
+}
+
 function officialProviderSource(provider: OfficialWeatherProviderId): string {
   return OFFICIAL_PROVIDER_SOURCE[provider];
 }
 
 async function fetchOfficialWeather(provider: OfficialWeatherProviderId, coord: WeatherCoord, timezone: string, targetDate?: string): Promise<WeatherFetchResult> {
   if (provider === 'jma') return fetchJmaOfficialWeather(coord, timezone, targetDate);
+  if (provider === 'hko') return fetchHkoOfficialWeather(coord, timezone, targetDate);
   if (provider === 'nea-sg') return fetchSingaporeOfficialWeather(coord, timezone, targetDate);
   if (provider === 'nws-us') return fetchNwsOfficialWeather(coord, targetDate);
   if (provider === 'msc-ca') return fetchMscOfficialWeather(coord, timezone, targetDate);
