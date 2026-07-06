@@ -34,7 +34,7 @@ test('可見度 gating: only personal 私人 records can be 🔒, saved + marked
     }],
   });
   await page.goto('http://localhost:8903/travel-expense/compact/#history');
-  await page.getByText('團體晚餐').first().click();
+  await page.locator('.receipt-main', { hasText: '團體晚餐' }).first().click();
   await expect(page.getByRole('heading', { name: '編輯紀錄' })).toBeVisible();
 
   // Shared split → visibility locked to 全團可見.
@@ -87,7 +87,7 @@ test('normalize strips illegal private visibility (shared split / cross 代付)'
     ],
   });
   await page.goto('http://localhost:8903/travel-expense/compact/#history');
-  await expect(page.getByText('合法私人單')).toBeVisible();
+  await expect(page.locator('.receipt-main', { hasText: '合法私人單' }).first()).toBeVisible();
   // Only the legal personal record keeps its 🔒 after normalizeState.
   await expect(page.locator('.history-private-mini')).toHaveCount(1);
   const row = page.locator('.receipt-main', { hasText: '合法私人單' });
