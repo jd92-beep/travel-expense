@@ -2,6 +2,14 @@
 
 ## 2026-07-06
 
+- **Compact App 0.12.0 Weather Overhaul (main) / Android 0.15.0**:
+  - **Root-caused Nagoya Day 1 showing Jeju weather**: the live Supabase trip carried 中部國際機場 with Jeju-airport coordinates (33.5113, 126.493), stamped by the old unscoped `/機場|airport/→Jeju` GEO_DICTIONARY pattern (still live on the Android branch until 0.15.0) and synced to every device. Healed the Supabase row directly (trip version bump) and added client self-heal: `normalizeItinerary` replaces stored spot coords sitting >150km from the name's dictionary entry.
+  - **Country-scoped geo resolution**: `resolveGeoCoordinate(name, countryHint)` only matches dictionary entries of the day's country (from `day.country` or timezone), so generic Korea patterns (中央地下街/鯖魚/umu/rainbow…) can never stamp Korea coords onto Japan/HK days again. Android's dictionary re-synced from main.
+  - **Weather geocode fallback restored**: the Weather tab now geocodes city/region names via Open-Meteo when the dictionary has no match (Paris, Jeju-by-name, any future trip) instead of dead-ending on 缺少座標.
+  - **Slot cards**: humidity removed per Boss spec; per-slot condition theme colors — 晴橙 / 多雲灰 / 霧淺灰 / 微雨淺藍 / 落雨藍 / 大雨深藍 / 雪冰藍 / 雷暴紫 (card gradient + border + type badge follow `--weather-accent`).
+  - **Arrive flash**: entering the Weather tab auto-scrolls to the live slot and plays a double-flash glow ring on it (reduced-motion safe).
+  - **weather-smoke suite repaired**: 6 pre-existing failures were stale fixtures (bare `installState({})` no longer produced the default Nagoya trip; Jeju-era expectations; Android had baked the Jeju bug into its expectations). Fixtures updated, humidity assertion inverted, new self-heal regression test. 14/14 green on both branches; dashboard/timeline/itinerary/final-nav green; Android also received the 0.11.1 Timeline port. Signed APK rebuilt (versionCode 1500, cert digest unchanged).
+
 - **Compact App 0.11.1 Itinerary Editing Fixes & UX Polish**:
   - **Fixed Spot Type Option Mismatch (Bug 1)**: Unified the per-spot editing select with the global `SPOT_TYPE_OPTIONS` constant to support all 10 categories (including flight and sightseeing) and prevent category data loss on save.
   - **Added `timeEnd` in Day Editor (Bug 2)**: Added a time input for `timeEnd` (end time) to each spot row in the Timeline Day Editor.

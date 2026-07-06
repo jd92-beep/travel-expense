@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-06
-- **Focus**: Compact in-place itinerary editing bug fixes and UX polish (option mismatch, timeEnd, details jump, mobile grid, unsaved warning, HTML swap confirm, smart default time)
-- **Agent**: Antigravity
-- **App version**: Compact `0.11.1`; Admin Console `0.7.0`; React unchanged in this pass
+- **Focus**: Weather overhaul — Jeju-coords root-cause fix (Supabase heal + client self-heal + country-scoped GEO_DICTIONARY), geocode fallback restored, condition-themed slot cards (no humidity), live-slot arrive flash; Android port + signed APK
+- **Agent**: Oscar (Claude Code)
+- **App version**: Compact `0.12.0` (main); Android branch `0.15.0` (versionCode 1500); Admin Console `0.7.0`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,12 +13,24 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.11.1`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.12.0` (android branch `0.15.0`).
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 38 (Antigravity — current session)
+### Session 39 (Oscar / Claude Code — current session)
+
+1. **Jeju-weather root cause (Boss report: 名古屋 Day 1 showed 濟州 weather)**:
+   - Live Supabase trip `ee4adff8` had 中部國際機場 stored with Jeju-airport coords — legacy damage from the old unscoped `/機場|airport/→Jeju` GEO_DICTIONARY entry (that poison pattern survived on the **Android branch** until this session). Healed the row via SQL (trip version → 6).
+   - Client self-heal in `normalizeItinerary`: stored spot coords >150km from the name's dictionary match are replaced (fixes stale localStorage copies everywhere).
+   - `resolveGeoCoordinate(name, countryHint)` is now country-scoped (`countryHintFor` from `day.country`/timezone) — generic Korea patterns can't contaminate Japan/HK days. Android `geo.ts` re-synced from main.
+   - Weather tab geocode fallback rewired (`resolveCoordsForDay`): dictionary-miss destinations geocode via Open-Meteo instead of showing 缺少座標.
+2. **Weather card spec changes (Boss)**: humidity removed; per-slot condition theme (晴橙/多雲灰/霧淺灰/微雨淺藍/落雨藍/大雨深藍/雪冰藍/雷暴紫) driven by `--weather-accent`; double-flash "you are here" glow after auto-scroll to the live slot (`.weather-arrive-flash`, reduced-motion safe).
+3. **weather-smoke suite repaired (was 6–7 failing on HEAD before this session)**: bare-fixture default restored to the Nagoya trip, Jeju-era ended-trip expectations rewritten, humidity assertion inverted per new spec, new self-heal regression test. 14/14 both branches; dashboard 8, timeline 8–9, itinerary 3, final-nav 8 all green.
+4. **Android v0.15.0**: ported main v0.12.0 weather overhaul + main v0.11.1 Timeline polish; killed the android-only `/機場|airport/→Jeju` dictionary entry; signed APK rebuilt and delivered (versionCode 1500, cert SHA-256 digest unchanged `30e99f89…f99b`).
+   - **Files changed (main)**: `app-compact/src/lib/{geo,weather,constants}.ts`, `src/domain/trip/normalize.ts`, `src/tabs/Weather.tsx`, `src/styles.css`, `tests/weather-smoke.spec.cjs`, `package.json`. Commits: main `c1f9807`, android `74ef33f`.
+
+### Session 38 (Antigravity — previous session)
 
 1. **Compact Itinerary Editing Bugs & UX Polish**:
    - **BUG 1 (Option Mismatch)**: Fixed the category dropdown in the single spot edit sheet by using the global `SPOT_TYPE_OPTIONS` constant, preventing data loss for flight and sightseeing categories.
