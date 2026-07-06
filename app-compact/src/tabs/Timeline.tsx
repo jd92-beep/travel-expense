@@ -1,10 +1,10 @@
 import type { CSSProperties, Dispatch, FormEvent, SetStateAction } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { CalendarDays, Home, MapPin, PencilLine, ReceiptText, RotateCcw } from 'lucide-react';
+import { ArrowLeftRight, ArrowDownUp, CalendarDays, Home, MapPin, PencilLine, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react';
 import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
 import { ShineBorder } from '../components/ui/shine-border';
-import { categoryById, dayLooseReceipts, fmt, getItinerary, getReceiptHkdAmount, getResolvedTripCurrency, getScheduleSpots, mapsUrl, safeExternalUrl, setItineraryOverride, todayForReceipts, isSettlementReceipt } from '../lib/domain';
+import { applyItineraryEdit, categoryById, dayLooseReceipts, fmt, getItinerary, getReceiptHkdAmount, getResolvedTripCurrency, getScheduleSpots, mapsUrl, safeExternalUrl, setItineraryOverride, swapItineraryDays, todayForReceipts, isSettlementReceipt } from '../lib/domain';
 import { currencyPrefix } from '../lib/currency';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from '../lib/types';
@@ -38,11 +38,15 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   const [editing, setEditing] = useState<{ date: string; idx: number; original: ItinerarySpot } | null>(null);
   const [dayReceipts, setDayReceipts] = useState<string | null>(null);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
+  const [dayEdit, setDayEdit] = useState<{ date: string; day: number; region: string; spots: ItinerarySpot[] } | null>(null);
+  const [swapSource, setSwapSource] = useState<string | null>(null);
   const itinerary = getItinerary(state);
+  // Viewers of a shared trip can't push trip changes — they keep the local override layer.
+  const canEditItinerary = activeTrip(state).sharing?.role !== 'viewer';
   const tripWindow = timelineTripWindow(itinerary);
   const activeDay = dayReceipts ? itinerary.find((day) => day.date === dayReceipts) : null;
   const looseReceipts = activeDay ? dayLooseReceipts(state, activeDay) : [];
-  const hasOpenModal = Boolean(editing || activeDay || viewPhoto);
+  const hasOpenModal = Boolean(editing || activeDay || viewPhoto || dayEdit || swapSource);
   const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
   const liveContext = timelineLiveContext(state, itinerary, nowTick, tripWindow);
   const commandDay = (liveContext.date ? itinerary.find((day) => day.date === liveContext.date) : null) || itinerary.find((day) => day.date === today) || itinerary[0];
@@ -146,6 +150,15 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
     return () => { document.removeEventListener('keydown', handleKeyDown); dayReceiptsPrevFocusRef.current?.focus?.(); };
   }, [activeDay]);
 
+  useEffect(() => {
+    if (!dayEdit && !swapSource) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); setDayEdit(null); setSwapSource(null); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [dayEdit, swapSource]);
+
   function saveSpot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editing) return;
@@ -158,8 +171,76 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       note: String(data.get('note') || ''),
       address: String(data.get('address') || ''),
     };
-    setState((prev) => setItineraryOverride(prev, editing.date, editing.idx, patch));
+    const targetDate = String(data.get('moveDate') || editing.date);
+    setState((prev) => {
+      // Viewer: keep the legacy personal-override behaviour (can't push trip changes).
+      if (activeTrip(prev).sharing?.role === 'viewer') {
+        return setItineraryOverride(prev, editing.date, editing.idx, patch);
+      }
+      const current = getItinerary(prev);
+      const srcDay = current.find((d) => d.date === editing.date);
+      const spot = srcDay?.spots?.[editing.idx];
+      if (!srcDay || !spot) return prev;
+      const updated = { ...spot, ...patch };
+      const next = targetDate === editing.date
+        ? current.map((d) => d.date === srcDay.date
+          ? { ...d, spots: d.spots.map((s, i) => (i === editing.idx ? updated : s)) }
+          : d)
+        : current.map((d) => {
+          if (d.date === srcDay.date) return { ...d, spots: d.spots.filter((_, i) => i !== editing.idx) };
+          if (d.date === targetDate) return { ...d, spots: [...(d.spots || []), updated] };
+          return d;
+        });
+      // Direct write supersedes any stale personal override for this spot.
+      const itineraryOverrides = { ...(prev.itineraryOverrides || {}) };
+      const key = spot.spotId || spot.id;
+      if (key) delete itineraryOverrides[key];
+      return { ...applyItineraryEdit(prev, next), itineraryOverrides };
+    });
     setEditing(null);
+  }
+
+  function deleteSpot() {
+    if (!editing) return;
+    if (!window.confirm(`刪除行程點「${editing.original.name}」？`)) return;
+    setState((prev) => {
+      const current = getItinerary(prev);
+      const next = current.map((d) => d.date === editing.date
+        ? { ...d, spots: (d.spots || []).filter((_, i) => i !== editing.idx) }
+        : d);
+      return applyItineraryEdit(prev, next);
+    });
+    setEditing(null);
+  }
+
+  function openDayEditor(day: ItineraryDay, withNewSpot = false) {
+    const spots = (day.spots || []).map((s) => ({ ...s }));
+    if (withNewSpot) spots.push({ time: '12:00', name: '', type: 'sightseeing' });
+    setDayEdit({ date: day.date, day: day.day, region: day.region, spots });
+  }
+
+  function saveDayEditor() {
+    if (!dayEdit) return;
+    const cleaned = dayEdit.spots
+      .map((s) => ({ ...s, name: s.name.trim() }))
+      .filter((s) => s.name);
+    setState((prev) => {
+      const next = getItinerary(prev).map((d) => d.date === dayEdit.date
+        ? { ...d, region: dayEdit.region.trim() || d.region, spots: cleaned }
+        : d);
+      return applyItineraryEdit(prev, next);
+    });
+    setDayEdit(null);
+  }
+
+  function confirmSwap(targetDate: string) {
+    if (!swapSource) return;
+    const a = itinerary.find((d) => d.date === swapSource);
+    const b = itinerary.find((d) => d.date === targetDate);
+    if (!a || !b) return;
+    if (!window.confirm(`將 Day ${a.day}（${a.region}）與 Day ${b.day}（${b.region}）嘅行程內容對調？日期唔會郁。`)) return;
+    setState((prev) => applyItineraryEdit(prev, swapItineraryDays(getItinerary(prev), swapSource, targetDate)));
+    setSwapSource(null);
   }
 
   return (
@@ -241,6 +322,12 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
             <div className="timeline-day-status">
               {day.date === today && <StatusPill tone="danger">Today</StatusPill>}
               <span>{spots.length} 個點</span>
+              {canEditItinerary && (
+                <span className="timeline-day-tools">
+                  <button type="button" className="icon-btn" aria-label={`編輯 Day ${day.day} 行程`} title="編輯呢日行程" onClick={() => openDayEditor(day)}><PencilLine size={15} /></button>
+                  <button type="button" className="icon-btn" aria-label={`Day ${day.day} 與其他日子對調`} title="與另一日對調" onClick={() => setSwapSource(day.date)} disabled={itinerary.length < 2}><ArrowLeftRight size={15} /></button>
+                </span>
+              )}
             </div>
           </div>
           <TimelineRail className={[rail.isToday ? 'is-today' : '', rail.isOutsideTrip ? 'is-outside-trip' : ''].filter(Boolean).join(' ')} style={timelineRailStyle(rail)}>
@@ -342,11 +429,22 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
           <label>名稱<input name="name" defaultValue={editing.original.name} /></label>
           <label>地址<input name="address" defaultValue={editing.original.address || ''} /></label>
           <label>備註<input name="note" defaultValue={editing.original.note || ''} /></label>
+          {canEditItinerary && itinerary.length > 1 && (
+            <label>移至日子
+              <select name="moveDate" defaultValue={editing.date}>
+                {itinerary.map((d) => <option key={d.date} value={d.date}>Day {d.day} · {d.date} · {d.region}</option>)}
+              </select>
+            </label>
+          )}
           <div className="modal-actions">
-            <button type="button" className="danger" onClick={() => {
-              setState((prev) => setItineraryOverride(prev, editing.date, editing.idx, null));
-              setEditing(null);
-            }}><RotateCcw size={15} /> 還原</button>
+            {canEditItinerary ? (
+              <button type="button" className="danger" onClick={deleteSpot}><Trash2 size={15} /> 刪除</button>
+            ) : (
+              <button type="button" className="danger" onClick={() => {
+                setState((prev) => setItineraryOverride(prev, editing.date, editing.idx, null));
+                setEditing(null);
+              }}><RotateCcw size={15} /> 還原</button>
+            )}
             <div className="action-row">
               <button type="button" className="secondary" onClick={() => setEditing(null)}>取消</button>
               <button type="submit" className="primary">儲存</button>
@@ -369,10 +467,68 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
         </div>
       </div>
     )}
+    {dayEdit && (
+      <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setDayEdit(null)}>
+        <div className="modal sheet timeline-day-editor" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-head">
+            <div>
+              <h2>編輯 Day {dayEdit.day} 行程</h2>
+              <p className="muted">{dayEdit.date} · 改完撳儲存先會生效</p>
+            </div>
+            <button type="button" className="icon-btn" onClick={() => setDayEdit(null)}>×</button>
+          </div>
+          <label>地區<input value={dayEdit.region} onChange={(e) => setDayEdit({ ...dayEdit, region: e.target.value })} /></label>
+          <div className="timeline-day-editor-spots">
+            {dayEdit.spots.map((spot, idx) => (
+              <div className="timeline-day-editor-row" key={idx}>
+                <input type="time" value={spot.time} aria-label="時間" onChange={(e) => setDayEdit({ ...dayEdit, spots: dayEdit.spots.map((s, i) => i === idx ? { ...s, time: e.target.value } : s) })} />
+                <input value={spot.name} placeholder="景點 / 餐廳名" aria-label="名稱" onChange={(e) => setDayEdit({ ...dayEdit, spots: dayEdit.spots.map((s, i) => i === idx ? { ...s, name: e.target.value } : s) })} />
+                <select value={spot.type || 'other'} aria-label="類別" onChange={(e) => setDayEdit({ ...dayEdit, spots: dayEdit.spots.map((s, i) => i === idx ? { ...s, type: e.target.value as ItinerarySpot['type'] } : s) })}>
+                  {SPOT_TYPE_OPTIONS.map((type) => <option key={type} value={type}>{categoryById(type).name}</option>)}
+                </select>
+                <button type="button" className="icon-btn" aria-label={`刪除 ${spot.name || '行程點'}`} onClick={() => setDayEdit({ ...dayEdit, spots: dayEdit.spots.filter((_, i) => i !== idx) })}><Trash2 size={15} /></button>
+              </div>
+            ))}
+            {!dayEdit.spots.length && <p className="empty">呢日未有行程點。</p>}
+          </div>
+          <div className="action-row wrap">
+            <button type="button" className="secondary" onClick={() => setDayEdit({ ...dayEdit, spots: [...dayEdit.spots, { time: '12:00', name: '', type: 'sightseeing' }] })}><Plus size={15} /> 新增行程點</button>
+            <button type="button" className="secondary" onClick={() => setDayEdit({ ...dayEdit, spots: dayEdit.spots.slice().sort((a, b) => String(a.time || '').localeCompare(String(b.time || ''))) })}><ArrowDownUp size={15} /> 按時間排序</button>
+          </div>
+          <div className="modal-actions">
+            <div className="action-row">
+              <button type="button" className="secondary" onClick={() => setDayEdit(null)}>取消</button>
+              <button type="button" className="primary" onClick={saveDayEditor}>儲存</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    {swapSource && (
+      <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setSwapSource(null)}>
+        <div className="modal sheet timeline-swap-sheet" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-head">
+            <div>
+              <h2>對調行程日</h2>
+              <p className="muted">Day {itinerary.find((d) => d.date === swapSource)?.day} 會同你揀嘅日子交換全部行程內容（日期不變）</p>
+            </div>
+            <button type="button" className="icon-btn" onClick={() => setSwapSource(null)}>×</button>
+          </div>
+          {itinerary.filter((d) => d.date !== swapSource).map((d) => (
+            <button type="button" className="secondary full-width timeline-swap-option" key={d.date} onClick={() => confirmSwap(d.date)}>
+              <strong>Day {d.day} · {d.date}</strong>
+              <span>{d.region} · {(d.spots || []).length} 個點</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    )}
     {viewPhoto && <ReceiptPhotoModal receipt={viewPhoto} onClose={() => setViewPhoto(null)} />}
   </>
   );
 }
+
+const SPOT_TYPE_OPTIONS: ItinerarySpot['type'][] = ['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'sightseeing', 'other'];
 
 function spotStableKey(date: string, spot: ScheduleSpot, fallbackIdx: number): string {
   if (spot.receiptId) return `${date}:receipt:${spot.receiptId}`;

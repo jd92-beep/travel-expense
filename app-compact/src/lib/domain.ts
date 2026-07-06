@@ -3,7 +3,7 @@ import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { computeShares, roundZeroSum, sharePercents, simplifyDebts } from './splitEngine';
 export { roundZeroSum, sharePercents } from './splitEngine';
-import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, ReceiptPayer, RecurringRule, SettlementSnapshot, TripPhase } from './types';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, ReceiptPayer, RecurringRule, SettlementSnapshot, SyncQueueItem, TripPhase, TripProfile } from './types';
 
 export const fmt = (n: number | string | undefined) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -324,6 +324,81 @@ export function setItineraryOverride(state: AppState, date: string, idx: number,
     delete itineraryOverrides[overrideKey(date, idx)];
   }
   return { ...state, itineraryOverrides };
+}
+
+// Write an edited itinerary into the ACTIVE trip itself (version bump + trip/settings sync),
+// so edits propagate to shared-trip members and other devices — unlike itineraryOverrides,
+// which live in personal settings and get wiped by AI trip updates / JSON imports.
+export function applyItineraryEdit(state: AppState, nextItinerary: ItineraryDay[]): AppState {
+  const now = Date.now();
+  const trip = activeTrip(state);
+  const nextTrip: TripProfile = { ...trip, itinerary: nextItinerary, version: (trip.version || 0) + 1, updatedAt: now };
+  const baseTrips = state.trips?.length ? state.trips : [trip];
+  const trips = baseTrips.some((t) => t.id === trip.id)
+    ? baseTrips.map((t) => (t.id === trip.id ? nextTrip : t))
+    : [...baseTrips, nextTrip];
+  const stamp = (type: SyncQueueItem['type'], entityId: string, payload: SyncQueueItem['payload']): SyncQueueItem => ({
+    id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+    type,
+    entityId,
+    op: 'update',
+    status: 'queued',
+    attempts: 0,
+    createdAt: now,
+    updatedAt: now,
+    payload,
+  });
+  return {
+    ...state,
+    trips,
+    customItinerary: nextItinerary,
+    settingsUpdatedAt: now,
+    syncQueue: [
+      ...(state.syncQueue || []),
+      stamp('trip', trip.id, { sourceId: nextTrip.sourceId || `trip_${trip.id}`, updatedAt: now }),
+      stamp('settings', 'app-settings', { updatedAt: now }),
+    ].slice(-500),
+  };
+}
+
+// Swap the CONTENT of two itinerary days (region/spots/lodging/…). Dates and Day numbers
+// stay in place — this answers "Day 3 and Day 5 should trade places".
+export function swapItineraryDays(itinerary: ItineraryDay[], dateA: string, dateB: string): ItineraryDay[] {
+  const ia = itinerary.findIndex((d) => d.date === dateA);
+  const ib = itinerary.findIndex((d) => d.date === dateB);
+  if (ia < 0 || ib < 0 || ia === ib) return itinerary;
+  const content = (d: ItineraryDay) => ({
+    region: d.region,
+    city: d.city,
+    country: d.country,
+    timezone: d.timezone,
+    currency: d.currency,
+    highlight: d.highlight,
+    note: d.note,
+    lodging: d.lodging,
+    spots: d.spots,
+  });
+  const next = itinerary.slice();
+  next[ia] = { ...itinerary[ia], ...content(itinerary[ib]) };
+  next[ib] = { ...itinerary[ib], ...content(itinerary[ia]) };
+  return next;
+}
+
+// One-shot migration: fold legacy per-spot overrides (personal memo layer) into the trip
+// itinerary so they survive AI updates and become visible to shared-trip members.
+// Returns null when there is nothing to bake.
+export function bakeItineraryOverrides(state: AppState): ItineraryDay[] | null {
+  const overrides = state.itineraryOverrides || {};
+  if (!Object.keys(overrides).length) return null;
+  const itinerary = getItinerary(state);
+  if (!itinerary.length) return null;
+  return itinerary.map((day) => ({
+    ...day,
+    spots: (day.spots || []).map((spot, idx) => ({
+      ...spot,
+      ...(overrides[spot.spotId || spot.id || overrideKey(day.date, idx)] || overrides[overrideKey(day.date, idx)] || {}),
+    })),
+  }));
 }
 
 export function getScheduleSpots(state: AppState, day: ItineraryDay): Array<ItinerarySpot & { _spotIdx: number; receiptId?: string }> {
