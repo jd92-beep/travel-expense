@@ -1,4 +1,4 @@
-import { Cloud, CloudLightning, CloudRain, CloudSun, LocateFixed, RefreshCw, Snowflake, Sun, Umbrella, Wind } from 'lucide-react';
+import { Cloud, CloudLightning, CloudRain, CloudSun, LocateFixed, RefreshCw, Snowflake, Sun, Wind } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GlassCard, LoadingState, Reveal, StatusPill, Toast } from '../components/ui';
@@ -7,7 +7,7 @@ import { Meteors } from '../components/ui/meteors';
 import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import { coordForDay, coordsForDay, fetchWeather, getCachedWeatherRows, groupedCoordsForDay, resolveOfficialWeatherProvider, setCachedWeatherRows, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type GroupedWeatherLocation, type WeatherCoord, type WeatherSlot } from '../lib/weather';
+import { coordForDay, coordsForDay, fetchWeather, getCachedWeatherRows, groupedCoordsForDay, resolveCoordsForDay, resolveOfficialWeatherProvider, setCachedWeatherRows, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type GroupedWeatherLocation, type WeatherCoord, type WeatherSlot } from '../lib/weather';
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
@@ -116,13 +116,26 @@ export function Weather({ state }: { state: AppState }) {
       try {
         const dayPromises = displayItinerary.map(async (day) => {
           const forecastDate = forecastDateFor(day.date);
-          const groups = groupedCoordsByDay.get(day.date) || [];
+          let groups = groupedCoordsByDay.get(day.date) || [];
+          // Dictionary miss (e.g. a trip outside Japan/HK/Korea): geocode the city/region names
+          // instead of dead-ending on 缺少座標.
+          if (groups.length && groups.every((g) => g.missing)) {
+            try {
+              const resolved = await resolveCoordsForDay(day, 2);
+              const found = resolved.filter((c) => !c.missing && Number.isFinite(c.lat) && Number.isFinite(c.lon));
+              if (found.length) {
+                groups = found.map((c) => ({ label: c.label, lat: c.lat, lon: c.lon, spotNames: [], timezone: c.timezone || day.timezone, origin: c.origin, query: c.query }));
+              }
+            } catch {
+              // Geocoding unavailable — keep the missing groups and show the notice.
+            }
+          }
           const coordPromises = groups.map(async (group) => {
             try {
               if (group.missing) {
                 return { coord: group as WeatherCoord, source: '缺少座標', slots: [] };
               }
-              const coord: WeatherCoord = { label: group.label, lat: group.lat, lon: group.lon, timezone: group.timezone, origin: 'known-region' };
+              const coord: WeatherCoord = { label: group.label, lat: group.lat, lon: group.lon, timezone: group.timezone, origin: group.origin || 'known-region', query: group.query };
               const officialProvider = resolveOfficialWeatherProvider(coord, { country: day.country, region: day.region, city: day.city });
               const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', officialProvider, state, forecastDate);
               if (controller.signal.aborted) return null;
@@ -203,6 +216,15 @@ export function Weather({ state }: { state: AppState }) {
       const center = rect.top + rect.height / 2;
       if (center < 112 || center > window.innerHeight - 112) doScroll('auto');
     }, delay));
+    // "You are here" double-flash on the landed slot, after the scroll settles.
+    scrollCorrectionHandlesRef.current.push(window.setTimeout(() => {
+      const el = findTarget();
+      if (!(el instanceof HTMLElement)) return;
+      el.classList.remove('weather-arrive-flash');
+      void el.offsetWidth;
+      el.classList.add('weather-arrive-flash');
+      window.setTimeout(() => el.classList.remove('weather-arrive-flash'), 2100);
+    }, 560));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadDay, today, trip]);
 
@@ -273,7 +295,6 @@ export function Weather({ state }: { state: AppState }) {
           <div className="preview-weather-facts">
             <span>最高 <b className="hot">{leadHigh}°C</b></span>
             <span>最低 <b>{leadLow}°C</b></span>
-            <span>濕度 <b>{leadSlot?.humidity ?? 56}%</b></span>
             <span>風速 <b>{leadSlot?.windSpeed ?? 3} m/s</b></span>
           </div>
           <div className="preview-weather-hourly-rail" aria-label="今日逐時天氣">
@@ -323,7 +344,6 @@ export function Weather({ state }: { state: AppState }) {
                           const live = liveHour === slot.hour;
                           const hasRain = slot.rain != null || slot.precipMm != null;
                           const hasWind = slot.windSpeed != null || slot.windGust != null;
-                          const hasHumidity = slot.humidity != null;
                           const hasSunUv = slot.uvIndex != null || slot.cloudCover != null;
                           const feels = slot.feelsLike ?? slot.temp;
 
@@ -393,12 +413,6 @@ export function Weather({ state }: { state: AppState }) {
                                   {slot.windGust != null ? formatNumber(slot.windGust, 'km/h') : ''}
                                   {slot.windSpeed != null && slot.windGust != null ? ')' : ''}
                                 </span>
-                              </span>
-                            )}
-                            {hasHumidity && (
-                              <span className="metric-tag humidity-tag">
-                                <Umbrella size={13} className="metric-icon" />
-                                <span className="metric-val">濕度 {formatNumber(slot.humidity, '%')}</span>
                               </span>
                             )}
                           </div>
@@ -509,12 +523,24 @@ function weatherHint(slot: { rain?: number; precipMm?: number; windSpeed?: numbe
   return '天氣條件穩定，適合按原定行程走。';
 }
 
-function weatherAccent(slot: { code?: number; rain?: number; precipMm?: number; temp?: number; feelsLike?: number; uvIndex?: number }): string {
-  if ((slot.rain || 0) >= 50 || (slot.precipMm || 0) >= 1) return '#1a7ae0';
-  if ((slot.uvIndex || 0) >= 6 || slot.code === 0) return '#d97706';
-  if ((slot.feelsLike ?? slot.temp ?? 18) <= 12) return '#2b7fff';
-  if ((slot.feelsLike ?? slot.temp ?? 0) >= 28) return '#dc2626';
-  if (slot.code != null && slot.code >= 95) return '#9333ea';
+// Per-slot theme color keyed on the forecast condition (Boss spec):
+// 大雨 deep blue · 落雨 blue · 微雨/驟雨 light blue · 晴 orange · 多雲 grey · 霧 pale grey
+// (雪 ice blue · 雷暴 purple). WMO weather codes; rain% is the fallback when code is missing.
+function weatherAccent(slot: { code?: number; rain?: number; precipMm?: number }): string {
+  const code = slot.code;
+  if (code != null) {
+    if (code >= 95) return '#7c3aed';                                        // 雷暴
+    if (code === 65 || code === 67 || code === 82) return '#1e40af';         // 大雨
+    if (code === 63 || code === 66 || code === 81) return '#2563eb';         // 落雨
+    if ((code >= 51 && code <= 61) || code === 80) return '#4a94e8';         // 微雨/驟雨
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return '#4fb2d9'; // 雪
+    if (code === 45 || code === 48) return '#9aa2ae';                        // 霧
+    if (code === 0 || code === 1) return '#f59e0b';                          // 晴
+    if (code === 2 || code === 3) return '#77808e';                          // 多雲
+  }
+  if ((slot.rain || 0) >= 70 || (slot.precipMm || 0) >= 4) return '#1e40af';
+  if ((slot.rain || 0) >= 40) return '#2563eb';
+  if ((slot.rain || 0) >= 20) return '#4a94e8';
   return '#1e6d86';
 }
 

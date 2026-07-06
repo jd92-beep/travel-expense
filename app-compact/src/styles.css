@@ -14537,3 +14537,54 @@ input[type="checkbox"] {
 @media (prefers-reduced-motion: reduce) {
   .tab-skeleton > i { animation: none; }
 }
+
+/* ========== WEATHER SLOT CONDITION THEME + ARRIVE FLASH (v0.12.0) ========== */
+/* Card surface follows --weather-accent (set per-slot from the forecast condition). */
+/* !important: the mobile glass skin (≈line 8890) forces a flat cream background with
+   !important on .weather-slot-detailed; the condition tint must win that fight. */
+.weather-screen .weather-slot-detailed {
+  background:
+    linear-gradient(150deg,
+      color-mix(in srgb, var(--weather-accent) 26%, white) 0%,
+      color-mix(in srgb, var(--weather-accent) 11%, white) 48%,
+      color-mix(in srgb, var(--weather-accent) 4%, white) 100%) !important;
+  border-color: color-mix(in srgb, var(--weather-accent) 38%, rgba(255, 255, 255, .7)) !important;
+}
+.weather-screen .weather-slot-detailed .weather-type-badge {
+  color: color-mix(in srgb, var(--weather-accent) 82%, #223);
+  background: color-mix(in srgb, var(--weather-accent) 14%, white);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+/* "You are here" — double flash after the auto-scroll lands on the live slot. */
+@keyframes weather-arrive-flash {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(30, 77, 107, .04);
+    transform: scale(1);
+  }
+  12%, 44% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--weather-accent, #1e6d86) 60%, transparent),
+      0 0 36px 6px color-mix(in srgb, var(--weather-accent, #1e6d86) 42%, transparent);
+    transform: scale(1.035);
+    filter: saturate(1.4) brightness(1.08);
+  }
+  28%, 62% {
+    box-shadow: 0 0 0 0 transparent;
+    transform: scale(1);
+    filter: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .weather-screen .weather-arrive-flash {
+    animation: weather-arrive-flash 1.9s cubic-bezier(.4, 0, .2, 1) 1;
+    z-index: 5;
+  }
+  .weather-screen .weather-arrive-flash::before {
+    animation: weather-arrive-bar 1.9s ease-in-out 1;
+  }
+  @keyframes weather-arrive-bar {
+    12%, 44% { box-shadow: 0 0 14px 2px color-mix(in srgb, var(--weather-accent, #1e6d86) 70%, transparent); }
+  }
+}

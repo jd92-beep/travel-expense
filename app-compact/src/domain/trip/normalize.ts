@@ -2,7 +2,7 @@ import { APP_SCHEMA_VERSION, DEFAULT_STATE, ITINERARY } from '../../lib/constant
 import { perHkdForCurrency } from '../../lib/currency';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile } from '../../lib/types';
 import { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
-import { resolveGeoCoordinate, resolveCategory } from '../../lib/geo';
+import { countryHintFor, geoDistanceKm, resolveGeoCoordinate, resolveCategory } from '../../lib/geo';
 
 export { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
 
@@ -107,9 +107,17 @@ export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fa
       currency: day.currency || fallbackCurrency,
       spots: (day.spots || []).map((spot, spotIdx) => {
         const name = String(spot.name || '').trim() || `Spot ${spotIdx + 1}`;
-        const geo = resolveGeoCoordinate(name);
-        const rawLat = Number(spot.lat);
-        const rawLon = Number(spot.lon);
+        const geo = resolveGeoCoordinate(name, countryHintFor(day));
+        let rawLat = Number(spot.lat);
+        let rawLon = Number(spot.lon);
+        // Self-heal: old unscoped geo lookups baked wrong-country coords into synced itineraries
+        // (中部國際機場 got Jeju airport). If the name resolves to a known place >150km from the
+        // stored coords, the stored coords are stale garbage — the dictionary wins.
+        if (geo && Number.isFinite(rawLat) && Number.isFinite(rawLon)
+          && geoDistanceKm({ lat: rawLat, lon: rawLon }, geo) > 150) {
+          rawLat = geo.lat;
+          rawLon = geo.lon;
+        }
         return {
           ...spot,
           name,

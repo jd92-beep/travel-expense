@@ -66,8 +66,43 @@ export const GEO_DICTIONARY: { pattern: RegExp; geo: GeoCoordinate }[] = [
   { pattern: /blue elephant/i, geo: { city: 'Aewol', country: 'South Korea', lat: 33.4650, lon: 126.3150 } },
 ];
 
-export function resolveGeoCoordinate(name: string): GeoCoordinate | null {
+// Country scoping: the dictionary mixes trips (Japan/HK/Korea) and some Korea patterns are
+// generic terms (中央地下街, 鯖魚, umu…) that also occur in Japanese spot names. An unscoped
+// lookup once stamped Jeju-airport coords onto 中部國際機場 and the bad coords synced to every
+// device. When we know the day's country, only that country's entries may match.
+const COUNTRY_HINTS: { pattern: RegExp; country: string }[] = [
+  { pattern: /japan|日本|jpn/i, country: 'Japan' },
+  { pattern: /korea|韓國|韩国|kr\b/i, country: 'South Korea' },
+  { pattern: /hong\s*kong|香港|hk\b/i, country: 'Hong Kong' },
+];
+
+const TZ_COUNTRY: Record<string, string> = {
+  'Asia/Tokyo': 'Japan',
+  'Asia/Seoul': 'South Korea',
+  'Asia/Hong_Kong': 'Hong Kong',
+};
+
+export function countryHintFor(context: { country?: string; timezone?: string }): string | undefined {
+  const country = String(context.country || '').trim();
+  if (country) {
+    const hit = COUNTRY_HINTS.find((h) => h.pattern.test(country));
+    if (hit) return hit.country;
+    return country;
+  }
+  return TZ_COUNTRY[String(context.timezone || '').trim()];
+}
+
+export function geoDistanceKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+export function resolveGeoCoordinate(name: string, countryHint?: string): GeoCoordinate | null {
   for (const entry of GEO_DICTIONARY) {
+    if (countryHint && entry.geo.country && entry.geo.country !== countryHint) continue;
     if (entry.pattern.test(name)) return entry.geo;
   }
   return null;
