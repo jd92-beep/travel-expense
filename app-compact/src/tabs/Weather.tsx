@@ -24,6 +24,15 @@ function WeatherIcon({ code, size = 18 }: { code?: number; size?: number }) {
   return <CloudSun size={size} />;
 }
 
+const WEEKDAY_ZH = ['日', '一', '二', '三', '四', '五', '六'] as const;
+function formatWeatherDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return dateStr;
+  const dt = new Date(y, m - 1, d);
+  const wd = WEEKDAY_ZH[dt.getDay()];
+  return `${m}月${d}日 (${wd})`;
+}
+
 export function Weather({ state }: { state: AppState }) {
   const [rows, setRows] = useState<Record<string, DayWeather[]>>({});
   const [busy, setBusy] = useState(false);
@@ -288,7 +297,11 @@ export function Weather({ state }: { state: AppState }) {
               <GlassCard className="weather-day">
                 <WeatherFX code={dayCode} tintOnly />
                 <div className="section-head">
-                  <div><p className="eyebrow">{day.date < today ? `Current · ${today} · Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p><h2>{day.region}</h2></div>
+                  <div>
+                    <p className="weather-day-date">{formatWeatherDate(day.date)}</p>
+                    <p className="eyebrow">{day.date < today ? `Current · Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p>
+                    <h2>{day.region}</h2>
+                  </div>
                   <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{(groupedCoordsByDay.get(day.date) || []).map((g) => g.label).join(' / ') || day.region}</StatusPill>
                 </div>
                 {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}

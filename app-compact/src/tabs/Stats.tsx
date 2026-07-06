@@ -5,7 +5,7 @@ import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, hkd, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
-import { amountToHkd, formatCurrencyAmount } from '../lib/currency';
+import { amountToHkd, formatCurrencyAmount, hkdToCurrency } from '../lib/currency';
 import { EmptyState, GlassCard, StatusPill, TickerMoney } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { VisualIcon } from '../components/VisualIcon';
@@ -294,7 +294,11 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
     : 0;
 
   const handleUpdateBudget = (newBudgetVal: string) => {
-    const newBudget = Number(newBudgetVal) || 0;
+    const rawInput = Number(newBudgetVal) || 0;
+    // When editing in HKD mode, convert back to trip currency for storage
+    const newBudget = showTripCurrency
+      ? rawInput
+      : Math.round(hkdToCurrency(rawInput, resolvedTripCurrency, state));
     if (setState) {
       const now = Date.now();
       const nextTrip = {
@@ -410,7 +414,11 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
                   type="button"
                   aria-label="編輯預算"
                   onClick={() => {
-                    setEditBudgetVal(String(state.budget || ''));
+                    // Show the value in the currently active display currency
+                    const initVal = showTripCurrency
+                      ? String(state.budget || '')
+                      : String(Math.round(amountToHkd(Number(state.budget) || 0, resolvedTripCurrency, state)) || '');
+                    setEditBudgetVal(initVal);
                     setIsEditingBudget(true);
                   }}
                   style={{ cursor: 'pointer' }}

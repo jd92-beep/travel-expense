@@ -2188,6 +2188,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .weather-day {
   padding: 18px;
 }
+.weather-day-date {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--accent, #e8a946);
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  margin: 0 0 2px;
+}
 .weather-location {
   display: grid;
   gap: 12px;
@@ -12327,7 +12335,10 @@ textarea,
 
   .app-shell--weather .weather-day .section-head .eyebrow,
   .app-shell--weather .weather-day .section-head .status-pill {
-    font-size: 9.5px !important;
+    font-size: 11px !important;
+  }
+  .app-shell--weather .weather-day .section-head .weather-day-date {
+    font-size: 13px !important;
   }
 
   .app-shell--weather .weather-grid.weather-grid-detailed {
@@ -12560,6 +12571,12 @@ textarea,
   .settings-status-tooltips,
   .weather-screen .eyebrow {
     font-size: 10px !important;
+  }
+  .weather-screen .weather-day .weather-day-date {
+    font-size: 13px !important;
+  }
+  .weather-screen .weather-day .eyebrow {
+    font-size: 11px !important;
   }
 }
 
@@ -13265,6 +13282,12 @@ textarea,
   .stats-tab.stats-cockpit .bar-row span,
   .stats-tab.stats-cockpit .rank-row span {
     font-size: 9.5px !important;
+  }
+  .weather-screen .weather-day .weather-day-date {
+    font-size: 13px !important;
+  }
+  .weather-screen .weather-day .eyebrow {
+    font-size: 11px !important;
   }
 
   .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-ring {
