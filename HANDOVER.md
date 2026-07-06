@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-06
-- **Focus**: Weather overhaul — Jeju-coords root-cause fix (Supabase heal + client self-heal + country-scoped GEO_DICTIONARY), geocode fallback restored, condition-themed slot cards (no humidity), live-slot arrive flash; Android port + signed APK
+- **Focus**: Private receipts (per-record visibility with server-side RLS + RPC enforcement, editor 可見度 control, Notion mirror skip, settlement-neutrality proof); earlier same day: weather overhaul (Jeju root cause)
 - **Agent**: Oscar (Claude Code)
-- **App version**: Compact `0.12.0` (main); Android branch `0.15.0` (versionCode 1500); Admin Console `0.7.0`; React unchanged in this pass
+- **App version**: Compact `0.13.1` (main); Android branch `0.16.0` (versionCode 1600); Admin Console `0.7.0`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,12 +13,22 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.12.0` (android branch `0.15.0`).
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.13.1` (android branch `0.16.0`).
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 39 (Oscar / Claude Code — current session)
+### Session 40 (Oscar / Claude Code — current session)
+
+1. **Private receipts (Boss request: hide some expenses from other trip members)** — main `0.13.0`/`0.13.1` (`337fd2e`, `8b1f38b`), android `0.16.0` (`d2c5abb`):
+   - `Receipt.visibility 'trip'|'private'`; enforcement is **server-side** — RLS select policy gates on visibility, and `upsert_shared_trip_receipt` RPC maps the field + skips Notion sync jobs for private rows. Live DB migrated via Management API (never `db push`); migration file `supabase/migrations/20260706090000_receipt_visibility.sql` passes `db:policy:scan`.
+   - Consistency invariant (`canBePrivateReceipt` in domain.ts, duplicated intentionally in storage.ts normalize): private visibility ⇢ 私人 split without cross-person 代付, so hidden records never affect anyone else's settlement. Editor locks 可見度 otherwise; changing 受惠人 to another person revokes it live.
+   - History shows 🔒 on private rows; editor hints in Cantonese; Notion `pushReceipt` no-ops for private records.
+   - `smoke:privacy` (3 tests) green both branches. Android merge preserved its richer editor (splitType/splits/payers, 進階拆數) — watch for `splitEngine` re-exports when porting domain.ts changes to android (roundZeroSum/sharePercents live in splitEngine there, NOT domain.ts).
+   - Pre-existing failures (stash-bisected, NOT from this work, tracked via session chip): history conflict-resolver test (both branches), android final-nav sync-error-indicator test.
+   - Note: Codex CLI was asked to build this first but hit its usage limit (resets Aug 4) after exploration only — no Codex commits; implemented by Oscar.
+
+### Session 39 (Oscar / Claude Code — earlier today)
 
 1. **Jeju-weather root cause (Boss report: 名古屋 Day 1 showed 濟州 weather)**:
    - Live Supabase trip `ee4adff8` had 中部國際機場 stored with Jeju-airport coords — legacy damage from the old unscoped `/機場|airport/→Jeju` GEO_DICTIONARY entry (that poison pattern survived on the **Android branch** until this session). Healed the row via SQL (trip version → 6).

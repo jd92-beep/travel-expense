@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 目錄 | package name | port | 角色 |
 |---|---|---|---|
 | `app-react/` | `travel-expense-react-fresh` | 8902 | React 重寫版，最完整 smoke-test 套件 |
-| `app-compact/` | `travel-expense-compact` | 8903 | **現役部署版**（目前 `v0.12.0`），有 production-gate scripts |
+| `app-compact/` | `travel-expense-compact` | 8903 | **現役部署版**（目前 `v0.13.1`），有 production-gate scripts |
 | `app-admin-kanban/` | `travel-expense-admin-kanban` | 8904 | Admin 管理 console（目前 `v0.7.0`，有 `api/`） |
 | `app/`, `app3/` | — | 5173 | 其他 Vite 變體 / 實驗 |
 | `index.html` | — | — | Legacy 單檔 app（CDN Tailwind + vanilla JS，~10k 行）；下面 §Architecture Overview 講緊呢個 |

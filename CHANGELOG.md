@@ -2,6 +2,14 @@
 
 ## 2026-07-06
 
+- **Compact App 0.13.0–0.13.1 Private Receipts (main) / Android 0.16.0**:
+  - **Per-record visibility**: `Receipt.visibility 'trip'|'private'` — 🔒只有自己 records are readable only by their owner. Enforced server-side: Supabase RLS `receipts_select_trip_members` now gates on visibility, and the `upsert_shared_trip_receipt` RPC maps the field and skips Notion mirror jobs for private rows (old clients / direct API calls cannot leak them). Live DB migrated via the Management API (`supabase/migrations/20260706090000_receipt_visibility.sql`, idempotent).
+  - **Consistency rule**: privacy is only offered on personal records — 私人 split with no cross-person 代付 (`canBePrivateReceipt`). The editor locks the 可見度 control otherwise, `normalizeState` strips illegal combos, so a hidden record can never change another member's balance and every pairwise debt is computed identically by both parties.
+  - **UI**: 可見度 select (全團可見 / 🔒只有自己) with Cantonese hints in the receipt editor; 🔒 marker on private rows in History.
+  - **Notion**: client `pushReceipt` no-ops for private records (treated as synced so the queue doesn't retry forever) + server-side sync-job skip.
+  - **Tests**: new `smoke:privacy` (editor gating incl. 代付 revocation, normalize strip, settlement neutrality — transfers identical with/without the private record). 3/3 on both branches; dashboard/six-person green; the history conflict-resolver and android final-nav failures are pre-existing on HEAD (stash-bisected) and tracked separately. 0.13.1 makes the spec selectors portable across both branches' History markup.
+  - Deferred (documented): per-member `visible_to` subset visibility needs a trip-member↔person binding that doesn't exist server-side yet.
+
 - **Compact App 0.12.0 Weather Overhaul (main) / Android 0.15.0**:
   - **Root-caused Nagoya Day 1 showing Jeju weather**: the live Supabase trip carried 中部國際機場 with Jeju-airport coordinates (33.5113, 126.493), stamped by the old unscoped `/機場|airport/→Jeju` GEO_DICTIONARY pattern (still live on the Android branch until 0.15.0) and synced to every device. Healed the Supabase row directly (trip version bump) and added client self-heal: `normalizeItinerary` replaces stored spot coords sitting >150km from the name's dictionary entry.
   - **Country-scoped geo resolution**: `resolveGeoCoordinate(name, countryHint)` only matches dictionary entries of the day's country (from `day.country` or timezone), so generic Korea patterns (中央地下街/鯖魚/umu/rainbow…) can never stamp Korea coords onto Japan/HK days again. Android's dictionary re-synced from main.
