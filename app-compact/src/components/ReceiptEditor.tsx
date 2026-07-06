@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { currencyPrefix, perHkdForCurrency, SUPPORTED_CURRENCIES } from '../lib/currency';
-import { getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
+import { canBePrivateReceipt, getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
 import type { AppState, CategoryId, PaymentId, Receipt, ReceiptLineItem, SplitMode } from '../lib/types';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
@@ -222,6 +222,8 @@ export function ReceiptEditor({
   const editPerHkd = Math.max(0.1, perHkdForCurrency(state, draft.currency || draft.originalCurrency || currencyForDate(draft.date)));
   const hkdOfItem = (amount: number) => Math.round((amount / editPerHkd) * 100) / 100;
   const fromHkdAmount = (hkdValue: number) => Math.round(hkdValue * editPerHkd * 100) / 100;
+  const effectivePayerId = draft.personId || first?.id || '';
+  const privacyEligible = canBePrivateReceipt({ splitMode: draft.splitMode || 'shared', beneficiaryId: draft.beneficiaryId, personId: effectivePayerId });
   const parseAmountInput = (raw: string) => {
     const parsed = parseFloat(raw);
     return !isNaN(parsed) && parsed >= 0 ? Math.min(parsed, MAX_RECEIPT_AMOUNT) : 0;
@@ -290,6 +292,7 @@ export function ReceiptEditor({
             currency: draft.currency || draft.originalCurrency || currencyForDate(draft.date),
             personId: draft.personId || first?.id || '',
             splitMode: draft.splitMode || 'shared',
+            visibility: privacyEligible && draft.visibility === 'private' ? 'private' : undefined,
             lineItems: finalLineItems.length ? finalLineItems : undefined,
             itemsText: itemRowsMode
               ? (finalLineItems.length ? serializeLineItems(finalLineItems, editPrefix) : '')
@@ -353,7 +356,7 @@ export function ReceiptEditor({
             </select>
           </label>
           <label>分帳
-            <select value={draft.splitMode || 'shared'} onChange={(e) => set('splitMode', e.target.value as SplitMode)}>
+            <select aria-label="分帳" value={draft.splitMode || 'shared'} onChange={(e) => set('splitMode', e.target.value as SplitMode)}>
               <option value="shared">Shared</option>
               <option value="private">私人 / 代付</option>
             </select>
@@ -361,11 +364,26 @@ export function ReceiptEditor({
         </div>
         {draft.splitMode === 'private' && (
           <label>受惠人
-            <select value={draft.beneficiaryId || draft.personId || first?.id || ''} onChange={(e) => set('beneficiaryId', e.target.value)}>
+            <select aria-label="受惠人" value={draft.beneficiaryId || draft.personId || first?.id || ''} onChange={(e) => set('beneficiaryId', e.target.value)}>
               {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
         )}
+        <label>可見度
+          {/* Locked to 全團可見 unless the record is personal (私人 split, no cross 代付) —
+              a hidden record must never change another member's balance. */}
+          <select
+            aria-label="可見度"
+            value={privacyEligible ? (draft.visibility || 'trip') : 'trip'}
+            disabled={!privacyEligible}
+            onChange={(e) => set('visibility', e.target.value === 'private' ? 'private' : undefined)}
+          >
+            <option value="trip">全團可見</option>
+            <option value="private">🔒 只有自己</option>
+          </select>
+          {!privacyEligible && <small className="muted field-hint">揀「私人」分帳（冇代付對象）先可以收起呢筆</small>}
+          {privacyEligible && draft.visibility === 'private' && <small className="muted field-hint">🔒 只會 sync 去你自己嘅戶口，唔會出現喺旅伴 app 或 Notion</small>}
+        </label>
         <label>地址 / 地圖搜尋
           <input value={draft.address || ''} onChange={(e) => set('address', e.target.value)} placeholder="例：名古屋市中村区名駅4-6-25" />
         </label>

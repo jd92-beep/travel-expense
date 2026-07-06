@@ -14588,3 +14588,15 @@ input[type="checkbox"] {
     12%, 44% { box-shadow: 0 0 14px 2px color-mix(in srgb, var(--weather-accent, #1e6d86) 70%, transparent); }
   }
 }
+
+/* Receipt editor 可見度 hint line */
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+.history-private-mini {
+  margin-right: 4px;
+  font-size: 0.8em;
+}

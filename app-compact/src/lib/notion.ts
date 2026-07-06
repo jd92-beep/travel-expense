@@ -1195,6 +1195,10 @@ export async function createNotionDatabase(
 }
 
 export async function pushReceipt(state: AppState, receipt: Receipt): Promise<Receipt> {
+  // Owner-only records never reach Notion: the shared trip mirror is readable by every member,
+  // so mirroring a private receipt would leak exactly what the visibility flag hides. Treated as
+  // a successful no-op so the sync queue doesn't retry it forever.
+  if (receipt.visibility === 'private') return receipt;
   const notionState = stateForReceiptNotion(state, receipt);
   const activeDb = getActiveNotionDb(notionState);
   if (!activeDb) return receipt;

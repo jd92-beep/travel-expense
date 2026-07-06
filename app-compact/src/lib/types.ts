@@ -11,6 +11,7 @@ export type CategoryId =
 
 export type PaymentId = 'cash' | 'credit' | 'paypay' | 'suica';
 export type SplitMode = 'shared' | 'private';
+export type ReceiptVisibility = 'trip' | 'private';
 export type TripPhase = 'prep' | 'trip' | 'post';
 export type SyncStatus = 'local' | 'queued' | 'syncing' | 'synced' | 'error' | 'failed';
 export type GlobalSyncStatus = 'idle' | 'queued' | 'pushing' | 'pulling' | 'synced' | 'error' | 'offline';
@@ -88,6 +89,10 @@ export interface Receipt {
   personId?: string;
   splitMode?: SplitMode;
   beneficiaryId?: string;
+  // Per-record visibility in shared trips. 'private' = owner-only (enforced by Supabase RLS);
+  // undefined/'trip' = all trip members. Only valid on splitMode 'private' records without a
+  // cross-person beneficiary — hidden records must never affect another member's balance.
+  visibility?: ReceiptVisibility;
   phase?: TripPhase;
   createdAt?: number;
   notionPageId?: string;

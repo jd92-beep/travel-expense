@@ -541,6 +541,13 @@ export function sharePercents(personIds: string[], shareRatios?: Record<string, 
   return roundZeroSum(base);
 }
 
+// A receipt may be owner-only ('private' visibility) ONLY when it cannot affect anyone else's
+// balance: personal split (payer bears 100%) without a cross-person beneficiary. This keeps every
+// pairwise debt computable identically by both parties from the records each of them can see.
+export function canBePrivateReceipt(r: Pick<Receipt, 'splitMode' | 'beneficiaryId' | 'personId'>): boolean {
+  return r.splitMode === 'private' && (!r.beneficiaryId || r.beneficiaryId === r.personId);
+}
+
 export function computeSettlements(state: AppState): SettlementSnapshot {
   const persons = getPersons(state);
   const empty: SettlementSnapshot = { transfers: [], balances: [], sharedTotal: 0, sharedByPayer: [], privateByOwner: [], crossPrivate: [] };
@@ -578,6 +585,10 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
       console.warn(`[settlement] receipt ${r.id} payer ${r.personId} not found — excluded from settlement`);
       continue;
     }
+    // 'private'-VISIBILITY receipts are always splitMode 'private' without a cross beneficiary
+    // (canBePrivateReceipt, enforced on save + normalize), so they only ever add to the owner's
+    // privateByOwner bucket and never produce transfers — members who can't see the record
+    // compute identical transfer amounts.
     if (r.splitMode === 'private') {
       if (r.beneficiaryId && idxOf(r.beneficiaryId) < 0) {
         console.warn(`[settlement] private receipt ${r.id} beneficiary ${r.beneficiaryId} not found — attributing to payer`);

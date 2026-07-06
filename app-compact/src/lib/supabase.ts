@@ -84,6 +84,7 @@ type SupabaseReceiptRow = {
   status: string;
   confidence: string | null;
   map_url: string | null;
+  visibility?: string | null;
   notion_page_id: string | null;
   notion_database_id: string | null;
   notion_sync_status?: string | null;
@@ -483,6 +484,7 @@ function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: Tri
     itemsText: row.items_text || undefined,
     source: 'supabase',
     sourceId: row.source_id || row.id,
+    visibility: row.visibility === 'private' ? 'private' : undefined,
     version: Number(row.version || 1),
     syncStatus: receiptSyncStatusForLedger(ledgerSyncStatus),
     createdAt: msFromIso(row.created_at),
@@ -919,6 +921,7 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     address: receipt.address || null,
     booking_ref: receipt.bookingRef || null,
     source_id: sourceIdForReceipt(receipt),
+    visibility: receipt.visibility === 'private' ? 'private' : 'trip',
     status: receipt.syncStatus === 'failed' || receipt.syncStatus === 'error' ? 'draft' : 'confirmed',
     confidence: null,
     map_url: receipt.mapUrl || null,
@@ -959,7 +962,7 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
   // strip those columns and retry instead of hard-failing the whole receipt — mirrors
   // the upsertSupabaseTrip fallback. Prevents one missing column from blocking all sync.
   if (error && /column|schema cache/i.test(error.message || '')) {
-    const { version: _version, ...legacyRow } = row;
+    const { version: _version, visibility: _visibility, ...legacyRow } = row as typeof row & { visibility?: string };
     ({ data, error } = await withTimeout(supabase
       .from('receipts')
       .upsert(legacyRow, { onConflict: 'id' })

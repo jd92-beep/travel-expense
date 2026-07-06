@@ -85,6 +85,13 @@ export function normalizeState(input: unknown): AppState {
     state.persons = [DEFAULT_STATE.persons[0], ...state.persons];
   }
   state.receipts = state.receipts.filter((r) => !(typeof r.id === 'string' && r.id.startsWith('__meta_')));
+  // Privacy guard (keep in sync with canBePrivateReceipt in domain.ts): owner-only visibility
+  // is only legal on personal records — a shared-split or cross-person 代付 record hidden from
+  // the people it charges would corrupt their settlement view.
+  state.receipts = state.receipts.map((r) =>
+    r.visibility === 'private' && !(r.splitMode === 'private' && (!r.beneficiaryId || r.beneficiaryId === r.personId))
+      ? { ...r, visibility: undefined }
+      : r);
   // Sync status is transient runtime state: a stale persisted 'error' (or a queue item
   // stuck in error/syncing when the app was killed) must not resurrect the error banner
   // on next launch. Reset on hydrate; failed items get a fresh retry cycle instead of
