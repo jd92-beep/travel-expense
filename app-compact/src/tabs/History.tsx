@@ -460,6 +460,7 @@ export function History({
                   <span className="receipt-main history-ledger-main">
                     <strong>
                       {isPendingReceipt(r) && <span className="history-pending-mini">pending</span>}
+                      {r.visibility === 'private' && <span className="history-private-mini" title="只有自己見到" aria-label="私人紀錄，只有自己見到">🔒</span>}
                       {displayStore(r)}
                     </strong>
                     <small>{[cat.name, r.date ? r.date.slice(5).replace('-', '/') : '', r.region || r.regionSnapshot, person?.name].filter(Boolean).join(' · ')}</small>
