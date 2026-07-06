@@ -4,13 +4,16 @@ test.use({ viewport: { width: 390, height: 844 } });
 
 function trustAndState(state) {
   const itinerary = Array.isArray(state.customItinerary) ? state.customItinerary : [];
+  // Empty fixture = the default Nagoya trip. getItinerary only falls back to the built-in
+  // ITINERARY constant when the trip IS the default Nagoya trip (name + 04-20..04-25 range).
+  const isBareFixture = !itinerary.length && !state.tripName && !(Array.isArray(state.trips) && state.trips.length);
   const startDate = state.tripDateRange?.start || itinerary[0]?.date || '2026-04-20';
-  const endDate = state.tripDateRange?.end || itinerary[itinerary.length - 1]?.date || startDate;
+  const endDate = state.tripDateRange?.end || itinerary[itinerary.length - 1]?.date || (isBareFixture ? '2026-04-25' : startDate);
   const tripCurrency = state.tripCurrency || itinerary[0]?.currency || 'JPY';
   const tripId = state.activeTripId || `weather_trip_${String(state.tripName || state.customItinerary?.[0]?.region || 'fixture').toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
   const trips = Array.isArray(state.trips) && state.trips.length ? state.trips : [{
     id: tripId,
-    name: state.tripName || 'Weather Test',
+    name: state.tripName || (isBareFixture ? '名古屋 2026' : 'Weather Test'),
     destinationSummary: itinerary.map((day) => day.region).filter(Boolean).slice(0, 4).join(' / ') || state.tripName || 'Weather Test',
     startDate,
     endDate,
@@ -399,7 +402,7 @@ test('Japan weather uses JMA official first and renders slots', async ({ page })
   await expect(command.getByLabel('刷新天氣')).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA official');
   await expect(page.locator('.preview-weather-source-strip')).toContainText(/Live ·|Cache ·/);
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText(/Target · (trip city|spot coord) · 名古屋/);
   await expect(page.locator('.preview-weather-place')).toContainText('名古屋');
   const commandMetrics = await command.evaluate((node) => {
     const card = node.getBoundingClientRect();
@@ -464,7 +467,8 @@ test('Japan weather uses JMA official first and renders slots', async ({ page })
   await expect(page.getByText('16:00').first()).toBeVisible();
   await expect(page.getByText('21:00').first()).toBeVisible();
   await expect(page.locator('[aria-label="體感 20°C"]').first()).toBeVisible();
-  await expect(page.getByText(/濕度 62%/).first()).toBeVisible();
+  // 濕度 deliberately removed from slot cards (Boss spec, v0.12.0).
+  await expect(page.getByText(/濕度/)).toHaveCount(0);
   await expect(page.getByText(/UV 6|UV 2/).first()).toBeVisible();
   expect(jmaCalls.some((url) => url.includes('/forecast/data/forecast/230000.json'))).toBe(true);
   expect(urls.some((url) => url.includes('models=jma_seamless'))).toBe(true);
@@ -553,7 +557,7 @@ test('JMA official stays preferred when broker session is active', async ({ page
   await expect(page.getByText(/Day 1 · JMA official/)).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA official');
   await expect(page.locator('.weather-screen')).not.toContainText('WeatherAPI.com');
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText(/Target · (trip city|spot coord) · 名古屋/);
   await expect(page.locator('.preview-weather-temp strong')).toHaveText('21°C');
   await expect(page.locator('.preview-weather-temp small')).toContainText('體感 30°C');
   await expect(page.locator('.weather-slot-detailed .weather-temp-block').first().locator('.temp-num')).toContainText('21');
@@ -669,10 +673,11 @@ test('Ended trip shows current weather for every itinerary day location', async 
   await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
   await expect(page.getByText(/Day 1 · JMA/)).toBeVisible();
   await expect(page.getByText(/Day 6 · JMA/)).toBeVisible();
-  await expect(page.locator('.weather-location h3').filter({ hasText: '濟州' }).first()).toBeVisible();
-  await expect(page.locator('.weather-location h3').filter({ hasText: '常滑' }).first()).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: '名古屋' }).first()).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: '高山' }).first()).toBeVisible();
+  await expect(page.locator('.weather-location h3').filter({ hasText: '金澤' }).first()).toBeVisible();
   await expect(page.locator('.weather-location h3').filter({ hasText: '香港' }).first()).toBeVisible();
-  await expect(page.locator('.weather-location h3')).toHaveCount(13);
+  await expect(page.locator('.weather-location h3')).toHaveCount(12);
   await expect(page.locator('.preview-weather-place')).not.toHaveText('目前地點');
   await expect(page.locator('[aria-label^="體感"]').first()).toBeVisible();
   expect(forecastUrls.length).toBeGreaterThanOrEqual(10);
@@ -958,6 +963,75 @@ test('Jeju Korea city fallback uses the South Korea weather target', async ({ pa
   await expect(page.getByText('21°C').first()).toBeVisible();
   expect(geocodeUrls.every((url) => !url.includes('Ethiopia') && !url.includes('Brazil'))).toBe(true);
   expect(forecastUrls.some((url) => /latitude=33\./.test(url) && /longitude=126\./.test(url))).toBe(true);
+});
+
+// Regression: Boss's real Nagoya trip had 中部國際機場 stamped with Jeju-airport coords by an old
+// unscoped geo lookup, so Day 1 rendered 濟州 weather. normalizeItinerary must self-heal stored
+// coords that sit >150km from the name's dictionary entry.
+test('Stale wrong-country spot coords self-heal and never show the wrong city', async ({ page }) => {
+  const fixed = new Date('2026-04-20T10:00:00+09:00').valueOf();
+  const forecastUrls = [];
+  await page.addInitScript((fixedNow) => {
+    window.__disable_supabase_configured = true;
+    const RealDate = Date;
+    class MockDate extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [fixedNow]));
+      }
+      static now() {
+        return fixedNow;
+      }
+    }
+    window.Date = MockDate;
+  }, fixed);
+  await routeJmaOfficial(page);
+  await page.route('https://api.open-meteo.com/**', async (route) => {
+    forecastUrls.push(route.request().url());
+    await route.fulfill({ json: weatherFixture() });
+  });
+  const poisonedItinerary = [{
+    date: '2026-04-20',
+    day: 1,
+    region: '名古屋',
+    timezone: 'Asia/Tokyo',
+    currency: 'JPY',
+    spots: [
+      // Jeju airport coords baked in by the old bug — must be healed to Centrair (34.8584, 136.8124).
+      { time: '10:00', name: '中部國際機場', type: 'transport', lat: 33.5113, lon: 126.493 },
+      { time: '12:00', name: '名古屋城', type: 'sightseeing', lat: 35.1856, lon: 136.8995 },
+    ],
+  }];
+  await installState(page, {
+    tripName: '名古屋 2026',
+    activeTripId: 'trip_2026_04_nagoya',
+    tripDateRange: { start: '2026-04-20', end: '2026-04-20' },
+    customItinerary: poisonedItinerary,
+    trips: [{
+      id: 'trip_2026_04_nagoya',
+      name: '名古屋 2026',
+      destinationSummary: '名古屋',
+      startDate: '2026-04-20',
+      endDate: '2026-04-20',
+      homeCurrency: 'HKD',
+      currencies: ['HKD', 'JPY'],
+      timezones: ['Asia/Tokyo'],
+      version: 1,
+      active: true,
+      archived: false,
+      budget: 150000,
+      itinerary: poisonedItinerary,
+      createdAt: 1,
+      updatedAt: 1,
+      sourceId: 'trip_trip_2026_04_nagoya',
+    }],
+  });
+  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
+  await expect(page.locator('.weather-location h3').first()).toBeVisible();
+  await expect(page.locator('.weather-screen')).not.toContainText('濟州');
+  await expect(page.locator('.weather-location h3').filter({ hasText: '名古屋' }).first()).toBeVisible();
+  await expect.poll(() => forecastUrls.length).toBeGreaterThan(0);
+  expect(forecastUrls.every((url) => !/latitude=33\.5/.test(url))).toBe(true);
 });
 
 test('Multi-city day renders two forecast locations and live slot', async ({ page }) => {

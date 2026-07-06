@@ -47,7 +47,8 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
   await expect(reloadedEditedEvent.locator('.timeline-time')).toContainText('09:15 – 10:45');
   await expect(reloadedEditedEvent).toHaveAttribute('data-spot-key', stableSpotKey || '');
   await reloadedEditedEvent.getByRole('button', { name: '編輯' }).click();
-  await page.getByRole('button', { name: '還原' }).click();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: '刪除' }).click();
   await expect(page.getByText('M6 Edited Spot')).toBeHidden();
 
   await nav.getByRole('button', { name: '記帳' }).click();

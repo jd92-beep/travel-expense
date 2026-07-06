@@ -1,7 +1,7 @@
 import type { ItineraryDay } from './types';
 import { brokerWeatherForecast } from './credentialBroker';
 import type { AppState } from './types';
-import { GEO_DICTIONARY } from './geo';
+import { countryHintFor, GEO_DICTIONARY } from './geo';
 
 export const WEATHER_SLOTS = [9, 12, 16, 21];
 
@@ -180,7 +180,9 @@ export function coordsForDay(day: ItineraryDay, limit = 2): WeatherCoord[] {
     if (coords.length >= limit) break;
   }
   if (!coords.length) {
+    const hint = countryHintFor(day);
     for (const entry of GEO_DICTIONARY) {
+      if (hint && entry.geo.country && entry.geo.country !== hint) continue;
       if (entry.pattern.test(hay)) {
         add({ label: itineraryWeatherLabel(day, entry.geo.city), lat: entry.geo.lat, lon: entry.geo.lon, timezone: day.timezone, origin: 'known-region' });
         if (coords.length >= limit) break;
