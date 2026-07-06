@@ -6,6 +6,7 @@ import { Shell } from './components/Shell';
 import { LoadingState, TabSkeleton } from './components/ui';
 import { Loader2 } from 'lucide-react';
 import { activeTrip, stampReceiptForTrip, stableDayId, stableSpotId } from './domain/trip/normalize';
+import { applyItineraryEdit, bakeItineraryOverrides } from './lib/domain';
 import { hasCredentialBrokerSession } from './lib/credentialBroker';
 import { canUseNotionMirror } from './lib/notionAccess';
 import { mergePulledData } from './lib/syncMerge';
@@ -358,6 +359,21 @@ export function App() {
       if (!bootSyncKeys.current.has(bootSyncKey)) bootSyncScheduledKey.current = '';
     };
   }, [isStorageReady, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, effectiveSupabaseSession, userEmail]);
+
+  // One-shot migration: fold legacy per-spot itinerary overrides (personal memo layer)
+  // into the trip itinerary so they survive AI updates and reach shared-trip members.
+  // Viewers keep the old local-only behaviour — they can't push trip changes.
+  useEffect(() => {
+    if (!isStorageReady) return;
+    setState((prev) => {
+      if (!Object.keys(prev.itineraryOverrides || {}).length) return prev;
+      if (activeTrip(prev).sharing?.role === 'viewer') return prev;
+      const baked = bakeItineraryOverrides(prev);
+      if (!baked) return prev;
+      console.log('[App] Baking itinerary overrides into trip itinerary (one-shot migration)');
+      return { ...applyItineraryEdit(prev, baked), itineraryOverrides: {} };
+    });
+  }, [isStorageReady, setState]);
 
   // Auto-connect Notion for Boss when Supabase session is available
   useEffect(() => {
