@@ -82,9 +82,9 @@ test('day editor edits region + spot and persists into trip.itinerary', async ({
 
 test('swap exchanges day contents but keeps dates', async ({ page }) => {
   await openTimeline(page);
-  page.on('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Day 1 與其他日子對調' }).click();
   await page.locator('.timeline-swap-option').first().click();
+  await page.getByRole('button', { name: '確認對調' }).click();
   await expect.poll(async () => (await storedTrip(page)).itinerary).toEqual([
     { date: '2026-04-20', region: '白川鄉', spots: ['合掌村'] },
     { date: '2026-04-21', region: '名古屋站', spots: ['早餐咖啡店', '名古屋城'] },

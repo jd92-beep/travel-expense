@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-06
-- **Focus**: Compact Stats/Weather/GEO bug fixes + HKO official weather provider
+- **Focus**: Compact in-place itinerary editing bug fixes and UX polish (option mismatch, timeEnd, details jump, mobile grid, unsaved warning, HTML swap confirm, smart default time)
 - **Agent**: Antigravity
-- **App version**: Compact `0.9.1`; Admin Console `0.7.0`; React unchanged in this pass
+- **App version**: Compact `0.11.1`; Admin Console `0.7.0`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,12 +13,27 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.9.1`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.11.1`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
 
-### Session 37 (Antigravity — current session)
+### Session 38 (Antigravity — current session)
+
+1. **Compact Itinerary Editing Bugs & UX Polish**:
+   - **BUG 1 (Option Mismatch)**: Fixed the category dropdown in the single spot edit sheet by using the global `SPOT_TYPE_OPTIONS` constant, preventing data loss for flight and sightseeing categories.
+   - **BUG 2 (timeEnd in Day Editor)**: Added a time input for `timeEnd` inside the Day Editor rows.
+   - **BUG 3 & UX 1 (Details jump)**: Added a "Details" gear button next to the delete button in each row. Clicking it saves current edits, sets the spot as `editing`, and opens the detailed per-spot editor sheet.
+   - **BUG 4 (Mobile Layout Grid)**: Updated `timeline.css` to render a clean 4-column layout on screens <= 430px with Touch Targets >= 40px, ensuring no overlaps or layout breakages.
+   - **BUG 5 (Unsaved Changes Warning)**: Implemented dirty state check for the Day Editor, prompting the user via `window.confirm` before closing if changes exist.
+   - **UX 2 (Custom HTML Day Swap Modal)**: Replaced browser `window.confirm` with a custom HTML confirmation modal, and updated the Playwright E2E test `itinerary-edit-smoke.spec.cjs`.
+   - **UX 3 (Smart default times)**: Implemented `getNextSpotDefaultTime(spots)` to default new spot times to 30 mins after the last spot's time.
+   - **Test Fix**: Fixed a pre-existing bug in the `timeline-smoke.spec.cjs` E2E test where direct edits in owner mode were expected to render a viewer-only "還原" button instead of "刪除". Aligned the test to expect and click "刪除" and accept the browser dialog.
+   - **Version bump**: Bumped Compact app version to `0.11.1`.
+   - **Verification**: `typecheck` ✅, `build` ✅ (1.64s), Playwright itinerary smoke tests ✅, Playwright timeline smoke tests ✅.
+   - **Files changed**: `app-compact/src/tabs/Timeline.tsx`, `app-compact/src/styles/timeline.css`, `app-compact/tests/itinerary-edit-smoke.spec.cjs`, `app-compact/tests/timeline-smoke.spec.cjs`, `app-compact/src/lib/constants.ts`, `app-compact/package.json`.
+
+### Session 37 (Antigravity — previous session)
 
 1. **Stats budget currency edit fix**:
    - When `displayCurrency` is HKD, the budget edit field now pre-fills the HKD-converted value and converts user input back to the trip's native currency via `hkdToCurrency()` before saving.

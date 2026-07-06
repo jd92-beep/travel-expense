@@ -2,6 +2,16 @@
 
 ## 2026-07-06
 
+- **Compact App 0.11.1 Itinerary Editing Fixes & UX Polish**:
+  - **Fixed Spot Type Option Mismatch (Bug 1)**: Unified the per-spot editing select with the global `SPOT_TYPE_OPTIONS` constant to support all 10 categories (including flight and sightseeing) and prevent category data loss on save.
+  - **Added `timeEnd` in Day Editor (Bug 2)**: Added a time input for `timeEnd` (end time) to each spot row in the Timeline Day Editor.
+  - **Added details jump button (Bug 3 & UX 1)**: Added a "Details" gear button next to the Trash button in each row. Clicking it saves current edits via `saveDayEditor()`, sets the selected spot as `editing`, and closes the Day Editor.
+  - **Redesigned mobile row grid (Bug 4)**: Updated `timeline.css` to align all 6 fields on desktop, and reflow to a clean 4-column, 2-row grid on screens <= 430px with Touch Targets >= 40px.
+  - **Added unsaved changes warning (Bug 5)**: Implemented dirty state check for the Day Editor, prompting the user with `window.confirm` if they attempt to discard unsaved edits.
+  - **Implemented custom day swap confirm modal (UX 2)**: Replaced browser `window.confirm` for day swapping with a custom HTML-based confirmation sheet, and aligned the Playwright E2E smoke tests.
+  - **Smart default times for new spots (UX 3)**: Implemented `getNextSpotDefaultTime(spots)` helper to default new spot times to 30 mins after the last spot's time (fallback to `'09:00'`).
+  - **Version bump**: Bumped Compact app version to `0.11.1`.
+
 - Fixed Compact Stats budget editing currency bug: when `displayCurrency` is HKD, user input is now correctly converted back to the trip's native currency via `hkdToCurrency()` before saving, and the edit field pre-fills the correctly converted HKD amount.
 - Improved Compact Weather tab date visibility: each day's weather card now shows the actual date prominently (e.g. `7月12日 (六)`) via a new `.weather-day-date` element at 15px desktop / 13px mobile, replacing the previous barely-visible `Day X` eyebrow.
 - Fixed GEO_DICTIONARY cross-trip contamination: replaced the overly-broad `/機場|airport/` pattern (which mapped any airport to Jeju coordinates) with Jeju-specific patterns, and added 13 Japan/Nagoya landmarks to prevent Nagoya trips showing Jeju weather data.
