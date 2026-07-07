@@ -143,7 +143,12 @@ const COMPACT_RELEASE_NOTES = [
   { title: 'Offline conflict resolver', detail: 'History can review failed local/cloud receipt conflicts without exposing provider payloads.' },
 ];
 const COMPACT_RELEASE_NOTES_SEEN_KEY = 'travel-expense-compact:release-notes-seen';
-const NATIVE_REACHABILITY_URL = 'https://travel-expense-compact.vercel.app/android-auth';
+// Probe the sync backbone (Supabase) first so the app never depends on our web deployment
+// being up to know it's online; the Vercel page is only a fallback probe target.
+const NATIVE_REACHABILITY_URLS = [
+  ...(import.meta.env.VITE_SUPABASE_URL ? [`${String(import.meta.env.VITE_SUPABASE_URL).replace(/\/$/, '')}/auth/v1/health`] : []),
+  'https://travel-expense-compact.vercel.app/android-auth',
+];
 const NATIVE_REACHABILITY_TIMEOUT_MS = 2500;
 
 type BeforeInstallPromptEvent = Event & {
@@ -175,20 +180,23 @@ function isNativeWebViewOrigin() {
 }
 
 async function checkNativeReachability() {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), NATIVE_REACHABILITY_TIMEOUT_MS);
-  try {
-    await fetch(`${NATIVE_REACHABILITY_URL}?reachability=${Date.now()}`, {
-      cache: 'no-store',
-      mode: 'no-cors',
-      signal: controller.signal,
-    });
-    return true;
-  } catch {
-    return false;
-  } finally {
-    window.clearTimeout(timer);
+  for (const url of NATIVE_REACHABILITY_URLS) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), NATIVE_REACHABILITY_TIMEOUT_MS);
+    try {
+      await fetch(`${url}?reachability=${Date.now()}`, {
+        cache: 'no-store',
+        mode: 'no-cors',
+        signal: controller.signal,
+      });
+      return true;
+    } catch {
+      // try next probe target
+    } finally {
+      window.clearTimeout(timer);
+    }
   }
+  return false;
 }
 
 export function Shell({
