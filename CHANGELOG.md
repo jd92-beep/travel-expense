@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-08
+
+- **Compact App 0.13.3 Offline-First Hardening (main) / Android 0.16.1**:
+  - **Audit result**: the Android APK bundles the full app locally (Capacitor `webDir: dist`, no `server.url`) — it boots and records expenses with zero dependency on GitHub Pages/Vercel. Sync gating uses `navigator.onLine` only; receipts written offline queue locally and the `'online'` event auto-triggers sync (backoff released, 100ms debounce), with 120s interval + visibilitychange as fallbacks. AI recognition holds no failure state (no cooldown/circuit in `ai.ts`/`credentialBroker.ts`) — every scan is a fresh request, so it works on the first attempt after reconnecting; offline OCR failure falls back to manual entry with the photo kept.
+  - **Fix (android)**: native reachability probe no longer depends on our Vercel deployment — it probes the Supabase health endpoint first, Vercel as fallback (`NATIVE_REACHABILITY_URLS`). Previously Vercel-down meant the offline pill lied and fast-reconnect sync never fired.
+  - **Fix (both)**: Google Fonts stylesheet loads non-blocking (`media="print"` + onload) so an offline cold boot never stalls on `fonts.googleapis.com`; Android falls back to system Noto Sans CJK.
+  - **Tests**: new `smoke:offline` (`tests/offline-sync-smoke.spec.cjs`, hermetic — all external routes aborted): offline edit persists + queues, debounced push bails on the offline gate, reconnect event alone starts sync, unreachable backend keeps the item queued for retry. Green on both branches; `smoke:privacy` 3/3 regression-green.
+
 ## 2026-07-07
 
 - **Admin Console (app-admin-kanban) 0.8.0 — Admin Console Upgrade**:
