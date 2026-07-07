@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-07
+
+- **Admin Console (app-admin-kanban) 0.8.0 — Admin Console Upgrade**:
+  - **Bug Fixes**: Fixed the puiyuchau@gmail.com 0-receipt bug by raising snapshot receipts cap to 10000 and sorting by `created_at desc` in the Edge function.
+  - **Refactoring**: Split the monolithic `App.tsx` (1300+ lines) into 15 modular components under `src/components/` (each under 400 lines).
+  - **New Features**: Implemented 5 new tabs (Trip Management, Audit Trail log timeline, Analytics dashboard using pure React SVG charts, Batch Ops with multi-select and CSV export, AI Provider Monitoring with latency trends and test run logs).
+
 ## 2026-07-06
 
 - **Compact App 0.13.0–0.13.1 Private Receipts (main) / Android 0.16.0**:

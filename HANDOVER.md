@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-06
-- **Focus**: Private receipts (per-record visibility with server-side RLS + RPC enforcement, editor 可見度 control, Notion mirror skip, settlement-neutrality proof); earlier same day: weather overhaul (Jeju root cause)
-- **Agent**: Oscar (Claude Code)
-- **App version**: Compact `0.13.1` (main); Android branch `0.16.0` (versionCode 1600); Admin Console `0.7.1`; React unchanged in this pass
+- **Date**: 2026-07-07
+- **Focus**: Admin Console Upgrade: version bump to 0.8.0, monolithic App.tsx split to 15 modular components, 5 new tabs implemented, puiyuchau@gmail.com 0-receipt bug fixed.
+- **Agent**: Antigravity / Teamwork Orchestrator
+- **App version**: Compact `0.13.1` (main); Android branch `0.16.0` (versionCode 1600); Admin Console `0.8.0`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -44,6 +44,19 @@ you closed with your session number.
    settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
 
 ## What Was Done
+
+### Session 41 (Antigravity / Teamwork Orchestrator)
+
+1. **Admin Console Upgrade & Modularization (Version 0.8.0)**:
+   - **Bug Fix**: Fixed the `puiyuchau@gmail.com` 0-receipt bug. The root cause was the snapshot receipts limit in the Edge function which capped the receipts retrieval. Raised the snapshot receipts cap to 10000 and added explicit sorting by `created_at desc` in the Edge function, ensuring all recent receipts are properly fetched.
+   - **Refactoring**: Successfully refactored the monolithic 1300+ line `App.tsx` by splitting it into 15 modular components under `src/components/`, ensuring each component remains highly maintainable and under 400 lines.
+   - **New Features**: Implemented 5 brand new tabs:
+     1. *Trip Management*: View, edit, and manage metadata for all active and archived trips.
+     2. *Audit Trail log timeline*: Track actions, errors, and logins in a chronologically organized timeline.
+     3. *Analytics dashboard*: Visualize expense distribution, trends, and budget metrics using pure React SVG charts.
+     4. *Batch Ops*: Perform operations on multiple records simultaneously, including multi-select actions and CSV exporting.
+     5. *AI Provider Monitoring*: Monitor latency trends, tokens used, cost tracking, and test run logs across various AI providers.
+   - **Verification & Outcome**: Ran `npm run typecheck`, `npm run build`, and `npm run smoke` in the `app-admin-kanban` directory. All 15/15 smoke tests pass successfully. Deployed changes to the active branch.
 
 ### Session 40 (Oscar / Claude Code — current session)
 
