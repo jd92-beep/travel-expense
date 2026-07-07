@@ -16,6 +16,33 @@
 - Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.13.1` (android branch `0.16.0`).
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
+## Current Open Items (LIVE — reconcile every session)
+
+This is the ONLY live to-do list in this file. Everything under "What Was Done", and the old
+"Pending Tasks" / "Bugs Pending Fix" sections further down, are historical snapshots — re-verify
+before acting on them. Every session must reconcile this list: add items you opened, mark items
+you closed with your session number.
+
+1. 🔴 **Supabase migration history diverged** — live `schema_migrations` has ~17 entries not in
+   `supabase/migrations/`, and repo migrations are unrecorded. **No `db push`, no blind
+   `migration repair`.** Reconcile via `supabase db pull` on a branch, diff, then decide.
+   Interim: single idempotent statements via the Management API. (Standing since ~Session 18;
+   still the active workaround in Session 40.)
+2. 🟠 **Notion outbox worker not deployed** — shared-trip receipt sync enqueues
+   `receipt_sync_jobs`, but no worker / Trip Ledger Broker consumes them yet, so shared receipts
+   can sit "Notion pending" indefinitely. (See the shared-ledger session entry below.)
+3. 🟠 **Pre-existing failing tests** (stash-bisected, not from recent work): history
+   conflict-resolver test (both branches); android final-nav sync-error-indicator test. (Session 40.)
+4. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
+   binding before "visible to some members" can be enforced. (Session 40.)
+5. 🟡 **Shared receipt photos use public URLs** — planned upgrade is signed URLs scoped by
+   `receipt_photos` RLS. (Old Pending list; unaddressed as of Session 40.)
+6. 🟡 **Compact Netlify deploy blocked** by hosting account credits (durable until topped up).
+7. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
+   unused `hkd` imports in History/Stats. (Old Pending list.)
+8. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
+   settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
+
 ## What Was Done
 
 ### Session 40 (Oscar / Claude Code — current session)
@@ -434,6 +461,9 @@
 
 ## Pending Tasks
 
+> **Historical snapshot (~Session 18 era).** The live list is "Current Open Items" at the top of
+> this file — reconcile there; do not act from this section without re-verifying.
+
 ### 🔴 HIGH PRIORITY
 1. **Reconcile Supabase migration history divergence**: The live project `fbnnjoahvtdrnigevrtw` has ~17 migrations in its `schema_migrations` table that are **not** in `supabase/migrations/`, and many repo migrations are not recorded as applied. `supabase db push` therefore refuses ("Remote migration versions not found in local migrations directory"). **Do NOT blind-push or blind-`migration repair`** — it could re-run old non-idempotent migrations on live data. Reconcile via `supabase db pull` into a branch, diff, then decide. Until then, apply single idempotent statements via the Management API (token in macOS keychain `security find-generic-password -s "Supabase CLI" -w`, `POST /v1/projects/<ref>/database/query`).
 
@@ -447,6 +477,10 @@
 3. **Stronger private photo sharing**: Current Storage bucket uses public URLs for rendering shared receipt photos. This is functional, but a later privacy upgrade could move to signed URLs scoped by `receipt_photos` RLS.
 
 ## Bugs Pending Fix
+
+> **Historical snapshot (~Session 18 era).** New bugs go into "Current Open Items" at the top of
+> this file, then get detailed in your session entry.
+
 - _None currently known._ All bugs found in Session 18 (cross-trip settlement leak, expired-invite acceptance, Notion 2000-char truncation, unwritten `trip_accounting_people`) were fixed. The Session 16 audit's Critical/High/Medium/Low items were all addressed in Sessions 16–17. Add new entries here as they are discovered, with file + symptom + severity.
 
 ### Session 16 (MiMo Code — previous session)

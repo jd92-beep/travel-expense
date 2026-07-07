@@ -36,8 +36,8 @@
 - Public Compact Vercel app: `https://travel-expense-compact.vercel.app`
 - Public Compact Netlify app: `https://travel-expense-compact.netlify.app`
 - GitNexus index is refreshed during handover work; run `npx gitnexus status` for the live indexed commit and counts before relying on them.
-- Latest pushed `main` commit is `0caab16` (`Sync credential broker lockfile`) as of 2026-07-02.
-- Latest Compact app version is `0.8.7`; latest Admin Console version is `0.7.0`. Live checks on 2026-07-02 returned `200` for Admin Vercel, Compact Vercel, Compact GitHub Pages, React Netlify, and Compact Netlify. GitHub Pages deploy succeeded; Compact Netlify workflow remains blocked by Netlify account credits.
+- For the current pushed `main` commit, run `git fetch origin && git log origin/main -1 --oneline`; do not trust point-in-time commit facts written into docs.
+- For current app versions, read `APP_VERSION` in `app-compact/src/lib/constants.ts` and `app-react/src/lib/constants.ts` (apps version independently). Verify deploy health live at the URLs above instead of relying on dated check results. Known durable blocker: Compact Netlify deploys stay blocked by Netlify account credits until the hosting account is topped up.
 - The repo is public. Never commit real API keys, OAuth tokens, Notion tokens, injected `_site/` output, or local secrets.
 
 ## Read First
@@ -49,6 +49,17 @@
 - For broader app/agent architecture lookups, read `/Users/tommy/Documents/Graphify and Gitnexus/README.md` and `/Users/tommy/Documents/Graphify and Gitnexus/GRAPH_REGISTRY.json` before using external snapshots. Skip this for ordinary UI fixes, CI/deploy failures, exact file edits, tests, or live runtime checks.
 - For legacy single-file tab work, read `docs/README.md` and the relevant `docs/<tab>.md`.
 - For GitNexus work, run `npx gitnexus status` first. If stale or missing, run `npx gitnexus analyze`.
+
+## Ground Rules For All Agents
+
+These rules bind every agent working in this repo (Oscar, Codex, Antigravity, MiMo Code, and any future agent), on top of each agent's own instruction file.
+
+- **Truth order**: live runtime/git/DB evidence > `HANDOVER.md` "Current Open Items" (top of file) > historical session entries > point-in-time facts written in docs. If a doc contradicts live state, trust live state and report the doc drift in your handover entry.
+- **Hard stops — ask Boss before**: running `supabase db push` or `supabase migration repair` (live `schema_migrations` has diverged from `supabase/migrations/`; see HANDOVER "Current Open Items" — reconcile via `supabase db pull` on a branch first; interim single idempotent statements go via the Management API); deleting or rewriting user data; loosening or disabling any RLS policy; touching credential-broker secrets or vault contents; spending paid quota beyond routine AI calls.
+- **Definition of done**: work is done only when (1) `typecheck`, `build`, and `security:scan` pass in every app you touched, (2) the smoke suite(s) covering the changed flow are green, and (3) those outputs are quoted in your HANDOVER session entry. "Should work" without pasted evidence is not done — it is a candidate.
+- **Verify, don't self-certify**: totals and user-facing numbers get recomputed independently of the code path that produced them; RLS/migration changes get `db:policy:scan` (and `db:rls:smoke` when a safe DB URL is available) before commit.
+- **Retry discipline**: if the same error survives two genuinely different fixes, stop patching that path — change approach (different layer, different entry point, or a smaller reproduction) or ask Boss. Never weaken or bypass a failing check to get green.
+- **Handover hygiene**: after meaningful work, add a dated session entry at the top of HANDOVER.md "What Was Done" AND reconcile the "Current Open Items" section above it (add items you opened, mark resolved ones with your session number). Never rewrite older session entries; they are historical record.
 
 ## App Shape
 

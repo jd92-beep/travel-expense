@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Binding for all agents**: `AGENTS.md` → "Ground Rules For All Agents" (truth order, hard stops, definition of done, retry discipline, handover hygiene). `HANDOVER.md` now opens with **Current Open Items** — the only live to-do list; reconcile it every session.
+
 # travel-expense
 
 旅行記帳 web app，專為 Boss (Tony) 嘅 2026 年 4 月 名古屋旅行度身訂造。原由 Cowork 起手，之後喺 Claude Code 持續 iterate。

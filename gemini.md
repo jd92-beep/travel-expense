@@ -9,6 +9,10 @@
 - **目的**: 幫 Boss (Tony) 記 2026 年名古屋旅行嘅帳，支持 AI OCR、Email 解析同行程 tracking。
 - **Tech Stack**: Vanilla JS + HTML (Legacy 主版) / React 18 + Vite (Fresh React 喺 `app-react/`) / Google Apps Script (Email-to-Notion) / Notion API 做 Database。
 
+## ⚖️ 全 Agent 共同規則（必讀）
+- 睇 `AGENTS.md` → **Ground Rules For All Agents**：真相優先序、hard stops（Supabase migration 唔准 blind push）、done 嘅定義（要貼證據）、retry 紀律、HANDOVER 衛生規矩。所有 agent（包括我 Antigravity）都要跟。
+- `HANDOVER.md` 頂部而家有 **Current Open Items（live 清單）**——開工前睇佢，收工前 reconcile 佢；中段嘅舊 Pending 區係歷史快照，唔好照做。
+
 ## 🤖 Antigravity 專屬工作守則
 
 ### 1. 溝通與風格
