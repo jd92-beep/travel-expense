@@ -495,8 +495,8 @@ test('renders new tabs (Trips, Batch Ops, Audit Trail, Analytics, AI Monitor)', 
 
   // 4. Analytics Tab
   await page.getByRole('button', { name: 'Analytics' }).click();
-  await expect(page.getByText('Daily Active Users (DAU)')).toBeVisible();
-  await expect(page.getByText('Receipt Velocity')).toBeVisible();
+  await expect(page.getByText('Daily Active Users')).toBeVisible();
+  await expect(page.getByText('Receipts Created', { exact: true })).toBeVisible();
 
   // Mock for AI monitoring latency trend endpoint
   await page.route('**/api/ai-monitoring/latency-trending*', async (route) => {
