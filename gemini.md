@@ -6,8 +6,8 @@
 - **Project 名**: Travel Expense (語音輸入可能會變咗 "Triple Expansion" 🤣，明晒！)
 - **Repo 路徑**: `/Users/tommy/Documents/Codex/travel-expense`
 - **Live URL**: `https://jd92-beep.github.io/travel-expense/` (GitHub Pages) / `https://travel-expense-react.vercel.app` (Public React Vercel)
-- **目的**: 幫 Boss (Tony) 記 2026 年名古屋旅行嘅帳，支持 AI OCR、Email 解析同行程 tracking。
-- **Tech Stack**: Vanilla JS + HTML (Legacy 主版) / React 18 + Vite (Fresh React 喺 `app-react/`) / Google Apps Script (Email-to-Notion) / Notion API 做 Database。
+- **目的**: 原本係幫 Boss (Tony) 記 2026 年名古屋旅行嘅帳，而家已經演化成公開多用戶產品：Supabase 多用戶 RLS、旅程共享（editor/viewer）、私人收據可見度、獨立 Admin 後台，支持 AI OCR、Email 解析同行程 tracking。
+- **Tech Stack**: Vanilla JS + HTML (Legacy 主版) / React 19 + Vite + TS (`app-react/`) / React 19 + Vite (現役 Compact `app-compact/`) / Admin Kanban (`app-admin-kanban/`) / Google Apps Script (Email-to-Notion) / Notion API 做 Database。
 
 ## ⚖️ 全 Agent 共同規則（必讀）
 - 睇 `AGENTS.md` → **Ground Rules For All Agents**：真相優先序、hard stops（Supabase migration 唔准 blind push）、done 嘅定義（要貼證據）、retry 紀律、HANDOVER 衛生規矩。所有 agent（包括我 Antigravity）都要跟。
@@ -157,7 +157,8 @@ Oscar (Claude Code) 完成咗 `v0.11.0` 嘅改行程功能，Antigravity Teamwor
 ## 🗂 重點檔案地圖
 - `index.html`: Legacy 主程式 (~10,000 行，已全面剔除 Zhipu，升級為 Kimi-first connections/voice/OCR fallback)。
 - `legacy-notion.js`: 由 index.html 抽離 the legacy Notion sync module，要 keep 住 compatible。
-- `app-react/`: 新版 React 18 + Vite + TS 專案，已 100% 編譯通過。核心 AI 調用在 `src/lib/ai.ts` 與 `src/lib/credentialBroker.ts`。
+- `app-react/`: 新版 React 19 + Vite + TS 專案，已 100% 編譯通過。核心 AI 調用在 `src/lib/ai.ts` 與 `src/lib/credentialBroker.ts`。
+- `app-compact/`: 現役部署版 React 19 + Vite + TS 專案（手機優化），獨立版本管理。
 - `email-to-notion.gs`: 後端 Apps Script。已全面更換為 Kimi 接口與 OpenAI 格式 retry，並實現 PropertiesService 查重防重複機制。
 - `workers/credential-broker`: Cloudflare Worker 項目。`wrangler.jsonc` 包含 `KIMI_PROXY_URL` 配置，`src/index.js` 將設備 TTL 縮短至 90 天以硬化安全。
 - `HANDOVER.md`: 最 update 嘅狀態同 next steps，每次完 session 都要 update。

@@ -38,7 +38,7 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.9.1`。Admin Console 目前版本：`0.7.0`。
+Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.13.1`。Admin Console 目前版本：`0.7.1`。
 
 ## 第一次使用
 

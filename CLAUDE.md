@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # travel-expense
 
-旅行記帳 web app，專為 Boss (Tony) 嘅 2026 年 4 月 名古屋旅行度身訂造。原由 Cowork 起手，之後喺 Claude Code 持續 iterate。
+旅行記帳 web app。原本專為 Boss (Tony) 嘅 2026 年 4 月名古屋旅行度身訂造，而家已演化成公開多用戶產品（Supabase 多用戶 RLS、旅程共享、私人收據、Admin 後台）。原由 Cowork 起手，之後喺 Claude Code 持續 iterate。
 
 ---
 
@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |---|---|---|---|
 | `app-react/` | `travel-expense-react-fresh` | 8902 | React 重寫版，最完整 smoke-test 套件 |
 | `app-compact/` | `travel-expense-compact` | 8903 | **現役部署版**（目前 `v0.13.1`），有 production-gate scripts |
-| `app-admin-kanban/` | `travel-expense-admin-kanban` | 8904 | Admin 管理 console（目前 `v0.7.0`，有 `api/`） |
+| `app-admin-kanban/` | `travel-expense-admin-kanban` | 8904 | Admin 管理 console（目前 `v0.7.1`，有 `api/`） |
 | `app/`, `app3/` | — | 5173 | 其他 Vite 變體 / 實驗 |
 | `index.html` | — | — | Legacy 單檔 app（CDN Tailwind + vanilla JS，~10k 行）；下面 §Architecture Overview 講緊呢個 |
 | `supabase/` | — | — | DB migrations（RLS、receipt-photo storage bucket） |

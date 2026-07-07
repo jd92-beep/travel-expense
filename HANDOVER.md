@@ -4,7 +4,7 @@
 - **Date**: 2026-07-06
 - **Focus**: Private receipts (per-record visibility with server-side RLS + RPC enforcement, editor 可見度 control, Notion mirror skip, settlement-neutrality proof); earlier same day: weather overhaul (Jeju root cause)
 - **Agent**: Oscar (Claude Code)
-- **App version**: Compact `0.13.1` (main); Android branch `0.16.0` (versionCode 1600); Admin Console `0.7.0`; React unchanged in this pass
+- **App version**: Compact `0.13.1` (main); Android branch `0.16.0` (versionCode 1600); Admin Console `0.7.1`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
