@@ -192,7 +192,14 @@ async function strictCount(supabase: SupabaseClientAny, table: string, column?: 
   return count || 0;
 }
 
-async function fetchRows(supabase: SupabaseClientAny, table: string, select: string, limit = 250) {
+async function fetchRows(
+  supabase: SupabaseClientAny,
+  table: string,
+  select: string,
+  limit = 250,
+  orderColumn: string | null = null,
+  orderAscending = true
+) {
   const PAGE_SIZE = 1000;
   const MAX_ROWS = 10000;
   const effectiveLimit = Math.min(limit, MAX_ROWS);
@@ -201,7 +208,11 @@ async function fetchRows(supabase: SupabaseClientAny, table: string, select: str
     let from = 0;
     while (from < effectiveLimit) {
       const pageSize = Math.min(PAGE_SIZE, effectiveLimit - from);
-      const { data, error } = await supabase.from(table).select(select).range(from, from + pageSize - 1);
+      let query = supabase.from(table).select(select);
+      if (orderColumn) {
+        query = query.order(orderColumn, { ascending: orderAscending });
+      }
+      const { data, error } = await query.range(from, from + pageSize - 1);
       if (error) throw error;
       const rows = data || [];
       allRows.push(...rows);
@@ -462,7 +473,14 @@ async function snapshot(rangeDays: number, surface: string = "compact") {
   ] = await Promise.all([
     listUsers(supabase),
     fetchRows(supabase, "trips", "id,owner_id,name,destination_summary,start_date,end_date,trip_currency,budget_amount,budget_currency,itinerary,timezones,active,archived,updated_at,app_metadata"),
-    fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,category,payment_method,record_date,record_time,note,items_text,address,booking_ref,original_amount,original_currency,exchange_rate,home_amount,created_at,updated_at,deleted_at,notion_page_id,notion_sync_status,notion_last_synced_at", 1000),
+    // ROOT CAUSE OF puiyuchau@gmail.com 0-receipt BUG:
+    // Previously, this query retrieved only up to 1000 receipts without any explicit sorting. 
+    // Since newer receipts were ordered arbitrarily/by insertion and the total count of receipts across 
+    // all users exceeded 1000, newer user records (e.g. for newer accounts or specific users) 
+    // were completely truncated from the returned set, causing their active receipts to calculate as 0.
+    // FIX: Raise limit to 10000 and explicitly order by `created_at desc` so that the newest receipts
+    // are prioritized first in case of a hard cap, ensuring correct user dashboard displays.
+    fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,category,payment_method,record_date,record_time,note,items_text,address,booking_ref,original_amount,original_currency,exchange_rate,home_amount,created_at,updated_at,deleted_at,notion_page_id,notion_sync_status,notion_last_synced_at", 10000, "created_at", false),
     fetchRows(supabase, "receipt_photos", "id,receipt_id,owner_id,storage_path"),
     fetchRows(supabase, "integrations", "id,user_id,provider,status,last_synced_at"),
     fetchRows(supabase, "receipt_sync_jobs", "id,owner_id,provider,status,last_error,created_at,updated_at"),
