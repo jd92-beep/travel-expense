@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, RefreshCw, Search, LogOut, Activity as ActivityIcon, Wrench, Bug, GitMerge, Scale, Monitor, AlertTriangle, UserRound, Activity } from 'lucide-react';
+import { Shield, RefreshCw, Search, LogOut, Activity as ActivityIcon, Wrench, Bug, GitMerge, Scale, Monitor, AlertTriangle, UserRound, Activity, Plane, CheckSquare, History, BarChart3, Cpu } from 'lucide-react';
 import type { AdminKanbanSnapshot, AdminSession, SurfaceScope, LiveState } from '../lib/types';
 import { UniversalHealth } from './UniversalHealth';
 import { UserDetailsPanel } from './UserDetailsPanel';
@@ -8,6 +8,11 @@ import { DataDoctorTab } from './DataDoctorTab';
 import { IdentityTab } from './IdentityTab';
 import { ReconcileTab } from './ReconcileTab';
 import { RuntimeTab } from './RuntimeTab';
+import { AiMonitoringTab } from './AiMonitoringTab';
+import { AnalyticsTab } from './AnalyticsTab';
+import { AuditTrailTab } from './AuditTrailTab';
+import { BatchOpsTab } from './BatchOpsTab';
+import { TripManagementTab } from './TripManagementTab';
 import { fmtDate, classForHealth } from '../lib/utils';
 
 const RANGE_OPTIONS = [1, 7, 30, 90];
@@ -19,7 +24,7 @@ const SURFACE_OPTIONS: Array<{ value: SurfaceScope; label: string }> = [
   { value: 'all', label: 'All' },
 ];
 
-type ConsoleTab = 'overview' | 'sync' | 'doctor' | 'identity' | 'reconcile' | 'runtime';
+type ConsoleTab = 'overview' | 'trips' | 'batch' | 'audit' | 'analytics' | 'aimonitor' | 'sync' | 'doctor' | 'identity' | 'reconcile' | 'runtime';
 
 function matchesSearch(user: any, search: string): boolean {
   if (!search.trim()) return true;
@@ -109,6 +114,11 @@ export function Board({
 
       <nav className="console-tabs">
         <button type="button" className={activeTab === 'overview' ? 'tab-active' : ''} onClick={() => setActiveTab('overview')}><ActivityIcon size={14} /> Overview</button>
+        <button type="button" className={activeTab === 'trips' ? 'tab-active' : ''} onClick={() => setActiveTab('trips')}><Plane size={14} /> Trips</button>
+        <button type="button" className={activeTab === 'batch' ? 'tab-active' : ''} onClick={() => setActiveTab('batch')}><CheckSquare size={14} /> Batch Ops</button>
+        <button type="button" className={activeTab === 'audit' ? 'tab-active' : ''} onClick={() => setActiveTab('audit')}><History size={14} /> Audit Trail</button>
+        <button type="button" className={activeTab === 'analytics' ? 'tab-active' : ''} onClick={() => setActiveTab('analytics')}><BarChart3 size={14} /> Analytics</button>
+        <button type="button" className={activeTab === 'aimonitor' ? 'tab-active' : ''} onClick={() => setActiveTab('aimonitor')}><Cpu size={14} /> AI Monitor</button>
         <button type="button" className={activeTab === 'sync' ? 'tab-active' : ''} onClick={() => setActiveTab('sync')}><Wrench size={14} /> Sync</button>
         <button type="button" className={activeTab === 'doctor' ? 'tab-active' : ''} onClick={() => setActiveTab('doctor')}><Bug size={14} /> Doctor</button>
         <button type="button" className={activeTab === 'identity' ? 'tab-active' : ''} onClick={() => setActiveTab('identity')}><GitMerge size={14} /> Identity</button>
@@ -116,6 +126,11 @@ export function Board({
         <button type="button" className={activeTab === 'runtime' ? 'tab-active' : ''} onClick={() => setActiveTab('runtime')}><Monitor size={14} /> Runtime</button>
       </nav>
 
+      {activeTab === 'trips' && <TripManagementTab session={session} snapshot={snapshot} onRefresh={onRefresh} />}
+      {activeTab === 'batch' && <BatchOpsTab session={session} snapshot={snapshot} onRefresh={onRefresh} />}
+      {activeTab === 'audit' && <AuditTrailTab session={session} />}
+      {activeTab === 'analytics' && <AnalyticsTab session={session} />}
+      {activeTab === 'aimonitor' && <AiMonitoringTab session={session} snapshot={snapshot} />}
       {activeTab === 'sync' && <SyncOpsTab session={session} />}
       {activeTab === 'doctor' && <DataDoctorTab session={session} />}
       {activeTab === 'identity' && <IdentityTab session={session} />}

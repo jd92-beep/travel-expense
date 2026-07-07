@@ -443,3 +443,76 @@ test('switching to all surface shows warning badge', async ({ page }) => {
   await page.waitForTimeout(500);
   await expect(page.getByText('All surfaces')).toBeVisible();
 });
+
+test('renders new tabs (Trips, Batch Ops, Audit Trail, Analytics, AI Monitor)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+
+  // 1. Trips Tab
+  await page.getByRole('button', { name: 'Trips' }).click();
+  await expect(page.getByText('All Trips (1)')).toBeVisible();
+  await expect(page.getByText('Japan Ops Trip')).toBeVisible();
+
+  // 2. Batch Ops Tab
+  await page.getByRole('button', { name: 'Batch Ops' }).click();
+  await expect(page.getByText('Store')).toBeVisible();
+  await expect(page.getByText('Amount')).toBeVisible();
+
+  // Mock for Audit events endpoint
+  await page.route('**/api/audit-events*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        events: [
+          { id: '1', created_at: '2026-07-01T00:00:00Z', admin_subject_hash: 'admin1', action: 'test_action', target_type: 'test_target' }
+        ],
+        total: 1
+      })
+    });
+  });
+
+  // 3. Audit Trail Tab
+  await page.getByRole('button', { name: 'Audit Trail' }).click();
+  await expect(page.getByText('Audit Log Records (Total: 1)')).toBeVisible();
+  await expect(page.getByText('test_action')).toBeVisible();
+
+  // Mock for Analytics timeseries endpoint
+  await page.route('**/api/analytics/timeseries*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        usageTrend: [{ date: '2026-07-01', events: 5, activeUsers: 2 }],
+        aiConsumption: [{ date: '2026-07-01', kimi: 10, google: 5 }],
+        receiptVelocity: [{ date: '2026-07-01', count: 3 }],
+        surfaceBreakdown: [{ surface: 'compact', count: 8 }]
+      })
+    });
+  });
+
+  // 4. Analytics Tab
+  await page.getByRole('button', { name: 'Analytics' }).click();
+  await expect(page.getByText('Daily Active Users (DAU)')).toBeVisible();
+  await expect(page.getByText('Receipt Velocity')).toBeVisible();
+
+  // Mock for AI monitoring latency trend endpoint
+  await page.route('**/api/ai-monitoring/latency-trending*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        latencyTrend: [{ date: '2026-07-01', kimi: 300, google: 150 }],
+        providerComparison: [{ provider: 'kimi', model: 'kimi-code', totalRequests: 10, errorRate: 0.1, avgLatencyMs: 320 }]
+      })
+    });
+  });
+
+  // 5. AI Monitor Tab
+  await page.getByRole('button', { name: 'AI Monitor' }).click();
+  await expect(page.getByText('AI Provider & Integration Monitoring')).toBeVisible();
+  await expect(page.getByText('kimi-code').first()).toBeVisible();
+});

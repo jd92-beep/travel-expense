@@ -93,6 +93,7 @@ export type AdminTripCard = {
   budgetAmount: number | null;
   budgetCurrency: string | null;
   memberCount: number;
+  members?: string[];
   timezones: string[];
   itinerary: any[] | null;
 };

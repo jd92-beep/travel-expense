@@ -239,3 +239,153 @@ export async function fetchSupportBundle(session: AdminSession, params: { userId
   }));
   return data.bundle;
 }
+
+export async function fetchAuditEvents(
+  session: AdminSession,
+  params: {
+    page?: number;
+    limit?: number;
+    actionType?: string;
+    targetType?: string;
+    startDate?: string;
+    endDate?: string;
+  }
+): Promise<{ events: any[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params.page !== undefined) qs.set('page', String(params.page));
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.actionType) qs.set('actionType', params.actionType);
+  if (params.targetType) qs.set('targetType', params.targetType);
+  if (params.startDate) qs.set('startDate', params.startDate);
+  if (params.endDate) qs.set('endDate', params.endDate);
+
+  const data = await parseJson<{ ok: boolean; events: any[]; total: number }>(
+    await fetch(adminDataUrl(`/api/audit-events?${qs}`), {
+      headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
+    })
+  );
+  return { events: data.events, total: data.total };
+}
+
+export async function amendTrip(
+  session: AdminSession,
+  updates: {
+    tripId: string;
+    name?: string;
+    destination_summary?: string;
+    start_date?: string;
+    end_date?: string;
+    trip_currency?: string;
+    budget_amount?: number | null;
+    budget_currency?: string | null;
+    active?: boolean;
+    archived?: boolean;
+  }
+): Promise<{ tripId: string }> {
+  const data = await parseJson<{ ok: boolean; tripId: string }>(
+    await fetch(adminDataUrl('/api/trips/amend'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'X-Admin-Token': session.token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    })
+  );
+  return data;
+}
+
+export async function manageTripMembers(
+  session: AdminSession,
+  params: {
+    tripId: string;
+    userId: string;
+    action: 'add' | 'remove';
+  }
+): Promise<{ ok: boolean }> {
+  const data = await parseJson<{ ok: boolean }>(
+    await fetch(adminDataUrl('/api/trips/members/manage'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'X-Admin-Token': session.token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    })
+  );
+  return data;
+}
+
+export async function batchActionReceipts(
+  session: AdminSession,
+  params: {
+    receiptIds: string[];
+    action: 'update_status' | 'delete';
+    status?: string;
+  }
+): Promise<{ affectedCount: number }> {
+  const data = await parseJson<{ ok: boolean; affectedCount: number }>(
+    await fetch(adminDataUrl('/api/receipts/batch-action'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'X-Admin-Token': session.token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    })
+  );
+  return data;
+}
+
+export async function fetchAnalyticsTimeseries(
+  session: AdminSession,
+  days = 30
+): Promise<{
+  usageTrend: Array<{ date: string; events: number; activeUsers: number }>;
+  aiConsumption: any[];
+  receiptVelocity: Array<{ date: string; count: number }>;
+  surfaceBreakdown: Array<{ surface: string; count: number }>;
+}> {
+  const data = await parseJson<{
+    ok: boolean;
+    usageTrend: any[];
+    aiConsumption: any[];
+    receiptVelocity: any[];
+    surfaceBreakdown: any[];
+  }>(
+    await fetch(adminDataUrl(`/api/analytics/timeseries?days=${days}`), {
+      headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
+    })
+  );
+  return {
+    usageTrend: data.usageTrend,
+    aiConsumption: data.aiConsumption,
+    receiptVelocity: data.receiptVelocity,
+    surfaceBreakdown: data.surfaceBreakdown,
+  };
+}
+
+export async function fetchAiLatencyTrending(
+  session: AdminSession,
+  days = 30
+): Promise<{
+  latencyTrend: any[];
+  providerComparison: any[];
+}> {
+  const data = await parseJson<{
+    ok: boolean;
+    latencyTrend: any[];
+    providerComparison: any[];
+  }>(
+    await fetch(adminDataUrl(`/api/ai-monitoring/latency-trending?days=${days}`), {
+      headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
+    })
+  );
+  return {
+    latencyTrend: data.latencyTrend,
+    providerComparison: data.providerComparison,
+  };
+}

@@ -478,7 +478,7 @@ async function snapshot(rangeDays: number, surface: string = "compact") {
     // Since newer receipts were ordered arbitrarily/by insertion and the total count of receipts across 
     // all users exceeded 1000, newer user records (e.g. for newer accounts or specific users) 
     // were completely truncated from the returned set, causing their active receipts to calculate as 0.
-    // FIX: Raise limit to 10000 and explicitly order by `created_at desc` so that the newest receipts
+    // FIX: Raise limit to 10000 and explicitly order by  so that the newest receipts
     // are prioritized first in case of a hard cap, ensuring correct user dashboard displays.
     fetchRows(supabase, "receipts", "id,trip_id,owner_id,store,status,amount,currency,category,payment_method,record_date,record_time,note,items_text,address,booking_ref,original_amount,original_currency,exchange_rate,home_amount,created_at,updated_at,deleted_at,notion_page_id,notion_sync_status,notion_last_synced_at", 10000, "created_at", false),
     fetchRows(supabase, "receipt_photos", "id,receipt_id,owner_id,storage_path"),
@@ -618,6 +618,7 @@ async function snapshot(rangeDays: number, surface: string = "compact") {
       itinerary: trip.itinerary || null,
       timezones: trip.timezones || null,
       memberCount: membersByTrip.get(trip.id) || 0,
+      members: tripMembers.filter((m: any) => m.trip_id === trip.id).map((m: any) => m.user_id),
       active: !!trip.active,
       archived: !!trip.archived,
       receiptCount: receiptCountByTrip.get(trip.id) || 0,
@@ -826,6 +827,373 @@ Deno.serve(async (req) => {
       const range = String(url.searchParams.get("range") || "7d").match(/^\d+/)?.[0] || "7";
       const surface = String(url.searchParams.get("surface") || "compact").toLowerCase();
       return json(req, 200, { ok: true, snapshot: await snapshot(Number(range), surface) });
+    }
+    if (req.method === "GET" && url.pathname.endsWith("/api/audit-events")) {
+      const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
+      const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || "50")));
+      const actionType = url.searchParams.get("actionType");
+      const targetType = url.searchParams.get("targetType");
+      const startDate = url.searchParams.get("startDate");
+      const endDate = url.searchParams.get("endDate");
+
+      const supabase = serviceClient();
+      let query = supabase
+        .from("admin_audit_events")
+        .select("id,admin_subject_hash,action,target_type,target_id_hash,request_id,preview_counts,result,created_at", { count: "exact" });
+
+      if (actionType) {
+        query = query.eq("action", actionType);
+      }
+      if (targetType) {
+        query = query.eq("target_type", targetType);
+      }
+      if (startDate) {
+        query = query.gte("created_at", startDate);
+      }
+      if (endDate) {
+        query = query.lte("created_at", endDate);
+      }
+
+      query = query.order("created_at", { ascending: false });
+      const from = (page - 1) * limit;
+      const to = page * limit - 1;
+      const { data, error, count } = await query.range(from, to);
+      if (error) throw error;
+
+      return json(req, 200, {
+        ok: true,
+        events: data || [],
+        total: count || 0,
+      });
+    }
+    if (req.method === "POST" && url.pathname.endsWith("/api/trips/amend")) {
+      const body = await readBody(req) as any;
+      const tripId = body.tripId;
+      if (!tripId) throw new Error("Missing tripId");
+      const supabase = serviceClient();
+      const updates: any = { updated_at: new Date().toISOString() };
+      if (body.name !== undefined) updates.name = String(body.name || "").trim() || null;
+      if (body.destination_summary !== undefined) updates.destination_summary = String(body.destination_summary || "").trim() || null;
+      if (body.start_date !== undefined) {
+        const startDate = String(body.start_date || "").trim();
+        if (startDate && !DATE_RE.test(startDate)) throw new Error("start_date must be YYYY-MM-DD");
+        updates.start_date = startDate || null;
+      }
+      if (body.end_date !== undefined) {
+        const endDate = String(body.end_date || "").trim();
+        if (endDate && !DATE_RE.test(endDate)) throw new Error("end_date must be YYYY-MM-DD");
+        updates.end_date = endDate || null;
+      }
+      if (body.trip_currency !== undefined) {
+        const tripCurrency = String(body.trip_currency || "").toUpperCase().trim();
+        if (tripCurrency && !CURRENCY_RE.test(tripCurrency)) throw new Error("trip_currency must be a 3-letter uppercase code");
+        updates.trip_currency = tripCurrency || null;
+      }
+      if (body.budget_amount !== undefined) {
+        if (body.budget_amount === null || body.budget_amount === "") {
+          updates.budget_amount = null;
+        } else {
+          const budgetAmount = Number(body.budget_amount);
+          if (!Number.isFinite(budgetAmount) || budgetAmount < 0) throw new Error("budget_amount must be a finite non-negative number");
+          updates.budget_amount = budgetAmount;
+        }
+      }
+      if (body.budget_currency !== undefined) {
+        const budgetCurrency = String(body.budget_currency || "").toUpperCase().trim();
+        if (budgetCurrency && !CURRENCY_RE.test(budgetCurrency)) throw new Error("budget_currency must be a 3-letter uppercase code");
+        updates.budget_currency = budgetCurrency || null;
+      }
+      if (body.active !== undefined) updates.active = Boolean(body.active);
+      if (body.archived !== undefined) updates.archived = Boolean(body.archived);
+
+      const { data, error } = await supabase.from("trips").update(updates).eq("id", tripId).select("id").single();
+      if (error) throw error;
+
+      await writeAudit(supabase, {
+        adminSubject,
+        action: "amend_trip",
+        targetType: "trip",
+        targetId: tripId,
+        requestId: crypto.randomUUID(),
+        previewCounts: {},
+        result: { amended: true, fields: Object.keys(updates).filter((k) => k !== "updated_at") },
+      });
+
+      return json(req, 200, { ok: true, tripId: data?.id });
+    }
+    if (req.method === "POST" && url.pathname.endsWith("/api/trips/members/manage")) {
+      const body = await readBody(req) as any;
+      const { tripId, userId, action } = body;
+      if (!tripId || !userId || !action) throw new Error("Missing tripId, userId, or action");
+      if (action !== "add" && action !== "remove") throw new Error("Action must be 'add' or 'remove'");
+
+      const supabase = serviceClient();
+      if (action === "add") {
+        const { error } = await supabase.from("trip_members").insert({ trip_id: tripId, user_id: userId });
+        if (error) {
+          if (error.code !== "23505") { // unique violation code
+            throw error;
+          }
+        }
+      } else {
+        const { error } = await supabase.from("trip_members").delete().eq("trip_id", tripId).eq("user_id", userId);
+        if (error) throw error;
+      }
+
+      await writeAudit(supabase, {
+        adminSubject,
+        action: `${action}_trip_member`,
+        targetType: "trip",
+        targetId: tripId,
+        requestId: crypto.randomUUID(),
+        previewCounts: {},
+        result: { action, userId },
+      });
+
+      return json(req, 200, { ok: true });
+    }
+    if (req.method === "POST" && url.pathname.endsWith("/api/receipts/batch-action")) {
+      const body = await readBody(req) as any;
+      const { receiptIds, action, status } = body;
+      if (!Array.isArray(receiptIds) || receiptIds.length === 0) throw new Error("receiptIds must be a non-empty array");
+      if (receiptIds.length > 200) throw new Error("Cannot perform batch action on more than 200 receipts at once");
+      if (action !== "update_status" && action !== "delete") throw new Error("Action must be 'update_status' or 'delete'");
+
+      const supabase = serviceClient();
+      const updates: any = { updated_at: new Date().toISOString() };
+      if (action === "update_status") {
+        if (!status || !RECEIPT_STATUSES.has(status)) {
+          throw new Error(`Status must be one of: ${[...RECEIPT_STATUSES].join(", ")}`);
+        }
+        updates.status = status;
+      } else {
+        updates.deleted_at = new Date().toISOString();
+      }
+
+      const { data, error } = await supabase
+        .from("receipts")
+        .update(updates)
+        .in("id", receiptIds)
+        .select("id");
+      if (error) throw error;
+      const affectedCount = data?.length || 0;
+
+      await writeAudit(supabase, {
+        adminSubject,
+        action: `batch_${action}`,
+        targetType: "receipt",
+        targetId: receiptIds[0] || "batch",
+        requestId: crypto.randomUUID(),
+        previewCounts: {},
+        result: { action, status, affectedCount },
+      });
+
+      return json(req, 200, { ok: true, affectedCount });
+    }
+    if (req.method === "GET" && url.pathname.endsWith("/api/analytics/timeseries")) {
+      const days = Math.min(90, Math.max(1, Number(url.searchParams.get("days") || "30")));
+      const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      const supabase = serviceClient();
+
+      const [usageRes, receiptsRes] = await Promise.all([
+        supabase
+          .from("app_usage_events")
+          .select("created_at,user_id,app_surface,provider,model,metadata")
+          .gte("created_at", sinceIso)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("receipts")
+          .select("created_at")
+          .gte("created_at", sinceIso)
+          .order("created_at", { ascending: true })
+      ]);
+
+      if (usageRes.error) throw usageRes.error;
+      if (receiptsRes.error) throw receiptsRes.error;
+
+      const usageRows = usageRes.data || [];
+      const receiptsRows = receiptsRes.data || [];
+
+      const usageTrendMap = new Map<string, { date: string; eventCount: number; activeUsers: Set<string> }>();
+      const aiConsumptionMap = new Map<string, Map<string, number>>();
+      const receiptVelocityMap = new Map<string, number>();
+      const surfaceBreakdownMap = new Map<string, number>();
+
+      for (let i = days - 1; i >= 0; i--) {
+        const dateStr = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+        usageTrendMap.set(dateStr, { date: dateStr, eventCount: 0, activeUsers: new Set() });
+        aiConsumptionMap.set(dateStr, new Map());
+        receiptVelocityMap.set(dateStr, 0);
+      }
+
+      for (const row of usageRows) {
+        const dateStr = String(row.created_at || "").split("T")[0];
+        if (!usageTrendMap.has(dateStr)) continue;
+
+        const trend = usageTrendMap.get(dateStr)!;
+        trend.eventCount += 1;
+        if (row.user_id) {
+          trend.activeUsers.add(row.user_id);
+        }
+
+        if (row.provider) {
+          const aiMap = aiConsumptionMap.get(dateStr)!;
+          let val = 1;
+          if (row.metadata && typeof row.metadata === "object") {
+            const meta = row.metadata as any;
+            if (meta.tokens) val = Number(meta.tokens) || 1;
+            else if (meta.total_tokens) val = Number(meta.total_tokens) || 1;
+          }
+          aiMap.set(row.provider, (aiMap.get(row.provider) || 0) + val);
+        }
+
+        if (row.app_surface) {
+          const surf = row.app_surface;
+          surfaceBreakdownMap.set(surf, (surfaceBreakdownMap.get(surf) || 0) + 1);
+        }
+      }
+
+      for (const row of receiptsRows) {
+        const dateStr = String(row.created_at || "").split("T")[0];
+        if (receiptVelocityMap.has(dateStr)) {
+          receiptVelocityMap.set(dateStr, receiptVelocityMap.get(dateStr)! + 1);
+        }
+      }
+
+      const usageTrend = Array.from(usageTrendMap.values()).map(t => ({
+        date: t.date,
+        events: t.eventCount,
+        activeUsers: t.activeUsers.size
+      }));
+
+      const aiConsumption: any[] = [];
+      for (const [date, providerMap] of aiConsumptionMap.entries()) {
+        const entry: any = { date };
+        for (const [provider, count] of providerMap.entries()) {
+          entry[provider] = count;
+        }
+        aiConsumption.push(entry);
+      }
+
+      const receiptVelocity = Array.from(receiptVelocityMap.entries()).map(([date, count]) => ({
+        date,
+        count
+      }));
+
+      const surfaceBreakdown = Array.from(surfaceBreakdownMap.entries()).map(([surface, count]) => ({
+        surface,
+        count
+      }));
+
+      return json(req, 200, {
+        ok: true,
+        usageTrend,
+        aiConsumption,
+        receiptVelocity,
+        surfaceBreakdown
+      });
+    }
+    if (req.method === "GET" && url.pathname.endsWith("/api/ai-monitoring/latency-trending")) {
+      const days = Math.min(90, Math.max(1, Number(url.searchParams.get("days") || "30")));
+      const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      const supabase = serviceClient();
+
+      const { data: rows, error } = await supabase
+        .from("app_usage_events")
+        .select("created_at,provider,model,outcome,metadata")
+        .not("provider", "is", null)
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      const events = rows || [];
+
+      const dailyLatency = new Map<string, Map<string, { sumLatency: number; count: number }>>();
+      const comparisonMap = new Map<string, {
+        provider: string;
+        model: string;
+        totalRequests: number;
+        errorCount: number;
+        sumLatency: number;
+        latencyCount: number;
+      }>();
+
+      for (let i = days - 1; i >= 0; i--) {
+        const dateStr = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+        dailyLatency.set(dateStr, new Map());
+      }
+
+      for (const row of events) {
+        const dateStr = String(row.created_at || "").split("T")[0];
+        const provider = row.provider || "unknown";
+        const model = row.model || "unknown";
+        const outcome = row.outcome || "success";
+        
+        let latency: number | null = null;
+        if (row.metadata && typeof row.metadata === "object") {
+          const meta = row.metadata as any;
+          const rawLat = meta.latencyMs ?? meta.latency_ms ?? meta.duration ?? meta.durationMs ?? meta.duration_ms;
+          if (rawLat != null) {
+            latency = Number(rawLat);
+          }
+        }
+
+        if (dailyLatency.has(dateStr)) {
+          const provMap = dailyLatency.get(dateStr)!;
+          if (latency != null && Number.isFinite(latency)) {
+            const current = provMap.get(provider) || { sumLatency: 0, count: 0 };
+            provMap.set(provider, {
+              sumLatency: current.sumLatency + latency,
+              count: current.count + 1
+            });
+          }
+        }
+
+        const compKey = `${provider}/${model}`;
+        if (!comparisonMap.has(compKey)) {
+          comparisonMap.set(compKey, {
+            provider,
+            model,
+            totalRequests: 0,
+            errorCount: 0,
+            sumLatency: 0,
+            latencyCount: 0
+          });
+        }
+        const comp = comparisonMap.get(compKey)!;
+        comp.totalRequests += 1;
+        if (outcome === "error" || outcome === "failed" || outcome === "fail") {
+          comp.errorCount += 1;
+        }
+        if (latency != null && Number.isFinite(latency)) {
+          comp.sumLatency += latency;
+          comp.latencyCount += 1;
+        }
+      }
+
+      const latencyTrend: any[] = [];
+      for (const [date, provMap] of dailyLatency.entries()) {
+        const entry: any = { date };
+        for (const [provider, stats] of provMap.entries()) {
+          entry[provider] = stats.count > 0 ? Math.round(stats.sumLatency / stats.count) : null;
+        }
+        latencyTrend.push(entry);
+      }
+
+      const providerComparison = Array.from(comparisonMap.values()).map(comp => ({
+        provider: comp.provider,
+        model: comp.model,
+        totalRequests: comp.totalRequests,
+        errorRate: comp.totalRequests > 0 ? Number((comp.errorCount / comp.totalRequests).toFixed(4)) : 0,
+        avgLatencyMs: comp.latencyCount > 0 ? Math.round(comp.sumLatency / comp.latencyCount) : null
+      }));
+
+      return json(req, 200, {
+        ok: true,
+        latencyTrend,
+        providerComparison
+      });
     }
     const photoMatch = url.pathname.match(/\/api\/receipts\/([^/]+)\/photo$/);
     if (req.method === "GET" && photoMatch) {
