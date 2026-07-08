@@ -386,7 +386,7 @@ async function run() {
 
     const initialStatus = await jsonFetch(env, '/credentials/status', { session });
     assert.equal(initialStatus.response.status, 200);
-    assert.deepEqual(initialStatus.data.providers.map((item) => item.status), ['missing', 'missing', 'missing', 'missing', 'missing']);
+    assert.deepEqual(initialStatus.data.providers.map((item) => item.status), ['missing', 'missing', 'missing', 'missing', 'missing', 'missing']);
 
     const adminRotateBlockedOrigin = await jsonFetch(env, '/credentials/admin-rotate', {
       method: 'POST',

@@ -6,11 +6,12 @@ const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const TRUSTED_DEVICE_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const SESSION_CHALLENGE_TTL_MS = 1000 * 60 * 5;
 const MAX_JSON_BYTES = 4500000;
-const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi', 'mimo'];
+const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi', 'mimo', 'volcano'];
 const NOTION_VERSION = '2022-06-28';
 const KIMI_DEFAULT_BASE = 'https://api.kimi.com/coding/v1';
 const MIMO_DEFAULT_BASE = 'https://token-plan-sgp.xiaomimimo.com/v1';
 const MIMO_PAYG_BASE = 'https://api.xiaomimimo.com/v1';
+const VOLCANO_DEFAULT_BASE = 'https://ark.cn-beijing.volces.com/api/plan/v3';
 const GOOGLE_DEFAULT_MODEL = 'gemma-4-31b-it';
 const RATE_WINDOW_MS = 1000 * 60 * 15;
 const DEFAULT_SUPABASE_AI_DAILY_LIMIT = 50;
@@ -405,6 +406,12 @@ async function readWeatherApiCredential(env) {
   const envSecret = String(env.WEATHERAPI_KEY || '').trim();
   if (envSecret) return { provider: 'weatherapi', secret: envSecret, extra: { source: 'env' }, status: 'connected' };
   return readCredential(env, 'weatherapi');
+}
+
+async function readVolcanoCredential(env) {
+  const envSecret = String(env.VOLCANO_KEY || '').trim();
+  if (envSecret) return { provider: 'volcano', secret: envSecret, extra: { source: 'env' }, status: 'connected' };
+  return readCredential(env, 'volcano');
 }
 
 async function readUserCredential(env, provider, userId) {
@@ -878,7 +885,7 @@ async function kimiJson(env, prompt, kind, image, requestedModel) {
     body: JSON.stringify({
       model: requestedModel || env.KIMI_MODEL || 'kimi-code',
       messages,
-      temperature: kind === 'test' ? 0 : 0.1,
+      temperature: 0.6,
       thinking: { type: 'disabled' },
     }),
   }));
@@ -1173,7 +1180,9 @@ function normalizeTripAnalysis(data, body) {
 async function testProvider(env, provider, candidateSecret, extra = {}) {
   const credential = candidateSecret
     ? { secret: candidateSecret, extra }
-    : provider === 'weatherapi' ? await readWeatherApiCredential(env) : await readCredential(env, provider);
+    : provider === 'weatherapi' ? await readWeatherApiCredential(env)
+    : provider === 'volcano' ? await readVolcanoCredential(env)
+    : await readCredential(env, provider);
   if (!credential?.secret) return { provider, status: 'missing' };
   try {
     if (provider === 'notion') await testNotion(env, credential);
@@ -1181,6 +1190,7 @@ async function testProvider(env, provider, candidateSecret, extra = {}) {
     if (provider === 'mimo') await mimoJsonWithCredential(env, credential);
     if (provider === 'google') await googleModelsList(credential.secret);
     if (provider === 'weatherapi') await testWeatherApi(credential.secret);
+    if (provider === 'volcano') await volcanoJsonWithCredential(env, credential);
     return { provider, status: 'connected', lastTestedAt: Date.now() };
   } catch (error) {
     return { provider, status: 'invalid', lastTestedAt: Date.now(), message: redact(error?.message || error) };
@@ -1212,8 +1222,53 @@ async function kimiJsonWithCredential(env, credential) {
     body: JSON.stringify({
       model: env.KIMI_MODEL || 'kimi-code',
       messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
-      temperature: 0,
+      temperature: 0.6,
       thinking: { type: 'disabled' },
+    }),
+  }));
+  return extractJson(data?.choices?.[0]?.message?.content || '');
+}
+
+async function volcanoJson(env, prompt, kind, image, requestedModel) {
+  const credential = await readVolcanoCredential(env);
+  if (!credential?.secret) throw new Error('Volcano credential missing');
+  const base = String(env.VOLCANO_API_BASE || VOLCANO_DEFAULT_BASE).replace(/\/+$/, '');
+  const messages = [
+    { role: 'system', content: 'Return strict JSON only. No markdown.' },
+    { role: 'user', content: image ? [
+      { type: 'text', text: prompt },
+      { type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.base64}` } },
+    ] : prompt },
+  ];
+  const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${credential.secret}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      model: requestedModel || 'doubao-seed-2.0-lite',
+      messages,
+      temperature: 0.6,
+    }),
+  }));
+  return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
+}
+
+async function volcanoJsonWithCredential(env, credential) {
+  const base = String(env.VOLCANO_API_BASE || VOLCANO_DEFAULT_BASE).replace(/\/+$/, '');
+  const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${credential.secret}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'doubao-seed-2.0-lite',
+      messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
+      temperature: 0.6,
     }),
   }));
   return extractJson(data?.choices?.[0]?.message?.content || '');
@@ -1330,6 +1385,13 @@ async function handleRequest(request, env) {
       const body = await readJson(request);
       await consumeSupabaseAiQuota(env, user, 'mimo', request);
       return json({ ok: true, data: await mimoJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
+    }
+    if (url.pathname === '/volcano/json') {
+      const user = await optionalSupabaseUser(request, env);
+      if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
+      const body = await readJson(request);
+      await consumeSupabaseAiQuota(env, user, 'volcano', request);
+      return json({ ok: true, data: await volcanoJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
     }
     if (url.pathname === '/trip/intelligence') {
       const user = await optionalSupabaseUser(request, env);

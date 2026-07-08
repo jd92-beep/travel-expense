@@ -3694,6 +3694,7 @@ export function Settings({
                   <option value="kimi">Kimi (kimi-code, kimi-8k, kimi-32k, kimi-k2.6, kimi-for-coding)</option>
                   <option value="google">Google (Gemini, Gemma — all Google models)</option>
                   <option value="mimo">Mimo (Mimo v2.5, Mimo v2.5 Pro)</option>
+                  <option value="volcano">Volcano Engine (doubao-seed-2.0-lite, minimax-m3, m2.7, auto)</option>
                   <option value="weatherapi">WeatherAPI (weather forecasts)</option>
                 </select>
               </label>
