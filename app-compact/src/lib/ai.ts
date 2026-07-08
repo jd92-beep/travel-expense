@@ -233,7 +233,7 @@ async function googleModelForRequest(state: AppState): Promise<string> {
 }
 
 interface ModelAttempt {
-  provider: 'kimi' | 'google' | 'mimo';
+  provider: 'kimi' | 'google' | 'mimo' | 'volcano';
   model?: string;
   label: string;
 }
@@ -689,11 +689,11 @@ function selectedModelAttempt(chosenModelId: string): ModelAttempt | null {
   if (!chosenModelId) return null;
   const parts = chosenModelId.split('/');
   if (parts.length === 2) {
-    const provider = parts[0] as 'kimi' | 'google' | 'mimo';
+    const provider = parts[0] as 'kimi' | 'google' | 'mimo' | 'volcano';
     return {
       provider,
       model: parts[1],
-      label: `${provider === 'kimi' ? 'Kimi' : provider === 'mimo' ? 'Mimo' : 'Google'} (${parts[1]}) [Selected]`,
+      label: `${provider === 'kimi' ? 'Kimi' : provider === 'mimo' ? 'Mimo' : provider === 'volcano' ? 'Volcano' : 'Google'} (${parts[1]}) [Selected]`,
     };
   }
   if (/kimi/i.test(chosenModelId)) {
@@ -701,6 +701,9 @@ function selectedModelAttempt(chosenModelId: string): ModelAttempt | null {
   }
   if (/mimo/i.test(chosenModelId)) {
     return { provider: 'mimo', model: chosenModelId, label: `Mimo (${chosenModelId}) [Selected]` };
+  }
+  if (/volcano|doubao|minimax/i.test(chosenModelId)) {
+    return { provider: 'volcano', model: chosenModelId, label: `Volcano (${chosenModelId}) [Selected]` };
   }
   return { provider: 'google', model: chosenModelId, label: `Google (${chosenModelId}) [Selected]` };
 }

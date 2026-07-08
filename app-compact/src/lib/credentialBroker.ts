@@ -3,7 +3,7 @@ import { loadCredentialSession, saveCredentialSession } from './storage';
 import { currentSupabaseAccessToken } from './supabase';
 import type { AppState, TripProfile } from './types';
 
-export type CredentialProvider = 'notion' | 'kimi' | 'google' | 'weatherapi';
+export type CredentialProvider = 'notion' | 'kimi' | 'google' | 'weatherapi' | 'volcano';
 
 export interface BrokerSession {
   credentialSession: string;
@@ -124,7 +124,7 @@ async function brokerFetch<T>(
 
 async function brokerAiFetch<T>(
   state: Pick<AppState, 'credentialBrokerUrl' | 'credentialSession' | 'credentialSessionExpiresAt'>,
-  provider: 'kimi' | 'google' | 'mimo',
+  provider: 'kimi' | 'google' | 'mimo' | 'volcano',
   body: unknown,
 ): Promise<T> {
   const session = currentBrokerSession(state);
@@ -331,7 +331,7 @@ export async function disconnectPersonalNotionIntegration(state: AppState): Prom
 
 export async function brokerAiJson(
   state: AppState,
-  provider: 'kimi' | 'google' | 'mimo',
+  provider: 'kimi' | 'google' | 'mimo' | 'volcano',
   prompt: string,
   kind: 'scan' | 'voice' | 'email' | 'trip' | 'test',
   image?: { base64: string; mime: string },
@@ -341,7 +341,7 @@ export async function brokerAiJson(
     prompt,
     kind,
     image,
-    model: model || (provider === 'kimi' ? 'kimi-code' : provider === 'mimo' ? 'mimo-v2.5' : state.googleBackupModel),
+    model: model || (provider === 'kimi' ? 'kimi-code' : provider === 'mimo' ? 'mimo-v2.5' : provider === 'volcano' ? 'doubao-seed-2.0-lite' : state.googleBackupModel),
   });
   return data.data;
 }
