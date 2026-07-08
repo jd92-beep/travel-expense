@@ -30,6 +30,18 @@ function redactError(error: unknown) {
     .slice(0, 220);
 }
 
+// A transient network hiccup (offline, radio waking on a cold open, DNS/first-request
+// flakiness, request timeout) is NOT an actionable failure — the 120s interval + reconnect
+// listener heal it within seconds. Surfacing it as the persistent red "sync error" banner is a
+// false alarm; that's the "open the app after a few hours and it always shows sync error" bug —
+// the first request after the phone's radio has slept just flakes once. Reserve the banner for
+// genuinely actionable errors (auth expired → re-login, permission denied, real data conflicts).
+export function isTransientSyncError(error: unknown): boolean {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+  const raw = (error instanceof Error ? error.message : String((error as any)?.message || error || '')).toLowerCase();
+  return /failed to fetch|networkerror|network error|load failed|fetch failed|request timeout|timed out|timeout|connection|econn|enotfound|dns|socket|aborted|err_network|err_internet|err_connection|internet connection appears to be offline|service unavailable|\b502\b|\b503\b|\b504\b/.test(raw);
+}
+
 function queueKey(item: SyncQueueItem) {
   return `${item.type}:${item.entityId}`;
 }
@@ -343,20 +355,29 @@ export function useSyncEngine(
           await processItem(item);
           removeQueueItem(item);
         } catch (error) {
-          failures += 1;
           lastError = redactError(error);
           const nextAttempts = item.attempts + 1;
-          const isAuthError = lastError.toLowerCase().includes('session') ||
+          const lowerError = lastError.toLowerCase();
+          const isAuthError = lowerError.includes('session') ||
                               lastError.includes('401') ||
-                              lastError.toLowerCase().includes('unauthorized') ||
-                              lastError.toLowerCase().includes('expired');
+                              lowerError.includes('unauthorized') ||
+                              lowerError.includes('expired');
           // Concurrent-edit version conflict (RPC raises 40001) — surface a clear, accurate message
           // instead of a raw error so the user knows their edit didn't overwrite the newer server copy.
-          const lowerError = lastError.toLowerCase();
           const isVersionConflict = lowerError.includes('40001') ||
                                     lowerError.includes('version conflict') ||
                                     lastError.includes('版本衝突');
 
+          // Transient network blip (cold-boot radio wake, DNS, timeout): keep the item retriable and
+          // quiet — don't count it as a failure (which paints the red banner) and don't burn a retry
+          // attempt toward the 3-strike drop, or a flaky first request would silently discard a
+          // pending receipt. The interval/reconnect loop re-pushes it.
+          if (isTransientSyncError(error) && !isAuthError && !isVersionConflict) {
+            markQueueItem(item, { status: 'queued', error: '' });
+            continue;
+          }
+
+          failures += 1;
           markQueueItem(item, {
             status: 'error', // Keep as error status, do not drop!
             attempts: nextAttempts,
@@ -430,9 +451,13 @@ export function useSyncEngine(
       ].filter((candidate): candidate is Partial<AppState> => !!candidate);
       settingsCandidates.sort((a, b) => Number(a.settingsUpdatedAt || 0) - Number(b.settingsUpdatedAt || 0));
       const settings = settingsCandidates.length ? settingsCandidates[settingsCandidates.length - 1] : null;
-      const pullErrors = [supabaseResult, tripsResult, receiptsResult, settingsResult]
+      const pullRejections = [supabaseResult, tripsResult, receiptsResult, settingsResult]
         .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-        .map((result) => redactError(result.reason));
+        .map((result) => result.reason);
+      const pullErrors = pullRejections.map(redactError);
+      // Only a non-transient rejection should paint the red banner; a network blip stays quiet
+      // and self-heals on the next interval/reconnect tick.
+      const hardPullError = pullRejections.some((reason) => !isTransientSyncError(reason));
       const mergedAt = Date.now();
       const overwrittenIds = new Set<string>();
       for (const remote of receipts) {
@@ -595,9 +620,11 @@ export function useSyncEngine(
           return {
             ...finalState,
             syncQueue: freshQueue,
-            globalSyncStatus: pullErrors.length ? 'error' : (computedPending ? 'queued' : 'synced'),
+            // Transient-only pull failures don't earn the red banner: stay 'queued'/'idle' and let
+            // the retry loop heal it. lastSyncedAt already isn't advanced on any error (nextSyncedAt).
+            globalSyncStatus: hardPullError ? 'error' : (computedPending ? 'queued' : (pullErrors.length ? 'idle' : 'synced')),
             lastSyncedAt: nextSyncedAt,
-            syncError: pullErrors.join(' | '),
+            syncError: hardPullError ? pullErrors.join(' | ') : '',
           };
         });
       }
@@ -605,7 +632,13 @@ export function useSyncEngine(
     } catch (error) {
       const message = redactError(error);
       console.log('[SyncEngine] pull() error:', message);
-      updateSyncState({ status: 'error', error: message });
+      // Same rule as the partial-failure path: a transient network error must not paint the
+      // persistent red banner on a cold boot — keep it soft and let the retry loop heal it.
+      if (isTransientSyncError(error)) {
+        updateSyncState({ status: pendingCount(stateRef.current.syncQueue) ? 'queued' : 'idle', error: '' });
+      } else {
+        updateSyncState({ status: 'error', error: message });
+      }
     } finally {
       pullingRef.current = false;
       runDeferredSync();
