@@ -33,6 +33,7 @@ export const AI_MODELS = [
   { id: 'mimo/mimo-v2.5', name: 'Mimo v2.5' },
   { id: 'mimo/mimo-v2.5-pro', name: 'Mimo v2.5 Pro' },
   { id: 'volcano/doubao-seed-2.0-lite', name: 'Volcano (doubao-seed-2.0-lite)' },
+  { id: 'volcano/doubao-seed-2.0-pro', name: 'Volcano (doubao-seed-2.0-pro)' },
   { id: 'volcano/minimax-m3', name: 'Volcano (minimax-m3)' },
   { id: 'volcano/minimax-m2.7', name: 'Volcano (minimax-m2.7)' },
   { id: 'volcano/doubao-seed-2.0-mini', name: 'Volcano (doubao-seed-2.0-mini)' },
