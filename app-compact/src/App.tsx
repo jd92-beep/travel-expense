@@ -57,16 +57,20 @@ function fetchBootCurrencySnapshot(): Promise<CurrencySnapshot> {
   return bootCurrencyPromise;
 }
 
+// Synchronous first-paint hint: "is this phone still logged in?" so a cold open keeps the
+// authenticated storage scope instead of flashing the login screen while supabase-js's async
+// getSession() runs. Deliberately does NOT reject on an expired access_token and NEVER deletes
+// storage — the access_token (JWT) expires ~hourly but the refresh_token is long-lived, and
+// supabase-js silently mints a fresh access_token from it. Rejecting on expiry dropped the hint
+// and flashed the login/local scope on every cold boot after the first hour. supabase-js owns
+// eviction: it clears this key itself only when the refresh_token is truly dead (see the
+// loading-gated fallback below, which returns the app to the login screen in that case).
 function storedSupabaseSession(): Session | null {
   try {
     const raw = localStorage.getItem('travel-expense:supabase-auth:v1');
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!(parsed?.user?.id && parsed?.access_token)) return null;
-    // Reject an expired stored session so the app doesn't render as "cloud sync active" against a
-    // dead token (which would just spew auth-failed sync items). supabaseAuth refreshes the real one.
-    const expEpoch = Number(parsed.expires_at) * 1000;
-    if (Number.isFinite(expEpoch) && expEpoch > 0 && expEpoch <= Date.now()) return null;
     return parsed as Session;
   } catch {
     return null;
@@ -76,7 +80,10 @@ function storedSupabaseSession(): Session | null {
 export function App() {
   const supabaseAuth = useSupabaseAuth();
   const localSupabaseSession = storedSupabaseSession();
-  const effectiveSupabaseSession = supabaseAuth.session || localSupabaseSession;
+  // Trust the local hint only until supabase-js has resolved: once auth settles, a null session
+  // means the refresh_token is genuinely dead → drop the hint so the login screen shows instead
+  // of a broken "authenticated" state whose API calls all 401.
+  const effectiveSupabaseSession = supabaseAuth.session || (supabaseAuth.loading ? localSupabaseSession : null);
   const isCloudSyncActive = hasSupabaseSession(effectiveSupabaseSession);
   const userEmail = effectiveSupabaseSession?.user?.email || null;
   const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';

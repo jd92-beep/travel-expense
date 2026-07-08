@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-compact",
   "private": true,
-  "version": "0.16.1",
+  "version": "0.16.2",
   "type": "module",
   "engines": {
     "node": "22.x"
@@ -35,6 +35,7 @@
     "smoke:weather": "playwright test tests/weather-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:privacy": "playwright test tests/receipt-privacy-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:offline": "playwright test tests/offline-sync-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:session": "playwright test tests/session-persistence-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:stats": "playwright test tests/stats-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:six-person": "playwright test tests/six-person-share-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:settle-up": "node scripts/run-with-dev-server.mjs -- ./node_modules/.bin/playwright test tests/settle-up-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
