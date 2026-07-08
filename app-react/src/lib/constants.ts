@@ -3,7 +3,7 @@ import type { AppState, ItineraryDay } from './types';
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.2.2';
+export const APP_VERSION = '0.2.3';
 
 export const STORAGE_KEY = 'boss-japan-tracker';
 export const DEFAULT_NOTION_DB = '3438d94d5f7c81878221fcda6d65d39d';
@@ -32,6 +32,11 @@ export const AI_MODELS = [
   { id: 'google/gemma-4-26b', name: 'Google Gemma 4 26B' },
   { id: 'mimo/mimo-v2.5', name: 'Mimo v2.5' },
   { id: 'mimo/mimo-v2.5-pro', name: 'Mimo v2.5 Pro' },
+  { id: 'volcano/doubao-seed-2.0-lite', name: 'Volcano (doubao-seed-2.0-lite)' },
+  { id: 'volcano/minimax-m3', name: 'Volcano (minimax-m3)' },
+  { id: 'volcano/minimax-m2.7', name: 'Volcano (minimax-m2.7)' },
+  { id: 'volcano/doubao-seed-2.0-mini', name: 'Volcano (doubao-seed-2.0-mini)' },
+  { id: 'volcano/auto', name: 'Volcano (auto)' },
 ] as const;
 
 export function normalizeAiModelSettings<T extends Partial<Pick<AppState, 'scanModel' | 'voiceModel' | 'emailModel' | 'tripUpdateModel' | 'googleBackupModel'>>>(settings: T): T {
