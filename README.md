@@ -38,7 +38,7 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.13.6`。Admin Console 目前版本：`0.8.1`。
+Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.13.6`。Admin Console 目前版本：`0.8.2`。
 
 Admin Console 正在進行 Admin 1.0 生產重整。現時 production 已啟用全域 read-only
 containment：讀取及診斷仍可用，所有寫入、刪除、merge、repair、provider probe及其他外部副作用

@@ -5,7 +5,7 @@ Last updated: 2026-07-10 HKT
 ## Current Status
 
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
-- Current transitional frontend: `0.8.1`
+- Current transitional frontend: `0.8.2`
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
 - Production mode: **read-only containment**. Edge mutations and provider probes are backend-denied.
 - Admin 1.0 is **not production-complete**. The current UI and bearer/session architecture are being
@@ -47,7 +47,7 @@ Verified on 2026-07-10:
 - Adjacent function smoke: `adjacent_security_privilege_smoke_passed`.
 - Edge Deno unit tests: `10 passed`, `0 failed`.
 - Broker: `npm run check` and `npm run self-test` passed after key rotation.
-- Admin: `npm ci --ignore-scripts`, `npm run typecheck`, `npm run build`, audit `0` vulnerabilities.
+- Admin: `npm ci --ignore-scripts`, `npm run typecheck`, `npm run build`, smoke `15/15`, audit `0` vulnerabilities.
 - Current-tree secret scan and containment verifier passed.
 
 Evidence files outside the public repository:
@@ -75,21 +75,22 @@ As of 2026-07-10 there is no Admin-specific GitHub production workflow. The curr
 production deployment is a Vercel CLI deployment. A normal git push must not be described as an
 Admin deployment until the planned protected CI/CD workflow lands.
 
-Current commands:
+Current guarded production command:
 
 ```bash
 cd app-admin-kanban
 npm ci --ignore-scripts
-npm run typecheck
-npm run build
+npm run deploy
 
 cd ..
 npx supabase functions deploy admin-kanban --no-verify-jwt
 ```
 
-Do not run a manual production Vercel deploy from a dirty worktree. For Admin 1.0 release, add the
-protected GitHub workflow, synthetic preview environment, Boss approval gate and provenance record
-before replacing this section.
+`npm run deploy` refuses a dirty worktree, pins `travel-expense-admin-kanban` with the Vercel
+`--project` flag, injects the exact Git SHA, verifies `/api/health`, and cleans CLI-created local
+link/OIDC files. Do not substitute a bare `vercel deploy`; it can create or target the wrong project.
+For Admin 1.0 release, add the protected GitHub workflow, synthetic preview environment, Boss
+approval gate and provenance record before replacing this temporary manual path.
 
 ## Open Blockers
 
