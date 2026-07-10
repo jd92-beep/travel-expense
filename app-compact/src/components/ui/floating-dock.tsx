@@ -133,11 +133,14 @@ function DockItemButton({
       onMouseLeave={() => setHovered(false)}
       aria-label={item.title}
       aria-current={item.active ? "page" : undefined}
+      whileTap={reducedMotion ? undefined : { scale: 0.94 }}
       className={cn(
         "relative flex min-w-0 items-center justify-center rounded-full border border-transparent text-[color:var(--navy)] outline-none transition duration-200 focus-visible:ring-2 focus-visible:ring-[rgba(211,154,41,.42)]",
         "flex-col gap-0.5 px-1 py-1.5",
         item.id === "scan" && "dock-item-scan",
-        item.active &&
+        // Mobile carries the active visuals on the morphing layoutId pill below; the static
+        // gradient stays desktop-only so the pill's travel between tabs is actually visible.
+        item.active && !mobile &&
           "border-[rgba(217,65,50,.18)] bg-[linear-gradient(180deg,rgba(217,65,50,.14),rgba(211,154,41,.12))] shadow-[inset_0_1px_0_rgba(255,255,255,.84)]",
       )}
       style={
@@ -149,6 +152,17 @@ function DockItemButton({
             }
       }
     >
+      {/* Mobile active pill: shared layoutId = transform-only morph gliding between tabs */}
+      {item.active && mobile && !reducedMotion && (
+        <motion.i
+          layoutId="floating-dock-active-mobile"
+          transition={{ type: "spring", stiffness: 480, damping: 40 }}
+          className="absolute inset-x-0.5 inset-y-0 rounded-[18px] border border-[rgba(217,65,50,.18)] bg-[linear-gradient(180deg,rgba(217,65,50,.14),rgba(211,154,41,.12))] shadow-[inset_0_1px_0_rgba(255,255,255,.84)]"
+        />
+      )}
+      {item.active && mobile && reducedMotion && (
+        <i className="absolute inset-x-0.5 inset-y-0 rounded-[18px] border border-[rgba(217,65,50,.18)] bg-[linear-gradient(180deg,rgba(217,65,50,.14),rgba(211,154,41,.12))] shadow-[inset_0_1px_0_rgba(255,255,255,.84)]" />
+      )}
       <motion.div
         style={mobile || reducedMotion ? undefined : { width: widthIcon, height: heightIcon }}
         className="relative flex items-center justify-center"
@@ -174,7 +188,7 @@ function DockItemButton({
           </motion.span>
         )}
       </AnimatePresence>
-      {mobile && <span className="dock-mobile-label">{item.title}</span>}
+      {mobile && <span className="dock-mobile-label relative z-10">{item.title}</span>}
     </motion.button>
   );
 }

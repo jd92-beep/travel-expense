@@ -1,8 +1,9 @@
-import { Cloud, CloudLightning, CloudRain, CloudSun, LocateFixed, RefreshCw, Snowflake, Sun, Wind } from 'lucide-react';
+import { CloudRain, CloudSun, LocateFixed, RefreshCw, Sun, Wind } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GlassCard, LoadingState, Reveal, StatusPill, Toast } from '../components/ui';
 import { WeatherFX } from '../components/WeatherFX';
+import { WeatherIcon } from '../components/WeatherIcon';
 import { Meteors } from '../components/ui/meteors';
 import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
@@ -11,18 +12,6 @@ import { coordForDay, coordsForDay, fetchWeather, getCachedWeatherRows, groupedC
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
-
-function WeatherIcon({ code, size = 18 }: { code?: number; size?: number }) {
-  if (code == null) return <CloudSun size={size} />;
-  if (code === 0) return <Sun size={size} />;
-  if ([1, 2, 3].includes(code)) return <CloudSun size={size} />;
-  if ([45, 48].includes(code)) return <Cloud size={size} />;
-  if (code >= 51 && code <= 67) return <CloudRain size={size} />;
-  if (code >= 80 && code <= 82) return <CloudRain size={size} />;
-  if (code >= 71 && code <= 86) return <Snowflake size={size} />;
-  if (code >= 95) return <CloudLightning size={size} />;
-  return <CloudSun size={size} />;
-}
 
 const WEEKDAY_ZH = ['日', '一', '二', '三', '四', '五', '六'] as const;
 function formatWeatherDate(dateStr: string): string {
@@ -275,7 +264,7 @@ export function Weather({ state }: { state: AppState }) {
         {error && <Toast tone="warning">天氣拉取失敗：{error}</Toast>}
       </GlassCard>
       <GlassCard className="preview-weather-current-card">
-        <WeatherFX code={leadSlot?.code} />
+        <WeatherFX code={leadSlot?.code} rain={leadSlot?.rain} precipMm={leadSlot?.precipMm} />
         <div className="preview-weather-source-strip" aria-label="Weather source status" style={{ position: 'relative', zIndex: 2 }}>
           <span>{weatherProviderLabel(leadSource)}</span>
           <span>{weatherFreshnessLabel(leadSource)}</span>
@@ -284,7 +273,7 @@ export function Weather({ state }: { state: AppState }) {
         </div>
         <div className="preview-weather-current-layout relative z-40">
           <div className="preview-weather-hero-icon">
-            <WeatherIcon code={leadSlot?.code} size={92} />
+            <WeatherIcon code={leadSlot?.code} size={92} hour={leadSlot?.hour} />
           </div>
           <div className="preview-weather-temp">
             <strong>{leadSlot?.temp != null ? Math.round(leadSlot.temp) : 22}°C</strong>
@@ -301,7 +290,7 @@ export function Weather({ state }: { state: AppState }) {
             {previewHourly.map((slot, index) => (
               <span className="preview-weather-hourly-chip" key={`preview-hour-${slot.hour}-${index}`}>
                 <b>{formatHour(slot.hour)}</b>
-                <WeatherIcon code={slot.code} size={18} />
+                <WeatherIcon code={slot.code} size={18} hour={slot.hour} />
                 <em>{slot.temp == null ? '—' : `${Math.round(slot.temp)}°C`}</em>
               </span>
             ))}
@@ -361,7 +350,7 @@ export function Weather({ state }: { state: AppState }) {
                               {live && <span className="live-badge live-pulse-badge"><span className="pulse-dot"></span>LIVE</span>}
                             </div>
                             <div className="weather-type-badge">
-                              <WeatherIcon code={slot.code} size={15} />
+                              <WeatherIcon code={slot.code} size={15} hour={slot.hour} />
                               <span className="type-text">{weatherLabel(slot.code)}</span>
                             </div>
                           </div>

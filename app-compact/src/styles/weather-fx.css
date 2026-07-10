@@ -1,4 +1,6 @@
-/* ===== Animated weather FX — reflects the real weather code (GPU-friendly: transform/opacity) ===== */
+/* ===== Animated weather FX v2 — reflects the real weather code =====
+   Every animated property is transform/opacity only (compositor-safe on low-end phones).
+   Static filters (pre-blurred cloud/fog gradients) are painted once — never animated. */
 .wfx {
   position: absolute;
   inset: 0;
@@ -6,7 +8,11 @@
   pointer-events: none;
   border-radius: inherit;
   z-index: 0;
+  contain: paint;
 }
+/* Battery guard: Shell/WeatherFX toggles this class when the page is hidden. */
+html.wfx-page-hidden .wfx * { animation-play-state: paused !important; }
+
 .wfx-tint {
   position: absolute;
   inset: 0;
@@ -17,10 +23,11 @@
 .wfx-clouds .wfx-tint { background: linear-gradient(160deg, rgba(206, 222, 235, 0.4), transparent 66%); }
 .wfx-fog .wfx-tint { background: linear-gradient(180deg, rgba(220, 226, 232, 0.55), transparent 72%); }
 .wfx-rain .wfx-tint { background: linear-gradient(160deg, rgba(64, 104, 146, 0.36), transparent 72%); }
+.wfx-rain.wfx-i3 .wfx-tint { background: linear-gradient(160deg, rgba(48, 82, 122, 0.48), transparent 76%); }
 .wfx-snow .wfx-tint { background: linear-gradient(160deg, rgba(198, 220, 242, 0.42), transparent 72%); }
 .wfx-storm .wfx-tint { background: linear-gradient(160deg, rgba(46, 56, 86, 0.5), transparent 74%); }
 
-/* Sun: soft pulsing glow + slowly rotating ray burst */
+/* ── Sun: layered light — breathing glow, wide corona, rotating rays, drifting shafts ── */
 .wfx-sun-glow {
   position: absolute;
   top: -34%;
@@ -30,6 +37,16 @@
   border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 204, 88, 0.55), rgba(255, 204, 88, 0) 66%);
   animation: wfx-pulse 5s ease-in-out infinite;
+}
+.wfx-sun-corona {
+  position: absolute;
+  top: -48%;
+  right: -24%;
+  width: 90%;
+  height: 120%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 226, 150, 0.28), rgba(255, 226, 150, 0) 70%);
+  animation: wfx-pulse 8s ease-in-out -2.5s infinite;
 }
 .wfx-sun-rays {
   position: absolute;
@@ -43,54 +60,118 @@
   opacity: 0.5;
   animation: wfx-spin 42s linear infinite;
 }
-@keyframes wfx-pulse { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.12); opacity: 0.78; } }
+/* Drifting light shafts — skewed translucent bands sweeping slowly across the card */
+.wfx-shaft {
+  position: absolute;
+  top: -20%;
+  width: 14%;
+  height: 150%;
+  background: linear-gradient(rgba(255, 236, 180, 0.0), rgba(255, 236, 180, 0.22) 40%, rgba(255, 236, 180, 0.0));
+  transform: skewX(-18deg);
+  animation: wfx-shaft-drift 13s ease-in-out infinite;
+}
+.wfx-shaft-a { left: 12%; }
+.wfx-shaft-b { left: 40%; width: 8%; animation-duration: 17s; animation-delay: -6s; opacity: 0.8; }
+@keyframes wfx-shaft-drift {
+  0%, 100% { transform: skewX(-18deg) translateX(0); opacity: 0.35; }
+  50% { transform: skewX(-18deg) translateX(140%); opacity: 0.75; }
+}
+@keyframes wfx-pulse { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.08); opacity: 0.78; } }
 @keyframes wfx-spin { to { transform: rotate(360deg); } }
 
-/* Clouds: drifting soft blobs */
+/* ── Clouds: 3-layer parallax (far→near) + top highlight ── */
 .wfx-cloud {
   position: absolute;
   left: -45%;
-  width: 48%;
-  height: 36%;
   border-radius: 50%;
   background: radial-gradient(circle at 32% 52%, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0) 70%);
-  filter: blur(2px);
   animation: wfx-drift linear infinite;
+}
+.wfx-cloud-0 { width: 30%; height: 22%; opacity: 0.34; filter: blur(3px); }
+.wfx-cloud-1 { width: 44%; height: 32%; opacity: 0.48; filter: blur(2px); }
+.wfx-cloud-2 { width: 58%; height: 40%; opacity: 0.62; filter: blur(1px); }
+.wfx-cloud-highlight {
+  position: absolute;
+  inset: 0 0 60% 0;
+  background: linear-gradient(rgba(255, 255, 255, 0.28), transparent);
+  opacity: 0.6;
 }
 @keyframes wfx-drift { from { transform: translateX(0); } to { transform: translateX(360%); } }
 
-/* Fog: blurred drifting bands */
+/* ── Fog: drifting pre-blurred bands with varied depth ── */
 .wfx-fog-band {
   position: absolute;
   left: -20%;
   width: 140%;
-  height: 28%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
   filter: blur(7px);
   animation: wfx-fog ease-in-out infinite alternate;
 }
 @keyframes wfx-fog { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
 
-/* Rain: thin falling streaks */
+/* ── Rain: slanted plane, two depth layers, ground splashes ── */
+.wfx-rain-plane {
+  position: absolute;
+  inset: -12%;
+  transform: rotate(9deg); /* static transform on the parent = slanted fall for free */
+}
 .wfx-drop {
   position: absolute;
-  top: -14%;
+  top: -18%;
   width: 2px;
-  height: 16%;
+  height: 17%;
   background: linear-gradient(transparent, rgba(155, 195, 235, 0.9));
   border-radius: 2px;
   animation: wfx-fall linear infinite;
 }
+.wfx-drop-back {
+  width: 1px;
+  height: 9%;
+  background: linear-gradient(transparent, rgba(170, 200, 230, 0.7));
+}
+.wfx-i3 .wfx-drop { height: 22%; }
 @keyframes wfx-fall { 0% { transform: translateY(-20%); } 100% { transform: translateY(820%); } }
+/* Splash: a micro-drop blooming at the bottom edge */
+.wfx-splash {
+  position: absolute;
+  bottom: 4%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(165, 200, 235, 0.75);
+  transform: scale(0.2);
+  opacity: 0;
+  animation: wfx-splash ease-out infinite;
+}
+@keyframes wfx-splash {
+  0% { transform: scale(0.15); opacity: 0; }
+  25% { opacity: 0.75; }
+  70% { transform: scale(1); opacity: 0.25; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
 
-/* Storm: rain + occasional lightning flash */
+/* ── Storm: brooding cloud silhouettes + dual offset lightning ── */
+.wfx-storm-cloud {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 60%, rgba(52, 62, 92, 0.55), rgba(52, 62, 92, 0) 70%);
+  filter: blur(2px);
+  animation: wfx-drift 46s linear infinite;
+}
+.wfx-storm-cloud-a { top: -6%; left: -45%; width: 62%; height: 42%; }
+.wfx-storm-cloud-b { top: 12%; left: -45%; width: 46%; height: 34%; animation-duration: 60s; animation-delay: -22s; opacity: 0.8; }
 .wfx-flash {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.85);
+  background: radial-gradient(120% 90% at 30% 0%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.25) 55%, transparent 80%);
   opacity: 0;
   mix-blend-mode: screen;
   animation: wfx-lightning 8s linear infinite;
+}
+.wfx-flash-b {
+  background: radial-gradient(110% 85% at 74% 4%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.2) 50%, transparent 78%);
+  animation-duration: 11s;
+  animation-delay: -4.6s;
 }
 @keyframes wfx-lightning {
   0%, 90%, 100% { opacity: 0; }
@@ -100,14 +181,14 @@
   94% { opacity: 0; }
 }
 
-/* Snow: drifting swaying flakes */
+/* ── Snow: SVG crystals — fall (translate) + sway (rotate/x on inner axis) ── */
 .wfx-flake {
   position: absolute;
   top: -8%;
-  color: rgba(255, 255, 255, 0.92);
-  line-height: 1;
-  text-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
-  animation: wfx-snow linear infinite;
+  line-height: 0;
+  animation-name: wfx-snow, wfx-flake-spin;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
   will-change: transform;
 }
 @keyframes wfx-snow {
@@ -115,6 +196,7 @@
   50% { transform: translate(var(--wfx-sway, 8px), 420%); }
   100% { transform: translate(0, 860%); }
 }
+@keyframes wfx-flake-spin { 0% { rotate: 0deg; } 100% { rotate: 180deg; } }
 
 .wfx-static .wfx-tint { opacity: 0.42; }
 
@@ -132,7 +214,11 @@
   .weather-day:hover { transform: translateY(-2px); box-shadow: 0 18px 40px rgba(30, 77, 107, 0.14); }
 }
 
+/* Meteocons sit on tight line-height contexts (badges/chips) — keep them optically centered */
+.weather-meteocon { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+
 @media (prefers-reduced-motion: reduce) {
-  .wfx-cloud, .wfx-fog-band, .wfx-drop, .wfx-flake, .wfx-sun-rays, .wfx-sun-glow, .wfx-flash { animation: none !important; display: none; }
+  .wfx-cloud, .wfx-cloud-highlight, .wfx-fog-band, .wfx-rain-plane, .wfx-drop, .wfx-splash, .wfx-flake,
+  .wfx-sun-rays, .wfx-sun-glow, .wfx-sun-corona, .wfx-shaft, .wfx-flash, .wfx-storm-cloud { animation: none !important; display: none; }
   .preview-weather-hero-icon { animation: none !important; }
 }

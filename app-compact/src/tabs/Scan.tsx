@@ -1,5 +1,7 @@
 import { Camera, CheckCircle2, Mail, Mic, RefreshCw, Repeat2, X } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
+import { getEffectsTier } from '../lib/performance';
 import { ActionRippleButton, GlassCard, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 import { ShimmerButton } from '../components/ui/shimmer-button';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
@@ -12,6 +14,23 @@ import { activeTrip } from '../domain/trip/normalize';
 import { resolveTripContext } from '../domain/trip/context';
 import scanMasterpieceSuite from '../assets/scan/scan-masterpiece-suite.png';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
+
+// One subtle celebratory burst in the washi palette when a batch lands in the ledger.
+// canvas-confetti manages its own overlay canvas; disableForReducedMotion covers a11y and
+// the lite tier skips it entirely (low-end devices shouldn't pay for a party).
+function celebrateSave() {
+  if (getEffectsTier() === 'lite') return;
+  confetti({
+    particleCount: 64,
+    spread: 68,
+    startVelocity: 32,
+    gravity: 1.1,
+    ticks: 140,
+    origin: { y: 0.72 },
+    colors: ['#D4A843', '#C23B5E', '#2D6E48', '#1E4D6B', '#FFFDF7'],
+    disableForReducedMotion: true,
+  });
+}
 
 type ScanMode = 'scan' | 'voice' | 'email';
 type BatchReceipt = Receipt & { selected?: boolean };
@@ -427,6 +446,7 @@ export function Scan({
       ? `已儲存 ${valid.length} 筆；略過 ${skipped} 筆缺資料紀錄`
       : `已儲存 ${valid.length} 筆 email 待確認紀錄。`);
     setSavingBatch(false);
+    celebrateSave();
   }
 
   async function handlePullPending() {

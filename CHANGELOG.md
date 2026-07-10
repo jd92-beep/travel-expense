@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-11
+
+- **Compact App 0.14.0 Motion Layer v2 (main) / Android 0.17.0**:
+  - **Root cause of "app feels static on phones"**: `shouldDisableHeavyEffects()` treated ANY mobile UA as low-end, stripping tab transitions and all rich motion on the primary platform while desktop kept the fancy path. Replaced with a 3-tier system (`getEffectsTier`: full / balanced / lite) — **balanced** (normal phones) now runs compositor-safe motion everywhere (transform/opacity only); **lite** (reduced-motion, ≤2GB RAM, ≤2 cores, save-data) keeps the old stripped behavior. Tier stamped on `<html>` as `fx-*` so CSS scales densities without JS.
+  - **Tab transitions on mobile**: direction-aware slide (±24px, tuned spring, ≤250ms) via the existing AnimatePresence path; instant swap on lite. The two duplicated tab-render branches in App.tsx were deduplicated. The full-screen WindmillTransition (which leaked onto mobile) is now desktop-only.
+  - **Weather showpiece**: vendored 13 Meteocons animated SVGs (Bas Milius, MIT — `src/assets/meteocons/`, ~70KB, offline-safe) replacing static lucide icons at hero/hourly/slot levels with day/night variants by slot hour; lite keeps lucide (SMIL can't honor reduced-motion). WeatherFX rewritten: 2-depth-layer slanted rain + ground splash blooms, precipitation-scaled intensity (`wfx-i1/2/3` from precipMm/rain%), breathing sun corona + drifting light shafts, SVG snow crystals (fall+sway+rotate, varied scale) replacing ❄ text glyphs, 3-layer parallax clouds, storm cloud silhouettes + dual offset lightning. All keyframes audited transform/opacity/rotate-only; `contain: paint`; all FX pause when the page is hidden (battery).
+  - **Shell/nav polish**: floating-dock active tab is a `layoutId` pill that glides between tabs + press scale feedback; sticky mobile header condenses on scroll (`--header-shrink` 0→1 over 96px, transform/opacity only).
+  - **Micro-interactions**: BorderBeam travelling light on the Dashboard hero budget card; History ledger rows stagger-rise (first 12 only); subtle washi-palette confetti on Scan batch save (`canvas-confetti`, reduced-motion aware, lite skips); press-dip on rows/chips.
+  - **Cleanup**: deleted dead `ui/timeline.tsx`, `ui/file-upload.tsx`, `ui/confetti.tsx` (0 importers).
+  - **Verified**: keyframe property audit 100% compositor-safe; typecheck + `npm run build` clean; smokes green — weather 14, final-nav 7, dashboard 8, history 8, timeline 9, settings 9, privacy 3, scan/stats/six-person/mobile-layout/a11y-touch/offline/session/sync-classify all pass. `smoke:welcome-guide` fails on pre-Motion-v2 HEAD too (stash-bisected, pre-existing) — flagged as a separate task.
+
 ## 2026-07-08
 
 - **Compact App 0.13.5 No False "Sync Error" On Cold Boot (main) / Android 0.16.3**:

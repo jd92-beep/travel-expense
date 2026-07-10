@@ -11,7 +11,7 @@ import { NoiseTexture } from './ui/noise-texture';
 import { Particles } from './ui/particles';
 import { AuroraText } from './ui/aurora-text';
 import { SyncStatusIndicator } from './SyncStatusIndicator';
-import { shouldDisableHeavyEffects } from '../lib/performance';
+import { getEffectsTier } from '../lib/performance';
 import { activeTrip, switchTrip } from '../domain/trip/normalize';
 import compactJapanMark from '../assets/generated/compact-japan-mark.svg';
 
@@ -148,11 +148,6 @@ type BeforeInstallPromptEvent = Event & {
   userChoice?: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
-// Legacy helper kept for backwards compatibility but we rely on shouldDisableHeavyEffects now.
-function prefersStableMobileEffects() {
-  return shouldDisableHeavyEffects();
-}
-
 function relativeFreshness(value: number) {
   if (!value) return 'local only';
   const seconds = Math.max(1, Math.round((Date.now() - value) / 1000));
@@ -191,12 +186,15 @@ export function Shell({
   const [updateReady, setUpdateReady] = useState(false);
   const [installReady, setInstallReady] = useState(false);
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
-  const [stableMobileEffects, setStableMobileEffects] = useState(shouldDisableHeavyEffects);
+  const [fxTier, setFxTier] = useState(getEffectsTier);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
   const raf = useRef<number | null>(null);
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const prefersReducedMotion = useReducedMotion();
-  const richVisualEffects = !prefersReducedMotion && !stableMobileEffects;
+  // Desktop-class effects (rAF canvas particles, full-screen mix-blend noise): full tier only.
+  const richVisualEffects = !prefersReducedMotion && fxTier === 'full';
+  // Compositor-safe motion (aurora text bg-position, scroll-linked vars): full + balanced.
+  const motionOk = !prefersReducedMotion && fxTier !== 'lite';
 
   const [pulling, setPulling] = useState(false);
 
@@ -286,7 +284,7 @@ export function Shell({
 
   const cacheTime = Math.max(syncState?.lastSyncedAt || 0, Number(state?.settingsPulledAt || 0));
   const cacheLabel = relativeFreshness(cacheTime);
-  const motionLabel = prefersReducedMotion || stableMobileEffects ? 'reduced' : 'rich';
+  const motionLabel = prefersReducedMotion || fxTier === 'lite' ? 'reduced' : fxTier === 'balanced' ? 'balanced' : 'rich';
   const failedSyncCount = syncState?.failedCount || 0;
   const pendingSyncCount = syncState?.pendingCount || 0;
   const hasSyncProblem = syncState?.status === 'error' || failedSyncCount > 0;
@@ -300,16 +298,17 @@ export function Shell({
 
   useEffect(() => {
     const handlePerformanceAndEffects = () => {
-      const disableHeavy = shouldDisableHeavyEffects();
-      setStableMobileEffects(disableHeavy);
+      const tier = getEffectsTier();
+      setFxTier(tier);
       setIsMobile(window.innerWidth <= 768);
 
-      // Dynamically toggle class on HTML element to apply lightweight styles/animations
-      if (disableHeavy) {
-        document.documentElement.classList.add('stable-effects');
-      } else {
-        document.documentElement.classList.remove('stable-effects');
-      }
+      // Stamp the tier on <html> so styles.css can scale densities/durations without JS.
+      // `stable-effects` (the shadow/animation strip) now applies on lite ONLY — phones on
+      // the balanced tier keep the Motion Layer running (compositor-safe animations only).
+      const root = document.documentElement;
+      root.classList.remove('fx-full', 'fx-balanced', 'fx-lite');
+      root.classList.add(`fx-${tier}`);
+      root.classList.toggle('stable-effects', tier === 'lite');
     };
 
     const queries = [
@@ -335,9 +334,10 @@ export function Shell({
 
   useEffect(() => {
     const root = document.documentElement;
-    if (prefersReducedMotion || stableMobileEffects) {
+    if (!motionOk) {
       root.style.setProperty('--scroll-y', '0px');
       root.style.setProperty('--scroll-progress', '0');
+      root.style.setProperty('--header-shrink', '0');
       return undefined;
     }
     const update = () => {
@@ -346,6 +346,9 @@ export function Shell({
       const y = Math.max(0, window.scrollY);
       root.style.setProperty('--scroll-y', `${y.toFixed(0)}px`);
       root.style.setProperty('--scroll-progress', `${Math.min(1, y / max).toFixed(4)}`);
+      // Header condensation driver: 0→1 over the first 96px of scroll (unitless, so CSS
+      // can scale/fade the sticky mobile header with transform/opacity only).
+      root.style.setProperty('--header-shrink', `${Math.min(1, y / 96).toFixed(3)}`);
     };
     const onScroll = () => {
       if (raf.current != null) return;
@@ -359,7 +362,7 @@ export function Shell({
       window.removeEventListener('resize', onScroll);
       if (raf.current != null) window.cancelAnimationFrame(raf.current);
     };
-  }, [prefersReducedMotion, stableMobileEffects]);
+  }, [motionOk]);
 
   return (
     <div className={`app-shell app-shell--${active}`} data-active-tab={active}>
@@ -449,7 +452,7 @@ export function Shell({
                 buttonClassName="shell-trip-trigger topbar-trip-trigger"
               >
                 <span className="topbar-trip-trigger-title" role="heading" aria-level={1}>
-                  {richVisualEffects
+                  {motionOk
                     ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeTripName}</AuroraText>
                     : activeTripName}
                 </span>
@@ -457,7 +460,7 @@ export function Shell({
             </div>
           ) : (
             <h1>
-              {richVisualEffects
+              {motionOk
                 ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeCopy.title}</AuroraText>
                 : activeCopy.title}
             </h1>
@@ -603,7 +606,9 @@ export function Shell({
         </section>
       )}
       <main className="content">{children}</main>
-      <WindmillTransition activeKey={active} />
+      {/* Full-screen conic sweep is desktop-only: on phones the real tab slide (App.tsx)
+          replaces it, and its 100vmax overlay was leaking onto mobile before tiers. */}
+      {fxTier === 'full' && <WindmillTransition activeKey={active} />}
 
       {/* Fixed bottom tab bar — never scrolls away */}
       <div className="fixed-tab-bar">
