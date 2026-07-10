@@ -1,6 +1,6 @@
 import { send } from './_lib/admin.js';
 
-const ADMIN_VERSION = '0.8.2';
+const ADMIN_VERSION = '0.8.3';
 
 // Unauthenticated liveness probe. Keep the response limited to deployment
 // provenance and whether read traffic is accepted.

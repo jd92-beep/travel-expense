@@ -13,11 +13,19 @@ const hadVercelDir = existsSync(localVercelDir);
 const hadEnvFile = existsSync(localEnvFile);
 
 function capture(command, args, cwd = repoRoot) {
-  return execFileSync(command, args, { cwd, encoding: 'utf8' }).trim();
+  return execFileSync(command, args, { cwd, encoding: 'utf8', env: childEnvironment() }).trim();
 }
 
 function run(command, args, cwd = appDir) {
-  execFileSync(command, args, { cwd, stdio: 'inherit' });
+  execFileSync(command, args, { cwd, stdio: 'inherit', env: childEnvironment() });
+}
+
+function childEnvironment() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === 'npm_config_allow_scripts') delete env[key];
+  }
+  return env;
 }
 
 const status = capture('git', ['status', '--porcelain']);

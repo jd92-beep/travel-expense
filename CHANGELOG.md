@@ -39,7 +39,7 @@
   - **Verified**: keyframe property audit 100% compositor-safe; typecheck + `npm run build` clean; smokes green — weather 14, final-nav 7, dashboard 8, history 8, timeline 9, settings 9, privacy 3, scan/stats/six-person/mobile-layout/a11y-touch/offline/session/sync-classify all pass. `smoke:welcome-guide` fails on pre-Motion-v2 HEAD too (stash-bisected, pre-existing) — flagged as a separate task.
 ## 2026-07-10
 
-- **Admin Console 0.8.2 emergency containment / Compact 0.13.6**:
+- **Admin Console 0.8.3 emergency containment / Compact 0.13.6**:
   - Production Admin Edge is read-only by default. All mutations and external side effects now fail
     before route dispatch with `503 ADMIN_WRITES_DISABLED`; hidden buttons or direct Edge requests
     cannot bypass the kill switch.

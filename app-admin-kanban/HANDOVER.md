@@ -5,7 +5,7 @@ Last updated: 2026-07-10 HKT
 ## Current Status
 
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
-- Current transitional frontend: `0.8.2`
+- Current transitional frontend: `0.8.3`
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
 - Production mode: **read-only containment**. Edge mutations and provider probes are backend-denied.
 - Admin 1.0 is **not production-complete**. The current UI and bearer/session architecture are being

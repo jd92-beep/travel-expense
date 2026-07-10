@@ -4,7 +4,7 @@
 - **Date**: 2026-07-10 HKT
 - **Focus**: Admin 1.0 Task 0/1 preservation and emergency containment. Production Edge writes are fail-closed, exposed admin tables/RPCs are browser-denied, machine keys were rotated, provider false-green fallback was removed, adjacent `SECURITY DEFINER` grants were hardened, and Compact/Android private-photo compatibility was prepared.
 - **Agent**: Codex
-- **App version**: Compact `0.13.6`; Android compatibility branch `0.16.4` (versionCode 1604); Admin Console `0.8.2`; React unchanged in this pass
+- **App version**: Compact `0.13.6`; Android compatibility branch `0.16.4` (versionCode 1604); Admin Console `0.8.3`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -96,9 +96,11 @@ you closed with your session number.
    reconciliation, new auth/BFF, paginated read API, five-workspace UI, full canonical contracts and
    verified R2 operations remain open in the accepted plan.
 8. **Deployment provenance guard**:
-   - Admin `0.8.2` adds `scripts/deploy-production.mjs`: it refuses dirty worktrees, pins the exact
+   - Admin `0.8.3` adds `scripts/deploy-production.mjs`: it refuses dirty worktrees, pins the exact
      Vercel project with `--project`, runs all Admin gates, injects the current Git SHA, verifies
      production `/api/health`, and removes CLI-created local link/OIDC files.
+   - The runner removes npm lifecycle-only `allow-scripts` config before nested `npm audit`; audit
+     remains mandatory and is never skipped.
    - An accidentally created empty `app-admin-kanban` Vercel project was immediately deleted; the
      canonical production project and alias remain `travel-expense-admin-kanban`.
 
