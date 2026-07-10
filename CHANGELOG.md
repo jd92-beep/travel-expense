@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-07-10 HKT (private receipt photos compatibility)
+
+- **v0.16.4 / versionCode 1604.** Prepared Android for the production move from a public
+  `receipt-photos` bucket to authenticated private Storage.
+  - Photo uploads now request a 15-minute signed URL after the object and metadata writes succeed.
+  - Cloud pulls batch-refresh signed URLs with `createSignedUrls`; a temporary Storage signing
+    failure no longer blocks receipt/trip data from loading and is retried on the next pull.
+  - The existing `publicUrl` return field is retained as a compatibility boundary, but its value is
+    now a signed URL. Queue, merge, retry and native bridge behavior are unchanged.
+  - The Supabase backfill smoke now mocks and asserts signed URL requests, including a maximum
+    900-second expiry; result `1/1` passed.
+  - Fixed Android QA's broad crash filter: a `uiautomator` process can emit its own
+    `FATAL EXCEPTION: UiAutomation` after closing an accessibility descriptor. QA now fails only
+    when logcat attributes a crash or ANR to the Travel Expense package.
+  - Evidence: `typecheck`, root production build and `security:scan` passed. JDK 21 debug APK
+    build/install/launch and `android:qa` passed with verified App Links on
+    `codex_api36_pixel_8`; artifacts are in
+    `/tmp/travel-expense-android-qa-2026-07-10T08-08-00-057Z`.
+  - Cutover remains blocked until this build and the matching Compact Web build are deployed and
+    active compatibility is confirmed. No live Storage privacy change was made in this branch.
+
 ## 2026-07-05 HKT (percentage sharing + 3-agent sharing audit)
 
 - **v0.12.29 / versionCode 1229.** Ran a 3-persona parallel audit of the whole sharing system

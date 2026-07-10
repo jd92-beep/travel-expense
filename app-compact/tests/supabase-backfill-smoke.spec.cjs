@@ -32,7 +32,8 @@ function sessionPayload() {
 
 test('backfill sweep pushes local receipts that never reached Supabase', async ({ page }) => {
   const receiptPosts = [];
-  const storagePosts = [];
+  const storageUploads = [];
+  const storageSignRequests = [];
 
   await page.route('**/travel-expense/secrets.local.js', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/javascript', body: 'window.DEV_SECRETS = {};' });
@@ -43,7 +44,31 @@ test('backfill sweep pushes local receipts that never reached Supabase', async (
   });
 
   await page.route('https://test-travel-expense.supabase.co/storage/v1/**', async (route) => {
-    storagePosts.push(route.request().url());
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname.includes('/object/sign/receipt-photos')) {
+      const body = request.postDataJSON?.() || {};
+      storageSignRequests.push({ url: request.url(), body });
+      if (Array.isArray(body.paths)) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(body.paths.map((path) => ({
+            error: null,
+            path,
+            signedURL: `/object/sign/receipt-photos/${path}?token=test-signed-token`,
+          }))),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ signedURL: `${url.pathname.replace('/storage/v1', '')}?token=test-signed-token` }),
+      });
+      return;
+    }
+    storageUploads.push(request.url());
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ Key: `receipt-photos/${userId}/test.jpg` }) });
   });
 
@@ -146,7 +171,9 @@ test('backfill sweep pushes local receipts that never reached Supabase', async (
   expect(stores).toContain('味仙');
   expect(stores).toContain('驛麵通');
   // Photos: the local receipt AND the stale-flag receipt (server photo missing) must both upload
-  await expect.poll(() => storagePosts.length, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
-  const stalePhotoUpload = storagePosts.some((url) => url.includes('44444444-4444-4444-8444-444444444444'));
+  await expect.poll(() => storageUploads.length, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
+  await expect.poll(() => storageSignRequests.length, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
+  expect(storageSignRequests.every(({ body }) => Number(body.expiresIn) > 0 && Number(body.expiresIn) <= 900)).toBe(true);
+  const stalePhotoUpload = storageUploads.some((url) => url.includes('44444444-4444-4444-8444-444444444444'));
   expect(stalePhotoUpload).toBe(true);
 });

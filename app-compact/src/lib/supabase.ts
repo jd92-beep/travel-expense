@@ -7,6 +7,7 @@ import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, Re
 
 const VALID_CATEGORIES = new Set(['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'other']);
 const VALID_PAYMENTS = new Set(['cash', 'credit', 'paypay', 'suica']);
+const RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS = 15 * 60;
 
 function withTimeout<T>(promise: PromiseLike<T>, ms = 30000): Promise<T> {
   return Promise.race([
@@ -1120,10 +1121,9 @@ export async function uploadReceiptPhoto(
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   const blob = new Blob([bytes], { type: mime });
-  // Privacy: the receipt-photos bucket is public, so the object key must be UNGUESSABLE —
-  // a leaked receipt UUID alone must not let anyone fetch the photo. Keep the `${userId}/`
-  // folder (storage RLS requires foldername[1] = auth.uid()) but add a random filename suffix.
-  // Reuse the existing path on re-upload so retries/edits don't orphan objects in storage.
+  // Keep the `${userId}/` folder for Storage RLS and reuse the existing path on
+  // retries so edits do not orphan objects. The random suffix also prevents
+  // predictable object names from leaking through logs or support exports.
   const storagePath = existingPath && existingPath.startsWith(`${session.user.id}/`)
     ? existingPath
     : `${session.user.id}/${receiptId}-${crypto.randomUUID().slice(0, 12)}.jpg`;
@@ -1131,15 +1131,16 @@ export async function uploadReceiptPhoto(
     .from('receipt-photos')
     .upload(storagePath, blob, { upsert: true, contentType: mime });
   if (uploadError) throw uploadError;
-  const { data: urlData } = supabase.storage
+  const { data: urlData, error: signedUrlError } = await supabase.storage
     .from('receipt-photos')
-    .getPublicUrl(storagePath);
+    .createSignedUrl(storagePath, RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS);
+  if (signedUrlError) throw signedUrlError;
   const { error: metadataError } = await supabase.from('receipt_photos').upsert(
     { receipt_id: receiptId, owner_id: session.user.id, storage_bucket: 'receipt-photos', storage_path: storagePath, mime_type: mime, file_size: bytes.length },
     { onConflict: 'receipt_id' },
   );
   if (metadataError) throw metadataError;
-  return { storagePath, publicUrl: urlData.publicUrl };
+  return { storagePath, publicUrl: urlData.signedUrl };
 }
 
 // Shared-trip Notion outbox drainer (client-side worker).
@@ -1418,6 +1419,7 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   const receiptRows = (receiptsResult.data || []) as SupabaseReceiptRow[];
   const receiptIds = receiptRows.map((row) => row.id).filter(Boolean);
   let photoMap = new Map<string, string>();
+  const signedPhotoUrlByPath = new Map<string, string>();
   if (receiptIds.length) {
     const { data: photoData, error: photoError } = await withTimeout(
       supabase.from('receipt_photos').select('receipt_id,storage_path').in('receipt_id', receiptIds),
@@ -1427,6 +1429,27 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
       for (const row of photoData as { receipt_id: string; storage_path: string }[]) {
         if (row.receipt_id && row.storage_path) photoMap.set(row.receipt_id, row.storage_path);
       }
+      const storagePaths = [...new Set(photoMap.values())];
+      if (storagePaths.length) {
+        try {
+          const { data: signedRows, error: signedUrlError } = await withTimeout(
+            supabase.storage.from('receipt-photos').createSignedUrls(
+              storagePaths,
+              RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS,
+            ),
+          );
+          if (signedUrlError) throw signedUrlError;
+          for (const signedRow of signedRows || []) {
+            if (!signedRow.error && signedRow.path && signedRow.signedUrl) {
+              signedPhotoUrlByPath.set(signedRow.path, signedRow.signedUrl);
+            }
+          }
+        } catch (signedUrlError) {
+          // Receipt data remains usable if Storage is temporarily unavailable.
+          // The next cloud pull refreshes the short-lived URLs.
+          console.warn('[Supabase] receipt photo signed URL refresh failed:', signedUrlError);
+        }
+      }
     }
   }
   const receipts = receiptRows
@@ -1435,8 +1458,7 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
       if (!receipt) return null;
       const storagePath = photoMap.get(row.id);
       if (storagePath) {
-        const { data: urlData } = supabase.storage.from('receipt-photos').getPublicUrl(storagePath);
-        receipt.photoUrl = urlData.publicUrl;
+        receipt.photoUrl = signedPhotoUrlByPath.get(storagePath);
         receipt._photoSyncedToSupabase = true;
         receipt.supabasePhotoPath = storagePath;
       }

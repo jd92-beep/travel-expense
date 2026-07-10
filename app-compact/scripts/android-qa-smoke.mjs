@@ -544,7 +544,10 @@ const crashPath = path.join(artifactDir, 'logcat-crash-filter.txt');
 await fsp.writeFile(crashPath, crashLines);
 const packageCrashPattern = new RegExp(`Process:\\s*${escapeRegex(packageName)}\\b`);
 const packageAnrPattern = new RegExp(`ANR in\\s+${escapeRegex(packageName)}\\b|Input dispatching timed out.*${escapeRegex(packageName)}`, 'i');
-if (/FATAL EXCEPTION/i.test(crashLines) || packageCrashPattern.test(crashLines) || packageAnrPattern.test(crashLines)) {
+// `uiautomator dump` can terminate its own UiAutomation process with a benign
+// FATAL EXCEPTION after closing the accessibility file descriptor. Only fail
+// when Android attributes the crash or ANR to this application package.
+if (packageCrashPattern.test(crashLines) || packageAnrPattern.test(crashLines)) {
   throw new Error(`Android crash signal detected. See ${crashPath}`);
 }
 
