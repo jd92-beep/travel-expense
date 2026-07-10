@@ -14891,3 +14891,60 @@ input[type="checkbox"] {
   margin-right: 4px;
   font-size: 0.8em;
 }
+
+/* ===================== MOTION LAYER v2 (effects tiers) =====================
+   html.fx-full / .fx-balanced / .fx-lite are stamped by Shell (getEffectsTier).
+   Everything here is transform/opacity only — safe for the balanced (phone) tier. */
+
+/* Sticky mobile header condensation: --header-shrink (0→1 over first 96px of scroll)
+   is written by Shell's rAF scroll handler on full+balanced, pinned to 0 on lite. */
+html.fx-balanced .compact-mobile-title-art,
+html.fx-full .compact-mobile-title-art {
+  transform-origin: left bottom;
+  transform: scale(calc(1 - var(--header-shrink, 0) * 0.16));
+  will-change: transform;
+}
+html.fx-balanced .compact-mobile-mark,
+html.fx-full .compact-mobile-mark {
+  transform-origin: left center;
+  transform: scale(calc(1 - var(--header-shrink, 0) * 0.18));
+}
+html.fx-balanced .compact-mobile-heading p,
+html.fx-full .compact-mobile-heading p {
+  opacity: calc(1 - var(--header-shrink, 0) * 0.85);
+}
+
+/* Ledger rows: staggered entrance (first 12 rows only — long lists mount instantly after).
+   Uses the existing motion-rise keyframe; transform/opacity only. */
+html.fx-full .history-ledger-row,
+html.fx-balanced .history-ledger-row {
+  animation: motion-rise 0.28s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+html.fx-full .history-ledger-row:nth-child(n + 13),
+html.fx-balanced .history-ledger-row:nth-child(n + 13) {
+  animation: none;
+}
+html.fx-full .history-ledger-row:nth-child(1), html.fx-balanced .history-ledger-row:nth-child(1) { animation-delay: 0.02s; }
+html.fx-full .history-ledger-row:nth-child(2), html.fx-balanced .history-ledger-row:nth-child(2) { animation-delay: 0.05s; }
+html.fx-full .history-ledger-row:nth-child(3), html.fx-balanced .history-ledger-row:nth-child(3) { animation-delay: 0.08s; }
+html.fx-full .history-ledger-row:nth-child(4), html.fx-balanced .history-ledger-row:nth-child(4) { animation-delay: 0.11s; }
+html.fx-full .history-ledger-row:nth-child(5), html.fx-balanced .history-ledger-row:nth-child(5) { animation-delay: 0.14s; }
+html.fx-full .history-ledger-row:nth-child(6), html.fx-balanced .history-ledger-row:nth-child(6) { animation-delay: 0.17s; }
+html.fx-full .history-ledger-row:nth-child(7), html.fx-balanced .history-ledger-row:nth-child(7) { animation-delay: 0.20s; }
+html.fx-full .history-ledger-row:nth-child(8), html.fx-balanced .history-ledger-row:nth-child(8) { animation-delay: 0.23s; }
+html.fx-full .history-ledger-row:nth-child(n + 9):nth-child(-n + 12),
+html.fx-balanced .history-ledger-row:nth-child(n + 9):nth-child(-n + 12) { animation-delay: 0.26s; }
+
+/* 立體 press feedback: interactive rows/cards dip on touch (transform only — the shadow
+   stays static, so no paint storm on low-end). */
+html.fx-full .history-ledger-row:active,
+html.fx-balanced .history-ledger-row:active,
+html.fx-full .preview-weather-hourly-chip:active,
+html.fx-balanced .preview-weather-hourly-chip:active {
+  transform: scale(0.985);
+  transition: transform 0.1s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-ledger-row { animation: none !important; }
+}

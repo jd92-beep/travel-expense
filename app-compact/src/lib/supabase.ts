@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, stampReceiptForTrip } from '../domain/trip/normalize';
+import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
 import { tripIntelligenceColumns } from '../domain/trip/context';
-import { DEFAULT_NOTION_DB, normalizeAiModelSettings } from './constants';
+import { DEFAULT_NOTION_DB, ITINERARY, normalizeAiModelSettings } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, ReceiptPayer, ReceiptSplit, SplitType, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
 
 const VALID_CATEGORIES = new Set(['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'other']);
@@ -77,6 +78,7 @@ type SupabaseTripRow = {
   itinerary?: unknown;
   app_metadata?: unknown;
   version?: number | null;
+  itinerary_version?: number | null;
   archived?: boolean | null;
   notion_page_id?: string | null;
   notion_database_id?: string | null;
@@ -227,6 +229,18 @@ function isMissingSharingTableError(error: unknown): boolean {
   return item?.code === '42P01'
     || item?.code === 'PGRST205'
     || /schema cache|does not exist|Could not find the table/i.test(item?.message || '');
+}
+
+function isMissingItineraryContractError(error: unknown): boolean {
+  const item = error as { code?: string; message?: string } | null | undefined;
+  return item?.code === '42703'
+    || item?.code === 'PGRST202'
+    || item?.code === 'PGRST204'
+    || /itinerary_version|update_trip_itinerary|schema cache|does not exist/i.test(item?.message || '');
+}
+
+function jsonMatches(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
 function cleanInviteRole(value: unknown): Exclude<TripMemberRole, 'owner' | 'admin'> {
@@ -533,22 +547,45 @@ function rowToTrip(row: SupabaseTripRow, state: AppState, sharing?: TripSharingS
   const intelligenceInput = Object.keys(jsonObject(row.trip_intelligence)).length
     ? row.trip_intelligence
     : metadata.intelligence || columnIntelligence || current?.intelligence;
-  const itinerary = safeItinerary(row.itinerary, appId, tripCurrency);
+  const startDate = row.start_date || current?.startDate || state.tripDateRange.start;
+  const endDate = row.end_date || current?.endDate || state.tripDateRange.end;
+  const storedItinerary = safeItinerary(row.itinerary, appId, tripCurrency);
+  const isNagoya = isNagoyaCanonicalRange({
+    id: appId,
+    name: row.name,
+    destinationSummary: row.destination_summary || current?.destinationSummary,
+    startDate,
+    endDate,
+  });
+  const itineraryContract = canonicalizeItineraryRange({
+    tripId: appId,
+    startDate,
+    endDate,
+    itinerary: storedItinerary,
+    fallbackItinerary: [
+      ...(current?.itinerary || []),
+      ...(isNagoya ? ITINERARY : []),
+    ],
+    fallbackCurrency: tripCurrency,
+    fallbackRegion: row.destination_summary || current?.destinationSummary || row.name,
+    fallbackTimezone: row.timezones?.[0] || current?.timezones?.[0],
+  });
+  const itinerary = itineraryContract.itinerary;
   return {
     ...(current || {}),
     id: appId,
     supabaseId: row.id,
     name: row.name,
     destinationSummary: row.destination_summary || current?.destinationSummary || '未設定目的地',
-    startDate: row.start_date || current?.startDate || state.tripDateRange.start,
-    endDate: row.end_date || current?.endDate || state.tripDateRange.end,
+    startDate,
+    endDate,
     homeCurrency: row.home_currency || 'HKD',
     currencies: Array.from(new Set([row.home_currency || 'HKD', tripCurrency])),
     timezones: Array.isArray(row.timezones) && row.timezones.length ? row.timezones : current?.timezones || ['Asia/Tokyo'],
     budget: Number(row.budget_amount || current?.budget || 0),
     active: row.active,
     archived: !!row.archived,
-    itinerary: itinerary.length ? itinerary : current?.itinerary || [],
+    itinerary,
     intelligence: normalizeTripIntelligence(
       intelligenceInput,
       row.destination_summary || current?.destinationSummary || '未設定目的地',
@@ -556,6 +593,10 @@ function rowToTrip(row: SupabaseTripRow, state: AppState, sharing?: TripSharingS
       Array.isArray(row.timezones) ? row.timezones[0] : current?.timezones?.[0],
     ),
     version: Number(row.version || current?.version || 1),
+    itineraryVersion: Number(row.itinerary_version || row.version || current?.itineraryVersion || current?.version || 1),
+    _itineraryNeedsRepair: itineraryContract.missingDates.length > 0
+      || itineraryContract.duplicateDates.length > 0
+      || itineraryContract.outOfRangeDates.length > 0,
     sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : current?.sourceId || `trip_${appId}`,
     notionDb: userScopedNotionDatabaseId(current?.notionDb) || undefined,
     notionPageId: row.notion_page_id || current?.notionPageId,
@@ -918,13 +959,35 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     trip.currencies?.find((currency) => currency !== (trip.homeCurrency || 'HKD')) || state.tripCurrency || 'JPY',
     trip.timezones?.[0],
   );
+  const startDate = cleanDate(trip.startDate, state.tripDateRange.start);
+  const endDate = cleanDate(trip.endDate, state.tripDateRange.end);
+  const isNagoya = isNagoyaCanonicalRange({
+    id: trip.id,
+    name: trip.name,
+    destinationSummary: trip.destinationSummary,
+    startDate,
+    endDate,
+  });
+  const canonicalItinerary = canonicalizeItineraryRange({
+    tripId: trip.id,
+    startDate,
+    endDate,
+    itinerary: trip.itinerary || [],
+    fallbackItinerary: [
+      ...(state.customItinerary || []),
+      ...(isNagoya ? ITINERARY : []),
+    ],
+    fallbackCurrency: trip.currencies?.find((currency) => currency !== (trip.homeCurrency || 'HKD')) || state.tripCurrency || 'JPY',
+    fallbackRegion: trip.destinationSummary || trip.name,
+    fallbackTimezone: trip.timezones?.[0],
+  });
   const row = {
     id,
     owner_id: userId,
     name: trip.name || '新旅程',
     destination_summary: trip.destinationSummary || null,
-    start_date: cleanDate(trip.startDate, state.tripDateRange.start),
-    end_date: cleanDate(trip.endDate, state.tripDateRange.end),
+    start_date: startDate,
+    end_date: endDate,
     home_currency: trip.homeCurrency || 'HKD',
     trip_currency: trip.currencies?.find((currency) => currency !== (trip.homeCurrency || 'HKD')) || state.tripCurrency || 'JPY',
     timezones: trip.timezones?.length ? trip.timezones : ['Asia/Tokyo'],
@@ -932,7 +995,7 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     budget_currency: trip.homeCurrency || 'HKD',
     active: !!trip.active && !trip.archived,
     legacy_source_id: sourceIdForTrip(trip),
-    itinerary: trip.itinerary || [],
+    itinerary: canonicalItinerary.itinerary,
     app_metadata: {
       sourceId: trip.sourceId || `trip_${trip.id}`,
       localTripId: trip.id,
@@ -947,18 +1010,95 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     updated_at: isoFromMs(trip.updatedAt),
   };
   const { owner_id: _ownerId, id: _rowId, created_at: _createdAt, ...sharedTripUpdate } = row;
-  let { data, error } = explicitSharedTrip
-    ? await withTimeout(supabase
+  const contractLookup = await withTimeout(supabase
+    .from('trips')
+    .select('id,itinerary_version,version,itinerary,start_date,end_date')
+    .eq('id', id)
+    .maybeSingle());
+  if (contractLookup.error && !isMissingItineraryContractError(contractLookup.error)) {
+    throw contractLookup.error;
+  }
+
+  let data: Record<string, any> | null = null;
+  let error: { message?: string } | null = null;
+  const contractRow = !contractLookup.error ? contractLookup.data as Record<string, any> | null : null;
+  if (contractRow && Number.isFinite(Number(contractRow.itinerary_version))) {
+    const serverItineraryVersion = Math.max(1, Number(contractRow.itinerary_version));
+    const localItineraryVersion = Math.max(1, Number(trip.itineraryVersion ?? trip.version) || 1);
+    if (localItineraryVersion < serverItineraryVersion || localItineraryVersion > serverItineraryVersion + 1) {
+      throw new Error(`40001 ITINERARY_VERSION_CONFLICT expected ${serverItineraryVersion}, received ${localItineraryVersion}`);
+    }
+
+    const itineraryChanged = contractRow.start_date !== startDate
+      || contractRow.end_date !== endDate
+      || !jsonMatches(contractRow.itinerary, canonicalItinerary.itinerary);
+    let itineraryResult: Record<string, any> | null = null;
+    if (itineraryChanged || localItineraryVersion === serverItineraryVersion + 1) {
+      const rpcResult = await withTimeout(supabase.rpc('update_trip_itinerary', {
+        p_trip_id: id,
+        p_expected_version: serverItineraryVersion,
+        p_start_date: startDate,
+        p_end_date: endDate,
+        p_itinerary: canonicalItinerary.itinerary,
+        p_source: isNativeAndroidShell() ? 'android' : 'compact',
+      }));
+      if (rpcResult.error) throw rpcResult.error;
+      itineraryResult = rpcResult.data as Record<string, any> | null;
+    }
+
+    const {
+      id: _metadataId,
+      owner_id: _metadataOwnerId,
+      created_at: _metadataCreatedAt,
+      itinerary: _metadataItinerary,
+      start_date: _metadataStartDate,
+      end_date: _metadataEndDate,
+      ...metadataUpdate
+    } = row;
+    metadataUpdate.version = Math.max(
+      Number(metadataUpdate.version) || 1,
+      Number(itineraryResult?.version) || 1,
+    );
+    let metadataResult = await withTimeout(supabase
       .from('trips')
-      .update(sharedTripUpdate)
+      .update(metadataUpdate)
       .eq('id', id)
       .select('*')
-      .single())
-    : await withTimeout(supabase
-      .from('trips')
-      .upsert(row, { onConflict: 'id' })
-      .select('*')
       .single());
+    if (metadataResult.error && /country_code|theme_key|weather_region|trip_intelligence|schema cache|column/i.test(metadataResult.error.message || '')) {
+      const {
+        country_code: _countryCode,
+        theme_key: _themeKey,
+        locale: _locale,
+        weather_region: _weatherRegion,
+        trip_intelligence: _tripIntelligence,
+        ...legacyMetadataUpdate
+      } = metadataUpdate;
+      metadataResult = await withTimeout(supabase
+        .from('trips')
+        .update(legacyMetadataUpdate)
+        .eq('id', id)
+        .select('*')
+        .single());
+    }
+    data = metadataResult.data as Record<string, any> | null;
+    error = metadataResult.error;
+  } else {
+    const directResult = explicitSharedTrip
+      ? await withTimeout(supabase
+        .from('trips')
+        .update(sharedTripUpdate)
+        .eq('id', id)
+        .select('*')
+        .single())
+      : await withTimeout(supabase
+        .from('trips')
+        .upsert(row, { onConflict: 'id' })
+        .select('*')
+        .single());
+    data = directResult.data as Record<string, any> | null;
+    error = directResult.error;
+  }
   if (error && /country_code|theme_key|weather_region|trip_intelligence|schema cache|column/i.test(error.message || '')) {
     const {
       country_code: _countryCode,
@@ -1021,7 +1161,7 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
   if (!supabase) return receipt;
   const trip = state.trips?.find((candidate) => candidate.id === receipt.tripId) || activeTrip(state);
   await ensureSupabaseProfile(session, state);
-  const syncedTrip = cleanUuid(trip.supabaseId) && trip.sharing?.role && trip.sharing.role !== 'owner'
+  const syncedTrip = cleanUuid(trip.supabaseId)
     ? trip
     : await upsertSupabaseTrip(session, state, trip);
   const tripUuid = cleanUuid(syncedTrip.supabaseId);

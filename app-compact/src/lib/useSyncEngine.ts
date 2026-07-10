@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { activeTrip } from '../domain/trip/normalize';
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
+import { recordClientHeartbeat } from './clientHeartbeat';
 import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { mergePulledData } from './syncMerge';
 import { isReceiptTombstoned, rawReceiptSourceId } from './syncMerge';
@@ -97,6 +98,10 @@ export function useSyncEngine(
   stateRef.current = state;
   const supabaseSessionRef = useRef<Session | null | undefined>(supabaseSession);
   supabaseSessionRef.current = supabaseSession;
+
+  useEffect(() => {
+    void recordClientHeartbeat(supabaseSession);
+  }, [supabaseSession?.user?.id]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -571,6 +576,31 @@ export function useSyncEngine(
             };
           }
           let freshQueue = (current.syncQueue || []).filter((item) => !overwrittenIds.has(item.entityId));
+          if (cloudPullOk && finalState.autoSync) {
+            const queuedTripIds = new Set(freshQueue.filter((item) => item.type === 'trip').map((item) => item.entityId));
+            const itineraryRepairs = (finalState.trips || []).filter((trip) => trip._itineraryNeedsRepair && !queuedTripIds.has(trip.id));
+            if (itineraryRepairs.length) {
+              const now = Date.now();
+              freshQueue = [
+                ...freshQueue,
+                ...itineraryRepairs.map((trip, index) => ({
+                  id: `sync_itinerary_repair_${now}_${index}`,
+                  type: 'trip' as const,
+                  entityId: trip.id,
+                  op: 'update' as const,
+                  status: 'queued' as const,
+                  attempts: 0,
+                  createdAt: now,
+                  updatedAt: now,
+                  payload: {
+                    sourceId: trip.sourceId || `trip_${trip.id}`,
+                    updatedAt: trip.updatedAt,
+                    itineraryRepair: true,
+                  },
+                })),
+              ];
+            }
+          }
           // Backfill sweep (ported from main v0.8.6): heal receipts that never reached
           // Supabase — created before cloud login, marked synced in the Notion-only era,
           // or whose queue item was dropped after MAX_RETRY_ATTEMPTS. After merge, anything

@@ -190,6 +190,8 @@ export interface TripProfile {
   currencies: string[];
   timezones: string[];
   version: number;
+  itineraryVersion?: number;
+  _itineraryNeedsRepair?: boolean;
   active: boolean;
   archived?: boolean;
   budget?: number;

@@ -20,7 +20,7 @@ import { AuthGate } from './security/AuthGate';
 import { HyperframeBackground } from './components/HyperframeBackground';
 import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, loadCurrencySnapshot, usableSnapshot, type CurrencySnapshot } from './lib/currency';
 import { AnimatePresence, motion } from 'motion/react';
-import { shouldDisableHeavyEffects } from './lib/performance';
+import { useEffectsTier } from './lib/performance';
 import { acceptSupabaseTripInvite, createSupabaseTripInvite, handleNativeAuthRedirectUrl, hasSupabaseSession, useSupabaseAuth } from './lib/supabase';
 import { SupabaseGate } from './security/SupabaseGate';
 import { clearIndexedState } from './storage/indexedDb';
@@ -620,11 +620,14 @@ export function App() {
     }, 150);
   };
 
-  const disableHeavy = shouldDisableHeavyEffects();
+  const fxTier = useEffectsTier();
 
+  // Motion Layer v2: full = desktop slide ±50 spring; balanced (phones) = shorter ±24
+  // transform/opacity-only slide with a snappier spring (≤250ms perceived); lite = instant swap.
+  const slideDistance = fxTier === 'full' ? 50 : 24;
   const slideVariants = {
     enter: (dir: number) => ({
-      x: disableHeavy ? 0 : (dir > 0 ? 50 : dir < 0 ? -50 : 0),
+      x: dir > 0 ? slideDistance : dir < 0 ? -slideDistance : 0,
       opacity: 0,
     }),
     center: {
@@ -632,10 +635,13 @@ export function App() {
       opacity: 1,
     },
     exit: (dir: number) => ({
-      x: disableHeavy ? 0 : (dir > 0 ? -50 : dir < 0 ? 50 : 0),
+      x: dir > 0 ? -slideDistance : dir < 0 ? slideDistance : 0,
       opacity: 0,
     }),
   };
+  const slideTransition = fxTier === 'full'
+    ? { x: { type: 'spring' as const, stiffness: 380, damping: 38, mass: 1 }, opacity: { duration: 0.15 } }
+    : { x: { type: 'spring' as const, stiffness: 420, damping: 42, mass: 0.9 }, opacity: { duration: 0.12 } };
 
   const appContent = (
     <TripThemeProvider state={state}>
@@ -662,59 +668,11 @@ export function App() {
       <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} updateState={updateState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)}>
         <ErrorBoundary key={safeTab}>
           <Suspense fallback={<TabSkeleton label="載入分頁" />}>
-            {disableHeavy ? (
-              <div className="w-full h-full">
-                {safeTab === 'dashboard' && <Dashboard state={state} setState={setState} updateState={updateState} onOpen={setEditing} onTab={changeTab} onManual={() => setEditing(null)} isWizardOpen={isNewTripWizardOpen} setIsWizardOpen={setIsNewTripWizardOpen} />}
-                {safeTab === 'scan' && (
-                  <Scan
-                    state={state}
-                    onManual={() => setEditing(null)}
-                    onDraft={setEditing}
-                    onImport={importReceipts}
-                    onPull={syncEngine.pull}
-                    cloudSyncAvailable={isCloudSyncActive}
-                    onBusyChange={setGlobalOcrBusy}
-                    batch={batch}
-                    setBatch={setBatch}
-                  />
-                )}
-                {safeTab === 'timeline' && <Timeline state={state} setState={setState} onOpen={setEditing} />}
-                {safeTab === 'history' && (
-                  <History
-                    state={state}
-                    setState={setState}
-                    updateState={updateState}
-                    onOpen={setEditing}
-                    onImport={importReceipts}
-                    onHydrate={importRemoteData}
-                    onConfirmPending={(receipt) => {
-                      const next = stampReceiptForTrip(state, { ...receipt, store: receipt.store.replace(/^⏳\s*/, ''), syncStatus: (isCloudSyncActive || canUseNotionMirror(state, false, userEmail)) ? 'queued' : 'local' });
-                      upsertReceipt(next);
-                    }}
-                    onPull={syncEngine.pull}
-                    cloudSyncAvailable={isCloudSyncActive}
-                  />
-                )}
-                {safeTab === 'weather' && <Weather state={state} />}
-                {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} upsertReceipt={upsertReceipt} deleteReceipt={deleteReceipt} />}
-                {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
-              </div>
-            ) : (
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={safeTab}
-                  custom={direction}
-                  variants={slideVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{
-                    x: { type: "spring", stiffness: 380, damping: 38, mass: 1 },
-                    opacity: { duration: 0.15 }
-                  }}
-                  className="w-full h-full will-change-transform"
-                  style={{ backfaceVisibility: 'hidden', transform: 'translate3d(0,0,0)' }}
-                >
+            {(() => {
+              // Single source of truth for tab content — previously duplicated verbatim in the
+              // animated and non-animated branches, which invited drift.
+              const tabContent = (
+                <>
                   {safeTab === 'dashboard' && <Dashboard state={state} setState={setState} updateState={updateState} onOpen={setEditing} onTab={changeTab} onManual={() => setEditing(null)} isWizardOpen={isNewTripWizardOpen} setIsWizardOpen={setIsNewTripWizardOpen} />}
                   {safeTab === 'scan' && (
                     <Scan
@@ -749,9 +707,29 @@ export function App() {
                   {safeTab === 'weather' && <Weather state={state} />}
                   {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} upsertReceipt={upsertReceipt} deleteReceipt={deleteReceipt} />}
                   {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
-                </motion.div>
-              </AnimatePresence>
-            )}
+                </>
+              );
+              if (fxTier === 'lite') {
+                return <div className="w-full h-full">{tabContent}</div>;
+              }
+              return (
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={safeTab}
+                    custom={direction}
+                    variants={slideVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={slideTransition}
+                    className="w-full h-full will-change-transform"
+                    style={{ backfaceVisibility: 'hidden', transform: 'translate3d(0,0,0)' }}
+                  >
+                    {tabContent}
+                  </motion.div>
+                </AnimatePresence>
+              );
+            })()}
           </Suspense>
           {editing !== undefined && (
         <ReceiptEditor

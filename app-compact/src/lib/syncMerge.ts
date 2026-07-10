@@ -136,15 +136,27 @@ export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
     const remoteUpdated = tripUpdatedAt(remoteTrip);
     const localUpdated = localTrip ? tripUpdatedAt(localTrip) : 0;
     const remoteHasMissingLink = localTrip
-      ? (!localTrip.notionPageId && !!remoteTrip.notionPageId) || (!localTrip.sourceId && !!remoteTrip.sourceId)
+      ? (!localTrip.supabaseId && !!remoteTrip.supabaseId)
+        || (!localTrip.notionPageId && !!remoteTrip.notionPageId)
+        || (!localTrip.sourceId && !!remoteTrip.sourceId)
       : true;
-    if (!localTrip || remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
+    if (!localTrip || remoteUpdated > localUpdated) {
       byId.set(remoteTrip.id, {
         ...localTrip,
         ...remoteTrip,
         itinerary: remoteTrip.itinerary?.length ? remoteTrip.itinerary : localTrip?.itinerary || remoteTrip.itinerary || [],
       });
-
+    } else if (remoteHasMissingLink || remoteTrip._itineraryNeedsRepair) {
+      byId.set(remoteTrip.id, {
+        ...localTrip,
+        supabaseId: remoteTrip.supabaseId || localTrip.supabaseId,
+        notionPageId: remoteTrip.notionPageId || localTrip.notionPageId,
+        sourceId: remoteTrip.sourceId || localTrip.sourceId,
+        sharing: remoteTrip.sharing || localTrip.sharing,
+        itineraryVersion: remoteTrip.itineraryVersion ?? localTrip.itineraryVersion,
+        _itineraryNeedsRepair: remoteTrip._itineraryNeedsRepair,
+        version: Math.max(localTrip.version || 1, remoteTrip.version || 1),
+      });
     }
   }
   return {

@@ -24,6 +24,7 @@ import {
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { GlassCard, Reveal, TickerMoney } from '../components/ui';
+import { BorderBeam } from '../components/ui/border-beam';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
 import { amountToHkd, currencyPrefix, formatCurrencyAmount } from '../lib/currency';
 import {
@@ -975,6 +976,8 @@ export function Dashboard({
       <div className="stack w-full relative z-10 preview-dashboard-grid">
       <Reveal className="dashboard-reveal">
       <GlassCard as="div" className="washi-budget-card dashboard-magic-budget preview-dashboard-budget relative overflow-hidden z-10">
+        {/* Hero card gets the travelling border light — the one place it reads as premium, not noise */}
+        <BorderBeam size={64} duration={9} borderWidth={1.5} colorFrom="#C23B5E" colorTo="#D4A843" />
         <div className="preview-dashboard-budget-head">
           <h2>預算總覽 <Info size={20} aria-hidden="true" /></h2>
           <div className="preview-dashboard-currency" role="group" aria-label="顯示貨幣">
