@@ -86,6 +86,7 @@ function makeEnv() {
     KIMI_API_BASE: 'https://kimi.test/v1',
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_PUBLISHABLE_KEY: 'test-supabase-publishable-key',
+    EDGE_BROKER_KEY: 'test-edge-broker-key-with-32-bytes-minimum',
     UNLOCK_MAX_FAILURES: '2',
     ADMIN_MAX_FAILURES: '2',
   };
@@ -95,11 +96,12 @@ function bearer(value) {
   return ['Bearer', value].join(' ');
 }
 
-function request(path, { method = 'GET', session, supabaseToken, body, origin = ORIGIN } = {}) {
+function request(path, { method = 'GET', session, supabaseToken, internalKey, body, origin = ORIGIN } = {}) {
   const headers = new Headers();
   if (origin) headers.set('Origin', origin);
   if (session) headers.set('X-Travel-Session', session);
   if (supabaseToken) headers.set('X-Supabase-Auth', bearer(supabaseToken));
+  if (internalKey) headers.set('X-Admin-Internal', internalKey);
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   return new Request(`https://broker.test${path}`, {
     method,
@@ -432,6 +434,25 @@ async function run() {
     assert.equal(malformedSession.response.status, 401);
     assert.equal(malformedSession.data.error, 'Session invalid');
 
+    const internalStatus = await jsonFetch(env, '/credentials/status', {
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+    });
+    assert.equal(internalStatus.response.status, 200);
+    assert.equal(internalStatus.data.ok, true);
+
+    const wrongInternalStatus = await jsonFetch(env, '/credentials/status', {
+      internalKey: 'wrong-edge-key-with-32-bytes-minimum',
+      origin: 'https://travel-expense-compact.vercel.app',
+    });
+    assert.equal(wrongInternalStatus.response.status, 401);
+
+    const internalCannotBypassArbitraryRoute = await jsonFetch(env, '/session/devices', {
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: trustedOrigin,
+    });
+    assert.equal(internalCannotBypassArbitraryRoute.response.status, 401);
+
     const notionRotate = await jsonFetch(env, '/credentials/rotate', {
       method: 'POST',
       session,
@@ -452,6 +473,15 @@ async function run() {
     });
     assert.equal(notion.response.status, 200);
     assert.equal(notion.data.data.id, 'page-1');
+
+    const internalNotion = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: { path: '/pages', method: 'POST', body: { parent: {}, properties: {} } },
+    });
+    assert.equal(internalNotion.response.status, 200);
+    assert.equal(internalNotion.data.data.id, 'page-1');
 
     const personalMissing = await jsonFetch(env, '/integrations/notion/status', {
       supabaseToken: 'supabase-user-token',

@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.87.0";
+import { classifyBrokerOnlyStatus, classifyProviderStatus, providerProbeSucceeded } from "./provider_status.ts";
+import { evaluateAdminRequest, type AdminRequestDecision } from "./security.ts";
 
 export const config = { verify_jwt: false };
 
@@ -91,26 +93,22 @@ async function readBody(req: Request) {
 async function verifyAdmin(req: Request): Promise<string> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://fbnnjoahvtdrnigevrtw.supabase.co";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  const adminToken = Deno.env.get("ADMIN_TOKEN") || "";
-
-  // Path 0: Custom admin token via X-Admin-Token header (check FIRST, before Authorization)
   const adminHeader = req.headers.get("x-admin-token") || "";
-  if (adminToken && adminHeader === adminToken) {
-    return "admin-token";
-  }
 
-  // Path 0.5: HMAC session token via X-Admin-Token header
-  if (adminHeader && adminHeader !== adminToken) {
+  // Transitional read-only HMAC session path. The verifier must explicitly
+  // affirm the session; an empty 200 response is never authorization.
+  if (adminHeader) {
     try {
       const verifyRes = await fetch(VERIFY_URL, {
         method: "POST",
         headers: { Authorization: `Bearer ${adminHeader}` },
       });
       const verifyData = await verifyRes.json().catch(() => ({}));
-      if (verifyRes.ok && verifyData?.ok !== false) {
+      if (verifyRes.ok && verifyData?.ok === true && verifyData?.adminSubject) {
         return String(verifyData.adminSubject || "hmac-admin");
       }
-    } catch { /* fall through */ }
+    } catch { /* handled below */ }
+    throw new Error("Admin session invalid");
   }
 
   // Now check Authorization header
@@ -324,7 +322,7 @@ async function brokerHealth(supabase: SupabaseClientAny) {
     const statusRes = await fetchWithTimeout(`${baseUrl}/credentials/status`, {
       headers: {
         'Origin': 'https://travel-expense-compact.vercel.app',
-        'X-Admin-Internal': Deno.env.get('ADMIN_TOKEN') || '',
+        'X-Admin-Internal': Deno.env.get('EDGE_BROKER_KEY') || '',
       },
     }, 5000);
     if (!statusRes.ok) throw new Error(`broker status ${statusRes.status}`);
@@ -370,13 +368,11 @@ async function brokerHealth(supabase: SupabaseClientAny) {
       const provider = p.provider || p.name || "";
       // Expand provider into individual model entries
       const models = providerModels(provider);
-      // hasKey alone is not health — an invalid/expired key must show as warning
-      const connected = p.status === "connected" || p.status === "healthy";
+      const classified = classifyProviderStatus(p);
       return models.map((modelEntry: any) => ({
         provider,
         label: p.label || providerLabel(provider),
-        status: connected ? "healthy" : p.hasKey ? "warning" : "danger",
-        storedStatus: p.status || (p.hasKey ? "connected" : "missing"),
+        ...classified,
         model: modelEntry.id,
         modelName: modelEntry.name,
         lastTestedAt: p.lastTestedAt || p.last_tested_at || null,
@@ -391,11 +387,11 @@ async function brokerHealth(supabase: SupabaseClientAny) {
       return fallback.map((provider) => ({
         provider,
         label: providerLabel(provider),
-        status: "healthy",
-        storedStatus: "broker_online",
+        ...classifyBrokerOnlyStatus(),
         model: providerModel(provider),
         lastTestedAt: null,
         errors24h: 0,
+        message: "Broker is online; provider health was not verified",
       }));
     } catch (error) {
       const fallback = ["notion", "kimi", "google", "weatherapi", "mimo"];
@@ -418,7 +414,7 @@ async function brokerNotionRequest(path: string, method: string, body?: unknown,
     headers: {
       "Content-Type": "application/json",
       "Origin": "https://travel-expense-compact.vercel.app",
-      "X-Admin-Internal": Deno.env.get("ADMIN_TOKEN") || "",
+      "X-Admin-Internal": Deno.env.get("EDGE_BROKER_KEY") || "",
     },
     body: JSON.stringify({ path, method, body, databaseId }),
   }, 15000);
@@ -769,6 +765,42 @@ async function writeAudit(supabase: SupabaseClientAny, entry: Record<string, any
   if (error) throw new Error("Admin audit write failed; delete operation blocked for safety");
 }
 
+async function recordRejectedAdminRequest(
+  req: Request,
+  decision: Extract<AdminRequestDecision, { allowed: false }>,
+) {
+  const event = {
+    event: "admin_security_event",
+    code: decision.code,
+    method: req.method.toUpperCase(),
+    route: decision.route || "invalid",
+    requestId: decision.requestId,
+    writeMode: decision.writeMode,
+  };
+  console.warn(JSON.stringify(event));
+
+  try {
+    const supabase = serviceClient();
+    const { error } = await supabase.from("admin_audit_events").insert({
+      admin_subject_hash: await hashId("unauthenticated"),
+      action: "admin_request_denied",
+      target_type: "admin_route",
+      target_id_hash: await hashId(`${event.method}:${event.route}`),
+      request_id: event.requestId,
+      preview_counts: null,
+      result: {
+        code: event.code,
+        method: event.method,
+        route: event.route,
+        writeMode: event.writeMode,
+      },
+    });
+    if (error) console.error(JSON.stringify({ event: "admin_security_event_store_failed", requestId: event.requestId }));
+  } catch {
+    console.error(JSON.stringify({ event: "admin_security_event_store_failed", requestId: event.requestId }));
+  }
+}
+
 async function deleteUser(userId: string, confirmPhrase: string, adminPassphrase: string, adminSubject: string) {
   await verifyPassphrase(adminPassphrase);
   const preview = await deletePreview(userId);
@@ -819,6 +851,26 @@ async function deleteUser(userId: string, confirmPhrase: string, adminPassphrase
 }
 
 Deno.serve(async (req) => {
+  const requestDecision = evaluateAdminRequest(req);
+  if (!requestDecision.allowed) {
+    await recordRejectedAdminRequest(req, requestDecision);
+    return json(req, requestDecision.status, {
+      ok: false,
+      data: null,
+      error: {
+        code: requestDecision.code,
+        message: requestDecision.code === "ADMIN_WRITES_DISABLED"
+          ? "Admin writes are disabled during maintenance"
+          : "Admin route is not available",
+        retryable: false,
+      },
+      meta: {
+        requestId: requestDecision.requestId,
+        generatedAt: new Date().toISOString(),
+        warnings: [],
+      },
+    });
+  }
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(req) });
   try {
     const adminSubject = await verifyAdmin(req);
@@ -1225,7 +1277,7 @@ Deno.serve(async (req) => {
     }
     if (req.method === "GET" && url.pathname.endsWith("/api/config-health")) {
       const required = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
-      const optional = ["ADMIN_TOKEN", "ADMIN_CONSOLE_OWNER_EMAILS", "CREDENTIAL_BROKER_URL", "ADMIN_KANBAN_VERIFY_URL", "ADMIN_KANBAN_LOGIN_URL", "ADMIN_KANBAN_USAGE_USER_ID"];
+      const optional = ["EDGE_BROKER_KEY", "ADMIN_CONSOLE_OWNER_EMAILS", "CREDENTIAL_BROKER_URL", "ADMIN_KANBAN_VERIFY_URL", "ADMIN_KANBAN_LOGIN_URL", "ADMIN_KANBAN_USAGE_USER_ID"];
       const configured: string[] = [];
       const missing: string[] = [];
       const configWarnings: string[] = [];
@@ -1349,14 +1401,15 @@ Deno.serve(async (req) => {
         headers: {
           'Content-Type': 'application/json',
           'Origin': 'https://travel-expense-compact.vercel.app',
-          'X-Admin-Internal': Deno.env.get('ADMIN_TOKEN') || '',
+          'X-Admin-Internal': Deno.env.get('EDGE_BROKER_KEY') || '',
         },
         body: JSON.stringify({ provider }),
       });
       const testData = await testRes.json().catch(() => ({ ok: false, error: "broker returned non-JSON" }));
       // Store test result in app_usage_events for persistence
-      const testStatus = testData.status?.status || (testRes.ok ? "connected" : "error");
+      const testStatus = testData.status?.status || (testRes.ok ? "unknown" : "error");
       const testMessage = testData.status?.message || testData.error || "";
+      const probeSucceeded = providerProbeSucceeded(testRes.status, testData);
       try {
         const supabase = serviceClient();
         const usageUserId = Deno.env.get("ADMIN_KANBAN_USAGE_USER_ID") || "";
@@ -1366,7 +1419,7 @@ Deno.serve(async (req) => {
             session_id_hash: "admin-console-test",
             event_name: `provider_test_${provider}`,
             provider,
-            outcome: testStatus === "connected" ? "success" : "error",
+            outcome: probeSucceeded ? "success" : "error",
             metadata: { status: testStatus, message: testMessage },
             app_surface: "admin-kanban",
           });
@@ -1374,7 +1427,12 @@ Deno.serve(async (req) => {
       } catch (e) { console.warn("Failed to store test result:", e); }
       // Also cache in memory for this instance
       providerTestCache.set(provider, { status: testStatus, message: testMessage, testedAt: Date.now() });
-      return json(req, testRes.ok ? 200 : testRes.status, { ok: testRes.ok, provider, ...testData });
+      return json(req, probeSucceeded ? 200 : (testRes.ok ? 502 : testRes.status), {
+        ok: probeSucceeded,
+        provider,
+        status: testData.status || { status: testStatus, message: testMessage },
+        error: probeSucceeded ? null : (testMessage || `Provider probe failed with status ${testStatus}`),
+      });
     }
     // --- Action Framework ---
     if (req.method === "POST" && url.pathname.endsWith("/api/actions/preview")) {

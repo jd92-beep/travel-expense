@@ -141,6 +141,18 @@ function constantTimeEqual(a, b) {
   return diff === 0;
 }
 
+async function isEdgeBrokerRequest(request, env) {
+  const expected = String(env.EDGE_BROKER_KEY || '');
+  const provided = String(request.headers.get('X-Admin-Internal') || '');
+  if (expected.length < 32 || !provided) return false;
+  const encoder = new TextEncoder();
+  const [expectedHash, providedHash] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(expected)),
+    crypto.subtle.digest('SHA-256', encoder.encode(provided)),
+  ]);
+  return constantTimeEqual(new Uint8Array(expectedHash), new Uint8Array(providedHash));
+}
+
 async function hmacKey(secret) {
   return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
@@ -1305,6 +1317,7 @@ async function handleRequest(request, env) {
       return json({ ok: true, service: SERVICE, version: VERSION }, 200, cors);
     }
     enforceAllowedOrigin(request, env);
+    const edgeBrokerRequest = await isEdgeBrokerRequest(request, env);
     if (url.pathname === '/session/unlock') {
       const rateKey = await enforceRateLimit(request, env, 'unlock');
       const body = await readJson(request);
@@ -1349,10 +1362,8 @@ async function handleRequest(request, env) {
       return json({ ok: true, status: result }, 200, cors);
     }
     if (url.pathname === '/notion/request') {
-      // Server-to-server: admin-kanban Edge Function reconciler calls with X-Admin-Internal
-      const internalNotionCall = request.headers.get('X-Admin-Internal') === env.ADMIN_TOKEN;
-      const user = internalNotionCall ? null : await optionalSupabaseUser(request, env);
-      if (!user && !internalNotionCall) await verifySession(request.headers.get(SESSION_HEADER), env);
+      const user = edgeBrokerRequest ? null : await optionalSupabaseUser(request, env);
+      if (!user && !edgeBrokerRequest) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
       const data = await fetchNotion(env, body.path, body.method, body.body, body.databaseId, user);
       return json({ ok: true, data }, 200, cors);
@@ -1408,9 +1419,8 @@ async function handleRequest(request, env) {
       return json({ ok: true, data: await weatherApiForecast(env, body) }, 200, cors);
     }
 
-    // Server-to-server auth bypass (Edge Function internal calls)
-    const isInternalCall = request.headers.get('X-Admin-Internal') === env.ADMIN_TOKEN;
-    if (!isInternalCall) {
+    const edgeBrokerRoute = url.pathname === '/credentials/status' || url.pathname === '/credentials/test';
+    if (!(edgeBrokerRequest && edgeBrokerRoute)) {
       const user = await optionalSupabaseUser(request, env);
       if (!user) {
         await verifySession(request.headers.get(SESSION_HEADER), env);
