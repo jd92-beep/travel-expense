@@ -37,6 +37,7 @@ graphify-out/
 # React uses the server-side Credential Broker instead of browser keys.
 secrets.local.js
 .gitnexus
+.worktrees/
 
 # Local Netlify folder
 .netlify
