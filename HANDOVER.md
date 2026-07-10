@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-07
-- **Focus**: Admin Console Upgrade: version bump to 0.8.0, monolithic App.tsx split to 15 modular components, 5 new tabs implemented, puiyuchau@gmail.com 0-receipt bug fixed.
-- **Agent**: Antigravity / Teamwork Orchestrator
-- **App version**: Compact `0.13.1` (main); Android branch `0.16.0` (versionCode 1600); Admin Console `0.8.0`; React unchanged in this pass
+- **Date**: 2026-07-10 HKT
+- **Focus**: Admin 1.0 Task 0/1 preservation and emergency containment. Production Edge writes are fail-closed, exposed admin tables/RPCs are browser-denied, machine keys were rotated, provider false-green fallback was removed, adjacent `SECURITY DEFINER` grants were hardened, and Compact/Android private-photo compatibility was prepared.
+- **Agent**: Codex
+- **App version**: Compact `0.13.6`; Android compatibility branch `0.16.4` (versionCode 1604); Admin Console `0.8.1`; React unchanged in this pass
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.13.1` (android branch `0.16.0`).
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact is currently at `0.13.6` (Android compatibility branch `0.16.4`).
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -27,7 +27,7 @@ you closed with your session number.
    `supabase/migrations/`, and repo migrations are unrecorded. **No `db push`, no blind
    `migration repair`.** Reconcile via `supabase db pull` on a branch, diff, then decide.
    Interim: single idempotent statements via the Management API. (Standing since ~Session 18;
-   still the active workaround in Session 40.)
+   still the active workaround in Session 42.)
 2. 🟠 **Notion outbox worker not deployed** — shared-trip receipt sync enqueues
    `receipt_sync_jobs`, but no worker / Trip Ledger Broker consumes them yet, so shared receipts
    can sit "Notion pending" indefinitely. (See the shared-ledger session entry below.)
@@ -35,15 +35,66 @@ you closed with your session number.
    conflict-resolver test (both branches); android final-nav sync-error-indicator test. (Session 40.)
 4. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-5. 🟡 **Shared receipt photos use public URLs** — planned upgrade is signed URLs scoped by
-   `receipt_photos` RLS. (Old Pending list; unaddressed as of Session 40.)
+5. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — Compact `0.13.6` and Android
+   `0.16.4` now use 15-minute signed URLs, and the Admin Edge photo endpoint uses a 60-second signed
+   URL with no public fallback. The tracked private-bucket migration is intentionally **not live**
+   until both clients are deployed and active compatibility is confirmed. (Session 42.)
 6. 🟡 **Compact Netlify deploy blocked** by hosting account credits (durable until topped up).
 7. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
    unused `hkd` imports in History/Stats. (Old Pending list.)
 8. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
    settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
+9. 🔴 **Admin production auth boundary is not complete** — production is safely read-only, but the
+   browser still uses the transitional bearer/session path. Opaque HttpOnly sessions, passkey second
+   factor, CSRF, durable rate limits and signed fixed-route BFF remain Task 3 before Admin 1.0.
+10. 🟠 **Admin DB ownership hardening needs a platform-owner operation** — browser grants, policies
+    and RPC execute are closed, and `search_path` is fixed. The managed SQL API cannot transfer the
+    helper function to the planned non-login owner, so this remains a documented go-live blocker.
 
 ## What Was Done
+
+### Session 42 (Codex — Admin 1.0 Tasks 0/1)
+
+1. **Preserved concurrent work**:
+   - Recorded dirty-worktree status/checksums and stored an external patch plus untracked archive in
+     `/tmp`; created isolated worktrees/branches without reverting Oscar or Boss changes.
+   - Rebuilt the GitNexus runner/index and reviewed Oscar's changes individually. Unsafe old-auth,
+     false-green and hardcoded-FX pieces were not copied blindly.
+2. **Production write containment**:
+   - Edge `ADMIN_WRITE_MODE` defaults and unknown values to `deny_all`; every mutation and external
+     side effect is rejected before auth/route dispatch with `503 ADMIN_WRITES_DISABLED` and a
+     request ID. Only a fixed GET route map remains readable.
+   - Live unauthenticated mutation smoke returned the expected `503`; Deno tests: `10 passed`.
+3. **Admin DB exposure closed**:
+   - Live policies/grants for `admin_action_requests`, `admin_console_config` and
+     `admin_identity_links` are now `service_role` only; browser execute on
+     `admin_kanban_rls_state()` is revoked and its `search_path` is empty.
+   - Real anon table GET/POST/PATCH/DELETE and RPC calls returned `401/42501`; SQL privilege smoke
+     returned `admin_console_privilege_smoke_passed`. Before/after reports and fingerprints are in
+     `/tmp/admin-console-*20260710.json`.
+4. **Credential/provider containment**:
+   - Rotated the exposed Edge-to-Broker key without printing or persisting it, deployed both sides,
+     verified the scoped route, removed the old `ADMIN_TOKEN` bindings, and confirmed current-tree
+     secret scans are clean. Historical Git commits still contain the old name/value and must not be
+     restored as rollback.
+   - Provider normalization now separates Configured from Healthy; broker liveness cannot paint all
+     providers green, and HTTP 200 with invalid provider status fails the probe.
+5. **Adjacent security hardening**:
+   - Live anon execute is revoked from `delete_own_user_account`, `trip_member_display_names` and
+     `trip_member_role_rank`; all three use `search_path=''`. Live smoke returned
+     `adjacent_security_privilege_smoke_passed`.
+   - Compact `0.13.6` and Android `0.16.4` use signed receipt-photo URLs. Android branch commit
+     `d294648` is pushed as `origin/codex/admin-console-1.0-android`; Android QA passed with verified
+     App Links. The private-bucket migration remains unapplied pending the compatibility gate.
+6. **Verification**:
+   - Admin: `npm ci --ignore-scripts`, `typecheck`, build and `npm audit` all green.
+   - Compact: `typecheck`, build, `security:scan`, `db:policy:scan`, and signed-photo backfill smoke
+     `1/1` green.
+   - Edge: containment verifier green; Deno unit tests `10/10`; focused Deno format checks green.
+   - Broker: `npm run check` and `npm run self-test` green. Current admin source secret scan green.
+7. **Do not claim Admin 1.0 complete**: production remains intentionally read-only. Migration
+   reconciliation, new auth/BFF, paginated read API, five-workspace UI, full canonical contracts and
+   verified R2 operations remain open in the accepted plan.
 
 ### Session 41 (Antigravity / Teamwork Orchestrator)
 

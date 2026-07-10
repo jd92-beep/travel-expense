@@ -12,6 +12,8 @@ const files = [
   'supabase/migrations/20260612165000_shared_ledger_receipt_rpc.sql',
   'supabase/migrations/20260613000000_receipt_photo_storage.sql',
   'supabase/migrations/20260613001000_harden_shared_invites_and_receipt_versions.sql',
+  'supabase/migrations/20260710160000_harden_remaining_security_definers.sql',
+  'supabase/migrations/20260710161000_private_receipt_photo_storage.sql',
 ];
 
 const sql = files
@@ -126,6 +128,22 @@ const requiredPatterns = [
   {
     name: 'receipt photo storage bucket migration is idempotent',
     re: /insert into storage\.buckets[\s\S]*?on conflict \(id\) do nothing[\s\S]*?drop policy if exists "receipt_photos_upload_own" on storage\.objects/i,
+  },
+  {
+    name: 'receipt photo storage bucket is made private',
+    re: /update storage\.buckets[\s\S]*?set public = false[\s\S]*?where id = 'receipt-photos'/i,
+  },
+  {
+    name: 'receipt photo public storage reads are removed',
+    re: /drop policy if exists "receipt_photos_public_read" on storage\.objects/i,
+  },
+  {
+    name: 'receipt photo storage reads require authenticated trip access',
+    re: /create policy "receipt_photos_read_trip_members"[\s\S]*?on storage\.objects for select to authenticated[\s\S]*?private\.can_access_trip\(r\.trip_id\)/i,
+  },
+  {
+    name: 'adjacent security definer functions deny anonymous execute',
+    re: /revoke execute on function public\.delete_own_user_account\(\) from public, anon[\s\S]*?revoke execute on function public\.trip_member_display_names\(uuid\[\]\) from public, anon/i,
   },
   {
     name: 'shared ledger receipt delete only deletes receipts owned by current user',

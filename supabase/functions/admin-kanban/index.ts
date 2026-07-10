@@ -1260,10 +1260,14 @@ Deno.serve(async (req) => {
       const photoRow = (photoRows || [])[0];
       if (photoErr || !photoRow?.storage_path) throw new Error("Receipt photo not found");
       const bucket = photoRow.storage_bucket || "receipt-photos";
-      // Signed URL works whether or not the bucket is public
-      const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(photoRow.storage_path, 3600);
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://fbnnjoahvtdrnigevrtw.supabase.co";
-      const photoUrl = signed?.signedUrl || `${supabaseUrl}/storage/v1/object/public/${bucket}/${photoRow.storage_path}`;
+      const { data: signed, error: signedError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(photoRow.storage_path, 60);
+      if (signedError || !signed?.signedUrl) {
+        const error = new Error("Receipt photo signing unavailable") as Error & { status?: number };
+        error.status = 502;
+        throw error;
+      }
       await writeAudit(supabase, {
         adminSubject,
         action: "view_receipt_photo",
@@ -1273,7 +1277,7 @@ Deno.serve(async (req) => {
         previewCounts: {},
         result: { viewed: true },
       }).catch(() => {});
-      return json(req, 200, { ok: true, url: photoUrl });
+      return json(req, 200, { ok: true, url: signed.signedUrl });
     }
     if (req.method === "GET" && url.pathname.endsWith("/api/config-health")) {
       const required = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];

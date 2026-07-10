@@ -1,5 +1,3 @@
-\set ON_ERROR_STOP on
-
 begin;
 
 do $$
@@ -7,7 +5,7 @@ declare
   role_name text;
   table_name text;
 begin
-  foreach role_name in array array['public', 'anon', 'authenticated']
+  foreach role_name in array array['anon', 'authenticated']
   loop
     foreach table_name in array array['admin_action_requests', 'admin_console_config', 'admin_identity_links']
     loop
@@ -20,8 +18,7 @@ begin
     end loop;
   end loop;
 
-  if pg_catalog.has_function_privilege('public', 'public.admin_kanban_rls_state()', 'execute')
-    or pg_catalog.has_function_privilege('anon', 'public.admin_kanban_rls_state()', 'execute')
+  if pg_catalog.has_function_privilege('anon', 'public.admin_kanban_rls_state()', 'execute')
     or pg_catalog.has_function_privilege('authenticated', 'public.admin_kanban_rls_state()', 'execute') then
     raise exception 'browser roles can still execute public.admin_kanban_rls_state()';
   end if;

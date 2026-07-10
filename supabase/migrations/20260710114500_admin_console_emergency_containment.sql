@@ -6,16 +6,8 @@ set local statement_timeout = '30s';
 
 create schema if not exists private;
 
-do $$
-begin
-  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'admin_console_owner') then
-    create role admin_console_owner nologin noinherit;
-  end if;
-end
-$$;
-
 revoke all on schema private from public, anon, authenticated;
-grant usage on schema private to service_role, admin_console_owner;
+grant usage on schema private to service_role;
 
 alter table public.admin_action_requests enable row level security;
 alter table public.admin_action_requests force row level security;
@@ -164,11 +156,9 @@ as $$
   order by relation.relname;
 $$;
 
-grant usage, create on schema public to admin_console_owner;
-alter function public.admin_kanban_rls_state() owner to admin_console_owner;
-revoke create on schema public from admin_console_owner;
-grant usage on schema public to admin_console_owner;
-
+-- The managed SQL API cannot SET ROLE to a newly-created NOLOGIN owner.
+-- Ownership transfer is therefore a separate platform-owner operation; the
+-- emergency transaction still fixes search_path and all browser EXECUTE grants.
 revoke execute on function public.admin_kanban_rls_state() from public, anon, authenticated;
 grant execute on function public.admin_kanban_rls_state() to service_role;
 
@@ -200,10 +190,5 @@ begin
   end loop;
 end
 $$;
-
-alter default privileges for role admin_console_owner in schema private
-  revoke all on tables from public, anon, authenticated;
-alter default privileges for role admin_console_owner in schema private
-  revoke execute on functions from public, anon, authenticated;
 
 commit;

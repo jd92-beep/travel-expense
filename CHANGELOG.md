@@ -37,7 +37,28 @@
   - **Micro-interactions**: BorderBeam travelling light on the Dashboard hero budget card; History ledger rows stagger-rise (first 12 only); subtle washi-palette confetti on Scan batch save (`canvas-confetti`, reduced-motion aware, lite skips); press-dip on rows/chips.
   - **Cleanup**: deleted dead `ui/timeline.tsx`, `ui/file-upload.tsx`, `ui/confetti.tsx` (0 importers).
   - **Verified**: keyframe property audit 100% compositor-safe; typecheck + `npm run build` clean; smokes green — weather 14, final-nav 7, dashboard 8, history 8, timeline 9, settings 9, privacy 3, scan/stats/six-person/mobile-layout/a11y-touch/offline/session/sync-classify all pass. `smoke:welcome-guide` fails on pre-Motion-v2 HEAD too (stash-bisected, pre-existing) — flagged as a separate task.
+## 2026-07-10
 
+- **Admin Console 0.8.1 emergency containment / Compact 0.13.6**:
+  - Production Admin Edge is read-only by default. All mutations and external side effects now fail
+    before route dispatch with `503 ADMIN_WRITES_DISABLED`; hidden buttons or direct Edge requests
+    cannot bypass the kill switch.
+  - Removed permissive browser policies/grants from the three admin state tables and denied anon or
+    authenticated execution of the admin RLS helper. Real PostgREST/RPC denial smokes and SQL
+    privilege reports passed against live Supabase.
+  - Rotated the exposed Edge-to-Broker machine key, removed the old static `ADMIN_TOKEN` path and
+    bindings, and limited Broker internal authentication to fixed scoped routes.
+  - Provider health now separates Configured from Healthy. Broker liveness and HTTP 200 with an
+    invalid nested status can no longer paint providers green.
+  - Hardened adjacent browser-executable functions: anon execute revoked and `search_path=''` for
+    account deletion, trip-member display names and member-role ranking.
+  - Compact receipt-photo upload/pull now uses 15-minute signed URLs; the Admin Edge photo route uses
+    60-second signed URLs and fails closed if signing is unavailable. Android `0.16.4` has the same
+    compatibility change on `codex/admin-console-1.0-android`.
+  - Added a tracked private `receipt-photos` bucket migration with authenticated trip-member Storage
+    RLS. It is intentionally not live until Compact and Android compatibility deployment is proven.
+  - Verification: Admin typecheck/build/audit green; Compact typecheck/build/security/policy scan and
+    signed-photo smoke green; Edge 10/10 Deno tests; Broker check/self-test green.
 ## 2026-07-08
 
 - **Compact App 0.13.5 No False "Sync Error" On Cold Boot (main) / Android 0.16.3**:

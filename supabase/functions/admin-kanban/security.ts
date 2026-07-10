@@ -21,8 +21,7 @@ type RejectedAdminRequest = {
 
 export type AdminRequestDecision = AllowedAdminRequest | RejectedAdminRequest;
 
-const SAFE_REQUEST_ID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SAFE_REQUEST_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const READ_ROUTE_MAP: ReadonlyArray<RegExp> = [
   /^\/api\/snapshot$/,
@@ -109,16 +108,14 @@ export function evaluateAdminRequest(
   }
 
   if (method === "GET") {
-    return matchesRoute(route, READ_ROUTE_MAP)
-      ? { allowed: true, requestId, route, writeMode }
-      : {
-        allowed: false,
-        requestId,
-        route,
-        writeMode,
-        status: 404,
-        code: "ADMIN_ROUTE_NOT_ALLOWED",
-      };
+    return matchesRoute(route, READ_ROUTE_MAP) ? { allowed: true, requestId, route, writeMode } : {
+      allowed: false,
+      requestId,
+      route,
+      writeMode,
+      status: 404,
+      code: "ADMIN_ROUTE_NOT_ALLOWED",
+    };
   }
 
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) {

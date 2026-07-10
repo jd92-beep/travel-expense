@@ -1,54 +1,111 @@
-# Admin Kanban / User Dashboard Handover
+# Travel Expense Admin Console Handover
 
-## ⚠️ 2026-07-02 — Deployment is MANUAL, not git-triggered
-Vercel deploys for this app are done by CLI (`npx vercel deploy --prod --yes` from `app-admin-kanban/`), NOT by git push. Production went stale from Jun 10 → Jul 2 because nobody ran it after the Phase 1 / Phases 2-7 commits — that was the "console functions not working" incident. **After any admin-console change: (1) `npx supabase functions deploy admin-kanban --no-verify-jwt --project-ref fbnnjoahvtdrnigevrtw`, (2) `npx vercel deploy --prod --yes`.** Verify with `GET /api/health` (Vercel) and `GET /api/runtime` (edge, needs admin token) — Runtime tab shows both.
+Last updated: 2026-07-10 HKT
 
-**v0.6.0 (2026-07-02):** receipts grouped by date with day totals; full-field amend (date/time/category/payment/original amount/fx/items/note/address/booking ref, server-validated); photo viewing fixed (signed URLs, no-photo icon no longer opens details); Identity tab one-click Merge (reassign_data); new 對數 tab `/api/reconcile` compares Supabase vs Notion mirror per trip (broker `/notion/request` now accepts `X-Admin-Internal` for server-to-server). **Deploy is now one command: `npm run deploy`** (typecheck + smoke + `vercel deploy --prod --yes`) — still remember to `npx supabase functions deploy admin-kanban --no-verify-jwt` when the edge changed, and `npx wrangler deploy` from `workers/credential-broker` when the broker changed.
+## Current Status
 
-v0.5.0 fixes: `/api/runtime` crash (`.single().catch()` on PostgrestBuilder), LLM provider status no longer reports "healthy" on hasKey alone (invalid keys now show warning), new unauthenticated `/api/health` Vercel probe, Runtime tab shows Vercel/broker health, smoke tests for Runtime/Sync/Doctor tabs. Known config gap: `ADMIN_KANBAN_USAGE_USER_ID` edge secret unset → provider-test telemetry not persisted (in-memory only per edge instance).
+- Production URL: `https://travel-expense-admin-kanban.vercel.app`
+- Current transitional frontend: `0.8.1`
+- Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
+- Production mode: **read-only containment**. Edge mutations and provider probes are backend-denied.
+- Admin 1.0 is **not production-complete**. The current UI and bearer/session architecture are being
+  replaced by the accepted Admin 1.0 plan.
 
-This file details the handover status of the `app-admin-kanban` directory after its transition from a Kanban layout to a User-Centric Dashboard.
+Never put the passphrase, session token, Supabase keys, Broker keys or credential values in this
+file, source control, screenshots, support bundles or chat output.
 
-Last updated: 2026-06-03
+## Security Boundary
 
-## 🎯 Project Overview
-The admin panel was originally styled as a Kanban board, which was deemed non-user-friendly. It has been redesigned into a split-pane **User-centric Dashboard** showing:
-1. **Universal Health Checks** (LLM routing, Frontend, Backend, Database connection status).
-2. **User Details Panel** triggered by clicking a user from the left-side list, exposing:
-   - **Connection Status**: Supabase and Notion connection indicators.
-   - **Statistics & Records**: Count of trips, receipts, and receipt photos/images.
-   - **Detailed Lists**: Active trip profiles, recent sync jobs, recent expense records.
-   - **Guarded Admin Delete**: preview counts, exact confirm phrase, and admin re-auth before destructive user deletion.
+Current containment:
 
-## 🛠️ Files Changed & Pushed
-The following files were modified by the Antigravity dashboard pass and then continued by Codex:
-* `app-admin-kanban/src/App.tsx`: Rewrote UI to a dashboard split-pane layout with Universal Health & UserDetailsPanel.
-* `app-admin-kanban/src/lib/types.ts`: Extended `AdminUserCard` interface to include `imageCount`.
-* `app-admin-kanban/src/styles.css`: Appended styles for the new dashboard components (universal-health, user-details-panel, connection-status, lists).
-* `supabase/functions/admin-kanban/index.ts`: Updated the Edge function snapshot query to count images by grouping `receipt_photos` by `owner_id`.
-* `app-admin-kanban/playwright.config.cjs`: Added a standalone Playwright web server so `npm run smoke` starts Vite automatically.
+1. `ADMIN_WRITE_MODE` defaults and unknown values to `deny_all`.
+2. Only the fixed Edge GET `READ_ROUTE_MAP` is reachable.
+3. POST/PUT/PATCH/DELETE and external side effects return `503 ADMIN_WRITES_DISABLED` with a request
+   ID before legacy route code can execute.
+4. `admin_action_requests`, `admin_console_config` and `admin_identity_links` have service-role-only
+   policies/grants. Anon and normal authenticated roles cannot CRUD them or execute the admin RLS
+   helper.
+5. The old `ADMIN_TOKEN` path and generic Broker bypass are removed. Edge-to-Broker requests use a
+   rotated scoped key and fixed route allowlist.
+6. Receipt photos are served through short-lived signed URLs. The Admin endpoint has no public URL
+   fallback.
 
-## 📍 Current Runtime Status
-1. **Frontend Local Build**: `npm run typecheck`, `npm run build`, and `npm run smoke` pass from `app-admin-kanban/`.
-2. **Supabase Edge Function Deployment**: Deployed through the Supabase connector as `admin-kanban` version 4 with `verify_jwt=false`; custom auth is still enforced by calling the Vercel admin session verifier.
-3. **Live Edge Snapshot**: Authenticated snapshot returned `HTTP 200`, `source=live-edge`, `authUsers=3`, `profiles=3`, `trips=1`, `receipts=0`, and per-user `imageCount` fields.
-4. **Environment**: Local secrets remain in `.env.admin-kanban.local` and are gitignored. Do not print the admin passphrase or Supabase tokens in chat.
+Known auth gap before Admin 1.0:
 
-## 🚀 Status & Next Steps
+- The browser still uses a transitional passphrase-to-bearer session and connects directly to Edge.
+- Opaque HttpOnly sessions, passkey second factor, CSRF, durable rate limiting and the signed
+  same-origin BFF are Task 3 and remain mandatory before enabling writes.
+- New browser startup must delete the old `sessionStorage` bearer when Task 3 lands.
 
-### Kanban Polish & Features Complete
-Antigravity has just finished building out the requested features:
-1. **Unmasked Emails**: The Edge Function and UI now return and display full email addresses instead of masked ones.
-2. **Photo Viewer**: A new <img src="https://unpkg.com/lucide-static@0.400.0/icons/image.svg" width="16" /> icon allows admin to view receipt photos directly within the Kanban Board through a modal.
-3. **Quick Amend**: A new <img src="https://unpkg.com/lucide-static@0.400.0/icons/pencil.svg" width="16" /> icon next to receipts opens a Quick Amend Modal, interacting with the new `POST /api/amend-receipt` Edge Function endpoint to safely bypass RLS and adjust Store Name, Amount, Currency, and Status.
-4. **Boss Authority Hardened**: `isBoss` logic across all frontend applications (`app-react` and `app-compact`) is now strictly locked to **`vc06456@gmail.com`**.
+## Live Evidence
 
-### The Duplicate Accounts Issue & Missing Receipts
-1. **The Core Reason**: Boss logged in with `vc06456@hotmail.com`, `vc06456@gmail.com`, and `ftjdfr@gmail.com`. Supabase treats these as completely distinct user profiles with unique UUIDs. All the Nagoya data was created under `ftjdfr@gmail.com` (`bf464ddb-9c80-4ae1-970c-1774d689d5fd`).
-2. **The Fix (Ready for User Execution)**: A SQL migration script `supabase/migrations/20260603000000_reassign_boss_data.sql` has been explicitly coded to move all data from `ftjdfr@gmail.com` to the correct admin account **`vc06456@gmail.com`** (`e6bd6e0a-4022-4491-95d3-e4b53ddc88f6`).
-3. **Action Required**: Boss must copy the contents of that migration and run it directly in the Supabase SQL Editor to link the data back to the admin profile.
+Verified on 2026-07-10:
 
-### Deploying the Fixes
-To push these changes to production:
-1. `npx supabase functions deploy admin-kanban` (must be done locally with Supabase CLI logged in).
-2. Push all code to `origin main` to trigger the `travel-expense-admin-kanban` Vercel deployment.
+- Unauthenticated Edge mutation: `503 ADMIN_WRITES_DISABLED` with request ID.
+- Real anon PostgREST table GET/POST/PATCH/DELETE and admin RPC execute: denied with `401/42501`.
+- SQL smoke: `admin_console_privilege_smoke_passed`.
+- Adjacent function smoke: `adjacent_security_privilege_smoke_passed`.
+- Edge Deno unit tests: `10 passed`, `0 failed`.
+- Broker: `npm run check` and `npm run self-test` passed after key rotation.
+- Admin: `npm ci --ignore-scripts`, `npm run typecheck`, `npm run build`, audit `0` vulnerabilities.
+- Current-tree secret scan and containment verifier passed.
+
+Evidence files outside the public repository:
+
+- `/tmp/admin-console-privileges-pre-20260710.json`
+- `/tmp/admin-console-privileges-post-20260710.json`
+- `/tmp/admin-console-schema-pre-20260710.json`
+- `/tmp/admin-console-schema-post-20260710.json`
+
+## Photo Privacy Gate
+
+Code is ready but the live `receipt-photos` bucket remains public for old-client compatibility.
+
+- Compact `0.13.6`: signed upload and batch-refresh URLs, focused smoke `1/1` passed.
+- Android `0.16.4`: matching signed URL implementation; branch commit `d294648`; native QA passed.
+- Admin Edge: 60-second signed URL, no fail-open public fallback.
+- Migration: `supabase/migrations/20260710161000_private_receipt_photo_storage.sql`.
+
+Do not apply that migration until both client builds are deployed and active compatibility is
+confirmed. Applying it early breaks receipt images in old Android installations.
+
+## Deployment Truth
+
+As of 2026-07-10 there is no Admin-specific GitHub production workflow. The currently inspected
+production deployment is a Vercel CLI deployment. A normal git push must not be described as an
+Admin deployment until the planned protected CI/CD workflow lands.
+
+Current commands:
+
+```bash
+cd app-admin-kanban
+npm ci --ignore-scripts
+npm run typecheck
+npm run build
+
+cd ..
+npx supabase functions deploy admin-kanban --no-verify-jwt
+```
+
+Do not run a manual production Vercel deploy from a dirty worktree. For Admin 1.0 release, add the
+protected GitHub workflow, synthetic preview environment, Boss approval gate and provenance record
+before replacing this section.
+
+## Open Blockers
+
+1. Reconcile diverged Supabase migration history. Do not run `db push` or `migration repair`.
+2. Transfer admin helper ownership to a reviewed non-login role through a platform-owner operation;
+   the managed SQL API cannot perform that transfer.
+3. Implement passphrase + passkey auth, opaque sessions, CSRF and signed fixed-route BFF.
+4. Replace the giant snapshot and legacy tabs with paginated read APIs and five workspaces.
+5. Deploy Compact/Android compatibility and then apply the private photo migration.
+6. Keep all R2/R3 operations server-disabled until preview, step-up, version, idempotency and audit
+   gates are green.
+
+## Rollback
+
+- Frontend: use the last new-auth-compatible read-only maintenance build once Task 3 lands.
+- Edge: keep `ADMIN_WRITE_MODE=deny_all`; roll forward to a fixed bundle. Never restore old auth.
+- Database: keep browser grants revoked and forward-fix migrations. Never reopen public admin access.
+- Secrets: generate another new key. Never restore the rotated value.
+- External operations: resume or compensate; do not report success until verified.

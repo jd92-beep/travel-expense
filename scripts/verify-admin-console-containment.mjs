@@ -35,10 +35,14 @@ const required = [
 
 const missing = required.filter((needle) => !normalizedSql.includes(needle));
 const hasPermissivePolicy = /create\s+policy\s+\S+\s+on\s+public\.admin_(?:action_requests|console_config|identity_links)\s+for\s+all(?!\s+to\s+service_role)/.test(normalizedSql);
+const edgeSource = fs.readFileSync(path.join(root, 'supabase', 'functions', 'admin-kanban', 'index.ts'), 'utf8');
+const hasPublicPhotoFallback = /storage\/v1\/object\/public\/\$\{bucket\}/.test(edgeSource)
+  || /signed\?\.signedUrl\s*\|\|/.test(edgeSource);
 
-if (missing.length || hasPermissivePolicy) {
+if (missing.length || hasPermissivePolicy || hasPublicPhotoFallback) {
   if (missing.length) console.error(`Missing containment clauses:\n- ${missing.join('\n- ')}`);
   if (hasPermissivePolicy) console.error('Found an admin FOR ALL policy without TO service_role');
+  if (hasPublicPhotoFallback) console.error('Found a fail-open public receipt photo URL fallback');
   process.exit(1);
 }
 
