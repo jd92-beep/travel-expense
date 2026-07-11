@@ -84,10 +84,13 @@ export function MagicCard(props: MagicCardProps) {
     setMounted(true)
     const syncTheme = () => setDarkTheme(document.documentElement.classList.contains("dark"))
     syncTheme()
+    // The orb/gradient spotlight this feeds isn't even rendered when heavy effects are
+    // disabled (see disableHeavy below) — skip the MutationObserver on that tier too.
+    if (disableHeavy) return
     const observer = new MutationObserver(syncTheme)
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
     return () => observer.disconnect()
-  }, [])
+  }, [disableHeavy])
 
   const isDarkTheme = useMemo(() => {
     if (!mounted) return false

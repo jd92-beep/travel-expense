@@ -66,7 +66,12 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.17.0` / versionCode `1700`.
+- Version: `0.18.0` / versionCode `1800`. Ported from main v0.15.0: Timeline de-lag (BorderBeam
+  gated off phones, per-day spots/loose/rail memoized, rail-sweep + now-marker animations
+  disabled on phones), the real windmill tab transition (keyed `ErrorBoundary` moved inside the
+  keyed `motion.div` so AnimatePresence actually animates; content rotates ±14° around a
+  below-screen hub), and Stats Top-10 translated shop names (kana/hangul store names show a
+  cached Cantonese/Chinese translation under the original).
 - Permissions: internet and camera only. The camera hardware feature is marked `required=false` so the app remains installable on devices without a camera.
 - Scan camera/gallery actions use Capacitor Camera on native Android, then pass the selected image back into the existing Compact OCR draft flow. Web keeps the hidden file-input fallback.
 - Broad storage/media read permissions were removed. Android's normal system picker should handle gallery input without library-wide read access.

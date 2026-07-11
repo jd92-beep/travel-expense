@@ -86,7 +86,7 @@ function coerceTime(value: unknown): string {
 
 // The broker normally returns parsed JSON, but if any provider path hands back raw text
 // (fences, prose, trailing commas), extract it client-side instead of failing the scan.
-function coerceModelJson(raw: unknown): unknown {
+export function coerceModelJson(raw: unknown): unknown {
   return typeof raw === 'string' ? extractJson(raw) : raw;
 }
 
@@ -810,7 +810,7 @@ async function callMimoJson(
   return brokerAiJson(state, 'mimo', prompt, kind, image, overrideModel);
 }
 
-async function callPreferredJson(
+export async function callPreferredJson(
   state: AppState,
   prompt: string,
   kind: 'scan' | 'voice' | 'email' | 'trip',

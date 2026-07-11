@@ -1,6 +1,7 @@
 import { motion, MotionStyle, Transition, useReducedMotion } from "motion/react"
 
 import { cn } from "@/lib/cn"
+import { shouldDisableHeavyEffects } from "../../lib/performance"
 
 interface BorderBeamProps {
   /**
@@ -63,6 +64,13 @@ export const BorderBeam = ({
   borderWidth = 1,
 }: BorderBeamProps) => {
   const reducedMotion = useReducedMotion() ?? false
+
+  // The offsetDistance keyframe animation runs on the main thread (motion-path isn't
+  // compositor-only), and TimelineRail mounts one BorderBeam per itinerary day — so on
+  // phones (tier !== 'full') this is skipped entirely rather than throttled.
+  if (shouldDisableHeavyEffects()) {
+    return null
+  }
 
   if (reducedMotion) {
     return (

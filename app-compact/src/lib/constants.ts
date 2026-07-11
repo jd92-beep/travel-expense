@@ -3,7 +3,7 @@ import type { AppState, ItineraryDay } from './types';
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.17.0';
+export const APP_VERSION = '0.18.0';
 
 export const STORAGE_KEY = 'boss-japan-tracker';
 export const DEFAULT_NOTION_DB = '3438d94d5f7c81878221fcda6d65d39d';
@@ -175,6 +175,7 @@ export const DEFAULT_STATE: AppState = {
   globalSyncStatus: 'idle',
   syncError: '',
   settingsPulledAt: 0,
+  storeTranslations: {},
 };
 
 export const BOSS_EMAILS = new Set([
