@@ -1060,6 +1060,15 @@
     box-shadow: 0 0 0 4px rgba(217,65,50,.14);
   }
 
+  .timeline-rail-sweep {
+    animation: none;
+    opacity: 0;
+  }
+
+  .timeline-now-marker {
+    animation: none;
+  }
+
   .timeline-cat.cat,
   .timeline-day-number,
   .timeline-loose-receipts {

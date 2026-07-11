@@ -1,5 +1,5 @@
 import type { CSSProperties, Dispatch, FormEvent, SetStateAction } from 'react';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, ArrowDownUp, CalendarDays, Home, MapPin, PencilLine, Plus, ReceiptText, RotateCcw, Trash2, Settings } from 'lucide-react';
 import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
@@ -45,12 +45,42 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   // Viewers of a shared trip can't push trip changes — they keep the local override layer.
   const canEditItinerary = activeTrip(state).sharing?.role !== 'viewer';
   const tripWindow = timelineTripWindow(itinerary);
+
+  // Precompute schedule spots / loose receipts / rail metrics once per itinerary day.
+  // Previously the command card, this per-day loop, and the orphan-receipts block each
+  // recomputed getScheduleSpots + dayLooseReceipts + scopedReceiptsForTrip independently
+  // (dayLooseReceipts itself re-ran getScheduleSpots internally) — 2-5x redundant work
+  // per render. Deps cover everything getScheduleSpots/dayLooseReceipts/timelineRailMetrics
+  // read from state: the itinerary contents, receipt list, itinerary overrides, which trip
+  // is active (trips + activeTripId, since scopedReceiptsForTrip's hasMultipleTrips check
+  // depends on state.trips.length too), plus nowTick and tripWindow for the rail metrics.
+  const perDayTimeline = useMemo(() => {
+    return itinerary.map((day) => {
+      const spots = getScheduleSpots(state, day);
+      const loose = dayLooseReceipts(state, day, spots);
+      const rail = timelineRailMetrics(day.date, day.timezone, spots, nowTick, tripWindow);
+      return { day, spots, loose, rail };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itinerary, state.receipts, state.itineraryOverrides, state.trips, state.activeTripId, nowTick, tripWindow]);
+  const perDayTimelineByDate = useMemo(() => {
+    const map = new Map<string, (typeof perDayTimeline)[number]>();
+    for (const entry of perDayTimeline) map.set(entry.day.date, entry);
+    return map;
+  }, [perDayTimeline]);
+  // Shared with the orphan-receipts block below so it doesn't redo the same trip-scoped filter.
+  const tripReceipts = useMemo(
+    () => scopedReceiptsForTrip(state, activeTrip(state)),
+    [state.receipts, state.trips, state.activeTripId],
+  );
+
   const activeDay = dayReceipts ? itinerary.find((day) => day.date === dayReceipts) : null;
-  const looseReceipts = activeDay ? dayLooseReceipts(state, activeDay) : [];
+  const looseReceipts = activeDay ? (perDayTimelineByDate.get(activeDay.date)?.loose ?? dayLooseReceipts(state, activeDay)) : [];
   const hasOpenModal = Boolean(editing || activeDay || viewPhoto || dayEdit || swapSource);
   const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
   const liveContext = timelineLiveContext(state, itinerary, nowTick, tripWindow);
   const commandDay = (liveContext.date ? itinerary.find((day) => day.date === liveContext.date) : null) || itinerary.find((day) => day.date === today) || itinerary[0];
+  const commandDayEntry = commandDay ? perDayTimelineByDate.get(commandDay.date) : undefined;
   const commandDate = commandDay?.date ? new Date(`${commandDay.date}T00:00:00`) : null;
   const commandYear = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getFullYear()) : '----';
   const commandMonth = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getMonth() + 1) : '--';
@@ -342,18 +372,15 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
                 </div>
               </div>
               <div className="preview-timeline-stats">
-                <span><MapPin size={18} /> 行程 {getScheduleSpots(state, commandDay).length} 個景點</span>
-                <b><ReceiptText size={18} /> 支出 HK$ {fmt(dayLooseReceipts(state, commandDay).reduce((s, r) => s + getReceiptHkdAmount(r, state), 0))}</b>
+                <span><MapPin size={18} /> 行程 {(commandDayEntry?.spots ?? getScheduleSpots(state, commandDay)).length} 個景點</span>
+                <b><ReceiptText size={18} /> 支出 HK$ {fmt((commandDayEntry?.loose ?? dayLooseReceipts(state, commandDay)).reduce((s, r) => s + getReceiptHkdAmount(r, state), 0))}</b>
               </div>
             </div>
           )}
         </div>
       </MagicCard>
 
-      {itinerary.map((day) => {
-        const spots = getScheduleSpots(state, day);
-        const loose = dayLooseReceipts(state, day);
-        const rail = timelineRailMetrics(day.date, day.timezone, spots, nowTick, tripWindow);
+      {perDayTimeline.map(({ day, spots, loose, rail }) => {
         const dayDate = new Date(`${day.date}T00:00:00`);
         const dayDateValid = !Number.isNaN(dayDate.getTime());
         const dayDateNumber = dayDateValid ? String(dayDate.getDate()) : String(day.day);
@@ -453,7 +480,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       {(() => {
         // Receipts dated outside every itinerary day used to silently vanish from this tab.
         const dayDates = new Set(itinerary.map((d) => d.date));
-        const orphans = scopedReceiptsForTrip(state, activeTrip(state)).filter((r) => r.date && !dayDates.has(r.date));
+        const orphans = tripReceipts.filter((r) => r.date && !dayDates.has(r.date));
         if (!orphans.length) return null;
         return (
           <GlassCard className="timeline-day">

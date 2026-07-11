@@ -443,9 +443,14 @@ export function getScheduleSpots(state: AppState, day: ItineraryDay): Array<Itin
   return spots.sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
 }
 
-export function dayLooseReceipts(state: AppState, day: ItineraryDay): Receipt[] {
+export function dayLooseReceipts(
+  state: AppState,
+  day: ItineraryDay,
+  precomputedSpots?: Array<ItinerarySpot & { _spotIdx: number; receiptId?: string }>,
+): Receipt[] {
   const trip = activeTrip(state);
-  const spotIds = new Set(getScheduleSpots(state, day).map((s) => s.receiptId).filter(Boolean));
+  const spots = precomputedSpots || getScheduleSpots(state, day);
+  const spotIds = new Set(spots.map((s) => s.receiptId).filter(Boolean));
   return scopedReceiptsForTrip(state, trip).filter((r) => r.date === day.date && !spotIds.has(r.id));
 }
 

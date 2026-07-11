@@ -435,26 +435,29 @@ export function App() {
 
   const fxTier = useEffectsTier();
 
-  // Motion Layer v2: full = desktop slide ±50 spring; balanced (phones) = shorter ±24
-  // transform/opacity-only slide with a snappier spring (≤250ms perceived); lite = instant swap.
-  const slideDistance = fxTier === 'full' ? 50 : 24;
-  const slideVariants = {
+  // Windmill Motion Layer: page content swings like a windmill blade / pendulum around a
+  // hub anchored below the screen (transformOrigin '50% 130%' on the motion.div). Rotation
+  // alone (no x translation) produces the horizontal travel feel, and stays compositor-only
+  // (rotate + opacity), which is why this replaced the old x-slide. full = desktop ±18deg
+  // spring; balanced (phones) = ±14deg shorter spring (≤250ms perceived); lite = instant swap.
+  const windmillAngle = fxTier === 'full' ? 18 : 14;
+  const windmillVariants = {
     enter: (dir: number) => ({
-      x: dir > 0 ? slideDistance : dir < 0 ? -slideDistance : 0,
+      rotate: dir > 0 ? windmillAngle : dir < 0 ? -windmillAngle : 0,
       opacity: 0,
     }),
     center: {
-      x: 0,
+      rotate: 0,
       opacity: 1,
     },
     exit: (dir: number) => ({
-      x: dir > 0 ? -slideDistance : dir < 0 ? slideDistance : 0,
+      rotate: dir > 0 ? -windmillAngle : dir < 0 ? windmillAngle : 0,
       opacity: 0,
     }),
   };
-  const slideTransition = fxTier === 'full'
-    ? { x: { type: 'spring' as const, stiffness: 380, damping: 38, mass: 1 }, opacity: { duration: 0.15 } }
-    : { x: { type: 'spring' as const, stiffness: 420, damping: 42, mass: 0.9 }, opacity: { duration: 0.12 } };
+  const windmillTransition = fxTier === 'full'
+    ? { rotate: { type: 'spring' as const, stiffness: 380, damping: 38, mass: 1 }, opacity: { duration: 0.15 } }
+    : { rotate: { type: 'spring' as const, stiffness: 420, damping: 40, mass: 0.9 }, opacity: { duration: 0.12 } };
 
   const appContent = (
     <TripThemeProvider state={state}>
@@ -479,9 +482,7 @@ export function App() {
         </div>
       )}
       <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} updateState={updateState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)}>
-        <ErrorBoundary key={safeTab}>
-          <Suspense fallback={<TabSkeleton label="載入分頁" />}>
-            {(() => {
+        {(() => {
               // Single source of truth for tab content — previously duplicated verbatim in the
               // animated and non-animated branches, which invited drift.
               const tabContent = (
@@ -522,28 +523,39 @@ export function App() {
                   {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} supabaseAccountId={effectiveSupabaseSession?.user?.id || ''} supabaseSessionExpiresAt={(effectiveSupabaseSession?.expires_at || 0) * 1000} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
                 </>
               );
+              // The keyed ErrorBoundary must live INSIDE the motion.div: when it wrapped
+              // AnimatePresence, every tab switch remounted AnimatePresence itself, and with
+              // initial={false} no enter/exit animation ever ran — the "transition never
+              // shows" bug.
+              const bounded = (
+                <ErrorBoundary key={safeTab}>
+                  <Suspense fallback={<TabSkeleton label="載入分頁" />}>{tabContent}</Suspense>
+                </ErrorBoundary>
+              );
               if (fxTier === 'lite') {
-                return <div className="w-full h-full">{tabContent}</div>;
+                return <div className="w-full h-full">{bounded}</div>;
               }
               return (
-                <AnimatePresence mode="wait" initial={false}>
-                  <motion.div
-                    key={safeTab}
-                    custom={direction}
-                    variants={slideVariants}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    transition={slideTransition}
-                    className="w-full h-full will-change-transform"
-                    style={{ backfaceVisibility: 'hidden', transform: 'translate3d(0,0,0)' }}
-                  >
-                    {tabContent}
-                  </motion.div>
-                </AnimatePresence>
+                <div className="w-full h-full" style={{ overflow: 'hidden' }}>
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                      key={safeTab}
+                      custom={direction}
+                      variants={windmillVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={windmillTransition}
+                      className="w-full h-full will-change-transform"
+                      style={{ backfaceVisibility: 'hidden', transformOrigin: '50% 130%' }}
+                    >
+                      {bounded}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
               );
-            })()}
-          </Suspense>
+        })()}
+        <ErrorBoundary>
           {editing !== undefined && (
         <ReceiptEditor
           state={state}

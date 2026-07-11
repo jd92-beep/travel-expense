@@ -330,6 +330,9 @@ export interface AppState {
   syncError?: string;
   settingsPulledAt?: number;
   displayCurrency?: string;
+  // LOCAL-ONLY cache of AI-translated shop names for the Stats "TOP 10 支出" chart.
+  // Keyed by the original (untranslated) store name; never synced to Supabase/Notion.
+  storeTranslations?: Record<string, { t: string; at: number }>;
 }
 
 export type TabId = 'dashboard' | 'scan' | 'timeline' | 'history' | 'weather' | 'stats' | 'settings';

@@ -1,11 +1,12 @@
-import { useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'motion/react';
 import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, hkd, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
+import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { amountToHkd, formatCurrencyAmount, hkdToCurrency } from '../lib/currency';
+import { needsTranslation, splitInlineTranslation, translateStoreNames } from '../lib/storeTranslation';
 import { EmptyState, GlassCard, StatusPill, TickerMoney } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { VisualIcon } from '../components/VisualIcon';
@@ -43,6 +44,60 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
     .slice()
     .sort((a, b) => getReceiptHkdAmount(b, state) - getReceiptHkdAmount(a, state))
     .slice(0, 10);
+  const topStoreDisplay = useMemo(() => topReceipts.map((r) => {
+    const rawName = displayStore(r);
+    const inline = splitInlineTranslation(rawName);
+    return {
+      id: r.id,
+      rawName,
+      original: inline ? inline.original : rawName,
+      translated: inline ? inline.translated : (needsTranslation(rawName) ? state.storeTranslations?.[rawName]?.t : undefined),
+      hasInline: !!inline,
+    };
+  }), [topReceipts, state.storeTranslations]);
+  const topNamesKey = topStoreDisplay.map((d) => d.rawName).join('§');
+  const translationInFlightRef = useRef(false);
+  const attemptedStoreNamesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    // Seed the cache with translations already inline in the store string (e.g. "桜町商店 (櫻町商店)")
+    // so future renders/sessions skip the AI call entirely for these names.
+    const inlineSeeds = topStoreDisplay.filter((d) => d.hasInline && d.translated);
+    if (inlineSeeds.length) {
+      const existing = state.storeTranslations || {};
+      const toSeed = inlineSeeds.filter((seed) => existing[seed.rawName]?.t !== seed.translated);
+      if (toSeed.length) {
+        const now = Date.now();
+        const patch = { ...existing };
+        for (const seed of toSeed) patch[seed.rawName] = { t: seed.translated!, at: now };
+        updateState({ storeTranslations: patch });
+      }
+    }
+
+    const namesNeeding = Array.from(new Set(
+      topStoreDisplay
+        .filter((d) => !d.hasInline && needsTranslation(d.rawName) && !state.storeTranslations?.[d.rawName]?.t && !attemptedStoreNamesRef.current.has(d.rawName))
+        .map((d) => d.rawName)
+    ));
+    if (!namesNeeding.length || translationInFlightRef.current) return;
+
+    translationInFlightRef.current = true;
+    namesNeeding.forEach((name) => attemptedStoreNamesRef.current.add(name));
+    translateStoreNames(state, namesNeeding)
+      .then((result) => {
+        if (!result || !Object.keys(result).length) return;
+        const now = Date.now();
+        const patch = { ...(state.storeTranslations || {}) };
+        for (const [name, translated] of Object.entries(result)) patch[name] = { t: translated, at: now };
+        updateState({ storeTranslations: patch });
+      })
+      .catch(() => {})
+      .finally(() => {
+        translationInFlightRef.current = false;
+      });
+    // Only re-run when the visible TOP 10 name list actually changes — avoids refetch loops
+    // when updateState() above triggers a re-render with the same names.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topNamesKey]);
   const trend = Object.entries(analysisReceipts.reduce<Record<string, number>>((acc, r) => {
     acc[r.date] = (acc[r.date] || 0) + getReceiptTripAmount(r, state, resolvedTripCurrency);
     return acc;
@@ -82,10 +137,15 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
       >
         {topReceipts.length ? topReceipts.map((r, idx) => {
           const cat = categoryById(r.category);
+          const display = topStoreDisplay[idx];
+          const showTranslation = !!display?.translated && display.translated !== display.original;
           return (
             <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
               <b>{idx + 1}</b>
-              <span><VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {displayStore(r)}</span>
+              <span>
+                <VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {display?.original ?? displayStore(r)}
+                {showTranslation && <span className="rank-store-translation">{display!.translated}</span>}
+              </span>
               <strong>{formatCurrencyAmount(r.total, r.currency || resolvedTripCurrency)}</strong>
             </motion.div>
           );

@@ -5,7 +5,6 @@ import { useReducedMotion } from 'motion/react';
 import { TAB_MANIFEST } from '../lib/tabs';
 import type { SyncEngineState, TabId, AppState, TripProfile } from '../lib/types';
 import { StatusPill } from './ui';
-import { WindmillTransition } from './WindmillTransition';
 import { FloatingDock } from './ui/floating-dock';
 import { NoiseTexture } from './ui/noise-texture';
 import { Particles } from './ui/particles';
@@ -606,9 +605,6 @@ export function Shell({
         </section>
       )}
       <main className="content">{children}</main>
-      {/* Full-screen conic sweep is desktop-only: on phones the real tab slide (App.tsx)
-          replaces it, and its 100vmax overlay was leaking onto mobile before tiers. */}
-      {fxTier === 'full' && <WindmillTransition activeKey={active} />}
 
       {/* Fixed bottom tab bar — never scrolls away */}
       <div className="fixed-tab-bar">
