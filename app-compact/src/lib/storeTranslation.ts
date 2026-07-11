@@ -1,12 +1,28 @@
 import { callPreferredJson, coerceModelJson } from './ai';
 import type { AppState } from './types';
 
-// Hiragana (぀-ゟ), Katakana incl. phonetic extensions (゠-ヿ, ㇰ-ㇿ),
-// Hangul syllables (가-힣). Han-only (Chinese-readable) or Latin-only strings must NOT match.
-const FOREIGN_SCRIPT_RE = /[぀-ゟ゠-ヿㇰ-ㇿ가-힣]/;
+// Broad "this name needs translating" detector — covers scripts across Asia, the Middle East,
+// the Indian subcontinent and Europe so the Stats Top-10 translator works worldwide, not just JP/KR.
+// Ranges (in order below):
+//   - Hiragana (぀-ゟ), Katakana incl. phonetic extensions (゠-ヿ, ㇰ-ㇿ)
+//   - Hangul syllables (가-힣)
+//   - Arabic (؀-ۿ) + Arabic Supplement (ݐ-ݿ)
+//   - Hebrew (֐-׿)
+//   - Devanagari (ऀ-ॿ), Bengali (ঀ-৿), Gurmukhi (਀-੿), Gujarati (઀-૿),
+//     Tamil (஀-௿), Telugu (ఀ-౿), Kannada (ಀ-೿), Malayalam (ഀ-ൿ)
+//   - Thai (฀-๿), Lao (຀-໿), Khmer (ក-៿), Myanmar (က-႟)
+//   - Cyrillic (Ѐ-ӿ), Greek (Ͱ-Ͽ)
+//   - Latin-1 Supplement letters (À-ÖØ-öø-ÿ — excludes × U+00D7 and ÷ U+00F7, which aren't
+//     letters), Latin Extended-A (Ā-ſ) and Extended-B (ƀ-ɏ) — catches accented/diacritic Latin
+//     names (French/German/Czech/Turkish/Nordic etc: é ü ø ß ç ř ğ å …).
+// Deliberately NOT matched: Han-only (Chinese-readable) and plain-ASCII Latin strings. Pure-ASCII
+// names are indistinguishable from English brand names (e.g. "Migros") and are conventionally
+// left as-is rather than "translated" into themselves.
+const FOREIGN_SCRIPT_RE =
+  /[぀-ゟ゠-ヿㇰ-ㇿ가-힣؀-ۿݐ-ݿ֐-׿ऀ-ॿঀ-৿਀-੿઀-૿஀-௿ఀ-౿ಀ-೿ഀ-ൿ฀-๿຀-໿ក-៿က-႟Ѐ-ӿͰ-ϿÀ-ÖØ-öø-ÿĀ-ſƀ-ɏ]/;
 const HAN_RE = /[一-鿿]/;
 
-/** True iff `name` contains Hiragana/Katakana/Hangul — i.e. needs a Cantonese/Chinese translation. */
+/** True iff `name` contains a non-Han, non-ASCII script (JP/KR/Arabic/Hebrew/Indic/SEA/Cyrillic/Greek/accented Latin/…) — i.e. needs a Cantonese/Chinese translation. */
 export function needsTranslation(name: string): boolean {
   return FOREIGN_SCRIPT_RE.test(String(name || ''));
 }
@@ -38,7 +54,7 @@ export async function translateStoreNames(state: AppState, names: string[]): Pro
   const uniqueNames = Array.from(new Set(names.map((n) => String(n || '').trim()).filter(Boolean)));
   if (!uniqueNames.length) return {};
 
-  const prompt = `你係一個店名翻譯 API。以下係一個 JSON 陣列，每個元素係一個店舖/商戶名稱（可能係日文、韓文等外語）：
+  const prompt = `你係一個店名翻譯 API。以下係一個 JSON 陣列，每個元素係一個店舖/商戶名稱（可能係任何外語，例如日文、韓文、歐洲語言、阿拉伯文、印度語系、泰文等）：
 ${JSON.stringify(uniqueNames)}
 
 對於陣列入面每一個名稱，判斷：

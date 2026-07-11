@@ -83,7 +83,15 @@ export function App() {
   // Trust the local hint only until supabase-js has resolved: once auth settles, a null session
   // means the refresh_token is genuinely dead → drop the hint so the login screen shows instead
   // of a broken "authenticated" state whose API calls all 401.
-  const effectiveSupabaseSession = supabaseAuth.session || (supabaseAuth.loading ? localSupabaseSession : null);
+  // When Supabase isn't configured at all (e.g. env vars missing in this environment),
+  // useSupabaseAuth's `loading` starts false and never flips true (there's no supabase client
+  // to resolve), so the `loading` gate above never opens and the local hint was always thrown
+  // away — silently downgrading a cloud-scoped session back to the local/default scope even
+  // though the storage blob is a real, unexpired session. Only the CONFIGURED case needs the
+  // loading gate (that's where a dead refresh_token must still show the login screen); when
+  // unconfigured there is no async resolution to wait for, so trust the local hint unconditionally.
+  const effectiveSupabaseSession = supabaseAuth.session
+    || (supabaseAuth.configured ? (supabaseAuth.loading ? localSupabaseSession : null) : localSupabaseSession);
   const isCloudSyncActive = hasSupabaseSession(effectiveSupabaseSession);
   const userEmail = effectiveSupabaseSession?.user?.email || null;
   const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';
