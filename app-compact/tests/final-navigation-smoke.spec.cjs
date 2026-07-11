@@ -97,29 +97,87 @@ test('Final lock gate smoke without trusted device', async ({ page }) => {
   await expect(page.getByText(/本機安全防護鎖|先解鎖再使用/).first()).toBeVisible();
 });
 
+// Both rigs below drive the sync-error banner the way production actually reaches it: seed a
+// QUEUED (not error) syncQueue item pointing at a real receipt, stub the backend endpoint the
+// engine actually calls in __disable_supabase_configured mode (the credential-broker's
+// /notion/request proxy — Supabase is disabled, so useSyncEngine's push() falls through to the
+// Notion mirror path), and let the app's own push() observe the failure and set
+// globalSyncStatus:'error' itself. storage.ts's hydrate-reset (commit a9b5748) only resets
+// error/failed queue items back to 'queued' on load — it never fabricates a NEW failure, so
+// seeding 'queued' + a real backend failure survives that reset by construction.
+//
+// The stubbed failure is HTTP 403 "permission denied" on the Notion page-create call
+// specifically: it is NOT in isTransientSyncError's quiet-retry list (unlike e.g. a timeout) and
+// NOT auth-shaped (no "session"/"401"/"unauthorized"/"expired"), so it neither gets silently
+// requeued nor — after the FIX for the stale-JWT quiet-retry — silently retried before the
+// banner paints. The stub fails only the FIRST page-create call and succeeds afterwards, so the
+// existing "click retry and the banner clears" assertions keep exercising a real recovered sync.
+function installNotionPermissionDeniedOnFirstCreate(page) {
+  let pageCreateAttempts = 0;
+  return page.route('**/notion/request', async (route) => {
+    const payload = route.request().postDataJSON();
+    const path = String(payload.path || '');
+    const method = String(payload.method || 'GET');
+    if (method === 'POST' && path === '/pages') {
+      pageCreateAttempts += 1;
+      if (pageCreateAttempts === 1) {
+        return route.fulfill({
+          status: 403,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: false, error: 'permission denied' }),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, data: { id: `fake-notion-page-${pageCreateAttempts}` } }),
+      });
+    }
+    if (method === 'GET' && /^\/databases\//.test(path)) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { properties: {} } }) });
+    }
+    // Schema migration PATCH, findPageBySourceId query, image-block lookup, etc. — none of these
+    // are on the failure path we're testing, so they always succeed with an empty/no-op shape.
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { results: [], has_more: false } }) });
+  });
+}
+
 test('Sync error indicator is clickable and retries sync', async ({ page }) => {
-	  await page.addInitScript(() => {
-	    window.__disable_supabase_configured = true;
-	    const now = Date.now();
-	    localStorage.clear();
-	    localStorage.setItem('__stress_panel_unlocked', 'true');
-	    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
-	    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+  await installNotionPermissionDeniedOnFirstCreate(page);
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    const now = Date.now();
+    localStorage.clear();
+    localStorage.setItem('__stress_panel_unlocked', 'true');
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    // Credential Broker session (not a Supabase session — Supabase is disabled above) so
+    // canUseNotionMirror() lets push() actually attempt the Notion mirror write.
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'sync-error-rig-session',
+      credentialSessionExpiresAt: now + 60 * 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'dashboard',
-      receipts: [],
-      autoSync: false,
-      globalSyncStatus: 'error',
-      syncError: 'manual smoke failure',
-      syncQueue: [{
-        id: 'manual_error_queue',
-        type: 'receipt',
-        entityId: 'manual_error_receipt',
-        op: 'create',
-        status: 'error',
-        attempts: 1,
-        error: 'manual smoke failure',
+      autoSync: true,
+      receipts: [{
+        id: 'sync_error_receipt',
+        store: 'Sync Error Rig Store',
+        total: 500,
+        date: '2026-01-01',
+        category: 'other',
+        payment: 'cash',
         createdAt: now - 60_000,
-        updatedAt: now - 30_000,
+        updatedAt: now - 60_000,
+      }],
+      syncQueue: [{
+        id: 'sync_error_queue',
+        type: 'receipt',
+        entityId: 'sync_error_receipt',
+        op: 'create',
+        status: 'queued',
+        attempts: 0,
+        createdAt: now - 60_000,
+        updatedAt: now - 60_000,
       }],
       settingsUpdatedAt: now + 31_536_000_000,
       schemaVersion: 3,
@@ -127,7 +185,8 @@ test('Sync error indicator is clickable and retries sync', async ({ page }) => {
   });
   await page.goto('http://localhost:8903/travel-expense/compact/');
 
-  await expect(page.getByRole('button', { name: /Sync error/ })).toBeVisible();
+  // The queued item auto-pushes ~3s after boot (autoSync debounce) and hits the stubbed 403.
+  await expect(page.getByRole('button', { name: /Sync error/ })).toBeVisible({ timeout: 10_000 });
   await expect.poll(async () => {
     const retry = page.getByRole('button', { name: /Sync error/ });
     if (!(await retry.isVisible().catch(() => false))) return true;
@@ -138,44 +197,56 @@ test('Sync error indicator is clickable and retries sync', async ({ page }) => {
 });
 
 test('Console surfaces failed queue items before another backend retry', async ({ page }) => {
+  await installNotionPermissionDeniedOnFirstCreate(page);
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
-	  const now = Date.now();
-	  localStorage.clear();
-	  localStorage.setItem('__stress_panel_unlocked', 'true');
-	  localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    const now = Date.now();
+    localStorage.clear();
+    localStorage.setItem('__stress_panel_unlocked', 'true');
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'queue-inspector-rig-session',
+      credentialSessionExpiresAt: now + 60 * 60_000,
+    }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'settings',
-      receipts: [],
-      autoSync: false,
-      globalSyncStatus: 'queued',
-      syncQueue: [{
-        id: 'failed_queue_receipt',
-        type: 'receipt',
-        entityId: 'missing_backend_receipt',
-        op: 'create',
-        status: 'error',
-        attempts: 2,
-        error: 'Request timeout after 30000ms',
+      autoSync: true,
+      receipts: [{
+        id: 'queue_inspector_receipt',
+        store: 'Queue Inspector Rig Store',
+        total: 500,
+        date: '2026-01-01',
+        category: 'other',
+        payment: 'cash',
         createdAt: now - 60_000,
-        updatedAt: now - 30_000,
+        updatedAt: now - 60_000,
+      }],
+      syncQueue: [{
+        id: 'queue_inspector_queue',
+        type: 'receipt',
+        entityId: 'queue_inspector_receipt',
+        op: 'create',
+        status: 'queued',
+        attempts: 0,
+        createdAt: now - 60_000,
+        updatedAt: now - 60_000,
       }],
       settingsUpdatedAt: now + 31_536_000_000,
       schemaVersion: 3,
     }));
   });
 
-	  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
-	  await expect(page.getByRole('button', { name: /Sync error.*1 failed/ })).toBeVisible();
-	  await expect(page.getByLabel('Compact travel readiness')).toContainText('Queue · 1 failed');
-	  const queueInspector = page.getByRole('region', { name: 'Sync Queue Inspector' });
-	  await expect(queueInspector).toContainText('1 active');
-	  await expect(queueInspector).toContainText('receipt · create · error');
+  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await expect(page.getByRole('button', { name: /Sync error.*1 failed/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByLabel('Compact travel readiness')).toContainText('Queue · 1 failed');
+  const queueInspector = page.getByRole('region', { name: 'Sync Queue Inspector' });
+  await expect(queueInspector).toContainText('1 active');
+  await expect(queueInspector).toContainText('receipt · create · error');
 
-	  await page.getByRole('button', { name: /Sync error.*1 failed/ }).click();
-	  await expect.poll(async () => page.getByLabel('Compact travel readiness').innerText()).not.toContain('failed');
-	  await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
-	});
+  await page.getByRole('button', { name: /Sync error.*1 failed/ }).click();
+  await expect.poll(async () => page.getByLabel('Compact travel readiness').innerText()).not.toContain('failed');
+  await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
+});
 
 test('Account switch watchdog keeps Compact console scoped to the active backend account', async ({ page }) => {
   await page.addInitScript(() => {

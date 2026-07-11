@@ -3,7 +3,6 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
-  CloudSun,
   Info,
   Lightbulb,
   MapPin,
@@ -23,6 +22,7 @@ import {
 } from 'lucide-react';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
+import { DashboardWeatherChip } from '../components/DashboardWeatherChip';
 import { GlassCard, Reveal, TickerMoney } from '../components/ui';
 import { BorderBeam } from '../components/ui/border-beam';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
@@ -1088,7 +1088,7 @@ export function Dashboard({
               {resolvedTripCurrency}
             </button>
           </div>
-          <div className="preview-dashboard-weather-mini" aria-label="今日天氣摘要"><CloudSun size={22} /> -- <small>--</small></div>
+          <DashboardWeatherChip state={state} variant="mini" />
         </div>
         <div className="preview-dashboard-today-chart" aria-label="每日預算使用率">
           <AnimatedCircularProgressBar
@@ -1138,10 +1138,7 @@ export function Dashboard({
             <span className="text-[10px] font-bold text-[#8C7864] uppercase tracking-wider">行程摘要</span>
             <h3 className="text-lg font-bold text-slate-800 mt-0.5">今日行程</h3>
           </div>
-          <div className="flex items-center gap-1 px-3 py-1 bg-amber-50 border border-amber-200/60 rounded-full text-[11px] font-bold text-amber-700">
-            <CloudSun size={14} />
-            <span>--</span>
-          </div>
+          <DashboardWeatherChip state={state} variant="badge" />
         </div>
 
         <div className="dashboard-compact-itinerary-list">

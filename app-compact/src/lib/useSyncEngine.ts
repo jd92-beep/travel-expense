@@ -13,6 +13,15 @@ const QUEUE_MAX_AGE_MS = 14 * 86_400_000; // drop long-stuck error items after 1
 const DEBOUNCE_MS = 3000;
 const BACKGROUND_INTERVAL_MS = 120_000;
 const MIN_SYNC_INTERVAL_MS = 30_000;
+// A stale-access-token race right after foregrounding (visibilitychange/interval/reconnect/boot)
+// looks identical to a genuinely dead session at the moment of the very first request, but
+// supabase-js's autoRefreshToken mints a fresh access_token within ~1s of noticing the old one
+// is expired. Auto-triggered syncs get exactly one quiet retry after this delay before the red
+// banner paints; a manually-clicked retry does not (the user is already looking at the banner
+// and expects an immediate, honest result).
+export const AUTO_SYNC_AUTH_RETRY_DELAY_MS = 2500;
+
+type SyncOptions = { auto?: boolean };
 
 function redactError(error: unknown) {
   let raw = 'Sync failed';
@@ -318,7 +327,7 @@ export function useSyncEngine(
     if (hasNotionSync) await pushSettingsMeta(current);
   }, [applyReceiptSyncResult, applyTripSyncResult]);
 
-  const push = useCallback(async () => {
+  const push = useCallback(async (options?: SyncOptions) => {
     console.log('[SyncEngine] push() started');
     if (processingRef.current) {
       lastPushSucceededRef.current = false;
@@ -375,6 +384,21 @@ export function useSyncEngine(
           if (isTransientSyncError(error) && !isAuthError && !isVersionConflict) {
             markQueueItem(item, { status: 'queued', error: '' });
             continue;
+          }
+
+          // Quiet retry: only for auto-triggered syncs (see AUTO_SYNC_AUTH_RETRY_DELAY_MS above).
+          // A genuinely dead refresh_token will fail again after the wait and fall through to the
+          // normal error handling below, so the banner still surfaces real auth failures.
+          if (isAuthError && options?.auto) {
+            await new Promise((resolve) => window.setTimeout(resolve, AUTO_SYNC_AUTH_RETRY_DELAY_MS));
+            if (!aliveRef.current) break;
+            try {
+              await processItem(item);
+              removeQueueItem(item);
+              continue;
+            } catch (retryError) {
+              lastError = redactError(retryError);
+            }
           }
 
           failures += 1;
@@ -668,7 +692,7 @@ export function useSyncEngine(
     }
   }, [updateSyncState]);
 
-  const sync = useCallback(async () => {
+  const sync = useCallback(async (options?: SyncOptions) => {
     if (syncingRef.current) {
       console.log('[SyncEngine] sync() skipped — already syncing');
       return;
@@ -676,7 +700,7 @@ export function useSyncEngine(
     syncingRef.current = true;
     console.log('[SyncEngine] sync() started');
     try {
-      await push();
+      await push(options);
       await yieldToStateFlush();
       if (!navigator.onLine) {
         console.log('[SyncEngine] Offline — skipping pull');
@@ -745,7 +769,7 @@ export function useSyncEngine(
   useEffect(() => {
     if (!state.autoSync || !pendingCount(state.syncQueue) || (!hasSupabaseSession(supabaseSession) && !canUseNotionMirror(state, false, (supabaseSession as any)?.user?.email || null))) return;
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(() => void push(), DEBOUNCE_MS);
+    debounceRef.current = window.setTimeout(() => void push({ auto: true }), DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
@@ -753,13 +777,13 @@ export function useSyncEngine(
 
   useEffect(() => {
     const onOnline = () => {
-      if (stateRef.current.autoSync) void sync();
+      if (stateRef.current.autoSync) void sync({ auto: true });
     };
     const onVisibility = () => {
-      if (!document.hidden && stateRef.current.autoSync && Date.now() - (stateRef.current.lastSyncedAt || 0) >= MIN_SYNC_INTERVAL_MS) void sync();
+      if (!document.hidden && stateRef.current.autoSync && Date.now() - (stateRef.current.lastSyncedAt || 0) >= MIN_SYNC_INTERVAL_MS) void sync({ auto: true });
     };
     const timer = window.setInterval(() => {
-      if (stateRef.current.autoSync && Date.now() - (stateRef.current.lastSyncedAt || 0) >= MIN_SYNC_INTERVAL_MS) void sync();
+      if (stateRef.current.autoSync && Date.now() - (stateRef.current.lastSyncedAt || 0) >= MIN_SYNC_INTERVAL_MS) void sync({ auto: true });
     }, BACKGROUND_INTERVAL_MS);
     window.addEventListener('online', onOnline);
     document.addEventListener('visibilitychange', onVisibility);
