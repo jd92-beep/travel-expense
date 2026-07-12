@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-07-13
+
+- **Admin Console 1.0.0-rc.1 current-SHA CI closure**:
+  - PR #36 run `29201116294` passed all seven required jobs: Admin/BFF, Edge, clean disposable
+    Supabase, Compact, React, Credential Broker and the Compact/React browser round trip.
+  - The clean database applied every forward migration through `20260712123000` and passed all 15
+    Admin/shared SQL fixtures, including passkey removal, sync conflict, R2 itinerary and Nagoya
+    six-day invariants.
+  - Fixed CI portability and lifecycle defects without changing app behavior: the database job no
+    longer assumes `rg` exists, and owned Vite servers now launch directly, close deterministically
+    and never terminate an external server. Previously the browser test printed `passed` in six
+    seconds but remained alive until the job timeout.
+  - Corrected stale SQL fixture expectations to exercise genuine underlying-row version drift and
+    count all versioned itinerary mutations/restores. Production triggers and mutation guards were
+    not weakened.
+  - Production remains Admin `0.8.3` read-only; no live migration, secret, passkey or data mutation
+    was performed.
+
 ## 2026-07-12
 
 - **Compact App 0.16.2 / Android 0.19.2 contested-trip recovery**:

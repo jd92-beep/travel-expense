@@ -1,6 +1,6 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-07-12 HKT
+Last updated: 2026-07-13 HKT
 
 ## Current Status
 
@@ -102,14 +102,14 @@ and recovered through the operation ID; the UI never declares success from reque
   belongs to one in-range day; partial updates preserve omitted days; every mutation creates a new
   version and snapshot.
 - Nagoya acceptance is exactly six days, `2026-04-20` through `2026-04-25`, with no scenery spot
-  outside that range. Compact/React browser and static contract tests are green. The disposable
-  Supabase SQL suites remain a required CI gate; they were not rerun locally after the final rebase
-  because no local container runtime was available. Live Boss data has not been rewritten because
-  that requires explicit approval, backup and a fresh preview.
+  outside that range. Compact/React browser and static contract tests are green. PR #36 run
+  `29201116294` rebuilt a disposable Supabase from zero and passed all 15 SQL smokes, including
+  itinerary/R2 round trips. Live Boss data has not been rewritten because that requires explicit
+  approval, backup and a fresh preview.
 
 ## Release Evidence
 
-Verified on 2026-07-12:
+Verified on 2026-07-13:
 
 - Admin: typecheck, build and security scan passed; unit `19/19`; contract `21/21`; full smoke
   `42 passed + 1 intentional visual-capture skip`; the suite covers login/WebAuthn, all 18 routes
@@ -126,8 +126,13 @@ Verified on 2026-07-12:
 - BFF: the contract suite executes the real catch-all handler, session verification, CSRF and
   signed Edge transport; invalid provenance, redirects, malformed envelopes and escaped routes fail closed.
 - Broker: check and self-test passed. Static migration policy and shared-ledger scans passed.
-- Local SQL note: Docker was unavailable and Podman was stopped, so the disposable Supabase SQL
-  suite was not rerun locally; CI must supply that evidence before production approval.
+- PR #36 run `29201116294` passed all seven required jobs at current code commit `48800e0`:
+  Admin `2m26s`, clean database `1m42s`, Compact `1m38s`, React `1m43s`, cross-client `1m05s`,
+  Edge `12s` and Broker `13s`. The production-promotion job correctly skipped.
+- The clean-database job applied every migration through `20260712123000` and passed all 15 tracked
+  SQL fixtures. Local Docker remained unavailable; no live database was used as a substitute.
+- Owned Compact/React Vite test servers now launch directly from the local CLI, receive bounded
+  TERM/KILL cleanup and are awaited; CI no longer hangs after already-passed browser output.
 
 ## CI And Runbooks
 

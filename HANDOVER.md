@@ -1,7 +1,7 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-12 HKT
+- **Date**: 2026-07-13 HKT
 - **Focus**: Session 45 completed the Admin `1.0.0-rc.1` production-hardening review: real BFF integration, fail-closed provider/account behavior, safe non-final passkey rotation and a complete login/action/route browser matrix. Production remains the intentionally read-only `0.8.3` deployment pending an approved maintenance cutover.
 - **Agent**: Codex with GPT-5.6 Terra workers
 - **App version**: Compact `0.16.2`; Android `0.19.2` (versionCode 1920); Admin production `0.8.3`, branch RC `1.0.0-rc.1`; React `0.2.3`
@@ -25,10 +25,10 @@ you closed with your session number.
 
 1. 🟠 **Production migration cutover remains approval-gated** — forward-only reconciliation
    artifacts and static migration/contract scans are tracked. Production has not received the new
-   Admin 1.0 migrations. The post-rebase local SQL suites were not run because Docker is unavailable
-   and the Podman VM is stopped; the disposable Supabase job remains a required CI gate. **No
-   `db push`, no blind `migration repair`.** Apply only through the reviewed maintenance runbook
-   after Boss approval.
+   Admin 1.0 migrations. PR #36 run `29201116294` rebuilt a clean disposable Supabase at commit
+   `48800e0`, applied every forward migration through `20260712123000` and passed all 15 tracked SQL
+   smokes. **No `db push`, no blind `migration repair`.** Apply to production only through the
+   reviewed maintenance runbook after Boss approval.
 2. 🟠 **Notion outbox worker deployment is unverified** — worker code, contracts and a guarded
    workflow now exist, but live Edge deployment and secret bindings were not changed in Session 43.
    Shared receipts may remain pending until live deployment is explicitly verified.
@@ -82,9 +82,14 @@ you closed with your session number.
    - Edge gates: 28 files format/lint green, three entrypoints checked and Deno `69 passed, 0 failed`.
      Static migration policy, shared-ledger contract and Admin workflow YAML checks passed.
 3. **Release truth**:
+   - PR #36 current-code run `29201116294` passed all seven required jobs: Admin, Edge, clean
+     database, Compact, React, Broker and cross-client browser round trip. The protected production
+     job correctly skipped on the pull request.
+   - Fixed two CI-evidence defects exposed by that run: runner-portable database container lookup
+     and deterministic owned-Vite shutdown. SQL fixtures now model genuine sync version drift and
+     count all versioned R2 itinerary operations without weakening production guards.
    - No production deployment, migration, secret/passphrase change, passkey enrollment/removal or
-     live user-data mutation was performed. Disposable Supabase execution remains a current-SHA PR
-     CI requirement before production approval.
+     live user-data mutation was performed. Live Admin remains `0.8.3` read-only.
 
 ### Session 44 (Codex + GPT-5.6 Terra — Oscar integration and final branch verification)
 
