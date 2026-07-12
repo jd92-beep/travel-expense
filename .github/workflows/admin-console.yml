@@ -1,0 +1,185 @@
+name: Admin Console 1.0 CI
+
+on:
+  pull_request:
+    paths:
+      - "app-admin-kanban/**"
+      - "app-compact/**"
+      - "app-react/**"
+      - "workers/credential-broker/**"
+      - "scripts/verify-shared-ledger-contract.mjs"
+      - "scripts/verify-supabase-migrations.mjs"
+      - "supabase/functions/_shared/**"
+      - "supabase/functions/admin-auth-state/**"
+      - "supabase/functions/admin-kanban/**"
+      - "supabase/functions/receipt-sync-worker/**"
+      - "supabase/migrations/**"
+      - "supabase/tests/**"
+      - ".github/workflows/admin-console.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app-admin-kanban/**"
+      - "app-compact/**"
+      - "app-react/**"
+      - "workers/credential-broker/**"
+      - "scripts/verify-shared-ledger-contract.mjs"
+      - "scripts/verify-supabase-migrations.mjs"
+      - "supabase/functions/_shared/**"
+      - "supabase/functions/admin-auth-state/**"
+      - "supabase/functions/admin-kanban/**"
+      - "supabase/functions/receipt-sync-worker/**"
+      - "supabase/migrations/**"
+      - "supabase/tests/**"
+      - ".github/workflows/admin-console.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-console-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  admin:
+    name: Admin frontend and BFF
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: app-admin-kanban/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app-admin-kanban
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Static, security and contract gates
+        working-directory: app-admin-kanban
+        run: |
+          npm run typecheck
+          npm run build
+          npm run security:scan
+          npm run test:unit
+          npm run test:contract
+          npm audit --audit-level=high
+
+      - name: Install Chromium
+        working-directory: app-admin-kanban
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser, mobile, reflow and accessibility gates
+        working-directory: app-admin-kanban
+        run: npm run smoke
+
+  edge:
+    name: Edge functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: 2.9.1
+
+      - name: Format, lint and typecheck
+        run: |
+          deno fmt --check supabase/functions/_shared supabase/functions/admin-auth-state supabase/functions/admin-kanban supabase/functions/receipt-sync-worker
+          deno lint supabase/functions/_shared supabase/functions/admin-auth-state supabase/functions/admin-kanban supabase/functions/receipt-sync-worker
+          deno check supabase/functions/admin-auth-state/index.ts supabase/functions/admin-kanban/index.ts supabase/functions/receipt-sync-worker/index.ts
+
+      - name: Edge contract tests
+        run: deno test --allow-env supabase/functions
+
+  database:
+    name: Clean local database contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
+        with:
+          version: 2.109.0
+
+      - name: Start disposable Supabase
+        run: supabase start
+
+      - name: Run Admin and shared-contract SQL smokes
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_container="$(docker ps --format '{{.Names}}' | rg '^supabase_db_' | head -1)"
+          test -n "$db_container"
+          for sql in \
+            supabase/tests/admin_auth_state_smoke.sql \
+            supabase/tests/admin_integrity_scan_smoke.sql \
+            supabase/tests/admin_operation_kernel_smoke.sql \
+            supabase/tests/admin_r2_operation_kernel_smoke.sql \
+            supabase/tests/admin_read_contract_smoke.sql \
+            supabase/tests/canonical_receipt_contract_smoke.sql \
+            supabase/tests/itinerary_contract_smoke.sql \
+            supabase/tests/receipt_sync_worker_smoke.sql \
+            supabase/tests/security_definer_contract_smoke.sql \
+            supabase/tests/trip_membership_contract_smoke.sql
+          do
+            docker exec -i "$db_container" psql -U postgres -d postgres \
+              --no-psqlrc --quiet --set ON_ERROR_STOP=1 < "$sql"
+          done
+
+      - name: Stop disposable Supabase
+        if: always()
+        run: supabase stop --no-backup
+
+  broker:
+    name: Credential Broker
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: workers/credential-broker/package-lock.json
+
+      - name: Install and verify
+        working-directory: workers/credential-broker
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm run self-test
+          npm audit --audit-level=high
+
+  shared-contract:
+    name: Cross-client contract scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22.22.3
+
+      - name: Migration and shared-ledger contract scans
+        run: |
+          node scripts/verify-supabase-migrations.mjs
+          node scripts/verify-shared-ledger-contract.mjs

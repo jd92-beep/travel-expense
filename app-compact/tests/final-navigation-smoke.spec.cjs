@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
 const tabs = [
   ['主頁', '預算總覽'],
@@ -50,7 +50,7 @@ for (const [name, viewport] of [
     const context = await browser.newContext({ viewport });
     const page = await context.newPage();
     await installTrust(page);
-    await page.goto('http://localhost:8903/travel-expense/compact/');
+    await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
     await expect(page.getByText('掃描收據').first()).toBeVisible();
     if (viewport.width <= 390) {
       await expect(page.locator('.hyperframe-layer')).toHaveCount(2);
@@ -93,7 +93,7 @@ test('Final lock gate smoke without trusted device', async ({ page }) => {
       },
     }));
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect(page.getByText(/本機安全防護鎖|先解鎖再使用/).first()).toBeVisible();
 });
 
@@ -183,7 +183,7 @@ test('Sync error indicator is clickable and retries sync', async ({ page }) => {
       schemaVersion: 3,
     }));
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
 
   // The queued item auto-pushes ~3s after boot (autoSync debounce) and hits the stubbed 403.
   await expect(page.getByRole('button', { name: /Sync error/ })).toBeVisible({ timeout: 10_000 });
@@ -236,7 +236,7 @@ test('Console surfaces failed queue items before another backend retry', async (
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expect(page.getByRole('button', { name: /Sync error.*1 failed/ })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByLabel('Compact travel readiness')).toContainText('Queue · 1 failed');
   const queueInspector = page.getByRole('region', { name: 'Sync Queue Inspector' });
@@ -299,7 +299,7 @@ test('Account switch watchdog keeps Compact console scoped to the active backend
     window.__sessionForBeta = sessionFor(betaId, 'beta@example.com');
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   const health = page.getByLabel('Account Sync Health');
   await expect(health).toContainText('alpha@example.com');
   await expect(health).toContainText('Alpha Scoped Trip');
@@ -337,7 +337,7 @@ test('Duplicate person ids do not create React key warnings', async ({ page }) =
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#stats');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#stats`);
   await expect(page.getByText('預算使用分析').first()).toBeVisible();
   await page.getByLabel('主要分頁').getByRole('button', { name: '設定', exact: true }).click();
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
@@ -353,7 +353,7 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
   const releaseNoteRequests = [];
   page.on('request', (request) => {
     const url = request.url();
-    if (/github|changelog|release-notes|releases/i.test(url) && !url.startsWith('http://localhost:8903/')) {
+    if (/github|changelog|release-notes|releases/i.test(url) && !url.startsWith(`${APP_ORIGIN}/`)) {
       releaseNoteRequests.push(url);
     }
   });
@@ -386,7 +386,7 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect(page.getByLabel('Compact travel readiness')).toHaveCount(0);
   const nav = page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]');
   await nav.getByRole('button', { name: '設定', exact: true }).click();
@@ -506,7 +506,7 @@ test('Boot currency and sync effects run once without noisy mobile 403s', async 
       }]
     }));
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect.poll(() => notionPaths.filter((path) => path.includes('/query')).length).toBeGreaterThanOrEqual(2);
   await page.waitForTimeout(1200);

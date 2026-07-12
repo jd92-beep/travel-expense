@@ -1,5 +1,7 @@
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
-import type { AppState, Receipt, TripProfile } from './types';
+import { canonicalizeItineraryRange } from '../domain/trip/itineraryContract';
+import { canonicalTombstoneWins, mergeCanonicalReceiptTombstones } from './receiptTombstones';
+import type { AppState, Receipt, ReceiptTombstone, SyncQueueItem, TripProfile } from './types';
 
 const stampForRemote = (state: AppState, receipt: Receipt) => stampReceiptForTrip(state, receipt, { preserveUpdatedAt: true });
 
@@ -51,41 +53,80 @@ function mergeItineraryDay(remote: TripProfile['itinerary'][number] | undefined,
     day: Number(remote?.day || local?.day || base.day) || 1,
     region: remote?.region || local?.region || base.region,
     lodging: remote?.lodging?.name ? remote.lodging : local?.lodging,
-    spots: remote?.spots?.length ? remote.spots : local?.spots || [],
+    spots: remote ? remote.spots || [] : local?.spots || [],
   };
 }
 
-function mergeTripItinerary(remoteTrip: TripProfile, localTrip?: TripProfile): TripProfile['itinerary'] {
+function tripItineraryVersion(trip?: TripProfile): number {
+  return Math.max(0, Number(trip?.itineraryVersion ?? trip?.version) || 0);
+}
+
+export function filterSupersededTripQueue(
+  queue: SyncQueueItem[],
+  localTrips: TripProfile[],
+  remoteTrips: TripProfile[],
+): SyncQueueItem[] {
+  const localById = new Map(localTrips.map((trip) => [trip.id, trip]));
+  const superseded = new Set(
+    remoteTrips
+      .filter((remote) => tripItineraryVersion(remote) > tripItineraryVersion(localById.get(remote.id)))
+      .map((remote) => remote.id),
+  );
+  return queue.filter((item) => item.type !== 'trip' || !superseded.has(item.entityId));
+}
+
+function mergeTripItinerary(
+  remoteTrip: TripProfile,
+  localTrip?: TripProfile,
+): TripProfile['itinerary'] {
   const range = validTripRange(remoteTrip, localTrip);
   const remoteDays = (remoteTrip.itinerary || []).filter((day) => inTripRange(day, range));
   const localDays = (localTrip?.itinerary || []).filter((day) => inTripRange(day, range));
-  if (!remoteDays.length) return localDays;
-  if (!localDays.length) return remoteDays;
-
   const remoteByDate = new Map(remoteDays.map((day) => [day.date, day]));
   const localByDate = new Map(localDays.map((day) => [day.date, day]));
   const dates = Array.from(new Set([...localDays, ...remoteDays].map((day) => day.date))).sort();
-  return dates
+  const mergedDays = dates
     .map((date, idx) => {
       const day = mergeItineraryDay(remoteByDate.get(date), localByDate.get(date));
       return day ? { ...day, day: idx + 1 } : null;
     })
     .filter((day): day is TripProfile['itinerary'][number] => !!day);
+  if (!range) return mergedDays;
+  return canonicalizeItineraryRange({
+    tripId: remoteTrip.id,
+    startDate: range.start,
+    endDate: range.end,
+    itinerary: mergedDays,
+    fallbackCurrency: remoteTrip.currencies?.[0],
+    fallbackRegion: remoteTrip.destinationSummary || remoteTrip.name,
+    fallbackTimezone: remoteTrip.timezones?.[0],
+  }).itinerary;
 }
 
 export function isReceiptTombstoned(
-  state: Pick<AppState, 'notionDeletedIds' | 'notionDeletedSourceIds' | 'trips'>,
-  receipt: Pick<Receipt, 'id' | 'sourceId' | 'notionPageId' | 'tripId'>,
+  state: Pick<AppState, 'notionDeletedIds' | 'notionDeletedSourceIds' | 'receiptTombstones' | 'trips'>,
+  receipt: Pick<Receipt, 'id' | 'sourceId' | 'notionPageId' | 'tripId' | 'syncRevision'>,
 ) {
   const deletedSourceIds = state.notionDeletedSourceIds || [];
   const sourceId = receipt.sourceId || receipt.id;
+  const canonicalDeleteWins = canonicalTombstoneWins(state.receiptTombstones, receipt);
   const hasMultipleTrips = Array.isArray(state.trips) && state.trips.filter((trip) => !trip.archived).length > 1;
   const rawLegacyMatchAllowed = !hasMultipleTrips || !receipt.tripId;
   return !!(
+    canonicalDeleteWins
+    ||
     receipt.notionPageId && state.notionDeletedIds?.includes(receipt.notionPageId)
     || deletedSourceIds.includes(receiptSourceTombstoneKey(receipt))
     || rawLegacyMatchAllowed && sourceId && deletedSourceIds.includes(sourceId)
   );
+}
+
+function mergeReceiptTombstones(
+  state: AppState,
+  pulledReceipts: Receipt[],
+  pulledTombstones: ReceiptTombstone[],
+): Record<string, ReceiptTombstone> {
+  return mergeCanonicalReceiptTombstones(state.receiptTombstones, pulledReceipts, pulledTombstones);
 }
 
 export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]): Receipt[] {
@@ -105,32 +146,38 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
       .map((receipt) => [receiptTripSourceKey(receipt), receipt.id] as const)
       .filter(([key]) => key),
   );
-  // Trip-agnostic raw sourceId fallback: a receipt pulled from Notion may have a valid sourceId
-  // but no tripId, so its trip-scoped key won't match. sourceId is unique per receipt (id-derived),
-  // so matching on the raw sourceId is collision-safe and prevents duplicate rows.
+  // Legacy Notion rows may not have a tripId. Raw SourceID matching is only safe when the candidate
+  // is unique and unscoped; canonical identity is always (TripID, SourceID).
   const rawKeyOf = (r: Pick<Receipt, 'id' | 'sourceId' | 'tripId'>) => rawReceiptSourceId(r.sourceId || r.id, r.tripId);
-  const idByRawSource = new Map(
-    state.receipts
-      .map((receipt) => [rawKeyOf(receipt), receipt.id] as const)
-      .filter(([key]) => key),
-  );
+  const idsByRawSource = new Map<string, string[]>();
+  const indexRawSource = (key: string, id: string) => {
+    if (!key) return;
+    const ids = idsByRawSource.get(key) || [];
+    if (!ids.includes(id)) idsByRawSource.set(key, [...ids, id]);
+  };
+  for (const receipt of state.receipts) indexRawSource(rawKeyOf(receipt), receipt.id);
   for (const remoteReceipt of pulledReceipts) {
     if (isReceiptTombstoned(state, remoteReceipt)) continue;
     const tripSourceKey = receiptTripSourceKey(remoteReceipt);
     const rawSourceKey = rawKeyOf(remoteReceipt);
+    const rawCandidates = rawSourceKey ? idsByRawSource.get(rawSourceKey) || [] : [];
+    const legacyCandidates = remoteReceipt.tripId
+      ? rawCandidates.filter((id) => !byId.get(id)?.tripId)
+      : rawCandidates;
+    const uniqueLegacyId = legacyCandidates.length === 1 ? legacyCandidates[0] : undefined;
     const matchedId = byId.has(remoteReceipt.id)
       ? remoteReceipt.id
       : (remoteReceipt.supabaseId ? idBySupabaseId.get(remoteReceipt.supabaseId) : undefined)
         || (remoteReceipt.notionPageId ? idByPageId.get(remoteReceipt.notionPageId) : undefined)
         || idByTripSource.get(tripSourceKey)
-        || (rawSourceKey ? idByRawSource.get(rawSourceKey) : undefined);
+        || uniqueLegacyId;
     const localReceipt = matchedId ? byId.get(matchedId) : undefined;
     if (!localReceipt) {
       byId.set(remoteReceipt.id, stampForRemote(state, { ...remoteReceipt, syncStatus: 'synced' }));
       if (remoteReceipt.supabaseId) idBySupabaseId.set(remoteReceipt.supabaseId, remoteReceipt.id);
       if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, remoteReceipt.id);
       if (tripSourceKey) idByTripSource.set(tripSourceKey, remoteReceipt.id);
-      if (rawSourceKey) idByRawSource.set(rawSourceKey, remoteReceipt.id);
+      indexRawSource(rawSourceKey, remoteReceipt.id);
       continue;
     }
     const localUpdated = receiptUpdatedAt(localReceipt, true);
@@ -150,7 +197,7 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
       if (remoteReceipt.supabaseId) idBySupabaseId.set(remoteReceipt.supabaseId, localReceipt.id);
       if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, localReceipt.id);
       if (tripSourceKey) idByTripSource.set(tripSourceKey, localReceipt.id);
-      if (rawSourceKey) idByRawSource.set(rawSourceKey, localReceipt.id);
+      indexRawSource(rawSourceKey, localReceipt.id);
     }
   }
   return [...byId.values()];
@@ -164,16 +211,42 @@ export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
     const localTrip = byId.get(remoteTrip.id);
     const remoteUpdated = tripUpdatedAt(remoteTrip);
     const localUpdated = localTrip ? tripUpdatedAt(localTrip) : 0;
+    const remoteItineraryVersion = tripItineraryVersion(remoteTrip);
+    const localItineraryVersion = tripItineraryVersion(localTrip);
     const remoteHasMissingLink = localTrip
-      ? (!localTrip.notionPageId && !!remoteTrip.notionPageId) || (!localTrip.sourceId && !!remoteTrip.sourceId)
+      ? (!localTrip.supabaseId && !!remoteTrip.supabaseId)
+        || (!localTrip.notionPageId && !!remoteTrip.notionPageId)
+        || (!localTrip.sourceId && !!remoteTrip.sourceId)
       : true;
-    if (!localTrip || remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
+    const keepNewerLocalItinerary = !!localTrip && remoteItineraryVersion < localItineraryVersion;
+    const itinerary = keepNewerLocalItinerary
+      ? localTrip.itinerary || []
+      : mergeTripItinerary(remoteTrip, localTrip);
+    if (!localTrip || remoteUpdated > localUpdated) {
       byId.set(remoteTrip.id, {
         ...localTrip,
         ...remoteTrip,
-        itinerary: mergeTripItinerary(remoteTrip, localTrip),
+        itinerary,
+        itineraryVersion: Math.max(localItineraryVersion, remoteItineraryVersion),
+        version: Math.max(localTrip?.version || 1, remoteTrip.version || 1),
+        _itineraryNeedsRepair: keepNewerLocalItinerary
+          ? localTrip._itineraryNeedsRepair
+          : remoteTrip._itineraryNeedsRepair,
       });
-
+    } else if (remoteItineraryVersion > localItineraryVersion || remoteHasMissingLink || remoteTrip._itineraryNeedsRepair || remoteTrip.sharing) {
+      byId.set(remoteTrip.id, {
+        ...localTrip,
+        supabaseId: remoteTrip.supabaseId || localTrip.supabaseId,
+        notionPageId: remoteTrip.notionPageId || localTrip.notionPageId,
+        sourceId: remoteTrip.sourceId || localTrip.sourceId,
+        sharing: remoteTrip.sharing || localTrip.sharing,
+        itinerary: remoteItineraryVersion > localItineraryVersion ? itinerary : localTrip.itinerary,
+        itineraryVersion: Math.max(localItineraryVersion, remoteItineraryVersion),
+        _itineraryNeedsRepair: remoteItineraryVersion > localItineraryVersion
+          ? remoteTrip._itineraryNeedsRepair
+          : localTrip._itineraryNeedsRepair,
+        version: Math.max(localTrip.version || 1, remoteTrip.version || 1),
+      });
     }
   }
   return {
@@ -182,11 +255,18 @@ export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
   };
 }
 
-export function mergePulledData(state: AppState, pulledReceipts: Receipt[], pulledTrips: TripProfile[] = []): AppState {
+export function mergePulledData(
+  state: AppState,
+  pulledReceipts: Receipt[],
+  pulledTrips: TripProfile[] = [],
+  pulledTombstones: ReceiptTombstone[] = [],
+): AppState {
   const { trips, activeTripId } = mergePulledTrips(state, pulledTrips);
-  const baseState = { ...state, trips, activeTripId };
+  const receiptTombstones = mergeReceiptTombstones(state, pulledReceipts, pulledTombstones);
+  const baseState = { ...state, trips, activeTripId, receiptTombstones };
   return {
     ...baseState,
-    receipts: mergePulledReceipts(baseState, pulledReceipts),
+    receipts: mergePulledReceipts(baseState, pulledReceipts)
+      .filter((receipt) => !isReceiptTombstoned(baseState, receipt)),
   };
 }

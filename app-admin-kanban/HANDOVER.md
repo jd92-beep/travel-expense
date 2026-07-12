@@ -1,112 +1,160 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-07-10 HKT
+Last updated: 2026-07-12 HKT
 
 ## Current Status
 
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
-- Current transitional frontend: `0.8.3`
+- Production release: `0.8.3`, intentionally read-only.
+- Verified local release candidate: `1.0.0-rc.1` on `codex/admin-console-1.0`.
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
-- Production mode: **read-only containment**. Edge mutations and provider probes are backend-denied.
-- Admin 1.0 is **not production-complete**. The current UI and bearer/session architecture are being
-  replaced by the accepted Admin 1.0 plan.
+- R0/R1/R2 code and release gates are complete locally. Production cutover is not approved or run.
+- R3 account consolidation/deletion, Notion write repair, device commands, runtime writes, arbitrary
+  SQL/table editing and generic credential controls are server-disabled.
 
-Never put the passphrase, session token, Supabase keys, Broker keys or credential values in this
-file, source control, screenshots, support bundles or chat output.
+Never put the passphrase, session token, Supabase keys, Broker keys or credential values in source,
+documentation, screenshots, support bundles or chat output.
 
-## Security Boundary
+## Architecture
 
-Current containment:
+The browser connects only to same-origin `/api/admin/*` routes. `App.tsx` provides the router and
+query client; `src/app/AdminShell.tsx` owns navigation and session chrome. Feature code is grouped
+under `src/features/`, primitives under `src/components/primitives/`, and public contracts under
+`src/lib/contracts/`.
 
-1. `ADMIN_WRITE_MODE` defaults and unknown values to `deny_all`.
-2. Only the fixed Edge GET `READ_ROUTE_MAP` is reachable.
-3. POST/PUT/PATCH/DELETE and external side effects return `503 ADMIN_WRITES_DISABLED` with a request
-   ID before legacy route code can execute.
-4. `admin_action_requests`, `admin_console_config` and `admin_identity_links` have service-role-only
-   policies/grants. Anon and normal authenticated roles cannot CRUD them or execute the admin RLS
-   helper.
-5. The old `ADMIN_TOKEN` path and generic Broker bypass are removed. Edge-to-Broker requests use a
-   rotated scoped key and fixed route allowlist.
-6. Receipt photos are served through short-lived signed URLs. The Admin endpoint has no public URL
-   fallback.
+Primary routes:
 
-Known auth gap before Admin 1.0:
-
-- The browser still uses a transitional passphrase-to-bearer session and connects directly to Edge.
-- Opaque HttpOnly sessions, passkey second factor, CSRF, durable rate limiting and the signed
-  same-origin BFF are Task 3 and remain mandatory before enabling writes.
-- New browser startup must delete the old `sessionStorage` bearer when Task 3 lands.
-
-## Live Evidence
-
-Verified on 2026-07-10:
-
-- Unauthenticated Edge mutation: `503 ADMIN_WRITES_DISABLED` with request ID.
-- Real anon PostgREST table GET/POST/PATCH/DELETE and admin RPC execute: denied with `401/42501`.
-- SQL smoke: `admin_console_privilege_smoke_passed`.
-- Adjacent function smoke: `adjacent_security_privilege_smoke_passed`.
-- Edge Deno unit tests: `10 passed`, `0 failed`.
-- Broker: `npm run check` and `npm run self-test` passed after key rotation.
-- Admin: `npm ci --ignore-scripts`, `npm run typecheck`, `npm run build`, smoke `15/15`, audit `0` vulnerabilities.
-- Current-tree secret scan and containment verifier passed.
-
-Evidence files outside the public repository:
-
-- `/tmp/admin-console-privileges-pre-20260710.json`
-- `/tmp/admin-console-privileges-post-20260710.json`
-- `/tmp/admin-console-schema-pre-20260710.json`
-- `/tmp/admin-console-schema-post-20260710.json`
-
-## Photo Privacy Gate
-
-Code is ready but the live `receipt-photos` bucket remains public for old-client compatibility.
-
-- Compact `0.13.6`: signed upload and batch-refresh URLs, focused smoke `1/1` passed.
-- Android `0.16.4`: matching signed URL implementation; branch commit `d294648`; native QA passed.
-- Admin Edge: 60-second signed URL, no fail-open public fallback.
-- Migration: `supabase/migrations/20260710161000_private_receipt_photo_storage.sql`.
-
-Do not apply that migration until both client builds are deployed and active compatibility is
-confirmed. Applying it early breaks receipt images in old Android installations.
-
-## Deployment Truth
-
-As of 2026-07-10 there is no Admin-specific GitHub production workflow. The currently inspected
-production deployment is a Vercel CLI deployment. A normal git push must not be described as an
-Admin deployment until the planned protected CI/CD workflow lands.
-
-Current guarded production command:
-
-```bash
-cd app-admin-kanban
-npm ci --ignore-scripts
-npm run deploy
-
-cd ..
-npx supabase functions deploy admin-kanban --no-verify-jwt
+```text
+/login
+/overview
+/data/accounts
+/data/accounts/:accountId
+/data/trips
+/data/trips/:tripId
+/data/trips/:tripId/itinerary
+/data/receipts
+/data/receipts/:receiptId
+/reliability/incidents
+/reliability/sync
+/reliability/integrity
+/reliability/reconciliation
+/system/providers
+/system/releases
+/system/infrastructure
+/audit
+/audit/:eventId
 ```
 
-`npm run deploy` refuses a dirty worktree, pins `travel-expense-admin-kanban` with the Vercel
-`--project` flag, injects the exact Git SHA, verifies `/api/health`, and cleans CLI-created local
-link/OIDC files. Do not substitute a bare `vercel deploy`; it can create or target the wrong project.
-For Admin 1.0 release, add the protected GitHub workflow, synthetic preview environment, Boss
-approval gate and provenance record before replacing this temporary manual path.
+The five workspaces are Overview, Data, Reliability, AI & System, and Audit. Lists use opaque cursor
+pagination and query-string filters. TanStack Query cancels stale requests, pauses hidden-tab polling,
+shows background refresh separately and never retries mutations.
 
-## Open Blockers
+## Authentication Boundary
 
-1. Reconcile diverged Supabase migration history. Do not run `db push` or `migration repair`.
-2. Transfer admin helper ownership to a reviewed non-login role through a platform-owner operation;
-   the managed SQL API cannot perform that transfer.
-3. Implement passphrase + passkey auth, opaque sessions, CSRF and signed fixed-route BFF.
-4. Replace the giant snapshot and legacy tabs with paginated read APIs and five workspaces.
-5. Deploy Compact/Android compatibility and then apply the private photo migration.
-6. Keep all R2/R3 operations server-disabled until preview, step-up, version, idempotency and audit
-   gates are green.
+The RC implements:
 
-## Rollback
+1. Async Node `crypto.scrypt` passphrase verification using the versioned
+   `scrypt:v1:131072:8:1:...` format and constant-time comparison.
+2. SimpleWebAuthn passkey authentication with exact origin/RP ID and required user verification.
+3. Opaque 256-bit `__Host-admin_session` tokens; only SHA-256 hashes are stored server-side.
+4. Ten-minute idle and two-hour absolute expiry, maximum two sessions and server-side revocation.
+5. `__Host-admin_csrf`, `X-Admin-CSRF`, exact Origin, same-origin Fetch Metadata and JSON-only
+   mutation checks.
+6. Durable pre-scrypt login and re-auth throttling with fail-closed store behavior.
+7. A fixed BFF route map and 30-second HMAC-signed BFF-to-Edge requests with nonce replay defense.
+8. Server-computed previews, short single-use step-up grants, version/hash drift checks and
+   idempotency keys for mutations.
 
-- Frontend: use the last new-auth-compatible read-only maintenance build once Task 3 lands.
-- Edge: keep `ADMIN_WRITE_MODE=deny_all`; roll forward to a fixed bundle. Never restore old auth.
-- Database: keep browser grants revoked and forward-fix migrations. Never reopen public admin access.
-- Secrets: generate another new key. Never restore the rotated value.
-- External operations: resume or compensate; do not report success until verified.
+The legacy browser bearer and direct Edge authorization paths are removed from the RC. Production
+still runs the old read-only build until the approved maintenance cutover.
+
+## API And Operations
+
+Read APIs cover overview/search, accounts/installations, trips/itinerary/versions, receipts/photos,
+incidents, sync jobs, integrity, Notion reconciliation, providers, runtime, audit and operations.
+Responses use typed envelopes, request IDs, source freshness and safe DTO allowlists.
+
+Admin 1.0 operations:
+
+- R1: redacted support bundle, provider probe and eligible sync retry/cancel.
+- R2: receipt amend/trash/restore, trip metadata amend, itinerary amend/restore and membership
+  add/invite/role/remove.
+- Intentionally unavailable: current-admin deletion, owner removal, hard delete, force overwrite,
+  generic patching and session revoke without an official cross-device revocation contract.
+
+R2 requires desktop, fresh complete data, server preview, passphrase plus passkey step-up, expected
+version, a single-use grant and verified server result. Network ambiguity is shown as Outcome Unknown
+and recovered through the operation ID; the UI never declares success from request submission alone.
+
+## Shared Contracts
+
+- Receipts use record kind, visibility, split/payer arrays, version, sync revision and durable
+  tombstones. Private receipts never enter Notion. Old client versions cannot resurrect deleted rows.
+- Membership uses owner/admin/editor/viewer and pending/active/removed. Owner removal or downgrade is
+  rejected; removed members reactivate instead of duplicating; active trip is per user.
+- Itinerary dates are local calendar dates. Inclusive ranges contain exactly one day per date; a spot
+  belongs to one in-range day; partial updates preserve omitted days; every mutation creates a new
+  version and snapshot.
+- Nagoya acceptance is exactly six days, `2026-04-20` through `2026-04-25`, with no scenery spot
+  outside that range. Local Compact/React/Android/SQL tests are green. Live Boss data has not been
+  rewritten because that requires explicit approval, backup and a fresh preview.
+
+## Release Evidence
+
+Verified on 2026-07-12:
+
+- Admin: typecheck, build and security scan passed; unit `8/8`; contract `12/12`; full smoke
+  `14 passed + 1 intentional visual-capture skip`; dedicated mobile `3/3`; axe serious/critical `0`
+  across all 16 routes at desktop/mobile; `npm audit` reports `0` vulnerabilities.
+- Edge: 21 files passed format/lint/check; Deno tests `50 passed, 0 failed`.
+- Disposable Supabase: all ten auth/read/R2/receipt/itinerary/membership/security/worker SQL suites
+  passed from a clean local rebuild.
+- Compact `0.13.6`: isolated 21-stage production gate passed in 236 seconds.
+- React `0.2.3`: typecheck/build/security/policy/contract gates passed; browser suite
+  `30 passed, 5 intentional skips`.
+- Android `0.18.2`: contract suites and isolated browser suites (`28 passed, 2 intentional skips`)
+  passed; JDK wrapper selected JBR 21; debug build and `android:qa` passed with
+  `appLinksVerified=true`. Artifact:
+  `/tmp/travel-expense-android-qa-2026-07-12T02-10-31-087Z`.
+- Broker: check, self-test and audit passed.
+
+## CI And Runbooks
+
+`.github/workflows/admin-console.yml` is synthetic CI only. It uses pinned actions and checks Admin,
+Edge, Broker, shared contracts and a disposable Supabase. It does not receive production secrets or
+deploy production. CODEOWNERS covers Admin, Edge, Broker and migrations.
+
+Runbook index: `docs/runbooks/README.md`
+
+- `docs/runbooks/maintenance-and-rollback.md`
+- `docs/runbooks/credential-incident.md`
+- `docs/runbooks/passkey-recovery.md`
+- `docs/runbooks/account-deletion.md`
+- `docs/runbooks/notion-repair-saga.md`
+
+## Production Blockers
+
+1. Boss must approve the maintenance window and production cutover.
+2. Configure production scrypt hash, WebAuthn exact origin/RP ID, BFF signing keys and bootstrap
+   secret without printing or committing values; enroll the first Boss passkey and revoke bootstrap.
+3. Apply reviewed forward-only migrations through the maintenance runbook. Do not run `db push` or
+   `migration repair`; transfer helper ownership through the platform-owner operation.
+4. Verify production BFF/Edge provenance, nonce store, session/rate stores and fail-closed behavior.
+5. Deploy Compact/Android compatibility and confirm heartbeats before making receipt photos private.
+6. Verify receipt-sync worker deployment and bindings separately.
+7. Preview and back up live Nagoya data before any repair; do not mutate live rows automatically.
+8. Add protected production-environment approval/deploy outside the current CI-only workflow.
+
+## Cutover And Rollback
+
+Follow `docs/runbooks/maintenance-and-rollback.md`. The fixed order is deny-all, privilege check,
+new-only BFF/Edge, secret rotation, session revocation, frontend promotion, read-only smoke, R1
+allowlist, then each verified R2 action separately.
+
+Rollback is forward-only:
+
+- Frontend returns to a new-auth-compatible read-only maintenance build.
+- Edge keeps `ADMIN_WRITE_MODE=deny_all`; old auth never returns.
+- Database keeps browser grants revoked and receives a forward fix.
+- Secrets are replaced with another new key; compromised values are never restored.
+- External operations resume or compensate and remain non-successful until server verification.

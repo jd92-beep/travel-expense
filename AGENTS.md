@@ -89,7 +89,10 @@ These rules bind every agent working in this repo (Oscar, Codex, Antigravity, Mi
 - Personal Notion broker requests must use the resolved active personal Notion DB. If `state.notionDb` is still the old shared default but the active trip has a personal `notionDb`, `notionFetch()` must send the active trip DB to `/notion/request` or the Worker scope guard will reject it.
 - In public Supabase mode, Settings must not present the old shared/default Notion `Database ID` as an editable mirror target before Personal Notion is connected. Supabase-only actions should be labelled as Supabase-only, and Notion-only diagnostics/schema actions should stay disabled until the personal mirror is ready.
 - AI provider calls go through the Credential Broker. Do not inject Kimi, Google, ZAI, MiniMax, OpenRouter, Notion, or app unlock secrets into GitHub Pages, Vercel, Netlify, or frontend env.
-- Required primary AI routing: email and trip update use Kimi `kimi/kimi-code`; scan and voice use Google Gemma 4 31B `google/gemma-4-31b`.
+- AI routing uses the user-selected primary model per task. Fresh defaults are Mimo `mimo-v2.5`
+  for scan/voice and Mimo `mimo-v2.5-pro` for email/trip update. Preserve the fixed fallback ladder
+  and actual-model evidence; `429`, quota and daily-limit responses remain hard stops with no
+  provider fallback.
 - AI quota/rate-limit failures from the Credential Broker are hard stops. Do not silently fallback to another provider after `429`, quota, or daily-limit errors, because that can bypass public-user metering and confuse the required primary model contract.
 - App settings can sync through Notion meta row `SourceID=__meta_settings__`; credentials must stay local or in vault.
 - If changing root `index.html` in a way that must beat stale PWA cache, bump `APP_BUILD`.
@@ -236,7 +239,7 @@ npm run self-test
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **travel-expense** (6413 symbols, 15615 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **travel-expense** (7115 symbols, 17338 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

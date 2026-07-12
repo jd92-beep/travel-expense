@@ -13,6 +13,8 @@
     "build:root": "VITE_BASE_PATH=/ npm run build",
     "preview": "vite preview --host 0.0.0.0 --port 4175",
     "typecheck": "tsc --noEmit",
+    "test:receipt-tombstone": "node --experimental-strip-types scripts/receipt-tombstone.test.ts",
+    "test:itinerary-merge": "node scripts/run-itinerary-sync-merge-test.mjs",
     "parity:tabs": "node ../scripts/tab-parity.mjs",
     "security:scan": "node ../scripts/security-scan.mjs",
     "db:policy:scan": "node ../scripts/verify-supabase-migrations.mjs",

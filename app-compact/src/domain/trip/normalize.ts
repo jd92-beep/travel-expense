@@ -337,10 +337,9 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   return {
     ...receipt,
     category: normalizedReceiptCategory(receipt),
-    // Stamp a stable, unique sourceId once so identity never shifts across edits/pulls.
-    // Two receipts with the same store/photo keep distinct ids → distinct source_ids →
-    // both persist as separate rows (Supabase unique key is (trip_id, source_id)).
-    sourceId: receipt.sourceId || receipt.id,
+    // Stamp local receipts once so identity never shifts across edits/pulls. A cloud-backed
+    // row missing SourceID stays missing so integrity tooling can surface and repair it.
+    sourceId: receipt.sourceId || (receipt.supabaseId || receipt.notionPageId ? undefined : receipt.id),
     // Ensure every receipt carries an explicit version for Supabase optimistic locking.
     version: receipt.version || 1,
     tripId: trip.id,

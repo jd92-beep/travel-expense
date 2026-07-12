@@ -1,5 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = (process.env.REACT_TEST_ORIGIN || 'http://localhost:8902').replace(/\/+$/, '');
+const APP_URL = `${APP_ORIGIN}/travel-expense/react/`;
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 const receipts = [
@@ -71,7 +74,7 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts, autoSync: false }));
   }, receipts);
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#history`);
   await expect(page.getByText('紀錄中心')).toBeVisible();
   await expect(page.locator('.history-command')).not.toContainText('local ready');
   await expect(page.getByRole('button', { name: /^切換旅程$/ })).toBeVisible();
@@ -187,7 +190,7 @@ test('History desktop shell title uses Expense Record copy', async ({ page }) =>
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts, autoSync: false }));
   }, receipts);
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#history`);
   await expect(page.getByRole('heading', { name: 'Expense Record' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Expense Archive' })).toHaveCount(0);
 });
@@ -217,7 +220,7 @@ test('History manual pull routes through global sync engine when broker session 
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: [] }));
   });
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#history`);
   await expect(page.getByText('紀錄中心')).toBeVisible();
   await page.getByRole('button', { name: '重新同步' }).click();
   await expect(page.getByText(/已從雲端同步/)).toBeVisible();
@@ -252,7 +255,7 @@ test('History relies on the single global boot pull instead of auto-pulling agai
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: [] }));
   });
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#history`);
   await expect(page.getByText('紀錄中心')).toBeVisible();
   await expect.poll(() => notionPaths.filter((path) => path.endsWith('/query')).length, { timeout: 10000 }).toBe(3);
   await page.waitForTimeout(1200);

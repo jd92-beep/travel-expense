@@ -61,6 +61,9 @@ function buildSafeEnv() {
     }
   }
   env.COMPACT_GATE_SAFE_MODE = '1';
+  env.COMPACT_TEST_ORIGIN = new URL(baseUrl).origin;
+  env.COMPACT_CONTACT_SHEET_BASE_URL = baseUrl;
+  env.COMPACT_SHARED_CONTRACT_COMPACT_URL = baseUrl;
   return env;
 }
 

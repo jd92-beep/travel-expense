@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 test('Password unlock registers a trusted device and trusted reload refreshes broker session', async ({ page }) => {
@@ -91,7 +93,7 @@ test('Password unlock registers a trusted device and trusted reload refreshes br
     };
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect(page.getByText('先解鎖再使用')).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.activeElement?.tagName || '')).not.toBe('INPUT');
   await page.getByLabel('密碼').fill('1234');

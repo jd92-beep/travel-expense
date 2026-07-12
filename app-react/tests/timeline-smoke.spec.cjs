@@ -31,8 +31,8 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
   await expect(reloadedEditedEvent).toBeVisible();
   await expect(reloadedEditedEvent).toHaveAttribute('data-spot-key', stableSpotKey || '');
   await reloadedEditedEvent.getByRole('button', { name: '編輯' }).click();
-  await page.getByRole('button', { name: '還原' }).click();
-  await expect(page.getByText('M6 Edited Spot')).toBeHidden();
+  await expect(page.getByRole('button', { name: '還原' })).toHaveCount(0);
+  await page.getByRole('button', { name: '取消' }).click();
 
   await nav.getByRole('button', { name: '記帳' }).click();
   await page.getByRole('button', { name: '手動', exact: true }).click();
@@ -75,7 +75,7 @@ test('Timeline map links reject unsafe imported URLs and use Android intent fall
       receipts: [],
     }));
   });
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto('http://localhost:8902/travel-expense/react/#timeline');
   await expect(page.getByText('行程時間線')).toBeVisible();
   const hrefs = await page.getByRole('link', { name: '地圖' }).evaluateAll((links) => links.map((link) => link.getAttribute('href') || ''));
   expect(hrefs.join(' ')).not.toMatch(/javascript:|evil\.example/i);
@@ -117,7 +117,7 @@ test('Timeline highlights live, passed, and future itinerary spots', async ({ pa
       receipts: [],
     }));
   }, fixed);
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto('http://localhost:8902/travel-expense/react/#timeline');
   await expect(page.getByText('行程時間線')).toBeVisible();
   await expect(page.locator('.timeline-event.is-passed')).toContainText('Breakfast Stop');
   await expect(page.locator('.timeline-event.is-live')).toContainText('Lunch Stop');
@@ -156,7 +156,7 @@ test('Timeline command card stays compact and day header shows one date', async 
     }));
   });
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto('http://localhost:8902/travel-expense/react/#timeline');
   await expect(page.getByText('行程時間線')).toBeVisible();
   const command = page.locator('.timeline-command');
   await expect(command).not.toContainText('📍');
@@ -229,7 +229,7 @@ test('Timeline mobile rail shines independently without covering compact itinera
     }));
   }, fixed);
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto('http://localhost:8902/travel-expense/react/#timeline');
   await expect(page.getByText('行程時間線')).toBeVisible();
   await expect(page.locator('.timeline-rail-beam')).toBeVisible();
 
@@ -302,7 +302,7 @@ test('Timeline rail progress follows the current itinerary spot instead of the w
     }));
   }, fixed);
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto('http://localhost:8902/travel-expense/react/#timeline');
   await expect(page.getByText('Current Day')).toBeVisible();
   const todayRail = page.locator('.timeline-rail.is-today');
   await expect(todayRail.locator('.timeline-now-marker')).toContainText('09:30');
@@ -366,7 +366,7 @@ test('Timeline rail uses a lighter inactive colour when today is outside the tri
     }));
   }, fixed);
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto('http://localhost:8902/travel-expense/react/#timeline');
   await expect(page.getByText('Past Day Two')).toBeVisible();
   await expect(page.locator('.timeline-rail.is-today')).toHaveCount(0);
   await expect(page.locator('.timeline-now-marker')).toHaveCount(0);

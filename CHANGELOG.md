@@ -14,6 +14,12 @@
   - **Phase 3 — display**: the Stats「顯示貨幣」binary HKD/tripCurrency pill becomes **HKD + one chip per currency the trip actually uses** (trip.currencies + per-receipt currencies, capped at 6, stale selection falls back to HKD). Totals/budget/daily lines convert into any selected chip via the HKD anchor; budget edits under any chip convert back to the trip-currency denomination correctly. Settlement stays HKD-anchored; Top-10 rows keep native per-receipt currency.
   - **Verified**: typecheck clean; smokes stats/scan/dashboard/six-person/history/final-nav/itinerary green (settings 9/10 — the 1 failure is the known pre-existing Trip Doctor stale rig, fails on clean HEAD, tracked separately); live 390×844 rig (CHF+EUR+CZK trip, fixed rates): chips render [HKD CHF EUR CZK], HKD total HK$1,516 ✓, CZK view Kč4,39x ✓, CHF view CHF16x ✓, Top-10 shows each receipt in native currency, editor dropdown offers CZK and defaults from the itinerary day.
 
+- **Admin 1.0 shared client contract audit**:
+  - Partial itinerary writes preserve every omitted in-range day; itinerary version wins over device clock skew.
+  - Receipt identity is `(TripID, SourceID)`; legacy raw `SourceID` matching is allowed only for one unique unscoped candidate.
+  - Compact carries receipt tombstones, private photo signed-URL handling, and canonical sync revisions across pull, upsert, and delete flows.
+  - Focused itinerary and Compact browser contract coverage remains part of the Admin RC gate.
+
 ## 2026-07-11
 
 - **Compact App 0.15.1 Sync-Banner Hardening + Worldwide 譯名 + Dashboard Weather Chip (main) / Android 0.18.1**:

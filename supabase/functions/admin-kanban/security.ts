@@ -24,23 +24,36 @@ export type AdminRequestDecision = AllowedAdminRequest | RejectedAdminRequest;
 const SAFE_REQUEST_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const READ_ROUTE_MAP: ReadonlyArray<RegExp> = [
-  /^\/api\/snapshot$/,
-  /^\/api\/audit-events$/,
-  /^\/api\/analytics\/timeseries$/,
-  /^\/api\/ai-monitoring\/latency-trending$/,
-  /^\/api\/receipts\/[^/]+\/photo$/,
-  /^\/api\/config-health$/,
-  /^\/api\/actions\/[0-9a-f-]+$/i,
-  /^\/api\/sync\/jobs$/,
-  /^\/api\/identity\/duplicates$/,
+  /^\/api\/overview$/,
+  /^\/api\/search$/,
+  /^\/api\/accounts$/,
+  /^\/api\/accounts\/[0-9a-f-]+$/i,
+  /^\/api\/accounts\/[0-9a-f-]+\/installations$/i,
+  /^\/api\/trips$/,
+  /^\/api\/trips\/[0-9a-f-]+$/i,
+  /^\/api\/trips\/[0-9a-f-]+\/itinerary$/i,
+  /^\/api\/trips\/[0-9a-f-]+\/itinerary\/versions$/i,
+  /^\/api\/receipts$/,
+  /^\/api\/receipts\/[0-9a-f-]+$/i,
+  /^\/api\/incidents$/,
+  /^\/api\/sync-jobs$/,
+  /^\/api\/integrity$/,
+  /^\/api\/reconciliation$/,
+  /^\/api\/providers$/,
   /^\/api\/runtime$/,
-  /^\/api\/data-doctor$/,
-  /^\/api\/reconcile$/,
+  /^\/api\/audit$/,
+  /^\/api\/audit\/[0-9a-f-]+$/i,
+  /^\/api\/receipts\/[0-9a-f-]+\/photo$/i,
+  /^\/api\/operations$/,
+  /^\/api\/operations\/[0-9a-f-]+$/i,
 ];
 
-// Phase 0 intentionally has no enabled mutations. Admin 1.0 actions are added
-// one at a time only after their preview, step-up, version and audit gates pass.
-const WRITE_ROUTE_MAP: ReadonlyArray<RegExp> = [];
+// The generic kernel is the only mutation surface. Its action allowlist is
+// enforced again inside Edge and the private database RPCs.
+const WRITE_ROUTE_MAP: ReadonlyArray<RegExp> = [
+  /^\/api\/operations\/preview$/,
+  /^\/api\/operations\/[0-9a-f-]+\/commit$/i,
+];
 
 function matchesRoute(route: string, routeMap: ReadonlyArray<RegExp>): boolean {
   return routeMap.some((pattern) => pattern.test(route));
@@ -86,15 +99,6 @@ export function evaluateAdminRequest(
   const writeMode = resolveAdminWriteMode(configuredMode);
   const route = normalizeAdminApiPath(new URL(req.url).pathname);
   const method = req.method.toUpperCase();
-
-  if (method === "OPTIONS") {
-    return {
-      allowed: true,
-      requestId,
-      route: route || "/api/preflight",
-      writeMode,
-    };
-  }
 
   if (!route) {
     return {

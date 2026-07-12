@@ -38,11 +38,18 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.13.6`。Admin Console 目前版本：`0.8.3`。
+Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.13.6`。Admin production
+仍是 `0.8.3` read-only containment；新 console 候選版本是 `1.0.0-rc.1`，尚未做 production
+cutover。
 
 Admin Console 正在進行 Admin 1.0 生產重整。現時 production 已啟用全域 read-only
 containment：讀取及診斷仍可用，所有寫入、刪除、merge、repair、provider probe及其他外部副作用
 均由 Edge backend 拒絕，並非只隱藏按鈕。Admin passphrase 不會寫在 README、GitHub 或前端程式碼。
+
+`1.0.0-rc.1` 已在獨立 branch 完成五個工作區、paginated read APIs、passphrase + passkey、
+HttpOnly opaque sessions、CSRF、signed BFF、server preview/step-up operations、audit、integrity、
+Notion dry-run reconciliation及完整 mobile/a11y states。Production 啟用前仍要由 Boss 批准 maintenance
+cutover、設定 production secrets、登記 passkey及確認 Compact/Android compatibility。
 
 ## 第一次使用
 
@@ -200,10 +207,12 @@ App 只會經 server-side Credential Broker 使用 AI。瀏覽器不應該存放
 
 目前主要模型規則：
 
-- Email parsing: Kimi `kimi/kimi-code` first.
-- Trip update parsing: Kimi `kimi/kimi-code` first.
-- Receipt scan: Google Gemma 4 31B first.
-- Voice parsing: Google Gemma 4 31B first.
+- 每一種 AI 工作都先用 Settings 選定的 primary model。
+- 新裝置預設：Receipt scan / Voice 使用 `mimo-v2.5`。
+- 新裝置預設：Email / Trip Update 使用 `mimo-v2.5-pro`。
+- Trip Update 會按固定次序嘗試 contract default、Google fast fallbacks，再到其他允許的
+  slower fallbacks；每一步都會保留實際 model evidence。
+- `429`、quota或daily-limit是 hard stop，不會偷偷換 provider 繞過用量限制。
 
 如果 AI 暫時不能用，你仍然可以自己打字記帳。
 

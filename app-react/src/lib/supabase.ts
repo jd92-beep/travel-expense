@@ -1,9 +1,52 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, stampReceiptForTrip } from '../domain/trip/normalize';
+import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
 import { tripIntelligenceColumns } from '../domain/trip/context';
-import { DEFAULT_NOTION_DB, normalizeAiModelSettings } from './constants';
-import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
+import { DEFAULT_NOTION_DB, ITINERARY, normalizeAiModelSettings } from './constants';
+import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, ReceiptPayer, ReceiptSplit, ReceiptTombstone, SplitType, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
+
+const VALID_CATEGORIES = new Set(['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'other']);
+const VALID_PAYMENTS = new Set(['cash', 'credit', 'paypay', 'suica']);
+
+function safeCategoryId(value: unknown): CategoryId {
+  const v = String(value || 'other').toLowerCase();
+  return VALID_CATEGORIES.has(v) ? v as CategoryId : 'other';
+}
+
+function safePaymentId(value: unknown): PaymentId {
+  const v = String(value || 'cash').toLowerCase();
+  return VALID_PAYMENTS.has(v) ? v as PaymentId : 'cash';
+}
+
+function safeSplitType(value: unknown): SplitType | undefined {
+  const v = String(value || '');
+  return ['equal', 'shares', 'exact', 'percent', 'adjustment', 'itemized'].includes(v) ? v as SplitType : undefined;
+}
+
+function safeReceiptSplits(value: unknown): ReceiptSplit[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value.map((raw) => {
+    const row = raw as Record<string, unknown>;
+    return {
+      personId: String(row.personId || ''),
+      weight: Number.isFinite(Number(row.weight)) ? Number(row.weight) : undefined,
+      amount: Number.isFinite(Number(row.amount)) ? Number(row.amount) : undefined,
+      pct: Number.isFinite(Number(row.pct)) ? Number(row.pct) : undefined,
+      adjust: Number.isFinite(Number(row.adjust)) ? Number(row.adjust) : undefined,
+    };
+  }).filter((row) => row.personId);
+  return rows.length ? rows : undefined;
+}
+
+function safeReceiptPayers(value: unknown): ReceiptPayer[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value.map((raw) => {
+    const row = raw as Record<string, unknown>;
+    return { personId: String(row.personId || ''), amount: Number(row.amount) || 0 };
+  }).filter((row) => row.personId && row.amount >= 0);
+  return rows.length ? rows : undefined;
+}
 
 type SupabaseTripRow = {
   id: string;
@@ -22,6 +65,7 @@ type SupabaseTripRow = {
   itinerary?: unknown;
   app_metadata?: unknown;
   version?: number | null;
+  itinerary_version?: number | null;
   archived?: boolean | null;
   notion_page_id?: string | null;
   notion_database_id?: string | null;
@@ -46,6 +90,7 @@ type SupabaseReceiptRow = {
   record_date: string;
   record_time: string | null;
   category: string | null;
+  record_kind?: string | null;
   payment_method: string | null;
   amount: number;
   currency: string;
@@ -62,12 +107,21 @@ type SupabaseReceiptRow = {
   status: string;
   confidence: string | null;
   map_url: string | null;
+  split_mode?: string | null;
+  split_type?: string | null;
+  splits?: unknown;
+  payers?: unknown;
+  person_id?: string | null;
+  beneficiary_id?: string | null;
+  visibility?: string | null;
   notion_page_id: string | null;
   notion_database_id: string | null;
   notion_sync_status?: string | null;
   notion_sync_error?: string | null;
   notion_last_synced_at?: string | null;
   notion_last_queued_at?: string | null;
+  version?: number | null;
+  sync_revision?: number | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -113,6 +167,7 @@ type SupabaseAccountingPersonRow = {
 export type SupabasePullResult = {
   trips: TripProfile[];
   receipts: Receipt[];
+  tombstones: ReceiptTombstone[];
   settings?: Partial<AppState>;
 };
 
@@ -120,6 +175,15 @@ const rawUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim();
 const rawKey = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
 let client: SupabaseClient | null = null;
+
+function withTimeout<T>(promise: PromiseLike<T>, ms = 30000): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Request timeout after ${ms}ms`)), ms)
+    ),
+  ]);
+}
 
 function isoFromMs(value: unknown, fallback = Date.now()): string {
   const n = Number(value) || fallback;
@@ -154,6 +218,18 @@ function isMissingSharingTableError(error: unknown): boolean {
   return item?.code === '42P01'
     || item?.code === 'PGRST205'
     || /schema cache|does not exist|Could not find the table/i.test(item?.message || '');
+}
+
+function isMissingItineraryContractError(error: unknown): boolean {
+  const item = error as { code?: string; message?: string } | null | undefined;
+  return item?.code === '42703'
+    || item?.code === 'PGRST202'
+    || item?.code === 'PGRST204'
+    || /itinerary_version|update_trip_itinerary|schema cache|does not exist/i.test(item?.message || '');
+}
+
+function jsonMatches(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
 function cleanInviteRole(value: unknown): Exclude<TripMemberRole, 'owner' | 'admin'> {
@@ -364,22 +440,45 @@ function rowToTrip(row: SupabaseTripRow, state: AppState, sharing?: TripSharingS
   const intelligenceInput = Object.keys(jsonObject(row.trip_intelligence)).length
     ? row.trip_intelligence
     : metadata.intelligence || columnIntelligence || current?.intelligence;
-  const itinerary = safeItinerary(row.itinerary, appId, tripCurrency);
+  const startDate = row.start_date || current?.startDate || state.tripDateRange.start;
+  const endDate = row.end_date || current?.endDate || state.tripDateRange.end;
+  const storedItinerary = safeItinerary(row.itinerary, appId, tripCurrency);
+  const isNagoya = isNagoyaCanonicalRange({
+    id: appId,
+    name: row.name,
+    destinationSummary: row.destination_summary || current?.destinationSummary,
+    startDate,
+    endDate,
+  });
+  const itineraryContract = canonicalizeItineraryRange({
+    tripId: appId,
+    startDate,
+    endDate,
+    itinerary: storedItinerary,
+    fallbackItinerary: [
+      ...(current?.itinerary || []),
+      ...(isNagoya ? ITINERARY : []),
+    ],
+    fallbackCurrency: tripCurrency,
+    fallbackRegion: row.destination_summary || current?.destinationSummary || row.name,
+    fallbackTimezone: row.timezones?.[0] || current?.timezones?.[0],
+  });
+  const itinerary = itineraryContract.itinerary;
   return {
     ...(current || {}),
     id: appId,
     supabaseId: row.id,
     name: row.name,
     destinationSummary: row.destination_summary || current?.destinationSummary || '未設定目的地',
-    startDate: row.start_date || current?.startDate || state.tripDateRange.start,
-    endDate: row.end_date || current?.endDate || state.tripDateRange.end,
+    startDate,
+    endDate,
     homeCurrency: row.home_currency || 'HKD',
     currencies: Array.from(new Set([row.home_currency || 'HKD', tripCurrency])),
     timezones: Array.isArray(row.timezones) && row.timezones.length ? row.timezones : current?.timezones || ['Asia/Tokyo'],
     budget: Number(row.budget_amount || current?.budget || 0),
-    active: row.active,
+    active: state.activeTripId ? appId === state.activeTripId : !!current?.active,
     archived: !!row.archived,
-    itinerary: itinerary.length ? itinerary : current?.itinerary || [],
+    itinerary,
     intelligence: normalizeTripIntelligence(
       intelligenceInput,
       row.destination_summary || current?.destinationSummary || '未設定目的地',
@@ -387,6 +486,10 @@ function rowToTrip(row: SupabaseTripRow, state: AppState, sharing?: TripSharingS
       Array.isArray(row.timezones) ? row.timezones[0] : current?.timezones?.[0],
     ),
     version: Number(row.version || current?.version || 1),
+    itineraryVersion: Number(row.itinerary_version || row.version || current?.itineraryVersion || current?.version || 1),
+    _itineraryNeedsRepair: itineraryContract.missingDates.length > 0
+      || itineraryContract.duplicateDates.length > 0
+      || itineraryContract.outOfRangeDates.length > 0,
     sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : current?.sourceId || `trip_${appId}`,
     notionDb: userScopedNotionDatabaseId(current?.notionDb) || undefined,
     notionPageId: row.notion_page_id || current?.notionPageId,
@@ -408,6 +511,10 @@ function rowToPulledReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupa
 
 function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: TripProfile, localId?: string, currentUserId?: string): Receipt {
   const ledgerSyncStatus = ledgerSyncStatusForRow(row);
+  const recordKind = row.record_kind === 'settlement' || String(row.category || '').toLowerCase() === 'settlement'
+    ? 'settlement'
+    : 'expense';
+  const visibility = row.visibility === 'private' ? 'private' : 'trip';
   return stampReceiptForTrip(state, {
     id: localId || row.id,
     supabaseId: row.id,
@@ -424,19 +531,42 @@ function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: Tri
     exchangeRate: Number(row.exchange_rate || 0) || undefined,
     date: row.record_date,
     time: row.record_time ? String(row.record_time).slice(0, 5) : undefined,
-    category: (row.category || 'other') as CategoryId,
-    payment: (row.payment_method || 'cash') as PaymentId,
+    category: safeCategoryId(recordKind === 'settlement' ? 'other' : row.category),
+    recordKind,
+    isSettlement: recordKind === 'settlement',
+    payment: safePaymentId(row.payment_method),
     address: row.address || undefined,
     mapUrl: row.map_url || undefined,
     bookingRef: row.booking_ref || undefined,
     note: row.note || undefined,
     itemsText: row.items_text || undefined,
+    personId: row.person_id || undefined,
+    beneficiaryId: row.beneficiary_id || undefined,
+    splitMode: row.split_mode === 'private' || visibility === 'private' ? 'private' : 'shared',
+    splitType: safeSplitType(row.split_type),
+    splits: safeReceiptSplits(row.splits),
+    payers: safeReceiptPayers(row.payers),
     source: 'supabase',
     sourceId: row.source_id || row.id,
+    visibility: visibility === 'private' ? 'private' : undefined,
+    version: Number(row.version || 1),
+    syncRevision: Number(row.sync_revision || 0) || undefined,
+    deletedAt: row.deleted_at ? msFromIso(row.deleted_at) : undefined,
     syncStatus: receiptSyncStatusForLedger(ledgerSyncStatus),
     createdAt: msFromIso(row.created_at),
     updatedAt: msFromIso(row.updated_at),
   }, { preserveUpdatedAt: true });
+}
+
+function rowToReceiptTombstone(row: SupabaseReceiptRow, trip: TripProfile): ReceiptTombstone {
+  return {
+    supabaseId: row.id,
+    sourceId: row.source_id || row.id,
+    tripId: trip.id,
+    version: Math.max(1, Number(row.version) || 1),
+    syncRevision: Math.max(1, Number(row.sync_revision) || 1),
+    deletedAt: msFromIso(row.deleted_at || row.updated_at),
+  };
 }
 
 export function isSupabaseConfigured(): boolean {
@@ -726,21 +856,44 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     trip.currencies?.find((currency) => currency !== (trip.homeCurrency || 'HKD')) || state.tripCurrency || 'JPY',
     trip.timezones?.[0],
   );
+  const startDate = cleanDate(trip.startDate, state.tripDateRange.start);
+  const endDate = cleanDate(trip.endDate, state.tripDateRange.end);
+  const isNagoya = isNagoyaCanonicalRange({
+    id: trip.id,
+    name: trip.name,
+    destinationSummary: trip.destinationSummary,
+    startDate,
+    endDate,
+  });
+  const canonicalItinerary = canonicalizeItineraryRange({
+    tripId: trip.id,
+    startDate,
+    endDate,
+    itinerary: trip.itinerary || [],
+    fallbackItinerary: [
+      ...(state.customItinerary || []),
+      ...(isNagoya ? ITINERARY : []),
+    ],
+    fallbackCurrency: trip.currencies?.find((currency) => currency !== (trip.homeCurrency || 'HKD')) || state.tripCurrency || 'JPY',
+    fallbackRegion: trip.destinationSummary || trip.name,
+    fallbackTimezone: trip.timezones?.[0],
+  });
   const row = {
     id,
     owner_id: userId,
     name: trip.name || '新旅程',
     destination_summary: trip.destinationSummary || null,
-    start_date: cleanDate(trip.startDate, state.tripDateRange.start),
-    end_date: cleanDate(trip.endDate, state.tripDateRange.end),
+    start_date: startDate,
+    end_date: endDate,
     home_currency: trip.homeCurrency || 'HKD',
     trip_currency: trip.currencies?.find((currency) => currency !== (trip.homeCurrency || 'HKD')) || state.tripCurrency || 'JPY',
     timezones: trip.timezones?.length ? trip.timezones : ['Asia/Tokyo'],
     budget_amount: Number(trip.budget || 0),
     budget_currency: trip.homeCurrency || 'HKD',
-    active: !!trip.active && !trip.archived,
+    // Active-trip selection is a per-user profile preference, never shared trip state.
+    active: false,
     legacy_source_id: sourceIdForTrip(trip),
-    itinerary: trip.itinerary || [],
+    itinerary: canonicalItinerary.itinerary,
     app_metadata: {
       sourceId: trip.sourceId || `trip_${trip.id}`,
       localTripId: trip.id,
@@ -749,24 +902,101 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     ...tripIntelligenceColumns(normalizedIntelligence),
     version: Math.max(1, Number(trip.version) || 1),
     archived: !!trip.archived,
-    notion_page_id: null,
-    notion_database_id: null,
+    notion_page_id: trip.notionPageId || null,
+    notion_database_id: userScopedNotionDatabaseId(trip.notionDb) || null,
     created_at: isoFromMs(trip.createdAt),
     updated_at: isoFromMs(trip.updatedAt),
   };
   const { owner_id: _ownerId, id: _rowId, created_at: _createdAt, ...sharedTripUpdate } = row;
-  let { data, error } = explicitSharedTrip
-    ? await supabase
+  const contractLookup = await withTimeout(supabase
+    .from('trips')
+    .select('id,itinerary_version,version,itinerary,start_date,end_date')
+    .eq('id', id)
+    .maybeSingle());
+  if (contractLookup.error && !isMissingItineraryContractError(contractLookup.error)) {
+    throw contractLookup.error;
+  }
+
+  let data: Record<string, any> | null = null;
+  let error: { message?: string } | null = null;
+  const contractRow = !contractLookup.error ? contractLookup.data as Record<string, any> | null : null;
+  if (contractRow && Number.isFinite(Number(contractRow.itinerary_version))) {
+    const serverItineraryVersion = Math.max(1, Number(contractRow.itinerary_version));
+    const localItineraryVersion = Math.max(1, Number(trip.itineraryVersion ?? trip.version) || 1);
+    if (localItineraryVersion < serverItineraryVersion || localItineraryVersion > serverItineraryVersion + 1) {
+      throw new Error(`40001 ITINERARY_VERSION_CONFLICT expected ${serverItineraryVersion}, received ${localItineraryVersion}`);
+    }
+
+    const itineraryChanged = contractRow.start_date !== startDate
+      || contractRow.end_date !== endDate
+      || !jsonMatches(contractRow.itinerary, canonicalItinerary.itinerary);
+    let itineraryResult: Record<string, any> | null = null;
+    if (itineraryChanged || localItineraryVersion === serverItineraryVersion + 1) {
+      const rpcResult = await withTimeout(supabase.rpc('update_trip_itinerary', {
+        p_trip_id: id,
+        p_expected_version: serverItineraryVersion,
+        p_start_date: startDate,
+        p_end_date: endDate,
+        p_itinerary: canonicalItinerary.itinerary,
+        p_source: 'react',
+      }));
+      if (rpcResult.error) throw rpcResult.error;
+      itineraryResult = rpcResult.data as Record<string, any> | null;
+    }
+
+    const {
+      id: _metadataId,
+      owner_id: _metadataOwnerId,
+      created_at: _metadataCreatedAt,
+      itinerary: _metadataItinerary,
+      start_date: _metadataStartDate,
+      end_date: _metadataEndDate,
+      ...metadataUpdate
+    } = row;
+    metadataUpdate.version = Math.max(
+      Number(metadataUpdate.version) || 1,
+      Number(itineraryResult?.version) || 1,
+    );
+    let metadataResult = await withTimeout(supabase
       .from('trips')
-      .update(sharedTripUpdate)
+      .update(metadataUpdate)
       .eq('id', id)
       .select('*')
-      .single()
-    : await supabase
-      .from('trips')
-      .upsert(row, { onConflict: 'id' })
-      .select('*')
-      .single();
+      .single());
+    if (metadataResult.error && /country_code|theme_key|weather_region|trip_intelligence|schema cache|column/i.test(metadataResult.error.message || '')) {
+      const {
+        country_code: _countryCode,
+        theme_key: _themeKey,
+        locale: _locale,
+        weather_region: _weatherRegion,
+        trip_intelligence: _tripIntelligence,
+        ...legacyMetadataUpdate
+      } = metadataUpdate;
+      metadataResult = await withTimeout(supabase
+        .from('trips')
+        .update(legacyMetadataUpdate)
+        .eq('id', id)
+        .select('*')
+        .single());
+    }
+    data = metadataResult.data as Record<string, any> | null;
+    error = metadataResult.error;
+  } else {
+    const directResult = explicitSharedTrip
+      ? await withTimeout(supabase
+        .from('trips')
+        .update(sharedTripUpdate)
+        .eq('id', id)
+        .select('*')
+        .single())
+      : await withTimeout(supabase
+        .from('trips')
+        .upsert(row, { onConflict: 'id' })
+        .select('*')
+        .single());
+    data = directResult.data as Record<string, any> | null;
+    error = directResult.error;
+  }
   if (error && /country_code|theme_key|weather_region|trip_intelligence|schema cache|column/i.test(error.message || '')) {
     const {
       country_code: _countryCode,
@@ -783,30 +1013,21 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
       ...legacySharedUpdate
     } = legacyRow;
     const fallback = explicitSharedTrip
-      ? await supabase
+      ? await withTimeout(supabase
         .from('trips')
         .update(legacySharedUpdate)
         .eq('id', id)
         .select('*')
-        .single()
-      : await supabase
+        .single())
+      : await withTimeout(supabase
         .from('trips')
         .upsert(legacyRow, { onConflict: 'id' })
         .select('*')
-        .single();
+        .single());
     data = fallback.data;
     error = fallback.error;
   }
   if (error) throw error;
-  if (row.active && !explicitSharedTrip) {
-    const { error: deactivateError } = await supabase
-      .from('trips')
-      .update({ active: false, updated_at: row.updated_at })
-      .eq('owner_id', userId)
-      .neq('id', id)
-      .eq('active', true);
-    if (deactivateError) throw deactivateError;
-  }
   return rowToTrip(data as SupabaseTripRow, state, trip.sharing);
 }
 
@@ -835,15 +1056,16 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
   const tripUuid = cleanUuid(syncedTrip.supabaseId);
   if (!tripUuid) throw new Error('Supabase trip id missing');
   const userId = session.user.id;
-  const id = await findReceiptUuid(supabase, tripUuid, userId, receipt);
+  const recordKind = receipt.recordKind === 'settlement' || receipt.isSettlement || String(receipt.category) === 'settlement'
+    ? 'settlement'
+    : 'expense';
+  const visibility = receipt.visibility === 'private' ? 'private' : 'trip';
   const row = {
-    id,
-    trip_id: tripUuid,
-    owner_id: userId,
     store: receipt.store || '未命名',
     record_date: cleanDate(receipt.date, syncedTrip.startDate),
     record_time: cleanTime(receipt.time),
-    category: receipt.category || 'other',
+    category: recordKind === 'settlement' ? null : receipt.category || 'other',
+    record_kind: recordKind,
     payment_method: receipt.payment || 'cash',
     amount: Number(receipt.total || 0),
     currency: receipt.currency || receipt.originalCurrency || state.tripCurrency || 'JPY',
@@ -857,35 +1079,24 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     address: receipt.address || null,
     booking_ref: receipt.bookingRef || null,
     source_id: sourceIdForReceipt(receipt),
-    status: receipt.syncStatus === 'failed' || receipt.syncStatus === 'error' ? 'draft' : 'confirmed',
+    visibility,
+    split_mode: visibility === 'private' || receipt.splitMode === 'private' ? 'private' : 'shared',
+    split_type: receipt.splitType || null,
+    splits: receipt.splits?.length ? receipt.splits : null,
+    payers: receipt.payers?.length ? receipt.payers : null,
+    person_id: receipt.personId || null,
+    beneficiary_id: receipt.beneficiaryId || null,
     confidence: null,
     map_url: receipt.mapUrl || null,
-    notion_page_id: null,
-    notion_database_id: null,
     version: Math.max(1, Number(receipt.version) || 1),
-    deleted_at: null,
-    created_at: isoFromMs(receipt.createdAt),
-    updated_at: isoFromMs(receipt.updatedAt),
   };
-  if (isSharedLedgerTrip(syncedTrip)) {
-    const { data, error } = await supabase
-      .rpc('upsert_shared_trip_receipt', {
-        p_trip_id: tripUuid,
-        p_receipt: row,
-        p_receipt_id: cleanUuid(receipt.supabaseId),
-        p_source_id: row.source_id,
-        p_idempotency_key: `${tripUuid}:${row.source_id}:upsert:${receipt.updatedAt || Date.now()}`,
-      })
-      .single();
-    if (error) throw error;
-    const tripBySupabaseId = new Map([[tripUuid, syncedTrip]]);
-    return rowToReceipt(data as SupabaseReceiptRow, { ...state, trips: (state.trips || []).map((item) => item.id === syncedTrip.id ? syncedTrip : item) }, tripBySupabaseId, receipt.id, userId);
-  }
-  const { data, error } = await supabase
-    .from('receipts')
-    .upsert(row, { onConflict: 'id' })
-    .select('*')
-    .single();
+  const { data, error } = await withTimeout(supabase.rpc('upsert_shared_trip_receipt', {
+    p_trip_id: tripUuid,
+    p_receipt: row,
+    p_receipt_id: cleanUuid(receipt.supabaseId),
+    p_source_id: row.source_id,
+    p_idempotency_key: `${tripUuid}:${row.source_id}:upsert:${receipt.syncRevision || receipt.updatedAt || receipt.createdAt || 0}`,
+  }).single());
   if (error) throw error;
   const tripBySupabaseId = new Map([[tripUuid, syncedTrip]]);
   return rowToReceipt(data as SupabaseReceiptRow, { ...state, trips: (state.trips || []).map((item) => item.id === syncedTrip.id ? syncedTrip : item) }, tripBySupabaseId, receipt.id, userId);
@@ -894,33 +1105,31 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
 export async function archiveSupabaseReceipt(session: Session, state: AppState, receipt: Receipt): Promise<void> {
   const supabase = getSupabaseClient();
   if (!supabase) return;
-  const trip = receipt.tripId ? state.trips?.find((candidate) => candidate.id === receipt.tripId) : undefined;
+  const trip = (receipt.tripId ? state.trips?.find((candidate) => candidate.id === receipt.tripId) : undefined) || activeTrip(state);
   const tripUuid = cleanUuid(trip?.supabaseId) || await existingTripUuid(supabase, session.user.id, trip);
-  if (tripUuid && isSharedLedgerTrip(trip)) {
-    const { error } = await supabase.rpc('delete_shared_trip_receipt', {
-      p_trip_id: tripUuid,
-      p_receipt_id: cleanUuid(receipt.supabaseId),
-      p_source_id: sourceIdForReceipt(receipt),
-      p_idempotency_key: `${tripUuid}:${sourceIdForReceipt(receipt)}:delete:${receipt.updatedAt || Date.now()}`,
-    });
+  if (!tripUuid) throw new Error('Supabase trip id missing for receipt delete');
+  let receiptId = cleanUuid(receipt.supabaseId);
+  if (!receiptId) {
+    const { data, error } = await supabase.from('receipts').select('id').eq('trip_id', tripUuid)
+      .eq('owner_id', session.user.id).eq('source_id', sourceIdForReceipt(receipt)).maybeSingle();
     if (error) throw error;
-    return;
+    receiptId = cleanUuid(data?.id);
+    if (!receiptId) return;
   }
-  let query = supabase.from('receipts').update({ deleted_at: new Date().toISOString(), status: 'deleted' });
-  const id = cleanUuid(receipt.supabaseId);
-  if (id) query = query.eq('id', id).eq('owner_id', session.user.id);
-  else {
-    if (!tripUuid) throw new Error('Supabase trip id missing for receipt delete');
-    query = query.eq('owner_id', session.user.id).eq('source_id', sourceIdForReceipt(receipt));
-    query = query.eq('trip_id', tripUuid);
-  }
-  const { error } = await query;
+  const expectedVersion = Number(receipt.version);
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw new Error('Receipt version missing; pull before deleting');
+  const { error } = await supabase.rpc('delete_receipt_v2', {
+    p_trip_id: tripUuid,
+    p_receipt_id: receiptId,
+    p_expected_version: expectedVersion,
+    p_idempotency_key: `${tripUuid}:${sourceIdForReceipt(receipt)}:delete:${expectedVersion}`,
+  });
   if (error) throw error;
 }
 
 export async function pullSupabaseData(session: Session, state: AppState): Promise<SupabasePullResult> {
   const supabase = getSupabaseClient();
-  if (!supabase) return { trips: [], receipts: [] };
+  if (!supabase) return { trips: [], receipts: [], tombstones: [] };
   await ensureSupabaseProfile(session, state);
   const [profileResult, tripsResult] = await Promise.all([
     supabase.from('profiles').select('app_settings').eq('id', session.user.id).maybeSingle(),
@@ -933,7 +1142,7 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   const emptyResult = { data: [], error: null };
   const [receiptsResult, membersResult, invitesResult, backendResult, peopleResult] = await Promise.all([
     tripIds.length
-      ? supabase.from('receipts').select('*').in('trip_id', tripIds).is('deleted_at', null).order('record_date', { ascending: false })
+      ? supabase.from('receipts').select('*').in('trip_id', tripIds).order('record_date', { ascending: false })
       : Promise.resolve(emptyResult),
     tripIds.length
       ? supabase.from('trip_members').select('trip_id,user_id,role,status,created_at,updated_at').in('trip_id', tripIds)
@@ -962,9 +1171,15 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   for (const trip of trips) {
     if (trip.supabaseId) tripBySupabaseId.set(trip.supabaseId, trip);
   }
-  const receipts = (receiptsResult.data || [])
-    .map((row) => rowToPulledReceipt(row as SupabaseReceiptRow, state, tripBySupabaseId, session.user.id))
+  const receiptRows = (receiptsResult.data || []) as SupabaseReceiptRow[];
+  const receipts = receiptRows
+    .filter((row) => !row.deleted_at)
+    .map((row) => rowToPulledReceipt(row, state, tripBySupabaseId, session.user.id))
     .filter((receipt): receipt is Receipt => !!receipt);
+  const tombstones = receiptRows.filter((row) => !!row.deleted_at).map((row) => {
+    const trip = tripBySupabaseId.get(row.trip_id) || activeTrip(state);
+    return rowToReceiptTombstone(row, trip);
+  });
   let settings = rowToSettings(profileResult.data as SupabaseProfileRow | null);
   if (peopleRows.length) {
     const activeTripId = settings?.activeTripId || state.activeTripId;
@@ -981,7 +1196,7 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
       settings.shareRatios = Object.fromEntries(activePeople.map((person) => [person.person_id, Number(person.share_ratio ?? 1)]));
     }
   }
-  return { trips, receipts, settings };
+  return { trips, receipts, tombstones, settings };
 }
 
 export function inviteLinkForToken(token: string): string {

@@ -4,6 +4,7 @@ import worker from '../src/index.js';
 const ORIGIN = 'http://localhost:8902';
 const UNLOCK_PASSWORD = 'test-unlock';
 const ADMIN_PASSWORD = 'test-admin';
+const SUPABASE_USER_ID = '97000000-0000-4000-8000-000000000001';
 
 class MemoryKv {
   constructor() {
@@ -132,7 +133,7 @@ function installProviderFetchStub() {
 
     if (href === 'https://test.supabase.co/auth/v1/user') {
       assert.equal(auth, bearer('supabase-user-token'));
-      return Response.json({ id: 'user-12345678', email: 'boss@example.com' });
+      return Response.json({ id: SUPABASE_USER_ID, email: 'boss@example.com' });
     }
 
     if (href.startsWith('https://test.supabase.co/rest/v1/integrations')) {
@@ -507,6 +508,50 @@ async function run() {
     });
     assert.equal(personalNotion.response.status, 200);
     assert.equal(personalNotion.data.data.id, 'personal-page-1');
+
+    const internalPersonalNotion = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: {
+        path: '/pages',
+        method: 'POST',
+        databaseId: 'personal-db',
+        internalUserId: SUPABASE_USER_ID,
+        body: { parent: {}, properties: {} },
+      },
+    });
+    assert.equal(internalPersonalNotion.response.status, 200);
+    assert.equal(internalPersonalNotion.data.data.id, 'personal-page-1');
+
+    const notionCallsBeforeInvalidInternalUser = restoreFetch.notionCalls();
+    const invalidInternalUser = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: {
+        path: '/databases/personal-db/query',
+        method: 'POST',
+        databaseId: 'personal-db',
+        internalUserId: 'not-a-user-id',
+        body: { page_size: 1 },
+      },
+    });
+    assert.equal(invalidInternalUser.response.status, 400);
+    assert.equal(restoreFetch.notionCalls(), notionCallsBeforeInvalidInternalUser);
+
+    const browserCannotImpersonate = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      session,
+      body: {
+        path: '/pages',
+        method: 'POST',
+        internalUserId: SUPABASE_USER_ID,
+        body: { parent: {}, properties: {} },
+      },
+    });
+    assert.equal(browserCannotImpersonate.response.status, 200);
+    assert.equal(browserCannotImpersonate.data.data.id, 'page-1');
 
     const notionCallsBeforeBlockedPersonal = restoreFetch.notionCalls();
     const blockedPersonalNotion = await jsonFetch(env, '/notion/request', {

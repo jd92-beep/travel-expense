@@ -18,7 +18,7 @@ Guidance for Claude Code working in this repo.
 |---|---|---|---|
 | `app-compact/` | `travel-expense-compact` | 8903 | **主力 / 現役部署版**（`v0.13.1`），有 production-gate scripts + Capacitor Android shell |
 | `app-react/` | `travel-expense-react-fresh` | 8902 | React 重寫版，最完整 smoke-test 套件 |
-| `app-admin-kanban/` | `travel-expense-admin-kanban` | 8904 | Admin console（`v0.7.1`，有 `api/`）— **git push ≠ deploy**，改完要手動 `supabase functions deploy` + `vercel deploy --prod` |
+| `app-admin-kanban/` | `travel-expense-admin-kanban` | 8904 | Admin console（production `0.8.3` read-only；local RC `1.0.0-rc.1`）— **git push ≠ deploy**，production cutover 要 maintenance approval |
 | `supabase/` | — | — | DB migrations（RLS、receipt-photo storage） |
 | `workers/` | — | — | Cloudflare Workers（Notion / AI proxy） |
 | `scripts/` | — | — | 共用 node scripts：`tab-parity.mjs`、`security-scan.mjs`、`verify-supabase-migrations.mjs`、`verify-shared-ledger-contract.mjs` |
@@ -82,7 +82,7 @@ git commit -m "type: description"  # conventional commits
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **travel-expense** (6413 symbols, 15615 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **travel-expense** (7115 symbols, 17338 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

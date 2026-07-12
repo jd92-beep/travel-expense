@@ -1,6 +1,7 @@
 import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
 import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, SyncQueueItem, TripPhase, TripProfile } from './types';
 
 export const fmt = (n: number | string | undefined) =>
@@ -40,11 +41,13 @@ function dateSeries(start: string, end: string): string[] {
 
 function isDefaultNagoyaTrip(state: AppState, trip: TripProfile): boolean {
   const range = itineraryRangeForTrip(state, trip);
-  const text = `${trip.id} ${trip.name} ${trip.destinationSummary || ''} ${state.tripName || ''}`;
-  return !!range
-    && range.start === DEFAULT_NAGOYA_START
-    && range.end === DEFAULT_NAGOYA_END
-    && /nagoya|名古屋/i.test(text);
+  return !!range && isNagoyaCanonicalRange({
+    id: trip.id,
+    name: `${trip.name} ${state.tripName || ''}`,
+    destinationSummary: trip.destinationSummary,
+    startDate: range.start,
+    endDate: range.end,
+  });
 }
 
 function mergeItineraryDay(primary: ItineraryDay | undefined, fallback: ItineraryDay | undefined, date: string, idx: number, currency: string): ItineraryDay {
@@ -67,39 +70,20 @@ function repairItineraryForTrip(state: AppState, trip: TripProfile, source: Itin
   const range = itineraryRangeForTrip(state, trip);
   const normalized = normalizeItinerary(source, trip.id, currency);
   if (!range) return normalized;
-
-  const inRange = normalized.filter((day) => day.date >= range.start && day.date <= range.end);
-  const dates = dateSeries(range.start, range.end);
-  if (!dates.length) return inRange;
-
-  if (isDefaultNagoyaTrip(state, trip)) {
-    const primaryByDate = new Map(inRange.map((day) => [day.date, day]));
-    const customByDate = new Map(normalizeItinerary(state.customItinerary || [], trip.id, currency)
-      .filter((day) => day.date >= range.start && day.date <= range.end)
-      .map((day) => [day.date, day]));
-    const defaultByDate = new Map(normalizeItinerary(ITINERARY, trip.id, currency)
-      .filter((day) => day.date >= range.start && day.date <= range.end)
-      .map((day) => [day.date, day]));
-    return dates
-      .map((date, idx) => mergeItineraryDay(
-        primaryByDate.get(date) || customByDate.get(date),
-        defaultByDate.get(date),
-        date,
-        idx,
-        currency,
-      ))
-      .filter((day) => day.spots.length || day.region);
-  }
-
-  if (inRange.length) return inRange.map((day, idx) => ({ ...day, day: idx + 1 }));
-  return dates.map((date, idx) => ({
-    date,
-    day: idx + 1,
-    region: trip.destinationSummary || trip.name || `Day ${idx + 1}`,
-    timezone: trip.timezones?.[0] || 'Asia/Tokyo',
-    currency,
-    spots: [],
-  }));
+  const fallback = [
+    ...(state.customItinerary || []),
+    ...(isDefaultNagoyaTrip(state, trip) ? ITINERARY : []),
+  ];
+  return canonicalizeItineraryRange({
+    tripId: trip.id,
+    startDate: range.start,
+    endDate: range.end,
+    itinerary: normalized,
+    fallbackItinerary: fallback,
+    fallbackCurrency: currency,
+    fallbackRegion: trip.destinationSummary || trip.name,
+    fallbackTimezone: trip.timezones?.[0],
+  }).itinerary;
 }
 
 export function getItinerary(state: AppState): ItineraryDay[] {
@@ -336,7 +320,13 @@ export function setItineraryOverride(state: AppState, date: string, idx: number,
 export function applyItineraryEdit(state: AppState, nextItinerary: ItineraryDay[]): AppState {
   const now = Date.now();
   const trip = activeTrip(state);
-  const nextTrip: TripProfile = { ...trip, itinerary: nextItinerary, version: (trip.version || 0) + 1, updatedAt: now };
+  const nextTrip: TripProfile = {
+    ...trip,
+    itinerary: nextItinerary,
+    version: (trip.version || 0) + 1,
+    itineraryVersion: (trip.itineraryVersion ?? trip.version ?? 0) + 1,
+    updatedAt: now,
+  };
   const baseTrips = state.trips?.length ? state.trips : [trip];
   const trips = baseTrips.some((t) => t.id === trip.id)
     ? baseTrips.map((t) => (t.id === trip.id ? nextTrip : t))

@@ -1,0 +1,9 @@
+/app-admin-kanban/ @jd92-beep
+/supabase/functions/_shared/ @jd92-beep
+/supabase/functions/admin-auth-state/ @jd92-beep
+/supabase/functions/admin-kanban/ @jd92-beep
+/supabase/functions/receipt-sync-worker/ @jd92-beep
+/supabase/migrations/ @jd92-beep
+/supabase/tests/ @jd92-beep
+/workers/credential-broker/ @jd92-beep
+/.github/workflows/admin-console.yml @jd92-beep

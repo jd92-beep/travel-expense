@@ -2,6 +2,8 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 // Offline-first contract: a receipt edited while offline must (1) persist locally,
 // (2) sit in the sync queue, (3) trigger an automatic sync attempt the moment the
 // browser fires 'online' — no manual sync tap, no waiting for the 120s interval.
@@ -53,7 +55,7 @@ test('offline receipt entry queues locally and auto-syncs on reconnect', async (
     }],
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.locator('.receipt-main', { hasText: '離線便利店' }).first()).toBeVisible();
 
   // ---- Go offline, then edit + save the receipt ----

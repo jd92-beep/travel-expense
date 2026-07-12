@@ -1,5 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = (process.env.REACT_TEST_ORIGIN || 'http://localhost:8902').replace(/\/+$/, '');
+const APP_URL = `${APP_ORIGIN}/travel-expense/react/`;
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 function stateWithTrip(tripId = 'security_trip', lastTab = 'dashboard') {
@@ -53,7 +56,7 @@ test('Sensitive legacy fields are stripped from localStorage, IndexedDB, and ser
     }));
   });
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#settings`);
   await expect(page.getByText('設定控制中心')).toBeVisible();
   await page.waitForTimeout(500);
 
@@ -121,13 +124,13 @@ test('Supabase magic-link redirect uses a clean app root without route hash', as
     localStorage.clear();
   });
 
-  await page.goto('http://localhost:8902/travel-expense/react/#settings');
+  await page.goto(`${APP_URL}#settings`);
   await page.getByRole('button', { name: 'Email連結' }).click();
   await expect(page.getByText('無密碼連結登入 ✉️')).toBeVisible();
   await page.getByPlaceholder('you@example.com').fill('redirect-smoke@example.com');
   await page.getByRole('button', { name: /寄出登入連結/ }).click();
 
-  await expect.poll(() => redirectTo, { timeout: 10000 }).toBe('http://localhost:8902/travel-expense/react/');
+  await expect.poll(() => redirectTo, { timeout: 10000 }).toBe(APP_URL);
   expect(redirectTo).not.toContain('#');
   expect(redirectTo).not.toContain('access_token');
 });
@@ -174,7 +177,7 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
 
   page.on('dialog', (dialog) => dialog.accept());
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#dashboard`);
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect(page.locator('.supabase-session-actions')).toHaveCount(0);
 
@@ -242,10 +245,10 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
   });
 
-  await page.route('http://localhost:8902/__scope-seed', async (route) => {
+  await page.route(`${APP_ORIGIN}/__scope-seed`, async (route) => {
     await route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
   });
-  await page.goto('http://localhost:8902/__scope-seed');
+  await page.goto(`${APP_ORIGIN}/__scope-seed`);
   await page.evaluate(async ({ userB, keyA, keyB, indexedKeyA, indexedKeyB, scopeBState }) => {
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
@@ -340,7 +343,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
     db.close();
   }, { userB, keyA, keyB, indexedKeyA, indexedKeyB, scopeBState: stateWithTrip('scope_b_trip', 'history') });
 
-  await page.goto('http://localhost:8902/travel-expense/react/#history');
+  await page.goto(`${APP_URL}#history`);
   await expect(page.getByText('紀錄中心').first()).toBeVisible();
 
   await expect.poll(async () => page.evaluate((keyB) => {

@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 const seededState = {
@@ -56,7 +58,7 @@ test('Trip intelligence drives the shared destination theme contract', async ({ 
     localStorage.setItem('boss-japan-tracker', JSON.stringify(payload));
   }, seededState);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
 
   const theme = await page.evaluate(() => ({

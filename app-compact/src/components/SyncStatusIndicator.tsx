@@ -27,7 +27,7 @@ export function SyncStatusIndicator({ state, onRetry }: { state: SyncEngineState
     : state.status;
   const item = config[effectiveStatus] || config.idle;
   const Icon = item.icon;
-  const title = `${item.label} · ${relativeTime(state.lastSyncedAt)}${state.pendingCount ? ` · ${state.pendingCount} pending` : ''}${state.failedCount ? ` · ${state.failedCount} failed` : ''}${state.error ? ` · ${state.error}` : ''}`;
+  const title = `${item.label} · ${relativeTime(state.lastSyncedAt)}${state.pendingCount ? ` · ${state.pendingCount} pending` : ''}${state.failedCount ? ` · ${state.failedCount} failed` : ''}${state.error ? ' · 需重試' : ''}`;
   const content = (
     <>
       <Icon size={14} className={state.status === 'pushing' || state.status === 'pulling' ? 'spin' : ''} />

@@ -811,9 +811,11 @@ function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' 
   let baseAttempts: ModelAttempt[] = [];
   if (kind === 'trip') {
     baseAttempts = [
-      { provider: 'kimi', model: 'kimi-code', label: 'Kimi kimi-code (1st Fallback)' },
-      { provider: 'google', model: 'gemma-4-31b-it', label: 'Google Gemma 4 31B (2nd Fallback)' },
-      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (3rd Fallback)' },
+      { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (Fast Fallback)' },
+      { provider: 'google', model: 'gemini-2.5-flash', label: 'Google Gemini 2.5 Flash (Fast Fallback)' },
+      { provider: 'kimi', model: 'kimi-code', label: 'Kimi kimi-code (Fallback)' },
+      { provider: 'google', model: 'gemma-4-31b-it', label: 'Google Gemma 4 31B (Fallback)' },
+      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (Fallback)' },
     ];
     for (const modelInfo of AI_MODELS) {
       const attempt = selectedModelAttempt(modelInfo.id);

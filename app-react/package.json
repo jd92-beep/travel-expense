@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-react-fresh",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -13,6 +13,7 @@
     "build:root": "VITE_BASE_PATH=/ npm run build",
     "preview": "vite preview --host 0.0.0.0 --port 4174",
     "typecheck": "tsc --noEmit",
+    "test:itinerary-merge": "node scripts/run-itinerary-sync-merge-test.mjs",
     "parity:tabs": "node ../scripts/tab-parity.mjs",
     "security:scan": "node ../scripts/security-scan.mjs",
     "db:policy:scan": "node ../scripts/verify-supabase-migrations.mjs",
@@ -57,10 +58,11 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
+    "@types/node": "^22.20.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "typescript": "^5.8.0",
-    "vite": "^8.0.11"
+    "vite": "^8.1.4"
   }
 }

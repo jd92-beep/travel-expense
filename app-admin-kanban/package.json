@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-admin-kanban",
   "private": true,
-  "version": "0.8.3",
+  "version": "1.0.0-rc.1",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -10,18 +10,27 @@
     "dev": "vite --host 0.0.0.0 --port 8904",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "security:scan": "node scripts/security-scan.mjs",
+    "test:unit": "node --test api/_lib/cookies.test.js api/_lib/crypto.test.js api/_lib/webauthn.test.js",
+    "test:contract": "node --test api/_lib/edge.test.js api/_lib/gateway-routes.test.js tests/admin-routes.test.js",
     "smoke": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:mobile": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line --grep mobile",
+    "smoke:a11y": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line --grep axe",
     "deploy": "node scripts/deploy-production.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.106.2",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.0",
+    "@tanstack/react-query": "^5.101.2",
     "@vitejs/plugin-react": "^6.0.1",
     "lucide-react": "^1.14.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-router": "^7.18.1",
     "vite": "^8.0.11"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.59.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

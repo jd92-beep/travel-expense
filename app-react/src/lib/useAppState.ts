@@ -170,7 +170,11 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
       const syncQueue = prev.autoSync && (syncAvailable || hasCredentialBrokerSession(prev) || hasDirectNotionToken())
         ? enqueueSyncItem(prev.syncQueue, queueItem('receipt', stamped.id, idx < 0 ? 'create' : 'update', {
             notionPageId: stamped.notionPageId,
+            supabaseId: stamped.supabaseId,
+            tripId: stamped.tripId,
             sourceId: stamped.sourceId || stamped.id,
+            version: stamped.version,
+            syncRevision: stamped.syncRevision,
             updatedAt: stamped.updatedAt,
           }))
         : prev.syncQueue;
@@ -184,6 +188,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   const deleteReceipt = useCallback((receipt: Receipt) => {
     const rawSourceId = receipt.sourceId || receipt.id;
     const tombstoneKey = receiptSourceTombstoneKey(receipt);
+    const deletedAt = Date.now();
     setState((prev) => ({
       ...prev,
       receipts: prev.receipts.filter((r) => r.id !== receipt.id),
@@ -193,6 +198,18 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
       notionDeletedSourceIds: tombstoneKey
         ? [...(prev.notionDeletedSourceIds || []), tombstoneKey].slice(-500)
         : prev.notionDeletedSourceIds,
+      receiptTombstones: {
+        ...(prev.receiptTombstones || {}),
+        [tombstoneKey]: {
+          supabaseId: receipt.supabaseId || receipt.id,
+          sourceId: rawSourceId,
+          tripId: receipt.tripId || prev.activeTripId || '',
+          version: Math.max(1, Number(receipt.version) || 1),
+          syncRevision: Math.max(0, Number(receipt.syncRevision) || 0),
+          deletedAt,
+          pending: true,
+        },
+      },
       syncQueue: prev.autoSync && (syncAvailable || hasCredentialBrokerSession(prev) || hasDirectNotionToken())
         ? enqueueSyncItem(prev.syncQueue, queueItem('delete-receipt', receipt.id, 'delete', {
             notionPageId: receipt.notionPageId,
@@ -200,6 +217,8 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
             tripId: receipt.tripId,
             sourceId: rawSourceId,
             tombstoneKey,
+            version: receipt.version,
+            syncRevision: receipt.syncRevision,
             updatedAt: receipt.updatedAt,
           }))
         : prev.syncQueue,

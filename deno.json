@@ -1,6 +1,8 @@
 {
   "imports": {
-    "@std/assert": "jsr:@std/assert@1"
+    "@std/assert": "jsr:@std/assert@1",
+    "@supabase/functions-js/edge-runtime.d.ts": "jsr:@supabase/functions-js@2.4.6/edge-runtime.d.ts",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.87.0"
   },
   "fmt": {
     "lineWidth": 100,

@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 const userId = '33333333-3333-4333-8333-333333333333';
@@ -15,6 +17,7 @@ test('New Supabase account guide captures trip members and split ratios', async 
   });
 
   await page.addInitScript(({ userId }) => {
+    window.__disable_supabase_configured = true;
     localStorage.clear();
     indexedDB.deleteDatabase('travel-expense-react');
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
@@ -37,14 +40,15 @@ test('New Supabase account guide captures trip members and split ratios', async 
     }));
   }, { userId });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
 
   await expect(page.getByText('旅伴與分帳比例')).toBeVisible();
-  await expect(page.getByLabel('人數')).toBeVisible();
+  await expect(page.getByRole('button', { name: '增加人數' })).toBeVisible();
   await expect(page.getByLabel('你嘅顯示名稱')).toBeVisible();
   await expect(page.getByLabel('First-run personalization')).toBeVisible();
 
-  await page.getByLabel('人數').fill('3');
+  await page.getByRole('button', { name: '增加人數' }).click();
+  await page.getByRole('button', { name: '增加人數' }).click();
   await expect(page.getByLabel('旅伴 3 名稱')).toBeVisible();
   await page.getByLabel('你嘅顯示名稱').fill('User 1');
   await page.getByLabel('旅伴 2 名稱').fill('May');
@@ -55,9 +59,9 @@ test('New Supabase account guide captures trip members and split ratios', async 
   await page.getByLabel('偏好貨幣').selectOption('KRW');
 
   const ratioInputs = page.locator('.welcome-guide-modal input[type="number"]');
-  await ratioInputs.nth(1).fill('2');
-  await ratioInputs.nth(2).fill('1');
-  await ratioInputs.nth(3).fill('0.5');
+  await ratioInputs.nth(0).fill('50');
+  await ratioInputs.nth(1).fill('30');
+  await expect(ratioInputs.nth(2)).toHaveValue('20');
 
   await page.getByRole('button', { name: /手動輸入旅行細節/ }).click();
   await page.getByLabel('旅行名稱').fill('Guide Smoke Trip');
@@ -75,9 +79,9 @@ test('New Supabase account guide captures trip members and split ratios', async 
       expect.objectContaining({ id: 'p_trip_3', name: 'Sam' }),
     ],
     shareRatios: {
-      p_boss: 2,
-      p_trip_2: 1,
-      p_trip_3: 0.5,
+      p_boss: 50,
+      p_trip_2: 30,
+      p_trip_3: 20,
     },
     tripCurrency: 'KRW',
     trips: [expect.objectContaining({
