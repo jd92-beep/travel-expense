@@ -2,6 +2,21 @@
 
 ## 2026-07-12
 
+- **Compact App 0.16.2 / Android 0.19.2 contested-trip recovery**:
+  - If a locally owned trip identity collides with another account's row, the client retries once
+    with a current-user-scoped trip identity so receipts and photos can sync to the correct account.
+    Genuine shared-trip access denial still requires a fresh owner invitation.
+
+- **Admin Console 1.0.0-rc.1 final branch hardening**:
+  - Rebased onto Compact `0.16.2` without dropping Oscar's access-denial, multi-currency, motion or
+    sync fixes. Canonical itinerary versions, receipt tombstones/sync revisions and private-photo
+    contracts remain aligned across web clients.
+  - Post-rebase gates: Admin unit `17/17`, contract `13/13`, browser `34 passed + 1 intentional
+    capture skip`; Edge `65/65`; Compact 9/9 selected gates; React final navigation `6/6`; Broker
+    check/self-test; security, migration-policy and shared-ledger scans green.
+  - Production is unchanged at Admin `0.8.3` read-only. No production deploy, migration, secret or
+    live user-data change was made.
+
 - **Compact App 0.16.1 Access-Denial Sync Fix — the real "sync fail" banner root cause (main) / Android 0.19.1**:
   - **Live diagnosis (puiyuchau@gmail.com, 61 failed queue items, photos stuck)**: her device holds a local copy of the owner's shared South Korea trip but she has NO `trip_members` row server-side (and no local sharing metadata), so every receipt push re-ran `upsertSupabaseTrip` down the OWNER path → upsert collided with the owner's `trips` row → Postgres `new row violates row-level security policy` → all 61 receipts + 66 photos failed, ~122 doomed POSTs per boot (server logs wall-to-wall RLS errors). Every cold open replayed the whole doomed sweep (boot hydrate-reset requeues error items and resets `attempts`), repainting the misleading「請檢查連線」banner — this loop, not connectivity, was the banner.
   - **Fixes**: (1) `upsertSupabaseTrip` translates RLS violations into an actionable Cantonese error（旅程存取權失效：請旅程擁有者重新邀請）; (2) `push()` classifies access/RLS denials (`isAccessError`) and fail-fasts all sibling receipts of a denied trip within the sweep — one network probe instead of N; manual retry still gets a fresh attempt; (3) the Shell banner shows a permission-specific headline instead of「請檢查連線」when the failure is access-shaped.

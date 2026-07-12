@@ -32,7 +32,7 @@
     "smoke:supabase-notion-mirror": "playwright test tests/supabase-notion-mirror-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:shared-ledger": "node ../scripts/verify-shared-ledger-contract.mjs",
     "smoke:mobile-layout": "node scripts/run-with-dev-server.mjs -- playwright test tests/mobile-layout-stability-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
-    "smoke:final-nav": "playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:final-nav": "node scripts/run-with-dev-server.mjs -- playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:trip-intelligence": "playwright test tests/trip-intelligence-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line"
   },
   "dependencies": {

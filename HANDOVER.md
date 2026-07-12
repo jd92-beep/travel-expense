@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-12 HKT
-- **Focus**: Session 43 completed the local Admin `1.0.0-rc.1` implementation and release gates: new auth/BFF boundary, paginated read APIs, five workspaces, audited R1/R2 operations, canonical Compact/React/Android contracts, CI and runbooks. Production remains the intentionally read-only `0.8.3` deployment pending an approved maintenance cutover.
-- **Agent**: Codex
-- **App version**: Compact `0.13.6`; Android `0.18.2` (versionCode 1820); Admin production `0.8.3`, local RC `1.0.0-rc.1`; React `0.2.3`
+- **Focus**: Session 44 rebased Admin `1.0.0-rc.1` onto Oscar's Compact `0.16.2`, preserved the new access-denial/multi-currency/motion/sync behavior, and reran the post-rebase Admin, Edge and cross-client gates. Production remains the intentionally read-only `0.8.3` deployment pending an approved maintenance cutover.
+- **Agent**: Codex with GPT-5.6 Terra workers
+- **App version**: Compact `0.16.2`; Android `0.19.2` (versionCode 1920); Admin production `0.8.3`, branch RC `1.0.0-rc.1`; React `0.2.3`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.13.6`; the Android branch is `0.18.2`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.2`; the Android branch is `0.19.2`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -23,17 +23,19 @@ This is the ONLY live to-do list in this file. Everything under "What Was Done",
 before acting on them. Every session must reconcile this list: add items you opened, mark items
 you closed with your session number.
 
-1. 🟠 **Production migration cutover remains approval-gated** — Session 43 reconciled repo/live
-   history into forward-only tracked artifacts and rebuilt a disposable local Supabase from zero.
-   Production has not received the new Admin 1.0 migrations. **No `db push`, no blind
-   `migration repair`.** Apply only through the reviewed maintenance runbook after Boss approval.
+1. 🟠 **Production migration cutover remains approval-gated** — forward-only reconciliation
+   artifacts and static migration/contract scans are tracked. Production has not received the new
+   Admin 1.0 migrations. The post-rebase local SQL suites were not run because Docker is unavailable
+   and the Podman VM is stopped; the disposable Supabase job remains a required CI gate. **No
+   `db push`, no blind `migration repair`.** Apply only through the reviewed maintenance runbook
+   after Boss approval.
 2. 🟠 **Notion outbox worker deployment is unverified** — worker code, contracts and a guarded
    workflow now exist, but live Edge deployment and secret bindings were not changed in Session 43.
    Shared receipts may remain pending until live deployment is explicitly verified.
 3. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-4. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — Compact `0.13.6` and Android
-   `0.18.2` use 15-minute signed URLs, and the Admin Edge photo endpoint uses a 60-second signed
+4. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — Compact `0.16.2` and Android
+   `0.19.2` use signed URLs, and the Admin Edge photo endpoint uses a 60-second signed
    URL with no public fallback. The tracked private-bucket migration is intentionally **not live**
    until both clients are deployed and active compatibility is confirmed. (Sessions 42-43.)
 5. 🟡 **Compact Netlify deploy blocked** by hosting account credits (durable until topped up).
@@ -41,11 +43,11 @@ you closed with your session number.
    unused `hkd` imports in History/Stats. (Old Pending list.)
 7. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
    settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
-8. 🟠 **Admin production cutover is pending** — local RC auth/BFF, read APIs and R1/R2 kernels are
+8. 🟠 **Admin production cutover is pending** — branch RC auth/BFF, read APIs and R1/R2 kernels are
    complete and tested, but production secrets, exact WebAuthn origin/RP ID, first Boss passkey
    enrollment, session revocation and maintenance promotion have not been performed. Live remains
-   `0.8.3` read-only. The new GitHub workflow is CI-only; protected production approval/deploy remains
-   a platform setup task.
+   `0.8.3` read-only. The GitHub workflow now has a manual, main-only protected production job after
+   all seven gates; the `admin-production` environment approval/setup and first run remain pending.
 9. 🟠 **Admin DB ownership hardening needs a platform-owner operation** — browser grants, policies
    and RPC execute are closed, and `search_path` is fixed. The managed SQL API cannot transfer the
    helper function to the planned non-login owner, so this remains a documented go-live blocker.
@@ -57,6 +59,29 @@ you closed with your session number.
     editing and session revoke stay server-disabled until their later threat-model milestones.
 
 ## What Was Done
+
+### Session 44 (Codex + GPT-5.6 Terra — Oscar integration and final branch verification)
+
+1. **Integrated concurrent Compact/Android work without reverting it**:
+   - Rebased `codex/admin-console-1.0` onto `origin/main` `a27cc3d` and kept Oscar's Compact `0.16.2`
+     access-denial recovery, multi-currency, motion, navigation and sync behavior.
+   - Merged only compatible Admin shared-contract additions: canonical itinerary versions, receipt
+     tombstones/sync revisions, private photo handling and trip-scoped identity. Android worktree
+     `9365ea7` reports `0.19.2` / versionCode `1920`.
+2. **Post-rebase verification evidence**:
+   - Admin: typecheck/build/security green; unit `17/17`; contract `13/13`; browser smoke
+     `34 passed, 1 intentional visual-capture skip`; audit `0` vulnerabilities.
+   - Edge: 28 files format/lint green, three entrypoints checked, Deno `65 passed, 0 failed`.
+   - Compact: 9/9 command gates green, including itinerary merge, tombstone, privacy, offline,
+     mobile layout and final navigation. React: typecheck/build/security, itinerary, security,
+     mobile and final navigation green; final navigation is `6/6` after routing it through the
+     existing owned dev-server wrapper. Broker check/self-test green.
+   - Static migration policy and shared-ledger contract scans passed; workflow YAML parsed. Local
+     SQL runtime was unavailable, so disposable Supabase SQL remains CI evidence, not a claimed
+     post-rebase local result.
+3. **Release truth**:
+   - Live `/api/health` returned Admin `0.8.3` with read traffic enabled. No production deploy,
+     migration, secret change, passkey enrollment or live user-data mutation was performed.
 
 ### Session 43 (Codex — Admin 1.0 RC)
 

@@ -7,6 +7,7 @@ Last updated: 2026-07-12 HKT
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
 - Production release: `0.8.3`, intentionally read-only.
 - Verified local release candidate: `1.0.0-rc.1` on `codex/admin-console-1.0`.
+- Compatibility baseline: Compact Web `0.16.2`, Android `0.19.2`, React `0.2.3`.
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
 - R0/R1/R2 code and release gates are complete locally. Production cutover is not approved or run.
 - R3 account consolidation/deletion, Notion write repair, device commands, runtime writes, arbitrary
@@ -96,33 +97,36 @@ and recovered through the operation ID; the UI never declares success from reque
   belongs to one in-range day; partial updates preserve omitted days; every mutation creates a new
   version and snapshot.
 - Nagoya acceptance is exactly six days, `2026-04-20` through `2026-04-25`, with no scenery spot
-  outside that range. Local Compact/React/Android/SQL tests are green. Live Boss data has not been
-  rewritten because that requires explicit approval, backup and a fresh preview.
+  outside that range. Compact/React browser and static contract tests are green. The disposable
+  Supabase SQL suites remain a required CI gate; they were not rerun locally after the final rebase
+  because no local container runtime was available. Live Boss data has not been rewritten because
+  that requires explicit approval, backup and a fresh preview.
 
 ## Release Evidence
 
 Verified on 2026-07-12:
 
-- Admin: typecheck, build and security scan passed; unit `8/8`; contract `12/12`; full smoke
-  `14 passed + 1 intentional visual-capture skip`; dedicated mobile `3/3`; axe serious/critical `0`
-  across all 16 routes at desktop/mobile; `npm audit` reports `0` vulnerabilities.
-- Edge: 21 files passed format/lint/check; Deno tests `50 passed, 0 failed`.
-- Disposable Supabase: all ten auth/read/R2/receipt/itinerary/membership/security/worker SQL suites
-  passed from a clean local rebuild.
-- Compact `0.13.6`: isolated 21-stage production gate passed in 236 seconds.
-- React `0.2.3`: typecheck/build/security/policy/contract gates passed; browser suite
-  `30 passed, 5 intentional skips`.
-- Android `0.18.2`: contract suites and isolated browser suites (`28 passed, 2 intentional skips`)
-  passed; JDK wrapper selected JBR 21; debug build and `android:qa` passed with
-  `appLinksVerified=true`. Artifact:
-  `/tmp/travel-expense-android-qa-2026-07-12T02-10-31-087Z`.
-- Broker: check, self-test and audit passed.
+- Admin: typecheck, build and security scan passed; unit `17/17`; contract `13/13`; full smoke
+  `34 passed + 1 intentional visual-capture skip`; axe serious/critical coverage is included;
+  `npm audit` reports `0` vulnerabilities.
+- Edge: 28 files passed format/lint; all three entrypoints passed `deno check`; Deno tests
+  `65 passed, 0 failed`.
+- Compact `0.16.2`: 9/9 selected post-rebase gates passed, including itinerary merge, receipt
+  tombstone, privacy, offline, mobile layout and final navigation.
+- React `0.2.3`: typecheck/build/security, itinerary merge, security, mobile layout and final
+  navigation passed; final navigation `6/6` uses the owned dev-server wrapper.
+- Android `0.19.2` / versionCode `1920` is the current Oscar worktree baseline. It was not rebuilt
+  or republished in this final web-console pass.
+- Broker: check and self-test passed. Static migration policy and shared-ledger scans passed.
+- Local SQL note: Docker was unavailable and Podman was stopped, so the disposable Supabase SQL
+  suite was not rerun locally; CI must supply that evidence before production approval.
 
 ## CI And Runbooks
 
-`.github/workflows/admin-console.yml` is synthetic CI only. It uses pinned actions and checks Admin,
-Edge, Broker, shared contracts and a disposable Supabase. It does not receive production secrets or
-deploy production. CODEOWNERS covers Admin, Edge, Broker and migrations.
+`.github/workflows/admin-console.yml` uses pinned actions and checks Admin, Edge, Compact, React,
+Broker, shared contracts and a disposable Supabase. Pull requests and ordinary pushes receive no
+production secrets. A manual `main`-only job can promote only after all seven gates and the protected
+`admin-production` environment approval. CODEOWNERS covers Admin, Edge, Broker and migrations.
 
 Runbook index: `docs/runbooks/README.md`
 
@@ -143,7 +147,8 @@ Runbook index: `docs/runbooks/README.md`
 5. Deploy Compact/Android compatibility and confirm heartbeats before making receipt photos private.
 6. Verify receipt-sync worker deployment and bindings separately.
 7. Preview and back up live Nagoya data before any repair; do not mutate live rows automatically.
-8. Add protected production-environment approval/deploy outside the current CI-only workflow.
+8. Configure and approve the protected `admin-production` GitHub environment before the first
+   manual production workflow run.
 
 ## Cutover And Rollback
 

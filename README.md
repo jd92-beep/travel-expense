@@ -38,9 +38,9 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact 目前版本：`0.13.6`。Admin production
-仍是 `0.8.3` read-only containment；新 console 候選版本是 `1.0.0-rc.1`，尚未做 production
-cutover。
+Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.2`；Android worktree
+目前版本是 `0.19.2`。Admin production 的 live health 仍回報 `0.8.3` read-only containment；
+新 console 候選版本是 `1.0.0-rc.1`，尚未做 production cutover。
 
 Admin Console 正在進行 Admin 1.0 生產重整。現時 production 已啟用全域 read-only
 containment：讀取及診斷仍可用，所有寫入、刪除、merge、repair、provider probe及其他外部副作用
