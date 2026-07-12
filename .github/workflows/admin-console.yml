@@ -222,7 +222,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          db_container="$(docker ps --format '{{.Names}}' | rg '^supabase_db_' | head -1)"
+          db_container="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | sed -n '1p')"
           test -n "$db_container"
           for sql in \
             supabase/tests/adjacent_security_privilege_smoke.sql \
