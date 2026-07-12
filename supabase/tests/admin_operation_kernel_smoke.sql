@@ -273,13 +273,10 @@ select public.admin_operation_preview_create(
 
 reset role;
 
-grant admin_auth_owner to postgres;
-set local role admin_auth_owner;
-update private.admin_operations
-set target_version = '2026-07-10 00:00:00+00'
-where id = '97500000-0000-4000-8000-000000000002';
-reset role;
-revoke admin_auth_owner from postgres;
+-- Change the target after preview so the commit RPC observes genuine version drift.
+update public.receipt_sync_jobs
+set last_error = 'synthetic stale-preview drift'
+where id = '97300000-0000-4000-8000-000000000001';
 
 set local role service_role;
 do $$
