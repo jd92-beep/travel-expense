@@ -347,6 +347,32 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function waitForClose(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const finish = (closed) => {
+      clearTimeout(timeout);
+      child.off('close', onClose);
+      resolve(closed);
+    };
+    const onClose = () => finish(true);
+    const timeout = setTimeout(() => finish(false), timeoutMs);
+    child.once('close', onClose);
+  });
+}
+
+async function stopServer(child, label) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  const gracefulClose = waitForClose(child, 5_000);
+  child.kill('SIGTERM');
+  if (await gracefulClose) return;
+
+  console.warn(`[shared-contract] ${label} ignored SIGTERM; sending SIGKILL`);
+  const forcedClose = waitForClose(child, 1_000);
+  child.kill('SIGKILL');
+  if (!await forcedClose) throw new Error(`[shared-contract] ${label} did not close after SIGKILL`);
+}
+
 async function probe(url, expectedMarker) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 900);
@@ -393,9 +419,9 @@ async function ensureServer({ name, cwd, url, port, base, expectedMarker, allowP
   if (!allowPortFallback && !(await portIsAvailable(Number(new URL(url).port)))) {
     throw new Error(`${name} server at ${url} does not match ${expectedMarker}`);
   }
-  const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   const targetPort = Number(new URL(targetUrl).port);
-  const server = spawn(npx, ['vite', '--host', '127.0.0.1', '--port', String(targetPort), '--strictPort'], {
+  const viteCli = resolve(cwd, 'node_modules', 'vite', 'bin', 'vite.js');
+  const server = spawn(process.execPath, [viteCli, '--host', '127.0.0.1', '--port', String(targetPort), '--strictPort'], {
     cwd,
     env: safeEnv({ FORCE_COLOR: '0', VITE_BASE_PATH: base }),
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -403,18 +429,22 @@ async function ensureServer({ name, cwd, url, port, base, expectedMarker, allowP
   let output = '';
   server.stdout.on('data', (chunk) => { output += String(chunk); });
   server.stderr.on('data', (chunk) => { output += String(chunk); });
-  for (let i = 0; i < 160; i += 1) {
-    if (server.exitCode !== null) {
-      throw new Error(`${name} server exited early with code ${server.exitCode}\n${output.slice(-2000)}`);
+  try {
+    for (let i = 0; i < 160; i += 1) {
+      if (server.exitCode !== null) {
+        throw new Error(`${name} server exited early with code ${server.exitCode}\n${output.slice(-2000)}`);
+      }
+      if (await probe(targetUrl, expectedMarker)) {
+        console.log(`[shared-contract] started ${name} server at ${targetUrl}`);
+        return { process: server, url: targetUrl };
+      }
+      await delay(250);
     }
-    if (await probe(targetUrl, expectedMarker)) {
-      console.log(`[shared-contract] started ${name} server at ${targetUrl}`);
-      return { process: server, url: targetUrl };
-    }
-    await delay(250);
+    throw new Error(`Timed out waiting for ${name} server at ${targetUrl}\n${output.slice(-2000)}`);
+  } catch (error) {
+    await stopServer(server, `owned ${name} server`);
+    throw error;
   }
-  server.kill('SIGTERM');
-  throw new Error(`Timed out waiting for ${name} server at ${targetUrl}\n${output.slice(-2000)}`);
 }
 
 function stable(value) {
@@ -780,6 +810,6 @@ try {
 } finally {
   if (browser) await browser.close();
   for (const server of startedServers.reverse()) {
-    if (server) server.kill('SIGTERM');
+    if (server) await stopServer(server, 'owned dev server');
   }
 }
