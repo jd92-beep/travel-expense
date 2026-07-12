@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 import { BffVerificationError, verifySignedBffRequest } from "../_shared/admin_bff.ts";
 import { authStateRpcFor, routeBindsSessionHash } from "./routes.ts";
+import { recordAuthStateSignatureRejection } from "./security.ts";
 
 export const config = { verify_jwt: false };
 
@@ -78,6 +79,7 @@ Deno.serve(async (req) => {
     const signed = await verifySignedBffRequest(req, {
       functionName: "admin-auth-state",
       keys: signingKeys(),
+      maxBodyBytes: MAX_BODY_BYTES,
       consumeNonce: async (nonceHash, signedRequestId, expiresAt) => {
         const { data, error } = await supabase.rpc("admin_consume_request_nonce", {
           p_nonce_hash: nonceHash,
@@ -89,17 +91,6 @@ Deno.serve(async (req) => {
       },
     });
     requestId = signed.requestId;
-
-    if (signed.bodyBytes.byteLength > MAX_BODY_BYTES) {
-      return response(413, requestId, {
-        ok: false,
-        error: {
-          code: "ADMIN_BODY_TOO_LARGE",
-          message: "Request body too large",
-          retryable: false,
-        },
-      });
-    }
 
     let body: unknown;
     try {
@@ -134,6 +125,24 @@ Deno.serve(async (req) => {
     return response(200, requestId, { ok: true, data, error: null });
   } catch (error) {
     if (error instanceof BffVerificationError) {
+      console.warn(JSON.stringify({
+        event: "admin_auth_signature_rejected",
+        code: error.code,
+        method: req.method.toUpperCase(),
+        requestId,
+      }));
+      try {
+        await recordAuthStateSignatureRejection(serviceClient(), {
+          code: error.code,
+          method: req.method,
+          requestId,
+        });
+      } catch {
+        console.error(JSON.stringify({
+          event: "admin_security_event_store_failed",
+          requestId,
+        }));
+      }
       return response(error.status, requestId, {
         ok: false,
         error: { code: error.code, message: error.message, retryable: false },

@@ -32,13 +32,15 @@ async function parseJson<T>(response: Response): Promise<T> {
   }
   if (!response.ok || payload?.ok === false) {
     const error = payload?.error;
-    throw new AdminApiError(
+    const apiError = new AdminApiError(
       typeof error === 'string' ? error : error?.message || payload?.message || `${response.status} ${response.statusText}`,
       error?.code || 'UPSTREAM_UNAVAILABLE',
       response.status,
       payload?.meta?.requestId || response.headers.get('x-admin-request-id') || undefined,
       error?.retryAfterSeconds,
     );
+    if (apiError.status === 401) window.dispatchEvent(new Event('admin:unauthorized'));
+    throw apiError;
   }
   return payload as T;
 }
@@ -116,6 +118,45 @@ export async function enrollBossPasskey(
     body: { flowId: begin.data.flowId, bootstrapSecret, label, response },
   });
   return sessionFrom(finish.data);
+}
+
+export type AdminPasskey = {
+  id: string;
+  label: string;
+  deviceType: string;
+  backedUp: boolean;
+  createdAt: string | null;
+  lastUsedAt: string | null;
+};
+
+export type AdminPasskeyState = {
+  credentials: AdminPasskey[];
+  count: number;
+  max: number;
+  context: { action: string; targetHash: string; previewHash: string };
+};
+
+export async function listAdminPasskeys(): Promise<AdminPasskeyState> {
+  const payload = await request<{ data: AdminPasskeyState }>('/api/admin/passkeys');
+  return payload.data;
+}
+
+export async function addBossPasskey(passphrase: string, label: string): Promise<AdminPasskey> {
+  const state = await listAdminPasskeys();
+  if (state.count < 1 || state.count >= state.max) {
+    throw new AdminApiError('備用 passkey enrollment 暫時不可用', 'PROTECTED_TARGET', 403);
+  }
+  const grant = await reauthenticateAdmin(passphrase, state.context);
+  const begin = await request<{ data: { flowId: string; options: any } }>('/api/admin/passkeys/add/begin', {
+    method: 'POST',
+    body: { grantId: grant.grantId },
+  });
+  const response = await startRegistration({ optionsJSON: begin.data.options });
+  const finish = await request<{ data: { credential: AdminPasskey } }>('/api/admin/passkeys/add/finish', {
+    method: 'POST',
+    body: { flowId: begin.data.flowId, label, response },
+  });
+  return finish.data.credential;
 }
 
 export async function reauthenticateAdmin(

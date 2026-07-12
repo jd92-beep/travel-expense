@@ -42,12 +42,12 @@ export default function finishPasskeyEnrollment(req, res) {
       }
       const info = await verifyRegistration(body.response, challenge.challenge);
       await authStateCall('/internal/credential/register', registrationRecord(info, body.label));
-      await recordLoginRate(bucketKey, true, 'login');
-      await authStateCall('/internal/session/revoke-all', { reason: 'first_passkey_enrolled' });
     } catch {
-      if (/^[0-9a-f]{64}$/.test(bucketKey)) await recordLoginRate(bucketKey, false, 'login').catch(() => null);
+      if (/^[0-9a-f]{64}$/.test(bucketKey)) await recordLoginRate(bucketKey, false, 'login');
       throw new HttpError('MFA_REQUIRED', 'Passkey enrollment failed', 403);
     }
+    await recordLoginRate(bucketKey, true, 'login');
+    await authStateCall('/internal/session/revoke-all', { reason: 'first_passkey_enrolled' });
 
     const session = await createOpaqueSession(res);
     sendData(res, 200, {

@@ -186,12 +186,26 @@ export async function callSignedEdge({
   throw lastError || new Error('Signed Edge request failed');
 }
 
+function requiredInternalEdgeUrl(name, functionName) {
+  const raw = String(process.env[name] || '').trim().replace(/\/+$/, '');
+  if (!raw) throw new Error(`${name} is not configured`);
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`${name} is invalid`);
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
+    || url.pathname !== `/functions/v1/${functionName}`) {
+    throw new Error(`${name} is invalid`);
+  }
+  return raw;
+}
+
 export function adminEdgeUrl() {
-  return process.env.ADMIN_EDGE_ADMIN_URL
-    || 'https://fbnnjoahvtdrnigevrtw.supabase.co/functions/v1/admin-kanban';
+  return requiredInternalEdgeUrl('ADMIN_EDGE_ADMIN_URL', 'admin-kanban');
 }
 
 export function adminAuthStateUrl() {
-  return process.env.ADMIN_EDGE_AUTH_STATE_URL
-    || 'https://fbnnjoahvtdrnigevrtw.supabase.co/functions/v1/admin-auth-state';
+  return requiredInternalEdgeUrl('ADMIN_EDGE_AUTH_STATE_URL', 'admin-auth-state');
 }

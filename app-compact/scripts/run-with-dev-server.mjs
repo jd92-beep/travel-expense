@@ -7,12 +7,16 @@ if (separatorIndex === -1 || separatorIndex === process.argv.length - 1) {
 }
 
 const command = process.argv.slice(separatorIndex + 1);
-const defaultBaseUrl = 'http://127.0.0.1:8903/travel-expense/compact/';
-const baseUrl = process.env.COMPACT_SMOKE_BASE_URL || defaultBaseUrl;
+const appPath = '/travel-expense/compact/';
+const defaultBaseUrl = `http://127.0.0.1:8903${appPath}`;
+const explicitBaseUrl = process.env.COMPACT_SMOKE_BASE_URL || '';
+let baseUrl = explicitBaseUrl || defaultBaseUrl;
+let testOrigin = new URL(baseUrl).origin;
 
 const allowedEnvNames = new Set([
   'CI',
   'COMPACT_SMOKE_BASE_URL',
+  'COMPACT_TEST_ORIGIN',
   'FORCE_COLOR',
   'HOME',
   'LANG',
@@ -41,6 +45,7 @@ function buildSafeEnv() {
     if (allowedEnvNames.has(key) || key.startsWith('npm_')) env[key] = value;
   }
   env.COMPACT_SMOKE_SAFE_MODE = '1';
+  env.COMPACT_TEST_ORIGIN = testOrigin;
   return env;
 }
 
@@ -62,16 +67,32 @@ async function probe(url) {
 }
 
 async function ensureServer() {
-  if (await probe(baseUrl)) {
+  if (explicitBaseUrl && await probe(baseUrl)) {
     console.log(`[compact-smoke] using existing dev server at ${baseUrl}`);
     return null;
   }
-  if (baseUrl !== defaultBaseUrl) {
+  if (explicitBaseUrl && !['127.0.0.1', 'localhost'].includes(new URL(baseUrl).hostname)) {
     throw new Error(`COMPACT_SMOKE_BASE_URL is not reachable: ${baseUrl}`);
   }
 
+  if (!explicitBaseUrl) {
+    const candidatePorts = [8903, ...Array.from({ length: 10 }, (_, index) => 8915 + index)];
+    let selected = null;
+    for (const port of candidatePorts) {
+      const candidate = `http://127.0.0.1:${port}${appPath}`;
+      if (!await probe(candidate)) {
+        selected = candidate;
+        break;
+      }
+    }
+    if (!selected) throw new Error('No isolated Compact smoke port is available');
+    baseUrl = selected;
+    testOrigin = new URL(baseUrl).origin;
+  }
+
   const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const server = spawn(npx, ['vite', '--host', '127.0.0.1', '--port', '8903'], {
+  const port = new URL(baseUrl).port;
+  const server = spawn(npx, ['vite', '--host', '127.0.0.1', '--port', port], {
     cwd: process.cwd(),
     env: { ...buildSafeEnv(), FORCE_COLOR: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],

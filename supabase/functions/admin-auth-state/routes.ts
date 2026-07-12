@@ -49,6 +49,14 @@ function textArray(body: JsonObject, key: string): string[] {
   return value;
 }
 
+function uuid(body: JsonObject, key: string): string {
+  const value = text(body, key, 36);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new Error(`${key} is invalid`);
+  }
+  return value;
+}
+
 export function authStateRpcFor(
   route: string,
   input: unknown,
@@ -121,6 +129,22 @@ export function authStateRpcFor(
           p_backed_up: boolean(body, "backedUp"),
         },
       };
+    case "/internal/credential/register-backup":
+      return {
+        rpc: "admin_auth_register_backup_credential",
+        args: {
+          p_credential_id: text(body, "credentialId", 1024),
+          p_public_key: text(body, "publicKey", 8192),
+          p_counter: integer(body, "counter"),
+          p_transports: textArray(body, "transports"),
+          p_device_type: text(body, "deviceType", 64),
+          p_backed_up: boolean(body, "backedUp"),
+          p_label: optionalText(body, "label"),
+          p_actor: actor,
+          p_session_hash: text(body, "sessionHash", 64),
+          p_request_id: uuid(body, "requestId"),
+        },
+      };
     case "/internal/session/create":
       return {
         rpc: "admin_auth_create_session",
@@ -137,6 +161,18 @@ export function authStateRpcFor(
         rpc: "admin_auth_verify_session",
         args: {
           p_token_hash: text(body, "tokenHash", 64),
+          p_passphrase_fingerprint: text(body, "passphraseFingerprint", 64),
+        },
+      };
+    case "/internal/session/rotate":
+      return {
+        rpc: "admin_auth_rotate_session",
+        args: {
+          p_current_token_hash: text(body, "tokenHash", 64),
+          p_next_token_hash: text(body, "nextTokenHash", 64),
+          p_csrf_hash: text(body, "csrfHash", 64),
+          p_actor: actor,
+          p_auth_method: text(body, "authMethod", 64),
           p_passphrase_fingerprint: text(body, "passphraseFingerprint", 64),
         },
       };
@@ -182,5 +218,7 @@ export function authStateRpcFor(
 
 export function routeBindsSessionHash(route: string): boolean {
   return route === "/internal/session/verify" || route === "/internal/session/revoke" ||
-    route === "/internal/step-up/create" || route === "/internal/step-up/consume";
+    route === "/internal/session/rotate" ||
+    route === "/internal/step-up/create" || route === "/internal/step-up/consume" ||
+    route === "/internal/credential/register-backup";
 }

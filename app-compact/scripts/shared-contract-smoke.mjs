@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
@@ -8,8 +9,8 @@ const compactDir = resolve(scriptDir, '..');
 const repoRoot = resolve(compactDir, '..');
 const reactDir = resolve(repoRoot, 'app-react');
 
-const compactUrl = process.env.COMPACT_SHARED_CONTRACT_COMPACT_URL || 'http://127.0.0.1:8913/travel-expense/compact/';
-const reactUrl = process.env.COMPACT_SHARED_CONTRACT_REACT_URL || 'http://127.0.0.1:8914/travel-expense/react/';
+let compactUrl = process.env.COMPACT_SHARED_CONTRACT_COMPACT_URL || 'http://127.0.0.1:8913/travel-expense/compact/';
+let reactUrl = process.env.COMPACT_SHARED_CONTRACT_REACT_URL || 'http://127.0.0.1:8914/travel-expense/react/';
 const userId = '55555555-5555-4555-8555-555555555555';
 const storageKey = 'boss-japan-tracker';
 const scopedStorageKey = `${storageKey}:state:supabase:${userId}`;
@@ -346,12 +347,14 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function probe(url) {
+async function probe(url, expectedMarker) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 900);
   try {
     const response = await fetch(url, { signal: controller.signal });
-    return response.ok;
+    if (!response.ok) return false;
+    const html = await response.text();
+    return html.includes(expectedMarker);
   } catch {
     return false;
   } finally {
@@ -359,13 +362,40 @@ async function probe(url) {
   }
 }
 
-async function ensureServer({ name, cwd, url, port, base }) {
-  if (await probe(url)) {
+async function portIsAvailable(port) {
+  return await new Promise((resolveAvailable) => {
+    const server = createServer();
+    server.unref();
+    server.once('error', () => resolveAvailable(false));
+    server.listen({ host: '127.0.0.1', port }, () => {
+      server.close(() => resolveAvailable(true));
+    });
+  });
+}
+
+async function nextAvailableUrl(url, startPort) {
+  const target = new URL(url);
+  for (let port = startPort; port < startPort + 50; port += 1) {
+    if (await portIsAvailable(port)) {
+      target.port = String(port);
+      return target.toString();
+    }
+  }
+  throw new Error(`No free shared-contract test port found from ${startPort}`);
+}
+
+async function ensureServer({ name, cwd, url, port, base, expectedMarker, allowPortFallback }) {
+  if (await probe(url, expectedMarker)) {
     console.log(`[shared-contract] using existing ${name} server at ${url}`);
-    return null;
+    return { process: null, url };
+  }
+  const targetUrl = allowPortFallback ? await nextAvailableUrl(url, port) : url;
+  if (!allowPortFallback && !(await portIsAvailable(Number(new URL(url).port)))) {
+    throw new Error(`${name} server at ${url} does not match ${expectedMarker}`);
   }
   const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const server = spawn(npx, ['vite', '--host', '127.0.0.1', '--port', String(port)], {
+  const targetPort = Number(new URL(targetUrl).port);
+  const server = spawn(npx, ['vite', '--host', '127.0.0.1', '--port', String(targetPort), '--strictPort'], {
     cwd,
     env: safeEnv({ FORCE_COLOR: '0', VITE_BASE_PATH: base }),
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -377,14 +407,14 @@ async function ensureServer({ name, cwd, url, port, base }) {
     if (server.exitCode !== null) {
       throw new Error(`${name} server exited early with code ${server.exitCode}\n${output.slice(-2000)}`);
     }
-    if (await probe(url)) {
-      console.log(`[shared-contract] started ${name} server at ${url}`);
-      return server;
+    if (await probe(targetUrl, expectedMarker)) {
+      console.log(`[shared-contract] started ${name} server at ${targetUrl}`);
+      return { process: server, url: targetUrl };
     }
     await delay(250);
   }
   server.kill('SIGTERM');
-  throw new Error(`Timed out waiting for ${name} server at ${url}\n${output.slice(-2000)}`);
+  throw new Error(`Timed out waiting for ${name} server at ${targetUrl}\n${output.slice(-2000)}`);
 }
 
 function stable(value) {
@@ -663,20 +693,29 @@ const startedServers = [];
 let browser;
 
 try {
-  startedServers.push(await ensureServer({
+  const compactServer = await ensureServer({
     name: 'compact',
     cwd: compactDir,
     url: compactUrl,
     port: 8913,
     base: '/travel-expense/compact/',
-  }));
-  startedServers.push(await ensureServer({
+    expectedMarker: '<title>旅費 Compact</title>',
+    allowPortFallback: !process.env.COMPACT_SHARED_CONTRACT_COMPACT_URL,
+  });
+  compactUrl = compactServer.url;
+  startedServers.push(compactServer.process);
+
+  const reactServer = await ensureServer({
     name: 'react',
     cwd: reactDir,
     url: reactUrl,
     port: 8914,
     base: '/travel-expense/react/',
-  }));
+    expectedMarker: '<title>旅費 React Fresh</title>',
+    allowPortFallback: !process.env.COMPACT_SHARED_CONTRACT_REACT_URL,
+  });
+  reactUrl = reactServer.url;
+  startedServers.push(reactServer.process);
 
   browser = await chromium.launch();
   const compactState = await collectNormalizedState(browser, {

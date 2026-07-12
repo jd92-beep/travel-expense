@@ -47,11 +47,11 @@ export default function finishAdminReauthentication(req, res) {
         backedUp: info.credentialBackedUp,
       });
       if (updated !== true) throw new Error('Passkey counter update failed');
-      await recordLoginRate(bucketKey, true, 'reauth');
     } catch {
-      if (/^[0-9a-f]{64}$/.test(bucketKey)) await recordLoginRate(bucketKey, false, 'reauth').catch(() => null);
+      if (/^[0-9a-f]{64}$/.test(bucketKey)) await recordLoginRate(bucketKey, false, 'reauth');
       throw new HttpError('MFA_REQUIRED', 'Passkey verification failed', 403);
     }
+    await recordLoginRate(bucketKey, true, 'reauth');
 
     const rotated = await rotateOpaqueSession(res, session);
     const grantId = crypto.randomUUID();

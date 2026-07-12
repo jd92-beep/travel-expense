@@ -33,6 +33,12 @@ on:
       - "supabase/tests/**"
       - ".github/workflows/admin-console.yml"
   workflow_dispatch:
+    inputs:
+      deploy_production:
+        description: Deploy the verified Admin release through the protected environment
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -101,6 +107,101 @@ jobs:
       - name: Edge contract tests
         run: deno test --allow-env supabase/functions
 
+  compact:
+    name: Compact shared-contract client
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: app-compact/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app-compact
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Static and client-contract gates
+        working-directory: app-compact
+        run: |
+          npm run typecheck
+          npm run build
+          npm run security:scan
+          npm run test:receipt-tombstone
+          npm run test:itinerary-merge
+
+      - name: Install Chromium
+        working-directory: app-compact
+        run: npx playwright install --with-deps chromium
+
+      - name: Itinerary, privacy, offline and mobile gates
+        working-directory: app-compact
+        run: |
+          npm run smoke:itinerary
+          npm run smoke:privacy
+          npm run smoke:offline
+          npm run smoke:mobile-layout
+          npm run smoke:security
+
+      - name: Supabase session isolation gate
+        working-directory: app-compact
+        env:
+          SUPABASE_REDIRECT_SMOKE: "1"
+          VITE_SUPABASE_URL: https://test-travel-expense.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        run: npm run smoke:security
+
+  react-client:
+    name: React shared-contract client
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: app-react/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app-react
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Static and shared-contract gates
+        working-directory: app-react
+        run: |
+          npm run typecheck
+          npm run build
+          npm run security:scan
+          npm run test:itinerary-merge
+
+      - name: Install Chromium
+        working-directory: app-react
+        run: npx playwright install --with-deps chromium
+
+      - name: Itinerary and mobile gates
+        working-directory: app-react
+        run: |
+          npm run smoke:timeline
+          npm run smoke:mobile-layout
+          npm run smoke:security
+
+      - name: Supabase session isolation gate
+        working-directory: app-react
+        env:
+          SUPABASE_REDIRECT_SMOKE: "1"
+          VITE_SUPABASE_URL: https://test-travel-expense.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        run: npm run smoke:security
+
   database:
     name: Clean local database contracts
     runs-on: ubuntu-latest
@@ -124,7 +225,11 @@ jobs:
           db_container="$(docker ps --format '{{.Names}}' | rg '^supabase_db_' | head -1)"
           test -n "$db_container"
           for sql in \
+            supabase/tests/adjacent_security_privilege_smoke.sql \
             supabase/tests/admin_auth_state_smoke.sql \
+            supabase/tests/admin_console_privilege_report.sql \
+            supabase/tests/admin_console_privilege_smoke.sql \
+            supabase/tests/admin_console_schema_fingerprint.sql \
             supabase/tests/admin_integrity_scan_smoke.sql \
             supabase/tests/admin_operation_kernel_smoke.sql \
             supabase/tests/admin_r2_operation_kernel_smoke.sql \
@@ -132,6 +237,7 @@ jobs:
             supabase/tests/canonical_receipt_contract_smoke.sql \
             supabase/tests/itinerary_contract_smoke.sql \
             supabase/tests/receipt_sync_worker_smoke.sql \
+            supabase/tests/rls_isolation_smoke.sql \
             supabase/tests/security_definer_contract_smoke.sql \
             supabase/tests/trip_membership_contract_smoke.sql
           do
@@ -167,9 +273,9 @@ jobs:
           npm audit --audit-level=high
 
   shared-contract:
-    name: Cross-client contract scan
+    name: Cross-client contract and browser round trip
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -178,8 +284,58 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: |
+            app-compact/package-lock.json
+            app-react/package-lock.json
+
+      - name: Install Compact and React dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund --prefix app-compact
+          npm ci --ignore-scripts --no-audit --no-fund --prefix app-react
+
+      - name: Install Chromium
+        working-directory: app-compact
+        run: npx playwright install --with-deps chromium
 
       - name: Migration and shared-ledger contract scans
         run: |
           node scripts/verify-supabase-migrations.mjs
           node scripts/verify-shared-ledger-contract.mjs
+
+      - name: Compact and React browser round trip
+        working-directory: app-compact
+        run: npm run smoke:shared-contract
+
+  production:
+    name: Protected Admin production promotion
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_production == true && github.ref == 'refs/heads/main'
+    needs: [admin, edge, compact, react-client, database, broker, shared-contract]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: admin-production
+    steps:
+      - name: Checkout verified main
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: app-admin-kanban/package-lock.json
+
+      - name: Install Admin dependencies
+        working-directory: app-admin-kanban
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Deploy candidate, verify dependencies and promote
+        working-directory: app-admin-kanban
+        env:
+          ADMIN_PRODUCTION_APPROVED: "YES"
+          ADMIN_READINESS_TOKEN: ${{ secrets.ADMIN_READINESS_TOKEN }}
+          ADMIN_RELEASE_GATE_SHA: ${{ github.sha }}
+          VERCEL_TOKEN: ${{ secrets.ADMIN_VERCEL_TOKEN }}
+        run: npm run deploy

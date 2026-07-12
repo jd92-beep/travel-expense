@@ -110,7 +110,7 @@ test('gateway exposes only the generic allowlisted operation mutation routes', (
       edgeRoute: '/api/operations/preview',
       query: {},
       mutation: true,
-      bodyLimit: 1024 * 1024,
+      bodyLimit: 64 * 1024,
       bodyKind: 'operation-preview',
     },
   );
@@ -197,6 +197,32 @@ test('gateway validates operation actions and strips no unchecked fields', () =>
       payload: { userId: idempotencyKey, role: 'viewer' },
     },
   );
+  assert.deepEqual(
+    validateGatewayBody('operation-preview', {
+      action: 'itinerary_amend',
+      idempotencyKey,
+      targetId: id,
+      payload: {
+        endDate: '2026-04-24',
+        expectedVersion: 7,
+        itinerary: [{ date: '2026-04-24', title: 'Day 1', spots: [] }],
+        removedDates: ['2026-04-25'],
+        startDate: '2026-04-24',
+      },
+    }),
+    {
+      action: 'itinerary_amend',
+      idempotencyKey,
+      targetId: id,
+      payload: {
+        endDate: '2026-04-24',
+        expectedVersion: 7,
+        itinerary: [{ date: '2026-04-24', title: 'Day 1', spots: [] }],
+        removedDates: ['2026-04-25'],
+        startDate: '2026-04-24',
+      },
+    },
+  );
   assert.throws(
     () => validateGatewayBody('operation-preview', {
       action: 'reassign_data', idempotencyKey, targetId: id, payload: {},
@@ -232,6 +258,20 @@ test('gateway validates operation actions and strips no unchecked fields', () =>
       payload: { expectedVersion: 2, restoreVersion: -1 },
     }),
     /itinerary restore context is invalid/i,
+  );
+  assert.throws(
+    () => validateGatewayBody('operation-preview', {
+      action: 'itinerary_amend',
+      idempotencyKey,
+      targetId: id,
+      payload: {
+        endDate: '2026-04-24',
+        expectedVersion: 7,
+        itinerary: [],
+        startDate: '2026-04-20',
+      },
+    }),
+    /itinerary context is invalid/i,
   );
   assert.throws(
     () => validateGatewayBody('operation-commit', { grantId: id, force: true }),

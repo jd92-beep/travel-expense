@@ -34,10 +34,15 @@ import {
 import { AuditDetailPage, AuditPage } from "../features/audit/AuditPages";
 import { SearchPage } from "../features/search/SearchPage";
 import { AdminShell } from "./AdminShell";
-import { RequireAdminSession, SessionSplash, useAdminSession } from "./session";
+import {
+  RequireAdminSession,
+  SessionBoundaryError,
+  SessionSplash,
+  useAdminSession,
+} from "./session";
 
 function LoginRoute() {
-  const { checking, session, setSession } = useAdminSession();
+  const { checking, retrySession, session, sessionError, setSession } = useAdminSession();
   const navigate = useNavigate();
   const location = useLocation();
   const from = typeof location.state === "object" && location.state &&
@@ -45,6 +50,7 @@ function LoginRoute() {
     ? String(location.state.from)
     : "/overview";
   if (checking) return <SessionSplash />;
+  if (sessionError) return <SessionBoundaryError error={sessionError} retry={retrySession} />;
   if (session) return <Navigate to="/overview" replace />;
   return (
     <LoginGate

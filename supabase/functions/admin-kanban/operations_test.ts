@@ -4,8 +4,11 @@ import {
   AdminOperationError,
   canonicalJson,
   commitAdminOperation,
+  detectReceiptPhotoMime,
   type OperationContext,
   previewAdminOperation,
+  receiptPhotoMimeMatches,
+  redactSupportText,
 } from "./operations.ts";
 
 function asClient(value: unknown): OperationContext["client"] {
@@ -17,6 +20,75 @@ Deno.test("canonical operation JSON is stable across object key order", () => {
     canonicalJson({ z: 1, nested: { b: 2, a: 1 }, a: [3, { y: 2, x: 1 }] }),
     canonicalJson({ a: [3, { x: 1, y: 2 }], nested: { a: 1, b: 2 }, z: 1 }),
   );
+});
+
+Deno.test("receipt photo MIME is derived from image magic bytes", () => {
+  assertEquals(detectReceiptPhotoMime(new Uint8Array([0xff, 0xd8, 0xff, 0xdb])), "image/jpeg");
+  assertEquals(
+    detectReceiptPhotoMime(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+    "image/png",
+  );
+  assertEquals(
+    detectReceiptPhotoMime(
+      new Uint8Array([
+        0x52,
+        0x49,
+        0x46,
+        0x46,
+        0,
+        0,
+        0,
+        0,
+        0x57,
+        0x45,
+        0x42,
+        0x50,
+      ]),
+    ),
+    "image/webp",
+  );
+  assertEquals(
+    detectReceiptPhotoMime(
+      new Uint8Array([
+        0,
+        0,
+        0,
+        0x18,
+        0x66,
+        0x74,
+        0x79,
+        0x70,
+        0x68,
+        0x65,
+        0x69,
+        0x63,
+      ]),
+    ),
+    "image/heic",
+  );
+  assertEquals(detectReceiptPhotoMime(new TextEncoder().encode("<script>alert(1)</script>")), null);
+});
+
+Deno.test("receipt photo declared MIME must match detected content", () => {
+  assertEquals(receiptPhotoMimeMatches("image/png", "image/png"), true);
+  assertEquals(receiptPhotoMimeMatches("image/jpeg", "image/png"), false);
+  assertEquals(receiptPhotoMimeMatches("image/heic", "image/heif"), true);
+});
+
+Deno.test("support bundle text redacts credentials, email addresses, and URLs", () => {
+  const redacted = redactSupportText(
+    [
+      "Bearer",
+      "abcdefghijklmnopqrstuvwxyz",
+      "owner@example.invalid",
+      "https://private.example/path?token=secret_value",
+    ].join(" "),
+  );
+  assertEquals(redacted.includes("abcdefghijklmnopqrstuvwxyz"), false);
+  assertEquals(redacted.includes("owner@example.invalid"), false);
+  assertEquals(redacted.includes("private.example"), false);
+  assertEquals(redacted.includes("[redacted-email]"), true);
+  assertEquals(redacted.includes("[redacted-url]"), true);
 });
 
 Deno.test("provider preview is server-computed and stored through the operation RPC", async () => {
@@ -244,6 +316,120 @@ Deno.test("R2 receipt preview and rotated-session commit remain bound to the ste
   });
 });
 
+Deno.test("R2 receipt preview blocks a private transition with a cross-person beneficiary", async () => {
+  let rpcCalled = false;
+  const error = await assertRejects(
+    () =>
+      previewAdminOperation({
+        actor: "boss",
+        brokerKey: "test-broker-key-that-is-not-a-secret",
+        brokerUrl: "https://broker.example",
+        client: asClient({
+          from() {
+            return {
+              select() {
+                return this;
+              },
+              eq() {
+                return this;
+              },
+              maybeSingle() {
+                return Promise.resolve({
+                  data: {
+                    id: "97200000-0000-4000-8000-000000000001",
+                    store: "Shared dinner",
+                    record_date: "2026-04-20",
+                    record_time: "19:30:00",
+                    amount: 100,
+                    currency: "JPY",
+                    category: "food",
+                    payment_method: "cash",
+                    record_kind: "expense",
+                    visibility: "trip",
+                    split_mode: "shared",
+                    person_id: "p_a",
+                    beneficiary_id: "p_b",
+                    version: 4,
+                    deleted_at: null,
+                    updated_at: "2026-07-11T00:00:00.000Z",
+                  },
+                  error: null,
+                });
+              },
+            };
+          },
+          rpc() {
+            rpcCalled = true;
+            return Promise.resolve({ data: null, error: null });
+          },
+        }),
+        requestId: "97000000-0000-4000-8000-000000000001",
+        sessionHash: "a".repeat(64),
+      }, {
+        action: "receipt_amend",
+        idempotencyKey: "97100000-0000-4000-8000-000000000001",
+        targetId: "97200000-0000-4000-8000-000000000001",
+        payload: { expectedVersion: 4, patch: { visibility: "private" } },
+      }),
+    AdminOperationError,
+  );
+  assertEquals(error.code, "DEPENDENCY_CONFLICT");
+  assertEquals(rpcCalled, false);
+});
+
+Deno.test("processing sync jobs cannot be cancelled as if they were still queued", async () => {
+  let rpcCalled = false;
+  const error = await assertRejects(
+    () =>
+      previewAdminOperation({
+        actor: "boss",
+        brokerKey: "test-broker-key-that-is-not-a-secret",
+        brokerUrl: "https://broker.example",
+        client: asClient({
+          from() {
+            return {
+              select() {
+                return this;
+              },
+              eq() {
+                return this;
+              },
+              maybeSingle() {
+                return Promise.resolve({
+                  data: {
+                    id: "97200000-0000-4000-8000-000000000001",
+                    provider: "notion",
+                    operation: "upsert",
+                    status: "processing",
+                    attempts: 2,
+                    next_attempt_at: "2026-07-11T00:00:00.000Z",
+                    last_error: null,
+                    updated_at: "2026-07-11T00:00:00.000Z",
+                  },
+                  error: null,
+                });
+              },
+            };
+          },
+          rpc() {
+            rpcCalled = true;
+            return Promise.resolve({ data: null, error: null });
+          },
+        }),
+        requestId: "97000000-0000-4000-8000-000000000001",
+        sessionHash: "a".repeat(64),
+      }, {
+        action: "cancel_sync_job",
+        idempotencyKey: "97100000-0000-4000-8000-000000000001",
+        targetId: "97200000-0000-4000-8000-000000000001",
+        payload: {},
+      }),
+    AdminOperationError,
+  );
+  assertEquals(error.code, "DEPENDENCY_CONFLICT");
+  assertEquals(rpcCalled, false);
+});
+
 Deno.test("R2 commit without a fresh grant fails before the mutation RPC", async () => {
   const calls: string[] = [];
   const error = await assertRejects(
@@ -341,6 +527,85 @@ Deno.test("R2 itinerary preview rejects a missing Nagoya day before it reaches S
   assertEquals(rpcCalled, false);
 });
 
+Deno.test("R2 itinerary shrink requires an exact explicit removal manifest", async () => {
+  const tripId = "97200000-0000-4000-8000-000000000001";
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const currentDays = [20, 21, 22, 23, 24, 25].map((day, index) => ({
+    date: `2026-04-${day}`,
+    title: day === 25 ? "Return day" : `Day ${index + 1}`,
+    spots: [],
+  }));
+  const proposedDays = currentDays.slice(0, 5);
+  const context = {
+    actor: "boss",
+    brokerKey: "test-broker-key-that-is-not-a-secret",
+    brokerUrl: "https://broker.example",
+    client: asClient({
+      from() {
+        return {
+          select() {
+            return this;
+          },
+          eq() {
+            return this;
+          },
+          maybeSingle() {
+            return Promise.resolve({
+              data: {
+                id: tripId,
+                name: "Nagoya",
+                start_date: "2026-04-20",
+                end_date: "2026-04-25",
+                itinerary: currentDays,
+                itinerary_version: 3,
+                updated_at: "2026-07-11T00:00:00.000Z",
+              },
+              error: null,
+            });
+          },
+        };
+      },
+      rpc(name: string, args: Record<string, unknown>) {
+        calls.push({ name, args });
+        return Promise.resolve({
+          data: { id: args.p_id, action: "itinerary_amend", risk: "R2", status: "previewed" },
+          error: null,
+        });
+      },
+    }),
+    requestId: "97000000-0000-4000-8000-000000000001",
+    sessionHash: "a".repeat(64),
+  };
+  const base = {
+    action: "itinerary_amend" as const,
+    idempotencyKey: "97100000-0000-4000-8000-000000000001",
+    targetId: tripId,
+    payload: {
+      expectedVersion: 3,
+      startDate: "2026-04-20",
+      endDate: "2026-04-24",
+      itinerary: proposedDays,
+    },
+  };
+
+  const missingManifest = await assertRejects(
+    () => previewAdminOperation(context, base),
+    AdminOperationError,
+  );
+  assertEquals(missingManifest.code, "VALIDATION_FAILED");
+  assertEquals(calls.length, 0);
+
+  await previewAdminOperation(context, {
+    ...base,
+    payload: { ...base.payload, removedDates: ["2026-04-25"] },
+  });
+  assertEquals(calls[0].name, "admin_operation_preview_r2_create");
+  assertEquals(calls[0].args.p_payload, {
+    ...base.payload,
+    removedDates: ["2026-04-25"],
+  });
+});
+
 Deno.test("member add creates an invite preview when the email has no account", async () => {
   const tripId = "97200000-0000-4000-8000-000000000001";
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
@@ -407,6 +672,77 @@ Deno.test("member add creates an invite preview when the email has no account", 
     userId: null,
   });
   assertEquals(calls[0].args.p_target_version, "invite-absent:2026-07-11T00:00:00.000Z");
+});
+
+Deno.test("member role preview binds the resolved membership primary key", async () => {
+  const tripId = "97200000-0000-4000-8000-000000000001";
+  const userId = "97200000-0000-4000-8000-000000000002";
+  const membershipId = "97200000-0000-4000-8000-000000000003";
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const client = {
+    from(table: string) {
+      return {
+        select() {
+          return this;
+        },
+        eq() {
+          return this;
+        },
+        maybeSingle() {
+          if (table === "trips") {
+            return Promise.resolve({
+              data: {
+                id: tripId,
+                name: "Nagoya",
+                owner_id: "97000000-0000-4000-8000-000000000001",
+              },
+              error: null,
+            });
+          }
+          if (table === "trip_members") {
+            return Promise.resolve({
+              data: {
+                id: membershipId,
+                trip_id: tripId,
+                user_id: userId,
+                role: "editor",
+                status: "active",
+                updated_at: "2026-07-11T00:00:00.000Z",
+              },
+              error: null,
+            });
+          }
+          throw new Error(`Unexpected table ${table}`);
+        },
+      };
+    },
+    rpc(name: string, args: Record<string, unknown>) {
+      calls.push({ name, args });
+      return Promise.resolve({
+        data: { id: args.p_id, action: "member_role", risk: "R2", status: "previewed" },
+        error: null,
+      });
+    },
+  };
+
+  await previewAdminOperation({
+    actor: "boss",
+    brokerKey: "test-broker-key-that-is-not-a-secret",
+    brokerUrl: "https://broker.example",
+    client: asClient(client),
+    requestId: "97000000-0000-4000-8000-000000000001",
+    sessionHash: "a".repeat(64),
+  }, {
+    action: "member_role",
+    idempotencyKey: "97100000-0000-4000-8000-000000000001",
+    targetId: tripId,
+    payload: { role: "viewer", userId },
+  });
+
+  assertEquals(calls[0].name, "admin_operation_preview_r2_create");
+  assertEquals(calls[0].args.p_target_type, "membership");
+  assertEquals(calls[0].args.p_target_ref, membershipId);
+  assertEquals(calls[0].args.p_target_version, "2026-07-11T00:00:00.000Z");
 });
 
 Deno.test("invite commit exposes an ephemeral compact link without adding it to the operation", async () => {

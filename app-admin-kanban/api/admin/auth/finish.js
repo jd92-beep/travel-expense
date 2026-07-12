@@ -40,11 +40,11 @@ export default function finishAdminAuthentication(req, res) {
         backedUp: info.credentialBackedUp,
       });
       if (updated !== true) throw new Error('Passkey counter update failed');
-      await recordLoginRate(bucketKey, true, 'login');
     } catch {
-      if (/^[0-9a-f]{64}$/.test(bucketKey)) await recordLoginRate(bucketKey, false, 'login').catch(() => null);
+      if (/^[0-9a-f]{64}$/.test(bucketKey)) await recordLoginRate(bucketKey, false, 'login');
       throw new HttpError('MFA_REQUIRED', 'Passkey verification failed', 403);
     }
+    await recordLoginRate(bucketKey, true, 'login');
 
     const session = await createOpaqueSession(res);
     sendData(res, 200, {

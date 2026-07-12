@@ -1,4 +1,9 @@
-import { evaluateAdminRequest, normalizeAdminApiPath, resolveAdminWriteMode } from "./security.ts";
+import {
+  evaluateAdminRequest,
+  normalizeAdminApiPath,
+  rejectedSignatureIdentity,
+  resolveAdminWriteMode,
+} from "./security.ts";
 
 import { assertEquals, assertMatch } from "@std/assert";
 
@@ -6,6 +11,18 @@ Deno.test("unknown write modes fail closed", () => {
   assertEquals(resolveAdminWriteMode(undefined), "deny_all");
   assertEquals(resolveAdminWriteMode("unexpected"), "deny_all");
   assertEquals(resolveAdminWriteMode("allowlisted"), "allowlisted");
+});
+
+Deno.test("unverified signature headers never become an audit identity", () => {
+  assertEquals(
+    rejectedSignatureIdentity(
+      new Headers({
+        "x-admin-actor": "spoofed-boss",
+        "x-admin-session-hash": "a".repeat(64),
+      }),
+    ),
+    { actor: "unauthenticated", sessionHash: "unauthenticated" },
+  );
 });
 
 Deno.test("deny_all blocks every mutation with a request id", () => {

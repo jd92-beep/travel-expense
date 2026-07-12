@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { RefreshCw, ScanSearch, Search, XCircle } from "lucide-react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { adminGet, queryFromSearchParams } from "../../lib/api/adminClient";
 import type {
   IncidentRow,
@@ -14,10 +14,13 @@ import {
   ErrorState,
   formatDateTime,
   FreshnessBanner,
+  adminMetaAllowsMutation,
   LoadingState,
   PageHeader,
   Pagination,
   StatusBadge,
+  useCursorPagination,
+  useOnline,
   WorkspaceNav,
 } from "../../components/primitives/ConsolePrimitives";
 import {
@@ -50,7 +53,7 @@ function ReliabilityFrame(
 
 export function IncidentsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const cursorPager = useCursorPagination(searchParams, setSearchParams);
   const values = queryFromSearchParams(searchParams, [
     "severity",
     "status",
@@ -183,15 +186,11 @@ export function IncidentsPage() {
                 )}
             </section>
             <Pagination
-              hasCursor={Boolean(searchParams.get("cursor"))}
+              hasCursor={cursorPager.hasCursor}
               nextCursor={query.data.meta.nextCursor}
               disabled={query.isFetching || query.isPlaceholderData}
-              onPrevious={() => navigate(-1)}
-              onNext={(cursor) => {
-                const next = new URLSearchParams(searchParams);
-                next.set("cursor", cursor);
-                setSearchParams(next);
-              }}
+              onPrevious={cursorPager.previous}
+              onNext={cursorPager.next}
             />
           </>
         )}
@@ -201,7 +200,8 @@ export function IncidentsPage() {
 
 export function SyncJobsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const cursorPager = useCursorPagination(searchParams, setSearchParams);
+  const online = useOnline();
   const values = queryFromSearchParams(searchParams, [
     "status",
     "provider",
@@ -227,6 +227,11 @@ export function SyncJobsPage() {
   const operationFlow = useOperationFlow(async () => {
     await query.refetch();
   });
+  const canMutate = Boolean(query.data && adminMetaAllowsMutation(
+    query.data.meta,
+    query.isFetching || query.isPlaceholderData,
+    online,
+  ));
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
@@ -344,7 +349,7 @@ export function SyncJobsPage() {
                                   type="button"
                                   title="重試同步工作"
                                   aria-label={`重試同步工作 ${job.id.slice(0, 8)}`}
-                                  disabled={query.isFetching || query.isPlaceholderData}
+                                  disabled={!canMutate}
                                   onClick={() =>
                                     operationFlow.begin({
                                       action: "retry_sync_job",
@@ -354,13 +359,13 @@ export function SyncJobsPage() {
                                   <RefreshCw size={17} />
                                 </button>
                               )}
-                              {(["pending", "processing"].includes(job.status)) && (
+                              {job.status === "pending" && (
                                 <button
                                   className="icon-button danger-action"
                                   type="button"
                                   title="取消同步工作"
                                   aria-label={`取消同步工作 ${job.id.slice(0, 8)}`}
-                                  disabled={query.isFetching || query.isPlaceholderData}
+                                  disabled={!canMutate}
                                   onClick={() =>
                                     operationFlow.begin({
                                       action: "cancel_sync_job",
@@ -387,15 +392,11 @@ export function SyncJobsPage() {
                 )}
             </section>
             <Pagination
-              hasCursor={Boolean(searchParams.get("cursor"))}
+              hasCursor={cursorPager.hasCursor}
               nextCursor={query.data.meta.nextCursor}
               disabled={query.isFetching || query.isPlaceholderData}
-              onPrevious={() => navigate(-1)}
-              onNext={(cursor) => {
-                const next = new URLSearchParams(searchParams);
-                next.set("cursor", cursor);
-                setSearchParams(next);
-              }}
+              onPrevious={cursorPager.previous}
+              onNext={cursorPager.next}
             />
           </>
         )}
@@ -406,7 +407,6 @@ export function SyncJobsPage() {
 
 export function IntegrityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const values = queryFromSearchParams(searchParams, [
     "severity",
     "findingType",
@@ -420,6 +420,8 @@ export function IntegrityPage() {
     queryFn: ({ signal }) =>
       adminGet<IntegrityData>("/integrity", values, signal),
     placeholderData: keepPreviousData,
+    refetchInterval: (current) =>
+      current.state.data?.data.state === "running" ? 10_000 : false,
     staleTime: 30_000,
   });
   const operationFlow = useOperationFlow(async () => {
@@ -458,7 +460,10 @@ export function IntegrityPage() {
         <button
           className="button primary"
           type="button"
-          disabled={query.isFetching || query.isPlaceholderData}
+          disabled={
+            query.isFetching || query.isPlaceholderData ||
+            query.data?.data.state === "running"
+          }
           onClick={() =>
             operationFlow.begin({
               action: "run_integrity_scan",
@@ -479,6 +484,14 @@ export function IntegrityPage() {
               fetching={query.isFetching}
               placeholder={query.isPlaceholderData}
             />
+            {query.data.data.state === "partial" && (
+              <section className="integrity-warning" role="alert">
+                <strong>完整性掃描只有部分結果</strong>
+                <span>
+                  已完成嘅 findings 仍可檢視，但未覆蓋所有 records；修正前請重新掃描。
+                </span>
+              </section>
+            )}
             {query.data.data.run && (
               <section className="metric-strip" aria-label="完整性掃描摘要">
                 <div className="metric-block">
@@ -570,6 +583,10 @@ export function IntegrityPage() {
                                 </td>
                                 <td data-label="Finding">
                                   {item.finding_type}
+                                  <details className="finding-detail">
+                                    <summary>查看詳細資料</summary>
+                                    <pre>{JSON.stringify(item.detail, null, 2)}</pre>
+                                  </details>
                                 </td>
                                 <td data-label="Entity">{item.entity_type}</td>
                                 <td data-label="ID">
@@ -591,7 +608,11 @@ export function IntegrityPage() {
               hasCursor={Boolean(searchParams.get("cursor"))}
               nextCursor={query.data.meta.nextCursor}
               disabled={query.isFetching || query.isPlaceholderData}
-              onPrevious={() => navigate(-1)}
+              onPrevious={() => {
+                const next = new URLSearchParams(searchParams);
+                next.delete("cursor");
+                setSearchParams(next);
+              }}
               onNext={(cursor) => {
                 const next = new URLSearchParams(searchParams);
                 next.set("cursor", cursor);
@@ -671,6 +692,12 @@ export function ReconciliationPage() {
     enabled: Boolean(selected),
     staleTime: 30_000,
   });
+  const reconciliation = query.data?.data;
+  const reconciliationIncomplete = Boolean(reconciliation) && (
+    reconciliation!.notionSource !== "live" || reconciliation!.truncated ||
+    query.data!.meta.warnings.length > 0 ||
+    query.data!.meta.sources?.notion !== "live"
+  );
   return (
     <ReliabilityFrame
       title="Notion 對數"
@@ -715,6 +742,17 @@ export function ReconciliationPage() {
               meta={query.data.meta}
               fetching={query.isFetching}
             />
+            {reconciliationIncomplete && query.data.data.notionSource !== "unavailable" && (
+              <section className="integrity-warning" role="alert">
+                <strong>對數覆蓋未完成</strong>
+                <span>
+                  已掃描 Notion {query.data.data.notionRowsScanned} rows；
+                  server 回報 {query.data.data.resultRows} 個結果
+                  {query.data.data.truncated ? "，目前只顯示首批結果" : ""}。
+                  未取得完整 live data 前不會宣告一致。
+                </span>
+              </section>
+            )}
             <section className="metric-strip">
               <div className="metric-block">
                 <span>Supabase receipts</span>
@@ -808,11 +846,18 @@ export function ReconciliationPage() {
                     detail="Supabase 資料仍然可見；未取得 Notion 資料前不會產生錯誤差異。"
                   />
                 )
-                : query.data.data.items.length === 0
+                : query.data.data.items.length === 0 && !reconciliationIncomplete
                 ? (
                   <EmptyState
                     title="Supabase 與 Notion 一致"
                     detail={`已檢查 ${query.data.data.tripReceipts} 張 trip receipts；private receipts 已排除。`}
+                  />
+                )
+                : query.data.data.items.length === 0
+                ? (
+                  <EmptyState
+                    title="對數結果未完整"
+                    detail="保留目前 Supabase 資料；請等 Notion source 回復 live 後再重新對數。"
                   />
                 )
                 : (

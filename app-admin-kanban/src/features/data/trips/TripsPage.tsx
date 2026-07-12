@@ -14,10 +14,11 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { adminGet, queryFromSearchParams } from "../../../lib/api/adminClient";
 import type {
   AdminMeta,
+  AuditRow,
   ItineraryData,
   ItineraryDay,
   ItineraryVersionsData,
@@ -34,10 +35,12 @@ import {
   formatDateTime,
   formatMoney,
   FreshnessBanner,
+  adminMetaAllowsMutation,
   LoadingState,
   PageHeader,
   Pagination,
   StatusBadge,
+  useCursorPagination,
   WorkspaceNav,
 } from "../../../components/primitives/ConsolePrimitives";
 
@@ -49,7 +52,7 @@ const DATA_NAV = [
 
 export function TripsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const cursorPager = useCursorPagination(searchParams, setSearchParams);
   const queryText = searchParams.get("q") || "";
   const [draft, setDraft] = useState(queryText);
   useEffect(() => setDraft(queryText), [queryText]);
@@ -245,15 +248,11 @@ export function TripsPage() {
                 )}
             </section>
             <Pagination
-              hasCursor={Boolean(searchParams.get("cursor"))}
+              hasCursor={cursorPager.hasCursor}
               nextCursor={query.data.meta.nextCursor}
               disabled={query.isFetching || query.isPlaceholderData}
-              onPrevious={() => navigate(-1)}
-              onNext={(cursor) => {
-                const next = new URLSearchParams(searchParams);
-                next.set("cursor", cursor);
-                setSearchParams(next);
-              }}
+              onPrevious={cursorPager.previous}
+              onNext={cursorPager.next}
             />
           </>
         )}
@@ -293,7 +292,8 @@ type TripReceiptRow = {
 type TripAuditRow = {
   id: string;
   action: string;
-  result: string;
+  result: unknown;
+  error_code?: string | null;
   request_id: string | null;
   created_at: string;
 };
@@ -359,12 +359,17 @@ function tripAmendPatch(trip: TripRow, draft: TripAmendDraft) {
   return patch;
 }
 
-function metaAllowsMutation(meta: AdminMeta, fetching: boolean) {
-  if (fetching) return false;
-  if (Object.values(meta.sources || {}).some((source) => source !== "live")) return false;
-  return !(meta.warnings || []).some((warning) =>
-    /stale|partial|offline|unavailable/i.test(warning)
-  );
+function auditResultLabel(result: unknown, errorCode?: string | null) {
+  if (errorCode) return "failed";
+  if (typeof result === "string" && result.trim()) return result;
+  if (result && typeof result === "object" && !Array.isArray(result)) {
+    const record = result as Record<string, unknown>;
+    for (const key of ["status", "outcome", "result"] as const) {
+      if (typeof record[key] === "string" && record[key]) return record[key];
+    }
+    if (record.ok === false) return "failed";
+  }
+  return "recorded";
 }
 
 export function TripDetailPage() {
@@ -380,10 +385,20 @@ export function TripDetailPage() {
       adminGet<TripDetail>(`/trips/${tripId}`, undefined, signal),
     enabled: Boolean(tripId),
   });
+  const auditQuery = useQuery({
+    queryKey: ["admin", "audit", "trip", tripId],
+    queryFn: ({ signal }) =>
+      adminGet<PagedData<AuditRow>>(
+        "/audit",
+        { direction: "desc", limit: "50", sort: "created_at", targetId: tripId },
+        signal,
+      ),
+    enabled: Boolean(tripId),
+  });
   const operationFlow = useOperationFlow(async () => {
     setEditing(false);
     setMemberEmail("");
-    await query.refetch();
+    await Promise.all([query.refetch(), auditQuery.refetch()]);
   });
   const loadedTrip = query.data?.data;
   useEffect(() => {
@@ -401,7 +416,8 @@ export function TripDetailPage() {
     );
   }
   const trip = query.data.data;
-  const canMutate = metaAllowsMutation(query.data.meta, query.isFetching);
+  const auditEvents: Array<AuditRow | TripAuditRow> = auditQuery.data?.data.items || [];
+  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching);
   const patch = draft ? tripAmendPatch(trip.overview, draft) : {};
   return (
     <div className="workspace-stack">
@@ -871,15 +887,22 @@ export function TripDetailPage() {
               查看全部
             </Link>
           </header>
-          {trip.audit.length
+          {auditQuery.isLoading
+            ? <LoadingState label="載入相關審計" />
+            : auditQuery.isError
+            ? <ErrorState error={auditQuery.error} retry={() => void auditQuery.refetch()} />
+            : auditEvents.length
             ? (
               <ol className="operation-list">
-                {trip.audit.map((event) => (
+                {auditEvents.map((event) => (
                   <li key={event.id}>
                     <span>
                       <strong>{event.action}</strong>
                       <small>
-                        {event.request_id || "no request id"} · {event.result}
+                        {event.request_id || "no request id"} · {auditResultLabel(
+                          event.result,
+                          event.error_code,
+                        )}
                       </small>
                     </span>
                     <time>{formatDateTime(event.created_at)}</time>
@@ -942,16 +965,13 @@ function normalizeItineraryDays(days: ItineraryDay[]): ItineraryDay[] {
   }));
 }
 
-function dayHasContent(day: ItineraryDay) {
-  return day.spots.length > 0 || Boolean(day.location?.trim()) || Boolean(day.notes?.trim());
-}
-
 export function ItineraryPage() {
   const { tripId = "" } = useParams();
   const [editing, setEditing] = useState(false);
   const [draftStart, setDraftStart] = useState("");
   const [draftEnd, setDraftEnd] = useState("");
   const [draftDays, setDraftDays] = useState<ItineraryDay[]>([]);
+  const [explicitlyRemovedDates, setExplicitlyRemovedDates] = useState<string[]>([]);
   const query = useQuery({
     queryKey: ["admin", "trip", tripId, "itinerary"],
     queryFn: ({ signal }) =>
@@ -978,6 +998,7 @@ export function ItineraryPage() {
     setDraftStart(loadedItinerary.startDate);
     setDraftEnd(loadedItinerary.endDate);
     setDraftDays(cloneItineraryDays(loadedItinerary.days));
+    setExplicitlyRemovedDates([]);
   }, [loadedItinerary?.tripId, loadedItinerary?.version]);
   if (query.isLoading) return <LoadingState label="載入行程表" />;
   if (query.isError || !query.data) {
@@ -989,17 +1010,20 @@ export function ItineraryPage() {
     );
   }
   const itinerary = query.data.data;
-  const canMutate = metaAllowsMutation(query.data.meta, query.isFetching);
+  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching);
   const rangeDates = inclusiveCalendarDates(draftStart, draftEnd);
   const visibleDraftDays = daysForRange(draftStart, draftEnd, draftDays);
   const rangeDateSet = new Set(rangeDates);
-  const blockedDays = draftDays.filter((day) => !rangeDateSet.has(day.date) && dayHasContent(day));
+  const blockedDays = draftDays.filter((day) => !rangeDateSet.has(day.date));
+  const removedDates = explicitlyRemovedDates
+    .filter((date) => !rangeDateSet.has(date))
+    .sort();
   const normalizedDraft = normalizeItineraryDays(visibleDraftDays);
   const invalidSpot = normalizedDraft.some((day) => day.spots.some((spot) => !spot.name));
   const changed = draftStart !== itinerary.startDate || draftEnd !== itinerary.endDate ||
     JSON.stringify(normalizedDraft) !== JSON.stringify(normalizeItineraryDays(itinerary.days));
   const canRestore = canMutate && Boolean(versionsQuery.data) &&
-    metaAllowsMutation(versionsQuery.data?.meta || query.data.meta, versionsQuery.isFetching);
+    adminMetaAllowsMutation(versionsQuery.data?.meta || query.data.meta, versionsQuery.isFetching);
 
   function updateDraftDay(date: string, update: (day: ItineraryDay) => ItineraryDay) {
     setDraftDays((current) => {
@@ -1029,6 +1053,7 @@ export function ItineraryPage() {
               setDraftStart(itinerary.startDate);
               setDraftEnd(itinerary.endDate);
               setDraftDays(cloneItineraryDays(itinerary.days));
+              setExplicitlyRemovedDates([]);
               setEditing((value) => !value);
             }}
           >
@@ -1069,6 +1094,7 @@ export function ItineraryPage() {
                   endDate: draftEnd,
                   expectedVersion: itinerary.version,
                   itinerary: normalizedDraft,
+                  removedDates,
                   startDate: draftStart,
                 },
               });
@@ -1102,22 +1128,24 @@ export function ItineraryPage() {
             {blockedDays.length > 0 && (
               <div className="integrity-warning" role="alert">
                 <strong>縮短日期前要處理範圍外內容</strong>
-                <span>先將景點移到保留日，再明確清空以下日期。</span>
+                <span>先將內容移到保留日，再逐項明確移除以下日期。</span>
                 <ul className="blocked-day-list">
                   {blockedDays.map((day) => (
                     <li key={day.date}>
-                      <span>{day.date} · {day.spots.length} spots</span>
+                      <span>{day.date} · {day.title || "未命名"} · {day.spots.length} spots</span>
                       <button
                         className="button secondary danger-action"
                         type="button"
-                        onClick={() =>
-                          updateDraftDay(day.date, (current) => ({
-                            date: current.date,
-                            title: current.title,
-                            spots: [],
-                          }))}
+                        onClick={() => {
+                          setExplicitlyRemovedDates((current) =>
+                            current.includes(day.date) ? current : [...current, day.date]
+                          );
+                          setDraftDays((current) =>
+                            current.filter((item) => item.date !== day.date)
+                          );
+                        }}
                       >
-                        <Trash2 size={15} />明確清空
+                        <Trash2 size={15} />明確移除
                       </button>
                     </li>
                   ))}

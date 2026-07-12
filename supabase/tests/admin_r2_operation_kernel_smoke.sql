@@ -72,14 +72,25 @@ insert into public.trips (
 
 insert into public.receipts (
   id, trip_id, owner_id, store, record_date, category, payment_method,
-  amount, currency, home_currency, source_id, status, visibility, split_mode
-) values (
-  '98200000-0000-4000-8000-000000000001',
-  '98100000-0000-4000-8000-000000000001',
-  '98000000-0000-4000-8000-000000000001',
-  'R2 Receipt', '2026-04-20', 'food', 'cash',
-  100, 'JPY', 'HKD', 'r2-receipt-fixture', 'confirmed', 'trip', 'shared'
-);
+  amount, currency, home_currency, source_id, status, visibility, split_mode,
+  person_id, beneficiary_id
+) values
+  (
+    '98200000-0000-4000-8000-000000000001',
+    '98100000-0000-4000-8000-000000000001',
+    '98000000-0000-4000-8000-000000000001',
+    'R2 Receipt', '2026-04-20', 'food', 'cash',
+    100, 'JPY', 'HKD', 'r2-receipt-fixture', 'confirmed', 'trip', 'shared',
+    'p_a', 'p_a'
+  ),
+  (
+    '98200000-0000-4000-8000-000000000002',
+    '98100000-0000-4000-8000-000000000001',
+    '98000000-0000-4000-8000-000000000001',
+    'Cross-person Receipt', '2026-04-20', 'food', 'cash',
+    100, 'JPY', 'HKD', 'r2-cross-private-fixture', 'confirmed', 'trip', 'shared',
+    'p_a', 'p_b'
+  );
 
 create temporary table r2_test_marker (value integer);
 create temporary table r2_invite_result (payload jsonb not null);
@@ -162,6 +173,28 @@ select public.admin_auth_create_session(
 select public.admin_auth_create_session(
   repeat('b', 64), repeat('2', 64), 'boss', 'passphrase+passkey', repeat('f', 64)
 );
+
+-- Private visibility cannot hide a receipt that affects another beneficiary.
+do $$
+begin
+  begin
+    perform pg_temp.preview_r2(
+      '98500000-0000-4000-8000-000000000017',
+      '98600000-0000-4000-8000-000000000017',
+      'receipt_amend', 'receipt',
+      '98200000-0000-4000-8000-000000000002', repeat('1', 64),
+      (select version::text from public.receipts where id = '98200000-0000-4000-8000-000000000002'),
+      jsonb_build_object(
+        'expectedVersion', (select version from public.receipts where id = '98200000-0000-4000-8000-000000000002'),
+        'patch', '{"visibility":"private"}'::jsonb
+      ),
+      repeat('1', 64)
+    );
+    raise exception 'cross-person receipt was allowed to become private';
+  exception when check_violation then null;
+  end;
+end
+$$;
 
 -- Receipt amend.
 select pg_temp.preview_r2(
@@ -252,6 +285,7 @@ select pg_temp.preview_r2(
     'expectedVersion', (select itinerary_version from public.trips where id = '98100000-0000-4000-8000-000000000001'),
     'startDate', '2026-04-20',
     'endDate', '2026-04-25',
+    'removedDates', '[]'::jsonb,
     'itinerary', '[
       {"date":"2026-04-20","title":"Arrival","spots":[]},
       {"date":"2026-04-21","title":"Central Nagoya","spots":[{"id":"nagoya-castle-v2","name":"Nagoya Castle","order":0}]},
@@ -267,6 +301,63 @@ select pg_temp.commit_r2(
   '98500000-0000-4000-8000-000000000005',
   '98700000-0000-4000-8000-000000000005',
   'itinerary_amend', repeat('5', 64), repeat('7', 64)
+);
+
+-- A title-only date cannot disappear without an exact removal manifest.
+do $$
+begin
+  begin
+    perform pg_temp.preview_r2(
+      '98500000-0000-4000-8000-000000000015',
+      '98600000-0000-4000-8000-000000000015',
+      'itinerary_amend', 'trip',
+      '98100000-0000-4000-8000-000000000001', repeat('5', 64),
+      (select itinerary_version::text from public.trips where id = '98100000-0000-4000-8000-000000000001'),
+      jsonb_build_object(
+        'expectedVersion', (select itinerary_version from public.trips where id = '98100000-0000-4000-8000-000000000001'),
+        'startDate', '2026-04-20',
+        'endDate', '2026-04-24',
+        'itinerary', '[
+          {"date":"2026-04-20","title":"Arrival","spots":[]},
+          {"date":"2026-04-21","title":"Central Nagoya","spots":[{"id":"nagoya-castle-v2","name":"Nagoya Castle","order":0}]},
+          {"date":"2026-04-22","title":"Ghibli","spots":[{"id":"ghibli-v2","name":"Ghibli Park","order":0}]},
+          {"date":"2026-04-23","title":"Atsuta","spots":[{"id":"atsuta-v2","name":"Atsuta Jingu","order":0}]},
+          {"date":"2026-04-24","title":"Museums","spots":[{"id":"toyota-v2","name":"Toyota Commemorative Museum","order":0}]}
+        ]'::jsonb
+      ),
+      repeat('3', 64)
+    );
+    raise exception 'title-only itinerary date disappeared without explicit removal';
+  exception when invalid_parameter_value then null;
+  end;
+end
+$$;
+
+select pg_temp.preview_r2(
+  '98500000-0000-4000-8000-000000000016',
+  '98600000-0000-4000-8000-000000000016',
+  'itinerary_amend', 'trip',
+  '98100000-0000-4000-8000-000000000001', repeat('5', 64),
+  (select itinerary_version::text from public.trips where id = '98100000-0000-4000-8000-000000000001'),
+  jsonb_build_object(
+    'expectedVersion', (select itinerary_version from public.trips where id = '98100000-0000-4000-8000-000000000001'),
+    'startDate', '2026-04-20',
+    'endDate', '2026-04-24',
+    'removedDates', '["2026-04-25"]'::jsonb,
+    'itinerary', '[
+      {"date":"2026-04-20","title":"Arrival","spots":[]},
+      {"date":"2026-04-21","title":"Central Nagoya","spots":[{"id":"nagoya-castle-v2","name":"Nagoya Castle","order":0}]},
+      {"date":"2026-04-22","title":"Ghibli","spots":[{"id":"ghibli-v2","name":"Ghibli Park","order":0}]},
+      {"date":"2026-04-23","title":"Atsuta","spots":[{"id":"atsuta-v2","name":"Atsuta Jingu","order":0}]},
+      {"date":"2026-04-24","title":"Museums","spots":[{"id":"toyota-v2","name":"Toyota Commemorative Museum","order":0}]}
+    ]'::jsonb
+  ),
+  repeat('4', 64)
+);
+select pg_temp.commit_r2(
+  '98500000-0000-4000-8000-000000000016',
+  '98700000-0000-4000-8000-000000000016',
+  'itinerary_amend', repeat('5', 64), repeat('4', 64)
 );
 
 select pg_temp.preview_r2(

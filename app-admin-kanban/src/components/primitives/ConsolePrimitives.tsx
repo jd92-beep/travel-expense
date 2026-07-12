@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -133,25 +133,19 @@ export function FreshnessBanner({
   fetching?: boolean;
   placeholder?: boolean;
 }) {
-  const staleAfter = (meta?.staleAfterSeconds ?? 60) * 1000;
-  const generatedAt = meta?.generatedAt ? Date.parse(meta.generatedAt) : 0;
-  const stale = generatedAt > 0 && Date.now() - generatedAt > staleAfter;
-  const unavailable = Object.values(meta?.sources ?? {}).some((value) =>
-    value === "unavailable"
-  );
-  const partial = unavailable || (meta?.warnings.length ?? 0) > 0;
   if (!meta) return null;
+  const { partial, stale } = adminMetaState(meta);
   return (
     <div
       className={`freshness-banner ${
         stale || partial ? "freshness-warning" : ""
       }`}
-      role={partial ? "status" : undefined}
+      role={stale || partial ? "status" : undefined}
     >
       <span>
         {fetching
           ? <RefreshCw className="spin" size={15} />
-          : stale
+          : stale || partial
           ? <TriangleAlert size={15} />
           : <CheckCircle2 size={15} />}
         {placeholder
@@ -161,7 +155,7 @@ export function FreshnessBanner({
           : stale
           ? "資料已過期，寫入操作已停用"
           : partial
-          ? "部分資料來源需要注意"
+          ? "部分資料來源不可用，寫入操作已停用"
           : "資料已更新"}
       </span>
       <span>
@@ -170,6 +164,65 @@ export function FreshnessBanner({
       </span>
     </div>
   );
+}
+
+export function adminMetaState(meta: AdminMeta, now = Date.now()) {
+  const generatedAt = Date.parse(meta.generatedAt);
+  const staleAfter = Math.max(1, meta.staleAfterSeconds ?? 60) * 1000;
+  const age = now - generatedAt;
+  const stale = !Number.isFinite(generatedAt) || age > staleAfter || age < -60_000;
+  const sources = Object.values(meta.sources ?? {});
+  const partial = sources.length === 0 || sources.some((source) => source !== "live") ||
+    meta.warnings.length > 0;
+  return { partial, stale };
+}
+
+export function adminMetaAllowsMutation(
+  meta: AdminMeta,
+  fetching: boolean,
+  online = typeof navigator !== "undefined" && navigator.onLine,
+) {
+  if (fetching || !online) return false;
+  const { partial, stale } = adminMetaState(meta);
+  return !partial && !stale;
+}
+
+export function useOnline() {
+  const [online, setOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  return online;
+}
+
+export function useCursorPagination(
+  searchParams: URLSearchParams,
+  setSearchParams: (next: URLSearchParams) => void,
+) {
+  const history = useRef<string[]>([]);
+  const cursor = searchParams.get("cursor") || "";
+  return {
+    hasCursor: Boolean(cursor),
+    next: (nextCursor: string) => {
+      history.current.push(cursor);
+      const next = new URLSearchParams(searchParams);
+      next.set("cursor", nextCursor);
+      setSearchParams(next);
+    },
+    previous: () => {
+      const previousCursor = history.current.pop();
+      const next = new URLSearchParams(searchParams);
+      if (previousCursor) next.set("cursor", previousCursor);
+      else next.delete("cursor");
+      setSearchParams(next);
+    },
+  };
 }
 
 export function LoadingState({ label = "載入資料" }: { label?: string }) {

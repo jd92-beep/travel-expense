@@ -13,7 +13,10 @@ import {
 } from "./operations.ts";
 import { reconcileTripReadOnly } from "./reconciliation.ts";
 import { type AdminRequestDecision, evaluateAdminRequest } from "./security.ts";
+import { rejectedSignatureIdentity } from "./security.ts";
+import { fetchNoRedirect } from "./safe_fetch.ts";
 import { aggregateProviderRows } from "./system_status.ts";
+import { runtimePolicyFor } from "./runtime_policy.ts";
 
 export const config = { verify_jwt: false };
 
@@ -61,16 +64,6 @@ function json(req: Request, status: number, payload: Record<string, unknown>) {
   return new Response(JSON.stringify(payload), { status, headers: corsHeaders(req) });
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 5000): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 function redact(value: unknown) {
   return String(value || "")
     .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted-key]")
@@ -80,20 +73,17 @@ function redact(value: unknown) {
 }
 
 function serviceClient() {
-  const url = Deno.env.get("SUPABASE_URL") || "https://fbnnjoahvtdrnigevrtw.supabase.co";
+  const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!key) throw new Error("Supabase Edge service role is not configured");
+  if (!url || !key) throw new Error("Supabase Edge service role is not configured");
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
 
-async function readBody(req: Request) {
-  if (req.method === "GET") return {};
-  const raw = await req.text();
-  if (new TextEncoder().encode(raw).length > MAX_JSON_BODY_BYTES) {
-    throw new HttpError("JSON body too large", 413);
-  }
+function readBody(method: string, bodyBytes: Uint8Array) {
+  if (method === "GET") return {};
+  const raw = new TextDecoder().decode(bodyBytes);
   if (!raw.trim()) return {};
   try {
     return JSON.parse(raw);
@@ -133,7 +123,7 @@ async function adminProviderRead(supabase: SupabaseClientAny) {
   let brokerSource: "live" | "unavailable" = "unavailable";
   const warnings: string[] = [];
   try {
-    const response = await fetchWithTimeout(`${baseUrl}/credentials/status`, {
+    const response = await fetchNoRedirect(`${baseUrl}/credentials/status`, {
       headers: {
         "Origin": "https://travel-expense-compact.vercel.app",
         "X-Admin-Internal": Deno.env.get("EDGE_BROKER_KEY") || "",
@@ -149,7 +139,7 @@ async function adminProviderRead(supabase: SupabaseClientAny) {
   } catch {
     warnings.push("PROVIDER_STATUS_UNAVAILABLE");
     try {
-      const health = await fetchWithTimeout(`${baseUrl}/health`, {}, 3000);
+      const health = await fetchNoRedirect(`${baseUrl}/health`, {}, 3000);
       if (health.ok) brokerSource = "live";
     } catch {
       warnings.push("BROKER_UNAVAILABLE");
@@ -181,15 +171,28 @@ async function adminProviderRead(supabase: SupabaseClientAny) {
       operation?.action === "provider_probe" &&
       operation?.preview?.provider === row.provider
     );
-    if (!probe) return row;
+    if (!probe) {
+      return {
+        ...row,
+        probeCooldownSeconds: 60,
+        probeAvailableAt: null,
+      };
+    }
     const probeSucceeded = probe.status === "completed";
+    const lastProbeAt = probe.result?.testedAt || probe.updatedAt || row.lastProbeAt;
+    const lastProbeMs = Date.parse(lastProbeAt || "");
+    const probeAvailableAt = Number.isFinite(lastProbeMs) && lastProbeMs + 60_000 > Date.now()
+      ? new Date(lastProbeMs + 60_000).toISOString()
+      : null;
     return {
       ...row,
       actualModel: probe.result?.actualModel || row.actualModel,
       healthy: probeSucceeded ? row.healthy : false,
-      lastProbeAt: probe.result?.testedAt || probe.updatedAt || row.lastProbeAt,
+      lastProbeAt,
       lastProbeMessage: probe.error?.message || probe.result?.message || null,
       lastProbeStatus: probeSucceeded ? probe.result?.status || "healthy" : "failed",
+      probeCooldownSeconds: 60,
+      probeAvailableAt,
       status: probeSucceeded ? row.status : "danger",
     };
   });
@@ -207,7 +210,7 @@ async function adminRuntimeRead(supabase: SupabaseClientAny) {
   let frontend: Record<string, unknown> = {};
   let frontendHealth = "unavailable";
   try {
-    const response = await fetchWithTimeout(`${ADMIN_FRONTEND_ORIGIN}/api/health`, {}, 3000);
+    const response = await fetchNoRedirect(`${ADMIN_FRONTEND_ORIGIN}/api/health`, {}, 3000);
     frontend = await response.json();
     frontendHealth = response.ok && frontend?.acceptingReadTraffic === true ? "healthy" : "failed";
   } catch {
@@ -217,7 +220,7 @@ async function adminRuntimeRead(supabase: SupabaseClientAny) {
   let brokerVersion = "unknown";
   let brokerStatus = "unavailable";
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetchNoRedirect(
       `${CREDENTIAL_BROKER_URL.replace(/\/+$/, "")}/health`,
       {},
       3000,
@@ -307,6 +310,7 @@ async function adminRuntimeRead(supabase: SupabaseClientAny) {
         compactVersion: latestVersion("compact"),
         androidVersion: latestVersion("android"),
       },
+      runtimePolicy: runtimePolicyFor(Deno.env.get("ADMIN_WRITE_MODE")),
       drift,
     },
     sources: {
@@ -384,10 +388,7 @@ async function recordSignatureRejection(
   decision: AdminRequestDecision,
   error: BffVerificationError,
 ) {
-  const actorHeader = req.headers.get("x-admin-actor") || "";
-  const actor = /^[A-Za-z0-9@._:-]{1,128}$/.test(actorHeader) ? actorHeader : "unauthenticated";
-  const sessionHeader = req.headers.get("x-admin-session-hash") || "";
-  const sessionHash = /^[0-9a-f]{64}$/.test(sessionHeader) ? sessionHeader : "unauthenticated";
+  const { actor, sessionHash } = rejectedSignatureIdentity(req.headers);
   console.warn(JSON.stringify({
     event: "admin_signature_rejected",
     code: error.code,
@@ -442,6 +443,7 @@ Deno.serve(async (req) => {
     const signed = await verifySignedBffRequest(req, {
       functionName: "admin-kanban",
       keys: bffSigningKeys(),
+      maxBodyBytes: MAX_JSON_BODY_BYTES,
       consumeNonce: async (nonceHash, requestId, expiresAt) => {
         const supabase = serviceClient();
         const { data, error } = await supabase.rpc("admin_consume_request_nonce", {
@@ -553,7 +555,10 @@ Deno.serve(async (req) => {
       );
     }
     if (req.method === "POST" && signed.route === "/api/operations/preview") {
-      const operation = await previewAdminOperation(operationContext, await readBody(req));
+      const operation = await previewAdminOperation(
+        operationContext,
+        readBody(req.method, signed.bodyBytes),
+      );
       return json(
         req,
         200,
@@ -570,7 +575,7 @@ Deno.serve(async (req) => {
       const result = await commitAdminOperation(
         operationContext,
         operationCommitRoute[1],
-        await readBody(req),
+        readBody(req.method, signed.bodyBytes),
       );
       return json(
         req,
@@ -661,6 +666,19 @@ Deno.serve(async (req) => {
         : /not found/i.test(message)
         ? 404
         : 500);
-    return json(req, status, { ok: false, error: message });
+    return json(req, status, {
+      ok: false,
+      data: null,
+      error: {
+        code: error instanceof HttpError ? "VALIDATION_FAILED" : "INTERNAL_ERROR",
+        message: error instanceof HttpError ? message : "Admin request failed",
+        retryable: status >= 500,
+      },
+      meta: {
+        requestId: requestDecision.requestId,
+        generatedAt: new Date().toISOString(),
+        warnings: [],
+      },
+    });
   }
 });

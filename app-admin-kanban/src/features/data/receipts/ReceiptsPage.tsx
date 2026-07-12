@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Camera,
+  CircleX,
+  Download,
   Pencil,
   RefreshCw,
   RotateCcw,
@@ -11,7 +13,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { adminGet, queryFromSearchParams } from "../../../lib/api/adminClient";
 import type {
   AdminMeta,
@@ -28,10 +30,13 @@ import {
   formatDateTime,
   formatMoney,
   FreshnessBanner,
+  adminMetaAllowsMutation,
   LoadingState,
   PageHeader,
   Pagination,
   StatusBadge,
+  useCursorPagination,
+  useOnline,
   WorkspaceNav,
 } from "../../../components/primitives/ConsolePrimitives";
 
@@ -41,12 +46,56 @@ const DATA_NAV = [
   { to: "/data/receipts", label: "收據" },
 ];
 
+function csvCell(value: unknown) {
+  const raw = value === null || value === undefined ? "" : String(value);
+  const safe = /^[\t\r ]*[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+function downloadReceiptCsv(receipts: ReceiptRow[]) {
+  const columns: Array<[string, (receipt: ReceiptRow) => unknown]> = [
+    ["id", (receipt) => receipt.id],
+    ["date", (receipt) => receipt.record_date],
+    ["time", (receipt) => receipt.record_time],
+    ["store", (receipt) => receipt.store],
+    ["trip", (receipt) => receipt.trip_name],
+    ["owner", (receipt) => receipt.owner_masked_email],
+    ["amount", (receipt) => receipt.amount],
+    ["currency", (receipt) => receipt.currency],
+    ["record_kind", (receipt) => receipt.record_kind],
+    ["visibility", (receipt) => receipt.visibility],
+    ["notion_status", (receipt) => receipt.notion_sync_status],
+    ["updated_at", (receipt) => receipt.updated_at],
+  ];
+  const csv = [
+    columns.map(([name]) => csvCell(name)).join(","),
+    ...receipts.map((receipt) =>
+      columns.map(([, value]) => csvCell(value(receipt))).join(",")
+    ),
+  ].join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `admin-receipts-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export function ReceiptsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const cursorPager = useCursorPagination(searchParams, setSearchParams);
   const queryText = searchParams.get("q") || "";
   const [draft, setDraft] = useState(queryText);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectionNotice, setSelectionNotice] = useState("");
   useEffect(() => setDraft(queryText), [queryText]);
+  const selectionScope = searchParams.toString();
+  useEffect(() => {
+    setSelectedIds((current) => {
+      if (current.length > 0) setSelectionNotice("篩選或頁面已變更，已清除選取");
+      return [];
+    });
+  }, [selectionScope]);
   const queryValues = queryFromSearchParams(searchParams, [
     "q",
     "tripId",
@@ -72,6 +121,12 @@ export function ReceiptsPage() {
     next.delete("cursor");
     setSearchParams(next);
   }
+  const pageReceipts = query.data?.data.items || [];
+  const selectedSet = new Set(selectedIds);
+  const selectedReceipts = pageReceipts.filter((receipt) => selectedSet.has(receipt.id));
+  const allPageSelected = pageReceipts.length > 0 && pageReceipts.every((receipt) =>
+    selectedSet.has(receipt.id)
+  );
   return (
     <div className="workspace-stack">
       <WorkspaceNav items={DATA_NAV} />
@@ -134,6 +189,15 @@ export function ReceiptsPage() {
           <option value="trash">Trash</option>
           <option value="all">全部</option>
         </select>
+        <select
+          aria-label="每頁筆數"
+          value={searchParams.get("limit") || "50"}
+          onChange={(event) => setFilter("limit", event.target.value)}
+        >
+          <option value="50">50 / page</option>
+          <option value="100">100 / page</option>
+          <option value="200">200 / page</option>
+        </select>
         <button className="button primary" type="submit">
           <Search size={16} />搜尋
         </button>
@@ -149,6 +213,26 @@ export function ReceiptsPage() {
               fetching={query.isFetching}
               placeholder={query.isPlaceholderData}
             />
+            {selectedReceipts.length > 0 && (
+              <div className="selection-bar" role="status" aria-label="選取狀態">
+                <strong>已選 {selectedReceipts.length} 項</strong>
+                <span>只包含目前已載入頁面，最多 200 項</span>
+                <button
+                  className="button secondary"
+                  type="button"
+                  aria-label="匯出已選 CSV"
+                  disabled={query.isFetching || query.isPlaceholderData}
+                  onClick={() => downloadReceiptCsv(selectedReceipts)}
+                >
+                  <Download size={16} />匯出 CSV
+                </button>
+              </div>
+            )}
+            {selectionNotice && selectedReceipts.length === 0 && (
+              <div className="selection-notice" role="status" aria-label="選取狀態">
+                {selectionNotice}
+              </div>
+            )}
             <section className="data-section">
               <header>
                 <div>
@@ -171,6 +255,20 @@ export function ReceiptsPage() {
                       <caption className="sr-only">收據清單</caption>
                       <thead>
                         <tr>
+                          <th scope="col">
+                            <input
+                              type="checkbox"
+                              aria-label="選取全部本頁收據"
+                              checked={allPageSelected}
+                              disabled={query.isFetching || query.isPlaceholderData}
+                              onChange={(event) => {
+                                setSelectionNotice("");
+                                setSelectedIds(event.target.checked
+                                  ? pageReceipts.slice(0, 200).map((receipt) => receipt.id)
+                                  : []);
+                              }}
+                            />
+                          </th>
                           <th scope="col">狀態</th>
                           <th scope="col">日期</th>
                           <th scope="col">商戶</th>
@@ -187,6 +285,22 @@ export function ReceiptsPage() {
                       <tbody>
                         {query.data.data.items.map((receipt) => (
                           <tr key={receipt.id}>
+                            <td data-label="選取">
+                              <input
+                                type="checkbox"
+                                aria-label={`選取收據 ${receipt.store}`}
+                                checked={selectedSet.has(receipt.id)}
+                                disabled={query.isFetching || query.isPlaceholderData}
+                                onChange={(event) => {
+                                  setSelectionNotice("");
+                                  setSelectedIds((current) => event.target.checked
+                                    ? current.includes(receipt.id)
+                                      ? current
+                                      : [...current, receipt.id].slice(0, 200)
+                                    : current.filter((id) => id !== receipt.id));
+                                }}
+                              />
+                            </td>
                             <td data-label="狀態">
                               <StatusBadge value={receipt.integrity_status} />
                             </td>
@@ -250,15 +364,11 @@ export function ReceiptsPage() {
                 )}
             </section>
             <Pagination
-              hasCursor={Boolean(searchParams.get("cursor"))}
+              hasCursor={cursorPager.hasCursor}
               nextCursor={query.data.meta.nextCursor}
               disabled={query.isFetching || query.isPlaceholderData}
-              onPrevious={() => navigate(-1)}
-              onNext={(cursor) => {
-                const next = new URLSearchParams(searchParams);
-                next.set("cursor", cursor);
-                setSearchParams(next);
-              }}
+              onPrevious={cursorPager.previous}
+              onNext={cursorPager.next}
             />
           </>
         )}
@@ -324,16 +434,9 @@ function receiptAmendPatch(
   return patch;
 }
 
-function metaAllowsMutation(meta: AdminMeta, fetching: boolean) {
-  if (fetching) return false;
-  if (Object.values(meta.sources || {}).some((source) => source !== "live")) return false;
-  return !(meta.warnings || []).some((warning) =>
-    /stale|partial|offline|unavailable/i.test(warning)
-  );
-}
-
 export function ReceiptDetailPage() {
   const { receiptId = "" } = useParams();
+  const online = useOnline();
   const [photoAttempt, setPhotoAttempt] = useState(0);
   const [photoFailed, setPhotoFailed] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -364,7 +467,7 @@ export function ReceiptDetailPage() {
   }
   const detail = query.data.data;
   const receipt = detail.receipt;
-  const canMutate = metaAllowsMutation(query.data.meta, query.isFetching);
+  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching, online);
   const patch = draft ? receiptAmendPatch(receipt, draft) : {};
   return (
     <div className="workspace-stack">
@@ -692,17 +795,56 @@ export function ReceiptDetailPage() {
           </div>
           <div>
             <h3>Sync jobs ({detail.syncJobs.length})</h3>
-            {detail.syncJobs.map((job) => (
-              <div className="compact-row" key={String(job.id)}>
-                <strong>
-                  {String(job.provider)} · {String(job.operation)}
-                </strong>
-                <span>
-                  <StatusBadge value={String(job.status)} /> · attempts{" "}
-                  {String(job.attempts)}
-                </span>
-              </div>
-            ))}
+            {detail.syncJobs.map((job) => {
+              const jobId = String(job.id || "");
+              const status = String(job.status || "unknown");
+              const retryable = status === "failed" || status === "cancelled";
+              const cancellable = status === "pending";
+              return (
+                <div className="compact-row sync-job-row" key={jobId}>
+                  <span>
+                    <strong>{String(job.provider)} · {String(job.operation)}</strong>
+                    <small>
+                      <StatusBadge value={status} /> · attempts {String(job.attempts)}
+                    </small>
+                  </span>
+                  {(retryable || cancellable) && (
+                    <span className="row-actions">
+                      {retryable && (
+                        <button
+                          className="icon-button"
+                          type="button"
+                          title="重試 sync job"
+                          aria-label={`重試 sync job ${jobId}`}
+                          disabled={!canMutate}
+                          onClick={() => operationFlow.begin({
+                            action: "retry_sync_job",
+                            targetId: jobId,
+                          })}
+                        >
+                          <RefreshCw size={16} />
+                        </button>
+                      )}
+                      {cancellable && (
+                        <button
+                          className="icon-button danger-icon"
+                          type="button"
+                          title="取消 pending sync job"
+                          aria-label={`取消 sync job ${jobId}`}
+                          disabled={!canMutate}
+                          onClick={() => operationFlow.begin({
+                            action: "cancel_sync_job",
+                            targetId: jobId,
+                          })}
+                        >
+                          <CircleX size={16} />
+                        </button>
+                      )}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

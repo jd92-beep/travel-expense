@@ -39,6 +39,19 @@ begin
     or pg_catalog.has_schema_privilege('admin_auth_owner', 'public', 'CREATE') then
     raise exception 'admin_auth_owner schema privileges are unsafe';
   end if;
+  if pg_catalog.pg_get_functiondef(
+    'public.admin_auth_register_credential(text,text,bigint,text[],text,boolean,text)'::regprocedure
+  ) not like '%pg_advisory_xact_lock%'
+    or pg_catalog.pg_get_functiondef(
+      'public.admin_auth_register_credential(text,text,bigint,text[],text,boolean,text)'::regprocedure
+    ) not like '%v_count <> 0%' then
+    raise exception 'bootstrap passkey registration is not one-time and concurrency-safe';
+  end if;
+  if pg_catalog.pg_get_functiondef(
+    'public.admin_auth_register_backup_credential(text,text,bigint,text[],text,boolean,text,text,text,uuid)'::regprocedure
+  ) not like '%append_admin_audit_v2%' then
+    raise exception 'backup passkey registration is not atomically audited';
+  end if;
 
   foreach v_table in array array[
     'admin_sessions',
@@ -82,6 +95,7 @@ declare
   v_first jsonb;
   v_second jsonb;
   v_third jsonb;
+  v_rotated jsonb;
   v_overflow_blocked boolean := false;
 begin
   v_result := public.admin_auth_rate_precheck(repeat('a', 64), 'login');
@@ -121,10 +135,25 @@ begin
   end if;
 
   perform public.admin_auth_register_credential('credential-0000000000001', repeat('c', 64), 0, array['internal'], 'singleDevice', false, 'One');
-  perform public.admin_auth_register_credential('credential-0000000000002', repeat('d', 64), 0, array['internal'], 'multiDevice', true, 'Two');
-  perform public.admin_auth_register_credential('credential-0000000000003', repeat('e', 64), 0, array['internal'], 'multiDevice', true, 'Three');
+  v_result := public.admin_auth_register_backup_credential(
+    'credential-0000000000002', repeat('d', 64), 0, array['internal'],
+    'multiDevice', true, 'Two', 'boss', repeat('1', 64),
+    '97000000-0000-4000-8000-000000000102'
+  );
+  if coalesce((v_result ->> 'count')::integer, 0) <> 2 then
+    raise exception 'second Boss passkey was not registered atomically';
+  end if;
+  perform public.admin_auth_register_backup_credential(
+    'credential-0000000000003', repeat('e', 64), 0, array['internal'],
+    'multiDevice', true, 'Three', 'boss', repeat('1', 64),
+    '97000000-0000-4000-8000-000000000103'
+  );
   begin
-    perform public.admin_auth_register_credential('credential-0000000000004', repeat('f', 64), 0, array['internal'], 'singleDevice', false, 'Four');
+    perform public.admin_auth_register_backup_credential(
+      'credential-0000000000004', repeat('f', 64), 0, array['internal'],
+      'singleDevice', false, 'Four', 'boss', repeat('1', 64),
+      '97000000-0000-4000-8000-000000000104'
+    );
   exception when others then
     v_overflow_blocked := true;
   end;
@@ -173,8 +202,18 @@ begin
     raise exception 'step-up grant replay succeeded';
   end if;
 
-  if not public.admin_auth_revoke_session(repeat('3', 64), 'logout')
-    or public.admin_auth_verify_session(repeat('3', 64), repeat('f', 64)) is not null then
+  v_rotated := public.admin_auth_rotate_session(
+    repeat('3', 64), repeat('4', 64), repeat('d', 64),
+    'boss', 'passphrase+passkey', repeat('f', 64)
+  );
+  if v_rotated ->> 'sessionId' is null
+    or public.admin_auth_verify_session(repeat('3', 64), repeat('f', 64)) is not null
+    or public.admin_auth_verify_session(repeat('4', 64), repeat('f', 64)) is null then
+    raise exception 'atomic session rotation did not replace the old session';
+  end if;
+
+  if not public.admin_auth_revoke_session(repeat('4', 64), 'logout')
+    or public.admin_auth_verify_session(repeat('4', 64), repeat('f', 64)) is not null then
     raise exception 'session revoke did not take effect';
   end if;
 

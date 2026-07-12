@@ -42,20 +42,31 @@ export async function requireAdminSession(req, { mutation = false } = {}) {
   return { ...data, tokenHash };
 }
 
-export async function revokeAdminSession(req, res, reason = 'logout') {
+export async function revokeAdminSession(req, res, reason = 'logout', stateCall = authStateCall) {
   const token = parseCookies(req)[SESSION_COOKIE] || '';
   if (token) {
     const tokenHash = sha256Hex(token);
-    await authStateCall('/internal/session/revoke', { tokenHash, reason }, { sessionHash: tokenHash }).catch(() => null);
+    await stateCall(
+      '/internal/session/revoke',
+      { tokenHash, reason },
+      { sessionHash: tokenHash },
+    );
   }
   res.setHeader('Set-Cookie', clearSessionCookies());
 }
 
-export async function rotateOpaqueSession(res, currentSession) {
-  const nextSession = await createOpaqueSession(res, currentSession.actor);
-  await authStateCall('/internal/session/revoke', {
+export async function rotateOpaqueSession(res, currentSession, stateCall = authStateCall) {
+  const sessionToken = randomToken(32);
+  const csrfToken = randomToken(32);
+  const tokenHash = sha256Hex(sessionToken);
+  const csrfHash = sha256Hex(csrfToken);
+  const data = await stateCall('/internal/session/rotate', {
     tokenHash: currentSession.tokenHash,
-    reason: 'privilege_elevation',
+    nextTokenHash: tokenHash,
+    csrfHash,
+    authMethod: 'passphrase+passkey',
+    passphraseFingerprint: passphraseFingerprint(),
   }, { sessionHash: currentSession.tokenHash });
-  return nextSession;
+  res.setHeader('Set-Cookie', sessionCookies(sessionToken, csrfToken));
+  return { ...data, tokenHash };
 }

@@ -8,7 +8,7 @@ import {
   Search,
   Smartphone,
 } from "lucide-react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { adminGet, queryFromSearchParams } from "../../../lib/api/adminClient";
 import type {
   AccountRow,
@@ -28,6 +28,7 @@ import {
   PageHeader,
   Pagination,
   StatusBadge,
+  useCursorPagination,
   WorkspaceNav,
 } from "../../../components/primitives/ConsolePrimitives";
 import {
@@ -43,7 +44,7 @@ const DATA_NAV = [
 
 export function AccountsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const cursorPager = useCursorPagination(searchParams, setSearchParams);
   const queryText = searchParams.get("q") || "";
   const [draft, setDraft] = useState(queryText);
   useEffect(() => setDraft(queryText), [queryText]);
@@ -262,15 +263,11 @@ export function AccountsPage() {
                 )}
             </section>
             <Pagination
-              hasCursor={Boolean(searchParams.get("cursor"))}
+              hasCursor={cursorPager.hasCursor}
               nextCursor={query.data.meta.nextCursor}
               disabled={query.isFetching || query.isPlaceholderData}
-              onPrevious={() => navigate(-1)}
-              onNext={(cursor) => {
-                const next = new URLSearchParams(searchParams);
-                next.set("cursor", cursor);
-                setSearchParams(next);
-              }}
+              onPrevious={cursorPager.previous}
+              onNext={cursorPager.next}
             />
           </>
         )}

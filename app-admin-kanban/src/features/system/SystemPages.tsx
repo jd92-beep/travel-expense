@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, RefreshCw } from "lucide-react";
 import { adminGet } from "../../lib/api/adminClient";
@@ -35,6 +36,8 @@ type ProviderRow = {
   lastProbeAt: string | null;
   lastProbeMessage?: string | null;
   lastProbeStatus?: string | null;
+  probeCooldownSeconds: number;
+  probeAvailableAt: string | null;
   p50LatencyMs: number | null;
   p95LatencyMs: number | null;
   errors24h: number;
@@ -58,10 +61,26 @@ type RuntimeData = {
     schemaVersion: string;
   };
   clients: { compactVersion: string; androidVersion: string };
+  runtimePolicy?: {
+    status: "allowlisted" | "deny_all";
+    version: "admin-write-mode-v1";
+    source: string;
+    expiresAt: null;
+    writable: boolean;
+  };
   drift: string[];
 };
 
+function providerProbeCoolingDown(provider: ProviderRow, now = Date.now()) {
+  return Boolean(
+    provider.probeAvailableAt &&
+      Number.isFinite(Date.parse(provider.probeAvailableAt)) &&
+      Date.parse(provider.probeAvailableAt) > now,
+  );
+}
+
 export function ProvidersPage() {
+  const [now, setNow] = useState(Date.now);
   const query = useQuery({
     queryKey: ["admin", "providers"],
     queryFn: ({ signal }) =>
@@ -71,6 +90,15 @@ export function ProvidersPage() {
   const operationFlow = useOperationFlow(async () => {
     await query.refetch();
   });
+  useEffect(() => {
+    const availableAt = query.data?.data
+      .map((provider) => Date.parse(provider.probeAvailableAt || ""))
+      .filter((time) => Number.isFinite(time) && time > Date.now())
+      .sort((left, right) => left - right)[0];
+    if (!availableAt) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, availableAt - Date.now()) + 1);
+    return () => window.clearTimeout(timer);
+  }, [query.data?.data]);
   return (
     <div className="workspace-stack">
       <WorkspaceNav items={SYSTEM_NAV} />
@@ -135,7 +163,9 @@ export function ProvidersPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {query.data.data.map((provider) => (
+                        {query.data.data.map((provider) => {
+                          const coolingDown = providerProbeCoolingDown(provider, now);
+                          return (
                           <tr key={provider.provider}>
                             <td data-label="Provider">
                               <strong>{provider.label}</strong>
@@ -182,6 +212,11 @@ export function ProvidersPage() {
                                   {provider.lastProbeMessage ? ` · ${provider.lastProbeMessage}` : ""}
                                 </small>
                               )}
+                              {coolingDown && (
+                                <small>
+                                  Cooldown 至 {formatDateTime(provider.probeAvailableAt)}
+                                </small>
+                              )}
                             </td>
                             <td data-label="p50 / p95">
                               {provider.p50LatencyMs ?? "—"} /{" "}
@@ -197,9 +232,11 @@ export function ProvidersPage() {
                               <button
                                 className="icon-button"
                                 type="button"
-                                title={`Probe ${provider.label}`}
+                                title={coolingDown
+                                  ? `Probe cooldown until ${formatDateTime(provider.probeAvailableAt)}`
+                                  : `Probe ${provider.label}`}
                                 aria-label={`Probe ${provider.label}`}
-                                disabled={provider.configured === false || query.isFetching}
+                                disabled={provider.configured === false || coolingDown || query.isFetching}
                                 onClick={() =>
                                   operationFlow.begin({
                                     action: "provider_probe",
@@ -210,7 +247,7 @@ export function ProvidersPage() {
                               </button>
                             </td>
                           </tr>
-                        ))}
+                        )})}
                       </tbody>
                     </table>
                   </div>
@@ -383,6 +420,13 @@ function ReleaseProvenance({ runtime }: { runtime: RuntimeData }) {
 }
 
 function InfrastructureHealth({ runtime }: { runtime: RuntimeData }) {
+  const policy = runtime.runtimePolicy ?? {
+    status: "deny_all" as const,
+    version: "admin-write-mode-v1" as const,
+    source: "default",
+    expiresAt: null,
+    writable: false,
+  };
   return (
     <section className="runtime-grid" aria-label="基礎設施健康狀態">
       <div className="data-section">
@@ -426,6 +470,21 @@ function InfrastructureHealth({ runtime }: { runtime: RuntimeData }) {
           <div><dt>Itinerary</dt><dd><code>{runtime.database.itineraryContractVersion || "unknown"}</code></dd></div>
           <div><dt>Receipts</dt><dd><code>{runtime.database.receiptContractVersion || "unknown"}</code></dd></div>
           <div><dt>Schema version</dt><dd><code>{runtime.database.schemaVersion || "unknown"}</code></dd></div>
+        </dl>
+      </div>
+      <div className="data-section">
+        <header>
+          <div><h2>Runtime policy</h2></div>
+          <StatusBadge
+            value={policy.status === "allowlisted" ? "warning" : "reported"}
+            label={policy.status}
+          />
+        </header>
+        <dl className="detail-list">
+          <div><dt>Version</dt><dd><code>{policy.version || "none"}</code></dd></div>
+          <div><dt>Source</dt><dd><code>{policy.source || "unknown"}</code></dd></div>
+          <div><dt>Expires</dt><dd>{formatDateTime(policy.expiresAt)}</dd></div>
+          <div><dt>Admin writes</dt><dd>{policy.writable ? "Writes enabled" : "Writes disabled"}</dd></div>
         </dl>
       </div>
     </section>

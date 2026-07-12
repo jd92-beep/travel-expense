@@ -111,17 +111,20 @@ Deno.test("valid signed request consumes nonce exactly once", async () => {
   const context = await verifySignedBffRequest(request, {
     functionName: "admin-kanban",
     keys: { "test-key": secret },
+    maxBodyBytes: 64 * 1024,
     nowSeconds: issuedAt + 10,
     consumeNonce,
   });
   assertEquals(context.route, "/api/runtime");
   assertEquals(context.actor, "boss");
 
+  const replay = await signedRequest();
   await assertRejects(
     () =>
-      verifySignedBffRequest(request, {
+      verifySignedBffRequest(replay.request, {
         functionName: "admin-kanban",
         keys: { "test-key": secret },
+        maxBodyBytes: 64 * 1024,
         nowSeconds: issuedAt + 10,
         consumeNonce,
       }),
@@ -137,6 +140,7 @@ Deno.test("direct browser and expired signed requests are rejected", async () =>
       verifySignedBffRequest(browser.request, {
         functionName: "admin-kanban",
         keys: { "test-key": browser.secret },
+        maxBodyBytes: 64 * 1024,
         nowSeconds: browser.issuedAt + 10,
         consumeNonce: () => Promise.resolve(true),
       }),
@@ -150,10 +154,35 @@ Deno.test("direct browser and expired signed requests are rejected", async () =>
       verifySignedBffRequest(expired.request, {
         functionName: "admin-kanban",
         keys: { "test-key": expired.secret },
+        maxBodyBytes: 64 * 1024,
         nowSeconds: expired.issuedAt + 60,
         consumeNonce: () => Promise.resolve(true),
       }),
     BffVerificationError,
     "expired",
   );
+});
+
+Deno.test("declared oversized bodies are rejected before signature verification", async () => {
+  const signed = await signedRequest();
+  const headers = new Headers(signed.request.headers);
+  headers.set("content-length", "65537");
+  const oversized = new Request(signed.request.url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ hello: "world" }),
+  });
+  const error = await assertRejects(
+    () =>
+      verifySignedBffRequest(oversized, {
+        functionName: "admin-kanban",
+        keys: { "test-key": signed.secret },
+        maxBodyBytes: 64 * 1024,
+        nowSeconds: signed.issuedAt + 10,
+        consumeNonce: () => Promise.resolve(true),
+      }),
+    BffVerificationError,
+  );
+  assertEquals(error.code, "ADMIN_BODY_TOO_LARGE");
+  assertEquals(error.status, 413);
 });

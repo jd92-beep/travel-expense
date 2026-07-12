@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import {
+  adminAuthStateUrl,
+  adminEdgeUrl,
   callSignedEdge,
   canonicalBffPayload,
   canonicalQuery,
@@ -21,6 +23,28 @@ test('signed routes reject dot segments and repeated slashes', () => {
   assert.equal(normalizeSignedRoute('/api/runtime'), '/api/runtime');
   assert.throws(() => normalizeSignedRoute('/api/../runtime'), /segments/);
   assert.throws(() => normalizeSignedRoute('/api//runtime'), /route/);
+});
+
+test('internal Edge URLs are explicit HTTPS environment bindings', () => {
+  const previousAdmin = process.env.ADMIN_EDGE_ADMIN_URL;
+  const previousAuth = process.env.ADMIN_EDGE_AUTH_STATE_URL;
+  try {
+    delete process.env.ADMIN_EDGE_ADMIN_URL;
+    delete process.env.ADMIN_EDGE_AUTH_STATE_URL;
+    assert.throws(() => adminEdgeUrl(), /not configured/i);
+    assert.throws(() => adminAuthStateUrl(), /not configured/i);
+    process.env.ADMIN_EDGE_ADMIN_URL = 'http://edge.example/functions/v1/admin-kanban';
+    assert.throws(() => adminEdgeUrl(), /invalid/i);
+    process.env.ADMIN_EDGE_ADMIN_URL = 'https://edge.example/functions/v1/admin-kanban';
+    process.env.ADMIN_EDGE_AUTH_STATE_URL = 'https://edge.example/functions/v1/admin-auth-state';
+    assert.equal(adminEdgeUrl(), process.env.ADMIN_EDGE_ADMIN_URL);
+    assert.equal(adminAuthStateUrl(), process.env.ADMIN_EDGE_AUTH_STATE_URL);
+  } finally {
+    if (previousAdmin === undefined) delete process.env.ADMIN_EDGE_ADMIN_URL;
+    else process.env.ADMIN_EDGE_ADMIN_URL = previousAdmin;
+    if (previousAuth === undefined) delete process.env.ADMIN_EDGE_AUTH_STATE_URL;
+    else process.env.ADMIN_EDGE_AUTH_STATE_URL = previousAuth;
+  }
 });
 
 test('Node signer matches the admin-v1 canonical protocol', () => {

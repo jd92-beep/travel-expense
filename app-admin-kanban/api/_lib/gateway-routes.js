@@ -1,6 +1,7 @@
 import { HttpError } from './http.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const PROVIDER_RE = /^(?:notion|kimi|google|weatherapi|mimo)$/;
 const R1_ACTIONS = new Set([
   'provider_probe',
@@ -112,7 +113,7 @@ export function resolveGatewayRoute(pathname, method, searchParams) {
         edgeRoute: '/api/operations/preview',
         query: queryObject(searchParams, new Set()),
         mutation: true,
-        bodyLimit: 1024 * 1024,
+        bodyLimit: 64 * 1024,
         bodyKind: 'operation-preview',
       };
     }
@@ -336,9 +337,14 @@ export function validateGatewayBody(kind, body) {
       throw new HttpError('VALIDATION_FAILED', 'Trip amendment context is invalid', 400);
     }
   } else if (action === 'itinerary_amend') {
-    rejectUnknownKeys(payload, new Set(['endDate', 'expectedVersion', 'itinerary', 'startDate']));
+    rejectUnknownKeys(payload, new Set([
+      'endDate', 'expectedVersion', 'itinerary', 'removedDates', 'startDate',
+    ]));
     if (!UUID_RE.test(targetId) || !isPositiveVersion(payload.expectedVersion)
-      || !Array.isArray(payload.itinerary)) {
+      || !Array.isArray(payload.itinerary) || !Array.isArray(payload.removedDates)
+      || payload.removedDates.length > 366
+      || new Set(payload.removedDates).size !== payload.removedDates.length
+      || payload.removedDates.some(date => typeof date !== 'string' || !DATE_RE.test(date))) {
       throw new HttpError('VALIDATION_FAILED', 'Itinerary context is invalid', 400);
     }
   } else if (action === 'itinerary_restore') {

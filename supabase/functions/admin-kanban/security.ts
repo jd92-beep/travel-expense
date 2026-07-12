@@ -21,6 +21,10 @@ type RejectedAdminRequest = {
 
 export type AdminRequestDecision = AllowedAdminRequest | RejectedAdminRequest;
 
+export function rejectedSignatureIdentity(_headers: Headers) {
+  return { actor: "unauthenticated", sessionHash: "unauthenticated" } as const;
+}
+
 const SAFE_REQUEST_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const READ_ROUTE_MAP: ReadonlyArray<RegExp> = [

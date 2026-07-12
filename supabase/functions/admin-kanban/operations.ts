@@ -132,6 +132,41 @@ const CURRENCY_RE = /^[A-Z]{3}$/;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const PHOTO_MIME_RE = /^image\/(?:jpeg|png|webp|heic|heif)$/i;
 
+function ascii(bytes: Uint8Array, start: number, length: number) {
+  return String.fromCharCode(...bytes.slice(start, start + length));
+}
+
+export function detectReceiptPhotoMime(bytes: Uint8Array): string | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    bytes.length >= 8 &&
+    [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, index) => bytes[index] === byte)
+  ) {
+    return "image/png";
+  }
+  if (bytes.length >= 12 && ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WEBP") {
+    return "image/webp";
+  }
+  if (bytes.length >= 12 && ascii(bytes, 4, 4) === "ftyp") {
+    const brand = ascii(bytes, 8, 4);
+    if (["heic", "heix", "hevc", "hevx", "heim", "heis"].includes(brand)) {
+      return "image/heic";
+    }
+    if (["mif1", "msf1"].includes(brand)) return "image/heif";
+  }
+  return null;
+}
+
+export function receiptPhotoMimeMatches(declared: string, detected: string) {
+  const declaredMime = declared.toLowerCase();
+  const detectedMime = detected.toLowerCase();
+  if (declaredMime === detectedMime) return true;
+  const heifFamily = new Set(["image/heic", "image/heif"]);
+  return heifFamily.has(declaredMime) && heifFamily.has(detectedMime);
+}
+
 export class AdminOperationError extends Error {
   code: string;
   status: number;
@@ -197,6 +232,13 @@ function redact(value: unknown, maxLength = 500): string {
     .replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]")
     .replace(/(?:sk-|ntn_|secret_)[A-Za-z0-9_-]+/g, "[redacted]")
     .replace(/[A-Za-z0-9_-]{48,}/g, "[redacted-value]")
+    .slice(0, maxLength);
+}
+
+export function redactSupportText(value: unknown, maxLength = 220): string {
+  return redact(value, maxLength * 2)
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
+    .replace(/https?:\/\/[^\s]+/gi, "[redacted-url]")
     .slice(0, maxLength);
 }
 
@@ -310,7 +352,7 @@ async function receiptR2Preview(context: OperationContext, input: PreviewInput) 
   const expectedVersion = expectedVersionPayload(input.payload);
   const { data: receipt, error } = await context.client.from("receipts")
     .select(
-      "id,store,record_date,record_time,amount,currency,category,payment_method,record_kind,visibility,version,deleted_at,updated_at",
+      "id,store,record_date,record_time,amount,currency,category,payment_method,record_kind,visibility,split_mode,person_id,beneficiary_id,version,deleted_at,updated_at",
     )
     .eq("id", input.targetId).maybeSingle();
   if (error || !receipt) {
@@ -329,6 +371,7 @@ async function receiptR2Preview(context: OperationContext, input: PreviewInput) 
     recordKind: String(receipt.record_kind),
     recordTime: receipt.record_time || null,
     store: String(receipt.store),
+    splitMode: String(receipt.split_mode || "shared"),
     version: Number(receipt.version),
     visibility: String(receipt.visibility),
   };
@@ -418,9 +461,20 @@ async function receiptR2Preview(context: OperationContext, input: PreviewInput) 
       if (!["trip", "private"].includes(visibility)) {
         throw new AdminOperationError("VALIDATION_FAILED", "Visibility is invalid", 400);
       }
+      if (
+        visibility === "private" && receipt.beneficiary_id &&
+        String(receipt.beneficiary_id) !== String(receipt.person_id || "")
+      ) {
+        throw new AdminOperationError(
+          "DEPENDENCY_CONFLICT",
+          "Resolve the cross-person beneficiary before making this receipt private",
+          409,
+        );
+      }
       normalized.visibility = visibility;
     }
     proposed = { ...current, ...normalized, version: expectedVersion + 1 };
+    if (proposed.visibility === "private") proposed.splitMode = "private";
     if (proposed.recordKind === "settlement") proposed.category = null;
     payload = { expectedVersion, patch: normalized };
     fields = Object.keys(normalized);
@@ -571,6 +625,38 @@ function inclusiveDates(startDate: string, endDate: string): string[] {
   return dates;
 }
 
+function canonicalRemovedDates(value: unknown, requiredDates: string[]): string[] {
+  if (!Array.isArray(value) || value.length > 366) {
+    throw new AdminOperationError(
+      "VALIDATION_FAILED",
+      "Itinerary removal manifest is invalid",
+      400,
+    );
+  }
+  const seen = new Set<string>();
+  const dates = value.map((entry) => {
+    const date = textValue(entry, "Removed itinerary date", { max: 10 });
+    if (!DATE_RE.test(date) || inclusiveDates(date, date)[0] !== date || seen.has(date)) {
+      throw new AdminOperationError(
+        "VALIDATION_FAILED",
+        "Itinerary removal manifest is invalid",
+        400,
+      );
+    }
+    seen.add(date);
+    return date;
+  }).sort();
+  const required = [...requiredDates].sort();
+  if (dates.length !== required.length || dates.some((date, index) => date !== required[index])) {
+    throw new AdminOperationError(
+      "VALIDATION_FAILED",
+      "Itinerary date shrink requires explicit removal of every removed date",
+      422,
+    );
+  }
+  return dates;
+}
+
 function canonicalItineraryPayload(startDate: string, endDate: string, value: unknown) {
   if (!Array.isArray(value)) {
     throw new AdminOperationError("VALIDATION_FAILED", "Itinerary must be an array", 400);
@@ -704,15 +790,26 @@ async function itineraryR2Preview(context: OperationContext, input: PreviewInput
       targetVersion: String(trip.itinerary_version),
     };
   }
-  exactKeys(input.payload, new Set(["endDate", "expectedVersion", "itinerary", "startDate"]));
+  exactKeys(
+    input.payload,
+    new Set(["endDate", "expectedVersion", "itinerary", "removedDates", "startDate"]),
+  );
   const startDate = textValue(input.payload.startDate, "Start date", { max: 10 });
   const endDate = textValue(input.payload.endDate, "End date", { max: 10 });
   const canonical = canonicalItineraryPayload(startDate, endDate, input.payload.itinerary);
+  const proposedDateSet = new Set(inclusiveDates(startDate, endDate));
+  const removedDates = canonicalRemovedDates(
+    input.payload.removedDates,
+    inclusiveDates(String(trip.start_date), String(trip.end_date)).filter((date) =>
+      !proposedDateSet.has(date)
+    ),
+  );
   return {
     payload: {
       endDate,
       expectedVersion,
       itinerary: canonical.itinerary,
+      removedDates,
       startDate,
     },
     preview: {
@@ -727,6 +824,7 @@ async function itineraryR2Preview(context: OperationContext, input: PreviewInput
       proposed: {
         days: canonical.itinerary.length,
         endDate,
+        removedDates,
         spots: canonical.spotCount,
         startDate,
         version: expectedVersion + 1,
@@ -909,7 +1007,7 @@ async function membershipR2Preview(context: OperationContext, input: PreviewInpu
       rollbackBoundary: "A removed member can be reactivated later; owner membership is protected.",
       title: input.action === "member_role" ? "Change member role" : "Remove trip member",
     },
-    targetRef: input.targetId,
+    targetRef: String(member.id),
     targetType: "membership",
     targetVersion: String(member.updated_at),
   };
@@ -934,7 +1032,7 @@ async function syncJobPreview(
   }
   const eligible = input.action === "retry_sync_job"
     ? ["failed", "cancelled"].includes(job.status)
-    : ["pending", "processing"].includes(job.status);
+    : job.status === "pending";
   if (!eligible) {
     throw new AdminOperationError(
       "DEPENDENCY_CONFLICT",
@@ -950,7 +1048,7 @@ async function syncJobPreview(
       title: input.action === "retry_sync_job" ? "Retry sync job" : "Cancel sync job",
       consequence: input.action === "retry_sync_job"
         ? "Queues this job for one new worker attempt without erasing attempt history."
-        : "Stops the current queued or processing job and marks its receipt mirror as failed.",
+        : "Cancels this queued job before a worker claims it and marks its receipt mirror as failed.",
       affectedCount: 1,
       provider: job.provider,
       operation: job.operation,
@@ -1260,7 +1358,7 @@ async function supportBundle(context: OperationContext, payload: Record<string, 
       contractVersion: "admin-operation-v1",
       edgeDeployment: Deno.env.get("DENO_DEPLOYMENT_ID") || "unknown",
       edgeSourceSha: Deno.env.get("ADMIN_EDGE_SOURCE_SHA") || "unknown",
-      schemaVersion: "20260710193000",
+      schemaVersion: Deno.env.get("ADMIN_EXPECTED_SCHEMA_VERSION") || "20260712122000",
     },
   };
   const rowCounts: Record<string, number> = {};
@@ -1324,7 +1422,7 @@ async function supportBundle(context: OperationContext, payload: Record<string, 
       operation: job.operation,
       status: job.status,
       attempts: Number(job.attempts || 0),
-      error: job.last_error ? redact(job.last_error, 220) : null,
+      error: job.last_error ? redactSupportText(job.last_error) : null,
       createdAt: job.created_at,
       updatedAt: job.updated_at,
     })));
@@ -1548,8 +1646,14 @@ export async function streamAdminReceiptPhoto(
     );
   }
   const bytes = new Uint8Array(await blob.arrayBuffer());
-  const contentType = String(photo.mime_type || blob.type || "").split(";")[0].trim().toLowerCase();
-  if (!PHOTO_MIME_RE.test(contentType) || bytes.length === 0 || bytes.length > MAX_PHOTO_BYTES) {
+  const declaredContentType = String(photo.mime_type || blob.type || "").split(";")[0].trim()
+    .toLowerCase();
+  const detectedContentType = detectReceiptPhotoMime(bytes);
+  if (
+    !PHOTO_MIME_RE.test(declaredContentType) || !detectedContentType ||
+    !receiptPhotoMimeMatches(declaredContentType, detectedContentType) || bytes.length === 0 ||
+    bytes.length > MAX_PHOTO_BYTES
+  ) {
     throw new AdminOperationError("UPSTREAM_UNAVAILABLE", "Receipt photo content is invalid", 502);
   }
   const receiptHash = await sha256Hex(receiptId);
@@ -1571,7 +1675,7 @@ export async function streamAdminReceiptPhoto(
       "Cache-Control": "no-store",
       "Content-Disposition": "inline",
       "Content-Length": String(bytes.length),
-      "Content-Type": contentType,
+      "Content-Type": detectedContentType,
       "X-Admin-Request-Id": context.requestId,
       "X-Content-Type-Options": "nosniff",
     },

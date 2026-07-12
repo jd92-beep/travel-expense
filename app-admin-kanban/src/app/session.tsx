@@ -1,12 +1,15 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router";
-import { LoaderCircle, ShieldCheck } from "lucide-react";
-import { clearSession, currentSession, logoutAdmin } from "../lib/adminApi";
+import { LoaderCircle, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
+import { AdminApiError, clearSession, currentSession, logoutAdmin } from "../lib/adminApi";
 import type { AdminSession } from "../lib/types";
 
 type SessionContextValue = {
   checking: boolean;
+  sessionError: AdminApiError | null;
+  logoutError: AdminApiError | null;
   session: AdminSession | null;
+  retrySession: () => void;
   setSession: (session: AdminSession | null) => void;
   logout: () => Promise<void>;
 };
@@ -18,15 +21,23 @@ export function AdminSessionProvider(
 ) {
   const [session, setSession] = useState<AdminSession | null>(null);
   const [checking, setChecking] = useState(true);
+  const [sessionError, setSessionError] = useState<AdminApiError | null>(null);
+  const [logoutError, setLogoutError] = useState<AdminApiError | null>(null);
 
-  useEffect(() => {
+  const checkSession = useCallback(() => {
     let active = true;
+    setChecking(true);
+    setSessionError(null);
     currentSession()
       .then((value) => {
         if (active) setSession(value);
       })
-      .catch(() => {
-        if (active) setSession(null);
+      .catch((error) => {
+        if (!active) return;
+        setSession(null);
+        setSessionError(error instanceof AdminApiError
+          ? error
+          : new AdminApiError("管理員驗證服務暫時不可用", "UPSTREAM_UNAVAILABLE", 503));
       })
       .finally(() => {
         if (active) setChecking(false);
@@ -37,24 +48,41 @@ export function AdminSessionProvider(
   }, []);
 
   useEffect(() => {
-    const unauthorized = () => setSession(null);
+    return checkSession();
+  }, [checkSession]);
+
+  useEffect(() => {
+    const unauthorized = () => {
+      setSessionError(null);
+      setSession(null);
+    };
     window.addEventListener("admin:unauthorized", unauthorized);
     return () => window.removeEventListener("admin:unauthorized", unauthorized);
   }, []);
 
   const value = useMemo<SessionContextValue>(() => ({
     checking,
+    sessionError,
+    logoutError,
     session,
+    retrySession: () => {
+      checkSession();
+    },
     setSession,
     logout: async () => {
       try {
         await logoutAdmin();
-      } finally {
         clearSession();
+        setSessionError(null);
         setSession(null);
+        setLogoutError(null);
+      } catch (error) {
+        setLogoutError(error instanceof AdminApiError
+          ? error
+          : new AdminApiError("未能確認登出狀態", "UPSTREAM_UNAVAILABLE", 503));
       }
     },
-  }), [checking, session]);
+  }), [checkSession, checking, logoutError, session, sessionError]);
 
   return (
     <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
@@ -81,12 +109,33 @@ export function SessionSplash() {
   );
 }
 
+export function SessionBoundaryError(
+  { error, retry }: { error: AdminApiError; retry: () => void },
+) {
+  return (
+    <main className="session-splash">
+      <section className="session-boundary-error" role="alert">
+        <ShieldAlert size={28} />
+        <div>
+          <h1>管理員驗證服務暫時不可用</h1>
+          <p>Console 已 fail closed；服務恢復前唔會顯示資料或接受操作。</p>
+          <code>{error.code} · {error.requestId || "no-request-id"}</code>
+          <button className="button secondary" type="button" onClick={retry}>
+            <RefreshCw size={16} />重新檢查
+          </button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export function RequireAdminSession(
   { children }: { children: React.ReactNode },
 ) {
-  const { checking, session } = useAdminSession();
+  const { checking, retrySession, session, sessionError } = useAdminSession();
   const location = useLocation();
   if (checking) return <SessionSplash />;
+  if (sessionError) return <SessionBoundaryError error={sessionError} retry={retrySession} />;
   if (!session) {
     return (
       <Navigate

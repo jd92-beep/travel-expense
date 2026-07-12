@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   Bell,
   Bot,
   Database,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -27,6 +28,7 @@ import {
   formatDateTime,
   StatusBadge,
 } from "../components/primitives/ConsolePrimitives";
+import { PasskeyManagerDialog } from "../features/system/PasskeyManagerDialog";
 
 const PRIMARY_NAV = [
   { to: "/overview", match: "/overview", label: "總覽", icon: LayoutDashboard },
@@ -37,6 +39,10 @@ const PRIMARY_NAV = [
 ];
 
 const MOBILE_NAV = PRIMARY_NAV.slice(0, 3);
+const ENVIRONMENT = String(
+  import.meta.env.VITE_ADMIN_ENVIRONMENT || (import.meta.env.DEV ? "LOCAL" : "UNVERIFIED"),
+).toUpperCase();
+const ENVIRONMENT_CLASS = `environment-${ENVIRONMENT.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
 function Navigation({ close }: { close?: () => void }) {
   const { pathname } = useLocation();
@@ -63,12 +69,18 @@ function Navigation({ close }: { close?: () => void }) {
 }
 
 export function AdminShell() {
-  const { session, logout } = useAdminSession();
+  const { session, logout, logoutError } = useAdminSession();
   const location = useLocation();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [passkeysOpen, setPasskeysOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerDialogRef = useRef<HTMLDialogElement>(null);
+  const activityButtonRef = useRef<HTMLButtonElement>(null);
+  const passkeyButtonRef = useRef<HTMLButtonElement>(null);
+  const activityDialogRef = useRef<HTMLDialogElement>(null);
   const operations = useQuery({
     queryKey: ["admin", "operations", "activity"],
     queryFn: ({ signal }) =>
@@ -91,11 +103,40 @@ export function AdminShell() {
     ["previewed", "authorized", "queued", "executing", "compensating", "outcome_unknown"]
       .includes(operation.status)
   ).length;
+  const canRecheckOperation = (status: string) =>
+    ["previewed", "authorized", "queued", "executing", "compensating", "outcome_unknown"].includes(status);
 
   useEffect(() => {
     setDrawerOpen(false);
     setActivityOpen(false);
+    setPasskeysOpen(false);
+    const frame = requestAnimationFrame(() => {
+      const heading = document.querySelector<HTMLElement>("#main-content h1");
+      heading?.setAttribute("tabindex", "-1");
+      heading?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    const dialog = drawerDialogRef.current;
+    if (!dialog) return;
+    if (drawerOpen && !dialog.open) dialog.showModal();
+    if (!drawerOpen && dialog.open) dialog.close();
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    const openActivity = () => setActivityOpen(true);
+    window.addEventListener("admin:activity-open", openActivity);
+    return () => window.removeEventListener("admin:activity-open", openActivity);
+  }, []);
+
+  useEffect(() => {
+    const dialog = activityDialogRef.current;
+    if (!dialog) return;
+    if (activityOpen && !dialog.open) dialog.showModal();
+    if (!activityOpen && dialog.open) dialog.close();
+  }, [activityOpen]);
 
   return (
     <div className="admin-shell">
@@ -111,25 +152,25 @@ export function AdminShell() {
         </div>
         <Navigation />
         <div className="sidebar-foot">
-          <span className="environment-badge">
-            <i />PRODUCTION
+          <span className={`environment-badge ${ENVIRONMENT_CLASS}`}>
+            <i />{ENVIRONMENT}
           </span>
           <span>Shared Cloud · Compact · Android</span>
         </div>
       </aside>
 
-      {drawerOpen && (
-        <button
-          className="drawer-scrim"
-          aria-label="關閉導覽"
-          type="button"
-          onClick={() => setDrawerOpen(false)}
-        />
-      )}
-      <aside
-        className={`mobile-drawer ${drawerOpen ? "open" : ""}`}
-        aria-hidden={!drawerOpen}
-        inert={!drawerOpen}
+      <dialog
+        ref={drawerDialogRef}
+        className="mobile-drawer"
+        aria-label="主要導覽選單"
+        onCancel={(event) => {
+          event.preventDefault();
+          setDrawerOpen(false);
+        }}
+        onClose={() => {
+          setDrawerOpen(false);
+          menuButtonRef.current?.focus();
+        }}
       >
         <div className="drawer-head">
           <strong>Travel Expense</strong>
@@ -144,11 +185,12 @@ export function AdminShell() {
           </button>
         </div>
         <Navigation close={() => setDrawerOpen(false)} />
-      </aside>
+      </dialog>
 
       <div className="shell-main">
         <header className="app-bar">
           <button
+            ref={menuButtonRef}
             className="icon-button mobile-menu"
             type="button"
             title="導覽"
@@ -177,10 +219,11 @@ export function AdminShell() {
               autoComplete="off"
             />
           </form>
-          <span className="top-environment">
-            <i />Production
+          <span className={`top-environment ${ENVIRONMENT_CLASS}`}>
+            <i />{ENVIRONMENT}
           </span>
           <button
+            ref={activityButtonRef}
             className="icon-button"
             type="button"
             title="Activity Center"
@@ -197,6 +240,17 @@ export function AdminShell() {
               <small>{session?.authMethod || "passphrase+passkey"}</small>
             </span>
             <button
+              ref={passkeyButtonRef}
+              className="icon-button"
+              type="button"
+              title="管理 Boss passkeys"
+              aria-label="管理 Boss passkeys"
+              aria-expanded={passkeysOpen}
+              onClick={() => setPasskeysOpen(true)}
+            >
+              <KeyRound size={18} />
+            </button>
+            <button
               className="icon-button"
               type="button"
               title="登出"
@@ -208,8 +262,28 @@ export function AdminShell() {
           </div>
         </header>
 
-        {activityOpen && (
-          <aside className="activity-center" aria-label="Activity Center">
+        {logoutError && (
+          <div className="logout-error" role="alert">
+            <span>{logoutError.message}；為保障 session，尚未清除。</span>
+            <button className="button secondary" type="button" onClick={() => void logout()}>
+              重試登出
+            </button>
+          </div>
+        )}
+
+        <dialog
+          ref={activityDialogRef}
+          className="activity-center"
+          aria-label="Activity Center"
+          onCancel={(event) => {
+            event.preventDefault();
+            setActivityOpen(false);
+          }}
+          onClose={() => {
+            setActivityOpen(false);
+            activityButtonRef.current?.focus();
+          }}
+        >
             <header>
               <strong>Activity Center</strong>
               <button
@@ -261,13 +335,29 @@ export function AdminShell() {
                       <div>
                         <StatusBadge value={operation.status} />
                         <time>{formatDateTime(operation.updatedAt)}</time>
+                        {canRecheckOperation(operation.status) && (
+                          <button
+                            className="button secondary"
+                            type="button"
+                            disabled={operations.isFetching}
+                            aria-label={`重新檢查操作 ${operation.id.slice(0, 8)}`}
+                            onClick={() => void operations.refetch()}
+                          >
+                            重新檢查
+                          </button>
+                        )}
                       </div>
                     </li>
                   ))}
                 </ol>
               )}
-          </aside>
-        )}
+        </dialog>
+
+        <PasskeyManagerDialog
+          open={passkeysOpen}
+          onClose={() => setPasskeysOpen(false)}
+          restoreFocus={() => passkeyButtonRef.current?.focus()}
+        />
 
         <main className="workspace" id="main-content">
           <Outlet />

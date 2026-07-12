@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Copy, LoaderCircle, Play, TriangleAlert, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, Copy, LoaderCircle, Play, RefreshCw, TriangleAlert, X } from "lucide-react";
 
-import { adminPost } from "../../lib/api/adminClient";
+import { adminGet, adminPost } from "../../lib/api/adminClient";
 import type {
   AdminOperation,
   OperationCommitData,
 } from "../../lib/contracts/admin";
 import { StatusBadge } from "../../components/primitives/ConsolePrimitives";
 import { AdminApiError, reauthenticateAdmin } from "../../lib/adminApi";
+import { supportsR2Passkey } from "../../lib/interaction";
 
 export type OperationRequest = {
   action:
@@ -30,6 +31,19 @@ export type OperationRequest = {
   payload?: Record<string, unknown>;
 };
 
+const TERMINAL_OPERATION_STATUSES = new Set([
+  "completed",
+  "partially_failed",
+  "failed",
+  "failed_manual",
+  "cancelled",
+  "expired",
+]);
+
+function isDefinitiveCommitRejection(error: unknown) {
+  return error instanceof AdminApiError && [400, 401, 403, 404, 409, 422, 429].includes(error.status);
+}
+
 export function useOperationFlow(
   onCompleted?: (data: OperationCommitData) => void | Promise<void>,
 ) {
@@ -38,6 +52,33 @@ export function useOperationFlow(
   const [operation, setOperation] = useState<AdminOperation | null>(null);
   const [completed, setCompleted] = useState<OperationCommitData | null>(null);
   const [passphrase, setPassphrase] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [tracking, setTracking] = useState(false);
+  const [outcomeUnknown, setOutcomeUnknown] = useState(false);
+  const commitRequestStarted = useRef(false);
+  const completedOperationIds = useRef(new Set<string>());
+  const onCompletedRef = useRef(onCompleted);
+
+  useEffect(() => {
+    onCompletedRef.current = onCompleted;
+  }, [onCompleted]);
+
+  const applyOperationResult = useCallback(async (data: OperationCommitData) => {
+    const status = data.operation.status;
+    const terminal = TERMINAL_OPERATION_STATUSES.has(status);
+    setOperation(data.operation);
+    setCompleted(status === "completed" ? data : null);
+    setOutcomeUnknown(status === "outcome_unknown");
+    setTracking(!terminal);
+    await queryClient.invalidateQueries({ queryKey: ["admin", "operations", "activity"] });
+    if (terminal) {
+      await queryClient.invalidateQueries({ queryKey: ["admin", "overview"] });
+    }
+    if (status === "completed" && !completedOperationIds.current.has(data.operation.id)) {
+      completedOperationIds.current.add(data.operation.id);
+      await onCompletedRef.current?.(data);
+    }
+  }, [queryClient]);
 
   const preview = useMutation({
     mutationFn: (request: OperationRequest) =>
@@ -52,6 +93,7 @@ export function useOperationFlow(
   const commit = useMutation({
     mutationFn: async ({ operation, passphrase }: { operation: AdminOperation; passphrase: string }) => {
       let grantId: string | undefined;
+      commitRequestStarted.current = false;
       if (operation.risk === "R2") {
         const grant = await reauthenticateAdmin(passphrase, {
           action: operation.action,
@@ -61,19 +103,52 @@ export function useOperationFlow(
         setPassphrase("");
         grantId = grant.grantId;
       }
+      setSubmitted(true);
+      commitRequestStarted.current = true;
       return adminPost<OperationCommitData>(`/operations/${operation.id}/commit`, {
         ...(grantId ? { grantId } : {}),
       });
     },
     onSuccess: async (response) => {
       setPassphrase("");
-      setCompleted(response.data);
-      setOperation(response.data.operation);
-      await queryClient.invalidateQueries({ queryKey: ["admin", "operations"] });
-      await queryClient.invalidateQueries({ queryKey: ["admin", "overview"] });
-      await onCompleted?.(response.data);
+      await applyOperationResult(response.data);
+    },
+    onError: (error) => {
+      if (!commitRequestStarted.current || isDefinitiveCommitRejection(error)) {
+        setSubmitted(false);
+        setTracking(false);
+        setOutcomeUnknown(false);
+        return;
+      }
+      setSubmitted(true);
+      setTracking(true);
+      setOutcomeUnknown(true);
+      setOperation((current) => current
+        ? {
+          ...current,
+          status: "outcome_unknown",
+          error: {
+            code: "OPERATION_UNKNOWN",
+            message: "連線中斷，正在向 server 查證最終結果。",
+          },
+        }
+        : current);
     },
   });
+
+  const recovery = useQuery({
+    queryKey: ["admin", "operation", operation?.id],
+    queryFn: ({ signal }) =>
+      adminGet<AdminOperation>(`/operations/${operation!.id}`, undefined, signal),
+    enabled: submitted && tracking && Boolean(operation?.id),
+    refetchInterval: tracking ? 10_000 : false,
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    if (!recovery.data?.data) return;
+    void applyOperationResult({ operation: recovery.data.data, reused: true });
+  }, [applyOperationResult, recovery.dataUpdatedAt]);
 
   const begin = (request: OperationRequest) => {
     preview.reset();
@@ -81,6 +156,10 @@ export function useOperationFlow(
     setOperation(null);
     setCompleted(null);
     setPassphrase("");
+    setSubmitted(false);
+    setTracking(false);
+    setOutcomeUnknown(false);
+    commitRequestStarted.current = false;
     setOpen(true);
     preview.mutate(request);
   };
@@ -94,9 +173,14 @@ export function useOperationFlow(
     begin,
     close,
     commit: () => operation && commit.mutate({ operation, passphrase }),
-    commitError: commit.error,
+    commitError: outcomeUnknown ? null : commit.error,
     committing: commit.isPending,
     completed,
+    outcomeUnknown,
+    recovering: recovery.isFetching,
+    recoveryError: recovery.error,
+    refreshOperation: () => void recovery.refetch(),
+    submitted,
     open,
     operation,
     passphrase,
@@ -125,23 +209,19 @@ function OperationError({ error }: { error: unknown }) {
 export function OperationDialog({ flow }: { flow: OperationFlow }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [copied, setCopied] = useState(false);
-  const [desktop, setDesktop] = useState(() =>
-    typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches
-  );
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (flow.open && !dialog.open) dialog.showModal();
     if (!flow.open && dialog.open) dialog.close();
   }, [flow.open]);
-  useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
-    const update = () => setDesktop(media.matches);
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
   useEffect(() => setCopied(false), [flow.completed?.operation.id]);
   const requiresStepUp = flow.operation?.risk === "R2";
+  const supportsPasskey = supportsR2Passkey();
+  const resultUnknown = flow.outcomeUnknown || flow.operation?.status === "outcome_unknown";
+  const activeAfterSubmit = flow.submitted && Boolean(flow.operation) &&
+    ["previewed", "authorized", "queued", "executing", "compensating", "outcome_unknown"]
+      .includes(flow.operation!.status);
 
   return (
     <dialog
@@ -182,7 +262,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
         )}
         {flow.previewError && <OperationError error={flow.previewError} />}
         {flow.commitError && <OperationError error={flow.commitError} />}
-        {flow.operation && !flow.completed && (
+        {flow.operation && !flow.completed && !flow.submitted && (
           <>
             <div className="operation-summary">
               <StatusBadge value={flow.operation.status} />
@@ -220,7 +300,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
               </div>
             </dl>
             {requiresStepUp && (
-              desktop
+              supportsPasskey
                 ? (
                   <label className="operation-passphrase">
                     <span>Current passphrase</span>
@@ -239,7 +319,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
                     <TriangleAlert size={20} />
                     <div>
                       <strong>請使用桌面版完成</strong>
-                      <p>R2 canonical data 操作只限 1024px 或以上桌面 viewport。</p>
+                      <p>R2 canonical data 操作需要精細指標輸入嘅桌面環境。</p>
                     </div>
                   </div>
                 )
@@ -288,6 +368,34 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
             )}
           </>
         )}
+        {flow.submitted && !flow.committing && !flow.completed && flow.operation && (
+          <div
+            className={activeAfterSubmit ? "operation-progress" : "operation-error"}
+            role="status"
+          >
+            {activeAfterSubmit
+              ? <LoaderCircle className="spin" size={22} />
+              : <TriangleAlert size={22} />}
+            <div>
+              <strong>
+                {resultUnknown
+                  ? "結果未確認，正在向 server 查證"
+                  : activeAfterSubmit
+                  ? "操作已提交，等待 server 最終狀態"
+                  : "操作未完成"}
+              </strong>
+              <p>
+                <StatusBadge value={flow.operation.status} />
+                {flow.operation.error?.message
+                  ? ` ${flow.operation.error.message}`
+                  : " 請喺 Activity Center 追蹤或重新整理最新結果。"}
+              </p>
+              {flow.recoveryError && (
+                <small>暫時未能讀取最新狀態；自動查詢會繼續，亦可立即重新檢查。</small>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <footer>
@@ -296,6 +404,36 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
             <button className="button primary" type="button" onClick={flow.close}>
               <CheckCircle2 size={16} />完成
             </button>
+          )
+          : flow.submitted
+          ? (
+            <>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={flow.recovering}
+                onClick={flow.refreshOperation}
+              >
+                <RefreshCw className={flow.recovering ? "spin" : undefined} size={16} />
+                立即重新檢查
+              </button>
+              {resultUnknown && (
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => {
+                    flow.close();
+                    window.dispatchEvent(new Event("admin:activity-open"));
+                  }}
+                >
+                  查看 Activity Center
+                </button>
+              )}
+              <button className="button primary" type="button" onClick={flow.close}>
+                {activeAfterSubmit ? <LoaderCircle size={16} /> : <TriangleAlert size={16} />}
+                {activeAfterSubmit ? "關閉並追蹤" : "關閉"}
+              </button>
+            </>
           )
           : (
             <>
@@ -311,7 +449,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
                 className="button primary"
                 type="button"
                 disabled={!flow.operation || flow.previewing || flow.committing || Boolean(flow.previewError) ||
-                  (requiresStepUp && (!desktop || !flow.passphrase))}
+                  (requiresStepUp && (!supportsPasskey || !flow.passphrase))}
                 onClick={flow.commit}
               >
                 <Play size={16} />{requiresStepUp ? "驗證並執行" : "確認執行"}

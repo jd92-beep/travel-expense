@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, RefreshCw } from "lucide-react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router";
 import { adminGet, queryFromSearchParams } from "../../lib/api/adminClient";
 import type { AuditRow, PagedData } from "../../lib/contracts/admin";
 import {
@@ -12,11 +13,32 @@ import {
   PageHeader,
   Pagination,
   StatusBadge,
+  useCursorPagination,
 } from "../../components/primitives/ConsolePrimitives";
+
+function last24HoursStart() {
+  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+}
+
+function isoToLocalInput(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
+}
+
+function localInputToIso(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
 
 export function AuditPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const cursorPager = useCursorPagination(searchParams, setSearchParams);
+  const [defaultStartAt] = useState(last24HoursStart);
+  const allTime = searchParams.get("range") === "all";
   const values = queryFromSearchParams(searchParams, [
     "action",
     "targetId",
@@ -31,6 +53,14 @@ export function AuditPage() {
     "sort",
     "direction",
   ]);
+  if (!values.startAt && !allTime) values.startAt = defaultStartAt;
+  useEffect(() => {
+    if (searchParams.has("startAt") || allTime) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("startAt", defaultStartAt);
+    next.delete("cursor");
+    setSearchParams(next, { replace: true });
+  }, [defaultStartAt, searchParams, setSearchParams]);
   const query = useQuery({
     queryKey: ["admin", "audit", values],
     queryFn: ({ signal }) =>
@@ -42,6 +72,20 @@ export function AuditPage() {
     if (value) next.set(key, value);
     else next.delete(key);
     next.delete("cursor");
+    if (key === "startAt" || key === "endAt") next.delete("range");
+    setSearchParams(next);
+  };
+  const setRange = (range: "24h" | "all") => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("cursor");
+    next.delete("endAt");
+    if (range === "all") {
+      next.delete("startAt");
+      next.set("range", "all");
+    } else {
+      next.set("startAt", last24HoursStart());
+      next.delete("range");
+    }
     setSearchParams(next);
   };
   return (
@@ -101,16 +145,18 @@ export function AuditPage() {
           onChange={(event) => setFilter("targetType", event.target.value)}
         />
         <input
+          aria-label="開始日期"
+          type="datetime-local"
+          value={allTime ? "" : isoToLocalInput(searchParams.get("startAt") || defaultStartAt)}
+          onChange={(event) =>
+            setFilter("startAt", localInputToIso(event.target.value))}
+        />
+        <input
           aria-label="結束日期"
           type="datetime-local"
-          value={searchParams.get("endAt") || ""}
+          value={isoToLocalInput(searchParams.get("endAt") || "")}
           onChange={(event) =>
-            setFilter(
-              "endAt",
-              event.target.value
-                ? new Date(event.target.value).toISOString()
-                : "",
-            )}
+            setFilter("endAt", localInputToIso(event.target.value))}
         />
         <input
           aria-label="Request ID"
@@ -118,25 +164,8 @@ export function AuditPage() {
           value={searchParams.get("requestId") || ""}
           onChange={(event) => setFilter("requestId", event.target.value)}
         />
-        <input
-          aria-label="開始日期"
-          type="datetime-local"
-          value={searchParams.get("startAt") || ""}
-          onChange={(event) =>
-            setFilter(
-              "startAt",
-              event.target.value
-                ? new Date(event.target.value).toISOString()
-                : "",
-            )}
-        />
-        <button
-          className="button secondary"
-          type="button"
-          onClick={() => setSearchParams(new URLSearchParams())}
-        >
-          重設
-        </button>
+        <button className="button secondary" type="button" aria-pressed={!allTime} onClick={() => setRange("24h")}>24 小時</button>
+        <button className="button secondary" type="button" aria-pressed={allTime} onClick={() => setRange("all")}>全部時間</button>
       </div>
       {query.isLoading
         ? <LoadingState label="載入審計紀錄" />
@@ -222,15 +251,11 @@ export function AuditPage() {
                 : <EmptyState title="沒有符合條件的審計事件" />}
             </section>
             <Pagination
-              hasCursor={Boolean(searchParams.get("cursor"))}
+              hasCursor={cursorPager.hasCursor}
               nextCursor={query.data.meta.nextCursor}
               disabled={query.isFetching || query.isPlaceholderData}
-              onPrevious={() => navigate(-1)}
-              onNext={(cursor) => {
-                const next = new URLSearchParams(searchParams);
-                next.set("cursor", cursor);
-                setSearchParams(next);
-              }}
+              onPrevious={cursorPager.previous}
+              onNext={cursorPager.next}
             />
           </>
         )}

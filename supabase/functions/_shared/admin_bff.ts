@@ -180,11 +180,65 @@ function requiredHeader(req: Request, name: string): string {
   return value;
 }
 
+async function readBoundedBody(req: Request, maxBodyBytes: number): Promise<Uint8Array> {
+  if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes < 0) {
+    throw new Error("Signed request body limit is invalid");
+  }
+  const declaredLength = req.headers.get("content-length");
+  if (declaredLength !== null) {
+    if (!/^\d+$/.test(declaredLength)) {
+      throw new BffVerificationError(
+        "ADMIN_BODY_LENGTH_INVALID",
+        400,
+        "Request body length is invalid",
+      );
+    }
+    if (Number(declaredLength) > maxBodyBytes) {
+      throw new BffVerificationError(
+        "ADMIN_BODY_TOO_LARGE",
+        413,
+        "Request body too large",
+      );
+    }
+  }
+  if (!req.body) return new Uint8Array();
+
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBodyBytes) {
+        await reader.cancel();
+        throw new BffVerificationError(
+          "ADMIN_BODY_TOO_LARGE",
+          413,
+          "Request body too large",
+        );
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
+}
+
 export async function verifySignedBffRequest(
   req: Request,
   options: {
     functionName: string;
     keys: Readonly<Record<string, string>>;
+    maxBodyBytes: number;
     nowSeconds?: number;
     consumeNonce: (nonceHash: string, requestId: string, expiresAt: number) => Promise<boolean>;
   },
@@ -239,7 +293,7 @@ export async function verifySignedBffRequest(
 
   const url = new URL(req.url);
   const route = normalizeFunctionPath(url.pathname, options.functionName);
-  const bodyBytes = new Uint8Array(await req.clone().arrayBuffer());
+  const bodyBytes = await readBoundedBody(req, options.maxBodyBytes);
   const payload = canonicalBffPayload({
     actor,
     bodyHash: await sha256Hex(bodyBytes),

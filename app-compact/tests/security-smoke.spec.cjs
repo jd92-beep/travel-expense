@@ -1,11 +1,12 @@
 const { test, expect } = require('@playwright/test');
 
 test.use({ viewport: { width: 390, height: 844 } });
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
 function expectedAuthRedirect() {
   const configured = String(process.env.VITE_COMPACT_PUBLIC_URL || '').trim();
   if (configured) return new URL(configured).toString();
-  return 'http://localhost:8903/travel-expense/compact/';
+  return `${APP_ORIGIN}/travel-expense/compact/`;
 }
 
 function grantDeviceTrust() {
@@ -63,8 +64,8 @@ test('Sensitive legacy fields are stripped from localStorage, IndexedDB, and ser
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await expect(page.getByRole('navigation', { name: '主要分頁' })).toBeVisible();
   await page.waitForTimeout(500);
 
   const mainStore = await page.evaluate(() => localStorage.getItem('boss-japan-tracker') || '');
@@ -132,7 +133,7 @@ test('Supabase magic-link redirect uses a clean app root without route hash', as
     grantDeviceTrust();
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await page.getByRole('button', { name: 'Email' }).click();
   await expect(page.getByText('Email 連結登入')).toBeVisible();
   await page.getByPlaceholder('you@example.com').fill('redirect-smoke@example.com');
@@ -164,7 +165,7 @@ test('Supabase Google OAuth starts with a clean app root redirect', async ({ pag
     grantDeviceTrust();
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expect(page.getByText('旅程雲端登入')).toBeVisible();
   await page.getByRole('button', { name: '使用 Google 帳號登入' }).click();
 
@@ -211,8 +212,8 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
 
   page.on('dialog', (dialog) => dialog.accept());
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByLabel('旅程總覽')).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await expect(page.getByRole('navigation', { name: '主要分頁' })).toBeVisible();
   await expect(page.locator('.supabase-session-actions')).toHaveCount(0);
 
   await page.evaluate(async ({ scopedStorageKey, scopedIndexedKey }) => {
@@ -298,10 +299,10 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
   });
 
-  await page.route('http://localhost:8903/__scope-seed', async (route) => {
+  await page.route(`${APP_ORIGIN}/__scope-seed`, async (route) => {
     await route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
   });
-  await page.goto('http://localhost:8903/__scope-seed');
+  await page.goto(`${APP_ORIGIN}/__scope-seed`);
   await page.evaluate(async ({ userB, keyA, keyB, indexedKeyA, indexedKeyB, scopeBState }) => {
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
@@ -396,7 +397,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
     db.close();
   }, { userB, keyA, keyB, indexedKeyA, indexedKeyB, scopeBState: stateWithTrip('scope_b_trip', 'history') });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.getByLabel('紀錄中心 header')).toBeVisible();
 
   await expect.poll(async () => page.evaluate((keyB) => {
