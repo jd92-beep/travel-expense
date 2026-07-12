@@ -979,7 +979,7 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
   if (!supabase) return trip;
   await ensureSupabaseProfile(session, state);
   const userId = session.user.id;
-  const id = await findTripUuid(supabase, userId, trip);
+  let id = await findTripUuid(supabase, userId, trip);
   const explicitSharedTrip = !!cleanUuid(trip.supabaseId) && !!trip.sharing && trip.sharing.role !== 'owner';
   const normalizedIntelligence = normalizeTripIntelligence(
     trip.intelligence,
@@ -1039,6 +1039,7 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     updated_at: isoFromMs(trip.updatedAt),
   };
   const { owner_id: _ownerId, id: _rowId, created_at: _createdAt, ...sharedTripUpdate } = row;
+  let activeRow: Record<string, any> = row;
   const contractLookup = await withTimeout(supabase
     .from('trips')
     .select('id,itinerary_version,version,itinerary,start_date,end_date')
@@ -1137,6 +1138,7 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
       trip_intelligence: _tripIntelligence,
       ...legacyRow
     } = row;
+    activeRow = legacyRow;
     const {
       owner_id: _legacyOwnerId,
       id: _legacyRowId,
@@ -1164,10 +1166,39 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     // the owner path on someone else's trip) surfaces as an RLS violation. Raw Postgres
     // wording ("new row violates row-level security policy") reads as gibberish in the sync
     // banner and — worse — looks retryable. Translate it into an actionable, permanent error.
-    if (/row-level security|42501|permission denied/i.test(error.message || '')) {
+    const isRlsError = /row-level security|42501|permission denied/i.test(error.message || '');
+    if (isRlsError && !explicitSharedTrip) {
+      // Contested identity: this id/legacy-source collides with a row owned by ANOTHER
+      // account (real-world case: the trip was created while a different account's session
+      // was logged in during device setup). The local client has no sharing metadata saying
+      // it's merely an editor of someone else's trip, so it believes it OWNS this trip —
+      // fighting over the contested row is wrong. Re-home it once: create a brand-new row
+      // under this user's own account instead. The legacy_source_id is suffixed with this
+      // user's id so it can never collide with the other account's row again, and so future
+      // findTripUuid lookups (owner_id + legacy_source_id) resolve straight to THIS row.
+      const newId = crypto.randomUUID();
+      const rehomeRow = {
+        ...activeRow,
+        id: newId,
+        owner_id: userId,
+        legacy_source_id: `${activeRow.legacy_source_id}__u_${userId.slice(0, 8)}`,
+        notion_page_id: null,
+        version: 1,
+      };
+      const rehome = await withTimeout(supabase
+        .from('trips')
+        .insert(rehomeRow)
+        .select('*')
+        .single());
+      if (!rehome.error) {
+        id = newId;
+        data = rehome.data;
+        error = null;
+      }
+    }
+    if (error) {
       throw new Error(`旅程「${trip.name || ''}」存取權失效：你唔係呢個旅程嘅成員。請旅程擁有者重新邀請你，接受後先可以同步。`);
     }
-    throw error;
   }
   return rowToTrip(data as SupabaseTripRow, state, trip.sharing);
 }

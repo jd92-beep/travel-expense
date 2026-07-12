@@ -16,8 +16,8 @@ android {
         applicationId "com.ftjdfr.travelexpensecompact"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1910
-        versionName "0.19.1"
+        versionCode 1920
+        versionName "0.19.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
