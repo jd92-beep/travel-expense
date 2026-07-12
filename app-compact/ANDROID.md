@@ -66,7 +66,7 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.18.2` / versionCode `1820`. Includes the v0.18.1 port from main v0.15.1: worldwide 譯名 detection
+- Version: `0.19.0` / versionCode `1900`. Adds the multi-currency port from main v0.16.0 (32 supported currencies incl. CZK/Nordic/ME/Indic with offline fallback rates, AI OCR/voice/email + local heuristic per-receipt currency detection — AI-detected currency wins over the trip-currency stamp, per-day itinerary currency in trip extraction, Stats HKD+per-currency chips). Prior: v0.18.1 port from main v0.15.1: worldwide 譯名 detection
   (`needsTranslation` now covers Arabic/Hebrew/Indic×8/Thai/Lao/Khmer/Myanmar/Cyrillic/Greek +
   diacritic Latin scripts, not just JP/KR, so the Stats Top-10 translator works globally), the
   Dashboard "今日狀態" weather chip wired to real data via a shared `DashboardWeatherChip`

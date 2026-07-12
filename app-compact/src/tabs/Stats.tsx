@@ -5,7 +5,7 @@ import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { categoryById, computeSettlements, createSettlementReceipt, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency, isSettlementReceipt, todayYmd } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
-import { amountToHkd, formatCurrencyAmount } from '../lib/currency';
+import { amountToHkd, formatCurrencyAmount, hkdToCurrency } from '../lib/currency';
 import { needsTranslation, splitInlineTranslation, translateStoreNames } from '../lib/storeTranslation';
 import { EmptyState, GlassCard, StatusPill, TickerMoney } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
@@ -418,13 +418,39 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
   const totalTrip = scopedReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
   const totalHkd = scopedReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
 
-  const displayCurrency = state.displayCurrency || 'HKD';
+  // Multi-currency chips: HKD + every currency this trip actually uses (trip.currencies +
+  // per-receipt currencies from mixed-currency legs, e.g. a Europe trip paying CHF/EUR/CZK).
+  // Single-currency trips naturally degrade to the old binary [HKD, tripCurrency] pair.
+  // Capped at 6 chips total to keep the pill row usable on phones.
+  const chipCurrencies = (() => {
+    const seen = new Set<string>();
+    const chips: string[] = [];
+    for (const code of ['HKD', resolvedTripCurrency, ...(trip.currencies || []), ...scopedReceipts.map((r) => r.currency || r.originalCurrency || '')]) {
+      const c = String(code || '').toUpperCase();
+      if (!c || seen.has(c)) continue;
+      seen.add(c);
+      chips.push(c);
+      if (chips.length >= 6) break;
+    }
+    return chips;
+  })();
+  const storedDisplayCurrency = state.displayCurrency || 'HKD';
+  // A stale selection (e.g. after switching trips) falls back to HKD gracefully.
+  const displayCurrency = chipCurrencies.includes(storedDisplayCurrency) ? storedDisplayCurrency : 'HKD';
   const showTripCurrency = displayCurrency !== 'HKD';
 
-  const activeTotal = showTripCurrency ? totalTrip : totalHkd;
-  const activeBudget = showTripCurrency
-    ? (Number(state.budget) || 0)
-    : Math.round(amountToHkd(Number(state.budget) || 0, resolvedTripCurrency, state));
+  // Convert an amount denominated in the trip currency into the selected display currency
+  // (identity for the trip currency itself; everything else round-trips through the HKD anchor).
+  const tripAmtToDisplay = (amt: number) => displayCurrency === resolvedTripCurrency
+    ? amt
+    : Math.round(hkdToCurrency(amountToHkd(amt, resolvedTripCurrency, state), displayCurrency, state));
+
+  const activeTotal = displayCurrency === 'HKD'
+    ? totalHkd
+    : (displayCurrency === resolvedTripCurrency
+      ? totalTrip
+      : scopedReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, displayCurrency), 0));
+  const activeBudget = tripAmtToDisplay(Number(state.budget) || 0);
 
   const slices = categorySlices(categories, totalTrip);
   const top = slices[0];
@@ -440,22 +466,18 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
     return formatCurrencyAmount(amt, displayCurrency);
   };
 
-  const activeDailyBudget = showTripCurrency
-    ? dailyBudget
-    : Math.round(amountToHkd(dailyBudget, resolvedTripCurrency, state));
-
-  const activeDailyAverage = showTripCurrency
-    ? dailyAverage
-    : Math.round(amountToHkd(dailyAverage, resolvedTripCurrency, state));
-
-  const activeTopTotal = top
-    ? (showTripCurrency
-        ? top.total
-        : Math.round(amountToHkd(top.total, resolvedTripCurrency, state)))
-    : 0;
+  const activeDailyBudget = tripAmtToDisplay(dailyBudget);
+  const activeDailyAverage = tripAmtToDisplay(dailyAverage);
+  const activeTopTotal = top ? tripAmtToDisplay(top.total) : 0;
 
   const handleUpdateBudget = (newBudgetVal: string) => {
-    const newBudget = Number(newBudgetVal) || 0;
+    const rawInput = Number(newBudgetVal) || 0;
+    // The budget is stored denominated in the trip currency; convert the input from
+    // whatever display currency is active (identity for the trip currency, HKD-anchored
+    // round-trip for HKD and any third currency chip).
+    const newBudget = displayCurrency === resolvedTripCurrency
+      ? rawInput
+      : Math.round(hkdToCurrency(amountToHkd(rawInput, displayCurrency, state), resolvedTripCurrency, state));
     if (setState) {
       const now = Date.now();
       const nextTrip = {
@@ -501,22 +523,17 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
         <span>預算羅盤</span>
         <Info size={17} aria-hidden="true" />
         <div className="preview-budget-currency" role="group" aria-label="顯示貨幣">
-          <button
-            type="button"
-            className={displayCurrency === 'HKD' ? 'is-active' : ''}
-            onClick={() => updateState({ displayCurrency: 'HKD' })}
-            style={{ cursor: 'pointer' }}
-          >
-            HKD
-          </button>
-          <button
-            type="button"
-            className={displayCurrency === resolvedTripCurrency ? 'is-active' : ''}
-            onClick={() => updateState({ displayCurrency: resolvedTripCurrency })}
-            style={{ cursor: 'pointer' }}
-          >
-            {resolvedTripCurrency}
-          </button>
+          {chipCurrencies.map((code) => (
+            <button
+              key={code}
+              type="button"
+              className={displayCurrency === code ? 'is-active' : ''}
+              onClick={() => updateState({ displayCurrency: code })}
+              style={{ cursor: 'pointer' }}
+            >
+              {code}
+            </button>
+          ))}
         </div>
       </div>
       <div className="preview-budget-overview">
