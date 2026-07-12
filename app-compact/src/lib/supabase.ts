@@ -861,7 +861,17 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     data = fallback.data;
     error = fallback.error;
   }
-  if (error) throw error;
+  if (error) {
+    // An upsert whose id collides with a row this user cannot UPDATE (e.g. a shared trip
+    // whose membership was revoked, or local sharing metadata was lost so the client took
+    // the owner path on someone else's trip) surfaces as an RLS violation. Raw Postgres
+    // wording ("new row violates row-level security policy") reads as gibberish in the sync
+    // banner and — worse — looks retryable. Translate it into an actionable, permanent error.
+    if (/row-level security|42501|permission denied/i.test(error.message || '')) {
+      throw new Error(`旅程「${trip.name || ''}」存取權失效：你唔係呢個旅程嘅成員。請旅程擁有者重新邀請你，接受後先可以同步。`);
+    }
+    throw error;
+  }
   if (row.active && !explicitSharedTrip) {
     const { error: deactivateError } = await withTimeout(supabase
       .from('trips')
