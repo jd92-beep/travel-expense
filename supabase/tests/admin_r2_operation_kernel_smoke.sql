@@ -571,7 +571,7 @@ begin
     or v_trip.start_date <> '2026-04-20'::date
     or v_trip.end_date <> '2026-04-25'::date
     or jsonb_array_length(v_trip.itinerary) <> 6
-    or v_trip.itinerary_version <> 3 then
+    or v_trip.itinerary_version <> 4 then
     raise exception 'trip or itinerary R2 result is wrong: %', to_jsonb(v_trip);
   end if;
   if exists (
@@ -634,7 +634,7 @@ begin
   ) then
     raise exception 'raw invitation token was persisted in operation or audit data';
   end if;
-  if (select count(*) from private.admin_operations where status = 'completed' and risk = 'R2') <> 10 then
+  if (select count(*) from private.admin_operations where status = 'completed' and risk = 'R2') <> 11 then
     raise exception 'R2 completed operation count is wrong';
   end if;
   if exists (
@@ -648,7 +648,7 @@ begin
   ) then
     raise exception 'R2 audit preview/commit evidence is incomplete';
   end if;
-  if (select count(*) from private.admin_step_up_grants where consumed_at is not null) <> 10 then
+  if (select count(*) from private.admin_step_up_grants where consumed_at is not null) <> 11 then
     raise exception 'R2 step-up consumption count is wrong';
   end if;
 end
