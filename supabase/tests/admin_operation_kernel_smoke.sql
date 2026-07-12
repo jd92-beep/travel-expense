@@ -273,10 +273,14 @@ select public.admin_operation_preview_create(
 
 reset role;
 
--- Change the target after preview so the commit RPC observes genuine version drift.
+-- Change the target version after preview without the transaction-stable timestamp trigger.
+alter table public.receipt_sync_jobs
+  disable trigger receipt_sync_jobs_set_updated_at;
 update public.receipt_sync_jobs
-set last_error = 'synthetic stale-preview drift'
+set updated_at = updated_at + interval '1 second'
 where id = '97300000-0000-4000-8000-000000000001';
+alter table public.receipt_sync_jobs
+  enable trigger receipt_sync_jobs_set_updated_at;
 
 set local role service_role;
 do $$
