@@ -350,8 +350,27 @@ export function useSyncEngine(
       let failures = 0;
       let lastError = '';
       const pushStartedAt = Date.now();
+      // Trips whose push already failed with an access/RLS denial THIS sweep. Every receipt
+      // push re-ensures its trip first (upsertSupabaseReceipt → upsertSupabaseTrip), so one
+      // revoked shared trip with N queued receipts would otherwise fire N doomed trip upserts
+      // per sweep (observed live: 61 receipts × 2 POSTs per boot). Access denial is permanent
+      // within a session — fail the remaining siblings locally without touching the network.
+      const accessDeniedTrips = new Set<string>();
+      const tripKeyForItem = (item: SyncQueueItem): string => String(
+        (item.payload as { tripId?: string } | undefined)?.tripId
+        || (item.type === 'receipt' ? stateRef.current.receipts.find((r) => r.id === item.entityId)?.tripId : '')
+        || (item.type === 'trip' ? item.entityId : '')
+        || '',
+      );
       for (const item of dedupeQueue(stateRef.current.syncQueue || [])) {
         if (!queueItemReady(item, pushStartedAt, MAX_RETRY_ATTEMPTS)) continue;
+        const tripKey = tripKeyForItem(item);
+        if (tripKey && accessDeniedTrips.has(tripKey)) {
+          failures += 1;
+          lastError = lastError || '旅程存取權失效：請旅程擁有者重新邀請。';
+          markQueueItem(item, { status: 'error', attempts: item.attempts + 1, error: lastError });
+          continue;
+        }
         markQueueItem(item, { status: 'syncing' });
         try {
           await processItem(item);
@@ -375,6 +394,13 @@ export function useSyncEngine(
           const isVersionConflict = lowerError.includes('40001') ||
                                     lowerError.includes('version conflict') ||
                                     lastError.includes('版本衝突');
+          // Access/RLS denial (revoked shared-trip membership, upsert colliding with someone
+          // else's row). Permanent for this session — retrying cannot fix it, only a fresh
+          // invite can. Matches both raw Postgres wording and upsertSupabaseTrip's translation.
+          // Must bypass the backoff-requeue branch below: a doomed access error has no business
+          // being retried with exponential backoff, it needs to park immediately.
+          const isAccessError = /row-level security|42501|permission denied|存取權/i.test(lastError);
+          if (isAccessError && tripKey) accessDeniedTrips.add(tripKey);
 
           if (isVersionConflict) {
             failures += 1;
@@ -383,6 +409,9 @@ export function useSyncEngine(
               attempts: nextAttempts,
               error: '有人啱啱改咗呢筆單，你嘅修改未有套用。請下拉同步後再改一次。',
             });
+          } else if (isAccessError) {
+            failures += 1;
+            markQueueItem(item, { status: 'error', attempts: nextAttempts, error: lastError });
           } else if (isAuthError || nextAttempts >= MAX_RETRY_ATTEMPTS) {
             // Auth failures need re-login; exhausted retries park for manual "重試" (kept, not dropped).
             failures += 1;

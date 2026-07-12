@@ -470,7 +470,13 @@ export function Shell({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
             </span>
-            <span className="truncate max-w-[200px] xs:max-w-xs md:max-w-md font-semibold">有資料同步失敗，請檢查連線或設定。{syncState.error ? `(${syncState.error})` : ''}</span>
+            <span className="truncate max-w-[200px] xs:max-w-xs md:max-w-md font-semibold">
+              {/* An access/permission failure is NOT a connectivity problem — telling the user to
+                  "check the connection" sends them chasing the wrong cause (observed live). */}
+              {/存取權/.test(syncState.error || '')
+                ? `有記帳因為權限問題未能同步。${syncState.error ? `(${syncState.error})` : ''}`
+                : `有資料同步失敗，請檢查連線或設定。${syncState.error ? `(${syncState.error})` : ''}`}
+            </span>
           </div>
           {onRetryFailed && (
             <button
