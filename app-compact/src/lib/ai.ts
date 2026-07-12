@@ -5,6 +5,7 @@ import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } 
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, ReceiptLineItem, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
 import { currentSupabaseAccessToken } from './supabase';
+import { isCurrencyCode, SUPPORTED_CURRENCIES } from './currency';
 
 const KIMI_API_MODEL = 'kimi-code';
 const KIMI_NON_THINKING = { type: 'disabled' } as const;
@@ -154,6 +155,14 @@ function validPayment(value: unknown): PaymentId {
   return 'cash';
 }
 
+// AI models sometimes hallucinate a currency code or return lowercase/garbage — validate
+// against SUPPORTED_CURRENCIES and drop anything invalid so normalize.ts's itinerary-day
+// derivation can still kick in as the fallback.
+function validCurrency(value: unknown): string | undefined {
+  const v = String(value || '').trim().toUpperCase();
+  return isCurrencyCode(v) ? v : undefined;
+}
+
 function ymdFromText(rawText: string, fallback: string): string {
   const text = toHalfWidthDigits(String(rawText || ''));
   const cjk = text.match(/(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})/);
@@ -169,6 +178,43 @@ function ymdFromText(rawText: string, fallback: string): string {
   return fallback;
 }
 
+// Currency signals the local no-AI fallback can recognize, checked in order: unambiguous
+// symbols/words first, the ¥/JPY family near the end (¥ is treated as JPY by long-standing
+// convention here), bare ISO codes handled separately in detectCurrencyFromText. A bare
+// "kr" is deliberately NOT mapped — DKK/NOK/SEK/ISK are indistinguishable, so the Nordic
+// currencies must appear as explicit ISO codes to be detected.
+const HEURISTIC_CURRENCY_SIGNALS: Array<[RegExp, string]> = [
+  [/€/, 'EUR'],
+  [/£/, 'GBP'],
+  [/₹|\bRs\.?\s*[0-9]/, 'INR'],
+  [/₺/, 'TRY'],
+  [/₪/, 'ILS'],
+  [/฿/, 'THB'],
+  [/₩/, 'KRW'],
+  [/₫/, 'VND'],
+  [/₱/, 'PHP'],
+  [/Kč/i, 'CZK'],
+  [/zł/i, 'PLN'],
+  [/[0-9][\s,.]*Ft\b/, 'HUF'],
+  [/\bCHF\b|\bFr\.\s*[0-9]/i, 'CHF'],
+  [/\bRM\s*[0-9]/, 'MYR'],
+  [/\bS\$\s*[0-9]/, 'SGD'],
+  [/\bRp\s*[0-9]/i, 'IDR'],
+  [/円|yen|¥|\bJPY\b/i, 'JPY'],
+  [/蚊|港幣|HK\$|\bHKD\b/i, 'HKD'],
+];
+
+function detectCurrencyFromText(text: string): string | undefined {
+  for (const [re, code] of HEURISTIC_CURRENCY_SIGNALS) {
+    if (re.test(text)) return code;
+  }
+  // Bare ISO codes adjacent to a number ("CZK 250" / "250 CZK") for every supported currency.
+  for (const code of SUPPORTED_CURRENCIES) {
+    if (new RegExp(`\\b${code}\\b\\s*[0-9]|[0-9][\\s,.]*\\b${code}\\b`, 'i').test(text)) return code;
+  }
+  return undefined;
+}
+
 function amountCandidatesFromText(text: string): number[] {
   const candidates: number[] = [];
   const pushAmount = (value: string) => {
@@ -177,8 +223,8 @@ function amountCandidatesFromText(text: string): number[] {
   };
 
   const currencyPatterns = [
-    /(?:¥|JPY|円|yen|蚊|HKD|港幣|\$)\s*([0-9][0-9,]*(?:\.\d+)?)/gi,
-    /([0-9][0-9,]*(?:\.\d+)?)\s*(?:円|yen|jpy|蚊|hkd|港幣)/gi,
+    /(?:¥|JPY|円|yen|蚊|HKD|港幣|\$|€|£|₹|₺|₪|฿|₩|₫|₱|Kč|zł|CHF|Rp|RM)\s*([0-9][0-9,]*(?:\.\d+)?)/gi,
+    /([0-9][0-9,]*(?:\.\d+)?)\s*(?:円|yen|jpy|蚊|hkd|港幣|Kč|zł|Ft|kr|EUR|CZK|CHF|PLN|HUF|SEK|NOK|DKK|ISK|RON|TRY|INR|ILS|AED|SAR|IDR|EGP)\b/gi,
   ];
   for (const pattern of currencyPatterns) {
     for (const match of text.matchAll(pattern)) pushAmount(match[1]);
@@ -198,6 +244,8 @@ function amountCandidatesFromText(text: string): number[] {
 export function heuristicReceiptFromText(text: string, state: AppState): Receipt {
   const amount = amountCandidatesFromText(text);
   const total = amount.length ? amount[amount.length - 1] : 0;
+  // normalize.ts falls back to the itinerary day's currency when this stays undefined.
+  const detectedCurrency = detectCurrencyFromText(text);
   let category: CategoryId = 'other';
   if (/機票|航班|flight|airport|機場/i.test(text)) category = 'flight';
   else if (/酒店|hotel|住宿|旅館/i.test(text)) category = 'lodging';
@@ -219,6 +267,8 @@ export function heuristicReceiptFromText(text: string, state: AppState): Receipt
     time: timeMatch ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}` : '',
     bookingRef: bookingMatch?.[1] || '',
     category,
+    currency: detectedCurrency,
+    originalCurrency: detectedCurrency,
     payment: /card|credit|visa|信用|master/i.test(text) ? 'credit' : /suica|ic/i.test(text) ? 'suica' : /paypay/i.test(text) ? 'paypay' : 'cash',
     personId: state.persons?.[0]?.id || '',
     splitMode: 'shared',
@@ -895,13 +945,14 @@ OUTPUT CONTRACT — FOLLOW EXACTLY:
 3. If a value is unknown, use "" for strings and 0 for numbers. Never invent data.
 
 JSON shape:
-{"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","itemsText":string,"note":string,"lineItems":[{"desc":string,"amount":number,"qty":number}]}
+{"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","currency":string,"itemsText":string,"note":string,"lineItems":[{"desc":string,"amount":number,"qty":number}]}
 
 FIELD RULES:
 - "total" is the grand total actually paid.
 - "date": convert Japanese era years (令和8年 = 2026, 平成/昭和 likewise). Use year ${(state.tripDateRange.start || '').slice(0, 4) || new Date().getFullYear()} if the receipt omits the year.
 - "time": 24-hour HH:MM from the receipt timestamp; "" if absent.
 - "category" and "payment" MUST be one of the listed values exactly.
+- "currency": the ISO 4217 code of the currency actually printed on the receipt (e.g. "JPY","EUR","CZK","INR"). Infer it from the receipt's language, currency symbols, and any country/address hints. Omit (use "") if you are not confident.
 - "lineItems": one entry per purchased item; "amount" is the LINE TOTAL (qty × unit price); [] if the receipt has no itemized lines.
 
 EXAMPLE OUTPUT (structure reference only — read the actual values from the image):
@@ -921,6 +972,7 @@ CRITICAL ITEMS FORMATTING RULES:
    - 삼각김밥 (三角飯糰) x 2: ₩2,400`;
   const parsed = coerceModelJson(await callPreferredJson(state, prompt, 'scan', imageForOCR)) as Partial<Receipt> & { lineItems?: unknown };
   const lineItems = parseLineItems(parsed.lineItems);
+  const currency = validCurrency(parsed.currency);
   return {
     id: `scan_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     store: String(parsed.store || file.name.replace(/\.[^.]+$/, '') || '掃描收據'),
@@ -931,6 +983,9 @@ CRITICAL ITEMS FORMATTING RULES:
     bookingRef: String(parsed.bookingRef || ''),
     category: validCategory(parsed.category),
     payment: validPayment(parsed.payment),
+    // normalize.ts falls back to the itinerary day's currency when this is undefined.
+    currency,
+    originalCurrency: currency,
     itemsText: lineItems.length ? deriveItemsText(lineItems) : String(parsed.itemsText || ''),
     lineItems: lineItems.length ? lineItems : undefined,
     note: String(parsed.note || ''),
@@ -945,7 +1000,8 @@ CRITICAL ITEMS FORMATTING RULES:
 
 export async function parseTextWithAi(text: string, state: AppState, source: string): Promise<Receipt[]> {
   const prompt = `Extract travel expense receipts from the text. Return a JSON array ONLY — no markdown, no code fences, no explanations, no trailing commas. Numbers must be plain half-width digits (no currency symbols, no commas). Use "" / 0 for unknown values.
-Each item: {"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","itemsText":string,"note":string}
+Each item: {"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","currency":string,"itemsText":string,"note":string}
+"currency": the ISO 4217 code of the currency the amount was actually spent in (e.g. "JPY","EUR","CZK","INR"), inferred from wording, symbols, or country hints in the text. Omit (use "") if unsure.
 TEXT:
 ${text.slice(0, 12000)}
 
@@ -982,6 +1038,7 @@ CRITICAL ITEMS FORMATTING RULES:
   }
   return rows.map((row, i) => {
     const r = row as Partial<Receipt>;
+    const currency = validCurrency(r.currency);
     return {
       id: `${source}_${Date.now()}_${i}_${Math.random().toString(16).slice(2)}`,
       store: String(r.store || '文字匯入'),
@@ -992,6 +1049,9 @@ CRITICAL ITEMS FORMATTING RULES:
       bookingRef: String(r.bookingRef || ''),
       category: validCategory(r.category),
       payment: validPayment(r.payment),
+      // normalize.ts falls back to the itinerary day's currency when this is undefined.
+      currency,
+      originalCurrency: currency,
       itemsText: String(r.itemsText || ''),
       note: String(r.note || ''),
       personId: state.persons?.[0]?.id || '',
@@ -1188,7 +1248,9 @@ Current trip JSON for merge/date/year context only:
 ${JSON.stringify(currentTrip).slice(0, 12000)}
 
 Return minimalist schema:
-{"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"lodging":{"name":string},"spots":[{"time":"HH:MM","timeEnd":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|sightseeing|other","note":string,"address":string,"bookingRef":string}]}]},"summary":string,"warnings":string[],"changes":string[]}
+{"organizedItinerary":string,"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"lodging":{"name":string},"spots":[{"time":"HH:MM","timeEnd":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|sightseeing|other","note":string,"address":string,"bookingRef":string}]}]},"summary":string,"warnings":string[],"changes":string[]}
+
+Per-day location fields: "city"/"country" are the day's primary location; "timezone" is its IANA zone (e.g. "Europe/Zurich"). "currency" is the ISO 4217 code of the LOCAL currency where that day's activities take place — infer per day from the city/country (Zürich day → "CHF", Prague day → "CZK", Paris day → "EUR", Tokyo day → "JPY"); a multi-country trip should therefore have DIFFERENT currencies on different days. Use "" only if the location is genuinely unknown.
 
 "type" classifies each spot: restaurants/cafes/meals → "food"; hotels/check-in → "lodging"; flights → "flight"; trains/buses/taxis → "transport"; temples/parks/viewpoints/museums → "sightseeing"; markets/malls → "shopping"; day tours → "localtour"; admission-based attractions → "ticket"; otherwise "other".
 

@@ -4,6 +4,21 @@ import { parseTripParagraph } from '../lib/ai';
 import { sharePercents } from '../lib/domain';
 import { createTripProfile, normalizeTripIntelligence } from '../domain/trip/normalize';
 import type { AppState, Person, TripProfile, TripSharingInviteDraft } from '../lib/types';
+import { SUPPORTED_CURRENCIES } from '../lib/currency';
+
+// Cantonese labels for the trip-currency selects. Every SUPPORTED_CURRENCIES code gets an
+// entry; the option list renders from SUPPORTED_CURRENCIES so newly supported codes appear
+// here automatically (falling back to the bare code if a label is ever missing).
+const CURRENCY_LABELS: Record<string, string> = {
+  JPY: '日圓', HKD: '港幣', USD: '美元', KRW: '韓元', TWD: '台幣', CNY: '人民幣',
+  EUR: '歐元', GBP: '英鎊', AUD: '澳元', SGD: '新加坡元', THB: '泰銖', MYR: '馬幣',
+  VND: '越南盾', CAD: '加元', NZD: '紐元', CHF: '瑞士法郎', PHP: '菲律賓披索',
+  CZK: '捷克克朗', DKK: '丹麥克朗', NOK: '挪威克朗', SEK: '瑞典克朗', PLN: '波蘭茲羅提',
+  HUF: '匈牙利福林', RON: '羅馬尼亞列伊', TRY: '土耳其里拉', ISK: '冰島克朗',
+  AED: '阿聯酋迪拉姆', SAR: '沙特里亞爾', ILS: '以色列謝克爾', INR: '印度盧比',
+  IDR: '印尼盾', EGP: '埃及鎊',
+};
+const TRIP_CURRENCY_OPTIONS = SUPPORTED_CURRENCIES.filter((code) => code !== 'HKD');
 
 export type WelcomeGuideResult = {
   trip: TripProfile;
@@ -540,20 +555,9 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                 onChange={(e) => setCurrency(e.target.value)}
                 style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
               >
-                <option value="JPY">JPY 日圓</option>
-                <option value="KRW">KRW 韓元</option>
-                <option value="TWD">TWD 台幣</option>
-                <option value="USD">USD 美元</option>
-                <option value="EUR">EUR 歐元</option>
-                <option value="GBP">GBP 英鎊</option>
-                <option value="CNY">CNY 人民幣</option>
-                <option value="SGD">SGD 新加坡元</option>
-                <option value="THB">THB 泰銖</option>
-                <option value="MYR">MYR 馬幣</option>
-                <option value="VND">VND 越南盾</option>
-                <option value="PHP">PHP 菲律賓披索</option>
-                <option value="AUD">AUD 澳元</option>
-                <option value="NZD">NZD 紐元</option>
+                {TRIP_CURRENCY_OPTIONS.map((code) => (
+                  <option key={code} value={code}>{code} {CURRENCY_LABELS[code] || ''}</option>
+                ))}
               </select>
             </label>
           </div>
@@ -782,21 +786,10 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                   onChange={(e) => setCurrency(e.target.value)}
                   style={{ padding: '10px 12px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white', fontFamily: 'inherit', height: '39px' }}
                 >
-                  <option value="JPY">JPY (日元)</option>
-                  <option value="TWD">TWD (台幣)</option>
-                  <option value="KRW">KRW (韓元)</option>
-                  <option value="HKD">HKD (港幣)</option>
-                  <option value="USD">USD (美元)</option>
-                  <option value="EUR">EUR (歐元)</option>
-                  <option value="GBP">GBP (英鎊)</option>
-                  <option value="CNY">CNY (人民幣)</option>
-                  <option value="SGD">SGD (新加坡元)</option>
-                  <option value="THB">THB (泰銖)</option>
-                  <option value="MYR">MYR (馬幣)</option>
-                  <option value="VND">VND (越南盾)</option>
-                  <option value="PHP">PHP (菲律賓披索)</option>
-                  <option value="AUD">AUD (澳元)</option>
-                  <option value="NZD">NZD (紐元)</option>
+                  <option value="HKD">HKD ({CURRENCY_LABELS.HKD})</option>
+                  {TRIP_CURRENCY_OPTIONS.map((code) => (
+                    <option key={code} value={code}>{code} ({CURRENCY_LABELS[code] || code})</option>
+                  ))}
                 </select>
               </label>
             </div>

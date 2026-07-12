@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-12
+
+- **Compact App 0.16.0 Multi-Currency Trips (main) / Android 0.19.0**:
+  - **Phase 1 — capture**: `SUPPORTED_CURRENCIES` 17 → 32 (adds CZK/DKK/NOK/SEK/PLN/HUF/RON/TRY/ISK/AED/SAR/ILS/INR/IDR/EGP) with coarse offline `FALLBACK_PER_HKD` rates (kills the silent 1:1-HKD conversion for these codes; a dev-time self-check warns if any supported code ever lacks a fallback), display prefixes, and ISK zero-decimal. OCR (`scanReceiptImage`), voice/email (`parseTextWithAi`), and the local no-AI heuristic all now detect and set per-receipt `currency` (AI prompts request an ISO code validated by `isCurrencyCode`; heuristic recognizes €/£/₹/₺/₪/฿/₩/₫/₱/Kč/zł/Ft/CHF/Rp/RM plus bare ISO codes next to digits — a bare "kr" deliberately stays unmapped since DKK/NOK/SEK/ISK are indistinguishable). Verified against 14 mixed samples.
+  - **Phase 2 — per-day intelligence**: the trip-extraction prompt's per-day schema now requests `city`/`country`/`timezone`/`currency` (Zürich day → CHF, Prague day → CZK — different days, different currencies). `mergeAnalyzedTrip`/`normalizeItinerary` already preserved per-day currency; the prompt simply never asked. `trip.currencies` becomes the true union (HKD + every distinct per-day currency). Wizard currency selects now render all 32 supported codes from `SUPPORTED_CURRENCIES` (was two divergent hardcoded 14/15-option lists); additional currencies flow in automatically from the AI itinerary rather than a manual multi-select.
+  - **Phase 3 — display**: the Stats「顯示貨幣」binary HKD/tripCurrency pill becomes **HKD + one chip per currency the trip actually uses** (trip.currencies + per-receipt currencies, capped at 6, stale selection falls back to HKD). Totals/budget/daily lines convert into any selected chip via the HKD anchor; budget edits under any chip convert back to the trip-currency denomination correctly. Settlement stays HKD-anchored; Top-10 rows keep native per-receipt currency.
+  - **Verified**: typecheck clean; smokes stats/scan/dashboard/six-person/history/final-nav/itinerary green (settings 9/10 — the 1 failure is the known pre-existing Trip Doctor stale rig, fails on clean HEAD, tracked separately); live 390×844 rig (CHF+EUR+CZK trip, fixed rates): chips render [HKD CHF EUR CZK], HKD total HK$1,516 ✓, CZK view Kč4,39x ✓, CHF view CHF16x ✓, Top-10 shows each receipt in native currency, editor dropdown offers CZK and defaults from the itinerary day.
+
 ## 2026-07-11
 
 - **Compact App 0.15.1 Sync-Banner Hardening + Worldwide 譯名 + Dashboard Weather Chip (main) / Android 0.18.1**:

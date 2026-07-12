@@ -298,7 +298,14 @@ function mergeAnalyzedTrip(base: TripProfile, analyzed: TripProfile | null, fall
     startDate: base.startDate,
     endDate: base.endDate,
     homeCurrency: 'HKD',
-    currencies: Array.from(new Set(['HKD', ...(analyzed?.currencies || []), currency])),
+    // Union of everything the trip touches: a multi-country itinerary (Zürich CHF day +
+    // Prague CZK day) contributes one entry per distinct per-day currency.
+    currencies: Array.from(new Set([
+      'HKD',
+      ...(analyzed?.currencies || []),
+      currency,
+      ...itinerary.map((day) => String(day.currency || '').toUpperCase()).filter(Boolean),
+    ])),
     timezones: Array.from(new Set(itinerary.map((day) => day.timezone || intelligence?.timezone || 'Asia/Hong_Kong'))),
     budget: base.budget,
     version: Math.max((base.version || 1) + 1, analyzed?.version || 1),

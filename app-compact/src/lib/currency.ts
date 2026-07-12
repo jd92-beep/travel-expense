@@ -1,6 +1,10 @@
 import type { AppState, ExchangeRateEntry } from './types';
 
-export const SUPPORTED_CURRENCIES = ['JPY', 'HKD', 'USD', 'KRW', 'TWD', 'CNY', 'EUR', 'GBP', 'AUD', 'SGD', 'THB', 'MYR', 'VND', 'CAD', 'NZD', 'CHF', 'PHP'] as const;
+export const SUPPORTED_CURRENCIES = [
+  'JPY', 'HKD', 'USD', 'KRW', 'TWD', 'CNY', 'EUR', 'GBP', 'AUD', 'SGD', 'THB', 'MYR', 'VND', 'CAD', 'NZD', 'CHF', 'PHP',
+  // Phase 1 multi-currency expansion: Europe / Middle East / India / SEA.
+  'CZK', 'DKK', 'NOK', 'SEK', 'PLN', 'HUF', 'RON', 'TRY', 'ISK', 'AED', 'SAR', 'ILS', 'INR', 'IDR', 'EGP',
+] as const;
 
 export type CurrencyCode = typeof SUPPORTED_CURRENCIES[number];
 
@@ -22,7 +26,36 @@ export const FALLBACK_PER_HKD: Record<string, number> = {
   NZD: 0.21,
   CHF: 0.114,
   PHP: 7.2,
+  // --- Phase 1 expansion: coarse offline fallbacks only (units of currency per 1 HKD).
+  // Live fetch (open.er-api, ~160 codes) always overrides these when available — these
+  // exist purely so the app never silently treats these currencies as 1:1 HKD offline.
+  CZK: 2.9,
+  DKK: 0.87,
+  NOK: 1.35,
+  SEK: 1.32,
+  PLN: 0.5,
+  HUF: 45,
+  RON: 0.58,
+  TRY: 5.2,
+  ISK: 17.5,
+  AED: 0.47,
+  SAR: 0.48,
+  ILS: 0.43,
+  INR: 11,
+  IDR: 2050,
+  EGP: 6.3,
 };
+
+// Dev-only self-check: every SUPPORTED_CURRENCIES code must have a FALLBACK_PER_HKD entry,
+// otherwise offline conversion silently treats it as 1:1 HKD (the exact bug this Phase 1
+// expansion fixes). Runs once at module load; cheap, so no extra guard is needed.
+if (import.meta.env?.DEV) {
+  for (const code of SUPPORTED_CURRENCIES) {
+    if (!(code in FALLBACK_PER_HKD)) {
+      console.warn(`[currency] SUPPORTED_CURRENCIES 缺少 FALLBACK_PER_HKD['${code}'] — 離線時會靜默當 1:1 兌 HKD`);
+    }
+  }
+}
 
 const CURRENCY_PREFIX: Record<string, string> = {
   HKD: 'HK$',
@@ -42,6 +75,22 @@ const CURRENCY_PREFIX: Record<string, string> = {
   NZD: 'NZ$',
   CHF: 'CHF',
   PHP: '₱',
+  // --- Phase 1 expansion.
+  CZK: 'Kč ',
+  DKK: 'DKr ',
+  NOK: 'NKr ',
+  SEK: 'SKr ',
+  PLN: 'zł ',
+  HUF: 'Ft ',
+  RON: 'lei ',
+  TRY: '₺',
+  ISK: 'IKr ',
+  AED: 'AED ',
+  SAR: 'SAR ',
+  ILS: '₪',
+  INR: '₹',
+  IDR: 'Rp ',
+  EGP: 'EGP ',
 };
 
 export interface CurrencySnapshot {
@@ -121,7 +170,7 @@ export function currencyPrefix(currency: string): string {
 }
 
 // Currencies with no minor unit (whole-number only). Everything else shows 2 decimals.
-const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'TWD', 'HKD', 'HUF', 'CLP', 'IDR']);
+const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'TWD', 'HKD', 'HUF', 'CLP', 'IDR', 'ISK']);
 
 export function formatCurrencyAmount(amount: number, currency: string): string {
   const code = String(currency || '').toUpperCase();
