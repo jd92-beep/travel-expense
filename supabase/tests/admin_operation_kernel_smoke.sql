@@ -311,7 +311,7 @@ select public.admin_operation_preview_create(
   '97600000-0000-4000-8000-000000000004',
   repeat('a', 64), 'boss', 'cancel_sync_job', 'R1', 'sync_job',
   '97300000-0000-4000-8000-000000000002', repeat('7', 64),
-  '2026-07-12 00:00:00+00',
+  (select updated_at::text from public.receipt_sync_jobs where id = '97300000-0000-4000-8000-000000000002'),
   '{"jobId":"97300000-0000-4000-8000-000000000002"}'::jsonb,
   repeat('8', 64),
   '{"affectedCount":1,"currentStatus":"pending"}'::jsonb,
