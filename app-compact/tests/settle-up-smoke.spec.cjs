@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 test.beforeEach(async ({ page }) => {
@@ -24,11 +26,6 @@ const receipts = [
   { id: 's_lodging', store: 'M9 Hotel', total: 5000, date: '2026-04-22', category: 'lodging', payment: 'credit', personId: 'p_boss', splitMode: 'shared', createdAt: 5 },
   { id: 's_transport', store: 'M9 Train', total: 700, date: '2026-04-22', category: 'transport', payment: 'suica', personId: 'p_xinxin', splitMode: 'shared', createdAt: 6 },
 ];
-
-const firstPercent = async (locator) => {
-  const text = await locator.innerText();
-  return (text.match(/\d+%/) || ['n/a'])[0];
-};
 
 test('Balances consume explicit splits and multiple payers', async ({ page }) => {
   await page.addInitScript((payload) => {
@@ -62,7 +59,7 @@ test('Balances consume explicit splits and multiple payers', async ({ page }) =>
     schemaVersion: 3,
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#stats');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#stats`);
   await expect(page.locator('.transfer-modern')).toHaveCount(1);
   await expect(page.locator('.transfer-modern')).toContainText('¥85');
 });
@@ -84,14 +81,14 @@ test('Settle up records a payment that zeroes the balance without touching spend
     schemaVersion: 3,
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#stats');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#stats`);
 
   // Outstanding transfer + spending baseline before settling.
   await expect(page.locator('.transfer-modern')).toContainText('¥2,850');
   const compass = page.locator('.spending-compass');
   await expect(compass).toBeVisible();
-  const usageBefore = await firstPercent(compass);
-  expect(usageBefore).toMatch(/\d+%/);
+  await expect(compass).toHaveAttribute('aria-label', /已用 \d+%/);
+  const usageBefore = await compass.getAttribute('aria-label');
 
   // Record the settlement: Xinxin pays User 1 the full ¥2,850.
   await page.getByRole('button', { name: '結清' }).first().click();
@@ -111,9 +108,8 @@ test('Settle up records a payment that zeroes the balance without touching spend
   await expect(records).toContainText('User 1 Cheung'); // receiver (to)
   await expect(records).toContainText('¥2,850');
 
-  // The settlement is NOT spending: budget usage returns to the same value (auto-retries past
-  // the compass count-up animation).
-  await expect(compass).toContainText(usageBefore);
+  // The semantic budget summary is stable even while the visual number animates.
+  await expect.poll(() => compass.getAttribute('aria-label')).toBe(usageBefore);
 
   // Undo the settlement -> the outstanding transfer comes back.
   await page.locator('.settlement-records button[aria-label="刪除結算記錄"]').first().click();

@@ -41,6 +41,7 @@ function buildSafeEnv() {
     if (allowedEnvNames.has(key) || key.startsWith('npm_')) env[key] = value;
   }
   env.COMPACT_SMOKE_SAFE_MODE = '1';
+  env.COMPACT_TEST_ORIGIN = new URL(baseUrl).origin;
   return env;
 }
 

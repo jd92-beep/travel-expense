@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 
 
 const tabs = [
@@ -50,7 +52,7 @@ for (const [name, viewport] of [
     const context = await browser.newContext({ viewport });
     const page = await context.newPage();
     await installTrust(page);
-    await page.goto('http://localhost:8903/travel-expense/compact/');
+    await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
     await expect(page.getByText('掃描收據').first()).toBeVisible();
     if (viewport.width <= 390) {
       // Low-perf mode (narrow/coarse-pointer viewports) renders only the base wallpaper layer — cut
@@ -98,7 +100,7 @@ test('Final lock gate smoke without trusted device', async ({ page }) => {
       },
     }));
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect(page.getByText(/本機安全防護鎖|先解鎖再使用/).first()).toBeVisible();
 });
 
@@ -170,7 +172,7 @@ test('Sync error indicator is clickable and retries sync', async ({ page }) => {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await Promise.all([
     page.waitForNavigation(),
     page.evaluate(async () => {
@@ -277,7 +279,7 @@ test('Duplicate person ids do not create React key warnings', async ({ page }) =
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#stats');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#stats`);
   await expect(page.getByText('預算使用分析').first()).toBeVisible();
   await page.getByLabel('主要分頁').getByRole('button', { name: '設定', exact: true }).click();
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
@@ -293,7 +295,7 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
   const releaseNoteRequests = [];
   page.on('request', (request) => {
     const url = request.url();
-    if (/github|changelog|release-notes|releases/i.test(url) && !url.startsWith('http://localhost:8903/')) {
+    if (/github|changelog|release-notes|releases/i.test(url) && !url.startsWith(`${APP_ORIGIN}/`)) {
       releaseNoteRequests.push(url);
     }
   });
@@ -326,7 +328,7 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect(page.getByLabel('Compact travel readiness')).toHaveCount(0);
   const nav = page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]');
   await nav.getByRole('button', { name: '設定', exact: true }).click();
@@ -400,7 +402,7 @@ test('Native reachability restore releases queued upload backoff for immediate r
     }));
   }, retryAt);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
   await page.evaluate(() => window.dispatchEvent(new Event('travel-expense:native-reachability-online')));
   await expect.poll(() => page.evaluate(() => {
@@ -500,7 +502,7 @@ test('Boot currency and sync effects run once without noisy mobile 403s', async 
       }]
     }));
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect.poll(() => notionPaths.filter((path) => path.includes('/query')).length).toBeGreaterThanOrEqual(2);
   await page.waitForTimeout(1200);

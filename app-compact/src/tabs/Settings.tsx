@@ -1996,6 +1996,22 @@ export function Settings({
       }
 
       const currentQueue = prev.syncQueue || [];
+      patch.receiptTombstones = {
+        ...(prev.receiptTombstones || {}),
+        ...Object.fromEntries(deletedReceipts.map((receipt) => {
+          const sourceId = receipt.sourceId || receipt.id;
+          const key = receiptSourceTombstoneKey(receipt);
+          return [key, {
+            supabaseId: receipt.supabaseId || receipt.id,
+            sourceId,
+            tripId: receipt.tripId || managerTripId,
+            version: Math.max(1, Number(receipt.version) || 1),
+            syncRevision: Math.max(0, Number(receipt.syncRevision) || 0),
+            deletedAt: Date.now(),
+            pending: true,
+          }];
+        })),
+      };
       const deleteQueueItems = deletedReceipts.map((r) => ({
         id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,
         type: 'delete-receipt' as const,
@@ -2010,6 +2026,10 @@ export function Settings({
           supabaseId: r.supabaseId,
           tripId: r.tripId,
           sourceId: r.sourceId || r.id,
+          tombstoneKey: receiptSourceTombstoneKey(r),
+          version: r.version,
+          syncRevision: r.syncRevision,
+          updatedAt: r.updatedAt,
         },
       }));
 

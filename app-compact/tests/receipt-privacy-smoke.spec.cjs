@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 const PERSONS = [
@@ -33,7 +35,7 @@ test('可見度 gating: only personal 私人 records can be 🔒, saved + marked
       personId: 'p_boss', splitMode: 'shared', createdAt: Date.now(), updatedAt: Date.now(),
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await page.locator('.receipt-main', { hasText: '團體晚餐' }).first().click();
   await expect(page.getByRole('heading', { name: '編輯紀錄' })).toBeVisible();
 
@@ -86,7 +88,7 @@ test('normalize strips illegal private visibility (shared split / cross 代付)'
       },
     ],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.locator('.receipt-main', { hasText: '合法私人單' }).first()).toBeVisible();
   // Only the legal personal record keeps its 🔒 after normalizeState.
   await expect(page.locator('.history-private-mini')).toHaveCount(1);
@@ -111,7 +113,7 @@ test('settlement is identical with and without a 🔒 private record', async ({ 
     ],
   };
   await seed(page, base);
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   const shareAccordion = page.getByRole('button', { name: /旅伴/ });
   if ((await shareAccordion.getAttribute('aria-expanded')) !== 'true') await shareAccordion.click();
   const miniList = page.locator('.mini-list').first();

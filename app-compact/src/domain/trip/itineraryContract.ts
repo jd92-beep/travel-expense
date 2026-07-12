@@ -76,7 +76,8 @@ function mergeWithFallback(
     highlight: primary?.highlight || fallback?.highlight,
     note: primary?.note || fallback?.note,
     lodging: primary?.lodging?.name ? primary.lodging : fallback?.lodging,
-    spots: primary?.spots?.length ? primary.spots : fallback?.spots || [],
+    // A present primary day is authoritative, including an explicit empty list.
+    spots: primary ? primary.spots || [] : fallback?.spots || [],
   };
 }
 

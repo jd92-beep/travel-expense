@@ -13,6 +13,7 @@ export type PaymentId = 'cash' | 'credit' | 'paypay' | 'suica';
 export type SplitMode = 'shared' | 'private';
 export type SplitType = 'equal' | 'shares' | 'exact' | 'percent' | 'adjustment' | 'itemized';
 export type ReceiptVisibility = 'trip' | 'private';
+export type ReceiptRecordKind = 'expense' | 'settlement';
 export type TripPhase = 'prep' | 'trip' | 'post';
 export type SyncStatus = 'local' | 'queued' | 'syncing' | 'synced' | 'error' | 'failed';
 export type GlobalSyncStatus = 'idle' | 'queued' | 'pushing' | 'pulling' | 'synced' | 'error' | 'offline';
@@ -72,6 +73,9 @@ export interface Receipt {
   createdByEmail?: string;
   createdByLabel?: string;
   version?: number;
+  syncRevision?: number;
+  deletedAt?: number;
+  recordKind?: ReceiptRecordKind;
   ledgerSyncStatus?: 'synced' | 'queued' | 'notion_pending' | 'notion_failed' | 'conflict';
   store: string;
   total: number;
@@ -125,6 +129,16 @@ export interface Receipt {
   spotId?: string;
   syncStatus?: SyncStatus;
   updatedAt?: number;
+}
+
+export interface ReceiptTombstone {
+  supabaseId: string;
+  sourceId: string;
+  tripId: string;
+  version: number;
+  syncRevision: number;
+  deletedAt: number;
+  pending?: boolean;
 }
 
 export interface AppCredentials {
@@ -297,6 +311,8 @@ export interface SyncQueueItem {
     tripId?: string;
     sourceId?: string;
     tombstoneKey?: string;
+    version?: number;
+    syncRevision?: number;
     updatedAt?: number;
   };
 }
@@ -364,6 +380,7 @@ export interface AppState {
   lastTab: TabId;
   notionDeletedIds?: string[];
   notionDeletedSourceIds?: string[];
+  receiptTombstones?: Record<string, ReceiptTombstone>;
   syncQueue?: SyncQueueItem[];
   recurringRules?: RecurringRule[];
   settingsUpdatedAt?: number;

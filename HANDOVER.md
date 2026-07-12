@@ -1,13 +1,12 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-10 HKT
-- **Focus (latest)**: Private receipt-photo compatibility for the Admin 1.0 security cutover. Android now uploads and refreshes receipt photos through 15-minute Supabase Storage signed URLs instead of public object URLs. Upload, queue, merge and retry contracts were intentionally unchanged. The native QA harness now ignores `uiautomator`'s own post-dump `Bad file descriptor` crash and only fails on a crash or ANR attributed to `com.ftjdfr.travelexpensecompact`.
-- **App version (this sweep)**: Compact/Android `0.16.4` (versionCode `1604`); branch `codex/admin-console-1.0-android` based on `codex/android-compact-shell`.
-- **Verification (this sweep)**: `typecheck` passed; root production build passed; `security:scan` passed; signed-photo backfill smoke `1/1` passed; JDK 21 debug APK build/install/launch and `android:qa` passed with `appLinksVerified=true` on `codex_api36_pixel_8`. Artifact: `/tmp/travel-expense-android-qa-2026-07-10T08-08-00-057Z`.
-- **Current cutover gate**: Do not make the live `receipt-photos` bucket private until this Android compatibility build and the matching Compact Web build are deployed and active client compatibility is confirmed. The tracked private-bucket migration lives in the main `travel-expense` Admin 1.0 branch and has intentionally not been applied live.
-- **Current contract blocker**: `smoke:shared-contract` starts both apps after installing `app-react` dependencies but currently reports pre-existing Compact/React fixture drift (`settingsUpdatedAt`, itinerary note and trip version). It is unrelated to the signed-photo patch and remains open for the canonical-contract phase.
-- **Prior sweep**: Compact/Android `0.12.23` (versionCode `1223`); compact web (main) `0.8.9`
+- **Date**: 2026-07-12 HKT
+- **Focus (latest)**: Admin 1.0 shared-contract alignment. Android now implements versioned itinerary merge, durable receipt tombstones, authoritative membership pull and the same canonical receipt/privacy/split semantics as Compact Web and React. Browser tests are origin-isolated, and Android commands select a compatible JDK automatically.
+- **App version (this sweep)**: Compact/Android `0.18.2` (versionCode `1820`); branch `codex/admin-console-1.0-android` based on `codex/android-compact-shell`. Oscar's `0.18.1` is already pushed beneath this contract patch.
+- **Verification (this sweep)**: typecheck/build/security/audit, tombstone and itinerary merge tests, split/Notion/shared-ledger contracts and isolated browser suites (`28 passed, 2 intentional skips`) passed. JBR 21 debug APK build succeeded; `android:qa` passed with `appLinksVerified=true` on `emulator-5554`. Artifact: `/tmp/travel-expense-android-qa-2026-07-12T02-10-31-087Z`.
+- **Current cutover gates**: Do not make live receipt photos private until this build and Compact `0.13.6` are deployed and active compatibility is confirmed. Do not rewrite live Nagoya rows without Boss approval, a backup and server preview. No release APK/AAB was built or published in this session.
+- **Contract status**: The previous Compact/React fixture drift is resolved. Nagoya round-trip is exactly six days (`2026-04-20` through `2026-04-25`); partial updates retain untouched days; range-external scenery and stale overwrites fail.
 
 ### Previous session (2026-07-01)
 - **Focus**: 6-agent parallel completeness audit split across `main` (compact web) and this Android worktree, each side reviewed within its own current feature set (confirmed main intentionally lacks the Splitwise-class rewrite — not a bug). Fixed 7 must-fix findings plus viewer-permission gaps in both apps.
@@ -177,10 +176,30 @@ agent does not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.12.14`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.18.2`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 62 (Codex — v0.18.2 Admin 1.0 shared contracts)
+
+1. **Canonical contracts:** added versioned itinerary merging, durable receipt tombstones and
+   authoritative membership synchronization while preserving Android's richer split/payer model.
+2. **Nagoya invariant:** contract and browser tests prove exactly six dates from `2026-04-20` to
+   `2026-04-25`; missing days remain visible/preserved, out-of-range scenery is rejected, and stale
+   offline data cannot overwrite the latest itinerary.
+   Final audit additionally fixed newer partial payload loss, version-vs-clock skew and cross-trip
+   `SourceID` matching; canonical receipt identity is `(TripID, SourceID)`.
+3. **Stable test/runtime boundary:** browser suites accept an explicit origin and no longer attach to
+   another checkout's fixed-port server. `run-with-android-jdk.mjs` chooses JDK 17-21 and skips JDK 26;
+   both `android:debug` and `android:qa` use it.
+4. **Verification:** typecheck/build/security/audit and all focused contract/unit suites passed.
+   The combined isolated browser run passed `28` tests with `2` intentional environment skips,
+   including Timeline `10/10`, itinerary `3/3`, privacy `3/3`, offline `1/1`, settle-up `2/2` and
+   fake-env Supabase backfill `2/2`. JBR 21 debug build succeeded; `android:qa` passed with verified
+   App Links. Artifact: `/tmp/travel-expense-android-qa-2026-07-12T02-10-31-087Z`.
+5. **Release truth:** no release APK/AAB or production deployment was created. Live photo privacy,
+   real-device login and Admin cutover remain separate approval/compatibility gates.
 
 ### Session 61 (Codex — v0.12.14 Android reconnect sync hardening)
 

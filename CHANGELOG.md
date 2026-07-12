@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-07-12 HKT (Admin 1.0 shared contracts)
+
+- **v0.18.2 / versionCode 1820.** Aligned Android with the Admin 1.0 canonical data contract on top
+  of Oscar's pushed `0.18.1` worldwide translation, Dashboard weather and session-hint fixes.
+  - Added versioned itinerary merge rules: local calendar dates, exactly one day per in-range date,
+    partial updates preserve omitted days, out-of-range spots are rejected and stale offline payloads
+    cannot overwrite a newer version. The Nagoya fixture is exactly `2026-04-20` through
+    `2026-04-25`, six days with no external scenery spots.
+  - Added durable receipt tombstone/version handling so deleted cloud rows remove active local copies
+    and an older Android upload cannot resurrect them. Canonical receipt privacy, split, payer and
+    settlement fields round-trip unchanged.
+  - Aligned membership pull with the shared backend as authoritative after a successful sync,
+    including revoked-member cleanup and owner protection.
+  - Added `run-with-android-jdk.mjs`, which selects a compatible JDK 17-21 and skips incompatible
+    JDK 26 installations. `android:debug` and `android:qa` now use the wrapper automatically.
+  - Made browser smoke origins explicit and isolated, preventing another checkout's dev server from
+    contaminating Android Timeline, itinerary, privacy, settle-up, offline and backfill tests.
+  - Fixed final-audit data loss: a newer partial itinerary now updates only transmitted dates and
+    preserves every omitted day; itinerary version wins over device clock skew. The same `SourceID`
+    in two trips can no longer cross-match because canonical identity is `(TripID, SourceID)`.
+  - Evidence: typecheck/build/security/audit, receipt tombstone, itinerary merge, split engine,
+    Notion metadata and shared-ledger checks passed. Isolated browser suites passed; JBR 21 debug APK
+    build succeeded; `android:qa` passed on `emulator-5554` with `appLinksVerified=true`. Artifact:
+    `/tmp/travel-expense-android-qa-2026-07-12T02-10-31-087Z`.
+  - No release APK/AAB was built or published in this session. Live photo privacy and Admin production
+    cutover remain approval/compatibility-gated.
+
 ## 2026-07-10 HKT (private receipt photos compatibility)
 
 - **v0.16.4 / versionCode 1604.** Prepared Android for the production move from a public

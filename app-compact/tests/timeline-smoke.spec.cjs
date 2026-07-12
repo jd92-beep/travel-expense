@@ -2,6 +2,8 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 async function stubLocalSecrets(page) {
   await page.route('**/secrets.local.js', async (route) => route.fulfill({
     status: 200,
@@ -20,7 +22,7 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   const nav = page.getByLabel('主要分頁');
   await nav.getByRole('button', { name: '行程' }).click();
   await expect(page.locator('.timeline-command')).toBeVisible();
@@ -94,7 +96,7 @@ test('Timeline map links reject unsafe imported URLs and use Android intent fall
       receipts: [],
     }));
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
   await expect(page.locator('.timeline-command')).toBeVisible();
   const hrefs = await page.getByRole('link', { name: '地圖' }).evaluateAll((links) => links.map((link) => link.getAttribute('href') || ''));
   expect(hrefs.join(' ')).not.toMatch(/javascript:|evil\.example/i);
@@ -136,7 +138,7 @@ test('Timeline highlights live, passed, and future itinerary spots', async ({ pa
       receipts: [],
     }));
   }, fixed);
-  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
   await expect(page.locator('.timeline-command')).toBeVisible();
   await expect(page.locator('.timeline-event.is-passed')).toContainText('Breakfast Stop');
   await expect(page.locator('.timeline-event.is-passed')).toContainText('完成');
@@ -197,7 +199,7 @@ test('Timeline tab entry scrolls to the current live itinerary spot', async ({ p
     }));
   }, fixed);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect(page.getByRole('heading', { name: '收據掃描' })).toBeVisible();
   await page.locator('.app-floating-dock-mobile').getByRole('button', { name: '行程' }).click();
   const liveSpot = page.locator('.timeline-event.is-live').filter({ hasText: 'Live Garden Spot' });
@@ -249,7 +251,7 @@ test('Timeline command card stays compact and day header shows one date', async 
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
   await expect(page.locator('.timeline-command')).toBeVisible();
   const command = page.locator('.timeline-command');
   await expect(command).not.toContainText('📍');
@@ -289,6 +291,105 @@ test('Timeline command card stays compact and day header shows one date', async 
   await expect(firstDay.locator('.timeline-day-status')).not.toContainText('2026-05-08');
 });
 
+test('Timeline restores Nagoya canonical days and hides out-of-range scenery after partial trip sync', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'timeline',
+      activeTripId: 'trip_2026_04_nagoya',
+      tripName: '名古屋 2026',
+      tripCurrency: 'JPY',
+      tripDateRange: { start: '2026-04-20', end: '2026-04-25' },
+      customItinerary: null,
+      trips: [{
+        id: 'trip_2026_04_nagoya',
+        name: '名古屋 2026',
+        destinationSummary: '日本名古屋、飛驒高山、白川鄉、金澤、常滑',
+        startDate: '2026-04-20',
+        endDate: '2026-04-25',
+        homeCurrency: 'HKD',
+        currencies: ['JPY', 'HKD'],
+        timezones: ['Asia/Tokyo'],
+        version: 3,
+        active: true,
+        itinerary: [
+          { date: '2026-04-20', day: 1, region: '名古屋市區', timezone: 'Asia/Tokyo', spots: [{ time: '09:00', name: '名古屋站', type: 'transport' }] },
+          { date: '2026-04-25', day: 6, region: '常滑 → 機場', timezone: 'Asia/Tokyo', spots: [{ time: '12:00', name: '中部國際機場', type: 'transport' }] },
+          { date: '2026-04-26', day: 7, region: '行程外', timezone: 'Asia/Tokyo', spots: [{ time: '10:00', name: '不存在行程以外日子的景點', type: 'sightseeing' }] },
+        ],
+        sourceId: 'trip_trip_2026_04_nagoya',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }],
+      receipts: [],
+    }));
+  });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
+  await expect(page.locator('.timeline-command')).toBeVisible();
+  await expect(page.locator('.timeline-trip-days')).toHaveText('6日');
+  await expect(page.locator('.timeline-day')).toHaveCount(6);
+  await expect(page.locator('.timeline-day-date-primary')).toHaveText([
+    '2026-04-20',
+    '2026-04-21',
+    '2026-04-22',
+    '2026-04-23',
+    '2026-04-24',
+    '2026-04-25',
+  ]);
+  await expect(page.locator('.timeline-event').filter({ hasText: '白川鄉 合掌村' })).toBeVisible();
+  await expect(page.locator('.timeline-event').filter({ hasText: '雪之大谷' })).toBeVisible();
+  await expect(page.locator('.timeline-event').filter({ hasText: '鳥開總本家' })).toBeVisible();
+  await expect(page.getByText('不存在行程以外日子的景點')).toHaveCount(0);
+});
+
+test('Timeline preserves every calendar day for an ordinary partial itinerary', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'timeline',
+      activeTripId: 'trip_kyoto_partial',
+      tripName: '京都三日遊',
+      tripCurrency: 'JPY',
+      tripDateRange: { start: '2026-06-01', end: '2026-06-03' },
+      trips: [{
+        id: 'trip_kyoto_partial',
+        name: '京都三日遊',
+        destinationSummary: '京都',
+        startDate: '2026-06-01',
+        endDate: '2026-06-03',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 4,
+        active: true,
+        itinerary: [
+          { date: '2026-06-01', day: 1, region: '京都東山', spots: [{ time: '09:00', name: '清水寺', type: 'ticket' }] },
+          { date: '2026-06-04', day: 4, region: '行程外', spots: [{ time: '09:00', name: '行程外景點', type: 'sightseeing' }] },
+        ],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }],
+      receipts: [],
+    }));
+  });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
+  await expect(page.locator('.timeline-trip-days')).toHaveText('3日');
+  await expect(page.locator('.timeline-day')).toHaveCount(3);
+  await expect(page.locator('.timeline-day-date-primary')).toHaveText([
+    '2026-06-01',
+    '2026-06-02',
+    '2026-06-03',
+  ]);
+  await expect(page.getByText('清水寺')).toBeVisible();
+  await expect(page.getByText('行程外景點')).toHaveCount(0);
+});
+
 test('Timeline mobile rail shines independently without covering compact itinerary cards', async ({ page }) => {
   const fixed = new Date('2026-05-08T12:30:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {
@@ -324,7 +425,7 @@ test('Timeline mobile rail shines independently without covering compact itinera
     }));
   }, fixed);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
   await expect(page.locator('.timeline-command')).toBeVisible();
   await expect(page.locator('.timeline-rail-beam')).toBeVisible();
 
@@ -397,7 +498,7 @@ test('Timeline rail progress follows the current itinerary spot instead of the w
     }));
   }, fixed);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
   await expect(page.getByRole('heading', { name: 'Current Day' })).toBeVisible();
   const todayRail = page.locator('.timeline-rail.is-today');
   await expect(todayRail.locator('.timeline-now-marker')).toContainText('09:30');
@@ -461,7 +562,7 @@ test('Timeline rail uses a lighter inactive colour when today is outside the tri
     }));
   }, fixed);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
   await expect(page.getByRole('heading', { name: 'Past Day Two' })).toBeVisible();
   await expect(page.locator('.timeline-rail.is-today')).toHaveCount(0);
   await expect(page.locator('.timeline-now-marker')).toHaveCount(0);

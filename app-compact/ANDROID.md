@@ -66,13 +66,15 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.18.1` / versionCode `1810`. Ported from main v0.15.1: worldwide 譯名 detection
+- Version: `0.18.2` / versionCode `1820`. Includes the v0.18.1 port from main v0.15.1: worldwide 譯名 detection
   (`needsTranslation` now covers Arabic/Hebrew/Indic×8/Thai/Lao/Khmer/Myanmar/Cyrillic/Greek +
   diacritic Latin scripts, not just JP/KR, so the Stats Top-10 translator works globally), the
   Dashboard "今日狀態" weather chip wired to real data via a shared `DashboardWeatherChip`
   component (was dead placeholder JSX), and the `effectiveSupabaseSession` fix so the
   localStorage session hint is trusted when Supabase is unconfigured. Does NOT include main's
   useSyncEngine.ts quiet-retry change (deliberately skipped — see HANDOVER.md for why).
+  Admin 1.0 compatibility adds versioned itinerary merge, durable receipt tombstones,
+  authoritative membership cleanup and canonical `(TripID, SourceID)` receipt identity.
 - Permissions: internet and camera only. The camera hardware feature is marked `required=false` so the app remains installable on devices without a camera.
 - Scan camera/gallery actions use Capacitor Camera on native Android, then pass the selected image back into the existing Compact OCR draft flow. Web keeps the hidden file-input fallback.
 - Broad storage/media read permissions were removed. Android's normal system picker should handle gallery input without library-wide read access.
