@@ -141,27 +141,39 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
   const scope = `supabase:${userId}`;
   const scopedStorageKey = `boss-japan-tracker:state:${scope}`;
   const scopedIndexedKey = `app-state:${scope}`;
+  const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+  const accessToken = `eyJhbGciOiJub25lIn0.${Buffer.from(JSON.stringify({ sub: userId, aud: 'authenticated', role: 'authenticated', exp: expiresAt })).toString('base64url')}.signature`;
+  let signalLogoutStarted;
+  const logoutStarted = new Promise((resolve) => {
+    signalLogoutStarted = resolve;
+  });
+  let releaseLogout;
+  const logoutMayFinish = new Promise((resolve) => {
+    releaseLogout = resolve;
+  });
 
   await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/logout')) {
+      signalLogoutStarted();
+      await logoutMayFinish;
       await route.fulfill({ status: 204 });
       return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
   });
 
-  await page.addInitScript(({ userId, scopedStorageKey, scopedState }) => {
+  await page.addInitScript(({ userId, scopedStorageKey, scopedState, accessToken, expiresAt }) => {
     localStorage.clear();
     indexedDB.deleteDatabase('travel-expense-react');
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem(scopedStorageKey, JSON.stringify(scopedState));
     localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify({
-      access_token: 'fake-access-token',
+      access_token: accessToken,
       refresh_token: 'fake-refresh-token',
       token_type: 'bearer',
       expires_in: 3600,
-      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      expires_at: expiresAt,
       user: {
         id: userId,
         aud: 'authenticated',
@@ -173,7 +185,7 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
         updated_at: new Date().toISOString(),
       },
     }));
-  }, { userId, scopedStorageKey, scopedState: stateWithTrip() });
+  }, { userId, scopedStorageKey, scopedState: stateWithTrip(), accessToken, expiresAt });
 
   page.on('dialog', (dialog) => dialog.accept());
 
@@ -206,7 +218,15 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
   await page.getByRole('button', { name: '清除此裝置資料並登出 Supabase' }).click();
   await expect(page.getByRole('dialog', { name: '清除此裝置資料' })).toBeVisible();
   await expect(page.getByText(/雲端 Supabase \/ Notion 資料不會刪除/)).toBeVisible();
-  await page.getByRole('button', { name: '確認清除並登出' }).click();
+  const confirmClear = page.getByRole('button', { name: '確認清除並登出' }).click();
+  await logoutStarted;
+  await page.evaluate(() => {
+    window.location.hash = '#history';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  });
+  await page.waitForFunction(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  releaseLogout();
+  await confirmClear;
   await expect(page.getByText('密碼登入 🔑')).toBeVisible();
 
   const remaining = await page.evaluate(async ({ scopedStorageKey, scopedIndexedKey }) => {
@@ -240,6 +260,24 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
   const keyB = `boss-japan-tracker:state:${scopeB}`;
   const indexedKeyA = `app-state:${scopeA}`;
   const indexedKeyB = `app-state:${scopeB}`;
+  const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+  const sessionB = {
+    access_token: `eyJhbGciOiJub25lIn0.${Buffer.from(JSON.stringify({ sub: userB, aud: 'authenticated', role: 'authenticated', exp: expiresAt })).toString('base64url')}.signature`,
+    refresh_token: 'fake-refresh-token-b',
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: expiresAt,
+    user: {
+      id: userB,
+      aud: 'authenticated',
+      role: 'authenticated',
+      email: 'user-b@example.com',
+      app_metadata: { provider: 'email', providers: ['email'] },
+      user_metadata: {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  };
 
   await page.route('https://test-travel-expense.supabase.co/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
@@ -249,7 +287,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
     await route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
   });
   await page.goto(`${APP_ORIGIN}/__scope-seed`);
-  await page.evaluate(async ({ userB, keyA, keyB, indexedKeyA, indexedKeyB, scopeBState }) => {
+  await page.evaluate(async ({ keyA, keyB, indexedKeyA, indexedKeyB, scopeBState, sessionB }) => {
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     await new Promise((resolve) => {
@@ -258,23 +296,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
       req.onerror = () => resolve();
       req.onblocked = () => resolve();
     });
-    localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify({
-      access_token: 'fake-access-token-b',
-      refresh_token: 'fake-refresh-token-b',
-      token_type: 'bearer',
-      expires_in: 3600,
-      expires_at: Math.floor(Date.now() / 1000) + 3600,
-      user: {
-        id: userB,
-        aud: 'authenticated',
-        role: 'authenticated',
-        email: 'user-b@example.com',
-        app_metadata: { provider: 'email', providers: ['email'] },
-        user_metadata: {},
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    }));
+    localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify(sessionB));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'history',
       receipts: [{
@@ -341,7 +363,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
       tx.onerror = () => reject(tx.error);
     });
     db.close();
-  }, { userB, keyA, keyB, indexedKeyA, indexedKeyB, scopeBState: stateWithTrip('scope_b_trip', 'history') });
+  }, { keyA, keyB, indexedKeyA, indexedKeyB, scopeBState: stateWithTrip('scope_b_trip', 'history'), sessionB });
 
   await page.goto(`${APP_URL}#history`);
   await expect(page.getByText('紀錄中心').first()).toBeVisible();

@@ -3,7 +3,7 @@ import { migrateAppState, stampReceiptForTrip } from '../domain/trip/normalize';
 import { DEFAULT_STATE, isBoss } from './constants';
 import { hasCredentialBrokerSession } from './credentialBroker';
 import { hasDirectNotionToken } from './notion';
-import { clearStoredCredentials, hasStoredState, loadState, saveState } from './storage';
+import { clearStoredCredentials, clearStoredState, hasStoredState, loadState, saveState } from './storage';
 import { clearIndexedState, loadIndexedState } from '../storage/indexedDb';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
@@ -104,9 +104,15 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   });
   const [hydratedScope, setHydratedScope] = useState(storageScope);
   const skipNextSaveRef = useRef(false);
+  const activeScopeRef = useRef(storageScope);
+  const disabledPersistenceScopesRef = useRef(new Set<string>());
 
   useLayoutEffect(() => {
     let alive = true;
+    if (activeScopeRef.current !== storageScope) {
+      disabledPersistenceScopesRef.current.delete(storageScope);
+      activeScopeRef.current = storageScope;
+    }
     skipNextSaveRef.current = true;
     const hasPrimarySnapshot = hasStoredState(storageScope);
     const filteredState = withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
@@ -135,12 +141,19 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
       skipNextSaveRef.current = false;
       return;
     }
+    if (disabledPersistenceScopesRef.current.has(storageScope)) return;
     try {
       saveState(migrateScopedState(state, storageScope, userEmail), storageScope);
     } catch (error) {
       console.warn('[useAppState] Persist failed:', error instanceof Error ? error.message : String(error));
     }
   }, [state, storageScope]);
+
+  const clearPersistedScope = useCallback(async (scope = storageScope) => {
+    disabledPersistenceScopesRef.current.add(scope);
+    clearStoredState(scope);
+    await clearIndexedState(scope);
+  }, [storageScope]);
 
   const updateState = useCallback((patch: Partial<AppState>) => {
     setState((prev) => {
@@ -234,5 +247,5 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     setState(withoutPublicDemoTrip({ ...DEFAULT_STATE, receipts: [] }, storageScope, userEmail));
   }, [storageScope, userEmail]);
 
-  return { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, hydratedScope, isHydratingScope: hydratedScope !== storageScope };
+  return { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, clearPersistedScope, hydratedScope, isHydratingScope: hydratedScope !== storageScope };
 }

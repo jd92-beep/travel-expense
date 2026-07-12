@@ -12,7 +12,7 @@ import { canUseNotionMirror } from './lib/notionAccess';
 import { mergePulledData } from './lib/syncMerge';
 import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
-import { clearCredentialSession, clearStoredState } from './lib/storage';
+import { clearCredentialSession } from './lib/storage';
 import type { Receipt, SyncQueueItem, TabId, TripInviteSummary, TripProfile } from './lib/types';
 import { TAB_MANIFEST } from './lib/tabs';
 import { isBoss } from './lib/constants';
@@ -23,7 +23,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import { shouldDisableHeavyEffects } from './lib/performance';
 import { acceptSupabaseTripInvite, createSupabaseTripInvite, hasSupabaseSession, useSupabaseAuth } from './lib/supabase';
 import { SupabaseGate } from './security/SupabaseGate';
-import { clearIndexedState } from './storage/indexedDb';
 import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/WelcomeGuidePopup';
 import { upsertSupabaseTrip } from './lib/supabase';
 import { createTripProfile } from './domain/trip/normalize';
@@ -76,7 +75,7 @@ export function App() {
   const isCloudSyncActive = hasSupabaseSession(effectiveSupabaseSession);
   const userEmail = effectiveSupabaseSession?.user?.email || null;
   const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';
-  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope } = useAppState(isCloudSyncActive, storageScope, userEmail);
+  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, clearPersistedScope, isHydratingScope } = useAppState(isCloudSyncActive, storageScope, userEmail);
   
   const [globalOcrBusy, setGlobalOcrBusy] = useState('');
   const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
@@ -179,8 +178,7 @@ export function App() {
   const safeTab = safeTabId(tab);
   const clearSupabaseDeviceData = async () => {
     const scope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : storageScope;
-    clearStoredState(scope);
-    await clearIndexedState(scope);
+    await clearPersistedScope(scope);
     clearCredentialSession();
     await clearDeviceTrust();
   };

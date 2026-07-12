@@ -2,6 +2,10 @@
 
 ## 2026-07-13
 
+- **React App 0.2.4 clear-device persistence race**: clearing device data now quiesces the active
+  Supabase storage scope before sign-out, so state/sync effects cannot recreate its scoped
+  localStorage or IndexedDB snapshots; a deterministic regression covers the writeback race.
+
 - **Admin Console 1.0.0-rc.1 current-SHA CI closure**:
   - PR #36 run `29201116294` passed all seven required jobs: Admin/BFF, Edge, clean disposable
     Supabase, Compact, React, Credential Broker and the Compact/React browser round trip.

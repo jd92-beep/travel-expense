@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-13 HKT
-- **Focus**: Session 45 completed the Admin `1.0.0-rc.1` production-hardening review: real BFF integration, fail-closed provider/account behavior, safe non-final passkey rotation and a complete login/action/route browser matrix. Production remains the intentionally read-only `0.8.3` deployment pending an approved maintenance cutover.
-- **Agent**: Codex with GPT-5.6 Terra workers
-- **App version**: Compact `0.16.2`; Android `0.19.2` (versionCode 1920); Admin production `0.8.3`, branch RC `1.0.0-rc.1`; React `0.2.3`
+- **Focus**: Session 46 fixed the React clear-device persistence race: scoped snapshots remain deleted even when state/sync effects run before Supabase sign-out completes. Production remains the intentionally read-only Admin `0.8.3` deployment pending an approved maintenance cutover.
+- **Agent**: Codex Sol with GPT-5.6 Terra worker
+- **App version**: Compact `0.16.2`; Android `0.19.2` (versionCode 1920); Admin production `0.8.3`, branch RC `1.0.0-rc.1`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -59,6 +59,23 @@ you closed with your session number.
     editing and session revoke stay server-disabled until their later threat-model milestones.
 
 ## What Was Done
+
+### Session 46 (Codex Sol + GPT-5.6 Terra — React 0.2.4 clear-device persistence race)
+
+1. **Root cause and fix**:
+   - `App.clearSupabaseDeviceData()` removed the scoped localStorage/IndexedDB snapshots while
+     `useAppState` still persisted the authenticated scope. A state or sync effect before
+     `signOut()` completed could write the old in-memory state back to that scope.
+   - `useAppState` now quiesces the cleared scope before deletion and suppresses persistence for it
+     until the app leaves and later re-enters that scope; `App` delegates the clear to this guard.
+2. **Deterministic regression and verification**:
+   - The RED smoke holds `/logout`, triggers a post-clear React state commit, then proves both scoped
+     localStorage and IndexedDB remain empty. It failed before the fix by recreating the scoped key.
+   - Focused clear-device repeat: `12/12` passed. Full React security smoke: `3 passed, 1 intentional
+     skip`. React `typecheck`, production `build`, and `security:scan` all passed.
+3. **Release truth**:
+   - Current Open Items were reconciled without additions or removals. No production mutation or
+     deployment occurred; live Admin remains `0.8.3` read-only.
 
 ### Session 45 (Codex Sol + GPT-5.6 Terra - final production-hardening review)
 
