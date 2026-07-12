@@ -116,7 +116,7 @@ export function AdminShell() {
       heading?.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [location.pathname, location.search]);
+  }, [location.pathname]);
 
   useEffect(() => {
     const dialog = drawerDialogRef.current;
@@ -224,7 +224,7 @@ export function AdminShell() {
           </span>
           <button
             ref={activityButtonRef}
-            className="icon-button"
+            className="icon-button activity-trigger"
             type="button"
             title="Activity Center"
             aria-label="開啟 Activity Center"

@@ -170,6 +170,10 @@ table { width: 100%; min-width: 760px; border-collapse: collapse; }
 .provider-table { min-width: 1120px; }
 .provider-table .status-badge { white-space: nowrap; overflow-wrap: normal; }
 .provider-table code, .release-table code { white-space: nowrap; }
+@media (min-width: 768px) {
+  table:has(td[data-label="狀態"]) .status-badge { white-space: nowrap; overflow-wrap: normal; }
+  table:has(td[data-label="日期"]) td:is([data-label="日期"], [data-label="更新"]) { white-space: nowrap; }
+}
 th, td { height: 44px; padding: 8px 12px; border-bottom: 1px solid var(--border-soft); text-align: left; vertical-align: middle; }
 th { position: sticky; top: 0; z-index: 1; color: var(--muted); background: var(--elevated); font-size: 12px; font-weight: 750; }
 td { max-width: 260px; }
@@ -285,6 +289,11 @@ th input[type="checkbox"], td input[type="checkbox"] { width: 18px; height: 18px
 .passkey-enrollment-form { display: grid; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border); }
 .passkey-enrollment-form label { display: grid; gap: 6px; }
 .passkey-enrollment-form > small { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.passkey-removal-form { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; padding: 14px; border: 1px solid #6d4a4a; background: #261d20; color: #f0d6d8; }
+.passkey-removal-form > div { min-width: 0; }
+.passkey-removal-form p { margin: 5px 0 12px; color: #ddc2c5; }
+.passkey-removal-form label { display: grid; gap: 6px; color: #f0d6d8; font-size: 13px; font-weight: 650; }
+.passkey-removal-input { width: 100%; min-height: 36px; padding: 0 10px; border: 1px solid #8a6065; border-radius: 4px; background: #15171b; color: var(--text); }
 .sync-job-row { justify-content: space-between; }
 .sync-job-row > span:first-child { min-width: 0; }
 .sync-job-row small { display: block; margin-top: 4px; color: var(--muted); }

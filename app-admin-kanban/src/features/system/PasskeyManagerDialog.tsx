@@ -6,9 +6,14 @@ import {
   addBossPasskey,
   AdminApiError,
   listAdminPasskeys,
+  previewBossPasskeyRemoval,
+  removeBossPasskey,
+  type AdminPasskey,
+  type AdminPasskeyRemovalPreview,
 } from "../../lib/adminApi";
 import { formatDateTime, StatusBadge } from "../../components/primitives/ConsolePrimitives";
 import { supportsR2Passkey } from "../../lib/interaction";
+import { useAdminSession } from "../../app/session";
 
 export function PasskeyManagerDialog({
   open,
@@ -25,6 +30,9 @@ export function PasskeyManagerDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [success, setSuccess] = useState("");
+  const [removalPreview, setRemovalPreview] = useState<AdminPasskeyRemovalPreview | null>(null);
+  const [passkeyAction, setPasskeyAction] = useState<"add" | "remove">("add");
+  const { setSession } = useAdminSession();
   const query = useQuery({
     queryKey: ["admin", "passkeys"],
     queryFn: listAdminPasskeys,
@@ -43,6 +51,8 @@ export function PasskeyManagerDialog({
       setPassphrase("");
       setError(null);
       setSuccess("");
+      setRemovalPreview(null);
+      setPasskeyAction("add");
     }
   }, [open]);
 
@@ -54,6 +64,7 @@ export function PasskeyManagerDialog({
     setBusy(true);
     setError(null);
     setSuccess("");
+    setPasskeyAction("add");
     try {
       const credential = await addBossPasskey(passphrase, label.trim());
       setPassphrase("");
@@ -64,6 +75,41 @@ export function PasskeyManagerDialog({
     } finally {
       setBusy(false);
     }
+  };
+  const previewRemoval = async (credential: AdminPasskey) => {
+    if (!supportsPasskey || !credential.removal) return;
+    setBusy(true);
+    setError(null);
+    setSuccess("");
+    setPasskeyAction("remove");
+    try {
+      setRemovalPreview(await previewBossPasskeyRemoval(credential.removal));
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const submitRemoval = async () => {
+    if (!removalPreview || !passphrase || !supportsPasskey) return;
+    setBusy(true);
+    setError(null);
+    setPasskeyAction("remove");
+    try {
+      await removeBossPasskey(passphrase, removalPreview);
+      setSession(null);
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const cancelRemoval = () => {
+    if (busy) return;
+    setRemovalPreview(null);
+    setPassphrase("");
+    setError(null);
+    setPasskeyAction("add");
   };
 
   return (
@@ -133,6 +179,16 @@ export function PasskeyManagerDialog({
                       />
                       <small>Last used {formatDateTime(credential.lastUsedAt)}</small>
                     </div>
+                    {supportsPasskey && state.count > 1 && !removalPreview && (
+                      <button
+                        className="button secondary danger-action"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void previewRemoval(credential)}
+                      >
+                        移除 {credential.label}
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -141,6 +197,20 @@ export function PasskeyManagerDialog({
                   <div className="operation-error" role="status">
                     <TriangleAlert size={20} />
                     <div><strong>請使用桌面版完成</strong><p>Passkey enrollment 屬於 R2 security operation。</p></div>
+                  </div>
+                )
+                : removalPreview
+                ? (
+                  <div className="passkey-removal-form" role="alert">
+                    <TriangleAlert size={20} />
+                    <div>
+                      <strong>移除 {removalPreview.target.label}</strong>
+                      <p>Server 已確認此操作會保留 {removalPreview.remainingCount} 把 passkey；完成後全部 admin session 會登出。</p>
+                      <label>
+                        <span>Current passphrase</span>
+                        <input className="passkey-removal-input" type="password" autoComplete="current-password" value={passphrase} disabled={busy} onChange={(event) => setPassphrase(event.target.value)} />
+                      </label>
+                    </div>
                   </div>
                 )
                 : !atLimit && (
@@ -161,8 +231,8 @@ export function PasskeyManagerDialog({
                 <div className="operation-error" role="alert">
                   <TriangleAlert size={20} />
                   <div>
-                    <strong>未能加入 passkey</strong>
-                    <p>{error instanceof AdminApiError ? error.message : "Passkey enrollment 暫時不可用。"}</p>
+                    <strong>{passkeyAction === "remove" ? "未能移除 passkey" : "未能加入 passkey"}</strong>
+                    <p>{error instanceof AdminApiError ? error.message : passkeyAction === "remove" ? "Passkey removal 暫時不可用。" : "Passkey enrollment 暫時不可用。"}</p>
                     {error instanceof AdminApiError && <code>{error.code} · {error.requestId || "no-request-id"}</code>}
                   </div>
                 </div>
@@ -171,8 +241,17 @@ export function PasskeyManagerDialog({
           )}
       </div>
       <footer>
-        <button className="button secondary" type="button" disabled={busy} onClick={onClose}>關閉</button>
-        {supportsPasskey && state && !atLimit && (
+        {!removalPreview && <button className="button secondary" type="button" disabled={busy} onClick={onClose}>關閉</button>}
+        {supportsPasskey && removalPreview && (
+          <button className="button secondary" type="button" disabled={busy} onClick={cancelRemoval}>取消移除</button>
+        )}
+        {supportsPasskey && removalPreview && (
+          <button className="button secondary danger-action" type="button" disabled={busy || !passphrase} onClick={() => void submitRemoval()}>
+            {busy ? <LoaderCircle className="spin" size={16} /> : <ShieldCheck size={16} />}
+            驗證並移除
+          </button>
+        )}
+        {supportsPasskey && state && !atLimit && !removalPreview && (
           <button className="button primary" type="button" disabled={busy || !passphrase || !label.trim()} onClick={() => void submit()}>
             {busy ? <LoaderCircle className="spin" size={16} /> : <KeyRound size={16} />}
             新增備用 passkey

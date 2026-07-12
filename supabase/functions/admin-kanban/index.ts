@@ -15,6 +15,7 @@ import { reconcileTripReadOnly } from "./reconciliation.ts";
 import { type AdminRequestDecision, evaluateAdminRequest } from "./security.ts";
 import { rejectedSignatureIdentity } from "./security.ts";
 import { fetchNoRedirect } from "./safe_fetch.ts";
+import { brokerHealthSucceeded } from "./provider_status.ts";
 import { aggregateProviderRows } from "./system_status.ts";
 import { runtimePolicyFor } from "./runtime_policy.ts";
 
@@ -140,7 +141,9 @@ async function adminProviderRead(supabase: SupabaseClientAny) {
     warnings.push("PROVIDER_STATUS_UNAVAILABLE");
     try {
       const health = await fetchNoRedirect(`${baseUrl}/health`, {}, 3000);
-      if (health.ok) brokerSource = "live";
+      const payload = await health.json().catch(() => null);
+      if (brokerHealthSucceeded(health.status, payload)) brokerSource = "live";
+      else warnings.push("BROKER_UNAVAILABLE");
     } catch {
       warnings.push("BROKER_UNAVAILABLE");
     }
@@ -227,7 +230,7 @@ async function adminRuntimeRead(supabase: SupabaseClientAny) {
     );
     const payload = await response.json();
     brokerVersion = String(payload?.version || "unknown");
-    brokerStatus = response.ok ? "healthy" : "failed";
+    brokerStatus = brokerHealthSucceeded(response.status, payload) ? "healthy" : "failed";
   } catch {
     brokerStatus = "unavailable";
   }

@@ -854,9 +854,13 @@ async function userByEmail(context: OperationContext, email: string) {
     const users = data?.users || [];
     const match = users.find((user) => String(user.email || "").toLowerCase() === email);
     if (match) return match;
-    if (users.length < 1000) break;
+    if (users.length < 1000) return null;
   }
-  return null;
+  throw new AdminOperationError(
+    "UPSTREAM_UNAVAILABLE",
+    "Account directory search exceeded its safe limit",
+    503,
+  );
 }
 
 async function membershipR2Preview(context: OperationContext, input: PreviewInput) {
@@ -1316,10 +1320,9 @@ async function probeProvider(context: OperationContext, provider: string) {
     );
   } catch {
     throw new AdminOperationError(
-      "UPSTREAM_UNAVAILABLE",
-      "Credential Broker did not respond",
+      "OUTCOME_UNKNOWN",
+      "Provider probe outcome is unknown",
       503,
-      { retryable: true },
     );
   }
   const payload = await response.json().catch(() => null);
@@ -1358,7 +1361,7 @@ async function supportBundle(context: OperationContext, payload: Record<string, 
       contractVersion: "admin-operation-v1",
       edgeDeployment: Deno.env.get("DENO_DEPLOYMENT_ID") || "unknown",
       edgeSourceSha: Deno.env.get("ADMIN_EDGE_SOURCE_SHA") || "unknown",
-      schemaVersion: Deno.env.get("ADMIN_EXPECTED_SCHEMA_VERSION") || "20260712122000",
+      schemaVersion: Deno.env.get("ADMIN_EXPECTED_SCHEMA_VERSION") || "20260712123000",
     },
   };
   const rowCounts: Record<string, number> = {};
@@ -1578,7 +1581,8 @@ export async function commitAdminOperation(
       : new AdminOperationError("UPSTREAM_UNAVAILABLE", "Operation dependency failed", 503, {
         retryable: true,
       });
-    await finishExternal(context, operationId, "failed", null, known).catch(() => null);
+    const status = known.code === "OUTCOME_UNKNOWN" ? "outcome_unknown" : "failed";
+    await finishExternal(context, operationId, status, null, known).catch(() => null);
     throw known;
   }
 }

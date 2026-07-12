@@ -11,8 +11,17 @@
   - Rebased onto Compact `0.16.2` without dropping Oscar's access-denial, multi-currency, motion or
     sync fixes. Canonical itinerary versions, receipt tombstones/sync revisions and private-photo
     contracts remain aligned across web clients.
-  - Post-rebase gates: Admin unit `17/17`, contract `13/13`, browser `34 passed + 1 intentional
-    capture skip`; Edge `65/65`; Compact 9/9 selected gates; React final navigation `6/6`; Broker
+  - Added safe non-final Boss passkey rotation. Removal is bound to the selected opaque credential,
+    complete passkey-set hash and single-use R2 step-up; the server protects the final passkey,
+    appends Audit v2 and revokes every Admin session after success.
+  - Hardened the real BFF path: Edge redirects, transport failures, malformed envelopes, mismatched
+    request IDs and unproven photo streams now fail closed. Broker health requires the explicit
+    Broker contract, provider-probe ambiguity remains `outcome_unknown`, and account-directory
+    lookup fails closed when its bounded search cannot prove an email is absent.
+  - Receipt-list status/date cells no longer split short operational values into unreadable fragments;
+    wide tables stay keyboard-scrollable inside their own region without document overflow.
+  - Post-rebase gates: Admin unit `19/19`, contract `21/21`, browser `42 passed + 1 intentional
+    capture skip`; Edge `69/69`; Compact 9/9 selected gates; React final navigation `6/6`; Broker
     check/self-test; security, migration-policy and shared-ledger scans green.
   - Production is unchanged at Admin `0.8.3` read-only. No production deploy, migration, secret or
     live user-data change was made.

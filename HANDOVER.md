@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-07-12 HKT
-- **Focus**: Session 44 rebased Admin `1.0.0-rc.1` onto Oscar's Compact `0.16.2`, preserved the new access-denial/multi-currency/motion/sync behavior, and reran the post-rebase Admin, Edge and cross-client gates. Production remains the intentionally read-only `0.8.3` deployment pending an approved maintenance cutover.
+- **Focus**: Session 45 completed the Admin `1.0.0-rc.1` production-hardening review: real BFF integration, fail-closed provider/account behavior, safe non-final passkey rotation and a complete login/action/route browser matrix. Production remains the intentionally read-only `0.8.3` deployment pending an approved maintenance cutover.
 - **Agent**: Codex with GPT-5.6 Terra workers
 - **App version**: Compact `0.16.2`; Android `0.19.2` (versionCode 1920); Admin production `0.8.3`, branch RC `1.0.0-rc.1`; React `0.2.3`
 
@@ -59,6 +59,32 @@ you closed with your session number.
     editing and session revoke stay server-disabled until their later threat-model milestones.
 
 ## What Was Done
+
+### Session 45 (Codex Sol + GPT-5.6 Terra - final production-hardening review)
+
+1. **Closed remaining Console reliability and security gaps**:
+   - The real catch-all BFF handler now rejects Edge redirects, transport failures, malformed
+     envelopes, mismatched request IDs and unproven photo streams with typed fail-closed errors.
+   - Broker health requires its exact health contract; provider-probe transport ambiguity is saved
+     as `outcome_unknown`; bounded account lookup no longer treats an incomplete directory scan as
+     proof that an email is unregistered.
+   - Added normal non-final passkey rotation with opaque selectors, credential-set drift protection,
+     passphrase-plus-passkey step-up, an atomic Audit v2 event and full Admin-session revocation.
+     Removing the final passkey remains prohibited outside the break-glass runbook.
+2. **Completed operator-path browser evidence**:
+   - Added a browser login journey with mocked WebAuthn, login axe/320px checks, exact support-bundle
+     download, every visible operation preview family, a full R2 grant/commit path and all 18 routes
+     across seven release viewports.
+   - Visual capture found and closed the remaining receipt-table badge/date wrapping defect; the
+     table remains locally scrollable while desktop and mobile documents retain zero overflow.
+   - Admin gates: typecheck/build/security green; unit `19/19`; contract `21/21`; browser smoke
+     `42 passed, 1 intentional visual-capture skip`; `npm audit` found `0` vulnerabilities.
+   - Edge gates: 28 files format/lint green, three entrypoints checked and Deno `69 passed, 0 failed`.
+     Static migration policy, shared-ledger contract and Admin workflow YAML checks passed.
+3. **Release truth**:
+   - No production deployment, migration, secret/passphrase change, passkey enrollment/removal or
+     live user-data mutation was performed. Disposable Supabase execution remains a current-SHA PR
+     CI requirement before production approval.
 
 ### Session 44 (Codex + GPT-5.6 Terra — Oscar integration and final branch verification)
 

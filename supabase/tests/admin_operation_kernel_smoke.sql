@@ -391,7 +391,7 @@ declare
   v_event_id uuid;
   v_event jsonb;
 begin
-  if public.admin_read_runtime_contract() ->> 'schemaVersion' <> '20260712122000' then
+  if public.admin_read_runtime_contract() ->> 'schemaVersion' <> '20260712123000' then
     raise exception 'runtime contract schema version is stale';
   end if;
   v_audit := public.admin_read_audit(
@@ -404,7 +404,7 @@ begin
   v_event_id := (v_audit -> 'items' -> 0 ->> 'id')::uuid;
   v_event := public.admin_read_audit_event(v_event_id);
   if v_event ->> 'authentication_method' <> 'passphrase+passkey'
-    or v_event ->> 'schema_version' <> '20260712122000' then
+    or v_event ->> 'schema_version' <> '20260712123000' then
     raise exception 'audit v2 detail lost authentication or provenance: %', v_event;
   end if;
 

@@ -1,6 +1,10 @@
 # Passkey Recovery
 
 Use this only when every registered Boss passkey is unavailable. There is no application backdoor.
+For routine rotation while two or more passkeys remain usable, use the Console passkey manager:
+removal requires the current passphrase, a current passkey, a fresh server preview and a single-use
+step-up grant; success revokes every Admin session. Never use this recovery procedure for routine
+rotation.
 
 1. The Vercel and Supabase platform owner opens a maintenance incident.
 2. Set global writes to deny-all and revoke every Admin session and machine key.

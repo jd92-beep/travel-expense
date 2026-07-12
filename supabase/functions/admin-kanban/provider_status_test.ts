@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import {
+  brokerHealthSucceeded,
   classifyBrokerOnlyStatus,
   classifyProviderStatus,
   providerProbeSucceeded,
@@ -36,6 +37,19 @@ Deno.test("broker liveness cannot be expanded into provider health", () => {
     status: "warning",
     storedStatus: "unknown_broker_online",
   });
+});
+
+Deno.test("broker health requires the explicit broker health contract", () => {
+  assertEquals(
+    brokerHealthSucceeded(200, { ok: true, service: "travel-expense-credential-broker" }),
+    true,
+  );
+  assertEquals(brokerHealthSucceeded(200, { ok: true }), false);
+  assertEquals(brokerHealthSucceeded(200, { service: "travel-expense-credential-broker" }), false);
+  assertEquals(
+    brokerHealthSucceeded(503, { ok: true, service: "travel-expense-credential-broker" }),
+    false,
+  );
 });
 
 Deno.test("HTTP 200 with invalid nested provider status is a failed probe", () => {

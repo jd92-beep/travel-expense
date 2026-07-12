@@ -52,6 +52,17 @@ begin
   ) not like '%append_admin_audit_v2%' then
     raise exception 'backup passkey registration is not atomically audited';
   end if;
+  if pg_catalog.pg_get_functiondef(
+    'public.admin_auth_remove_backup_credential(text,text,uuid,text,text,uuid)'::regprocedure
+  ) not like '%pg_advisory_xact_lock%'
+    or pg_catalog.pg_get_functiondef(
+      'public.admin_auth_remove_backup_credential(text,text,uuid,text,text,uuid)'::regprocedure
+    ) not like '%append_admin_audit_v2%'
+    or pg_catalog.pg_get_functiondef(
+      'public.admin_auth_remove_backup_credential(text,text,uuid,text,text,uuid)'::regprocedure
+    ) not like '%admin_auth_revoke_all_sessions%' then
+    raise exception 'passkey removal is not locked, audited, and session-revoking';
+  end if;
 
   foreach v_table in array array[
     'admin_sessions',
@@ -97,6 +108,11 @@ declare
   v_third jsonb;
   v_rotated jsonb;
   v_overflow_blocked boolean := false;
+  v_selector text;
+  v_set_hash text;
+  v_target_hash text;
+  v_preview_hash text;
+  v_removal jsonb;
 begin
   v_result := public.admin_auth_rate_precheck(repeat('a', 64), 'login');
   if coalesce((v_result ->> 'allowed')::boolean, false) is not true then
@@ -215,6 +231,76 @@ begin
   if not public.admin_auth_revoke_session(repeat('4', 64), 'logout')
     or public.admin_auth_verify_session(repeat('4', 64), repeat('f', 64)) is not null then
     raise exception 'session revoke did not take effect';
+  end if;
+
+  select selector into v_selector from (
+    select encode(extensions.digest('passkey-remove-selector-v1' || chr(10) || 'credential-0000000000002', 'sha256'), 'hex') as selector
+  ) selectors;
+  select encode(extensions.digest(string_agg(selector, chr(10) order by selector), 'sha256'), 'hex')
+  into v_set_hash
+  from (
+    select encode(extensions.digest('passkey-remove-selector-v1' || chr(10) || credential_id, 'sha256'), 'hex') as selector
+    from (values ('credential-0000000000001'), ('credential-0000000000002'), ('credential-0000000000003')) as keys(credential_id)
+  ) selectors;
+  v_target_hash := encode(extensions.digest('passkey-remove-target-v1' || chr(10) || v_selector, 'sha256'), 'hex');
+  v_preview_hash := encode(extensions.digest('passkey-remove-preview-v1' || chr(10) || v_selector || chr(10) || v_set_hash, 'sha256'), 'hex');
+  perform public.admin_auth_create_session(repeat('6', 64), repeat('e', 64), 'boss', 'passphrase+passkey', repeat('f', 64));
+  perform public.admin_auth_create_session(repeat('7', 64), repeat('f', 64), 'boss', 'passphrase+passkey', repeat('f', 64));
+  perform public.admin_auth_create_step_up(
+    '97000000-0000-4000-8000-000000000010', repeat('7', 64),
+    'passkey_remove', v_target_hash, v_preview_hash
+  );
+  v_removal := public.admin_auth_remove_backup_credential(
+    v_selector, v_set_hash, '97000000-0000-4000-8000-000000000010',
+    repeat('7', 64), 'boss', '97000000-0000-4000-8000-000000000011'
+  );
+  if coalesce((v_removal ->> 'removed')::boolean, false) is not true
+    or coalesce((v_removal ->> 'remainingPasskeys')::integer, 0) <> 2
+    or public.admin_auth_verify_session(repeat('6', 64), repeat('f', 64)) is not null
+    or public.admin_auth_verify_session(repeat('7', 64), repeat('f', 64)) is not null then
+    raise exception 'passkey removal did not delete atomically and revoke all sessions';
+  end if;
+  if public.admin_auth_consume_step_up(
+    '97000000-0000-4000-8000-000000000010', repeat('7', 64),
+    'passkey_remove', v_target_hash, v_preview_hash
+  ) then
+    raise exception 'passkey removal step-up grant replay succeeded';
+  end if;
+  perform public.admin_auth_create_session(repeat('8', 64), repeat('1', 64), 'boss', 'passphrase+passkey', repeat('f', 64));
+  v_selector := encode(extensions.digest('passkey-remove-selector-v1' || chr(10) || 'credential-0000000000003', 'sha256'), 'hex');
+  select encode(extensions.digest(string_agg(selector, chr(10) order by selector), 'sha256'), 'hex')
+  into v_set_hash
+  from (
+    select encode(extensions.digest('passkey-remove-selector-v1' || chr(10) || credential_id, 'sha256'), 'hex') as selector
+    from (values ('credential-0000000000001'), ('credential-0000000000003')) as keys(credential_id)
+  ) selectors;
+  if coalesce((public.admin_auth_remove_backup_credential(
+    v_selector, repeat('0', 64), '97000000-0000-4000-8000-000000000012',
+    repeat('8', 64), 'boss', '97000000-0000-4000-8000-000000000013'
+  ) ->> 'errorCode'), '') <> 'PREVIEW_STALE' then
+    raise exception 'stale passkey set was accepted';
+  end if;
+  v_target_hash := encode(extensions.digest('passkey-remove-target-v1' || chr(10) || v_selector, 'sha256'), 'hex');
+  v_preview_hash := encode(extensions.digest('passkey-remove-preview-v1' || chr(10) || v_selector || chr(10) || v_set_hash, 'sha256'), 'hex');
+  perform public.admin_auth_create_step_up(
+    '97000000-0000-4000-8000-000000000012', repeat('8', 64),
+    'passkey_remove', v_target_hash, v_preview_hash
+  );
+  v_removal := public.admin_auth_remove_backup_credential(
+    v_selector, v_set_hash, '97000000-0000-4000-8000-000000000012',
+    repeat('8', 64), 'boss', '97000000-0000-4000-8000-000000000014'
+  );
+  if coalesce((v_removal ->> 'removed')::boolean, false) is not true then
+    raise exception 'second non-final passkey removal failed';
+  end if;
+  perform public.admin_auth_create_session(repeat('9', 64), repeat('2', 64), 'boss', 'passphrase+passkey', repeat('f', 64));
+  v_selector := encode(extensions.digest('passkey-remove-selector-v1' || chr(10) || 'credential-0000000000001', 'sha256'), 'hex');
+  v_set_hash := encode(extensions.digest(v_selector, 'sha256'), 'hex');
+  if coalesce((public.admin_auth_remove_backup_credential(
+    v_selector, v_set_hash, '97000000-0000-4000-8000-000000000013',
+    repeat('9', 64), 'boss', '97000000-0000-4000-8000-000000000015'
+  ) ->> 'errorCode'), '') <> 'FINAL_PASSKEY_PROTECTED' then
+    raise exception 'final passkey removal was accepted';
   end if;
 
   if not public.admin_consume_request_nonce(

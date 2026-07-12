@@ -6,6 +6,19 @@ import { requireAdminSession } from '../_lib/session.js';
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const PHOTO_CONTENT_TYPE_RE = /^image\/(?:jpeg|png|webp|heic|heif)$/i;
 
+function validEdgeEnvelope(payload, requestId) {
+  const meta = payload?.meta;
+  return payload && typeof payload === 'object' && !Array.isArray(payload)
+    && typeof payload.ok === 'boolean'
+    && Object.hasOwn(payload, 'data')
+    && Object.hasOwn(payload, 'error')
+    && meta && typeof meta === 'object' && !Array.isArray(meta)
+    && meta.requestId === requestId
+    && typeof meta.generatedAt === 'string'
+    && Array.isArray(meta.warnings)
+    && meta.warnings.every((warning) => typeof warning === 'string');
+}
+
 export default function adminGateway(req, res) {
   return handler(req, res, async (requestId) => {
     const requestUrl = new URL(req.url, 'https://travel-expense-admin-kanban.vercel.app');
@@ -14,18 +27,32 @@ export default function adminGateway(req, res) {
     const body = route.mutation
       ? validateGatewayBody(route.bodyKind, await readJson(req, route.bodyLimit))
       : undefined;
-    const upstream = await callSignedEdge({
-      actor: session.actor,
-      baseUrl: adminEdgeUrl(),
-      body,
-      method: req.method,
-      query: route.query,
-      requestId,
-      route: route.edgeRoute,
-      sessionHash: session.tokenHash,
-    });
+    let upstream;
+    try {
+      upstream = await callSignedEdge({
+        actor: session.actor,
+        baseUrl: adminEdgeUrl(),
+        body,
+        method: req.method,
+        query: route.query,
+        requestId,
+        route: route.edgeRoute,
+        sessionHash: session.tokenHash,
+      });
+    } catch (error) {
+      const redirected = error instanceof Error && error.message === 'Signed Edge request redirect rejected';
+      throw new HttpError(
+        'UPSTREAM_UNAVAILABLE',
+        redirected ? 'Admin Edge redirect rejected' : 'Admin Edge unavailable',
+        redirected ? 502 : 503,
+        { retryable: true },
+      );
+    }
 
     if (route.responseType === 'stream' && upstream.ok) {
+      if (upstream.headers.get('x-admin-request-id') !== requestId) {
+        throw new HttpError('UPSTREAM_UNAVAILABLE', 'Receipt photo response provenance is invalid', 502, { retryable: true });
+      }
       const contentType = String(upstream.headers.get('content-type') || '').split(';')[0].trim();
       const declaredLength = Number(upstream.headers.get('content-length') || '0');
       if (!PHOTO_CONTENT_TYPE_RE.test(contentType)
@@ -47,12 +74,10 @@ export default function adminGateway(req, res) {
       return;
     }
 
-    const payload = await upstream.json().catch(() => ({
-      ok: false,
-      data: null,
-      error: { code: 'UPSTREAM_UNAVAILABLE', message: 'Admin Edge returned an invalid response', retryable: true },
-      meta: { requestId, generatedAt: new Date().toISOString(), warnings: [] },
-    }));
+    const payload = await upstream.json().catch(() => null);
+    if (!validEdgeEnvelope(payload, requestId) || (upstream.ok && payload.ok !== true)) {
+      throw new HttpError('UPSTREAM_UNAVAILABLE', 'Admin Edge returned an invalid response', 502, { retryable: true });
+    }
     send(res, upstream.status, payload, requestId);
   });
 }

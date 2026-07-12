@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "security:scan": "node scripts/security-scan.mjs",
     "test:unit": "node --test api/health.test.js api/readiness.test.js api/_lib/cookies.test.js api/_lib/crypto.test.js api/_lib/passkeys.test.js api/_lib/session.test.js api/_lib/webauthn.test.js",
-    "test:contract": "node --test api/_lib/edge.test.js api/_lib/gateway-routes.test.js tests/admin-routes.test.js",
+    "test:contract": "node --test api/_lib/edge.test.js api/_lib/gateway-routes.test.js tests/admin-routes.test.js tests/admin-bff-integration.test.js",
     "smoke": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:mobile": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line --grep mobile",
     "smoke:a11y": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line --grep axe",

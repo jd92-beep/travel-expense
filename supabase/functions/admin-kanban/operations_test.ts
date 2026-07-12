@@ -797,3 +797,120 @@ Deno.test("invite commit exposes an ephemeral compact link without adding it to 
     `https://travel-expense-compact.vercel.app/#accept-invite?token=${token}`,
   );
 });
+
+Deno.test("provider probe transport ambiguity is retained as outcome unknown", async () => {
+  const operationId = "97300000-0000-4000-8000-000000000001";
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = () => Promise.reject(new Error("transport interrupted"));
+  try {
+    const error = await assertRejects(
+      () =>
+        commitAdminOperation({
+          actor: "boss",
+          brokerKey: "test-broker-key-that-is-not-a-secret",
+          brokerUrl: "https://broker.example",
+          client: asClient({
+            rpc(name: string, args: Record<string, unknown>) {
+              calls.push({ name, args });
+              if (name === "admin_operation_get") {
+                return Promise.resolve({
+                  data: {
+                    action: "provider_probe",
+                    id: operationId,
+                    risk: "R1",
+                    status: "previewed",
+                  },
+                  error: null,
+                });
+              }
+              if (name === "admin_operation_begin_external") {
+                return Promise.resolve({
+                  data: {
+                    action: "provider_probe",
+                    id: operationId,
+                    status: "executing",
+                    targetRef: "google",
+                  },
+                  error: null,
+                });
+              }
+              if (name === "admin_operation_finish_external") {
+                return Promise.resolve({
+                  data: { id: operationId, status: args.p_status },
+                  error: null,
+                });
+              }
+              throw new Error(`Unexpected RPC ${name}`);
+            },
+          }),
+          requestId: "97000000-0000-4000-8000-000000000001",
+          sessionHash: "b".repeat(64),
+        }, operationId),
+      AdminOperationError,
+    );
+    assertEquals(error.code, "OUTCOME_UNKNOWN");
+    assertEquals(
+      calls.find((call) => call.name === "admin_operation_finish_external")?.args.p_status,
+      "outcome_unknown",
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+Deno.test("member add fails closed when the bounded account directory is incomplete", async () => {
+  const fullPage = Array.from({ length: 1000 }, (_, index) => ({
+    email: `member-${index}@example.invalid`,
+  }));
+  let directoryCalls = 0;
+  let inviteLookup = false;
+  const error = await assertRejects(
+    () =>
+      previewAdminOperation({
+        actor: "boss",
+        brokerKey: "test-broker-key-that-is-not-a-secret",
+        brokerUrl: "https://broker.example",
+        client: asClient({
+          auth: {
+            admin: {
+              listUsers() {
+                directoryCalls += 1;
+                return Promise.resolve({ data: { users: fullPage }, error: null });
+              },
+            },
+          },
+          from(table: string) {
+            return {
+              select() {
+                return this;
+              },
+              eq() {
+                return this;
+              },
+              maybeSingle() {
+                if (table === "trip_invites") inviteLookup = true;
+                return Promise.resolve({
+                  data: table === "trips"
+                    ? { id: "97200000-0000-4000-8000-000000000001", owner_id: "owner" }
+                    : null,
+                  error: null,
+                });
+              },
+            };
+          },
+        }),
+        requestId: "97000000-0000-4000-8000-000000000001",
+        sessionHash: "a".repeat(64),
+      }, {
+        action: "member_add",
+        idempotencyKey: "97100000-0000-4000-8000-000000000001",
+        targetId: "97200000-0000-4000-8000-000000000001",
+        payload: { email: "missing@example.invalid", role: "viewer" },
+      }),
+    AdminOperationError,
+  );
+  assertEquals(error.code, "UPSTREAM_UNAVAILABLE");
+  assertEquals(directoryCalls, 10);
+  assertEquals(inviteLookup, false);
+});

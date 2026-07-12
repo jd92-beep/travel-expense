@@ -1,6 +1,12 @@
 import { authStateCall } from '../../_lib/auth-state.js';
 import { handler, HttpError, requireMethod, sendData } from '../../_lib/http.js';
-import { passkeyEnrollmentContext, sanitizePasskeyCredentials } from '../../_lib/passkeys.js';
+import {
+  passkeyEnrollmentContext,
+  passkeyRemovalContext,
+  passkeyRemovalSetHash,
+  passkeyRemovalSelector,
+  sanitizePasskeyCredentials,
+} from '../../_lib/passkeys.js';
 import { requireAdminSession } from '../../_lib/session.js';
 
 export default function listAdminPasskeys(req, res) {
@@ -14,8 +20,13 @@ export default function listAdminPasskeys(req, res) {
     if (!Array.isArray(credentials)) {
       throw new HttpError('UPSTREAM_UNAVAILABLE', 'Passkey store unavailable', 503);
     }
+    const setHash = passkeyRemovalSetHash(credentials);
+    const sanitized = sanitizePasskeyCredentials(credentials);
     sendData(res, 200, {
-      credentials: sanitizePasskeyCredentials(credentials),
+      credentials: sanitized.map((credential, index) => {
+        const selector = passkeyRemovalSelector(credentials[index].credentialId);
+        return { ...credential, removal: { selector, setHash, ...passkeyRemovalContext(selector, setHash) } };
+      }),
       count: credentials.length,
       max: 3,
       context: passkeyEnrollmentContext(),

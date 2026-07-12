@@ -297,12 +297,21 @@ async function setupApi(page, options = {}) {
         ],
       }; break;
       case '/api/admin/providers': data = [{ provider: 'google', label: 'Google Gemma', configured: true, healthy: true, status: 'healthy', storedStatus: 'connected', requiredModel: 'google/gemma-4-31b', actualModel: 'google/gemma-4-31b', lastSuccessfulRequestAt: new Date().toISOString(), lastProbeAt: null, probeCooldownSeconds: 60, probeAvailableAt: options.providerProbeAvailableAt || null, p50LatencyMs: 420, p95LatencyMs: 800, errors24h: 0, rateLimited24h: 0 }]; break;
-      case '/api/admin/runtime': data = { adminFrontend: { version: '1.0.0-rc.1', gitSha: 'abc123', deploymentId: 'deploy-1', health: 'healthy' }, edge: { deploymentId: 'edge-1', sourceSha: 'abc123', routeVersion: 'admin-kanban-v1' }, broker: { version: '1.0.0', health: 'healthy' }, database: { auditContractVersion: 'admin-audit-v2', contractVersion: 'admin-operation-v1', itineraryContractVersion: 'versioned-itinerary-v1', receiptContractVersion: 'canonical-receipt-v1', schemaVersion: '20260712122000' }, clients: { compactVersion: '0.9.0', androidVersion: '0.9.0' }, runtimePolicy: options.runtimePolicy || { status: 'deny_all', version: 'admin-write-mode-v1', source: 'default', expiresAt: null, writable: false }, drift: [] }; break;
+      case '/api/admin/runtime': data = { adminFrontend: { version: '1.0.0-rc.1', gitSha: 'abc123', deploymentId: 'deploy-1', health: 'healthy' }, edge: { deploymentId: 'edge-1', sourceSha: 'abc123', routeVersion: 'admin-kanban-v1' }, broker: { version: '1.0.0', health: 'healthy' }, database: { auditContractVersion: 'admin-audit-v2', contractVersion: 'admin-operation-v1', itineraryContractVersion: 'versioned-itinerary-v1', receiptContractVersion: 'canonical-receipt-v1', schemaVersion: '20260712123000' }, clients: { compactVersion: '0.9.0', androidVersion: '0.9.0' }, runtimePolicy: options.runtimePolicy || { status: 'deny_all', version: 'admin-write-mode-v1', source: 'default', expiresAt: null, writable: false }, drift: [] }; break;
       case '/api/admin/audit': data = { items: options.auditItems || [] }; meta = { total: (options.auditItems || []).length }; break;
-      case `/api/admin/audit/${auditEventId}`: data = { id: auditEventId, sequence: 42, previous_event_hash: 'e'.repeat(64), event_hash: 'f'.repeat(64), admin_subject_hash: 'a'.repeat(64), authentication_method: 'passphrase+passkey', session_hash: 'b'.repeat(64), risk: 'R2', action: 'operation_completed', target_type: 'trip', target_id_hash: 'c'.repeat(64), preview_counts: { affected: 1 }, before_state: { version: 6 }, after_state: { version: 7 }, result: { status: 'completed' }, error_code: null, request_id: requestId, operation_id: operationId, incident_id: null, frontend_version: '1.0.0-rc.1', edge_version: 'admin-kanban-v1', schema_version: '20260712122000', created_at: new Date().toISOString() }; break;
+      case `/api/admin/audit/${auditEventId}`: data = { id: auditEventId, sequence: 42, previous_event_hash: 'e'.repeat(64), event_hash: 'f'.repeat(64), admin_subject_hash: 'a'.repeat(64), authentication_method: 'passphrase+passkey', session_hash: 'b'.repeat(64), risk: 'R2', action: 'operation_completed', target_type: 'trip', target_id_hash: 'c'.repeat(64), preview_counts: { affected: 1 }, before_state: { version: 6 }, after_state: { version: 7 }, result: { status: 'completed' }, error_code: null, request_id: requestId, operation_id: operationId, incident_id: null, frontend_version: '1.0.0-rc.1', edge_version: 'admin-kanban-v1', schema_version: '20260712123000', created_at: new Date().toISOString() }; break;
       case '/api/admin/search': data = { accounts: [account], trips: [trip], receipts: [receipt] }; break;
       case '/api/admin/operations': data = { items: (options.activityOperationStatuses || []).map((status) => operation(status, lastOperationAction)) }; break;
-      case '/api/admin/passkeys': data = { credentials: [{ id: 'a1b2c3d4e5f6', label: 'Boss Mac', deviceType: 'multiDevice', backedUp: true, createdAt: '2026-07-01T00:00:00Z', lastUsedAt: '2026-07-10T10:00:00Z' }], count: 1, max: 3, context: { action: 'passkey_enroll', targetHash: 'c'.repeat(64), previewHash: 'd'.repeat(64) } }; break;
+      case '/api/admin/passkeys': data = options.passkeys || { credentials: [{ id: 'a1b2c3d4e5f6', label: 'Boss Mac', deviceType: 'multiDevice', backedUp: true, createdAt: '2026-07-01T00:00:00Z', lastUsedAt: '2026-07-10T10:00:00Z', removal: { selector: 'a'.repeat(64), setHash: 'b'.repeat(64), action: 'passkey_remove', targetHash: 'c'.repeat(64), previewHash: 'd'.repeat(64) } }], count: 1, max: 3, context: { action: 'passkey_enroll', targetHash: 'c'.repeat(64), previewHash: 'd'.repeat(64) } }; break;
+      case '/api/admin/passkeys/remove/preview':
+        if (options.passkeyRemovalPreviewError) {
+          await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ ok: false, data: null, error: { code: 'PREVIEW_STALE', message: 'Synthetic passkey set changed', retryable: false }, meta: { requestId, generatedAt: new Date().toISOString(), warnings: [] } }) });
+          return;
+        }
+        data = { selector: body.selector, setHash: body.setHash, count: 2, remainingCount: 1, target: { id: 'b1c2d3e4f5a6', label: 'Boss backup', deviceType: 'singleDevice', backedUp: false, createdAt: '2026-07-02T00:00:00Z', lastUsedAt: null }, context: { action: 'passkey_remove', targetHash: 'f'.repeat(64), previewHash: '0'.repeat(64) } }; break;
+      case '/api/admin/reauth/begin': data = { flowId: requestId, options: { challenge: 'AQ', allowCredentials: [{ id: 'AQ', type: 'public-key' }] } }; break;
+      case '/api/admin/reauth/finish': data = { grantId: requestId, expiresAt: new Date(Date.now() + 60_000).toISOString() }; break;
+      case '/api/admin/passkeys/remove/commit': data = { removed: true, revokedSessions: 2 }; break;
       case `/api/admin/operations/${operationId}`: {
         const statuses = options.operationReadStatuses || [options.commitStatus || 'queued'];
         const status = statuses[Math.min(operationReadIndex, statuses.length - 1)];
@@ -340,6 +349,101 @@ async function setupApi(page, options = {}) {
   });
 }
 
+async function installMockWebAuthn(page) {
+  await page.addInitScript(() => {
+    let resolveCredential;
+    Object.defineProperty(navigator.credentials, 'get', {
+      configurable: true,
+      value: () => new Promise((resolve) => {
+        resolveCredential = resolve;
+        document.documentElement.dataset.mockWebauthn = 'pending';
+      }),
+    });
+    window.completeMockWebAuthn = () => {
+      resolveCredential?.({
+        id: 'mock-passkey',
+        rawId: new Uint8Array([1, 2, 3]).buffer,
+        type: 'public-key',
+        authenticatorAttachment: 'platform',
+        response: {
+          authenticatorData: new Uint8Array([4, 5, 6]).buffer,
+          clientDataJSON: new Uint8Array([7, 8, 9]).buffer,
+          signature: new Uint8Array([10, 11, 12]).buffer,
+          userHandle: null,
+        },
+        getClientExtensionResults: () => ({}),
+      });
+    };
+  });
+}
+
+async function setupLoginApi(page, requests) {
+  let beginAttempts = 0;
+  await page.route('**/api/admin/auth/begin', async route => {
+    const body = route.request().postDataJSON();
+    requests.push({ method: route.request().method(), pathname: '/api/admin/auth/begin', body });
+    if (beginAttempts++ === 0) {
+      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ ok: false, data: null, error: { code: 'UNAUTHORIZED', message: 'Synthetic passphrase rejected', retryable: false }, meta: { requestId, generatedAt: new Date().toISOString(), warnings: [] } }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ flowId: requestId, options: { challenge: 'AQ', allowCredentials: [{ id: 'AQ', type: 'public-key' }] } })) });
+  });
+  await page.route('**/api/admin/auth/finish', async route => {
+    const body = route.request().postDataJSON();
+    requests.push({ method: route.request().method(), pathname: '/api/admin/auth/finish', body });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ actor: 'boss', authMethod: 'passphrase+passkey', idleExpiresAt: '2026-07-10T11:00:00Z', absoluteExpiresAt: '2026-07-10T12:00:00Z' })) });
+  });
+}
+
+async function setupSupportBundleCommit(page) {
+  await page.route(`**/api/admin/operations/${operationId}/commit`, async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(envelope({
+        operation: operation('completed', 'support_bundle'),
+        reused: false,
+        bundle: { accountId, report: 'synthetic support bundle' },
+      })),
+    });
+  });
+}
+
+async function setupDeletedReceipt(page) {
+  await page.route(`**/api/admin/receipts/${receiptId}`, async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(envelope({
+        receipt: { ...receipt, deleted_at: '2026-07-11T00:00:00Z' },
+        photo: null,
+        syncJobs: [],
+        audit: [],
+      })),
+    });
+  });
+}
+
+async function setupLongReflowContent(page) {
+  const longEmail = `${'long-admin-address-'.repeat(8)}@example.invalid`;
+  const longCjk = '名古屋行程資料因跨裝置同步重試而暫時不可用，請保留完整 request UUID 交由支援團隊跟進。'.repeat(3);
+  const longProviderError = 'Provider quota exceeded after 429; 已保留 request evidence，請勿自動 fallback 至其他 provider。'.repeat(3);
+  await page.route(`**/api/admin/accounts/${accountId}`, async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ identity: { ...account, email: longEmail, emailConfirmedAt: '2026-07-01T00:00:00Z', created_at: '2026-07-01T00:00:00Z' }, integrations: [], trips: [trip], recentReceipts: [receipt], incidents: [], audit: [] })) });
+  });
+  await page.route(`**/api/admin/trips/${tripId}`, async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope({ overview: { ...trip, destination_summary: longCjk }, members: [{ user_id: accountId, masked_email: 're***@example.invalid', role: 'owner', status: 'active' }, { user_id: '98000000-0000-4000-8000-0000000000b2', masked_email: 'me***@example.invalid', role: 'editor', status: 'active' }], invites: [], receipts: [receipt], integration: { status: 'error', syncMode: 'dual_write', databaseConfigured: true, lastError: longCjk }, audit: [] })) });
+  });
+  await page.route('**/api/admin/providers', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(envelope([{ provider: 'google', label: 'Google Gemma', configured: true, healthy: false, status: 'error', storedStatus: 'connected', requiredModel: 'google/gemma-4-31b', actualModel: 'google/gemma-4-31b', lastSuccessfulRequestAt: null, lastProbeAt: new Date().toISOString(), lastProbeStatus: '429', lastProbeMessage: longProviderError, probeCooldownSeconds: 60, probeAvailableAt: null, p50LatencyMs: 420, p95LatencyMs: 800, errors24h: 1, rateLimited24h: 1 }] )) });
+  });
+  return { longCjk, longEmail, longProviderError };
+}
+
+function latestPreview(requests) {
+  return [...requests].reverse().find(request => request.pathname === '/api/admin/operations/preview')?.body;
+}
+
 test('desktop shell renders operational overview without a giant snapshot', async ({ page }) => {
   await setupApi(page);
   await page.goto('/overview');
@@ -363,6 +467,44 @@ test('missing session opens login while auth-state outage remains fail-closed', 
   await expect(outagePage.getByRole('alert')).toContainText('管理員驗證服務暫時不可用');
   await expect(outagePage.getByRole('alert')).toContainText('UPSTREAM_UNAVAILABLE');
   await expect(outagePage.getByLabel('管理員通行片語')).toHaveCount(0);
+});
+
+test('browser login retries an error, completes mocked WebAuthn, and never persists the passphrase', async ({ page }) => {
+  const requests = [];
+  await installMockWebAuthn(page);
+  await setupApi(page, { sessionErrorStatus: 401, requests });
+  await setupLoginApi(page, requests);
+  await page.goto('/overview');
+
+  const passphrase = page.getByLabel('管理員通行片語');
+  const submit = page.getByRole('button', { name: '使用 Passkey 登入' });
+  await passphrase.fill('synthetic boss passphrase');
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect(page.getByText('Synthetic passphrase rejected')).toBeVisible();
+
+  await submit.click();
+  await expect(page.getByRole('button', { name: '驗證中' })).toBeDisabled();
+  await expect.poll(() => page.locator('html').getAttribute('data-mock-webauthn')).toBe('pending');
+  await page.evaluate(() => window.completeMockWebAuthn());
+  await expect(page.getByRole('heading', { name: '總覽' })).toBeVisible();
+  const loginBegins = requests.filter(request => request.pathname === '/api/admin/auth/begin');
+  expect(loginBegins).toHaveLength(2);
+  expect(loginBegins.at(-1)?.body).toEqual({ passphrase: 'synthetic boss passphrase' });
+  expect(requests.find(request => request.pathname === '/api/admin/auth/finish')?.body).toMatchObject({ flowId: requestId, response: { id: 'mock-passkey' } });
+  expect(await page.evaluate(() => JSON.stringify({ localStorage, sessionStorage }))).not.toContain('synthetic boss passphrase');
+});
+
+test('login route has no serious axe violations and no 320px overflow', async ({ page }) => {
+  await setupApi(page, { sessionErrorStatus: 401 });
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/login');
+    await expect(page.getByRole('heading', { name: 'Travel Expense Admin Console' })).toBeVisible();
+    const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
+    expect(results.violations.filter(item => ['serious', 'critical'].includes(item.impact)), `login at ${viewport.width}x${viewport.height}`).toEqual([]);
+    expect(await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
 });
 
 test('account list and detail preserve URL navigation', async ({ page }) => {
@@ -546,6 +688,22 @@ test('tablet shell reports its environment and restores focus from modal panels'
   await expect(activity).toBeFocused();
 });
 
+test('query filters preserve focus and the Activity count is an anchored badge', async ({ page }) => {
+  await setupApi(page, { activityOperationStatuses: ['queued'] });
+  await page.goto('/data/accounts');
+
+  const activity = page.getByRole('button', { name: '開啟 Activity Center' });
+  const badge = activity.getByText('1', { exact: true });
+  await expect(activity).toHaveClass(/activity-trigger/);
+  await expect(badge).toHaveCSS('position', 'absolute');
+
+  const status = page.getByLabel('帳戶狀態');
+  await status.focus();
+  await status.selectOption('active');
+  await expect(page).toHaveURL(/status=active/);
+  await expect(status).toBeFocused();
+});
+
 test('session security dialog lists redacted passkeys and backup capacity', async ({ page }) => {
   await setupApi(page);
   await page.goto('/overview');
@@ -558,6 +716,70 @@ test('session security dialog lists redacted passkeys and backup capacity', asyn
   await expect(dialog.getByRole('button', { name: '新增備用 passkey' })).toBeDisabled();
   await dialog.getByRole('button', { name: '關閉 passkey 管理' }).click();
   await expect(trigger).toBeFocused();
+});
+
+test('non-final passkey removal shows a bound confirmation and returns to login after success', async ({ page }) => {
+  await page.addInitScript(() => {
+    navigator.credentials.get = async () => ({
+      id: 'AQ', rawId: new Uint8Array([1]), type: 'public-key', authenticatorAttachment: 'platform',
+      response: { authenticatorData: new Uint8Array([1]), clientDataJSON: new Uint8Array([1]), signature: new Uint8Array([1]), userHandle: null },
+      getClientExtensionResults: () => ({}),
+    });
+  });
+  await setupApi(page, {
+    passkeys: {
+      credentials: [
+        {
+          id: 'a1b2c3d4e5f6', label: 'Boss Mac', deviceType: 'multiDevice', backedUp: true,
+          createdAt: '2026-07-01T00:00:00Z', lastUsedAt: '2026-07-10T10:00:00Z',
+          removal: { selector: 'a'.repeat(64), setHash: 'b'.repeat(64), action: 'passkey_remove', targetHash: 'c'.repeat(64), previewHash: 'd'.repeat(64) },
+        },
+        {
+          id: 'b1c2d3e4f5a6', label: 'Boss backup', deviceType: 'singleDevice', backedUp: false,
+          createdAt: '2026-07-02T00:00:00Z', lastUsedAt: null,
+          removal: { selector: 'e'.repeat(64), setHash: 'b'.repeat(64), action: 'passkey_remove', targetHash: 'f'.repeat(64), previewHash: '0'.repeat(64) },
+        },
+      ],
+      count: 2,
+      max: 3,
+      context: { action: 'passkey_enroll', targetHash: 'c'.repeat(64), previewHash: 'd'.repeat(64) },
+    },
+  });
+  await page.goto('/overview');
+  await page.getByRole('button', { name: '管理 Boss passkeys' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Boss passkeys' });
+  await dialog.getByRole('button', { name: '移除 Boss backup' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('保留 1 把 passkey');
+  await expect(dialog.getByLabel('Current passphrase')).toHaveClass(/passkey-removal-input/);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect(dialog.getByRole('button', { name: '關閉', exact: true })).toHaveCount(0);
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  expect(await dialog.locator('footer').evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await dialog.getByRole('button', { name: '取消移除' }).click();
+  await expect(dialog.getByRole('button', { name: '新增備用 passkey' })).toBeVisible();
+  await dialog.getByRole('button', { name: '移除 Boss backup' }).click();
+  await dialog.getByLabel('Current passphrase').fill('passphrase');
+  await expect(dialog.getByRole('button', { name: '驗證並移除' })).toBeEnabled();
+  await dialog.getByRole('button', { name: '驗證並移除' }).click();
+  await expect(page).toHaveURL('/login');
+});
+
+test('passkey removal errors use removal copy and retain a cancel path', async ({ page }) => {
+  await setupApi(page, {
+    passkeyRemovalPreviewError: true,
+    passkeys: {
+      credentials: [
+        { id: 'a1b2c3d4e5f6', label: 'Boss Mac', deviceType: 'multiDevice', backedUp: true, createdAt: null, lastUsedAt: null, removal: { selector: 'a'.repeat(64), setHash: 'b'.repeat(64), action: 'passkey_remove', targetHash: 'c'.repeat(64), previewHash: 'd'.repeat(64) } },
+        { id: 'b1c2d3e4f5a6', label: 'Boss backup', deviceType: 'singleDevice', backedUp: false, createdAt: null, lastUsedAt: null, removal: { selector: 'e'.repeat(64), setHash: 'b'.repeat(64), action: 'passkey_remove', targetHash: 'f'.repeat(64), previewHash: '0'.repeat(64) } },
+      ], count: 2, max: 3, context: { action: 'passkey_enroll', targetHash: 'c'.repeat(64), previewHash: 'd'.repeat(64) },
+    },
+  });
+  await page.goto('/overview');
+  await page.getByRole('button', { name: '管理 Boss passkeys' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Boss passkeys' });
+  await dialog.getByRole('button', { name: '移除 Boss backup' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('未能移除 passkey');
+  await expect(dialog.getByRole('alert')).toContainText('PREVIEW_STALE');
 });
 
 test('typed dependency error shows request evidence and retry', async ({ page }) => {
@@ -707,6 +929,97 @@ test('receipt sync controls expose only server-eligible retry and cancel actions
   await expect(page.getByRole('button', { name: new RegExp(processingJobId) })).toHaveCount(0);
 });
 
+test('support bundle previews its exact payload and completes as a browser download', async ({ page }) => {
+  const requests = [];
+  await setupApi(page, { requests });
+  await setupSupportBundleCommit(page);
+  await page.goto(`/data/accounts/${accountId}`);
+  const supportBundle = page.getByRole('button', { name: 'Support bundle' });
+  await expect(supportBundle).toBeEnabled();
+  await supportBundle.click();
+  expect(latestPreview(requests)).toMatchObject({
+    action: 'support_bundle',
+    targetId: accountId,
+    payload: { includeJobs: true, userId: accountId },
+  });
+  const dialog = page.getByRole('dialog');
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    dialog.getByRole('button', { name: '確認執行' }).click(),
+  ]);
+  await expect(dialog).toContainText('操作已由 server 驗證完成');
+  expect(download.suggestedFilename()).toMatch(/^travel-expense-support-\d{4}-\d{2}-\d{2}\.json$/);
+});
+
+test('visible admin workflows send exact preview actions and payloads', async ({ page }) => {
+  const requests = [];
+  const pendingJobId = '98500000-0000-4000-8000-000000000002';
+  await setupApi(page, {
+    requests,
+    syncJobs: [{ id: pendingJobId, provider: 'notion', operation: 'upsert', status: 'pending', attempts: 0, next_attempt_at: null, last_error: null, created_at: '2026-07-10T10:00:00Z', updated_at: '2026-07-10T10:00:00Z', owner_masked_email: 're***@example.invalid', receipt_id: receiptId }],
+  });
+
+  await page.goto('/reliability/sync');
+  const cancelSync = page.getByRole('button', { name: `取消同步工作 ${pendingJobId.slice(0, 8)}` });
+  await expect(cancelSync).toBeEnabled();
+  await cancelSync.click();
+  expect(latestPreview(requests)).toMatchObject({ action: 'cancel_sync_job', targetId: pendingJobId, payload: {} });
+  await page.getByRole('button', { name: '關閉操作' }).click();
+
+  await page.goto(`/data/trips/${tripId}`);
+  const amendTrip = page.getByRole('button', { name: '修改', exact: true });
+  await expect(amendTrip).toBeEnabled();
+  await amendTrip.click();
+  await page.getByLabel('行程名稱').fill('名古屋 2026 更新');
+  await page.getByRole('button', { name: '預覽修改' }).click();
+  expect(latestPreview(requests)).toMatchObject({
+    action: 'trip_amend',
+    targetId: tripId,
+    payload: { expectedVersion: 7, patch: { name: '名古屋 2026 更新' } },
+  });
+  await page.getByRole('button', { name: '關閉操作' }).click();
+
+  await page.getByLabel('帳戶電郵').fill('new.member@example.invalid');
+  await page.locator('.member-add-form select').selectOption('viewer');
+  const addMember = page.getByRole('button', { name: '加入' });
+  await expect(addMember).toBeEnabled();
+  await addMember.click();
+  expect(latestPreview(requests)).toMatchObject({
+    action: 'member_add',
+    targetId: tripId,
+    payload: { email: 'new.member@example.invalid', role: 'viewer' },
+  });
+  await page.getByRole('button', { name: '關閉操作' }).click();
+
+  const memberRow = page.getByRole('row').filter({ hasText: 'me***@example.invalid' });
+  const removeMember = memberRow.getByRole('button', { name: '移除成員' });
+  await expect(removeMember).toBeEnabled();
+  await removeMember.click();
+  expect(latestPreview(requests)).toMatchObject({
+    action: 'member_remove',
+    targetId: tripId,
+    payload: { userId: '98000000-0000-4000-8000-0000000000b2' },
+  });
+  await page.getByRole('button', { name: '關閉操作' }).click();
+
+  await page.goto(`/data/receipts/${receiptId}`);
+  const trashReceipt = page.getByRole('button', { name: '移至 Trash' });
+  await expect(trashReceipt).toBeEnabled();
+  await trashReceipt.click();
+  expect(latestPreview(requests)).toMatchObject({ action: 'receipt_trash', targetId: receiptId, payload: { expectedVersion: 3 } });
+
+  const restorePage = await page.context().newPage();
+  const restoreRequests = [];
+  await setupApi(restorePage, { requests: restoreRequests });
+  await setupDeletedReceipt(restorePage);
+  await restorePage.goto(`/data/receipts/${receiptId}`);
+  const restoreReceipt = restorePage.getByRole('button', { name: '還原' });
+  await expect(restoreReceipt).toBeEnabled();
+  await restoreReceipt.click();
+  expect(latestPreview(restoreRequests)).toMatchObject({ action: 'receipt_restore', targetId: receiptId, payload: { expectedVersion: 3 } });
+  await restorePage.close();
+});
+
 test('receipt R2 editor creates a versioned before-and-after preview', async ({ page }) => {
   await setupApi(page);
   await page.goto(`/data/receipts/${receiptId}`);
@@ -719,6 +1032,32 @@ test('receipt R2 editor creates a versioned before-and-after preview', async ({ 
   await expect(dialog.getByRole('heading', { name: '提交後' })).toBeVisible();
   await expect(dialog.getByLabel('Current passphrase')).toBeVisible();
   if (process.env.CAPTURE_UI === '1') await page.screenshot({ path: 'test-results/visual-audit/receipt-r2-preview.png', fullPage: true });
+});
+
+test('R2 receipt trash reauthenticates with a mocked passkey, grants, and commits completed', async ({ page }) => {
+  const requests = [];
+  await installMockWebAuthn(page);
+  await setupApi(page, { requests });
+  await page.goto(`/data/receipts/${receiptId}`);
+  await page.getByRole('button', { name: '移至 Trash' }).click();
+  expect(latestPreview(requests)).toMatchObject({ action: 'receipt_trash', targetId: receiptId, payload: { expectedVersion: 3 } });
+
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Current passphrase').fill('step-up passphrase');
+  await dialog.getByRole('button', { name: '驗證並執行' }).click();
+  await expect.poll(() => page.locator('html').getAttribute('data-mock-webauthn')).toBe('pending');
+  const reauthBegin = requests.find(request => request.pathname === '/api/admin/reauth/begin');
+  expect(reauthBegin?.body).toEqual({
+    passphrase: 'step-up passphrase',
+    action: 'receipt_trash',
+    previewHash: 'b'.repeat(64),
+    targetHash: 'a'.repeat(64),
+  });
+
+  await page.evaluate(() => window.completeMockWebAuthn());
+  await expect(dialog).toContainText('操作已由 server 驗證完成');
+  expect(requests.find(request => request.pathname === '/api/admin/reauth/finish')?.body).toMatchObject({ flowId: requestId, response: { id: 'mock-passkey' } });
+  expect(requests.find(request => request.pathname === `/api/admin/operations/${operationId}/commit`)?.body).toEqual({ grantId: requestId });
 });
 
 test('itinerary editor preserves six days and previews one full canonical payload', async ({ page }) => {
@@ -896,8 +1235,12 @@ test('all workspace routes have no serious or critical axe violations on desktop
   }
 });
 
-test('representative workspaces reflow without document overflow across release viewports', async ({ page }) => {
-  await setupApi(page);
+test('all workspaces reflow without document overflow across release viewports', async ({ page }) => {
+  const longSyncError = 'Notion provider 回覆 429，保留完整 request UUID 98500000-0000-4000-8000-0000000000ff，請由 server audit trace 調查。'.repeat(3);
+  await setupApi(page, {
+    syncJobs: [{ id: '98500000-0000-4000-8000-0000000000ff', provider: 'notion', operation: 'upsert', status: 'failed', attempts: 9, next_attempt_at: null, last_error: longSyncError, created_at: '2026-07-10T10:00:00Z', updated_at: '2026-07-10T10:00:00Z', owner_masked_email: 're***@example.invalid', receipt_id: receiptId }],
+  });
+  const longContent = await setupLongReflowContent(page);
   const viewports = [
     { width: 320, height: 568 },
     { width: 360, height: 800 },
@@ -907,16 +1250,15 @@ test('representative workspaces reflow without document overflow across release 
     { width: 1440, height: 900 },
     { width: 640, height: 400 },
   ];
-  const routes = workspaceRoutes.filter(([name]) => [
-    'overview', 'accounts', 'trip-detail', 'itinerary',
-    'receipt-detail', 'integrity', 'providers', 'audit',
-  ].includes(name));
-
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
-    for (const [name, path] of routes) {
+    for (const [name, path] of workspaceRoutes) {
       await page.goto(path);
       await expect(page.locator('h1')).toBeVisible();
+      if (name === 'account-detail') await expect(page.getByText(longContent.longEmail).first()).toBeVisible();
+      if (name === 'trip-detail') await expect(page.getByText(longContent.longCjk).first()).toBeVisible();
+      if (name === 'providers') await expect(page.getByText(longContent.longProviderError)).toBeVisible();
+      if (name === 'sync') await expect(page.getByText(longSyncError)).toBeVisible();
       const layout = await page.evaluate(() => ({
         documentScrollWidth: document.documentElement.scrollWidth,
         documentClientWidth: document.documentElement.clientWidth,

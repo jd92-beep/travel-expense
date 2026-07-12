@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
   passkeyEnrollmentContext,
+  passkeyRemovalContext,
+  passkeyRemovalPreview,
   sanitizePasskeyCredentials,
 } from './passkeys.js';
 
@@ -36,4 +38,43 @@ test('browser passkey list never exposes credential or public keys', () => {
   assert.match(rows[0].id, /^[0-9a-f]{12}$/);
   assert.equal(JSON.stringify(rows).includes('credential-secret-value'), false);
   assert.equal(JSON.stringify(rows).includes('public-key-secret-value'), false);
+});
+
+test('passkey removal selector and set context are opaque and bind the exact target set', () => {
+  const credentials = [
+    { credentialId: 'credential-secret-value-one', label: 'Boss Mac' },
+    { credentialId: 'credential-secret-value-two', label: 'Boss backup' },
+  ];
+  const preview = passkeyRemovalPreview(credentials, 'credential-secret-value-two');
+  const context = passkeyRemovalContext(preview.selector, preview.setHash);
+
+  assert.equal(preview.count, 2);
+  assert.equal(preview.remainingCount, 1);
+  assert.match(preview.selector, /^[0-9a-f]{64}$/);
+  assert.match(preview.setHash, /^[0-9a-f]{64}$/);
+  assert.match(context.targetHash, /^[0-9a-f]{64}$/);
+  assert.match(context.previewHash, /^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify({ preview, context }).includes('credential-secret-value-two'), false);
+  assert.equal(JSON.stringify({ preview, context }).includes('credential-secret-value-one'), false);
+});
+
+test('passkey removal preview rejects final and stale targets without exposing credential ids', () => {
+  assert.throws(
+    () => passkeyRemovalPreview([{ credentialId: 'credential-secret-value-one' }], 'credential-secret-value-one'),
+    /final passkey/i,
+  );
+  assert.throws(
+    () => passkeyRemovalPreview([{ credentialId: 'credential-secret-value-one' }], 'missing-credential'),
+    /target/i,
+  );
+  const current = passkeyRemovalPreview([
+    { credentialId: 'credential-secret-value-one' },
+    { credentialId: 'credential-secret-value-two' },
+  ], 'credential-secret-value-two');
+  const changed = passkeyRemovalPreview([
+    { credentialId: 'credential-secret-value-one' },
+    { credentialId: 'credential-secret-value-two' },
+    { credentialId: 'credential-secret-value-three' },
+  ], current.selector);
+  assert.notEqual(current.setHash, changed.setHash);
 });

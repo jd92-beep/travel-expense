@@ -7,6 +7,7 @@ Last updated: 2026-07-12 HKT
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
 - Production release: `0.8.3`, intentionally read-only.
 - Verified local release candidate: `1.0.0-rc.1` on `codex/admin-console-1.0`.
+- Expected database contract: `20260712123000` (`admin-passkeys-v2`).
 - Compatibility baseline: Compact Web `0.16.2`, Android `0.19.2`, React `0.2.3`.
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
 - R0/R1/R2 code and release gates are complete locally. Production cutover is not approved or run.
@@ -28,6 +29,7 @@ Primary routes:
 ```text
 /login
 /overview
+/search
 /data/accounts
 /data/accounts/:accountId
 /data/trips
@@ -65,6 +67,9 @@ The RC implements:
 7. A fixed BFF route map and 30-second HMAC-signed BFF-to-Edge requests with nonce replay defense.
 8. Server-computed previews, short single-use step-up grants, version/hash drift checks and
    idempotency keys for mutations.
+9. Normal passkey rotation can remove a selected non-final credential only after a fresh
+   passphrase-plus-passkey step-up. The server rechecks the complete credential-set hash under a
+   lock, appends Audit v2 and revokes every Admin session. The final passkey remains break-glass only.
 
 The legacy browser bearer and direct Edge authorization paths are removed from the RC. Production
 still runs the old read-only build until the approved maintenance cutover.
@@ -77,7 +82,7 @@ Responses use typed envelopes, request IDs, source freshness and safe DTO allowl
 
 Admin 1.0 operations:
 
-- R1: redacted support bundle, provider probe and eligible sync retry/cancel.
+- R1: redacted support bundle, provider probe, integrity scan and eligible sync retry/cancel.
 - R2: receipt amend/trash/restore, trip metadata amend, itinerary amend/restore and membership
   add/invite/role/remove.
 - Intentionally unavailable: current-admin deletion, owner removal, hard delete, force overwrite,
@@ -106,17 +111,20 @@ and recovered through the operation ID; the UI never declares success from reque
 
 Verified on 2026-07-12:
 
-- Admin: typecheck, build and security scan passed; unit `17/17`; contract `13/13`; full smoke
-  `34 passed + 1 intentional visual-capture skip`; axe serious/critical coverage is included;
+- Admin: typecheck, build and security scan passed; unit `19/19`; contract `21/21`; full smoke
+  `42 passed + 1 intentional visual-capture skip`; the suite covers login/WebAuthn, all 18 routes
+  at seven release viewports, every visible R1/R2 action family and axe serious/critical checks;
   `npm audit` reports `0` vulnerabilities.
 - Edge: 28 files passed format/lint; all three entrypoints passed `deno check`; Deno tests
-  `65 passed, 0 failed`.
+  `69 passed, 0 failed`.
 - Compact `0.16.2`: 9/9 selected post-rebase gates passed, including itinerary merge, receipt
   tombstone, privacy, offline, mobile layout and final navigation.
 - React `0.2.3`: typecheck/build/security, itinerary merge, security, mobile layout and final
   navigation passed; final navigation `6/6` uses the owned dev-server wrapper.
 - Android `0.19.2` / versionCode `1920` is the current Oscar worktree baseline. It was not rebuilt
   or republished in this final web-console pass.
+- BFF: the contract suite executes the real catch-all handler, session verification, CSRF and
+  signed Edge transport; invalid provenance, redirects, malformed envelopes and escaped routes fail closed.
 - Broker: check and self-test passed. Static migration policy and shared-ledger scans passed.
 - Local SQL note: Docker was unavailable and Podman was stopped, so the disposable Supabase SQL
   suite was not rerun locally; CI must supply that evidence before production approval.

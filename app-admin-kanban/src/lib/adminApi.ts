@@ -127,6 +127,7 @@ export type AdminPasskey = {
   backedUp: boolean;
   createdAt: string | null;
   lastUsedAt: string | null;
+  removal?: { selector: string; setHash: string; action: string; targetHash: string; previewHash: string };
 };
 
 export type AdminPasskeyState = {
@@ -157,6 +158,37 @@ export async function addBossPasskey(passphrase: string, label: string): Promise
     body: { flowId: begin.data.flowId, label, response },
   });
   return finish.data.credential;
+}
+
+export type AdminPasskeyRemovalPreview = {
+  selector: string;
+  setHash: string;
+  count: number;
+  remainingCount: number;
+  target: Omit<AdminPasskey, 'removal'>;
+  context: { action: string; targetHash: string; previewHash: string };
+};
+
+export async function previewBossPasskeyRemoval(
+  removal: NonNullable<AdminPasskey['removal']>,
+): Promise<AdminPasskeyRemovalPreview> {
+  const payload = await request<{ data: AdminPasskeyRemovalPreview }>('/api/admin/passkeys/remove/preview', {
+    method: 'POST',
+    body: { selector: removal.selector, setHash: removal.setHash },
+  });
+  return payload.data;
+}
+
+export async function removeBossPasskey(
+  passphrase: string,
+  preview: AdminPasskeyRemovalPreview,
+): Promise<void> {
+  const grant = await reauthenticateAdmin(passphrase, preview.context);
+  await request('/api/admin/passkeys/remove/commit', {
+    method: 'POST',
+    body: { selector: preview.selector, setHash: preview.setHash, grantId: grant.grantId },
+  });
+  clearSession();
 }
 
 export async function reauthenticateAdmin(

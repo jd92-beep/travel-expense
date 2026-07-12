@@ -95,6 +95,39 @@ Deno.test("backup passkey registration is session-bound and audit-aware", () => 
   assertEquals(routeBindsSessionHash("/internal/credential/register-backup"), true);
 });
 
+Deno.test("passkey removal is fixed-route, session-bound, and carries only opaque context", () => {
+  assertEquals(
+    authStateRpcFor(
+      "/internal/credential/remove",
+      {
+        selector: "a".repeat(64),
+        setHash: "b".repeat(64),
+        grantId: "97000000-0000-4000-8000-000000000001",
+        sessionHash: "c".repeat(64),
+        requestId: "97000000-0000-4000-8000-000000000002",
+      },
+      "boss",
+    ),
+    {
+      rpc: "admin_auth_remove_backup_credential",
+      args: {
+        p_selector: "a".repeat(64),
+        p_set_hash: "b".repeat(64),
+        p_grant_id: "97000000-0000-4000-8000-000000000001",
+        p_session_hash: "c".repeat(64),
+        p_actor: "boss",
+        p_request_id: "97000000-0000-4000-8000-000000000002",
+      },
+    },
+  );
+  assertEquals(routeBindsSessionHash("/internal/credential/remove"), true);
+  assertThrows(
+    () => authStateRpcFor("/internal/credential/remove", { credentialId: "raw" }, "boss"),
+    Error,
+    "selector",
+  );
+});
+
 Deno.test("credential and session fields are bounded", () => {
   assertThrows(
     () =>

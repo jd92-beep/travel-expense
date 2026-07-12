@@ -40,6 +40,14 @@ export function classifyBrokerOnlyStatus(): ClassifiedProviderStatus {
   };
 }
 
+export function brokerHealthSucceeded(httpStatus: number, data: unknown): boolean {
+  if (httpStatus < 200 || httpStatus >= 300 || !data || typeof data !== "object") {
+    return false;
+  }
+  const payload = data as { ok?: unknown; service?: unknown };
+  return payload.ok === true && payload.service === "travel-expense-credential-broker";
+}
+
 export function providerProbeSucceeded(
   httpStatus: number,
   data: unknown,

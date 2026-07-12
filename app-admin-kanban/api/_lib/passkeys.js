@@ -3,6 +3,46 @@ import { sha256Hex } from './crypto.js';
 const PASSKEY_ENROLL_ACTION = 'passkey_enroll';
 const PASSKEY_ENROLL_TARGET = 'boss-passkey-set';
 const PASSKEY_ENROLL_PREVIEW = 'add-backup-passkey-v1';
+const PASSKEY_REMOVE_ACTION = 'passkey_remove';
+
+export function passkeyRemovalSelector(credentialId) {
+  return sha256Hex(`passkey-remove-selector-v1\n${String(credentialId || '')}`);
+}
+
+export function passkeyRemovalSetHash(credentials) {
+  const selectors = Array.isArray(credentials)
+    ? credentials.map((credential) => passkeyRemovalSelector(credential.credentialId)).sort()
+    : [];
+  return sha256Hex(selectors.join('\n'));
+}
+
+export function passkeyRemovalContext(selector, setHash) {
+  if (!/^[0-9a-f]{64}$/.test(String(selector)) || !/^[0-9a-f]{64}$/.test(String(setHash))) {
+    throw new Error('Passkey removal context is invalid');
+  }
+  return {
+    action: PASSKEY_REMOVE_ACTION,
+    targetHash: sha256Hex(`passkey-remove-target-v1\n${selector}`),
+    previewHash: sha256Hex(`passkey-remove-preview-v1\n${selector}\n${setHash}`),
+  };
+}
+
+export function passkeyRemovalPreview(credentials, target) {
+  if (!Array.isArray(credentials)) throw new Error('Passkey store unavailable');
+  const selector = /^[0-9a-f]{64}$/.test(String(target))
+    ? String(target)
+    : passkeyRemovalSelector(target);
+  const credential = credentials.find((entry) => passkeyRemovalSelector(entry.credentialId) === selector);
+  if (!credential) throw new Error('Passkey removal target is unavailable');
+  if (credentials.length <= 1) throw new Error('Final passkey is break-glass protected');
+  return {
+    selector,
+    setHash: passkeyRemovalSetHash(credentials),
+    count: credentials.length,
+    remainingCount: credentials.length - 1,
+    target: sanitizePasskeyCredentials([credential])[0],
+  };
+}
 
 export function passkeyEnrollmentContext() {
   return {

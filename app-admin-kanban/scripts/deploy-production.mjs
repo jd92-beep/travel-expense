@@ -10,7 +10,7 @@ const repoRoot = path.resolve(appDir, '..');
 const projectName = 'travel-expense-admin-kanban';
 const productionUrl = 'https://travel-expense-admin-kanban.vercel.app';
 const appPath = 'app-admin-kanban';
-const adminRuntimeSchemaVersion = '20260712122000';
+const adminRuntimeSchemaVersion = '20260712123000';
 const stagingDir = mkdtempSync(path.join(tmpdir(), 'travel-expense-admin-release-'));
 const vercelArgs = ['--yes', 'vercel@54.17.3'];
 

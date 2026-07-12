@@ -145,6 +145,18 @@ export function authStateRpcFor(
           p_request_id: uuid(body, "requestId"),
         },
       };
+    case "/internal/credential/remove":
+      return {
+        rpc: "admin_auth_remove_backup_credential",
+        args: {
+          p_selector: text(body, "selector", 64),
+          p_set_hash: text(body, "setHash", 64),
+          p_grant_id: uuid(body, "grantId"),
+          p_session_hash: text(body, "sessionHash", 64),
+          p_actor: actor,
+          p_request_id: uuid(body, "requestId"),
+        },
+      };
     case "/internal/session/create":
       return {
         rpc: "admin_auth_create_session",
@@ -220,5 +232,5 @@ export function routeBindsSessionHash(route: string): boolean {
   return route === "/internal/session/verify" || route === "/internal/session/revoke" ||
     route === "/internal/session/rotate" ||
     route === "/internal/step-up/create" || route === "/internal/step-up/consume" ||
-    route === "/internal/credential/register-backup";
+    route === "/internal/credential/register-backup" || route === "/internal/credential/remove";
 }
