@@ -342,4 +342,6 @@ jobs:
           ADMIN_READINESS_TOKEN: ${{ secrets.ADMIN_READINESS_TOKEN }}
           ADMIN_RELEASE_GATE_SHA: ${{ github.sha }}
           VERCEL_TOKEN: ${{ secrets.ADMIN_VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.ADMIN_VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.ADMIN_VERCEL_PROJECT_ID }}
         run: npm run deploy
