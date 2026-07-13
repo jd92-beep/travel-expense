@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { AdminApiError } from "../../lib/adminApi";
 import type { AdminMeta } from "../../lib/contracts/admin";
-import { NavLink } from "react-router";
+import { NavLink, useNavigate } from "react-router";
 
 export function PageHeader({
   title,
@@ -205,8 +205,10 @@ export function useCursorPagination(
   searchParams: URLSearchParams,
   setSearchParams: (next: URLSearchParams) => void,
 ) {
+  const navigate = useNavigate();
   const history = useRef<string[]>([]);
   const cursor = searchParams.get("cursor") || "";
+
   return {
     hasCursor: Boolean(cursor),
     next: (nextCursor: string) => {
@@ -216,10 +218,13 @@ export function useCursorPagination(
       setSearchParams(next);
     },
     previous: () => {
-      const previousCursor = history.current.pop();
+      if (history.current.length > 0) {
+        history.current.pop();
+        navigate(-1);
+        return;
+      }
       const next = new URLSearchParams(searchParams);
-      if (previousCursor) next.set("cursor", previousCursor);
-      else next.delete("cursor");
+      next.delete("cursor");
       setSearchParams(next);
     },
   };

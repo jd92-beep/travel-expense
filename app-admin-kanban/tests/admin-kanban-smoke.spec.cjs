@@ -569,6 +569,10 @@ test('cursor history returns through opaque pages while direct links fall back t
   await expect(page).toHaveURL(/cursor=page-3/);
   await page.getByRole('button', { name: '上一頁' }).click();
   await expect(page).toHaveURL(/cursor=page-2/);
+  await page.goForward();
+  await expect(page).toHaveURL(/cursor=page-3/);
+  await page.getByRole('button', { name: '上一頁' }).click();
+  await expect(page).toHaveURL(/cursor=page-2/);
   await page.getByRole('button', { name: '上一頁' }).click();
   await expect(page).toHaveURL('/data/receipts');
 
