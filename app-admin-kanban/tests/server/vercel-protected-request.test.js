@@ -60,6 +60,26 @@ test('protected candidate response parser accepts JSON only from a 2xx response'
   );
 });
 
+test('protected candidate response parser accepts the route canary unauthorized JSON response', () => {
+  const unauthorized = {
+    ok: false,
+    data: null,
+    error: { code: 'UNAUTHORIZED' },
+  };
+  assert.deepEqual(
+    parseProtectedResponse(`${JSON.stringify(unauthorized)}\n401`, 'route canary', { expectedStatus: 401 }),
+    unauthorized,
+  );
+  assert.throws(
+    () => parseProtectedResponse('{"ok":true}\n200', 'route canary', { expectedStatus: 401 }),
+    /route canary failed \(200\)/,
+  );
+  assert.throws(
+    () => parseProtectedResponse('not-json\n401', 'route canary', { expectedStatus: 401 }),
+    /route canary did not return JSON/,
+  );
+});
+
 test('protected candidate request rejects non-Vercel targets and header injection', () => {
   assert.throws(() => protectedRequestArgs({
     baseArgs: [],
