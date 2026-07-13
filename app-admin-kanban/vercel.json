@@ -63,8 +63,8 @@
   ],
   "rewrites": [
     {
-      "source": "/api/admin/(.*)",
-      "destination": "/api/admin?__admin_path=$1"
+      "source": "/api/admin/:__admin_path*",
+      "destination": "/api/admin"
     },
     {
       "source": "/(.*)",

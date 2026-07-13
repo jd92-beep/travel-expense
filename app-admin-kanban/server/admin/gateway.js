@@ -26,20 +26,24 @@ function decodedInternalPathValues(search) {
       continue;
     }
     if (name !== INTERNAL_PATH_PARAM) continue;
+    if (rawName !== INTERNAL_PATH_PARAM) invalidAdminRoute();
 
     const rawValue = equals < 0 ? '' : pair.slice(equals + 1);
+    let value;
     try {
-      values.push(decodeURIComponent(rawValue.replace(/\+/g, ' ')));
+      value = decodeURIComponent(rawValue.replace(/\+/g, ' '));
     } catch {
       invalidAdminRoute();
     }
+    if (rawValue !== encodeURIComponent(value)) invalidAdminRoute();
+    values.push(value);
   }
   return values;
 }
 
 function canonicalAdminRequest(requestUrl) {
   const paths = decodedInternalPathValues(requestUrl.search);
-  if (requestUrl.pathname !== '/api/admin' || paths.length !== 1) invalidAdminRoute();
+  if (paths.length !== 1) invalidAdminRoute();
 
   const [value] = paths;
   if (!SAFE_PATH_RE.test(value)
@@ -47,8 +51,11 @@ function canonicalAdminRequest(requestUrl) {
     invalidAdminRoute();
   }
 
+  const browserPathname = `/api/admin/${value}`;
+  if (requestUrl.pathname !== browserPathname) invalidAdminRoute();
+
   const canonical = new URL(requestUrl);
-  canonical.pathname = `/api/admin/${value}`;
+  canonical.pathname = browserPathname;
   canonical.searchParams.delete(INTERNAL_PATH_PARAM);
   return canonical;
 }

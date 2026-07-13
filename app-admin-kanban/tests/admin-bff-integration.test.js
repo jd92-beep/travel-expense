@@ -65,7 +65,6 @@ function rewriteAdminRequest(url) {
   const prefix = '/api/admin/';
   if (!requestUrl.pathname.startsWith(prefix)) return url;
   const path = requestUrl.pathname.slice(prefix.length);
-  requestUrl.pathname = '/api/admin';
   requestUrl.searchParams.append(INTERNAL_PATH_PARAM, path);
   return `${requestUrl.pathname}${requestUrl.search}`;
 }
@@ -275,8 +274,8 @@ test('Admin BFF black-box integration gate', async (t) => {
       assert.equal(calls.length, 0);
     });
 
-    await t.test('rewritten session requests reach the fixed JSON handler instead of SPA HTML', async () => {
-      const res = await invoke({ url: '/api/admin/session' });
+    await t.test('Vercel-preserved rewritten session requests reach the fixed JSON handler instead of SPA HTML', async () => {
+      const res = await invokeRaw({ url: '/api/admin/session?client=probe&__admin_path=session' });
       assert.equal(res.statusCode, 401);
       assert.equal(res.getHeader('content-type'), 'application/json; charset=utf-8');
       assert.equal(res.json().error.code, 'UNAUTHORIZED');
@@ -319,6 +318,7 @@ test('Admin BFF black-box integration gate', async (t) => {
         'overview/../runtime',
         'overview\\runtime',
         'overview%0Aruntime',
+        'overview%2fruntime',
       ]) {
         calls.length = 0;
         const res = await invokeRaw({
@@ -331,8 +331,12 @@ test('Admin BFF black-box integration gate', async (t) => {
       }
 
       for (const url of [
+        `/api/admin?${INTERNAL_PATH_PARAM}=session`,
         `/api/admin?${INTERNAL_PATH_PARAM}=overview&${INTERNAL_PATH_PARAM}=runtime`,
         `/api/admin/session?${INTERNAL_PATH_PARAM}=overview`,
+        `/api/admin/session?${INTERNAL_PATH_PARAM}=session&${INTERNAL_PATH_PARAM}=session`,
+        '/api/admin/session',
+        `/api/admin/%73ession?${INTERNAL_PATH_PARAM}=session`,
       ]) {
         calls.length = 0;
         const res = await invokeRaw({ headers: sessionHeaders(), url });

@@ -24,8 +24,8 @@ test('Vercel Hobby function glob contains only the three API entrypoints', () =>
 test('Vercel routes every admin API request through the gateway before the SPA fallback', () => {
   assert.deepEqual(vercelConfig.rewrites, [
     {
-      source: '/api/admin/(.*)',
-      destination: '/api/admin?__admin_path=$1',
+      source: '/api/admin/:__admin_path*',
+      destination: '/api/admin',
     },
     {
       source: '/(.*)',
