@@ -10,6 +10,11 @@ const VALID_CATEGORIES = new Set(['flight', 'transport', 'food', 'shopping', 'lo
 const VALID_PAYMENTS = new Set(['cash', 'credit', 'paypay', 'suica']);
 const RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS = 15 * 60;
 
+// Contested trip ids already re-homed this session (contested id → re-homed id).
+// Lets subsequent upserts in the same sweep skip the doomed RLS-denied attempt
+// and go straight to the user's own row.
+const rehomedTripIds = new Map<string, string>();
+
 function withTimeout<T>(promise: PromiseLike<T>, ms = 30000): Promise<T> {
   return Promise.race([
     Promise.resolve(promise),
@@ -980,6 +985,8 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
   await ensureSupabaseProfile(session, state);
   const userId = session.user.id;
   let id = await findTripUuid(supabase, userId, trip);
+  const rehomedId = rehomedTripIds.get(id);
+  if (rehomedId) id = rehomedId;
   const explicitSharedTrip = !!cleanUuid(trip.supabaseId) && !!trip.sharing && trip.sharing.role !== 'owner';
   const normalizedIntelligence = normalizeTripIntelligence(
     trip.intelligence,
@@ -1176,21 +1183,33 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
       // under this user's own account instead. The legacy_source_id is suffixed with this
       // user's id so it can never collide with the other account's row again, and so future
       // findTripUuid lookups (owner_id + legacy_source_id) resolve straight to THIS row.
-      const newId = crypto.randomUUID();
+      // Idempotent: a previous attempt (this session or an earlier one) may already have
+      // re-homed this trip. Without this lookup every queued receipt re-runs the trip
+      // upsert, hits the same RLS denial, and would insert yet another duplicate row —
+      // a 61-receipt queue would scatter across 61 trips.
+      const rehomedSourceId = `${activeRow.legacy_source_id}__u_${userId.slice(0, 8)}`;
+      const existingRehome = await withTimeout(supabase
+        .from('trips')
+        .select('id')
+        .eq('owner_id', userId)
+        .eq('legacy_source_id', rehomedSourceId)
+        .maybeSingle());
+      const newId = cleanUuid(existingRehome.data?.id) || crypto.randomUUID();
       const rehomeRow = {
         ...activeRow,
         id: newId,
         owner_id: userId,
-        legacy_source_id: `${activeRow.legacy_source_id}__u_${userId.slice(0, 8)}`,
+        legacy_source_id: rehomedSourceId,
         notion_page_id: null,
         version: 1,
       };
       const rehome = await withTimeout(supabase
         .from('trips')
-        .insert(rehomeRow)
+        .upsert(rehomeRow, { onConflict: 'id' })
         .select('*')
         .single());
       if (!rehome.error) {
+        rehomedTripIds.set(String(activeRow.id), newId);
         id = newId;
         data = rehome.data;
         error = null;
