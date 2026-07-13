@@ -2,6 +2,13 @@
 
 ## 2026-07-13
 
+- **Compact App 0.16.3 idempotent trip re-home**: fix(compact): v0.16.3 — idempotent trip re-home.
+  The v0.16.2 re-home inserted a fresh UUID row on every RLS-denied trip upsert while the local
+  trip's supabaseId stayed stale, so a queue of N receipts would create up to N duplicate trips.
+  Re-home now reuses the existing re-homed row (owner_id + suffixed legacy_source_id lookup,
+  upsert not insert) and a per-session contested→re-homed id map skips the doomed contested
+  attempt on subsequent pushes.
+
 - **Admin Console 1.0.0 cutover preparation**:
   - Promoted the verified branch metadata from `1.0.0-rc.1` to cutover candidate `1.0.0` in the
     Admin package, both package-lock root entries and `/api/health`.
