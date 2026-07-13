@@ -22,7 +22,7 @@ begin
       and with_check is null
       and lower(coalesce(qual, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
       and translate(
-        replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+|asuid', '', 'g'), 'public.', ''),
+        replace(replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
         '()',
         ''
       )
@@ -47,7 +47,7 @@ begin
       and qual is null
       and lower(coalesce(with_check, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
       and translate(
-        replace(regexp_replace(lower(coalesce(with_check, '')), '\s+|::[[:alnum:]_]+|asuid', '', 'g'), 'public.', ''),
+        replace(replace(regexp_replace(lower(coalesce(with_check, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
         '()',
         ''
       ) = 'bucket_id=''receipt-photos''andstorage.foldernamename[1]=auth.uid'
@@ -64,7 +64,7 @@ begin
       and with_check is null
       and lower(coalesce(qual, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
       and translate(
-        replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+|asuid', '', 'g'), 'public.', ''),
+        replace(replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
         '()',
         ''
       ) = 'bucket_id=''receipt-photos''andstorage.foldernamename[1]=auth.uid'
@@ -81,7 +81,7 @@ begin
       and with_check is null
       and lower(coalesce(qual, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
       and translate(
-        replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+|asuid', '', 'g'), 'public.', ''),
+        replace(replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
         '()',
         ''
       ) = 'owner_id=selectauth.uid'
@@ -98,7 +98,7 @@ begin
       and with_check is null
       and lower(coalesce(qual, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
       and translate(
-        replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+|asuid', '', 'g'), 'public.', ''),
+        replace(replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
         '()',
         ''
       ) = 'existsselect1fromreceiptsrwherer.id=receipt_photos.receipt_idandr.visibility=''trip''andprivate.can_access_tripr.trip_id'
