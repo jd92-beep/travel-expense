@@ -1,9 +1,20 @@
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  parseProtectedResponse,
+  protectedRequestArgs,
+} from './vercel-protected-request.mjs';
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(appDir, '..');
@@ -88,8 +99,45 @@ async function fetchJson(url, options = {}) {
   return payload;
 }
 
+function fetchProtectedJson(baseUrl, pathname, options = {}) {
+  const args = protectedRequestArgs({
+    baseArgs: vercelArgs,
+    body: options.body,
+    deploymentUrl: baseUrl,
+    headerFile: options.headerFile,
+    headers: options.headers,
+    method: options.method,
+    pathname,
+  });
+  return parseProtectedResponse(
+    capture('npx', args, appDir),
+    'Protected release verification',
+  );
+}
+
+async function withReadinessHeaderFile(token, operation) {
+  if (/\r|\n/.test(token)) throw new Error('ADMIN_READINESS_TOKEN is invalid');
+  const directory = mkdtempSync(path.join(tmpdir(), 'travel-expense-admin-readiness-'));
+  const headerFile = path.join(directory, 'headers');
+  try {
+    chmodSync(directory, 0o700);
+    writeFileSync(headerFile, `Authorization: Bearer ${token}\n`, {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600,
+    });
+    chmodSync(headerFile, 0o600);
+    return await operation(headerFile);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 async function verifyCandidate(baseUrl, gitSha, version, mode) {
-  const health = await fetchJson(`${baseUrl}/api/health`);
+  const requestJson = mode === 'candidate'
+    ? (pathname, options) => fetchProtectedJson(baseUrl, pathname, options)
+    : (pathname, options) => fetchJson(`${baseUrl}${pathname}`, options);
+  const health = await requestJson('/api/health');
   if (health.version !== version || health.gitSha !== gitSha
     || health.acceptingReadTraffic !== true || health.deploymentId === 'unknown') {
     throw new Error('Admin health provenance mismatch');
@@ -97,15 +145,23 @@ async function verifyCandidate(baseUrl, gitSha, version, mode) {
 
   const token = String(process.env.ADMIN_READINESS_TOKEN || '');
   if (token.length < 32) throw new Error('ADMIN_READINESS_TOKEN is missing');
-  const readiness = await fetchJson(`${baseUrl}/api/readiness`, {
+  const readinessOptions = {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       'X-Admin-Request-Id': crypto.randomUUID(),
     },
     body: JSON.stringify({ mode }),
-  });
+  };
+  const readiness = mode === 'candidate'
+    ? await withReadinessHeaderFile(token, (headerFile) => requestJson('/api/readiness', {
+      ...readinessOptions,
+      headerFile,
+    }))
+    : await requestJson('/api/readiness', {
+      ...readinessOptions,
+      headers: { ...readinessOptions.headers, Authorization: `Bearer ${token}` },
+    });
   if (readiness?.data?.ready !== true || readiness?.data?.gitSha !== gitSha) {
     throw new Error('Signed Edge/database readiness canary failed');
   }
