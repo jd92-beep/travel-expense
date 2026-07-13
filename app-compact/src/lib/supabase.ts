@@ -1135,6 +1135,21 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
       throw new Error(`旅程「${trip.name || ''}」存取權失效：你唔係呢個旅程嘅成員。請旅程擁有者重新邀請你，接受後先可以同步。`);
     }
   }
+  // Belt-and-suspenders: ensure the trip creator always has a trip_members row with role='owner'.
+  // can_edit_trip() checks trips.owner_id first, but if that path fails (e.g. the id was rehomed,
+  // or a stale session produced a different owner_id), having an explicit trip_members entry
+  // provides a second RLS path so receipts can still sync. Fire-and-forget — tolerate missing
+  // table (pre-sharing schema) or RLS restrictions.
+  if (!explicitSharedTrip) {
+    supabase.from('trip_members').upsert(
+      { trip_id: id, user_id: userId, role: 'owner', status: 'active' },
+      { onConflict: 'trip_id,user_id' },
+    ).then(({ error: memberError }) => {
+      if (memberError && !isMissingSharingTableError(memberError)) {
+        console.warn('[supabase] trip_members auto-seed failed:', memberError.message);
+      }
+    });
+  }
   if (row.active && !explicitSharedTrip) {
     const { error: deactivateError } = await withTimeout(supabase
       .from('trips')

@@ -1028,6 +1028,28 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     error = fallback.error;
   }
   if (error) throw error;
+  // Belt-and-suspenders: ensure the trip creator always has a trip_members row with role='owner'.
+  // can_edit_trip() checks trips.owner_id first, but if that path fails (e.g. stale owner_id),
+  // having an explicit trip_members entry provides a second RLS path for receipt sync.
+  if (!explicitSharedTrip) {
+    supabase.from('trip_members').upsert(
+      { trip_id: id, user_id: userId, role: 'owner', status: 'active' },
+      { onConflict: 'trip_id,user_id' },
+    ).then(({ error: memberError }) => {
+      if (memberError && !isMissingSharingTableError(memberError)) {
+        console.warn('[supabase] trip_members auto-seed failed:', memberError.message);
+      }
+    });
+  }
+  if (row.active && !explicitSharedTrip) {
+    const { error: deactivateError } = await withTimeout(supabase
+      .from('trips')
+      .update({ active: false, updated_at: row.updated_at })
+      .eq('owner_id', userId)
+      .neq('id', id)
+      .eq('active', true));
+    if (deactivateError) throw deactivateError;
+  }
   return rowToTrip(data as SupabaseTripRow, state, trip.sharing);
 }
 

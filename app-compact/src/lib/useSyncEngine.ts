@@ -99,6 +99,10 @@ export function useSyncEngine(
   const needsSyncAfterCurrentRef = useRef(false);
   const syncRef = useRef<() => Promise<void>>(async () => {});
   const aliveRef = useRef(true);
+  // Trips whose push failed with an access/RLS denial. Persisted across push/pull cycles so the
+  // backfill sweep in pull() doesn't eternally re-queue receipts that will always fail.
+  // Cleared for a trip when a push for that trip succeeds (e.g. after a re-invite).
+  const accessDeniedTripsRef = useRef(new Set<string>());
 
   stateRef.current = state;
   const supabaseSessionRef = useRef<Session | null | undefined>(supabaseSession);
@@ -376,7 +380,9 @@ export function useSyncEngine(
       // revoked shared trip with N queued receipts would otherwise fire N doomed trip upserts
       // per sweep (observed live: 61 receipts × 2 POSTs per boot). Access denial is permanent
       // within a session — fail the remaining siblings locally without touching the network.
-      const accessDeniedTrips = new Set<string>();
+      // NOTE: accessDeniedTripsRef persists across push/pull cycles to prevent the backfill
+      // sweep from re-queueing receipts whose trip is permanently blocked.
+      const accessDeniedTrips = accessDeniedTripsRef.current;
       const tripKeyForItem = (item: SyncQueueItem): string => String(
         (item.payload as { tripId?: string } | undefined)?.tripId
         || (item.type === 'receipt' ? stateRef.current.receipts.find((r) => r.id === item.entityId)?.tripId : '')
@@ -396,6 +402,10 @@ export function useSyncEngine(
         try {
           await processItem(item);
           removeQueueItem(item);
+          // Recovery: if a trip push succeeds now (e.g. after re-invite or rehome),
+          // clear the denied flag so future receipts for this trip can sync.
+          const successTripKey = tripKeyForItem(item);
+          if (successTripKey) accessDeniedTrips.delete(successTripKey);
         } catch (error) {
           lastError = redactError(error);
           const nextAttempts = item.attempts + 1;
@@ -714,10 +724,15 @@ export function useSyncEngine(
           // ponytail: unbounded photo re-tries are rate-limited to one attempt per pull cycle.
           if (cloudPullOk && finalState.autoSync) {
             const queuedIds = new Set(freshQueue.filter((item) => item.type === 'receipt').map((item) => item.entityId));
+            // Break the backfill infinite loop: skip receipts whose trip is permanently
+            // access-denied. Without this, the sweep re-queues them with attempts=0,
+            // push fails, and the cycle repeats forever (the 61-item bug).
+            const deniedTrips = accessDeniedTripsRef.current;
             const needsBackfill = (finalState.receipts || []).filter((receipt) =>
               !queuedIds.has(receipt.id)
               && !isReceiptTombstoned(finalState, receipt)
-              && (!receipt.supabaseId || (!!receipt.photoThumb && !receipt._photoSyncedToSupabase)));
+              && (!receipt.supabaseId || (!!receipt.photoThumb && !receipt._photoSyncedToSupabase))
+              && !(receipt.tripId && deniedTrips.has(receipt.tripId)));
             if (needsBackfill.length) {
               console.log(`[SyncEngine] backfill sweep: ${needsBackfill.length} receipt(s) missing from Supabase — re-queueing`);
               const now = Date.now();
