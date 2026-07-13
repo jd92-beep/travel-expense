@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { authorizeReadiness, validateReadinessData } from './readiness.js';
+import { authorizeReadiness, validateReadinessData } from '../../api/readiness.js';
 
 const gitSha = 'a'.repeat(40);
 const schemaVersion = '20260712123000';

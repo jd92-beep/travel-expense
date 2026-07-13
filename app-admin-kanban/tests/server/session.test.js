@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { revokeAdminSession, rotateOpaqueSession } from './session.js';
+import { revokeAdminSession, rotateOpaqueSession } from '../../server/admin/session.js';
 
 process.env.ADMIN_KANBAN_HASH = `scrypt:v1:131072:8:1:${Buffer.alloc(16).toString('base64url')}:${Buffer.alloc(32).toString('base64url')}`;
 

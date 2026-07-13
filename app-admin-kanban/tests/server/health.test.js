@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import health from './health.js';
+import health from '../../api/health.js';
 
 function invokeHealth() {
   let body = '';

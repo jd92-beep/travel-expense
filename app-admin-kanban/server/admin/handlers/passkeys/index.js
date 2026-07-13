@@ -1,13 +1,13 @@
-import { authStateCall } from '../../_lib/auth-state.js';
-import { handler, HttpError, requireMethod, sendData } from '../../_lib/http.js';
+import { authStateCall } from '../../auth-state.js';
+import { handler, HttpError, requireMethod, sendData } from '../../http.js';
 import {
   passkeyEnrollmentContext,
   passkeyRemovalContext,
   passkeyRemovalSetHash,
   passkeyRemovalSelector,
   sanitizePasskeyCredentials,
-} from '../../_lib/passkeys.js';
-import { requireAdminSession } from '../../_lib/session.js';
+} from '../../passkeys.js';
+import { requireAdminSession } from '../../session.js';
 
 export default function listAdminPasskeys(req, res) {
   return handler(req, res, async (requestId) => {

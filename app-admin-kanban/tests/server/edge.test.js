@@ -10,7 +10,7 @@ import {
   canonicalQuery,
   normalizeSignedRoute,
   signedEdgeHeaders,
-} from './edge.js';
+} from '../../server/admin/edge.js';
 
 const TEST_SIGNING_KEY = '0123456789abcdef0123456789abcdef';
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveGatewayRoute, validateGatewayBody } from './gateway-routes.js';
+import { resolveGatewayRoute, validateGatewayBody } from '../../server/admin/gateway-routes.js';
 
 test('gateway maps only production read routes', () => {
   assert.deepEqual(

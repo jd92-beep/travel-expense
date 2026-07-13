@@ -7,7 +7,7 @@ import {
   parseScryptHash,
   sourceNetwork,
   verifyAdminPassphrase,
-} from './crypto.js';
+} from '../../server/admin/crypto.js';
 
 test('scrypt v1 hash verifies exact passphrase without trim or normalization', async () => {
   const previous = process.env.ADMIN_KANBAN_HASH;

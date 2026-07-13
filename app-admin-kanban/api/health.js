@@ -1,4 +1,4 @@
-import { send } from './_lib/http.js';
+import { send } from '../server/admin/http.js';
 
 const ADMIN_VERSION = '1.0.0';
 

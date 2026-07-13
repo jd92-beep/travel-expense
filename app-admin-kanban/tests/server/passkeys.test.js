@@ -6,7 +6,7 @@ import {
   passkeyRemovalContext,
   passkeyRemovalPreview,
   sanitizePasskeyCredentials,
-} from './passkeys.js';
+} from '../../server/admin/passkeys.js';
 
 test('backup passkey context is fixed and hash-bound', () => {
   const context = passkeyEnrollmentContext();

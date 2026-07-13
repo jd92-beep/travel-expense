@@ -1,30 +1,33 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { publicPreviewError } from '../api/admin/passkeys/remove/preview.js';
-import { publicRemovalError } from '../api/admin/passkeys/remove/commit.js';
+import adminGateway from '../api/admin/[...path].js';
+import { publicPreviewError } from '../server/admin/handlers/passkeys/remove/preview.js';
+import { publicRemovalError } from '../server/admin/handlers/passkeys/remove/commit.js';
+import { fixedAdminRoute } from '../server/admin/routes.js';
 
-const routeModules = [
-  '../api/admin/auth/begin.js',
-  '../api/admin/auth/finish.js',
-  '../api/admin/passkeys/enroll/begin.js',
-  '../api/admin/passkeys/enroll/finish.js',
-  '../api/admin/passkeys/index.js',
-  '../api/admin/passkeys/add/begin.js',
-  '../api/admin/passkeys/add/finish.js',
-  '../api/admin/passkeys/remove/preview.js',
-  '../api/admin/passkeys/remove/commit.js',
-  '../api/admin/reauth/begin.js',
-  '../api/admin/reauth/finish.js',
-  '../api/admin/session.js',
-  '../api/admin/[...path].js',
+const fixedRoutes = [
+  ['POST', '/api/admin/auth/begin'],
+  ['POST', '/api/admin/auth/finish'],
+  ['POST', '/api/admin/passkeys/enroll/begin'],
+  ['POST', '/api/admin/passkeys/enroll/finish'],
+  ['GET', '/api/admin/passkeys'],
+  ['POST', '/api/admin/passkeys/add/begin'],
+  ['POST', '/api/admin/passkeys/add/finish'],
+  ['POST', '/api/admin/passkeys/remove/preview'],
+  ['POST', '/api/admin/passkeys/remove/commit'],
+  ['POST', '/api/admin/reauth/begin'],
+  ['POST', '/api/admin/reauth/finish'],
+  ['GET', '/api/admin/session'],
+  ['DELETE', '/api/admin/session'],
 ];
 
-test('all fixed browser admin routes import as handlers', async () => {
-  for (const path of routeModules) {
-    const route = await import(path);
-    assert.equal(typeof route.default, 'function', `${path} must export a handler`);
+test('catch-all preserves every fixed browser admin pathname', () => {
+  assert.equal(typeof adminGateway, 'function');
+  for (const [, pathname] of fixedRoutes) {
+    assert.equal(typeof fixedAdminRoute(pathname), 'function', pathname);
   }
+  assert.equal(fixedAdminRoute('/api/admin/overview'), undefined);
 });
 
 test('passkey removal maps internal state errors to the accepted public envelope', () => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { clearSessionCookies, CSRF_COOKIE, parseCookies, SESSION_COOKIE, sessionCookies } from './cookies.js';
+import { clearSessionCookies, CSRF_COOKIE, parseCookies, SESSION_COOKIE, sessionCookies } from '../../server/admin/cookies.js';
 
 test('session cookie is host-only secure strict and HttpOnly', () => {
   const [session, csrf] = sessionCookies('session-token', 'csrf-token');
