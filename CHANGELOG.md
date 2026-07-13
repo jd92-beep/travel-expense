@@ -2,6 +2,18 @@
 
 ## 2026-07-13
 
+- **Admin Console 1.0.0 cutover preparation**:
+  - Promoted the verified branch metadata from `1.0.0-rc.1` to cutover candidate `1.0.0` in the
+    Admin package, both package-lock root entries and `/api/health`.
+  - Final-SHA PR #36 run `29202450339` passed Admin/BFF, clean database, Compact, React,
+    cross-client, Edge and Credential Broker at `8aa2f8a`; protected production promotion skipped.
+    React `0.2.4` evidence remains typecheck/build/security green, clear-device `12/12`, and
+    security smoke `3 passed, 1 intentional skip`.
+  - Admin metadata gates passed: typecheck/build/security, unit `19/19`, contract `21/21`. Boss
+    explicitly approved cutover preparation, but production deploy and migrations are not complete.
+    The existing `ADMIN_KANBAN_HASH` and current passphrase remain unchanged; passkey is additive and
+    no live enrollment occurred. Production remains Admin `0.8.3` read-only until verified promotion.
+
 - **React App 0.2.4 clear-device persistence race**: clearing device data now quiesces the active
   Supabase storage scope before sign-out, so state/sync effects cannot recreate its scoped
   localStorage or IndexedDB snapshots; a deterministic regression covers the writeback race.

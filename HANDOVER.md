@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-13 HKT
-- **Focus**: Session 46 fixed the React clear-device persistence race: scoped snapshots remain deleted even when state/sync effects run before Supabase sign-out completes. Production remains the intentionally read-only Admin `0.8.3` deployment pending an approved maintenance cutover.
+- **Focus**: Session 47 promoted verified Admin release metadata to the `1.0.0` cutover candidate. Boss has explicitly approved cutover preparation; production deploy and migrations remain incomplete, and live Admin stays intentionally read-only at `0.8.3` until verified promotion.
 - **Agent**: Codex Sol with GPT-5.6 Terra worker
-- **App version**: Compact `0.16.2`; Android `0.19.2` (versionCode 1920); Admin production `0.8.3`, branch RC `1.0.0-rc.1`; React `0.2.4`
+- **App version**: Compact `0.16.2`; Android `0.19.2` (versionCode 1920); Admin production `0.8.3`, branch cutover candidate `1.0.0`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -23,12 +23,12 @@ This is the ONLY live to-do list in this file. Everything under "What Was Done",
 before acting on them. Every session must reconcile this list: add items you opened, mark items
 you closed with your session number.
 
-1. 🟠 **Production migration cutover remains approval-gated** — forward-only reconciliation
-   artifacts and static migration/contract scans are tracked. Production has not received the new
-   Admin 1.0 migrations. PR #36 run `29201116294` rebuilt a clean disposable Supabase at commit
-   `48800e0`, applied every forward migration through `20260712123000` and passed all 15 tracked SQL
-   smokes. **No `db push`, no blind `migration repair`.** Apply to production only through the
-   reviewed maintenance runbook after Boss approval.
+1. 🟠 **Production migration cutover is approved and in preparation** — forward-only reconciliation
+   artifacts and static migration/contract scans are tracked. Production deploy has not run and the
+   new Admin 1.0 migrations have not been applied. Final-SHA PR #36 run `29202450339` rebuilt a clean disposable Supabase at
+   commit `8aa2f8a`, applied every forward migration through `20260712123000` and passed all 15 tracked SQL
+   smokes. **No `db push`, no blind `migration repair`.** Apply only through the reviewed maintenance
+   runbook during the approved cutover.
 2. 🟠 **Notion outbox worker deployment is unverified** — worker code, contracts and a guarded
    workflow now exist, but live Edge deployment and secret bindings were not changed in Session 43.
    Shared receipts may remain pending until live deployment is explicitly verified.
@@ -43,11 +43,12 @@ you closed with your session number.
    unused `hkd` imports in History/Stats. (Old Pending list.)
 7. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
    settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
-8. 🟠 **Admin production cutover is pending** — branch RC auth/BFF, read APIs and R1/R2 kernels are
-   complete and tested, but production secrets, exact WebAuthn origin/RP ID, first Boss passkey
+8. 🟠 **Admin production cutover is approved and in preparation** — branch cutover candidate `1.0.0`
+   auth/BFF, read APIs and R1/R2 kernels are complete and tested. Final-SHA PR #36 run
+   `29202450339` passed all seven required gates at `8aa2f8a`; its protected production job correctly
+   skipped. Production deploy, migrations, secrets, exact WebAuthn origin/RP ID, first Boss passkey
    enrollment, session revocation and maintenance promotion have not been performed. Live remains
-   `0.8.3` read-only. The GitHub workflow now has a manual, main-only protected production job after
-   all seven gates; the `admin-production` environment approval/setup and first run remain pending.
+   `0.8.3` read-only; the `admin-production` environment setup and first run remain pending.
 9. 🟠 **Admin DB ownership hardening needs a platform-owner operation** — browser grants, policies
    and RPC execute are closed, and `search_path` is fixed. The managed SQL API cannot transfer the
    helper function to the planned non-login owner, so this remains a documented go-live blocker.
@@ -59,6 +60,21 @@ you closed with your session number.
     editing and session revoke stay server-disabled until their later threat-model milestones.
 
 ## What Was Done
+
+### Session 47 (Codex — Admin 1.0.0 cutover preparation)
+
+1. **Release metadata**: promoted only the local Admin package, both package-lock root entries and
+   `/api/health` version from `1.0.0-rc.1` to cutover candidate `1.0.0`; Compact `0.16.2`, Android
+   `0.19.2` / versionCode `1920`, and React `0.2.4` were preserved.
+2. **Evidence**: final-SHA PR #36 run `29202450339` passed Admin/BFF, clean database, Compact,
+   React, cross-client, Edge and Broker at `8aa2f8a`; protected production promotion skipped. React
+   `0.2.4` has typecheck/build/security green, clear-device `12/12`, and security smoke `3 passed,
+   1 intentional skip`. This pass: Admin typecheck/build/security green; unit `19/19`; contract
+   `21/21`.
+3. **Release truth**: Boss has approved cutover preparation, but no production deploy or migration
+   has completed. The existing `ADMIN_KANBAN_HASH` and current passphrase remain unchanged; passkey
+   is additive, and no live enrollment occurred in this pass. Current Open Items remain open, and
+   Admin production remains `0.8.3` read-only until verified promotion.
 
 ### Session 46 (Codex Sol + GPT-5.6 Terra — React 0.2.4 clear-device persistence race)
 

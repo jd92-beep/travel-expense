@@ -1,6 +1,6 @@
 import { send } from './_lib/http.js';
 
-const ADMIN_VERSION = '1.0.0-rc.1';
+const ADMIN_VERSION = '1.0.0';
 
 // Unauthenticated liveness probe. Keep the response limited to deployment
 // provenance and whether read traffic is accepted.

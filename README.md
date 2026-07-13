@@ -40,17 +40,19 @@ npm run smoke:production-gate
 
 Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.2`；Android worktree
 目前版本是 `0.19.2`。Admin production 的 live health 仍回報 `0.8.3` read-only containment；
-新 console 候選版本是 `1.0.0-rc.1`，尚未做 production cutover。
+新 console cutover 候選版本是 `1.0.0`。Cutover 已獲 Boss 明確批准並正在準備；production deploy 和
+migrations 尚未完成，完成已驗證 promotion 前 live 仍是 `0.8.3`。
 
 Admin Console 正在進行 Admin 1.0 生產重整。現時 production 已啟用全域 read-only
 containment：讀取及診斷仍可用，所有寫入、刪除、merge、repair、provider probe及其他外部副作用
-均由 Edge backend 拒絕，並非只隱藏按鈕。Admin passphrase 不會寫在 README、GitHub 或前端程式碼。
+均由 Edge backend 拒絕，並非只隱藏按鈕。現有 `ADMIN_KANBAN_HASH` 對應的 Admin passphrase 維持不變；
+passkey 只會新增保護，不會取代它。兩者都不會寫在 README、GitHub 或前端程式碼。
 
-`1.0.0-rc.1` 已在獨立 branch 完成五個工作區、paginated read APIs、passphrase + passkey、
+`1.0.0` 已在獨立 branch 完成五個工作區、paginated read APIs、passphrase + passkey、
 HttpOnly opaque sessions、CSRF、signed BFF、server preview/step-up operations、audit、integrity、
-Notion dry-run reconciliation、非最後 passkey 安全輪換及完整 mobile/a11y states。Production 啟用前
-仍要由 Boss 批准 maintenance cutover、設定 production secrets、登記 passkey及確認
-Compact/Android compatibility。
+Notion dry-run reconciliation、非最後 passkey 安全輪換及完整 mobile/a11y states。Cutover 已獲 Boss
+明確批准並正準備中；production deploy 和 migrations 尚未完成，仍要設定 production secrets、登記
+passkey及確認 Compact/Android compatibility。完成已驗證 promotion 前 live 仍維持 `0.8.3`。
 
 ## 第一次使用
 

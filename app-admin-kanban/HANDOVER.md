@@ -6,11 +6,14 @@ Last updated: 2026-07-13 HKT
 
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
 - Production release: `0.8.3`, intentionally read-only.
-- Verified local release candidate: `1.0.0-rc.1` on `codex/admin-console-1.0`.
+- Verified local cutover candidate: `1.0.0` on `codex/admin-console-1.0`.
 - Expected database contract: `20260712123000` (`admin-passkeys-v2`).
-- Compatibility baseline: Compact Web `0.16.2`, Android `0.19.2`, React `0.2.3`.
+- Compatibility baseline: Compact Web `0.16.2`, Android `0.19.2`, React `0.2.4`.
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
-- R0/R1/R2 code and release gates are complete locally. Production cutover is not approved or run.
+- R0/R1/R2 code and release gates are complete locally. Boss has approved cutover preparation;
+  production deploy and migrations are not complete, and live remains `0.8.3` read-only until
+  verified promotion.
+- The existing `ADMIN_KANBAN_HASH` and current passphrase remain unchanged; passkey is additive.
 - R3 account consolidation/deletion, Notion write repair, device commands, runtime writes, arbitrary
   SQL/table editing and generic credential controls are server-disabled.
 
@@ -54,7 +57,7 @@ shows background refresh separately and never retries mutations.
 
 ## Authentication Boundary
 
-The RC implements:
+The cutover candidate implements:
 
 1. Async Node `crypto.scrypt` passphrase verification using the versioned
    `scrypt:v1:131072:8:1:...` format and constant-time comparison.
@@ -71,7 +74,7 @@ The RC implements:
    passphrase-plus-passkey step-up. The server rechecks the complete credential-set hash under a
    lock, appends Audit v2 and revokes every Admin session. The final passkey remains break-glass only.
 
-The legacy browser bearer and direct Edge authorization paths are removed from the RC. Production
+The legacy browser bearer and direct Edge authorization paths are removed from the cutover candidate. Production
 still runs the old read-only build until the approved maintenance cutover.
 
 ## API And Operations
@@ -102,8 +105,8 @@ and recovered through the operation ID; the UI never declares success from reque
   belongs to one in-range day; partial updates preserve omitted days; every mutation creates a new
   version and snapshot.
 - Nagoya acceptance is exactly six days, `2026-04-20` through `2026-04-25`, with no scenery spot
-  outside that range. Compact/React browser and static contract tests are green. PR #36 run
-  `29201116294` rebuilt a disposable Supabase from zero and passed all 15 SQL smokes, including
+  outside that range. Compact/React browser and static contract tests are green. PR #36 final-SHA run
+  `29202450339` rebuilt a disposable Supabase from zero and passed all 15 SQL smokes, including
   itinerary/R2 round trips. Live Boss data has not been rewritten because that requires explicit
   approval, backup and a fresh preview.
 
@@ -111,24 +114,29 @@ and recovered through the operation ID; the UI never declares success from reque
 
 Verified on 2026-07-13:
 
-- Admin: typecheck, build and security scan passed; unit `19/19`; contract `21/21`; full smoke
+- Admin `1.0.0` cutover metadata is aligned in `package.json`, both package-lock root entries and
+  `/api/health`; this pass's typecheck, build and security scan passed, with unit `19/19` and
+  contract `21/21`. Prior full smoke evidence remains
   `42 passed + 1 intentional visual-capture skip`; the suite covers login/WebAuthn, all 18 routes
   at seven release viewports, every visible R1/R2 action family and axe serious/critical checks;
   `npm audit` reports `0` vulnerabilities.
+- Boss explicitly approved cutover preparation, but production deploy and migrations are not
+  complete. The existing `ADMIN_KANBAN_HASH` and current passphrase remain unchanged; passkey is
+  additive, and no live enrollment occurred in this pass.
 - Edge: 28 files passed format/lint; all three entrypoints passed `deno check`; Deno tests
   `69 passed, 0 failed`.
 - Compact `0.16.2`: 9/9 selected post-rebase gates passed, including itinerary merge, receipt
   tombstone, privacy, offline, mobile layout and final navigation.
-- React `0.2.3`: typecheck/build/security, itinerary merge, security, mobile layout and final
-  navigation passed; final navigation `6/6` uses the owned dev-server wrapper.
+- React `0.2.4`: typecheck/build/security passed; the deterministic clear-device repeat was `12/12`,
+  and the full security smoke was `3 passed, 1 intentional skip`.
 - Android `0.19.2` / versionCode `1920` is the current Oscar worktree baseline. It was not rebuilt
   or republished in this final web-console pass.
 - BFF: the contract suite executes the real catch-all handler, session verification, CSRF and
   signed Edge transport; invalid provenance, redirects, malformed envelopes and escaped routes fail closed.
 - Broker: check and self-test passed. Static migration policy and shared-ledger scans passed.
-- PR #36 run `29201116294` passed all seven required jobs at current code commit `48800e0`:
-  Admin `2m26s`, clean database `1m42s`, Compact `1m38s`, React `1m43s`, cross-client `1m05s`,
-  Edge `12s` and Broker `13s`. The production-promotion job correctly skipped.
+- PR #36 final-SHA run `29202450339` passed all seven required jobs at code commit `8aa2f8a`:
+  Admin/BFF, clean database, Compact, React, cross-client, Edge and Broker. The protected
+  production-promotion job correctly skipped.
 - The clean-database job applied every migration through `20260712123000` and passed all 15 tracked
   SQL fixtures. Local Docker remained unavailable; no live database was used as a substitute.
 - Owned Compact/React Vite test servers now launch directly from the local CLI, receive bounded
