@@ -1,7 +1,35 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { verifyAdminSessionRouteCanary } from '../../scripts/admin-session-route-canary.mjs';
 import { retryPromotedReadiness } from '../../scripts/retry-promoted-readiness.mjs';
+
+test('admin session route canary requires the canonical unauthorized JSON response', async () => {
+  const response = await verifyAdminSessionRouteCanary(async (pathname, options) => {
+    assert.equal(pathname, '/api/admin/session');
+    assert.deepEqual(options, { expectedStatus: 401 });
+    return { ok: false, data: null, error: { code: 'UNAUTHORIZED' } };
+  });
+  assert.deepEqual(response, { ok: false, data: null, error: { code: 'UNAUTHORIZED' } });
+});
+
+test('admin session route canary fails closed for an unexpected error code', async () => {
+  await assert.rejects(
+    verifyAdminSessionRouteCanary(async () => ({
+      ok: false,
+      data: null,
+      error: { code: 'NOT_FOUND' },
+    })),
+    /Admin session route canary did not return the expected unauthorized envelope/,
+  );
+});
+
+test('admin session route canary rejects a minimal unauthorized error envelope', async () => {
+  await assert.rejects(
+    verifyAdminSessionRouteCanary(async () => ({ error: { code: 'UNAUTHORIZED' } })),
+    /Admin session route canary did not return the expected unauthorized envelope/,
+  );
+});
 
 test('promoted readiness retries transient failures and returns the verified result', async () => {
   let attempts = 0;

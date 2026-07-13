@@ -57,11 +57,14 @@ export function protectedRequestArgs({
   return args;
 }
 
-export function parseProtectedResponse(value, label) {
+export function parseProtectedResponse(value, label, { expectedStatus } = {}) {
   const output = String(value);
   const separator = output.lastIndexOf('\n');
   const status = Number(separator >= 0 ? output.slice(separator + 1).trim() : '');
-  if (!Number.isInteger(status) || status < 200 || status > 299) {
+  const accepted = expectedStatus === undefined
+    ? status >= 200 && status <= 299
+    : status === expectedStatus;
+  if (!Number.isInteger(status) || !accepted) {
     throw new Error(`${label} failed (${Number.isInteger(status) ? status : 'unknown'})`);
   }
   try {

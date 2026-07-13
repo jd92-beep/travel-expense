@@ -15,6 +15,7 @@ import {
   parseProtectedResponse,
   protectedRequestArgs,
 } from './vercel-protected-request.mjs';
+import { verifyAdminSessionRouteCanary } from './admin-session-route-canary.mjs';
 import { retryPromotedReadiness } from './retry-promoted-readiness.mjs';
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -92,16 +93,16 @@ function deploymentUrlFrom(result) {
   return parsed.origin;
 }
 
-async function fetchJson(url, options = {}) {
+async function fetchJson(url, { expectedStatus, ...options } = {}) {
   const response = await fetch(url, { cache: 'no-store', redirect: 'error', ...options });
   const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload) {
+  if ((expectedStatus === undefined ? !response.ok : response.status !== expectedStatus) || !payload) {
     throw new Error(`Release verification failed (${response.status})`);
   }
   return payload;
 }
 
-function fetchProtectedJson(baseUrl, pathname, options = {}) {
+function fetchProtectedJson(baseUrl, pathname, { expectedStatus, ...options } = {}) {
   const args = protectedRequestArgs({
     baseArgs: vercelArgs,
     body: options.body,
@@ -114,6 +115,7 @@ function fetchProtectedJson(baseUrl, pathname, options = {}) {
   return parseProtectedResponse(
     capture('npx', args, appDir),
     'Protected release verification',
+    { expectedStatus },
   );
 }
 
@@ -144,6 +146,7 @@ async function verifyCandidate(baseUrl, gitSha, version, mode) {
     || health.acceptingReadTraffic !== true || health.deploymentId === 'unknown') {
     throw new Error('Admin health provenance mismatch');
   }
+  const session = await verifyAdminSessionRouteCanary(requestJson);
 
   const token = String(process.env.ADMIN_READINESS_TOKEN || '');
   if (token.length < 32) throw new Error('ADMIN_READINESS_TOKEN is missing');
@@ -167,7 +170,7 @@ async function verifyCandidate(baseUrl, gitSha, version, mode) {
   if (readiness?.data?.ready !== true || readiness?.data?.gitSha !== gitSha) {
     throw new Error('Signed Edge/database readiness canary failed');
   }
-  return { health, readiness };
+  return { health, readiness, session };
 }
 
 try {
