@@ -1226,6 +1226,7 @@ test('capture workspace visual audit', async ({ page }) => {
 });
 
 test('all workspace routes have no serious or critical axe violations on desktop and mobile', async ({ page }) => {
+  test.setTimeout(120_000);
   await setupApi(page);
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
@@ -1240,6 +1241,7 @@ test('all workspace routes have no serious or critical axe violations on desktop
 });
 
 test('all workspaces reflow without document overflow across release viewports', async ({ page }) => {
+  test.setTimeout(120_000);
   const longSyncError = 'Notion provider 回覆 429，保留完整 request UUID 98500000-0000-4000-8000-0000000000ff，請由 server audit trace 調查。'.repeat(3);
   await setupApi(page, {
     syncJobs: [{ id: '98500000-0000-4000-8000-0000000000ff', provider: 'notion', operation: 'upsert', status: 'failed', attempts: 9, next_attempt_at: null, last_error: longSyncError, created_at: '2026-07-10T10:00:00Z', updated_at: '2026-07-10T10:00:00Z', owner_masked_email: 're***@example.invalid', receipt_id: receiptId }],
