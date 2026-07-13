@@ -5,15 +5,105 @@ begin;
 
 do $$
 begin
-  if (select public from storage.buckets where id = 'receipt-photos') then
-    raise exception 'receipt photo bucket is still public';
+  if (select count(*) from storage.buckets where id = 'receipt-photos') <> 1
+    or not exists (
+      select 1 from storage.buckets
+      where id = 'receipt-photos' and public = true
+    ) then
+    raise exception 'receipt photo bucket is not exactly one public compatibility bucket';
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname = 'receipt_photos_public_read'
+      and permissive = 'PERMISSIVE'
+      and cmd = 'SELECT'
+      and roles = array['public']::name[]
+      and with_check is null
+      and lower(coalesce(qual, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
+      and translate(
+        replace(replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
+        '()',
+        ''
+      )
+        = 'bucket_id=''receipt-photos'''
+  ) then
+    raise exception 'public receipt photo compatibility policy shape is wrong';
   end if;
   if exists (
     select 1 from pg_policies
     where schemaname = 'storage' and tablename = 'objects'
-      and policyname = 'receipt_photos_public_read'
+      and policyname in ('receipt_photos_read_own', 'receipt_photos_read_trip_members')
   ) then
-    raise exception 'public receipt photo policy still exists';
+    raise exception 'interim or staged receipt photo read policy still exists';
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname = 'receipt_photos_upload_own'
+      and permissive = 'PERMISSIVE'
+      and cmd = 'INSERT'
+      and roles = array['authenticated']::name[]
+      and qual is null
+      and lower(coalesce(with_check, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
+      and translate(
+        replace(replace(regexp_replace(lower(coalesce(with_check, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
+        '()',
+        ''
+      ) = 'bucket_id=''receipt-photos''andstorage.foldernamename[1]=auth.uid'
+  ) then
+    raise exception 'receipt photo upload policy is not authenticated owner-path only';
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname = 'receipt_photos_delete_own'
+      and permissive = 'PERMISSIVE'
+      and cmd = 'DELETE'
+      and roles = array['authenticated']::name[]
+      and with_check is null
+      and lower(coalesce(qual, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
+      and translate(
+        replace(replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
+        '()',
+        ''
+      ) = 'bucket_id=''receipt-photos''andstorage.foldernamename[1]=auth.uid'
+  ) then
+    raise exception 'receipt photo delete policy is not authenticated owner-path only';
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'receipt_photos'
+      and policyname = 'receipt_photos_select_own'
+      and permissive = 'PERMISSIVE'
+      and cmd = 'SELECT'
+      and roles = array['authenticated']::name[]
+      and with_check is null
+      and lower(coalesce(qual, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
+      and translate(
+        replace(replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
+        '()',
+        ''
+      ) = 'owner_id=selectauth.uid'
+  ) then
+    raise exception 'receipt photo owner visibility policy is not authenticated owner-only';
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'receipt_photos'
+      and policyname = 'receipt_photos_select_trip_members'
+      and permissive = 'PERMISSIVE'
+      and cmd = 'SELECT'
+      and roles = array['authenticated']::name[]
+      and with_check is null
+      and lower(coalesce(qual, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
+      and translate(
+        replace(replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
+        '()',
+        ''
+      ) = 'existsselect1fromreceiptsrwherer.id=receipt_photos.receipt_idandr.visibility=''trip''andprivate.can_access_tripr.trip_id'
+  ) then
+    raise exception 'receipt photo trip visibility policy is not authenticated trip-member only';
   end if;
   if has_table_privilege('anon', 'private.admin_operations', 'select')
     or has_table_privilege('authenticated', 'private.admin_operations', 'select')

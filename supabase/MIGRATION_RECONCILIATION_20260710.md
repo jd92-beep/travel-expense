@@ -36,7 +36,7 @@ production schema snapshot.
 | `20260603000000_reassign_boss_data.sql` | Archived; data migration is not replayed by a clean schema build. |
 | `20260615120000_claim_receipt_sync_jobs.sql` | Archived; absent from linked history and live canonical schema. |
 | Emergency containment and adjacent definer hardening | Kept active with their original forward timestamps and checksums. |
-| Private receipt-photo storage migration | Moved to `migrations-staged/`; it remains compatibility-gated until both Compact and Android signed-photo clients are live. |
+| Private receipt-photo storage migration | `20260710161000_private_receipt_photo_storage.sql` stays in `migrations-staged/` until both Compact and Android signed-photo clients are live and heartbeats confirm compatibility. Active `20260712122500_restore_receipt_photo_compatibility.sql` preserves public compatibility meanwhile. Neither migration was applied to production in the 2026-07-13 cutover-preparation pass. |
 
 ## Forward Migration Set
 
@@ -53,7 +53,26 @@ The active forward-only layer is:
 20260710100000 live drift, visibility, grants, and definer reconciliation
 20260710114500 admin console emergency containment
 20260710160000 adjacent SECURITY DEFINER hardening
+20260712122500 receipt-photo public compatibility restoration
 ```
+
+## Receipt-Photo Compatibility Gate
+
+`20260712122500_restore_receipt_photo_compatibility.sql` follows the operation/privacy migrations
+and precedes `20260712123000`. It keeps only the `receipt-photos` Storage bucket public, restores
+the exact public `receipt_photos_public_read` policy, and removes the interim owner-only read
+policy. It deliberately does not alter upload/delete policies or `public.receipt_photos` visibility
+enforcement. The staged private migration remains a separately verified future contract.
+
+The static gate requires this migration to be after `20260710187000` and immediately before
+`20260712123000`; its public bucket and public-read `CREATE` actions must be final, and no later
+active migration may mention receipt-photo compatibility state. The SQL fixture verifies final
+`pg_policies` metadata and normalized predicates, not policy names alone.
+
+The guard is deliberately conservative after the compatibility migration: any later
+`storage.buckets` reference or `create`/`drop`/`alter policy` action on `storage.objects` is a
+failure. The fixture requires exact normalized predicates in the correct `qual` or `with_check`
+column, rejects logical `OR` and extra predicates, and rejects the staged-only read policy.
 
 ## Verification
 
@@ -71,3 +90,7 @@ security_definer_contract_smoke_passed
 The migration history must still be reviewed and deployed as a normal
 forward-only release. This file is evidence, not authorization to repair the
 remote migration table or push schema changes directly.
+
+On 2026-07-13, static migration and shared-ledger scans passed for the public
+compatibility state. Local Docker was unavailable, so the clean Supabase rebuild and SQL fixture
+remain CI work. No production migration ran.

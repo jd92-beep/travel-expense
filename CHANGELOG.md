@@ -9,6 +9,16 @@
   upsert not insert) and a per-session contested→re-homed id map skips the doomed contested
   attempt on subsequent pushes.
 
+- **Receipt-photo cutover compatibility**:
+  - Added forward migration `20260712122500_restore_receipt_photo_compatibility.sql` to retain the
+    public `receipt-photos` bucket and exact public read policy until Compact/Android signed-URL
+    heartbeats prove active compatibility.
+  - The static migration gate now verifies the final active public state separately from the staged
+    private-bucket contract, locks the migration ordering/final actions, and rejects later active
+    Storage mutations; the Admin SQL smoke verifies exact normalized policy metadata/predicates and
+    rejects staged-only read policy activation.
+  - No production migration, deployment, secret, or data mutation occurred.
+
 - **Admin Console 1.0.0 cutover preparation**:
   - Promoted the verified branch metadata from `1.0.0-rc.1` to cutover candidate `1.0.0` in the
     Admin package, both package-lock root entries and `/api/health`.

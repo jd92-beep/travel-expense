@@ -7,11 +7,25 @@ const files = readdirSync(join(repoRoot, 'supabase/migrations'))
   .sort()
   .map((file) => `supabase/migrations/${file}`);
 
-files.push('supabase/migrations-staged/20260710161000_private_receipt_photo_storage.sql');
+const stagedFiles = [
+  'supabase/migrations-staged/20260710161000_private_receipt_photo_storage.sql',
+];
+const receiptPhotoCompatibilityMigration =
+  'supabase/migrations/20260712122500_restore_receipt_photo_compatibility.sql';
+const adminOperationKernelMigration =
+  'supabase/migrations/20260710187000_admin_operation_kernel.sql';
+const adminPasskeyRemovalMigration =
+  'supabase/migrations/20260712123000_admin_passkey_removal.sql';
 
-const sql = files
+const activeSql = files
   .map((file) => readFileSync(join(repoRoot, file), 'utf8'))
   .join('\n\n');
+const stagedSql = stagedFiles
+  .map((file) => readFileSync(join(repoRoot, file), 'utf8'))
+  .join('\n\n');
+const receiptPhotoCompatibilitySql = files.includes(receiptPhotoCompatibilityMigration)
+  ? readFileSync(join(repoRoot, receiptPhotoCompatibilityMigration), 'utf8')
+  : '';
 
 const requiredPatterns = [
   {
@@ -131,18 +145,6 @@ const requiredPatterns = [
     re: /insert into storage\.buckets[\s\S]*?on conflict \(id\) do nothing[\s\S]*?drop policy if exists "receipt_photos_upload_own" on storage\.objects/i,
   },
   {
-    name: 'receipt photo storage bucket is made private',
-    re: /update storage\.buckets[\s\S]*?set public = false[\s\S]*?where id = 'receipt-photos'/i,
-  },
-  {
-    name: 'receipt photo public storage reads are removed',
-    re: /drop policy if exists "receipt_photos_public_read" on storage\.objects/i,
-  },
-  {
-    name: 'receipt photo storage reads require authenticated trip access',
-    re: /create policy "receipt_photos_read_trip_members"[\s\S]*?on storage\.objects for select to authenticated[\s\S]*?private\.can_access_trip\(r\.trip_id\)[\s\S]*?r\.visibility\s*=\s*'trip'[\s\S]*?r\.owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
-  },
-  {
     name: 'browser receipt writes cannot retain private Notion identifiers',
     re: /create or replace function public\.enforce_receipt_private_fields\(\)[\s\S]*?coalesce\(auth\.role\(\), ''\)\s*<>\s*'service_role'[\s\S]*?new\.notion_page_id\s*:=\s*null[\s\S]*?new\.notion_database_id\s*:=\s*null/i,
   },
@@ -168,7 +170,115 @@ const requiredPatterns = [
   },
 ];
 
-const findings = requiredPatterns.filter((item) => !item.re.test(sql));
+const receiptPhotoCompatibilityPatterns = [
+  {
+    name: 'final receipt photo compatibility migration keeps only the receipt-photos bucket public',
+    re: /update storage\.buckets\s+set public = true\s+where id = 'receipt-photos'/i,
+  },
+  {
+    name: 'final receipt photo compatibility migration restores the exact public read policy',
+    re: /create policy "receipt_photos_public_read"\s+on storage\.objects for select\s+using\s*\(\s*bucket_id\s*=\s*'receipt-photos'\s*\)/i,
+  },
+  {
+    name: 'final receipt photo compatibility migration removes the interim owner-only read policy',
+    re: /drop policy if exists "receipt_photos_read_own" on storage\.objects/i,
+  },
+  {
+    name: 'final receipt photo compatibility migration sets local lock and statement timeouts',
+    re: /set local lock_timeout = '5s';[\s\S]*?set local statement_timeout = '30s';/i,
+  },
+];
+
+const stagedReceiptPhotoPatterns = [
+  {
+    name: 'staged receipt photo migration makes the bucket private',
+    re: /update storage\.buckets[\s\S]*?set public = false[\s\S]*?where id = 'receipt-photos'/i,
+  },
+  {
+    name: 'staged receipt photo migration removes public storage reads',
+    re: /drop policy if exists "receipt_photos_public_read" on storage\.objects/i,
+  },
+  {
+    name: 'staged receipt photo migration requires authenticated trip access for storage reads',
+    re: /create policy "receipt_photos_read_trip_members"[\s\S]*?on storage\.objects for select to authenticated[\s\S]*?private\.can_access_trip\(r\.trip_id\)[\s\S]*?r\.visibility\s*=\s*'trip'[\s\S]*?r\.owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
+  },
+];
+
+const findings = [
+  ...requiredPatterns.filter((item) => !item.re.test(activeSql)),
+  ...receiptPhotoCompatibilityPatterns.filter(
+    (item) => !item.re.test(receiptPhotoCompatibilitySql),
+  ),
+  ...stagedReceiptPhotoPatterns.filter((item) => !item.re.test(stagedSql)),
+];
+
+if (/\b(?:begin|commit)\s*;/i.test(receiptPhotoCompatibilitySql)) {
+  findings.push({
+    name: 'final receipt photo compatibility migration relies on the migration runner transaction',
+  });
+}
+
+if (/drop policy if exists "receipt_photos_(?:upload|delete)_own" on storage\.objects/i.test(receiptPhotoCompatibilitySql)) {
+  findings.push({
+    name: 'final receipt photo compatibility migration preserves upload and delete policies',
+  });
+}
+
+const receiptPhotoCompatibilityIndex = files.indexOf(receiptPhotoCompatibilityMigration);
+const adminOperationKernelIndex = files.indexOf(adminOperationKernelMigration);
+if (
+  adminOperationKernelIndex === -1
+  || receiptPhotoCompatibilityIndex <= adminOperationKernelIndex
+  || files[receiptPhotoCompatibilityIndex + 1] !== adminPasskeyRemovalMigration
+) {
+  findings.push({
+    name: 'final receipt photo compatibility migration is ordered after 20260710187000 and immediately before 20260712123000',
+  });
+}
+
+const storageBucketMutations = [
+  ...receiptPhotoCompatibilitySql.matchAll(
+    /\b(?:insert\s+into|update|delete\s+from|alter\s+table)\s+storage\.buckets\b[^;]*;/gi,
+  ),
+];
+if (
+  !/^\s*update\s+storage\.buckets\s+set\s+[^;]*?\bpublic\s*=\s*true\b[^;]*?\bwhere\s+id\s*=\s*'receipt-photos'\s*;\s*$/i.test(
+    storageBucketMutations.at(-1)?.[0] ?? '',
+  )
+) {
+  findings.push({
+    name: 'final receipt photo compatibility storage.buckets mutation leaves receipt-photos public',
+  });
+}
+
+const storageObjectPolicyActions = [
+  ...receiptPhotoCompatibilitySql.matchAll(
+    /\b(drop|create|alter)\s+policy(?:\s+if\s+exists)?\s+(?:"([^"]+)"|([^\s]+))\s+on\s+storage\.objects\b/gi,
+  ),
+];
+const finalStorageObjectPolicyAction = storageObjectPolicyActions.at(-1);
+if (
+  finalStorageObjectPolicyAction?.[1].toLowerCase() !== 'create'
+  || (finalStorageObjectPolicyAction?.[2] ?? finalStorageObjectPolicyAction?.[3])
+    !== 'receipt_photos_public_read'
+) {
+  findings.push({
+    name: 'final receipt photo compatibility public-read create is the final storage.objects policy action',
+  });
+}
+
+if (receiptPhotoCompatibilityIndex !== -1) {
+  const laterActiveStorageMutationFiles = files.slice(receiptPhotoCompatibilityIndex + 1).filter((file) => {
+    const sql = readFileSync(join(repoRoot, file), 'utf8');
+    return /\bstorage\.buckets\b/i.test(sql)
+      || /\b(?:create|drop|alter)\s+policy\b[\s\S]*?\bon\s+storage\.objects\b/i.test(sql);
+  });
+  if (laterActiveStorageMutationFiles.length) {
+    findings.push({
+      name: `later active migrations mutate Storage state: ${laterActiveStorageMutationFiles.join(', ')}`,
+    });
+  }
+}
 
 if (findings.length) {
   console.error('Supabase migration policy scan failed:');

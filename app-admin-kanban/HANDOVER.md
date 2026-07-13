@@ -13,6 +13,10 @@ Last updated: 2026-07-13 HKT
 - R0/R1/R2 code and release gates are complete locally. Boss has approved cutover preparation;
   production deploy and migrations are not complete, and live remains `0.8.3` read-only until
   verified promotion.
+- Active source now includes `20260712122500_restore_receipt_photo_compatibility.sql`, which keeps
+  receipt photos public until client heartbeats prove signed-URL compatibility. The staged private
+  migration remains `20260710161000_private_receipt_photo_storage.sql`; neither migration ran in
+  production during this cutover-preparation pass.
 - The existing `ADMIN_KANBAN_HASH` and current passphrase remain unchanged; passkey is additive.
 - R3 account consolidation/deletion, Notion write repair, device commands, runtime writes, arbitrary
   SQL/table editing and generic credential controls are server-disabled.
@@ -139,6 +143,17 @@ Verified on 2026-07-13:
   production-promotion job correctly skipped.
 - The clean-database job applied every migration through `20260712123000` and passed all 15 tracked
   SQL fixtures. Local Docker remained unavailable; no live database was used as a substitute.
+- Receipt-photo compatibility source gate passed: final active state requires a public
+  `receipt-photos` bucket and exact public read policy, while the private staged migration remains
+  separately verified. This local pass did not run a clean database because Docker was unavailable;
+  production received no migration.
+- Reviewer follow-up validates the bucket cardinality, complete public-policy metadata and normalized
+  predicate, authenticated owner-path storage writes/deletes, and authenticated owner/trip table
+  visibility predicates. The source scanner also locks the migration order and rejects later active
+  receipt-photo mutations; typecheck/build/security, unit `19/19`, and contract `21/21` passed again.
+- Second review broadens the source guard to all later Storage bucket references and Storage policy
+  actions. It requires exact normalized policy expressions without `OR`/extra predicates and rejects
+  the staged-only storage read policy; the existing RLS behavior fixture remains the end-to-end proof.
 - Owned Compact/React Vite test servers now launch directly from the local CLI, receive bounded
   TERM/KILL cleanup and are awaited; CI no longer hangs after already-passed browser output.
 
@@ -165,7 +180,8 @@ Runbook index: `docs/runbooks/README.md`
 3. Apply reviewed forward-only migrations through the maintenance runbook. Do not run `db push` or
    `migration repair`; transfer helper ownership through the platform-owner operation.
 4. Verify production BFF/Edge provenance, nonce store, session/rate stores and fail-closed behavior.
-5. Deploy Compact/Android compatibility and confirm heartbeats before making receipt photos private.
+5. Keep receipt photos in public compatibility mode and deploy Compact/Android compatibility; confirm
+   heartbeats before applying the staged private receipt-photo migration.
 6. Verify receipt-sync worker deployment and bindings separately.
 7. Preview and back up live Nagoya data before any repair; do not mutate live rows automatically.
 8. Configure and approve the protected `admin-production` GitHub environment before the first
