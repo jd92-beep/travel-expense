@@ -2,8 +2,8 @@
 
 ## Last Worked On
 - **Date**: 2026-07-13 HKT
-- **Focus**: Session 48 added the receipt-photo public compatibility forward migration. Boss has explicitly approved cutover preparation; production deploy and migrations remain incomplete, and live Admin stays intentionally read-only at `0.8.3` until verified promotion.
-- **Agent**: Codex Sol with GPT-5.6 Terra worker
+- **Focus**: Session 49 fixed the sync backfill infinite loop (61-item bug for `puiyuchau@gmail.com`) and added defensive `trip_members` auto-seed.
+- **Agent**: Antigravity
 - **App version**: Compact `0.16.2`; Android `0.19.2` (versionCode 1920); Admin production `0.8.3`, branch cutover candidate `1.0.0`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
@@ -60,8 +60,30 @@ you closed with your session number.
 11. 🟡 **Admin 1.0 intentionally excludes R3 and generic controls** — account consolidation,
     scheduled deletion, Notion write repair, device commands, runtime writes, arbitrary SQL/table
     editing and session revoke stay server-disabled until their later threat-model milestones.
+12. 🟠 **`puiyuchau@gmail.com` root cause — owner_id mismatch** — the infinite backfill loop is now
+    broken (Session 49), but the underlying `owner_id ≠ auth.uid()` mismatch needs DB-side
+    investigation (Admin Kanban gateway blocked access). If re-invite or trip re-creation doesn't
+    fix it, a manual `UPDATE trips SET owner_id = '<correct_uid>'` may be needed.
 
 ## What Was Done
+
+### Session 49 (Antigravity — sync backfill infinite loop fix)
+1. **Root cause identified**: User `puiyuchau@gmail.com` had 61 failed sync items because:
+   - The trip's `owner_id` doesn't match the user's `auth.uid()` (likely Magic Link email case mismatch)
+   - RLS `can_edit_trip()` blocks all receipt upserts
+   - The backfill sweep in `pull()` re-queues all 61 items with `attempts: 0` after every pull cycle
+   - This creates an infinite failure loop that never self-heals
+2. **Fix 1 — Break backfill infinite loop** (`app-compact/src/lib/useSyncEngine.ts`):
+   - Promoted `accessDeniedTrips` from a local variable inside `push()` to a `useRef` persisting across push/pull cycles
+   - Backfill sweep now skips receipts whose trip is in `accessDeniedTripsRef`
+   - When a trip push succeeds (e.g. after re-invite), the denied flag is cleared for recovery
+3. **Fix 2 — Defensive `trip_members` auto-seed** (`supabase.ts`, both compact + react):
+   - After every successful trip upsert, fire-and-forget upserts a `trip_members` row with `role='owner'`
+   - Provides a second RLS path so `can_edit_trip()` never fails for the actual trip creator
+   - Tolerates missing `trip_members` table (pre-sharing schema) via `isMissingSharingTableError`
+4. **Verification**: Compact + React typecheck ✅, build ✅, security:scan ✅.
+5. **Remaining**: DB-side investigation of the user's actual `owner_id` vs `auth.uid()` values
+   requires Admin Kanban access (currently blocked by gateway `ADMIN_ROUTE_NOT_ALLOWED`).
 
 ### Session 48 (Codex — receipt-photo cutover compatibility)
 1. Added active forward migration `20260712122500_restore_receipt_photo_compatibility.sql` after
