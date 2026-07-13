@@ -81,12 +81,26 @@ export function normalizeFunctionPath(
     throw new BffVerificationError("ADMIN_PATH_INVALID", 400, "Invalid path segments");
   }
 
-  const marker = `/functions/v1/${functionName}`;
-  const markerIndex = decoded.indexOf(marker);
-  if (markerIndex < 0 || markerIndex !== decoded.lastIndexOf(marker)) {
+  const prefixes = [`/functions/v1/${functionName}`, `/${functionName}`];
+  const prefix = prefixes.find((candidate) =>
+    decoded === candidate || decoded.startsWith(candidate + "/")
+  );
+  if (!prefix) {
     throw new BffVerificationError("ADMIN_PATH_INVALID", 400, "Function path mismatch");
   }
-  const route = decoded.slice(markerIndex + marker.length) || "/";
+  const route = decoded.slice(prefix.length) || "/";
+  const hasRepeatedPrefix = (candidate: string): boolean => {
+    let index = route.indexOf(candidate);
+    while (index >= 0) {
+      const end = index + candidate.length;
+      if (end === route.length || route[end] === "/") return true;
+      index = route.indexOf(candidate, end);
+    }
+    return false;
+  };
+  if (prefixes.some(hasRepeatedPrefix)) {
+    throw new BffVerificationError("ADMIN_PATH_INVALID", 400, "Function path mismatch");
+  }
   if (!route.startsWith("/")) {
     throw new BffVerificationError("ADMIN_PATH_INVALID", 400, "Invalid function route");
   }
