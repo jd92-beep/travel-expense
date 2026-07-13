@@ -331,6 +331,10 @@ jobs:
         working-directory: app-admin-kanban
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Install Chromium
+        working-directory: app-admin-kanban
+        run: npx playwright install --with-deps chromium
+
       - name: Deploy candidate, verify dependencies and promote
         working-directory: app-admin-kanban
         env:

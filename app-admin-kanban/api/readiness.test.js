@@ -25,9 +25,12 @@ test('readiness token is required and compared exactly', () => {
   );
 });
 
-test('candidate allows only temporary frontend drift while promoted requires none', () => {
+test('candidate allows expected temporary frontend drift while promoted requires none', () => {
   const candidate = runtimeData({
-    drift: ['ADMIN_FRONTEND_GIT_SHA_MISMATCH'],
+    drift: [
+      'ADMIN_FRONTEND_GIT_SHA_MISMATCH',
+      'ADMIN_EDGE_FRONTEND_SOURCE_SHA_MISMATCH',
+    ],
   });
   assert.equal(validateReadinessData(candidate, {
     expectedGitSha: gitSha,

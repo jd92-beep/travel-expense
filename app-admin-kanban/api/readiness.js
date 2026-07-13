@@ -4,6 +4,7 @@ import { handler, HttpError, readJson, requireMethod, sendData } from './_lib/ht
 
 const ALLOWED_CANDIDATE_DRIFT = new Set([
   'ADMIN_FRONTEND_GIT_SHA_MISMATCH',
+  'ADMIN_EDGE_FRONTEND_SOURCE_SHA_MISMATCH',
 ]);
 
 export function authorizeReadiness(req, expectedToken = process.env.ADMIN_READINESS_TOKEN) {
