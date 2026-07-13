@@ -29,7 +29,7 @@ async function signature(secret: string, payload: string): Promise<string> {
   );
 }
 
-async function signedRequest(options: { origin?: string; expiresAt?: number } = {}) {
+async function signedRequest(options: { origin?: string; expiresAt?: number; path?: string } = {}) {
   const keyId = "test-key";
   const secret = "0123456789abcdef0123456789abcdef";
   const requestId = "018f06fd-8bc9-7e9c-8443-7c20f0c7d479";
@@ -37,7 +37,9 @@ async function signedRequest(options: { origin?: string; expiresAt?: number } = 
   const expiresAt = options.expiresAt ?? issuedAt + 30;
   const nonce = "abcdefghijklmnopqrstuv";
   const body = JSON.stringify({ hello: "world" });
-  const url = "https://edge.example/functions/v1/admin-kanban/api/runtime?z=2&a=1";
+  const url = `https://edge.example${
+    options.path ?? "/functions/v1/admin-kanban/api/runtime"
+  }?z=2&a=1`;
   const payload = canonicalBffPayload({
     actor: "boss",
     bodyHash: await sha256Hex(new TextEncoder().encode(body)),
@@ -80,15 +82,31 @@ Deno.test("canonical query sorts keys and rejects duplicates", () => {
   }
 });
 
-Deno.test("function path rejects dot segments and wrong functions", () => {
-  assertEquals(
-    normalizeFunctionPath("/functions/v1/admin-kanban/api/runtime", "admin-kanban"),
-    "/api/runtime",
-  );
+Deno.test("function path accepts external and hosted function prefixes", () => {
+  for (
+    const [path, route] of [
+      ["/functions/v1/admin-kanban/api/runtime", "/api/runtime"],
+      ["/admin-kanban/api/runtime", "/api/runtime"],
+      ["/admin-kanban/api/admin-kanban-report", "/api/admin-kanban-report"],
+    ]
+  ) {
+    assertEquals(normalizeFunctionPath(path, "admin-kanban"), route);
+  }
+});
+
+Deno.test("function path rejects invalid prefixes and path segments", () => {
   for (
     const path of [
+      "/api/runtime",
+      "/prefix/functions/v1/admin-kanban/api/runtime",
+      "/admin-kanbanish/api/runtime",
       "/functions/v1/admin-kanban/api/../runtime",
+      "/admin-kanban/api/%2e%2e/runtime",
+      "/functions/v1/admin-kanban/api//runtime",
       "/functions/v1/other/api/runtime",
+      "/other/api/runtime",
+      "/functions/v1/admin-kanban/functions/v1/admin-kanban/api/runtime",
+      "/admin-kanban/admin-kanban/api/runtime",
     ]
   ) {
     try {
@@ -131,6 +149,20 @@ Deno.test("valid signed request consumes nonce exactly once", async () => {
     BffVerificationError,
     "already used",
   );
+});
+
+Deno.test("hosted signed request verifies the canonical runtime route", async () => {
+  const { request, secret, issuedAt } = await signedRequest({
+    path: "/admin-kanban/api/runtime",
+  });
+  const context = await verifySignedBffRequest(request, {
+    functionName: "admin-kanban",
+    keys: { "test-key": secret },
+    maxBodyBytes: 64 * 1024,
+    nowSeconds: issuedAt + 10,
+    consumeNonce: () => Promise.resolve(true),
+  });
+  assertEquals(context.route, "/api/runtime");
 });
 
 Deno.test("direct browser and expired signed requests are rejected", async () => {
