@@ -3,9 +3,10 @@ import { createHash, createHmac } from 'node:crypto';
 import { Readable } from 'node:stream';
 import test from 'node:test';
 
-import adminGateway from '../api/admin/[...path].js';
+import adminGateway from '../api/admin.js';
 
 const ADMIN_ORIGIN = 'https://travel-expense-admin-kanban.vercel.app';
+const INTERNAL_PATH_PARAM = '__admin_path';
 const ADMIN_EDGE_URL = 'https://admin-edge.test/functions/v1/admin-kanban';
 const AUTH_STATE_URL = 'https://auth-state.test/functions/v1/admin-auth-state';
 const SIGNING_KEY = '0123456789abcdef0123456789abcdef';
@@ -59,10 +60,24 @@ function browserRequest({ method = 'GET', url, headers = {}, body } = {}) {
   });
 }
 
-async function invoke(options) {
+function rewriteAdminRequest(url) {
+  const requestUrl = new URL(url, ADMIN_ORIGIN);
+  const prefix = '/api/admin/';
+  if (!requestUrl.pathname.startsWith(prefix)) return url;
+  const path = requestUrl.pathname.slice(prefix.length);
+  requestUrl.pathname = '/api/admin';
+  requestUrl.searchParams.append(INTERNAL_PATH_PARAM, path);
+  return `${requestUrl.pathname}${requestUrl.search}`;
+}
+
+async function invokeRaw(options) {
   const res = new ResponseDouble();
   await adminGateway(browserRequest(options), res);
   return res;
+}
+
+function invoke(options) {
+  return invokeRaw({ ...options, url: rewriteAdminRequest(options.url) });
 }
 
 function responseEnvelope(data, requestId, warnings = []) {
@@ -260,6 +275,14 @@ test('Admin BFF black-box integration gate', async (t) => {
       assert.equal(calls.length, 0);
     });
 
+    await t.test('rewritten session requests reach the fixed JSON handler instead of SPA HTML', async () => {
+      const res = await invoke({ url: '/api/admin/session' });
+      assert.equal(res.statusCode, 401);
+      assert.equal(res.getHeader('content-type'), 'application/json; charset=utf-8');
+      assert.equal(res.json().error.code, 'UNAUTHORIZED');
+      assert.doesNotMatch(res.body.toString('utf8'), /<!doctype html>/i);
+    });
+
     await t.test('missing opaque session rejects before either Edge service', async () => {
       calls.length = 0;
       const res = await invoke({ url: '/api/admin/overview' });
@@ -282,8 +305,41 @@ test('Admin BFF black-box integration gate', async (t) => {
       assertSignedCall(edgeCalls[0], { baseUrl: ADMIN_EDGE_URL, route: '/api/search' });
       assertSignedCall(edgeCalls[1], { baseUrl: ADMIN_EDGE_URL, route: '/api/search' });
       assert.equal(canonicalQuery(new URL(edgeCalls[0].url)), 'q=ab');
+      assert.equal(new URL(edgeCalls[0].url).searchParams.has(INTERNAL_PATH_PARAM), false);
       assert.notEqual(edgeCalls[0].headers['x-admin-request-id'], edgeCalls[1].headers['x-admin-request-id']);
       assert.notEqual(edgeCalls[0].headers['x-admin-nonce'], edgeCalls[1].headers['x-admin-nonce']);
+    });
+
+    await t.test('malformed internal rewrite routes fail closed before authentication or upstream calls', async () => {
+      for (const route of [
+        '',
+        '%',
+        '%ZZ',
+        'overview//extra',
+        'overview/../runtime',
+        'overview\\runtime',
+        'overview%0Aruntime',
+      ]) {
+        calls.length = 0;
+        const res = await invokeRaw({
+          headers: sessionHeaders(),
+          url: `/api/admin?${INTERNAL_PATH_PARAM}=${route}`,
+        });
+        assert.equal(res.statusCode, 404, route);
+        assert.equal(res.json().error.code, 'NOT_FOUND', route);
+        assert.equal(calls.length, 0, route);
+      }
+
+      for (const url of [
+        `/api/admin?${INTERNAL_PATH_PARAM}=overview&${INTERNAL_PATH_PARAM}=runtime`,
+        `/api/admin/session?${INTERNAL_PATH_PARAM}=overview`,
+      ]) {
+        calls.length = 0;
+        const res = await invokeRaw({ headers: sessionHeaders(), url });
+        assert.equal(res.statusCode, 404, url);
+        assert.equal(res.json().error.code, 'NOT_FOUND', url);
+        assert.equal(calls.length, 0, url);
+      }
     });
 
     await t.test('photo streams bind response provenance before copying bytes', async () => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import adminGateway from '../api/admin/[...path].js';
+import adminGateway from '../api/admin.js';
 import { publicPreviewError } from '../server/admin/handlers/passkeys/remove/preview.js';
 import { publicRemovalError } from '../server/admin/handlers/passkeys/remove/commit.js';
 import { fixedAdminRoute } from '../server/admin/routes.js';
@@ -22,7 +22,7 @@ const fixedRoutes = [
   ['DELETE', '/api/admin/session'],
 ];
 
-test('catch-all preserves every fixed browser admin pathname', () => {
+test('gateway preserves every fixed browser admin pathname', () => {
   assert.equal(typeof adminGateway, 'function');
   for (const [, pathname] of fixedRoutes) {
     assert.equal(typeof fixedAdminRoute(pathname), 'function', pathname);

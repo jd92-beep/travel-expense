@@ -78,7 +78,7 @@ for (const path of [
 }
 
 for (const path of [
-  'api/admin/[...path].js',
+  'api/admin.js',
   'server/admin/routes.js',
   'server/admin/handlers/auth/begin.js',
   'server/admin/handlers/auth/finish.js',

@@ -11,7 +11,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "security:scan": "node scripts/security-scan.mjs",
-    "test:unit": "node --test tests/server/health.test.js tests/server/readiness.test.js tests/server/cookies.test.js tests/server/crypto.test.js tests/server/passkeys.test.js tests/server/session.test.js tests/server/webauthn.test.js tests/server/vercel-function-count.test.js tests/server/vercel-protected-request.test.js",
+    "test:unit": "node --test tests/server/health.test.js tests/server/readiness.test.js tests/server/cookies.test.js tests/server/crypto.test.js tests/server/passkeys.test.js tests/server/session.test.js tests/server/webauthn.test.js tests/server/vercel-function-count.test.js tests/server/vercel-protected-request.test.js tests/server/deploy-production.test.js",
     "test:contract": "node --test tests/server/edge.test.js tests/server/gateway-routes.test.js tests/admin-routes.test.js tests/admin-bff-integration.test.js",
     "smoke": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:mobile": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line --grep mobile",
