@@ -15,6 +15,7 @@ import {
   parseProtectedResponse,
   protectedRequestArgs,
 } from './vercel-protected-request.mjs';
+import { retryPromotedReadiness } from './retry-promoted-readiness.mjs';
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(appDir, '..');
@@ -62,6 +63,7 @@ function assertReleaseManifest(manifest, sourceDir) {
     'package.json',
     'vercel.json',
     'src/main.tsx',
+    'api/admin.js',
     'api/health.js',
     'api/readiness.js',
   ];
@@ -223,7 +225,9 @@ try {
 
   await verifyCandidate(candidateUrl, gitSha, packageJson.version, 'candidate');
   run('npx', [...vercelArgs, 'promote', candidateUrl, '--yes'], archiveAppDir);
-  const verified = await verifyCandidate(productionUrl, gitSha, packageJson.version, 'promoted');
+  const verified = await retryPromotedReadiness(
+    () => verifyCandidate(productionUrl, gitSha, packageJson.version, 'promoted'),
+  );
 
   console.log(JSON.stringify({
     status: 'passed',

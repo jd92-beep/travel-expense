@@ -6,6 +6,52 @@ import { requireAdminSession } from './session.js';
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const PHOTO_CONTENT_TYPE_RE = /^image\/(?:jpeg|png|webp|heic|heif)$/i;
+const INTERNAL_PATH_PARAM = '__admin_path';
+const SAFE_PATH_RE = /^[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/;
+
+function invalidAdminRoute() {
+  throw new HttpError('NOT_FOUND', 'Admin route not found', 404);
+}
+
+function decodedInternalPathValues(search) {
+  const values = [];
+  for (const pair of search.slice(1).split('&')) {
+    if (!pair) continue;
+    const equals = pair.indexOf('=');
+    const rawName = equals < 0 ? pair : pair.slice(0, equals);
+    let name;
+    try {
+      name = decodeURIComponent(rawName.replace(/\+/g, ' '));
+    } catch {
+      continue;
+    }
+    if (name !== INTERNAL_PATH_PARAM) continue;
+
+    const rawValue = equals < 0 ? '' : pair.slice(equals + 1);
+    try {
+      values.push(decodeURIComponent(rawValue.replace(/\+/g, ' ')));
+    } catch {
+      invalidAdminRoute();
+    }
+  }
+  return values;
+}
+
+function canonicalAdminRequest(requestUrl) {
+  const paths = decodedInternalPathValues(requestUrl.search);
+  if (requestUrl.pathname !== '/api/admin' || paths.length !== 1) invalidAdminRoute();
+
+  const [value] = paths;
+  if (!SAFE_PATH_RE.test(value)
+    || value.split('/').some((segment) => segment === '.' || segment === '..')) {
+    invalidAdminRoute();
+  }
+
+  const canonical = new URL(requestUrl);
+  canonical.pathname = `/api/admin/${value}`;
+  canonical.searchParams.delete(INTERNAL_PATH_PARAM);
+  return canonical;
+}
 
 function validEdgeEnvelope(payload, requestId) {
   const meta = payload?.meta;
@@ -21,7 +67,12 @@ function validEdgeEnvelope(payload, requestId) {
 }
 
 export default function adminGateway(req, res) {
-  const requestUrl = new URL(req.url, 'https://travel-expense-admin-kanban.vercel.app');
+  let requestUrl;
+  try {
+    requestUrl = canonicalAdminRequest(new URL(req.url, 'https://travel-expense-admin-kanban.vercel.app'));
+  } catch (error) {
+    return handler(req, res, async () => { throw error; });
+  }
   const fixedRoute = fixedAdminRoute(requestUrl.pathname);
   if (fixedRoute) return fixedRoute(req, res);
 

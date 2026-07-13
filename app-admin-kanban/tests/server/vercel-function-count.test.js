@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import test from 'node:test';
 
 const apiRoot = fileURLToPath(new URL('../../api/', import.meta.url));
+const vercelConfig = JSON.parse(readFileSync(fileURLToPath(new URL('../../vercel.json', import.meta.url)), 'utf8'));
 
 function functionFiles(directory, prefix = '') {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -16,6 +17,19 @@ function functionFiles(directory, prefix = '') {
 
 test('Vercel Hobby function glob contains only the three API entrypoints', () => {
   const files = functionFiles(apiRoot);
-  assert.deepEqual(files, ['admin/[...path].js', 'health.js', 'readiness.js']);
-  assert.ok(files.length <= 12);
+  assert.deepEqual(files, ['admin.js', 'health.js', 'readiness.js']);
+  assert.equal(files.length, 3);
+});
+
+test('Vercel routes every admin API request through the gateway before the SPA fallback', () => {
+  assert.deepEqual(vercelConfig.rewrites, [
+    {
+      source: '/api/admin/:path*',
+      destination: '/api/admin?__admin_path=:path*',
+    },
+    {
+      source: '/(.*)',
+      destination: '/index.html',
+    },
+  ]);
 });
