@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-07-13 HKT
-- **Focus**: Session 47 promoted verified Admin release metadata to the `1.0.0` cutover candidate. Boss has explicitly approved cutover preparation; production deploy and migrations remain incomplete, and live Admin stays intentionally read-only at `0.8.3` until verified promotion.
+- **Focus**: Session 48 added the receipt-photo public compatibility forward migration. Boss has explicitly approved cutover preparation; production deploy and migrations remain incomplete, and live Admin stays intentionally read-only at `0.8.3` until verified promotion.
 - **Agent**: Codex Sol with GPT-5.6 Terra worker
 - **App version**: Compact `0.16.2`; Android `0.19.2` (versionCode 1920); Admin production `0.8.3`, branch cutover candidate `1.0.0`; React `0.2.4`
 
@@ -26,18 +26,20 @@ you closed with your session number.
 1. 🟠 **Production migration cutover is approved and in preparation** — forward-only reconciliation
    artifacts and static migration/contract scans are tracked. Production deploy has not run and the
    new Admin 1.0 migrations have not been applied. Final-SHA PR #36 run `29202450339` rebuilt a clean disposable Supabase at
-   commit `8aa2f8a`, applied every forward migration through `20260712123000` and passed all 15 tracked SQL
-   smokes. **No `db push`, no blind `migration repair`.** Apply only through the reviewed maintenance
+   commit `8aa2f8a`, applied the then-tracked forward migrations through `20260712123000` and passed all 15 tracked SQL
+   smokes. The new `20260712122500` receipt-photo compatibility migration has not run in production. **No `db push`, no blind `migration repair`.** Apply only through the reviewed maintenance
    runbook during the approved cutover.
 2. 🟠 **Notion outbox worker deployment is unverified** — worker code, contracts and a guarded
    workflow now exist, but live Edge deployment and secret bindings were not changed in Session 43.
    Shared receipts may remain pending until live deployment is explicitly verified.
 3. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-4. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — Compact `0.16.2` and Android
-   `0.19.2` use signed URLs, and the Admin Edge photo endpoint uses a 60-second signed
-   URL with no public fallback. The tracked private-bucket migration is intentionally **not live**
-   until both clients are deployed and active compatibility is confirmed. (Sessions 42-43.)
+4. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — active forward migration
+   `20260712122500` keeps `receipt-photos` public with `receipt_photos_public_read` for legacy
+   compatibility, while staged `20260710161000_private_receipt_photo_storage.sql` stays **unapplied**.
+   Compact `0.16.2` and Android `0.19.2` use signed URLs, but Android active compatibility is not
+   yet confirmed. No production migration occurred in Session 48; make photos private only after
+   both clients are deployed and heartbeats prove compatibility. (Sessions 42-43, 48.)
 5. 🟡 **Compact Netlify deploy blocked** by hosting account credits (durable until topped up).
 6. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
    unused `hkd` imports in History/Stats. (Old Pending list.)
@@ -60,6 +62,32 @@ you closed with your session number.
     editing and session revoke stay server-disabled until their later threat-model milestones.
 
 ## What Was Done
+
+### Session 48 (Codex — receipt-photo cutover compatibility)
+1. Added active forward migration `20260712122500_restore_receipt_photo_compatibility.sql` after
+   the operation/privacy migrations and before `20260712123000`. It sets local `5s`/`30s` timeouts,
+   keeps only the `receipt-photos` bucket public, removes `receipt_photos_read_own`, and restores
+   exact public `receipt_photos_public_read`; it has no `BEGIN`/`COMMIT` and does not alter upload,
+   delete, or table-level receipt visibility policies.
+2. Split the static migration scanner into active final-state and staged-private-contract inputs.
+   `admin_operation_kernel_smoke.sql` now requires public compatibility mode while also asserting
+   the upload/delete and `public.receipt_photos` visibility policies remain present.
+3. Reviewer follow-up hardened the photo gate: the bucket check requires exactly one public row;
+   the public policy check validates its complete `pg_policies` shape and normalized predicate;
+   upload/delete and table visibility checks now validate roles, commands, and predicate substance.
+   The scanner requires `20260712122500` after `20260710187000` and immediately before
+   `20260712123000`, final public actions, and no later active receipt-photo mutation.
+4. Verification: `node scripts/verify-supabase-migrations.mjs` passed; `node
+   scripts/verify-shared-ledger-contract.mjs` passed; Admin `typecheck`, `build`, `security:scan`
+   (`Secret scan passed`, `Admin trust-boundary scan passed`), unit `19/19`, and contract `21/21`
+   passed again after the review changes. Local Docker CLI/socket were unavailable, so no clean local Supabase rebuild or SQL
+   smoke ran and no live database was used; CI must run the disposable-database fixture. No
+   production migration, deployment, secret, or data mutation occurred.
+5. Second reviewer follow-up makes the final-state guard conservative: any later active
+   `storage.buckets` reference or `storage.objects` policy action fails the scanner, while the
+   compatibility migration's public bucket update and public policy `CREATE` must be the final
+   Storage actions. The smoke now compares normalized expressions exactly, rejects `OR`/extra
+   predicates, and rejects the staged-only `receipt_photos_read_trip_members` policy.
 
 ### Session 47 (Codex — Admin 1.0.0 cutover preparation)
 
