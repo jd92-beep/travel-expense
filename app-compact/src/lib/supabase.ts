@@ -1219,6 +1219,20 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
       throw new Error(`旅程「${trip.name || ''}」存取權失效：你唔係呢個旅程嘅成員。請旅程擁有者重新邀請你，接受後先可以同步。`);
     }
   }
+  // Defensive auto-seed: ensure the creator always has a trip_members row with role='owner'.
+  // This provides a second RLS path so can_edit_trip() never fails for the actual trip creator,
+  // even if owner_id got mismatched (e.g. account migration, device setup edge case).
+  try {
+    await supabase.from('trip_members').upsert(
+      { trip_id: id, user_id: userId, role: 'owner', status: 'active' },
+      { onConflict: 'trip_id,user_id' },
+    );
+  } catch (seedError) {
+    // Fire-and-forget: tolerate missing trip_members table (pre-sharing schema).
+    if (!isMissingSharingTableError(seedError)) {
+      console.warn('[supabase] trip_members auto-seed failed (non-fatal):', seedError);
+    }
+  }
   return rowToTrip(data as SupabaseTripRow, state, trip.sharing);
 }
 
