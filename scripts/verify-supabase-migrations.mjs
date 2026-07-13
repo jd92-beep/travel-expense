@@ -1,18 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const repoRoot = join(import.meta.dirname, '..');
-const files = [
-  'supabase/migrations/20260526071500_enforce_user_isolation_rls.sql',
-  'supabase/migrations/20260526075811_revoke_anon_private_table_grants.sql',
-  'supabase/migrations/20260526093000_scope_receipt_owner_updates.sql',
-  'supabase/migrations/20260526094500_keep_notion_scope_private.sql',
-  'supabase/migrations/20260526101000_tighten_shared_private_rows.sql',
-  'supabase/migrations/20260612153000_trip_sharing_dual_backend.sql',
-  'supabase/migrations/20260612165000_shared_ledger_receipt_rpc.sql',
-  'supabase/migrations/20260613000000_receipt_photo_storage.sql',
-  'supabase/migrations/20260613001000_harden_shared_invites_and_receipt_versions.sql',
-];
+const files = readdirSync(join(repoRoot, 'supabase/migrations'))
+  .filter((file) => file.endsWith('.sql'))
+  .sort()
+  .map((file) => `supabase/migrations/${file}`);
+
+files.push('supabase/migrations-staged/20260710161000_private_receipt_photo_storage.sql');
 
 const sql = files
   .map((file) => readFileSync(join(repoRoot, file), 'utf8'))
@@ -62,6 +57,14 @@ const requiredPatterns = [
   {
     name: 'receipt photo select is owner-only',
     re: /create policy receipt_photos_select_own[\s\S]*?using\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)\s*\)/i,
+  },
+  {
+    name: 'trip-visible receipt items are shared without exposing private items',
+    re: /create policy receipt_items_select_trip_members[\s\S]*?r\.visibility\s*=\s*'trip'[\s\S]*?private\.can_access_trip\(r\.trip_id\)/i,
+  },
+  {
+    name: 'trip-visible receipt photos are shared without exposing private photos',
+    re: /create policy receipt_photos_select_trip_members[\s\S]*?r\.visibility\s*=\s*'trip'[\s\S]*?private\.can_access_trip\(r\.trip_id\)/i,
   },
   {
     name: 'receipt sync job select is owner-only',
@@ -126,6 +129,26 @@ const requiredPatterns = [
   {
     name: 'receipt photo storage bucket migration is idempotent',
     re: /insert into storage\.buckets[\s\S]*?on conflict \(id\) do nothing[\s\S]*?drop policy if exists "receipt_photos_upload_own" on storage\.objects/i,
+  },
+  {
+    name: 'receipt photo storage bucket is made private',
+    re: /update storage\.buckets[\s\S]*?set public = false[\s\S]*?where id = 'receipt-photos'/i,
+  },
+  {
+    name: 'receipt photo public storage reads are removed',
+    re: /drop policy if exists "receipt_photos_public_read" on storage\.objects/i,
+  },
+  {
+    name: 'receipt photo storage reads require authenticated trip access',
+    re: /create policy "receipt_photos_read_trip_members"[\s\S]*?on storage\.objects for select to authenticated[\s\S]*?private\.can_access_trip\(r\.trip_id\)[\s\S]*?r\.visibility\s*=\s*'trip'[\s\S]*?r\.owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
+  },
+  {
+    name: 'browser receipt writes cannot retain private Notion identifiers',
+    re: /create or replace function public\.enforce_receipt_private_fields\(\)[\s\S]*?coalesce\(auth\.role\(\), ''\)\s*<>\s*'service_role'[\s\S]*?new\.notion_page_id\s*:=\s*null[\s\S]*?new\.notion_database_id\s*:=\s*null/i,
+  },
+  {
+    name: 'adjacent security definer functions deny anonymous execute',
+    re: /revoke execute on function public\.delete_own_user_account\(\) from public, anon[\s\S]*?revoke execute on function public\.trip_member_display_names\(uuid\[\]\) from public, anon/i,
   },
   {
     name: 'shared ledger receipt delete only deletes receipts owned by current user',

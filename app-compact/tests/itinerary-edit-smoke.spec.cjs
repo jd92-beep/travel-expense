@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test.use({ viewport: { width: 390, height: 844 } });
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
 // In-place itinerary editing (v0.11.0): Timeline day editor, day swap, and per-spot
 // edits must write into trip.itinerary (version bump + sync queue), NOT the legacy
@@ -42,7 +43,7 @@ async function openTimeline(page) {
       receipts: [],
     }));
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#timeline');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
   await expect(page.locator('.timeline-day').first()).toBeVisible();
 }
 

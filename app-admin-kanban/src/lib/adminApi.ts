@@ -1,391 +1,208 @@
-import type { AdminKanbanSnapshot, AdminSession, DeletePreview, SurfaceScope } from './types';
+import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 
-const SESSION_KEY = 'travel-expense-admin-kanban:session:v1';
+import type { AdminSession } from './types';
 
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZibm5qb2FodnRkcm5pZ2V2cnR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDY5OTksImV4cCI6MjA5NTI4Mjk5OX0.iDibnjCXwlwxeb1mAWy69RRh5gflh9pEsBIOI-P5INM';
+const LEGACY_SESSION_KEY = 'travel-expense-admin-kanban:session:v1';
 
-function apiBase(): string {
-  return String(import.meta.env.VITE_ADMIN_API_URL || 'https://fbnnjoahvtdrnigevrtw.supabase.co/functions/v1/admin-kanban').replace(/\/+$/, '');
-}
-
-function adminDataUrl(path: string): string {
-  const base = apiBase();
-  return `${base}${path.startsWith('/') ? path : `/${path}`}`;
-}
-
-function sessionUrl(path: string): string {
-  return path.startsWith('/') ? path : `/${path}`;
-}
-
-function readStoredSession(): AdminSession | null {
-  try {
-    const raw = window.sessionStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as AdminSession;
-    if (!parsed.token || Date.parse(parsed.expiresAt) <= Date.now()) return null;
-    return parsed;
-  } catch {
-    return null;
+export class AdminApiError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly status: number,
+    readonly requestId?: string,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(message);
   }
 }
 
-function writeStoredSession(session: AdminSession | null) {
-  if (!session) {
-    window.sessionStorage.removeItem(SESSION_KEY);
-    return;
-  }
-  window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+function csrfToken(): string {
+  const prefix = '__Host-admin_csrf=';
+  const part = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(prefix));
+  return part ? decodeURIComponent(part.slice(prefix.length)) : '';
 }
 
 async function parseJson<T>(response: Response): Promise<T> {
   const text = await response.text();
-  let data: any = {};
+  let payload: any;
   try {
-    data = text ? JSON.parse(text) : {};
+    payload = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(`${response.status} ${response.statusText}`);
+    throw new AdminApiError('伺服器回應格式無效', 'UPSTREAM_UNAVAILABLE', response.status);
   }
-  if (!response.ok || data?.ok === false) {
-    throw new Error(data?.error || data?.message || `${response.status} ${response.statusText}`);
+  if (!response.ok || payload?.ok === false) {
+    const error = payload?.error;
+    const apiError = new AdminApiError(
+      typeof error === 'string' ? error : error?.message || payload?.message || `${response.status} ${response.statusText}`,
+      error?.code || 'UPSTREAM_UNAVAILABLE',
+      response.status,
+      payload?.meta?.requestId || response.headers.get('x-admin-request-id') || undefined,
+      error?.retryAfterSeconds,
+    );
+    if (apiError.status === 401) window.dispatchEvent(new Event('admin:unauthorized'));
+    throw apiError;
   }
-  return data as T;
+  return payload as T;
 }
 
-export function currentSession(): AdminSession | null {
-  return readStoredSession();
+async function request<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {};
+  if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (method !== 'GET' && method !== 'HEAD') {
+    const token = csrfToken();
+    if (token) headers['X-Admin-CSRF'] = token;
+  }
+  return parseJson<T>(await fetch(path, {
+    method,
+    headers,
+    credentials: 'same-origin',
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  }));
+}
+
+function sessionFrom(data: any): AdminSession {
+  return {
+    adminSubject: String(data.actor || 'boss'),
+    authMethod: String(data.authMethod || 'passphrase+passkey'),
+    idleExpiresAt: String(data.idleExpiresAt || ''),
+    absoluteExpiresAt: String(data.absoluteExpiresAt || ''),
+  };
+}
+
+export async function currentSession(): Promise<AdminSession | null> {
+  window.sessionStorage.removeItem(LEGACY_SESSION_KEY);
+  try {
+    const payload = await request<{ data: any }>('/api/admin/session');
+    return sessionFrom(payload.data);
+  } catch (error) {
+    if (error instanceof AdminApiError && error.status === 401) return null;
+    throw error;
+  }
 }
 
 export function clearSession() {
-  writeStoredSession(null);
+  window.sessionStorage.removeItem(LEGACY_SESSION_KEY);
+}
+
+export async function logoutAdmin(): Promise<void> {
+  await request('/api/admin/session', { method: 'DELETE' });
+  clearSession();
 }
 
 export async function loginAdmin(passphrase: string): Promise<AdminSession> {
-  const data = await parseJson<{ ok: boolean; session: AdminSession }>(await fetch(sessionUrl('/api/session'), {
+  const begin = await request<{ data: { flowId: string; options: any } }>('/api/admin/auth/begin', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ passphrase }),
-  }));
-  writeStoredSession(data.session);
-  return data.session;
-}
-
-export async function fetchSnapshot(session: AdminSession, rangeDays: number, surface: SurfaceScope = 'compact'): Promise<AdminKanbanSnapshot> {
-  const params = new URLSearchParams({ range: `${rangeDays}d`, surface });
-  const data = await parseJson<{ ok: boolean; snapshot: AdminKanbanSnapshot }>(await fetch(adminDataUrl(`/api/snapshot?${params}`), {
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-  }));
-  return data.snapshot;
-}
-
-export async function previewDeleteUser(session: AdminSession, userId: string): Promise<DeletePreview> {
-  const data = await parseJson<{ ok: boolean; preview: DeletePreview }>(await fetch(adminDataUrl('/api/delete-preview'), {
+    body: { passphrase },
+  });
+  const response = await startAuthentication({ optionsJSON: begin.data.options });
+  const finish = await request<{ data: any }>('/api/admin/auth/finish', {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      'X-Admin-Token': session.token,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ userId }),
-  }));
-  return data.preview;
+    body: { flowId: begin.data.flowId, response },
+  });
+  return sessionFrom(finish.data);
 }
 
-export async function confirmDeleteUser(
-  session: AdminSession,
-  userId: string,
-  confirmPhrase: string,
-  adminPassphrase: string,
-): Promise<{ deleted: boolean; postDeleteCounts: Record<string, number> }> {
-  const data = await parseJson<{ ok: boolean; result: { deleted: boolean; postDeleteCounts: Record<string, number> } }>(
-    await fetch(adminDataUrl('/api/delete-user'), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      'X-Admin-Token': session.token,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ userId, confirmPhrase, adminPassphrase }),
-    }),
-  );
-  return data.result;
+export async function enrollBossPasskey(
+  passphrase: string,
+  bootstrapSecret: string,
+  label: string,
+): Promise<AdminSession> {
+  const begin = await request<{ data: { flowId: string; options: any } }>('/api/admin/passkeys/enroll/begin', {
+    method: 'POST',
+    body: { passphrase, bootstrapSecret },
+  });
+  const response = await startRegistration({ optionsJSON: begin.data.options });
+  const finish = await request<{ data: any }>('/api/admin/passkeys/enroll/finish', {
+    method: 'POST',
+    body: { flowId: begin.data.flowId, bootstrapSecret, label, response },
+  });
+  return sessionFrom(finish.data);
 }
 
-export async function amendReceipt(
-  session: AdminSession,
-  receiptId: string,
-  updates: {
-    store?: string; amount?: number; currency?: string; status?: string; category?: string;
-    payment?: string; recordDate?: string; recordTime?: string;
-    note?: string; itemsText?: string; address?: string; bookingRef?: string;
-    originalAmount?: number | null; originalCurrency?: string | null; exchangeRate?: number | null;
+export type AdminPasskey = {
+  id: string;
+  label: string;
+  deviceType: string;
+  backedUp: boolean;
+  createdAt: string | null;
+  lastUsedAt: string | null;
+  removal?: { selector: string; setHash: string; action: string; targetHash: string; previewHash: string };
+};
+
+export type AdminPasskeyState = {
+  credentials: AdminPasskey[];
+  count: number;
+  max: number;
+  context: { action: string; targetHash: string; previewHash: string };
+};
+
+export async function listAdminPasskeys(): Promise<AdminPasskeyState> {
+  const payload = await request<{ data: AdminPasskeyState }>('/api/admin/passkeys');
+  return payload.data;
+}
+
+export async function addBossPasskey(passphrase: string, label: string): Promise<AdminPasskey> {
+  const state = await listAdminPasskeys();
+  if (state.count < 1 || state.count >= state.max) {
+    throw new AdminApiError('備用 passkey enrollment 暫時不可用', 'PROTECTED_TARGET', 403);
   }
-): Promise<{ id: string }> {
-  const data = await parseJson<{ ok: boolean; id: string }>(
-    await fetch(adminDataUrl('/api/amend-receipt'), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      'X-Admin-Token': session.token,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ receiptId, ...updates }),
-    }),
-  );
-  return data;
-}
-
-export async function testProvider(session: AdminSession, provider: string): Promise<{ ok: boolean; provider: string; status?: { status: string; message?: string } }> {
-  const data = await parseJson<any>(await fetch(adminDataUrl('/api/test-provider'), {
+  const grant = await reauthenticateAdmin(passphrase, state.context);
+  const begin = await request<{ data: { flowId: string; options: any } }>('/api/admin/passkeys/add/begin', {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      'X-Admin-Token': session.token,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ provider }),
-  }));
-  return data;
-}
-
-export async function fetchReceiptPhoto(session: AdminSession, receiptId: string): Promise<{ url: string }> {
-  const data = await parseJson<{ ok: boolean; url: string }>(await fetch(adminDataUrl(`/api/receipts/${encodeURIComponent(receiptId)}/photo`), {
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-  }));
-  return { url: data.url };
-}
-
-export async function fetchConfigHealth(session: AdminSession): Promise<{ configured: string[]; missing: string[]; warnings: string[] }> {
-  const data = await parseJson<{ ok: boolean; config: { configured: string[]; missing: string[]; warnings: string[] } }>(await fetch(adminDataUrl('/api/config-health'), {
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-  }));
-  return data.config;
-}
-
-export async function previewAction(session: AdminSession, params: { action: string; targetType: string; targetId: string; preview?: any; payload?: any; reason?: string; idempotencyKey?: string }): Promise<any> {
-  const data = await parseJson<any>(await fetch(adminDataUrl('/api/actions/preview'), {
+    body: { grantId: grant.grantId },
+  });
+  const response = await startRegistration({ optionsJSON: begin.data.options });
+  const finish = await request<{ data: { credential: AdminPasskey } }>('/api/admin/passkeys/add/finish', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token, 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  }));
-  return data.action;
+    body: { flowId: begin.data.flowId, label, response },
+  });
+  return finish.data.credential;
 }
 
-export async function commitAction(session: AdminSession, actionId: string): Promise<any> {
-  const data = await parseJson<any>(await fetch(adminDataUrl('/api/actions/commit'), {
+export type AdminPasskeyRemovalPreview = {
+  selector: string;
+  setHash: string;
+  count: number;
+  remainingCount: number;
+  target: Omit<AdminPasskey, 'removal'>;
+  context: { action: string; targetHash: string; previewHash: string };
+};
+
+export async function previewBossPasskeyRemoval(
+  removal: NonNullable<AdminPasskey['removal']>,
+): Promise<AdminPasskeyRemovalPreview> {
+  const payload = await request<{ data: AdminPasskeyRemovalPreview }>('/api/admin/passkeys/remove/preview', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ actionId }),
-  }));
-  return data.action;
+    body: { selector: removal.selector, setHash: removal.setHash },
+  });
+  return payload.data;
 }
 
-export async function fetchSyncJobs(session: AdminSession, params?: { status?: string; provider?: string; userId?: string; limit?: number }): Promise<any[]> {
-  const qs = new URLSearchParams();
-  if (params?.status) qs.set('status', params.status);
-  if (params?.provider) qs.set('provider', params.provider);
-  if (params?.userId) qs.set('userId', params.userId);
-  if (params?.limit) qs.set('limit', String(params.limit));
-  const data = await parseJson<{ ok: boolean; jobs: any[] }>(await fetch(adminDataUrl(`/api/sync/jobs?${qs}`), {
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-  }));
-  return data.jobs;
-}
-
-export async function fetchIdentityDuplicates(session: AdminSession): Promise<Array<{ prefix: string; users: any[] }>> {
-  const data = await parseJson<{ ok: boolean; duplicates: Array<{ prefix: string; users: any[] }> }>(await fetch(adminDataUrl('/api/identity/duplicates'), {
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-  }));
-  return data.duplicates;
-}
-
-export async function fetchRuntime(session: AdminSession): Promise<any> {
-  const data = await parseJson<{ ok: boolean; runtime: any }>(await fetch(adminDataUrl('/api/runtime'), {
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-  }));
-  return data.runtime;
-}
-
-export async function fetchDataDoctor(session: AdminSession): Promise<{ issues: any[]; summary: { high: number; medium: number; low: number }; total: number }> {
-  const data = await parseJson<{ ok: boolean; issues: any[]; summary: { high: number; medium: number; low: number }; total: number }>(await fetch(adminDataUrl('/api/data-doctor'), {
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-  }));
-  return { issues: data.issues, summary: data.summary, total: data.total };
-}
-
-export async function fetchReconcile(session: AdminSession): Promise<{ generatedAt: string; trips: import('./types').ReconcileTripEntry[] }> {
-  const data = await parseJson<{ ok: boolean; generatedAt: string; trips: import('./types').ReconcileTripEntry[] }>(await fetch(adminDataUrl('/api/reconcile'), {
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-  }));
-  return { generatedAt: data.generatedAt, trips: data.trips };
-}
-
-export async function runNotionRepair(session: AdminSession, dryRun = false): Promise<{
-  linked: number; photosRecovered: number; photosFailed: number; photosRemaining: number;
-  pagesCreated: number; createFailed: number; createRemaining: number; notionPagesScanned: number; dryRun: boolean;
-}> {
-  const data = await parseJson<any>(await fetch(adminDataUrl('/api/notion/repair'), {
+export async function removeBossPasskey(
+  passphrase: string,
+  preview: AdminPasskeyRemovalPreview,
+): Promise<void> {
+  const grant = await reauthenticateAdmin(passphrase, preview.context);
+  await request('/api/admin/passkeys/remove/commit', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dryRun }),
-  }));
-  return data;
+    body: { selector: preview.selector, setHash: preview.setHash, grantId: grant.grantId },
+  });
+  clearSession();
 }
 
-export async function fetchSupportBundle(session: AdminSession, params: { userId?: string; tripId?: string; includeJobs?: boolean; includeDoctor?: boolean }): Promise<any> {
-  const data = await parseJson<{ ok: boolean; bundle: any }>(await fetch(adminDataUrl('/api/support-bundle'), {
+export async function reauthenticateAdmin(
+  passphrase: string,
+  context: { action: string; targetHash: string; previewHash: string },
+): Promise<{ grantId: string; expiresAt: string }> {
+  const begin = await request<{ data: { flowId: string; options: any } }>('/api/admin/reauth/begin', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token, 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  }));
-  return data.bundle;
-}
-
-export async function fetchAuditEvents(
-  session: AdminSession,
-  params: {
-    page?: number;
-    limit?: number;
-    actionType?: string;
-    targetType?: string;
-    startDate?: string;
-    endDate?: string;
-  }
-): Promise<{ events: any[]; total: number }> {
-  const qs = new URLSearchParams();
-  if (params.page !== undefined) qs.set('page', String(params.page));
-  if (params.limit !== undefined) qs.set('limit', String(params.limit));
-  if (params.actionType) qs.set('actionType', params.actionType);
-  if (params.targetType) qs.set('targetType', params.targetType);
-  if (params.startDate) qs.set('startDate', params.startDate);
-  if (params.endDate) qs.set('endDate', params.endDate);
-
-  const data = await parseJson<{ ok: boolean; events: any[]; total: number }>(
-    await fetch(adminDataUrl(`/api/audit-events?${qs}`), {
-      headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-    })
-  );
-  return { events: data.events, total: data.total };
-}
-
-export async function amendTrip(
-  session: AdminSession,
-  updates: {
-    tripId: string;
-    name?: string;
-    destination_summary?: string;
-    start_date?: string;
-    end_date?: string;
-    trip_currency?: string;
-    budget_amount?: number | null;
-    budget_currency?: string | null;
-    active?: boolean;
-    archived?: boolean;
-  }
-): Promise<{ tripId: string }> {
-  const data = await parseJson<{ ok: boolean; tripId: string }>(
-    await fetch(adminDataUrl('/api/trips/amend'), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'X-Admin-Token': session.token,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(updates),
-    })
-  );
-  return data;
-}
-
-export async function manageTripMembers(
-  session: AdminSession,
-  params: {
-    tripId: string;
-    userId: string;
-    action: 'add' | 'remove';
-  }
-): Promise<{ ok: boolean }> {
-  const data = await parseJson<{ ok: boolean }>(
-    await fetch(adminDataUrl('/api/trips/members/manage'), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'X-Admin-Token': session.token,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(params),
-    })
-  );
-  return data;
-}
-
-export async function batchActionReceipts(
-  session: AdminSession,
-  params: {
-    receiptIds: string[];
-    action: 'update_status' | 'delete';
-    status?: string;
-  }
-): Promise<{ affectedCount: number }> {
-  const data = await parseJson<{ ok: boolean; affectedCount: number }>(
-    await fetch(adminDataUrl('/api/receipts/batch-action'), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'X-Admin-Token': session.token,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(params),
-    })
-  );
-  return data;
-}
-
-export async function fetchAnalyticsTimeseries(
-  session: AdminSession,
-  days = 30
-): Promise<{
-  usageTrend: Array<{ date: string; events: number; activeUsers: number }>;
-  aiConsumption: any[];
-  receiptVelocity: Array<{ date: string; count: number }>;
-  surfaceBreakdown: Array<{ surface: string; count: number }>;
-}> {
-  const data = await parseJson<{
-    ok: boolean;
-    usageTrend: any[];
-    aiConsumption: any[];
-    receiptVelocity: any[];
-    surfaceBreakdown: any[];
-  }>(
-    await fetch(adminDataUrl(`/api/analytics/timeseries?days=${days}`), {
-      headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-    })
-  );
-  return {
-    usageTrend: data.usageTrend,
-    aiConsumption: data.aiConsumption,
-    receiptVelocity: data.receiptVelocity,
-    surfaceBreakdown: data.surfaceBreakdown,
-  };
-}
-
-export async function fetchAiLatencyTrending(
-  session: AdminSession,
-  days = 30
-): Promise<{
-  latencyTrend: any[];
-  providerComparison: any[];
-}> {
-  const data = await parseJson<{
-    ok: boolean;
-    latencyTrend: any[];
-    providerComparison: any[];
-  }>(
-    await fetch(adminDataUrl(`/api/ai-monitoring/latency-trending?days=${days}`), {
-      headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'X-Admin-Token': session.token },
-    })
-  );
-  return {
-    latencyTrend: data.latencyTrend,
-    providerComparison: data.providerComparison,
-  };
+    body: { passphrase, ...context },
+  });
+  const response = await startAuthentication({ optionsJSON: begin.data.options });
+  const finish = await request<{ data: { grantId: string; expiresAt: string } }>('/api/admin/reauth/finish', {
+    method: 'POST',
+    body: { flowId: begin.data.flowId, response },
+  });
+  return finish.data;
 }

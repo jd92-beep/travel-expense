@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 import { activeTrip } from '../domain/trip/normalize';
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
+import { recordClientHeartbeat } from './clientHeartbeat';
 import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
-import { mergePulledData } from './syncMerge';
-import { isReceiptTombstoned, rawReceiptSourceId } from './syncMerge';
+import { filterSupersededTripQueue, isReceiptTombstoned, mergePulledData, rawReceiptSourceId, receiptSourceTombstoneKey } from './syncMerge';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
 import type { Session } from '@supabase/supabase-js';
 
@@ -103,6 +103,10 @@ export function useSyncEngine(
   stateRef.current = state;
   const supabaseSessionRef = useRef<Session | null | undefined>(supabaseSession);
   supabaseSessionRef.current = supabaseSession;
+
+  useEffect(() => {
+    void recordClientHeartbeat(supabaseSession);
+  }, [supabaseSession?.user?.id]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -264,10 +268,11 @@ export function useSyncEngine(
         }
       }
       if (hasNotionSync && !sharedLedger) {
-        const beforeNotionPageId = synced.notionPageId;
-        synced = await pushReceipt(current, synced);
-        if (supabaseSession && synced.notionPageId !== beforeNotionPageId) {
-          synced = await upsertSupabaseReceipt(supabaseSession, current, synced);
+        if (receipt.visibility === 'private') {
+          if (receipt.notionPageId) await archiveReceipt(current, receipt);
+          synced = { ...synced, notionPageId: undefined };
+        } else {
+          synced = await pushReceipt(current, { ...synced, notionPageId: receipt.notionPageId });
         }
       }
       applyReceiptSyncResult(item, synced);
@@ -288,7 +293,14 @@ export function useSyncEngine(
               attempts: 0,
               createdAt: Date.now(),
               updatedAt: Date.now(),
-              payload: { supabaseId: retryReceipt.supabaseId, sourceId: retryReceipt.sourceId, tripId: retryReceipt.tripId, updatedAt: retryReceipt.updatedAt },
+              payload: {
+                supabaseId: retryReceipt.supabaseId,
+                sourceId: retryReceipt.sourceId,
+                tripId: retryReceipt.tripId,
+                version: retryReceipt.version,
+                syncRevision: retryReceipt.syncRevision,
+                updatedAt: retryReceipt.updatedAt,
+              },
             },
           ],
         }));
@@ -307,6 +319,8 @@ export function useSyncEngine(
         supabaseId: item.payload?.supabaseId,
         tripId: item.payload?.tripId,
         sourceId: rawReceiptSourceId(item.payload?.sourceId || item.entityId, item.payload?.tripId),
+        version: item.payload?.version,
+        syncRevision: item.payload?.syncRevision,
       } as Receipt;
       if (hasSupabaseSession(session)) await archiveSupabaseReceipt(session, current, tombstone);
       if (hasNotionSync && !usesSharedLedger(current, tombstone)) await archiveReceipt(current, tombstone);
@@ -485,12 +499,12 @@ export function useSyncEngine(
       const hasCloudSync = !!cloudSession;
       const hasNotionSync = canUseNotionMirror(stateRef.current, hasCloudSync, cloudSession?.user?.email || null);
       const [supabaseResult, tripsResult, receiptsResult, settingsResult] = await Promise.allSettled([
-        cloudSession ? pullSupabaseData(cloudSession, stateRef.current) : Promise.resolve({ trips: [], receipts: [], settings: undefined }),
+        cloudSession ? pullSupabaseData(cloudSession, stateRef.current) : Promise.resolve({ trips: [], receipts: [], tombstones: [], settings: undefined }),
         hasNotionSync ? pullTrips(stateRef.current) : Promise.resolve([]),
         hasNotionSync ? pullAll(stateRef.current) : Promise.resolve([]),
         hasNotionSync && !hasCloudSync ? pullSettingsMeta(stateRef.current) : Promise.resolve(null),
       ]);
-      const supabaseData = supabaseResult.status === 'fulfilled' ? supabaseResult.value : { trips: [], receipts: [] };
+      const supabaseData = supabaseResult.status === 'fulfilled' ? supabaseResult.value : { trips: [], receipts: [], tombstones: [] };
       const trips = [...supabaseData.trips, ...(tripsResult.status === 'fulfilled' ? tripsResult.value : [])];
       const receipts = [...supabaseData.receipts, ...(receiptsResult.status === 'fulfilled' ? receiptsResult.value : [])];
       const settingsCandidates = [
@@ -525,14 +539,14 @@ export function useSyncEngine(
       // it (and its receipts) so a removed member doesn't keep stale shared data. Never purge on a
       // failed pull or in Notion-only mode (guarded by cloudPullOk).
       const cloudPullOk = !!cloudSession && supabaseResult.status === 'fulfilled';
-      const cloudPullAuthoritative = cloudPullOk && supabaseData.trips.length > 0;
+      const cloudPullAuthoritative = cloudPullOk;
       const authorizedSupabaseIds = new Set(
         supabaseData.trips.map((trip) => trip.supabaseId).filter((id): id is string => !!id),
       );
       let computedPending = 0;
       if (aliveRef.current) {
         setState((current) => {
-          const mergedBase = mergePulledData(current, receipts, trips);
+          const mergedBase = mergePulledData(current, receipts, trips, supabaseData.tombstones);
           let finalState = mergedBase;
           if (settings) {
             const remoteTs = Number(settings.settingsUpdatedAt || 0);
@@ -596,15 +610,39 @@ export function useSyncEngine(
             );
             if (purgedTripIds.size) {
               const remainingTrips = (finalState.trips || []).filter((trip) => !purgedTripIds.has(trip.id));
+              const removedReceiptIds = new Set(
+                (finalState.receipts || []).filter((receipt) => receipt.tripId && purgedTripIds.has(receipt.tripId)).map((receipt) => receipt.id),
+              );
+              const remainingReceipts = (finalState.receipts || []).filter((receipt) => !receipt.tripId || !purgedTripIds.has(receipt.tripId));
               const activeStillValid = remainingTrips.some((trip) => trip.id === finalState.activeTripId && !trip.archived);
               const nextActiveTripId = activeStillValid
                 ? finalState.activeTripId
                 : (remainingTrips.find((trip) => !trip.archived)?.id || remainingTrips[0]?.id || finalState.activeTripId);
+              const peopleByTripId = Object.fromEntries(
+                Object.entries(finalState.peopleByTripId || {}).filter(([tripId]) => !purgedTripIds.has(tripId)),
+              );
+              const shareRatiosByTripId = Object.fromEntries(
+                Object.entries(finalState.shareRatiosByTripId || {}).filter(([tripId]) => !purgedTripIds.has(tripId)),
+              );
               finalState = {
                 ...finalState,
                 trips: remainingTrips,
-                receipts: (finalState.receipts || []).filter((receipt) => !receipt.tripId || !purgedTripIds.has(receipt.tripId)),
+                receipts: remainingReceipts,
                 activeTripId: nextActiveTripId,
+                peopleByTripId,
+                shareRatiosByTripId,
+                persons: nextActiveTripId && peopleByTripId[nextActiveTripId] || finalState.persons,
+                shareRatios: nextActiveTripId && shareRatiosByTripId[nextActiveTripId] || finalState.shareRatios,
+                receiptTombstones: Object.fromEntries(
+                  Object.entries(finalState.receiptTombstones || {}).filter(([, tombstone]) => !purgedTripIds.has(tombstone.tripId)),
+                ),
+                notionDeletedSourceIds: (finalState.notionDeletedSourceIds || []).filter(
+                  (key) => ![...purgedTripIds].some((tripId) => key.startsWith(`${tripId}::`)),
+                ),
+                syncQueue: (finalState.syncQueue || []).filter((item) =>
+                  !removedReceiptIds.has(item.entityId)
+                  && !(item.type === 'trip' && purgedTripIds.has(item.entityId))
+                  && !(item.payload?.tripId && purgedTripIds.has(item.payload.tripId))),
               };
               console.warn('[SyncEngine] purged revoked/deleted trips from local cache:', [...purgedTripIds]);
             }
@@ -626,7 +664,48 @@ export function useSyncEngine(
                   : receipt),
             };
           }
-          let freshQueue = (current.syncQueue || []).filter((item) => !overwrittenIds.has(item.entityId));
+          const serverTombstoneKeys = new Set(supabaseData.tombstones.map((tombstone) =>
+            receiptSourceTombstoneKey({ id: tombstone.supabaseId, sourceId: tombstone.sourceId, tripId: tombstone.tripId })));
+          let freshQueue = filterSupersededTripQueue(
+            finalState.syncQueue || [],
+            current.trips || [],
+            trips,
+          )
+            .filter((item) => !overwrittenIds.has(item.entityId))
+            .filter((item) => {
+              if (item.type !== 'receipt' && item.type !== 'delete-receipt') return true;
+              const key = item.payload?.tombstoneKey || receiptSourceTombstoneKey({
+                id: item.payload?.sourceId || item.entityId,
+                sourceId: item.payload?.sourceId,
+                tripId: item.payload?.tripId,
+              });
+              return !serverTombstoneKeys.has(key);
+            });
+          if (cloudPullOk && finalState.autoSync) {
+            const queuedTripIds = new Set(freshQueue.filter((item) => item.type === 'trip').map((item) => item.entityId));
+            const itineraryRepairs = (finalState.trips || []).filter((trip) => trip._itineraryNeedsRepair && !queuedTripIds.has(trip.id));
+            if (itineraryRepairs.length) {
+              const now = Date.now();
+              freshQueue = [
+                ...freshQueue,
+                ...itineraryRepairs.map((trip, index) => ({
+                  id: `sync_itinerary_repair_${now}_${index}`,
+                  type: 'trip' as const,
+                  entityId: trip.id,
+                  op: 'update' as const,
+                  status: 'queued' as const,
+                  attempts: 0,
+                  createdAt: now,
+                  updatedAt: now,
+                  payload: {
+                    sourceId: trip.sourceId || `trip_${trip.id}`,
+                    updatedAt: trip.updatedAt,
+                    itineraryRepair: true,
+                  },
+                })),
+              ];
+            }
+          }
           // Backfill sweep: heal receipts that never reached Supabase — created before cloud
           // login, marked synced in the Notion-only era, or whose queue item was dropped after
           // MAX_RETRY_ATTEMPTS. After merge, anything still missing supabaseId (or with an
@@ -658,6 +737,8 @@ export function useSyncEngine(
                     notionPageId: receipt.notionPageId,
                     sourceId: receipt.sourceId || receipt.id,
                     tripId: receipt.tripId,
+                    version: receipt.version,
+                    syncRevision: receipt.syncRevision,
                     updatedAt: receipt.updatedAt,
                   },
                 })),
@@ -741,7 +822,7 @@ export function useSyncEngine(
       const cloudSession = hasSupabaseSession(supabaseSessionRef.current) ? supabaseSessionRef.current : null;
       if (cloudSession && canUseNotionMirror(stateRef.current, true, cloudSession.user?.email || null)) {
         await yieldToStateFlush();
-        const outbox = await drainSharedTripNotionOutbox(cloudSession, stateRef.current, pushReceipt).catch(() => null);
+        const outbox = await drainSharedTripNotionOutbox(cloudSession, stateRef.current, pushReceipt, archiveReceipt).catch(() => null);
         if (outbox && (outbox.processed || outbox.failed)) {
           console.log(`[SyncEngine] Notion outbox drained: ${outbox.processed} ok, ${outbox.failed} failed`);
         }

@@ -92,16 +92,20 @@ export function normalizeState(input: unknown): AppState {
     r.visibility === 'private' && !(r.splitMode === 'private' && (!r.beneficiaryId || r.beneficiaryId === r.personId))
       ? { ...r, visibility: undefined }
       : r);
-  // Sync status is transient runtime state: a stale persisted 'error' (or a queue item
-  // stuck in error/syncing when the app was killed) must not resurrect the error banner
-  // on next launch. Reset on hydrate; failed items get a fresh retry cycle instead of
-  // waiting forever for the manual-retry button.
-  state.globalSyncStatus = 'idle';
-  state.syncError = '';
+  // A killed in-flight attempt is safe to requeue. Verified failures are durable operator
+  // evidence and must remain visible until an explicit retry succeeds.
   state.syncQueue = (state.syncQueue || []).map((item) =>
-    item.status === 'error' || item.status === 'failed' || item.status === 'syncing'
-      ? { ...item, status: 'queued' as const, attempts: 0, error: undefined }
+    item.status === 'syncing'
+      ? { ...item, status: 'queued' as const, error: undefined }
       : item);
+  const failedItem = state.syncQueue.find((item) => item.status === 'error' || item.status === 'failed');
+  if (failedItem) {
+    state.globalSyncStatus = 'error';
+    state.syncError = failedItem.error || state.syncError || 'Sync queue requires retry';
+  } else {
+    state.globalSyncStatus = state.syncQueue.some((item) => item.status === 'queued') ? 'queued' : 'idle';
+    state.syncError = '';
+  }
   return stripLegacyProviderSecrets(state);
 }
 

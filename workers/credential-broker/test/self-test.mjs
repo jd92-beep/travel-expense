@@ -4,6 +4,7 @@ import worker from '../src/index.js';
 const ORIGIN = 'http://localhost:8902';
 const UNLOCK_PASSWORD = 'test-unlock';
 const ADMIN_PASSWORD = 'test-admin';
+const SUPABASE_USER_ID = '97000000-0000-4000-8000-000000000001';
 
 class MemoryKv {
   constructor() {
@@ -86,6 +87,7 @@ function makeEnv() {
     KIMI_API_BASE: 'https://kimi.test/v1',
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_PUBLISHABLE_KEY: 'test-supabase-publishable-key',
+    EDGE_BROKER_KEY: 'test-edge-broker-key-with-32-bytes-minimum',
     UNLOCK_MAX_FAILURES: '2',
     ADMIN_MAX_FAILURES: '2',
   };
@@ -95,11 +97,12 @@ function bearer(value) {
   return ['Bearer', value].join(' ');
 }
 
-function request(path, { method = 'GET', session, supabaseToken, body, origin = ORIGIN } = {}) {
+function request(path, { method = 'GET', session, supabaseToken, internalKey, body, origin = ORIGIN } = {}) {
   const headers = new Headers();
   if (origin) headers.set('Origin', origin);
   if (session) headers.set('X-Travel-Session', session);
   if (supabaseToken) headers.set('X-Supabase-Auth', bearer(supabaseToken));
+  if (internalKey) headers.set('X-Admin-Internal', internalKey);
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   return new Request(`https://broker.test${path}`, {
     method,
@@ -130,7 +133,7 @@ function installProviderFetchStub() {
 
     if (href === 'https://test.supabase.co/auth/v1/user') {
       assert.equal(auth, bearer('supabase-user-token'));
-      return Response.json({ id: 'user-12345678', email: 'boss@example.com' });
+      return Response.json({ id: SUPABASE_USER_ID, email: 'boss@example.com' });
     }
 
     if (href.startsWith('https://test.supabase.co/rest/v1/integrations')) {
@@ -432,6 +435,25 @@ async function run() {
     assert.equal(malformedSession.response.status, 401);
     assert.equal(malformedSession.data.error, 'Session invalid');
 
+    const internalStatus = await jsonFetch(env, '/credentials/status', {
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+    });
+    assert.equal(internalStatus.response.status, 200);
+    assert.equal(internalStatus.data.ok, true);
+
+    const wrongInternalStatus = await jsonFetch(env, '/credentials/status', {
+      internalKey: 'wrong-edge-key-with-32-bytes-minimum',
+      origin: 'https://travel-expense-compact.vercel.app',
+    });
+    assert.equal(wrongInternalStatus.response.status, 401);
+
+    const internalCannotBypassArbitraryRoute = await jsonFetch(env, '/session/devices', {
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: trustedOrigin,
+    });
+    assert.equal(internalCannotBypassArbitraryRoute.response.status, 401);
+
     const notionRotate = await jsonFetch(env, '/credentials/rotate', {
       method: 'POST',
       session,
@@ -452,6 +474,15 @@ async function run() {
     });
     assert.equal(notion.response.status, 200);
     assert.equal(notion.data.data.id, 'page-1');
+
+    const internalNotion = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: { path: '/pages', method: 'POST', body: { parent: {}, properties: {} } },
+    });
+    assert.equal(internalNotion.response.status, 200);
+    assert.equal(internalNotion.data.data.id, 'page-1');
 
     const personalMissing = await jsonFetch(env, '/integrations/notion/status', {
       supabaseToken: 'supabase-user-token',
@@ -477,6 +508,50 @@ async function run() {
     });
     assert.equal(personalNotion.response.status, 200);
     assert.equal(personalNotion.data.data.id, 'personal-page-1');
+
+    const internalPersonalNotion = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: {
+        path: '/pages',
+        method: 'POST',
+        databaseId: 'personal-db',
+        internalUserId: SUPABASE_USER_ID,
+        body: { parent: {}, properties: {} },
+      },
+    });
+    assert.equal(internalPersonalNotion.response.status, 200);
+    assert.equal(internalPersonalNotion.data.data.id, 'personal-page-1');
+
+    const notionCallsBeforeInvalidInternalUser = restoreFetch.notionCalls();
+    const invalidInternalUser = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: {
+        path: '/databases/personal-db/query',
+        method: 'POST',
+        databaseId: 'personal-db',
+        internalUserId: 'not-a-user-id',
+        body: { page_size: 1 },
+      },
+    });
+    assert.equal(invalidInternalUser.response.status, 400);
+    assert.equal(restoreFetch.notionCalls(), notionCallsBeforeInvalidInternalUser);
+
+    const browserCannotImpersonate = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      session,
+      body: {
+        path: '/pages',
+        method: 'POST',
+        internalUserId: SUPABASE_USER_ID,
+        body: { parent: {}, properties: {} },
+      },
+    });
+    assert.equal(browserCannotImpersonate.response.status, 200);
+    assert.equal(browserCannotImpersonate.data.data.id, 'page-1');
 
     const notionCallsBeforeBlockedPersonal = restoreFetch.notionCalls();
     const blockedPersonalNotion = await jsonFetch(env, '/notion/request', {

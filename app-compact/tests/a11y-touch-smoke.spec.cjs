@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const APP_URL = 'http://localhost:8903/travel-expense/compact/';
+const APP_URL = `${process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903'}/travel-expense/compact/`;
 
 async function seedCompactA11yState(page) {
   await page.route('**/secrets.local.js', (route) => route.fulfill({

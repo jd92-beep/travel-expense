@@ -44,3 +44,4 @@ secrets.local.js
 
 # Supabase CLI local link metadata
 supabase/.temp/
+supabase/.branches/

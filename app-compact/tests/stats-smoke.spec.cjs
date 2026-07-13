@@ -1,6 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
-test.use({ viewport: { width: 390, height: 844 } });
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
+test.use({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/secrets.local.js', async (route) => route.fulfill({
@@ -48,7 +50,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
     schemaVersion: 3,
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#stats');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#stats`);
   await expect(page.getByText('預算使用分析').first()).toBeVisible();
   await expect(page.getByText('4 筆紀錄')).toBeVisible();
   await expect(page.locator('.stats-command-title-row')).toContainText('預算使用分析');

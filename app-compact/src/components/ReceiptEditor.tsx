@@ -442,6 +442,7 @@ export function ReceiptEditor({
             </button>
           )}
           <div className="photo-tool-buttons">
+            {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>刪除相片</button>}
             <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>
             {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
               const total = validAmount(draft.total);
@@ -451,17 +452,18 @@ export function ReceiptEditor({
               }
               onAddToItinerary({ ...draft, store: draft.store.trim() || '未命名', total });
             }}>加入行程</button>}
-            {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>刪除相片</button>}
           </div>
         </div>
 
         <div className="modal-actions receipt-editor-actions">
+          {receipt && onDelete && !viewerReadOnly
+            ? <div className="receipt-delete-slot"><button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button></div>
+            : null}
           <div className="receipt-final-actions">
             {viewerReadOnly
               ? <span className="muted" style={{ fontSize: '12px', alignSelf: 'center' }}>只可檢視（Viewer 權限）</span>
               : <button type="submit" className="primary">儲存</button>}
             <button type="button" className="secondary" onClick={onCancel}>取消</button>
-            {receipt && onDelete && !viewerReadOnly ? <button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button> : null}
           </div>
         </div>
       </form>

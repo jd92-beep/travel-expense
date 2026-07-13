@@ -106,7 +106,7 @@ function receiptHealthMarkers(
   if (receiptPhotoNeedsSync(receipt)) markers.push({ key: 'photo-unsynced', label: 'photo unsynced', tone: 'info' });
   if (receipt.ledgerSyncStatus === 'notion_failed') markers.push({ key: 'notion-failed', label: 'notion sync failed', tone: 'warning' });
   if (receiptHasTrueConflict(receipt, state)) markers.push({ key: 'sync-conflict', label: 'sync conflict', tone: 'danger' });
-  else if (receiptHasSyncConflict(receipt, state)) markers.push({ key: 'sync-retry', label: 'sync retrying', tone: 'warning' });
+  else if (receiptHasSyncConflict(receipt, state)) markers.push({ key: 'sync-failed', label: 'sync failed', tone: 'warning' });
   if ((receipt.supabaseId || receipt.notionPageId) && !receipt.sourceId) markers.push({ key: 'cloud-only', label: 'cloud-only', tone: 'info' });
   if (!receipt.supabaseId && !receipt.notionPageId) markers.push({ key: 'local-only', label: 'local-only', tone: 'neutral' });
   return markers;

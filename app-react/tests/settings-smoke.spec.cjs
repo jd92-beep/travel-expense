@@ -2,6 +2,9 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const APP_ORIGIN = (process.env.REACT_TEST_ORIGIN || 'http://localhost:8902').replace(/\/+$/, '');
+const APP_URL = `${APP_ORIGIN}/travel-expense/react/`;
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function setAccordion(page, title, expanded = true) {
@@ -218,7 +221,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
     }));
   });
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#settings`);
   await expect(page.getByText('設定控制中心')).toBeVisible();
   await expect(page.getByText('同步信心中心')).toBeVisible();
   await expect(page.locator('.settings-sync-confidence')).toContainText('Pending Queue');
@@ -254,10 +257,10 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await page.getByLabel(/反轉首頁統計/).check();
   await expect(tripNameInput).toHaveValue('M10 Trip Updated');
 
-  await setAccordion(page, '行程更新卡片');
+  await setAccordion(page, 'AI 行程更新');
   await page.getByPlaceholder(/下次/).fill('2026-07-10 to 2026-07-12 Seoul, arrive Hongdae 18:00, stay near Hongdae.');
-  await page.getByRole('button', { name: /用 Kimi 分析/ }).click();
-  await expect(page.getByText(/已產生 preview|AI 暫時未能完整分析/).first()).toBeVisible();
+  await page.getByRole('button', { name: /用已選模型分析/ }).click();
+  await expect(page.getByText(/已產生 preview|分析行程失敗/).first()).toBeVisible();
 
   await setAccordion(page, '旅伴');
   await page.getByPlaceholder('旅伴名字').fill('M10 Friend');
@@ -414,7 +417,7 @@ test('Settings sync confidence center shows queued and failed local health state
     }));
   }, tripState());
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#settings`);
   const center = page.locator('.settings-sync-confidence');
   await expect(center).toBeVisible();
   await expect(center).toContainText('Needs attention');
@@ -483,7 +486,7 @@ test('Settings sync confidence center labels Supabase-only cloud mode', async ({
     },
   });
 
-  await page.goto('http://localhost:8902/travel-expense/react/#settings');
+  await page.goto(`${APP_URL}#settings`);
   const center = page.locator('.settings-sync-confidence');
   await expect(center).toBeVisible();
   await expect(center).toContainText('已登入雲端');
@@ -547,7 +550,7 @@ test('Settings protects broker URL and does not keep archived trip active', asyn
     }));
   }, trips);
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#settings`);
   await expect(page.getByText('設定控制中心')).toBeVisible();
 
   await setAccordion(page, 'Credentials & Connection');
@@ -607,7 +610,7 @@ test('Settings can connect a broker session without leaking the password into ap
     }));
   });
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#settings`);
   await expect(page.getByText('設定控制中心')).toBeVisible();
   await setAccordion(page, 'Credentials & Connection');
 

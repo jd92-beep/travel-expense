@@ -39,23 +39,33 @@ values ('91000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-0000000
 
 insert into public.receipts (
   id, trip_id, owner_id, store, record_date, category, payment_method, amount, currency,
-  home_currency, source_id, status, notion_page_id, notion_database_id
+  home_currency, source_id, status, visibility, split_mode, notion_page_id, notion_database_id
 ) values (
   '92000000-0000-4000-8000-000000000001',
   '91000000-0000-4000-8000-000000000001',
   '90000000-0000-4000-8000-0000000000a1',
   'A private receipt', '2026-05-01', 'food', 'cash', 123, 'JPY',
-  'HKD', 'same-source', 'confirmed', 'page-should-be-scrubbed', 'receipt-db-should-be-scrubbed'
+  'HKD', 'private-source', 'confirmed', 'private', 'private', 'page-should-be-scrubbed', 'receipt-db-should-be-scrubbed'
+), (
+  '92000000-0000-4000-8000-000000000002',
+  '91000000-0000-4000-8000-000000000001',
+  '90000000-0000-4000-8000-0000000000a1',
+  'A trip-visible receipt', '2026-05-02', 'transport', 'card', 456, 'JPY',
+  'HKD', 'shared-source', 'confirmed', 'trip', 'shared', null, null
 );
 
 insert into public.receipt_items (id, receipt_id, owner_id, name, amount, currency)
-values ('93000000-0000-4000-8000-0000000000a1', '92000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-0000000000a1', 'A private item', 123, 'JPY');
+values
+  ('93000000-0000-4000-8000-0000000000a1', '92000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-0000000000a1', 'A private item', 123, 'JPY'),
+  ('93000000-0000-4000-8000-0000000000b2', '92000000-0000-4000-8000-000000000002', '90000000-0000-4000-8000-0000000000a1', 'A shared item', 456, 'JPY');
 
 insert into public.receipt_photos (id, receipt_id, owner_id, storage_path)
-values ('94000000-0000-4000-8000-0000000000a1', '92000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-0000000000a1', 'private/a/path.jpg');
+values
+  ('94000000-0000-4000-8000-0000000000a1', '92000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-0000000000a1', 'private/a/path.jpg'),
+  ('94000000-0000-4000-8000-0000000000b2', '92000000-0000-4000-8000-000000000002', '90000000-0000-4000-8000-0000000000a1', 'shared/a/path.jpg');
 
 insert into public.receipt_sync_jobs (id, receipt_id, trip_id, owner_id, provider, operation, payload, last_error)
-values ('95000000-0000-4000-8000-0000000000a1', '92000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-0000000000a1', 'notion', 'upsert', '{"private":"payload"}'::jsonb, 'private sync error');
+values ('95000000-0000-4000-8000-0000000000a1', '92000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-0000000000a1', 'notion', 'delete', '{"private":"payload"}'::jsonb, 'private sync error');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '90000000-0000-4000-8000-0000000000b2', true);
@@ -74,17 +84,46 @@ begin
   end if;
 
   select count(*) into n from public.receipts
-  where id = '92000000-0000-4000-8000-000000000001'
-    and (notion_page_id is not null or notion_database_id is not null);
+  where id = '92000000-0000-4000-8000-000000000001';
   if n <> 0 then
-    raise exception 'receipt Notion identifiers leaked to shared member';
+    raise exception 'shared editor read another owner private receipt';
   end if;
 
-  update public.receipts
-  set store = 'B overwrite attempt'
-  where id = '92000000-0000-4000-8000-000000000001';
-  get diagnostics changed = row_count;
-  if changed <> 0 then
+  select count(*) into n from public.receipts
+  where id = '92000000-0000-4000-8000-000000000002'
+    and notion_page_id is null
+    and notion_database_id is null;
+  if n <> 1 then
+    raise exception 'shared editor could not read trip-visible receipt';
+  end if;
+
+  select count(*) into n from public.receipt_items
+  where id = '93000000-0000-4000-8000-0000000000b2';
+  if n <> 1 then
+    raise exception 'shared editor could not read trip-visible receipt item';
+  end if;
+
+  select count(*) into n from public.receipt_photos
+  where id = '94000000-0000-4000-8000-0000000000b2';
+  if n <> 1 then
+    raise exception 'shared editor could not read trip-visible receipt photo';
+  end if;
+
+  if has_table_privilege('authenticated', 'public.receipts', 'UPDATE') then
+    raise exception 'authenticated retained direct receipt UPDATE privilege';
+  end if;
+
+  blocked := false;
+  begin
+    update public.receipts
+    set store = 'B overwrite attempt'
+    where id = '92000000-0000-4000-8000-000000000001';
+    get diagnostics changed = row_count;
+    blocked := changed = 0;
+  exception when insufficient_privilege then
+    blocked := true;
+  end;
+  if not blocked then
     raise exception 'shared editor updated another owner receipt';
   end if;
 

@@ -1,0 +1,135 @@
+import { classifyBrokerOnlyStatus, classifyProviderStatus } from "./provider_status.ts";
+
+type BrokerProvider = {
+  provider?: unknown;
+  name?: unknown;
+  label?: unknown;
+  status?: unknown;
+  hasKey?: unknown;
+  lastTestedAt?: unknown;
+  last_tested_at?: unknown;
+};
+
+type UsageRow = {
+  provider?: unknown;
+  model?: unknown;
+  outcome?: unknown;
+  duration_ms?: unknown;
+  error_code?: unknown;
+  event_name?: unknown;
+  created_at?: unknown;
+};
+
+export type ProviderReadRow = {
+  provider: string;
+  label: string;
+  configured: boolean | null;
+  healthy: boolean | null;
+  status: "healthy" | "warning" | "danger";
+  storedStatus: string;
+  requiredModel: string | null;
+  actualModel: string | null;
+  lastSuccessfulRequestAt: string | null;
+  lastProbeAt: string | null;
+  p50LatencyMs: number | null;
+  p95LatencyMs: number | null;
+  errors24h: number;
+  rateLimited24h: number;
+};
+
+const PROVIDER_ORDER = ["kimi", "google", "notion", "weatherapi", "mimo"];
+const REQUIRED_MODELS: Record<string, string | null> = {
+  kimi: "kimi/kimi-code",
+  google: "google/gemma-4-31b",
+  notion: null,
+  weatherapi: "forecast",
+  mimo: null,
+};
+const LABELS: Record<string, string> = {
+  kimi: "Kimi",
+  google: "Google Gemma",
+  notion: "Notion",
+  weatherapi: "WeatherAPI",
+  mimo: "Mimo",
+};
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function validTimestamp(value: unknown) {
+  const text = stringValue(value);
+  return text && Number.isFinite(Date.parse(text)) ? text : null;
+}
+
+function latest(values: Array<string | null>) {
+  return values.filter((value): value is string => value !== null).sort((left, right) =>
+    Date.parse(right) - Date.parse(left)
+  )[0] ?? null;
+}
+
+function percentile(values: number[], fraction: number) {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  return Math.round(sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)]);
+}
+
+export function aggregateProviderRows(input: {
+  brokerProviders: BrokerProvider[];
+  brokerVerified: boolean;
+  usageRows: UsageRow[];
+}): ProviderReadRow[] {
+  const brokerMap = new Map<string, BrokerProvider>();
+  for (const provider of input.brokerProviders) {
+    const id = stringValue(provider.provider) ?? stringValue(provider.name);
+    if (id) brokerMap.set(id.toLowerCase(), provider);
+  }
+  const providerIds = [...new Set([...PROVIDER_ORDER, ...brokerMap.keys()])];
+
+  return providerIds.map((provider) => {
+    const broker = brokerMap.get(provider);
+    const classification = input.brokerVerified
+      ? classifyProviderStatus(broker ?? { status: "missing", hasKey: false })
+      : classifyBrokerOnlyStatus();
+    const usage = input.usageRows.filter((row) =>
+      stringValue(row.provider)?.toLowerCase() === provider
+    );
+    const productionSuccesses = usage.filter((row) =>
+      stringValue(row.outcome)?.toLowerCase() === "success" &&
+      !String(row.event_name || "").startsWith("provider_test_")
+    );
+    const lastSuccessfulRequestAt = latest(
+      productionSuccesses.map((row) => validTimestamp(row.created_at)),
+    );
+    const latestSuccess = productionSuccesses
+      .filter((row) => validTimestamp(row.created_at))
+      .sort((left, right) =>
+        Date.parse(String(right.created_at)) - Date.parse(String(left.created_at))
+      )[0];
+    const durations = usage.map((row) => Number(row.duration_ms)).filter((value) =>
+      Number.isFinite(value) && value >= 0
+    );
+    const errorRows = usage.filter((row) => stringValue(row.outcome)?.toLowerCase() === "error");
+    const usageProbeAt = latest(
+      usage.filter((row) => String(row.event_name || "").startsWith("provider_test_"))
+        .map((row) => validTimestamp(row.created_at)),
+    );
+    const brokerProbeAt = validTimestamp(broker?.lastTestedAt) ??
+      validTimestamp(broker?.last_tested_at);
+    return {
+      provider,
+      label: stringValue(broker?.label) ?? LABELS[provider] ?? provider,
+      ...classification,
+      requiredModel: REQUIRED_MODELS[provider] ?? null,
+      actualModel: stringValue(latestSuccess?.model),
+      lastSuccessfulRequestAt,
+      lastProbeAt: latest([brokerProbeAt, usageProbeAt]),
+      p50LatencyMs: percentile(durations, 0.5),
+      p95LatencyMs: percentile(durations, 0.95),
+      errors24h: errorRows.length,
+      rateLimited24h: errorRows.filter((row) =>
+        /(?:^|\D)429(?:\D|$)|quota|rate.?limit/i.test(String(row.error_code || ""))
+      ).length,
+    };
+  });
+}

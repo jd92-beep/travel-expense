@@ -1,6 +1,21 @@
-import { send } from './_lib/admin.js';
+import { send } from './_lib/http.js';
 
-// ponytail: unauthenticated liveness probe — no data, just proves Vercel functions are up
+const ADMIN_VERSION = '1.0.0';
+
+// Unauthenticated liveness probe. Keep the response limited to deployment
+// provenance and whether read traffic is accepted.
 export default function health(req, res) {
-  send(res, 200, { ok: true, service: 'admin-kanban-vercel', version: '0.7.1', time: new Date().toISOString() });
+  const gitSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.ADMIN_GIT_SHA || 'unknown';
+  const deploymentId = process.env.VERCEL_DEPLOYMENT_ID || 'unknown';
+  const acceptingReadTraffic = process.env.ADMIN_ACCEPT_READ_TRAFFIC === 'true'
+    && /^[0-9a-f]{40}$/i.test(gitSha)
+    && deploymentId !== 'unknown';
+  send(res, 200, {
+    ok: true,
+    service: 'travel-expense-admin-console',
+    version: ADMIN_VERSION,
+    gitSha,
+    deploymentId,
+    acceptingReadTraffic,
+  });
 }

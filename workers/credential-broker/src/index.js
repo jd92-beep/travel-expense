@@ -16,6 +16,7 @@ const GOOGLE_DEFAULT_MODEL = 'gemma-4-31b-it';
 const RATE_WINDOW_MS = 1000 * 60 * 15;
 const DEFAULT_SUPABASE_AI_DAILY_LIMIT = 50;
 const BOSS_EMAIL = 'vc06456@gmail.com';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TRIP_THEME_KEYS = ['japan_washi', 'korea_editorial', 'taiwan_nightmarket', 'europe_rail', 'global_journal'];
 const TRIP_CONTEXTS = [
   { countryCode: 'JP', countryName: 'Japan', primaryCurrency: 'JPY', themeKey: 'japan_washi', locale: 'ja-JP', timezone: 'Asia/Tokyo', weatherRegion: 'Japan', pattern: /日本|東京|东京|大阪|名古屋|京都|札幌|沖繩|冲绳|japan|tokyo|osaka|nagoya|kyoto|sapporo|okinawa|jpy/i },
@@ -139,6 +140,18 @@ function constantTimeEqual(a, b) {
   let diff = 0;
   for (let i = 0; i < a.length; i += 1) diff |= a[i] ^ b[i];
   return diff === 0;
+}
+
+async function isEdgeBrokerRequest(request, env) {
+  const expected = String(env.EDGE_BROKER_KEY || '');
+  const provided = String(request.headers.get('X-Admin-Internal') || '');
+  if (expected.length < 32 || !provided) return false;
+  const encoder = new TextEncoder();
+  const [expectedHash, providedHash] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(expected)),
+    crypto.subtle.digest('SHA-256', encoder.encode(provided)),
+  ]);
+  return constantTimeEqual(new Uint8Array(expectedHash), new Uint8Array(providedHash));
 }
 
 async function hmacKey(secret) {
@@ -619,6 +632,13 @@ async function verifySupabaseUser(request, env) {
 async function optionalSupabaseUser(request, env) {
   if (!supabaseBearerToken(request)) return null;
   return verifySupabaseUser(request, env);
+}
+
+function internalNotionUser(body, edgeBrokerRequest) {
+  if (!edgeBrokerRequest || body?.internalUserId == null) return null;
+  const id = String(body.internalUserId || '').trim();
+  if (!UUID_RE.test(id)) throw new HttpError('Internal Notion user invalid', 400);
+  return { id, email: '' };
 }
 
 function notionCredentialRef(userId) {
@@ -1305,6 +1325,7 @@ async function handleRequest(request, env) {
       return json({ ok: true, service: SERVICE, version: VERSION }, 200, cors);
     }
     enforceAllowedOrigin(request, env);
+    const edgeBrokerRequest = await isEdgeBrokerRequest(request, env);
     if (url.pathname === '/session/unlock') {
       const rateKey = await enforceRateLimit(request, env, 'unlock');
       const body = await readJson(request);
@@ -1349,11 +1370,11 @@ async function handleRequest(request, env) {
       return json({ ok: true, status: result }, 200, cors);
     }
     if (url.pathname === '/notion/request') {
-      // Server-to-server: admin-kanban Edge Function reconciler calls with X-Admin-Internal
-      const internalNotionCall = request.headers.get('X-Admin-Internal') === env.ADMIN_TOKEN;
-      const user = internalNotionCall ? null : await optionalSupabaseUser(request, env);
-      if (!user && !internalNotionCall) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
+      const user = edgeBrokerRequest
+        ? internalNotionUser(body, edgeBrokerRequest)
+        : await optionalSupabaseUser(request, env);
+      if (!user && !edgeBrokerRequest) await verifySession(request.headers.get(SESSION_HEADER), env);
       const data = await fetchNotion(env, body.path, body.method, body.body, body.databaseId, user);
       return json({ ok: true, data }, 200, cors);
     }
@@ -1408,9 +1429,8 @@ async function handleRequest(request, env) {
       return json({ ok: true, data: await weatherApiForecast(env, body) }, 200, cors);
     }
 
-    // Server-to-server auth bypass (Edge Function internal calls)
-    const isInternalCall = request.headers.get('X-Admin-Internal') === env.ADMIN_TOKEN;
-    if (!isInternalCall) {
+    const edgeBrokerRoute = url.pathname === '/credentials/status' || url.pathname === '/credentials/test';
+    if (!(edgeBrokerRequest && edgeBrokerRoute)) {
       const user = await optionalSupabaseUser(request, env);
       if (!user) {
         await verifySession(request.headers.get(SESSION_HEADER), env);

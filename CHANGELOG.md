@@ -1,6 +1,64 @@
 # Changelog
 
+## 2026-07-13
+
+- **Admin Console 1.0.0 cutover preparation**:
+  - Promoted the verified branch metadata from `1.0.0-rc.1` to cutover candidate `1.0.0` in the
+    Admin package, both package-lock root entries and `/api/health`.
+  - Final-SHA PR #36 run `29202450339` passed Admin/BFF, clean database, Compact, React,
+    cross-client, Edge and Credential Broker at `8aa2f8a`; protected production promotion skipped.
+    React `0.2.4` evidence remains typecheck/build/security green, clear-device `12/12`, and
+    security smoke `3 passed, 1 intentional skip`.
+  - Admin metadata gates passed: typecheck/build/security, unit `19/19`, contract `21/21`. Boss
+    explicitly approved cutover preparation, but production deploy and migrations are not complete.
+    The existing `ADMIN_KANBAN_HASH` and current passphrase remain unchanged; passkey is additive and
+    no live enrollment occurred. Production remains Admin `0.8.3` read-only until verified promotion.
+
+- **React App 0.2.4 clear-device persistence race**: clearing device data now quiesces the active
+  Supabase storage scope before sign-out, so state/sync effects cannot recreate its scoped
+  localStorage or IndexedDB snapshots; a deterministic regression covers the writeback race.
+
+- **Admin Console 1.0.0-rc.1 current-SHA CI closure**:
+  - PR #36 run `29201116294` passed all seven required jobs: Admin/BFF, Edge, clean disposable
+    Supabase, Compact, React, Credential Broker and the Compact/React browser round trip.
+  - The clean database applied every forward migration through `20260712123000` and passed all 15
+    Admin/shared SQL fixtures, including passkey removal, sync conflict, R2 itinerary and Nagoya
+    six-day invariants.
+  - Fixed CI portability and lifecycle defects without changing app behavior: the database job no
+    longer assumes `rg` exists, and owned Vite servers now launch directly, close deterministically
+    and never terminate an external server. Previously the browser test printed `passed` in six
+    seconds but remained alive until the job timeout.
+  - Corrected stale SQL fixture expectations to exercise genuine underlying-row version drift and
+    count all versioned itinerary mutations/restores. Production triggers and mutation guards were
+    not weakened.
+  - Production remains Admin `0.8.3` read-only; no live migration, secret, passkey or data mutation
+    was performed.
+
 ## 2026-07-12
+
+- **Compact App 0.16.2 / Android 0.19.2 contested-trip recovery**:
+  - If a locally owned trip identity collides with another account's row, the client retries once
+    with a current-user-scoped trip identity so receipts and photos can sync to the correct account.
+    Genuine shared-trip access denial still requires a fresh owner invitation.
+
+- **Admin Console 1.0.0-rc.1 final branch hardening**:
+  - Rebased onto Compact `0.16.2` without dropping Oscar's access-denial, multi-currency, motion or
+    sync fixes. Canonical itinerary versions, receipt tombstones/sync revisions and private-photo
+    contracts remain aligned across web clients.
+  - Added safe non-final Boss passkey rotation. Removal is bound to the selected opaque credential,
+    complete passkey-set hash and single-use R2 step-up; the server protects the final passkey,
+    appends Audit v2 and revokes every Admin session after success.
+  - Hardened the real BFF path: Edge redirects, transport failures, malformed envelopes, mismatched
+    request IDs and unproven photo streams now fail closed. Broker health requires the explicit
+    Broker contract, provider-probe ambiguity remains `outcome_unknown`, and account-directory
+    lookup fails closed when its bounded search cannot prove an email is absent.
+  - Receipt-list status/date cells no longer split short operational values into unreadable fragments;
+    wide tables stay keyboard-scrollable inside their own region without document overflow.
+  - Post-rebase gates: Admin unit `19/19`, contract `21/21`, browser `42 passed + 1 intentional
+    capture skip`; Edge `69/69`; Compact 9/9 selected gates; React final navigation `6/6`; Broker
+    check/self-test; security, migration-policy and shared-ledger scans green.
+  - Production is unchanged at Admin `0.8.3` read-only. No production deploy, migration, secret or
+    live user-data change was made.
 
 - **Compact App 0.16.1 Access-Denial Sync Fix — the real "sync fail" banner root cause (main) / Android 0.19.1**:
   - **Live diagnosis (puiyuchau@gmail.com, 61 failed queue items, photos stuck)**: her device holds a local copy of the owner's shared South Korea trip but she has NO `trip_members` row server-side (and no local sharing metadata), so every receipt push re-ran `upsertSupabaseTrip` down the OWNER path → upsert collided with the owner's `trips` row → Postgres `new row violates row-level security policy` → all 61 receipts + 66 photos failed, ~122 doomed POSTs per boot (server logs wall-to-wall RLS errors). Every cold open replayed the whole doomed sweep (boot hydrate-reset requeues error items and resets `attempts`), repainting the misleading「請檢查連線」banner — this loop, not connectivity, was the banner.
@@ -13,6 +71,12 @@
   - **Phase 2 — per-day intelligence**: the trip-extraction prompt's per-day schema now requests `city`/`country`/`timezone`/`currency` (Zürich day → CHF, Prague day → CZK — different days, different currencies). `mergeAnalyzedTrip`/`normalizeItinerary` already preserved per-day currency; the prompt simply never asked. `trip.currencies` becomes the true union (HKD + every distinct per-day currency). Wizard currency selects now render all 32 supported codes from `SUPPORTED_CURRENCIES` (was two divergent hardcoded 14/15-option lists); additional currencies flow in automatically from the AI itinerary rather than a manual multi-select.
   - **Phase 3 — display**: the Stats「顯示貨幣」binary HKD/tripCurrency pill becomes **HKD + one chip per currency the trip actually uses** (trip.currencies + per-receipt currencies, capped at 6, stale selection falls back to HKD). Totals/budget/daily lines convert into any selected chip via the HKD anchor; budget edits under any chip convert back to the trip-currency denomination correctly. Settlement stays HKD-anchored; Top-10 rows keep native per-receipt currency.
   - **Verified**: typecheck clean; smokes stats/scan/dashboard/six-person/history/final-nav/itinerary green (settings 9/10 — the 1 failure is the known pre-existing Trip Doctor stale rig, fails on clean HEAD, tracked separately); live 390×844 rig (CHF+EUR+CZK trip, fixed rates): chips render [HKD CHF EUR CZK], HKD total HK$1,516 ✓, CZK view Kč4,39x ✓, CHF view CHF16x ✓, Top-10 shows each receipt in native currency, editor dropdown offers CZK and defaults from the itinerary day.
+
+- **Admin 1.0 shared client contract audit**:
+  - Partial itinerary writes preserve every omitted in-range day; itinerary version wins over device clock skew.
+  - Receipt identity is `(TripID, SourceID)`; legacy raw `SourceID` matching is allowed only for one unique unscoped candidate.
+  - Compact carries receipt tombstones, private photo signed-URL handling, and canonical sync revisions across pull, upsert, and delete flows.
+  - Focused itinerary and Compact browser contract coverage remains part of the Admin RC gate.
 
 ## 2026-07-11
 
@@ -37,7 +101,30 @@
   - **Micro-interactions**: BorderBeam travelling light on the Dashboard hero budget card; History ledger rows stagger-rise (first 12 only); subtle washi-palette confetti on Scan batch save (`canvas-confetti`, reduced-motion aware, lite skips); press-dip on rows/chips.
   - **Cleanup**: deleted dead `ui/timeline.tsx`, `ui/file-upload.tsx`, `ui/confetti.tsx` (0 importers).
   - **Verified**: keyframe property audit 100% compositor-safe; typecheck + `npm run build` clean; smokes green — weather 14, final-nav 7, dashboard 8, history 8, timeline 9, settings 9, privacy 3, scan/stats/six-person/mobile-layout/a11y-touch/offline/session/sync-classify all pass. `smoke:welcome-guide` fails on pre-Motion-v2 HEAD too (stash-bisected, pre-existing) — flagged as a separate task.
+## 2026-07-10
 
+- **Admin Console 0.8.3 emergency containment / Compact 0.13.6**:
+  - Production Admin Edge is read-only by default. All mutations and external side effects now fail
+    before route dispatch with `503 ADMIN_WRITES_DISABLED`; hidden buttons or direct Edge requests
+    cannot bypass the kill switch.
+  - Removed permissive browser policies/grants from the three admin state tables and denied anon or
+    authenticated execution of the admin RLS helper. Real PostgREST/RPC denial smokes and SQL
+    privilege reports passed against live Supabase.
+  - Rotated the exposed Edge-to-Broker machine key, removed the old static `ADMIN_TOKEN` path and
+    bindings, and limited Broker internal authentication to fixed scoped routes.
+  - Provider health now separates Configured from Healthy. Broker liveness and HTTP 200 with an
+    invalid nested status can no longer paint providers green.
+  - Hardened adjacent browser-executable functions: anon execute revoked and `search_path=''` for
+    account deletion, trip-member display names and member-role ranking.
+  - Compact receipt-photo upload/pull now uses 15-minute signed URLs; the Admin Edge photo route uses
+    60-second signed URLs and fails closed if signing is unavailable. Android `0.16.4` has the same
+    compatibility change on `codex/admin-console-1.0-android`.
+  - Added a tracked private `receipt-photos` bucket migration with authenticated trip-member Storage
+    RLS. It is intentionally not live until Compact and Android compatibility deployment is proven.
+  - Verification: Admin typecheck/build/audit green; Compact typecheck/build/security/policy scan and
+    signed-photo smoke green; Edge 10/10 Deno tests; Broker check/self-test green.
+  - Added a guarded Admin production deploy command that refuses dirty worktrees, pins the canonical
+    Vercel project, injects the exact Git SHA and verifies live health provenance after promotion.
 ## 2026-07-08
 
 - **Compact App 0.13.5 No False "Sync Error" On Cold Boot (main) / Android 0.16.3**:

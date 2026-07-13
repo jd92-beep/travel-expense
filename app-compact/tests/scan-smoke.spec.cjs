@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page }) => {
@@ -57,7 +59,7 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   const nav = page.getByLabel('主要分頁');
   await nav.getByRole('button', { name: '記帳', exact: true }).click();
   await expect(page.getByText('掃描收據')).toBeVisible();
