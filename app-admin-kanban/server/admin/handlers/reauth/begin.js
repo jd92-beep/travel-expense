@@ -1,11 +1,11 @@
 import crypto from 'node:crypto';
 
-import { authStateCall } from '../../_lib/auth-state.js';
-import { passphraseFingerprint, verifyAdminPassphrase } from '../../_lib/crypto.js';
-import { handler, HttpError, readJson, requireMethod, sendData } from '../../_lib/http.js';
-import { precheckLoginRate, recordLoginRate } from '../../_lib/rate.js';
-import { requireAdminSession } from '../../_lib/session.js';
-import { authenticationOptions, challengeContext } from '../../_lib/webauthn.js';
+import { authStateCall } from '../../auth-state.js';
+import { passphraseFingerprint, verifyAdminPassphrase } from '../../crypto.js';
+import { handler, HttpError, readJson, requireMethod, sendData } from '../../http.js';
+import { precheckLoginRate, recordLoginRate } from '../../rate.js';
+import { requireAdminSession } from '../../session.js';
+import { authenticationOptions, challengeContext } from '../../webauthn.js';
 
 function operationContext(body) {
   const action = String(body.action || '');

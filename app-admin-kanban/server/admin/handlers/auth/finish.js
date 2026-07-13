@@ -1,9 +1,9 @@
-import { authStateCall } from '../../_lib/auth-state.js';
-import { passphraseFingerprint } from '../../_lib/crypto.js';
-import { handler, HttpError, readJson, requireMethod, requireSameOriginMutation, sendData } from '../../_lib/http.js';
-import { recordLoginRate } from '../../_lib/rate.js';
-import { createOpaqueSession } from '../../_lib/session.js';
-import { challengeContext, verifyAuthentication } from '../../_lib/webauthn.js';
+import { authStateCall } from '../../auth-state.js';
+import { passphraseFingerprint } from '../../crypto.js';
+import { handler, HttpError, readJson, requireMethod, requireSameOriginMutation, sendData } from '../../http.js';
+import { recordLoginRate } from '../../rate.js';
+import { createOpaqueSession } from '../../session.js';
+import { challengeContext, verifyAuthentication } from '../../webauthn.js';
 
 export default function finishAdminAuthentication(req, res) {
   return handler(req, res, async (requestId) => {

@@ -1,5 +1,5 @@
-import { handler, requireMethod, sendData } from '../_lib/http.js';
-import { requireAdminSession, revokeAdminSession } from '../_lib/session.js';
+import { handler, requireMethod, sendData } from '../http.js';
+import { requireAdminSession, revokeAdminSession } from '../session.js';
 
 export default function adminSession(req, res) {
   return handler(req, res, async (requestId) => {

@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 
-import { authStateCall } from '../../_lib/auth-state.js';
-import { passphraseFingerprint, verifyAdminPassphrase } from '../../_lib/crypto.js';
-import { handler, HttpError, readJson, requireMethod, requireSameOriginMutation, sendData } from '../../_lib/http.js';
-import { precheckLoginRate, recordLoginRate } from '../../_lib/rate.js';
-import { authenticationOptions, challengeContext } from '../../_lib/webauthn.js';
+import { authStateCall } from '../../auth-state.js';
+import { passphraseFingerprint, verifyAdminPassphrase } from '../../crypto.js';
+import { handler, HttpError, readJson, requireMethod, requireSameOriginMutation, sendData } from '../../http.js';
+import { precheckLoginRate, recordLoginRate } from '../../rate.js';
+import { authenticationOptions, challengeContext } from '../../webauthn.js';
 
 export default function beginAdminAuthentication(req, res) {
   return handler(req, res, async (requestId) => {

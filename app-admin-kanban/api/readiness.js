@@ -1,6 +1,6 @@
-import { adminEdgeUrl, callSignedEdge } from './_lib/edge.js';
-import { sha256Hex, timingSafeStringEqual } from './_lib/crypto.js';
-import { handler, HttpError, readJson, requireMethod, sendData } from './_lib/http.js';
+import { adminEdgeUrl, callSignedEdge } from '../server/admin/edge.js';
+import { sha256Hex, timingSafeStringEqual } from '../server/admin/crypto.js';
+import { handler, HttpError, readJson, requireMethod, sendData } from '../server/admin/http.js';
 
 const ALLOWED_CANDIDATE_DRIFT = new Set([
   'ADMIN_FRONTEND_GIT_SHA_MISMATCH',

@@ -1,7 +1,7 @@
-import { authStateCall } from '../../../_lib/auth-state.js';
-import { clearSessionCookies } from '../../../_lib/cookies.js';
-import { handler, HttpError, readJson, requireMethod, sendData } from '../../../_lib/http.js';
-import { requireAdminSession } from '../../../_lib/session.js';
+import { authStateCall } from '../../../auth-state.js';
+import { clearSessionCookies } from '../../../cookies.js';
+import { handler, HttpError, readJson, requireMethod, sendData } from '../../../http.js';
+import { requireAdminSession } from '../../../session.js';
 
 function removalCommitInput(body) {
   const selector = String(body.selector || '');

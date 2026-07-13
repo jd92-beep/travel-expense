@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 
-import { authStateCall } from '../../../_lib/auth-state.js';
-import { handler, HttpError, readJson, requireMethod, sendData } from '../../../_lib/http.js';
-import { passkeyEnrollmentContext } from '../../../_lib/passkeys.js';
-import { requireAdminSession } from '../../../_lib/session.js';
-import { challengeContext, registrationOptions } from '../../../_lib/webauthn.js';
+import { authStateCall } from '../../../auth-state.js';
+import { handler, HttpError, readJson, requireMethod, sendData } from '../../../http.js';
+import { passkeyEnrollmentContext } from '../../../passkeys.js';
+import { requireAdminSession } from '../../../session.js';
+import { challengeContext, registrationOptions } from '../../../webauthn.js';
 
 export default function beginBackupPasskeyEnrollment(req, res) {
   return handler(req, res, async (requestId) => {

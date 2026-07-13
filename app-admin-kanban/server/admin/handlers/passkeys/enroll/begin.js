@@ -1,15 +1,15 @@
 import crypto from 'node:crypto';
 
-import { authStateCall } from '../../../_lib/auth-state.js';
-import { passphraseFingerprint, verifyAdminPassphrase } from '../../../_lib/crypto.js';
-import { handler, HttpError, readJson, requireMethod, requireSameOriginMutation, sendData } from '../../../_lib/http.js';
-import { precheckLoginRate, recordLoginRate } from '../../../_lib/rate.js';
+import { authStateCall } from '../../../auth-state.js';
+import { passphraseFingerprint, verifyAdminPassphrase } from '../../../crypto.js';
+import { handler, HttpError, readJson, requireMethod, requireSameOriginMutation, sendData } from '../../../http.js';
+import { precheckLoginRate, recordLoginRate } from '../../../rate.js';
 import {
   bootstrapFingerprint,
   challengeContext,
   registrationOptions,
   verifyBootstrapSecret,
-} from '../../../_lib/webauthn.js';
+} from '../../../webauthn.js';
 
 export default function beginPasskeyEnrollment(req, res) {
   return handler(req, res, async (requestId) => {

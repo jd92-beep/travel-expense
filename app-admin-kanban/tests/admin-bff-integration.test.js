@@ -231,6 +231,35 @@ test('Admin BFF black-box integration gate', async (t) => {
   };
 
   try {
+    await t.test('fixed paths retain their original method contracts', async () => {
+      const wrongMethods = [
+        ['GET', '/api/admin/auth/begin'],
+        ['GET', '/api/admin/auth/finish'],
+        ['GET', '/api/admin/passkeys/enroll/begin'],
+        ['GET', '/api/admin/passkeys/enroll/finish'],
+        ['POST', '/api/admin/passkeys'],
+        ['GET', '/api/admin/passkeys/add/begin'],
+        ['GET', '/api/admin/passkeys/add/finish'],
+        ['GET', '/api/admin/passkeys/remove/preview'],
+        ['GET', '/api/admin/passkeys/remove/commit'],
+        ['GET', '/api/admin/reauth/begin'],
+        ['GET', '/api/admin/reauth/finish'],
+        ['POST', '/api/admin/session'],
+      ];
+      calls.length = 0;
+      for (const [method, url] of wrongMethods) {
+        const res = await invoke({ method, url });
+        assert.equal(res.statusCode, 405, `${method} ${url}`);
+        assert.equal(res.json().error.code, 'METHOD_NOT_ALLOWED', `${method} ${url}`);
+      }
+      for (const method of ['GET', 'DELETE']) {
+        const res = await invoke({ method, url: '/api/admin/session' });
+        assert.equal(res.statusCode, 401, `${method} /api/admin/session`);
+        assert.equal(res.json().error.code, 'UNAUTHORIZED', `${method} /api/admin/session`);
+      }
+      assert.equal(calls.length, 0);
+    });
+
     await t.test('missing opaque session rejects before either Edge service', async () => {
       calls.length = 0;
       const res = await invoke({ url: '/api/admin/overview' });

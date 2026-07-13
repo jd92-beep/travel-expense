@@ -78,19 +78,20 @@ for (const path of [
 }
 
 for (const path of [
-  'api/admin/auth/begin.js',
-  'api/admin/auth/finish.js',
-  'api/admin/passkeys/enroll/begin.js',
-  'api/admin/passkeys/enroll/finish.js',
-  'api/admin/reauth/begin.js',
-  'api/admin/reauth/finish.js',
-  'api/admin/session.js',
   'api/admin/[...path].js',
+  'server/admin/routes.js',
+  'server/admin/handlers/auth/begin.js',
+  'server/admin/handlers/auth/finish.js',
+  'server/admin/handlers/passkeys/enroll/begin.js',
+  'server/admin/handlers/passkeys/enroll/finish.js',
+  'server/admin/handlers/reauth/begin.js',
+  'server/admin/handlers/reauth/finish.js',
+  'server/admin/handlers/session.js',
 ]) {
-  if (!existsSync(join(appRoot, path))) findings.push(`Required admin route is missing: ${path}`);
+  if (!existsSync(join(appRoot, path))) findings.push(`Required admin handler is missing: ${path}`);
 }
 
-const edgeSource = readFileSync(join(appRoot, 'api/_lib/edge.js'), 'utf8');
+const edgeSource = readFileSync(join(appRoot, 'server/admin/edge.js'), 'utf8');
 if (!edgeSource.includes("redirect: 'manual'")) findings.push('Signed Edge requests must reject redirects');
 if (!edgeSource.includes("'X-Admin-Signature'")) findings.push('Signed Edge protocol headers are missing');
 

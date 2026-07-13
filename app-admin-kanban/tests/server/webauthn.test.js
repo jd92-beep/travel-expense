@@ -7,7 +7,7 @@ import {
   registrationOptions,
   verifyBootstrapSecret,
   webAuthnConfig,
-} from './webauthn.js';
+} from '../../server/admin/webauthn.js';
 
 test('production WebAuthn origin and RP ID are exact', () => {
   const previous = process.env.VERCEL_ENV;

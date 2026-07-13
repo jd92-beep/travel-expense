@@ -1,7 +1,7 @@
-import { authStateCall } from '../../../_lib/auth-state.js';
-import { handler, HttpError, readJson, requireMethod, sendData } from '../../../_lib/http.js';
-import { passkeyRemovalContext, passkeyRemovalPreview } from '../../../_lib/passkeys.js';
-import { requireAdminSession } from '../../../_lib/session.js';
+import { authStateCall } from '../../../auth-state.js';
+import { handler, HttpError, readJson, requireMethod, sendData } from '../../../http.js';
+import { passkeyRemovalContext, passkeyRemovalPreview } from '../../../passkeys.js';
+import { requireAdminSession } from '../../../session.js';
 
 function removalInput(body) {
   const selector = String(body.selector || '');

@@ -1,8 +1,8 @@
-import { authStateCall } from '../../../_lib/auth-state.js';
-import { handler, HttpError, readJson, requireMethod, sendData } from '../../../_lib/http.js';
-import { sameCredentialIds } from '../../../_lib/passkeys.js';
-import { requireAdminSession, rotateOpaqueSession } from '../../../_lib/session.js';
-import { challengeContext, registrationRecord, verifyRegistration } from '../../../_lib/webauthn.js';
+import { authStateCall } from '../../../auth-state.js';
+import { handler, HttpError, readJson, requireMethod, sendData } from '../../../http.js';
+import { sameCredentialIds } from '../../../passkeys.js';
+import { requireAdminSession, rotateOpaqueSession } from '../../../session.js';
+import { challengeContext, registrationRecord, verifyRegistration } from '../../../webauthn.js';
 
 export default function finishBackupPasskeyEnrollment(req, res) {
   return handler(req, res, async (requestId) => {
