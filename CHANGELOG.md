@@ -2,6 +2,19 @@
 
 ## 2026-07-14
 
+- **Compact App 0.16.4 cold-open sync reliability**:
+  - A temporary Supabase auth refresh race no longer becomes a permanent queue failure and generic
+    connection banner on every launch. Boot sync uses bounded quiet auth retry, and non-exhausted
+    persisted failures safely requeue after hydration.
+  - Exhausted and version-conflict failures remain durable; manual retry clears stale access/backfill
+    latches and schedules one authoritative sync, including when another sync is already running.
+  - Permission/RLS failures now show the permission-specific message rather than 「有資料連線失敗，
+    請檢查連線或設定。」
+  - Offline/cold-open regression tests passed `4/4`, focused manual retry passed `2/2`, and the full
+    Compact production gate passed typecheck, final navigation `10/10`, mobile, a11y/touch, broker
+    guards, security scan and production build. No passphrase, secret, RLS, migration or live user
+    data changed.
+
 - **Admin Console 1.0.1 performance and runtime-status correction**:
   - Default Overview、Accounts、Incidents、Providers 與 Audit reads 使用最多兩個併發嘅 bounded
     prefetch；idle Activity Center 停止每 60 秒重讀，打開時先明確 refresh。

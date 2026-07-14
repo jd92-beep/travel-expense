@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-14 HKT
-- **Focus**: Session 55 completed the verified Admin 1.0.1 performance/status production promotion.
+- **Focus**: Session 56 fixed Compact cold-open false connection failures and durable retry recovery.
 - **Agent**: Codex Sol (orchestration/review) + Terra (implementation)
-- **App version**: Compact `0.16.3`; Android `0.19.2` (versionCode 1920); Admin source/production `1.0.1`; React `0.2.4`
+- **App version**: Compact `0.16.4`; Android `0.19.2` (versionCode 1920); Admin source/production `1.0.1`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.3`; the Android branch is `0.19.2`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.4`; the Android branch is `0.19.2`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -50,8 +50,34 @@ you closed with your session number.
     broken (Session 49), but the underlying `owner_id ≠ auth.uid()` mismatch needs DB-side
     investigation (Admin Kanban gateway blocked access). If re-invite or trip re-creation doesn't
     fix it, a manual `UPDATE trips SET owner_id = '<correct_uid>'` may be needed.
+12. 🟡 **Compact Supabase backfill smoke has a pre-existing itinerary fixture failure** — on clean
+    `origin/main` `3cede8a`, receipt backfill and revoked-trip purge pass, but the first test receives
+    zero `update_trip_itinerary` RPC calls instead of one. Session 56 reproduced the same failure on
+    the fix branch and untouched baseline; investigate the itinerary merge/fixture separately.
 
 ## What Was Done
+
+### Session 56 (Codex Sol + Terra — Compact 0.16.4 cold-open sync reliability)
+
+1. **Live root cause**: the latest 100 Supabase API logs contained 98 `200`, one `201`, and one
+   `/auth/v1/user` `403` immediately after a successful refresh-token `200`; subsequent trips,
+   receipts, profile and photo reads were `200`. The backend recovered, but a Compact hydration
+   regression persisted that transient auth failure as a durable queue error, skipped it on later
+   pushes and replayed the generic red connection banner on every launch.
+2. **Recovery contract**: boot sync now uses the existing quiet auth-retry path. Non-exhausted
+   persisted failures requeue on hydration; version conflicts and exhausted failures remain durable.
+   Failed rows are no longer discarded and recreated with zero attempts, and a manual retry clears
+   the access-denied/backfill latches before one authoritative deferred sync.
+3. **Accurate UI**: raw RLS, `42501`, `permission denied` and translated access errors now use the
+   permission-specific banner instead of 「有資料連線失敗，請檢查連線或設定。」. Transient cold-open
+   failures stay quiet while retrying; genuine exhausted failures remain visible and actionable.
+4. **Regression proof**: `npm run smoke:offline` passed `4/4`; focused existing manual-retry tests
+   passed `2/2`; privacy `3/3` and sync-classifier `2/2` passed. `npm run smoke:production-gate`
+   passed: typecheck, final navigation `10/10`, mobile layout, accessibility/touch, broker preflight,
+   fail-closed vault guard, secret scan and production build. `git diff --check` passed.
+5. **Baseline debt and scope**: `smoke:supabase-backfill` returned `1 passed, 1 failed` because the
+   itinerary RPC count was `0`; an untouched `origin/main` worktree at `3cede8a` reproduced the same
+   failure. No passphrase, secret, RLS, migration, provider credential or live user data changed.
 
 ### Session 55 (Codex Sol + Terra — Admin 1.0.1 verified production promotion)
 
