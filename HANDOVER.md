@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-13 HKT
-- **Focus**: Session 49 fixed the sync backfill infinite loop (61-item bug for `puiyuchau@gmail.com`) and added defensive `trip_members` auto-seed.
-- **Agent**: Antigravity
-- **App version**: Compact `0.16.2`; Android `0.19.2` (versionCode 1920); Admin production `0.8.3`, branch cutover candidate `1.0.0`; React `0.2.4`
+- **Date**: 2026-07-14 HKT
+- **Focus**: Session 54 completed the verified Admin 1.0.1 performance, Volcano and overview-status candidate.
+- **Agent**: Codex Sol (orchestration/review) + Terra (implementation)
+- **App version**: Compact `0.16.3`; Android `0.19.2` (versionCode 1920); Admin source `1.0.1` / production `1.0.0` pending protected promotion; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.2`; the Android branch is `0.19.2`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.3`; the Android branch is `0.19.2`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -23,49 +23,143 @@ This is the ONLY live to-do list in this file. Everything under "What Was Done",
 before acting on them. Every session must reconcile this list: add items you opened, mark items
 you closed with your session number.
 
-1. 🟠 **Production migration cutover is approved and in preparation** — forward-only reconciliation
-   artifacts and static migration/contract scans are tracked. Production deploy has not run and the
-   new Admin 1.0 migrations have not been applied. Final-SHA PR #36 run `29202450339` rebuilt a clean disposable Supabase at
-   commit `8aa2f8a`, applied the then-tracked forward migrations through `20260712123000` and passed all 15 tracked SQL
-   smokes. The new `20260712122500` receipt-photo compatibility migration has not run in production. **No `db push`, no blind `migration repair`.** Apply only through the reviewed maintenance
-   runbook during the approved cutover.
-2. 🟠 **Notion outbox worker deployment is unverified** — worker code, contracts and a guarded
-   workflow now exist, but live Edge deployment and secret bindings were not changed in Session 43.
-   Shared receipts may remain pending until live deployment is explicitly verified.
-3. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
+1. 🟠 **Admin 1.0.1 protected production promotion pending** — local Admin, BFF and Edge gates are
+   green for the performance/status fix. Merge through reviewed `main`, run the protected workflow,
+   then record live health, Volcano, Broker and heartbeat-state evidence before closing Session 54.
+2. 🟡 **Final post-bootstrap fresh login check (Boss is doing this now)** — passkey enrollment and
+   bootstrap removal are complete. Record this one fresh Chrome login result before closing the item;
+   do not claim it has passed yet.
+3. 🟠 **Real ordinary authenticated JWT privilege smoke is pending** — repeat the production
+   privilege check with an ordinary authenticated JWT; do not substitute privileged/service access.
+4. 🟠 **Admin DB platform-owner hardening remains pending** — complete the platform-owner operation
+   for the planned non-login helper owner; browser grants, policies and RPC execute remain closed.
+5. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — `receipt-photos` remains in public
+   compatibility mode until Compact/Android signed-URL heartbeats prove active compatibility. Do
+   not apply the staged private receipt-photo migration before that proof.
+6. 🟡 **Receipt-sync/Notion outbox worker execution remains unproven** — worker `v37` is deployed
+   and passed a negative canary, so deployment is no longer unverified. Do not claim an end-to-end
+   live write: a positive shared-receipt write and Notion mirror result still need separate proof.
+7. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-4. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — active forward migration
-   `20260712122500` keeps `receipt-photos` public with `receipt_photos_public_read` for legacy
-   compatibility, while staged `20260710161000_private_receipt_photo_storage.sql` stays **unapplied**.
-   Compact `0.16.2` and Android `0.19.2` use signed URLs, but Android active compatibility is not
-   yet confirmed. No production migration occurred in Session 48; make photos private only after
-   both clients are deployed and heartbeats prove compatibility. (Sessions 42-43, 48.)
-5. 🟡 **Compact Netlify deploy blocked** by hosting account credits (durable until topped up).
-6. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
+8. 🟡 **Compact Netlify deploy blocked** by hosting account credits (durable until topped up).
+9. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
    unused `hkd` imports in History/Stats. (Old Pending list.)
-7. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
+10. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
    settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
-8. 🟠 **Admin production cutover is approved and in preparation** — branch cutover candidate `1.0.0`
-   auth/BFF, read APIs and R1/R2 kernels are complete and tested. Final-SHA PR #36 run
-   `29202450339` passed all seven required gates at `8aa2f8a`; its protected production job correctly
-   skipped. Production deploy, migrations, secrets, exact WebAuthn origin/RP ID, first Boss passkey
-   enrollment, session revocation and maintenance promotion have not been performed. Live remains
-   `0.8.3` read-only; the `admin-production` environment setup and first run remain pending.
-9. 🟠 **Admin DB ownership hardening needs a platform-owner operation** — browser grants, policies
-   and RPC execute are closed, and `search_path` is fixed. The managed SQL API cannot transfer the
-   helper function to the planned non-login owner, so this remains a documented go-live blocker.
-10. 🟠 **Live Nagoya data has not been rewritten** — synthetic/local/cross-client tests prove exactly
-    six days (`2026-04-20` through `2026-04-25`) and reject range-external spots, but changing Boss's
-    live rows is a user-data mutation and requires explicit approval plus a fresh preview/backup.
 11. 🟡 **Admin 1.0 intentionally excludes R3 and generic controls** — account consolidation,
     scheduled deletion, Notion write repair, device commands, runtime writes, arbitrary SQL/table
-    editing and session revoke stay server-disabled until their later threat-model milestones.
+    editing and session revoke stay server-disabled; `ADMIN_WRITE_MODE` remains `deny_all`.
 12. 🟠 **`puiyuchau@gmail.com` root cause — owner_id mismatch** — the infinite backfill loop is now
     broken (Session 49), but the underlying `owner_id ≠ auth.uid()` mismatch needs DB-side
     investigation (Admin Kanban gateway blocked access). If re-invite or trip re-creation doesn't
     fix it, a manual `UPDATE trips SET owner_id = '<correct_uid>'` may be needed.
 
 ## What Was Done
+
+### Session 54 (Codex Sol + Terra — Admin 1.0.1 performance and runtime-status candidate)
+
+1. **Measured root cause**: live Edge logs showed each tab paying sequential session verification
+   plus Admin Edge latency, while `EXPLAIN ANALYZE public.admin_read_overview()` completed in about
+   `10.5ms`. The fix keeps the complete authentication boundary and optimizes work after verification.
+2. **Loading behavior**: bounded default workspace prefetch warms Overview、Accounts、Incidents、
+   Providers 同 Audit with at most two concurrent reads. Idle operation polling stops; Activity
+   Center refreshes explicitly and active operations retain the 10-second interval.
+3. **Provider and overview truth**: Volcano is present end-to-end with required model
+   `volcano/doubao-seed-2.0-lite`. Overview reads DB、operations 同 strict Broker `/health` in
+   parallel. Broker health requires exact `200`/service/version evidence; missing client heartbeats
+   render `awaiting_heartbeat` / `待首次心跳` instead of Unknown or a false green state.
+4. **Independent gates**: Admin typecheck/build/security passed; unit `31/31`, contract `24/24`,
+   full smoke `47 passed + 1 intentional skip`; Edge format/lint/check passed with `72/72` tests;
+   `npm audit` found 0 vulnerabilities; GitNexus detect_changes reported LOW risk and 0 affected
+   processes. The first full smoke exposed one StrictMode-only test assumption; the test now compares
+   against its settled request baseline, focused rerun passed, and the full suite passed.
+5. **Security scope**: Admin version bumped to `1.0.1`. No passphrase, secret, RLS, migration, live
+   user data, provider credential or write-mode change occurred. Production promotion and live Chrome
+   verification remain open above until protected deployment completes.
+
+### Session 53 (Terra — Admin 1.0 passkey bootstrap closure and final production promotion)
+
+1. **Passkey and Edge proof**: first passkey enrollment BFF begin/finish returned `200`. Edge
+   credential register, revoke-all, session create and session verify all returned `200`; the current
+   passphrase text is unchanged and remains necessary.
+2. **Bootstrap closure**: `ADMIN_PASSKEY_BOOTSTRAP_SECRET` was removed from Vercel Production and
+   temporary Keychain items were removed. Workflow `29303308607` produced bootstrap-closure deployment
+   `dpl_59zhH1QnLEXtPnfNq8yHkscPczJe`.
+3. **Final release and direct canaries**: PR #49 merged as
+   `0a71608e2b0c888eb7e7e4efb194a21a59ad935b` with localized Chrome focus guidance. Edge versions are
+   `admin-auth-state` `37`, `admin-kanban` `90`, and `receipt-sync-worker` `37`. Direct negative
+   canaries returned `401 ADMIN_SIGNATURE_MISSING` and `401 UNAUTHORIZED` as expected.
+4. **Verified final production deployment**: workflow `29303864302` succeeded at exact SHA
+   `0a71608e2b0c888eb7e7e4efb194a21a59ad935b`; Vercel deployment
+   `dpl_A7o26cPYDieYCa1RaNcVvGpJ4XWh`; Edge deployment
+   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_90`; schema `20260712123000`.
+   `/api/health` returned `200` with `acceptingReadTraffic=true`, production asset
+   `/assets/index-BbcEP-GN.js` contains the focus guidance, and bootstrap env is absent.
+5. **Current posture and scope**: `ADMIN_WRITE_MODE` remains `deny_all` and R3 remains disabled.
+   The only passkey/bootstrap follow-up is Boss's in-progress fresh-login check in Current Open Items.
+   Documentation only: no app code, secret value, commit or push was changed; run `git diff --check`
+   before handoff.
+
+### Session 52 (Terra — Admin 1.0 verified production promotion)
+
+1. **Failed-closed retry retained as evidence**: workflow `29301851315` failed at candidate readiness
+   with `503`; no Edge `/api/runtime` request occurred. Candidate Vercel deployment
+   `dpl_9yRX6HWGUfDHtnAS1vt7so5c4uma` was not promoted.
+2. **Official production configuration update**: `ADMIN_KANBAN_HASH` was updated through the official
+   Vercel CLI, sourced from Keychain through stdin without exposing its value. Temporary OIDC
+   `.env.local` and link metadata created by the CLI were removed afterwards.
+3. **Verified promotion and runtime**: workflow `29302288203` completed all seven prerequisites and
+   protected promotion at exact SHA `72ee62507349e245b8613d9531958d428237bc90`. Production is Admin
+   `1.0.0`, Vercel `dpl_J6huupag1ur7GwmPCVU6k7b7kJsn`, Edge
+   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_88`, schema `20260712123000`.
+   Live `/api/health` returned `200`, version `1.0.0`, the exact SHA and
+   `acceptingReadTraffic=true`; unauthenticated session returned `401`, while direct catch-all
+   session query returned `404`.
+4. **Security posture at that interim promotion**: passphrase text was unchanged. First Boss passkey
+   enrollment and bootstrap removal were still pending then; Session 53 records their completion.
+   `ADMIN_WRITE_MODE` remained `deny_all` and R3 stayed disabled.
+5. **Version correction and scope**: this worktree reports Compact `APP_VERSION` `0.16.3` and React
+   `APP_VERSION` `0.2.4`; current-doc claims were corrected. Documentation only: no app code, secret
+   value, commit or push was changed. Run `git diff --check` before handoff.
+
+### Session 51 (Terra — Admin 1.0 cutover documentation reconciliation)
+
+1. **Reconciled branch state**: rebased this documentation-only worktree onto `origin/main`
+   `72ee62507349e245b8613d9531958d428237bc90` without touching the root checkout. PR #48 adds the
+   readiness guard that validates the configured hash before any Edge request.
+2. **Corrected production-auth truth**: the prior Admin `1.0.0` production deployment at
+   `90cfab891665300cdd8b9765f34c02cfea6d8169` did not complete a usable login cutover because
+   production `ADMIN_KANBAN_HASH` remained legacy `PBKDF2`; Admin 1.0 accepts only strict `scrypt`.
+   A new valid `scrypt` hash was generated locally and set in Vercel Production. The passphrase text
+   remains unchanged, but a fresh deployment and live login verification are still pending.
+3. **Remaining auth operations**: first Boss passkey enrollment and bootstrap removal remain pending;
+   neither is claimed complete. `ADMIN_WRITE_MODE` remains `deny_all`, and R3 stays disabled.
+4. **Receipt worker correction**: `receipt-sync-worker`/Notion outbox worker `v33` is deployed and
+   has passed a negative canary. No end-to-end live write execution is claimed or verified.
+5. **Technical correlation only**: root request IDs are
+   `c1e45c92-2cc6-4a05-acde-eeed3a46aa83`,
+   `4299f645-f4a0-4ea1-a1ee-e6c075fd8bd2`, and
+   `91b4075e-9077-44f3-b4b2-3bb7a1016ebf`.
+6. **Scope and verification**: documentation only; no application code, Vercel configuration,
+   credential value, passphrase, migration, user data, commit or push was changed. `git diff --check`
+   and docs-consistency searches are required before handoff.
+
+### Session 50 (Codex — Admin Console 1.0 live cutover documentation)
+
+1. **Verified live promotion**: GitHub Actions workflow `29268903409` succeeded for exact commit
+   `90cfab891665300cdd8b9765f34c02cfea6d8169`; all CI groups and the protected promotion passed.
+   Production is `https://travel-expense-admin-kanban.vercel.app`, Vercel deployment
+   `dpl_83w5XAgVae9Twssb4RSRmQmxGyUU`, Edge deployment
+   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_86`, and schema `20260712123000`.
+2. **Live read-path proof**: `/api/health` returned `200` with `acceptingReadTraffic=true`;
+   unauthenticated `/api/admin/session` and a rewritten nested itinerary request returned typed
+   `401 UNAUTHORIZED`; direct `/api/admin?__admin_path=session` returned typed `404 NOT_FOUND`.
+3. **Security and data invariants**: the current passphrase remains unchanged and necessary;
+   passkey is additive and the first Boss enrollment remains pending. Writes remain `deny_all` and
+   R3 is server-disabled. Nagoya acceptance is exactly six days (`2026-04-20` through
+   `2026-04-25`) with `21/21` scenery spots in range.
+4. **Scope**: documentation only. No code, configuration, secret, passphrase, hash, token,
+   bootstrap material, migration, data, commit, push or PR was changed or created.
 
 ### Session 49 (Antigravity — sync backfill infinite loop fix)
 1. **Root cause identified**: User `puiyuchau@gmail.com` had 61 failed sync items because:

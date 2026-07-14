@@ -1,23 +1,36 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-07-13 HKT
+Last updated: 2026-07-14 HKT
 
 ## Current Status
 
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
-- Production release: `0.8.3`, intentionally read-only.
-- Verified local cutover candidate: `1.0.0` on `codex/admin-console-1.0`.
-- Expected database contract: `20260712123000` (`admin-passkeys-v2`).
-- Compatibility baseline: Compact Web `0.16.2`, Android `0.19.2`, React `0.2.4`.
+- Verified source candidate: Admin `1.0.1`, with bounded default-workspace prefetch, idle-polling
+  removal, Volcano provider coverage, strict live Broker health and explicit awaiting-heartbeat
+  client status. Protected production promotion and live post-deploy proof remain pending.
+- Completed passkey bootstrap closure: first passkey enrollment BFF begin/finish returned `200`; Edge
+  credential register, revoke-all, session create and session verify all returned `200`. The current
+  passphrase remains unchanged and necessary. `ADMIN_PASSKEY_BOOTSTRAP_SECRET` is removed from Vercel
+  Production, temporary Keychain items are removed, and workflow `29303308607` deployed
+  `dpl_59zhH1QnLEXtPnfNq8yHkscPczJe` for bootstrap closure.
+- Final production release: PR #49 merged at exact Git SHA
+  `0a71608e2b0c888eb7e7e4efb194a21a59ad935b` with localized Chrome passkey-focus guidance. Final
+  workflow `29303864302` succeeded at that SHA: Vercel `dpl_A7o26cPYDieYCa1RaNcVvGpJ4XWh`; Edge
+  `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_90`; schema `20260712123000`.
+- Live proof: `/api/health` returned `200`, `acceptingReadTraffic=true`, and production asset
+  `/assets/index-BbcEP-GN.js` includes the localized focus guidance. Bootstrap env is absent. Edge
+  versions are `admin-auth-state` `37`, `admin-kanban` `90`, and `receipt-sync-worker` `37`; direct
+  negative canaries returned `401 ADMIN_SIGNATURE_MISSING` and `401 UNAUTHORIZED`.
+- Production database contract: `20260712123000` (`admin-passkeys-v2`).
+- Compatibility baseline: Compact Web `0.16.3`, Android `0.19.2`, React `0.2.4`.
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
-- R0/R1/R2 code and release gates are complete locally. Boss has approved cutover preparation;
-  production deploy and migrations are not complete, and live remains `0.8.3` read-only until
-  verified promotion.
-- Active source now includes `20260712122500_restore_receipt_photo_compatibility.sql`, which keeps
-  receipt photos public until client heartbeats prove signed-URL compatibility. The staged private
-  migration remains `20260710161000_private_receipt_photo_storage.sql`; neither migration ran in
-  production during this cutover-preparation pass.
-- The existing `ADMIN_KANBAN_HASH` and current passphrase remain unchanged; passkey is additive.
+- All CI groups, protected promotion and current runtime/auth-route checks passed.
+- Receipt photos remain in public compatibility mode until client heartbeats prove signed-URL
+  compatibility; do not apply the staged private migration before that proof.
+- The current passphrase remains unchanged and necessary; passkey is additive. Passkey enrollment and
+  bootstrap removal are complete. Boss is performing the final post-bootstrap fresh login check now;
+  do not mark that check complete until its result is recorded.
+- Writes remain `deny_all`.
 - R3 account consolidation/deletion, Notion write repair, device commands, runtime writes, arbitrary
   SQL/table editing and generic credential controls are server-disabled.
 
@@ -78,8 +91,9 @@ The cutover candidate implements:
    passphrase-plus-passkey step-up. The server rechecks the complete credential-set hash under a
    lock, appends Audit v2 and revokes every Admin session. The final passkey remains break-glass only.
 
-The legacy browser bearer and direct Edge authorization paths are removed from the cutover candidate. Production
-still runs the old read-only build until the approved maintenance cutover.
+The legacy browser bearer and direct Edge authorization paths are removed. In live production,
+unauthenticated `/api/admin/session` and rewritten nested itinerary reads return typed
+`401 UNAUTHORIZED`; direct `/api/admin?__admin_path=session` returns typed `404 NOT_FOUND`.
 
 ## API And Operations
 
@@ -108,15 +122,18 @@ and recovered through the operation ID; the UI never declares success from reque
 - Itinerary dates are local calendar dates. Inclusive ranges contain exactly one day per date; a spot
   belongs to one in-range day; partial updates preserve omitted days; every mutation creates a new
   version and snapshot.
-- Nagoya acceptance is exactly six days, `2026-04-20` through `2026-04-25`, with no scenery spot
-  outside that range. Compact/React browser and static contract tests are green. PR #36 final-SHA run
-  `29202450339` rebuilt a disposable Supabase from zero and passed all 15 SQL smokes, including
-  itinerary/R2 round trips. Live Boss data has not been rewritten because that requires explicit
-  approval, backup and a fresh preview.
+- Nagoya acceptance is exactly six days, `2026-04-20` through `2026-04-25`, with all `21/21`
+  scenery spots in range. Compact/React browser and static contract tests are green.
 
 ## Release Evidence
 
-Verified on 2026-07-13:
+Verified for final production promotion:
+
+- Admin `1.0.1` candidate verification: typecheck/build/security passed; unit `31/31`, contract
+  `24/24`, full smoke `47 passed + 1 intentional skip`; Edge format/lint/check passed with `72/72`
+  tests; `npm audit` found 0 vulnerabilities; GitNexus detect_changes reported LOW risk and 0
+  affected processes. The current passphrase and all secrets remain unchanged, writes remain
+  `deny_all`, and no migration or live data mutation occurred.
 
 - Admin `1.0.0` cutover metadata is aligned in `package.json`, both package-lock root entries and
   `/api/health`; this pass's typecheck, build and security scan passed, with unit `19/19` and
@@ -124,12 +141,32 @@ Verified on 2026-07-13:
   `42 passed + 1 intentional visual-capture skip`; the suite covers login/WebAuthn, all 18 routes
   at seven release viewports, every visible R1/R2 action family and axe serious/critical checks;
   `npm audit` reports `0` vulnerabilities.
-- Boss explicitly approved cutover preparation, but production deploy and migrations are not
-  complete. The existing `ADMIN_KANBAN_HASH` and current passphrase remain unchanged; passkey is
-  additive, and no live enrollment occurred in this pass.
+- First passkey enrollment BFF begin/finish returned `200`; Edge credential register, revoke-all,
+  session create and session verify returned `200`. `ADMIN_PASSKEY_BOOTSTRAP_SECRET` was removed from
+  Vercel Production; temporary Keychain items were removed; workflow `29303308607` deployed
+  `dpl_59zhH1QnLEXtPnfNq8yHkscPczJe` for bootstrap closure.
+- PR #49 merged as `0a71608e2b0c888eb7e7e4efb194a21a59ad935b` with localized Chrome focus guidance.
+  Final workflow `29303864302` succeeded at that exact SHA and deployed Vercel
+  `dpl_A7o26cPYDieYCa1RaNcVvGpJ4XWh`, Edge
+  `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_90`, schema `20260712123000`.
+  `/api/health` returned `200` with `acceptingReadTraffic=true`; `/assets/index-BbcEP-GN.js` contains
+  the localized focus guidance and bootstrap env is absent. Edge versions are `admin-auth-state` `37`,
+  `admin-kanban` `90`, `receipt-sync-worker` `37`; direct negative canaries returned
+  `401 ADMIN_SIGNATURE_MISSING` and `401 UNAUTHORIZED`.
+- Workflow `29301851315` recorded the intended fail-closed readiness behavior: candidate readiness
+  returned `503`, no Edge `/api/runtime` request occurred and candidate deployment
+  `dpl_9yRX6HWGUfDHtnAS1vt7so5c4uma` was not promoted.
+- After the official Vercel CLI configuration update, workflow `29302288203` completed all seven
+  prerequisites and protected promotion at `72ee62507349e245b8613d9531958d428237bc90`. That interim
+  promotion used Vercel `dpl_J6huupag1ur7GwmPCVU6k7b7kJsn`, Edge
+  `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_88`, schema `20260712123000`.
+  `/api/health` returned `200`, version `1.0.0`, the exact SHA and `acceptingReadTraffic=true`;
+  unauthenticated session returned `401` and direct catch-all session query returned `404`.
+  The passphrase is unchanged; the later completed passkey bootstrap closure is recorded above.
 - Edge: 28 files passed format/lint; all three entrypoints passed `deno check`; Deno tests
   `69 passed, 0 failed`.
-- Compact `0.16.2`: 9/9 selected post-rebase gates passed, including itinerary merge, receipt
+- Compact `0.16.3` is the current app version; the prior 9/9 selected post-rebase gates passed,
+  including itinerary merge, receipt
   tombstone, privacy, offline, mobile layout and final navigation.
 - React `0.2.4`: typecheck/build/security passed; the deterministic clear-device repeat was `12/12`,
   and the full security smoke was `3 passed, 1 intentional skip`.
@@ -138,15 +175,12 @@ Verified on 2026-07-13:
 - BFF: the contract suite executes the real catch-all handler, session verification, CSRF and
   signed Edge transport; invalid provenance, redirects, malformed envelopes and escaped routes fail closed.
 - Broker: check and self-test passed. Static migration policy and shared-ledger scans passed.
-- PR #36 final-SHA run `29202450339` passed all seven required jobs at code commit `8aa2f8a`:
-  Admin/BFF, clean database, Compact, React, cross-client, Edge and Broker. The protected
-  production-promotion job correctly skipped.
-- The clean-database job applied every migration through `20260712123000` and passed all 15 tracked
-  SQL fixtures. Local Docker remained unavailable; no live database was used as a substitute.
+- Protected production workflow `29302288203` is the successful Admin 1.0 production promotion. The
+  clean-database group applied every migration through `20260712123000` and passed all 15 tracked SQL
+  fixtures.
 - Receipt-photo compatibility source gate passed: final active state requires a public
   `receipt-photos` bucket and exact public read policy, while the private staged migration remains
-  separately verified. This local pass did not run a clean database because Docker was unavailable;
-  production received no migration.
+  separately verified. Production stays in this public compatibility mode pending client heartbeats.
 - Reviewer follow-up validates the bucket cardinality, complete public-policy metadata and normalized
   predicate, authenticated owner-path storage writes/deletes, and authenticated owner/trip table
   visibility predicates. The source scanner also locks the migration order and rejects later active
@@ -172,26 +206,26 @@ Runbook index: `docs/runbooks/README.md`
 - `docs/runbooks/account-deletion.md`
 - `docs/runbooks/notion-repair-saga.md`
 
-## Production Blockers
+## Current Post-Bootstrap Open Items
 
-1. Boss must approve the maintenance window and production cutover.
-2. Configure production scrypt hash, WebAuthn exact origin/RP ID, BFF signing keys and bootstrap
-   secret without printing or committing values; enroll the first Boss passkey and revoke bootstrap.
-3. Apply reviewed forward-only migrations through the maintenance runbook. Do not run `db push` or
-   `migration repair`; transfer helper ownership through the platform-owner operation.
-4. Verify production BFF/Edge provenance, nonce store, session/rate stores and fail-closed behavior.
-5. Keep receipt photos in public compatibility mode and deploy Compact/Android compatibility; confirm
-   heartbeats before applying the staged private receipt-photo migration.
-6. Verify receipt-sync worker deployment and bindings separately.
-7. Preview and back up live Nagoya data before any repair; do not mutate live rows automatically.
-8. Configure and approve the protected `admin-production` GitHub environment before the first
-   manual production workflow run.
+1. **Promote and live-verify Admin 1.0.1** — merge the verified candidate through `main`, run the
+   protected workflow, then record live `/api/health`, Volcano, Broker and client heartbeat-state
+   evidence.
+2. **Final post-bootstrap fresh login check (Boss is doing this now)** — passkey enrollment and
+   bootstrap removal are complete. Do not mark this check passed until Boss records the fresh Chrome
+   login result.
+3. Keep the receipt-photo bucket in public compatibility mode until Compact/Android signed-URL
+   heartbeats prove active compatibility.
+4. Run a real ordinary authenticated JWT privilege smoke; privileged or service access is not a
+   substitute.
+5. Complete platform-owner hardening through the required platform-owner operation.
 
 ## Cutover And Rollback
 
-Follow `docs/runbooks/maintenance-and-rollback.md`. The fixed order is deny-all, privilege check,
-new-only BFF/Edge, secret rotation, session revocation, frontend promotion, read-only smoke, R1
-allowlist, then each verified R2 action separately.
+Admin `1.0.0` final production promotion is verified at
+`0a71608e2b0c888eb7e7e4efb194a21a59ad935b`; keep writes at `deny_all`. Follow
+`docs/runbooks/maintenance-and-rollback.md` for future changes and keep the fixed order of privilege
+check, new-only BFF/Edge, read-only smoke, R1 allowlist, then each verified R2 action separately.
 
 Rollback is forward-only:
 

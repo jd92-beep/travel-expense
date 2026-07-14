@@ -37,10 +37,11 @@ export type ProviderReadRow = {
   rateLimited24h: number;
 };
 
-const PROVIDER_ORDER = ["kimi", "google", "notion", "weatherapi", "mimo"];
+const PROVIDER_ORDER = ["kimi", "google", "volcano", "notion", "weatherapi", "mimo"];
 const REQUIRED_MODELS: Record<string, string | null> = {
   kimi: "kimi/kimi-code",
   google: "google/gemma-4-31b",
+  volcano: "volcano/doubao-seed-2.0-lite",
   notion: null,
   weatherapi: "forecast",
   mimo: null,
@@ -48,10 +49,55 @@ const REQUIRED_MODELS: Record<string, string | null> = {
 const LABELS: Record<string, string> = {
   kimi: "Kimi",
   google: "Google Gemma",
+  volcano: "Volcano",
   notion: "Notion",
   weatherapi: "WeatherAPI",
   mimo: "Mimo",
 };
+
+type OverviewStatus = {
+  id: string;
+  status: string;
+  lastSeenAt: string | null;
+};
+
+export function normalizeOverviewStatusStrip(
+  statusStrip: unknown,
+  brokerHealthy: boolean,
+  brokerLastSeenAt: string | null,
+): OverviewStatus[] {
+  const rows = Array.isArray(statusStrip) ? statusStrip : [];
+  let brokerIncluded = false;
+  const normalized = rows.flatMap((row): OverviewStatus[] => {
+    if (!row || typeof row !== "object") return [];
+    const source = row as Partial<OverviewStatus>;
+    if (typeof source.id !== "string" || typeof source.status !== "string") return [];
+    if (source.id === "broker") {
+      brokerIncluded = true;
+      return [{
+        id: "broker",
+        status: brokerHealthy ? "healthy" : "unavailable",
+        lastSeenAt: brokerHealthy ? brokerLastSeenAt : null,
+      }];
+    }
+    return [{
+      id: source.id,
+      status: ["compact-web", "android"].includes(source.id) && source.status === "unknown" &&
+          source.lastSeenAt == null
+        ? "awaiting_heartbeat"
+        : source.status,
+      lastSeenAt: typeof source.lastSeenAt === "string" ? source.lastSeenAt : null,
+    }];
+  });
+  if (!brokerIncluded) {
+    normalized.push({
+      id: "broker",
+      status: brokerHealthy ? "healthy" : "unavailable",
+      lastSeenAt: brokerHealthy ? brokerLastSeenAt : null,
+    });
+  }
+  return normalized;
+}
 
 function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;

@@ -110,7 +110,7 @@ Deno.test("provider preview is server-computed and stored through the operation 
   }, {
     action: "provider_probe",
     idempotencyKey: "97100000-0000-4000-8000-000000000001",
-    targetId: "google",
+    targetId: "volcano",
     payload: {},
   });
 
@@ -120,7 +120,7 @@ Deno.test("provider preview is server-computed and stored through the operation 
     "admin_operation_preview_create",
   ]);
   assertEquals(calls[1].args.p_action, "provider_probe");
-  assertEquals(calls[1].args.p_target_ref, "google");
+  assertEquals(calls[1].args.p_target_ref, "volcano");
   assertEquals(String(calls[1].args.p_preview_hash).length, 64);
 });
 

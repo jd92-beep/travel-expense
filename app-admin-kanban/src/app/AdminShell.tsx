@@ -22,6 +22,7 @@ import {
   useNavigate,
 } from "react-router";
 import { useAdminSession } from "./session";
+import { prefetchDefaultWorkspaceReads } from "./defaultWorkspacePrefetch";
 import { adminGet } from "../lib/api/adminClient";
 import type { OperationListData } from "../lib/contracts/admin";
 import {
@@ -81,6 +82,7 @@ export function AdminShell() {
   const activityButtonRef = useRef<HTMLButtonElement>(null);
   const passkeyButtonRef = useRef<HTMLButtonElement>(null);
   const activityDialogRef = useRef<HTMLDialogElement>(null);
+  const prefetchStartedRef = useRef(false);
   const operations = useQuery({
     queryKey: ["admin", "operations", "activity"],
     queryFn: ({ signal }) =>
@@ -95,7 +97,7 @@ export function AdminShell() {
             .includes(operation.status)
         )
         ? 10_000
-        : 60_000,
+        : false,
     staleTime: 10_000,
   });
   const operationItems = operations.data?.data.items ?? [];
@@ -117,6 +119,16 @@ export function AdminShell() {
     });
     return () => cancelAnimationFrame(frame);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!session || prefetchStartedRef.current) return;
+    prefetchStartedRef.current = true;
+    void prefetchDefaultWorkspaceReads(location.pathname);
+  }, [location.pathname, session]);
+
+  useEffect(() => {
+    if (activityOpen) void operations.refetch();
+  }, [activityOpen, operations.refetch]);
 
   useEffect(() => {
     const dialog = drawerDialogRef.current;

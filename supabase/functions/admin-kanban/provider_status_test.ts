@@ -41,13 +41,40 @@ Deno.test("broker liveness cannot be expanded into provider health", () => {
 
 Deno.test("broker health requires the explicit broker health contract", () => {
   assertEquals(
-    brokerHealthSucceeded(200, { ok: true, service: "travel-expense-credential-broker" }),
+    brokerHealthSucceeded(200, {
+      ok: true,
+      service: "travel-expense-credential-broker",
+      version: "2026.7.14",
+    }),
     true,
   );
   assertEquals(brokerHealthSucceeded(200, { ok: true }), false);
-  assertEquals(brokerHealthSucceeded(200, { service: "travel-expense-credential-broker" }), false);
   assertEquals(
-    brokerHealthSucceeded(503, { ok: true, service: "travel-expense-credential-broker" }),
+    brokerHealthSucceeded(200, { ok: true, service: "travel-expense-credential-broker" }),
+    false,
+  );
+  assertEquals(
+    brokerHealthSucceeded(200, {
+      ok: true,
+      service: "travel-expense-credential-broker",
+      version: "  ",
+    }),
+    false,
+  );
+  assertEquals(
+    brokerHealthSucceeded(503, {
+      ok: true,
+      service: "travel-expense-credential-broker",
+      version: "2026.7.14",
+    }),
+    false,
+  );
+  assertEquals(
+    brokerHealthSucceeded(204, {
+      ok: true,
+      service: "travel-expense-credential-broker",
+      version: "2026.7.14",
+    }),
     false,
   );
 });

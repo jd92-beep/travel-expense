@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { adminGet, queryFromSearchParams } from "../../lib/api/adminClient";
 import type { AuditRow, PagedData } from "../../lib/contracts/admin";
+import { defaultAuditStartAt } from "../../app/defaultWorkspacePrefetch";
 import {
   EmptyState,
   ErrorState,
@@ -15,10 +16,6 @@ import {
   StatusBadge,
   useCursorPagination,
 } from "../../components/primitives/ConsolePrimitives";
-
-function last24HoursStart() {
-  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-}
 
 function isoToLocalInput(value: string) {
   const date = new Date(value);
@@ -37,7 +34,7 @@ function localInputToIso(value: string) {
 export function AuditPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const cursorPager = useCursorPagination(searchParams, setSearchParams);
-  const [defaultStartAt] = useState(last24HoursStart);
+  const [defaultStartAt] = useState(defaultAuditStartAt);
   const allTime = searchParams.get("range") === "all";
   const values = queryFromSearchParams(searchParams, [
     "action",
@@ -83,7 +80,7 @@ export function AuditPage() {
       next.delete("startAt");
       next.set("range", "all");
     } else {
-      next.set("startAt", last24HoursStart());
+      next.set("startAt", defaultAuditStartAt());
       next.delete("range");
     }
     setSearchParams(next);

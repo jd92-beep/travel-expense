@@ -1,5 +1,61 @@
 # Changelog
 
+## 2026-07-14
+
+- **Admin Console 1.0.1 performance and runtime-status correction**:
+  - Default Overview、Accounts、Incidents、Providers 與 Audit reads 使用最多兩個併發嘅 bounded
+    prefetch；idle Activity Center 停止每 60 秒重讀，打開時先明確 refresh。
+  - Volcano 已加入 provider aggregation、required model `volcano/doubao-seed-2.0-lite`、BFF
+    validation 與 Edge operation allowlist。
+  - Overview 喺 signed request 驗證後並行讀 DB、recent operations 同 Broker health；Broker 只會
+    喺 exact health contract 成功時顯示 healthy。未有 Compact/Android heartbeat 會顯示
+    `待首次心跳`，唔再係 generic Unknown，亦唔會偽裝 healthy。
+  - Admin `typecheck`、build、security、unit `31/31`、contract `24/24`、full smoke
+    `47 passed + 1 intentional skip`、Edge `72/72`、`npm audit` 0 vulnerabilities 全部通過。
+    Passphrase、secrets、RLS、migration、live user data 及 `ADMIN_WRITE_MODE=deny_all` 均冇改動。
+
+- **Admin Console 1.0 passkey bootstrap closure and final production promotion**:
+  - First passkey enrollment BFF begin/finish returned `200`; Edge credential register, revoke-all,
+    session create and session verify also returned `200`. The existing passphrase text remains
+    unchanged and necessary.
+  - `ADMIN_PASSKEY_BOOTSTRAP_SECRET` was removed from Vercel Production. Bootstrap-closure workflow
+    `29303308607` deployed `dpl_59zhH1QnLEXtPnfNq8yHkscPczJe`; temporary Keychain material was
+    removed.
+  - PR #49 merged at `0a71608e2b0c888eb7e7e4efb194a21a59ad935b` with localized Chrome passkey-focus
+    guidance. Final workflow `29303864302` succeeded at that SHA and deployed Vercel
+    `dpl_A7o26cPYDieYCa1RaNcVvGpJ4XWh`, Edge
+    `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_90`, schema `20260712123000`.
+  - Live `/api/health` returned `200` with `acceptingReadTraffic=true`; production asset
+    `/assets/index-BbcEP-GN.js` includes the localized focus guidance, and the bootstrap environment
+    is absent. Writes remain `deny_all`, and R3 remains server-disabled.
+
+- **Admin Console 1.0 successful production promotion**:
+  - Retry workflow `29301851315` failed closed at candidate readiness with `503`; no Edge
+    `/api/runtime` request occurred, and candidate Vercel deployment
+    `dpl_9yRX6HWGUfDHtnAS1vt7so5c4uma` was not promoted.
+  - `ADMIN_KANBAN_HASH` was updated through the official Vercel CLI without changing the passphrase.
+    Workflow `29302288203` then completed all seven prerequisites and protected promotion at exact
+    Git SHA `72ee62507349e245b8613d9531958d428237bc90`.
+  - Production is Admin `1.0.0`: Vercel `dpl_J6huupag1ur7GwmPCVU6k7b7kJsn`, Edge
+    `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_88`, schema `20260712123000`.
+    Live `/api/health` returned `200`, version `1.0.0`, the exact SHA and
+    `acceptingReadTraffic=true`; unauthenticated session returned `401` and direct catch-all session
+    query returned `404`.
+  - This interim promotion was superseded by the completed passkey bootstrap closure and final
+    production promotion above. Writes remain `deny_all`, and R3 remains server-disabled.
+
+- **Admin Console 1.0 deployment readiness follow-up**:
+  - Production promotion workflow `29268903409` deployed the prior Admin `1.0.0` release at exact
+    Git SHA `90cfab891665300cdd8b9765f34c02cfea6d8169`, but production login failed because its
+    configured `ADMIN_KANBAN_HASH` was a legacy `PBKDF2` value rather than the strict `scrypt`
+    format required by Admin 1.0.
+  - PR #48 merged at `72ee62507349e245b8613d9531958d428237bc90`; readiness now fails closed on a
+    malformed hash before any Edge call. A new valid `scrypt` hash was generated locally and set in
+    Vercel Production without changing the passphrase.
+  - At that interim point, passkey enrollment and bootstrap removal were still pending. Both were
+    subsequently completed and verified by the final production promotion above.
+  - Writes remain `deny_all`, and R3 remains server-disabled.
+
 ## 2026-07-13
 
 - **Compact App 0.16.3 idempotent trip re-home**: fix(compact): v0.16.3 — idempotent trip re-home.

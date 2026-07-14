@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { aggregateProviderRows } from "./system_status.ts";
+import { aggregateProviderRows, normalizeOverviewStatusStrip } from "./system_status.ts";
 
 Deno.test("provider aggregation returns one row with production evidence", () => {
   const rows = aggregateProviderRows({
@@ -64,7 +64,36 @@ Deno.test("broker liveness alone never becomes provider health", () => {
   });
   assertEquals(rows.find((row) => row.provider === "kimi")?.healthy, null);
   assertEquals(rows.find((row) => row.provider === "google")?.configured, null);
+  assertEquals(rows.find((row) => row.provider === "volcano")?.label, "Volcano");
+  assertEquals(
+    rows.find((row) => row.provider === "volcano")?.requiredModel,
+    "volcano/doubao-seed-2.0-lite",
+  );
   assertEquals(new Set(rows.map((row) => row.provider)).size, rows.length);
+});
+
+Deno.test("overview status strip marks missing client heartbeats and only reports verified broker health", () => {
+  assertEquals(
+    normalizeOverviewStatusStrip(
+      [
+        { id: "compact-web", status: "unknown" },
+        { id: "android", status: "stale", lastSeenAt: "2026-07-14T10:00:00Z" },
+        { id: "shared-cloud", status: "healthy", lastSeenAt: "2026-07-14T10:00:00Z" },
+      ],
+      false,
+      "2026-07-14T12:00:00Z",
+    ),
+    [
+      { id: "compact-web", status: "awaiting_heartbeat", lastSeenAt: null },
+      { id: "android", status: "stale", lastSeenAt: "2026-07-14T10:00:00Z" },
+      { id: "shared-cloud", status: "healthy", lastSeenAt: "2026-07-14T10:00:00Z" },
+      { id: "broker", status: "unavailable", lastSeenAt: null },
+    ],
+  );
+  assertEquals(
+    normalizeOverviewStatusStrip([], true, "2026-07-14T12:00:00Z"),
+    [{ id: "broker", status: "healthy", lastSeenAt: "2026-07-14T12:00:00Z" }],
+  );
 });
 
 Deno.test("configured invalid credentials remain failed", () => {

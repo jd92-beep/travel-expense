@@ -38,21 +38,18 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.2`；Android worktree
-目前版本是 `0.19.2`。Admin production 的 live health 仍回報 `0.8.3` read-only containment；
-新 console cutover 候選版本是 `1.0.0`。Cutover 已獲 Boss 明確批准並正在準備；production deploy 和
-migrations 尚未完成，完成已驗證 promotion 前 live 仍是 `0.8.3`。
+Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.3`；Android worktree
+目前版本是 `0.19.2`。Admin Console `1.0.0` 已由 final production workflow `29303864302` 以 Git SHA
+`0a71608e2b0c888eb7e7e4efb194a21a59ad935b` 成功 promotion；live `/api/health` 回 `200`、版本 `1.0.0`、
+exact SHA 及 `acceptingReadTraffic=true`。Admin `1.0.1` performance/status 修正已通過本機完整驗證，
+會經 protected production workflow promotion；完成前 live 版本仍以 `/api/health` 為準。
 
-Admin Console 正在進行 Admin 1.0 生產重整。現時 production 已啟用全域 read-only
-containment：讀取及診斷仍可用，所有寫入、刪除、merge、repair、provider probe及其他外部副作用
-均由 Edge backend 拒絕，並非只隱藏按鈕。現有 `ADMIN_KANBAN_HASH` 對應的 Admin passphrase 維持不變；
-passkey 只會新增保護，不會取代它。兩者都不會寫在 README、GitHub 或前端程式碼。
-
-`1.0.0` 已在獨立 branch 完成五個工作區、paginated read APIs、passphrase + passkey、
-HttpOnly opaque sessions、CSRF、signed BFF、server preview/step-up operations、audit、integrity、
-Notion dry-run reconciliation、非最後 passkey 安全輪換及完整 mobile/a11y states。Cutover 已獲 Boss
-明確批准並正準備中；production deploy 和 migrations 尚未完成，仍要設定 production secrets、登記
-passkey及確認 Compact/Android compatibility。完成已驗證 promotion 前 live 仍維持 `0.8.3`。
+Admin Console production URL 是 `https://travel-expense-admin-kanban.vercel.app`。readiness 會在呼叫 Edge
+前拒絕格式錯誤嘅 hash；production health 與 unauthenticated route 行為已驗證：未登入 session 回 `401`，
+direct catch-all session query 回 `404`。現有 Admin passphrase 維持不變並仍然需要；passkey 只會新增保護，不會取代它。
+第一個 Boss passkey 已完成登記，bootstrap secret 已從 production 移除。Boss 正進行最後一次 post-bootstrap
+fresh login check，完成前不會宣稱該項 check 已通過。所有寫入仍由 Edge backend 以 `deny_all` 拒絕，R3 與
+generic controls 保持 server-disabled。任何 passphrase、token 或 secret 都不會寫入 README、GitHub 或前端程式碼。
 
 ## 第一次使用
 
@@ -308,6 +305,7 @@ SUPABASE_TRIP_ACTIVE_SMOKE=1 npx playwright test tests/supabase-trip-active-smok
 ```text
 travel-expense/
   app-react/                 React 19 + Vite public app
+  app-admin-kanban/          Admin Console 1.0 Vercel surface
   index.html                 Legacy root app kept as backup
   legacy-notion.js           Legacy Notion sync helper
   email-to-notion.gs         Google Apps Script email importer
@@ -329,7 +327,8 @@ git push origin main
 
 GitHub Actions builds `app-react/`, publishes the legacy app at the root, and publishes the React app under `/react/`.
 
-Vercel is connected to the same GitHub repo and serves the React app at `/`.
+Vercel is connected to the same GitHub repo and serves the React app at `/`; the separate Admin
+Console production URL is `https://travel-expense-admin-kanban.vercel.app`.
 
 Netlify config is present, but the current public Netlify URL is blocked by account usage limits.
 

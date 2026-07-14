@@ -16,7 +16,7 @@ import { type AdminRequestDecision, evaluateAdminRequest } from "./security.ts";
 import { rejectedSignatureIdentity } from "./security.ts";
 import { fetchNoRedirect } from "./safe_fetch.ts";
 import { brokerHealthSucceeded } from "./provider_status.ts";
-import { aggregateProviderRows } from "./system_status.ts";
+import { aggregateProviderRows, normalizeOverviewStatusStrip } from "./system_status.ts";
 import { runtimePolicyFor } from "./runtime_policy.ts";
 
 export const config = { verify_jwt: false };
@@ -34,7 +34,15 @@ type ClientVersionRow = {
 
 type ReadRoutePayload = {
   data?: Record<string, unknown>;
-  meta?: { warnings?: string[] };
+  meta?: {
+    sources?: Record<string, "live" | "stale" | "unavailable">;
+    warnings?: string[];
+  };
+};
+
+type BrokerHealth = {
+  checkedAt: string;
+  version: string;
 };
 
 const ADMIN_FRONTEND_ORIGIN = Deno.env.get("ADMIN_FRONTEND_ORIGIN") ||
@@ -117,6 +125,21 @@ function bffSigningKeys(): Record<string, string> {
   return keys;
 }
 
+async function fetchBrokerHealth(): Promise<BrokerHealth | null> {
+  try {
+    const response = await fetchNoRedirect(
+      `${CREDENTIAL_BROKER_URL.replace(/\/+$/, "")}/health`,
+      {},
+      2000,
+    );
+    const payload = await response.json().catch(() => null);
+    if (!brokerHealthSucceeded(response.status, payload)) return null;
+    return { checkedAt: new Date().toISOString(), version: payload.version.trim() };
+  } catch {
+    return null;
+  }
+}
+
 async function adminProviderRead(supabase: SupabaseClientAny) {
   const baseUrl = CREDENTIAL_BROKER_URL.replace(/\/+$/, "");
   let brokerProviders: Array<Record<string, unknown>> = [];
@@ -139,14 +162,8 @@ async function adminProviderRead(supabase: SupabaseClientAny) {
     brokerSource = "live";
   } catch {
     warnings.push("PROVIDER_STATUS_UNAVAILABLE");
-    try {
-      const health = await fetchNoRedirect(`${baseUrl}/health`, {}, 3000);
-      const payload = await health.json().catch(() => null);
-      if (brokerHealthSucceeded(health.status, payload)) brokerSource = "live";
-      else warnings.push("BROKER_UNAVAILABLE");
-    } catch {
-      warnings.push("BROKER_UNAVAILABLE");
-    }
+    if (await fetchBrokerHealth()) brokerSource = "live";
+    else warnings.push("BROKER_UNAVAILABLE");
   }
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -220,20 +237,9 @@ async function adminRuntimeRead(supabase: SupabaseClientAny) {
     frontendHealth = "unavailable";
   }
 
-  let brokerVersion = "unknown";
-  let brokerStatus = "unavailable";
-  try {
-    const response = await fetchNoRedirect(
-      `${CREDENTIAL_BROKER_URL.replace(/\/+$/, "")}/health`,
-      {},
-      3000,
-    );
-    const payload = await response.json();
-    brokerVersion = String(payload?.version || "unknown");
-    brokerStatus = brokerHealthSucceeded(response.status, payload) ? "healthy" : "failed";
-  } catch {
-    brokerStatus = "unavailable";
-  }
+  const brokerHealth = await fetchBrokerHealth();
+  const brokerVersion = brokerHealth?.version || "unknown";
+  const brokerStatus = brokerHealth ? "healthy" : "unavailable";
 
   const { data: clientRows } = await supabase
     .from("app_usage_events")
@@ -493,19 +499,31 @@ Deno.serve(async (req) => {
         }),
       );
     }
-    const readResult = await handleAdminReadRoute({
+    const readContext = {
       client: operationContext.client as unknown as AdminRpcClient,
       requestId: signed.requestId,
       route: signed.route,
       searchParams: url.searchParams,
-    });
-    if (readResult) {
-      if (signed.route === "/api/overview" && readResult.status === 200) {
-        try {
-          const operations = await listAdminOperations(operationContext, "all", 10);
+    };
+    if (req.method === "GET" && signed.route === "/api/overview") {
+      const overviewRead = handleAdminReadRoute(readContext);
+      const operationsRead = listAdminOperations(operationContext, "all", 10).catch(() => null);
+      const brokerRead = fetchBrokerHealth();
+      const [readResult, operations, brokerHealth] = await Promise.all([
+        overviewRead,
+        operationsRead,
+        brokerRead,
+      ]);
+      if (readResult) {
+        if (readResult.status === 200) {
           const payload = readResult.payload as ReadRoutePayload;
           if (payload?.data && typeof payload.data === "object") {
-            payload.data.recentOperations = operations.slice(0, 5).map((operation) => ({
+            payload.data.statusStrip = normalizeOverviewStatusStrip(
+              payload.data.statusStrip,
+              Boolean(brokerHealth),
+              brokerHealth?.checkedAt || null,
+            );
+            payload.data.recentOperations = (operations || []).slice(0, 5).map((operation) => ({
               action: operation.action,
               created_at: operation.createdAt,
               id: operation.id,
@@ -515,18 +533,26 @@ Deno.serve(async (req) => {
               target_type: operation.targetType,
             }));
           }
-        } catch {
-          const payload = readResult.payload as ReadRoutePayload;
-          if (Array.isArray(payload?.meta?.warnings)) {
-            payload.meta.warnings.push("OPERATION_HISTORY_UNAVAILABLE");
-          }
+          payload.meta ??= {};
+          payload.meta.sources = {
+            ...payload.meta.sources,
+            broker: brokerHealth ? "live" : "unavailable",
+          };
+          payload.meta.warnings ??= [];
+          if (!operations) payload.meta.warnings.push("OPERATION_HISTORY_UNAVAILABLE");
+          if (!brokerHealth) payload.meta.warnings.push("BROKER_UNAVAILABLE");
         }
+        return json(req, readResult.status, readResult.payload as Record<string, unknown>);
       }
-      return json(
-        req,
-        readResult.status,
-        readResult.payload as unknown as Record<string, unknown>,
-      );
+    } else {
+      const readResult = await handleAdminReadRoute(readContext);
+      if (readResult) {
+        return json(
+          req,
+          readResult.status,
+          readResult.payload as unknown as Record<string, unknown>,
+        );
+      }
     }
     const photoRoute = signed.route.match(/^\/api\/receipts\/([0-9a-f-]+)\/photo$/i);
     if (req.method === "GET" && photoRoute) {
