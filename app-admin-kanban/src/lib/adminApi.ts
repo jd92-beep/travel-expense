@@ -16,6 +16,26 @@ export class AdminApiError extends Error {
   }
 }
 
+export const PASSKEY_FOCUS_GUIDANCE = 'Passkey 需要此 Chrome 分頁或視窗有焦點。請返回後再試一次。';
+
+export function ensureWebAuthnFocus() {
+  if (!document.hasFocus()) {
+    throw new AdminApiError(PASSKEY_FOCUS_GUIDANCE, 'WEBAUTHN_FOCUS_REQUIRED', 409);
+  }
+}
+
+async function runWebAuthnCeremony<T>(start: () => Promise<T>): Promise<T> {
+  ensureWebAuthnFocus();
+  try {
+    return await start();
+  } catch (error) {
+    if (error instanceof Error && /page does not have focus/i.test(error.message)) {
+      throw new AdminApiError(PASSKEY_FOCUS_GUIDANCE, 'WEBAUTHN_FOCUS_REQUIRED', 409);
+    }
+    throw error;
+  }
+}
+
 function csrfToken(): string {
   const prefix = '__Host-admin_csrf=';
   const part = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(prefix));
@@ -95,7 +115,7 @@ export async function loginAdmin(passphrase: string): Promise<AdminSession> {
     method: 'POST',
     body: { passphrase },
   });
-  const response = await startAuthentication({ optionsJSON: begin.data.options });
+  const response = await runWebAuthnCeremony(() => startAuthentication({ optionsJSON: begin.data.options }));
   const finish = await request<{ data: any }>('/api/admin/auth/finish', {
     method: 'POST',
     body: { flowId: begin.data.flowId, response },
@@ -112,7 +132,7 @@ export async function enrollBossPasskey(
     method: 'POST',
     body: { passphrase, bootstrapSecret },
   });
-  const response = await startRegistration({ optionsJSON: begin.data.options });
+  const response = await runWebAuthnCeremony(() => startRegistration({ optionsJSON: begin.data.options }));
   const finish = await request<{ data: any }>('/api/admin/passkeys/enroll/finish', {
     method: 'POST',
     body: { flowId: begin.data.flowId, bootstrapSecret, label, response },
@@ -152,7 +172,7 @@ export async function addBossPasskey(passphrase: string, label: string): Promise
     method: 'POST',
     body: { grantId: grant.grantId },
   });
-  const response = await startRegistration({ optionsJSON: begin.data.options });
+  const response = await runWebAuthnCeremony(() => startRegistration({ optionsJSON: begin.data.options }));
   const finish = await request<{ data: { credential: AdminPasskey } }>('/api/admin/passkeys/add/finish', {
     method: 'POST',
     body: { flowId: begin.data.flowId, label, response },
@@ -199,7 +219,7 @@ export async function reauthenticateAdmin(
     method: 'POST',
     body: { passphrase, ...context },
   });
-  const response = await startAuthentication({ optionsJSON: begin.data.options });
+  const response = await runWebAuthnCeremony(() => startAuthentication({ optionsJSON: begin.data.options }));
   const finish = await request<{ data: { grantId: string; expiresAt: string } }>('/api/admin/reauth/finish', {
     method: 'POST',
     body: { flowId: begin.data.flowId, response },

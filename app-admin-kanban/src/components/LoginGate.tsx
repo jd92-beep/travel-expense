@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { KeyRound, Lock, Shield } from 'lucide-react';
-import { AdminApiError, enrollBossPasskey, loginAdmin } from '../lib/adminApi';
+import { AdminApiError, enrollBossPasskey, ensureWebAuthnFocus, loginAdmin } from '../lib/adminApi';
 import type { AdminSession } from '../lib/types';
 
 export function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => void }) {
@@ -29,6 +29,12 @@ export function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => voi
 
   async function enroll() {
     if (!passphrase || !bootstrapSecret) return;
+    try {
+      ensureWebAuthnFocus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Passkey 登記失敗');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
