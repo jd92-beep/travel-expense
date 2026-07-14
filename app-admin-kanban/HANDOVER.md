@@ -5,22 +5,27 @@ Last updated: 2026-07-14 HKT
 ## Current Status
 
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
-- Verified source candidate: Admin `1.0.1`, with bounded default-workspace prefetch, idle-polling
-  removal, Volcano provider coverage, strict live Broker health and explicit awaiting-heartbeat
-  client status. Protected production promotion and live post-deploy proof remain pending.
+- Verified production: Admin `1.0.1`, with bounded default-workspace prefetch, idle-polling removal,
+  Volcano provider coverage, strict live Broker health and explicit awaiting-heartbeat client status.
+  Workflow `29337850114` attempt 2 passed at exact SHA
+  `697a9c9522b14a1a67e77ab4088136e48de369b2`: Vercel
+  `dpl_6R3tZEYhwmiJ5CyeykdnqKhYshSv`; Edge
+  `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_92`; schema `20260712123000`.
 - Completed passkey bootstrap closure: first passkey enrollment BFF begin/finish returned `200`; Edge
   credential register, revoke-all, session create and session verify all returned `200`. The current
   passphrase remains unchanged and necessary. `ADMIN_PASSKEY_BOOTSTRAP_SECRET` is removed from Vercel
   Production, temporary Keychain items are removed, and workflow `29303308607` deployed
   `dpl_59zhH1QnLEXtPnfNq8yHkscPczJe` for bootstrap closure.
-- Final production release: PR #49 merged at exact Git SHA
+- Previous Admin `1.0.0` production release: PR #49 merged at exact Git SHA
   `0a71608e2b0c888eb7e7e4efb194a21a59ad935b` with localized Chrome passkey-focus guidance. Final
   workflow `29303864302` succeeded at that SHA: Vercel `dpl_A7o26cPYDieYCa1RaNcVvGpJ4XWh`; Edge
   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_90`; schema `20260712123000`.
-- Live proof: `/api/health` returned `200`, `acceptingReadTraffic=true`, and production asset
-  `/assets/index-BbcEP-GN.js` includes the localized focus guidance. Bootstrap env is absent. Edge
-  versions are `admin-auth-state` `37`, `admin-kanban` `90`, and `receipt-sync-worker` `37`; direct
-  negative canaries returned `401 ADMIN_SIGNATURE_MISSING` and `401 UNAUTHORIZED`.
+- Current live proof: `/api/health` returns `200`, Admin `1.0.1`, exact SHA/deployment and
+  `acceptingReadTraffic=true`. Broker `/health` returns exact service
+  `travel-expense-credential-broker`, version `2026.06.12`; deployed Edge source contains Volcano,
+  strict Broker health and `awaiting_heartbeat`. Edge versions are `admin-auth-state` `38`,
+  `admin-kanban` `92`, and `receipt-sync-worker` `38`; direct unsigned runtime access returns
+  `401 ADMIN_SIGNATURE_MISSING`.
 - Production database contract: `20260712123000` (`admin-passkeys-v2`).
 - Compatibility baseline: Compact Web `0.16.3`, Android `0.19.2`, React `0.2.4`.
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
@@ -127,13 +132,15 @@ and recovered through the operation ID; the UI never declares success from reque
 
 ## Release Evidence
 
-Verified for final production promotion:
+Verified for current production promotion:
 
-- Admin `1.0.1` candidate verification: typecheck/build/security passed; unit `31/31`, contract
+- Admin `1.0.1` production verification: typecheck/build/security passed; unit `32/32`, contract
   `24/24`, full smoke `47 passed + 1 intentional skip`; Edge format/lint/check passed with `72/72`
   tests; `npm audit` found 0 vulnerabilities; GitNexus detect_changes reported LOW risk and 0
-  affected processes. The current passphrase and all secrets remain unchanged, writes remain
-  `deny_all`, and no migration or live data mutation occurred.
+  affected processes. Workflow `29336763253` rejected a health/package version mismatch; PR #51
+  added a package-bound regression. Workflow `29337850114` attempt 1 rejected stale Edge provenance;
+  attempt 2 passed after reviewed Edge `v92` deployment. The current passphrase and credential values
+  remain unchanged, writes remain `deny_all`, and no migration or live data mutation occurred.
 
 - Admin `1.0.0` cutover metadata is aligned in `package.json`, both package-lock root entries and
   `/api/health`; this pass's typecheck, build and security scan passed, with unit `19/19` and

@@ -10,9 +10,18 @@
   - Overview 喺 signed request 驗證後並行讀 DB、recent operations 同 Broker health；Broker 只會
     喺 exact health contract 成功時顯示 healthy。未有 Compact/Android heartbeat 會顯示
     `待首次心跳`，唔再係 generic Unknown，亦唔會偽裝 healthy。
-  - Admin `typecheck`、build、security、unit `31/31`、contract `24/24`、full smoke
+  - Admin `typecheck`、build、security、unit `32/32`、contract `24/24`、full smoke
     `47 passed + 1 intentional skip`、Edge `72/72`、`npm audit` 0 vulnerabilities 全部通過。
     Passphrase、secrets、RLS、migration、live user data 及 `ADMIN_WRITE_MODE=deny_all` 均冇改動。
+  - Protected workflow `29336763253` 先因 health/package version drift fail closed；PR #51 加入
+    package-bound health version regression。Workflow `29337850114` attempt 1 再因舊 Edge source
+    fail closed，兩個 candidate 均未 promotion。
+  - Reviewed `admin-kanban` Edge bundle 已部署為 `v92`；workflow `29337850114` attempt 2 最終於
+    exact Git SHA `697a9c9522b14a1a67e77ab4088136e48de369b2` 成功 promotion。Production Vercel deployment
+    是 `dpl_6R3tZEYhwmiJ5CyeykdnqKhYshSv`，Edge deployment 是
+    `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_92`，schema `20260712123000`。
+    Live health 回 `200` 同 `acceptingReadTraffic=true`；passphrase、credential values、RLS、
+    migration、live user data 同 write mode 均冇改動。
 
 - **Admin Console 1.0 passkey bootstrap closure and final production promotion**:
   - First passkey enrollment BFF begin/finish returned `200`; Edge credential register, revoke-all,

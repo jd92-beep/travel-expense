@@ -39,10 +39,10 @@ npm run smoke:production-gate
 ```
 
 Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.3`；Android worktree
-目前版本是 `0.19.2`。Admin Console `1.0.0` 已由 final production workflow `29303864302` 以 Git SHA
-`0a71608e2b0c888eb7e7e4efb194a21a59ad935b` 成功 promotion；live `/api/health` 回 `200`、版本 `1.0.0`、
-exact SHA 及 `acceptingReadTraffic=true`。Admin `1.0.1` performance/status 修正已通過本機完整驗證，
-會經 protected production workflow promotion；完成前 live 版本仍以 `/api/health` 為準。
+目前版本是 `0.19.2`。Admin Console `1.0.1` 已由 protected workflow `29337850114` 以 Git SHA
+`697a9c9522b14a1a67e77ab4088136e48de369b2` 成功 promotion；live `/api/health` 回 `200`、版本
+`1.0.1`、exact SHA 及 `acceptingReadTraffic=true`。呢個版本加快常用 workspace 切換、補回 Volcano
+provider，並將未有 client heartbeat 嘅 Compact/Android 明確顯示為 `待首次心跳`。
 
 Admin Console production URL 是 `https://travel-expense-admin-kanban.vercel.app`。readiness 會在呼叫 Edge
 前拒絕格式錯誤嘅 hash；production health 與 unauthenticated route 行為已驗證：未登入 session 回 `401`，
