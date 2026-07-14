@@ -240,7 +240,7 @@ async function setupApi(page, options = {}) {
     switch (url.pathname) {
       case '/api/admin/session': data = { actor: 'boss', authMethod: 'passphrase+passkey', idleExpiresAt: '2026-07-10T11:00:00Z', absoluteExpiresAt: '2026-07-10T12:00:00Z' }; break;
       case '/api/admin/overview':
-        data = { counts: { activeAccounts: 1, openTrips: 1, recentReceipts: 2, failedJobs: 0, integrityIssues: 0 }, incidents: [], statusStrip: [{ id: 'shared-cloud', status: 'healthy', lastSeenAt: new Date().toISOString() }, { id: 'compact-web', status: 'healthy', lastSeenAt: new Date().toISOString() }, { id: 'android', status: 'healthy', lastSeenAt: new Date().toISOString() }, { id: 'notion', status: 'healthy', lastSeenAt: new Date().toISOString() }, { id: 'broker', status: 'unknown', lastSeenAt: null }], clientVersions: [{ app_surface: 'android', app_build: '0.9.0', contract_version: 4, installations: 1, last_seen_at: new Date().toISOString() }], recentOperations: [] };
+        data = { counts: { activeAccounts: 1, openTrips: 1, recentReceipts: 2, failedJobs: 0, integrityIssues: 0 }, incidents: [], statusStrip: options.statusStrip || [{ id: 'shared-cloud', status: 'healthy', lastSeenAt: new Date().toISOString() }, { id: 'compact-web', status: 'healthy', lastSeenAt: new Date().toISOString() }, { id: 'android', status: 'healthy', lastSeenAt: new Date().toISOString() }, { id: 'notion', status: 'healthy', lastSeenAt: new Date().toISOString() }, { id: 'broker', status: 'unknown', lastSeenAt: null }], clientVersions: [{ app_surface: 'android', app_build: '0.9.0', contract_version: 4, installations: 1, last_seen_at: new Date().toISOString() }], recentOperations: [] };
         break;
       case '/api/admin/accounts': data = { items: [account] }; meta = { total: 1 }; break;
       case `/api/admin/accounts/${accountId}`: data = { identity: { ...account, email: 'read-owner@example.invalid', emailConfirmedAt: '2026-07-01T00:00:00Z', created_at: '2026-07-01T00:00:00Z' }, integrations: [], trips: [trip], recentReceipts: [receipt], incidents: [], audit: [] }; break;
@@ -452,6 +452,75 @@ test('desktop shell renders operational overview without a giant snapshot', asyn
   await expect(page.getByRole('navigation', { name: '主要導覽' })).toContainText('可靠性');
   expect((await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth))).toBe(true);
   if (process.env.CAPTURE_UI === '1') await page.screenshot({ path: 'test-results/overview-desktop.png', fullPage: true });
+});
+
+test('authenticated shell prefetches bounded default workspace reads without duplicating the current route', async ({ page }) => {
+  const requests = [];
+  const prefetchedPaths = new Set([
+    '/api/admin/accounts',
+    '/api/admin/audit',
+    '/api/admin/incidents',
+    '/api/admin/providers',
+  ]);
+  let inFlight = 0;
+  let maxInFlight = 0;
+  await setupApi(page, { requests });
+  await page.route('**/api/admin/**', async route => {
+    if (!prefetchedPaths.has(new URL(route.request().url()).pathname)) {
+      await route.fallback();
+      return;
+    }
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    try {
+      await route.fallback();
+    } finally {
+      inFlight -= 1;
+    }
+  });
+  await page.goto('/overview');
+
+  await expect.poll(() => requests.filter(request => prefetchedPaths.has(request.pathname)).length)
+    .toBe(4);
+  expect(maxInFlight).toBeLessThanOrEqual(2);
+  // StrictMode runs the initial overview query twice in this dev smoke; prefetch must not add a third.
+  expect(requests.filter(request => request.pathname === '/api/admin/overview')).toHaveLength(
+    2,
+  );
+  expect(requests.filter(request => prefetchedPaths.has(request.pathname)).every(request => !request.search.includes('cursor='))).toBe(true);
+  expect(requests.find(request => request.pathname === '/api/admin/audit')?.search)
+    .toMatch(/(?:^|\?)startAt=/);
+
+  await page.getByRole('link', { name: '審計紀錄' }).click();
+  await expect(page.getByRole('heading', { name: '審計紀錄' })).toBeVisible();
+  expect(requests.filter(request => request.pathname === '/api/admin/audit')).toHaveLength(1);
+});
+
+test('awaiting heartbeat has a pending label and explicit last-seen explanation', async ({ page }) => {
+  await setupApi(page, {
+    statusStrip: [{ id: 'android', status: 'awaiting_heartbeat', lastSeenAt: null }],
+  });
+  await page.goto('/overview');
+
+  const android = page.getByLabel('系統狀態').locator('.status-unit');
+  await expect(android.getByText('待首次心跳')).toBeVisible();
+  await expect(android).toContainText('尚未收到首次 client 心跳，暫無最後回報時間');
+  await expect(android).not.toContainText('Unknown');
+  await expect(android).not.toContainText('Healthy');
+});
+
+test('opening Activity Center explicitly refreshes idle operation status', async ({ page }) => {
+  const requests = [];
+  await setupApi(page, { requests, activityOperationStatuses: ['completed'] });
+  await page.goto('/overview');
+  await page.waitForLoadState('networkidle');
+  const baseline = requests.filter(request => request.pathname === '/api/admin/operations').length;
+  expect(baseline).toBeGreaterThan(0);
+
+  await page.getByRole('button', { name: '開啟 Activity Center' }).click();
+  await expect.poll(() => requests.filter(request => request.pathname === '/api/admin/operations').length)
+    .toBe(baseline + 1);
 });
 
 test('missing session opens login while auth-state outage remains fail-closed', async ({ page }) => {

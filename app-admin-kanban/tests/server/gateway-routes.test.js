@@ -146,9 +146,9 @@ test('gateway validates operation actions and strips no unchecked fields', () =>
     validateGatewayBody('operation-preview', {
       action: 'provider_probe',
       idempotencyKey,
-      targetId: 'google',
+      targetId: 'volcano',
     }),
-    { action: 'provider_probe', idempotencyKey, targetId: 'google', payload: {} },
+    { action: 'provider_probe', idempotencyKey, targetId: 'volcano', payload: {} },
   );
   assert.deepEqual(
     validateGatewayBody('operation-preview', {

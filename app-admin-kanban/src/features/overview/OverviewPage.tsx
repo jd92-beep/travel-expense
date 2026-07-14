@@ -118,8 +118,15 @@ export function OverviewPage() {
                 : <Workflow size={17} />}
               {SOURCE_LABELS[source.id] || source.id}
             </span>
-            <StatusBadge value={source.status} />
-            <small>{formatDateTime(source.lastSeenAt)}</small>
+            <StatusBadge
+              value={source.status}
+              label={source.status === "awaiting_heartbeat" ? "待首次心跳" : undefined}
+            />
+            <small>
+              {source.status === "awaiting_heartbeat"
+                ? "尚未收到首次 client 心跳，暫無最後回報時間"
+                : formatDateTime(source.lastSeenAt)}
+            </small>
           </div>
         ))}
       </section>

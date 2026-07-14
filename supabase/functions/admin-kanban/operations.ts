@@ -98,7 +98,7 @@ type PreviewInput = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH_RE = /^[0-9a-f]{64}$/;
-const PROVIDERS = new Set(["notion", "kimi", "google", "weatherapi", "mimo"]);
+const PROVIDERS = new Set(["notion", "kimi", "google", "volcano", "weatherapi", "mimo"]);
 const ACTIONS = new Set([
   "provider_probe",
   "support_bundle",
