@@ -88,3 +88,192 @@ test('offline receipt entry queues locally and auto-syncs on reconnect', async (
   });
   expect(queueAfter).toBe(1);
 });
+
+test('boot retries a persisted retryable error with auto auth recovery', async ({ page }) => {
+  let pageCreateAttempts = 0;
+  await page.route('**/notion/request', async (route) => {
+    const payload = route.request().postDataJSON();
+    if (payload.method === 'POST' && payload.path === '/pages') {
+      pageCreateAttempts += 1;
+      if (pageCreateAttempts === 1) {
+        return route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: false, error: 'session expired' }),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, data: { id: 'recovered-notion-page' } }),
+      });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data: { results: [], has_more: false } }),
+    });
+  });
+
+  await page.addInitScript(() => {
+    const now = Date.now();
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'boot-retry-session',
+      credentialSessionExpiresAt: now + 60 * 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      autoSync: true,
+      receipts: [{
+        id: 'boot_retry_receipt',
+        store: 'Boot Retry Store',
+        total: 500,
+        date: '2026-01-01',
+        category: 'other',
+        payment: 'cash',
+        createdAt: now - 60_000,
+        updatedAt: now - 60_000,
+      }],
+      syncQueue: [{
+        id: 'boot_retry_queue',
+        type: 'receipt',
+        entityId: 'boot_retry_receipt',
+        op: 'create',
+        status: 'error',
+        attempts: 1,
+        error: 'session expired',
+        createdAt: now - 60_000,
+        updatedAt: now - 60_000,
+      }],
+      settingsUpdatedAt: now + 31_536_000_000,
+      schemaVersion: 3,
+    }));
+  });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await expect.poll(() => pageCreateAttempts, { timeout: 8_000 }).toBe(2);
+  await expect.poll(() => page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
+    return { queueLength: state.syncQueue?.length || 0, status: state.globalSyncStatus };
+  }), { timeout: 5_000 }).toEqual({ queueLength: 0, status: 'synced' });
+  await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
+});
+
+test('boot retries a non-exhausted permission error after access is restored', async ({ page }) => {
+  let pageCreateAttempts = 0;
+  await page.route('**/notion/request', async (route) => {
+    const payload = route.request().postDataJSON();
+    if (payload.method === 'POST' && payload.path === '/pages') {
+      pageCreateAttempts += 1;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, data: { id: 'restored-access-notion-page' } }),
+      });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data: { results: [], has_more: false } }),
+    });
+  });
+  await page.addInitScript(() => {
+    const now = Date.now();
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'restored-access-session',
+      credentialSessionExpiresAt: now + 60 * 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      autoSync: true,
+      receipts: [{
+        id: 'restored_access_receipt',
+        store: 'Restored Access Store',
+        total: 500,
+        date: '2026-01-01',
+        category: 'other',
+        payment: 'cash',
+        createdAt: now - 60_000,
+        updatedAt: now - 60_000,
+      }],
+      syncQueue: [{
+        id: 'restored_access_queue',
+        type: 'receipt',
+        entityId: 'restored_access_receipt',
+        op: 'create',
+        status: 'error',
+        attempts: 1,
+        error: 'permission denied',
+        createdAt: now - 60_000,
+        updatedAt: now - 60_000,
+      }],
+      settingsUpdatedAt: now + 31_536_000_000,
+      schemaVersion: 3,
+    }));
+  });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await expect.poll(() => pageCreateAttempts, { timeout: 5_000 }).toBe(1);
+  await expect.poll(() => page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
+    return { queueLength: state.syncQueue?.length || 0, status: state.globalSyncStatus };
+  }), { timeout: 5_000 }).toEqual({ queueLength: 0, status: 'synced' });
+  await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
+});
+
+test('boot keeps exhausted permission errors visible for manual retry', async ({ page }) => {
+  await page.route('**/notion/request', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: true, data: { results: [], has_more: false } }),
+  }));
+  await page.addInitScript(() => {
+    const now = Date.now();
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'exhausted-permission-session',
+      credentialSessionExpiresAt: now + 60 * 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      autoSync: true,
+      receipts: [{
+        id: 'exhausted_permission_receipt',
+        store: 'Exhausted Permission Store',
+        total: 500,
+        date: '2026-01-01',
+        category: 'other',
+        payment: 'cash',
+        createdAt: now - 60_000,
+        updatedAt: now - 60_000,
+      }],
+      syncQueue: [{
+        id: 'exhausted_permission_queue',
+        type: 'receipt',
+        entityId: 'exhausted_permission_receipt',
+        op: 'create',
+        status: 'error',
+        attempts: 3,
+        error: 'permission denied',
+        createdAt: now - 60_000,
+        updatedAt: now - 60_000,
+      }],
+      settingsUpdatedAt: now + 31_536_000_000,
+      schemaVersion: 3,
+    }));
+  });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await page.waitForTimeout(1_500);
+  await expect.poll(() => page.evaluate(() => {
+    const item = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}').syncQueue?.[0];
+    return item && { status: item.status, attempts: item.attempts, error: item.error };
+  })).toEqual({ status: 'error', attempts: 3, error: 'permission denied' });
+  await expect(page.getByText(/權限問題/)).toBeVisible();
+  await expect(page.getByRole('button', { name: '手動重試' })).toBeVisible();
+});

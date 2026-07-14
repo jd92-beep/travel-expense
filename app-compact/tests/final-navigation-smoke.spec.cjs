@@ -102,9 +102,8 @@ test('Final lock gate smoke without trusted device', async ({ page }) => {
 // engine actually calls in __disable_supabase_configured mode (the credential-broker's
 // /notion/request proxy — Supabase is disabled, so useSyncEngine's push() falls through to the
 // Notion mirror path), and let the app's own push() observe the failure and set
-// globalSyncStatus:'error' itself. storage.ts's hydrate-reset (commit a9b5748) only resets
-// error/failed queue items back to 'queued' on load — it never fabricates a NEW failure, so
-// seeding 'queued' + a real backend failure survives that reset by construction.
+// globalSyncStatus:'error' itself. Hydration only retries non-exhausted, retryable failures, so
+// seeding 'queued' + a real backend failure keeps this smoke focused on an actionable banner.
 //
 // The stubbed failure is HTTP 403 "permission denied" on the Notion page-create call
 // specifically: it is NOT in isTransientSyncError's quiet-retry list (unlike e.g. a timeout) and

@@ -365,7 +365,7 @@ export function App() {
         void pull();
       } else {
         console.log('[App] Boot sync — existing local data');
-        void sync();
+        void sync({ auto: true });
       }
     }, 800);
     return () => {
@@ -436,9 +436,6 @@ export function App() {
 
   const handleSyncRetry = () => {
     syncEngine.retryFailedItems();
-    window.setTimeout(() => {
-      void syncEngine.sync();
-    }, 150);
   };
 
   const fxTier = useEffectsTier();

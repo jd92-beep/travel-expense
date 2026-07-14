@@ -5,11 +5,10 @@ import { canUseNotionMirror } from './notionAccess';
 import { recordClientHeartbeat } from './clientHeartbeat';
 import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { filterSupersededTripQueue, isReceiptTombstoned, mergePulledData, rawReceiptSourceId, receiptSourceTombstoneKey } from './syncMerge';
+import { MAX_SYNC_RETRY_ATTEMPTS } from './constants';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
 import type { Session } from '@supabase/supabase-js';
 
-const MAX_RETRY_ATTEMPTS = 3;
-const QUEUE_MAX_AGE_MS = 14 * 86_400_000; // drop long-stuck error items after 14 days
 const DEBOUNCE_MS = 3000;
 const BACKGROUND_INTERVAL_MS = 120_000;
 const MIN_SYNC_INTERVAL_MS = 30_000;
@@ -103,7 +102,7 @@ export function useSyncEngine(
   // backfill sweep in pull() doesn't eternally re-queue receipts that will always fail.
   // Cleared for a trip when a push for that trip succeeds (e.g. after a re-invite).
   const accessDeniedTripsRef = useRef(new Set<string>());
-  // Receipt IDs that have exhausted MAX_RETRY_ATTEMPTS at least once this session.
+  // Receipt IDs that have exhausted MAX_SYNC_RETRY_ATTEMPTS at least once this session.
   // The backfill sweep skips these so it doesn't reset attempts to 0 and create an
   // infinite loop. Cleared for a receipt when its push eventually succeeds.
   const backfillSuspendedRef = useRef(new Set<string>());
@@ -229,13 +228,18 @@ export function useSyncEngine(
 
   const settlePushStatus = useCallback((failures: number, lastError?: string) => {
     if (!aliveRef.current) return;
-    lastPushSucceededRef.current = failures === 0;
-    updateSyncState({
-      status: failures ? 'error' : (pendingCount(stateRef.current.syncQueue) ? 'queued' : 'synced'),
-      lastSyncedAt: failures ? stateRef.current.lastSyncedAt || 0 : Date.now(),
-      error: failures ? lastError : '',
+    setState((current) => {
+      const failedItem = (current.syncQueue || []).find((item) => item.status === 'failed' || item.status === 'error');
+      const hasFailure = failures > 0 || !!failedItem;
+      lastPushSucceededRef.current = !hasFailure;
+      return {
+        ...current,
+        globalSyncStatus: hasFailure ? 'error' : (pendingCount(current.syncQueue) ? 'queued' : 'synced'),
+        lastSyncedAt: hasFailure ? current.lastSyncedAt || 0 : Date.now(),
+        syncError: failures ? lastError || '' : failedItem?.error || '',
+      };
     });
-  }, [updateSyncState]);
+  }, [setState]);
 
   const yieldToStateFlush = useCallback(() => new Promise<void>((resolve) => {
     if (!aliveRef.current) {
@@ -271,8 +275,8 @@ export function useSyncEngine(
           // eventually uploads, without making the (already-synced) receipt look failed.
           const attempts = Number(receipt._photoSyncAttempts || 0) + 1;
           synced = { ...synced, _photoSyncedToSupabase: false, _photoSyncAttempts: attempts };
-          photoRetryNeeded = attempts < MAX_RETRY_ATTEMPTS;
-          console.warn(`[SyncEngine] Supabase photo upload failed (attempt ${attempts}/${MAX_RETRY_ATTEMPTS}):`, photoErr);
+          photoRetryNeeded = attempts < MAX_SYNC_RETRY_ATTEMPTS;
+          console.warn(`[SyncEngine] Supabase photo upload failed (attempt ${attempts}/${MAX_SYNC_RETRY_ATTEMPTS}):`, photoErr);
         }
       }
       if (hasNotionSync && !sharedLedger) {
@@ -286,7 +290,7 @@ export function useSyncEngine(
       applyReceiptSyncResult(item, synced);
       if (photoRetryNeeded && aliveRef.current) {
         // Re-enqueue a photo-only retry (dedupeQueue collapses by type:entityId, so this
-        // never accumulates). Bounded by _photoSyncAttempts < MAX_RETRY_ATTEMPTS above.
+        // never accumulates). Bounded by _photoSyncAttempts < MAX_SYNC_RETRY_ATTEMPTS above.
         const retryReceipt = synced;
         setState((current) => ({
           ...current,
@@ -394,7 +398,7 @@ export function useSyncEngine(
         || '',
       );
       for (const item of dedupeQueue(stateRef.current.syncQueue || [])) {
-        if (item.status === 'failed' || item.status === 'error' || item.attempts >= MAX_RETRY_ATTEMPTS) continue;
+        if (item.status === 'failed' || item.status === 'error' || item.attempts >= MAX_SYNC_RETRY_ATTEMPTS) continue;
         const tripKey = tripKeyForItem(item);
         if (tripKey && accessDeniedTrips.has(tripKey)) {
           failures += 1;
@@ -471,19 +475,18 @@ export function useSyncEngine(
       if (aliveRef.current) {
         setState((current) => {
           const before = dedupeQueue(current.syncQueue || []);
-          // Track receipt IDs that are about to be evicted for exhausting MAX_RETRY_ATTEMPTS.
-          // This prevents the backfill sweep from re-queueing them with attempts=0.
+          // Keep exhausted receipt IDs out of backfill so durable failures cannot be replaced
+          // by fresh attempts=0 items.
           for (const item of before) {
-            if (item.type === 'receipt' && item.attempts >= MAX_RETRY_ATTEMPTS) {
+            if (item.type === 'receipt' && item.attempts >= MAX_SYNC_RETRY_ATTEMPTS) {
               backfillSuspendedRef.current.add(item.entityId);
             }
           }
+          const durableFailures = before.filter((item) => item.status === 'error' || item.status === 'failed');
+          const activeQueue = before.filter((item) => item.status !== 'error' && item.status !== 'failed').slice(-500);
           return {
             ...current,
-            syncQueue: before
-              .filter((item) => item.attempts < MAX_RETRY_ATTEMPTS)
-              .filter((item) => !((item.status === 'error' || item.status === 'failed') && (item.updatedAt || item.createdAt || 0) < Date.now() - QUEUE_MAX_AGE_MS))
-              .slice(-500),
+            syncQueue: [...durableFailures, ...activeQueue],
           };
         });
       }
@@ -734,7 +737,7 @@ export function useSyncEngine(
           }
           // Backfill sweep: heal receipts that never reached Supabase — created before cloud
           // login, marked synced in the Notion-only era, or whose queue item was dropped after
-          // MAX_RETRY_ATTEMPTS. After merge, anything still missing supabaseId (or with an
+          // MAX_SYNC_RETRY_ATTEMPTS. After merge, anything still missing supabaseId (or with an
           // un-uploaded photo) is provably absent server-side, so re-queue it. Push is
           // idempotent (findReceiptUuid matches by trip+source_id), so this never duplicates.
           // ponytail: unbounded photo re-tries are rate-limited to one attempt per pull cycle.
@@ -779,14 +782,15 @@ export function useSyncEngine(
             }
           }
           computedPending = pendingCount(freshQueue);
+          const failedItem = freshQueue.find((item) => item.status === 'error' || item.status === 'failed');
           return {
             ...finalState,
             syncQueue: freshQueue,
             // Transient-only pull failures don't earn the red banner: stay 'queued'/'idle' and let
             // the retry loop heal it. lastSyncedAt already isn't advanced on any error (nextSyncedAt).
-            globalSyncStatus: hardPullError ? 'error' : (computedPending ? 'queued' : (pullErrors.length ? 'idle' : 'synced')),
+            globalSyncStatus: hardPullError || failedItem ? 'error' : (computedPending ? 'queued' : (pullErrors.length ? 'idle' : 'synced')),
             lastSyncedAt: nextSyncedAt,
-            syncError: hardPullError ? pullErrors.join(' | ') : '',
+            syncError: hardPullError ? pullErrors.join(' | ') : failedItem?.error || '',
           };
         });
       }
@@ -832,6 +836,7 @@ export function useSyncEngine(
 
   const sync = useCallback(async (options?: SyncOptions) => {
     if (syncingRef.current) {
+      scheduleSyncAfterCurrent();
       console.log('[SyncEngine] sync() skipped — already syncing');
       return;
     }
@@ -864,11 +869,21 @@ export function useSyncEngine(
       syncingRef.current = false;
       runDeferredSync();
     }
-  }, [pull, push, yieldToStateFlush]);
+  }, [pull, push, yieldToStateFlush, scheduleSyncAfterCurrent]);
   syncRef.current = sync;
 
   const retryFailedItems = useCallback(() => {
     if (!aliveRef.current) return;
+    for (const item of stateRef.current.syncQueue || []) {
+      if (item.status !== 'failed' && item.status !== 'error') continue;
+      const tripId = String(
+        item.payload?.tripId
+        || (item.type === 'receipt' ? stateRef.current.receipts.find((receipt) => receipt.id === item.entityId)?.tripId : '')
+        || (item.type === 'trip' ? item.entityId : ''),
+      );
+      if (tripId) accessDeniedTripsRef.current.delete(tripId);
+      if (item.type === 'receipt') backfillSuspendedRef.current.delete(item.entityId);
+    }
     setState((current) => ({
       ...current,
       syncQueue: (current.syncQueue || []).map((item) =>
@@ -878,9 +893,9 @@ export function useSyncEngine(
       ),
     }));
     setTimeout(() => {
-      void push();
+      void sync({ auto: true });
     }, 100);
-  }, [setState, push]);
+  }, [setState, sync]);
 
   useEffect(() => {
     if (!aliveRef.current || !state.activeTripId) return;
