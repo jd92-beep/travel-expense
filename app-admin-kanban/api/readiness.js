@@ -1,5 +1,5 @@
 import { adminEdgeUrl, callSignedEdge } from '../server/admin/edge.js';
-import { sha256Hex, timingSafeStringEqual } from '../server/admin/crypto.js';
+import { parseScryptHash, sha256Hex, timingSafeStringEqual } from '../server/admin/crypto.js';
 import { handler, HttpError, readJson, requireMethod, sendData } from '../server/admin/http.js';
 
 const ALLOWED_CANDIDATE_DRIFT = new Set([
@@ -47,6 +47,13 @@ export default function readiness(req, res) {
     const body = await readJson(req, 256);
     const mode = body.mode === 'candidate' ? 'candidate' : body.mode === 'promoted' ? 'promoted' : null;
     if (!mode) throw new HttpError('VALIDATION_FAILED', 'Readiness mode is invalid', 400);
+    try {
+      parseScryptHash(process.env.ADMIN_KANBAN_HASH);
+    } catch {
+      throw new HttpError('UPSTREAM_UNAVAILABLE', 'Release dependencies are not ready', 503, {
+        retryable: true,
+      });
+    }
 
     const expectedGitSha = String(process.env.ADMIN_GIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || '');
     const expectedSchemaVersion = String(process.env.ADMIN_EXPECTED_SCHEMA_VERSION || '');
