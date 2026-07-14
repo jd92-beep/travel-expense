@@ -1,6 +1,5 @@
 import { send } from '../server/admin/http.js';
-
-const ADMIN_VERSION = '1.0.0';
+import packageJson from '../package.json' with { type: 'json' };
 
 // Unauthenticated liveness probe. Keep the response limited to deployment
 // provenance and whether read traffic is accepted.
@@ -13,7 +12,7 @@ export default function health(req, res) {
   send(res, 200, {
     ok: true,
     service: 'travel-expense-admin-console',
-    version: ADMIN_VERSION,
+    version: packageJson.version,
     gitSha,
     deploymentId,
     acceptingReadTraffic,

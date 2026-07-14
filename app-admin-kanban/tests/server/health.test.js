@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import health from '../../api/health.js';
+import packageJson from '../../package.json' with { type: 'json' };
 
 function invokeHealth() {
   let body = '';
@@ -41,4 +42,8 @@ test('health accepts read traffic only with explicit provenance-bound enablement
     if (previous.sha === undefined) delete process.env.VERCEL_GIT_COMMIT_SHA;
     else process.env.VERCEL_GIT_COMMIT_SHA = previous.sha;
   }
+});
+
+test('health reports the release package version', () => {
+  assert.equal(invokeHealth().body.version, packageJson.version);
 });
