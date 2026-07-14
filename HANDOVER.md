@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-14 HKT
-- **Focus**: Session 54 completed the verified Admin 1.0.1 performance, Volcano and overview-status candidate.
+- **Focus**: Session 55 completed the verified Admin 1.0.1 performance/status production promotion.
 - **Agent**: Codex Sol (orchestration/review) + Terra (implementation)
-- **App version**: Compact `0.16.3`; Android `0.19.2` (versionCode 1920); Admin source `1.0.1` / production `1.0.0` pending protected promotion; React `0.2.4`
+- **App version**: Compact `0.16.3`; Android `0.19.2` (versionCode 1920); Admin source/production `1.0.1`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -23,38 +23,58 @@ This is the ONLY live to-do list in this file. Everything under "What Was Done",
 before acting on them. Every session must reconcile this list: add items you opened, mark items
 you closed with your session number.
 
-1. 🟠 **Admin 1.0.1 protected production promotion pending** — local Admin, BFF and Edge gates are
-   green for the performance/status fix. Merge through reviewed `main`, run the protected workflow,
-   then record live health, Volcano, Broker and heartbeat-state evidence before closing Session 54.
-2. 🟡 **Final post-bootstrap fresh login check (Boss is doing this now)** — passkey enrollment and
+1. 🟡 **Final post-bootstrap fresh login check (Boss is doing this now)** — passkey enrollment and
    bootstrap removal are complete. Record this one fresh Chrome login result before closing the item;
    do not claim it has passed yet.
-3. 🟠 **Real ordinary authenticated JWT privilege smoke is pending** — repeat the production
+2. 🟠 **Real ordinary authenticated JWT privilege smoke is pending** — repeat the production
    privilege check with an ordinary authenticated JWT; do not substitute privileged/service access.
-4. 🟠 **Admin DB platform-owner hardening remains pending** — complete the platform-owner operation
+3. 🟠 **Admin DB platform-owner hardening remains pending** — complete the platform-owner operation
    for the planned non-login helper owner; browser grants, policies and RPC execute remain closed.
-5. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — `receipt-photos` remains in public
+4. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — `receipt-photos` remains in public
    compatibility mode until Compact/Android signed-URL heartbeats prove active compatibility. Do
    not apply the staged private receipt-photo migration before that proof.
-6. 🟡 **Receipt-sync/Notion outbox worker execution remains unproven** — worker `v37` is deployed
+5. 🟡 **Receipt-sync/Notion outbox worker execution remains unproven** — worker `v38` is deployed
    and passed a negative canary, so deployment is no longer unverified. Do not claim an end-to-end
    live write: a positive shared-receipt write and Notion mirror result still need separate proof.
-7. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
+6. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-8. 🟡 **Compact Netlify deploy blocked** by hosting account credits (durable until topped up).
-9. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
+7. 🟡 **Compact Netlify deploy blocked** by hosting account credits (durable until topped up).
+8. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
    unused `hkd` imports in History/Stats. (Old Pending list.)
-10. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
+9. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
    settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
-11. 🟡 **Admin 1.0 intentionally excludes R3 and generic controls** — account consolidation,
+10. 🟡 **Admin 1.0 intentionally excludes R3 and generic controls** — account consolidation,
     scheduled deletion, Notion write repair, device commands, runtime writes, arbitrary SQL/table
     editing and session revoke stay server-disabled; `ADMIN_WRITE_MODE` remains `deny_all`.
-12. 🟠 **`puiyuchau@gmail.com` root cause — owner_id mismatch** — the infinite backfill loop is now
+11. 🟠 **`puiyuchau@gmail.com` root cause — owner_id mismatch** — the infinite backfill loop is now
     broken (Session 49), but the underlying `owner_id ≠ auth.uid()` mismatch needs DB-side
     investigation (Admin Kanban gateway blocked access). If re-invite or trip re-creation doesn't
     fix it, a manual `UPDATE trips SET owner_id = '<correct_uid>'` may be needed.
 
 ## What Was Done
+
+### Session 55 (Codex Sol + Terra — Admin 1.0.1 verified production promotion)
+
+1. **Fail-closed release evidence**: workflow `29336763253` rejected the first candidate because
+   `/api/health` still reported `1.0.0`; PR #51 bound health to `package.json` and added a regression.
+   Workflow `29337850114` attempt 1 then rejected candidate readiness because live Edge still carried
+   the prior source. Neither failed candidate was promoted.
+2. **Edge and provenance cutover**: deployed the reviewed `admin-kanban` bundle as version `92` and
+   updated only the non-sensitive frontend/Edge provenance SHA markers to
+   `697a9c9522b14a1a67e77ab4088136e48de369b2`. Direct unsigned runtime access still returns
+   `401 ADMIN_SIGNATURE_MISSING`. No passphrase or credential value changed.
+3. **Verified production**: workflow `29337850114` attempt 2 passed at that exact SHA. Production is
+   Admin `1.0.1`, Vercel `dpl_6R3tZEYhwmiJ5CyeykdnqKhYshSv`, Edge
+   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_92`, schema `20260712123000`.
+   Live health returns `200`, exact version/SHA/deployment and `acceptingReadTraffic=true`; Broker
+   health returns exact service `travel-expense-credential-broker`, version `2026.06.12`.
+4. **Requested fixes live**: deployed Edge source contains Volcano model
+   `volcano/doubao-seed-2.0-lite`, strict Broker health and `awaiting_heartbeat`; the production asset
+   contains `待首次心跳`. Bounded max-two prefetch and idle-poll suppression are in the promoted build.
+5. **Final gates**: all seven workflow groups passed; protected promotion reran Admin typecheck,
+   build, security, unit `32/32`, contract `24/24`, full smoke `47 passed + 1 intentional skip`,
+   Edge `72/72`, cross-client and clean-database contracts, with `npm audit` at 0 vulnerabilities.
+   Writes remain `deny_all`; no RLS, migration or live user-data mutation occurred.
 
 ### Session 54 (Codex Sol + Terra — Admin 1.0.1 performance and runtime-status candidate)
 
