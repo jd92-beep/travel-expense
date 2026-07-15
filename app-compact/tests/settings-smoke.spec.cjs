@@ -412,7 +412,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
     await expect.poll(() => modelProbeCalls.length).toBe(volcanoModels.indexOf(model) + 1);
   }
   expect(modelProbeCalls.map((call) => ({ kind: call.kind, model: `volcano/${call.model}`, prompt: call.prompt }))).toEqual(
-    volcanoModels.map((model) => ({ kind: 'test', model, prompt: '{"ok":true}' })),
+    volcanoModels.map((model) => ({ kind: 'test', model, prompt: 'Return only JSON: {"ok":true}' })),
   );
 
   await setAccordion(page, '資料管理');

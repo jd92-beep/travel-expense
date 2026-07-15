@@ -351,7 +351,7 @@ export async function testAiModel(state: AppState, modelId: string): Promise<str
   const selected = AI_MODELS.find((model) => model.id === modelId);
   if (!selected) throw new Error('AI model 不在 app allowlist');
   const [provider, model] = selected.id.split('/') as ['kimi' | 'google' | 'mimo' | 'volcano', string];
-  const result = await brokerAiJson(state, provider, '{"ok":true}', 'test', undefined, model);
+  const result = await brokerAiJson(state, provider, 'Return only JSON: {"ok":true}', 'test', undefined, model);
   if (!result || typeof result !== 'object' || (result as { ok?: unknown }).ok !== true) {
     throw new Error('Model 未有返回有效測試結果');
   }

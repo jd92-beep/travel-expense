@@ -1,5 +1,5 @@
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.07.15';
+const VERSION = '2026.07.15.2';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -1299,10 +1299,20 @@ async function volcanoJson(env, prompt, kind, image, requestedModel) {
       model: requestedModel || 'doubao-seed-2.0-lite',
       messages,
       temperature: kind === 'test' ? 0 : 0.6,
+      thinking: kind === 'test' ? { type: 'disabled' } : undefined,
       max_tokens: kind === 'test' ? 8 : undefined,
     }),
   }));
-  return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
+  const choice = data?.choices?.[0];
+  const content = choice?.message?.content || data?.content || '';
+  if (kind === 'test') {
+    const reasoning = choice?.message?.reasoning_content || '';
+    if (!String(content).trim() && !String(reasoning).trim()) {
+      throw new Error('Model test returned an empty response');
+    }
+    return { ok: true, provider: 'volcano' };
+  }
+  return extractJson(content);
 }
 
 async function volcanoJsonWithCredential(env, credential) {

@@ -243,6 +243,9 @@ function installProviderFetchStub() {
       assert.equal(auth, bearer('volcano-secret-for-test'));
       const body = JSON.parse(init.body || '{}');
       volcanoBodies.push(body);
+      if (body.model === 'minimax-m2.7') {
+        return Response.json({ choices: [{ finish_reason: 'length', message: { content: '', reasoning_content: 'provider answered' } }] });
+      }
       return Response.json({ choices: [{ message: { content: '{"ok":true,"provider":"volcano"}' } }] });
     }
 
@@ -756,8 +759,10 @@ async function run() {
         body: { prompt: '{"ok":true}', kind: 'test', model },
       });
       assert.equal(volcano.response.status, 200);
+      assert.equal(volcano.data.data.ok, true);
       assert.equal(volcano.data.data.provider, 'volcano');
       assert.equal(restoreFetch.volcanoBodies().at(-1).model, model);
+      assert.deepEqual(restoreFetch.volcanoBodies().at(-1).thinking, { type: 'disabled' });
       assert.equal(restoreFetch.volcanoBodies().at(-1).max_tokens, 8);
     }
 
