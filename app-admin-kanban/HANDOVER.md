@@ -4,20 +4,19 @@ Last updated: 2026-07-15 HKT
 
 ## Current Status
 
-- Admin `1.0.2` is a verified source release candidate: Providers keeps one row per provider and now
-  displays every supported Volcano app LLM. Broker `2026.07.15` publishes the safe catalog and
-  recognizes the existing env-backed Volcano binding without exposing credential values. Local gates
-  passed: typecheck/build/security, unit `32/32`, contract `24/24`, full smoke `48 passed + 1 skip`,
-  Edge `53/53`, Broker check/self-test. Production remains the verified `1.0.1` release below until
-  the protected cutover completes.
+- Admin `1.0.2` is live: Providers keeps one row per provider and displays every supported Volcano
+  app LLM. Broker `2026.07.15.2` publishes the safe catalog, recognizes the existing env-backed
+  Volcano binding and verifies selected model availability with an 8-output-token request. Protected
+  workflow `29415119909` passed all frontend, BFF, Edge, cross-client and database gates before
+  production promotion.
 
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
-- Verified production: Admin `1.0.1`, with bounded default-workspace prefetch, idle-polling removal,
+- Verified production: Admin `1.0.2`, with bounded default-workspace prefetch, idle-polling removal,
   Volcano provider coverage, strict live Broker health and explicit awaiting-heartbeat client status.
-  Workflow `29337850114` attempt 2 passed at exact SHA
-  `697a9c9522b14a1a67e77ab4088136e48de369b2`: Vercel
-  `dpl_6R3tZEYhwmiJ5CyeykdnqKhYshSv`; Edge
-  `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_92`; schema `20260712123000`.
+  Workflow `29415119909` passed at exact SHA
+  `67cde57a42bc43f1bda026d81d555260e25bb564`: Vercel
+  `dpl_B4bGNsxLudia3k38BMuP5PXsD7kZ`; Edge
+  `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_95`; schema `20260712123000`.
 - Completed passkey bootstrap closure: first passkey enrollment BFF begin/finish returned `200`; Edge
   credential register, revoke-all, session create and session verify all returned `200`. The current
   passphrase remains unchanged and necessary. `ADMIN_PASSKEY_BOOTSTRAP_SECRET` is removed from Vercel
@@ -27,14 +26,14 @@ Last updated: 2026-07-15 HKT
   `0a71608e2b0c888eb7e7e4efb194a21a59ad935b` with localized Chrome passkey-focus guidance. Final
   workflow `29303864302` succeeded at that SHA: Vercel `dpl_A7o26cPYDieYCa1RaNcVvGpJ4XWh`; Edge
   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_90`; schema `20260712123000`.
-- Current live proof: `/api/health` returns `200`, Admin `1.0.1`, exact SHA/deployment and
+- Current live proof: `/api/health` returns `200`, Admin `1.0.2`, exact SHA/deployment and
   `acceptingReadTraffic=true`. Broker `/health` returns exact service
-  `travel-expense-credential-broker`, version `2026.06.12`; deployed Edge source contains Volcano,
-  strict Broker health and `awaiting_heartbeat`. Edge versions are `admin-auth-state` `38`,
-  `admin-kanban` `92`, and `receipt-sync-worker` `38`; direct unsigned runtime access returns
+  `travel-expense-credential-broker`, version `2026.07.15.2`; deployed Edge source contains all five
+  Volcano LLM IDs, strict Broker health and `awaiting_heartbeat`. Edge versions are
+  `admin-auth-state` `40`, `admin-kanban` `95`, and `receipt-sync-worker` `40`; direct unsigned runtime access returns
   `401 ADMIN_SIGNATURE_MISSING`.
 - Production database contract: `20260712123000` (`admin-passkeys-v2`).
-- Compatibility baseline: Compact Web `0.16.3`, Android `0.19.2`, React `0.2.4`.
+- Compatibility baseline: Compact Web `0.16.8`, Android branch `0.19.5`, React `0.2.4`.
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
 - All CI groups, protected promotion and current runtime/auth-route checks passed.
 - Receipt photos remain in public compatibility mode until client heartbeats prove signed-URL
@@ -141,7 +140,13 @@ and recovered through the operation ID; the UI never declares success from reque
 
 Verified for current production promotion:
 
-- Admin `1.0.1` production verification: typecheck/build/security passed; unit `32/32`, contract
+- Admin `1.0.2` production verification: typecheck/build/security passed; unit `32/32`, contract
+  `24/24`, full smoke `48 passed + 1 intentional skip`; Edge contract tests passed `53/53`.
+  Protected workflow `29415119909` promoted exact SHA
+  `67cde57a42bc43f1bda026d81d555260e25bb564`, Vercel
+  `dpl_B4bGNsxLudia3k38BMuP5PXsD7kZ` and Edge `admin-kanban` v95. The Console provider DTO and UI
+  cover all five configured Volcano LLM IDs; Seedance media models are intentionally excluded.
+- Admin `1.0.1` historical production verification: typecheck/build/security passed; unit `32/32`, contract
   `24/24`, full smoke `47 passed + 1 intentional skip`; Edge format/lint/check passed with `72/72`
   tests; `npm audit` found 0 vulnerabilities; GitNexus detect_changes reported LOW risk and 0
   affected processes. Workflow `29336763253` rejected a health/package version mismatch; PR #51
@@ -179,17 +184,19 @@ Verified for current production promotion:
   The passphrase is unchanged; the later completed passkey bootstrap closure is recorded above.
 - Edge: 28 files passed format/lint; all three entrypoints passed `deno check`; Deno tests
   `69 passed, 0 failed`.
-- Compact `0.16.3` is the current app version; the prior 9/9 selected post-rebase gates passed,
+- Compact `0.16.8` is the current web app version; Vercel, Netlify and GitHub Pages contain the exact
+  version and selected-model probe prompt. The prior 9/9 selected post-rebase gates passed,
   including itinerary merge, receipt
   tombstone, privacy, offline, mobile layout and final navigation.
 - React `0.2.4`: typecheck/build/security passed; the deterministic clear-device repeat was `12/12`,
   and the full security smoke was `3 passed, 1 intentional skip`.
-- Android `0.19.2` / versionCode `1920` is the current Oscar worktree baseline. It was not rebuilt
-  or republished in this final web-console pass.
+- Android branch `0.19.5` / versionCode `1950` passed persisted-state, selected-model and mobile
+  smokes, a JBR 21 debug build and emulator QA. No release APK/AAB was built or published.
 - BFF: the contract suite executes the real catch-all handler, session verification, CSRF and
   signed Edge transport; invalid provenance, redirects, malformed envelopes and escaped routes fail closed.
-- Broker: check and self-test passed. Static migration policy and shared-ledger scans passed.
-- Protected production workflow `29302288203` is the successful Admin 1.0 production promotion. The
+- Broker `2026.07.15.2`: check/self-test and five authenticated live Volcano model probes passed;
+  every selected-model probe is capped at 8 output tokens. Static migration policy and shared-ledger scans passed.
+- Protected production workflow `29415119909` is the successful Admin 1.0.2 production promotion. The
   clean-database group applied every migration through `20260712123000` and passed all 15 tracked SQL
   fixtures.
 - Receipt-photo compatibility source gate passed: final active state requires a public
@@ -222,9 +229,8 @@ Runbook index: `docs/runbooks/README.md`
 
 ## Current Post-Bootstrap Open Items
 
-1. **Promote and live-verify Admin 1.0.1** — merge the verified candidate through `main`, run the
-   protected workflow, then record live `/api/health`, Volcano, Broker and client heartbeat-state
-   evidence.
+1. **Admin 1.0.2 promotion completed** — workflow `29415119909`, live `/api/health`, Edge v95,
+   Broker `2026.07.15.2` and all five Volcano model probes are verified.
 2. **Final post-bootstrap fresh login check (Boss is doing this now)** — passkey enrollment and
    bootstrap removal are complete. Do not mark this check passed until Boss records the fresh Chrome
    login result.
@@ -236,8 +242,8 @@ Runbook index: `docs/runbooks/README.md`
 
 ## Cutover And Rollback
 
-Admin `1.0.0` final production promotion is verified at
-`0a71608e2b0c888eb7e7e4efb194a21a59ad935b`; keep writes at `deny_all`. Follow
+Admin `1.0.2` final production promotion is verified at
+`67cde57a42bc43f1bda026d81d555260e25bb564`; keep writes at `deny_all`. Follow
 `docs/runbooks/maintenance-and-rollback.md` for future changes and keep the fixed order of privilege
 check, new-only BFF/Edge, read-only smoke, R1 allowlist, then each verified R2 action separately.
 

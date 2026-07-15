@@ -22,7 +22,7 @@
 - GitHub Pages React app: https://jd92-beep.github.io/travel-expense/react/
 - 舊版備用 app: https://jd92-beep.github.io/travel-expense/
 
-請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。2026-07-15 live check 已確認 Compact Vercel、Netlify 及 GitHub Pages 全部提供 `0.16.6`；Vercel 仍是主要 Compact 入口。Compact `0.16.7`、Admin `1.0.2` 同 Broker `2026.07.15` 已完成本地 release gates，production cutover 會喺同一個 release commit 後進行。
+請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。2026-07-15 live check 已確認 Compact Vercel、Netlify 及 GitHub Pages 全部提供 `0.16.8`；Vercel 仍是主要 Compact 入口。Admin `1.0.2` 同 Broker `2026.07.15.2` 亦已完成 production cutover。
 
 ## Compact App Developer Quick Start
 
@@ -38,11 +38,12 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact Web source release 目前版本是 `0.16.7`；Android worktree
-目前版本是 `0.19.4`。Admin Console source release 是 `1.0.2`；目前已驗證 production `1.0.1` 由 protected workflow `29337850114` 以 Git SHA
-`697a9c9522b14a1a67e77ab4088136e48de369b2` 成功 promotion；live `/api/health` 回 `200`、版本
-`1.0.1`、exact SHA 及 `acceptingReadTraffic=true`。呢個版本加快常用 workspace 切換、補回 Volcano
-provider，並將未有 client heartbeat 嘅 Compact/Android 明確顯示為 `待首次心跳`。新 source release 會列出五個既有 Volcano app LLM，Compact/Android Settings 亦可用極短、無 fallback request 測試所選 model。
+Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.8`；Android worktree
+目前版本是 `0.19.5`（versionCode `1950`）。Admin Console production 是 `1.0.2`，由 protected
+workflow `29415119909` 以 Git SHA `67cde57a42bc43f1bda026d81d555260e25bb564` promotion；live
+`/api/health` 回 `200`、exact SHA 及 `acceptingReadTraffic=true`。Console Providers 會列出五個
+既有 Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output
+tokens 嘅 request 測試 availability。Seedance 係 media model，唔會混入 LLM selector。
 
 Admin Console production URL 是 `https://travel-expense-admin-kanban.vercel.app`。readiness 會在呼叫 Edge
 前拒絕格式錯誤嘅 hash；production health 與 unauthenticated route 行為已驗證：未登入 session 回 `401`，

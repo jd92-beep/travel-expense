@@ -2,13 +2,30 @@
 
 ## 2026-07-15
 
+- **Compact 0.16.8 / Android 0.19.5 / Broker 2026.07.15.2 low-token Volcano probes**:
+  - Live investigation proved all five Volcano model IDs and the existing credential work. The old
+    strict probe failed only because `minimax-m2.7` spent its tiny completion budget in
+    `reasoning_content` (`finish_reason=length`, empty final content), so the Broker JSON parser
+    incorrectly reported a model failure.
+  - Selected-model tests now send the explicit prompt `Return only JSON: {"ok":true}`. For
+    `kind=test`, a valid non-empty provider `content` or `reasoning_content` is availability proof;
+    normal scan/trip calls still require strict parsed JSON. Every model remains capped at 8 output
+    tokens, uses no fallback and preserves quota/`429` hard stops.
+  - Live authenticated Broker probes returned `200` and `ok=true` for `doubao-seed-2.0-lite`,
+    `doubao-seed-2.0-pro`, `minimax-m3`, `minimax-m2.7` and `doubao-seed-2.0-mini`.
+  - Compact `0.16.8` is verified on Vercel, Netlify and GitHub Pages. Google Chrome 150 waited 15
+    seconds on production with neither generic sync-error banner, no page error and no horizontal
+    overflow. Android `0.19.5` passed persisted-state `2/2`, model `1/1`, mobile `1/1`, debug APK and
+    emulator QA with verified App Link. No passphrase, secret value, RLS, migration or live user data
+    changed.
+
 - **Compact 0.16.7 / Admin 1.0.2 / Broker 2026.07.15 Volcano model closure**:
   - 根因係 Compact/Android model dispatcher 只有 Kimi、Mimo 分支，Volcano selection 會跌入
     Google path；Admin Edge 同 Broker status 亦只回報一個 required model，而 Broker status
     忽略只存在 Worker env 嘅 `VOLCANO_KEY`。
   - Compact 同 Android 而家會把五個既有 Volcano LLM 精確送去 `/volcano/json`；Settings 四個
     task selector 各有直接測試掣，固定 `kind=test`、8 output tokens、無 fallback，並驗證
-    model 真正回傳 `{ok:true}`。`429`、quota、daily-limit hard stop 維持不變。
+    Broker 收到指定 model 嘅有效回應。`429`、quota、daily-limit hard stop 維持不變。
   - Admin Providers 保持每 provider 一 row，但新增完整 model catalog，Volcano 會顯示
     `doubao-seed-2.0-lite`、`doubao-seed-2.0-pro`、`minimax-m3`、`minimax-m2.7` 同
     `doubao-seed-2.0-mini`。Seedance media models唔會混入 LLM selector/probe。

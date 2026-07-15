@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-15 HKT
-- **Focus**: Session 59 closed exact Volcano routing/catalog/model probes across Compact, Android, Broker and Admin, and hardened Android persisted sync recovery.
+- **Focus**: Session 60 completed live low-token Volcano probes, Compact `0.16.8` production verification and Android `0.19.5` debug/emulator QA.
 - **Agent**: Codex Sol (investigation, orchestration and review); two investigators cross-checked the root cause; Terra implemented the Android branch changes.
-- **App version**: Compact source `0.16.7`; Android branch `0.19.4` (versionCode 1940); Admin source `1.0.2`; Broker source `2026.07.15`; React `0.2.4`
+- **App version**: Compact `0.16.8`; Android branch `0.19.5` (versionCode 1950); Admin production `1.0.2`; Broker production `2026.07.15.2`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web source is currently `0.16.7`; the Android branch is `0.19.4`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.8`; the Android branch is `0.19.5`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -66,11 +66,34 @@ you closed with your session number.
     detector until Boss performs one hard refresh after `0.16.6` reaches production. Do not claim
     that specific tab is on `0.16.6` until the refreshed asset/version is confirmed. Future stale
     tabs running `0.16.6+` will show the explicit update notice without a service worker.
-15. 🟡 **Session 59 production cutover** — Compact `0.16.7`, Admin `1.0.2`, Broker `2026.07.15`
-    and the matching Admin Edge catalog are verified release candidates. Commit/push, protected
-    promotion and no-store live Chrome verification remain before this item can close.
+15. 🟢 **Session 59/60 production cutover closed** — Admin `1.0.2` protected workflow
+    `29415119909`, Edge `admin-kanban` v95, Compact `0.16.8` on Vercel/Netlify/Pages and Broker
+    `2026.07.15.2` are live. Five authenticated Volcano probes returned `200`; Chrome 150 no-store
+    cold-open waited 15 seconds with neither generic sync-error banner. (Session 60.)
 
 ## What Was Done
+
+### Session 60 (Codex Sol + Terra — low-token Volcano live closure)
+
+1. **Deeper provider root cause:** all five configured Volcano IDs and the existing credential were
+   valid. `minimax-m2.7` returned HTTP success but used a tiny completion entirely for
+   `reasoning_content`; `finish_reason=length` and empty `content` made the strict JSON parser create
+   a false failure. Increasing the cap to 16/24/64 was rejected as the final approach.
+2. **Minimal availability contract:** Compact and Android send the explicit selected-model prompt
+   `Return only JSON: {"ok":true}`. Broker `kind=test` now accepts a non-empty provider `content` or
+   `reasoning_content` and returns its own `{ok:true}` availability result. All five models use 8
+   output tokens, exact routing and no fallback; normal AI tasks retain strict JSON parsing.
+3. **Live proof:** authenticated probes returned `200` and `ok=true` for both Doubao Seed 2.0 text
+   models, both MiniMax models and Doubao Mini. Broker health reports `2026.07.15.2`.
+4. **Compact release:** commit `24f4ad1` is live as `0.16.8` on Vercel, Netlify and GitHub Pages;
+   workflows `29417694544`, `29417694505` and Admin CI `29417694469` passed. Google Chrome
+   `150.0.7871.124` waited 15 seconds with zero generic sync banners, zero page errors and 390px body
+   width at a 390px viewport. One pre-existing CSP inline-handler console warning remains.
+5. **Android proof:** branch commit `8eb1bd4` is `0.19.5` / versionCode `1950`. Persisted-state
+   offline `2/2`, selected-model Settings `1/1`, mobile layout `1/1`, debug APK build and emulator QA
+   passed; App Link evidence is `/tmp/travel-expense-android-qa-2026-07-15T13-01-24-550Z`.
+6. **Safety:** no passphrase, secret value, provider credential, RLS, migration, write mode or live
+   user data changed. Three touched package audits found zero vulnerabilities.
 
 ### Session 59 (Codex Sol + Terra — Volcano model closure and Android sync-state hardening)
 
