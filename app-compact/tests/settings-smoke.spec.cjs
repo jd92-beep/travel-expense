@@ -1778,7 +1778,7 @@ test('Settings model testers use the selected exact Volcano broker model without
       url: 'https://travel-expense-credential-broker.ftjdfr.workers.dev/volcano/json',
       kind: 'test',
       model,
-      prompt: '{"ok":true}',
+      prompt: 'Return only JSON: {"ok":true}',
     });
   }
 
@@ -1790,7 +1790,7 @@ test('Settings model testers use the selected exact Volcano broker model without
     url: 'https://travel-expense-credential-broker.ftjdfr.workers.dev/volcano/json',
     kind: 'test',
     model: 'doubao-seed-2.0-mini',
-    prompt: '{"ok":true}',
+    prompt: 'Return only JSON: {"ok":true}',
   });
   expect(calls.every((call) => call.url.endsWith('/volcano/json'))).toBe(true);
 });

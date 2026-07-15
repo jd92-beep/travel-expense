@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-15 HKT (Android MiniMax model-test prompt)
+
+- **v0.19.5 / versionCode 1950.** Settings selected-model tests now send the exact instruction
+  `Return only JSON: {"ok":true}` instead of a bare JSON object, so MiniMax real JSON task routing
+  follows the same concise explicit-response shape that passed Broker investigation.
+  - The direct `kind=test` route remains selected-model-only with no fallback and still validates
+    the returned `{ok:true}` payload.
+  - Credential Broker model tests use 8 output tokens for every model and treat a non-empty provider
+    response as availability proof. The Worker change belongs to main orchestration; this Android
+    shell does not modify Worker source.
+
 ## 2026-07-15 HKT (Android sync-state and Volcano routing)
 
 - **v0.19.4 / versionCode 1940.** Fixed Android Compact persisted sync recovery and added exact

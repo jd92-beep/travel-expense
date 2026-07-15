@@ -37,7 +37,7 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Android worktree 的 Compact 目前版本：`0.19.4`。
+Compact app 和 React app 獨立版本管理。Android worktree 的 Compact 目前版本：`0.19.5`。
 
 ## Compact Android Developer Quick Start
 
@@ -57,7 +57,7 @@ Debug APK 會輸出到：
 app-compact/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-本次 `0.19.4` 已驗證 IndexedDB cold-start 會正規化同步佇列，保留耗盡重試或版本衝突等真失敗；五個既有 Volcano LLM 會經指定 Credential Broker 路由，Settings 可用極短、無 fallback request 測試所選 model。正式上架前仍需要處理 release signing、Play Store metadata、native camera/gallery QA、offline sync QA、以及 Android 真機回歸測試。
+本次 `0.19.5` 的 Settings model test 會送出明確指令 `Return only JSON: {"ok":true}`，仍然只測試所選 model、不使用 fallback。Credential Broker 對每個 model test 都只使用 8 個 output tokens，並以非空 provider response 作 availability proof。呢個 Broker 行為由 main 的 orchestrator 更新，Android shell 不會修改 Worker source。正式上架前仍需要處理 release signing、Play Store metadata、native camera/gallery QA、offline sync QA、以及 Android 真機回歸測試。
 
 Android Google/Supabase login uses the App Link callback `https://travel-expense-compact.vercel.app/android-auth`. The debug certificate SHA-256 is already listed in `app-compact/public/.well-known/assetlinks.json`; add the release SHA-256 after creating the release keystore.
 
