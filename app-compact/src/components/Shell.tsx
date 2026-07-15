@@ -141,6 +141,8 @@ const COMPACT_RELEASE_NOTES = [
   { title: 'Offline conflict resolver', detail: 'History can review failed local/cloud receipt conflicts without exposing provider payloads.' },
 ];
 const COMPACT_RELEASE_NOTES_SEEN_KEY = 'travel-expense-compact:release-notes-seen';
+const DEPLOYMENT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const DEPLOYMENT_CHECK_QUERY = '__compact_deploy_check';
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -242,19 +244,57 @@ export function Shell({
         setReleaseNotesOpen(true);
       }
     };
+    let deploymentCheckInFlight = false;
+    const checkForDeploymentUpdate = async () => {
+      if (deploymentCheckInFlight || !navigator.onLine) return;
+      const loadedScript = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src;
+      if (!loadedScript) return;
+      deploymentCheckInFlight = true;
+      try {
+        const indexUrl = new URL(import.meta.env.BASE_URL || '/', window.location.origin);
+        indexUrl.searchParams.set(DEPLOYMENT_CHECK_QUERY, String(Date.now()));
+        const response = await fetch(indexUrl, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+          headers: { Accept: 'text/html' },
+        });
+        if (!response.ok) return;
+        const html = await response.text();
+        const latestDocument = new DOMParser().parseFromString(html, 'text/html');
+        const latestSource = latestDocument.querySelector<HTMLScriptElement>('script[type="module"][src]')?.getAttribute('src');
+        if (!latestSource) return;
+        const latestScript = new URL(latestSource, response.url).href;
+        if (latestScript !== loadedScript) onControllerChange();
+      } catch {
+        // Version discovery is advisory and must never affect offline or sync state.
+      } finally {
+        deploymentCheckInFlight = false;
+      }
+    };
+    const onFocus = () => void checkForDeploymentUpdate();
+    const onVisibilityChange = () => {
+      if (!document.hidden) void checkForDeploymentUpdate();
+    };
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       installPromptRef.current = event as BeforeInstallPromptEvent;
       setInstallReady(true);
     };
+    void checkForDeploymentUpdate();
+    const deploymentTimer = window.setInterval(() => void checkForDeploymentUpdate(), DEPLOYMENT_CHECK_INTERVAL_MS);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
+    window.addEventListener('focus', onFocus);
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     navigator.serviceWorker?.addEventListener('controllerchange', onControllerChange);
     return () => {
+      window.clearInterval(deploymentTimer);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
+      window.removeEventListener('focus', onFocus);
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange);
     };
   }, []);
@@ -409,7 +449,7 @@ export function Shell({
           <button type="button" onClick={() => location.reload()}>立即更新</button>
         </div>
       )}
-      {hasSyncProblem && (
+      {hasSyncProblem && !updateReady && (
         <div className="top-notice text-red-700 bg-red-50 border border-red-200/60 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-300 backdrop-blur-md flex items-center justify-between gap-4 w-full" style={{ background: 'rgba(253, 240, 240, 0.95)', border: '1px solid rgba(194, 59, 94, 0.3)', color: '#A83030' }}>
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 relative">

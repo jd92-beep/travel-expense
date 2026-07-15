@@ -290,3 +290,152 @@ test('authoritative empty pull backfills a local-only owner trip once and auto-s
   expect(tripPosts).toHaveLength(2);
   await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
 });
+
+test('stale deployment is detected without a service worker and takes priority over sync errors', async ({ page }) => {
+  await page.route('**/*__compact_deploy_check*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<!doctype html><html><head><script type="module" src="/assets/index-next.js"></script></head><body></body></html>',
+    });
+  });
+  await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: sessionPayload().user }) });
+  });
+  await page.route('https://test-travel-expense.supabase.co/rest/v1/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+  });
+
+  await page.addInitScript(({ session, key }) => {
+    const now = Date.now();
+    localStorage.clear();
+    indexedDB.deleteDatabase('travel-expense-react');
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify(session));
+    localStorage.setItem(key, JSON.stringify({
+      autoSync: false,
+      activeTripId: 'trip_stale_deployment',
+      trips: [{
+        id: 'trip_stale_deployment',
+        name: 'Stale deployment trip',
+        destinationSummary: 'Tokyo',
+        startDate: '2026-08-01',
+        endDate: '2026-08-03',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: true,
+        itinerary: [],
+        createdAt: now,
+        updatedAt: now,
+      }],
+      receipts: [],
+      globalSyncStatus: 'error',
+      syncError: 'legacy stale runtime failure',
+      syncQueue: [{
+        id: 'sync_stale_deployment',
+        type: 'trip',
+        entityId: 'trip_stale_deployment',
+        op: 'upsert',
+        status: 'error',
+        attempts: 3,
+        error: 'legacy stale runtime failure',
+        createdAt: now - 1_000,
+        updatedAt: now - 1_000,
+      }],
+    }));
+  }, { session: sessionPayload(), key: scopedStorageKey });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await expect(page.getByText('發現新版本')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/有資料同步失敗/)).toHaveCount(0);
+  const serviceWorkers = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
+  expect(serviceWorkers).toBe(0);
+});
+
+test('successful stale trip push retains newer local content and applies the Supabase identity', async ({ page }) => {
+  const tripPosts = [];
+  await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: sessionPayload().user }) });
+  });
+  await page.route('https://test-travel-expense.supabase.co/rest/v1/**', async (route) => {
+    const url = new URL(route.request().url());
+    const table = url.pathname.split('/').pop();
+    const method = route.request().method();
+    if (table === 'profiles') {
+      await route.fulfill({ status: method === 'POST' ? 201 : 200, contentType: 'application/json', body: JSON.stringify([]) });
+      return;
+    }
+    if (table === 'trips' && method === 'POST') {
+      const body = route.request().postDataJSON();
+      tripPosts.push(body);
+      if (body.country_code || body.theme_key || body.locale || body.weather_region || body.trip_intelligence) {
+        await route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'PGRST204', message: "Could not find the 'country_code' column of 'trips' in the schema cache" }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 201, body: '' });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+  });
+
+  await page.addInitScript(({ session, key }) => {
+    const now = Date.now();
+    localStorage.clear();
+    indexedDB.deleteDatabase('travel-expense-react');
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify(session));
+    localStorage.setItem(key, JSON.stringify({
+      autoSync: true,
+      activeTripId: 'trip_stale_identity',
+      trips: [{
+        id: 'trip_stale_identity',
+        name: 'Newer local name',
+        destinationSummary: 'Osaka',
+        startDate: '2026-09-01',
+        endDate: '2026-09-03',
+        homeCurrency: 'HKD',
+        currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'],
+        version: 1,
+        active: true,
+        itinerary: [],
+        createdAt: now - 20_000,
+        updatedAt: now,
+      }],
+      receipts: [],
+      syncQueue: [{
+        id: 'sync_stale_identity',
+        type: 'trip',
+        entityId: 'trip_stale_identity',
+        op: 'upsert',
+        status: 'queued',
+        attempts: 0,
+        createdAt: now - 10_000,
+        updatedAt: now - 10_000,
+        payload: { sourceId: 'trip_stale_identity', updatedAt: now - 10_000 },
+      }],
+    }));
+  }, { session: sessionPayload(), key: scopedStorageKey });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await expect.poll(async () => page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || '{}');
+    const trip = state.trips?.find((entry) => entry.id === 'trip_stale_identity');
+    return {
+      name: trip?.name,
+      supabaseId: trip?.supabaseId,
+      queuedTrips: (state.syncQueue || []).filter((item) => item.type === 'trip').length,
+    };
+  }, scopedStorageKey), { timeout: 15_000 }).toEqual({
+    name: 'Newer local name',
+    supabaseId: expect.any(String),
+    queuedTrips: 0,
+  });
+  expect(tripPosts).toHaveLength(2);
+});

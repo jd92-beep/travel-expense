@@ -2,6 +2,23 @@
 
 ## 2026-07-15
 
+- **Compact App 0.16.6 stale-tab and trip identity recovery**:
+  - Live Chrome timing proved the reported banner came from a tab opened on `0.16.4` at 10:11,
+    before the `0.16.5` trip-sync repair deployed at 10:52. The tab had never reloaded, so later
+    successful Supabase pulls could not make the old in-memory JavaScript adopt the repair.
+  - Compact previously marked updates ready only on `serviceWorker.controllerchange`, while its
+    security contract intentionally registers no service worker. It now checks the same-origin
+    index on load, foreground/focus and a five-minute interval with `cache: no-store`, compares the
+    loaded module asset with the current deployment and shows the existing explicit reload notice.
+    An update notice takes priority over stale-runtime sync errors; the app never auto-reloads while
+    the user may be editing.
+  - A successful trip push now always preserves its `supabaseId` identity link when newer local trip
+    content wins the timestamp merge. This closes the `synced + empty queue + missing supabaseId`
+    state without overwriting the newer itinerary or metadata.
+  - Two regressions failed before the fix and now pass; the sync suite is `6/6`. Typecheck, build,
+    security scan, security smoke, offline `4/4`, mobile layout and the full production gate all
+    passed. No passphrase, secret, provider credential, RLS, migration or live user data changed.
+
 - **Compact App 0.16.5 production trip-sync recovery**:
   - Live Chrome state and Supabase logs proved the recurring banner was not a generic connection
     failure: a new trip hit `400` on live-schema column drift, then two `403` RLS failures while the

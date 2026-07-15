@@ -38,7 +38,7 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.5`；Android worktree
+Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.6`；Android worktree
 目前版本是 `0.19.2`。Admin Console `1.0.1` 已由 protected workflow `29337850114` 以 Git SHA
 `697a9c9522b14a1a67e77ab4088136e48de369b2` 成功 promotion；live `/api/health` 回 `200`、版本
 `1.0.1`、exact SHA 及 `acceptingReadTraffic=true`。呢個版本加快常用 workspace 切換、補回 Volcano

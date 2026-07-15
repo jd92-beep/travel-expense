@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-15 HKT
-- **Focus**: Session 57 fixed the production new-trip RLS/empty-retry path and recovered stranded local trips.
-- **Agent**: Codex Sol (orchestration/review) + Terra (implementation)
-- **App version**: Compact `0.16.5`; Android `0.19.2` (versionCode 1920); Admin source/production `1.0.1`; React `0.2.4`
+- **Focus**: Session 58 proved the remaining banner came from a stale pre-fix tab and added reliable deployment freshness plus trip identity recovery.
+- **Agent**: Codex Sol (investigation, orchestration, implementation and review); two Sol explorers cross-checked the root cause. Terra workers produced no edits after capacity/timebox stops.
+- **App version**: Compact `0.16.6`; Android `0.19.2` (versionCode 1920); Admin source/production `1.0.1`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.5`; the Android branch is `0.19.2`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.6`; the Android branch is `0.19.2`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -56,11 +56,49 @@ you closed with your session number.
     the fix branch and untouched baseline; investigate the itinerary merge/fixture separately.
 13. 🟡 **Live trip-intelligence schema drift** — Session 57 confirmed production `trips` has
     `itinerary_version` but not `country_code`, `theme_key`, `locale`, `weather_region` or
-    `trip_intelligence`. Compact `0.16.5` safely falls back to the legacy row contract, but reconcile
+    `trip_intelligence`. Compact `0.16.6` safely falls back to the legacy row contract, but reconcile
     the migration history on a reviewed branch before adding these columns. Do not use `db push` or
     migration repair without Boss approval.
+14. 🟡 **One-time stale Chrome tab reload confirmation** — the currently open Compact tab was
+    created at 10:11 on `0.16.4`, before Sessions 57/58 deployed. It cannot run the new freshness
+    detector until Boss performs one hard refresh after `0.16.6` reaches production. Do not claim
+    that specific tab is on `0.16.6` until the refreshed asset/version is confirmed. Future stale
+    tabs running `0.16.6+` will show the explicit update notice without a service worker.
 
 ## What Was Done
+
+### Session 58 (Codex Sol + Sol explorers — Compact 0.16.6 stale-tab and trip identity recovery)
+
+1. **Root cause locked by live timing**: the active Chrome Compact tab was created at 10:11 and
+   therefore loaded `0.16.4`; the Session 57 repair was committed/deployed at 10:52–10:57. Two
+   independent explorers confirmed the old guide-save failure path kept the local trip, wrote a
+   generic global sync error and created no queue item. The later all-`200` Supabase reads and final
+   `synced` state were subsequent pulls, not evidence that the old tab had loaded `0.16.5`.
+2. **Dead update path repaired**: `Shell` previously set `updateReady` only from
+   `serviceWorker.controllerchange`, but Compact's security smoke requires zero registrations. It
+   now performs a no-store same-origin index check on mount, focus/foreground and every five minutes,
+   compares the loaded/current module assets and exposes the existing explicit reload action. The
+   update notice suppresses the stale runtime's generic sync banner; it does not auto-reload or alter
+   sync/offline state.
+3. **Cloud identity invariant repaired**: `applyTripSyncResult` still preserves newer local trip
+   content, but now merges `supabaseId` together with Notion/source links after a successful stale
+   queue result. A successful cloud write can no longer clear the queue while leaving the local trip
+   falsely unlinked.
+4. **Test-first proof**: the two new regressions initially failed exactly as expected: no update
+   notice was found, and the stale trip result ended with `queue=[]` plus `supabaseId=undefined`.
+   After the fixes, `npm run smoke:sync-regression` passed `6/6`; `smoke:offline` passed `4/4`,
+   `smoke:security` passed its active case with four environment-dependent skips, and mobile layout
+   passed `1/1`.
+5. **Full gates**: typecheck, production build and security scan passed independently. The Compact
+   production gate passed in `108.2s`: final navigation `10/10`, mobile layout, accessibility/touch,
+   all seven 390px contact-sheet routes with zero console/network/layout failures, live Broker
+   preflight, vault fail-closed guard, security scan and production build were green. GitNexus impact
+   was LOW for `Shell`, `applyTripSyncResult` and `useSyncEngine`; index counts refreshed to 7,543
+   symbols and 18,267 relationships. No passphrase, secret, provider credential, RLS, migration or
+   live user-data mutation occurred.
+6. **Deployment state at code commit**: local candidate verification is complete. Push, Vercel/GitHub
+   deployment proof and the one-time hard refresh of the pre-existing `0.16.4` Chrome tab remain to
+   be recorded before this session is fully closed.
 
 ### Session 57 (Codex Sol + Terra — Compact 0.16.5 production trip-sync recovery)
 
