@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-07-15
+
+- **Compact App 0.16.5 production trip-sync recovery**:
+  - Live Chrome state and Supabase logs proved the recurring banner was not a generic connection
+    failure: a new trip hit `400` on live-schema column drift, then two `403` RLS failures while the
+    app kept the trip locally but created no retry job.
+  - Confirmed new owned trips now use INSERT without `RETURNING`; the legacy-column fallback uses the
+    same safe path, avoiding a false SELECT-RLS failure after a valid owner INSERT. Existing-trip and
+    shared-trip update behavior is unchanged.
+  - A failed guide save now creates one deduplicated trip queue item instead of claiming it will retry
+    with an empty queue. Successful authoritative pulls also backfill old local-only owner trips, so
+    data stranded by `0.16.4` can heal automatically.
+  - IndexedDB-only hydration now uses the same retry normalization as localStorage without re-running
+    that normalization on ordinary state updates. Four production-shaped regressions cover all four
+    paths; session and sync-classifier smokes remain green.
+  - The live schema still lacks the optional trip-intelligence columns; the client remains compatible,
+    and durable schema reconciliation stays tracked without `db push`, migration repair or RLS changes.
+    No passphrase, secret, provider credential or live user data changed.
+
 ## 2026-07-14
 
 - **Compact App 0.16.4 cold-open sync reliability**:

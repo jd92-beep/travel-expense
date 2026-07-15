@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-14 HKT
-- **Focus**: Session 56 fixed Compact cold-open false connection failures and durable retry recovery.
+- **Date**: 2026-07-15 HKT
+- **Focus**: Session 57 fixed the production new-trip RLS/empty-retry path and recovered stranded local trips.
 - **Agent**: Codex Sol (orchestration/review) + Terra (implementation)
-- **App version**: Compact `0.16.4`; Android `0.19.2` (versionCode 1920); Admin source/production `1.0.1`; React `0.2.4`
+- **App version**: Compact `0.16.5`; Android `0.19.2` (versionCode 1920); Admin source/production `1.0.1`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.4`; the Android branch is `0.19.2`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.5`; the Android branch is `0.19.2`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -54,8 +54,40 @@ you closed with your session number.
     `origin/main` `3cede8a`, receipt backfill and revoked-trip purge pass, but the first test receives
     zero `update_trip_itinerary` RPC calls instead of one. Session 56 reproduced the same failure on
     the fix branch and untouched baseline; investigate the itinerary merge/fixture separately.
+13. 🟡 **Live trip-intelligence schema drift** — Session 57 confirmed production `trips` has
+    `itinerary_version` but not `country_code`, `theme_key`, `locale`, `weather_region` or
+    `trip_intelligence`. Compact `0.16.5` safely falls back to the legacy row contract, but reconcile
+    the migration history on a reviewed branch before adding these columns. Do not use `db push` or
+    migration repair without Boss approval.
 
 ## What Was Done
+
+### Session 57 (Codex Sol + Terra — Compact 0.16.5 production trip-sync recovery)
+
+1. **Live root cause**: Chrome reproduced the exact generic sync banner while the matching scoped
+   state held one local trip, `globalSyncStatus='error'` and `syncQueue=[]`. Supabase Edge logs showed
+   `POST /rest/v1/trips` returning `400`, then `403`, `403`; Postgres logged two `42501` trip RLS
+   violations. The authenticated log identity matched the current session, the auth user/profile
+   existed, and read-only DB checks found zero owned trips and zero source/UUID collisions.
+2. **Insert contract repair**: the live schema lacks optional intelligence columns, so the first POST
+   correctly enters the legacy fallback. For a lookup-proven new owned trip, both full and legacy
+   rows now use INSERT without `RETURNING`; this avoids asking the SELECT policy's stable self-query
+   to return a row created inside the same statement. Existing and explicitly shared trips retain
+   their update/upsert/version paths.
+3. **Durable recovery**: failed guide saves keep the trip locally and create one deduplicated queued
+   trip job with the original safe error. A successful authoritative pull now queues non-archived
+   local owner trips missing `supabaseId`, including the already-stranded production state; viewer,
+   editor and existing failed jobs are not reset. IndexedDB hydration alone applies `normalizeState`,
+   while normal state updates keep `migrateAppState` and cannot revive exhausted failures.
+4. **Regression proof**: the new fake-Supabase smoke passed `4/4`, covering queue creation, IndexedDB
+   recovery, legacy no-RETURNING insert and one-time local-trip backfill. Independent checks passed
+   typecheck, build, security scan, session `2/2` and sync classifier `2/2`. The Welcome Guide smoke's
+   stale Dashboard expectation was aligned with the intentional Scan default. Final production-gate
+   and live-deploy evidence are recorded below when promotion completes.
+5. **Baseline and scope**: a detached untouched `282f610` worktree reproduced both pre-existing test
+   failures: Welcome Guide waited for the retired Dashboard default, and Supabase backfill expected one
+   itinerary RPC but received zero. No passphrase, secret, provider credential, RLS, migration or live
+   user-data mutation was performed.
 
 ### Session 56 (Codex Sol + Terra — Compact 0.16.4 cold-open sync reliability)
 

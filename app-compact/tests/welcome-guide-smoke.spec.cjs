@@ -68,7 +68,9 @@ test('New Supabase account guide captures trip members and split ratios', async 
   await page.getByLabel('目的地國家/城市').fill('Seoul Korea');
   await page.getByRole('button', { name: /建立並進入 App/ }).click();
 
-  await expect(page.getByLabel('旅程總覽')).toBeVisible();
+  // The app deliberately opens on Scan when no hash is requested. Completing the guide must
+  // dismiss onboarding and persist the trip; it must not force the old Dashboard default.
+  await expect(page.locator('.welcome-guide-modal')).toHaveCount(0);
   await expect.poll(async () => page.evaluate((key) => {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;

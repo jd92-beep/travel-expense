@@ -3,7 +3,7 @@ import { migrateAppState, stampReceiptForTrip } from '../domain/trip/normalize';
 import { DEFAULT_STATE, isBoss } from './constants';
 import { hasCredentialBrokerSession } from './credentialBroker';
 import { hasDirectNotionToken } from './notion';
-import { clearStoredCredentials, hasStoredState, loadState, saveState } from './storage';
+import { clearStoredCredentials, hasStoredState, loadState, normalizeState, saveState } from './storage';
 import { clearIndexedState, loadIndexedState } from '../storage/indexedDb';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
@@ -100,6 +100,10 @@ function migrateScopedState(input: unknown, storageScope: string, userEmail: str
   return withoutPublicDemoTrip(migrateAppState(input), storageScope, userEmail);
 }
 
+function normalizeScopedState(input: unknown, storageScope: string, userEmail: string | null): AppState {
+  return withoutPublicDemoTrip(normalizeState(input), storageScope, userEmail);
+}
+
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
   const [state, setState] = useState<AppState>(() => {
     return withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
@@ -119,7 +123,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
       setState((prev) => {
         if (!hasPrimarySnapshot) {
           console.log('[useAppState] Hydrated from IndexedDB (no primary snapshot)');
-          return migrateScopedState({ ...prev, ...indexed }, storageScope, userEmail);
+          return normalizeScopedState({ ...prev, ...indexed }, storageScope, userEmail);
         }
         const indexedGlobal = stateFreshness(indexed);
         const localGlobal = stateFreshness(prev);
@@ -136,7 +140,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
           if (!mergedReceipts.some((r) => r.id === id)) mergedReceipts.push(local);
         }
         console.log('[useAppState] Hydrated newer state from IndexedDB (per-receipt merge)');
-        return migrateScopedState({ ...prev, ...indexed, receipts: mergedReceipts }, storageScope, userEmail);
+        return normalizeScopedState({ ...prev, ...indexed, receipts: mergedReceipts }, storageScope, userEmail);
       });
     }).catch(() => {
       // localStorage remains the compatibility fallback.

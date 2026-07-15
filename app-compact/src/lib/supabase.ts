@@ -970,7 +970,12 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
   let data: Record<string, any> | null = null;
   let error: { message?: string } | null = null;
   const contractRow = !contractLookup.error ? contractLookup.data as Record<string, any> | null : null;
-  if (contractRow && Number.isFinite(Number(contractRow.itinerary_version))) {
+  const isNewOwnedTrip = !contractLookup.error && !contractRow && !explicitSharedTrip;
+  if (isNewOwnedTrip) {
+    const insertResult = await withTimeout(supabase.from('trips').insert(row));
+    data = insertResult.error ? null : row;
+    error = insertResult.error;
+  } else if (contractRow && Number.isFinite(Number(contractRow.itinerary_version))) {
     const serverItineraryVersion = Math.max(1, Number(contractRow.itinerary_version));
     const localItineraryVersion = Math.max(1, Number(trip.itineraryVersion ?? trip.version) || 1);
     if (localItineraryVersion < serverItineraryVersion || localItineraryVersion > serverItineraryVersion + 1) {
@@ -1068,7 +1073,9 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
       created_at: _legacyCreatedAt,
       ...legacySharedUpdate
     } = legacyRow;
-    const fallback = explicitSharedTrip
+    const fallback = isNewOwnedTrip
+      ? await withTimeout(supabase.from('trips').insert(legacyRow))
+      : explicitSharedTrip
       ? await withTimeout(supabase
         .from('trips')
         .update(legacySharedUpdate)
@@ -1080,7 +1087,7 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
         .upsert(legacyRow, { onConflict: 'id' })
         .select('*')
         .single());
-    data = fallback.data;
+    data = fallback.data || (isNewOwnedTrip ? legacyRow : null);
     error = fallback.error;
   }
   if (error) {
@@ -1132,7 +1139,9 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
       }
     }
     if (error) {
-      throw new Error(`旅程「${trip.name || ''}」存取權失效：你唔係呢個旅程嘅成員。請旅程擁有者重新邀請你，接受後先可以同步。`);
+      const accessError = new Error(`旅程「${trip.name || ''}」存取權失效：你唔係呢個旅程嘅成員。請旅程擁有者重新邀請你，接受後先可以同步。`);
+      (accessError as Error & { backendError?: string }).backendError = error.message || '';
+      throw accessError;
     }
   }
   // Belt-and-suspenders: ensure the trip creator always has a trip_members row with role='owner'.

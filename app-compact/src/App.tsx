@@ -146,11 +146,27 @@ export function App() {
         shareRatios,
         settingsUpdatedAt: Date.now(),
       }));
-    } catch {
-      // Cloud save failed — keep the trip locally but tell the user (don't fail silently).
-      const invitePart = (sharingInvites && sharingInvites.length)
-        ? '；分享邀請要重新連線後再喺設定度發送'
-        : '';
+    } catch (error) {
+      const now = Date.now();
+      const queue: SyncQueueItem = {
+        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+        type: 'trip',
+        entityId: trip.id,
+        op: 'upsert',
+        status: 'queued',
+        attempts: 0,
+        error: error instanceof Error
+          ? (error as Error & { backendError?: string }).backendError || error.message
+          : String(error),
+        createdAt: now,
+        updatedAt: now,
+        payload: {
+          notionPageId: trip.notionPageId,
+          supabaseId: trip.supabaseId,
+          sourceId: trip.sourceId || trip.id,
+          updatedAt: trip.updatedAt,
+        },
+      };
       setState((prev) => ({
         ...prev,
         trips: [trip],
@@ -162,9 +178,13 @@ export function App() {
         customItinerary: trip.itinerary || [],
         persons,
         shareRatios,
-        settingsUpdatedAt: Date.now(),
-        syncError: `旅程已暫存本機，雲端同步未成功，會自動重試${invitePart}`,
-        globalSyncStatus: 'error',
+        settingsUpdatedAt: now,
+        syncQueue: [
+          ...(prev.syncQueue || []).filter((item) => item.type !== queue.type || item.entityId !== queue.entityId),
+          queue,
+        ].slice(-500),
+        syncError: '',
+        globalSyncStatus: 'queued',
       }));
     }
   };

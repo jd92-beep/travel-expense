@@ -735,6 +735,32 @@ export function useSyncEngine(
               ];
             }
           }
+          if (cloudPullAuthoritative && finalState.autoSync) {
+            const queuedTripIds = new Set(freshQueue.filter((item) => item.type === 'trip').map((item) => item.entityId));
+            const localTrips = (finalState.trips || []).filter((trip) =>
+              !trip.archived
+              && !trip.supabaseId
+              && !queuedTripIds.has(trip.id)
+              && trip.sharing?.role !== 'viewer'
+              && trip.sharing?.role !== 'editor');
+            if (localTrips.length) {
+              const now = Date.now();
+              freshQueue = [
+                ...freshQueue,
+                ...localTrips.slice(0, 100).map((trip, index) => ({
+                  id: `sync_trip_backfill_${now}_${index}_${Math.random().toString(16).slice(2)}`,
+                  type: 'trip' as const,
+                  entityId: trip.id,
+                  op: 'upsert' as const,
+                  status: 'queued' as const,
+                  attempts: 0,
+                  createdAt: now,
+                  updatedAt: now,
+                  payload: { sourceId: trip.sourceId || trip.id, updatedAt: trip.updatedAt },
+                })),
+              ];
+            }
+          }
           // Backfill sweep: heal receipts that never reached Supabase — created before cloud
           // login, marked synced in the Notion-only era, or whose queue item was dropped after
           // MAX_SYNC_RETRY_ATTEMPTS. After merge, anything still missing supabaseId (or with an
