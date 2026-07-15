@@ -35,10 +35,49 @@
 - Public React Netlify app: `https://travel-expense-react.netlify.app`
 - Public Compact Vercel app: `https://travel-expense-compact.vercel.app`
 - Public Compact Netlify app: `https://travel-expense-compact.netlify.app`
-- GitNexus index is refreshed during handover work; run `npx gitnexus status` for the live indexed commit and counts before relying on them.
+- Admin Console production: `https://travel-expense-admin-kanban.vercel.app`
+- Android worktree: `/Users/tommy/Documents/Codex/travel-expense-android-shell`, branch
+  `codex/admin-console-1.0-android`. Keep Android changes on that branch unless Boss explicitly asks
+  for a reviewed merge; do not treat a debug APK as a published Android release.
+- GitNexus index is refreshed during handover work; run `node .gitnexus/run.cjs status` for the live indexed commit and counts before relying on them.
 - For the current pushed `main` commit, run `git fetch origin && git log origin/main -1 --oneline`; do not trust point-in-time commit facts written into docs.
-- For current app versions, read `APP_VERSION` in `app-compact/src/lib/constants.ts` and `app-react/src/lib/constants.ts` (apps version independently). Verify deploy health live at the URLs above instead of relying on dated check results. The previous Compact Netlify credit block was cleared by the successful `0.16.6` workflow on 2026-07-15; continue to treat live checks as authoritative because account credits can change again.
+- For current app versions, read `APP_VERSION` in `app-compact/src/lib/constants.ts` and `app-react/src/lib/constants.ts` (apps version independently). Verify deploy health live at the URLs above instead of relying on dated check results. The previous Compact Netlify credit block was cleared by the successful `0.16.6` workflow, and `0.16.8` was live-verified on 2026-07-15; continue to treat live checks as authoritative because account credits can change again.
 - The repo is public. Never commit real API keys, OAuth tokens, Notion tokens, injected `_site/` output, or local secrets.
+
+## Current Release Snapshot
+
+This snapshot was live-verified on 2026-07-15 HKT. Re-run the checks above before relying on it;
+runtime and deploy state outrank this section.
+
+- Compact Web: `0.16.8`, verified on Vercel, Netlify and GitHub Pages. `npm run smoke:deploy-live`
+  passes against the public Vercel and Netlify aliases.
+- React source: `0.2.4`.
+- Android branch: `0.19.5`, versionCode `1950`, commit `8eb1bd4`. Persisted-state `2/2`, selected
+  model `1/1`, mobile layout `1/1`, JBR 21 debug build and emulator QA passed. No release APK/AAB
+  was published.
+- Admin Console: production `1.0.2`; `/api/health` returns `200`, exact source SHA
+  `67cde57a42bc43f1bda026d81d555260e25bb564` and `acceptingReadTraffic=true`. Protected workflow
+  `29415119909` promoted the release; Admin Edge `admin-kanban` v95 is active.
+- Credential Broker: production `2026.07.15.2`. Authenticated live probes returned `200` and
+  `ok=true` for all five configured Volcano LLMs.
+- The current Admin passphrase remains unchanged and necessary; passkey is additive. Never put the
+  passphrase, passkey bootstrap material, session cookies or machine keys in source or docs.
+
+## Current Operational Boundaries
+
+- Admin writes remain backend-enforced `deny_all`. Account consolidation, scheduled deletion,
+  Notion write repair, device commands, runtime writes, arbitrary SQL/table editing and other R3
+  controls remain server-disabled.
+- Final post-bootstrap fresh Chrome login evidence, an ordinary authenticated JWT privilege smoke
+  and the planned non-login helper-owner hardening remain open; consult the top of `HANDOVER.md`.
+- `receipt-photos` remains in public compatibility mode until active Compact/Android signed-photo
+  heartbeats justify the reviewed private cutover.
+- Live migration history remains divergent, and optional trip-intelligence columns are absent in
+  production. Preserve the client legacy-row fallback; do not use `supabase db push` or migration
+  repair without Boss approval.
+- Known test debt is tracked in `HANDOVER.md`: the Compact Supabase backfill itinerary fixture, the
+  Android Trip Doctor Settings assertion drift, and one pre-existing Compact CSP inline-handler
+  console warning. Do not hide or weaken these checks.
 
 ## Read First
 
@@ -48,7 +87,9 @@
 - Read `graphify-out/GRAPH_REPORT.md` only when the task is broad architecture, cross-file concept mapping, or handover-level reasoning. Treat embedded old source paths as historical if they point outside this folder. `graphify-out/` is local-only and ignored by git.
 - For broader app/agent architecture lookups, read `/Users/tommy/Documents/Graphify and Gitnexus/README.md` and `/Users/tommy/Documents/Graphify and Gitnexus/GRAPH_REGISTRY.json` before using external snapshots. Skip this for ordinary UI fixes, CI/deploy failures, exact file edits, tests, or live runtime checks.
 - For legacy single-file tab work, read `docs/README.md` and the relevant `docs/<tab>.md`.
-- For GitNexus work, run `npx gitnexus status` first. If stale or missing, run `npx gitnexus analyze`.
+- For GitNexus work, run `node .gitnexus/run.cjs status` first. If stale or missing, run
+  `node .gitnexus/run.cjs analyze`. Use `npx gitnexus` only as a fallback because npm 11 can hit the
+  known `Invalid Version` installer failure.
 
 ## Ground Rules For All Agents
 
@@ -67,6 +108,9 @@ These rules bind every agent working in this repo (Oscar, Codex, Antigravity, Mi
 - `legacy-notion.js` is the extracted legacy Notion sync module for `index.html`; keep its global function contract compatible with the legacy page unless the user explicitly asks for a breaking refactor.
 - `app-react/` is the main public React 19 + Vite + TypeScript app, deployed under `/react/` on GitHub Pages and to the public React Vercel/Netlify apps.
 - `app-compact/` is the active Compact React + Vite + TypeScript app, deployed under `/compact/` on GitHub Pages and to the public Compact Vercel/Netlify apps. Prioritize this surface when Boss explicitly says Compact.
+- `app-admin-kanban/` is the production Admin Console frontend/BFF. Browser traffic must stay on
+  same-origin `/api/admin/*`; direct browser-to-Edge authorization and browser-held admin bearer or
+  service credentials are forbidden.
 - `app/` and `app3/` are older React attempts. Keep them for history, but do not use them as the source for new React work.
 - `email-to-notion.gs` is the Google Apps Script backend for Gmail label `travel-expense` -> AI parse -> Notion.
 - `workers/credential-broker/` is the Cloudflare Worker for app unlock, short sessions, encrypted provider credentials, and AI provider calls.
@@ -94,6 +138,20 @@ These rules bind every agent working in this repo (Oscar, Codex, Antigravity, Mi
   and actual-model evidence; `429`, quota and daily-limit responses remain hard stops with no
   provider fallback.
 - AI quota/rate-limit failures from the Credential Broker are hard stops. Do not silently fallback to another provider after `429`, quota, or daily-limit errors, because that can bypass public-user metering and confuse the required primary model contract.
+- The safe Volcano LLM catalog is exactly `doubao-seed-2.0-lite`, `doubao-seed-2.0-pro`,
+  `minimax-m3`, `minimax-m2.7`, and `doubao-seed-2.0-mini`. Admin Providers must show all five.
+  Seedance is a media/video model and must not appear in LLM selectors or LLM probes.
+- Compact and Android selected-model tests use the exact selected provider/model, `kind=test`, no
+  fallback and at most 8 output tokens. A non-empty provider `content` or `reasoning_content` proves
+  availability; normal scan, voice, email and trip calls still require strict parsed JSON. Do not
+  loosen normal-task parsing to imitate the health probe.
+- Compact and Android persisted sync hydration must requeue only retryable, non-exhausted,
+  non-version-conflict work. Exhausted attempts and `40001`/version conflicts remain durable error
+  evidence. Never clear every error merely to suppress the generic banner; genuine failures must
+  remain visible while stale retry state must not replay a false banner on every cold open.
+- Successful trip sync must preserve `supabaseId` even when newer local trip content wins the merge.
+  Compact's no-store deployment freshness check must keep stale-runtime errors behind the explicit
+  update notice; never auto-reload while the user may be editing.
 - App settings can sync through Notion meta row `SourceID=__meta_settings__`; credentials must stay local or in vault.
 - If changing root `index.html` in a way that must beat stale PWA cache, bump `APP_BUILD`.
 
@@ -106,8 +164,8 @@ git fetch origin
 git push origin main
 
 # GitNexus
-npx gitnexus status
-npx gitnexus analyze
+node .gitnexus/run.cjs status
+node .gitnexus/run.cjs analyze
 
 # Legacy app local smoke
 python3 -m http.server 8899
@@ -119,6 +177,9 @@ npm run typecheck
 npm run build
 npm run security:scan
 npm run smoke:settings
+npm run smoke:ai-routing
+npm run smoke:offline
+npm run smoke:sync-regression
 npm run smoke:timeline
 npm run smoke:dashboard
 npm run smoke:mobile-layout
@@ -150,6 +211,14 @@ SUPABASE_REDIRECT_SMOKE=1 npm run smoke:security
 cd ../workers/credential-broker
 npm run check
 npm run self-test
+
+# Android worktree (debug/QA only; no release APK/AAB unless Boss explicitly asks)
+cd /Users/tommy/Documents/Codex/travel-expense-android-shell/app-compact
+npm run typecheck
+npm run build
+npm run security:scan
+npm run android:debug
+npm run android:qa
 
 # Old React attempts are kept as history only unless the user explicitly asks.
 ```
@@ -191,7 +260,7 @@ npm run self-test
 - Do not use Graphify or GitNexus when a direct file search, runtime log, browser smoke test, unit test, or simple config read gives fresher and more exact evidence. Graphs are snapshots; live runtime truth wins for bugs, deploys, credentials, provider failures, and UI verification.
 - Do not answer secrets, credentials, tokens, or account-state questions from graphs. Inspect the live configured environment only when the user explicitly asks and it is safe to do so.
 - Refresh indexes only when their consumers benefit:
-  - For this repo's GitNexus: run `npx gitnexus analyze` after meaningful symbol/module/flow changes or before a task that will rely on a fresh index. Do not refresh just because a small docs/style/config change happened.
+  - For this repo's GitNexus: run `node .gitnexus/run.cjs analyze` after meaningful symbol/module/flow changes or before a task that will rely on a fresh index. Do not refresh just because a small docs/style/config change happened.
   - For this repo's Graphify: use `graphify update .` after meaningful architecture or cross-document changes. Do not run it for ordinary UI tweaks, deploy checks, or narrow bug fixes.
   - For external snapshots: update only the target folder that matches the app/agent being changed, verify `SNAPSHOT_SOURCE.txt`, preserve `.graphifyignore` / `.gitnexusignore`, and refresh `/Users/tommy/Documents/Graphify and Gitnexus/GRAPH_REGISTRY.json` if counts or paths changed.
 - Never merge GitNexus databases with Graphify JSON files. If a shared lookup is needed, update the registry/reference docs instead of combining artifact formats.
@@ -216,7 +285,11 @@ npm run self-test
 - If a Pages run fails before checkout while downloading an action archive from `codeload.github.com`, treat it as an external GitHub Actions download failure first; retry before changing app code.
 - For Vercel, the public linked projects are `travel-expense-react` and `travel-expense-compact`; they should normally update from GitHub pushes instead of manual CLI deploys.
 - Treat the legacy/root Vercel project `travel-expense` as a private backup surface only. Do not use it as the main public app unless the user explicitly asks.
-- Netlify project `travel-expense-react` is configured from `netlify.toml`. Compact Netlify is deployed through `.github/workflows/deploy-compact-netlify.yml`. The Compact workflow and public alias served the verified `0.16.6` bundle on 2026-07-15; re-check the workflow and live asset whenever account-credit status may have changed.
+- Netlify project `travel-expense-react` is configured from `netlify.toml`. Compact Netlify is deployed through `.github/workflows/deploy-compact-netlify.yml`. The Compact workflow and public alias served the verified `0.16.8` bundle on 2026-07-15; re-check the workflow and live asset whenever account-credit status may have changed.
+- Admin production uses the protected `Admin Console 1.0 CI` workflow and `admin-production`
+  environment approval. Ordinary pushes run gates but do not authorize production promotion. Keep
+  the production source SHA, Vercel deployment and Edge provenance aligned; never bypass the
+  protected workflow with an ad hoc Admin deploy.
 - If a manual Vercel deploy is unavoidable, be explicit about the target project before running anything:
   - `travel-expense-react` = public React app, rooted by Vercel project settings at `app-react/`
   - `travel-expense-compact` = public Compact app, rooted by Vercel project settings at `app-compact/`
@@ -239,7 +312,7 @@ npm run self-test
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **travel-expense** (7550 symbols, 18296 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **travel-expense** (7564 symbols, 18319 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

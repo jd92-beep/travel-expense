@@ -2,8 +2,8 @@
 
 ## Last Worked On
 - **Date**: 2026-07-15 HKT
-- **Focus**: Session 60 completed live low-token Volcano probes, Compact `0.16.8` production verification and Android `0.19.5` debug/emulator QA.
-- **Agent**: Codex Sol (investigation, orchestration and review); two investigators cross-checked the root cause; Terra implemented the Android branch changes.
+- **Focus**: Session 61 refreshed `AGENTS.md` against current Git, Compact, Admin, Broker and Android evidence without changing runtime behavior.
+- **Agent**: Codex.
 - **App version**: Compact `0.16.8`; Android branch `0.19.5` (versionCode 1950); Admin production `1.0.2`; Broker production `2026.07.15.2`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
@@ -72,6 +72,20 @@ you closed with your session number.
     cold-open waited 15 seconds with neither generic sync-error banner. (Session 60.)
 
 ## What Was Done
+
+### Session 61 (Codex — current agent instructions refresh)
+
+1. **Live truth refresh:** confirmed `origin/main`, Compact `0.16.8` Vercel/Netlify live verification,
+   Admin `1.0.2` health with `acceptingReadTraffic=true`, and Broker `2026.07.15.2` health before
+   updating operational instructions.
+2. **Agent instructions:** added the Admin URL, Android worktree/release boundary, current release
+   snapshot, production hard stops, all-five Volcano catalog, 8-token selected-model probe contract,
+   sync hydration/banner invariants, current smoke commands and protected Admin deployment rules.
+   Updated Compact Netlify evidence from `0.16.6` to `0.16.8` and switched local GitNexus commands
+   to the repo runner because npm 11 can fail through `npx`.
+3. **Safety and verification:** docs only; no app version, passphrase, secret, RLS, migration or live
+   data changed. `git diff --check` and the repository security scan passed. Existing `CLAUDE.md`
+   worktree changes were preserved and not staged.
 
 ### Session 60 (Codex Sol + Terra — low-token Volcano live closure)
 
