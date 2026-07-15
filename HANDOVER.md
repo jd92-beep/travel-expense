@@ -38,7 +38,9 @@ you closed with your session number.
    live write: a positive shared-receipt write and Notion mirror result still need separate proof.
 6. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-7. 🟡 **Compact Netlify deploy blocked** by hosting account credits (durable until topped up).
+7. 🟢 **Compact Netlify credit block resolved in Session 58** — workflow `29397584955` completed
+   successfully and the public alias serves the verified `0.16.6` bundle. Continue monitoring
+   account credits, but do not treat the old block as current.
 8. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
    unused `hkd` imports in History/Stats. (Old Pending list.)
 9. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
@@ -96,9 +98,13 @@ you closed with your session number.
    was LOW for `Shell`, `applyTripSyncResult` and `useSyncEngine`; index counts refreshed to 7,543
    symbols and 18,267 relationships. No passphrase, secret, provider credential, RLS, migration or
    live user-data mutation occurred.
-6. **Deployment state at code commit**: local candidate verification is complete. Push, Vercel/GitHub
-   deployment proof and the one-time hard refresh of the pre-existing `0.16.4` Chrome tab remain to
-   be recorded before this session is fully closed.
+6. **Production deployment proven**: commit `882de8e` was pushed to `origin/main`. Vercel deployment
+   `dpl_5mH5juftaFiFyJUH5t4w1gvq4zjq` reached Ready; GitHub Pages run `29397584920`, Compact Netlify
+   run `29397584955` and Admin CI run `29397585050` all completed successfully. Direct no-store
+   downloads from all three Compact public origins found `0.16.6`, `__compact_deploy_check` and
+   `sync_trip_backfill_` in the served JavaScript. `npm run smoke:deploy-live` also passed against
+   both Vercel and Netlify. Only Boss's one-time hard refresh of the pre-existing `0.16.4` Chrome tab
+   remains as Open Item 14; that old runtime cannot execute code added after it loaded.
 
 ### Session 57 (Codex Sol + Terra — Compact 0.16.5 production trip-sync recovery)
 

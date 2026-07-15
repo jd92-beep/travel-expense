@@ -37,7 +37,7 @@
 - Public Compact Netlify app: `https://travel-expense-compact.netlify.app`
 - GitNexus index is refreshed during handover work; run `npx gitnexus status` for the live indexed commit and counts before relying on them.
 - For the current pushed `main` commit, run `git fetch origin && git log origin/main -1 --oneline`; do not trust point-in-time commit facts written into docs.
-- For current app versions, read `APP_VERSION` in `app-compact/src/lib/constants.ts` and `app-react/src/lib/constants.ts` (apps version independently). Verify deploy health live at the URLs above instead of relying on dated check results. Known durable blocker: Compact Netlify deploys stay blocked by Netlify account credits until the hosting account is topped up.
+- For current app versions, read `APP_VERSION` in `app-compact/src/lib/constants.ts` and `app-react/src/lib/constants.ts` (apps version independently). Verify deploy health live at the URLs above instead of relying on dated check results. The previous Compact Netlify credit block was cleared by the successful `0.16.6` workflow on 2026-07-15; continue to treat live checks as authoritative because account credits can change again.
 - The repo is public. Never commit real API keys, OAuth tokens, Notion tokens, injected `_site/` output, or local secrets.
 
 ## Read First
@@ -216,7 +216,7 @@ npm run self-test
 - If a Pages run fails before checkout while downloading an action archive from `codeload.github.com`, treat it as an external GitHub Actions download failure first; retry before changing app code.
 - For Vercel, the public linked projects are `travel-expense-react` and `travel-expense-compact`; they should normally update from GitHub pushes instead of manual CLI deploys.
 - Treat the legacy/root Vercel project `travel-expense` as a private backup surface only. Do not use it as the main public app unless the user explicitly asks.
-- Netlify project `travel-expense-react` is configured from `netlify.toml`. Compact Netlify is deployed through `.github/workflows/deploy-compact-netlify.yml`. Both public Netlify URLs returned `200` on 2026-07-02, but Compact Netlify deploy workflow is blocked by account credits until the hosting account is topped up.
+- Netlify project `travel-expense-react` is configured from `netlify.toml`. Compact Netlify is deployed through `.github/workflows/deploy-compact-netlify.yml`. The Compact workflow and public alias served the verified `0.16.6` bundle on 2026-07-15; re-check the workflow and live asset whenever account-credit status may have changed.
 - If a manual Vercel deploy is unavoidable, be explicit about the target project before running anything:
   - `travel-expense-react` = public React app, rooted by Vercel project settings at `app-react/`
   - `travel-expense-compact` = public Compact app, rooted by Vercel project settings at `app-compact/`

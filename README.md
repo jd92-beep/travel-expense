@@ -22,7 +22,7 @@
 - GitHub Pages React app: https://jd92-beep.github.io/travel-expense/react/
 - 舊版備用 app: https://jd92-beep.github.io/travel-expense/
 
-請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。React 和 Compact Netlify public URLs 在 2026-07-02 live check 均回 `200`；Compact Netlify 的 GitHub deploy workflow 仍受 Netlify account credit block 影響，所以平常仍以 Vercel/GitHub Pages 作最新確認入口。
+請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。2026-07-15 live check 已確認 Compact Vercel、Netlify 及 GitHub Pages 全部提供 `0.16.6`；Vercel 仍是主要 Compact 入口。
 
 ## Compact App Developer Quick Start
 
@@ -330,7 +330,8 @@ GitHub Actions builds `app-react/`, publishes the legacy app at the root, and pu
 Vercel is connected to the same GitHub repo and serves the React app at `/`; the separate Admin
 Console production URL is `https://travel-expense-admin-kanban.vercel.app`.
 
-Netlify config is present, but the current public Netlify URL is blocked by account usage limits.
+Netlify config is present. The Compact Netlify workflow and public URL were healthy in the
+2026-07-15 `0.16.6` live verification; Vercel remains the primary production entry point.
 
 ## For The Next Agent
 

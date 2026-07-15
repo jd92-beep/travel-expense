@@ -18,6 +18,9 @@
   - Two regressions failed before the fix and now pass; the sync suite is `6/6`. Typecheck, build,
     security scan, security smoke, offline `4/4`, mobile layout and the full production gate all
     passed. No passphrase, secret, provider credential, RLS, migration or live user data changed.
+  - Commit `882de8e` is live on Compact Vercel, Netlify and GitHub Pages. Direct production-bundle
+    checks found version `0.16.6` plus both repair markers on all three origins; GitHub Pages run
+    `29397584920`, Netlify run `29397584955` and Admin CI run `29397585050` all passed.
 
 - **Compact App 0.16.5 production trip-sync recovery**:
   - Live Chrome state and Supabase logs proved the recurring banner was not a generic connection
