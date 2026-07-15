@@ -66,7 +66,13 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.19.3` / versionCode `1930`. Idempotent trip re-home port (main v0.16.3): the re-home
+- Version: `0.19.4` / versionCode `1940`. Sync-state hydration now runs through the shared
+  normalizer: transient persisted failures remain retryable, while exhausted retry budgets and
+  Supabase version conflicts remain visible as terminal errors instead of being silently requeued.
+  Android keeps its native auth, idempotency-key, 5,000-item tombstone, and scoped-hydration rules.
+  Volcano model attempts now use the exact Credential Broker route, and every Settings AI selector
+  has an accessible direct selected-model test with no fallback and required `{ok:true}` response.
+  Prior: Idempotent trip re-home port (main v0.16.3): the re-home
   block now looks up an existing re-homed row (owner_id + suffixed legacy_source_id) and upserts
   it instead of always inserting a fresh UUID, and a per-session contested→re-homed id map skips
   the doomed contested attempt on subsequent queued-receipt pushes — prevents a large receipt queue

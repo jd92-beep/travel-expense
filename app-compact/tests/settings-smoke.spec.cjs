@@ -2,6 +2,8 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function setAccordion(page, title, expanded = true) {
@@ -1733,4 +1735,62 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
   await expect(rateInput).toHaveValue('25');
   const afterLive = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
   expect(afterLive.rateMode).toBe('live');
+});
+
+test('Settings model testers use the selected exact Volcano broker model without fallback', async ({ page }) => {
+  const calls = [];
+  await page.route('**/*/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ url: route.request().url(), kind: body.kind, model: body.model, prompt: body.prompt });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { ok: true } }) });
+  });
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({ credentialSession: 'settings-model-test', credentialSessionExpiresAt: Date.now() + 60_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      credentialSession: 'settings-model-test',
+      credentialSessionExpiresAt: Date.now() + 60_000,
+      scanModel: 'volcano/doubao-seed-2.0-lite',
+      voiceModel: 'volcano/doubao-seed-2.0-pro',
+      emailModel: 'volcano/minimax-m3',
+      tripUpdateModel: 'volcano/minimax-m2.7',
+    }));
+  });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await page.getByLabel('主要分頁').getByRole('button', { name: '設定', exact: true }).click();
+  await setAccordion(page, 'AI 模型選擇');
+
+  const controls = [
+    ['測試 Scan model', 'doubao-seed-2.0-lite'],
+    ['測試 Voice model', 'doubao-seed-2.0-pro'],
+    ['測試 Email model', 'minimax-m3'],
+    ['測試 Trip update model', 'minimax-m2.7'],
+  ];
+  for (const [index, [buttonLabel, model]] of controls.entries()) {
+    const button = page.getByRole('button', { name: buttonLabel });
+    await expect(button).toBeVisible();
+    await button.click();
+    await expect.poll(() => calls.length).toBe(index + 1);
+    expect(calls.at(-1)).toEqual({
+      url: 'https://travel-expense-credential-broker.ftjdfr.workers.dev/volcano/json',
+      kind: 'test',
+      model,
+      prompt: '{"ok":true}',
+    });
+  }
+
+  const scanModel = page.locator('label', { hasText: 'Scan model' }).locator('select');
+  await scanModel.selectOption('volcano/doubao-seed-2.0-mini');
+  await page.getByRole('button', { name: '測試 Scan model' }).click();
+  await expect.poll(() => calls.length).toBe(5);
+  expect(calls.at(-1)).toEqual({
+    url: 'https://travel-expense-credential-broker.ftjdfr.workers.dev/volcano/json',
+    kind: 'test',
+    model: 'doubao-seed-2.0-mini',
+    prompt: '{"ok":true}',
+  });
+  expect(calls.every((call) => call.url.endsWith('/volcano/json'))).toBe(true);
 });

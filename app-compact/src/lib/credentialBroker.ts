@@ -1,9 +1,9 @@
-import { ALLOWED_CREDENTIAL_BROKER_URLS, DEFAULT_CREDENTIAL_BROKER_URL } from './constants';
+import { AI_MODELS, ALLOWED_CREDENTIAL_BROKER_URLS, DEFAULT_CREDENTIAL_BROKER_URL } from './constants';
 import { loadCredentialSession, saveCredentialSession } from './storage';
 import { currentSupabaseAccessToken } from './supabase';
 import type { AppState, TripProfile } from './types';
 
-export type CredentialProvider = 'notion' | 'kimi' | 'google' | 'weatherapi' | 'volcano';
+export type CredentialProvider = 'notion' | 'kimi' | 'google' | 'weatherapi' | 'mimo' | 'volcano';
 
 export interface BrokerSession {
   credentialSession: string;
@@ -24,6 +24,7 @@ export interface ProviderStatus {
   updatedAt?: number;
   lastTestedAt?: number;
   message?: string;
+  models?: string[];
 }
 
 export interface ConnectionStatus {
@@ -344,6 +345,17 @@ export async function brokerAiJson(
     model: model || (provider === 'kimi' ? 'kimi-code' : provider === 'mimo' ? 'mimo-v2.5' : provider === 'volcano' ? 'doubao-seed-2.0-lite' : state.googleBackupModel),
   });
   return data.data;
+}
+
+export async function testAiModel(state: AppState, modelId: string): Promise<string> {
+  const selected = AI_MODELS.find((model) => model.id === modelId);
+  if (!selected) throw new Error('AI model 不在 app allowlist');
+  const [provider, model] = selected.id.split('/') as ['kimi' | 'google' | 'mimo' | 'volcano', string];
+  const result = await brokerAiJson(state, provider, '{"ok":true}', 'test', undefined, model);
+  if (!result || typeof result !== 'object' || (result as { ok?: unknown }).ok !== true) {
+    throw new Error('Model 未有返回有效測試結果');
+  }
+  return selected.name;
 }
 
 export async function brokerTripIntelligence(

@@ -242,6 +242,41 @@ test('AI routing keeps required primary models ahead of stale settings', async (
   expect(calls.some((call) => call.kind === 'trip' && call.provider === 'kimi')).toBe(false);
 });
 
+test('selected Volcano Scan model uses the Volcano broker route without fallback', async ({ page }) => {
+  test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
+  const calls = [];
+  const appOrigin = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+  await page.route('**/*/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ url: route.request().url(), kind: body.kind, model: body.model });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data: { store: 'Volcano Scan Mart', total: 88, date: '2026-05-08', category: 'food', payment: 'cash' } }),
+    });
+  });
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({ credentialSession: 'volcano-routing-session', credentialSessionExpiresAt: Date.now() + 60_000 }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({ receipts: [], lastTab: 'scan', scanModel: 'volcano/doubao-seed-2.0-pro' }));
+  });
+
+  await page.goto(`${appOrigin}/travel-expense/compact/#scan`);
+  await page.locator('#scan-gallery-input').setInputFiles({
+    name: 'receipt.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64'),
+  });
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Volcano Scan Mart');
+  expect(calls).toEqual([{
+    url: 'https://travel-expense-credential-broker.ftjdfr.workers.dev/volcano/json',
+    kind: 'scan',
+    model: 'doubao-seed-2.0-pro',
+  }]);
+});
+
 test('Trip update does not treat the current itinerary as a successful extraction', async ({ page }) => {
   test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
   const calls = [];

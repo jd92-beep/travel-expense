@@ -825,6 +825,7 @@ async function callModelAttemptJson(
 ) {
   if (attempt.provider === 'kimi') return callKimiJson(state, prompt, kind, image, attempt.model);
   if (attempt.provider === 'mimo') return callMimoJson(state, prompt, kind, image, attempt.model);
+  if (attempt.provider === 'volcano') return brokerAiJson(state, 'volcano', prompt, kind, image, attempt.model);
   return callGoogleJson(state, prompt, kind, image, attempt.model);
 }
 

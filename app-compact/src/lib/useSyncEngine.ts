@@ -201,6 +201,7 @@ export function useSyncEngine(
         if (queueUpdatedAt && currentUpdatedAt > queueUpdatedAt) {
           return {
             ...candidate,
+            supabaseId: trip.supabaseId || candidate.supabaseId,
             notionPageId: trip.notionPageId || candidate.notionPageId,
             sourceId: trip.sourceId || candidate.sourceId,
           };

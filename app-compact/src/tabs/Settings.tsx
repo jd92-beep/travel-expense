@@ -16,6 +16,7 @@ import {
   redactedError,
   registerPersonalNotionIntegration,
   rotateProviderCredential,
+  testAiModel,
   testProviderConnection,
   unlockCredentialBroker,
   type CredentialProvider,
@@ -944,6 +945,18 @@ export function Settings({
   const [newRuleNextRun, setNewRuleNextRun] = useState(() => todayYmd());
   const tripUpdateModelId = state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
   const tripUpdateModelName = aiModelLabel(tripUpdateModelId);
+  const testSelectedAiModel = async (label: string, selectedModel: string) => {
+    setBusy(`測試 ${label} model`);
+    setStatus('');
+    try {
+      const modelName = await testAiModel(state, selectedModel);
+      setStatus(`${label} model 連線正常：${modelName}`);
+    } catch (error) {
+      setStatus(`${label} model 測試失敗：${redactedError(error)}`);
+    } finally {
+      setBusy('');
+    }
+  };
   const tripPreviewStats = tripDraft ? tripDraftPreviewStats(tripDraft) : null;
   const tripReviewDraft = editableTripDraft || tripDraft;
   const tripReviewStats = tripReviewDraft ? tripDraftPreviewStats(tripReviewDraft) : null;
@@ -2469,29 +2482,37 @@ export function Settings({
       </AccordionCard>
 
       <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
-        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。如果失敗，會自動 fallback 到 contract default（Scan/Voice → Gemma 4 31B，Email/Trip → Kimi kimi-code），然後再 fallback 到其他備用模型。Provider keys 不會進入 React state。</p>
+        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。失敗時會按固定 fallback ladder 重試；429、quota 同 daily-limit 會 hard stop，唔會轉 provider。Volcano Engine key 只會留喺 Credential Broker vault，唔會進入 React state。</p>
         <div className="form-grid">
-          <label>Scan model
-            <select value={state.scanModel} onChange={(e) => updateState({ scanModel: e.target.value })}>
-              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
-          <label>Voice model
-            <select value={state.voiceModel} onChange={(e) => updateState({ voiceModel: e.target.value })}>
-              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
+          <div><label>Scan model
+              <select value={state.scanModel} onChange={(e) => updateState({ scanModel: e.target.value })}>
+                {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+              </select>
+            </label>
+            <button className="secondary compact" type="button" disabled={!!busy || !brokerReady} aria-label="測試 Scan model" onClick={() => void testSelectedAiModel('Scan', state.scanModel)}>測試</button>
+          </div>
+          <div><label>Voice model
+              <select value={state.voiceModel} onChange={(e) => updateState({ voiceModel: e.target.value })}>
+                {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+              </select>
+            </label>
+            <button className="secondary compact" type="button" disabled={!!busy || !brokerReady} aria-label="測試 Voice model" onClick={() => void testSelectedAiModel('Voice', state.voiceModel)}>測試</button>
+          </div>
         </div>
-        <label>Email model
-          <select value={state.emailModel} onChange={(e) => updateState({ emailModel: e.target.value })}>
-            {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-          </select>
-        </label>
-        <label>Trip update model
-          <select value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} onChange={(e) => updateState({ tripUpdateModel: e.target.value })}>
-            {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-          </select>
-        </label>
+        <div><label>Email model
+            <select value={state.emailModel} onChange={(e) => updateState({ emailModel: e.target.value })}>
+              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+            </select>
+          </label>
+          <button className="secondary compact" type="button" disabled={!!busy || !brokerReady} aria-label="測試 Email model" onClick={() => void testSelectedAiModel('Email', state.emailModel)}>測試</button>
+        </div>
+        <div><label>Trip update model
+            <select value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} onChange={(e) => updateState({ tripUpdateModel: e.target.value })}>
+              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+            </select>
+          </label>
+          <button className="secondary compact" type="button" disabled={!!busy || !brokerReady} aria-label="測試 Trip update model" onClick={() => void testSelectedAiModel('Trip update', state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID)}>測試</button>
+        </div>
         <label>Google backup model
           <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
         </label>

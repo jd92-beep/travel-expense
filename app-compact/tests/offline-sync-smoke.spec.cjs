@@ -88,3 +88,85 @@ test('offline receipt entry queues locally and auto-syncs on reconnect', async (
   });
   expect(queueAfter).toBe(1);
 });
+
+test('IndexedDB cold start requeues only retryable sync failures and preserves exhausted or conflict evidence', async ({ page }) => {
+  await page.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, (route) => route.abort());
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+  });
+
+  const seedIndexedState = async (snapshot) => {
+    await page.goto(`${APP_ORIGIN}/travel-expense/compact/favicon.svg`);
+    await page.evaluate(async (value) => {
+      localStorage.clear();
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('travel-expense-react', 1);
+        request.onupgradeneeded = () => {
+          if (!request.result.objectStoreNames.contains('state')) request.result.createObjectStore('state');
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction('state', 'readwrite');
+        transaction.objectStore('state').put(value, 'app-state');
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      db.close();
+    }, snapshot);
+    await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  };
+
+  const snapshot = (item) => ({
+    receipts: [{
+      id: item.entityId,
+      store: 'IndexedDB sync item',
+      total: 500,
+      date: '2026-01-01',
+      category: 'other',
+      payment: 'cash',
+      createdAt: 1,
+      updatedAt: 1,
+    }],
+    syncQueue: [item],
+    globalSyncStatus: 'error',
+    syncError: item.error,
+    settingsUpdatedAt: Date.now() + 31_536_000_000,
+    schemaVersion: 3,
+  });
+  const readIndexedState = () => page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('travel-expense-react', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const state = await new Promise((resolve, reject) => {
+      const transaction = db.transaction('state', 'readonly');
+      const request = transaction.objectStore('state').get('app-state');
+      request.onsuccess = () => resolve(request.result || {});
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return { status: state.globalSyncStatus, error: state.syncError, queue: state.syncQueue?.[0] };
+  });
+
+  await seedIndexedState(snapshot({
+    id: 'retryable', type: 'receipt', entityId: 'retryable', op: 'create', status: 'error', attempts: 1,
+    error: 'session expired', createdAt: 1, updatedAt: 1,
+  }));
+  await expect.poll(readIndexedState).toMatchObject({ status: 'queued', error: '', queue: { status: 'queued', attempts: 1 } });
+
+  await seedIndexedState(snapshot({
+    id: 'exhausted', type: 'receipt', entityId: 'exhausted', op: 'create', status: 'error', attempts: 3,
+    error: 'permission denied', createdAt: 1, updatedAt: 1,
+  }));
+  await expect.poll(readIndexedState).toMatchObject({ status: 'error', error: 'permission denied', queue: { status: 'error', attempts: 3 } });
+
+  await seedIndexedState(snapshot({
+    id: 'conflict', type: 'receipt', entityId: 'conflict', op: 'create', status: 'failed', attempts: 1,
+    error: 'version conflict', createdAt: 1, updatedAt: 1,
+  }));
+  await expect.poll(readIndexedState).toMatchObject({ status: 'error', error: 'version conflict', queue: { status: 'failed', attempts: 1 } });
+});

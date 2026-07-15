@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-12 HKT
-- **Focus (latest)**: Admin 1.0 shared-contract alignment. Android now implements versioned itinerary merge, durable receipt tombstones, authoritative membership pull and the same canonical receipt/privacy/split semantics as Compact Web and React. Browser tests are origin-isolated, and Android commands select a compatible JDK automatically.
-- **App version (this sweep)**: Compact/Android `0.18.2` (versionCode `1820`); branch `codex/admin-console-1.0-android` based on `codex/android-compact-shell`. Oscar's `0.18.1` is already pushed beneath this contract patch.
-- **Verification (this sweep)**: typecheck/build/security/audit, tombstone and itinerary merge tests, split/Notion/shared-ledger contracts and isolated browser suites (`28 passed, 2 intentional skips`) passed. JBR 21 debug APK build succeeded; `android:qa` passed with `appLinksVerified=true` on `emulator-5554`. Artifact: `/tmp/travel-expense-android-qa-2026-07-12T02-10-31-087Z`.
+- **Date**: 2026-07-15 HKT
+- **Focus (latest)**: Android Compact sync-state hydration now preserves terminal exhausted/conflict failures while normalizing IndexedDB recovery, and selected Volcano AI models use the exact broker route. Settings can directly test each selected task model without fallback.
+- **App version (this sweep)**: Compact/Android `0.19.4` (versionCode `1940`); local branch `codex/admin-console-1.0-android`.
+- **Verification (this sweep)**: `typecheck`, `build`, `security:scan`, persisted-state offline `2/2`, selected Volcano scan `1/1`, selected-model Settings broker test `1/1`, and mobile layout `1/1` passed. JBR 21 debug APK build succeeded. `android:qa` exited `0`; its artifact confirms `travel-expense-compact.vercel.app: verified`: `/tmp/travel-expense-android-qa-2026-07-15T12-16-37-029Z`.
 - **Current cutover gates**: Do not make live receipt photos private until this build and Compact `0.13.6` are deployed and active compatibility is confirmed. Do not rewrite live Nagoya rows without Boss approval, a backup and server preview. No release APK/AAB was built or published in this session.
 - **Contract status**: The previous Compact/React fixture drift is resolved. Nagoya round-trip is exactly six days (`2026-04-20` through `2026-04-25`); partial updates retain untouched days; range-external scenery and stale overwrites fail.
 
@@ -19,7 +19,7 @@
 - **What v0.12.17 fixed** (full list in `CHANGELOG.md`): 2 HIGH money-engine bugs (recurring receipts never stamped an FX rate so they re-priced at whatever the live rate happened to be on view; monthly recurring day-of-month clamp compounded permanently once it hit a short month), 1 HIGH bug caught before shipping (v0.12.16's scan crash-recovery could double-process a capture on ordinary tab switch — fixed with a session-scoped gate), 3 MED React/sync bugs (`isHydratingScope` flipped early before the IndexedDB merge landed; a multi-file email-scan batch read stale state mid-loop; `pull()` had no re-entrancy guard unlike `push()`/`sync()`), 1 MED concurrency race (parallel exports could hand the OS share sheet a deleted file), 1 LOW data-hygiene gap (AI-parsed totals had no non-negative guard). Two test-suite fixes (not app bugs): a live-FX-rate-dependent hardcoded assertion in `stats-smoke`, and a stale wallpaper-layer-count assertion in `final-navigation-smoke` left over from the v0.12.15 low-RAM optimization.
 - **What v0.12.15/16 shipped** (full list in `CHANGELOG.md`): 3 specialist review agents (native UX, perf/size, security) found the release APK was 66MB with 39MB being an unreferenced video — deleting it plus WebP-converting wallpapers/scan assets cut the signed APK to **9.1MB (from 66MB, −86%)**. Added `@capacitor/status-bar` (targetSdk36 edge-to-edge ignores theme XML at runtime), a viewport keyboard fix, a Camera capture-size cap (OOM guard), map-link/OTP-type hardening, hardware-back closing the trip dropdown/budget edit, and scan crash-recovery.
 - **Latest verification evidence**: v0.12.17 passed `npm run typecheck`, all 3 unit-test scripts (split-engine, sync-backoff, notion-split-meta), and the full Playwright smoke suite (dashboard/history/scan/split-editor/timeline/stats/welcome-guide/settings/settle-up/final-nav — final-nav re-run 3x for stability after a layer-count assertion update), plus a runtime-error walker (`scripts/explore-errors.mjs`) across all 7 tabs showing only the pre-existing benign baseline (secrets.local.js 404, external API 429). Signed release APK built and verified (APK Signing Block v2/v3 present).
-- **Current known verification blockers / pending**: Real-device Google/magic-link login still needs a human account/device round-trip. Build Versioning Rule "currently at": v0.12.17 / versionCode 1217.
+- **Current known verification blockers / pending**: Real-device Google/magic-link login still needs a human account/device round-trip. Compact/Android current version: v0.19.4 / versionCode 1940.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -180,6 +180,28 @@ agent does not restart from stale Phase 5 notes.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 63 (Codex — v0.19.4 Android sync-state and Volcano routing)
+
+1. **Persisted sync correctness:** ported queue-derived global sync state so terminal exhausted
+   retries and `40001` conflicts remain visible after `normalizeState()`; only retryable persisted
+   failures are queued again. Both scoped IndexedDB hydration paths now apply that normalization,
+   closing the stale-state banner resurrection after cold start.
+2. **Android invariants retained:** native auth, item `idempotencyKey`, 5,000 tombstone cap and
+   `isHydratingScope` behaviour remain. The stale trip-result path preserves a known `supabaseId`.
+3. **Volcano and Settings tests:** `callModelAttemptJson()` routes Volcano through the broker with
+   the selected model; Dashboard recognizes the provider. Scan, Voice, Email and Trip selectors now
+   offer accessible direct `kind=test` checks with minimal JSON and no fallback. Rate/quota hard-stop
+   rules were not changed.
+4. **Verification:** `npm run typecheck`, `npm run build`, and `npm run security:scan` passed.
+   Isolated browser evidence: offline persisted-state `2/2`, selected Volcano scan routing `1/1`,
+   Settings exact Volcano provider/model/kind/prompt `1/1`, and mobile layout `1/1`. JBR 21
+   `npm run android:debug` succeeded; `npm run android:qa` exited `0`, and its App Link artifact
+   reports `travel-expense-compact.vercel.app: verified` at
+   `/tmp/travel-expense-android-qa-2026-07-15T12-05-37-272Z`.
+5. **Release/data boundary:** debug APK only. No release APK/AAB, commit, push, deployment,
+   credential change, or live-data action occurred. The existing real-device Google/magic-link
+   human-account verification remains an external follow-up.
 
 ### Session 62 (Codex — v0.18.2 Admin 1.0 shared contracts)
 

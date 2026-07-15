@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-07-15 HKT (Android sync-state and Volcano routing)
+
+- **v0.19.4 / versionCode 1940.** Fixed Android Compact persisted sync recovery and added exact
+  Volcano routing plus per-task AI model tests.
+  - `normalizeState()` now preserves exhausted retry and `40001` version-conflict failures as
+    visible terminal errors; only transient persisted failures re-enter the queue. IndexedDB scoped
+    hydration uses the same normalizer, preventing a stale pre-normalized state from restoring an
+    already-resolved banner.
+  - Kept Android-native idempotency keys, native auth, 5,000 tombstone cap and hydration guards.
+    Stale trip sync results also retain an existing `supabaseId`.
+  - Volcano scan attempts and Dashboard provider metadata use the exact broker route. Settings has
+    accessible Scan, Voice, Email and Trip selected-model test controls that send a minimal JSON
+    probe directly with `kind=test`, no fallback, and require a valid `{ok:true}` result. `429`, quota
+    and daily-limit hard stops remain.
+  - Evidence: `typecheck`, `build`, and `security:scan` passed; offline persisted-state smoke `2/2`,
+    selected Volcano scan routing `1/1`, Settings exact-model broker request `1/1`, and mobile layout
+    `1/1` passed. JBR 21 debug APK build succeeded; `android:qa` exited `0`, verified the App Link,
+    and wrote `/tmp/travel-expense-android-qa-2026-07-15T12-16-37-029Z`.
+  - Debug APK only. No release APK/AAB, deployment, secret, or live-data action.
+
 ## 2026-07-12 HKT (Admin 1.0 shared contracts)
 
 - **v0.18.2 / versionCode 1820.** Aligned Android with the Admin 1.0 canonical data contract on top
