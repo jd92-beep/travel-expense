@@ -81,9 +81,15 @@ you closed with your session number.
    while normal state updates keep `migrateAppState` and cannot revive exhausted failures.
 4. **Regression proof**: the new fake-Supabase smoke passed `4/4`, covering queue creation, IndexedDB
    recovery, legacy no-RETURNING insert and one-time local-trip backfill. Independent checks passed
-   typecheck, build, security scan, session `2/2` and sync classifier `2/2`. The Welcome Guide smoke's
-   stale Dashboard expectation was aligned with the intentional Scan default. Final production-gate
-   and live-deploy evidence are recorded below when promotion completes.
+   typecheck, build, security scan, session `2/2`, sync classifier `2/2`, offline `4/4` and Welcome
+   Guide `1/1`. The full production gate passed in `75.2s`: final navigation `10/10`, mobile layout,
+   accessibility/touch, all 390px contact-sheet routes, broker preflight/vault guards, security scan
+   and production build were green. GitHub Pages run `29385148652` completed successfully. Vercel
+   deployment `dpl_hst2wvwwiD5S1WUHuRxtLYmGuQ5i` reached Ready and the production alias served main
+   asset `index-BZEkCpa1.js`; that live bundle contains `sync_trip_backfill_` and omits the obsolete
+   false-retry copy. The live verifier now checks the required main script, broker script and CSS by
+   asset type instead of assuming a minimum chunk count; the Vercel-only live smoke passed against
+   the three production assets with HTTP `200`.
 5. **Baseline and scope**: a detached untouched `282f610` worktree reproduced both pre-existing test
    failures: Welcome Guide waited for the retired Dashboard default, and Supabase backfill expected one
    itinerary RPC but received zero. No passphrase, secret, provider credential, RLS, migration or live

@@ -49,7 +49,9 @@ async function fetchHtml(url) {
     assets,
     assetHash: sha256(assets.join('\n')),
     htmlHash: sha256(text),
-    hasCredentialBroker: text.includes('credentialBroker'),
+    hasMainScript: assets.some((asset) => /\/assets\/index-[^/]+\.js(?:\?|$)/.test(asset)),
+    hasCredentialBroker: assets.some((asset) => /\/assets\/credentialBroker-[^/]+\.js(?:\?|$)/.test(asset)),
+    hasStylesheet: assets.some((asset) => /\/assets\/index-[^/]+\.css(?:\?|$)/.test(asset)),
   };
 }
 
@@ -75,8 +77,9 @@ for (const url of liveUrls) {
   assert(page.status === 200, `${page.url} returned HTTP ${page.status}`);
   assert(page.title === expectedTitle, `${page.url} title ${JSON.stringify(page.title)} did not match ${JSON.stringify(expectedTitle)}`);
   assert(page.hasRoot, `${page.url} is missing #root`);
-  assert(page.assets.length >= 4, `${page.url} had too few assets: ${page.assets.length}`);
+  assert(page.hasMainScript, `${page.url} did not reference the main index script`);
   assert(page.hasCredentialBroker, `${page.url} did not reference credentialBroker asset`);
+  assert(page.hasStylesheet, `${page.url} did not reference the main stylesheet`);
   livePages.push(page);
 }
 
@@ -94,6 +97,9 @@ const proof = {
     status: page.status,
     title: page.title,
     hasRoot: page.hasRoot,
+    hasMainScript: page.hasMainScript,
+    hasCredentialBroker: page.hasCredentialBroker,
+    hasStylesheet: page.hasStylesheet,
     assetCount: page.assets.length,
     assetHash: page.assetHash.slice(0, 16),
     htmlHash: page.htmlHash.slice(0, 16),
