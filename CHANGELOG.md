@@ -2,6 +2,24 @@
 
 ## 2026-07-15
 
+- **Compact 0.16.7 / Admin 1.0.2 / Broker 2026.07.15 Volcano model closure**:
+  - 根因係 Compact/Android model dispatcher 只有 Kimi、Mimo 分支，Volcano selection 會跌入
+    Google path；Admin Edge 同 Broker status 亦只回報一個 required model，而 Broker status
+    忽略只存在 Worker env 嘅 `VOLCANO_KEY`。
+  - Compact 同 Android 而家會把五個既有 Volcano LLM 精確送去 `/volcano/json`；Settings 四個
+    task selector 各有直接測試掣，固定 `kind=test`、8 output tokens、無 fallback，並驗證
+    model 真正回傳 `{ok:true}`。`429`、quota、daily-limit hard stop 維持不變。
+  - Admin Providers 保持每 provider 一 row，但新增完整 model catalog，Volcano 會顯示
+    `doubao-seed-2.0-lite`、`doubao-seed-2.0-pro`、`minimax-m3`、`minimax-m2.7` 同
+    `doubao-seed-2.0-mini`。Seedance media models唔會混入 LLM selector/probe。
+  - Android cold-start 同 IndexedDB hydration 使用相同 sync normalizer：只重排未耗盡、可重試
+    failure；exhausted/`40001` conflict 保留真實 error evidence，避免錯誤 banner 無限重播或
+    真失敗被靜默清除。stale trip result 同時保留 `supabaseId`。
+  - 本地證據：Compact typecheck/build/security、AI routing、Settings、offline、sync regression
+    同 mobile smoke 全綠；Admin unit `32/32`、contract `24/24`、full smoke `48 passed + 1 skip`；
+    Edge `53/53`；Broker check/self-test；Android debug APK 同 emulator QA 全部通過。
+    Passphrase、secret values、RLS、migration、write mode 同 live user data 均冇改動。
+
 - **Compact App 0.16.6 stale-tab and trip identity recovery**:
   - Live Chrome timing proved the reported banner came from a tab opened on `0.16.4` at 10:11,
     before the `0.16.5` trip-sync repair deployed at 10:52. The tab had never reloaded, so later

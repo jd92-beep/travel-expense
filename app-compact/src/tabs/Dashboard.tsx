@@ -393,15 +393,17 @@ function aiModelLabel(modelId: string | undefined): string {
   return AI_MODELS.find((model) => model.id === id)?.name || id;
 }
 
-function aiProviderForModel(modelId: string | undefined): { provider: 'kimi' | 'google' | 'mimo'; model: string; id: string } {
+function aiProviderForModel(modelId: string | undefined): { provider: 'kimi' | 'google' | 'mimo' | 'volcano'; model: string; id: string } {
   const id = modelId || DEFAULT_KIMI_PRIMARY_MODEL_ID;
   const [providerRaw, modelRaw] = id.includes('/') ? id.split('/') : ['', id];
-  const provider = providerRaw === 'google' || providerRaw === 'mimo' || providerRaw === 'kimi'
+  const provider = providerRaw === 'google' || providerRaw === 'mimo' || providerRaw === 'kimi' || providerRaw === 'volcano'
     ? providerRaw
     : /mimo/i.test(id)
       ? 'mimo'
       : /kimi/i.test(id)
         ? 'kimi'
+        : /volcano|doubao|minimax/i.test(id)
+          ? 'volcano'
         : 'google';
   return { provider, model: modelRaw || id, id };
 }

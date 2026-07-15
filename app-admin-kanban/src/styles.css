@@ -167,9 +167,11 @@ pre { max-width: 100%; margin: 0; overflow: auto; white-space: pre-wrap; color: 
 .member-add-form { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, .4fr) auto; align-items: end; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border-soft); }
 .table-scroll { width: 100%; max-width: 100%; overflow: auto; }
 table { width: 100%; min-width: 760px; border-collapse: collapse; }
-.provider-table { min-width: 1120px; }
+.provider-table { min-width: 1380px; }
 .provider-table .status-badge { white-space: nowrap; overflow-wrap: normal; }
 .provider-table code, .release-table code { white-space: nowrap; }
+.provider-model-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.provider-model-list code { white-space: normal; overflow-wrap: anywhere; }
 @media (min-width: 768px) {
   table:has(td[data-label="狀態"]) .status-badge { white-space: nowrap; overflow-wrap: normal; }
   table:has(td[data-label="日期"]) td:is([data-label="日期"], [data-label="更新"]) { white-space: nowrap; }

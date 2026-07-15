@@ -256,6 +256,57 @@ test('AI routing keeps user-selected primary models ahead of fallbacks', async (
   expect(calls.some((call) => call.kind === 'trip' && call.provider === 'kimi')).toBe(false);
 });
 
+test('selected Volcano model routes to the Volcano broker endpoint without Google fallback', async ({ page }) => {
+  test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
+  const calls = [];
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+  await page.route('**/volcano/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ provider: 'volcano', kind: body.kind, model: body.model });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: { store: 'Volcano Scan Mart', total: 88, date: '2026-05-08', category: 'food', payment: 'cash' },
+      }),
+    });
+  });
+  await page.route('**/google/json', async (route) => {
+    calls.push({ provider: 'google' });
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Wrong provider' }) });
+  });
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'volcano-routing-session',
+      credentialSessionExpiresAt: Date.now() + 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'scan',
+      receipts: [],
+      scanModel: 'volcano/doubao-seed-2.0-pro',
+    }));
+  });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await page.getByLabel('主要分頁').getByRole('button', { name: '記帳', exact: true }).click();
+  await page.locator('#scan-gallery-input').setInputFiles({
+    name: 'receipt.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64'),
+  });
+  await expect(page.getByText('編輯紀錄')).toBeVisible();
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Volcano Scan Mart');
+  expect(calls).toEqual([{ provider: 'volcano', kind: 'scan', model: 'doubao-seed-2.0-pro' }]);
+});
+
 test('Trip update does not treat the current itinerary as a successful extraction', async ({ page }) => {
   test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
   const calls = [];
@@ -587,9 +638,9 @@ test('AI routing stops provider fallback when broker quota is exceeded', async (
     body: 'window.DEV_SECRETS = {};',
   }));
 
-  await page.route('**/google/json', async (route) => {
+  await page.route('**/volcano/json', async (route) => {
     const body = route.request().postDataJSON();
-    calls.push({ provider: 'google', kind: body.kind, model: body.model });
+    calls.push({ provider: 'volcano', kind: body.kind, model: body.model });
     await route.fulfill({
       status: 429,
       contentType: 'application/json',
@@ -600,16 +651,16 @@ test('AI routing stops provider fallback when broker quota is exceeded', async (
     });
   });
 
-  await page.route('**/kimi/json', async (route) => {
+  await page.route('**/mimo/json', async (route) => {
     const body = route.request().postDataJSON();
-    calls.push({ provider: 'kimi', kind: body.kind, model: body.model });
+    calls.push({ provider: 'mimo', kind: body.kind, model: body.model });
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         ok: true,
         data: {
-          store: 'Unexpected Kimi Fallback',
+          store: 'Unexpected Mimo Fallback',
           total: 999,
           date: '2026-05-08',
           category: 'food',
@@ -630,7 +681,7 @@ test('AI routing stops provider fallback when broker quota is exceeded', async (
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'scan',
       receipts: [],
-      scanModel: 'google/gemma-4-31b-it',
+      scanModel: 'volcano/minimax-m3',
     }));
   });
 
@@ -650,7 +701,7 @@ test('AI routing stops provider fallback when broker quota is exceeded', async (
   await expect(page.getByLabel('備註')).toHaveValue(/Supabase AI daily quota exceeded/);
 
   expect(calls).toEqual([
-    expect.objectContaining({ provider: 'google', kind: 'scan', model: 'gemma-4-31b-it' }),
+    expect.objectContaining({ provider: 'volcano', kind: 'scan', model: 'minimax-m3' }),
   ]);
 });
 

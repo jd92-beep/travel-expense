@@ -122,8 +122,11 @@ function installProviderFetchStub() {
   const originalFetch = globalThis.fetch;
   const integrations = [];
   const kimiModels = [];
+  const kimiBodies = [];
   const googleModels = [];
+  const googleBodies = [];
   const mimoBodies = [];
+  const volcanoBodies = [];
   const weatherQueries = [];
   let notionCalls = 0;
   globalThis.fetch = async (url, init = {}) => {
@@ -174,6 +177,7 @@ function installProviderFetchStub() {
     if (href.includes('kimi.test/v1/chat/completions')) {
       assert.equal(auth, bearer('kimi-secret-for-test'));
       const body = JSON.parse(init.body || '{}');
+      kimiBodies.push(body);
       kimiModels.push(body.model);
       const promptText = JSON.stringify(body.messages || body.prompt || '');
       if (promptText.includes('Analyze the user')) {
@@ -230,8 +234,16 @@ function installProviderFetchStub() {
 
     if (href.includes('generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent')) {
       assert.match(href, /key=google-secret-for-test/);
+      googleBodies.push(JSON.parse(init.body || '{}'));
       googleModels.push('gemma-4-31b-it');
       return Response.json({ candidates: [{ content: { parts: [{ text: '{"ok":true,"provider":"google"}' }] } }] });
+    }
+
+    if (href.includes('ark.cn-beijing.volces.com/api/plan/v3/chat/completions')) {
+      assert.equal(auth, bearer('volcano-secret-for-test'));
+      const body = JSON.parse(init.body || '{}');
+      volcanoBodies.push(body);
+      return Response.json({ choices: [{ message: { content: '{"ok":true,"provider":"volcano"}' } }] });
     }
 
     if (href.startsWith('https://api.weatherapi.com/v1/current.json')) {
@@ -271,8 +283,11 @@ function installProviderFetchStub() {
   };
   restore.notionCalls = () => notionCalls;
   restore.kimiModels = () => kimiModels.slice();
+  restore.kimiBodies = () => kimiBodies.slice();
   restore.googleModels = () => googleModels.slice();
+  restore.googleBodies = () => googleBodies.slice();
   restore.mimoBodies = () => mimoBodies.slice();
+  restore.volcanoBodies = () => volcanoBodies.slice();
   restore.weatherQueries = () => weatherQueries.slice();
   return restore;
 }
@@ -390,6 +405,20 @@ async function run() {
     const initialStatus = await jsonFetch(env, '/credentials/status', { session });
     assert.equal(initialStatus.response.status, 200);
     assert.deepEqual(initialStatus.data.providers.map((item) => item.status), ['missing', 'missing', 'missing', 'missing', 'missing', 'missing']);
+    assert.deepEqual(
+      initialStatus.data.providers.find((item) => item.provider === 'volcano')?.models,
+      [
+        'volcano/doubao-seed-2.0-lite',
+        'volcano/doubao-seed-2.0-pro',
+        'volcano/minimax-m3',
+        'volcano/minimax-m2.7',
+        'volcano/doubao-seed-2.0-mini',
+      ],
+    );
+
+    env.VOLCANO_KEY = 'volcano-secret-for-test';
+    const envVolcanoStatus = await jsonFetch(env, '/credentials/status', { session });
+    assert.equal(envVolcanoStatus.data.providers.find((item) => item.provider === 'volcano')?.status, 'connected');
 
     const adminRotateBlockedOrigin = await jsonFetch(env, '/credentials/admin-rotate', {
       method: 'POST',
@@ -601,6 +630,7 @@ async function run() {
     });
     assert.equal(kimiRotate.response.status, 200);
     assert.equal(restoreFetch.kimiModels().at(-1), 'kimi-code');
+    assert.equal(restoreFetch.kimiBodies().at(-1).max_tokens, 8);
 
     const kimi = await jsonFetch(env, '/kimi/json', {
       method: 'POST',
@@ -672,6 +702,7 @@ async function run() {
     assert.equal(google.response.status, 200);
     assert.equal(google.data.data.provider, 'google');
     assert.equal(restoreFetch.googleModels().at(-1), 'gemma-4-31b-it');
+    assert.equal(restoreFetch.googleBodies().at(-1).generationConfig.maxOutputTokens, 8);
 
     const supabaseGoogle = await jsonFetch(env, '/google/json', {
       method: 'POST',
@@ -690,7 +721,7 @@ async function run() {
     assert.equal(mimoRotate.response.status, 200);
     assert.deepEqual(restoreFetch.mimoBodies().at(-1).thinking, { type: 'disabled' });
     assert.equal(restoreFetch.mimoBodies().at(-1).stream, false);
-    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 800);
+    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 8);
 
     const mimo = await jsonFetch(env, '/mimo/json', {
       method: 'POST',
@@ -703,6 +734,32 @@ async function run() {
     assert.deepEqual(restoreFetch.mimoBodies().at(-1).thinking, { type: 'disabled' });
     assert.equal(restoreFetch.mimoBodies().at(-1).stream, false);
     assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 10000);
+
+    const mimoTest = await jsonFetch(env, '/mimo/json', {
+      method: 'POST',
+      session,
+      body: { prompt: '{"ok":true}', kind: 'test', model: 'mimo-v2.5' },
+    });
+    assert.equal(mimoTest.response.status, 200);
+    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 8);
+
+    for (const model of [
+      'doubao-seed-2.0-lite',
+      'doubao-seed-2.0-pro',
+      'minimax-m3',
+      'minimax-m2.7',
+      'doubao-seed-2.0-mini',
+    ]) {
+      const volcano = await jsonFetch(env, '/volcano/json', {
+        method: 'POST',
+        session,
+        body: { prompt: '{"ok":true}', kind: 'test', model },
+      });
+      assert.equal(volcano.response.status, 200);
+      assert.equal(volcano.data.data.provider, 'volcano');
+      assert.equal(restoreFetch.volcanoBodies().at(-1).model, model);
+      assert.equal(restoreFetch.volcanoBodies().at(-1).max_tokens, 8);
+    }
 
     const weatherApiRotate = await jsonFetch(env, '/credentials/rotate', {
       method: 'POST',

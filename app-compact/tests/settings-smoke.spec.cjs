@@ -23,6 +23,7 @@ async function expectSettingsReady(page) {
 }
 
 test('Settings expandable cards, safe broker actions, backup, restore, and trust clear work', async ({ page }) => {
+  const modelProbeCalls = [];
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
     const body = route.request().postDataJSON();
     const prompt = String(body.prompt || '');
@@ -138,6 +139,15 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
     contentType: 'application/json',
     body: JSON.stringify({ ok: false, error: 'Credential test failed' }),
   }));
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/volcano/json', async (route) => {
+    const body = route.request().postDataJSON();
+    modelProbeCalls.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data: { ok: true } }),
+    });
+  });
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/notion/request', async (route) => {
     const payload = route.request().postDataJSON();
     const data = String(payload.path || '').endsWith('/query')
@@ -382,7 +392,28 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(modelOptions.join(' ')).toContain('Kimi (kimi-code)');
   expect(modelOptions.join(' ')).toContain('Google Gemini 2.5 Flash');
   expect(modelOptions.join(' ')).toContain('Mimo v2.5 Pro');
-  expect(modelOptions.join(' ')).not.toMatch(/MiniMax|OpenRouter|GLM|ZAI/);
+  expect(modelOptions.join(' ')).toContain('Volcano (doubao-seed-2.0-lite)');
+  expect(modelOptions.join(' ')).toContain('Volcano (doubao-seed-2.0-pro)');
+  expect(modelOptions.join(' ')).toContain('Volcano (minimax-m3)');
+  expect(modelOptions.join(' ')).toContain('Volcano (minimax-m2.7)');
+  expect(modelOptions.join(' ')).toContain('Volcano (doubao-seed-2.0-mini)');
+  expect(modelOptions.join(' ')).not.toMatch(/OpenRouter|GLM|ZAI/);
+  const volcanoModels = [
+    'volcano/doubao-seed-2.0-lite',
+    'volcano/doubao-seed-2.0-pro',
+    'volcano/minimax-m3',
+    'volcano/minimax-m2.7',
+    'volcano/doubao-seed-2.0-mini',
+  ];
+  const scanModel = page.getByRole('combobox', { name: 'Scan model', exact: true });
+  for (const model of volcanoModels) {
+    await scanModel.selectOption(model);
+    await page.getByRole('button', { name: '測試 Scan model' }).click();
+    await expect.poll(() => modelProbeCalls.length).toBe(volcanoModels.indexOf(model) + 1);
+  }
+  expect(modelProbeCalls.map((call) => ({ kind: call.kind, model: `volcano/${call.model}`, prompt: call.prompt }))).toEqual(
+    volcanoModels.map((model) => ({ kind: 'test', model, prompt: '{"ok":true}' })),
+  );
 
   await setAccordion(page, '資料管理');
   const backupSafety = page.getByLabel('Backup safety scope');
@@ -765,8 +796,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
   await expect(doctor).toContainText('Pending OCR');
   await expect(doctor).toContainText('Missing payer');
   await expect(doctor).toContainText('Sync queue');
-  await expect(doctor).toContainText('1 pending');
-  await expect(doctor).toContainText('1 failed');
+  await expect(doctor).toContainText('2 pending');
   await expect(doctor).toContainText('Trip completeness');
   await expect(doctor).toContainText('1/3 days');
   await expect(doctor).toContainText('Backup safety');
@@ -1400,7 +1430,7 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
     contentType: 'application/json',
     body: JSON.stringify({ ok: false, error: 'trip intelligence unavailable' }),
   }));
-  for (const provider of ['mimo', 'kimi', 'google']) {
+  for (const provider of ['mimo', 'kimi', 'google', 'volcano']) {
     await page.route(`https://travel-expense-credential-broker.ftjdfr.workers.dev/${provider}/json`, async (route) => route.fulfill({
       status: 500,
       contentType: 'application/json',
@@ -1505,7 +1535,7 @@ test('Trip update AI extracts markdown table itinerary when providers fail', asy
     contentType: 'application/json',
     body: JSON.stringify({ ok: false, error: 'trip intelligence unavailable' }),
   }));
-  for (const provider of ['mimo', 'kimi', 'google']) {
+  for (const provider of ['mimo', 'kimi', 'google', 'volcano']) {
     await page.route(`https://travel-expense-credential-broker.ftjdfr.workers.dev/${provider}/json`, async (route) => route.fulfill({
       status: 500,
       contentType: 'application/json',

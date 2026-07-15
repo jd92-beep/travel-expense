@@ -1,5 +1,5 @@
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.06.12';
+const VERSION = '2026.07.15';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -7,6 +7,18 @@ const TRUSTED_DEVICE_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const SESSION_CHALLENGE_TTL_MS = 1000 * 60 * 5;
 const MAX_JSON_BYTES = 4500000;
 const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi', 'mimo', 'volcano'];
+const PROVIDER_MODELS = Object.freeze({
+  kimi: ['kimi/kimi-code', 'kimi/kimi-8k', 'kimi/kimi-32k', 'kimi/kimi-k2.6', 'kimi/kimi-for-coding'],
+  google: ['google/gemini-2.5-flash', 'google/gemini-3.1-flash', 'google/gemini-3.1-flash-lite', 'google/gemma-4-31b-it', 'google/gemma-4-26b'],
+  mimo: ['mimo/mimo-v2.5', 'mimo/mimo-v2.5-pro'],
+  volcano: [
+    'volcano/doubao-seed-2.0-lite',
+    'volcano/doubao-seed-2.0-pro',
+    'volcano/minimax-m3',
+    'volcano/minimax-m2.7',
+    'volcano/doubao-seed-2.0-mini',
+  ],
+});
 const NOTION_VERSION = '2022-06-28';
 const KIMI_DEFAULT_BASE = 'https://api.kimi.com/coding/v1';
 const MIMO_DEFAULT_BASE = 'https://token-plan-sgp.xiaomimimo.com/v1';
@@ -574,17 +586,22 @@ async function consumeSupabaseAiQuota(env, user, provider, request) {
 }
 
 async function providerStatus(env, provider) {
+  const models = PROVIDER_MODELS[provider] || [];
   if (provider === 'weatherapi' && String(env.WEATHERAPI_KEY || '').trim()) {
-    return { provider, status: 'connected', updatedAt: Date.now() };
+    return { provider, status: 'connected', updatedAt: Date.now(), models };
+  }
+  if (provider === 'volcano' && String(env.VOLCANO_KEY || '').trim()) {
+    return { provider, status: 'connected', updatedAt: Date.now(), models };
   }
   const raw = await env.CREDENTIALS_VAULT.get(vaultId(provider), 'json');
-  if (!raw) return { provider, status: 'missing' };
+  if (!raw) return { provider, status: 'missing', models };
   const data = await decryptVaultValue(env, raw);
   return {
     provider,
     status: data.status || 'unknown',
     updatedAt: data.updatedAt || raw.updatedAt,
     lastTestedAt: data.lastTestedAt,
+    models,
   };
 }
 
@@ -905,8 +922,9 @@ async function kimiJson(env, prompt, kind, image, requestedModel) {
     body: JSON.stringify({
       model: requestedModel || env.KIMI_MODEL || 'kimi-code',
       messages,
-      temperature: 0.6,
+      temperature: kind === 'test' ? 0 : 0.6,
       thinking: { type: 'disabled' },
+      max_tokens: kind === 'test' ? 8 : undefined,
     }),
   }));
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
@@ -928,7 +946,7 @@ async function mimoJson(env, prompt, kind, image, requestedModel) {
     temperature: kind === 'test' ? 0 : 0.1,
     stream: false,
     thinking: { type: 'disabled' },
-    max_tokens: kind === 'trip' ? 10000 : 800,
+    max_tokens: kind === 'test' ? 8 : kind === 'trip' ? 10000 : 800,
   });
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
 }
@@ -960,7 +978,7 @@ async function mimoChatCompletion(env, credential, body) {
   throw lastError || new Error('Mimo provider unavailable');
 }
 
-async function googleJson(env, prompt, _kind, image, requestedModel) {
+async function googleJson(env, prompt, kind, image, requestedModel) {
   const credential = await readCredential(env, 'google');
   if (!credential?.secret) throw new Error('Google credential missing');
   const model = String(requestedModel || env.GOOGLE_MODEL || GOOGLE_DEFAULT_MODEL).replace(/^models\//, '');
@@ -972,7 +990,11 @@ async function googleJson(env, prompt, _kind, image, requestedModel) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+      generationConfig: {
+        temperature: kind === 'test' ? 0 : 0.1,
+        responseMimeType: 'application/json',
+        maxOutputTokens: kind === 'test' ? 8 : undefined,
+      },
     }),
   }));
   return extractJson(data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
@@ -1211,7 +1233,12 @@ async function testProvider(env, provider, candidateSecret, extra = {}) {
     if (provider === 'google') await googleModelsList(credential.secret);
     if (provider === 'weatherapi') await testWeatherApi(credential.secret);
     if (provider === 'volcano') await volcanoJsonWithCredential(env, credential);
-    return { provider, status: 'connected', lastTestedAt: Date.now() };
+    return {
+      provider,
+      status: 'connected',
+      lastTestedAt: Date.now(),
+      model: PROVIDER_MODELS[provider]?.[0] || null,
+    };
   } catch (error) {
     return { provider, status: 'invalid', lastTestedAt: Date.now(), message: redact(error?.message || error) };
   }
@@ -1242,8 +1269,9 @@ async function kimiJsonWithCredential(env, credential) {
     body: JSON.stringify({
       model: env.KIMI_MODEL || 'kimi-code',
       messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
-      temperature: 0.6,
+      temperature: 0,
       thinking: { type: 'disabled' },
+      max_tokens: 8,
     }),
   }));
   return extractJson(data?.choices?.[0]?.message?.content || '');
@@ -1270,7 +1298,8 @@ async function volcanoJson(env, prompt, kind, image, requestedModel) {
     body: JSON.stringify({
       model: requestedModel || 'doubao-seed-2.0-lite',
       messages,
-      temperature: 0.6,
+      temperature: kind === 'test' ? 0 : 0.6,
+      max_tokens: kind === 'test' ? 8 : undefined,
     }),
   }));
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
@@ -1288,7 +1317,8 @@ async function volcanoJsonWithCredential(env, credential) {
     body: JSON.stringify({
       model: 'doubao-seed-2.0-lite',
       messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
-      temperature: 0.6,
+      temperature: 0,
+      max_tokens: 8,
     }),
   }));
   return extractJson(data?.choices?.[0]?.message?.content || '');
@@ -1301,7 +1331,7 @@ async function mimoJsonWithCredential(env, credential) {
     temperature: 0,
     stream: false,
     thinking: { type: 'disabled' },
-    max_tokens: 800,
+    max_tokens: 8,
   });
   return extractJson(data?.choices?.[0]?.message?.content || '');
 }

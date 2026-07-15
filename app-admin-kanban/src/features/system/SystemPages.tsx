@@ -30,6 +30,7 @@ type ProviderRow = {
   healthy: boolean | null;
   status: string;
   storedStatus: string;
+  models: string[];
   requiredModel: string | null;
   actualModel: string | null;
   lastSuccessfulRequestAt: string | null;
@@ -152,6 +153,7 @@ export function ProvidersPage() {
                           <th scope="col">Provider</th>
                           <th scope="col">Configured</th>
                           <th scope="col">Health</th>
+                          <th scope="col">App models</th>
                           <th scope="col">Required model</th>
                           <th scope="col">Actual model</th>
                           <th scope="col">Last success</th>
@@ -194,6 +196,15 @@ export function ProvidersPage() {
                                   ? "Failed"
                                   : "Unknown"}
                               />
+                            </td>
+                            <td data-label="App models">
+                              {provider.models?.length
+                                ? (
+                                  <ul className="provider-model-list" aria-label={`${provider.label} app models`}>
+                                    {provider.models.map((model) => <li key={model}><code>{model}</code></li>)}
+                                  </ul>
+                                )
+                                : "—"}
                             </td>
                             <td data-label="Required model">
                               <code>{provider.requiredModel || "—"}</code>

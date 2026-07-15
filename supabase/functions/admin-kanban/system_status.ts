@@ -8,6 +8,7 @@ type BrokerProvider = {
   hasKey?: unknown;
   lastTestedAt?: unknown;
   last_tested_at?: unknown;
+  models?: unknown;
 };
 
 type UsageRow = {
@@ -27,6 +28,7 @@ export type ProviderReadRow = {
   healthy: boolean | null;
   status: "healthy" | "warning" | "danger";
   storedStatus: string;
+  models: string[];
   requiredModel: string | null;
   actualModel: string | null;
   lastSuccessfulRequestAt: string | null;
@@ -38,13 +40,39 @@ export type ProviderReadRow = {
 };
 
 const PROVIDER_ORDER = ["kimi", "google", "volcano", "notion", "weatherapi", "mimo"];
+const PROVIDER_MODELS: Record<string, string[]> = {
+  kimi: [
+    "kimi/kimi-code",
+    "kimi/kimi-8k",
+    "kimi/kimi-32k",
+    "kimi/kimi-k2.6",
+    "kimi/kimi-for-coding",
+  ],
+  google: [
+    "google/gemini-2.5-flash",
+    "google/gemini-3.1-flash",
+    "google/gemini-3.1-flash-lite",
+    "google/gemma-4-31b-it",
+    "google/gemma-4-26b",
+  ],
+  volcano: [
+    "volcano/doubao-seed-2.0-lite",
+    "volcano/doubao-seed-2.0-pro",
+    "volcano/minimax-m3",
+    "volcano/minimax-m2.7",
+    "volcano/doubao-seed-2.0-mini",
+  ],
+  notion: [],
+  weatherapi: [],
+  mimo: ["mimo/mimo-v2.5", "mimo/mimo-v2.5-pro"],
+};
 const REQUIRED_MODELS: Record<string, string | null> = {
   kimi: "kimi/kimi-code",
-  google: "google/gemma-4-31b",
+  google: "google/gemma-4-31b-it",
   volcano: "volcano/doubao-seed-2.0-lite",
   notion: null,
   weatherapi: "forecast",
-  mimo: null,
+  mimo: "mimo/mimo-v2.5",
 };
 const LABELS: Record<string, string> = {
   kimi: "Kimi",
@@ -120,6 +148,18 @@ function percentile(values: number[], fraction: number) {
   return Math.round(sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)]);
 }
 
+function modelCatalog(provider: string, value: unknown) {
+  const supported = PROVIDER_MODELS[provider];
+  if (supported) return [...supported];
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(value.flatMap((model) => {
+      const normalized = stringValue(model);
+      return normalized && normalized.length <= 120 ? [normalized] : [];
+    })),
+  ].slice(0, 20);
+}
+
 export function aggregateProviderRows(input: {
   brokerProviders: BrokerProvider[];
   brokerVerified: boolean;
@@ -166,6 +206,7 @@ export function aggregateProviderRows(input: {
       provider,
       label: stringValue(broker?.label) ?? LABELS[provider] ?? provider,
       ...classification,
+      models: modelCatalog(provider, broker?.models),
       requiredModel: REQUIRED_MODELS[provider] ?? null,
       actualModel: stringValue(latestSuccess?.model),
       lastSuccessfulRequestAt,

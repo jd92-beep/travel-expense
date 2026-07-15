@@ -1,8 +1,15 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-07-14 HKT
+Last updated: 2026-07-15 HKT
 
 ## Current Status
+
+- Admin `1.0.2` is a verified source release candidate: Providers keeps one row per provider and now
+  displays every supported Volcano app LLM. Broker `2026.07.15` publishes the safe catalog and
+  recognizes the existing env-backed Volcano binding without exposing credential values. Local gates
+  passed: typecheck/build/security, unit `32/32`, contract `24/24`, full smoke `48 passed + 1 skip`,
+  Edge `53/53`, Broker check/self-test. Production remains the verified `1.0.1` release below until
+  the protected cutover completes.
 
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
 - Verified production: Admin `1.0.1`, with bounded default-workspace prefetch, idle-polling removal,

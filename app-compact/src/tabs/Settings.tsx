@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, Cloud, Copy, Download, KeyRound, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, Cloud, Copy, Download, FlaskConical, KeyRound, LoaderCircle, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useMemo, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
@@ -16,6 +16,7 @@ import {
   redactedError,
   registerPersonalNotionIntegration,
   rotateProviderCredential,
+  testAiModel,
   testProviderConnection,
   unlockCredentialBroker,
   type CredentialProvider,
@@ -252,6 +253,60 @@ function compactTripDoctor(
 function aiModelLabel(modelId: string | undefined): string {
   const id = modelId || DEFAULT_KIMI_PRIMARY_MODEL_ID;
   return AI_MODELS.find((model) => model.id === id)?.name || id;
+}
+
+function AiModelField({
+  label,
+  value,
+  state,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  state: AppState;
+  onChange: (value: string) => void;
+}) {
+  const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+  const runTest = async () => {
+    setStatus('testing');
+    setMessage('測試中');
+    try {
+      const modelName = await testAiModel(state, value);
+      setStatus('success');
+      setMessage(`${modelName} 可用`);
+    } catch (error) {
+      setStatus('error');
+      setMessage(`未能使用：${redactedError(error)}`);
+    }
+  };
+  return (
+    <div className="ai-model-field">
+      <label>{label}
+        <select
+          value={value}
+          onChange={(event) => {
+            setStatus('idle');
+            setMessage('');
+            onChange(event.target.value);
+          }}
+        >
+          {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="secondary compact ai-model-test-button"
+        aria-label={`測試 ${label}`}
+        disabled={status === 'testing'}
+        onClick={() => void runTest()}
+      >
+        {status === 'testing' ? <LoaderCircle size={16} className="spin" /> : <FlaskConical size={16} />}
+        測試
+      </button>
+      <small className={`ai-model-test-status ${status}`} aria-live="polite">{message}</small>
+    </div>
+  );
 }
 
 function tripDraftPreviewStats(draft: TripDraft) {
@@ -2492,29 +2547,13 @@ export function Settings({
       </AccordionCard>
 
       <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
-        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。如果失敗，會自動 fallback 到 contract default（Scan/Voice → Gemma 4 31B，Email/Trip → Kimi kimi-code），然後再 fallback 到其他備用模型。Provider keys 不會進入 React state。</p>
-        <div className="form-grid">
-          <label>Scan model
-            <select value={state.scanModel} onChange={(e) => updateState({ scanModel: e.target.value })}>
-              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
-          <label>Voice model
-            <select value={state.voiceModel} onChange={(e) => updateState({ voiceModel: e.target.value })}>
-              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
+        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。如果失敗，會自動 fallback 到 contract default（Scan/Voice → Mimo v2.5，Email/Trip → Mimo v2.5 Pro），再使用其他備用模型。測試只會向所選 model 發出一次極短 JSON request，唔會 fallback。Provider keys 不會進入 React state。</p>
+        <div className="form-grid ai-model-grid">
+          <AiModelField label="Scan model" value={state.scanModel} state={state} onChange={(scanModel) => updateState({ scanModel })} />
+          <AiModelField label="Voice model" value={state.voiceModel} state={state} onChange={(voiceModel) => updateState({ voiceModel })} />
+          <AiModelField label="Email model" value={state.emailModel} state={state} onChange={(emailModel) => updateState({ emailModel })} />
+          <AiModelField label="Trip update model" value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} state={state} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
         </div>
-        <label>Email model
-          <select value={state.emailModel} onChange={(e) => updateState({ emailModel: e.target.value })}>
-            {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-          </select>
-        </label>
-        <label>Trip update model
-          <select value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} onChange={(e) => updateState({ tripUpdateModel: e.target.value })}>
-            {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-          </select>
-        </label>
         <label>Google backup model
           <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
         </label>
@@ -3715,7 +3754,7 @@ export function Settings({
                   <option value="kimi">Kimi (kimi-code, kimi-8k, kimi-32k, kimi-k2.6, kimi-for-coding)</option>
                   <option value="google">Google (Gemini, Gemma — all Google models)</option>
                   <option value="mimo">Mimo (Mimo v2.5, Mimo v2.5 Pro)</option>
-                  <option value="volcano">Volcano Engine (doubao-seed-2.0-lite, minimax-m3, m2.7, auto)</option>
+                  <option value="volcano">Volcano Engine (5 app LLM models)</option>
                   <option value="weatherapi">WeatherAPI (weather forecasts)</option>
                 </select>
               </label>

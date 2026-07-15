@@ -3,7 +3,13 @@ import { aggregateProviderRows, normalizeOverviewStatusStrip } from "./system_st
 
 Deno.test("provider aggregation returns one row with production evidence", () => {
   const rows = aggregateProviderRows({
-    brokerProviders: [{ provider: "google", label: "Google", status: "connected", hasKey: true }],
+    brokerProviders: [{
+      provider: "google",
+      label: "Google",
+      status: "connected",
+      hasKey: true,
+      models: ["google/gemma-4-31b-it", "google/gemini-2.5-flash"],
+    }],
     brokerVerified: true,
     usageRows: [
       {
@@ -44,7 +50,14 @@ Deno.test("provider aggregation returns one row with production evidence", () =>
     healthy: true,
     status: "healthy",
     storedStatus: "connected",
-    requiredModel: "google/gemma-4-31b",
+    models: [
+      "google/gemini-2.5-flash",
+      "google/gemini-3.1-flash",
+      "google/gemini-3.1-flash-lite",
+      "google/gemma-4-31b-it",
+      "google/gemma-4-26b",
+    ],
+    requiredModel: "google/gemma-4-31b-it",
     actualModel: "google/gemma-4-31b",
     lastSuccessfulRequestAt: "2026-07-10T10:01:00Z",
     lastProbeAt: "2026-07-10T10:03:00Z",
@@ -66,8 +79,14 @@ Deno.test("broker liveness alone never becomes provider health", () => {
   assertEquals(rows.find((row) => row.provider === "google")?.configured, null);
   assertEquals(rows.find((row) => row.provider === "volcano")?.label, "Volcano");
   assertEquals(
-    rows.find((row) => row.provider === "volcano")?.requiredModel,
-    "volcano/doubao-seed-2.0-lite",
+    rows.find((row) => row.provider === "volcano")?.models,
+    [
+      "volcano/doubao-seed-2.0-lite",
+      "volcano/doubao-seed-2.0-pro",
+      "volcano/minimax-m3",
+      "volcano/minimax-m2.7",
+      "volcano/doubao-seed-2.0-mini",
+    ],
   );
   assertEquals(new Set(rows.map((row) => row.provider)).size, rows.length);
 });

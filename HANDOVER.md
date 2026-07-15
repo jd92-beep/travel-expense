@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-15 HKT
-- **Focus**: Session 58 proved the remaining banner came from a stale pre-fix tab and added reliable deployment freshness plus trip identity recovery.
-- **Agent**: Codex Sol (investigation, orchestration, implementation and review); two Sol explorers cross-checked the root cause. Terra workers produced no edits after capacity/timebox stops.
-- **App version**: Compact `0.16.6`; Android `0.19.2` (versionCode 1920); Admin source/production `1.0.1`; React `0.2.4`
+- **Focus**: Session 59 closed exact Volcano routing/catalog/model probes across Compact, Android, Broker and Admin, and hardened Android persisted sync recovery.
+- **Agent**: Codex Sol (investigation, orchestration and review); two investigators cross-checked the root cause; Terra implemented the Android branch changes.
+- **App version**: Compact source `0.16.7`; Android branch `0.19.4` (versionCode 1940); Admin source `1.0.2`; Broker source `2026.07.15`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.6`; the Android branch is `0.19.2`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web source is currently `0.16.7`; the Android branch is `0.19.4`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -66,8 +66,37 @@ you closed with your session number.
     detector until Boss performs one hard refresh after `0.16.6` reaches production. Do not claim
     that specific tab is on `0.16.6` until the refreshed asset/version is confirmed. Future stale
     tabs running `0.16.6+` will show the explicit update notice without a service worker.
+15. 🟡 **Session 59 production cutover** — Compact `0.16.7`, Admin `1.0.2`, Broker `2026.07.15`
+    and the matching Admin Edge catalog are verified release candidates. Commit/push, protected
+    promotion and no-store live Chrome verification remain before this item can close.
 
 ## What Was Done
+
+### Session 59 (Codex Sol + Terra — Volcano model closure and Android sync-state hardening)
+
+1. **Root cause locked**: Compact and Android `callModelAttemptJson()` only handled Kimi/Mimo, so a
+   selected Volcano model fell through to Google. Admin aggregation and Broker status exposed one
+   required model instead of the app catalog, and env-only `VOLCANO_KEY` was falsely reported missing.
+2. **Exact model contract**: all five existing Volcano app LLM IDs now route to `/volcano/json`.
+   Compact/Android Settings add four selected-model tests using `kind=test`, 8 output tokens, no
+   fallback and a required `{ok:true}` response. Quota/429 hard stops remain unchanged; Seedance
+   media models stay outside the LLM contract.
+3. **Admin/provider truth**: Broker status returns the complete safe model catalog without credential
+   values and recognizes the env-backed Volcano binding. Admin keeps one row per provider and renders
+   every supported model with responsive reflow.
+4. **Android banner prevention**: both localStorage and IndexedDB hydration use the same normalizer.
+   Only non-exhausted retryable failures requeue; exhausted and version-conflict failures remain
+   visible evidence, preventing stale generic banners without hiding genuine terminal failures.
+   Stale trip completion also preserves `supabaseId`.
+5. **Verification**: Broker check/self-test passed; Edge format/lint/check and `53/53` tests passed;
+   Compact typecheck/build/security plus AI routing, Settings, offline `4/4`, sync regression `6/6`
+   and mobile `1/1` passed. Admin typecheck/build/security, unit `32/32`, contract `24/24`, mobile
+   `3/3`, a11y `2/2` and full smoke `48 passed + 1 intentional skip` passed. Android typecheck,
+   build, security, targeted browser smokes, JBR 21 debug build and emulator QA passed with verified
+   App Link at `/tmp/travel-expense-android-qa-2026-07-15T12-16-37-029Z`.
+6. **Safety scope**: no passphrase, secret value, provider credential, RLS, migration, write mode or
+   live user data changed. The verified release candidate still requires commit/push and production
+   cutover, tracked as Open Item 15.
 
 ### Session 58 (Codex Sol + Sol explorers — Compact 0.16.6 stale-tab and trip identity recovery)
 

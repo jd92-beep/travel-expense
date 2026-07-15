@@ -1465,6 +1465,12 @@ button.sync-status-indicator:focus-visible {
   margin-bottom: 12px;
 }
 .filters, .form-grid, .action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ai-model-field { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px 8px; }
+.ai-model-field > label { min-width: 0; margin-top: 0; }
+.ai-model-test-button { min-width: 82px; justify-content: center; }
+.ai-model-test-status { grid-column: 1 / -1; min-height: 18px; color: var(--muted); font-weight: 700; }
+.ai-model-test-status.success { color: var(--green); }
+.ai-model-test-status.error { color: var(--red); }
 .action-row.wrap { display: flex; flex-wrap: wrap; }
 .check-row { display: flex; align-items: center; gap: 8px; }
 .check-row input { width: auto; }

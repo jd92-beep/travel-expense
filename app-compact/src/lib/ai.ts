@@ -855,7 +855,18 @@ async function callModelAttemptJson(
 ) {
   if (attempt.provider === 'kimi') return callKimiJson(state, prompt, kind, image, attempt.model);
   if (attempt.provider === 'mimo') return callMimoJson(state, prompt, kind, image, attempt.model);
+  if (attempt.provider === 'volcano') return callVolcanoJson(state, prompt, kind, image, attempt.model);
   return callGoogleJson(state, prompt, kind, image, attempt.model);
+}
+
+async function callVolcanoJson(
+  state: AppState,
+  prompt: string,
+  kind: 'scan' | 'voice' | 'email' | 'trip',
+  image?: { base64: string; mime: string },
+  overrideModel?: string,
+) {
+  return brokerAiJson(state, 'volcano', prompt, kind, image, overrideModel);
 }
 
 async function callGoogleJson(
