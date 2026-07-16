@@ -1,5 +1,14 @@
 # AGENTS.md
 
+## Global Handbook
+
+- Inherit the core rules and progressive-loading index from
+  `/Users/tommy/.codex/AGENTS.md`.
+- Read `/Users/tommy/Documents/Codex/travel-expense/AGENTS.md` for shared
+  travel-expense contracts, then apply the worktree-specific scope below.
+- Load `/Users/tommy/.codex/ai-agents.md` only for named-agent, runtime, host,
+  SSH, or cross-agent work.
+
 ## Reply Style
 
 - Call the user `Boss`.
@@ -11,8 +20,12 @@
 
 ## Project Scope
 
-- This file applies only to `/Users/tommy/Documents/Codex/travel-expense`.
-- Local project directory: `/Users/tommy/Documents/Codex/travel-expense`.
+- This file applies only to
+  `/Users/tommy/Documents/Codex/travel-expense-android-shell`.
+- Main project directory: `/Users/tommy/Documents/Codex/travel-expense`.
+- This checkout is the Android worktree. Verify its current branch live before
+  editing, keep Android work here, and do not merge or publish a release unless
+  Boss explicitly asks.
 - GitHub repo: `https://github.com/jd92-beep/travel-expense`
 - GitHub connection: git remote `origin` uses `https://github.com/jd92-beep/travel-expense.git` for both fetch and push.
 - GitHub Pages legacy/root app: `https://jd92-beep.github.io/travel-expense/`
