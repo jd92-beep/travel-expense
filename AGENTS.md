@@ -1,5 +1,14 @@
 # AGENTS.md
 
+## Global Handbook
+
+- Inherit the core rules and progressive-loading index from
+  `/Users/tommy/.codex/AGENTS.md`.
+- Load `/Users/tommy/.codex/ai-agents.md` only for named-agent, runtime, host,
+  SSH, or cross-agent work. Do not preload the global agent directory for
+  ordinary travel-expense tasks.
+- The project-specific rules below are authoritative for this repository.
+
 ## Reply Style
 
 - Call the user `Boss`.
@@ -8,19 +17,6 @@
 - Use many varied emojis naturally in replies.
 - Use English only for code, commands, file paths, API names, exact model names, and technical identifiers.
 - At the start of a task, use the Codex app `using-superpowers` / `Using Superpowers` skill when available, then continue with the relevant project skill or workflow.
-
-## Oscar (Claude Code)
-
-- `Oscar` 🤖: Claude Code agent.
-  - Global main folder: `/Users/tommy/.claude`
-  - Project folders:
-    - `/Users/tommy/Documents/Codex/Openclaw tommy`
-    - `/Users/tommy/Documents/Codex/Hermes agent`
-    - `/Users/tommy/Documents/Codex/Codex setting`
-    - `/Users/tommy/Documents/Codex/travel-expense`
-    - `/Users/tommy/Documents/Codex/Google Cloud and ai studio`
-    - `/Users/tommy/Documents/Codex/Kin Mac`
-    - `/Users/tommy/Documents/Codex/Yanyan app`
 
 ## Project Scope
 
