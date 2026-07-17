@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-15 HKT
-- **Focus**: Session 61 refreshed `AGENTS.md` against current Git, Compact, Admin, Broker and Android evidence without changing runtime behavior.
+- **Date**: 2026-07-17 HKT
+- **Focus**: Session 62 repaired documentation evidence, generated-hunk custody, Android commit wording, and shared-receipt worker status without changing runtime behavior.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.8`; Android branch `0.19.5` (versionCode 1950); Admin production `1.0.2`; Broker production `2026.07.15.2`; React `0.2.4`
+- **App version**: Compact `0.16.8`; Android `0.19.5` (versionCode 1950; branch HEAD `60be98e`, latest app-code commit `8eb1bd4`); Admin production `1.0.2`; Broker production `2026.07.15.2`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -72,6 +72,35 @@ you closed with your session number.
     cold-open waited 15 seconds with neither generic sync-error banner. (Session 60.)
 
 ## What Was Done
+
+### Session 62 (Codex — Baton documentation findings repair)
+
+1. **Exact evidence recorded:** supplied verification was `git diff --check f575a5e^ f575a5e` →
+   exit `0`, no output; `node scripts/security-scan.mjs` → `Secret scan passed`; and Compact
+   `npm run smoke:deploy-live` → `status=passed`, `head/originMain=6683219`, Vercel HTTP `200`,
+   Netlify HTTP `200`. Admin `/api/health` → HTTP `200`, source SHA
+   `67cde57a42bc43f1bda026d81d555260e25bb564`, deployment
+   `dpl_B4bGNsxLudia3k38BMuP5PXsD7kZ`, `acceptingReadTraffic=true`; Broker `/health` →
+   `ok=true`, version `2026.07.15.2`. Admin workflow `29415119909` succeeded at its exact SHA,
+   Edge suffix is `_95`, and Pages workflow `29421527793` for `f575a5e` succeeded. These exact
+   results correct Session 61's unquoted pass assertions without rewriting its historical entry.
+2. **Generated-hunk custody:** `f575a5e` also included the pre-existing generated GitNexus count
+   hunk (`7550`/`18296` to `7564`/`18319`) without explicit custody disclosure. Do not manually edit
+   the generated GitNexus block or counts. For future commits, stage and review at hunk level; either
+   own every staged generated hunk explicitly or leave it out.
+3. **Durable handoff wording:** current release/open-item detail now belongs here rather than in a
+   dated `AGENTS.md` snapshot. Android branch HEAD is `60be98e`, while its latest app-code commit is
+   `8eb1bd4`; both describe app `0.19.5` / versionCode `1950`, and no release APK/AAB exists.
+4. **Shared-receipt worker status:** worker `v38` is deployed and passed a negative canary. Current
+   Open Item 5 remains open: a positive shared-receipt write plus Notion mirror result is still
+   unproven.
+5. **Scope:** this session deliberately changed only `AGENTS.md`, `HANDOVER.md`, and `README.md`;
+   no code, version, package, Git index, branch, deployment, DB, RLS, secret, or user data changed.
+   Existing `CLAUDE.md` work and concurrently appearing `app-admin-kanban` package/style changes
+   remain untouched, unreviewed and unstaged.
+6. **Repair verification:** `git diff --check -- AGENTS.md HANDOVER.md README.md` → exit `0`, no
+   output; `node scripts/security-scan.mjs` → `Secret scan passed`. No app build or version bump
+   was required because this repair changes documentation only.
 
 ### Session 61 (Codex — current agent instructions refresh)
 

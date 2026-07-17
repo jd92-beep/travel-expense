@@ -35,45 +35,24 @@
 - Android worktree: `/Users/tommy/Documents/Codex/travel-expense-android-shell`, branch
   `codex/admin-console-1.0-android`. Keep Android changes on that branch unless Boss explicitly asks
   for a reviewed merge; do not treat a debug APK as a published Android release.
+- Android branch HEAD and its latest app-code commit can differ after docs-only commits; check both
+  live before reporting Android state.
 - GitNexus index is refreshed during handover work; run `node .gitnexus/run.cjs status` for the live indexed commit and counts before relying on them.
 - For the current pushed `main` commit, run `git fetch origin && git log origin/main -1 --oneline`; do not trust point-in-time commit facts written into docs.
-- For current app versions, read `APP_VERSION` in `app-compact/src/lib/constants.ts` and `app-react/src/lib/constants.ts` (apps version independently). Verify deploy health live at the URLs above instead of relying on dated check results. The previous Compact Netlify credit block was cleared by the successful `0.16.6` workflow, and `0.16.8` was live-verified on 2026-07-15; continue to treat live checks as authoritative because account credits can change again.
+- For current app versions, read `APP_VERSION` in `app-compact/src/lib/constants.ts` and `app-react/src/lib/constants.ts` (apps version independently). Verify deploy health live at the URLs above; check `HANDOVER.md` for current release evidence and open items. Account credits can change, so recheck the Compact workflow and live asset when relevant.
 - The repo is public. Never commit real API keys, OAuth tokens, Notion tokens, injected `_site/` output, or local secrets.
 
-## Current Release Snapshot
+## Production Safety Boundaries
 
-This snapshot was live-verified on 2026-07-15 HKT. Re-run the checks above before relying on it;
-runtime and deploy state outrank this section.
-
-- Compact Web: `0.16.8`, verified on Vercel, Netlify and GitHub Pages. `npm run smoke:deploy-live`
-  passes against the public Vercel and Netlify aliases.
-- React source: `0.2.4`.
-- Android branch: `0.19.5`, versionCode `1950`, commit `8eb1bd4`. Persisted-state `2/2`, selected
-  model `1/1`, mobile layout `1/1`, JBR 21 debug build and emulator QA passed. No release APK/AAB
-  was published.
-- Admin Console: production `1.0.2`; `/api/health` returns `200`, exact source SHA
-  `67cde57a42bc43f1bda026d81d555260e25bb564` and `acceptingReadTraffic=true`. Protected workflow
-  `29415119909` promoted the release; Admin Edge `admin-kanban` v95 is active.
-- Credential Broker: production `2026.07.15.2`. Authenticated live probes returned `200` and
-  `ok=true` for all five configured Volcano LLMs.
-- The current Admin passphrase remains unchanged and necessary; passkey is additive. Never put the
-  passphrase, passkey bootstrap material, session cookies or machine keys in source or docs.
-
-## Current Operational Boundaries
-
-- Admin writes remain backend-enforced `deny_all`. Account consolidation, scheduled deletion,
-  Notion write repair, device commands, runtime writes, arbitrary SQL/table editing and other R3
-  controls remain server-disabled.
-- Final post-bootstrap fresh Chrome login evidence, an ordinary authenticated JWT privilege smoke
-  and the planned non-login helper-owner hardening remain open; consult the top of `HANDOVER.md`.
-- `receipt-photos` remains in public compatibility mode until active Compact/Android signed-photo
-  heartbeats justify the reviewed private cutover.
-- Live migration history remains divergent, and optional trip-intelligence columns are absent in
-  production. Preserve the client legacy-row fallback; do not use `supabase db push` or migration
-  repair without Boss approval.
-- Known test debt is tracked in `HANDOVER.md`: the Compact Supabase backfill itinerary fixture, the
-  Android Trip Doctor Settings assertion drift, and one pre-existing Compact CSP inline-handler
-  console warning. Do not hide or weaken these checks.
+- Read `HANDOVER.md` "Current Open Items" before Admin, database, receipt-photo or release work;
+  it is the live source for enabled capabilities, compatibility gates and unresolved checks.
+- Do not enable Admin writes, R3 controls or generic data-editing surfaces without a reviewed plan,
+  completed safety gates and Boss approval.
+- Do not make `receipt-photos` private until active Compact and Android compatibility evidence
+  satisfies the reviewed cutover gate.
+- Preserve the client legacy-row fallback. Do not use `supabase db push` or migration repair without
+  Boss approval.
+- Never hide, weaken or delete a failing check to make a release appear green.
 
 ## Read First
 
