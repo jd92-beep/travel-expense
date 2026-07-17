@@ -178,7 +178,7 @@ export function AdminShell() {
           </span>
         </div>
         <Navigation surface="sidebar" />
-        <div className="sidebar-foot">
+        <div className="sidebar-foot" data-augmented-ui="tl-clip br-clip border">
           <span className={`environment-badge ${ENVIRONMENT_CLASS}`}>
             <i />{ENVIRONMENT}
           </span>
@@ -227,7 +227,7 @@ export function AdminShell() {
             <Menu size={20} />
           </button>
           <form
-            className="global-search"
+            className="global-search hud-corners"
             onSubmit={(event) => {
               event.preventDefault();
               const q = search.trim();

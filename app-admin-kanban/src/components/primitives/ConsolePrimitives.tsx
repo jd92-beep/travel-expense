@@ -27,7 +27,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="page-header">
+    <header className="page-header" data-augmented-ui="tl-clip br-clip border">
       <div>
         <h1>{title}</h1>
         {description && <p>{description}</p>}
@@ -153,7 +153,7 @@ export function FreshnessBanner({
   const { partial, stale } = adminMetaState(meta);
   return (
     <div
-      className={`freshness-banner ${
+      className={`freshness-banner hud-corners ${
         stale || partial ? "freshness-warning" : ""
       }`}
       role={stale || partial ? "status" : undefined}
@@ -348,9 +348,14 @@ export function Metric(
     : null;
   return (
     // BlurFade is the root element itself (not a wrapper around a separate div) so
-    // .metric-block stays a direct child of .metric-strip — that preserves the
-    // `.metric-block:last-child { border-right: 0 }` rule and the grid item count.
-    <BlurFade className={`metric-block metric-${tone}`} delay={delay}>
+    // .metric-block stays a direct child of .metric-strip — that preserves the grid
+    // item count. Each metric now renders as its own chamfered HUD readout module
+    // (metric-strip switched to a gapped grid — see components.css).
+    <BlurFade
+      className={`metric-block metric-${tone}`}
+      delay={delay}
+      augmentedUi="tl-clip br-clip border"
+    >
       <span>{label}</span>
       <strong>{numericValue !== null ? <NumberTicker value={numericValue} /> : value}</strong>
     </BlurFade>

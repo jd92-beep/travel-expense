@@ -6,11 +6,37 @@ button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .52; }
 a { color: inherit; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: 0 0 0 5px var(--ring); border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--neon-cyan); outline-offset: 2px; box-shadow: 0 0 0 5px var(--ring); border-radius: 4px; }
 h1, h2, h3, p { overflow-wrap: anywhere; }
 h1, h2, h3 { margin: 0; letter-spacing: 0; }
-h1 { font-family: var(--font-display); font-size: 24px; line-height: 1.25; }
-h2 { font-size: 16px; line-height: 1.35; }
+h1 {
+  position: relative;
+  padding-bottom: 10px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.25;
+  letter-spacing: .01em;
+}
+h1::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 48px;
+  height: 3px;
+  background: var(--grad-accent);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+h2 { font-size: 16px; line-height: 1.35; font-family: var(--font-display); font-weight: 600; }
+h2::before {
+  content: "▮▮";
+  display: inline-block;
+  margin-right: 7px;
+  color: var(--neon-cyan);
+  font-size: .7em;
+  letter-spacing: 1px;
+  vertical-align: middle;
+}
 h3 { font-size: 14px; line-height: 1.4; }
 p { margin: 0; line-height: 1.55; }
 small { color: var(--muted); font-size: 12px; line-height: 1.45; }

@@ -116,6 +116,7 @@ export function PasskeyManagerDialog({
     <dialog
       ref={dialogRef}
       className="passkey-dialog"
+      data-augmented-ui="tl-clip br-clip border"
       aria-labelledby="passkey-dialog-title"
       onCancel={(event) => {
         event.preventDefault();

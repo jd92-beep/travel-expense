@@ -117,6 +117,7 @@ export function OverviewPage() {
             key={source.id}
             delay={index * STAGGER_STEP_S}
             className={`status-unit ${HEALTHY_STATUS.has(source.status) ? "status-unit-healthy" : ""}`}
+            augmentedUi="tl-clip br-clip border"
           >
             <span>
               {source.id === "android"

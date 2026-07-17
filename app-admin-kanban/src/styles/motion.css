@@ -1,5 +1,5 @@
 .shimmer-bar {
-  background: var(--elevated) linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .06) 50%, transparent 70%);
+  background: var(--elevated) linear-gradient(100deg, transparent 30%, rgba(37, 225, 237, .14) 50%, transparent 70%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
 }
@@ -44,14 +44,16 @@ dialog.mobile-drawer::backdrop { background: rgba(6, 8, 11, .6); backdrop-filter
   dialog.mobile-drawer[open]::backdrop { opacity: 0; }
 }
 
-/* Overview: healthy status units get a soft breathing glow — tier-full only (compositor-
-   cheap box-shadow, but reserved for desktop/mouse to keep phones' battery/perf headroom). */
+/* Overview: healthy status units get a soft breathing glow — tier-full only. Uses
+   `filter: drop-shadow` rather than `box-shadow`: the card now carries an augmented-ui
+   `clip-path` chamfer, and box-shadow gets clipped away outside that polygon on every
+   straight edge (only drop-shadow survives clip-path as a post-clip filter). */
 html[data-fx-tier="full"] .status-unit-healthy {
   animation: status-glow-breathe 3s var(--ease-out) infinite;
 }
 @keyframes status-glow-breathe {
-  0%, 100% { box-shadow: var(--shadow-1), 0 0 0 rgba(105, 167, 255, 0); }
-  50% { box-shadow: var(--shadow-1), 0 0 16px var(--glow-accent); }
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(37, 225, 237, 0)); }
+  50% { filter: drop-shadow(0 0 10px var(--glow-cyan)); }
 }
 
 /* Overview: 1px gradient accent line under the page header, contained to the header box. */
@@ -72,6 +74,6 @@ html[data-fx-tier="full"] .status-unit-healthy {
   animation-iteration-count: 1;
 }
 @keyframes activity-badge-ping-ring {
-  0% { box-shadow: 0 0 0 0 rgba(184, 65, 73, .55); }
-  100% { box-shadow: 0 0 0 8px rgba(184, 65, 73, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(255, 42, 109, .55); }
+  100% { box-shadow: 0 0 0 8px rgba(255, 42, 109, 0); }
 }

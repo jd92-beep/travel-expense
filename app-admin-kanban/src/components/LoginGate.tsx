@@ -67,7 +67,9 @@ export function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => voi
       <BlurFade className="login-panel">
         <div className="brand-mark"><Shield size={30} /></div>
         <BlurFade delay={0.05}>
-          <h1>Travel Expense Admin Console</h1>
+          <h1 className="glitch-title" data-text="Travel Expense Admin Console">
+            Travel Expense Admin Console
+          </h1>
         </BlurFade>
         <p>管理員驗證</p>
         <label>

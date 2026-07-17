@@ -227,6 +227,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
     <dialog
       ref={dialogRef}
       className="operation-dialog"
+      data-augmented-ui="tl-clip br-clip border"
       aria-labelledby="operation-dialog-title"
       onCancel={(event) => {
         event.preventDefault();

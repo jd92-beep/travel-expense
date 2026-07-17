@@ -20,15 +20,20 @@ export function BlurFade({
   children,
   delay = 0,
   className,
+  augmentedUi,
 }: {
   children: ReactNode;
   delay?: number;
   className?: string;
+  /** Optional `data-augmented-ui` attribute value — threads the augmented-ui chamfered
+   * panel treatment onto this element without needing a separate wrapper (BlurFade is
+   * the card's root DOM node in every current call site). */
+  augmentedUi?: string;
 }) {
   const tier = useEffectsTier();
 
   if (tier === "lite") {
-    return <div className={className}>{children}</div>;
+    return <div className={className} data-augmented-ui={augmentedUi}>{children}</div>;
   }
 
   const initial = tier === "full"
@@ -41,6 +46,7 @@ export function BlurFade({
   return (
     <motion.div
       className={className}
+      data-augmented-ui={augmentedUi}
       initial={initial}
       animate={animate}
       transition={{ duration: 0.2, delay, ease: [0.22, 1, 0.36, 1] }}

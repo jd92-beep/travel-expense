@@ -4,6 +4,33 @@ Last updated: 2026-07-18 HKT
 
 ## Current Status
 
+- Local RC `1.2.0` — cyberpunk visual pass on top of the v1.1.0 futuristic overhaul (not yet
+  promoted; production remains `1.0.2`). Visual/CSS + attribute-only layer, no API/auth/routing/
+  operation-flow logic changed. Key facts:
+  - New dep `augmented-ui` (BSD-2-Clause, pure CSS, no JS) for chamfered panel corners via
+    `data-augmented-ui` + `--aug-*` custom props — applied to login panel (manual `clip-path`
+    variant to avoid clashing with the existing shine-ring pseudo-elements), Overview status
+    units + metric cards (now a gapped grid of discrete HUD modules instead of one divided bar),
+    `PageHeader`, `operation-dialog`, `passkey-dialog`, and the sidebar footer environment badge.
+  - `--font-display` switched to `@fontsource-variable/oxanium`; `@fontsource-variable/space-grotesk`
+    removed (fully superseded, uninstalled).
+  - New neon tokens in `tokens.css` (`--neon-cyan/magenta/magenta-hot/yellow` + matching glow
+    rgbas), `--grad-accent` and `--ring` now cyan/magenta-based.
+  - `filter: drop-shadow(...)` used instead of `box-shadow` for glows on any element carrying a
+    `clip-path` (status-unit breathing glow, button hover glow) — `box-shadow` gets silently
+    clipped away outside a `clip-path` polygon on straight edges; `drop-shadow` is a post-clip
+    filter and survives.
+  - Hex-grid + scanline atmosphere layers on `.admin-shell` are `position: fixed` pseudo-elements
+    (excluded from document scroll-width by definition) — the mobile smoke's exact
+    `body.scrollWidth === 360` assertion is unaffected.
+  - Login title glitch (`.glitch-title` in `LoginGate.tsx`) fires once on mount then again on
+    hover, `full` tier only; every other tier (incl. reduced-motion, which forces `lite`) gets a
+    static RGB-split double text-shadow.
+  - All four verification suites pass unmodified: 48 smokes + 2 a11y + 3 mobile + typecheck.
+    Build: main JS chunk 183.83KB gz (baseline 183.71KB, +0.13KB — well under the +25KB budget),
+    three.js login chunk still a separate lazy chunk (131.66KB gz), CSS 29.23KB gz (was 11.78KB;
+    the augmented-ui stylesheet is the bulk of that growth, as expected).
+
 - Local RC `1.1.0` — futuristic UI overhaul (not yet promoted; production remains `1.0.2`). Visual
   layer only: no API, auth, routing or operation-flow logic changed. Key facts for maintainers:
   - Styles moved from `src/styles.css` to `src/styles/{index,tokens,base,components,motion,fx,reduced-motion}.css`

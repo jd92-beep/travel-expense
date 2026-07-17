@@ -13,8 +13,8 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 const POINT_COUNT = 1200;
-const ACCENT = new THREE.Color("#69a7ff");
-const TEAL = new THREE.Color("#4ca9c9");
+const ACCENT = new THREE.Color("#25e1ed"); // neon cyan
+const TEAL = new THREE.Color("#ff2a6d"); // neon magenta (hot)
 const FOG_COLOR = 0x0a0c10;
 const POINTS_ROTATION_PERIOD_S = 90; // >=60s per the "slow" requirement
 const CORE_ROTATION_PERIOD_S = 75;
@@ -149,7 +149,7 @@ export default function LoginScene3D() {
 
     const coreGeometry = new THREE.IcosahedronGeometry(2.1, 1);
     const coreMaterial = new THREE.MeshBasicMaterial({
-      color: 0x69a7ff,
+      color: 0x25e1ed,
       wireframe: true,
       transparent: true,
       opacity: 0.12,
