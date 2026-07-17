@@ -1,0 +1,77 @@
+.shimmer-bar {
+  background: var(--elevated) linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .06) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+dialog.operation-dialog[open] { opacity: 1; transform: translateY(0) scale(1); transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+@starting-style {
+  dialog.operation-dialog[open] { opacity: 0; transform: translateY(8px) scale(.985); }
+}
+dialog.operation-dialog::backdrop { background: rgba(6, 8, 11, .6); backdrop-filter: blur(2px); transition: opacity var(--dur-2); }
+@starting-style {
+  dialog.operation-dialog[open]::backdrop { opacity: 0; }
+}
+
+dialog.passkey-dialog[open] { opacity: 1; transform: translateY(0) scale(1); transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+@starting-style {
+  dialog.passkey-dialog[open] { opacity: 0; transform: translateY(8px) scale(.985); }
+}
+dialog.passkey-dialog::backdrop { background: rgba(6, 8, 11, .6); backdrop-filter: blur(2px); transition: opacity var(--dur-2); }
+@starting-style {
+  dialog.passkey-dialog[open]::backdrop { opacity: 0; }
+}
+
+dialog.activity-center[open] { opacity: 1; transform: translateY(0) scale(1); transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+@starting-style {
+  dialog.activity-center[open] { opacity: 0; transform: translateY(8px) scale(.985); }
+}
+dialog.activity-center::backdrop { background: rgba(6, 8, 11, .6); backdrop-filter: blur(2px); transition: opacity var(--dur-2); }
+@starting-style {
+  dialog.activity-center[open]::backdrop { opacity: 0; }
+}
+
+dialog.mobile-drawer[open] { opacity: 1; transform: translateY(0) scale(1); transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+@starting-style {
+  dialog.mobile-drawer[open] { opacity: 0; transform: translateY(8px) scale(.985); }
+}
+dialog.mobile-drawer::backdrop { background: rgba(6, 8, 11, .6); backdrop-filter: blur(2px); transition: opacity var(--dur-2); }
+@starting-style {
+  dialog.mobile-drawer[open]::backdrop { opacity: 0; }
+}
+
+/* Overview: healthy status units get a soft breathing glow — tier-full only (compositor-
+   cheap box-shadow, but reserved for desktop/mouse to keep phones' battery/perf headroom). */
+html[data-fx-tier="full"] .status-unit-healthy {
+  animation: status-glow-breathe 3s var(--ease-out) infinite;
+}
+@keyframes status-glow-breathe {
+  0%, 100% { box-shadow: var(--shadow-1), 0 0 0 rgba(105, 167, 255, 0); }
+  50% { box-shadow: var(--shadow-1), 0 0 16px var(--glow-accent); }
+}
+
+/* Overview: 1px gradient accent line under the page header, contained to the header box. */
+.overview-page .page-header { position: relative; overflow: clip; }
+.overview-page .page-header::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1px;
+  background: var(--grad-accent);
+  opacity: .6;
+}
+
+/* Activity bell badge: one-shot ping ring on mount (i.e. whenever the count first becomes
+   positive) — never loops, so it can't compete for attention while operations stay active. */
+.activity-badge-ping {
+  animation: activity-badge-ping-ring var(--dur-3) var(--ease-out) 1;
+  animation-iteration-count: 1;
+}
+@keyframes activity-badge-ping-ring {
+  0% { box-shadow: 0 0 0 0 rgba(184, 65, 73, .55); }
+  100% { box-shadow: 0 0 0 8px rgba(184, 65, 73, 0); }
+}

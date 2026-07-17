@@ -1,0 +1,52 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif;
+  font-synthesis: none;
+  letter-spacing: 0;
+  background: #0f1115;
+  color: #f5f7fa;
+
+  /* Neutrals */
+  --bg-deep: #0a0c10;
+  --bg: #0f1115;
+  --surface: #171a1f;
+  --surface-2: #14171c;
+  --elevated: #1e2228;
+  --border: #343a42;
+  --border-soft: #272c33;
+  --text: #f5f7fa;
+  --muted: #aab2bd;
+
+  /* Accent + status */
+  --accent: #69a7ff;
+  --success: #3fb950;
+  --warning: #d4a72c;
+  --danger: #ff6b6b;
+  --info: #4ca9c9;
+
+  /* Glass + glow */
+  --overlay: rgba(23, 26, 31, 0.82);
+  --glow-accent: rgba(105, 167, 255, 0.35);
+  --grad-accent: linear-gradient(90deg, #69a7ff, #4ca9c9);
+  --ring: rgba(105, 167, 255, 0.5);
+
+  /* Depth */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, .45);
+  --shadow-3: 0 12px 40px rgba(0, 0, 0, .55);
+
+  /* Radii */
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+
+  /* Motion */
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 300ms;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+
+  /* Fonts */
+  --font-display: 'Space Grotesk Variable', 'Noto Sans TC', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'SFMono-Regular', Consolas, monospace;
+}

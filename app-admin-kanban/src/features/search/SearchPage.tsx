@@ -9,6 +9,10 @@ import {
   LoadingState,
   PageHeader,
 } from "../../components/primitives/ConsolePrimitives";
+import { BlurFade } from "../../components/fx/BlurFade";
+
+const STAGGER_STEP_S = 0.04;
+const STAGGER_MAX_ITEMS = 8;
 
 type SearchData = {
   accounts: Array<Record<string, unknown>>;
@@ -91,20 +95,24 @@ function SearchGroup(
       {items.length
         ? (
           <div className="compact-list">
-            {items.map((item) => (
-              <Link
-                className="compact-row"
-                to={`${base}/${String(item.id)}`}
+            {items.map((item, index) => (
+              <BlurFade
                 key={String(item.id)}
+                delay={Math.min(index, STAGGER_MAX_ITEMS - 1) * STAGGER_STEP_S}
               >
-                <Search size={16} />
-                <span>
-                  <strong>{String(item[labelKey] || item.id)}</strong>
-                  <small>
-                    <code>{String(item.id)}</code>
-                  </small>
-                </span>
-              </Link>
+                <Link
+                  className="compact-row"
+                  to={`${base}/${String(item.id)}`}
+                >
+                  <Search size={16} />
+                  <span>
+                    <strong>{String(item[labelKey] || item.id)}</strong>
+                    <small>
+                      <code>{String(item.id)}</code>
+                    </small>
+                  </span>
+                </Link>
+              </BlurFade>
             ))}
           </div>
         )

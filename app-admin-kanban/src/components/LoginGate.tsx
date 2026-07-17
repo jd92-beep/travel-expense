@@ -1,9 +1,17 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { KeyRound, Lock, Shield } from 'lucide-react';
 import { AdminApiError, enrollBossPasskey, ensureWebAuthnFocus, loginAdmin } from '../lib/adminApi';
 import type { AdminSession } from '../lib/types';
+import { useEffectsTier } from '../lib/performance';
+import { BlurFade } from './fx/BlurFade';
+import Particles from './fx/Particles';
+
+// three.js only ships to browsers that land on the `full` effects tier — lazy + Suspense
+// keeps it out of the main chunk entirely (verified in the production build output).
+const LoginScene3D = lazy(() => import('./fx/LoginScene3D'));
 
 export function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => void }) {
+  const tier = useEffectsTier();
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -48,9 +56,19 @@ export function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => voi
 
   return (
     <main className="login-screen">
-      <section className="login-panel">
+      <div className="login-fx" aria-hidden="true">
+        {tier === 'full' && (
+          <Suspense fallback={null}>
+            <LoginScene3D />
+          </Suspense>
+        )}
+        {tier === 'balanced' && <Particles />}
+      </div>
+      <BlurFade className="login-panel">
         <div className="brand-mark"><Shield size={30} /></div>
-        <h1>Travel Expense Admin Console</h1>
+        <BlurFade delay={0.05}>
+          <h1>Travel Expense Admin Console</h1>
+        </BlurFade>
         <p>管理員驗證</p>
         <label>
           管理員通行片語
@@ -97,7 +115,7 @@ export function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => voi
             <Lock size={16} /> {busy ? '驗證中' : '使用 Passkey 登入'}
           </button>
         )}
-      </section>
+      </BlurFade>
     </main>
   );
 }

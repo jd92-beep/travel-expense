@@ -5,14 +5,17 @@ import {
   ArrowRight,
   CheckCircle2,
   Info,
-  LoaderCircle,
   RefreshCw,
   TriangleAlert,
   WifiOff,
 } from "lucide-react";
+import { motion } from "motion/react";
 import { AdminApiError } from "../../lib/adminApi";
 import type { AdminMeta } from "../../lib/contracts/admin";
 import { NavLink, useNavigate } from "react-router";
+import { useEffectsTier } from "../../lib/performance";
+import { NumberTicker } from "../fx/NumberTicker";
+import { BlurFade } from "../fx/BlurFade";
 
 export function PageHeader({
   title,
@@ -37,6 +40,7 @@ export function PageHeader({
 export function WorkspaceNav(
   { items }: { items: Array<{ to: string; label: string }> },
 ) {
+  const tier = useEffectsTier();
   return (
     <nav className="workspace-nav" aria-label="工作區導覽">
       {items.map((item) => (
@@ -45,7 +49,19 @@ export function WorkspaceNav(
           to={item.to}
           className={({ isActive }) => isActive ? "active" : ""}
         >
-          {item.label}
+          {({ isActive }) => (
+            <>
+              {item.label}
+              {isActive && tier !== "lite" && (
+                <motion.span
+                  layoutId="workspace-active"
+                  className="workspace-nav-underline"
+                  aria-hidden="true"
+                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                />
+              )}
+            </>
+          )}
         </NavLink>
       ))}
     </nav>
@@ -233,7 +249,11 @@ export function useCursorPagination(
 export function LoadingState({ label = "載入資料" }: { label?: string }) {
   return (
     <div className="state-panel" aria-live="polite">
-      <LoaderCircle className="spin" size={22} />
+      <div className="skeleton-stack" aria-hidden="true">
+        <span className="shimmer-bar skeleton-bar" style={{ width: "78%" }} />
+        <span className="shimmer-bar skeleton-bar" style={{ width: "52%" }} />
+        <span className="shimmer-bar skeleton-bar" style={{ width: "64%" }} />
+      </div>
       <strong>{label}</strong>
     </div>
   );
@@ -314,17 +334,26 @@ export function Pagination({
 }
 
 export function Metric(
-  { label, value, tone = "neutral" }: {
+  { label, value, tone = "neutral", delay = 0 }: {
     label: string;
     value: string | number;
     tone?: string;
+    delay?: number;
   },
 ) {
+  const numericValue = typeof value === "number"
+    ? (Number.isFinite(value) ? value : null)
+    : (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)))
+    ? Number(value)
+    : null;
   return (
-    <div className={`metric-block metric-${tone}`}>
+    // BlurFade is the root element itself (not a wrapper around a separate div) so
+    // .metric-block stays a direct child of .metric-strip — that preserves the
+    // `.metric-block:last-child { border-right: 0 }` rule and the grid item count.
+    <BlurFade className={`metric-block metric-${tone}`} delay={delay}>
       <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
+      <strong>{numericValue !== null ? <NumberTicker value={numericValue} /> : value}</strong>
+    </BlurFade>
   );
 }
 

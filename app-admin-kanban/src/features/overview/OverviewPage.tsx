@@ -19,6 +19,10 @@ import {
   PageHeader,
   StatusBadge,
 } from "../../components/primitives/ConsolePrimitives";
+import { BlurFade } from "../../components/fx/BlurFade";
+
+const STAGGER_STEP_S = 0.04;
+const HEALTHY_STATUS = new Set(["healthy", "active", "connected", "live"]);
 
 const SOURCE_LABELS: Record<string, string> = {
   "shared-cloud": "Shared Backend",
@@ -56,7 +60,7 @@ export function OverviewPage() {
   const { data, meta } = query.data;
 
   return (
-    <div className="workspace-stack">
+    <div className="workspace-stack overview-page">
       <PageHeader
         title="總覽"
         description="Compact Web、Android 與共用後端的即時營運狀態"
@@ -108,8 +112,12 @@ export function OverviewPage() {
         )}
 
       <section className="status-strip" aria-label="系統狀態" tabIndex={0}>
-        {data.statusStrip.map((source) => (
-          <div className="status-unit" key={source.id}>
+        {data.statusStrip.map((source, index) => (
+          <BlurFade
+            key={source.id}
+            delay={index * STAGGER_STEP_S}
+            className={`status-unit ${HEALTHY_STATUS.has(source.status) ? "status-unit-healthy" : ""}`}
+          >
             <span>
               {source.id === "android"
                 ? <Smartphone size={17} />
@@ -127,23 +135,25 @@ export function OverviewPage() {
                 ? "尚未收到首次 client 心跳，暫無最後回報時間"
                 : formatDateTime(source.lastSeenAt)}
             </small>
-          </div>
+          </BlurFade>
         ))}
       </section>
 
       <section className="metric-strip" aria-label="核心指標">
-        <Metric label="Active accounts" value={data.counts.activeAccounts} />
-        <Metric label="Open trips" value={data.counts.openTrips} />
-        <Metric label="Recent receipts" value={data.counts.recentReceipts} />
+        <Metric label="Active accounts" value={data.counts.activeAccounts} delay={0 * STAGGER_STEP_S} />
+        <Metric label="Open trips" value={data.counts.openTrips} delay={1 * STAGGER_STEP_S} />
+        <Metric label="Recent receipts" value={data.counts.recentReceipts} delay={2 * STAGGER_STEP_S} />
         <Metric
           label="Failed jobs"
           value={data.counts.failedJobs}
           tone={data.counts.failedJobs ? "danger" : "success"}
+          delay={3 * STAGGER_STEP_S}
         />
         <Metric
           label="Integrity issues"
           value={data.counts.integrityIssues}
           tone={data.counts.integrityIssues ? "warning" : "success"}
+          delay={4 * STAGGER_STEP_S}
         />
       </section>
 

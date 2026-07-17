@@ -1,8 +1,25 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-07-15 HKT
+Last updated: 2026-07-18 HKT
 
 ## Current Status
+
+- Local RC `1.1.0` — futuristic UI overhaul (not yet promoted; production remains `1.0.2`). Visual
+  layer only: no API, auth, routing or operation-flow logic changed. Key facts for maintainers:
+  - Styles moved from `src/styles.css` to `src/styles/{index,tokens,base,components,motion,fx,reduced-motion}.css`
+    (imported in that order; the `prefers-reduced-motion` clamp must stay the terminal import).
+  - Effects tiering: `src/lib/performance.ts` (`full`/`balanced`/`lite`) + `src/lib/fxAttr.ts` sets
+    `html[data-fx-tier]`; CSS gates decorative animation on that attribute.
+  - New deps: `motion@12` (CSSOM-only, CSP-safe), `three` (login scene ONLY — ships as a separate
+    lazy chunk ~132KB gz, absent from the main chunk), `@fontsource-variable/space-grotesk`,
+    `@fontsource-variable/jetbrains-mono` (self-hosted, `font-src 'self'`).
+  - Route transitions are enter-only (`src/components/fx/RouteTransition.tsx`); never add
+    exit-mode AnimatePresence — the h1-focus effect and StrictMode query-count smokes depend on a
+    single mounted page. Entrances never animate `opacity` to 0 (axe samples at t=0).
+  - LoginGate tiers: full = three.js point-cloud scene, balanced = 2D canvas particles, lite =
+    static CSS aurora. All decorative layers use `overflow: clip` containment (mobile smoke asserts
+    `body.scrollWidth === 360` exact).
+  - All smokes pass unmodified: 48 + 2 a11y + 3 mobile.
 
 - Admin `1.0.2` is live: Providers keeps one row per provider and displays every supported Volcano
   app LLM. Broker `2026.07.15.2` publishes the safe catalog, recognizes the existing env-backed

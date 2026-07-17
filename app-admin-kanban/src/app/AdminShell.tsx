@@ -16,11 +16,11 @@ import {
 } from "lucide-react";
 import {
   NavLink,
-  Outlet,
   ScrollRestoration,
   useLocation,
   useNavigate,
 } from "react-router";
+import { motion } from "motion/react";
 import { useAdminSession } from "./session";
 import { prefetchDefaultWorkspaceReads } from "./defaultWorkspacePrefetch";
 import { adminGet } from "../lib/api/adminClient";
@@ -30,6 +30,8 @@ import {
   StatusBadge,
 } from "../components/primitives/ConsolePrimitives";
 import { PasskeyManagerDialog } from "../features/system/PasskeyManagerDialog";
+import { RouteTransition } from "../components/fx/RouteTransition";
+import { useEffectsTier } from "../lib/performance";
 
 const PRIMARY_NAV = [
   { to: "/overview", match: "/overview", label: "總覽", icon: LayoutDashboard },
@@ -45,8 +47,13 @@ const ENVIRONMENT = String(
 ).toUpperCase();
 const ENVIRONMENT_CLASS = `environment-${ENVIRONMENT.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
-function Navigation({ close }: { close?: () => void }) {
+function Navigation({ close, surface }: { close?: () => void; surface: "sidebar" | "drawer" }) {
   const { pathname } = useLocation();
+  const tier = useEffectsTier();
+  // Two Navigation instances (desktop sidebar + mobile drawer) are always mounted at once —
+  // CSS just hides whichever isn't the current viewport's surface. A shared layoutId would
+  // fly the pill between them on resize/drawer-open, so each surface gets its own.
+  const layoutId = `nav-active-pill-${surface}`;
   return (
     <nav className="primary-nav" aria-label="主要導覽">
       {PRIMARY_NAV.map((item) => {
@@ -60,6 +67,14 @@ function Navigation({ close }: { close?: () => void }) {
             aria-current={active ? "page" : undefined}
             className={active ? "nav-link active" : "nav-link"}
           >
+            {active && tier !== "lite" && (
+              <motion.span
+                layoutId={layoutId}
+                className="nav-active-pill"
+                aria-hidden="true"
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              />
+            )}
             <Icon size={18} />
             <span>{item.label}</span>
           </NavLink>
@@ -162,7 +177,7 @@ export function AdminShell() {
             <small>Admin Console</small>
           </span>
         </div>
-        <Navigation />
+        <Navigation surface="sidebar" />
         <div className="sidebar-foot">
           <span className={`environment-badge ${ENVIRONMENT_CLASS}`}>
             <i />{ENVIRONMENT}
@@ -196,7 +211,7 @@ export function AdminShell() {
             <X size={20} />
           </button>
         </div>
-        <Navigation close={() => setDrawerOpen(false)} />
+        <Navigation close={() => setDrawerOpen(false)} surface="drawer" />
       </dialog>
 
       <div className="shell-main">
@@ -244,7 +259,11 @@ export function AdminShell() {
             onClick={() => setActivityOpen((value) => !value)}
           >
             <Bell size={18} />
-            {activeCount > 0 && <span aria-label={`${activeCount} 個執行中操作`}>{activeCount}</span>}
+            {activeCount > 0 && (
+              <span className="activity-badge-ping" aria-label={`${activeCount} 個執行中操作`}>
+                {activeCount}
+              </span>
+            )}
           </button>
           <div className="session-summary">
             <span>
@@ -372,7 +391,7 @@ export function AdminShell() {
         />
 
         <main className="workspace" id="main-content">
-          <Outlet />
+          <RouteTransition />
         </main>
       </div>
 

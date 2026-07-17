@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-admin-kanban",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.1.0",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -19,14 +19,18 @@
     "deploy": "node scripts/deploy-production.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource-variable/space-grotesk": "^5.2.10",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.0",
     "@tanstack/react-query": "^5.101.2",
     "@vitejs/plugin-react": "^6.0.1",
     "lucide-react": "^1.14.0",
+    "motion": "^12.42.2",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router": "^7.18.1",
+    "three": "^0.185.1",
     "vite": "^8.0.11"
   },
   "devDependencies": {
@@ -34,6 +38,7 @@
     "@playwright/test": "^1.59.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.1",
     "typescript": "^5.8.0"
   }
 }

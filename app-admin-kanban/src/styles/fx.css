@@ -1,0 +1,63 @@
+/* WP5 showpieces: login aurora backdrop + panel shine border + sidebar rail collapse.
+   Decorative layers are contained strictly inside `.login-screen`/`.login-fx` — never
+   attached to <body> — so the mobile smoke's exact scrollWidth assertion on workspace
+   routes is unaffected (the login route isn't one of the measured workspace routes, but
+   the containment discipline is kept anyway as a hard rule for any future decorative layer). */
+
+@property --fx-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes fx-hue-drift {
+  to { --fx-angle: 360deg; }
+}
+
+.login-screen { position: relative; overflow: clip; }
+
+/* Decorative backdrop: absolutely positioned, clipped, never intercepts pointer events —
+   sits behind the login panel purely by DOM order (painted first, panel painted after). */
+.login-fx {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  pointer-events: none;
+}
+
+.login-fx::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background:
+    conic-gradient(from var(--fx-angle), rgba(105, 167, 255, .16), transparent 35%, rgba(76, 169, 201, .16), transparent 75%),
+    radial-gradient(circle at 8% -8%, rgba(105, 167, 255, .35), transparent 55%),
+    radial-gradient(circle at 92% 108%, rgba(76, 169, 201, .32), transparent 55%);
+  filter: blur(60px);
+}
+
+html[data-fx-tier="full"] .login-fx::before {
+  animation: fx-hue-drift 60s linear infinite;
+}
+
+/* The canvas layer (LoginScene3D / Particles) renders as a normal child of .login-fx,
+   so it paints on top of the ::before aurora automatically — no z-index needed. */
+.login-fx > canvas { display: block; width: 100%; height: 100%; }
+
+/* Panel shine border — `full` tier only. Other tiers keep the plain 1px `--border` that
+   `.login-panel` already sets, untouched (text contrast is unaffected either way: this is
+   a border-only ring, masked out of the panel's content box). */
+html[data-fx-tier="full"] .login-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--fx-angle), var(--accent), transparent 30%, var(--info), transparent 70%, var(--accent));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: fx-hue-drift 8s linear infinite;
+}
