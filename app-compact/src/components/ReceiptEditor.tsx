@@ -5,6 +5,7 @@ import { canBePrivateReceipt, getItinerary, getPersons, safePhotoUrl, todayForRe
 import { activeTrip } from '../domain/trip/normalize';
 import type { AppState, CategoryId, PaymentId, Receipt, ReceiptLineItem, SplitMode } from '../lib/types';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
+import { GradientButton } from './ui/gradient-button';
 
 const newId = () => `manual_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const MAX_RECEIPT_AMOUNT = 1_000_000_000;
@@ -462,7 +463,7 @@ export function ReceiptEditor({
           <div className="receipt-final-actions">
             {viewerReadOnly
               ? <span className="muted" style={{ fontSize: '12px', alignSelf: 'center' }}>只可檢視（Viewer 權限）</span>
-              : <button type="submit" className="primary">儲存</button>}
+              : <GradientButton type="submit" className="text-sm">儲存</GradientButton>}
             <button type="button" className="secondary" onClick={onCancel}>取消</button>
           </div>
         </div>

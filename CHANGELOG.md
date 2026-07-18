@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-18
+
+- **fix(compact): v0.16.9 — 21st.dev GradientButton (radial-gradient @property morph effect) on Welcome/Editor-save/Settings-sync CTAs**
+
 ## 2026-07-15
 
 - **Compact 0.16.8 / Android 0.19.5 / Broker 2026.07.15.2 low-token Volcano probes**:

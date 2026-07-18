@@ -5,6 +5,7 @@ import { sharePercents } from '../lib/domain';
 import { createTripProfile, normalizeTripIntelligence } from '../domain/trip/normalize';
 import type { AppState, Person, TripProfile, TripSharingInviteDraft } from '../lib/types';
 import { SUPPORTED_CURRENCIES } from '../lib/currency';
+import { GradientButton } from './ui/gradient-button';
 
 // Cantonese labels for the trip-currency selects. Every SUPPORTED_CURRENCIES code gets an
 // entry; the option list renders from SUPPORTED_CURRENCIES so newly supported codes appear
@@ -794,30 +795,14 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
               </label>
             </div>
 
-            <button
+            <GradientButton
               onClick={handleCreate}
               type="button"
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '12px',
-                border: 0,
-                background: 'linear-gradient(135deg, #CC2929, #E07B39)',
-                color: 'white',
-                fontSize: '13px',
-                fontWeight: 900,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                marginTop: '6px',
-                boxShadow: '0 4px 12px rgba(204, 41, 41, 0.15)'
-              }}
+              className="mt-1.5 w-full gap-1.5 text-[13px]"
             >
               <span>建立並進入 App</span>
               <ArrowRight size={15} />
-            </button>
+            </GradientButton>
           </div>
         )}
 

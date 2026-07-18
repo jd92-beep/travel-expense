@@ -50,6 +50,7 @@ import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { GlassCard, SegmentedControl, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
+import { GradientButton } from '../components/ui/gradient-button';
 import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
 
@@ -2939,9 +2940,15 @@ export function Settings({
               <Mail size={18} /> 建立邀請
             </button>
             {onPull && (
-              <button className="secondary" type="button" disabled={!!busy || !cloudSyncAvailable} onClick={() => void onPull()}>
+              <GradientButton
+                variant="variant"
+                type="button"
+                disabled={!!busy || !cloudSyncAvailable}
+                onClick={() => void onPull()}
+                className="gap-1.5 text-sm"
+              >
                 <RotateCcw size={18} /> Refresh sharing
-              </button>
+              </GradientButton>
             )}
           </div>
         </GlassCard>
