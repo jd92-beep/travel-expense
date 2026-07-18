@@ -4,6 +4,19 @@ Last updated: 2026-07-18 HKT
 
 ## Current Status
 
+- **2026-07-19 PRODUCTION INCIDENT FIX — client write grants restored.** The Admin 1.0
+  read-only containment hardening collaterally REVOKED `authenticated`'s table privileges on
+  the end-user client's core sync tables while leaving every RLS policy intact: `receipts`,
+  `trip_members`, `trip_invites`, `trip_backend_links`, `receipt_sync_jobs` were SELECT-only,
+  and `delete_shared_trip_receipt(uuid,uuid,text,text)` lost EXECUTE. Every user's receipt
+  push failed with `permission denied` (observed live: postgres ERROR log + Boss's sync
+  banner ~4s after open). Restored via two idempotent migrations applied through the
+  Management API (`restore_authenticated_client_write_grants`,
+  `restore_delete_shared_trip_receipt_execute`); RLS remains the row-security layer,
+  admin-only tables (`admin_audit_events`, `data_quality_*`) remain deny_all.
+  ⚠️ Any future containment migration MUST scope revokes away from these five client tables
+  and the shared-trip RPCs, or client sync breaks production-wide again.
+
 - Local RC `1.2.3` — bug-sweep fixes: Overview accent line moved from `::after` to a
   background layer (it was clobbering augmented-ui's border `::after` by specificity, killing the
   header chamfer on Overview only); `LoginScene3D` gained a `webglcontextrestored` listener
