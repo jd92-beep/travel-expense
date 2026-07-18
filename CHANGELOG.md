@@ -2,6 +2,16 @@
 
 ## 2026-07-19
 
+- **feat(compact): v0.16.12 — shared-trip Notion mirror polish (multi-user)**:
+  - Member receipt PHOTOS now reach the Notion mirror: the owner-side outbox drain backfills
+    each receipt's image from Supabase Storage (signed URL → broker native Notion upload) —
+    previously member receipts mirrored as text-only rows because the draining device never
+    held the photo locally. Best-effort with session-level dedupe; a photo failure never
+    fails the record's mirror job. (Server-side receipt-sync-worker remains text-only —
+    photo mirroring rides the owner drain.)
+  - Outbox drain now claims up to 5×20 jobs per sync cycle instead of 20, so a backlog
+    (e.g. after the 07-19 grants outage) clears in one open instead of trickling.
+
 - **fix(compact): v0.16.11 — lag + blank-tab polish sweep (Fable direct)**:
   - BlurFade reveal safety net: tab content (scan/dashboard/timeline/weather/history reveals)
     gated visibility on IntersectionObserver, which never fires on occluded surfaces / WebView
