@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-07-19
+
+- **fix(compact): v0.16.11 — lag + blank-tab polish sweep (Fable direct)**:
+  - BlurFade reveal safety net: tab content (scan/dashboard/timeline/weather/history reveals)
+    gated visibility on IntersectionObserver, which never fires on occluded surfaces / WebView
+    background restores — the whole tab shipped blank (reproduced live: `visibilityState:
+    hidden` freezes both IO and rAF, so opacity-0 initial states never animated away). A 700ms
+    fallback now adds `.blur-fade-forced` (CSS `!important`, rAF-independent) so content always
+    appears; IO still drives the pretty path when it works.
+  - Turing backdrop de-lag: no longer mounts below the `full` tier (on phones it was invisible
+    behind the opaque washi shell yet still held two giant GPU layers); `filter: blur(88px)`
+    blobs replaced with equivalent wide radial-gradient ramps; `will-change` only while
+    drifting; mobile `.app-shell` washi background restored to opaque `#f7efe3` (the 0.85 alpha
+    forced per-frame blending during scroll for zero visual gain).
+  - Timeline now-marker mis-centering: `active-float` keyframes overwrote the marker's
+    `translateY(-50%)` centring, parking it 11px low on desktop whenever the float animation
+    ran — dedicated `active-float-centered` keyframes preserve the centring.
+- **fix(admin): v1.2.4 — same blur-blob de-lag for the console atmosphere layer** (gradient
+  ramps instead of `blur(88px)`, `will-change` gated to full tier).
+
 ## 2026-07-18
 
 - **feat(compact): v0.16.10 — Turing landing ambient backdrop (`TuringBackdrop` + `turing-backdrop.css`), video layer replicated in pure CSS (dead 21st.dev S3 source), drift gated to effects tier `full`**

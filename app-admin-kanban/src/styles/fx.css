@@ -323,13 +323,20 @@ html[data-fx-tier="full"] .top-environment::after {
   opacity: .5;
 }
 
+/* Softness baked into the gradient ramp instead of filter: blur(88px) — the blur
+   forced two ~60vmax intermediate GPU surfaces that re-blended on every scroll frame
+   under the glass app-bar. A wider radial falloff reads identically. will-change only
+   where the drift animation actually runs (full tier). */
 .admin-atmosphere-turing::before,
 .admin-atmosphere-turing::after {
   content: "";
   position: absolute;
   border-radius: 50%;
-  filter: blur(88px);
   pointer-events: none;
+}
+
+html[data-fx-tier="full"] .admin-atmosphere-turing::before,
+html[data-fx-tier="full"] .admin-atmosphere-turing::after {
   will-change: transform;
 }
 
@@ -338,7 +345,10 @@ html[data-fx-tier="full"] .top-environment::after {
   height: 58vmax;
   top: -20%;
   left: -16%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%);
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--accent) 22%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 10%, transparent) 42%,
+    transparent 74%);
 }
 
 .admin-atmosphere-turing::after {
@@ -346,7 +356,10 @@ html[data-fx-tier="full"] .top-environment::after {
   height: 50vmax;
   bottom: -22%;
   right: -10%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--neon-cyan) 20%, transparent), transparent 72%);
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--neon-cyan) 17%, transparent) 0%,
+    color-mix(in srgb, var(--neon-cyan) 8%, transparent) 44%,
+    transparent 76%);
 }
 
 /* Drift — compositor-only transform/scale loops, `full` tier only (same gate as the

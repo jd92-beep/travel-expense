@@ -389,6 +389,14 @@
   50% { transform: translateY(-4px); }
 }
 
+/* now-marker variant: the marker centres itself with translateY(-50%); plain
+   active-float would overwrite that and park it 11px low for as long as the
+   animation runs. Same float, centring preserved. */
+@keyframes active-float-centered {
+  0%, 100% { transform: translateY(-50%); }
+  50% { transform: translateY(calc(-50% - 4px)); }
+}
+
 @keyframes route-glint {
   0% { transform: translateX(-120%) rotate(8deg); opacity: 0; }
   25% { opacity: .55; }
@@ -529,7 +537,7 @@
   font-weight: 900;
   box-shadow: 0 10px 24px rgba(194,59,94,.24), 0 0 0 5px rgba(255,255,255,.38);
   transform: translateY(-50%);
-  animation: active-float 4s ease-in-out infinite;
+  animation: active-float-centered 4s ease-in-out infinite;
 }
 
 .timeline-event {

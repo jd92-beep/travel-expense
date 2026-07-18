@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   AnimatePresence,
   motion,
@@ -11,6 +11,7 @@ import {
   type Variants,
 } from "motion/react"
 import { shouldDisableHeavyEffects } from "../../lib/performance"
+import { cn } from "../../lib/cn"
 
 type MarginType = UseInViewOptions["margin"]
 
@@ -50,7 +51,17 @@ export function BlurFade({
   const reducedMotion = useReducedMotion() ?? false
   const disableHeavy = shouldDisableHeavyEffects()
   const inViewResult = useInView(ref, { once: true, margin: inViewMargin })
-  const isInView = !inView || inViewResult
+  // Content visibility must never be hostage to IntersectionObserver delivery:
+  // occluded surfaces and some Android WebView states throttle IO to never-fires,
+  // which left whole tabs (scan/dashboard/timeline/...) parked at opacity 0.
+  // If IO hasn't fired shortly after mount, force the reveal.
+  const [forceVisible, setForceVisible] = useState(false)
+  useEffect(() => {
+    if (!inView || inViewResult || forceVisible) return
+    const t = window.setTimeout(() => setForceVisible(true), 700)
+    return () => window.clearTimeout(t)
+  }, [inView, inViewResult, forceVisible])
+  const isInView = !inView || inViewResult || forceVisible
 
   const defaultVariants: Variants = {
     hidden: {
@@ -90,7 +101,10 @@ export function BlurFade({
           ease: "easeOut",
           ...(shouldTransitionFilter && !reducedMotion && !disableHeavy ? { filter: { duration } } : {}),
         }}
-        className={className}
+        // blur-fade-forced is a CSS !important escape hatch: it beats motion's inline
+        // styles without rAF, so content still appears when the surface is occluded
+        // (hidden pages freeze rAF — motion can never animate opacity 0 → 1 there).
+        className={cn(className, forceVisible && !inViewResult && "blur-fade-forced")}
         {...props}
       >
         {children}

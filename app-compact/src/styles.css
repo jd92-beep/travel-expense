@@ -3771,6 +3771,15 @@ body {
   min-width: 0;
   max-width: 100%;
 }
+
+/* Reveal safety net (see BlurFade): when IntersectionObserver never delivers
+   (occluded surface / WebView background restore), content must still show.
+   !important beats motion's inline opacity/transform without needing rAF. */
+.blur-fade-forced {
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+}
 .timeline-screen .stack > *,
 .timeline-screen .timeline-command,
 .timeline-screen .timeline-day,
@@ -9035,11 +9044,11 @@ textarea,
     width: min(100%, 430px) !important;
     /* Was a fully opaque #f7efe3 !important — that fully occluded every negative-z
        decorative layer (HyperframeBackground, TuringBackdrop) on mobile since this
-       positioned (relative) element paints above them. Minimal alpha crack lets the
-       Turing ambient glow read through at the shell edges without any perceptible
-       change to card/text contrast (cards keep their own separate opaque/near-opaque
-       backgrounds). */
-    background: rgba(247, 239, 227, 0.85) !important;
+       positioned (relative) element paints above them. Opaque again since v0.16.11:
+       TuringBackdrop no longer mounts below the 'full' tier, so on phones there is
+       nothing behind this to reveal — and the 0.85 alpha forced per-frame blending
+       of the shell over fixed layers during scroll (measurable jank on weak GPUs). */
+    background: #f7efe3 !important;
   }
 
   .compact-mobile-header {
