@@ -20,6 +20,7 @@ import {
   StatusBadge,
 } from "../../components/primitives/ConsolePrimitives";
 import { BlurFade } from "../../components/fx/BlurFade";
+import { GradientButton } from "../../components/fx/GradientButton";
 
 const STAGGER_STEP_S = 0.04;
 const HEALTHY_STATUS = new Set(["healthy", "active", "connected", "live"]);
@@ -65,8 +66,8 @@ export function OverviewPage() {
         title="總覽"
         description="Compact Web、Android 與共用後端的即時營運狀態"
         actions={
-          <button
-            className="button secondary"
+          <GradientButton
+            variant="cyan"
             type="button"
             onClick={() => void query.refetch()}
             disabled={query.isFetching}
@@ -75,7 +76,7 @@ export function OverviewPage() {
               className={query.isFetching ? "spin" : ""}
               size={16}
             />更新
-          </button>
+          </GradientButton>
         }
       />
       <FreshnessBanner meta={meta} fetching={query.isFetching} />

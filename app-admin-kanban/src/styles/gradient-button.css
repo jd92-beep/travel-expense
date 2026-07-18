@@ -1,0 +1,210 @@
+/* GradientButton — 21st.dev "Gradient Button" effect, adapted verbatim in structure
+   (registered @property custom properties driving a radial-gradient fill + a 1px
+   gradient border via mask-composite exclude) but recolored to the console's cyberpunk
+   neon tokens. Plain CSS only — this app has no Tailwind, see HANDOVER.md. Transitions
+   are hover-only (state-conveying), so reduced-motion.css's blanket `!important` clamp
+   (loaded after this file) is sufficient — no continuous animation to opt out of. */
+
+@property --pos-x {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 11.14%;
+}
+@property --pos-y {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 140%;
+}
+@property --spread-x {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 150%;
+}
+@property --spread-y {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 180%;
+}
+@property --color-1 {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #000000;
+}
+@property --color-2 {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #0c0218;
+}
+@property --color-3 {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #3a1030;
+}
+@property --color-4 {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #62203f;
+}
+@property --color-5 {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #591428;
+}
+@property --border-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 20deg;
+}
+@property --border-color-1 {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: hsla(340, 75%, 60%, 0.2);
+}
+@property --border-color-2 {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: hsla(340, 75%, 40%, 0.75);
+}
+@property --stop-1 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+@property --stop-2 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 50%;
+}
+@property --stop-3 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 100%;
+}
+@property --stop-4 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 100%;
+}
+@property --stop-5 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 100%;
+}
+
+/* Default (magenta) — rest state is near-black so white text clears 4.5:1 with room
+   to spare; hover shifts toward --neon-magenta-hot but every stop that would otherwise
+   land under ~4.5:1 against white 16px text has been darkened (see gradient-button
+   integration report for the exact contrast ratios checked). */
+.gradient-button {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 11px;
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 600;
+  cursor: pointer;
+  background: radial-gradient(
+    var(--spread-x) var(--spread-y) at var(--pos-x) var(--pos-y),
+    var(--color-1) var(--stop-1),
+    var(--color-2) var(--stop-2),
+    var(--color-3) var(--stop-3),
+    var(--color-4) var(--stop-4),
+    var(--color-5) var(--stop-5)
+  );
+  transition:
+    --pos-x 0.5s ease,
+    --pos-y 0.5s ease,
+    --spread-x 0.5s ease,
+    --spread-y 0.5s ease,
+    --color-1 0.5s ease,
+    --color-2 0.5s ease,
+    --color-3 0.5s ease,
+    --color-4 0.5s ease,
+    --color-5 0.5s ease,
+    --border-angle 0.5s ease,
+    --border-color-1 0.5s ease,
+    --border-color-2 0.5s ease,
+    transform 0.12s var(--ease-out);
+}
+.gradient-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(var(--border-angle), var(--border-color-1), var(--border-color-2));
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+}
+.gradient-button:hover {
+  --pos-x: 0%;
+  --pos-y: 91.51%;
+  --spread-x: 120%;
+  --spread-y: 103%;
+  --color-1: #1a0510;
+  --color-2: #3a1030;
+  --color-3: #62203f;
+  --color-4: #8a2d54;
+  --color-5: #b83d63;
+  --border-angle: 190deg;
+  --border-color-1: hsla(340, 85%, 65%, 0.5);
+  --border-color-2: hsla(340, 90%, 55%, 0.9);
+}
+.gradient-button:active {
+  transform: translateY(1px);
+}
+.gradient-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.gradient-button:disabled:hover {
+  --pos-x: 11.14%;
+  --pos-y: 140%;
+  --spread-x: 150%;
+  --spread-y: 180%;
+  --color-1: #000000;
+  --color-2: #0c0218;
+  --color-3: #3a1030;
+  --color-4: #62203f;
+  --color-5: #591428;
+}
+
+/* Variant (cyan) — same choreography, deep navy-to-teal ramp ending near --neon-cyan.
+   Border hue tuned cyan (per the console adaptation spec — the raw 21st.dev variant's
+   own border hue is magenta/320, which this app intentionally does not carry over). */
+.gradient-button--cyan {
+  --color-1: #00030a;
+  --color-2: #001c33;
+  --color-3: #123f4a;
+  --color-4: #1f3f6d;
+  --color-5: #0d4a52;
+  --border-color-1: hsla(185, 75%, 55%, 0.2);
+  --border-color-2: hsla(185, 75%, 40%, 0.75);
+}
+.gradient-button--cyan:hover {
+  --color-1: #001522;
+  --color-2: #123f4a;
+  --color-3: #1f3f6d;
+  --color-4: #2d5f61;
+  --color-5: #1f6b73;
+  --border-color-1: hsla(185, 85%, 65%, 0.5);
+  --border-color-2: hsla(185, 90%, 55%, 0.9);
+}
+.gradient-button--cyan:disabled:hover {
+  --color-1: #00030a;
+  --color-2: #001c33;
+  --color-3: #123f4a;
+  --color-4: #1f3f6d;
+  --color-5: #0d4a52;
+}

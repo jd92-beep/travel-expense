@@ -4,6 +4,7 @@ import { AdminApiError, enrollBossPasskey, ensureWebAuthnFocus, loginAdmin } fro
 import type { AdminSession } from '../lib/types';
 import { useEffectsTier } from '../lib/performance';
 import { BlurFade } from './fx/BlurFade';
+import { GradientButton } from './fx/GradientButton';
 import Particles from './fx/Particles';
 
 // three.js only ships to browsers that land on the `full` effects tier — lazy + Suspense
@@ -109,13 +110,13 @@ export function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => voi
         )}
         {error && <p className="error-line">{error}</p>}
         {enrollmentRequired ? (
-          <button className="primary-command" type="button" disabled={busy || !passphrase || !bootstrapSecret} onClick={() => void enroll()}>
+          <GradientButton variant="cyan" type="button" disabled={busy || !passphrase || !bootstrapSecret} onClick={() => void enroll()}>
             <KeyRound size={16} /> {busy ? '登記中' : '登記 Boss Passkey'}
-          </button>
+          </GradientButton>
         ) : (
-          <button className="primary-command" type="button" disabled={busy || !passphrase} onClick={() => void submit()}>
+          <GradientButton variant="magenta" type="button" disabled={busy || !passphrase} onClick={() => void submit()}>
             <Lock size={16} /> {busy ? '驗證中' : '使用 Passkey 登入'}
-          </button>
+          </GradientButton>
         )}
       </BlurFade>
     </main>

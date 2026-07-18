@@ -30,6 +30,9 @@ Last updated: 2026-07-18 HKT
     Build: main JS chunk 183.83KB gz (baseline 183.71KB, +0.13KB — well under the +25KB budget),
     three.js login chunk still a separate lazy chunk (131.66KB gz), CSS 29.23KB gz (was 11.78KB;
     the augmented-ui stylesheet is the bulk of that growth, as expected).
+  - **1.2.1** — 21st.dev GradientButton effect adapted to plain CSS (`styles/gradient-button.css`
+    + `components/fx/GradientButton.tsx`), applied to login CTAs + PageHeader refresh; recolored
+    to neon tokens; no Tailwind (deliberate).
 
 - Local RC `1.1.0` — futuristic UI overhaul (not yet promoted; production remains `1.0.2`). Visual
   layer only: no API, auth, routing or operation-flow logic changed. Key facts for maintainers:
