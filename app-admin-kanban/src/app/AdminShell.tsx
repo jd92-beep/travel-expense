@@ -167,6 +167,7 @@ export function AdminShell() {
 
   return (
     <div className="admin-shell">
+      <div className="admin-atmosphere-turing" aria-hidden="true" />
       <aside className="sidebar">
         <div className="product-lockup">
           <span className="product-icon">

@@ -33,6 +33,12 @@ Last updated: 2026-07-18 HKT
   - **1.2.1** — 21st.dev GradientButton effect adapted to plain CSS (`styles/gradient-button.css`
     + `components/fx/GradientButton.tsx`), applied to login CTAs + PageHeader refresh; recolored
     to neon tokens; no Tailwind (deliberate).
+  - **1.2.2** — Turing landing ambient backdrop (`fx.css` `.admin-atmosphere-turing` + one
+    `aria-hidden` div in `AdminShell.tsx`, least-DOM since `.admin-shell`'s own two pseudo-slots
+    are already the hex-grid/scanline): two static blue gradient overlays + two slow drift blobs
+    replicating the 21st.dev snippet's dead-S3 `<video>` layer in pure CSS, recolored to
+    `--accent`/`--neon-cyan` at ≤.15-.26 alpha via `color-mix`; drift is `full`-tier only and
+    already covered by the existing blanket reduced-motion clamp.
 
 - Local RC `1.1.0` — futuristic UI overhaul (not yet promoted; production remains `1.0.2`). Visual
   layer only: no API, auth, routing or operation-flow logic changed. Key facts for maintainers:

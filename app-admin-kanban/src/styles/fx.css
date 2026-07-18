@@ -292,3 +292,81 @@ html[data-fx-tier="full"] .top-environment::after {
   right: 1px;
   opacity: .55;
 }
+
+/* ============================================================================
+ * Turing landing ambient backdrop — ported from the 21st.dev "Turing landing"
+ * snippet as an additional atmosphere layer alongside the hex-grid + scanline
+ * above. The original hero used a <video> loop over a #0a0a0a base; that
+ * asset 404s (dead S3 bucket) so the motion is replicated in pure CSS: two
+ * static gradient overlays plus a pair of slow-drifting blurred blobs.
+ * Recolored from the snippet's raw #0084ff to this console's own blue tokens
+ * (--accent / --neon-cyan) so it blends with the cyberpunk system instead of
+ * clashing; alphas capped at .15 (overlays) / .12-.16 (blobs, via color-mix)
+ * so text contrast on every surface above it is unaffected.
+ *
+ * `.admin-shell` already spends both its pseudo-element slots on the hex-grid
+ * (::before) and scanline (::after) above, so this uses one extra aria-hidden
+ * div (least-DOM option) whose own background carries the two static
+ * overlays and whose ::before/::after carry the two drift blobs — same
+ * containment discipline as `.admin-shell`: fixed + inset:0 + z-index:0,
+ * pointer-events:none, never affects scrollWidth.
+ * ========================================================================== */
+.admin-atmosphere-turing {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: clip;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, color-mix(in srgb, var(--accent) 15%, transparent), transparent 60%),
+    linear-gradient(to bottom left, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%);
+  opacity: .5;
+}
+
+.admin-atmosphere-turing::before,
+.admin-atmosphere-turing::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(88px);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.admin-atmosphere-turing::before {
+  width: 58vmax;
+  height: 58vmax;
+  top: -20%;
+  left: -16%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%);
+}
+
+.admin-atmosphere-turing::after {
+  width: 50vmax;
+  height: 50vmax;
+  bottom: -22%;
+  right: -10%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--neon-cyan) 20%, transparent), transparent 72%);
+}
+
+/* Drift — compositor-only transform/scale loops, `full` tier only (same gate as the
+   scanline above). `reduced-motion.css`'s blanket `animation-duration: .01ms !important`
+   clamp already neutralizes these for prefers-reduced-motion, so no extra query needed. */
+html[data-fx-tier="full"] .admin-atmosphere-turing::before {
+  animation: turing-drift-a 78s ease-in-out infinite alternate;
+}
+html[data-fx-tier="full"] .admin-atmosphere-turing::after {
+  animation: turing-drift-b 94s ease-in-out infinite alternate;
+}
+
+@keyframes turing-drift-a {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(6%, 4%) scale(1.08); }
+  100% { transform: translate(-4%, 7%) scale(0.96); }
+}
+
+@keyframes turing-drift-b {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(-5%, -6%) scale(1.1); }
+  100% { transform: translate(4%, -3%) scale(0.94); }
+}
