@@ -56,15 +56,17 @@ html[data-fx-tier="full"] .status-unit-healthy {
   50% { filter: drop-shadow(0 0 10px var(--glow-cyan)); }
 }
 
-/* Overview: 1px gradient accent line under the page header, contained to the header box. */
-.overview-page .page-header { position: relative; overflow: clip; }
-.overview-page .page-header::after {
-  content: "";
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 1px;
-  background: var(--grad-accent);
-  opacity: .6;
+/* Overview: 1px gradient accent line under the page header. Drawn as a background layer,
+   NOT a pseudo-element — .page-header carries data-augmented-ui="...border", whose chamfered
+   border lives in [data-augmented-ui]::after; a higher-specificity ::after here would clobber
+   it (same slot-collision the .admin-atmosphere-turing div exists to avoid). */
+.overview-page .page-header {
+  position: relative;
+  overflow: clip;
+  background-image: linear-gradient(90deg, rgba(37, 225, 237, .6), rgba(255, 42, 109, .6));
+  background-size: 100% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
 }
 
 /* Activity bell badge: one-shot ping ring on mount (i.e. whenever the count first becomes

@@ -208,6 +208,15 @@ export default function LoginScene3D() {
     };
     canvas.addEventListener("webglcontextlost", onContextLost, false);
 
+    // preventDefault() on contextlost opts in to a restored event — without this listener a
+    // context loss while the tab stays visible would freeze the canvas until full remount.
+    const onContextRestored = () => {
+      paused = false;
+      timer.update();
+      rafId = requestAnimationFrame(tick);
+    };
+    canvas.addEventListener("webglcontextrestored", onContextRestored, false);
+
     const onVisibilityChange = () => {
       if (document.hidden) {
         paused = true;
@@ -225,6 +234,7 @@ export default function LoginScene3D() {
       cancelAnimationFrame(rafId);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       canvas.removeEventListener("webglcontextlost", onContextLost);
+      canvas.removeEventListener("webglcontextrestored", onContextRestored);
       canvas.removeEventListener("webglcontextcreationerror", onContextCreationError);
       window.removeEventListener("pointermove", onPointerMove);
       resizeObserver.disconnect();

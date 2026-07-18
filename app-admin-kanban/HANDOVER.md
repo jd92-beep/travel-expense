@@ -4,6 +4,13 @@ Last updated: 2026-07-18 HKT
 
 ## Current Status
 
+- Local RC `1.2.3` — bug-sweep fixes: Overview accent line moved from `::after` to a
+  background layer (it was clobbering augmented-ui's border `::after` by specificity, killing the
+  header chamfer on Overview only); `LoginScene3D` gained a `webglcontextrestored` listener
+  (context loss with the tab visible previously froze the canvas until remount); nav-pill z-index
+  scoped via `:not(.nav-active-pill)`; garbled ReceiptDetail caption fixed. Full gates re-run
+  green: typecheck, unit, contract, smoke 48, a11y 2/2, mobile 3/3.
+
 - Local RC `1.2.0` — cyberpunk visual pass on top of the v1.1.0 futuristic overhaul (not yet
   promoted; production remains `1.0.2`). Visual/CSS + attribute-only layer, no API/auth/routing/
   operation-flow logic changed. Key facts:

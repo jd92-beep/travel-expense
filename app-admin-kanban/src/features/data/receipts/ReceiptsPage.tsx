@@ -708,7 +708,7 @@ export function ReceiptDetailPage() {
           <header>
             <div>
               <h2>明細</h2>
-              <p>只於 addressed detail 載入</p>
+              <p>只於收據詳情頁載入的詳細資料</p>
             </div>
           </header>
           <dl className="detail-list">
