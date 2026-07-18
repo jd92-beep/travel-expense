@@ -66,7 +66,12 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.19.5` / versionCode `1950`. Sync-state hydration now runs through the shared
+- Version: `0.19.6` / versionCode `1960`. Ports main compact v0.16.9: 21st.dev GradientButton
+  (radial-gradient `@property` morph effect, plain-CSS since Tailwind v4 dropped `@layer components`
+  + `@apply`) on the Welcome Guide's 建立並進入 App CTA, the ReceiptEditor 儲存 save button, and
+  Settings' Trip Sharing "Refresh sharing" manual-sync button — sized `px-6 py-3` (no `min-w`) to
+  fit this app's 320px-wide layouts, deviating from the 21st.dev source's `min-w-[132px] px-9 py-4`.
+  Prior: `0.19.5` / versionCode `1950`. Sync-state hydration now runs through the shared
   normalizer: transient persisted failures remain retryable, while exhausted retry budgets and
   Supabase version conflicts remain visible as terminal errors instead of being silently requeued.
   Android keeps its native auth, idempotency-key, 5,000-item tombstone, and scoped-hydration rules.

@@ -7,6 +7,7 @@ import { activeTrip } from '../domain/trip/normalize';
 import type { AppState, CategoryId, PaymentId, Person, Receipt, ReceiptLineItem, ReceiptPayer, ReceiptSplit, SplitMode, SplitType } from '../lib/types';
 import { AvatarBadge } from './AvatarBadge';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
+import { GradientButton } from './ui/gradient-button';
 import { NumberTextInput, SegmentedControl, StatusPill } from './ui';
 import { foldLineItemsToSplits } from '../lib/splitEngine';
 
@@ -783,7 +784,7 @@ export function ReceiptEditor({
           <div className="receipt-final-actions">
             {viewerReadOnly
               ? <span className="muted" style={{ fontSize: '12px', alignSelf: 'center' }}>只可檢視（Viewer 權限）</span>
-              : <button type="submit" className="primary">儲存</button>}
+              : <GradientButton type="submit" className="text-sm">儲存</GradientButton>}
             <button type="button" className="secondary" onClick={onCancel}>取消</button>
             {receipt && onDelete && !viewerReadOnly ? <button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button> : null}
           </div>

@@ -5,6 +5,7 @@
 @import "./styles/dashboard.css";
 @import "./styles/icons.css";
 @import "./styles/compact.css";
+@import "./styles/gradient-button.css";
 
 @custom-variant dark (&:is(.dark *));
 
