@@ -2,6 +2,7 @@
 
 ## 2026-07-18
 
+- **feat(compact): v0.16.10 — Turing landing ambient backdrop (`TuringBackdrop` + `turing-backdrop.css`), video layer replicated in pure CSS (dead 21st.dev S3 source), drift gated to effects tier `full`**
 - **fix(compact): v0.16.9 — 21st.dev GradientButton (radial-gradient @property morph effect) on Welcome/Editor-save/Settings-sync CTAs**
 
 ## 2026-07-15
