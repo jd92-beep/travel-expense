@@ -66,7 +66,13 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.19.6` / versionCode `1960`. Ports main compact v0.16.9: 21st.dev GradientButton
+- Version: `0.19.7` / versionCode `1970`. Ports main compact v0.16.10: Turing landing ambient
+  backdrop (`TuringBackdrop` + `turing-backdrop.css`) — two static blue gradient overlays plus
+  slow-drifting blurred blobs standing in for the 21st.dev snippet's dead-S3 `<video>` layer,
+  replicated in pure CSS; drift gated to the `full` effects tier, static otherwise; minimal alpha
+  crack in the mobile `.app-shell` opaque background (`#f7efe3` → `rgba(...,.85)`) so the layer
+  reads through instead of being fully occluded.
+  Prior: `0.19.6` / versionCode `1960`. Ports main compact v0.16.9: 21st.dev GradientButton
   (radial-gradient `@property` morph effect, plain-CSS since Tailwind v4 dropped `@layer components`
   + `@apply`) on the Welcome Guide's 建立並進入 App CTA, the ReceiptEditor 儲存 save button, and
   Settings' Trip Sharing "Refresh sharing" manual-sync button — sized `px-6 py-3` (no `min-w`) to

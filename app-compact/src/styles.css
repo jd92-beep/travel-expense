@@ -6,6 +6,7 @@
 @import "./styles/icons.css";
 @import "./styles/compact.css";
 @import "./styles/gradient-button.css";
+@import "./styles/turing-backdrop.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -9282,7 +9283,13 @@ textarea,
 @media (max-width: 767px) {
   .app-shell {
     width: min(100%, 430px) !important;
-    background: #f7efe3 !important;
+    /* Was a fully opaque #f7efe3 !important — that fully occluded every negative-z
+       decorative layer (HyperframeBackground, TuringBackdrop) on mobile since this
+       positioned (relative) element paints above them. Minimal alpha crack lets the
+       Turing ambient glow read through at the shell edges without any perceptible
+       change to card/text contrast (cards keep their own separate opaque/near-opaque
+       backgrounds). */
+    background: rgba(247, 239, 227, 0.85) !important;
   }
 
   .compact-mobile-header {

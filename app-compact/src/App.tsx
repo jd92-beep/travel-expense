@@ -18,6 +18,7 @@ import { TAB_MANIFEST } from './lib/tabs';
 import { isBoss } from './lib/constants';
 import { AuthGate } from './security/AuthGate';
 import { HyperframeBackground } from './components/HyperframeBackground';
+import { TuringBackdrop } from './components/TuringBackdrop';
 import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, loadCurrencySnapshot, usableSnapshot, type CurrencySnapshot } from './lib/currency';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffectsTier } from './lib/performance';
@@ -657,6 +658,7 @@ export function App() {
   const appContent = (
     <TripThemeProvider state={state}>
       <HyperframeBackground />
+      <TuringBackdrop />
       {showGuide && (
         <WelcomeGuidePopup
           state={state}
