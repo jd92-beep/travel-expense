@@ -38,11 +38,17 @@
   opacity: .5;
 }
 
+/* Soft glow baked into the gradient falloff instead of filter: blur(88px) —
+   an 88px blur on a 62vmax element forces a huge intermediate GPU surface and
+   re-blends on every scroll frame; a wider radial ramp looks identical here
+   and costs a plain gradient fill. will-change only while actually drifting. */
 .turing-backdrop__blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(88px);
   pointer-events: none;
+}
+
+.turing-backdrop--drift .turing-backdrop__blob {
   will-change: transform;
 }
 
@@ -51,7 +57,7 @@
   height: 62vmax;
   top: -22%;
   left: -18%;
-  background: radial-gradient(circle, rgba(0, 132, 255, .30), transparent 70%);
+  background: radial-gradient(circle, rgba(0, 132, 255, .26) 0%, rgba(0, 132, 255, .12) 42%, transparent 74%);
 }
 
 .turing-backdrop__blob--b {
@@ -59,7 +65,7 @@
   height: 54vmax;
   bottom: -24%;
   right: -12%;
-  background: radial-gradient(circle, rgba(0, 132, 255, .22), transparent 72%);
+  background: radial-gradient(circle, rgba(0, 132, 255, .19) 0%, rgba(0, 132, 255, .08) 44%, transparent 76%);
 }
 
 .turing-backdrop__shimmer {

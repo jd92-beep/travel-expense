@@ -3968,6 +3968,15 @@ body {
   min-width: 0;
   max-width: 100%;
 }
+
+/* Reveal safety net (see BlurFade): when IntersectionObserver never delivers
+   (occluded surface / WebView background restore), content must still show.
+   !important beats motion's inline opacity/transform without needing rAF. */
+.blur-fade-forced {
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+}
 .timeline-screen .stack > *,
 .timeline-screen .timeline-command,
 .timeline-screen .timeline-day,
@@ -9289,7 +9298,7 @@ textarea,
        Turing ambient glow read through at the shell edges without any perceptible
        change to card/text contrast (cards keep their own separate opaque/near-opaque
        backgrounds). */
-    background: rgba(247, 239, 227, 0.85) !important;
+    background: #f7efe3 !important;
   }
 
   .compact-mobile-header {

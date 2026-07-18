@@ -66,7 +66,11 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.19.7` / versionCode `1970`. Ports main compact v0.16.10: Turing landing ambient
+- Version: `0.19.8` / versionCode `1980`. Ports main compact v0.16.11: BlurFade reveal safety
+  net (IntersectionObserver never fires on occluded/WebView-background surfaces — tabs shipped
+  blank at opacity 0; 700ms `.blur-fade-forced` CSS fallback is rAF-independent), Turing backdrop
+  de-lag (full-tier-only mount, gradient ramps instead of blur(88px) blobs, opaque washi shell
+  restored), timeline now-marker centring fix (`active-float-centered`). Prior: `0.19.7` / versionCode `1970`. Ports main compact v0.16.10: Turing landing ambient
   backdrop (`TuringBackdrop` + `turing-backdrop.css`) — two static blue gradient overlays plus
   slow-drifting blurred blobs standing in for the 21st.dev snippet's dead-S3 `<video>` layer,
   replicated in pure CSS; drift gated to the `full` effects tier, static otherwise; minimal alpha

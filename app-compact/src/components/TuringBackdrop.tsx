@@ -16,13 +16,14 @@ import { useEffectsTier } from '../lib/performance';
  */
 export function TuringBackdrop() {
   const tier = useEffectsTier();
-  const drifting = tier === 'full';
+
+  // Full tier only. On phones (balanced/lite) the layer sat behind the opaque washi
+  // .app-shell and was invisible — yet its two giant blurred blobs still held GPU
+  // layers and blended on every scroll frame. Zero visual value, real jank cost.
+  if (tier !== 'full') return null;
 
   return (
-    <div
-      className={`turing-backdrop${drifting ? ' turing-backdrop--drift' : ''}`}
-      aria-hidden="true"
-    >
+    <div className="turing-backdrop turing-backdrop--drift" aria-hidden="true">
       <div className="turing-backdrop__overlay turing-backdrop__overlay--1" />
       <div className="turing-backdrop__overlay turing-backdrop__overlay--2" />
       <div className="turing-backdrop__shimmer" />
