@@ -12,7 +12,11 @@ import {
   streamAdminReceiptPhoto,
 } from "./operations.ts";
 import { reconcileTripReadOnly } from "./reconciliation.ts";
-import { type AdminRequestDecision, evaluateAdminRequest } from "./security.ts";
+import {
+  type AdminRequestDecision,
+  evaluateAdminRequest,
+  isAdminOperationAllowed,
+} from "./security.ts";
 import { rejectedSignatureIdentity } from "./security.ts";
 import { fetchNoRedirect } from "./safe_fetch.ts";
 import { brokerHealthSucceeded } from "./provider_status.ts";
@@ -584,9 +588,20 @@ Deno.serve(async (req) => {
       );
     }
     if (req.method === "POST" && signed.route === "/api/operations/preview") {
+      const body = readBody(req.method, signed.bodyBytes);
+      const action = body && typeof body === "object" && "action" in body
+        ? String(body.action)
+        : "";
+      if (!isAdminOperationAllowed(requestDecision.writeMode, action)) {
+        throw new AdminOperationError(
+          "WRITES_DISABLED",
+          "Admin action is disabled during maintenance",
+          503,
+        );
+      }
       const operation = await previewAdminOperation(
         operationContext,
-        readBody(req.method, signed.bodyBytes),
+        body,
       );
       return json(
         req,
@@ -601,6 +616,14 @@ Deno.serve(async (req) => {
       /^\/api\/operations\/([0-9a-f-]+)\/commit$/i,
     );
     if (req.method === "POST" && operationCommitRoute) {
+      const operation = await getAdminOperation(operationContext, operationCommitRoute[1]);
+      if (!isAdminOperationAllowed(requestDecision.writeMode, operation.action)) {
+        throw new AdminOperationError(
+          "WRITES_DISABLED",
+          "Admin action is disabled during maintenance",
+          503,
+        );
+      }
       const result = await commitAdminOperation(
         operationContext,
         operationCommitRoute[1],

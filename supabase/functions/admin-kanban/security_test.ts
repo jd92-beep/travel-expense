@@ -1,5 +1,6 @@
 import {
   evaluateAdminRequest,
+  isAdminOperationAllowed,
   normalizeAdminApiPath,
   rejectedSignatureIdentity,
   resolveAdminWriteMode,
@@ -11,6 +12,22 @@ Deno.test("unknown write modes fail closed", () => {
   assertEquals(resolveAdminWriteMode(undefined), "deny_all");
   assertEquals(resolveAdminWriteMode("unexpected"), "deny_all");
   assertEquals(resolveAdminWriteMode("allowlisted"), "allowlisted");
+  assertEquals(resolveAdminWriteMode("provider_probe_only"), "provider_probe_only");
+});
+
+Deno.test("provider probe mode exposes the kernel only for provider probes", () => {
+  const preview = evaluateAdminRequest(
+    new Request(
+      "https://edge.example/functions/v1/admin-kanban/api/operations/preview",
+      { method: "POST" },
+    ),
+    "provider_probe_only",
+  );
+  assertEquals(preview.allowed, true);
+  assertEquals(isAdminOperationAllowed("provider_probe_only", "provider_probe"), true);
+  assertEquals(isAdminOperationAllowed("provider_probe_only", "support_bundle"), false);
+  assertEquals(isAdminOperationAllowed("deny_all", "provider_probe"), false);
+  assertEquals(isAdminOperationAllowed("allowlisted", "receipt_amend"), true);
 });
 
 Deno.test("unverified signature headers never become an audit identity", () => {

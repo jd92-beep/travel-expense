@@ -1,4 +1,4 @@
-export type AdminWriteMode = "deny_all" | "allowlisted";
+export type AdminWriteMode = "deny_all" | "provider_probe_only" | "allowlisted";
 
 type AllowedAdminRequest = {
   allowed: true;
@@ -71,7 +71,12 @@ function requestIdFor(req: Request): string {
 export function resolveAdminWriteMode(
   value: string | undefined,
 ): AdminWriteMode {
-  return value === "allowlisted" ? "allowlisted" : "deny_all";
+  return value === "allowlisted" || value === "provider_probe_only" ? value : "deny_all";
+}
+
+export function isAdminOperationAllowed(writeMode: AdminWriteMode, action: string): boolean {
+  return writeMode === "allowlisted" ||
+    (writeMode === "provider_probe_only" && action === "provider_probe");
 }
 
 export function normalizeAdminApiPath(pathname: string): string | null {
@@ -137,7 +142,7 @@ export function evaluateAdminRequest(
     };
   }
 
-  if (writeMode === "allowlisted" && matchesRoute(route, WRITE_ROUTE_MAP)) {
+  if (writeMode !== "deny_all" && matchesRoute(route, WRITE_ROUTE_MAP)) {
     return { allowed: true, requestId, route, writeMode };
   }
 

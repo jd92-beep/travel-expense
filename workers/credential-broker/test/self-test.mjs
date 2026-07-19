@@ -766,6 +766,25 @@ async function run() {
       assert.equal(restoreFetch.volcanoBodies().at(-1).max_tokens, 8);
     }
 
+    const exactInternalVolcano = await jsonFetch(env, '/credentials/test', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: { provider: 'volcano', model: 'volcano/minimax-m2.7' },
+    });
+    assert.equal(exactInternalVolcano.response.status, 200);
+    assert.equal(exactInternalVolcano.data.status.model, 'volcano/minimax-m2.7');
+    assert.equal(restoreFetch.volcanoBodies().at(-1).model, 'minimax-m2.7');
+    assert.equal(restoreFetch.volcanoBodies().at(-1).max_tokens, 8);
+
+    const mismatchedInternalModel = await jsonFetch(env, '/credentials/test', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: { provider: 'volcano', model: 'google/gemma-4-31b-it' },
+    });
+    assert.equal(mismatchedInternalModel.response.status, 400);
+
     const weatherApiRotate = await jsonFetch(env, '/credentials/rotate', {
       method: 'POST',
       session,

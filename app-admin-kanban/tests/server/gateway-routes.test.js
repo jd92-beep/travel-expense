@@ -147,8 +147,23 @@ test('gateway validates operation actions and strips no unchecked fields', () =>
       action: 'provider_probe',
       idempotencyKey,
       targetId: 'volcano',
+      payload: { model: 'volcano/minimax-m2.7' },
     }),
-    { action: 'provider_probe', idempotencyKey, targetId: 'volcano', payload: {} },
+    {
+      action: 'provider_probe',
+      idempotencyKey,
+      targetId: 'volcano',
+      payload: { model: 'volcano/minimax-m2.7' },
+    },
+  );
+  assert.throws(
+    () => validateGatewayBody('operation-preview', {
+      action: 'provider_probe',
+      idempotencyKey,
+      targetId: 'volcano',
+      payload: { model: 'google/gemma-4-31b-it' },
+    }),
+    /model is not allowlisted/i,
   );
   assert.deepEqual(
     validateGatewayBody('operation-preview', {

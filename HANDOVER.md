@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-17 HKT
-- **Focus**: Session 62 repaired documentation evidence, generated-hunk custody, Android commit wording, and shared-receipt worker status without changing runtime behavior.
+- **Date**: 2026-07-19 HKT
+- **Focus**: Session 63 repaired Admin provider heartbeat maintenance routing and exact low-token model probes; production cutover evidence remains to be appended after promotion.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.8`; Android `0.19.5` (versionCode 1950; branch HEAD `60be98e`, latest app-code commit `8eb1bd4`); Admin production `1.0.2`; Broker production `2026.07.15.2`; React `0.2.4`
+- **App version**: Compact `0.16.12`; Android `0.19.5` (versionCode 1950; re-check branch HEAD and latest app-code commit live); Admin RC `1.3.1` (production was `1.0.2` before Session 63 cutover); Broker RC `2026.07.19.1`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -45,9 +45,10 @@ you closed with your session number.
    unused `hkd` imports in History/Stats. (Old Pending list.)
 9. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
    settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
-10. 🟡 **Admin 1.0 intentionally excludes R3 and generic controls** — account consolidation,
+10. 🟡 **Admin intentionally excludes R3 and generic controls** — account consolidation,
     scheduled deletion, Notion write repair, device commands, runtime writes, arbitrary SQL/table
-    editing and session revoke stay server-disabled; `ADMIN_WRITE_MODE` remains `deny_all`.
+    editing and session revoke stay server-disabled. Session 63 adds a narrow
+    `provider_probe_only` mode; it does not enable the general operation allowlist.
 11. 🟠 **`puiyuchau@gmail.com` root cause — owner_id mismatch** — the infinite backfill loop is now
     broken (Session 49), but the underlying `owner_id ≠ auth.uid()` mismatch needs DB-side
     investigation (Admin Kanban gateway blocked access). If re-invite or trip re-creation doesn't
@@ -72,6 +73,30 @@ you closed with your session number.
     cold-open waited 15 seconds with neither generic sync-error banner. (Session 60.)
 
 ## What Was Done
+
+### Session 63 (Codex — Admin provider heartbeat probe-only repair)
+
+1. **Root cause:** production correctly remained `ADMIN_WRITE_MODE=deny_all`, while Providers
+   heartbeat used the generic operation mutation kernel. Edge rejected preview before any Broker or
+   model request, producing `ADMIN_WRITES_DISABLED`. The operation also sent only a provider name;
+   Volcano's Broker test therefore always used `doubao-seed-2.0-lite`.
+2. **Scoped repair:** `provider_probe_only` admits the signed kernel but authorizes only
+   `provider_probe` after signature/session verification. Commit rechecks the stored action;
+   support, sync, integrity and all R2 actions remain blocked. BFF, Edge and Broker validate and
+   preserve the exact provider/model pair.
+3. **Low-token contract:** Console sends the row's exact required model. Broker tests it directly
+   with 8 output tokens, temperature 0 and no provider/model fallback; non-empty `content` or
+   `reasoning_content` is availability proof for this probe only.
+4. **TDD evidence:** before implementation BFF rejected `model`, Edge lacked probe-only mode,
+   Broker changed requested `volcano/minimax-m2.7` to `volcano/doubao-seed-2.0-lite`, and browser
+   preview omitted the model. All four regression paths pass after the repair.
+5. **Local gates:** Admin typecheck/build/security, unit `32/32`, contract `24/24`, full smoke
+   `49 passed + 1 intentional skip`, a11y `2/2`, mobile `3/3` and audit 0 vulnerabilities passed.
+   Edge fmt/lint/check and `73/73` tests passed. Broker check/self-test and audit 0 vulnerabilities
+   passed. No passphrase, passkey, credential value, RLS, migration or live user data changed.
+6. **Cutover state:** Admin `1.3.1` and Broker `2026.07.19.1` are prepared. Append exact commit,
+   deployment IDs, workflow and authenticated live probe evidence after promotion; do not call the
+   incident closed before those checks pass.
 
 ### Session 62 (Codex — Baton documentation findings repair)
 

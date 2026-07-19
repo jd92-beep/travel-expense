@@ -99,6 +99,30 @@ type PreviewInput = {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH_RE = /^[0-9a-f]{64}$/;
 const PROVIDERS = new Set(["notion", "kimi", "google", "volcano", "weatherapi", "mimo"]);
+const PROVIDER_MODELS: Record<string, string[]> = {
+  kimi: [
+    "kimi/kimi-code",
+    "kimi/kimi-8k",
+    "kimi/kimi-32k",
+    "kimi/kimi-k2.6",
+    "kimi/kimi-for-coding",
+  ],
+  google: [
+    "google/gemini-2.5-flash",
+    "google/gemini-3.1-flash",
+    "google/gemini-3.1-flash-lite",
+    "google/gemma-4-31b-it",
+    "google/gemma-4-26b",
+  ],
+  mimo: ["mimo/mimo-v2.5", "mimo/mimo-v2.5-pro"],
+  volcano: [
+    "volcano/doubao-seed-2.0-lite",
+    "volcano/doubao-seed-2.0-pro",
+    "volcano/minimax-m3",
+    "volcano/minimax-m2.7",
+    "volcano/doubao-seed-2.0-mini",
+  ],
+};
 const ACTIONS = new Set([
   "provider_probe",
   "support_bundle",
@@ -1069,7 +1093,10 @@ async function syncJobPreview(
 }
 
 async function providerPreview(context: OperationContext, input: PreviewInput) {
-  if (!PROVIDERS.has(input.targetId) || Object.keys(input.payload).length > 0) {
+  exactKeys(input.payload, new Set(["model"]));
+  const models = PROVIDER_MODELS[input.targetId] || [];
+  const model = input.payload.model === undefined ? models[0] || null : String(input.payload.model);
+  if (!PROVIDERS.has(input.targetId) || (model !== null && !models.includes(model))) {
     throw new AdminOperationError("VALIDATION_FAILED", "Provider is not allowlisted", 400);
   }
   const operations = rpcResult<AdminOperationRecord[]>(
@@ -1079,6 +1106,7 @@ async function providerPreview(context: OperationContext, input: PreviewInput) {
   const recent = operations.find((operation) =>
     operation.action === "provider_probe" &&
     operation.preview?.provider === input.targetId &&
+    (operation.preview?.model || null) === model &&
     operation.idempotencyKey !== input.idempotencyKey &&
     Date.parse(operation.createdAt || "") >= Date.now() - 60_000
   );
@@ -1091,12 +1119,13 @@ async function providerPreview(context: OperationContext, input: PreviewInput) {
     );
   }
   return {
-    payload: { provider: input.targetId },
+    payload: { provider: input.targetId, model },
     preview: {
       title: "Probe provider",
       consequence: "Sends one explicit credential test request through the Credential Broker.",
       affectedCount: 1,
       provider: input.targetId,
+      model,
       cooldownSeconds: 60,
       rollbackBoundary: "The probe does not change provider configuration.",
     },
@@ -1292,7 +1321,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
-async function probeProvider(context: OperationContext, provider: string) {
+async function probeProvider(context: OperationContext, provider: string, model: string | null) {
   if (!PROVIDERS.has(provider) || context.brokerKey.length < 16) {
     throw new AdminOperationError(
       "UPSTREAM_UNAVAILABLE",
@@ -1314,7 +1343,7 @@ async function probeProvider(context: OperationContext, provider: string) {
           "Origin": "https://travel-expense-compact.vercel.app",
           "X-Admin-Internal": context.brokerKey,
         },
-        body: JSON.stringify({ provider }),
+        body: JSON.stringify({ provider, model }),
       },
       10_000,
     );
@@ -1345,6 +1374,7 @@ async function probeProvider(context: OperationContext, provider: string) {
   }
   return {
     provider,
+    requestedModel: model,
     status: String(payload?.status?.status || "healthy"),
     message: redact(payload?.status?.message || "Probe succeeded", 220),
     actualModel: payload?.status?.model ? String(payload.status.model).slice(0, 120) : null,
@@ -1557,7 +1587,12 @@ export async function commitAdminOperation(
 
   try {
     if (started.action === "provider_probe") {
-      const result = await probeProvider(context, String(started.targetRef));
+      const payload = started.payload && typeof started.payload === "object" ? started.payload : {};
+      const result = await probeProvider(
+        context,
+        String(started.targetRef),
+        payload.model ? String(payload.model) : null,
+      );
       const operation = await finishExternal(context, operationId, "completed", result);
       return { operation, probe: result, reused: false };
     }

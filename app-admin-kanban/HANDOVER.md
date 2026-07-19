@@ -1,8 +1,14 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-07-18 HKT
+Last updated: 2026-07-19 HKT
 
 ## Current Status
+
+- Local RC `1.3.1` repairs provider heartbeat under maintenance without enabling general Admin
+  writes. `provider_probe_only` admits only `provider_probe`; Edge rechecks action on preview and
+  commit. The exact required model is validated by BFF/Edge/Broker and tested with 8 output tokens,
+  temperature 0 and no provider/model fallback. Local Admin, Edge and Broker gates are green; live
+  cutover evidence must be appended after promotion.
 
 - **2026-07-19 PRODUCTION INCIDENT FIX — client write grants restored.** The Admin 1.0
   read-only containment hardening collaterally REVOKED `authenticated`'s table privileges on
@@ -122,7 +128,8 @@ Last updated: 2026-07-18 HKT
 - The current passphrase remains unchanged and necessary; passkey is additive. Passkey enrollment and
   bootstrap removal are complete. Boss is performing the final post-bootstrap fresh login check now;
   do not mark that check complete until its result is recorded.
-- Writes remain `deny_all`.
+- Production remained `deny_all` before the `1.3.1` cutover. The reviewed target state is
+  `provider_probe_only`; all non-probe operations remain server-disabled.
 - R3 account consolidation/deletion, Notion write repair, device commands, runtime writes, arbitrary
   SQL/table editing and generic credential controls are server-disabled.
 

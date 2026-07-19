@@ -63,7 +63,7 @@ type RuntimeData = {
   };
   clients: { compactVersion: string; androidVersion: string };
   runtimePolicy?: {
-    status: "allowlisted" | "deny_all";
+    status: "allowlisted" | "provider_probe_only" | "deny_all";
     version: "admin-write-mode-v1";
     source: string;
     expiresAt: null;
@@ -245,13 +245,16 @@ export function ProvidersPage() {
                                 type="button"
                                 title={coolingDown
                                   ? `Probe cooldown until ${formatDateTime(provider.probeAvailableAt)}`
-                                  : `Probe ${provider.label}`}
+                                  : `Probe ${provider.requiredModel || provider.label}`}
                                 aria-label={`Probe ${provider.label}`}
                                 disabled={provider.configured === false || coolingDown || query.isFetching}
                                 onClick={() =>
                                   operationFlow.begin({
                                     action: "provider_probe",
                                     targetId: provider.provider,
+                                    payload: provider.requiredModel
+                                      ? { model: provider.requiredModel }
+                                      : {},
                                   })}
                               >
                                 <Activity size={17} />
@@ -495,7 +498,14 @@ function InfrastructureHealth({ runtime }: { runtime: RuntimeData }) {
           <div><dt>Version</dt><dd><code>{policy.version || "none"}</code></dd></div>
           <div><dt>Source</dt><dd><code>{policy.source || "unknown"}</code></dd></div>
           <div><dt>Expires</dt><dd>{formatDateTime(policy.expiresAt)}</dd></div>
-          <div><dt>Admin writes</dt><dd>{policy.writable ? "Writes enabled" : "Writes disabled"}</dd></div>
+          <div>
+            <dt>Admin writes</dt>
+            <dd>{policy.writable
+              ? "Writes enabled"
+              : policy.status === "provider_probe_only"
+              ? "Provider probes enabled; other writes disabled"
+              : "Writes disabled"}</dd>
+          </div>
         </dl>
       </div>
     </section>

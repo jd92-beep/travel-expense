@@ -2,6 +2,15 @@
 
 ## 2026-07-19
 
+- **fix(admin): v1.3.1 — provider heartbeat maintenance repair**:
+  - `provider_probe_only` permits only authenticated provider probe preview/commit; support, sync,
+    integrity and every R2 action remain blocked at Edge.
+  - Console, BFF, Edge and Broker now preserve and validate the exact provider/model pair. The
+    Broker sends one direct 8-output-token request with no model/provider fallback, so Volcano no
+    longer silently tests only `doubao-seed-2.0-lite`.
+  - Infrastructure distinguishes probe-only maintenance from general Admin writes. Passphrase,
+    passkeys, credential values, RLS, migrations and live user data are unchanged.
+
 - **feat(compact): v0.16.12 — shared-trip Notion mirror polish (multi-user)**:
   - Member receipt PHOTOS now reach the Notion mirror: the owner-side outbox drain backfills
     each receipt's image from Supabase Storage (signed URL → broker native Notion upload) —

@@ -3,6 +3,12 @@ import { HttpError } from './http.js';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const PROVIDER_RE = /^(?:notion|kimi|google|volcano|weatherapi|mimo)$/;
+const PROVIDER_MODELS = new Map([
+  ['kimi', new Set(['kimi/kimi-code', 'kimi/kimi-8k', 'kimi/kimi-32k', 'kimi/kimi-k2.6', 'kimi/kimi-for-coding'])],
+  ['google', new Set(['google/gemini-2.5-flash', 'google/gemini-3.1-flash', 'google/gemini-3.1-flash-lite', 'google/gemma-4-31b-it', 'google/gemma-4-26b'])],
+  ['mimo', new Set(['mimo/mimo-v2.5', 'mimo/mimo-v2.5-pro'])],
+  ['volcano', new Set(['volcano/doubao-seed-2.0-lite', 'volcano/doubao-seed-2.0-pro', 'volcano/minimax-m3', 'volcano/minimax-m2.7', 'volcano/doubao-seed-2.0-mini'])],
+]);
 const R1_ACTIONS = new Set([
   'provider_probe',
   'support_bundle',
@@ -288,9 +294,12 @@ export function validateGatewayBody(kind, body) {
   }
 
   if (action === 'provider_probe') {
-    rejectUnknownKeys(payload, new Set());
+    rejectUnknownKeys(payload, new Set(['model']));
     if (!PROVIDER_RE.test(targetId)) {
       throw new HttpError('VALIDATION_FAILED', 'Provider is not allowlisted', 400);
+    }
+    if (payload.model !== undefined && !PROVIDER_MODELS.get(targetId)?.has(String(payload.model))) {
+      throw new HttpError('VALIDATION_FAILED', 'Provider model is not allowlisted', 400);
     }
   } else if (action === 'support_bundle') {
     rejectUnknownKeys(payload, new Set(['includeJobs', 'tripId', 'userId']));

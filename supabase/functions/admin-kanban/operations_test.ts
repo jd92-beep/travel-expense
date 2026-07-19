@@ -111,7 +111,7 @@ Deno.test("provider preview is server-computed and stored through the operation 
     action: "provider_probe",
     idempotencyKey: "97100000-0000-4000-8000-000000000001",
     targetId: "volcano",
-    payload: {},
+    payload: { model: "volcano/minimax-m2.7" },
   });
 
   assertEquals(result.status, "previewed");
@@ -121,6 +121,14 @@ Deno.test("provider preview is server-computed and stored through the operation 
   ]);
   assertEquals(calls[1].args.p_action, "provider_probe");
   assertEquals(calls[1].args.p_target_ref, "volcano");
+  assertEquals(
+    (calls[1].args.p_preview as Record<string, unknown>).model,
+    "volcano/minimax-m2.7",
+  );
+  assertEquals(
+    (calls[1].args.p_payload as Record<string, unknown>).model,
+    "volcano/minimax-m2.7",
+  );
   assertEquals(String(calls[1].args.p_preview_hash).length, 64);
 });
 
@@ -802,7 +810,14 @@ Deno.test("provider probe transport ambiguity is retained as outcome unknown", a
   const operationId = "97300000-0000-4000-8000-000000000001";
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = () => Promise.reject(new Error("transport interrupted"));
+  globalThis.fetch = (_input, init) => {
+    const body = JSON.parse(String(init?.body || "{}"));
+    assertEquals(body, {
+      provider: "google",
+      model: "google/gemma-4-31b-it",
+    });
+    return Promise.reject(new Error("transport interrupted"));
+  };
   try {
     const error = await assertRejects(
       () =>
@@ -829,6 +844,7 @@ Deno.test("provider probe transport ambiguity is retained as outcome unknown", a
                   data: {
                     action: "provider_probe",
                     id: operationId,
+                    payload: { model: "google/gemma-4-31b-it" },
                     status: "executing",
                     targetRef: "google",
                   },

@@ -296,7 +296,7 @@ async function setupApi(page, options = {}) {
           { sourceId: 'notion-only', status: 'notion_only', supabaseReceiptId: null, notionCopies: 1, linked: false },
         ],
       }; break;
-      case '/api/admin/providers': data = options.providers || [{ provider: 'google', label: 'Google Gemma', configured: true, healthy: true, status: 'healthy', storedStatus: 'connected', models: ['google/gemma-4-31b-it'], requiredModel: 'google/gemma-4-31b', actualModel: 'google/gemma-4-31b', lastSuccessfulRequestAt: new Date().toISOString(), lastProbeAt: null, probeCooldownSeconds: 60, probeAvailableAt: options.providerProbeAvailableAt || null, p50LatencyMs: 420, p95LatencyMs: 800, errors24h: 0, rateLimited24h: 0 }]; break;
+      case '/api/admin/providers': data = options.providers || [{ provider: 'google', label: 'Google Gemma', configured: true, healthy: true, status: 'healthy', storedStatus: 'connected', models: ['google/gemma-4-31b-it'], requiredModel: 'google/gemma-4-31b-it', actualModel: 'google/gemma-4-31b-it', lastSuccessfulRequestAt: new Date().toISOString(), lastProbeAt: null, probeCooldownSeconds: 60, probeAvailableAt: options.providerProbeAvailableAt || null, p50LatencyMs: 420, p95LatencyMs: 800, errors24h: 0, rateLimited24h: 0 }]; break;
       case '/api/admin/runtime': data = { adminFrontend: { version: '1.0.0-rc.1', gitSha: 'abc123', deploymentId: 'deploy-1', health: 'healthy' }, edge: { deploymentId: 'edge-1', sourceSha: 'abc123', routeVersion: 'admin-kanban-v1' }, broker: { version: '1.0.0', health: 'healthy' }, database: { auditContractVersion: 'admin-audit-v2', contractVersion: 'admin-operation-v1', itineraryContractVersion: 'versioned-itinerary-v1', receiptContractVersion: 'canonical-receipt-v1', schemaVersion: '20260712123000' }, clients: { compactVersion: '0.9.0', androidVersion: '0.9.0' }, runtimePolicy: options.runtimePolicy || { status: 'deny_all', version: 'admin-write-mode-v1', source: 'default', expiresAt: null, writable: false }, drift: [] }; break;
       case '/api/admin/audit': data = { items: options.auditItems || [] }; meta = { total: (options.auditItems || []).length }; break;
       case `/api/admin/audit/${auditEventId}`: data = { id: auditEventId, sequence: 42, previous_event_hash: 'e'.repeat(64), event_hash: 'f'.repeat(64), admin_subject_hash: 'a'.repeat(64), authentication_method: 'passphrase+passkey', session_hash: 'b'.repeat(64), risk: 'R2', action: 'operation_completed', target_type: 'trip', target_id_hash: 'c'.repeat(64), preview_counts: { affected: 1 }, before_state: { version: 6 }, after_state: { version: 7 }, result: { status: 'completed' }, error_code: null, request_id: requestId, operation_id: operationId, incident_id: null, frontend_version: '1.0.0-rc.1', edge_version: 'admin-kanban-v1', schema_version: '20260712123000', created_at: new Date().toISOString() }; break;
@@ -885,9 +885,11 @@ test('provider catalog shows every supported Volcano LLM in one provider row', a
 });
 
 test('provider R1 operation requires server preview before commit', async ({ page }) => {
-  await setupApi(page);
+  const requests = [];
+  await setupApi(page, { requests });
   await page.goto('/system/providers');
   await page.getByRole('button', { name: 'Probe Google Gemma' }).click();
+  expect(latestPreview(requests)?.payload?.model).toBe('google/gemma-4-31b-it');
   await expect(page.getByRole('dialog')).toContainText('Sends one explicit credential test request');
   await page.getByRole('button', { name: '確認執行' }).click();
   await expect(page.getByRole('dialog')).toContainText('操作已由 server 驗證完成');
@@ -923,6 +925,17 @@ test('infrastructure reports the runtime policy state supplied by the backend', 
   await expect(policy).toContainText('admin-write-mode-v1');
   await expect(policy).toContainText('ADMIN_WRITE_MODE');
   await expect(policy).toContainText('Writes enabled');
+});
+
+test('infrastructure distinguishes provider probes from general admin writes', async ({ page }) => {
+  await setupApi(page, {
+    runtimePolicy: { status: 'provider_probe_only', version: 'admin-write-mode-v1', source: 'ADMIN_WRITE_MODE', expiresAt: null, writable: false },
+  });
+  await page.goto('/system/infrastructure');
+  const policy = page.locator('.data-section').filter({ hasText: 'Runtime policy' });
+  await expect(policy).toContainText('provider_probe_only');
+  await expect(policy).toContainText('Provider probes enabled');
+  await expect(policy).not.toContainText('Writes enabled');
 });
 
 test('non-terminal operation responses never claim verified completion', async ({ page }) => {

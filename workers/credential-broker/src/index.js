@@ -1,5 +1,5 @@
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.07.15.2';
+const VERSION = '2026.07.19.1';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -1226,18 +1226,25 @@ async function testProvider(env, provider, candidateSecret, extra = {}) {
     : provider === 'volcano' ? await readVolcanoCredential(env)
     : await readCredential(env, provider);
   if (!credential?.secret) return { provider, status: 'missing' };
+  const model = extra.model == null ? null : String(extra.model);
+  if (model && !PROVIDER_MODELS[provider]?.includes(model)) {
+    throw new HttpError('Provider model is not allowlisted', 400);
+  }
   try {
     if (provider === 'notion') await testNotion(env, credential);
-    if (provider === 'kimi') await kimiJsonWithCredential(env, credential);
-    if (provider === 'mimo') await mimoJsonWithCredential(env, credential);
-    if (provider === 'google') await googleModelsList(credential.secret);
+    if (provider === 'kimi') await kimiJsonWithCredential(env, credential, model);
+    if (provider === 'mimo') await mimoJsonWithCredential(env, credential, model);
+    if (provider === 'google') {
+      if (model) await googleJsonWithCredential(credential, model);
+      else await googleModelsList(credential.secret);
+    }
     if (provider === 'weatherapi') await testWeatherApi(credential.secret);
-    if (provider === 'volcano') await volcanoJsonWithCredential(env, credential);
+    if (provider === 'volcano') await volcanoJsonWithCredential(env, credential, model);
     return {
       provider,
       status: 'connected',
       lastTestedAt: Date.now(),
-      model: PROVIDER_MODELS[provider]?.[0] || null,
+      model: model || PROVIDER_MODELS[provider]?.[0] || null,
     };
   } catch (error) {
     return { provider, status: 'invalid', lastTestedAt: Date.now(), message: redact(error?.message || error) };
@@ -1256,7 +1263,20 @@ async function testWeatherApi(secret) {
   return data.current;
 }
 
-async function kimiJsonWithCredential(env, credential) {
+function providerModelName(provider, model, fallback) {
+  return String(model || fallback).replace(new RegExp(`^${provider}/`), '');
+}
+
+function requireModelTestResponse(data) {
+  const message = data?.choices?.[0]?.message;
+  const content = message?.content || data?.content || data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const reasoning = message?.reasoning_content || '';
+  if (!String(content).trim() && !String(reasoning).trim()) {
+    throw new Error('Model test returned an empty response');
+  }
+}
+
+async function kimiJsonWithCredential(env, credential, requestedModel) {
   const base = String(env.KIMI_PROXY_URL || env.KIMI_API_BASE || KIMI_DEFAULT_BASE).replace(/\/+$/, '');
   const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
     method: 'POST',
@@ -1267,14 +1287,14 @@ async function kimiJsonWithCredential(env, credential) {
       'User-Agent': 'claude-code/0.1.0',
     },
     body: JSON.stringify({
-      model: env.KIMI_MODEL || 'kimi-code',
+      model: providerModelName('kimi', requestedModel, env.KIMI_MODEL || 'kimi-code'),
       messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
       temperature: 0,
       thinking: { type: 'disabled' },
       max_tokens: 8,
     }),
   }));
-  return extractJson(data?.choices?.[0]?.message?.content || '');
+  requireModelTestResponse(data);
 }
 
 async function volcanoJson(env, prompt, kind, image, requestedModel) {
@@ -1315,7 +1335,7 @@ async function volcanoJson(env, prompt, kind, image, requestedModel) {
   return extractJson(content);
 }
 
-async function volcanoJsonWithCredential(env, credential) {
+async function volcanoJsonWithCredential(env, credential, requestedModel) {
   const base = String(env.VOLCANO_API_BASE || VOLCANO_DEFAULT_BASE).replace(/\/+$/, '');
   const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
     method: 'POST',
@@ -1325,25 +1345,39 @@ async function volcanoJsonWithCredential(env, credential) {
       Accept: 'application/json',
     },
     body: JSON.stringify({
-      model: 'doubao-seed-2.0-lite',
+      model: providerModelName('volcano', requestedModel, 'doubao-seed-2.0-lite'),
       messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
       temperature: 0,
       max_tokens: 8,
     }),
   }));
-  return extractJson(data?.choices?.[0]?.message?.content || '');
+  requireModelTestResponse(data);
 }
 
-async function mimoJsonWithCredential(env, credential) {
+async function mimoJsonWithCredential(env, credential, requestedModel) {
   const data = await mimoChatCompletion(env, credential, {
-    model: env.MIMO_MODEL || 'mimo-v2.5',
+    model: providerModelName('mimo', requestedModel, env.MIMO_MODEL || 'mimo-v2.5'),
     messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
     temperature: 0,
     stream: false,
     thinking: { type: 'disabled' },
     max_tokens: 8,
   });
-  return extractJson(data?.choices?.[0]?.message?.content || '');
+  requireModelTestResponse(data);
+}
+
+async function googleJsonWithCredential(credential, requestedModel) {
+  const model = providerModelName('google', requestedModel, GOOGLE_DEFAULT_MODEL);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(credential.secret)}`;
+  const data = await parseProviderJson(await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: 'Return only JSON: {"ok":true}' }] }],
+      generationConfig: { temperature: 0, responseMimeType: 'application/json', maxOutputTokens: 8 },
+    }),
+  }));
+  requireModelTestResponse(data);
 }
 
 async function googleModelsList(key) {
@@ -1490,7 +1524,7 @@ async function handleRequest(request, env) {
     }
     if (url.pathname === '/credentials/test') {
       const body = await readJson(request);
-      return json({ ok: true, status: await testProvider(env, body.provider) }, 200, cors);
+      return json({ ok: true, status: await testProvider(env, body.provider, undefined, { model: body.model }) }, 200, cors);
     }
     if (url.pathname === '/credentials/test-all') {
       return json({ ok: true, providers: await Promise.all(PROVIDERS.map((provider) => testProvider(env, provider))) }, 200, cors);
