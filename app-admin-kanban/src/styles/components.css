@@ -240,8 +240,13 @@ th, td { height: 44px; padding: 8px 12px; border-bottom: 1px solid var(--border-
 th { position: sticky; top: 0; z-index: 1; color: var(--muted); background: var(--elevated); font-size: 12px; font-weight: 750; }
 td { max-width: 260px; }
 td > small, td > strong { display: block; }
-tbody tr { transition: background var(--dur-1) var(--ease-out); }
-tbody tr:hover { background: #1c2026; }
+tbody tr { transition: background var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+/* Hover = HUD row lock: cyan edge tint sweeping in from the left + a hairline
+   underline. Background/box-shadow only — no transform (sticky th would break). */
+tbody tr:hover {
+  background: #1c2026 linear-gradient(90deg, rgba(37, 225, 237, .09), transparent 34%);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--neon-cyan) 35%, transparent);
+}
 .row-actions { white-space: nowrap; }
 .row-actions .icon-button { margin-left: 5px; }
 .row-actions .icon-button:first-child { margin-left: 0; }

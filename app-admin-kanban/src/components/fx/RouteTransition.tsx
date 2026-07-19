@@ -39,10 +39,14 @@ export function RouteTransition() {
   return (
     <motion.div
       key={location.pathname}
+      className="route-transition"
       initial={initial}
       animate={animate}
       transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
     >
+      {/* One-shot cyan scan wipe per navigation — CSS-driven, full tier only
+          (display:none elsewhere), remounts with the keyed wrapper. */}
+      <span className="route-scan" aria-hidden="true" />
       {outlet}
     </motion.div>
   );

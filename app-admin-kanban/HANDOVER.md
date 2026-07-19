@@ -17,6 +17,14 @@ Last updated: 2026-07-18 HKT
   ⚠️ Any future containment migration MUST scope revokes away from these five client tables
   and the shared-trip RPCs, or client sync breaks production-wide again.
 
+- Local RC `1.3.0` — cyberpunk polish round 2 (CSS + one RouteTransition span; all
+  animations state-tied or `html[data-fx-tier="full"]`-gated, reduced-motion clamp still
+  terminal): route-change cyan scan wipe (one-shot, contained by `.route-transition`
+  overflow:clip), sidebar circuit-rail travelling node (transform-only), page-title RGB
+  jitter on hover, danger-badge alert breathing, search-field cyan arm on focus-within,
+  table row hover HUD tint (background/box-shadow only — no transform, sticky th safe).
+  Gates re-run green: typecheck, smoke 48, a11y 2/2, mobile 3/3.
+
 - Local RC `1.2.3` — bug-sweep fixes: Overview accent line moved from `::after` to a
   background layer (it was clobbering augmented-ui's border `::after` by specificity, killing the
   header chamfer on Overview only); `LoginScene3D` gained a `webglcontextrestored` listener
