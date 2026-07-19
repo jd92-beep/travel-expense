@@ -4,11 +4,12 @@ Last updated: 2026-07-19 HKT
 
 ## Current Status
 
-- Local RC `1.3.1` repairs provider heartbeat under maintenance without enabling general Admin
+- Production `1.3.1` repairs provider heartbeat under maintenance without enabling general Admin
   writes. `provider_probe_only` admits only `provider_probe`; Edge rechecks action on preview and
   commit. The exact required model is validated by BFF/Edge/Broker and tested with 8 output tokens,
-  temperature 0 and no provider/model fallback. Local Admin, Edge and Broker gates are green; live
-  cutover evidence must be appended after promotion.
+  temperature 0 and no provider/model fallback. Protected workflow `29693521861` promoted exact
+  source `760b63db2a673a1772a8f24348abe74a495868b3`; the remaining check is one authenticated operator
+  heartbeat click from Boss's Chrome session.
 
 - **2026-07-19 PRODUCTION INCIDENT FIX — client write grants restored.** The Admin 1.0
   read-only containment hardening collaterally REVOKED `authenticated`'s table privileges on
@@ -23,7 +24,7 @@ Last updated: 2026-07-19 HKT
   ⚠️ Any future containment migration MUST scope revokes away from these five client tables
   and the shared-trip RPCs, or client sync breaks production-wide again.
 
-- Local RC `1.3.0` — cyberpunk polish round 2 (CSS + one RouteTransition span; all
+- Admin `1.3.0` visual changes are included in production `1.3.1` — cyberpunk polish round 2 (CSS + one RouteTransition span; all
   animations state-tied or `html[data-fx-tier="full"]`-gated, reduced-motion clamp still
   terminal): route-change cyan scan wipe (one-shot, contained by `.route-transition`
   overflow:clip), sidebar circuit-rail travelling node (transform-only), page-title RGB
@@ -38,8 +39,8 @@ Last updated: 2026-07-19 HKT
   scoped via `:not(.nav-active-pill)`; garbled ReceiptDetail caption fixed. Full gates re-run
   green: typecheck, unit, contract, smoke 48, a11y 2/2, mobile 3/3.
 
-- Local RC `1.2.0` — cyberpunk visual pass on top of the v1.1.0 futuristic overhaul (not yet
-  promoted; production remains `1.0.2`). Visual/CSS + attribute-only layer, no API/auth/routing/
+- Admin `1.2.0` historical RC — cyberpunk visual pass on top of the v1.1.0 futuristic overhaul,
+  now included in production `1.3.1`. Visual/CSS + attribute-only layer, no API/auth/routing/
   operation-flow logic changed. Key facts:
   - New dep `augmented-ui` (BSD-2-Clause, pure CSS, no JS) for chamfered panel corners via
     `data-augmented-ui` + `--aug-*` custom props — applied to login panel (manual `clip-path`
@@ -74,7 +75,7 @@ Last updated: 2026-07-19 HKT
     `--accent`/`--neon-cyan` at ≤.15-.26 alpha via `color-mix`; drift is `full`-tier only and
     already covered by the existing blanket reduced-motion clamp.
 
-- Local RC `1.1.0` — futuristic UI overhaul (not yet promoted; production remains `1.0.2`). Visual
+- Admin `1.1.0` historical RC — futuristic UI overhaul, now included in production `1.3.1`. Visual
   layer only: no API, auth, routing or operation-flow logic changed. Key facts for maintainers:
   - Styles moved from `src/styles.css` to `src/styles/{index,tokens,base,components,motion,fx,reduced-motion}.css`
     (imported in that order; the `prefers-reduced-motion` clamp must stay the terminal import).
@@ -91,19 +92,18 @@ Last updated: 2026-07-19 HKT
     `body.scrollWidth === 360` exact).
   - All smokes pass unmodified: 48 + 2 a11y + 3 mobile.
 
-- Admin `1.0.2` is live: Providers keeps one row per provider and displays every supported Volcano
-  app LLM. Broker `2026.07.15.2` publishes the safe catalog, recognizes the existing env-backed
-  Volcano binding and verifies selected model availability with an 8-output-token request. Protected
-  workflow `29415119909` passed all frontend, BFF, Edge, cross-client and database gates before
+- Admin `1.3.1` is live: Providers keeps one row per provider and displays every supported Volcano
+  app LLM. Broker `2026.07.19.1` publishes the safe catalog, recognizes the existing env-backed
+  Volcano binding and verifies the exact selected model with an 8-output-token request. Protected
+  workflow `29693521861` passed all frontend, BFF, Edge, cross-client and database gates before
   production promotion.
 
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
-- Verified production: Admin `1.0.2`, with bounded default-workspace prefetch, idle-polling removal,
+- Verified production: Admin `1.3.1`, with bounded default-workspace prefetch, idle-polling removal,
   Volcano provider coverage, strict live Broker health and explicit awaiting-heartbeat client status.
-  Workflow `29415119909` passed at exact SHA
-  `67cde57a42bc43f1bda026d81d555260e25bb564`: Vercel
-  `dpl_B4bGNsxLudia3k38BMuP5PXsD7kZ`; Edge
-  `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_95`; schema `20260712123000`.
+  Workflow `29693521861` passed at exact SHA
+  `760b63db2a673a1772a8f24348abe74a495868b3`: Vercel
+  `dpl_DEkCHHofMYw2ebMDRBRN1YYFcDP2`; Edge `admin-kanban` v101; schema `20260712123000`.
 - Completed passkey bootstrap closure: first passkey enrollment BFF begin/finish returned `200`; Edge
   credential register, revoke-all, session create and session verify all returned `200`. The current
   passphrase remains unchanged and necessary. `ADMIN_PASSKEY_BOOTSTRAP_SECRET` is removed from Vercel
@@ -113,14 +113,14 @@ Last updated: 2026-07-19 HKT
   `0a71608e2b0c888eb7e7e4efb194a21a59ad935b` with localized Chrome passkey-focus guidance. Final
   workflow `29303864302` succeeded at that SHA: Vercel `dpl_A7o26cPYDieYCa1RaNcVvGpJ4XWh`; Edge
   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_90`; schema `20260712123000`.
-- Current live proof: `/api/health` returns `200`, Admin `1.0.2`, exact SHA/deployment and
-  `acceptingReadTraffic=true`. Broker `/health` returns exact service
-  `travel-expense-credential-broker`, version `2026.07.15.2`; deployed Edge source contains all five
-  Volcano LLM IDs, strict Broker health and `awaiting_heartbeat`. Edge versions are
-  `admin-auth-state` `40`, `admin-kanban` `95`, and `receipt-sync-worker` `40`; direct unsigned runtime access returns
+- Current live proof: `/api/health` returns `200`, Admin `1.3.1`, exact SHA
+  `760b63db2a673a1772a8f24348abe74a495868b3`, deployment
+  `dpl_DEkCHHofMYw2ebMDRBRN1YYFcDP2` and `acceptingReadTraffic=true`. Broker `/health` returns exact
+  service `travel-expense-credential-broker`, version `2026.07.19.1`; deployed Edge
+  `admin-kanban` v101 is active with exact-model `provider_probe_only`. Direct unsigned runtime access returns
   `401 ADMIN_SIGNATURE_MISSING`.
 - Production database contract: `20260712123000` (`admin-passkeys-v2`).
-- Compatibility baseline: Compact Web `0.16.8`, Android branch `0.19.5`, React `0.2.4`.
+- Compatibility baseline: Compact Web `0.16.12`, Android branch `0.19.5`, React `0.2.4`.
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
 - All CI groups, protected promotion and current runtime/auth-route checks passed.
 - Receipt photos remain in public compatibility mode until client heartbeats prove signed-URL
@@ -128,7 +128,7 @@ Last updated: 2026-07-19 HKT
 - The current passphrase remains unchanged and necessary; passkey is additive. Passkey enrollment and
   bootstrap removal are complete. Boss is performing the final post-bootstrap fresh login check now;
   do not mark that check complete until its result is recorded.
-- Production remained `deny_all` before the `1.3.1` cutover. The reviewed target state is
+- Production used `deny_all` before the `1.3.1` cutover. It now uses reviewed
   `provider_probe_only`; all non-probe operations remain server-disabled.
 - R3 account consolidation/deletion, Notion write repair, device commands, runtime writes, arbitrary
   SQL/table editing and generic credential controls are server-disabled.
@@ -228,6 +228,16 @@ and recovered through the operation ID; the UI never declares success from reque
 
 Verified for current production promotion:
 
+- Admin `1.3.1` production verification: implementation commit `889ec74` and deployment helper
+  commit `760b63d` are on `origin/main`. Admin typecheck/build/security passed; unit `32/32`, contract
+  `24/24`, full smoke `49 passed + 1 intentional skip`, a11y `2/2`, mobile `3/3`, and npm audit found
+  0 vulnerabilities. Edge fmt/lint/check and `73/73` tests passed. Broker check/self-test and audit
+  passed; Compact selected-model routing passed `5 + 1 intentional skip`. Broker
+  `2026.07.19.1` is Worker version `9d742877-9223-47c6-aeca-c931383c4182`; Edge `admin-kanban` v101
+  is active. Protected workflow `29693521861` promoted exact source
+  `760b63db2a673a1772a8f24348abe74a495868b3` to Vercel
+  `dpl_DEkCHHofMYw2ebMDRBRN1YYFcDP2` and completed in 4m23s. The production helper pins Vercel CLI
+  `56.3.2`, bounds child processes at five minutes and passes its `6/6` regression suite.
 - Admin `1.0.2` production verification: typecheck/build/security passed; unit `32/32`, contract
   `24/24`, full smoke `48 passed + 1 intentional skip`; Edge contract tests passed `53/53`.
   Protected workflow `29415119909` promoted exact SHA
@@ -317,8 +327,10 @@ Runbook index: `docs/runbooks/README.md`
 
 ## Current Post-Bootstrap Open Items
 
-1. **Admin 1.0.2 promotion completed** — workflow `29415119909`, live `/api/health`, Edge v95,
-   Broker `2026.07.15.2` and all five Volcano model probes are verified.
+1. **Admin 1.3.1 promotion completed** — workflow `29693521861`, live `/api/health`, Edge v101 and
+   Broker `2026.07.19.1` are verified. The exact-model probe implementation and deployment gates are
+   green; record one authenticated provider-row heartbeat click from Boss's session before claiming
+   the operator path itself has been observed live.
 2. **Final post-bootstrap fresh login check (Boss is doing this now)** — passkey enrollment and
    bootstrap removal are complete. Do not mark this check passed until Boss records the fresh Chrome
    login result.
@@ -330,8 +342,8 @@ Runbook index: `docs/runbooks/README.md`
 
 ## Cutover And Rollback
 
-Admin `1.0.2` final production promotion is verified at
-`67cde57a42bc43f1bda026d81d555260e25bb564`; keep writes at `deny_all`. Follow
+Admin `1.3.1` production promotion is verified at
+`760b63db2a673a1772a8f24348abe74a495868b3`; keep writes at `provider_probe_only`. Follow
 `docs/runbooks/maintenance-and-rollback.md` for future changes and keep the fixed order of privilege
 check, new-only BFF/Edge, read-only smoke, R1 allowlist, then each verified R2 action separately.
 
