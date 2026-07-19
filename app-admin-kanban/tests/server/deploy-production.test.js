@@ -1,8 +1,20 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { verifyAdminSessionRouteCanary } from '../../scripts/admin-session-route-canary.mjs';
 import { retryPromotedReadiness } from '../../scripts/retry-promoted-readiness.mjs';
+
+const deploySource = readFileSync(
+  fileURLToPath(new URL('../../scripts/deploy-production.mjs', import.meta.url)),
+  'utf8',
+);
+
+test('production deploy pins the current Vercel CLI and bounds child processes', () => {
+  assert.match(deploySource, /vercel@56\.3\.2/);
+  assert.match(deploySource, /timeout: CHILD_PROCESS_TIMEOUT_MS/);
+});
 
 test('admin session route canary requires the canonical unauthorized JSON response', async () => {
   const response = await verifyAdminSessionRouteCanary(async (pathname, options) => {

@@ -24,8 +24,9 @@ const projectName = 'travel-expense-admin-kanban';
 const productionUrl = 'https://travel-expense-admin-kanban.vercel.app';
 const appPath = 'app-admin-kanban';
 const adminRuntimeSchemaVersion = '20260712123000';
+const CHILD_PROCESS_TIMEOUT_MS = 5 * 60 * 1000;
 const stagingDir = mkdtempSync(path.join(tmpdir(), 'travel-expense-admin-release-'));
-const vercelArgs = ['--yes', 'vercel@54.17.3'];
+const vercelArgs = ['--yes', 'vercel@56.3.2'];
 
 function childEnvironment() {
   const env = { ...process.env };
@@ -41,11 +42,17 @@ function capture(command, args, cwd = repoRoot) {
     encoding: 'utf8',
     env: childEnvironment(),
     maxBuffer: 16 * 1024 * 1024,
+    timeout: CHILD_PROCESS_TIMEOUT_MS,
   }).trim();
 }
 
 function run(command, args, cwd = appDir) {
-  execFileSync(command, args, { cwd, stdio: 'inherit', env: childEnvironment() });
+  execFileSync(command, args, {
+    cwd,
+    stdio: 'inherit',
+    env: childEnvironment(),
+    timeout: CHILD_PROCESS_TIMEOUT_MS,
+  });
 }
 
 function parseJson(value, label) {
