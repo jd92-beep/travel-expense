@@ -416,6 +416,7 @@ async function run() {
         'volcano/minimax-m3',
         'volcano/minimax-m2.7',
         'volcano/doubao-seed-2.0-mini',
+        'volcano/kimi-k3',
       ],
     );
 
@@ -752,6 +753,7 @@ async function run() {
       'minimax-m3',
       'minimax-m2.7',
       'doubao-seed-2.0-mini',
+      'kimi-k3',
     ]) {
       const volcano = await jsonFetch(env, '/volcano/json', {
         method: 'POST',

@@ -1,5 +1,5 @@
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.07.19.1';
+const VERSION = '2026.07.20.1';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -17,6 +17,7 @@ const PROVIDER_MODELS = Object.freeze({
     'volcano/minimax-m3',
     'volcano/minimax-m2.7',
     'volcano/doubao-seed-2.0-mini',
+    'volcano/kimi-k3',
   ],
 });
 const NOTION_VERSION = '2022-06-28';

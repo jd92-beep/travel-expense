@@ -114,7 +114,8 @@ These rules bind every agent working in this repo (Oscar, Codex, Antigravity, Mi
   provider fallback.
 - AI quota/rate-limit failures from the Credential Broker are hard stops. Do not silently fallback to another provider after `429`, quota, or daily-limit errors, because that can bypass public-user metering and confuse the required primary model contract.
 - The safe Volcano LLM catalog is exactly `doubao-seed-2.0-lite`, `doubao-seed-2.0-pro`,
-  `minimax-m3`, `minimax-m2.7`, and `doubao-seed-2.0-mini`. Admin Providers must show all five.
+  `minimax-m3`, `minimax-m2.7`, `doubao-seed-2.0-mini`, and `kimi-k3`. Admin Providers must show
+  all six.
   Seedance is a media/video model and must not appear in LLM selectors or LLM probes.
 - Compact and Android selected-model tests use the exact selected provider/model, `kind=test`, no
   fallback and at most 8 output tokens. A non-empty provider `content` or `reasoning_content` proves

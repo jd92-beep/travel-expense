@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-20
+
+- **feat(broker): add Volcano Kimi K3 safe route.** Credential Broker `2026.07.20.1` adds
+  `volcano/kimi-k3` to the exposed provider catalog and exact-model test allowlist for the Android
+  app's Scan, Voice, Email and Trip update selectors. Broker check/self-test and deploy preflight
+  passed; production Worker version `29a61b5a-5b6d-416e-a753-db56b137f7f4` is live and `/health`
+  reports `2026.07.20.1`. Direct Volcano text and valid 820x538 WebP probes both returned `200` with
+  `model=kimi-k3`. No credential value, database, RLS or live user data changed.
+
 ## 2026-07-19
 
 - **fix(admin): v1.3.1 — provider heartbeat maintenance repair**:

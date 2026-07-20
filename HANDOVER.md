@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-19 HKT
-- **Focus**: Session 63 repaired and promoted Admin provider heartbeat maintenance routing, exact low-token model probes and bounded Vercel production deployment.
+- **Date**: 2026-07-20 HKT
+- **Focus**: Session 64 added Volcano Kimi K3 to the production Credential Broker safe catalog for the Android app's four recognition tasks and verified text/image inference.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.12`; Android `0.19.5` (versionCode 1950; re-check branch HEAD and latest app-code commit live); Admin production `1.3.1`; Broker production `2026.07.19.1`; React `0.2.4`
+- **App version**: Compact `0.16.12`; Android `0.20.0` (versionCode 2000; pending Android branch commit at this handover edit); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -73,10 +73,29 @@ you closed with your session number.
     cold-open waited 15 seconds with neither generic sync-error banner. (Session 60.)
 16. 🟡 **Authenticated Admin heartbeat click evidence** — Session 63 deployed the exact-model
     probe path and all production gates passed, but no controllable authenticated Chrome session was
-    available for the final operator click. Record one provider-row heartbeat result from Boss's
-    session; it must reach preview/commit without `ADMIN_WRITES_DISABLED` and name the selected model.
+   available for the final operator click. Record one provider-row heartbeat result from Boss's
+   session; it must reach preview/commit without `ADMIN_WRITES_DISABLED` and name the selected model.
+17. 🟡 **Authenticated in-app Kimi K3 click evidence** — Session 64 proved the Android request
+   shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
+   and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
+   selected-model click when a human account session is available; do not bypass auth to obtain it.
 
 ## What Was Done
+
+### Session 64 (Codex — production Broker Kimi K3 route)
+
+1. **Safe model contract:** added `volcano/kimi-k3` to `PROVIDER_MODELS`, so Android may use Kimi K3
+   for Scan image, Voice text, Email and Trip update recognition without opening arbitrary model IDs.
+2. **Regression proof:** Broker syntax check and self-test passed; self-test verifies status exposes
+   the new safe ID and both public/internal exact-model paths forward `kimi-k3` to Volcano.
+3. **Production cutover:** deploy preflight passed and Cloudflare Worker version
+   `29a61b5a-5b6d-416e-a753-db56b137f7f4` is active. No-store `/health` returned HTTP `200` with
+   Broker `2026.07.20.1`; unauthenticated `/volcano/json` remained fail-closed with `401`.
+4. **Provider proof:** direct Volcano one-shots returned HTTP `200`, `model=kimi-k3` for both text
+   and a valid 820x538 WebP. A 1x1 PNG correctly failed provider image validation and was replaced
+   by the valid app asset for the capability proof.
+5. **Boundary:** no credential value was printed, rotated or committed; no database, RLS, Admin
+   write mode or live user data changed. Authenticated in-app evidence remains Open Item 17.
 
 ### Session 63 (Codex — Admin provider heartbeat probe-only repair)
 
