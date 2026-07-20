@@ -242,7 +242,7 @@ test('AI routing keeps required primary models ahead of stale settings', async (
   expect(calls.some((call) => call.kind === 'trip' && call.provider === 'kimi')).toBe(false);
 });
 
-test('selected Volcano Scan model uses the Volcano broker route without fallback', async ({ page }) => {
+test('selected Volcano Kimi K3 image model uses the exact broker route without fallback', async ({ page }) => {
   test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
   const calls = [];
   const appOrigin = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
@@ -260,7 +260,7 @@ test('selected Volcano Scan model uses the Volcano broker route without fallback
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({ credentialSession: 'volcano-routing-session', credentialSessionExpiresAt: Date.now() + 60_000 }));
-    localStorage.setItem('boss-japan-tracker', JSON.stringify({ receipts: [], lastTab: 'scan', scanModel: 'volcano/doubao-seed-2.0-pro' }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({ receipts: [], lastTab: 'scan', scanModel: 'volcano/kimi-k3' }));
   });
 
   await page.goto(`${appOrigin}/travel-expense/compact/#scan`);
@@ -273,7 +273,7 @@ test('selected Volcano Scan model uses the Volcano broker route without fallback
   expect(calls).toEqual([{
     url: 'https://travel-expense-credential-broker.ftjdfr.workers.dev/volcano/json',
     kind: 'scan',
-    model: 'doubao-seed-2.0-pro',
+    model: 'kimi-k3',
   }]);
 });
 

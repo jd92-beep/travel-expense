@@ -382,6 +382,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(modelOptions.join(' ')).toContain('Kimi (kimi-code)');
   expect(modelOptions.join(' ')).toContain('Google Gemini 2.5 Flash');
   expect(modelOptions.join(' ')).toContain('Mimo v2.5 Pro');
+  expect(modelOptions.join(' ')).toContain('Volcano (Kimi K3)');
   expect(modelOptions.join(' ')).not.toMatch(/MiniMax|OpenRouter|GLM|ZAI/);
 
   await setAccordion(page, '資料管理');
@@ -1792,5 +1793,22 @@ test('Settings model testers use the selected exact Volcano broker model without
     model: 'doubao-seed-2.0-mini',
     prompt: 'Return only JSON: {"ok":true}',
   });
+  const k3Controls = [
+    ['Scan model', '測試 Scan model'],
+    ['Voice model', '測試 Voice model'],
+    ['Email model', '測試 Email model'],
+    ['Trip update model', '測試 Trip update model'],
+  ];
+  for (const [index, [fieldLabel, buttonLabel]] of k3Controls.entries()) {
+    await page.locator('label', { hasText: fieldLabel }).locator('select').selectOption('volcano/kimi-k3');
+    await page.getByRole('button', { name: buttonLabel }).click();
+    await expect.poll(() => calls.length).toBe(6 + index);
+    expect(calls.at(-1)).toEqual({
+      url: 'https://travel-expense-credential-broker.ftjdfr.workers.dev/volcano/json',
+      kind: 'test',
+      model: 'kimi-k3',
+      prompt: 'Return only JSON: {"ok":true}',
+    });
+  }
   expect(calls.every((call) => call.url.endsWith('/volcano/json'))).toBe(true);
 });

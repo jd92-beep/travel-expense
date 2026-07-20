@@ -66,7 +66,7 @@ to bake into the binary. Verify it landed: after `npm run android:sync`, the URL
 
 - Bundled Capacitor Android shell.
 - App id: `com.ftjdfr.travelexpensecompact`.
-- Version: `0.19.9` / versionCode `1990`. Ports main compact v0.16.12: shared-trip Notion mirror polish — member receipt photos backfilled from Storage into the owner outbox drain (signed URL → broker native upload, best-effort + session dedupe), drain claims up to 5×20 jobs per cycle. Prior: `0.19.8` / versionCode `1980`. Ports main compact v0.16.11: BlurFade reveal safety
+- Version: `0.20.0` / versionCode `2000`. Adds Volcano Engine Kimi K3 (`volcano/kimi-k3`) to Scan image recognition, Voice text recognition, Email recognition and Trip update recognition. All four selectors send the exact provider model `kimi-k3`; the shared production Broker allowlist was deployed as `2026.07.20.1`. Prior: `0.19.9` / versionCode `1990`. Ports main compact v0.16.12: shared-trip Notion mirror polish — member receipt photos backfilled from Storage into the owner outbox drain (signed URL → broker native upload, best-effort + session dedupe), drain claims up to 5×20 jobs per cycle. Prior: `0.19.8` / versionCode `1980`. Ports main compact v0.16.11: BlurFade reveal safety
   net (IntersectionObserver never fires on occluded/WebView-background surfaces — tabs shipped
   blank at opacity 0; 700ms `.blur-fade-forced` CSS fallback is rAF-independent), Turing backdrop
   de-lag (full-tier-only mount, gradient ramps instead of blur(88px) blobs, opaque washi shell

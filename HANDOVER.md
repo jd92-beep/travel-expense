@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-15 HKT
-- **Focus (latest)**: Android Compact Settings selected-model tests now explicitly request JSON, which keeps MiniMax test routing on its proven concise JSON-task shape while retaining exact-model/no-fallback behavior.
-- **App version (this sweep)**: Compact/Android `0.19.5` (versionCode `1950`); local branch `codex/admin-console-1.0-android`.
-- **Verification (this sweep)**: `typecheck`, `build` and `security:scan` exited `0`; persisted-state offline `2/2`, selected-model Settings `1/1` and mobile layout `1/1` passed. JBR 21 debug APK build succeeded, and `android:qa` passed with verified App Link at `/tmp/travel-expense-android-qa-2026-07-15T13-01-24-550Z`. No release APK/AAB was built.
+- **Date**: 2026-07-20 HKT
+- **Focus (latest)**: Added Volcano Engine Kimi K3 to Android Scan image, Voice text, Email and Trip update recognition with matching production Broker allowlist.
+- **App version (this sweep)**: Compact/Android `0.20.0` (versionCode `2000`); local branch `codex/admin-console-1.0-android`.
+- **Verification (this sweep)**: `typecheck`, `build`, `security:scan`, Broker check/self-test/preflight, focused K3 image + four-selector smoke `2/2`, JBR 21 debug build and `android:qa` passed. Live direct Volcano text and 820x538 WebP probes both returned `200` for `kimi-k3`; QA artifact `/tmp/travel-expense-android-qa-2026-07-20T09-22-33-082Z`. No release APK/AAB was built.
 - **Current cutover gates**: Do not make live receipt photos private until this build and Compact `0.13.6` are deployed and active compatibility is confirmed. Do not rewrite live Nagoya rows without Boss approval, a backup and server preview. No release APK/AAB was built or published in this session.
 - **Contract status**: The previous Compact/React fixture drift is resolved. Nagoya round-trip is exactly six days (`2026-04-20` through `2026-04-25`); partial updates retain untouched days; range-external scenery and stale overwrites fail.
 
@@ -19,7 +19,7 @@
 - **What v0.12.17 fixed** (full list in `CHANGELOG.md`): 2 HIGH money-engine bugs (recurring receipts never stamped an FX rate so they re-priced at whatever the live rate happened to be on view; monthly recurring day-of-month clamp compounded permanently once it hit a short month), 1 HIGH bug caught before shipping (v0.12.16's scan crash-recovery could double-process a capture on ordinary tab switch — fixed with a session-scoped gate), 3 MED React/sync bugs (`isHydratingScope` flipped early before the IndexedDB merge landed; a multi-file email-scan batch read stale state mid-loop; `pull()` had no re-entrancy guard unlike `push()`/`sync()`), 1 MED concurrency race (parallel exports could hand the OS share sheet a deleted file), 1 LOW data-hygiene gap (AI-parsed totals had no non-negative guard). Two test-suite fixes (not app bugs): a live-FX-rate-dependent hardcoded assertion in `stats-smoke`, and a stale wallpaper-layer-count assertion in `final-navigation-smoke` left over from the v0.12.15 low-RAM optimization.
 - **What v0.12.15/16 shipped** (full list in `CHANGELOG.md`): 3 specialist review agents (native UX, perf/size, security) found the release APK was 66MB with 39MB being an unreferenced video — deleting it plus WebP-converting wallpapers/scan assets cut the signed APK to **9.1MB (from 66MB, −86%)**. Added `@capacitor/status-bar` (targetSdk36 edge-to-edge ignores theme XML at runtime), a viewport keyboard fix, a Camera capture-size cap (OOM guard), map-link/OTP-type hardening, hardware-back closing the trip dropdown/budget edit, and scan crash-recovery.
 - **Latest verification evidence**: v0.12.17 passed `npm run typecheck`, all 3 unit-test scripts (split-engine, sync-backoff, notion-split-meta), and the full Playwright smoke suite (dashboard/history/scan/split-editor/timeline/stats/welcome-guide/settings/settle-up/final-nav — final-nav re-run 3x for stability after a layer-count assertion update), plus a runtime-error walker (`scripts/explore-errors.mjs`) across all 7 tabs showing only the pre-existing benign baseline (secrets.local.js 404, external API 429). Signed release APK built and verified (APK Signing Block v2/v3 present).
-- **Current known verification blockers / pending**: Real-device Google/magic-link login still needs a human account/device round-trip. `npm run smoke:settings` has one unrelated failing Trip Doctor expectation at `tests/settings-smoke.spec.cjs:769`: it expects `1 failed`, while the rendered doctor shows `2 pending` and no failed item. Compact/Android current version: v0.19.5 / versionCode 1950.
+- **Current known verification blockers / pending**: Real-device Google/magic-link login still needs a human account/device round-trip. The emulator reached the login gate, so an authenticated in-app K3 button click was not available; exact app routing, production Broker deployment and direct Volcano text/image inference were verified independently. `npm run smoke:settings` retains the unrelated Trip Doctor expectation noted in Session 64. Compact/Android current version: v0.20.0 / versionCode 2000.
 
 ## 🧭 Super-app direction (Splitwise-class) — read `app-compact/SUPER_APP_ROADMAP.md`
 
@@ -176,10 +176,30 @@ agent does not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.19.5`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.20.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 65 (Codex — v0.20.0 Android Volcano Kimi K3)
+
+1. **Four-task catalog:** added `volcano/kimi-k3` / `Volcano (Kimi K3)` to the one shared
+   `AI_MODELS` catalog consumed by Scan, Voice, Email and Trip update selectors. Existing selected
+   model routing removes the `volcano/` prefix and sends exact `model: kimi-k3` to `/volcano/json`.
+2. **Backend contract:** main's production Credential Broker added the same safe provider model,
+   bumped to `2026.07.20.1`, passed check/self-test/deploy preflight and deployed as Worker version
+   `29a61b5a-5b6d-416e-a753-db56b137f7f4`. No credential value was read into app state or docs.
+3. **Functional proof:** Settings smoke selected K3 independently for all four tasks and asserted
+   exact provider/model/prompt requests. The image recognition smoke uploaded a receipt image and
+   asserted one K3 request with no fallback. Both focused tests passed (`2/2`).
+4. **Provider proof:** direct Volcano probes returned HTTP `200`, `model=kimi-k3` for text and a
+   real 820x538 WebP image. A 1x1 PNG was first rejected with `InvalidParameter`; retrying a valid
+   app asset proved this was image validation, not lack of multimodal support.
+5. **Gates:** `typecheck`, production build and `security:scan` exited `0`; JBR 21 debug APK build
+   succeeded. `android:qa` passed with `appLinksVerified=true`, `launchMode=login`, no app crash/ANR,
+   and artifacts at `/tmp/travel-expense-android-qa-2026-07-20T09-22-33-082Z`.
+6. **Boundary:** Android was bumped to `0.20.0` / versionCode `2000`; the previously stale lockfile
+   version was aligned. Debug APK only; no release APK/AAB, database, RLS or live user data changed.
 
 ### Session 64 (Codex — v0.19.5 Android MiniMax model-test follow-up)
 

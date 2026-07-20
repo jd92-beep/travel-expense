@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-07-20 HKT (Android Volcano Kimi K3)
+
+- **v0.20.0 / versionCode 2000.** Added `Volcano (Kimi K3)` (`volcano/kimi-k3`) to
+  the shared AI catalog used by Scan image recognition, Voice text recognition, Email recognition
+  and Trip update recognition.
+  - The four Settings selectors and their selected-model probes preserve exact routing to
+    `/volcano/json` with `model: kimi-k3`; no provider fallback is used by the probes.
+  - Production Credential Broker `2026.07.20.1` now includes the matching safe allowlist entry and
+    was deployed as Cloudflare Worker version `29a61b5a-5b6d-416e-a753-db56b137f7f4`.
+  - Evidence: Broker check/self-test and deploy preflight passed; Android typecheck, build and
+    security scan passed; focused K3 image routing plus all-four-selector smoke passed `2/2`.
+    Direct Volcano one-shots returned `200` for `model=kimi-k3` with both text and a real 820x538
+    WebP image. JBR 21 debug APK build and emulator QA passed with verified App Links; artifact
+    `/tmp/travel-expense-android-qa-2026-07-20T09-22-33-082Z`.
+  - Debug APK only. No release APK/AAB, database, RLS, credential value or live user data changed.
+
 ## 2026-07-15 HKT (Android MiniMax model-test prompt)
 
 - **v0.19.5 / versionCode 1950.** Settings selected-model tests now send the exact instruction
