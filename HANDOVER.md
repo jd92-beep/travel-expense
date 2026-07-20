@@ -4,7 +4,7 @@
 - **Date**: 2026-07-20 HKT
 - **Focus**: Session 64 added Volcano Kimi K3 to the production Credential Broker safe catalog for the Android app's four recognition tasks and verified text/image inference.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.12`; Android `0.20.0` (versionCode 2000; pending Android branch commit at this handover edit); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
+- **App version**: Compact `0.16.12`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
