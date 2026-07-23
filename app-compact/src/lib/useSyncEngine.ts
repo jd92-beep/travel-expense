@@ -5,7 +5,7 @@ import { canUseNotionMirror } from './notionAccess';
 import { recordClientHeartbeat } from './clientHeartbeat';
 import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { filterSupersededTripQueue, isReceiptTombstoned, mergePulledData, rawReceiptSourceId, receiptSourceTombstoneKey } from './syncMerge';
-import { enqueueChange, settleChange, type ChangeDraft, type JournalOutcome } from './changeJournal';
+import { enqueueChange, settleChange, type JournalOutcome } from './changeJournal';
 import { MAX_SYNC_RETRY_ATTEMPTS } from './constants';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
 import type { Session } from '@supabase/supabase-js';
@@ -164,9 +164,12 @@ export function useSyncEngine(
 
   const settleQueueItem = useCallback((item: SyncQueueItem, outcome: JournalOutcome) => {
     if (!aliveRef.current) return;
+    const guardedOutcome = outcome.kind === 'syncing' || outcome.kind === 'manual-retry'
+      ? outcome
+      : { ...outcome, expectedUpdatedAt: item.updatedAt };
     setState((current) => ({
       ...current,
-      syncQueue: settleChange(current.syncQueue || [], item.id, outcome).queue,
+      syncQueue: settleChange(current.syncQueue || [], item.id, guardedOutcome).queue,
     }));
   }, [setState]);
 
@@ -246,7 +249,7 @@ export function useSyncEngine(
     return () => window.clearTimeout(timer);
   }), []);
 
-  const processItem = useCallback(async (item: SyncQueueItem): Promise<ChangeDraft | undefined> => {
+  const processItem = useCallback(async (item: SyncQueueItem): Promise<JournalOutcome | undefined> => {
     const current = stateRef.current;
     const session = supabaseSessionRef.current;
     const supabaseSession = hasSupabaseSession(session) ? session : null;
@@ -258,18 +261,16 @@ export function useSyncEngine(
       let synced = supabaseSession
         ? await upsertSupabaseReceipt(supabaseSession, current, { ...receipt, syncStatus: 'syncing' })
         : { ...receipt, syncStatus: 'syncing' as const };
-      let photoRetryNeeded = false;
+      let photoError = '';
       if (receipt.photoThumb && !receipt._photoSyncedToSupabase && supabaseSession) {
         try {
           const receiptUuid = synced.supabaseId || synced.id;
           const { publicUrl, storagePath } = await uploadReceiptPhoto(supabaseSession, receiptUuid, receipt.photoThumb, 'image/jpeg', receipt.supabasePhotoPath);
           synced = { ...synced, photoUrl: publicUrl, supabasePhotoPath: storagePath, _photoSyncedToSupabase: true, _photoSyncAttempts: 0 };
         } catch (photoErr) {
-          // Don't swallow: track attempts and schedule a bounded retry so the photo
-          // eventually uploads, without making the (already-synced) receipt look failed.
-          const attempts = Number(receipt._photoSyncAttempts || 0) + 1;
+          const attempts = item.attempts + 1;
           synced = { ...synced, _photoSyncedToSupabase: false, _photoSyncAttempts: attempts };
-          photoRetryNeeded = attempts < MAX_SYNC_RETRY_ATTEMPTS;
+          photoError = redactError(photoErr);
           console.warn(`[SyncEngine] Supabase photo upload failed (attempt ${attempts}/${MAX_SYNC_RETRY_ATTEMPTS}):`, photoErr);
         }
       }
@@ -282,22 +283,7 @@ export function useSyncEngine(
         }
       }
       applyReceiptSyncResult(item, synced);
-      if (photoRetryNeeded && aliveRef.current) {
-        return {
-          type: 'receipt',
-          entityId: synced.id,
-          op: 'update',
-          payload: {
-            supabaseId: synced.supabaseId,
-            sourceId: synced.sourceId,
-            tripId: synced.tripId,
-            version: synced.version,
-            syncRevision: synced.syncRevision,
-            updatedAt: synced.updatedAt,
-          },
-        };
-      }
-      return;
+      return photoError ? { kind: 'retryable-error', error: photoError } : undefined;
     }
     if (item.type === 'delete-receipt') {
       const tombstone = {
@@ -388,14 +374,8 @@ export function useSyncEngine(
         }
         settleQueueItem(item, { kind: 'syncing' });
         try {
-          const retryChange = await processItem(item);
-          settleQueueItem(item, { kind: 'succeeded' });
-          if (retryChange) {
-            setState((current) => ({
-              ...current,
-              syncQueue: enqueueChange(current.syncQueue, retryChange),
-            }));
-          }
+          const outcome = await processItem(item);
+          settleQueueItem(item, outcome || { kind: 'succeeded' });
           // Recovery: if a trip push succeeds now (e.g. after re-invite or rehome),
           // clear the denied flag so future receipts for this trip can sync.
           const successTripKey = tripKeyForItem(item);
@@ -433,14 +413,8 @@ export function useSyncEngine(
             await new Promise((resolve) => window.setTimeout(resolve, AUTO_SYNC_AUTH_RETRY_DELAY_MS));
             if (!aliveRef.current) break;
             try {
-              const retryChange = await processItem(item);
-              settleQueueItem(item, { kind: 'succeeded' });
-              if (retryChange) {
-                setState((current) => ({
-                  ...current,
-                  syncQueue: enqueueChange(current.syncQueue, retryChange),
-                }));
-              }
+              const outcome = await processItem(item);
+              settleQueueItem(item, outcome || { kind: 'succeeded' });
               continue;
             } catch (retryError) {
               lastError = redactError(retryError);
@@ -872,18 +846,26 @@ export function useSyncEngine(
       if (tripId) accessDeniedTripsRef.current.delete(tripId);
       if (item.type === 'receipt') backfillSuspendedRef.current.delete(item.entityId);
     }
-    setState((current) => ({
-      ...current,
-      syncQueue: (current.syncQueue || []).reduce(
+    setState((current) => {
+      const retryPhotoIds = new Set((current.syncQueue || [])
+        .filter((item) => (item.status === 'error' || item.status === 'failed') && item.type === 'receipt')
+        .map((item) => item.entityId));
+      return {
+        ...current,
+        receipts: current.receipts.map((receipt) => retryPhotoIds.has(receipt.id) && receipt.photoThumb && !receipt._photoSyncedToSupabase
+          ? { ...receipt, _photoSyncAttempts: 0 }
+          : receipt),
+        syncQueue: (current.syncQueue || []).reduce(
         (queue, item) =>
           item.status === 'error' || item.status === 'failed'
             ? settleChange(queue, item.id, { kind: 'manual-retry' }).queue
             : queue,
         current.syncQueue || [],
-      ),
-      globalSyncStatus: 'queued',
-      syncError: '',
-    }));
+        ),
+        globalSyncStatus: 'queued',
+        syncError: '',
+      };
+    });
     setTimeout(() => {
       void sync({ auto: true });
     }, 100);

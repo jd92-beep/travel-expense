@@ -18,8 +18,13 @@ let queue = enqueueChange([], receipt('r1', {
   notionPageId: 'n1',
   updatedAt: 10,
 }));
-queue = settleChange(queue, queue[0].id, { kind: 'syncing' }).queue;
+const syncing = queue[0];
+queue = settleChange(queue, syncing.id, { kind: 'syncing' }).queue;
 queue = enqueueChange(queue, receipt('r1', { updatedAt: 20 }));
+queue = settleChange(queue, syncing.id, {
+  kind: 'succeeded',
+  expectedUpdatedAt: syncing.updatedAt,
+}).queue;
 assert.equal(queue.length, 1);
 assert.equal(queue[0].payload?.supabaseId, 's1');
 assert.equal(queue[0].payload?.notionPageId, 'n1');
@@ -47,6 +52,21 @@ assert.equal(retryQueue[0].attempts, 3);
 assert.equal(retryQueue[0].status, 'error');
 assert.equal(restoreJournal(retryQueue).queue[0].status, 'error');
 
+let photoRetryQueue = enqueueChange([], receipt('photo-retry'));
+for (let attempt = 1; attempt <= 3; attempt += 1) {
+  const photoItem = photoRetryQueue[0];
+  photoRetryQueue = settleChange(photoRetryQueue, photoItem.id, {
+    kind: 'retryable-error',
+    error: 'photo upload failed',
+    expectedUpdatedAt: photoItem.updatedAt,
+  }).queue;
+  assert.equal(photoRetryQueue[0].attempts, attempt);
+}
+assert.equal(photoRetryQueue[0].status, 'error');
+photoRetryQueue = settleChange(photoRetryQueue, photoRetryQueue[0].id, { kind: 'manual-retry' }).queue;
+assert.equal(photoRetryQueue[0].attempts, 0);
+assert.equal(photoRetryQueue[0].error, undefined);
+
 let conflictQueue = enqueueChange([], receipt('conflict'));
 conflictQueue = settleChange(conflictQueue, conflictQueue[0].id, {
   kind: 'terminal-error',
@@ -61,6 +81,11 @@ terminal = settleChange(terminal, terminal[0].id, {
   error: '40001 version conflict',
 }).queue;
 assert.equal(restoreJournal(terminal).queue[0].status, 'error');
+const terminalAttempts = terminal[0].attempts;
+const terminalError = terminal[0].error;
+terminal = enqueueChange(terminal, receipt('terminal', { updatedAt: 30 }));
+assert.equal(terminal[0].attempts, terminalAttempts);
+assert.equal(terminal[0].error, terminalError);
 terminal = settleChange(terminal, terminal[0].id, { kind: 'manual-retry' }).queue;
 assert.equal(terminal[0].attempts, 0);
 assert.equal(terminal[0].status, 'queued');

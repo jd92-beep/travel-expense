@@ -7,9 +7,9 @@ export type ChangeDraft = Pick<SyncQueueItem, 'type' | 'entityId' | 'op' | 'payl
 
 export type JournalOutcome =
   | { kind: 'syncing' }
-  | { kind: 'succeeded' }
-  | { kind: 'retryable-error'; error: string }
-  | { kind: 'terminal-error'; error: string }
+  | { kind: 'succeeded'; expectedUpdatedAt?: number }
+  | { kind: 'retryable-error'; error: string; expectedUpdatedAt?: number }
+  | { kind: 'terminal-error'; error: string; expectedUpdatedAt?: number }
   | { kind: 'manual-retry' };
 
 export type JournalResult = {
@@ -44,6 +44,7 @@ export function enqueueChange(
   const now = Date.now();
   const previous = (queue || []).find((item) => queueKey(item) === queueKey(change));
   const terminal = previous?.status === 'error' || previous?.status === 'failed';
+  const updatedAt = Math.max(now, (previous?.updatedAt || 0) + 1);
   const next: SyncQueueItem = {
     ...previous,
     ...change,
@@ -52,7 +53,7 @@ export function enqueueChange(
     attempts: terminal ? previous.attempts : 0,
     error: terminal ? previous.error : undefined,
     createdAt: previous?.createdAt || now,
-    updatedAt: now,
+    updatedAt,
     payload: { ...previous?.payload, ...change.payload },
   };
   return [...(queue || []).filter((item) => queueKey(item) !== queueKey(change)), next]
@@ -64,17 +65,24 @@ export function settleChange(
   itemId: string,
   outcome: JournalOutcome,
 ): JournalResult {
+  const current = queue.find((item) => item.id === itemId);
+  if (!current) return summarize(queue);
+  if (outcome.kind !== 'syncing'
+    && outcome.kind !== 'manual-retry'
+    && outcome.expectedUpdatedAt !== undefined
+    && current.updatedAt !== outcome.expectedUpdatedAt) {
+    return summarize(queue);
+  }
   if (outcome.kind === 'succeeded') {
     return summarize(queue.filter((item) => item.id !== itemId));
   }
   const next = queue.map((item): SyncQueueItem => {
     if (item.id !== itemId) return item;
-    const now = Date.now();
     if (outcome.kind === 'syncing') {
-      return { ...item, status: 'syncing', updatedAt: now, error: undefined };
+      return { ...item, status: 'syncing', error: undefined };
     }
     if (outcome.kind === 'manual-retry') {
-      return { ...item, status: 'queued', attempts: 0, updatedAt: now, error: undefined };
+      return { ...item, status: 'queued', attempts: 0, error: undefined };
     }
     const attempts = item.attempts + 1;
     const terminal = outcome.kind === 'terminal-error'
@@ -84,7 +92,6 @@ export function settleChange(
       ...item,
       attempts,
       status: terminal ? 'error' : 'queued',
-      updatedAt: now,
       error: outcome.error,
     };
   });

@@ -467,7 +467,7 @@ test('successful stale trip push retains newer local content and applies the Sup
   expect(tripPosts).toHaveLength(2);
 });
 
-test('photo upload abort keeps one journal entry and retries after online', async ({ page }) => {
+test('photo upload abort becomes terminal after three retries', async ({ page }) => {
   const tripUuid = '11111111-1111-4111-8111-111111111111';
   const receiptUuid = '22222222-2222-4222-8222-222222222222';
   let uploadAttempts = 0;
@@ -542,7 +542,7 @@ test('photo upload abort keeps one journal entry and retries after online', asyn
   });
   await page.route('https://test-travel-expense.supabase.co/storage/v1/object/**', async (route) => {
     uploadAttempts += 1;
-    if (uploadAttempts === 1) {
+    if (uploadAttempts <= 3) {
       await route.abort('internetdisconnected');
       return;
     }
@@ -651,17 +651,28 @@ test('photo upload abort keeps one journal entry and retries after online', asyn
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect.poll(() => uploadAttempts).toBe(1);
+  for (const attempt of [2, 3]) {
+    // Wait for the prior push/pull cycle to release the online listener's sync guard.
+    await page.waitForTimeout(250);
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await expect.poll(() => uploadAttempts).toBe(attempt);
+  }
   await expect.poll(async () => page.evaluate((key) => {
     const queue = JSON.parse(localStorage.getItem(key) || '{}').syncQueue || [];
-    return queue.filter((item) => item.type === 'receipt' && item.entityId === 'upload-cut').length;
-  }, scopedStorageKey)).toBe(1);
-
-  // Wait for the initial push/pull cycle to release the online listener's sync guard.
-  await page.waitForTimeout(250);
-  await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await expect.poll(() => uploadAttempts).toBe(2);
+    return queue.filter((item) => item.type === 'receipt' && item.entityId === 'upload-cut')
+      .map((item) => ({ status: item.status, attempts: item.attempts, error: item.error }));
+  }, scopedStorageKey)).toEqual([
+    expect.objectContaining({ status: 'error', attempts: 3, error: expect.any(String) }),
+  ]);
+  await page.getByRole('button', { name: '手動重試' }).click();
+  await expect.poll(() => uploadAttempts).toBe(4);
   await expect.poll(async () => page.evaluate((key) => {
-    const queue = JSON.parse(localStorage.getItem(key) || '{}').syncQueue || [];
-    return queue.filter((item) => item.type === 'receipt' && item.entityId === 'upload-cut').length;
-  }, scopedStorageKey)).toBeLessThanOrEqual(1);
+    const state = JSON.parse(localStorage.getItem(key) || '{}');
+    const receipt = state.receipts?.find((item) => item.id === 'upload-cut');
+    return {
+      queue: state.syncQueue?.filter((item) => item.type === 'receipt' && item.entityId === 'upload-cut'),
+      photoSynced: receipt?._photoSyncedToSupabase,
+      photoAttempts: receipt?._photoSyncAttempts,
+    };
+  }, scopedStorageKey)).toEqual({ queue: [], photoSynced: true, photoAttempts: 0 });
 });
