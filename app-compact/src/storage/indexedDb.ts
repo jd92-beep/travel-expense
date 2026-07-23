@@ -1,39 +1,10 @@
 import type { AppState } from '../lib/types';
+import { stripSensitiveState } from '../lib/storage';
 
 const DB_NAME = 'travel-expense-react';
 const DB_VERSION = 1;
 const STATE_STORE = 'state';
 const SNAPSHOT_KEY = 'app-state';
-
-type LegacySecretFields = {
-  notionToken?: unknown;
-  apiKey?: unknown;
-  googleKey?: unknown;
-  zaiKey?: unknown;
-  minimaxKey?: unknown;
-  openrouterKey?: unknown;
-  kimiKey?: unknown;
-  kimiProxy?: unknown;
-  credentialSession?: unknown;
-  credentialSessionExpiresAt?: unknown;
-};
-
-function stripSensitiveState(state: AppState): AppState {
-  const {
-    notionToken: _notionToken,
-    apiKey: _apiKey,
-    googleKey: _googleKey,
-    zaiKey: _zaiKey,
-    minimaxKey: _minimaxKey,
-    openrouterKey: _openrouterKey,
-    kimiKey: _kimiKey,
-    kimiProxy: _kimiProxy,
-    credentialSession: _credentialSession,
-    credentialSessionExpiresAt: _credentialSessionExpiresAt,
-    ...safe
-  } = state as AppState & LegacySecretFields;
-  return safe as AppState;
-}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {

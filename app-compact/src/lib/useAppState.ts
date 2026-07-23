@@ -3,8 +3,9 @@ import { migrateAppState, stampReceiptForTrip } from '../domain/trip/normalize';
 import { DEFAULT_STATE, isBoss } from './constants';
 import { hasCredentialBrokerSession } from './credentialBroker';
 import { hasDirectNotionToken } from './notion';
-import { clearStoredCredentials, hasStoredState, loadState, normalizeState, saveState } from './storage';
-import { clearIndexedState, loadIndexedState } from '../storage/indexedDb';
+import { clearStoredCredentials, loadState } from './storage';
+import { clearIndexedState } from '../storage/indexedDb';
+import { hydrateScope, persistScope } from './scopedPersistence';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { clearCurrencyCache } from './currency';
@@ -40,17 +41,6 @@ function shouldQueueSettings(patch: Partial<AppState>) {
   return Object.keys(patch).some((key) => CLOUD_SETTINGS_KEYS.has(key as keyof AppState));
 }
 
-function stateFreshness(state: Partial<AppState>): number {
-  const receiptFreshness = Array.isArray(state.receipts)
-    ? Math.max(0, ...state.receipts.map((receipt) => Number(receipt.updatedAt || receipt.createdAt || 0)))
-    : 0;
-  return Math.max(
-    Number(state.settingsUpdatedAt || 0),
-    Number(state.lastSyncedAt || 0),
-    receiptFreshness,
-  );
-}
-
 function isPublicSupabaseScope(storageScope: string, userEmail: string | null): boolean {
   return storageScope.startsWith('supabase:') && !isBoss(userEmail);
 }
@@ -79,10 +69,6 @@ function migrateScopedState(input: unknown, storageScope: string, userEmail: str
   return withoutPublicDemoTrip(migrateAppState(input), storageScope, userEmail);
 }
 
-function normalizeScopedState(input: unknown, storageScope: string, userEmail: string | null): AppState {
-  return withoutPublicDemoTrip(normalizeState(input), storageScope, userEmail);
-}
-
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
   const [state, setState] = useState<AppState>(() => {
     return withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
@@ -93,39 +79,20 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   useLayoutEffect(() => {
     let alive = true;
     setIndexedReadyScope('');
-    const hasPrimarySnapshot = hasStoredState(storageScope);
-    const filteredState = withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
-    setState(filteredState);
-    setHydratedScope(storageScope);
-    loadIndexedState(storageScope).then((indexed) => {
-      if (!alive || !indexed) return;
-      setState((prev) => {
-        if (!hasPrimarySnapshot) {
-          console.log('[useAppState] Hydrated from IndexedDB (no primary snapshot)');
-          return normalizeScopedState({ ...prev, ...indexed }, storageScope, userEmail);
-        }
-        const indexedGlobal = stateFreshness(indexed);
-        const localGlobal = stateFreshness(prev);
-        if (indexedGlobal <= localGlobal) return prev;
-        const localReceiptsById = new Map(prev.receipts.map((r) => [r.id, r]));
-        const mergedReceipts = (indexed.receipts || []).map((remote) => {
-          const local = localReceiptsById.get(remote.id);
-          if (!local) return remote;
-          const localUpdated = Number(local.updatedAt || local.createdAt || 0);
-          const remoteUpdated = Number(remote.updatedAt || remote.createdAt || 0);
-          return remoteUpdated > localUpdated ? remote : local;
-        });
-        for (const [id, local] of localReceiptsById) {
-          if (!mergedReceipts.some((r) => r.id === id)) mergedReceipts.push(local);
-        }
-        console.log('[useAppState] Hydrated newer state from IndexedDB (per-receipt merge)');
-        return normalizeScopedState({ ...prev, ...indexed, receipts: mergedReceipts }, storageScope, userEmail);
+    void hydrateScope(storageScope, userEmail)
+      .then((hydrated) => {
+        if (!alive) return;
+        setState(hydrated);
+        setHydratedScope(storageScope);
+        setIndexedReadyScope(storageScope);
+      })
+      .catch((error) => {
+        if (!alive) return;
+        console.warn('[useAppState] Hydration failed:',
+          error instanceof Error ? error.message : String(error));
+        setHydratedScope(storageScope);
+        setIndexedReadyScope(storageScope);
       });
-    }).catch(() => {
-      // localStorage remains the compatibility fallback.
-    }).finally(() => {
-      if (alive) setIndexedReadyScope(storageScope);
-    });
     return () => {
       alive = false;
     };
@@ -133,11 +100,11 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
 
   useEffect(() => {
     if (indexedReadyScope !== storageScope) return;
-    try {
-      saveState(migrateScopedState(state, storageScope, userEmail), storageScope);
-    } catch (error) {
-      console.warn('[useAppState] Persist failed:', error instanceof Error ? error.message : String(error));
-    }
+    void persistScope(storageScope, userEmail, state).then((result) => {
+      if (result.status !== 'succeeded') {
+        console.warn('[useAppState] Persist degraded:', result.error);
+      }
+    });
   }, [indexedReadyScope, state, storageScope, userEmail]);
 
   const updateState = useCallback((patch: Partial<AppState>) => {

@@ -1728,8 +1728,13 @@ export function Settings({
   }
 
   function saveLocalSettingsNow() {
-    saveState(migrateAppState(state), storageScope);
-    setStatus('本機設定已保存；provider credentials/session 已自動排除。');
+    try {
+      saveState(migrateAppState(state), storageScope);
+      setStatus('本機設定已保存；provider credentials/session 已自動排除。');
+    } catch (error) {
+      console.warn('[Settings] local settings write failed:', error instanceof Error ? error.message : String(error));
+      setStatus('localStorage 未能寫入；已嘗試 IndexedDB 安全 fallback。');
+    }
   }
 
   async function pullPendingEmail() {

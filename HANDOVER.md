@@ -79,12 +79,42 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟢 **Architecture deepening Milestone 1 Offline Change Journal closed in Session 68** — review
+18. 🟢 **Architecture deepening Milestones 1-2 closed in Sessions 68-69** — review
    remediation adds the stale revision guard and terminal photo retry ledger: newer same-identity
    changes survive old success settlement; photo failures terminalize at 3 attempts and only manual
-   retry resets them. Milestones 2-4 and the Android port remain separate work.
+   retry resets them. Scoped Hydration now owns scoped dual-snapshot arbitration, secret stripping
+   and account-safe persistence. Milestones 3-4 and the Android port remain separate work.
 
 ## What Was Done
+
+### Session 69 (Codex — Compact Milestone 2 Scoped Hydration)
+
+1. **Canonical scoped persistence:** added `scopedPersistence.ts` with the narrow localStorage and
+   IndexedDB adapter seam. It reads both scoped snapshots with `Promise.allSettled`, chooses global
+   freshness, merges receipts by identity/timestamp before a single normalization pass, retains
+   companion trip context, restores the Milestone 1 journal through `normalizeState()`, and removes
+   the public demo only after the account-specific merge.
+2. **Isolation and secrets:** raw adapters keep existing storage/IndexedDB keys unchanged; only
+   local scope reloads credentials, while both snapshot targets receive `stripSensitiveState()`.
+   A localStorage failure still attempts IndexedDB through the Settings compatibility wrapper;
+   canonical persistence records `succeeded`/`degraded`/`failed` evidence without hiding a failed
+   terminal journal item.
+3. **Lifecycle:** `useAppState` now delegates hydration/persistence only. Its cancellation guard
+   prevents an old scope response from replacing a newer account scope, and it does not persist
+   until that scope is ready.
+4. **TDD and regression:** `test:scoped-persistence` first failed with the expected missing-module
+   error, then exposed the public scoped partial-snapshot trip-ID regression. The final focused
+   script passes and covers IndexedDB-only hydration, per-receipt merge, public scope isolation,
+   secret stripping, retained terminal conflict evidence, malformed primary fallback, and one/both
+   write failures. Compact version is `0.16.14`.
+5. **Completed gates:** `test:scoped-persistence`, `test:change-journal`, `typecheck`, `build`,
+   `security:scan`, `smoke:session` (2 passed), full fake-env `smoke:security` (4 passed, 1
+   pre-existing skip), `smoke:offline` (4 passed), `smoke:sync-regression` (8 passed),
+   `smoke:settings` (10 passed, 1 pre-existing skip), and `smoke:mobile-layout` (1 passed).
+   `git diff --check` passed with no output. The first `smoke:session` attempt only lacked a local
+   Vite server and was rerun successfully; it was not an assertion failure.
+6. **Safety:** no DB/RLS/credential/live-data/deploy/push operation occurred. `AGENTS.md` and
+   `CLAUDE.md` were pre-existing dirty files and remained untouched and unstaged.
 
 ### Session 68 (Codex — Milestone 1 completion proof)
 

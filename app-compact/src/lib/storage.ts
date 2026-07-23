@@ -107,11 +107,24 @@ export function safeJsonParse(raw: string): unknown {
     key === '__proto__' || key === 'constructor' || key === 'prototype' ? undefined : value);
 }
 
+export function loadStoredSnapshot(scope?: string): unknown | null {
+  const raw = localStorage.getItem(scopedStateKey(scope));
+  return raw ? safeJsonParse(raw) : null;
+}
+
+export function saveStoredSnapshot(state: AppState, scope?: string): void {
+  saveCredentials(state);
+  const safeState = stripSensitiveState(state);
+  if (!safeLocalStorageSet(scopedStateKey(scope), JSON.stringify(safeState))) {
+    throw new Error('localStorage write failed');
+  }
+}
+
 export function loadState(scope?: string): AppState {
   try {
-    const raw = localStorage.getItem(scopedStateKey(scope));
     const credentials = scope && scope !== 'local' ? {} : loadCredentials();
-    return normalizeState({ ...(raw ? safeJsonParse(raw) as object : null), ...credentials });
+    const snapshot = loadStoredSnapshot(scope);
+    return normalizeState({ ...(snapshot as object | null), ...credentials });
   } catch {
     return normalizeState({ ...DEFAULT_STATE, ...(scope && scope !== 'local' ? {} : loadCredentials()) });
   }
@@ -134,12 +147,16 @@ export function clearStoredState(scope?: string): void {
 }
 
 export function saveState(state: AppState, scope?: string): void {
-  saveCredentials(state);
-  const safeState = stripSensitiveState(state);
-  safeLocalStorageSet(scopedStateKey(scope), JSON.stringify(safeState));
-  void saveIndexedState(safeState, scope).catch((error) => {
+  let localError: unknown;
+  try {
+    saveStoredSnapshot(state, scope);
+  } catch (error) {
+    localError = error;
+  }
+  void saveIndexedState(stripSensitiveState(state), scope).catch((error) => {
     console.warn('[storage] IndexedDB snapshot write failed:', error instanceof Error ? error.message : String(error));
   });
+  if (localError) throw localError;
 }
 
 export function stripSensitiveState<T extends Partial<AppState>>(state: T): T {
