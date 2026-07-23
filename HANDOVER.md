@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-07-24 HKT
-- **Focus**: Session 71 completed Compact Milestone 3 mirror-smoke fixture repair: current Settings/Scan locators, scoped-persistence Supabase responses, and the shared-owner ledger-first Notion outbox browser proof.
+- **Focus**: Session 72 completed Compact Milestone 3 non-DB review remediation; final approval remains blocked on live DB lease-recovery scope/evidence after completion transport failure.
 - **Agent**: Codex.
 - **App version**: Compact `0.16.15`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.14`; the Android branch is `0.20.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.15`; the Android branch is `0.20.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -79,7 +79,14 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟢 **Architecture deepening Milestones 1-3 closed in Sessions 68-71** — review
+18. 🟡 **Architecture deepening Milestone 3 awaits DB lease-recovery approval** — Sessions 68-72
+   completed the client-side review remediation: scoped backend selection now overrides both root and
+   trip Notion DB state; claimed jobs without trip/backend are failed explicitly; list/claim/completion
+   transport errors stay observable; secret redaction precedes truncation; and Personal Notion
+   connect/persist/queue browser coverage is restored. The repository canonical SQL includes a
+   120-second stale-lock reclaim, but a completion transport failure cannot prove the live finish RPC
+   committed. Verify the live RPC contract and apply any approved DB recovery change only after Boss
+   grants migration scope. Do not mark Milestone 3 approved before that evidence. Earlier milestone
    remediation adds the stale revision guard and terminal photo retry ledger: newer same-identity
    changes survive old success settlement; photo failures terminalize at 3 attempts and only manual
    retry resets them. Scoped Hydration owns scoped dual-snapshot arbitration, secret stripping and
@@ -87,6 +94,14 @@ you closed with your session number.
    with the current browser mirror fixture green. Provider Catalog and Android port remain separate work.
 
 ## What Was Done
+
+### Session 72 (Codex — Compact Milestone 3 non-DB review remediation)
+
+1. **Outbox truth and scope:** `notionState` now sets both root `notionDb` and the selected trip backend. Claimed jobs missing a local trip/backend call `finish(...failed, safe reason)`; backend-list and claim failures return explicit redacted transport evidence instead of empty success. Completion transport failures remain failed and observable to `useSyncEngine`.
+2. **Safe errors and edge contracts:** the outbox deep module owns one pure transport-agnostic redactor. Bearer, `ntn_...`, and `key=...` values are removed before the 300-character cap. Port tests cover the 5×20/100 ceiling, missing receipt success, missing trip/backend failure completion, list/claim truth, Notion+finish double failure, duplicate single completion, and photo dedupe only after a successful upsert.
+3. **Personal Notion regression repaired:** the existing connect/check/disconnect controls are restored inside `Credentials & Connection`. Browser smoke proves connect authorization, secret non-persistence, root DB persistence, stale trip DB removal, settings queue creation, and a claimed shared receipt writing to its per-trip DB even while root Personal Notion points elsewhere.
+4. **Verification:** outbox, change-journal, scoped persistence, typecheck, build (2,379 modules), security scan, mirror `7/7`, Settings `10 passed + 1 intentional skip`, offline `4/4`, sync regression `8/8`, mobile layout `1/1`, and shared-ledger contract passed. Guarded backfill exited 0 with `2 skipped`; Current Open Item 12 remains.
+5. **Approval boundary:** Compact stays `0.16.15`. No migration, RPC signature, RLS, Worker, live DB/data, push or deployment changed. Milestone 3 remains blocked pending Boss-approved live DB lease-recovery verification/scope for ambiguous completion transport failures. Boss dirty `AGENTS.md` and `CLAUDE.md` remain untouched and unstaged.
 
 ### Session 71 (Codex — Compact Milestone 3 mirror-smoke fixture repair)
 

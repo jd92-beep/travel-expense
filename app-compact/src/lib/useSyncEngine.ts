@@ -819,7 +819,7 @@ export function useSyncEngine(
       console.log('[SyncEngine] Running pull()...');
       await pull();
       // Owner/admin drains the shared-trip Notion outbox (receipt_sync_jobs) when online with
-      // Notion connected. Fire-and-forget + never throws, so it can't block or fail the sync.
+      // Notion connected. Transport failures stay observable without blocking the main sync.
       const cloudSession = hasSupabaseSession(supabaseSessionRef.current) ? supabaseSessionRef.current : null;
       if (cloudSession && canUseNotionMirror(stateRef.current, true, cloudSession.user?.email || null)) {
         await yieldToStateFlush();
@@ -840,6 +840,9 @@ export function useSyncEngine(
         }).catch(() => null);
         if (outbox && (outbox.processed || outbox.failed)) {
           console.log(`[SyncEngine] Notion outbox drained: ${outbox.processed} ok, ${outbox.failed} failed`);
+        }
+        if (outbox?.transportError) {
+          console.warn(`[SyncEngine] Notion outbox transport failure: ${outbox.transportError}`);
         }
       }
     } finally {

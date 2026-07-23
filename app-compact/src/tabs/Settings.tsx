@@ -3081,6 +3081,40 @@ export function Settings({
           {statusPill('google')}
           {statusPill('weatherapi')}
         </div>
+        {cloudSyncAvailable && (
+          <div className="rotation-box">
+            <div className="section-head">
+              <h2>個人 Notion notebook</h2>
+              <span className={`pill ${personalNotionStatus?.status === 'connected' ? 'ok' : 'hot'}`}>
+                {personalNotionStatus?.status || 'not checked'}
+              </span>
+            </div>
+            <p className="muted">呢度只綁定目前 Supabase 帳號。Connector secret 會直接送去 Credential Broker 加密保存，唔會寫入 browser、backup、Supabase row 或 GitHub。</p>
+            <label>Personal Notion database ID
+              <input value={personalNotionDb} onChange={(e) => setPersonalNotionDb(e.target.value)} placeholder="你自己 Notion database ID" />
+            </label>
+            <label>Personal Notion connector secret
+              <input
+                type="password"
+                value={personalNotionToken}
+                onChange={(e) => setPersonalNotionToken(e.target.value)}
+                placeholder="貼上你自己 Notion connector secret"
+                autoComplete="off"
+              />
+            </label>
+            <div className="action-row wrap">
+              <button className="secondary" type="button" disabled={!!busy} onClick={() => void refreshPersonalNotion()}>
+                Check Personal Notion
+              </button>
+              <button className="primary" type="button" disabled={!!busy || !personalNotionToken.trim() || !personalNotionDb.trim()} onClick={() => void connectPersonalNotion()}>
+                <ShieldCheck size={18} /> Connect Personal Notion
+              </button>
+              <button className="danger" type="button" disabled={!!busy || personalNotionStatus?.status !== 'connected'} onClick={() => void disconnectPersonalNotion()}>
+                Disconnect
+              </button>
+            </div>
+          </div>
+        )}
         {!brokerReady && !cloudSyncAvailable && (
           <div className="form-grid">
             <label>Broker password
