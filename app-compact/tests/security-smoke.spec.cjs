@@ -136,6 +136,152 @@ test('Complete persistence failure is logged as failed', async ({ page }) => {
   await expect.poll(() => warnings.some((warning) => warning.includes('[useAppState] Persist failed:'))).toBe(true);
 });
 
+test('Scoped bootstrap waits for canonical hydration before exposing snapshot state', async ({ page }) => {
+  test.skip(process.env.SUPABASE_REDIRECT_SMOKE !== '1', 'Set SUPABASE_REDIRECT_SMOKE=1 and start Vite with fake Supabase env.');
+  const userId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const scope = `supabase:${userId}`;
+  const scopedKey = `boss-japan-tracker:state:${scope}`;
+  const indexedKey = `app-state:${scope}`;
+  const marker = 'POISONED BOOTSTRAP TRIP';
+
+  await page.route('https://test-travel-expense.supabase.co/**', async (route) => {
+    if (new URL(route.request().url()).pathname.startsWith('/auth/v1/')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+  });
+  await page.route(`${APP_ORIGIN}/__scope-seed`, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
+  });
+  await page.goto(`${APP_ORIGIN}/__scope-seed`);
+  await page.evaluate(async ({ userId, scopedKey, indexedKey, marker }) => {
+    const now = Date.now();
+    const poisonTrip = {
+      id: 'poisoned-trip',
+      name: marker,
+      destinationSummary: 'Poisoned City',
+      startDate: '2026-05-01',
+      endDate: '2026-05-02',
+      homeCurrency: 'HKD',
+      currencies: ['HKD', 'JPY'],
+      timezones: ['Asia/Tokyo'],
+      version: 1,
+      active: true,
+      itinerary: [],
+      createdAt: now,
+      updatedAt: now,
+      sharing: {
+        role: 'owner',
+        isShared: true,
+        memberCount: 1,
+        pendingInviteCount: 1,
+        invites: [{ id: 'poison-invite', email: 'poison@example.com', role: 'editor', token: 'poison-invite-token' }],
+      },
+    };
+    const canonicalTrip = { ...poisonTrip, id: 'canonical-trip', name: 'Canonical Trip', sharing: undefined };
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify({
+      access_token: 'fake-access-token',
+      refresh_token: 'fake-refresh-token',
+      token_type: 'bearer',
+      expires_in: 3600,
+      expires_at: Math.floor(now / 1000) + 3600,
+      user: {
+        id: userId,
+        aud: 'authenticated',
+        role: 'authenticated',
+        email: 'bootstrap@example.com',
+        app_metadata: { provider: 'email', providers: ['email'] },
+        user_metadata: {},
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    }));
+    localStorage.setItem(scopedKey, JSON.stringify({
+      tripName: marker,
+      activeTripId: poisonTrip.id,
+      trips: [poisonTrip],
+      receipts: [],
+      credentialBrokerUrl: 'https://poisoned.example/broker',
+      credentialSession: 'poison-session-token',
+      credentialSessionExpiresAt: now + 60_000,
+    }));
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('travel-expense-react', 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains('state')) request.result.createObjectStore('state');
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('state', 'readwrite');
+      tx.objectStore('state').put({
+        tripName: canonicalTrip.name,
+        activeTripId: canonicalTrip.id,
+        trips: [canonicalTrip],
+        receipts: [],
+        settingsUpdatedAt: now + 1,
+      }, indexedKey);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }, { userId, scopedKey, indexedKey, marker });
+
+  await page.addInitScript(({ indexedKey, scopedKey }) => {
+    const get = IDBObjectStore.prototype.get;
+    const getItem = Storage.prototype.getItem;
+    window.__scopedSnapshotReads = [];
+    Storage.prototype.getItem = function(key) {
+      if (key === scopedKey) window.__scopedSnapshotReads.push(key);
+      return getItem.call(this, key);
+    };
+    IDBObjectStore.prototype.get = function(key) {
+      const request = get.call(this, key);
+      if (key !== indexedKey) return request;
+      window.__bootstrapHydrationPending = true;
+      const delayed = {};
+      Object.defineProperties(delayed, {
+        result: { get: () => request.result },
+        error: { get: () => request.error },
+        onsuccess: { set: (handler) => { request.onsuccess = (event) => { window.__releaseBootstrapHydration = () => handler(event); }; } },
+        onerror: { set: (handler) => { request.onerror = handler; } },
+      });
+      return delayed;
+    };
+  }, { indexedKey, scopedKey });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
+  await expect.poll(() => page.evaluate(() => window.__bootstrapHydrationPending === true)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__scopedSnapshotReads)).toEqual([scopedKey, scopedKey]);
+
+  const initial = await page.evaluate(async () => {
+    const { DEFAULT_CREDENTIAL_BROKER_URL } = await import('/travel-expense/compact/src/lib/constants.ts');
+    localStorage.setItem('boss-japan-tracker:react-credentials', JSON.stringify({ credentialBrokerUrl: DEFAULT_CREDENTIAL_BROKER_URL }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({ credentialSession: 'approved-local-session', credentialSessionExpiresAt: Date.now() + 60_000 }));
+    const { safeInitialState } = await import('/travel-expense/compact/src/lib/scopedPersistence.ts');
+    const local = safeInitialState('local', null);
+    const scoped = safeInitialState('supabase:other-user', 'other@example.com');
+    return { local, scoped };
+  });
+  expect(initial.local.credentialSession).toBe('approved-local-session');
+  expect(initial.local.credentialSessionExpiresAt).toBeGreaterThan(Date.now());
+  expect(initial.scoped.tripName).not.toBe(marker);
+  expect(initial.scoped.credentialSession).toBe('');
+  expect(initial.scoped.credentialSessionExpiresAt).toBe(0);
+
+  await page.evaluate(() => window.__releaseBootstrapHydration());
+  await expect(page.getByRole('navigation', { name: '主要分頁' })).toBeVisible();
+  await expect.poll(async () => page.evaluate((key) => localStorage.getItem(key) || '', scopedKey), { timeout: 10_000 }).toContain('Canonical Trip');
+  const serialized = await page.evaluate((key) => localStorage.getItem(key) || '', scopedKey);
+  expect(serialized).not.toContain('poison-session-token');
+  expect(serialized).not.toContain('poison-invite-token');
+  expect(serialized).not.toContain('poisoned.example');
+});
+
 test('Supabase magic-link redirect uses a clean app root without route hash', async ({ page }) => {
   test.skip(process.env.SUPABASE_REDIRECT_SMOKE !== '1', 'Set SUPABASE_REDIRECT_SMOKE=1 and start Vite with fake Supabase env.');
   let redirectTo = '';

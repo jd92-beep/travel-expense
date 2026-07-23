@@ -3,9 +3,9 @@ import { migrateAppState, stampReceiptForTrip } from '../domain/trip/normalize';
 import { DEFAULT_STATE } from './constants';
 import { hasCredentialBrokerSession } from './credentialBroker';
 import { hasDirectNotionToken } from './notion';
-import { clearStoredCredentials, loadState } from './storage';
+import { clearStoredCredentials } from './storage';
 import { clearIndexedState } from '../storage/indexedDb';
-import { hydrateScope, persistScope, sanitizePublicDemoState } from './scopedPersistence';
+import { hydrateScope, persistScope, safeInitialState, sanitizePublicDemoState } from './scopedPersistence';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { clearCurrencyCache } from './currency';
@@ -46,9 +46,7 @@ function migrateScopedState(input: unknown, storageScope: string, userEmail: str
 }
 
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
-  const [state, setState] = useState<AppState>(() => {
-    return sanitizePublicDemoState(loadState(storageScope), storageScope, userEmail);
-  });
+  const [state, setState] = useState<AppState>(() => safeInitialState(storageScope, userEmail));
   const [hydratedScope, setHydratedScope] = useState('');
   const [indexedReadyScope, setIndexedReadyScope] = useState('');
 

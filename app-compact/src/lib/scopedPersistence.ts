@@ -131,6 +131,14 @@ export function sanitizePublicDemoState(state: AppState, scope: string, userEmai
   };
 }
 
+export function safeInitialState(scope: string, userEmail: string | null): AppState {
+  const credentials = scope === 'local' ? loadCredentials() : {};
+  return sanitizePublicDemoState(normalizeState(migrateAppState({
+    ...DEFAULT_STATE,
+    ...credentials,
+  })), scope, userEmail);
+}
+
 export function createScopedPersistence(
   local: SnapshotAdapter,
   indexed: SnapshotAdapter,
