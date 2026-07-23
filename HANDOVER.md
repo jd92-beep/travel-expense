@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-07-23 HKT
-- **Focus**: Session 66 completed the executable TDD plans for all four main architecture milestones and the isolated Android port/extreme offline QA; production code execution is pending Boss's execution-mode choice.
+- **Focus**: Session 67 implemented Compact Milestone 1 Offline Change Journal with authoritative enqueue/settle/restore transitions. Required focused, build, security and core offline/cold-open gates passed; the Settings smoke command needs a pre-started dev server and the photo-abort browser fixture remains follow-up coverage.
 - **Agent**: Codex.
 - **App version**: Compact `0.16.12`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
 
@@ -79,12 +79,33 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟡 **Architecture deepening execution pending** — Session 65 records the Boss-approved design;
-   Session 66 adds five executable TDD plans covering the four ordered main milestones plus the
-   isolated Android port/extreme offline QA. No production code has changed yet. Execute Main
-   milestone-by-milestone, then port applicable changes to Android without merging the worktrees.
+18. 🟡 **Architecture deepening Milestone 1 implemented with test-runner follow-up** — Session 67
+   centralizes Compact offline changes in the Change Journal and passes focused, offline and
+   cold-open regressions. Milestones 2-4 and the Android port remain. Add the requested authenticated
+   Storage photo-abort browser fixture, and resolve the long Settings/sync smoke completion-token
+   runner behavior before claiming the broader suite fully green.
 
 ## What Was Done
+
+### Session 67 (Codex — Compact Milestone 1 Offline Change Journal)
+
+1. **Authoritative journal:** added `changeJournal.ts` with bounded identity enqueue, lifecycle settlement,
+   terminal-error preservation, manual-only retry reset, and cold-open restore summary. Compact `0.16.13`
+   routes receipt, trip, settings, tombstone, photo retry, repair and backfill queue creation through it.
+2. **Risk containment:** `normalizeState()` only replaces the prior queue restore/status derivation with
+   `restoreJournal()`; storage keys, all other normalization and `AppState` remain unchanged. A photo retry
+   now settles its completed queue item before enqueueing the same journal identity, so it cannot be removed
+   by the preceding success transition.
+3. **Regression coverage:** journal sequence assertions pass; offline smoke `4/4` includes a duplicate
+   offline receipt save; sync regression `7/7` includes durable `40001` cold-open evidence. A later rerun
+   of sync regression reached test `5/7` before the execution runner lost its completion token.
+4. **Verification:** `test:change-journal`, `typecheck`, `build`, `security:scan`, `smoke:offline` and an
+   earlier complete `smoke:sync-regression` passed. `git diff --check` passed. `smoke:settings` first failed
+   only because its script starts no dev server; with a pre-started dev server it reached test `9/11` before
+   the runner lost its completion token. The requested authenticated Storage photo-abort browser fixture is
+   not yet present, so this session is `DONE_WITH_CONCERNS`, not full release proof.
+5. **Safety:** no database, RLS, credential, deployment, push or live-data operation occurred. Existing
+   dirty `AGENTS.md` and `CLAUDE.md` were left unstaged and untouched.
 
 ### Session 66 (Codex — architecture deepening implementation plans)
 

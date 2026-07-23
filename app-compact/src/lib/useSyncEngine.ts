@@ -5,6 +5,7 @@ import { canUseNotionMirror } from './notionAccess';
 import { recordClientHeartbeat } from './clientHeartbeat';
 import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { filterSupersededTripQueue, isReceiptTombstoned, mergePulledData, rawReceiptSourceId, receiptSourceTombstoneKey } from './syncMerge';
+import { enqueueChange, settleChange, type ChangeDraft, type JournalOutcome } from './changeJournal';
 import { MAX_SYNC_RETRY_ATTEMPTS } from './constants';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
 import type { Session } from '@supabase/supabase-js';
@@ -161,19 +162,11 @@ export function useSyncEngine(
     }));
   }, [setState]);
 
-  const markQueueItem = useCallback((item: SyncQueueItem, patch: Partial<SyncQueueItem>) => {
+  const settleQueueItem = useCallback((item: SyncQueueItem, outcome: JournalOutcome) => {
     if (!aliveRef.current) return;
     setState((current) => ({
       ...current,
-      syncQueue: (current.syncQueue || []).map((queued) => queued.id === item.id ? { ...queued, ...patch, updatedAt: Date.now() } : queued),
-    }));
-  }, [setState]);
-
-  const removeQueueItem = useCallback((item: SyncQueueItem) => {
-    if (!aliveRef.current) return;
-    setState((current) => ({
-      ...current,
-      syncQueue: (current.syncQueue || []).filter((queued) => queued.id !== item.id),
+      syncQueue: settleChange(current.syncQueue || [], item.id, outcome).queue,
     }));
   }, [setState]);
 
@@ -253,7 +246,7 @@ export function useSyncEngine(
     return () => window.clearTimeout(timer);
   }), []);
 
-  const processItem = useCallback(async (item: SyncQueueItem) => {
+  const processItem = useCallback(async (item: SyncQueueItem): Promise<ChangeDraft | undefined> => {
     const current = stateRef.current;
     const session = supabaseSessionRef.current;
     const supabaseSession = hasSupabaseSession(session) ? session : null;
@@ -290,33 +283,19 @@ export function useSyncEngine(
       }
       applyReceiptSyncResult(item, synced);
       if (photoRetryNeeded && aliveRef.current) {
-        // Re-enqueue a photo-only retry (dedupeQueue collapses by type:entityId, so this
-        // never accumulates). Bounded by _photoSyncAttempts < MAX_SYNC_RETRY_ATTEMPTS above.
-        const retryReceipt = synced;
-        setState((current) => ({
-          ...current,
-          syncQueue: [
-            ...(current.syncQueue || []),
-            {
-              id: `sync_photo_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-              type: 'receipt',
-              entityId: retryReceipt.id,
-              op: 'update',
-              status: 'queued',
-              attempts: 0,
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-              payload: {
-                supabaseId: retryReceipt.supabaseId,
-                sourceId: retryReceipt.sourceId,
-                tripId: retryReceipt.tripId,
-                version: retryReceipt.version,
-                syncRevision: retryReceipt.syncRevision,
-                updatedAt: retryReceipt.updatedAt,
-              },
-            },
-          ],
-        }));
+        return {
+          type: 'receipt',
+          entityId: synced.id,
+          op: 'update',
+          payload: {
+            supabaseId: synced.supabaseId,
+            sourceId: synced.sourceId,
+            tripId: synced.tripId,
+            version: synced.version,
+            syncRevision: synced.syncRevision,
+            updatedAt: synced.updatedAt,
+          },
+        };
       }
       return;
     }
@@ -404,13 +383,19 @@ export function useSyncEngine(
         if (tripKey && accessDeniedTrips.has(tripKey)) {
           failures += 1;
           lastError = lastError || '旅程存取權失效：請旅程擁有者重新邀請。';
-          markQueueItem(item, { status: 'error', attempts: item.attempts + 1, error: lastError });
+          settleQueueItem(item, { kind: 'terminal-error', error: lastError });
           continue;
         }
-        markQueueItem(item, { status: 'syncing' });
+        settleQueueItem(item, { kind: 'syncing' });
         try {
-          await processItem(item);
-          removeQueueItem(item);
+          const retryChange = await processItem(item);
+          settleQueueItem(item, { kind: 'succeeded' });
+          if (retryChange) {
+            setState((current) => ({
+              ...current,
+              syncQueue: enqueueChange(current.syncQueue, retryChange),
+            }));
+          }
           // Recovery: if a trip push succeeds now (e.g. after re-invite or rehome),
           // clear the denied flag so future receipts for this trip can sync.
           const successTripKey = tripKeyForItem(item);
@@ -419,7 +404,6 @@ export function useSyncEngine(
           if (item.type === 'receipt') backfillSuspendedRef.current.delete(item.entityId);
         } catch (error) {
           lastError = redactError(error);
-          const nextAttempts = item.attempts + 1;
           const lowerError = lastError.toLowerCase();
           const isAuthError = lowerError.includes('session') ||
                               lastError.includes('401') ||
@@ -436,12 +420,9 @@ export function useSyncEngine(
           const isAccessError = /row-level security|42501|permission denied|存取權/i.test(lastError);
           if (isAccessError && tripKey) accessDeniedTrips.add(tripKey);
 
-          // Transient network blip (cold-boot radio wake, DNS, timeout): keep the item retriable and
-          // quiet — don't count it as a failure (which paints the red banner) and don't burn a retry
-          // attempt toward the 3-strike drop, or a flaky first request would silently discard a
-          // pending receipt. The interval/reconnect loop re-pushes it.
-          if (isTransientSyncError(error) && !isAuthError && !isVersionConflict) {
-            markQueueItem(item, { status: 'queued', error: '' });
+          const retryable = isTransientSyncError(error) && !isAuthError && !isVersionConflict;
+          if (retryable) {
+            settleQueueItem(item, { kind: 'retryable-error', error: lastError });
             continue;
           }
 
@@ -452,8 +433,14 @@ export function useSyncEngine(
             await new Promise((resolve) => window.setTimeout(resolve, AUTO_SYNC_AUTH_RETRY_DELAY_MS));
             if (!aliveRef.current) break;
             try {
-              await processItem(item);
-              removeQueueItem(item);
+              const retryChange = await processItem(item);
+              settleQueueItem(item, { kind: 'succeeded' });
+              if (retryChange) {
+                setState((current) => ({
+                  ...current,
+                  syncQueue: enqueueChange(current.syncQueue, retryChange),
+                }));
+              }
               continue;
             } catch (retryError) {
               lastError = redactError(retryError);
@@ -461,10 +448,12 @@ export function useSyncEngine(
           }
 
           failures += 1;
-          markQueueItem(item, {
-            status: 'error', // Keep as error status, do not drop!
-            attempts: nextAttempts,
-            error: isVersionConflict ? '有人啱啱改咗呢筆單，你嘅修改未有套用。請下拉同步後再改一次。' : lastError,
+          const safeMessage = isVersionConflict
+            ? '有人啱啱改咗呢筆單，你嘅修改未有套用。請下拉同步後再改一次。'
+            : lastError;
+          settleQueueItem(item, {
+            kind: 'terminal-error',
+            error: safeMessage,
           });
 
           if (isAuthError) {
@@ -498,7 +487,7 @@ export function useSyncEngine(
       processingRef.current = false;
       runDeferredSync();
     }
-  }, [markQueueItem, updateSyncState, processItem, removeQueueItem, settlePushStatus, setState, yieldToStateFlush, scheduleSyncAfterCurrent, runDeferredSync]);
+  }, [settleQueueItem, updateSyncState, processItem, settlePushStatus, setState, yieldToStateFlush, scheduleSyncAfterCurrent, runDeferredSync]);
 
   const pull = useCallback(async () => {
     console.log('[SyncEngine] pull() started');
@@ -715,25 +704,15 @@ export function useSyncEngine(
             const queuedTripIds = new Set(freshQueue.filter((item) => item.type === 'trip').map((item) => item.entityId));
             const itineraryRepairs = (finalState.trips || []).filter((trip) => trip._itineraryNeedsRepair && !queuedTripIds.has(trip.id));
             if (itineraryRepairs.length) {
-              const now = Date.now();
-              freshQueue = [
-                ...freshQueue,
-                ...itineraryRepairs.map((trip, index) => ({
-                  id: `sync_itinerary_repair_${now}_${index}`,
-                  type: 'trip' as const,
-                  entityId: trip.id,
-                  op: 'update' as const,
-                  status: 'queued' as const,
-                  attempts: 0,
-                  createdAt: now,
-                  updatedAt: now,
-                  payload: {
-                    sourceId: trip.sourceId || `trip_${trip.id}`,
-                    updatedAt: trip.updatedAt,
-                    itineraryRepair: true,
-                  },
-                })),
-              ];
+              freshQueue = itineraryRepairs.reduce((queue, trip) => enqueueChange(queue, {
+                type: 'trip',
+                entityId: trip.id,
+                op: 'update',
+                payload: {
+                  sourceId: trip.sourceId || `trip_${trip.id}`,
+                  updatedAt: trip.updatedAt,
+                },
+              }), freshQueue);
             }
           }
           if (cloudPullAuthoritative && finalState.autoSync) {
@@ -745,21 +724,12 @@ export function useSyncEngine(
               && trip.sharing?.role !== 'viewer'
               && trip.sharing?.role !== 'editor');
             if (localTrips.length) {
-              const now = Date.now();
-              freshQueue = [
-                ...freshQueue,
-                ...localTrips.slice(0, 100).map((trip, index) => ({
-                  id: `sync_trip_backfill_${now}_${index}_${Math.random().toString(16).slice(2)}`,
-                  type: 'trip' as const,
-                  entityId: trip.id,
-                  op: 'upsert' as const,
-                  status: 'queued' as const,
-                  attempts: 0,
-                  createdAt: now,
-                  updatedAt: now,
-                  payload: { sourceId: trip.sourceId || trip.id, updatedAt: trip.updatedAt },
-                })),
-              ];
+              freshQueue = localTrips.slice(0, 100).reduce((queue, trip) => enqueueChange(queue, {
+                type: 'trip',
+                entityId: trip.id,
+                op: 'upsert',
+                payload: { sourceId: trip.sourceId || trip.id, updatedAt: trip.updatedAt },
+              }), freshQueue);
             }
           }
           // Backfill sweep: heal receipts that never reached Supabase — created before cloud
@@ -783,29 +753,20 @@ export function useSyncEngine(
               && !suspended.has(receipt.id));
             if (needsBackfill.length) {
               console.log(`[SyncEngine] backfill sweep: ${needsBackfill.length} receipt(s) missing from Supabase — re-queueing`);
-              const now = Date.now();
-              freshQueue = [
-                ...freshQueue,
-                ...needsBackfill.slice(0, 200).map((receipt, idx) => ({
-                  id: `sync_backfill_${now}_${idx}_${Math.random().toString(16).slice(2)}`,
-                  type: 'receipt' as const,
-                  entityId: receipt.id,
-                  op: 'update' as const,
-                  status: 'queued' as const,
-                  attempts: 0,
-                  createdAt: now,
-                  updatedAt: now,
-                  payload: {
-                    supabaseId: receipt.supabaseId,
-                    notionPageId: receipt.notionPageId,
-                    sourceId: receipt.sourceId || receipt.id,
-                    tripId: receipt.tripId,
-                    version: receipt.version,
-                    syncRevision: receipt.syncRevision,
-                    updatedAt: receipt.updatedAt,
-                  },
-                })),
-              ];
+              freshQueue = needsBackfill.slice(0, 200).reduce((queue, receipt) => enqueueChange(queue, {
+                type: 'receipt',
+                entityId: receipt.id,
+                op: 'update',
+                payload: {
+                  supabaseId: receipt.supabaseId,
+                  notionPageId: receipt.notionPageId,
+                  sourceId: receipt.sourceId || receipt.id,
+                  tripId: receipt.tripId,
+                  version: receipt.version,
+                  syncRevision: receipt.syncRevision,
+                  updatedAt: receipt.updatedAt,
+                },
+              }), freshQueue);
             }
           }
           computedPending = pendingCount(freshQueue);
@@ -913,11 +874,15 @@ export function useSyncEngine(
     }
     setState((current) => ({
       ...current,
-      syncQueue: (current.syncQueue || []).map((item) =>
-        item.status === 'failed' || item.status === 'error'
-          ? { ...item, status: 'queued', attempts: 0, error: undefined }
-          : item
+      syncQueue: (current.syncQueue || []).reduce(
+        (queue, item) =>
+          item.status === 'error' || item.status === 'failed'
+            ? settleChange(queue, item.id, { kind: 'manual-retry' }).queue
+            : queue,
+        current.syncQueue || [],
       ),
+      globalSyncStatus: 'queued',
+      syncError: '',
     }));
     setTimeout(() => {
       void sync({ auto: true });

@@ -129,6 +129,33 @@ test('IndexedDB-only scoped snapshot requeues a recoverable sync failure without
   await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
 });
 
+test('cold-open keeps a version conflict as durable terminal evidence', async ({ page }) => {
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      autoSync: false,
+      syncQueue: [{
+        id: 'sync_conflict',
+        type: 'receipt',
+        entityId: 'conflict',
+        op: 'update',
+        status: 'error',
+        attempts: 3,
+        error: '40001 version conflict',
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+    }));
+  });
+
+  await page.reload();
+  const restored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}'));
+  expect(restored.syncQueue.find((item) => item.entityId === 'conflict').status).toBe('error');
+  expect(restored.syncQueue.find((item) => item.entityId === 'conflict').attempts).toBe(3);
+});
+
 test('new guide trip retries a legacy-schema insert without RETURNING when SELECT RLS cannot read it', async ({ page }) => {
   const tripPosts = [];
   await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {

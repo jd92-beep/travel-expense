@@ -29,6 +29,7 @@ import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 import { saveReceiptRepairIntent } from '../lib/repairIntent';
 import { receiptSourceTombstoneKey } from '../lib/syncMerge';
+import { enqueueChange } from '../lib/changeJournal';
 import {
   diagnoseNotionSchema,
   diagnoseReactReceiptMapping,
@@ -1446,29 +1447,18 @@ export function Settings({
         const { notionDb: _notionDb, ...localTrip } = trip;
         return { ...localTrip, updatedAt: trip.updatedAt };
       });
-      const latest = new Map<string, SyncQueueItem>();
-      const settingsItem: SyncQueueItem = {
-        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
-        type: 'settings',
-        entityId: 'app-settings',
-        op: 'upsert',
-        status: 'queued',
-        attempts: 0,
-        createdAt: now,
-        updatedAt: now,
-        payload: { updatedAt: now },
-      };
-      for (const item of [...(prev.syncQueue || []), settingsItem]) {
-        if (item.status === 'synced') continue;
-        latest.set(`${item.type}:${item.entityId}`, item);
-      }
       return migrateAppState({
         ...prev,
         notionDb: cleanDb || prev.notionDb,
         personalNotionConnected: connected,
         trips,
         settingsUpdatedAt: now,
-        syncQueue: [...latest.values()].slice(-500),
+        syncQueue: enqueueChange(prev.syncQueue, {
+          type: 'settings',
+          entityId: 'app-settings',
+          op: 'upsert',
+          payload: { updatedAt: now },
+        }),
       });
     });
   }
@@ -1785,31 +1775,6 @@ export function Settings({
       const tripsNext = exists
         ? prevTrips.map((trip) => trip.id === draft.trip.id ? { ...draft.trip, active: true, archived: false } : { ...trip, active: false })
         : [...prevTrips.map((trip) => ({ ...trip, active: false })), { ...draft.trip, active: true, archived: false }];
-      const tripSyncItem: SyncQueueItem = {
-        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
-        type: 'trip',
-        entityId: draft.trip.id,
-        op: exists ? 'update' : 'create',
-        status: 'queued',
-        attempts: 0,
-        createdAt: now,
-        updatedAt: now,
-        payload: {
-          sourceId: draft.trip.sourceId || `trip_${draft.trip.id}`,
-          updatedAt: draft.trip.updatedAt,
-        },
-      };
-      const settingsSyncItem: SyncQueueItem = {
-        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
-        type: 'settings',
-        entityId: 'app-settings',
-        op: 'upsert',
-        status: 'queued',
-        attempts: 0,
-        createdAt: now,
-        updatedAt: now,
-        payload: { updatedAt: now },
-      };
       return migrateAppState({
         ...prev,
         activeTripId: draft.trip.id,
@@ -1820,15 +1785,20 @@ export function Settings({
         budget: draft.trip.budget,
         customItinerary: draft.trip.itinerary,
         settingsUpdatedAt: now,
-        syncQueue: [
-          ...(prev.syncQueue || []).filter((item) => (
-            item.status !== 'synced' &&
-            !(item.type === 'trip' && item.entityId === draft.trip.id) &&
-            !(item.type === 'settings' && item.entityId === 'app-settings')
-          )),
-          tripSyncItem,
-          settingsSyncItem,
-        ].slice(-500),
+        syncQueue: enqueueChange(enqueueChange(prev.syncQueue, {
+          type: 'trip',
+          entityId: draft.trip.id,
+          op: exists ? 'update' : 'create',
+          payload: {
+            sourceId: draft.trip.sourceId || `trip_${draft.trip.id}`,
+            updatedAt: draft.trip.updatedAt,
+          },
+        }), {
+          type: 'settings',
+          entityId: 'app-settings',
+          op: 'upsert',
+          payload: { updatedAt: now },
+        }),
       });
     });
     setTripDraft(null);
@@ -1975,23 +1945,15 @@ export function Settings({
         }
       }
 
-      const nextSyncQueue = [
-        ...(prev.syncQueue || []),
-        {
-          id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-          type: 'trip' as const,
-          entityId: managerTripId,
-          op: 'update' as const,
-          status: 'queued' as const,
-          attempts: 0,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          payload: {
-            sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
-            updatedAt: nextTrip.updatedAt,
-          },
-        }
-      ].slice(-500);
+      const nextSyncQueue = enqueueChange(prev.syncQueue, {
+        type: 'trip',
+        entityId: managerTripId,
+        op: 'update',
+        payload: {
+          sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
+          updatedAt: nextTrip.updatedAt,
+        },
+      });
 
       patch.syncQueue = nextSyncQueue;
 
@@ -2061,43 +2023,29 @@ export function Settings({
           }];
         })),
       };
-      const deleteQueueItems = deletedReceipts.map((r) => ({
-        id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        type: 'delete-receipt' as const,
-        entityId: r.id,
-        op: 'delete' as const,
-        status: 'queued' as const,
-        attempts: 0,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+      patch.syncQueue = deletedReceipts.reduce((queue, receipt) => enqueueChange(queue, {
+        type: 'delete-receipt',
+        entityId: receipt.id,
+        op: 'delete',
         payload: {
-          notionPageId: r.notionPageId,
-          supabaseId: r.supabaseId,
-          tripId: r.tripId,
-          sourceId: r.sourceId || r.id,
-          tombstoneKey: receiptSourceTombstoneKey(r),
-          version: r.version,
-          syncRevision: r.syncRevision,
-          updatedAt: r.updatedAt,
+          notionPageId: receipt.notionPageId,
+          supabaseId: receipt.supabaseId,
+          tripId: receipt.tripId,
+          sourceId: receipt.sourceId || receipt.id,
+          tombstoneKey: receiptSourceTombstoneKey(receipt),
+          version: receipt.version,
+          syncRevision: receipt.syncRevision,
+          updatedAt: receipt.updatedAt,
         },
-      }));
-
-      const deleteTripQueueItem = {
-        id: `sync_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        type: 'trip' as const,
+      }), enqueueChange(currentQueue, {
+        type: 'trip',
         entityId: managerTripId,
-        op: 'update' as const,
-        status: 'queued' as const,
-        attempts: 0,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+        op: 'update',
         payload: {
           sourceId: target.sourceId || `trip_${target.id}`,
           updatedAt: Date.now(),
         },
-      };
-
-      patch.syncQueue = [...currentQueue, ...deleteQueueItems, deleteTripQueueItem].slice(-500);
+      }));
 
       return migrateAppState({
         ...prev,
@@ -2134,27 +2082,8 @@ export function Settings({
       currency: newManagedTripCurrency,
       now,
     });
-    const queueItem: SyncQueueItem = {
-      id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
-      type: 'trip',
-      entityId: newTrip.id,
-      op: 'create',
-      status: 'queued',
-      attempts: 0,
-      createdAt: now,
-      updatedAt: now,
-      payload: {
-        sourceId: newTrip.sourceId,
-        updatedAt: newTrip.updatedAt,
-      },
-    };
     setState((prev) => {
       const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
-      const latest = new Map<string, SyncQueueItem>();
-      for (const item of [...(prev.syncQueue || []), queueItem]) {
-        if (item.status === 'synced') continue;
-        latest.set(`${item.type}:${item.entityId}`, item);
-      }
       return migrateAppState({
         ...prev,
         trips: [...prevTrips.map((trip) => ({ ...trip, active: false })), newTrip],
@@ -2164,7 +2093,15 @@ export function Settings({
         tripCurrency: nonHomeCurrencyForTrip(newTrip, prev.tripCurrency),
         budget: newTrip.budget || 0,
         customItinerary: newTrip.itinerary,
-        syncQueue: [...latest.values()].slice(-500),
+        syncQueue: enqueueChange(prev.syncQueue, {
+          type: 'trip',
+          entityId: newTrip.id,
+          op: 'create',
+          payload: {
+            sourceId: newTrip.sourceId,
+            updatedAt: newTrip.updatedAt,
+          },
+        }),
       });
     });
     setManagerTripId(newTrip.id);

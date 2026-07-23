@@ -15,7 +15,7 @@ const PERSONS = [
   { id: 'p2', name: 'B', emoji: '🧳', color: '#1E4D6B' },
 ];
 
-test('offline receipt entry queues locally and auto-syncs on reconnect', async ({ page }) => {
+test('duplicate offline save remains one queued change after reconnect', async ({ page }) => {
   const logs = [];
   page.on('console', (msg) => logs.push(msg.text()));
   // Abort everything that is not the local dev server (Notion/broker/Supabase/fonts…).
@@ -71,6 +71,17 @@ test('offline receipt entry queues locally and auto-syncs on reconnect', async (
     const r = (s.receipts || []).find((x) => x.id === 'r_off');
     return { split: r?.splitMode, queued: (s.syncQueue || []).filter((q) => q.type === 'receipt' && q.status !== 'synced').length };
   })).toEqual({ split: 'private', queued: 1 });
+
+  // A second offline edit of the same receipt must merge into the existing journal entry.
+  await page.locator('.receipt-main', { hasText: '離線便利店' }).first().click();
+  await expect(page.getByRole('heading', { name: '編輯紀錄' })).toBeVisible();
+  await page.getByLabel('金額', { exact: true }).fill('120');
+  await page.getByRole('button', { name: '儲存' }).click();
+  const duplicateQueue = await page.evaluate(() => {
+    const queue = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}').syncQueue || [];
+    return queue.filter((item) => item.type === 'receipt' && item.entityId === 'r_off').length;
+  });
+  expect(duplicateQueue).toBe(1);
 
   // Debounced push fires (~3s) and must bail out on the offline gate.
   await expect.poll(() => logs.some((l) => l.includes('push() skipped — offline')), { timeout: 10_000 }).toBe(true);

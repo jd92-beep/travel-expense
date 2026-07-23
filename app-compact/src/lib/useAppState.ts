@@ -8,30 +8,9 @@ import { clearIndexedState, loadIndexedState } from '../storage/indexedDb';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { clearCurrencyCache } from './currency';
+import { enqueueChange } from './changeJournal';
 import { receiptSourceTombstoneKey } from './syncMerge';
-import type { AppState, Receipt, SyncQueueItem } from './types';
-
-function queueItem(type: SyncQueueItem['type'], entityId: string, op: SyncQueueItem['op'], payload?: SyncQueueItem['payload']): SyncQueueItem {
-  const now = Date.now();
-  return {
-    id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
-    type,
-    entityId,
-    op,
-    status: 'queued',
-    attempts: 0,
-    createdAt: now,
-    updatedAt: now,
-    payload,
-  };
-}
-
-function enqueueSyncItem(queue: SyncQueueItem[] | undefined, item: SyncQueueItem) {
-  return [
-    ...(queue || []).filter((queued) => queued.type !== item.type || queued.entityId !== item.entityId),
-    item,
-  ].slice(-500);
-}
+import type { AppState, Receipt } from './types';
 
 const CLOUD_SETTINGS_KEYS = new Set<keyof AppState>([
   'budget',
@@ -167,7 +146,12 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
       const settingsChanged = shouldQueueSettings(patch);
       const cloudReady = prev.autoSync && settingsChanged && (syncAvailable || hasCredentialBrokerSession(prev) || hasDirectNotionToken());
       const nextQueue = cloudReady
-        ? enqueueSyncItem(prev.syncQueue, queueItem('settings', 'app-settings', 'upsert', { updatedAt: now }))
+        ? enqueueChange(prev.syncQueue, {
+            type: 'settings',
+            entityId: 'app-settings',
+            op: 'upsert',
+            payload: { updatedAt: now },
+          })
         : prev.syncQueue;
       return migrateScopedState({
         ...prev,
@@ -187,15 +171,20 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
       });
       const idx = prev.receipts.findIndex((r) => r.id === receipt.id);
       const syncQueue = prev.autoSync && (syncAvailable || hasCredentialBrokerSession(prev) || hasDirectNotionToken())
-        ? enqueueSyncItem(prev.syncQueue, queueItem('receipt', stamped.id, idx < 0 ? 'create' : 'update', {
-            notionPageId: stamped.notionPageId,
-            supabaseId: stamped.supabaseId,
-            tripId: stamped.tripId,
-            sourceId: stamped.sourceId || stamped.id,
-            version: stamped.version,
-            syncRevision: stamped.syncRevision,
-            updatedAt: stamped.updatedAt,
-          }))
+        ? enqueueChange(prev.syncQueue, {
+            type: 'receipt',
+            entityId: stamped.id,
+            op: idx < 0 ? 'create' : 'update',
+            payload: {
+              notionPageId: stamped.notionPageId,
+              supabaseId: stamped.supabaseId,
+              tripId: stamped.tripId,
+              sourceId: stamped.sourceId || stamped.id,
+              version: stamped.version,
+              syncRevision: stamped.syncRevision,
+              updatedAt: stamped.updatedAt,
+            },
+          })
         : prev.syncQueue;
       if (idx < 0) return { ...prev, receipts: [...prev.receipts, stamped], syncQueue };
       const next = prev.receipts.slice();
@@ -230,16 +219,21 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
         },
       },
       syncQueue: prev.autoSync && (syncAvailable || hasCredentialBrokerSession(prev) || hasDirectNotionToken())
-        ? enqueueSyncItem(prev.syncQueue, queueItem('delete-receipt', receipt.id, 'delete', {
-            notionPageId: receipt.notionPageId,
-            supabaseId: receipt.supabaseId,
-            tripId: receipt.tripId,
-            sourceId: rawSourceId,
-            tombstoneKey,
-            version: receipt.version,
-            syncRevision: receipt.syncRevision,
-            updatedAt: receipt.updatedAt,
-          }))
+        ? enqueueChange(prev.syncQueue, {
+            type: 'delete-receipt',
+            entityId: receipt.id,
+            op: 'delete',
+            payload: {
+              notionPageId: receipt.notionPageId,
+              supabaseId: receipt.supabaseId,
+              tripId: receipt.tripId,
+              sourceId: rawSourceId,
+              tombstoneKey,
+              version: receipt.version,
+              syncRevision: receipt.syncRevision,
+              updatedAt: receipt.updatedAt,
+            },
+          })
         : prev.syncQueue,
     }));
   }, [syncAvailable]);
