@@ -94,6 +94,86 @@ persistence = createScopedPersistence(poisoned.adapter, memoryAdapter(null, 'rea
 state = await persistence.hydrateScope('local', 'vc06456@gmail.com');
 assert.equal('kimiKey' in state, false);
 
+const poisonedScopedLocal = memoryAdapter({
+  ...DEFAULT_STATE,
+  credentialSession: 'local-snapshot-session',
+  credentialSessionExpiresAt: 99_999,
+  credentialBrokerUrl: 'https://poisoned.example/broker',
+  trips: [{
+    ...DEFAULT_STATE.trips[0],
+    id: 'poisoned-trip',
+    sharing: {
+      role: 'owner',
+      isShared: true,
+      memberCount: 1,
+      pendingInviteCount: 1,
+      invites: [{ id: 'local-invite', email: 'local@example.com', role: 'editor', token: 'local-invite-token' }],
+    },
+  }],
+});
+const poisonedScopedIndexed = memoryAdapter({
+  ...DEFAULT_STATE,
+  settingsUpdatedAt: 10,
+  credentialSession: 'indexed-snapshot-session',
+  credentialSessionExpiresAt: 88_888,
+  trips: [{
+    ...DEFAULT_STATE.trips[0],
+    id: 'poisoned-trip',
+    sharing: {
+      role: 'owner',
+      isShared: true,
+      memberCount: 1,
+      pendingInviteCount: 1,
+      invites: [{ id: 'indexed-invite', email: 'indexed@example.com', role: 'editor', token: 'indexed-invite-token' }],
+    },
+  }],
+});
+persistence = createScopedPersistence(poisonedScopedLocal.adapter, poisonedScopedIndexed.adapter);
+state = await persistence.hydrateScope('supabase:user-1', 'member@example.com');
+assert.equal(state.credentialSession, '');
+assert.equal(state.credentialSessionExpiresAt, 0);
+assert.notEqual(state.credentialBrokerUrl, 'https://poisoned.example/broker');
+assert.equal('token' in (state.trips[0]?.sharing?.invites?.[0] || {}), false);
+
+const oldLiveReceipt = {
+  id: 'receipt-live',
+  sourceId: 'receipt-source',
+  tripId: 'tombstone-trip',
+  store: 'Old live receipt',
+  total: 2,
+  date: '2026-01-01',
+  category: 'other',
+  payment: 'cash',
+  updatedAt: 10,
+  syncRevision: 1,
+};
+const newerTombstone = {
+  supabaseId: 'receipt-live',
+  sourceId: 'receipt-source',
+  tripId: 'tombstone-trip',
+  version: 1,
+  syncRevision: 1,
+  deletedAt: 20,
+  pending: true,
+};
+persistence = createScopedPersistence(
+  memoryAdapter({ ...DEFAULT_STATE, receipts: [oldLiveReceipt] }).adapter,
+  memoryAdapter({ ...DEFAULT_STATE, receiptTombstones: { 'tombstone-trip::receipt-source': newerTombstone } }).adapter,
+);
+state = await persistence.hydrateScope('local', 'vc06456@gmail.com');
+assert.equal(state.receipts.some((receipt) => receipt.id === oldLiveReceipt.id), false);
+assert.deepEqual(state.receiptTombstones, { 'tombstone-trip::receipt-source': newerTombstone });
+
+const oldTombstone = { ...newerTombstone, deletedAt: 10, pending: false };
+const newerLiveReceipt = { ...oldLiveReceipt, updatedAt: 20, syncRevision: 2, store: 'New live receipt' };
+persistence = createScopedPersistence(
+  memoryAdapter({ ...DEFAULT_STATE, receiptTombstones: { 'tombstone-trip::receipt-source': oldTombstone } }).adapter,
+  memoryAdapter({ ...DEFAULT_STATE, receipts: [newerLiveReceipt] }).adapter,
+);
+state = await persistence.hydrateScope('local', 'vc06456@gmail.com');
+assert.equal(state.receipts.find((receipt) => receipt.id === newerLiveReceipt.id)?.store, 'New live receipt');
+assert.equal(state.receiptTombstones?.['tombstone-trip::receipt-source'], undefined);
+
 const terminalSnapshot = {
   ...DEFAULT_STATE,
   syncQueue: [{

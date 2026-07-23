@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { migrateAppState, stampReceiptForTrip } from '../domain/trip/normalize';
-import { DEFAULT_STATE, isBoss } from './constants';
+import { DEFAULT_STATE } from './constants';
 import { hasCredentialBrokerSession } from './credentialBroker';
 import { hasDirectNotionToken } from './notion';
 import { clearStoredCredentials, loadState } from './storage';
 import { clearIndexedState } from '../storage/indexedDb';
-import { hydrateScope, persistScope } from './scopedPersistence';
+import { hydrateScope, persistScope, sanitizePublicDemoState } from './scopedPersistence';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { clearCurrencyCache } from './currency';
@@ -41,37 +41,13 @@ function shouldQueueSettings(patch: Partial<AppState>) {
   return Object.keys(patch).some((key) => CLOUD_SETTINGS_KEYS.has(key as keyof AppState));
 }
 
-function isPublicSupabaseScope(storageScope: string, userEmail: string | null): boolean {
-  return storageScope.startsWith('supabase:') && !isBoss(userEmail);
-}
-
-function withoutPublicDemoTrip(state: AppState, storageScope: string, userEmail: string | null): AppState {
-  if (!isPublicSupabaseScope(storageScope, userEmail)) return state;
-  const demoTripId = DEFAULT_STATE.activeTripId;
-  const trips = (state.trips || []).filter((trip) => trip.id !== demoTripId);
-  const activeTripId = trips.find((trip) => trip.id === state.activeTripId && !trip.archived)?.id
-    || trips.find((trip) => trip.active && !trip.archived)?.id
-    || trips.find((trip) => !trip.archived)?.id
-    || '';
-  const active = trips.find((trip) => trip.id === activeTripId);
-  return {
-    ...state,
-    trips: trips.map((trip) => ({ ...trip, active: trip.id === activeTripId && !trip.archived })),
-    receipts: (state.receipts || []).filter((receipt) => receipt.tripId !== demoTripId),
-    activeTripId,
-    tripName: active?.name || (trips.length ? state.tripName : ''),
-    tripDateRange: active ? { start: active.startDate, end: active.endDate } : state.tripDateRange,
-    customItinerary: active?.itinerary || (trips.length ? state.customItinerary : null),
-  };
-}
-
 function migrateScopedState(input: unknown, storageScope: string, userEmail: string | null): AppState {
-  return withoutPublicDemoTrip(migrateAppState(input), storageScope, userEmail);
+  return sanitizePublicDemoState(migrateAppState(input), storageScope, userEmail);
 }
 
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
   const [state, setState] = useState<AppState>(() => {
-    return withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
+    return sanitizePublicDemoState(loadState(storageScope), storageScope, userEmail);
   });
   const [hydratedScope, setHydratedScope] = useState('');
   const [indexedReadyScope, setIndexedReadyScope] = useState('');
@@ -102,7 +78,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     if (indexedReadyScope !== storageScope) return;
     void persistScope(storageScope, userEmail, state).then((result) => {
       if (result.status !== 'succeeded') {
-        console.warn('[useAppState] Persist degraded:', result.error);
+        console.warn(`[useAppState] Persist ${result.status}:`, result.error);
       }
     });
   }, [indexedReadyScope, state, storageScope, userEmail]);
@@ -211,7 +187,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     clearStoredCredentials();
     clearDeviceTrust();
     clearCurrencyCache();
-    setState(withoutPublicDemoTrip({ ...DEFAULT_STATE, receipts: [] }, storageScope, userEmail));
+    setState(sanitizePublicDemoState({ ...DEFAULT_STATE, receipts: [] }, storageScope, userEmail));
   }, [storageScope, userEmail]);
 
   return {

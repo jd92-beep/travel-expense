@@ -8,7 +8,8 @@ import {
   saveStoredSnapshot,
   stripSensitiveState,
 } from './storage';
-import type { AppState, Receipt } from './types';
+import { canonicalReceiptKey, canonicalTombstoneWins } from './receiptTombstones';
+import type { AppState, Receipt, ReceiptTombstone } from './types';
 
 export type SnapshotAdapter = {
   load(scope: string): Promise<unknown | null>;
@@ -28,11 +29,24 @@ const snapshot = (value: unknown): Partial<AppState> | null =>
 const receiptsOf = (state: Partial<AppState>) =>
   Array.isArray(state.receipts) ? state.receipts : [];
 
+const tombstonesOf = (state: Partial<AppState>): ReceiptTombstone[] =>
+  state.receiptTombstones && typeof state.receiptTombstones === 'object'
+    ? Object.values(state.receiptTombstones)
+    : [];
+
+function sanitizeSnapshot(value: unknown): Partial<AppState> | null {
+  const state = snapshot(value);
+  if (!state) return null;
+  const { credentialBrokerUrl: _credentialBrokerUrl, ...safe } = stripSensitiveState(state);
+  return safe;
+}
+
 const freshness = (state: Partial<AppState>) => Math.max(
   Number(state.settingsUpdatedAt || 0),
   Number(state.lastSyncedAt || 0),
   ...receiptsOf(state).map((receipt) =>
     Number(receipt.updatedAt || receipt.createdAt || 0)),
+  ...tombstonesOf(state).map((tombstone) => Number(tombstone.deletedAt || 0)),
 );
 
 function mergeReceipts(primary: Receipt[], secondary: Receipt[]): Receipt[] {
@@ -55,7 +69,45 @@ function mergeTrips(primary: AppState['trips'], secondary: AppState['trips']): N
   return [...merged.values()];
 }
 
-function removePublicDemo(state: AppState, scope: string, userEmail: string | null): AppState {
+function mergeTombstones(
+  primary: ReceiptTombstone[],
+  secondary: ReceiptTombstone[],
+): Record<string, ReceiptTombstone> {
+  const merged = new Map<string, ReceiptTombstone>();
+  for (const tombstone of [...primary, ...secondary]) {
+    const key = canonicalReceiptKey({ id: tombstone.supabaseId, ...tombstone });
+    if (!key) continue;
+    const current = merged.get(key);
+    if (!current
+      || Number(tombstone.deletedAt || 0) > Number(current.deletedAt || 0)
+      || Number(tombstone.deletedAt || 0) === Number(current.deletedAt || 0)
+        && Number(tombstone.syncRevision || 0) > Number(current.syncRevision || 0)) {
+      merged.set(key, tombstone);
+    }
+  }
+  return Object.fromEntries(merged);
+}
+
+function resolveReceiptTombstones(
+  receipts: Receipt[],
+  tombstones: Record<string, ReceiptTombstone>,
+): { receipts: Receipt[]; tombstones: Record<string, ReceiptTombstone> } {
+  const nextTombstones = { ...tombstones };
+  const activeReceipts = receipts.filter((receipt) => {
+    const key = canonicalReceiptKey(receipt);
+    const tombstone = nextTombstones[key];
+    if (!tombstone) return true;
+    const receiptIsNewer = Number(receipt.updatedAt || receipt.createdAt || 0) > Number(tombstone.deletedAt || 0);
+    if (receiptIsNewer && !canonicalTombstoneWins(nextTombstones, receipt)) {
+      delete nextTombstones[key];
+      return true;
+    }
+    return false;
+  });
+  return { receipts: activeReceipts, tombstones: nextTombstones };
+}
+
+export function sanitizePublicDemoState(state: AppState, scope: string, userEmail: string | null): AppState {
   if (!scope.startsWith('supabase:') || isBoss(userEmail)) return state;
   const trips = (state.trips || []).filter((trip) => trip.id !== DEFAULT_STATE.activeTripId);
   const activeTripId = trips.find((trip) => trip.id === state.activeTripId && !trip.archived)?.id
@@ -91,22 +143,31 @@ export function createScopedPersistence(
       ]);
       const localValue = localResult.status === 'fulfilled' ? localResult.value : null;
       const indexedValue = indexedResult.status === 'fulfilled' ? indexedResult.value : null;
-      const localState = snapshot(localValue);
-      const indexedState = snapshot(indexedValue);
+      const localState = sanitizeSnapshot(localValue);
+      const indexedState = sanitizeSnapshot(indexedValue);
       const newest = localState && indexedState
         ? freshness(indexedState) > freshness(localState) ? indexedState : localState
         : localState || indexedState || DEFAULT_STATE;
       const other = newest === localState ? indexedState : localState;
+      const receiptTombstones = mergeTombstones(
+        tombstonesOf(newest),
+        tombstonesOf(other || {}),
+      );
+      const resolved = resolveReceiptTombstones(
+        mergeReceipts(receiptsOf(newest), receiptsOf(other || {})),
+        receiptTombstones,
+      );
       const merged = other
         ? {
             ...other,
             ...newest,
-            receipts: mergeReceipts(receiptsOf(newest), receiptsOf(other)),
+            receipts: resolved.receipts,
+            receiptTombstones: resolved.tombstones,
             trips: mergeTrips(newest.trips, other.trips),
           }
-        : newest;
+        : { ...newest, receipts: resolved.receipts, receiptTombstones: resolved.tombstones };
       const credentials = scope === 'local' ? loadCredentials() : {};
-      return removePublicDemo(normalizeState(migrateAppState({
+      return sanitizePublicDemoState(normalizeState(migrateAppState({
         ...merged,
         ...credentials,
       })), scope, userEmail);
