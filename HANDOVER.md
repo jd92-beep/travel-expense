@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-23 HKT
-- **Focus**: Session 68 completed Compact Milestone 1 Offline Change Journal proof with an authenticated Supabase Storage abort/retry browser regression. The requested Settings, sync, offline, journal, typecheck, build and security gates completed green.
+- **Date**: 2026-07-24 HKT
+- **Focus**: Session 69 completed and approved Compact Milestone 2 Scoped Hydration review remediation: canonical tombstone arbitration, scoped raw-read secret boundaries, truthful persistence evidence, deterministic account-switch cancellation, and secure bootstrap hydration.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.13`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
+- **App version**: Compact `0.16.14`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.13`; the Android branch is `0.20.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.14`; the Android branch is `0.20.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -115,6 +115,20 @@ you closed with your session number.
    Vite server and was rerun successfully; it was not an assertion failure.
 6. **Safety:** no DB/RLS/credential/live-data/deploy/push operation occurred. `AGENTS.md` and
    `CLAUDE.md` were pre-existing dirty files and remained untouched and unstaged.
+7. **Approved review remediation:** commits `8a005ec` (`fix: harden scoped hydration`) and
+   `fc757dc` (`fix: secure scoped bootstrap`) close every Milestone 2 review finding. Tombstones
+   merge by canonical identity, so a newer deletion prevents an older receipt resurrection; a newer
+   receipt can clear an older tombstone only under the existing `syncRevision` tie contract. Every
+   raw adapter read is sanitized before merge, removing session, provider, credential, and sharing
+   invite fields. `safeInitialState()` replaces bootstrap `loadState(scope)`: only `local` overlays
+   approved local credentials, while scoped blobs are read solely by canonical `hydrateScope()`.
+   Persistence logs the actual `failed`/`degraded` outcome, and a delayed old-scope account-switch
+   browser regression proves only the new scope can set or persist.
+8. **Final evidence:** focused scoped hydration and journal tests passed; session `2 passed`,
+   offline `4 passed`, sync regression `8 passed`, fake-env security `7 passed, 1 skipped`, and
+   Settings, mobile layout, typecheck, build, and security scans passed. Final root security scan
+   and `git diff --check` passed for this handover. No push, deploy, DB/RLS, credential, or
+   live-data operation occurred.
 
 ### Session 68 (Codex — Milestone 1 completion proof)
 
