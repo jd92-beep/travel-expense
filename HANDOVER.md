@@ -79,10 +79,10 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟢 **Architecture deepening Milestone 1 Offline Change Journal closed in Session 68** — the
-   authenticated fake-Supabase browser regression aborts an actual `receipt-photos` upload, retains
-   one journal identity, and retries successfully after `online`. The complete Settings and sync
-   regression commands now finish green. Milestones 2-4 and the Android port remain separate work.
+18. 🟢 **Architecture deepening Milestone 1 Offline Change Journal closed in Session 68** — review
+   remediation adds the stale revision guard and terminal photo retry ledger: newer same-identity
+   changes survive old success settlement; photo failures terminalize at 3 attempts and only manual
+   retry resets them. Milestones 2-4 and the Android port remain separate work.
 
 ## What Was Done
 
@@ -99,6 +99,14 @@ you closed with your session number.
    `smoke:offline` (`4 passed`) passed on the final tree.
 3. **Safety:** no database, RLS, credentials, deployment, push, or live-data operation occurred.
    Existing dirty `AGENTS.md` and `CLAUDE.md` remained untouched and unstaged.
+4. **Review remediation:** `4e043b7` adds an `expectedUpdatedAt` stale-settlement guard without
+   changing the three-argument journal API, and keeps status transitions from overwriting the queue
+   content revision. A newer enqueue during sync therefore remains queued after the old success.
+5. **Photo retry ledger:** a failed upload now settles the existing receipt journal item instead of
+   rebuilding it with zero attempts. Three failures persist `error/attempts=3`; manual retry alone
+   resets journal and unsynced-photo attempts. `test:change-journal`, focused photo `1/1`, sync
+   regression `8/8`, offline `4/4`, typecheck, build, and security scan passed. The companion
+   cleanup commit removes the accidental tracked SDD report while keeping the local scratch report.
 
 ### Session 67 (Codex — Compact Milestone 1 Offline Change Journal)
 
