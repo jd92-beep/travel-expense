@@ -1,8 +1,8 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-20 HKT
-- **Focus**: Session 64 added Volcano Kimi K3 to the production Credential Broker safe catalog for the Android app's four recognition tasks and verified text/image inference.
+- **Date**: 2026-07-23 HKT
+- **Focus**: Session 65 completed and committed the approved four-milestone architecture deepening design; implementation is pending Boss's spec review.
 - **Agent**: Codex.
 - **App version**: Compact `0.16.12`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
 
@@ -79,8 +79,33 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
+18. 🟡 **Architecture deepening implementation pending** — Session 65 records Boss-approved,
+   behavior-preserving designs for the Offline Change Journal, Scoped Hydration, shared-trip Notion
+   Outbox and Provider Catalog. Boss must review the committed spec before implementation planning.
+   Main is implemented and verified milestone-by-milestone before applicable changes are ported to
+   the isolated Android branch.
 
 ## What Was Done
+
+### Session 65 (Codex — architecture deepening design)
+
+1. **Recent-change review:** weighted the scan toward Compact queue/retry, scoped persistence,
+   shared-trip Notion outbox and cross-runtime AI model catalog paths. `CONTEXT.md` and `docs/adr/`
+   were absent before this session; no existing ADR constrained the design.
+2. **Approved rollout:** Boss approved behavior-preserving incremental deepening as four independent
+   milestones: Offline Change Journal, Scoped Hydration, shared-trip Notion Outbox, then Provider
+   Catalog. Main is completed first; applicable changes are ported to Android only after all main
+   gates pass.
+3. **Design contract:** storage keys, `AppState`, Supabase schema/RLS, Broker routes, quota hard
+   stops, terminal sync evidence and protected Admin write mode remain unchanged. The only observable
+   correction is restoring the documented six-model Volcano Admin catalog, including Kimi K3.
+4. **Documentation:** added the project domain glossary in `CONTEXT.md` and the approved design at
+   `docs/superpowers/specs/2026-07-23-architecture-deepening-design.md`. No app code, app version,
+   database, RLS, credential, production deployment or user data changed.
+5. **Verification:** placeholder/ambiguity/contradiction self-review passed; `git diff --check`
+   returned exit `0` with no output, the repository security scan returned `Secret scan passed`,
+   and `origin/main` was still `f72dfc3`. App builds and smokes were intentionally deferred because
+   this session changes documentation only.
 
 ### Session 64 (Codex — production Broker Kimi K3 route)
 
