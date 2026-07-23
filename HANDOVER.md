@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-07-23 HKT
-- **Focus**: Session 65 completed and committed the approved four-milestone architecture deepening design; implementation is pending Boss's spec review.
+- **Focus**: Session 66 completed the executable TDD plans for all four main architecture milestones and the isolated Android port/extreme offline QA; production code execution is pending Boss's execution-mode choice.
 - **Agent**: Codex.
 - **App version**: Compact `0.16.12`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.8`; the Android branch is `0.19.5`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.12`; the Android branch is `0.20.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -79,13 +79,35 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟡 **Architecture deepening implementation pending** — Session 65 records Boss-approved,
-   behavior-preserving designs for the Offline Change Journal, Scoped Hydration, shared-trip Notion
-   Outbox and Provider Catalog. Boss must review the committed spec before implementation planning.
-   Main is implemented and verified milestone-by-milestone before applicable changes are ported to
-   the isolated Android branch.
+18. 🟡 **Architecture deepening execution pending** — Session 65 records the Boss-approved design;
+   Session 66 adds five executable TDD plans covering the four ordered main milestones plus the
+   isolated Android port/extreme offline QA. No production code has changed yet. Execute Main
+   milestone-by-milestone, then port applicable changes to Android without merging the worktrees.
 
 ## What Was Done
+
+### Session 66 (Codex — architecture deepening implementation plans)
+
+1. **Five executable plans:** added separate TDD plans for Offline Change Journal, Scoped Hydration,
+   shared-trip Notion Outbox, Provider Catalog, and the Android port/extreme offline QA. Each plan
+   names exact files, interfaces, red/green tests, GitNexus impact/detect gates, version bumps,
+   staging lists, commits, pushes, and expected results.
+2. **Data-safety coverage:** the plans preserve queue identity and bounds, manual-only terminal
+   reset, cross-adapter terminal evidence, Account Scope isolation, ledger-first mirroring,
+   duplicate Mirror Job suppression, completion-failure recovery, and hard-stop AI quota behavior.
+3. **Android proof boundary:** Android remains isolated and ports four verified main milestones as
+   `0.20.1` through `0.20.4` / versionCodes `2001` through `2004`. Deterministic adb/CDP cold-open
+   recovery is distinct from the real authenticated backend reconnect gate; unavailable login
+   evidence remains open instead of being bypassed.
+4. **Provider invariant:** the catalog plan keeps Compact Web exposure unchanged, preserves Android
+   Kimi K3, and makes Broker/Admin BFF/Supabase Edge consume one secret-free root catalog. Admin's
+   six-model Volcano set is asserted without enabling writes or changing routes.
+5. **Scope:** documentation only. No app code, app version, dependency, database, RLS, credential,
+   production deployment, Android build artifact, or user data changed.
+6. **Verification:** the plan structure/placeholder/fence check printed
+   `plan structure check passed: 5 files`; `git diff --check` exited `0` with no output; and
+   `node scripts/security-scan.mjs` printed `Secret scan passed`. App builds and runtime smokes were
+   intentionally deferred because this session changes documentation only.
 
 ### Session 65 (Codex — architecture deepening design)
 

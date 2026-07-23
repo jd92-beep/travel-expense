@@ -1,6 +1,6 @@
 # Architecture Deepening Design
 
-**Status:** Approved by Boss on 2026-07-23; implementation pending spec review.
+**Status:** Approved by Boss on 2026-07-23; implementation plans complete and execution pending.
 
 ## Objective
 
@@ -59,6 +59,16 @@ Offline Change Journal
 Each milestone gets its own implementation commit, app version bump when app code
 changes, focused tests, full required gates, and HANDOVER evidence. A later
 milestone does not start until the previous milestone is green.
+
+## Implementation Plans
+
+Execute these plans in order:
+
+1. `docs/superpowers/plans/2026-07-23-offline-change-journal.md`
+2. `docs/superpowers/plans/2026-07-23-scoped-hydration.md`
+3. `docs/superpowers/plans/2026-07-23-shared-trip-notion-outbox.md`
+4. `docs/superpowers/plans/2026-07-23-provider-catalog.md`
+5. `docs/superpowers/plans/2026-07-23-android-architecture-port-and-offline-qa.md`
 
 ## Milestone 1: Offline Change Journal
 
