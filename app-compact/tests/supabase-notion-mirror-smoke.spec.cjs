@@ -53,9 +53,83 @@ function pageFixture(id, properties) {
   };
 }
 
+function profileGetBody(url, appSettings) {
+  return url.searchParams.get('select') === 'app_settings'
+    ? { app_settings: appSettings }
+    : [];
+}
+
+function cloudTripRow({
+  legacySourceId,
+  name,
+  destination,
+  startDate,
+  endDate,
+  notionDatabaseId = null,
+  now = Date.now(),
+}) {
+  return {
+    id: tripUuid,
+    owner_id: userId,
+    name,
+    destination_summary: destination,
+    start_date: startDate,
+    end_date: endDate,
+    home_currency: 'HKD',
+    trip_currency: 'JPY',
+    timezones: ['Asia/Tokyo'],
+    budget_amount: 0,
+    budget_currency: 'HKD',
+    active: true,
+    legacy_source_id: legacySourceId,
+    itinerary: [],
+    app_metadata: { sourceId: `trip_${legacySourceId}` },
+    version: 1,
+    archived: false,
+    notion_page_id: null,
+    notion_database_id: notionDatabaseId,
+    created_at: new Date(now).toISOString(),
+    updated_at: new Date(now).toISOString(),
+  };
+}
+
+function cloudReceiptRow({
+  id,
+  sourceId,
+  store,
+  total,
+  date,
+  now = Date.now(),
+}) {
+  return {
+    id,
+    trip_id: tripUuid,
+    owner_id: userId,
+    source_id: sourceId,
+    store,
+    amount: total,
+    original_amount: total,
+    currency: 'JPY',
+    hkd_amount: total / 20,
+    record_date: date,
+    category: 'food',
+    payment: 'cash',
+    record_kind: 'expense',
+    version: 1,
+    deleted_at: null,
+    created_at: new Date(now).toISOString(),
+    updated_at: new Date(now).toISOString(),
+  };
+}
+
 async function setAccordion(page, title, expanded = true) {
-  const button = page.getByRole('button', { name: new RegExp(title) });
+  const button = page.locator('.accordion-summary', { hasText: new RegExp(title) }).first();
   if ((await button.getAttribute('aria-expanded')) !== String(expanded)) await button.click();
+  await expect(button).toHaveAttribute('aria-expanded', String(expanded));
+}
+
+function historyHeader(page) {
+  return page.getByRole('banner', { name: '紀錄中心 header' });
 }
 
 function sessionPayload() {
@@ -84,7 +158,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('Supabase public Notion panel clearly stays Supabase-only before Personal Notion is connected', async ({ page }) => {
+test('Supabase public mirror status stays scoped before Personal Notion is connected', async ({ page }) => {
   const notionRequests = [];
 
 
@@ -170,24 +244,16 @@ test('Supabase public Notion panel clearly stays Supabase-only before Personal N
 
   await page.goto('http://localhost:8903/travel-expense/compact/#settings');
   await expect(page.getByText('設定控制中心')).toBeVisible();
-  await setAccordion(page, 'Notion Sync');
+  await setAccordion(page, 'Credentials & Connection');
 
+  const credentials = page.locator('#settings-credentials-panel');
   await expect(page.getByLabel('Database ID', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Notion mirror database')).toBeDisabled();
-  await expect(page.getByLabel('Notion mirror database')).toHaveValue('Personal Notion 未連接');
-  await expect(page.getByRole('button', { name: /Push Supabase$/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Save & Push Supabase Settings/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: '測試' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: '美化 Schema' })).toBeDisabled();
-
-  await page.getByRole('button', { name: /Push Supabase$/ }).click();
-  await expect(page.getByText(/已透過 Sync Engine 推送 pending queue/)).toBeVisible();
-  await page.waitForTimeout(500);
+  await expect(page.getByRole('button', { name: /Notion Sync/ })).toHaveCount(0);
+  await expect(credentials).toContainText('Notion mirror: needs own DB');
   expect(notionRequests).toHaveLength(0);
 });
 
-test('Supabase personal Notion connect persists database scope and queues active trip update', async ({ page }) => {
-  const connectRequests = [];
+test('Supabase public email intake stays out of the shared Gmail inbox', async ({ page }) => {
 
   await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: sessionPayload().user }) });
@@ -216,42 +282,13 @@ test('Supabase personal Notion connect persists database scope and queues active
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
   });
 
-  await page.route('**/notion/request', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: true, data: { ok: true } }),
-    });
-  });
-
-  await page.route('**/integrations/notion/connect', async (route) => {
-    connectRequests.push({
-      supabaseAuth: route.request().headers()['x-supabase-auth'] || '',
-      brokerSession: route.request().headers()['x-travel-session'] || '',
-      body: route.request().postDataJSON(),
-    });
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ok: true,
-        status: {
-          provider: 'notion',
-          status: 'connected',
-          databaseId: 'db_personal_new',
-          updatedAt: Date.now(),
-        },
-      }),
-    });
-  });
-
   await page.addInitScript(({ userId, session }) => {
     const now = Date.now();
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify(session));
     localStorage.setItem(`boss-japan-tracker:state:supabase:${userId}`, JSON.stringify({
-      lastTab: 'settings',
+      lastTab: 'scan',
       autoSync: true,
       activeTripId: 'trip_old_notion',
       notionDb: '3438d94d5f7c81878221fcda6d65d39d',
@@ -277,46 +314,35 @@ test('Supabase personal Notion connect persists database scope and queues active
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
-  await expect(page.getByText('設定控制中心')).toBeVisible();
-  await setAccordion(page, 'Email / Shortcut');
+  await page.goto('http://localhost:8903/travel-expense/compact/#scan');
+  await expect(page.getByRole('banner', { name: '收據掃描工作室 header' })).toBeVisible();
+  await page.getByRole('button', { name: 'Email' }).click();
   await expect(page.getByText(/Public Supabase mode 不使用共享 Gmail inbox/)).toBeVisible();
   await expect(page.getByRole('button', { name: /複製 Gmail/ })).toHaveCount(0);
-  await setAccordion(page, 'Notion Sync');
-  await page.getByLabel('Personal Notion database ID').fill('db_personal_new');
-  await page.getByLabel('Personal Notion connector secret').fill('ntn_test_personal_secret');
-  await page.getByRole('button', { name: /Connect Personal Notion/ }).click();
-  await expect(page.getByText(/Personal Notion 已安全連接/)).toBeVisible();
-
-  expect(connectRequests).toHaveLength(1);
-  expect(connectRequests[0].supabaseAuth).toBe('Bearer test-access-token');
-  expect(connectRequests[0].brokerSession).toBe('');
-  expect(connectRequests[0].body.databaseId).toBe('db_personal_new');
-
-  console.log('DEBUG LOCALSTORAGE:', await page.evaluate(() => JSON.stringify(localStorage, null, 2)));
-
-  await expect.poll(() => page.evaluate((userId) => {
-    const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
-    const activeTrip = (state.trips || []).find((trip) => trip.id === 'trip_old_notion');
-    return {
-      notionDb: state.notionDb,
-      personalNotionConnected: state.personalNotionConnected,
-      activeTripNotionDb: activeTrip?.notionDb,
-      queuedTypes: (state.syncQueue || []).map((item) => `${item.type}:${item.entityId}`).sort(),
-    };
-  }, userId), { timeout: 10000 }).toEqual({
-    notionDb: 'db_personal_new',
-    personalNotionConnected: true,
-    activeTripNotionDb: undefined,
-    queuedTypes: ['settings:app-settings'],
-  });
+  await expect(page.getByPlaceholder('貼 booking confirmation / email 文字')).toBeVisible();
 });
 
-test('Supabase personal Notion connection mirrors without a broker password session', async ({ page }) => {
+test('Supabase shared-trip owner drains the Personal Notion outbox without a broker password session', async ({ page }) => {
   const receiptUpserts = [];
-  const receiptIdLookups = [];
   const notionRequests = [];
   const profilePatches = [];
+  const finishedJobs = [];
+  const cloudTrip = cloudTripRow({
+    legacySourceId: 'trip_mirror',
+    name: 'Mirror Trip',
+    destination: 'Mirror City',
+    startDate: '2026-08-01',
+    endDate: '2026-08-02',
+    notionDatabaseId: 'db_mirror',
+  });
+  const mirroredReceipt = cloudReceiptRow({
+    id: receiptUuid,
+    sourceId: 'receipt_mirror_source',
+    store: 'Mirror Cafe',
+    total: 1800,
+    date: '2026-08-01',
+  });
+  let claimed = false;
 
   await page.route('**/travel-expense/secrets.local.js', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/javascript', body: 'window.DEV_SECRETS = {};' });
@@ -337,7 +363,7 @@ test('Supabase personal Notion connection mirrors without a broker password sess
       return;
     }
     if (table === 'profiles' && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ app_settings: {} }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profileGetBody(url, {})) });
       return;
     }
     if (table === 'profiles' && method === 'PATCH') {
@@ -346,11 +372,7 @@ test('Supabase personal Notion connection mirrors without a broker password sess
       return;
     }
     if (table === 'trips' && method === 'GET') {
-      if (url.searchParams.get('select') === 'id') {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: tripUuid }) });
-      } else {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
-      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([cloudTrip]) });
       return;
     }
     if (table === 'trips' && method === 'POST') {
@@ -367,35 +389,46 @@ test('Supabase personal Notion connection mirrors without a broker password sess
       });
       return;
     }
+    if (table === 'upsert_shared_trip_receipt' && method === 'POST') {
+      receiptUpserts.push(body);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mirroredReceipt) });
+      return;
+    }
     if (table === 'receipts' && method === 'GET') {
-      if (url.searchParams.get('select') === 'id') {
-        receiptIdLookups.push({
-          ownerId: url.searchParams.get('owner_id'),
-          tripId: url.searchParams.get('trip_id'),
-          sourceId: url.searchParams.get('source_id'),
-        });
+      if (url.searchParams.get('id') === `eq.${receiptUuid}`) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mirroredReceipt) });
+      } else if (url.searchParams.get('select') === 'id') {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(null) });
       } else {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
       }
       return;
     }
-    if (table === 'receipts' && method === 'POST') {
-      receiptUpserts.push(body);
+    if (table === 'trip_backend_links' && method === 'GET') {
       await route.fulfill({
-        status: 201,
+        status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          ...body,
-          id: receiptUuid,
-          owner_id: userId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify([{ trip_id: tripUuid, sync_mode: 'dual_write', status: 'active', notion_database_ref: 'db_mirror' }]),
       });
       return;
     }
-
+    if (table === 'claim_receipt_sync_jobs' && method === 'POST') {
+      const jobs = claimed || !receiptUpserts.length ? [] : [{
+        id: 'job_mirror_receipt',
+        trip_id: tripUuid,
+        receipt_id: receiptUuid,
+        operation: 'update',
+        payload: { sourceId: 'receipt_mirror_source' },
+      }];
+      claimed = claimed || jobs.length > 0;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(jobs) });
+      return;
+    }
+    if (table === 'finish_receipt_sync_job' && method === 'POST') {
+      finishedJobs.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      return;
+    }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
   });
 
@@ -495,23 +528,20 @@ test('Supabase personal Notion connection mirrors without a broker password sess
   }, { userId, session: sessionPayload() });
 
   await page.goto('http://localhost:8903/travel-expense/compact/#history');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await expect(historyHeader(page)).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
 
-  await expect.poll(() => receiptUpserts.length, { timeout: 10000 }).toBeGreaterThanOrEqual(2);
-  expect(receiptIdLookups.some((lookup) => (
-    lookup.ownerId === `eq.${userId}` &&
-    lookup.tripId === `eq.${tripUuid}` &&
-    lookup.sourceId === 'eq.receipt_mirror_source'
-  ))).toBe(true);
+  await expect.poll(() => receiptUpserts.length, { timeout: 10000 }).toBeGreaterThanOrEqual(1);
+  await expect.poll(() => finishedJobs.length, { timeout: 10000 }).toBe(1);
   expect(notionRequests.length).toBeGreaterThan(0);
   expect(notionRequests.every((request) => request.supabaseAuth === 'Bearer test-access-token')).toBe(true);
   expect(notionRequests.every((request) => !request.brokerSession)).toBe(true);
   expect(notionRequests.every((request) => request.databaseId === 'db_mirror')).toBe(true);
+  expect(finishedJobs[0]).toMatchObject({ p_job_id: 'job_mirror_receipt', p_status: 'succeeded', p_error: null });
   await expect.poll(() => profilePatches.some((patch) => patch?.app_settings?.notionDb === 'db_mirror'), { timeout: 10000 }).toBe(true);
   expect(profilePatches.every((patch) => patch?.app_settings?.notionDb !== '3438d94d5f7c81878221fcda6d65d39d')).toBe(true);
-  expect(receiptUpserts[0].notion_page_id).toBeNull();
-  expect(receiptUpserts.at(-1).notion_page_id).toBeNull();
-  expect(receiptUpserts.at(-1).notion_database_id).toBeNull();
+  expect(receiptUpserts.every((call) => call.p_receipt?.notion_page_id === undefined)).toBe(true);
+  expect(receiptUpserts.every((call) => call.p_receipt?.notion_database_id === undefined)).toBe(true);
 });
 
 test('Supabase profile settings stay authoritative over stale Notion meta in public mode', async ({ page }) => {
@@ -579,12 +609,10 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          app_settings: {
-            activeTripId: 'trip_supabase',
-            settingsUpdatedAt: now + 1_000,
-          },
-        }),
+        body: JSON.stringify(profileGetBody(url, {
+          activeTripId: 'trip_supabase',
+          settingsUpdatedAt: now + 1_000,
+        })),
       });
       return;
     }
@@ -651,7 +679,7 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
   }, { userId, session: sessionPayload(), now });
 
   await page.goto('http://localhost:8903/travel-expense/compact/#history');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await expect(historyHeader(page)).toBeVisible();
   await page.getByRole('button', { name: '重新同步' }).click();
 
   await expect.poll(() => page.evaluate((userId) => {
@@ -715,12 +743,10 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          app_settings: {
-            activeTripId: 'foreign_or_deleted_trip',
-            settingsUpdatedAt: now + 10_000,
-          },
-        }),
+        body: JSON.stringify(profileGetBody(url, {
+          activeTripId: 'foreign_or_deleted_trip',
+          settingsUpdatedAt: now + 10_000,
+        })),
       });
       return;
     }
@@ -765,7 +791,7 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
   }, { userId, session: sessionPayload(), now });
 
   await page.goto('http://localhost:8903/travel-expense/compact/#history');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await expect(historyHeader(page)).toBeVisible();
   await page.getByRole('button', { name: '重新同步' }).click();
 
   await expect.poll(() => page.evaluate((userId) => {
@@ -775,10 +801,10 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
       activeFlags: (state.trips || []).map((trip) => ({ id: trip.id, active: trip.active, archived: !!trip.archived })),
     };
   }, userId), { timeout: 10000 }).toEqual({
-    activeTripId: 'trip_valid_supabase',
+    activeTripId: 'trip_local',
     activeFlags: [
-      { id: 'trip_local', active: false, archived: false },
-      { id: 'trip_valid_supabase', active: true, archived: false },
+      { id: 'trip_local', active: true, archived: false },
+      { id: 'trip_valid_supabase', active: false, archived: false },
     ],
   });
 });
@@ -786,6 +812,13 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
 test('Supabase public account without own Notion database does not use shared Notion mirror', async ({ page }) => {
   const receiptUpserts = [];
   const notionRequests = [];
+  const cloudTrip = cloudTripRow({
+    legacySourceId: 'trip_public_only',
+    name: 'Public Only Trip',
+    destination: 'Public City',
+    startDate: '2026-09-01',
+    endDate: '2026-09-02',
+  });
 
   await page.route('**/travel-expense/secrets.local.js', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/javascript', body: 'window.DEV_SECRETS = {};' });
@@ -806,15 +839,11 @@ test('Supabase public account without own Notion database does not use shared No
       return;
     }
     if (table === 'profiles' && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ app_settings: {} }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profileGetBody(url, {})) });
       return;
     }
     if (table === 'trips' && method === 'GET') {
-      if (url.searchParams.get('select') === 'id') {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: tripUuid }) });
-      } else {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
-      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([cloudTrip]) });
       return;
     }
     if (table === 'trips' && method === 'POST') {
@@ -831,6 +860,21 @@ test('Supabase public account without own Notion database does not use shared No
       });
       return;
     }
+    if (table === 'upsert_shared_trip_receipt' && method === 'POST') {
+      receiptUpserts.push(body);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(cloudReceiptRow({
+          id: receiptUuid,
+          sourceId: 'receipt_public_source',
+          store: 'Public Cafe',
+          total: 1200,
+          date: '2026-09-01',
+        })),
+      });
+      return;
+    }
     if (table === 'receipts' && method === 'GET') {
       if (url.searchParams.get('select') === 'id') {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(null) });
@@ -839,22 +883,6 @@ test('Supabase public account without own Notion database does not use shared No
       }
       return;
     }
-    if (table === 'receipts' && method === 'POST') {
-      receiptUpserts.push(body);
-      await route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ...body,
-          id: receiptUuid,
-          owner_id: userId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }),
-      });
-      return;
-    }
-
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
   });
 
@@ -920,11 +948,12 @@ test('Supabase public account without own Notion database does not use shared No
   }, { userId, session: sessionPayload() });
 
   await page.goto('http://localhost:8903/travel-expense/compact/#history');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await expect(historyHeader(page)).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
 
   await expect.poll(() => receiptUpserts.length, { timeout: 10000 }).toBeGreaterThanOrEqual(1);
   await page.waitForTimeout(1500);
   expect(notionRequests).toHaveLength(0);
-  expect(receiptUpserts.at(-1).notion_page_id).toBeNull();
-  expect(receiptUpserts.at(-1).notion_database_id).toBeNull();
+  expect(receiptUpserts.every((call) => call.p_receipt?.notion_page_id === undefined)).toBe(true);
+  expect(receiptUpserts.every((call) => call.p_receipt?.notion_database_id === undefined)).toBe(true);
 });

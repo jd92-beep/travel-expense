@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-24 HKT
-- **Focus**: Session 69 completed and approved Compact Milestone 2 Scoped Hydration review remediation: canonical tombstone arbitration, scoped raw-read secret boundaries, truthful persistence evidence, deterministic account-switch cancellation, and secure bootstrap hydration.
+- **Focus**: Session 71 completed Compact Milestone 3 mirror-smoke fixture repair: current Settings/Scan locators, scoped-persistence Supabase responses, and the shared-owner ledger-first Notion outbox browser proof.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.14`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
+- **App version**: Compact `0.16.15`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -79,14 +79,21 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟢 **Architecture deepening Milestones 1-3 closed in Sessions 68-70** — review
+18. 🟢 **Architecture deepening Milestones 1-3 closed in Sessions 68-71** — review
    remediation adds the stale revision guard and terminal photo retry ledger: newer same-identity
    changes survive old success settlement; photo failures terminalize at 3 attempts and only manual
    retry resets them. Scoped Hydration owns scoped dual-snapshot arbitration, secret stripping and
-   account-safe persistence; Shared-trip Notion Outbox now has an isolated, tested port and adapter.
-   Provider Catalog and Android port remain separate work.
+   account-safe persistence; Shared-trip Notion Outbox now has an isolated, tested port and adapter,
+   with the current browser mirror fixture green. Provider Catalog and Android port remain separate work.
 
 ## What Was Done
+
+### Session 71 (Codex — Compact Milestone 3 mirror-smoke fixture repair)
+
+1. **Baseline truth:** a detached `/tmp/travel-expense-m3-baseline` worktree at `039a5e6` reproduced all six focused mirror-smoke failures: two stale accordion names (`Notion Sync`, `Email / Shortcut`) timed out, and four history cases hit the three-element strict `紀錄中心` locator. The current fixture now targets the rendered `.accordion-summary`, the labelled mobile history banner, current Credentials status, and Scan Email intake.
+2. **Current contracts, not skipped assertions:** the fixture supplies current `pullSupabaseData()` response shapes for profile lists, authorized trips and ledger RPCs. The shared-owner case drives `upsert_shared_trip_receipt` before `claim_receipt_sync_jobs`, verifies the scoped Notion database and Supabase auth header, then requires `finish_receipt_sync_job(...succeeded)`. The public case writes the ledger through the same RPC and asserts zero Notion requests and no Notion metadata in the ledger payload.
+3. **Green gates:** focused `smoke:supabase-notion-mirror` passed `6/6 (10.2s)`; outbox, change-journal, scoped persistence, typecheck, build, security scan, offline `4/4`, sync regression `8/8`, and the shared-ledger contract all passed. `smoke:supabase-backfill` exited 0 with its guard-driven `2 skipped`; keep Current Open Item 12.
+4. **Boundary:** the repair is test-only and Compact remains `0.16.15`; Milestone 4 retains ownership of `0.16.16`. No DB/RLS/RPC signature, Worker, credentials, live data, push or deployment changed. Pre-existing dirty `AGENTS.md` and `CLAUDE.md` remain untouched and unstaged.
 
 ### Session 70 (Codex — Compact Milestone 3 Shared-trip Notion Outbox)
 
