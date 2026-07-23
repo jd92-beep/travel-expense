@@ -3,7 +3,8 @@ import { activeTrip } from '../domain/trip/normalize';
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
 import { recordClientHeartbeat } from './clientHeartbeat';
-import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
+import { archiveSupabaseReceipt, createSharedTripOutboxSupabaseAdapter, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
+import { drainSharedTripOutbox } from './sharedTripNotionOutbox';
 import { filterSupersededTripQueue, isReceiptTombstoned, mergePulledData, rawReceiptSourceId, receiptSourceTombstoneKey } from './syncMerge';
 import { enqueueChange, settleChange, type JournalOutcome } from './changeJournal';
 import { MAX_SYNC_RETRY_ATTEMPTS } from './constants';
@@ -822,7 +823,21 @@ export function useSyncEngine(
       const cloudSession = hasSupabaseSession(supabaseSessionRef.current) ? supabaseSessionRef.current : null;
       if (cloudSession && canUseNotionMirror(stateRef.current, true, cloudSession.user?.email || null)) {
         await yieldToStateFlush();
-        const outbox = await drainSharedTripNotionOutbox(cloudSession, stateRef.current, pushReceipt, archiveReceipt).catch(() => null);
+        const tripIds = (stateRef.current.trips || [])
+          .filter((trip) => trip.supabaseId
+            && (trip.sharing?.role === 'owner' || trip.sharing?.role === 'admin'))
+          .map((trip) => trip.supabaseId as string);
+        const outbox = await drainSharedTripOutbox({
+          state: stateRef.current,
+          tripIds,
+          workerId: cloudSession.user.id,
+        }, {
+          supabase: createSharedTripOutboxSupabaseAdapter(cloudSession, stateRef.current),
+          notion: {
+            async upsert(notionState, receipt) { await pushReceipt(notionState, receipt); },
+            archive: archiveReceipt,
+          },
+        }).catch(() => null);
         if (outbox && (outbox.processed || outbox.failed)) {
           console.log(`[SyncEngine] Notion outbox drained: ${outbox.processed} ok, ${outbox.failed} failed`);
         }

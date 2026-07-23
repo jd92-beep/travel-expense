@@ -79,13 +79,23 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟢 **Architecture deepening Milestones 1-2 closed in Sessions 68-69** — review
+18. 🟢 **Architecture deepening Milestones 1-3 closed in Sessions 68-70** — review
    remediation adds the stale revision guard and terminal photo retry ledger: newer same-identity
    changes survive old success settlement; photo failures terminalize at 3 attempts and only manual
-   retry resets them. Scoped Hydration now owns scoped dual-snapshot arbitration, secret stripping
-   and account-safe persistence. Milestones 3-4 and the Android port remain separate work.
+   retry resets them. Scoped Hydration owns scoped dual-snapshot arbitration, secret stripping and
+   account-safe persistence; Shared-trip Notion Outbox now has an isolated, tested port and adapter.
+   Provider Catalog and Android port remain separate work.
 
 ## What Was Done
+
+### Session 70 (Codex — Compact Milestone 3 Shared-trip Notion Outbox)
+
+1. **Isolated shared-trip mirror orchestration:** extracted the bounded 5x20 shared-trip Notion job drain into `sharedTripNotionOutbox.ts`. The port deduplicates a repeated claim by job ID, maps each job to its explicit per-trip Notion backend, settles missing receipts as succeeded, continues after individual failures, bounds error text to 300 characters, and treats `finish_receipt_sync_job` failure as a failed result.
+2. **Supabase adapter only:** `supabase.ts` now owns the unchanged `claim_receipt_sync_jobs` / `finish_receipt_sync_job` RPC calls, receipt lookup, signed Storage URL, FileReader conversion and session photo dedupe. Photo lookup remains best-effort: missing, oversized, signed-URL and fetch failures return `null`, allowing the text receipt to mirror; photo IDs are marked only after the Notion upsert succeeds.
+3. **Sync wiring:** `useSyncEngine` computes only owner/admin Supabase trip IDs and passes the existing `pushReceipt` / `archiveReceipt` callbacks through the new port. No DB/RLS/RPC signature, Worker, credential or live-data change occurred. Compact is `0.16.15`.
+4. **TDD evidence:** new `test:shared-trip-outbox` first failed with `ERR_MODULE_NOT_FOUND`, then passed. It covers empty queues, update/delete success, continuation after Notion failure, duplicate claims, photo pass-through, and completion failure. `test:change-journal`, `test:scoped-persistence`, typecheck, build, security scan, offline (`4 passed`), sync regression (`8 passed`), and the root shared-ledger contract passed.
+5. **Known gate status:** `smoke:supabase-backfill` ran as `2 skipped` without its optional fixture/server. Existing `smoke:supabase-notion-mirror` remains red before any Milestone 3 test change: three cases timeout in `setAccordion`, and three have the pre-existing strict `getByText('紀錄中心')` locator ambiguity (three matching elements). The stale fixture was not weakened or edited. `AGENTS.md` and `CLAUDE.md` were pre-existing dirty files and remain untouched and unstaged.
+
 
 ### Session 69 (Codex — Compact Milestone 2 Scoped Hydration)
 

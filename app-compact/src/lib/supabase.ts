@@ -4,6 +4,7 @@ import { activeTrip, normalizeItinerary, normalizeTripIntelligence, stampReceipt
 import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
 import { tripIntelligenceColumns } from '../domain/trip/context';
 import { DEFAULT_NOTION_DB, ITINERARY, normalizeAiModelSettings } from './constants';
+import type { MirrorJob, SharedTripOutboxAdapters } from './sharedTripNotionOutbox';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, ReceiptPayer, ReceiptSplit, ReceiptTombstone, SplitType, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
 
 const VALID_CATEGORIES = new Set(['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'other']);
@@ -15,9 +16,7 @@ const RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS = 15 * 60;
 // and go straight to the user's own row.
 const rehomedTripIds = new Map<string, string>();
 
-// Receipts whose photo has already been mirrored to Notion this session (see
-// drainSharedTripNotionOutbox) — avoids re-downloading/re-uploading the same
-// image when repeat update jobs arrive for one receipt.
+// Receipts whose photo has already been mirrored to Notion this session.
 const notionPhotoMirroredReceipts = new Set<string>();
 
 function withTimeout<T>(promise: PromiseLike<T>, ms = 30000): Promise<T> {
@@ -1285,160 +1284,103 @@ export async function uploadReceiptPhoto(
   return { storagePath, publicUrl: urlData.signedUrl };
 }
 
-// Opportunistic compatibility drainer for older deployments. The server worker is authoritative;
-// this owner/admin path uses the same row locks and remains a bounded online fallback.
-export async function drainSharedTripNotionOutbox(
+function rowToMirrorJob(row: Record<string, unknown>): MirrorJob {
+  const payload = row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+    ? row.payload as Record<string, unknown>
+    : {};
+  return {
+    id: String(row.id || ''),
+    tripId: String(row.trip_id || ''),
+    receiptId: String(row.receipt_id || ''),
+    operation: row.operation === 'delete' ? 'delete' : 'update',
+    payload: typeof payload.sourceId === 'string' ? { sourceId: payload.sourceId } : {},
+  };
+}
+
+async function loadMirrorReceipt(
+  supabase: SupabaseClient,
   session: Session,
   state: AppState,
-  push: (state: AppState, receipt: Receipt) => Promise<Receipt>,
-  archive: (state: AppState, receipt: Receipt) => Promise<void>,
-): Promise<{ processed: number; failed: number }> {
-  const supabase = getSupabaseClient();
-  if (!supabase) return { processed: 0, failed: 0 };
+  job: MirrorJob,
+): Promise<Receipt | null> {
+  if (!job.receiptId) return null;
+  const trip = (state.trips || []).find((candidate) =>
+    candidate.supabaseId === job.tripId || candidate.id === job.tripId);
+  if (!trip) return null;
+  const { data, error } = await withTimeout(
+    supabase.from('receipts').select('*').eq('id', job.receiptId).is('deleted_at', null).maybeSingle(),
+  );
+  if (error) throw error;
+  return data ? rowToReceiptForTrip(data as SupabaseReceiptRow, state, trip, undefined, session.user.id) : null;
+}
+
+async function loadMirrorPhotoDataUrl(supabase: SupabaseClient, receiptId: string): Promise<string | null> {
+  if (!receiptId || notionPhotoMirroredReceipts.has(receiptId)) return null;
   try {
-    const adminTripUuids = (state.trips || [])
-      .filter((trip) => trip.supabaseId && (trip.sharing?.role === 'owner' || trip.sharing?.role === 'admin'))
-      .map((trip) => cleanUuid(trip.supabaseId))
-      .filter((id): id is string => !!id);
-    if (!adminTripUuids.length) return { processed: 0, failed: 0 };
-
-    // Resolve each shared trip's Notion backend database (explicit — never fall back to a default DB).
-    const { data: backendRows, error: backendError } = await withTimeout(
-      supabase.from('trip_backend_links').select('trip_id,notion_database_ref').in('trip_id', adminTripUuids),
+    const { data: photoRow } = await withTimeout(
+      supabase.from('receipt_photos').select('storage_path').eq('receipt_id', receiptId).maybeSingle(),
     );
-    if (backendError) return { processed: 0, failed: 0 };
-    const dbByTrip = new Map<string, string>();
-    for (const row of (backendRows || []) as { trip_id: string; notion_database_ref: string | null }[]) {
-      if (row.notion_database_ref) dbByTrip.set(row.trip_id, row.notion_database_ref);
-    }
-    if (!dbByTrip.size) return { processed: 0, failed: 0 };
+    const storagePath = String((photoRow as { storage_path?: string } | null)?.storage_path || '');
+    if (!storagePath) return null;
+    const { data: signed } = await withTimeout(
+      supabase.storage.from('receipt-photos').createSignedUrl(storagePath, RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS),
+    );
+    if (!signed?.signedUrl) return null;
+    const response = await fetch(signed.signedUrl);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    if (blob.size <= 0 || blob.size > 6_000_000) return null;
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
 
-    const tripIdArray = [...dbByTrip.keys()];
-
-    const finishJob = async (jobId: string, status: 'succeeded' | 'failed', error?: unknown) => {
+export function createSharedTripOutboxSupabaseAdapter(
+  session: Session,
+  state: AppState,
+): SharedTripOutboxAdapters['supabase'] {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error('Supabase client unavailable');
+  return {
+    async listBackends(tripIds) {
+      const { data, error } = await withTimeout(
+        supabase.from('trip_backend_links').select('trip_id,notion_database_ref').in('trip_id', tripIds),
+      );
+      if (error) throw error;
+      return new Map((data || [])
+        .filter((row) => row.notion_database_ref)
+        .map((row) => [row.trip_id, row.notion_database_ref]));
+    },
+    async claim(tripIds, workerId, limit) {
+      const { data, error } = await withTimeout(supabase.rpc('claim_receipt_sync_jobs', {
+        p_trip_ids: tripIds,
+        p_provider: 'notion',
+        p_worker: workerId,
+        p_limit: limit,
+      }));
+      if (error) throw error;
+      return (data || []).map(rowToMirrorJob);
+    },
+    loadReceipt: (job) => loadMirrorReceipt(supabase, session, state, job),
+    loadPhoto: (receiptId) => loadMirrorPhotoDataUrl(supabase, receiptId),
+    markPhotoMirrored(receiptId) {
+      notionPhotoMirroredReceipts.add(receiptId);
+    },
+    async finish(jobId, status, error) {
       const result = await withTimeout(supabase.rpc('finish_receipt_sync_job', {
         p_job_id: jobId,
         p_status: status,
-        p_error: status === 'failed' ? String((error as Error)?.message || error || 'Notion sync failed').slice(0, 300) : null,
+        p_error: status === 'failed' ? error || 'Notion sync failed' : null,
       }));
       if (result.error) throw result.error;
-    };
-
-    let processed = 0;
-    let failed = 0;
-    // Up to 5 claim rounds per drain (100 jobs): a backlog — e.g. after the grants
-    // outage or an offline stretch — previously trickled out at 20 jobs per whole
-    // sync cycle. Stop early when a round comes back short (queue empty).
-    for (let round = 0; round < 5; round++) {
-    const { data: rpcJobs, error: rpcError } = await withTimeout(
-      supabase.rpc('claim_receipt_sync_jobs', {
-        p_trip_ids: tripIdArray,
-        p_provider: 'notion',
-        p_worker: session.user.id,
-        p_limit: 20,
-      }),
-    );
-    if (rpcError) break;
-    const jobs = (rpcJobs || []) as Array<Record<string, any>>;
-    if (!jobs?.length) break;
-    for (const job of jobs as Array<Record<string, any>>) {
-      const notionDb = dbByTrip.get(job.trip_id);
-      const trip = (state.trips || []).find((candidate) => cleanUuid(candidate.supabaseId) === job.trip_id);
-      if (!notionDb || !trip) continue;
-      try {
-        if (job.operation === 'delete') {
-          const sourceId = String(job.payload?.sourceId || '').trim();
-          const receiptId = String(job.receipt_id || '').trim();
-          const notionState: AppState = {
-            ...state,
-            activeTripId: trip.id,
-            trips: (state.trips || []).map((candidate) =>
-              candidate.id === trip.id ? { ...candidate, notionDb } : candidate
-            ),
-          };
-          const tombstone = {
-            id: receiptId || sourceId,
-            sourceId: sourceId || receiptId,
-            tripId: trip.id,
-            store: '',
-            date: trip.startDate || state.tripDateRange.start,
-            total: 0,
-            category: 'other' as const,
-            payment: 'cash' as const,
-          } as Receipt;
-          await archive(notionState, tombstone);
-          await finishJob(job.id, 'succeeded');
-          processed += 1;
-          continue;
-        }
-        const { data: receiptRow, error: receiptError } = await withTimeout(
-          supabase.from('receipts').select('*').eq('id', job.receipt_id).is('deleted_at', null).maybeSingle(),
-        );
-        if (receiptError) throw receiptError;
-        if (!receiptRow) {
-          await finishJob(job.id, 'succeeded');
-          processed += 1;
-          continue;
-        }
-        const receipt = rowToReceiptForTrip(receiptRow as SupabaseReceiptRow, state, trip, undefined, session.user.id);
-        // Member receipts exist here only as Supabase rows — the draining owner's device
-        // never held the photo locally, so pushReceipt's photoThumb path would silently
-        // mirror the record WITHOUT its image. Backfill it from Storage (trip members can
-        // sign each other's photos — the same policy the pull path relies on) so the
-        // broker's native Notion upload attaches it. Best-effort: a photo failure never
-        // fails the record's mirror job.
-        if (!receipt.photoThumb && !notionPhotoMirroredReceipts.has(String(job.receipt_id))) {
-          try {
-            const { data: photoRow } = await withTimeout(
-              supabase.from('receipt_photos').select('storage_path').eq('receipt_id', job.receipt_id).maybeSingle(),
-            );
-            const storagePath = String((photoRow as { storage_path?: string } | null)?.storage_path || '');
-            if (storagePath) {
-              const { data: signed } = await withTimeout(
-                supabase.storage.from('receipt-photos').createSignedUrl(storagePath, RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS),
-              );
-              if (signed?.signedUrl) {
-                const res = await fetch(signed.signedUrl);
-                if (res.ok) {
-                  const blob = await res.blob();
-                  if (blob.size > 0 && blob.size <= 6_000_000) {
-                    receipt.photoThumb = await new Promise<string>((resolve, reject) => {
-                      const reader = new FileReader();
-                      reader.onload = () => resolve(String(reader.result));
-                      reader.onerror = () => reject(reader.error);
-                      reader.readAsDataURL(blob);
-                    });
-                  }
-                }
-              }
-            }
-          } catch {
-            // ponytail: photo mirror is best-effort; the record row still mirrors.
-          }
-        }
-        const notionState: AppState = {
-          ...state,
-          activeTripId: trip.id,
-          trips: (state.trips || []).map((candidate) => candidate.id === trip.id ? { ...candidate, notionDb } : candidate),
-        };
-        await push(notionState, { ...receipt, tripId: trip.id });
-        // Session-scoped dedupe: repeat UPDATE jobs for the same receipt would re-upload
-        // the identical image each time (Notion replaces the files property, so no
-        // duplicates appear — this just avoids the wasted upload).
-        if (receipt.photoThumb) notionPhotoMirroredReceipts.add(String(job.receipt_id));
-        await finishJob(job.id, 'succeeded');
-        processed += 1;
-      } catch (err) {
-        failed += 1;
-        await finishJob(job.id, 'failed', err).catch(() => {});
-      }
-    }
-    if (jobs.length < 20) break;
-    }
-    return { processed, failed };
-  } catch {
-    return { processed: 0, failed: 0 };
-  }
+    },
+  };
 }
 
 export async function archiveSupabaseReceipt(session: Session, state: AppState, receipt: Receipt): Promise<void> {
