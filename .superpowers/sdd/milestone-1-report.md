@@ -73,7 +73,7 @@ This report remains uncommitted under `.superpowers/sdd/`. Existing dirty `AGENT
 ### Status And Head
 
 - Status: **DONE** — both Important findings and both related Minor findings are fixed and verified locally.
-- Working head before this remediation commit: `c0e39a1` on `main`; no push or deploy was run.
+- Working head before remediation: `c0e39a1` on `main`; remediation code/test commit: `4e043b7 fix: preserve compact change journal retries`. No push or deploy was run.
 
 ### Fix Details
 
@@ -118,6 +118,7 @@ This report remains uncommitted under `.superpowers/sdd/`. Existing dirty `AGENT
 | `npm run smoke:offline` | 0 | `4 passed (19.2s)`. |
 | `git diff --check` | 0 | No output. |
 | `node .gitnexus/run.cjs detect-changes -r /Users/tommy/Documents/Codex/travel-expense` | 0 | High impact as recorded above; expected task symbols only plus pre-existing dirty instruction files. |
+| `git commit -m "fix: preserve compact change journal retries"` | 0 | Created `4e043b7` with the four code/test files and this report. |
 
 ### Self Review
 
