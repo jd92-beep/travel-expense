@@ -5,50 +5,6 @@ begin;
 set local lock_timeout = '5s';
 set local statement_timeout = '30s';
 
-create or replace function public.claim_receipt_sync_jobs(
-  p_trip_ids uuid[],
-  p_provider text default 'notion',
-  p_worker text default null,
-  p_limit integer default 20
-)
-returns setof public.receipt_sync_jobs
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_user uuid := auth.uid();
-begin
-  if v_user is null then raise exception 'Authentication required' using errcode = '28000'; end if;
-  if p_provider <> 'notion' then raise exception 'Unsupported sync provider' using errcode = '22023'; end if;
-  if p_worker is not null and btrim(p_worker) <> '' and btrim(p_worker) <> v_user::text then
-    raise exception 'Worker identity must match authenticated user' using errcode = '42501';
-  end if;
-
-  return query
-  with candidate as (
-    select j.id
-    from public.receipt_sync_jobs j
-    where j.provider = p_provider
-      and j.trip_id = any(coalesce(p_trip_ids, array[]::uuid[]))
-      and j.status in ('pending', 'failed', 'processing')
-      and j.next_attempt_at <= clock_timestamp()
-      and j.attempts < 5
-      and (j.locked_at is null or j.locked_at < clock_timestamp() - interval '120 seconds')
-      and private.can_admin_trip(j.trip_id)
-    order by j.next_attempt_at, j.id
-    limit greatest(1, least(coalesce(p_limit, 20), 50))
-    for update skip locked
-  )
-  update public.receipt_sync_jobs j
-  set status = 'processing', locked_at = clock_timestamp(), locked_by = v_user::text,
-      last_error = null, updated_at = clock_timestamp()
-  from candidate
-  where j.id = candidate.id
-  returning j.*;
-end;
-$$;
-
 create or replace function public.claim_receipt_sync_jobs_worker(
   p_worker text,
   p_limit integer default 10
@@ -152,12 +108,8 @@ $$;
 alter function public.claim_receipt_sync_jobs_worker(text, integer)
   owner to receipt_sync_owner;
 
-revoke all on function public.claim_receipt_sync_jobs(uuid[], text, text, integer)
-  from public, anon, authenticated, service_role;
 revoke all on function public.claim_receipt_sync_jobs_worker(text, integer)
   from public, anon, authenticated;
-grant execute on function public.claim_receipt_sync_jobs(uuid[], text, text, integer)
-  to authenticated, service_role;
 grant execute on function public.claim_receipt_sync_jobs_worker(text, integer)
   to service_role;
 

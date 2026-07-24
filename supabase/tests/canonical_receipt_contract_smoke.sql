@@ -280,7 +280,7 @@ insert into public.receipt_sync_jobs (
     '98200000-0000-4000-8000-000000000001',
     'notion', 'upsert', 'processing', 2,
     clock_timestamp() - interval '1 second', clock_timestamp() - interval '121 seconds',
-    'browser-expired-worker', '{"sourceId":"browser-stale-processing"}'::jsonb
+    '98200000-0000-4000-8000-000000000001', '{"sourceId":"browser-stale-processing"}'::jsonb
   ),
   (
     '98500000-0000-4000-8000-000000000003',
@@ -306,7 +306,7 @@ insert into public.receipt_sync_jobs (
     '98300000-0000-4000-8000-000000000001',
     '98200000-0000-4000-8000-000000000001',
     'notion', 'upsert', 'pending', 0,
-    clock_timestamp() + interval '1 minute', null, null,
+    clock_timestamp() + interval '10 minutes', null, null,
     '{"sourceId":"browser-future-pending"}'::jsonb
   );
 
@@ -327,37 +327,150 @@ begin
     10
   ) job;
 
-  if v_claimed <> array['98500000-0000-4000-8000-000000000002'::uuid] then
-    raise exception 'browser stale-processing claim is wrong: %', v_claimed;
+  if cardinality(v_claimed) <> 0 then
+    raise exception 'browser claim reclaimed protected processing work: %', v_claimed;
   end if;
   if not exists (
     select 1 from public.receipt_sync_jobs
     where id = '98500000-0000-4000-8000-000000000002'
       and status = 'processing'
+      and attempts = 2
+      and next_attempt_at <= clock_timestamp()
+      and locked_at < clock_timestamp() - interval '120 seconds'
       and locked_by = '98200000-0000-4000-8000-000000000001'
   ) then
-    raise exception 'browser expired processing job was not reclaimed';
+    raise exception 'browser claim changed or lost its stale processing lease';
   end if;
-  if exists (
+  if not exists (
     select 1 from public.receipt_sync_jobs
     where id = '98500000-0000-4000-8000-000000000003'
-      and (status <> 'processing' or locked_by <> 'browser-fresh-worker')
+      and status = 'processing'
+      and attempts = 2
+      and next_attempt_at <= clock_timestamp()
+      and locked_at > clock_timestamp() - interval '120 seconds'
+      and locked_by = 'browser-fresh-worker'
   ) then
-    raise exception 'browser fresh processing lease was reclaimed';
+    raise exception 'browser fresh processing lease state is wrong or missing';
   end if;
-  if exists (
+  if not exists (
     select 1 from public.receipt_sync_jobs
     where id = '98500000-0000-4000-8000-000000000004'
-      and (status <> 'processing' or attempts <> 5 or locked_by <> 'browser-exhausted-worker')
+      and status = 'processing'
+      and attempts = 5
+      and next_attempt_at <= clock_timestamp()
+      and locked_at < clock_timestamp() - interval '120 seconds'
+      and locked_by = 'browser-exhausted-worker'
   ) then
-    raise exception 'browser exhausted processing job was reclaimed';
+    raise exception 'browser exhausted processing lease state is wrong or missing';
   end if;
-  if exists (
+  if not exists (
     select 1 from public.receipt_sync_jobs
     where id = '98500000-0000-4000-8000-000000000005'
-      and status <> 'pending'
+      and status = 'pending'
+      and attempts = 0
+      and next_attempt_at > clock_timestamp()
+      and locked_at is null
+      and locked_by is null
   ) then
-    raise exception 'browser future retry job was reclaimed';
+    raise exception 'browser future retry state is wrong or missing';
+  end if;
+end;
+$$;
+
+reset role;
+
+set local role service_role;
+
+do $$
+declare
+  v_claim jsonb;
+begin
+  v_claim := public.claim_receipt_sync_jobs_worker(
+    'receipt-sync:browser-fence:12345678', 10
+  );
+
+  if jsonb_array_length(v_claim) <> 1
+    or v_claim -> 0 ->> 'id' <> '98500000-0000-4000-8000-000000000002'
+    or v_claim -> 0 -> 'payload' ->> 'sourceId' <> 'browser-stale-processing' then
+    raise exception 'worker cross-path reclaim is wrong: %', v_claim;
+  end if;
+  if not exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '98500000-0000-4000-8000-000000000002'
+      and status = 'processing'
+      and attempts = 2
+      and next_attempt_at <= clock_timestamp()
+      and locked_at > clock_timestamp() - interval '120 seconds'
+      and locked_by = 'receipt-sync:browser-fence:12345678'
+  ) then
+    raise exception 'worker did not replace the stale browser lock with its unique lease';
+  end if;
+  if not exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '98500000-0000-4000-8000-000000000003'
+      and status = 'processing'
+      and attempts = 2
+      and next_attempt_at <= clock_timestamp()
+      and locked_at > clock_timestamp() - interval '120 seconds'
+      and locked_by = 'browser-fresh-worker'
+  ) then
+    raise exception 'worker changed or lost the fresh processing lease';
+  end if;
+  if not exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '98500000-0000-4000-8000-000000000004'
+      and status = 'processing'
+      and attempts = 5
+      and next_attempt_at <= clock_timestamp()
+      and locked_at < clock_timestamp() - interval '120 seconds'
+      and locked_by = 'browser-exhausted-worker'
+  ) then
+    raise exception 'worker changed or lost the exhausted processing lease';
+  end if;
+  if not exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '98500000-0000-4000-8000-000000000005'
+      and status = 'pending'
+      and attempts = 0
+      and next_attempt_at > clock_timestamp()
+      and locked_at is null
+      and locked_by is null
+  ) then
+    raise exception 'worker changed or lost the future retry';
+  end if;
+end;
+$$;
+
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '98200000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+
+do $$
+declare
+  v_blocked boolean := false;
+begin
+  begin
+    perform public.finish_receipt_sync_job(
+      '98500000-0000-4000-8000-000000000002',
+      'succeeded',
+      null
+    );
+  exception when sqlstate '40001' then
+    v_blocked := true;
+  end;
+  if not v_blocked then
+    raise exception 'browser finish accepted a job fenced by the unique server worker';
+  end if;
+  if not exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '98500000-0000-4000-8000-000000000002'
+      and status = 'processing'
+      and attempts = 2
+      and locked_by = 'receipt-sync:browser-fence:12345678'
+  ) then
+    raise exception 'failed browser finish changed or lost the server-worker lease';
   end if;
 end;
 $$;

@@ -16,6 +16,8 @@ const adminOperationKernelMigration =
   'supabase/migrations/20260710187000_admin_operation_kernel.sql';
 const adminPasskeyRemovalMigration =
   'supabase/migrations/20260712123000_admin_passkey_removal.sql';
+const receiptSyncWorkerContractMigration =
+  'supabase/migrations/20260710191000_receipt_sync_worker_contract.sql';
 const staleReceiptSyncLeaseRecoveryMigration =
   'supabase/migrations/20260724110000_reclaim_stale_receipt_sync_processing_leases.sql';
 
@@ -30,6 +32,9 @@ const receiptPhotoCompatibilitySql = files.includes(receiptPhotoCompatibilityMig
   : '';
 const staleReceiptSyncLeaseRecoverySql = files.includes(staleReceiptSyncLeaseRecoveryMigration)
   ? readFileSync(join(repoRoot, staleReceiptSyncLeaseRecoveryMigration), 'utf8')
+  : '';
+const receiptSyncWorkerContractSql = files.includes(receiptSyncWorkerContractMigration)
+  ? readFileSync(join(repoRoot, receiptSyncWorkerContractMigration), 'utf8')
   : '';
 
 const requiredPatterns = [
@@ -209,46 +214,33 @@ const stagedReceiptPhotoPatterns = [
   },
 ];
 
-const staleReceiptSyncLeaseRecoveryPatterns = [
-  {
-    name: 'stale receipt-sync lease recovery migration is transactional with local timeouts',
-    re: /\bbegin;[\s\S]*?set local lock_timeout = '5s';[\s\S]*?set local statement_timeout = '30s';[\s\S]*?commit;\s*$/i,
-  },
-  {
-    name: 'browser claim keeps its signature, SECURITY DEFINER, empty search path, stale processing recovery, due time, attempts cap, and row lock',
-    re: /create or replace function public\.claim_receipt_sync_jobs\(\s*p_trip_ids uuid\[\],\s*p_provider text default 'notion',\s*p_worker text default null,\s*p_limit integer default 20\s*\)[\s\S]*?returns setof public\.receipt_sync_jobs\s*language plpgsql\s*security definer\s*set search_path = ''[\s\S]*?where j\.provider = p_provider[\s\S]*?and j\.trip_id = any\(coalesce\(p_trip_ids, array\[\]::uuid\[\]\)\)[\s\S]*?and j\.status in \('pending', 'failed', 'processing'\)[\s\S]*?and j\.next_attempt_at <= clock_timestamp\(\)[\s\S]*?and j\.attempts < 5[\s\S]*?and \(j\.locked_at is null or j\.locked_at < clock_timestamp\(\) - interval '120 seconds'\)[\s\S]*?and private\.can_admin_trip\(j\.trip_id\)[\s\S]*?for update skip locked/i,
-  },
-  {
-    name: 'worker claim keeps its signature, SECURITY DEFINER, empty search path, stale processing recovery, due time, attempts cap, payload joins, and row lock',
-    re: /create or replace function public\.claim_receipt_sync_jobs_worker\(\s*p_worker text,\s*p_limit integer default 10\s*\)[\s\S]*?returns jsonb\s*language plpgsql\s*security definer\s*set search_path = ''[\s\S]*?with candidate as materialized \([\s\S]*?where job\.provider = 'notion'[\s\S]*?and job\.status in \('pending', 'failed', 'processing'\)[\s\S]*?and job\.next_attempt_at <= clock_timestamp\(\)[\s\S]*?and job\.attempts < 5[\s\S]*?and \(job\.locked_at is null or job\.locked_at < clock_timestamp\(\) - interval '120 seconds'\)[\s\S]*?and receipt\.visibility = 'trip'[\s\S]*?and link\.status = 'active'[\s\S]*?and link\.sync_mode = 'dual_write'[\s\S]*?for update of job skip locked[\s\S]*?jsonb_build_object\([\s\S]*?'databaseRef', link\.notion_database_ref[\s\S]*?'receipt', jsonb_build_object/i,
-  },
-  {
-    name: 'worker claim owner remains receipt_sync_owner',
-    re: /alter function public\.claim_receipt_sync_jobs_worker\(text, integer\)\s*owner to receipt_sync_owner;/i,
-  },
-  {
-    name: 'browser claim revokes default execution before its existing authenticated and service-role grant',
-    re: /revoke all on function public\.claim_receipt_sync_jobs\(uuid\[\], text, text, integer\)\s*from public, anon, authenticated, service_role;[\s\S]*?grant execute on function public\.claim_receipt_sync_jobs\(uuid\[\], text, text, integer\)\s*to authenticated, service_role;/i,
-  },
-  {
-    name: 'worker claim revokes browser execution before its existing service-role grant',
-    re: /revoke all on function public\.claim_receipt_sync_jobs_worker\(text, integer\)\s*from public, anon, authenticated;[\s\S]*?grant execute on function public\.claim_receipt_sync_jobs_worker\(text, integer\)\s*to service_role;/i,
-  },
-];
-
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function executeGrantRoles(sql, signature) {
-  const re = new RegExp(
-    `grant\\s+execute\\s+on\\s+function\\s+${escapeRegExp(signature)}\\s+to\\s+([^;]+);`,
-    'gi',
-  );
-  return [...sql.matchAll(re)]
-    .flatMap((match) => match[1].split(','))
-    .map((role) => role.trim().toLowerCase())
-    .sort();
+function stripSqlComments(sql) {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/--[^\r\n]*/g, '');
+}
+
+function extractFunctionStatement(sql, functionName) {
+  const match = new RegExp(
+    `\\bcreate\\s+or\\s+replace\\s+function\\s+${escapeRegExp(functionName)}\\s*\\(`,
+    'i',
+  ).exec(sql);
+  if (!match) return null;
+  const end = sql.indexOf('\n$$;', match.index);
+  if (end === -1) return null;
+  return {
+    start: match.index,
+    end: end + 4,
+    sql: sql.slice(match.index, end + 4),
+  };
+}
+
+function normalizeSqlStatement(statement) {
+  return statement.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 const findings = [
@@ -257,46 +249,85 @@ const findings = [
     (item) => !item.re.test(receiptPhotoCompatibilitySql),
   ),
   ...stagedReceiptPhotoPatterns.filter((item) => !item.re.test(stagedSql)),
-  ...staleReceiptSyncLeaseRecoveryPatterns.filter(
-    (item) => !item.re.test(staleReceiptSyncLeaseRecoverySql),
-  ),
 ];
 
+const strippedStaleLeaseSql = stripSqlComments(staleReceiptSyncLeaseRecoverySql);
+const strippedWorkerContractSql = stripSqlComments(receiptSyncWorkerContractSql);
 const recreatedStaleLeaseFunctions = [
-  ...staleReceiptSyncLeaseRecoverySql.matchAll(
+  ...strippedStaleLeaseSql.matchAll(
     /create\s+or\s+replace\s+function\s+(public\.[a-z_][a-z0-9_]*)\s*\(/gi,
   ),
-].map((match) => match[1].toLowerCase()).sort();
+].map((match) => match[1].toLowerCase());
 if (
-  recreatedStaleLeaseFunctions.join(',')
-  !== 'public.claim_receipt_sync_jobs,public.claim_receipt_sync_jobs_worker'
+  recreatedStaleLeaseFunctions.length !== 1
+  || recreatedStaleLeaseFunctions[0] !== 'public.claim_receipt_sync_jobs_worker'
 ) {
   findings.push({
-    name: 'stale receipt-sync lease recovery migration replaces only the two claim functions',
+    name: 'stale receipt-sync lease recovery migration replaces only the worker claim function',
   });
 }
 
-if (/\b(?:alter\s+table|create\s+policy|drop\s+policy|create\s+trigger|drop\s+trigger)\b/i.test(staleReceiptSyncLeaseRecoverySql)) {
+if (/create\s+or\s+replace\s+function\s+public\.claim_receipt_sync_jobs\s*\(/i.test(strippedStaleLeaseSql)) {
   findings.push({
-    name: 'stale receipt-sync lease recovery migration does not change tables, RLS, or triggers',
+    name: 'stale receipt-sync lease recovery migration leaves the browser claim function absent',
   });
 }
 
-for (const { signature, roles } of [
-  {
-    signature: 'public.claim_receipt_sync_jobs(uuid[], text, text, integer)',
-    roles: ['authenticated', 'service_role'],
-  },
-  {
-    signature: 'public.claim_receipt_sync_jobs_worker(text, integer)',
-    roles: ['service_role'],
-  },
-]) {
-  if (executeGrantRoles(staleReceiptSyncLeaseRecoverySql, signature).join(',') !== roles.join(',')) {
+const recoveryWorkerFunction = extractFunctionStatement(
+  strippedStaleLeaseSql,
+  'public.claim_receipt_sync_jobs_worker',
+);
+const canonicalWorkerFunction = extractFunctionStatement(
+  strippedWorkerContractSql,
+  'public.claim_receipt_sync_jobs_worker',
+);
+if (!recoveryWorkerFunction || !canonicalWorkerFunction) {
+  findings.push({
+    name: 'worker claim function is available for mechanical source comparison',
+  });
+} else {
+  const scopedRecoverySelector =
+    "and job.status in ('pending', 'failed', 'processing')\n      and job.next_attempt_at";
+  const canonicalSelector =
+    "and job.status in ('pending', 'failed')\n      and job.next_attempt_at";
+  const normalizedRecoveryWorker = recoveryWorkerFunction.sql.replace(
+    scopedRecoverySelector,
+    canonicalSelector,
+  );
+  if (normalizedRecoveryWorker === recoveryWorkerFunction.sql) {
     findings.push({
-      name: `${signature} execute grant roles are not exact`,
+      name: 'worker claim adds processing only to the scoped candidate selector',
+    });
+  } else if (normalizedRecoveryWorker !== canonicalWorkerFunction.sql) {
+    findings.push({
+      name: 'worker claim matches canonical source after normalizing only the scoped status selector',
     });
   }
+}
+
+const maskedStaleLeaseSql = recoveryWorkerFunction
+  ? `${strippedStaleLeaseSql.slice(0, recoveryWorkerFunction.start)}
+__worker_claim_function__;
+${strippedStaleLeaseSql.slice(recoveryWorkerFunction.end)}`
+  : strippedStaleLeaseSql;
+const staleLeaseStatements = maskedStaleLeaseSql
+  .split(';')
+  .map(normalizeSqlStatement)
+  .filter(Boolean);
+const expectedStaleLeaseStatements = [
+  'begin',
+  "set local lock_timeout = '5s'",
+  "set local statement_timeout = '30s'",
+  '__worker_claim_function__',
+  'alter function public.claim_receipt_sync_jobs_worker(text, integer) owner to receipt_sync_owner',
+  'revoke all on function public.claim_receipt_sync_jobs_worker(text, integer) from public, anon, authenticated',
+  'grant execute on function public.claim_receipt_sync_jobs_worker(text, integer) to service_role',
+  'commit',
+];
+if (JSON.stringify(staleLeaseStatements) !== JSON.stringify(expectedStaleLeaseStatements)) {
+  findings.push({
+    name: 'stale receipt-sync lease recovery migration has the exact statement and privilege allowlist',
+  });
 }
 
 if (/\b(?:begin|commit)\s*;/i.test(receiptPhotoCompatibilitySql)) {

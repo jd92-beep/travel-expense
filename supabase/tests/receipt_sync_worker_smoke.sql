@@ -235,7 +235,7 @@ insert into public.receipt_sync_jobs (
     '99100000-0000-4000-8000-000000000001',
     '99000000-0000-4000-8000-000000000001',
     'notion', 'upsert', 'pending', 0,
-    clock_timestamp() + interval '1 minute', null, null,
+    clock_timestamp() + interval '10 minutes', null, null,
     '{"sourceId":"worker-future-pending"}'::jsonb
   );
 
@@ -259,30 +259,45 @@ begin
     select 1 from public.receipt_sync_jobs
     where id = '99300000-0000-4000-8000-000000000002'
       and status = 'processing'
+      and attempts = 2
+      and next_attempt_at <= clock_timestamp()
+      and locked_at > clock_timestamp() - interval '120 seconds'
       and locked_by = 'receipt-sync:edge-stale:12345678'
   ) then
-    raise exception 'worker expired processing job was not reclaimed';
+    raise exception 'worker reclaimed processing state is wrong or missing';
   end if;
-  if exists (
+  if not exists (
     select 1 from public.receipt_sync_jobs
     where id = '99300000-0000-4000-8000-000000000003'
-      and (status <> 'processing' or locked_by <> 'worker-fresh-lease')
+      and status = 'processing'
+      and attempts = 2
+      and next_attempt_at <= clock_timestamp()
+      and locked_at > clock_timestamp() - interval '120 seconds'
+      and locked_by = 'worker-fresh-lease'
   ) then
-    raise exception 'worker fresh processing lease was reclaimed';
+    raise exception 'worker fresh processing lease state is wrong or missing';
   end if;
-  if exists (
+  if not exists (
     select 1 from public.receipt_sync_jobs
     where id = '99300000-0000-4000-8000-000000000004'
-      and (status <> 'processing' or attempts <> 5 or locked_by <> 'worker-exhausted-lease')
+      and status = 'processing'
+      and attempts = 5
+      and next_attempt_at <= clock_timestamp()
+      and locked_at < clock_timestamp() - interval '120 seconds'
+      and locked_by = 'worker-exhausted-lease'
   ) then
-    raise exception 'worker exhausted processing job was reclaimed';
+    raise exception 'worker exhausted processing lease state is wrong or missing';
   end if;
-  if exists (
+  if not exists (
     select 1 from public.receipt_sync_jobs
     where id = '99300000-0000-4000-8000-000000000005'
-      and status <> 'pending'
+      and status = 'pending'
+      and attempts = 0
+      and next_attempt_at > clock_timestamp()
+      and locked_at is null
+      and locked_by is null
   ) then
-    raise exception 'worker future retry job was reclaimed';
+    raise exception 'worker future retry state is wrong or missing';
   end if;
 end;
 $$;
