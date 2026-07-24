@@ -230,5 +230,138 @@ end;
 $$;
 
 reset role;
+
+insert into public.receipts (
+  id, trip_id, owner_id, store, record_date, category, payment_method,
+  amount, currency, home_currency, source_id, status, visibility, split_mode,
+  record_kind, version, notion_sync_status
+) values
+  (
+    '98400000-0000-4000-8000-000000000002',
+    '98300000-0000-4000-8000-000000000001',
+    '98200000-0000-4000-8000-000000000001',
+    'Browser stale processing', '2026-07-01', 'food', 'cash',
+    10, 'JPY', 'HKD', 'browser-stale-processing', 'confirmed', 'trip', 'shared',
+    'expense', 1, 'pending'
+  ),
+  (
+    '98400000-0000-4000-8000-000000000003',
+    '98300000-0000-4000-8000-000000000001',
+    '98200000-0000-4000-8000-000000000001',
+    'Browser fresh processing', '2026-07-01', 'food', 'cash',
+    10, 'JPY', 'HKD', 'browser-fresh-processing', 'confirmed', 'trip', 'shared',
+    'expense', 1, 'pending'
+  ),
+  (
+    '98400000-0000-4000-8000-000000000004',
+    '98300000-0000-4000-8000-000000000001',
+    '98200000-0000-4000-8000-000000000001',
+    'Browser exhausted processing', '2026-07-01', 'food', 'cash',
+    10, 'JPY', 'HKD', 'browser-exhausted-processing', 'confirmed', 'trip', 'shared',
+    'expense', 1, 'pending'
+  ),
+  (
+    '98400000-0000-4000-8000-000000000005',
+    '98300000-0000-4000-8000-000000000001',
+    '98200000-0000-4000-8000-000000000001',
+    'Browser future pending', '2026-07-01', 'food', 'cash',
+    10, 'JPY', 'HKD', 'browser-future-pending', 'confirmed', 'trip', 'shared',
+    'expense', 1, 'pending'
+  );
+
+insert into public.receipt_sync_jobs (
+  id, receipt_id, trip_id, owner_id, provider, operation, status, attempts,
+  next_attempt_at, locked_at, locked_by, payload
+) values
+  (
+    '98500000-0000-4000-8000-000000000002',
+    '98400000-0000-4000-8000-000000000002',
+    '98300000-0000-4000-8000-000000000001',
+    '98200000-0000-4000-8000-000000000001',
+    'notion', 'upsert', 'processing', 2,
+    clock_timestamp() - interval '1 second', clock_timestamp() - interval '121 seconds',
+    'browser-expired-worker', '{"sourceId":"browser-stale-processing"}'::jsonb
+  ),
+  (
+    '98500000-0000-4000-8000-000000000003',
+    '98400000-0000-4000-8000-000000000003',
+    '98300000-0000-4000-8000-000000000001',
+    '98200000-0000-4000-8000-000000000001',
+    'notion', 'upsert', 'processing', 2,
+    clock_timestamp() - interval '1 second', clock_timestamp() - interval '60 seconds',
+    'browser-fresh-worker', '{"sourceId":"browser-fresh-processing"}'::jsonb
+  ),
+  (
+    '98500000-0000-4000-8000-000000000004',
+    '98400000-0000-4000-8000-000000000004',
+    '98300000-0000-4000-8000-000000000001',
+    '98200000-0000-4000-8000-000000000001',
+    'notion', 'upsert', 'processing', 5,
+    clock_timestamp() - interval '1 second', clock_timestamp() - interval '121 seconds',
+    'browser-exhausted-worker', '{"sourceId":"browser-exhausted-processing"}'::jsonb
+  ),
+  (
+    '98500000-0000-4000-8000-000000000005',
+    '98400000-0000-4000-8000-000000000005',
+    '98300000-0000-4000-8000-000000000001',
+    '98200000-0000-4000-8000-000000000001',
+    'notion', 'upsert', 'pending', 0,
+    clock_timestamp() + interval '1 minute', null, null,
+    '{"sourceId":"browser-future-pending"}'::jsonb
+  );
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '98200000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+
+do $$
+declare
+  v_claimed uuid[];
+begin
+  select coalesce(array_agg(job.id order by job.id), array[]::uuid[])
+  into v_claimed
+  from public.claim_receipt_sync_jobs(
+    array['98300000-0000-4000-8000-000000000001']::uuid[],
+    'notion',
+    '98200000-0000-4000-8000-000000000001',
+    10
+  ) job;
+
+  if v_claimed <> array['98500000-0000-4000-8000-000000000002'::uuid] then
+    raise exception 'browser stale-processing claim is wrong: %', v_claimed;
+  end if;
+  if not exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '98500000-0000-4000-8000-000000000002'
+      and status = 'processing'
+      and locked_by = '98200000-0000-4000-8000-000000000001'
+  ) then
+    raise exception 'browser expired processing job was not reclaimed';
+  end if;
+  if exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '98500000-0000-4000-8000-000000000003'
+      and (status <> 'processing' or locked_by <> 'browser-fresh-worker')
+  ) then
+    raise exception 'browser fresh processing lease was reclaimed';
+  end if;
+  if exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '98500000-0000-4000-8000-000000000004'
+      and (status <> 'processing' or attempts <> 5 or locked_by <> 'browser-exhausted-worker')
+  ) then
+    raise exception 'browser exhausted processing job was reclaimed';
+  end if;
+  if exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '98500000-0000-4000-8000-000000000005'
+      and status <> 'pending'
+  ) then
+    raise exception 'browser future retry job was reclaimed';
+  end if;
+end;
+$$;
+
+reset role;
 select 'canonical_receipt_contract_smoke_passed' as result;
 rollback;

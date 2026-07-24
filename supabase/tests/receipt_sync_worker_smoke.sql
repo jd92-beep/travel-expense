@@ -160,6 +160,135 @@ begin
 end
 $$;
 
+insert into public.receipts (
+  id, trip_id, owner_id, store, record_date, category, payment_method,
+  amount, currency, home_currency, source_id, status, visibility, split_mode,
+  record_kind, version, notion_sync_status
+) values
+  (
+    '99200000-0000-4000-8000-000000000002',
+    '99100000-0000-4000-8000-000000000001',
+    '99000000-0000-4000-8000-000000000001',
+    'Worker stale processing', '2026-04-20', 'food', 'cash',
+    1200, 'JPY', 'HKD', 'worker-stale-processing', 'confirmed', 'trip', 'shared',
+    'expense', 3, 'pending'
+  ),
+  (
+    '99200000-0000-4000-8000-000000000003',
+    '99100000-0000-4000-8000-000000000001',
+    '99000000-0000-4000-8000-000000000001',
+    'Worker fresh processing', '2026-04-20', 'food', 'cash',
+    1200, 'JPY', 'HKD', 'worker-fresh-processing', 'confirmed', 'trip', 'shared',
+    'expense', 3, 'pending'
+  ),
+  (
+    '99200000-0000-4000-8000-000000000004',
+    '99100000-0000-4000-8000-000000000001',
+    '99000000-0000-4000-8000-000000000001',
+    'Worker exhausted processing', '2026-04-20', 'food', 'cash',
+    1200, 'JPY', 'HKD', 'worker-exhausted-processing', 'confirmed', 'trip', 'shared',
+    'expense', 3, 'pending'
+  ),
+  (
+    '99200000-0000-4000-8000-000000000005',
+    '99100000-0000-4000-8000-000000000001',
+    '99000000-0000-4000-8000-000000000001',
+    'Worker future pending', '2026-04-20', 'food', 'cash',
+    1200, 'JPY', 'HKD', 'worker-future-pending', 'confirmed', 'trip', 'shared',
+    'expense', 3, 'pending'
+  );
+
+insert into public.receipt_sync_jobs (
+  id, receipt_id, trip_id, owner_id, provider, operation, status, attempts,
+  next_attempt_at, locked_at, locked_by, payload
+) values
+  (
+    '99300000-0000-4000-8000-000000000002',
+    '99200000-0000-4000-8000-000000000002',
+    '99100000-0000-4000-8000-000000000001',
+    '99000000-0000-4000-8000-000000000001',
+    'notion', 'upsert', 'processing', 2,
+    clock_timestamp() - interval '1 second', clock_timestamp() - interval '121 seconds',
+    'worker-expired-lease', '{"sourceId":"worker-stale-processing"}'::jsonb
+  ),
+  (
+    '99300000-0000-4000-8000-000000000003',
+    '99200000-0000-4000-8000-000000000003',
+    '99100000-0000-4000-8000-000000000001',
+    '99000000-0000-4000-8000-000000000001',
+    'notion', 'upsert', 'processing', 2,
+    clock_timestamp() - interval '1 second', clock_timestamp() - interval '60 seconds',
+    'worker-fresh-lease', '{"sourceId":"worker-fresh-processing"}'::jsonb
+  ),
+  (
+    '99300000-0000-4000-8000-000000000004',
+    '99200000-0000-4000-8000-000000000004',
+    '99100000-0000-4000-8000-000000000001',
+    '99000000-0000-4000-8000-000000000001',
+    'notion', 'upsert', 'processing', 5,
+    clock_timestamp() - interval '1 second', clock_timestamp() - interval '121 seconds',
+    'worker-exhausted-lease', '{"sourceId":"worker-exhausted-processing"}'::jsonb
+  ),
+  (
+    '99300000-0000-4000-8000-000000000005',
+    '99200000-0000-4000-8000-000000000005',
+    '99100000-0000-4000-8000-000000000001',
+    '99000000-0000-4000-8000-000000000001',
+    'notion', 'upsert', 'pending', 0,
+    clock_timestamp() + interval '1 minute', null, null,
+    '{"sourceId":"worker-future-pending"}'::jsonb
+  );
+
+set local role service_role;
+
+do $$
+declare
+  v_claim jsonb;
+begin
+  v_claim := public.claim_receipt_sync_jobs_worker(
+    'receipt-sync:edge-stale:12345678', 10
+  );
+
+  if jsonb_array_length(v_claim) <> 1
+    or v_claim -> 0 ->> 'id' <> '99300000-0000-4000-8000-000000000002'
+    or v_claim -> 0 -> 'payload' ->> 'sourceId' <> 'worker-stale-processing'
+    or v_claim -> 0 -> 'receipt' ->> 'sourceId' <> 'worker-stale-processing' then
+    raise exception 'worker stale-processing claim payload is wrong: %', v_claim;
+  end if;
+  if not exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '99300000-0000-4000-8000-000000000002'
+      and status = 'processing'
+      and locked_by = 'receipt-sync:edge-stale:12345678'
+  ) then
+    raise exception 'worker expired processing job was not reclaimed';
+  end if;
+  if exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '99300000-0000-4000-8000-000000000003'
+      and (status <> 'processing' or locked_by <> 'worker-fresh-lease')
+  ) then
+    raise exception 'worker fresh processing lease was reclaimed';
+  end if;
+  if exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '99300000-0000-4000-8000-000000000004'
+      and (status <> 'processing' or attempts <> 5 or locked_by <> 'worker-exhausted-lease')
+  ) then
+    raise exception 'worker exhausted processing job was reclaimed';
+  end if;
+  if exists (
+    select 1 from public.receipt_sync_jobs
+    where id = '99300000-0000-4000-8000-000000000005'
+      and status <> 'pending'
+  ) then
+    raise exception 'worker future retry job was reclaimed';
+  end if;
+end;
+$$;
+
+reset role;
+
 rollback;
 
 select 'receipt_sync_worker_smoke_passed' as result;

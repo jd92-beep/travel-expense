@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-07-24 HKT
-- **Focus**: Session 72 completed Compact Milestone 3 non-DB review remediation; final approval remains blocked on live DB lease-recovery scope/evidence after completion transport failure.
+- **Focus**: Session 73 added the Boss-approved stale-processing lease-recovery migration candidate for both receipt-sync claim RPCs; it is tracked only and awaits independent review plus live-application evidence.
 - **Agent**: Codex.
 - **App version**: Compact `0.16.15`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
 
@@ -79,14 +79,18 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟡 **Architecture deepening Milestone 3 awaits DB lease-recovery approval** — Sessions 68-72
+18. 🟡 **Architecture deepening Milestone 3 awaits independent DB review and live evidence** — Sessions 68-72
    completed the client-side review remediation: scoped backend selection now overrides both root and
    trip Notion DB state; claimed jobs without trip/backend are failed explicitly; list/claim/completion
    transport errors stay observable; secret redaction precedes truncation; and Personal Notion
-   connect/persist/queue browser coverage is restored. The repository canonical SQL includes a
-   120-second stale-lock reclaim, but a completion transport failure cannot prove the live finish RPC
-   committed. Verify the live RPC contract and apply any approved DB recovery change only after Boss
-   grants migration scope. Do not mark Milestone 3 approved before that evidence. Earlier milestone
+   connect/persist/queue browser coverage is restored. Before Session 73, canonical claim SQL had the
+   120-second stale-lock predicate but selected only `pending` and `failed`, so it did **not** reclaim
+   expired `processing` jobs. Session 73 adds tracked migration
+   `20260724110000_reclaim_stale_receipt_sync_processing_leases.sql`, which admits only expired
+   `processing` jobs to the unchanged browser and worker candidate sets; it is not live-applied.
+   Run the disposable SQL smokes, complete independent review, then obtain live claim/finish evidence
+   without `db push`, migration repair or a production data probe. Do not mark Milestone 3 approved
+   before that evidence. Earlier milestone
    remediation adds the stale revision guard and terminal photo retry ledger: newer same-identity
    changes survive old success settlement; photo failures terminalize at 3 attempts and only manual
    retry resets them. Scoped Hydration owns scoped dual-snapshot arbitration, secret stripping and
@@ -94,6 +98,14 @@ you closed with your session number.
    with the current browser mirror fixture green. Provider Catalog and Android port remain separate work.
 
 ## What Was Done
+
+### Session 73 (Codex — Milestone 3 stale processing lease recovery candidate)
+
+1. **Scoped migration:** added transactional `20260724110000_reclaim_stale_receipt_sync_processing_leases.sql`. It `CREATE OR REPLACE`s only the unchanged browser and service-worker claim signatures, retaining `SECURITY DEFINER`, `search_path = ''`, due-time/attempts/backoff behavior, `FOR UPDATE SKIP LOCKED`, payload shape and all callers. The sole candidate change is `status in ('pending', 'failed', 'processing')` behind the existing 120-second stale-lock condition.
+2. **Privilege boundary:** browser execution remains exactly `authenticated, service_role`; worker execution remains `service_role` only, with its `receipt_sync_owner` ownership reasserted. The migration does not change tables, RLS, finish RPCs, Worker source, credentials or live data.
+3. **Synthetic coverage:** extended the existing browser and worker SQL smokes. Each proves one expired processing lease is reclaimed while a fresh processing lease, an exhausted (`attempts = 5`) processing lease and a future retry remain ineligible. Existing worker payload, retry and terminal-state assertions remain present.
+4. **Current evidence:** `node scripts/verify-supabase-migrations.mjs` and `npm --prefix app-compact run db:policy:scan` both printed `Supabase migration policy scan passed`; the inline function-parity check printed `claim function parity check passed: only stale processing selectors differ`; `node scripts/security-scan.mjs` printed `Secret scan passed`; relevant SQL `deno fmt --check` printed `Checked 3 files`; `git diff --check` exited `0`. GitNexus `detect-changes` reported `6 files`, `18 symbols`, `0` affected processes and `low` risk; the new SQL migration remains symbol-invisible as expected. `supabase status` could not connect to Docker, so the disposable SQL runtime smokes are written but unrun; no local or live database was touched.
+5. **Boundary:** Compact remains `0.16.15`. This migration is tracked, not live-applied. No `supabase db push`, migration repair, Management API, deployment or push occurred. Boss dirty `AGENTS.md` and `CLAUDE.md` remain untouched and unstaged.
 
 ### Session 72 (Codex — Compact Milestone 3 non-DB review remediation)
 

@@ -16,6 +16,8 @@ const adminOperationKernelMigration =
   'supabase/migrations/20260710187000_admin_operation_kernel.sql';
 const adminPasskeyRemovalMigration =
   'supabase/migrations/20260712123000_admin_passkey_removal.sql';
+const staleReceiptSyncLeaseRecoveryMigration =
+  'supabase/migrations/20260724110000_reclaim_stale_receipt_sync_processing_leases.sql';
 
 const activeSql = files
   .map((file) => readFileSync(join(repoRoot, file), 'utf8'))
@@ -25,6 +27,9 @@ const stagedSql = stagedFiles
   .join('\n\n');
 const receiptPhotoCompatibilitySql = files.includes(receiptPhotoCompatibilityMigration)
   ? readFileSync(join(repoRoot, receiptPhotoCompatibilityMigration), 'utf8')
+  : '';
+const staleReceiptSyncLeaseRecoverySql = files.includes(staleReceiptSyncLeaseRecoveryMigration)
+  ? readFileSync(join(repoRoot, staleReceiptSyncLeaseRecoveryMigration), 'utf8')
   : '';
 
 const requiredPatterns = [
@@ -204,13 +209,95 @@ const stagedReceiptPhotoPatterns = [
   },
 ];
 
+const staleReceiptSyncLeaseRecoveryPatterns = [
+  {
+    name: 'stale receipt-sync lease recovery migration is transactional with local timeouts',
+    re: /\bbegin;[\s\S]*?set local lock_timeout = '5s';[\s\S]*?set local statement_timeout = '30s';[\s\S]*?commit;\s*$/i,
+  },
+  {
+    name: 'browser claim keeps its signature, SECURITY DEFINER, empty search path, stale processing recovery, due time, attempts cap, and row lock',
+    re: /create or replace function public\.claim_receipt_sync_jobs\(\s*p_trip_ids uuid\[\],\s*p_provider text default 'notion',\s*p_worker text default null,\s*p_limit integer default 20\s*\)[\s\S]*?returns setof public\.receipt_sync_jobs\s*language plpgsql\s*security definer\s*set search_path = ''[\s\S]*?where j\.provider = p_provider[\s\S]*?and j\.trip_id = any\(coalesce\(p_trip_ids, array\[\]::uuid\[\]\)\)[\s\S]*?and j\.status in \('pending', 'failed', 'processing'\)[\s\S]*?and j\.next_attempt_at <= clock_timestamp\(\)[\s\S]*?and j\.attempts < 5[\s\S]*?and \(j\.locked_at is null or j\.locked_at < clock_timestamp\(\) - interval '120 seconds'\)[\s\S]*?and private\.can_admin_trip\(j\.trip_id\)[\s\S]*?for update skip locked/i,
+  },
+  {
+    name: 'worker claim keeps its signature, SECURITY DEFINER, empty search path, stale processing recovery, due time, attempts cap, payload joins, and row lock',
+    re: /create or replace function public\.claim_receipt_sync_jobs_worker\(\s*p_worker text,\s*p_limit integer default 10\s*\)[\s\S]*?returns jsonb\s*language plpgsql\s*security definer\s*set search_path = ''[\s\S]*?with candidate as materialized \([\s\S]*?where job\.provider = 'notion'[\s\S]*?and job\.status in \('pending', 'failed', 'processing'\)[\s\S]*?and job\.next_attempt_at <= clock_timestamp\(\)[\s\S]*?and job\.attempts < 5[\s\S]*?and \(job\.locked_at is null or job\.locked_at < clock_timestamp\(\) - interval '120 seconds'\)[\s\S]*?and receipt\.visibility = 'trip'[\s\S]*?and link\.status = 'active'[\s\S]*?and link\.sync_mode = 'dual_write'[\s\S]*?for update of job skip locked[\s\S]*?jsonb_build_object\([\s\S]*?'databaseRef', link\.notion_database_ref[\s\S]*?'receipt', jsonb_build_object/i,
+  },
+  {
+    name: 'worker claim owner remains receipt_sync_owner',
+    re: /alter function public\.claim_receipt_sync_jobs_worker\(text, integer\)\s*owner to receipt_sync_owner;/i,
+  },
+  {
+    name: 'browser claim revokes default execution before its existing authenticated and service-role grant',
+    re: /revoke all on function public\.claim_receipt_sync_jobs\(uuid\[\], text, text, integer\)\s*from public, anon, authenticated, service_role;[\s\S]*?grant execute on function public\.claim_receipt_sync_jobs\(uuid\[\], text, text, integer\)\s*to authenticated, service_role;/i,
+  },
+  {
+    name: 'worker claim revokes browser execution before its existing service-role grant',
+    re: /revoke all on function public\.claim_receipt_sync_jobs_worker\(text, integer\)\s*from public, anon, authenticated;[\s\S]*?grant execute on function public\.claim_receipt_sync_jobs_worker\(text, integer\)\s*to service_role;/i,
+  },
+];
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function executeGrantRoles(sql, signature) {
+  const re = new RegExp(
+    `grant\\s+execute\\s+on\\s+function\\s+${escapeRegExp(signature)}\\s+to\\s+([^;]+);`,
+    'gi',
+  );
+  return [...sql.matchAll(re)]
+    .flatMap((match) => match[1].split(','))
+    .map((role) => role.trim().toLowerCase())
+    .sort();
+}
+
 const findings = [
   ...requiredPatterns.filter((item) => !item.re.test(activeSql)),
   ...receiptPhotoCompatibilityPatterns.filter(
     (item) => !item.re.test(receiptPhotoCompatibilitySql),
   ),
   ...stagedReceiptPhotoPatterns.filter((item) => !item.re.test(stagedSql)),
+  ...staleReceiptSyncLeaseRecoveryPatterns.filter(
+    (item) => !item.re.test(staleReceiptSyncLeaseRecoverySql),
+  ),
 ];
+
+const recreatedStaleLeaseFunctions = [
+  ...staleReceiptSyncLeaseRecoverySql.matchAll(
+    /create\s+or\s+replace\s+function\s+(public\.[a-z_][a-z0-9_]*)\s*\(/gi,
+  ),
+].map((match) => match[1].toLowerCase()).sort();
+if (
+  recreatedStaleLeaseFunctions.join(',')
+  !== 'public.claim_receipt_sync_jobs,public.claim_receipt_sync_jobs_worker'
+) {
+  findings.push({
+    name: 'stale receipt-sync lease recovery migration replaces only the two claim functions',
+  });
+}
+
+if (/\b(?:alter\s+table|create\s+policy|drop\s+policy|create\s+trigger|drop\s+trigger)\b/i.test(staleReceiptSyncLeaseRecoverySql)) {
+  findings.push({
+    name: 'stale receipt-sync lease recovery migration does not change tables, RLS, or triggers',
+  });
+}
+
+for (const { signature, roles } of [
+  {
+    signature: 'public.claim_receipt_sync_jobs(uuid[], text, text, integer)',
+    roles: ['authenticated', 'service_role'],
+  },
+  {
+    signature: 'public.claim_receipt_sync_jobs_worker(text, integer)',
+    roles: ['service_role'],
+  },
+]) {
+  if (executeGrantRoles(staleReceiptSyncLeaseRecoverySql, signature).join(',') !== roles.join(',')) {
+    findings.push({
+      name: `${signature} execute grant roles are not exact`,
+    });
+  }
+}
 
 if (/\b(?:begin|commit)\s*;/i.test(receiptPhotoCompatibilitySql)) {
   findings.push({
