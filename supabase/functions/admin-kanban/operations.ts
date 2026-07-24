@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { providerProbeSucceeded } from "./provider_status.ts";
+import { PROVIDER_MODELS } from "./provider_catalog.ts";
 
 type AdminClient = SupabaseClient;
 
@@ -99,30 +100,6 @@ type PreviewInput = {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH_RE = /^[0-9a-f]{64}$/;
 const PROVIDERS = new Set(["notion", "kimi", "google", "volcano", "weatherapi", "mimo"]);
-const PROVIDER_MODELS: Record<string, string[]> = {
-  kimi: [
-    "kimi/kimi-code",
-    "kimi/kimi-8k",
-    "kimi/kimi-32k",
-    "kimi/kimi-k2.6",
-    "kimi/kimi-for-coding",
-  ],
-  google: [
-    "google/gemini-2.5-flash",
-    "google/gemini-3.1-flash",
-    "google/gemini-3.1-flash-lite",
-    "google/gemma-4-31b-it",
-    "google/gemma-4-26b",
-  ],
-  mimo: ["mimo/mimo-v2.5", "mimo/mimo-v2.5-pro"],
-  volcano: [
-    "volcano/doubao-seed-2.0-lite",
-    "volcano/doubao-seed-2.0-pro",
-    "volcano/minimax-m3",
-    "volcano/minimax-m2.7",
-    "volcano/doubao-seed-2.0-mini",
-  ],
-};
 const ACTIONS = new Set([
   "provider_probe",
   "support_bundle",

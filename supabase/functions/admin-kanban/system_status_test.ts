@@ -1,4 +1,5 @@
 import { assertEquals } from "@std/assert";
+import { PROVIDER_MODELS } from "./provider_catalog.ts";
 import { aggregateProviderRows, normalizeOverviewStatusStrip } from "./system_status.ts";
 
 Deno.test("provider aggregation returns one row with production evidence", () => {
@@ -70,6 +71,7 @@ Deno.test("provider aggregation returns one row with production evidence", () =>
 });
 
 Deno.test("broker liveness alone never becomes provider health", () => {
+  assertEquals(PROVIDER_MODELS.volcano.includes("volcano/kimi-k3"), true);
   const rows = aggregateProviderRows({
     brokerProviders: [],
     brokerVerified: false,
@@ -86,6 +88,7 @@ Deno.test("broker liveness alone never becomes provider health", () => {
       "volcano/minimax-m3",
       "volcano/minimax-m2.7",
       "volcano/doubao-seed-2.0-mini",
+      "volcano/kimi-k3",
     ],
   );
   assertEquals(new Set(rows.map((row) => row.provider)).size, rows.length);

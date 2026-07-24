@@ -1,9 +1,10 @@
 import type { AppState, ItineraryDay } from './types';
+import { COMPACT_AI_MODELS } from './providerCatalog';
 
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.16.15';
+export const APP_VERSION = '0.16.16';
 export const MAX_SYNC_RETRY_ATTEMPTS = 3;
 
 export const STORAGE_KEY = 'boss-japan-tracker';
@@ -18,25 +19,7 @@ export const DEFAULT_TRIP_UPDATE_MODEL_ID = 'mimo/mimo-v2.5-pro';
 
 const STALE_GOOGLE_BACKUP_MODELS = new Set(['gemma-3-27b-it', 'gemma-4-31b', 'gemma-4-26b-a4b-it']);
 
-export const AI_MODELS = [
-  { id: 'kimi/kimi-code', name: 'Kimi (kimi-code)' },
-  { id: 'kimi/kimi-8k', name: 'Kimi (kimi-8k)' },
-  { id: 'kimi/kimi-32k', name: 'Kimi (kimi-32k)' },
-  { id: 'kimi/kimi-k2.6', name: 'Kimi (kimi-k2.6)' },
-  { id: 'kimi/kimi-for-coding', name: 'Kimi (kimi-for-coding)' },
-  { id: 'google/gemini-2.5-flash', name: 'Google Gemini 2.5 Flash' },
-  { id: 'google/gemini-3.1-flash', name: 'Google Gemini 3.1 Flash' },
-  { id: 'google/gemini-3.1-flash-lite', name: 'Google Gemini 3.1 Flash Lite' },
-  { id: 'google/gemma-4-31b-it', name: 'Google Gemma 4 31B' },
-  { id: 'google/gemma-4-26b', name: 'Google Gemma 4 26B' },
-  { id: 'mimo/mimo-v2.5', name: 'Mimo v2.5' },
-  { id: 'mimo/mimo-v2.5-pro', name: 'Mimo v2.5 Pro' },
-  { id: 'volcano/doubao-seed-2.0-lite', name: 'Volcano (doubao-seed-2.0-lite)' },
-  { id: 'volcano/doubao-seed-2.0-pro', name: 'Volcano (doubao-seed-2.0-pro)' },
-  { id: 'volcano/minimax-m3', name: 'Volcano (minimax-m3)' },
-  { id: 'volcano/minimax-m2.7', name: 'Volcano (minimax-m2.7)' },
-  { id: 'volcano/doubao-seed-2.0-mini', name: 'Volcano (doubao-seed-2.0-mini)' },
-] as const;
+export const AI_MODELS = COMPACT_AI_MODELS;
 
 export function normalizeAiModelSettings<T extends Partial<Pick<AppState, 'scanModel' | 'voiceModel' | 'emailModel' | 'tripUpdateModel' | 'googleBackupModel'>>>(settings: T): T {
   const next = { ...settings };

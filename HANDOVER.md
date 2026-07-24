@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-07-24 HKT
-- **Focus**: Session 74 narrowed the stale-processing lease-recovery candidate to the request-unique server-worker claim path; it is tracked only and awaits independent re-review plus live-application evidence.
+- **Focus**: Session 76 centralised the approved provider catalog across Compact, Credential Broker, Admin BFF and Admin Edge; Android port and QA are next.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.15`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin production `1.3.1`; Broker production `2026.07.20.1`; React `0.2.4`
+- **App version**: Compact `0.16.16`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.4`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.15`; the Android branch is `0.20.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.16`; the Android branch is `0.20.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -79,28 +79,40 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟢 **Architecture deepening Milestone 3 source work approved; live DB evidence remains separate** — Sessions 68-72
-   completed the client-side review remediation: scoped backend selection now overrides both root and
-   trip Notion DB state; claimed jobs without trip/backend are failed explicitly; list/claim/completion
-   transport errors stay observable; secret redaction precedes truncation; and Personal Notion
-   connect/persist/queue browser coverage is restored. Before Session 73, canonical claim SQL had the
-   120-second stale-lock predicate but selected only `pending` and `failed`, so it did **not** reclaim
-   expired `processing` jobs. Sessions 73-74 add and then fence tracked migration
-   `20260724110000_reclaim_stale_receipt_sync_processing_leases.sql`: only the request-unique
-   server-worker claim may admit expired `processing` jobs. The canonical browser claim remains
-   `pending`/`failed` only, including when the stale lock belongs to that browser user. The migration
-   is not live-applied. Session 75 independent source/code re-review found no actionable issue:
-   migration policy/static scans, Compact outbox/typecheck, SQL formatting, security and diff checks
-   pass. Docker is unavailable, so rollback-only SQL runtime smokes and live claim/finish evidence
-   remain explicitly unproven under Open Item 5; do not infer live recovery until the reviewed
-   migration is applied through the separately approved database process. Earlier milestone
-   remediation adds the stale revision guard and terminal photo retry ledger: newer same-identity
-   changes survive old success settlement; photo failures terminalize at 3 attempts and only manual
-   retry resets them. Scoped Hydration owns scoped dual-snapshot arbitration, secret stripping and
-   account-safe persistence; Shared-trip Notion Outbox now has an isolated, tested port and adapter,
-   with the current browser mirror fixture green. Provider Catalog and Android port remain separate work.
+18. 🟢 **All four main source milestones complete; Android port and QA are next** — Session 76 adds the
+   secret-free catalog and thin Compact, Broker, Admin BFF and Admin Edge adapters. Compact keeps K3
+   excluded; Broker, Admin BFF and Admin Edge recognise all six safe Volcano LLMs, and the Android
+   catalog surface retains K3 for the later port. No Android file changed in main. The tracked
+   stale-lease migration is still not live-applied, and positive shared-receipt/Notion outbox plus
+   live claim/finish evidence remain open under Item 5. Keep authenticated operator evidence in Items
+   16 and 17 open; no deployment, push, credential, database, RLS or live-data action occurred.
 
 ## What Was Done
+
+### Session 76 (Codex — Milestone 4 Provider Catalog)
+
+1. **Single catalog, four adapters:** added `contracts/ai-provider-catalog.json` with the approved Kimi,
+   Google, Mimo and six safe Volcano LLM records only. Compact filters `compact` and excludes
+   `volcano/kimi-k3`; Broker, Admin BFF and Admin Edge filter their own surfaces and include it.
+   Seedance/media models, routes, regex validation, base URLs, defaults, `kind=test`, 8-token cap,
+   no-fallback behaviour and quota/`429` hard stops are unchanged.
+2. **TDD evidence:** the new contract test first failed with `ERR_MODULE_NOT_FOUND` for
+   `contracts/ai-provider-catalog.json`, then passed with `provider catalog contract passed` after the
+   catalog and adapters were added. Broker self-test, Admin gateway contract and Edge tests assert K3
+   through their exported adapters; the root contract asserts Compact exclusion and Android inclusion.
+3. **Completed gates:** provider contract passed; Compact `typecheck`, build (`2381 modules`),
+   `security:scan`, AI routing (`5 passed, 1 skipped`) and Settings (`10 passed, 1 skipped`) passed.
+   The browser smokes used the stable wrapper plus `npm exec`; the first bare `playwright` invocation
+   stopped before assertions with `unknown command 'test'` and was rerun without weakening coverage.
+   Broker `check` and `self-test` passed. Admin `typecheck`, build (`2244 modules`), security,
+   unit (`33/33`) and contract (`24/24`) passed. Deno fmt/lint checked 28 files, Edge check passed and
+   Deno test passed `73/73`; root security printed `Secret scan passed`. Staged GitNexus detection
+   reported `21 files, 19 symbols, 0 affected processes, low`; `git diff --check` and
+   `git diff --cached --check` both exited `0` with no output.
+4. **Versions and boundary:** Compact is `0.16.16`, Admin candidate is `1.3.2` and Broker candidate is
+   `2026.07.23.1`. No Android source, credential, database, migration, RLS, Admin write mode,
+   deployment, production probe, push or live data changed. Boss dirty `AGENTS.md` and `CLAUDE.md`
+   remain untouched and unstaged.
 
 ### Session 75 (Codex — Milestone 3 source approval)
 

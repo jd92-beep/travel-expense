@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from "@std/assert";
 
+import { PROVIDER_MODELS } from "./provider_catalog.ts";
 import {
   AdminOperationError,
   canonicalJson,
@@ -92,6 +93,7 @@ Deno.test("support bundle text redacts credentials, email addresses, and URLs", 
 });
 
 Deno.test("provider preview is server-computed and stored through the operation RPC", async () => {
+  assertEquals(PROVIDER_MODELS.volcano.includes("volcano/kimi-k3"), true);
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const client = {
     rpc(name: string, args: Record<string, unknown>) {

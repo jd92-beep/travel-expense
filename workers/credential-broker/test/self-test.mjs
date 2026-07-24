@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
+import { PROVIDER_MODELS } from '../src/provider-catalog.js';
 
 const ORIGIN = 'http://localhost:8902';
 const UNLOCK_PASSWORD = 'test-unlock';
@@ -297,6 +298,7 @@ function installProviderFetchStub() {
 
 async function run() {
   const env = makeEnv();
+  assert.equal(PROVIDER_MODELS.volcano.includes('volcano/kimi-k3'), true);
   env.APP_UNLOCK_HASH = await passwordSpec(UNLOCK_PASSWORD, 'unlock-salt');
   env.ADMIN_ROTATION_HASH = await passwordSpec(ADMIN_PASSWORD, 'admin-salt');
   const restoreFetch = installProviderFetchStub();

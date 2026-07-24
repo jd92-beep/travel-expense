@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { resolveGatewayRoute, validateGatewayBody } from '../../server/admin/gateway-routes.js';
+import { PROVIDER_MODELS } from '../../server/admin/provider-catalog.js';
 
 test('gateway maps only production read routes', () => {
   assert.deepEqual(
@@ -133,6 +134,7 @@ test('gateway exposes only the generic allowlisted operation mutation routes', (
 test('gateway validates operation actions and strips no unchecked fields', () => {
   const id = '97000000-0000-4000-8000-000000000001';
   const idempotencyKey = '97100000-0000-4000-8000-000000000001';
+  assert.equal(PROVIDER_MODELS.volcano.includes('volcano/kimi-k3'), true);
   assert.deepEqual(
     validateGatewayBody('operation-preview', {
       action: 'retry_sync_job',

@@ -1,5 +1,7 @@
+import { PROVIDER_MODELS } from './provider-catalog.js';
+
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.07.20.1';
+const VERSION = '2026.07.23.1';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -7,19 +9,6 @@ const TRUSTED_DEVICE_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const SESSION_CHALLENGE_TTL_MS = 1000 * 60 * 5;
 const MAX_JSON_BYTES = 4500000;
 const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi', 'mimo', 'volcano'];
-const PROVIDER_MODELS = Object.freeze({
-  kimi: ['kimi/kimi-code', 'kimi/kimi-8k', 'kimi/kimi-32k', 'kimi/kimi-k2.6', 'kimi/kimi-for-coding'],
-  google: ['google/gemini-2.5-flash', 'google/gemini-3.1-flash', 'google/gemini-3.1-flash-lite', 'google/gemma-4-31b-it', 'google/gemma-4-26b'],
-  mimo: ['mimo/mimo-v2.5', 'mimo/mimo-v2.5-pro'],
-  volcano: [
-    'volcano/doubao-seed-2.0-lite',
-    'volcano/doubao-seed-2.0-pro',
-    'volcano/minimax-m3',
-    'volcano/minimax-m2.7',
-    'volcano/doubao-seed-2.0-mini',
-    'volcano/kimi-k3',
-  ],
-});
 const NOTION_VERSION = '2022-06-28';
 const KIMI_DEFAULT_BASE = 'https://api.kimi.com/coding/v1';
 const MIMO_DEFAULT_BASE = 'https://token-plan-sgp.xiaomimimo.com/v1';
