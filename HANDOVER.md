@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-07-24 HKT
-- **Focus**: Session 76 centralised the approved provider catalog across Compact, Credential Broker, Admin BFF and Admin Edge; Android port and QA are next.
+- **Focus**: Session 77 independently approved the provider catalog source; Android port and QA are next.
 - **Agent**: Codex.
 - **App version**: Compact `0.16.16`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.4`
 
@@ -88,6 +88,19 @@ you closed with your session number.
    16 and 17 open; no deployment, push, credential, database, RLS or live-data action occurred.
 
 ## What Was Done
+
+### Session 77 (Codex — Milestone 4 source approval)
+
+1. **Independent approval:** focused static re-review approved catalog/filter parity, the six-model
+   Volcano boundary, Compact K3 exclusion, Android K3 inclusion, Seedance exclusion, task defaults,
+   unchanged routing/quota/fallback semantics, runtime adapter shapes, version bumps and contract
+   coverage with no actionable code finding.
+2. **Review remediation:** reconciled the handover after approval and removed the accidentally tracked
+   `.superpowers/sdd/milestone-4-report.md` from Git while retaining it as ignored local SDD evidence.
+   Boss dirty `AGENTS.md` and `CLAUDE.md` remain untouched and unstaged.
+3. **Boundary:** no Android source, credential, database, migration, RLS, Admin write mode, deployment,
+   production probe or live data changed. Android remains `0.20.0` / versionCode `2000` until its
+   isolated four-commit port starts.
 
 ### Session 76 (Codex — Milestone 4 Provider Catalog)
 
