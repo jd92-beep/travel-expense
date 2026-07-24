@@ -79,7 +79,7 @@ you closed with your session number.
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟡 **Architecture deepening Milestone 3 awaits independent DB review and live evidence** — Sessions 68-72
+18. 🟢 **Architecture deepening Milestone 3 source work approved; live DB evidence remains separate** — Sessions 68-72
    completed the client-side review remediation: scoped backend selection now overrides both root and
    trip Notion DB state; claimed jobs without trip/backend are failed explicitly; list/claim/completion
    transport errors stay observable; secret redaction precedes truncation; and Personal Notion
@@ -89,10 +89,11 @@ you closed with your session number.
    `20260724110000_reclaim_stale_receipt_sync_processing_leases.sql`: only the request-unique
    server-worker claim may admit expired `processing` jobs. The canonical browser claim remains
    `pending`/`failed` only, including when the stale lock belongs to that browser user. The migration
-   is not live-applied.
-   Run the disposable SQL smokes, complete independent review, then obtain live claim/finish evidence
-   without `db push`, migration repair or a production data probe. Do not mark Milestone 3 approved
-   before that evidence. Earlier milestone
+   is not live-applied. Session 75 independent source/code re-review found no actionable issue:
+   migration policy/static scans, Compact outbox/typecheck, SQL formatting, security and diff checks
+   pass. Docker is unavailable, so rollback-only SQL runtime smokes and live claim/finish evidence
+   remain explicitly unproven under Open Item 5; do not infer live recovery until the reviewed
+   migration is applied through the separately approved database process. Earlier milestone
    remediation adds the stale revision guard and terminal photo retry ledger: newer same-identity
    changes survive old success settlement; photo failures terminalize at 3 attempts and only manual
    retry resets them. Scoped Hydration owns scoped dual-snapshot arbitration, secret stripping and
@@ -100,6 +101,12 @@ you closed with your session number.
    with the current browser mirror fixture green. Provider Catalog and Android port remain separate work.
 
 ## What Was Done
+
+### Session 75 (Codex — Milestone 3 source approval)
+
+1. **Independent approval:** final re-review approved the Compact outbox changes and worker-only stale-lease recovery source with no actionable finding. The canonical browser claim remains `pending`/`failed`; only request-unique server workers can reclaim expired `processing` jobs.
+2. **Fencing evidence:** the rollback-only SQL smokes cover browser non-reclaim, server-worker takeover, fresh/exhausted/future exclusions and old-browser finish rejection with SQLSTATE `40001`. The static verifier enforces canonical worker body parity plus an exact DDL/privilege allowlist.
+3. **Verification and boundary:** migration policy scan, Compact outbox/typecheck, SQL formatting, security scan and `git diff --check` pass. Docker is unavailable, so SQL runtime smokes are written but unrun. Migration `20260724110000_reclaim_stale_receipt_sync_processing_leases.sql` is tracked only and not live-applied; no DB push, migration repair, Management API, deployment or live-data action occurred.
 
 ### Session 74 (Codex — Milestone 3 lease-fencing review remediation)
 
