@@ -38,9 +38,10 @@ you closed with your session number.
    live write: a positive shared-receipt write and Notion mirror result still need separate proof.
 6. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-7. 🟢 **Compact Netlify credit block resolved in Session 58** — workflow `29397584955` completed
-   successfully and the public alias serves the verified `0.16.6` bundle. Continue monitoring
-   account credits, but do not treat the old block as current.
+7. 🟠 **Compact Netlify credit block is active again** — Session 78 workflow `30455269747` built and
+   typechecked Compact `0.16.17`, then Netlify rejected the production deploy with `403 Account
+   credit usage exceeded`. The public alias still serves the previous bundle; add credits before
+   retrying this workflow.
 8. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
    unused `hkd` imports in History/Stats. (Old Pending list.)
 9. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
@@ -111,7 +112,13 @@ you closed with your session number.
    intentional skip. Both web apps passed `typecheck`, production build and `security:scan`.
    Android passed `typecheck`, production web build, `security:scan`, session smoke `3/3` and debug
    APK assembly. Emulator QA passed with verified App Links and the native login surface visible.
-4. **Git boundary:** Boss's pre-existing main `AGENTS.md` / `CLAUDE.md` edits remain untouched.
+4. **Production:** source commit `715f879` was pushed to `main`. GitHub Pages workflow
+   `30455273522` passed, Compact Vercel deployment `dpl_7bS2RbEM7vyxUuED8z6fwoH8zWu6` is
+   `READY`, and manual root-linked React Vercel deployment `dpl_2fDbkkwBczVJboVbKb4VTNXnXYoT`
+   is `READY`. Fresh Chrome checks on Compact Vercel/Pages/Netlify and React Vercel/Pages all
+   returned `200`, left the reconnect screen and rendered the Supabase login surface. Netlify
+   deployment failed only at its external credit gate as recorded in Open Item 7.
+5. **Git boundary:** Boss's pre-existing main `AGENTS.md` / `CLAUDE.md` edits remain untouched.
    Android already contained a broad uncommitted `0.20.1` milestone spanning the same version and
    Supabase files, so its `0.20.2` auth repair is verified in place but must not be staged or pushed
    independently until that milestone is reviewed.
