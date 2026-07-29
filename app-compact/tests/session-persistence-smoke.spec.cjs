@@ -50,3 +50,26 @@ test('malformed session blob is ignored without crashing the app', async ({ page
   // App renders real UI (didn't throw on the malformed blob) rather than a blank/error screen.
   await expect(page.getByRole('banner').first()).toBeVisible();
 });
+
+// Regression: if Supabase is paused or unreachable, getSession() can reject or
+// remain pending while refreshing the saved token. Cold boot must leave the reconnect screen and
+// show the sign-in surface with the network error instead of loading forever.
+test('unreachable Supabase releases the reconnect screen after session refresh fails', async ({ page }) => {
+  await page.route('https://test-travel-expense.supabase.co/**', (route) => route.abort('failed'));
+  await page.addInitScript((key) => {
+    localStorage.clear();
+    localStorage.setItem(key, JSON.stringify({
+      access_token: 'expired.jwt.token',
+      refresh_token: 'refresh_token_for_unreachable_project',
+      expires_at: Math.floor(Date.now() / 1000) - 600,
+      token_type: 'bearer',
+      user: { id: 'u_network_failure', email: 'network@example.com' },
+    }));
+  }, SUPA_KEY);
+
+  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
+
+  await expect(page.getByLabel('Supabase reconnect')).toBeHidden({ timeout: 10_000 });
+  await expect(page.getByLabel('Travel Expense Supabase login')).toBeVisible();
+  await expect(page.locator('.lock-error')).toContainText(/fetch|network/i);
+});

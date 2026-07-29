@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-24 HKT
-- **Focus**: Session 77 independently approved the provider catalog source; Android port and QA are next.
+- **Date**: 2026-07-29 HKT
+- **Focus**: Session 78 restored the paused Supabase project and prevented Compact, React and Android from hanging forever during an unreachable session refresh.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.16`; Android `0.20.0` (versionCode 2000; branch commit `1c03a9b`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.4`
+- **App version**: Compact `0.16.17`; Android working tree `0.20.2` (versionCode 2002; branch HEAD remains `1c03a9b` until its pre-existing dirty milestone is reviewed); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -86,8 +86,35 @@ you closed with your session number.
    stale-lease migration is still not live-applied, and positive shared-receipt/Notion outbox plus
    live claim/finish evidence remain open under Item 5. Keep authenticated operator evidence in Items
    16 and 17 open; no deployment, push, credential, database, RLS or live-data action occurred.
+19. 🟢 **Supabase pause/login hang resolved in Session 78** — the free-plan project was restored from
+   `INACTIVE` to `ACTIVE_HEALTHY`. Compact, React and Android now leave the reconnect screen after a
+   five-second unreachable-session watchdog and show the login surface with network evidence. No
+   schema, RLS, migration, credential or user-data change was made.
 
 ## What Was Done
+
+### Session 78 (Codex — Supabase restore and auth-bootstrap recovery)
+
+1. **Live root cause and recovery:** production Compact stayed on `Supabase reconnect` while
+   `getSession()` repeatedly failed to fetch. The project `travel-expense-public` was confirmed
+   `INACTIVE`, restored through the Supabase control plane and rechecked as `ACTIVE_HEALTHY`; the
+   public auth endpoint again resolved and responded. No database write, schema, RLS, migration,
+   credential or user-data operation occurred.
+2. **TDD fix across three surfaces:** a fake expired session plus an aborted Supabase origin first
+   reproduced the permanent reconnect screen. Catching a rejected promise alone still failed
+   because the client can keep refresh work pending; a five-second bootstrap watchdog now releases
+   loading, clears the unusable in-memory session and displays the network failure. Compact and
+   React versions are `0.16.17` and `0.2.5`; the Android working tree is `0.20.2` / versionCode
+   `2002`.
+3. **Verification:** Compact session smoke passed `3/3`; React session smoke passed `1/1`; Compact
+   Supabase security smoke passed `7` with `1` intentional skip; React passed `3` with `1`
+   intentional skip. Both web apps passed `typecheck`, production build and `security:scan`.
+   Android passed `typecheck`, production web build, `security:scan`, session smoke `3/3` and debug
+   APK assembly. Emulator QA passed with verified App Links and the native login surface visible.
+4. **Git boundary:** Boss's pre-existing main `AGENTS.md` / `CLAUDE.md` edits remain untouched.
+   Android already contained a broad uncommitted `0.20.1` milestone spanning the same version and
+   Supabase files, so its `0.20.2` auth repair is verified in place but must not be staged or pushed
+   independently until that milestone is reviewed.
 
 ### Session 77 (Codex — Milestone 4 source approval)
 

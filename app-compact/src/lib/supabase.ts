@@ -681,10 +681,23 @@ export function useSupabaseAuth() {
       return undefined;
     }
     let alive = true;
+    const sessionCheckTimeout = window.setTimeout(() => {
+      if (!alive) return;
+      setError('Supabase network is unavailable. Please try again.');
+      setSession(null);
+      setLoading(false);
+    }, 5_000);
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
       if (!alive) return;
+      window.clearTimeout(sessionCheckTimeout);
       if (sessionError) setError(sessionError.message);
       setSession(data.session || null);
+      setLoading(false);
+    }).catch((sessionError: unknown) => {
+      if (!alive) return;
+      window.clearTimeout(sessionCheckTimeout);
+      setError(sessionError instanceof Error ? sessionError.message : 'Supabase session check failed');
+      setSession(null);
       setLoading(false);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -694,6 +707,7 @@ export function useSupabaseAuth() {
     });
     return () => {
       alive = false;
+      window.clearTimeout(sessionCheckTimeout);
       data.subscription.unsubscribe();
     };
   }, [supabase]);

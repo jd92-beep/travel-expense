@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-29
+
+- **fix(compact/react/android): recover from paused or unreachable Supabase during cold boot.**
+  The Supabase project was restored to `ACTIVE_HEALTHY`. Auth bootstrap now catches rejected session
+  checks and has a five-second watchdog for refresh calls that remain pending, so the app leaves the
+  reconnect screen and shows the login surface with a network error instead of loading forever.
+  Compact is `0.16.17`, React is `0.2.5`, and the Android working tree is `0.20.2` / versionCode
+  `2002`. No schema, RLS, migration, credential or user-data change was made.
+
 ## 2026-07-20
 
 - **feat(broker): add Volcano Kimi K3 safe route.** Credential Broker `2026.07.20.1` adds
