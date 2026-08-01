@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-08-01 HKT
-- **Focus (latest)**: Completed the Android/Compact sync-regression review: stable cloud identity, serialized native sync, durable retry evidence, itinerary repair backfill, secret-free manual retry and native reachability/storage hardening.
+- **Focus (latest)**: Completed the Android/Compact sync-regression review: stable cloud identity, serialized native sync, recoverable retry evidence, itinerary repair backfill, secret-free manual retry and native reachability/storage hardening.
 - **App version (this sweep)**: Compact/Android `0.20.3` (versionCode `2003`); local branch `codex/admin-console-1.0-android`.
 - **Verification (this sweep)**: full production gate passed in `268.9s`; sync regression `10/10`, Supabase backfill `2/2`, offline `2/2`, session `3/3`, privacy `3/3`, configured security `4` with one intentional local-storage skip, unit contracts, `typecheck`, `build`, `security:scan`, JBR 21 debug build and `android:qa` all passed. QA verified App Links and the native login surface; artifact `/tmp/travel-expense-android-qa-2026-08-01T01-52-57-679Z`. No release APK/AAB was built.
 - **Current cutover gates**: Do not make live receipt photos private until active Compact/Android compatibility is confirmed. Do not rewrite live Nagoya rows without Boss approval, a backup and server preview. Real-device Google/magic-link and authenticated selected-model clicks remain pending. No release APK/AAB was built or published in this session.

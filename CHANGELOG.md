@@ -4,8 +4,8 @@
 
 - **v0.20.3 / versionCode 2003.** Serialized native push/pull/sync triggers, restored
   authoritative empty-cloud owner-trip backfill, preserved Supabase receipt/trip identities and
-  stable local trip links, retained cloud itinerary repair flags, and made RLS/version conflicts
-  durable terminal journal evidence. Stale deployment notices take priority over sync errors and
+  stable local trip links, retained cloud itinerary repair flags, and kept version conflicts
+  terminal while allowing one cold-boot RLS retry after access may be restored. Stale deployment notices take priority over sync errors and
   generic banners no longer expose backend details. Manual History retry rebuilds a secret-free
   payload, native reachability requires an OK response, trip AI includes fast Google fallbacks, and
   exported camera files are scoped to app-specific Pictures storage.
