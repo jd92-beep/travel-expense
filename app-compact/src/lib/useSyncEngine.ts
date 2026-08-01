@@ -3,7 +3,7 @@ import { activeTrip } from '../domain/trip/normalize';
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
 import { recordClientHeartbeat } from './clientHeartbeat';
-import { archiveSupabaseReceipt, createSharedTripOutboxSupabaseAdapter, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
+import { archiveSupabaseReceipt, createSharedTripOutboxSupabaseAdapter, hasSupabaseSession, isSupabaseConfigured, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { drainSharedTripOutbox } from './sharedTripNotionOutbox';
 import { filterSupersededTripQueue, isReceiptTombstoned, mergePulledData, rawReceiptSourceId, receiptSourceTombstoneKey } from './syncMerge';
 import { enqueueChange, settleChange, type JournalOutcome } from './changeJournal';
@@ -186,6 +186,7 @@ export function useSyncEngine(
         if (queueUpdatedAt && currentUpdatedAt > queueUpdatedAt) {
           return {
             ...candidate,
+            supabaseId: receipt.supabaseId || candidate.supabaseId,
             notionPageId: receipt.notionPageId || candidate.notionPageId,
             sourceId: receipt.sourceId || candidate.sourceId,
             _photoSyncedToSupabase: candidate._photoSyncedToSupabase || receipt._photoSyncedToSupabase,
@@ -821,7 +822,7 @@ export function useSyncEngine(
       // Owner/admin drains the shared-trip Notion outbox (receipt_sync_jobs) when online with
       // Notion connected. Transport failures stay observable without blocking the main sync.
       const cloudSession = hasSupabaseSession(supabaseSessionRef.current) ? supabaseSessionRef.current : null;
-      if (cloudSession && canUseNotionMirror(stateRef.current, true, cloudSession.user?.email || null)) {
+      if (cloudSession && isSupabaseConfigured() && canUseNotionMirror(stateRef.current, true, cloudSession.user?.email || null)) {
         await yieldToStateFlush();
         const tripIds = (stateRef.current.trips || [])
           .filter((trip) => trip.supabaseId

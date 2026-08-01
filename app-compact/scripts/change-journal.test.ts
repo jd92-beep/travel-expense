@@ -75,6 +75,14 @@ conflictQueue = settleChange(conflictQueue, conflictQueue[0].id, {
 assert.equal(conflictQueue[0].status, 'error');
 assert.equal(restoreJournal(conflictQueue).queue[0].status, 'error');
 
+let accessDeniedQueue = enqueueChange([], receipt('access-denied'));
+accessDeniedQueue = settleChange(accessDeniedQueue, accessDeniedQueue[0].id, {
+  kind: 'terminal-error',
+  error: '42501 row-level security permission denied',
+}).queue;
+assert.equal(accessDeniedQueue[0].status, 'error');
+assert.equal(restoreJournal(accessDeniedQueue).queue[0].status, 'error');
+
 let terminal = enqueueChange([], receipt('terminal'));
 terminal = settleChange(terminal, terminal[0].id, {
   kind: 'terminal-error',

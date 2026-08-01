@@ -8,10 +8,10 @@ async function seedCompactA11yState(page) {
     contentType: 'application/javascript',
     body: 'window.DEV_SECRETS = {};',
   }));
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/notion/request', (route) => route.fulfill({
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/**', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ ok: true, data: { results: [], has_more: false } }),
+    body: JSON.stringify({ ok: true, broker: 'online', providers: [], data: { results: [], has_more: false } }),
   }));
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;

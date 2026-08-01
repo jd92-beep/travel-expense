@@ -464,10 +464,11 @@ function sharingForTrip(
 }
 
 function rowToTrip(row: SupabaseTripRow, state: AppState, sharing?: TripSharingState): TripProfile {
-  const appId = row.legacy_source_id || `supabase_${row.id}`;
+  const metadata = jsonObject(row.app_metadata);
+  const metadataLocalTripId = typeof metadata.localTripId === 'string' ? metadata.localTripId.trim() : '';
+  const appId = metadataLocalTripId || row.legacy_source_id || `supabase_${row.id}`;
   const current = (state.trips || []).find((trip) => trip.id === appId || trip.supabaseId === row.id);
   const tripCurrency = row.trip_currency || current?.currencies?.find((currency) => currency !== row.home_currency) || state.tripCurrency || 'JPY';
-  const metadata = jsonObject(row.app_metadata);
   const columnIntelligence = {
     countryCode: row.country_code || undefined,
     themeKey: row.theme_key || undefined,

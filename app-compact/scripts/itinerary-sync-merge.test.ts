@@ -63,6 +63,8 @@ const newerLocal = trip(3, 300, [day('2026-04-20', 1, [{ ...staleSpot, name: 'LO
 const olderRemote = trip(2, 400, [day('2026-04-20', 1, [])]);
 const preserved = mergePulledTrips(state(newerLocal), [olderRemote]).trips[0];
 assert.equal(preserved.itinerary[0].spots[0].name, 'LOCAL NEWER', 'older remote itinerary cannot overwrite a newer local version');
+const repairNeeded = mergePulledTrips(state(local), [{ ...equalVersionRemote, updatedAt: 50, _itineraryNeedsRepair: true }]).trips[0];
+assert.equal(repairNeeded._itineraryNeedsRepair, true, 'cloud itinerary repair remains queued when equal-version local content wins');
 
 const newerVersionOlderClock = trip(4, 250, [day('2026-04-20', 1, [{ ...staleSpot, name: 'SERVER VERSION WINS' }])]);
 const versionAuthoritative = mergePulledTrips(state(newerLocal), [newerVersionOlderClock]).trips[0];

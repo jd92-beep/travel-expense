@@ -467,10 +467,236 @@ test('successful stale trip push retains newer local content and applies the Sup
   expect(tripPosts).toHaveLength(2);
 });
 
+test('successful stale receipt push retains newer local content and applies the Supabase identity', async ({ page }) => {
+  const tripUuid = '33333333-3333-4333-8333-333333333333';
+  const receiptUuid = '55555555-5555-4555-8555-555555555555';
+  const now = Date.now();
+  const serverTrip = {
+    id: tripUuid,
+    owner_id: userId,
+    name: 'Receipt identity trip',
+    destination_summary: 'Tokyo',
+    start_date: '2026-08-01',
+    end_date: '2026-08-03',
+    home_currency: 'HKD',
+    trip_currency: 'JPY',
+    timezones: ['Asia/Tokyo'],
+    budget_amount: null,
+    budget_currency: 'HKD',
+    active: false,
+    legacy_source_id: 'trip_receipt_identity',
+    itinerary: [],
+    app_metadata: { localTripId: 'trip_receipt_identity' },
+    version: 1,
+    itinerary_version: 1,
+    archived: false,
+    notion_page_id: null,
+    notion_database_id: null,
+    created_at: new Date(now - 20_000).toISOString(),
+    updated_at: new Date(now - 10_000).toISOString(),
+  };
+  const serverReceipt = {
+    id: receiptUuid,
+    trip_id: tripUuid,
+    owner_id: userId,
+    store: 'Queued older store',
+    record_date: '2026-08-01',
+    record_time: null,
+    category: 'other',
+    record_kind: 'expense',
+    payment_method: 'cash',
+    amount: 300,
+    currency: 'JPY',
+    home_amount: null,
+    home_currency: 'HKD',
+    original_amount: null,
+    original_currency: null,
+    exchange_rate: null,
+    items_text: '',
+    note: '',
+    address: '',
+    booking_ref: '',
+    source_id: 'receipt_identity',
+    status: 'confirmed',
+    confidence: null,
+    map_url: null,
+    visibility: 'trip',
+    split_mode: 'shared',
+    split_type: null,
+    splits: null,
+    payers: null,
+    person_id: null,
+    beneficiary_id: null,
+    notion_page_id: null,
+    notion_database_id: null,
+    version: 1,
+    sync_revision: 1,
+    created_at: new Date(now - 20_000).toISOString(),
+    updated_at: new Date(now - 10_000).toISOString(),
+    deleted_at: null,
+  };
+
+  await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: sessionPayload().user }) });
+  });
+  await page.route('https://test-travel-expense.supabase.co/rest/v1/**', async (route) => {
+    const url = new URL(route.request().url());
+    const table = url.pathname.split('/').pop();
+    const method = route.request().method();
+    if (table === 'upsert_shared_trip_receipt' && method === 'POST') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(serverReceipt) });
+      return;
+    }
+    if (table === 'trips' && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([serverTrip]) });
+      return;
+    }
+    if (table === 'profiles') {
+      await route.fulfill({ status: method === 'POST' ? 201 : 200, contentType: 'application/json', body: JSON.stringify([]) });
+      return;
+    }
+    await route.fulfill({ status: method === 'POST' ? 201 : 200, contentType: 'application/json', body: JSON.stringify([]) });
+  });
+
+  await page.addInitScript(({ session, key, now, tripUuid }) => {
+    localStorage.clear();
+    indexedDB.deleteDatabase('travel-expense-react');
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify(session));
+    localStorage.setItem(key, JSON.stringify({
+      autoSync: true,
+      activeTripId: 'trip_receipt_identity',
+      trips: [{
+        id: 'trip_receipt_identity', supabaseId: tripUuid, name: 'Receipt identity trip', destinationSummary: 'Tokyo',
+        startDate: '2026-08-01', endDate: '2026-08-03', homeCurrency: 'HKD', currencies: ['HKD', 'JPY'],
+        timezones: ['Asia/Tokyo'], version: 1, active: true, itinerary: [], createdAt: now - 20_000, updatedAt: now,
+      }],
+      receipts: [{
+        id: 'receipt_identity', sourceId: 'receipt_identity', tripId: 'trip_receipt_identity', store: 'Newer local store',
+        total: 300, date: '2026-08-01', category: 'other', payment: 'cash', currency: 'JPY',
+        createdAt: now - 20_000, updatedAt: now,
+      }],
+      syncQueue: [{
+        id: 'sync_receipt_identity', type: 'receipt', entityId: 'receipt_identity', op: 'update', status: 'queued', attempts: 0,
+        createdAt: now - 10_000, updatedAt: now - 10_000,
+        payload: { tripId: 'trip_receipt_identity', sourceId: 'receipt_identity', updatedAt: now - 10_000 },
+      }],
+    }));
+  }, { session: sessionPayload(), key: scopedStorageKey, now, tripUuid });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await expect.poll(async () => page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || '{}');
+    const receipt = state.receipts?.find((entry) => entry.id === 'receipt_identity');
+    return {
+      store: receipt?.store,
+      supabaseId: receipt?.supabaseId,
+      queuedReceipts: (state.syncQueue || []).filter((item) => item.type === 'receipt' && item.entityId === 'receipt_identity').length,
+    };
+  }, scopedStorageKey), { timeout: 15_000 }).toEqual({
+    store: 'Newer local store',
+    supabaseId: receiptUuid,
+    queuedReceipts: 0,
+  });
+});
+
+test('re-homed trip keeps its stable local id and receipt links', async ({ page }) => {
+  const receiptUuid = '66666666-6666-4666-8666-666666666666';
+  const now = Date.now();
+  let rehomedRow = null;
+
+  await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: sessionPayload().user }) });
+  });
+  await page.route('https://test-travel-expense.supabase.co/rest/v1/**', async (route) => {
+    const url = new URL(route.request().url());
+    const table = url.pathname.split('/').pop();
+    const method = route.request().method();
+    const single = String(route.request().headers().accept || '').includes('pgrst.object');
+    if (table === 'profiles') {
+      await route.fulfill({ status: method === 'POST' ? 201 : 200, contentType: 'application/json', body: JSON.stringify([]) });
+      return;
+    }
+    if (table === 'trips' && method === 'GET') {
+      const select = url.searchParams.get('select') || '';
+      const value = select === 'id' || !rehomedRow ? null : rehomedRow;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(single ? value : value ? [value] : []),
+      });
+      return;
+    }
+    if (table === 'trips' && method === 'POST') {
+      const body = route.request().postDataJSON();
+      if (!String(body.legacy_source_id || '').includes('__u_')) {
+        await route.fulfill({
+          status: 403,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: '42501', message: 'new row violates row-level security policy' }),
+        });
+        return;
+      }
+      rehomedRow = body;
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(single ? body : [body]) });
+      return;
+    }
+    await route.fulfill({ status: method === 'POST' ? 201 : 200, contentType: 'application/json', body: JSON.stringify([]) });
+  });
+
+  await page.addInitScript(({ session, key, now, receiptUuid }) => {
+    localStorage.clear();
+    indexedDB.deleteDatabase('travel-expense-react');
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: now + 31_536_000_000 }));
+    localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify(session));
+    localStorage.setItem(key, JSON.stringify({
+      autoSync: true,
+      activeTripId: 'trip_rehome',
+      trips: [{
+        id: 'trip_rehome', name: 'Re-home trip', destinationSummary: 'Seoul', startDate: '2026-08-01', endDate: '2026-08-03',
+        homeCurrency: 'HKD', currencies: ['HKD', 'KRW'], timezones: ['Asia/Seoul'], version: 1, active: true,
+        itinerary: [], createdAt: now - 20_000, updatedAt: now,
+      }],
+      receipts: [{
+        id: 'linked_receipt', supabaseId: receiptUuid, sourceId: 'linked_receipt', tripId: 'trip_rehome', store: 'Linked receipt',
+        total: 100, date: '2026-08-01', category: 'other', payment: 'cash', createdAt: now, updatedAt: now,
+      }],
+      syncQueue: [{
+        id: 'sync_trip_rehome', type: 'trip', entityId: 'trip_rehome', op: 'upsert', status: 'queued', attempts: 0,
+        createdAt: now, updatedAt: now, payload: { sourceId: 'trip_rehome', updatedAt: now },
+      }],
+    }));
+  }, { session: sessionPayload(), key: scopedStorageKey, now, receiptUuid });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await expect.poll(async () => page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || '{}');
+    const trip = state.trips?.find((entry) => entry.supabaseId);
+    const receipt = state.receipts?.find((entry) => entry.id === 'linked_receipt');
+    return {
+      rehomed: !!trip?.supabaseId,
+      tripId: trip?.id,
+      activeTripId: state.activeTripId,
+      receiptTripId: receipt?.tripId,
+      queuedTrips: (state.syncQueue || []).filter((item) => item.type === 'trip').length,
+    };
+  }, scopedStorageKey), { timeout: 15_000 }).toEqual({
+    rehomed: true,
+    tripId: 'trip_rehome',
+    activeTripId: 'trip_rehome',
+    receiptTripId: 'trip_rehome',
+    queuedTrips: 0,
+  });
+  expect(rehomedRow?.legacy_source_id).toMatch(/^trip_rehome__u_/);
+  expect(rehomedRow?.app_metadata?.localTripId).toBe('trip_rehome');
+});
+
 test('photo upload abort becomes terminal after three retries', async ({ page }) => {
   const tripUuid = '11111111-1111-4111-8111-111111111111';
   const receiptUuid = '22222222-2222-4222-8222-222222222222';
   let uploadAttempts = 0;
+  let manualUploadInFlight = false;
+  let pullOverlappedManualUpload = false;
   const now = Date.now();
   const serverTrip = {
     id: tripUuid,
@@ -546,6 +772,9 @@ test('photo upload abort becomes terminal after three retries', async ({ page })
       await route.abort('internetdisconnected');
       return;
     }
+    manualUploadInFlight = true;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    manualUploadInFlight = false;
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ Key: 'receipt-photos/upload-cut.jpg' }) });
   });
   await page.route('https://test-travel-expense.supabase.co/storage/v1/object/sign/**', async (route) => {
@@ -559,6 +788,7 @@ test('photo upload abort becomes terminal after three retries', async ({ page })
     const url = new URL(route.request().url());
     const table = url.pathname.split('/').pop();
     const method = route.request().method();
+    if (method === 'GET' && manualUploadInFlight) pullOverlappedManualUpload = true;
     const single = String(route.request().headers().accept || '').includes('pgrst.object');
     const body = route.request().postDataJSON?.() || {};
     const response = (value) => JSON.stringify(single ? value : [value]);
@@ -675,4 +905,5 @@ test('photo upload abort becomes terminal after three retries', async ({ page })
       photoAttempts: receipt?._photoSyncAttempts,
     };
   }, scopedStorageKey)).toEqual({ queue: [], photoSynced: true, photoAttempts: 0 });
+  expect(pullOverlappedManualUpload).toBe(false);
 });

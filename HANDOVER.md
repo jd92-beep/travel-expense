@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-29 HKT
-- **Focus**: Session 78 restored the paused Supabase project and prevented Compact, React and Android from hanging forever during an unreachable session refresh.
+- **Date**: 2026-08-01 HKT
+- **Focus**: Session 79 completed the Compact/Android sync-regression review, repaired stable cloud identity and itinerary backfill, and verified both surfaces end to end.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.17`; Android working tree `0.20.2` (versionCode 2002; branch HEAD remains `1c03a9b` until its pre-existing dirty milestone is reviewed); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
+- **App version**: Compact `0.16.18`; Android `0.20.3` (versionCode 2003; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -54,10 +54,9 @@ you closed with your session number.
     broken (Session 49), but the underlying `owner_id ≠ auth.uid()` mismatch needs DB-side
     investigation (Admin Kanban gateway blocked access). If re-invite or trip re-creation doesn't
     fix it, a manual `UPDATE trips SET owner_id = '<correct_uid>'` may be needed.
-12. 🟡 **Compact Supabase backfill smoke has a pre-existing itinerary fixture failure** — on clean
-    `origin/main` `3cede8a`, receipt backfill and revoked-trip purge pass, but the first test receives
-    zero `update_trip_itinerary` RPC calls instead of one. Session 56 reproduced the same failure on
-    the fix branch and untouched baseline; investigate the itinerary merge/fixture separately.
+12. 🟢 **Compact Supabase backfill fixture resolved in Session 79** — equal-version local-wins
+    merges now preserve the cloud itinerary repair flag. The focused backfill suite passes `2/2`
+    on Compact and Android, including `update_trip_itinerary` and revoked-trip purge.
 13. 🟡 **Live trip-intelligence schema drift** — Session 57 confirmed production `trips` has
     `itinerary_version` but not `country_code`, `theme_key`, `locale`, `weather_region` or
     `trip_intelligence`. Compact `0.16.6` safely falls back to the legacy row contract, but reconcile
@@ -93,6 +92,26 @@ you closed with your session number.
    schema, RLS, migration, credential or user-data change was made.
 
 ## What Was Done
+
+### Session 79 (Codex — Compact/Android sync regression and full review)
+
+1. **Sync/data fixes:** preserved `supabaseId` after stale receipt/trip pushes, kept stable local trip
+   IDs during re-home, serialized Android push/pull/sync triggers, restored authoritative empty-pull
+   owner-trip backfill, retained cloud itinerary repair flags during local-wins merges, and made RLS
+   failures durable terminal journal evidence. Stale deployment notices now take priority over the
+   generic sync banner; raw backend errors are no longer rendered in that banner.
+2. **Android/native fixes:** native reachability now requires a successful response, manual retry
+   rebuilds a secret-free receipt payload, trip AI restores the fast Google fallback ladder, and
+   exported camera files are limited to the app-specific Pictures directory.
+3. **Verification:** Compact `0.16.18` full production gate passed in `293.9s`; Android `0.20.3`
+   passed in `268.9s`. Both sync-regression suites passed `10/10`, focused Supabase backfill passed
+   `2/2`, itinerary merge and journal tests passed, and security/build/mobile/a11y/shared-contract
+   gates were green. Android offline `2/2`, session `3/3`, privacy `3/3`, configured security `4`
+   with one intentional local-storage skip, JBR 21 `assembleDebug`, and emulator QA passed with
+   verified App Links; artifact `/tmp/travel-expense-android-qa-2026-08-01T01-52-57-679Z`.
+4. **Boundaries:** no schema, migration, RLS, credential, live-data or release APK/AAB action was
+   performed. Real-device Google/magic-link and authenticated selected-model clicks remain human
+   verification items; Android's non-blocking `636 kB` main-chunk warning remains an optimization.
 
 ### Session 78 (Codex — Supabase restore and auth-bootstrap recovery)
 

@@ -20,7 +20,7 @@ export type JournalResult = {
   error: string;
 };
 
-const terminalError = (error: string) => /40001|version conflict|版本衝突/i.test(error);
+const terminalError = (error: string) => /40001|version conflict|版本衝突|row-level security|42501|permission denied|存取權/i.test(error);
 const queueKey = (item: Pick<SyncQueueItem, 'type' | 'entityId'>) =>
   `${item.type}:${item.entityId}`;
 
