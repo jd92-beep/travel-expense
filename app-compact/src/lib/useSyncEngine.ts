@@ -6,12 +6,12 @@ import { canUseNotionMirror } from './notionAccess';
 import { recordClientHeartbeat } from './clientHeartbeat';
 import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { filterSupersededTripQueue, isReceiptTombstoned, mergePulledData, rawReceiptSourceId, receiptSourceTombstoneKey } from './syncMerge';
-import { MAX_RETRY_ATTEMPTS, queueItemReady, releaseReconnectBackoff, syncBackoffMs } from './syncBackoff';
+import { enqueueChange, settleChange, type JournalOutcome } from './changeJournal';
+import { MAX_RETRY_ATTEMPTS, queueItemReady, releaseReconnectBackoff } from './syncBackoff';
 import { NATIVE_REACHABILITY_ONLINE_EVENT } from './constants';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
 import type { Session } from '@supabase/supabase-js';
 
-const QUEUE_MAX_AGE_MS = 14 * 86_400_000; // drop long-stuck error items after 14 days
 const DEBOUNCE_MS = 3000;
 const BACKGROUND_INTERVAL_MS = 120_000;
 const MIN_SYNC_INTERVAL_MS = 30_000;
@@ -91,6 +91,8 @@ export function useSyncEngine(
   const lastPushSucceededRef = useRef(true);
   const syncingRef = useRef(false);
   const pullingRef = useRef(false);
+  const needsSyncAfterCurrentRef = useRef(false);
+  const syncRef = useRef<() => Promise<void>>(async () => {});
   const reconnectSyncTimerRef = useRef<number | null>(null);
   const aliveRef = useRef(true);
   // Trips whose push failed with an access/RLS denial. Persisted across push/pull cycles so the
@@ -117,9 +119,22 @@ export function useSyncEngine(
       processingRef.current = false;
       syncingRef.current = false;
       pullingRef.current = false;
+      needsSyncAfterCurrentRef.current = false;
       if (reconnectSyncTimerRef.current) window.clearTimeout(reconnectSyncTimerRef.current);
       if (tripPullDebounceRef.current) window.clearTimeout(tripPullDebounceRef.current);
     };
+  }, []);
+
+  const scheduleSyncAfterCurrent = useCallback(() => {
+    needsSyncAfterCurrentRef.current = true;
+  }, []);
+
+  const runDeferredSync = useCallback(() => {
+    if (!aliveRef.current || processingRef.current || pullingRef.current || syncingRef.current || !needsSyncAfterCurrentRef.current) return;
+    needsSyncAfterCurrentRef.current = false;
+    window.setTimeout(() => {
+      if (aliveRef.current) void syncRef.current();
+    }, 0);
   }, []);
 
   const engineState = useMemo<SyncEngineState>(() => ({
@@ -143,19 +158,14 @@ export function useSyncEngine(
     }));
   }, [setState]);
 
-  const markQueueItem = useCallback((item: SyncQueueItem, patch: Partial<SyncQueueItem>) => {
+  const settleQueueItem = useCallback((item: SyncQueueItem, outcome: JournalOutcome) => {
     if (!aliveRef.current) return;
+    const guardedOutcome = outcome.kind === 'syncing' || outcome.kind === 'manual-retry'
+      ? outcome
+      : { ...outcome, expectedUpdatedAt: item.updatedAt };
     setState((current) => ({
       ...current,
-      syncQueue: (current.syncQueue || []).map((queued) => queued.id === item.id ? { ...queued, ...patch, updatedAt: Date.now() } : queued),
-    }));
-  }, [setState]);
-
-  const removeQueueItem = useCallback((item: SyncQueueItem) => {
-    if (!aliveRef.current) return;
-    setState((current) => ({
-      ...current,
-      syncQueue: (current.syncQueue || []).filter((queued) => queued.id !== item.id),
+      syncQueue: settleChange(current.syncQueue || [], item.id, guardedOutcome).queue,
     }));
   }, [setState]);
 
@@ -171,6 +181,7 @@ export function useSyncEngine(
         if (queueUpdatedAt && currentUpdatedAt > queueUpdatedAt) {
           return {
             ...candidate,
+            supabaseId: receipt.supabaseId || candidate.supabaseId,
             notionPageId: receipt.notionPageId || candidate.notionPageId,
             sourceId: receipt.sourceId || candidate.sourceId,
             _photoSyncedToSupabase: candidate._photoSyncedToSupabase || receipt._photoSyncedToSupabase,
@@ -195,7 +206,7 @@ export function useSyncEngine(
     setState((current) => ({
       ...current,
       trips: (current.trips || []).map((candidate) => {
-        if (candidate.id !== trip.id) return candidate;
+        if (candidate.id !== item.entityId) return candidate;
         const queueUpdatedAt = Number(item.payload?.updatedAt || trip.updatedAt || trip.createdAt || 0);
         const currentUpdatedAt = Number(candidate.updatedAt || candidate.createdAt || Date.now());
         if (queueUpdatedAt && currentUpdatedAt > queueUpdatedAt) {
@@ -213,13 +224,19 @@ export function useSyncEngine(
 
   const settlePushStatus = useCallback((failures: number, lastError?: string) => {
     if (!aliveRef.current) return;
-    lastPushSucceededRef.current = failures === 0;
-    updateSyncState({
-      status: failures ? 'error' : (pendingCount(stateRef.current.syncQueue) ? 'queued' : 'synced'),
-      lastSyncedAt: failures ? stateRef.current.lastSyncedAt || 0 : Date.now(),
-      error: failures ? lastError : '',
+    setState((current) => {
+      const failedItem = (current.syncQueue || []).find((item) =>
+        item.status === 'failed' || item.status === 'error');
+      const hasFailure = failures > 0 || !!failedItem;
+      lastPushSucceededRef.current = !hasFailure;
+      return {
+        ...current,
+        globalSyncStatus: hasFailure ? 'error' : (pendingCount(current.syncQueue) ? 'queued' : 'synced'),
+        lastSyncedAt: hasFailure ? current.lastSyncedAt || 0 : Date.now(),
+        syncError: hasFailure ? lastError || failedItem?.error || current.syncError || '' : '',
+      };
     });
-  }, [updateSyncState]);
+  }, [setState]);
 
   const yieldToStateFlush = useCallback(() => new Promise<void>((resolve) => {
     if (!aliveRef.current) {
@@ -232,7 +249,7 @@ export function useSyncEngine(
     return () => window.clearTimeout(timer);
   }), []);
 
-  const processItem = useCallback(async (item: SyncQueueItem) => {
+  const processItem = useCallback(async (item: SyncQueueItem): Promise<JournalOutcome | undefined> => {
     const current = stateRef.current;
     const session = supabaseSessionRef.current;
     const supabaseSession = hasSupabaseSession(session) ? session : null;
@@ -244,18 +261,16 @@ export function useSyncEngine(
       let synced = supabaseSession
         ? await upsertSupabaseReceipt(supabaseSession, current, { ...receipt, syncStatus: 'syncing' })
         : { ...receipt, syncStatus: 'syncing' as const };
-      let photoRetryNeeded = false;
+      let photoError = '';
       if (receipt.photoThumb && !receipt._photoSyncedToSupabase && supabaseSession) {
         try {
           const receiptUuid = synced.supabaseId || synced.id;
           const { publicUrl, storagePath } = await uploadReceiptPhoto(supabaseSession, receiptUuid, receipt.photoThumb, 'image/jpeg', receipt.supabasePhotoPath);
           synced = { ...synced, photoUrl: publicUrl, supabasePhotoPath: storagePath, _photoSyncedToSupabase: true, _photoSyncAttempts: 0 };
         } catch (photoErr) {
-          // Don't swallow: track attempts and schedule a bounded retry so the photo
-          // eventually uploads, without making the (already-synced) receipt look failed.
-          const attempts = Number(receipt._photoSyncAttempts || 0) + 1;
+          const attempts = item.attempts + 1;
           synced = { ...synced, _photoSyncedToSupabase: false, _photoSyncAttempts: attempts };
-          photoRetryNeeded = attempts < MAX_RETRY_ATTEMPTS;
+          photoError = redactError(photoErr);
           console.warn(`[SyncEngine] Supabase photo upload failed (attempt ${attempts}/${MAX_RETRY_ATTEMPTS}):`, photoErr);
         }
       }
@@ -268,36 +283,7 @@ export function useSyncEngine(
         }
       }
       applyReceiptSyncResult(item, synced);
-      if (photoRetryNeeded && aliveRef.current) {
-        // Re-enqueue a photo-only retry (dedupeQueue collapses by type:entityId, so this
-        // never accumulates). Bounded by _photoSyncAttempts < MAX_RETRY_ATTEMPTS above.
-        const retryReceipt = synced;
-        setState((current) => ({
-          ...current,
-          syncQueue: [
-            ...(current.syncQueue || []),
-            {
-              id: `sync_photo_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-              type: 'receipt',
-              entityId: retryReceipt.id,
-              op: 'update',
-              status: 'queued',
-              attempts: 0,
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-              payload: {
-                supabaseId: retryReceipt.supabaseId,
-                sourceId: retryReceipt.sourceId,
-                tripId: retryReceipt.tripId,
-                version: retryReceipt.version,
-                syncRevision: retryReceipt.syncRevision,
-                updatedAt: retryReceipt.updatedAt,
-              },
-            },
-          ],
-        }));
-      }
-      return;
+      return photoError ? { kind: 'retryable-error', error: photoError } : undefined;
     }
     if (item.type === 'delete-receipt') {
       const tombstone = {
@@ -338,7 +324,13 @@ export function useSyncEngine(
     console.log('[SyncEngine] push() started');
     if (processingRef.current) {
       lastPushSucceededRef.current = false;
+      scheduleSyncAfterCurrent();
       console.log('[SyncEngine] push() skipped — already processing');
+      return;
+    }
+    if (pullingRef.current) {
+      scheduleSyncAfterCurrent();
+      console.log('[SyncEngine] push() skipped — pull in progress');
       return;
     }
     if (!navigator.onLine) {
@@ -358,7 +350,6 @@ export function useSyncEngine(
     try {
       let failures = 0;
       let lastError = '';
-      const pushStartedAt = Date.now();
       const accessDeniedTrips = accessDeniedTripsRef.current;
       const tripKeyForItem = (item: SyncQueueItem): string => String(
         (item.payload as { tripId?: string } | undefined)?.tripId
@@ -366,19 +357,24 @@ export function useSyncEngine(
         || (item.type === 'trip' ? item.entityId : '')
         || '',
       );
+      const pushStartedAt = Date.now();
       for (const item of dedupeQueue(stateRef.current.syncQueue || [])) {
         if (!queueItemReady(item, pushStartedAt, MAX_RETRY_ATTEMPTS)) continue;
         const tripKey = tripKeyForItem(item);
         if (tripKey && accessDeniedTrips.has(tripKey)) {
           failures += 1;
           lastError = lastError || '旅程存取權失效：請旅程擁有者重新邀請。';
-          markQueueItem(item, { status: 'error', attempts: item.attempts + 1, error: lastError });
+          settleQueueItem(item, { kind: 'terminal-error', error: lastError });
           continue;
         }
-        markQueueItem(item, { status: 'syncing' });
+        settleQueueItem(item, { kind: 'syncing' });
         try {
-          await processItem(item);
-          removeQueueItem(item);
+          const outcome = await processItem(item);
+          settleQueueItem(item, outcome || { kind: 'succeeded' });
+          if (outcome?.kind === 'retryable-error' && item.attempts + 1 >= MAX_RETRY_ATTEMPTS) {
+            failures += 1;
+            lastError = outcome.error;
+          }
           // Recovery: if a trip push succeeds now (e.g. after re-invite or rehome),
           // clear the denied flag so future receipts for this trip can sync.
           const successTripKey = tripKeyForItem(item);
@@ -412,30 +408,21 @@ export function useSyncEngine(
           const isAccessError = /row-level security|42501|permission denied|存取權/i.test(lastError);
           if (isAccessError && tripKey) accessDeniedTrips.add(tripKey);
 
+          const safeMessage = isVersionConflict
+            ? '有人啱啱改咗呢筆單，你嘅修改未有套用。請下拉同步後再改一次。'
+            : lastError;
           if (isVersionConflict) {
             failures += 1;
-            markQueueItem(item, {
-              status: 'error',
-              attempts: nextAttempts,
-              error: '有人啱啱改咗呢筆單，你嘅修改未有套用。請下拉同步後再改一次。',
-            });
+            settleQueueItem(item, { kind: 'terminal-error', error: safeMessage });
           } else if (isAccessError) {
             failures += 1;
-            markQueueItem(item, { status: 'error', attempts: nextAttempts, error: lastError });
+            settleQueueItem(item, { kind: 'terminal-error', error: safeMessage });
           } else if (isAuthError || nextAttempts >= MAX_RETRY_ATTEMPTS) {
-            // Auth failures need re-login; exhausted retries park for manual "重試" (kept, not dropped).
             failures += 1;
-            markQueueItem(item, { status: 'error', attempts: nextAttempts, error: lastError });
+            settleQueueItem(item, { kind: 'terminal-error', error: safeMessage });
             if (isAuthError) console.log('[SyncEngine] Auth error detected mid-push, skipping item');
           } else {
-            // Transient failure (flaky network / server hiccup): stay retriable with exponential
-            // backoff so the receipt self-heals instead of stranding as local-only.
-            markQueueItem(item, {
-              status: 'queued',
-              attempts: nextAttempts,
-              error: lastError,
-              nextRetryAt: Date.now() + syncBackoffMs(nextAttempts),
-            });
+            settleQueueItem(item, { kind: 'retryable-error', error: safeMessage });
           }
         }
       }
@@ -451,10 +438,10 @@ export function useSyncEngine(
           }
           return {
             ...current,
-            syncQueue: before
-              // Keep parked 'error'/'failed' items so manual retry works; only age-out truly stale ones.
-              .filter((item) => !((item.status === 'error' || item.status === 'failed') && (item.updatedAt || item.createdAt || 0) < Date.now() - QUEUE_MAX_AGE_MS))
-              .slice(-500),
+            syncQueue: [
+              ...before.filter((item) => item.status === 'error' || item.status === 'failed'),
+              ...before.filter((item) => item.status !== 'error' && item.status !== 'failed').slice(-500),
+            ],
           };
         });
       }
@@ -463,8 +450,9 @@ export function useSyncEngine(
       settlePushStatus(failures, lastError || undefined);
     } finally {
       processingRef.current = false;
+      runDeferredSync();
     }
-  }, [markQueueItem, updateSyncState, processItem, removeQueueItem, settlePushStatus, setState, yieldToStateFlush]);
+  }, [settleQueueItem, updateSyncState, processItem, settlePushStatus, setState, yieldToStateFlush, scheduleSyncAfterCurrent, runDeferredSync]);
 
   const pull = useCallback(async () => {
     console.log('[SyncEngine] pull() started');
@@ -473,7 +461,13 @@ export function useSyncEngine(
     // concurrent network round-trips, each computing its own overwrittenIds snapshot against a different
     // intermediate state before merging (mirrors push()'s existing processingRef guard).
     if (pullingRef.current) {
+      scheduleSyncAfterCurrent();
       console.log('[SyncEngine] pull() skipped — already pulling');
+      return;
+    }
+    if (processingRef.current) {
+      scheduleSyncAfterCurrent();
+      console.log('[SyncEngine] pull() skipped — push in progress');
       return;
     }
     if (!navigator.onLine) {
@@ -678,25 +672,32 @@ export function useSyncEngine(
             const queuedTripIds = new Set(freshQueue.filter((item) => item.type === 'trip').map((item) => item.entityId));
             const itineraryRepairs = (finalState.trips || []).filter((trip) => trip._itineraryNeedsRepair && !queuedTripIds.has(trip.id));
             if (itineraryRepairs.length) {
-              const now = Date.now();
-              freshQueue = [
-                ...freshQueue,
-                ...itineraryRepairs.map((trip, index) => ({
-                  id: `sync_itinerary_repair_${now}_${index}`,
-                  type: 'trip' as const,
-                  entityId: trip.id,
-                  op: 'update' as const,
-                  status: 'queued' as const,
-                  attempts: 0,
-                  createdAt: now,
-                  updatedAt: now,
-                  payload: {
-                    sourceId: trip.sourceId || `trip_${trip.id}`,
-                    updatedAt: trip.updatedAt,
-                    itineraryRepair: true,
-                  },
-                })),
-              ];
+              freshQueue = itineraryRepairs.reduce((queue, trip) => enqueueChange(queue, {
+                type: 'trip',
+                entityId: trip.id,
+                op: 'update',
+                payload: {
+                  sourceId: trip.sourceId || `trip_${trip.id}`,
+                  updatedAt: trip.updatedAt,
+                },
+              }), freshQueue);
+            }
+          }
+          if (cloudPullOk && finalState.autoSync) {
+            const queuedTripIds = new Set(freshQueue.filter((item) => item.type === 'trip').map((item) => item.entityId));
+            const localTrips = (finalState.trips || []).filter((trip) =>
+              !trip.archived
+              && !trip.supabaseId
+              && !queuedTripIds.has(trip.id)
+              && trip.sharing?.role !== 'viewer'
+              && trip.sharing?.role !== 'editor');
+            if (localTrips.length) {
+              freshQueue = localTrips.slice(0, 100).reduce((queue, trip) => enqueueChange(queue, {
+                type: 'trip',
+                entityId: trip.id,
+                op: 'upsert',
+                payload: { sourceId: trip.sourceId || trip.id, updatedAt: trip.updatedAt },
+              }), freshQueue);
             }
           }
           // Backfill sweep (ported from main v0.8.6): heal receipts that never reached
@@ -720,40 +721,32 @@ export function useSyncEngine(
               && !suspended.has(receipt.id));
             if (needsBackfill.length) {
               console.log(`[SyncEngine] backfill sweep: ${needsBackfill.length} receipt(s) missing from Supabase — re-queueing`);
-              const now = Date.now();
-              freshQueue = [
-                ...freshQueue,
-                ...needsBackfill.slice(0, 200).map((receipt, idx) => ({
-                  id: `sync_backfill_${now}_${idx}_${Math.random().toString(16).slice(2)}`,
-                  type: 'receipt' as const,
-                  entityId: receipt.id,
-                  op: 'update' as const,
-                  status: 'queued' as const,
-                  attempts: 0,
-                  createdAt: now,
-                  updatedAt: now,
-                  payload: {
-                    supabaseId: receipt.supabaseId,
-                    notionPageId: receipt.notionPageId,
-                    sourceId: receipt.sourceId || receipt.id,
-                    tripId: receipt.tripId,
-                    version: receipt.version,
-                    syncRevision: receipt.syncRevision,
-                    updatedAt: receipt.updatedAt,
-                  },
-                })),
-              ];
+              freshQueue = needsBackfill.slice(0, 200).reduce((queue, receipt) => enqueueChange(queue, {
+                type: 'receipt',
+                entityId: receipt.id,
+                op: 'update',
+                payload: {
+                  supabaseId: receipt.supabaseId,
+                  notionPageId: receipt.notionPageId,
+                  sourceId: receipt.sourceId || receipt.id,
+                  tripId: receipt.tripId,
+                  version: receipt.version,
+                  syncRevision: receipt.syncRevision,
+                  updatedAt: receipt.updatedAt,
+                },
+              }), freshQueue);
             }
           }
           computedPending = pendingCount(freshQueue);
+          const failedItem = freshQueue.find((item) => item.status === 'error' || item.status === 'failed');
           return {
             ...finalState,
             syncQueue: freshQueue,
             // Transient-only pull failures don't earn the red banner: stay 'queued'/'idle' and let
             // the retry loop heal it. lastSyncedAt already isn't advanced on any error (nextSyncedAt).
-            globalSyncStatus: hardPullError ? 'error' : (computedPending ? 'queued' : (pullErrors.length ? 'idle' : 'synced')),
+            globalSyncStatus: hardPullError || failedItem ? 'error' : (computedPending ? 'queued' : (pullErrors.length ? 'idle' : 'synced')),
             lastSyncedAt: nextSyncedAt,
-            syncError: hardPullError ? pullErrors.join(' | ') : '',
+            syncError: hardPullError ? pullErrors.join(' | ') : failedItem?.error || '',
           };
         });
       }
@@ -770,8 +763,9 @@ export function useSyncEngine(
       }
     } finally {
       pullingRef.current = false;
+      runDeferredSync();
     }
-  }, [updateSyncState, setState]);
+  }, [updateSyncState, setState, scheduleSyncAfterCurrent, runDeferredSync]);
 
   const pushSettings = useCallback(async () => {
     const current = stateRef.current;
@@ -798,6 +792,7 @@ export function useSyncEngine(
 
   const sync = useCallback(async () => {
     if (syncingRef.current) {
+      scheduleSyncAfterCurrent();
       console.log('[SyncEngine] sync() skipped — already syncing');
       return;
     }
@@ -828,23 +823,47 @@ export function useSyncEngine(
       }
     } finally {
       syncingRef.current = false;
+      runDeferredSync();
     }
-  }, [pull, push, yieldToStateFlush]);
+  }, [pull, push, yieldToStateFlush, scheduleSyncAfterCurrent, runDeferredSync]);
+  syncRef.current = sync;
 
   const retryFailedItems = useCallback(() => {
     if (!aliveRef.current) return;
-    setState((current) => ({
-      ...current,
-      syncQueue: (current.syncQueue || []).map((item) =>
-        item.status === 'failed' || item.status === 'error'
-          ? { ...item, status: 'queued', attempts: 0, error: undefined, nextRetryAt: undefined }
-          : item
-      ),
-    }));
+    for (const item of stateRef.current.syncQueue || []) {
+      if (item.status !== 'failed' && item.status !== 'error') continue;
+      const tripId = String(
+        item.payload?.tripId
+        || (item.type === 'receipt' ? stateRef.current.receipts.find((receipt) => receipt.id === item.entityId)?.tripId : '')
+        || (item.type === 'trip' ? item.entityId : ''),
+      );
+      if (tripId) accessDeniedTripsRef.current.delete(tripId);
+      if (item.type === 'receipt') backfillSuspendedRef.current.delete(item.entityId);
+    }
+    setState((current) => {
+      const retryPhotoIds = new Set((current.syncQueue || [])
+        .filter((item) => (item.status === 'error' || item.status === 'failed') && item.type === 'receipt')
+        .map((item) => item.entityId));
+      return {
+        ...current,
+        receipts: current.receipts.map((receipt) => retryPhotoIds.has(receipt.id) && receipt.photoThumb && !receipt._photoSyncedToSupabase
+          ? { ...receipt, _photoSyncAttempts: 0 }
+          : receipt),
+        syncQueue: (current.syncQueue || []).reduce(
+          (queue, item) =>
+            item.status === 'error' || item.status === 'failed'
+              ? settleChange(queue, item.id, { kind: 'manual-retry' }).queue
+              : queue,
+          current.syncQueue || [],
+        ),
+        globalSyncStatus: 'queued',
+        syncError: '',
+      };
+    });
     setTimeout(() => {
-      void push();
+      void sync();
     }, 100);
-  }, [setState, push]);
+  }, [setState, sync]);
 
   useEffect(() => {
     if (!aliveRef.current || !state.activeTripId) return;
@@ -877,8 +896,6 @@ export function useSyncEngine(
     };
   }, [push, state.autoSync, state.credentialSession, state.credentialSessionExpiresAt, state.syncQueue, supabaseSession]);
 
-  // Backoff wake-up: when an item is waiting on its backoff window, schedule a push at the soonest
-  // nextRetryAt so a 30s/2m retry self-heals promptly instead of waiting for the 120s interval.
   useEffect(() => {
     if (!state.autoSync) return;
     const now = Date.now();
@@ -889,8 +906,10 @@ export function useSyncEngine(
         : min
     ), Infinity);
     if (!Number.isFinite(soonest)) return;
-    const delay = Math.min(Math.max(soonest - now, 0), BACKGROUND_INTERVAL_MS);
-    const timer = window.setTimeout(() => { void push(); }, delay);
+    const timer = window.setTimeout(
+      () => { void push(); },
+      Math.min(Math.max(soonest - now, 0), BACKGROUND_INTERVAL_MS),
+    );
     return () => window.clearTimeout(timer);
   }, [push, state.autoSync, state.syncQueue]);
 

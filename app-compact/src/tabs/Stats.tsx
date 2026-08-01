@@ -7,6 +7,7 @@ import { categoryById, computeSettlements, createSettlementReceipt, displayStore
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { amountToHkd, formatCurrencyAmount, hkdToCurrency } from '../lib/currency';
 import { needsTranslation, splitInlineTranslation, translateStoreNames } from '../lib/storeTranslation';
+import { enqueueChange } from '../lib/changeJournal';
 import { EmptyState, GlassCard, StatusPill, TickerMoney } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { VisualIcon } from '../components/VisualIcon';
@@ -487,29 +488,19 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
         updatedAt: now,
       };
 
-      const queueItem = {
-        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
-        type: 'trip' as const,
-        entityId: trip.id,
-        op: 'update' as const,
-        status: 'queued' as const,
-        attempts: 0,
-        createdAt: now,
-        updatedAt: now,
-        payload: {
-          sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
-          updatedAt: nextTrip.updatedAt,
-        },
-      };
-
       setState((prev: AppState) => ({
         ...prev,
         budget: newBudget,
         trips: (prev.trips || []).map((t) => t.id === trip.id ? nextTrip : t),
-        syncQueue: [
-          ...(prev.syncQueue || []),
-          queueItem,
-        ].slice(-500),
+        syncQueue: enqueueChange(prev.syncQueue, {
+          type: 'trip',
+          entityId: trip.id,
+          op: 'update',
+          payload: {
+            sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
+            updatedAt: nextTrip.updatedAt,
+          },
+        }),
       }));
     } else {
       updateState({ budget: newBudget });

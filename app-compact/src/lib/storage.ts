@@ -1,7 +1,8 @@
-import { ALLOWED_CREDENTIAL_BROKER_URLS, DEFAULT_CREDENTIAL_BROKER_URL, DEFAULT_NOTION_DB, DEFAULT_STATE, MAX_SYNC_RETRY_ATTEMPTS, STORAGE_KEY, normalizeAiModelSettings } from './constants';
+import { ALLOWED_CREDENTIAL_BROKER_URLS, DEFAULT_CREDENTIAL_BROKER_URL, DEFAULT_NOTION_DB, DEFAULT_STATE, STORAGE_KEY, normalizeAiModelSettings } from './constants';
+import { restoreJournal } from './changeJournal';
 import { migrateAppState } from '../domain/trip/normalize';
 import { saveIndexedState } from '../storage/indexedDb';
-import type { AppCredentials, AppState, SyncQueueItem } from './types';
+import type { AppCredentials, AppState } from './types';
 
 const CREDENTIALS_KEY = `${STORAGE_KEY}:react-credentials`;
 const BROKER_SESSION_KEY = `${STORAGE_KEY}:credential-session:v1`;
@@ -66,11 +67,6 @@ function normalizeCredentialBrokerUrl(value: unknown): string {
     : DEFAULT_CREDENTIAL_BROKER_URL;
 }
 
-function isRetryablePersistedSyncFailure(item: SyncQueueItem): boolean {
-  if ((item.status !== 'error' && item.status !== 'failed') || item.attempts >= MAX_SYNC_RETRY_ATTEMPTS) return false;
-  return !/40001|version conflict|版本衝突/i.test(item.error || '');
-}
-
 export function normalizeState(input: unknown): AppState {
   const parsed = input && typeof input === 'object' ? input as Partial<AppState> : {};
   const state: AppState = migrateAppState({
@@ -97,22 +93,10 @@ export function normalizeState(input: unknown): AppState {
     r.visibility === 'private' && !(r.splitMode === 'private' && (!r.beneficiaryId || r.beneficiaryId === r.personId))
       ? { ...r, visibility: undefined }
       : r);
-  // A killed in-flight attempt is safe to requeue. Non-exhausted, retryable failures get one
-  // boot retry; exhausted and conflict failures remain durable operator evidence.
-  state.syncQueue = (state.syncQueue || []).map((item) =>
-    item.status === 'syncing'
-      ? { ...item, status: 'queued' as const, error: undefined }
-      : isRetryablePersistedSyncFailure(item)
-        ? { ...item, status: 'queued' as const, error: undefined }
-      : item);
-  const failedItem = state.syncQueue.find((item) => item.status === 'error' || item.status === 'failed');
-  if (failedItem) {
-    state.globalSyncStatus = 'error';
-    state.syncError = failedItem.error || state.syncError || 'Sync queue requires retry';
-  } else {
-    state.globalSyncStatus = state.syncQueue.some((item) => item.status === 'queued') ? 'queued' : 'idle';
-    state.syncError = '';
-  }
+  const journal = restoreJournal(state.syncQueue);
+  state.syncQueue = journal.queue;
+  state.globalSyncStatus = journal.status;
+  state.syncError = journal.error;
   return stripLegacyProviderSecrets(state);
 }
 

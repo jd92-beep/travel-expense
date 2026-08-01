@@ -142,6 +142,8 @@ const COMPACT_RELEASE_NOTES = [
   { title: 'Offline conflict resolver', detail: 'History can review failed local/cloud receipt conflicts without exposing provider payloads.' },
 ];
 const COMPACT_RELEASE_NOTES_SEEN_KEY = 'travel-expense-compact:release-notes-seen';
+const DEPLOYMENT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const DEPLOYMENT_CHECK_QUERY = '__compact_deploy_check';
 // Probe the sync backbone (Supabase) first so the app never depends on our web deployment
 // being up to know it's online; the Vercel page is only a fallback probe target.
 const NATIVE_REACHABILITY_URLS = [
@@ -178,12 +180,11 @@ async function checkNativeReachability() {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), NATIVE_REACHABILITY_TIMEOUT_MS);
     try {
-      await fetch(`${url}?reachability=${Date.now()}`, {
+      const response = await fetch(`${url}?reachability=${Date.now()}`, {
         cache: 'no-store',
-        mode: 'no-cors',
         signal: controller.signal,
       });
-      return true;
+      if (response.ok) return true;
     } catch {
       // try next probe target
     } finally {
@@ -300,6 +301,36 @@ export function Shell({
         setReleaseNotesOpen(true);
       }
     };
+    let deploymentCheckInFlight = false;
+    const checkForDeploymentUpdate = async () => {
+      if (deploymentCheckInFlight || !navigator.onLine) return;
+      const loadedScript = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src;
+      if (!loadedScript) return;
+      deploymentCheckInFlight = true;
+      try {
+        const indexUrl = new URL(import.meta.env.BASE_URL || '/', window.location.origin);
+        indexUrl.searchParams.set(DEPLOYMENT_CHECK_QUERY, String(Date.now()));
+        const response = await fetch(indexUrl, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+          headers: { Accept: 'text/html' },
+        });
+        if (!response.ok) return;
+        const html = await response.text();
+        const latestDocument = new DOMParser().parseFromString(html, 'text/html');
+        const latestSource = latestDocument.querySelector<HTMLScriptElement>('script[type="module"][src]')?.getAttribute('src');
+        if (!latestSource) return;
+        if (new URL(latestSource, response.url).href !== loadedScript) onControllerChange();
+      } catch {
+        // Advisory only: freshness discovery must not affect offline or sync state.
+      } finally {
+        deploymentCheckInFlight = false;
+      }
+    };
+    const onFocus = () => void checkForDeploymentUpdate();
+    const onVisibilityChange = () => {
+      if (!document.hidden) void checkForDeploymentUpdate();
+    };
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       installPromptRef.current = event as BeforeInstallPromptEvent;
@@ -307,9 +338,16 @@ export function Shell({
     };
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
+    window.addEventListener('focus', onFocus);
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     navigator.serviceWorker?.addEventListener('controllerchange', onControllerChange);
     void refreshOnline();
+    void checkForDeploymentUpdate();
+    const deploymentTimer = window.setInterval(
+      () => { void checkForDeploymentUpdate(); },
+      DEPLOYMENT_CHECK_INTERVAL_MS,
+    );
     const reachabilityTimer = nativeReachability
       ? window.setInterval(() => { void refreshOnline(); }, 30_000)
       : null;
@@ -317,8 +355,11 @@ export function Shell({
       alive = false;
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
+      window.removeEventListener('focus', onFocus);
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange);
+      window.clearInterval(deploymentTimer);
       if (reachabilityTimer) window.clearInterval(reachabilityTimer);
     };
   }, []);
@@ -463,7 +504,7 @@ export function Shell({
           <button type="button" onClick={() => location.reload()}>立即更新</button>
         </div>
       )}
-      {syncState?.status === 'error' && (
+      {syncState?.status === 'error' && !updateReady && (
         <div className="top-notice text-red-700 bg-red-50 border border-red-200/60 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-300 backdrop-blur-md flex items-center justify-between gap-4 w-full" style={{ background: 'rgba(253, 240, 240, 0.95)', border: '1px solid rgba(194, 59, 94, 0.3)', color: '#A83030' }}>
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 relative">
@@ -475,7 +516,7 @@ export function Shell({
                   "check the connection" sends them chasing the wrong cause (observed live). */}
               {/存取權/.test(syncState.error || '')
                 ? `有記帳因為權限問題未能同步。${syncState.error ? `(${syncState.error})` : ''}`
-                : `有資料同步失敗，請檢查連線或設定。${syncState.error ? `(${syncState.error})` : ''}`}
+                : '有資料同步失敗，請檢查連線或設定。'}
             </span>
           </div>
           {onRetryFailed && (

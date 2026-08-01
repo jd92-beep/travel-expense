@@ -708,7 +708,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
       shareRatios: { p_boss: 1 },
       syncQueue: [
         { id: 'sync_doctor_1', type: 'receipt', entityId: 'doctor_pending_ocr', op: 'update', status: 'queued', attempts: 0, createdAt: 1, updatedAt: 1 },
-        { id: 'sync_doctor_2', type: 'receipt', entityId: 'doctor_missing_person', op: 'update', status: 'error', attempts: 2, createdAt: 2, updatedAt: 2, lastError: 'network down' },
+        { id: 'sync_doctor_2', type: 'receipt', entityId: 'doctor_missing_person', op: 'update', status: 'error', attempts: 3, createdAt: 2, updatedAt: 2, error: 'network down' },
       ],
       trips: [{
         id: 'trip_doctor',
@@ -748,7 +748,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
           payment: 'cash',
           splitMode: 'shared',
           tripId: 'trip_doctor',
-          syncStatus: 'error',
+          syncStatus: 'queued',
           createdAt: 2,
         },
       ],

@@ -53,7 +53,14 @@ export function isAllowedCredentialBrokerUrl(value: unknown): boolean {
 }
 
 export function redactedError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error || 'Unknown error');
+  const objectMessage = error && typeof error === 'object' && 'message' in error
+    ? (error as { message?: unknown }).message
+    : undefined;
+  const message = error instanceof Error
+    ? error.message
+    : typeof objectMessage === 'string'
+      ? objectMessage
+      : String(error || 'Unknown error');
   return message
     .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted-key]')
     .replace(/ntn_[A-Za-z0-9]+/g, '[redacted-token]')

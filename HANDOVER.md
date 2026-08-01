@@ -1,11 +1,11 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-07-20 HKT
-- **Focus (latest)**: Added Volcano Engine Kimi K3 to Android Scan image, Voice text, Email and Trip update recognition with matching production Broker allowlist.
-- **App version (this sweep)**: Compact/Android `0.20.0` (versionCode `2000`); local branch `codex/admin-console-1.0-android`.
-- **Verification (this sweep)**: `typecheck`, `build`, `security:scan`, Broker check/self-test/preflight, focused K3 image + four-selector smoke `2/2`, JBR 21 debug build and `android:qa` passed. Live direct Volcano text and 820x538 WebP probes both returned `200` for `kimi-k3`; QA artifact `/tmp/travel-expense-android-qa-2026-07-20T09-22-33-082Z`. No release APK/AAB was built.
-- **Current cutover gates**: Do not make live receipt photos private until this build and Compact `0.13.6` are deployed and active compatibility is confirmed. Do not rewrite live Nagoya rows without Boss approval, a backup and server preview. No release APK/AAB was built or published in this session.
+- **Date**: 2026-08-01 HKT
+- **Focus (latest)**: Completed the Android/Compact sync-regression review: stable cloud identity, serialized native sync, durable retry evidence, itinerary repair backfill, secret-free manual retry and native reachability/storage hardening.
+- **App version (this sweep)**: Compact/Android `0.20.3` (versionCode `2003`); local branch `codex/admin-console-1.0-android`.
+- **Verification (this sweep)**: full production gate passed in `268.9s`; sync regression `10/10`, Supabase backfill `2/2`, offline `2/2`, session `3/3`, privacy `3/3`, configured security `4` with one intentional local-storage skip, unit contracts, `typecheck`, `build`, `security:scan`, JBR 21 debug build and `android:qa` all passed. QA verified App Links and the native login surface; artifact `/tmp/travel-expense-android-qa-2026-08-01T01-52-57-679Z`. No release APK/AAB was built.
+- **Current cutover gates**: Do not make live receipt photos private until active Compact/Android compatibility is confirmed. Do not rewrite live Nagoya rows without Boss approval, a backup and server preview. Real-device Google/magic-link and authenticated selected-model clicks remain pending. No release APK/AAB was built or published in this session.
 - **Contract status**: The previous Compact/React fixture drift is resolved. Nagoya round-trip is exactly six days (`2026-04-20` through `2026-04-25`); partial updates retain untouched days; range-external scenery and stale overwrites fail.
 
 ### Previous session (2026-07-01)

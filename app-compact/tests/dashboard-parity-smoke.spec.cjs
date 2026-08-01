@@ -62,18 +62,18 @@ async function openDashboard(page, statsIncludeTransportLodging, extraState = {}
 }
 
 test('Dashboard spending toggle matches legacy semantics for today stats but budget is consistent', async ({ browser }) => {
-  const defaultContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const defaultContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const defaultPage = await defaultContext.newPage();
   await openDashboard(defaultPage, false);
   await expect(defaultPage.locator('.washi-today-stats-card').filter({ hasText: '今日支出' })).toContainText(/HK\$ (48|49|50)/);
-  await expect(defaultPage.locator('.washi-budget-card').filter({ hasText: '已使用' })).toContainText('HK$ 500');
+  await expect(defaultPage.locator('.preview-dashboard-budget-row.is-used')).toContainText('HK$ 500');
   await defaultContext.close();
 
-  const flippedContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const flippedContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const flippedPage = await flippedContext.newPage();
   await openDashboard(flippedPage, true);
   await expect(flippedPage.locator('.washi-today-stats-card').filter({ hasText: '今日支出' })).toContainText(/HK\$ (48\d|490|500)/);
-  await expect(flippedPage.locator('.washi-budget-card').filter({ hasText: '已使用' })).toContainText('HK$ 500');
+  await expect(flippedPage.locator('.preview-dashboard-budget-row.is-used')).toContainText('HK$ 500');
   await flippedContext.close();
 });
 

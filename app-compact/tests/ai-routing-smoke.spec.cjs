@@ -1,8 +1,10 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
-test('AI routing keeps required primary models ahead of stale settings', async ({ page }) => {
+test('AI routing migrates legacy scan and voice defaults without overriding selected email and trip models', async ({ page }) => {
   test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
   const calls = [];
 
@@ -134,6 +136,33 @@ test('AI routing keeps required primary models ahead of stale settings', async (
     });
   });
 
+  await page.route('**/mimo/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ provider: 'mimo', kind: body.kind, model: body.model });
+    const data = body.kind === 'scan'
+      ? {
+          store: 'Mimo Scan Mart',
+          total: 1234,
+          date: '2026-05-08',
+          time: '09:30',
+          category: 'food',
+          payment: 'suica',
+        }
+      : [{
+          store: 'Mimo Voice Cafe',
+          total: 1234,
+          date: '2026-05-08',
+          time: '09:30',
+          category: 'food',
+          payment: 'suica',
+        }];
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data }),
+    });
+  });
+
   await page.route('**/trip/intelligence', async (route) => {
     const body = route.request().postDataJSON();
     calls.push({ provider: 'kimi', kind: 'trip', model: body.model });
@@ -188,7 +217,7 @@ test('AI routing keeps required primary models ahead of stale settings', async (
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   const nav = page.getByLabel('主要分頁');
   await nav.getByRole('button', { name: '記帳', exact: true }).click();
   await expect(page.getByText('掃描收據')).toBeVisible();
@@ -202,14 +231,14 @@ test('AI routing keeps required primary models ahead of stale settings', async (
     ),
   });
   await expect(page.getByText('編輯紀錄')).toBeVisible();
-  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Gemma Scan Mart');
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Mimo Scan Mart');
   await page.getByRole('button', { name: '取消' }).click();
 
   await page.getByRole('button', { name: '語音' }).click();
   await page.getByPlaceholder('例：喺全家買飯糰同飲品 580 yen，用 Suica').fill('2026-05-08 喺 Voice Cafe 1234 yen，用 Suica，09:30');
   await page.getByRole('button', { name: '解析' }).click();
   await expect(page.getByText('編輯紀錄')).toBeVisible();
-  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Gemma Voice Cafe');
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Mimo Voice Cafe');
   await page.getByRole('button', { name: '取消' }).click();
 
   await page.getByRole('button', { name: 'Email' }).click();
@@ -231,21 +260,20 @@ test('AI routing keeps required primary models ahead of stale settings', async (
   await expect(tripConfirm).toContainText('Google BBQ');
 
   expect(calls).toEqual(expect.arrayContaining([
-    expect.objectContaining({ provider: 'google', kind: 'scan', model: 'gemma-4-31b-it' }),
-    expect.objectContaining({ provider: 'google', kind: 'voice', model: 'gemma-4-31b-it' }),
-    expect.objectContaining({ provider: 'kimi', kind: 'email', model: 'kimi-code' }),
+    expect.objectContaining({ provider: 'mimo', kind: 'scan', model: 'mimo-v2.5' }),
+    expect.objectContaining({ provider: 'mimo', kind: 'voice', model: 'mimo-v2.5' }),
+    expect.objectContaining({ provider: 'google', kind: 'email', model: 'gemini-3.1-flash' }),
     expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash' }),
   ]));
-  expect(calls.some((call) => call.kind === 'scan' && call.provider === 'kimi')).toBe(false);
-  expect(calls.some((call) => call.kind === 'voice' && call.provider === 'kimi')).toBe(false);
-  expect(calls.some((call) => call.kind === 'email' && call.provider === 'google')).toBe(false);
-  expect(calls.some((call) => call.kind === 'trip' && call.provider === 'kimi')).toBe(false);
+  expect(calls.some((call) => call.kind === 'scan' && call.provider !== 'mimo')).toBe(false);
+  expect(calls.some((call) => call.kind === 'voice' && call.provider !== 'mimo')).toBe(false);
+  expect(calls.some((call) => call.kind === 'email' && call.provider !== 'google')).toBe(false);
+  expect(calls.some((call) => call.kind === 'trip' && call.provider !== 'google')).toBe(false);
 });
 
 test('selected Volcano Kimi K3 image model uses the exact broker route without fallback', async ({ page }) => {
   test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
   const calls = [];
-  const appOrigin = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
   await page.route('**/*/json', async (route) => {
     const body = route.request().postDataJSON();
     calls.push({ url: route.request().url(), kind: body.kind, model: body.model });
@@ -263,7 +291,7 @@ test('selected Volcano Kimi K3 image model uses the exact broker route without f
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ receipts: [], lastTab: 'scan', scanModel: 'volcano/kimi-k3' }));
   });
 
-  await page.goto(`${appOrigin}/travel-expense/compact/#scan`);
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#scan`);
   await page.locator('#scan-gallery-input').setInputFiles({
     name: 'receipt.png',
     mimeType: 'image/png',
@@ -417,8 +445,8 @@ test('Trip update does not treat the current itinerary as a successful extractio
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
   const tripUpdate = page.getByRole('button', { name: /AI 行程更新/ });
   if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
   await page.getByPlaceholder(/下次/).fill('2026-08-01 to 2026-08-03 Jeju, arrive 15:00, dinner at market, stay near harbor.');
@@ -427,11 +455,11 @@ test('Trip update does not treat the current itinerary as a successful extractio
   await expect(tripConfirm).toBeVisible();
   await expect(tripConfirm.getByRole('heading', { name: 'Mimo Jeju Trip' })).toBeVisible();
   await expect(tripConfirm).toContainText('Dongmun Market');
-  await expect(tripConfirm).toContainText('未確認：Dongmun Market lat/lon');
+  await expect(tripConfirm).toContainText('Dongmun Market lat/lon');
   await expect(page.getByText('Old Current Spot')).toHaveCount(0);
   expect(calls).toEqual(expect.arrayContaining([
     expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash' }),
-    expect.objectContaining({ provider: 'mimo', kind: 'trip', model: 'mimo-v2.5' }),
+    expect.objectContaining({ provider: 'mimo', kind: 'trip', model: 'mimo-v2.5-pro' }),
   ]));
 });
 
@@ -578,8 +606,8 @@ test('Trip update skips a slow selected model and opens confirmation with a fast
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
   const tripUpdate = page.getByRole('button', { name: /AI 行程更新/ });
   if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
   await page.getByPlaceholder(/下次/).fill('Day 1｜6月13日｜到步＋西線入住｜住 Hotel Fine Jeju\n06:30 抵達濟州機場\n14:00 Osulloc Tea Museum');
@@ -588,7 +616,7 @@ test('Trip update skips a slow selected model and opens confirmation with a fast
   const tripConfirm = page.getByRole('dialog', { name: '確認 AI 行程更新' });
   await expect(tripConfirm).toBeVisible();
   await expect(tripConfirm.getByRole('heading', { name: 'Fast Google Jeju Trip' })).toBeVisible();
-  await expect(tripConfirm).toContainText('AI 重整行程');
+  await expect(tripConfirm).toContainText('AI 已經整理好行程');
   await expect(tripConfirm).toContainText('Fast Google Osulloc');
   await expect(tripConfirm).not.toContainText('Slow Mimo Spot');
 
@@ -655,7 +683,7 @@ test('AI routing stops provider fallback when broker quota is exceeded', async (
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#scan');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#scan`);
   await expect(page.getByText('掃描收據')).toBeVisible();
 
   await page.locator('#scan-gallery-input').setInputFiles({
@@ -843,7 +871,7 @@ test('Supabase users can call required AI primaries without a broker password se
     }));
   }, { userId, session });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#scan');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#scan`);
   const nav = page.getByLabel('主要分頁');
   await expect(page.getByText('掃描收據')).toBeVisible();
 

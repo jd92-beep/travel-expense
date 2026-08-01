@@ -550,10 +550,11 @@ function sharingForTrip(
 }
 
 function rowToTrip(row: SupabaseTripRow, state: AppState, sharing?: TripSharingState): TripProfile {
-  const appId = row.legacy_source_id || `supabase_${row.id}`;
+  const metadata = jsonObject(row.app_metadata);
+  const metadataLocalTripId = typeof metadata.localTripId === 'string' ? metadata.localTripId.trim() : '';
+  const appId = metadataLocalTripId || row.legacy_source_id || `supabase_${row.id}`;
   const current = (state.trips || []).find((trip) => trip.id === appId || trip.supabaseId === row.id);
   const tripCurrency = row.trip_currency || current?.currencies?.find((currency) => currency !== row.home_currency) || state.tripCurrency || 'JPY';
-  const metadata = jsonObject(row.app_metadata);
   const columnIntelligence = {
     countryCode: row.country_code || undefined,
     themeKey: row.theme_key || undefined,
@@ -767,10 +768,23 @@ export function useSupabaseAuth() {
       return undefined;
     }
     let alive = true;
+    const sessionCheckTimeout = window.setTimeout(() => {
+      if (!alive) return;
+      setError('Supabase network is unavailable. Please try again.');
+      setSession(null);
+      setLoading(false);
+    }, 5_000);
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
       if (!alive) return;
+      window.clearTimeout(sessionCheckTimeout);
       if (sessionError) setError(sessionError.message);
       setSession(data.session || null);
+      setLoading(false);
+    }).catch((sessionError: unknown) => {
+      if (!alive) return;
+      window.clearTimeout(sessionCheckTimeout);
+      setError(sessionError instanceof Error ? sessionError.message : 'Supabase session check failed');
+      setSession(null);
       setLoading(false);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -780,6 +794,7 @@ export function useSupabaseAuth() {
     });
     return () => {
       alive = false;
+      window.clearTimeout(sessionCheckTimeout);
       data.subscription.unsubscribe();
     };
   }, [supabase]);
@@ -1064,7 +1079,12 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
   let data: Record<string, any> | null = null;
   let error: { message?: string } | null = null;
   const contractRow = !contractLookup.error ? contractLookup.data as Record<string, any> | null : null;
-  if (contractRow && Number.isFinite(Number(contractRow.itinerary_version))) {
+  const isNewOwnedTrip = !contractLookup.error && !contractRow && !explicitSharedTrip;
+  if (isNewOwnedTrip) {
+    const insertResult = await withTimeout(supabase.from('trips').insert(row));
+    data = insertResult.error ? null : row;
+    error = insertResult.error;
+  } else if (contractRow && Number.isFinite(Number(contractRow.itinerary_version))) {
     const serverItineraryVersion = Math.max(1, Number(contractRow.itinerary_version));
     const localItineraryVersion = Math.max(1, Number(trip.itineraryVersion ?? trip.version) || 1);
     if (localItineraryVersion < serverItineraryVersion || localItineraryVersion > serverItineraryVersion + 1) {
@@ -1157,7 +1177,9 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
       created_at: _legacyCreatedAt,
       ...legacySharedUpdate
     } = legacyRow;
-    const fallback = explicitSharedTrip
+    const fallback = isNewOwnedTrip
+      ? await withTimeout(supabase.from('trips').insert(legacyRow))
+      : explicitSharedTrip
       ? await withTimeout(supabase
         .from('trips')
         .update(legacySharedUpdate)
@@ -1169,7 +1191,7 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
         .upsert(legacyRow, { onConflict: 'id' })
         .select('*')
         .single());
-    data = fallback.data;
+    data = fallback.data || (isNewOwnedTrip ? legacyRow : null);
     error = fallback.error;
   }
   if (error) {

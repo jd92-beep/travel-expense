@@ -46,7 +46,8 @@ import {
   isSettlementReceipt
 } from '../lib/domain';
 import { activeTrip, createTripProfile, normalizeItinerary, scopedReceiptsForTrip, switchTrip } from '../domain/trip/normalize';
-import type { AppState, ItineraryDay, ItinerarySpot, Receipt, SyncQueueItem, TabId, TripProfile } from '../lib/types';
+import type { AppState, ItineraryDay, ItinerarySpot, Receipt, TabId, TripProfile } from '../lib/types';
+import { enqueueChange } from '../lib/changeJournal';
 import { parseTripParagraph } from '../lib/ai';
 import { brokerAiJson, redactedError } from '../lib/credentialBroker';
 import { AI_MODELS, DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
@@ -723,31 +724,19 @@ export function Dashboard({
       itinerary: normalizeItinerary(finalTrip.itinerary, finalTrip.id, finalTrip.currencies.find((currency) => currency !== 'HKD') || newTripCurrency || 'JPY'),
     };
 
-    const queueItem: SyncQueueItem = {
-      id: `sync_${updatedAt}_${Math.random().toString(16).slice(2)}`,
+    const queueItem = {
       type: 'trip',
       entityId: finalTrip.id,
       op: 'create',
-      status: 'queued',
-      attempts: 0,
-      createdAt: updatedAt,
-      updatedAt,
       payload: {
         tripId: finalTrip.id,
         sourceId: finalTrip.sourceId || `trip_${finalTrip.id}`,
         updatedAt,
       }
-    };
+    } as const;
 
     setState((prev) => {
       const trips = [...(prev.trips || []).map((item) => ({ ...item, active: false })), finalTrip];
-      const nextQueue = [...(prev.syncQueue || []), queueItem];
-
-      const latest = new Map<string, SyncQueueItem>();
-      for (const item of nextQueue) {
-        if (item.status === 'synced') continue;
-        latest.set(`${item.type}:${item.entityId}`, item);
-      }
       return {
         ...prev,
         trips,
@@ -757,7 +746,7 @@ export function Dashboard({
         tripCurrency: finalTrip.currencies.find((currency) => currency !== 'HKD') || 'JPY',
         customItinerary: finalTrip.itinerary,
         tripDateRange: { start: finalTrip.startDate, end: finalTrip.endDate },
-        syncQueue: [...latest.values()].slice(-500)
+        syncQueue: enqueueChange(prev.syncQueue, queueItem)
       };
     });
 
@@ -798,30 +787,20 @@ export function Dashboard({
         updatedAt: now,
       };
 
-      const queueItem: SyncQueueItem = {
-        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
-        type: 'trip' as const,
-        entityId: trip.id,
-        op: 'update' as const,
-        status: 'queued' as const,
-        attempts: 0,
-        createdAt: now,
-        updatedAt: now,
-        payload: {
-          tripId: trip.id,
-          sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
-          updatedAt: nextTrip.updatedAt,
-        },
-      };
-
       setState((prev: AppState) => ({
         ...prev,
         budget: newBudget,
         trips: (prev.trips || []).map((t) => t.id === trip.id ? nextTrip : t),
-        syncQueue: [
-          ...(prev.syncQueue || []),
-          queueItem,
-        ].slice(-500),
+        syncQueue: enqueueChange(prev.syncQueue, {
+          type: 'trip',
+          entityId: trip.id,
+          op: 'update',
+          payload: {
+            tripId: trip.id,
+            sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
+            updatedAt: nextTrip.updatedAt,
+          },
+        }),
       }));
     } else {
       updateState({ budget: newBudget });

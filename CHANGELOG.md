@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-01 HKT (Android sync regression review)
+
+- **v0.20.3 / versionCode 2003.** Serialized native push/pull/sync triggers, restored
+  authoritative empty-cloud owner-trip backfill, preserved Supabase receipt/trip identities and
+  stable local trip links, retained cloud itinerary repair flags, and made RLS/version conflicts
+  durable terminal journal evidence. Stale deployment notices take priority over sync errors and
+  generic banners no longer expose backend details. Manual History retry rebuilds a secret-free
+  payload, native reachability requires an OK response, trip AI includes fast Google fallbacks, and
+  exported camera files are scoped to app-specific Pictures storage.
+  - Evidence: full production gate `268.9s`; sync regression `10/10`; Supabase backfill `2/2`;
+    offline `2/2`; session `3/3`; privacy `3/3`; configured security `4` plus one intentional skip;
+    unit contracts, debug APK build and emulator QA passed with verified App Links.
+  - Debug APK only. No release APK/AAB, database, RLS, credential or live-data action.
+
 ## 2026-07-20 HKT (Android Volcano Kimi K3)
 
 - **v0.20.0 / versionCode 2000.** Added `Volcano (Kimi K3)` (`volcano/kimi-k3`) to

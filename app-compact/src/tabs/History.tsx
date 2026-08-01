@@ -12,6 +12,7 @@ import { VisualIcon } from '../components/VisualIcon';
 import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, isSettlementReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 import { currencyPrefix } from '../lib/currency';
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
+import { enqueueChange, settleChange } from '../lib/changeJournal';
 
 type ReceiptHealthMarker = {
   key: string;
@@ -246,38 +247,25 @@ export function History({
         syncStatus: 'queued',
         updatedAt: now,
       };
-      let matched = false;
-      const nextQueue = (prev.syncQueue || []).map((item) => {
-        const matches = item.id === conflict.queueItem?.id || queueItemMatchesReceipt(item, currentReceipt);
-        if (!matches || item.type !== 'receipt') return item;
-        matched = true;
-        return {
-          ...item,
-          error: undefined,
-          status: 'queued' as const,
-          attempts: 0,
-          updatedAt: now,
-          payload: buildSafeReceiptPayload(updatedReceipt, now),
-        };
-      });
-      if (!matched) {
-        nextQueue.push({
-          id: `receipt-conflict-${updatedReceipt.id}-${now}`,
+      const matchingItem = (prev.syncQueue || []).find((item) =>
+        item.type === 'receipt'
+        && (item.id === conflict.queueItem?.id || queueItemMatchesReceipt(item, currentReceipt)));
+      const retryQueue = matchingItem
+        ? settleChange(prev.syncQueue || [], matchingItem.id, { kind: 'manual-retry' }).queue.map((item) => (
+          item.id === matchingItem.id ? { ...item, payload: buildSafeReceiptPayload(updatedReceipt, now) } : item
+        ))
+        : prev.syncQueue;
+      const nextQueue = enqueueChange(retryQueue, {
           type: 'receipt',
           entityId: updatedReceipt.id,
           op: updatedReceipt.supabaseId || updatedReceipt.notionPageId ? 'update' : 'create',
-          status: 'queued',
-          attempts: 0,
-          createdAt: now,
-          updatedAt: now,
           payload: buildSafeReceiptPayload(updatedReceipt, now),
         });
-      }
       const stillHasFailedQueue = nextQueue.some(isFailedQueueItem);
       return {
         ...prev,
         receipts: prev.receipts.map((receipt) => receipt.id === updatedReceipt.id ? updatedReceipt : receipt),
-        syncQueue: nextQueue.slice(-500),
+        syncQueue: nextQueue,
         globalSyncStatus: stillHasFailedQueue ? prev.globalSyncStatus : 'queued',
         syncError: stillHasFailedQueue ? prev.syncError : '',
       };

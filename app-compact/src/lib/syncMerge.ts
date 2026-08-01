@@ -245,7 +245,7 @@ export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
         itineraryVersion: Math.max(localItineraryVersion, remoteItineraryVersion),
         version: Math.max(localTrip?.version || 1, remoteTrip.version || 1),
         _itineraryNeedsRepair: keepNewerLocalItinerary
-          ? localTrip._itineraryNeedsRepair
+          ? !!(localTrip._itineraryNeedsRepair || remoteTrip._itineraryNeedsRepair)
           : remoteTrip._itineraryNeedsRepair,
       });
     } else if (remoteItineraryVersion > localItineraryVersion || remoteHasMissingLink || remoteTrip._itineraryNeedsRepair || remoteTrip.sharing) {
@@ -259,7 +259,7 @@ export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
         itineraryVersion: Math.max(localItineraryVersion, remoteItineraryVersion),
         _itineraryNeedsRepair: remoteItineraryVersion > localItineraryVersion
           ? remoteTrip._itineraryNeedsRepair
-          : localTrip._itineraryNeedsRepair,
+          : !!(localTrip._itineraryNeedsRepair || remoteTrip._itineraryNeedsRepair),
         version: Math.max(localTrip.version || 1, remoteTrip.version || 1),
       });
     }

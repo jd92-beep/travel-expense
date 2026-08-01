@@ -3,8 +3,9 @@ import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
 import { computeShares, roundZeroSum, sharePercents, simplifyDebts } from './splitEngine';
+import { enqueueChange } from './changeJournal';
 export { roundZeroSum, sharePercents } from './splitEngine';
-import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, ReceiptPayer, RecurringRule, SettlementSnapshot, SyncQueueItem, TripPhase, TripProfile } from './types';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, ReceiptPayer, RecurringRule, SettlementSnapshot, TripPhase, TripProfile } from './types';
 
 export const fmt = (n: number | string | undefined) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -385,27 +386,23 @@ export function applyItineraryEdit(state: AppState, nextItinerary: ItineraryDay[
   const trips = baseTrips.some((t) => t.id === trip.id)
     ? baseTrips.map((t) => (t.id === trip.id ? nextTrip : t))
     : [...baseTrips, nextTrip];
-  const stamp = (type: SyncQueueItem['type'], entityId: string, payload: SyncQueueItem['payload']): SyncQueueItem => ({
-    id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
-    type,
-    entityId,
+  const withTrip = enqueueChange(state.syncQueue, {
+    type: 'trip',
+    entityId: trip.id,
     op: 'update',
-    status: 'queued',
-    attempts: 0,
-    createdAt: now,
-    updatedAt: now,
-    payload,
+    payload: { sourceId: nextTrip.sourceId || `trip_${trip.id}`, updatedAt: now },
   });
   return {
     ...state,
     trips,
     customItinerary: nextItinerary,
     settingsUpdatedAt: now,
-    syncQueue: [
-      ...(state.syncQueue || []),
-      stamp('trip', trip.id, { sourceId: nextTrip.sourceId || `trip_${trip.id}`, updatedAt: now }),
-      stamp('settings', 'app-settings', { updatedAt: now }),
-    ].slice(-500),
+    syncQueue: enqueueChange(withTrip, {
+      type: 'settings',
+      entityId: 'app-settings',
+      op: 'update',
+      payload: { updatedAt: now },
+    }),
   };
 }
 

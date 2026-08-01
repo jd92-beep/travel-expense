@@ -12,6 +12,7 @@ import { canUseNotionMirror } from './lib/notionAccess';
 import { mergePulledData } from './lib/syncMerge';
 import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
+import { enqueueChange } from './lib/changeJournal';
 import { clearCredentialSession, clearStoredState } from './lib/storage';
 import type { AppState, Receipt, SyncQueueItem, TabId, TripInviteSummary, TripProfile } from './lib/types';
 import { TAB_MANIFEST } from './lib/tabs';
@@ -234,11 +235,9 @@ export function App() {
         shareRatios,
         settingsUpdatedAt: Date.now(),
       }));
-    } catch {
-      // Cloud save failed — keep the trip locally but tell the user (don't fail silently).
-      const invitePart = (sharingInvites && sharingInvites.length)
-        ? '；分享邀請要重新連線後再喺設定度發送'
-        : '';
+    } catch (error) {
+      const now = Date.now();
+      console.warn('[WelcomeGuide] Cloud save failed; queued for retry:', redactedError(error));
       setState((prev) => ({
         ...prev,
         trips: [trip],
@@ -250,9 +249,21 @@ export function App() {
         customItinerary: trip.itinerary || [],
         persons,
         shareRatios,
-        settingsUpdatedAt: Date.now(),
-        syncError: `旅程已暫存本機，雲端同步未成功，會自動重試${invitePart}`,
-        globalSyncStatus: 'error',
+        settingsUpdatedAt: now,
+        syncQueue: enqueueChange(prev.syncQueue, {
+          type: 'trip',
+          entityId: trip.id,
+          op: 'upsert',
+          payload: {
+            notionPageId: trip.notionPageId,
+            supabaseId: trip.supabaseId,
+            sourceId: trip.sourceId || trip.id,
+            updatedAt: trip.updatedAt,
+          },
+          error: redactedError(error),
+        }),
+        syncError: '',
+        globalSyncStatus: 'queued',
       }));
     }
   };
@@ -624,9 +635,6 @@ export function App() {
 
   const handleSyncRetry = () => {
     syncEngine.retryFailedItems();
-    window.setTimeout(() => {
-      void syncEngine.sync();
-    }, 150);
   };
 
   const fxTier = useEffectsTier();
@@ -800,29 +808,21 @@ export function App() {
               };
               target.spots = [...target.spots, spot].sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
               const trips = (prev.trips || []).map((item) => item.id === trip.id ? { ...item, itinerary, version: item.version + 1, updatedAt: now } : item);
-              const queue: SyncQueueItem = {
-                id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+              const syncQueue = enqueueChange(prev.syncQueue, {
                 type: 'trip',
                 entityId: trip.id,
                 op: 'update',
-                status: 'queued',
-                attempts: 0,
-                createdAt: now,
-                updatedAt: now,
                 payload: {
                   notionPageId: trip.notionPageId,
                   sourceId: trip.sourceId || trip.id,
                   updatedAt: now,
                 },
-              };
+              });
               return {
                 ...prev,
                 trips,
                 customItinerary: itinerary,
-                syncQueue: [
-                  ...(prev.syncQueue || []).filter((item) => item.type !== queue.type || item.entityId !== queue.entityId),
-                  queue,
-                ].slice(-500),
+                syncQueue,
               };
             });
             setEditing(undefined);
