@@ -5,7 +5,7 @@
 - **fix(compact/android): close sync regressions and preserve repair identity.** Compact `0.16.18`
   and Android `0.20.3` retain Supabase IDs after stale local-wins merges, preserve stable local trip
   links during re-home, requeue authoritative empty-cloud owner trips, keep cloud itinerary repairs
-  actionable, and classify RLS failures as terminal evidence. Android additionally serializes sync
+  actionable, and keep RLS failures visible without blocking a later cold-boot recovery. Android additionally serializes sync
   triggers, validates native reachability, strips secrets from manual retry payloads, restores fast
   trip-model fallbacks, and limits exported camera files to app-specific Pictures storage.
   Both full production gates, both `10/10` sync-regression suites, both `2/2` Supabase backfill

@@ -98,7 +98,8 @@ you closed with your session number.
 1. **Sync/data fixes:** preserved `supabaseId` after stale receipt/trip pushes, kept stable local trip
    IDs during re-home, serialized Android push/pull/sync triggers, restored authoritative empty-pull
    owner-trip backfill, retained cloud itinerary repair flags during local-wins merges, and made RLS
-   failures durable terminal journal evidence. Stale deployment notices now take priority over the
+   failures visible for the current session while allowing one cold-boot retry after access may
+   have been restored. Stale deployment notices now take priority over the
    generic sync banner; raw backend errors are no longer rendered in that banner.
 2. **Android/native fixes:** native reachability now requires a successful response, manual retry
    rebuilds a secret-free receipt payload, trip AI restores the fast Google fallback ladder, and
@@ -106,7 +107,7 @@ you closed with your session number.
 3. **Verification:** Compact `0.16.18` full production gate passed in `293.9s`; Android `0.20.3`
    passed in `268.9s`. Both sync-regression suites passed `10/10`, focused Supabase backfill passed
    `2/2`, itinerary merge and journal tests passed, and security/build/mobile/a11y/shared-contract
-   gates were green. Android offline `2/2`, session `3/3`, privacy `3/3`, configured security `4`
+   gates were green. Compact offline recovery passed `4/4`; Android offline `2/2`, session `3/3`, privacy `3/3`, configured security `4`
    with one intentional local-storage skip, JBR 21 `assembleDebug`, and emulator QA passed with
    verified App Links; artifact `/tmp/travel-expense-android-qa-2026-08-01T01-52-57-679Z`.
 4. **Boundaries:** no schema, migration, RLS, credential, live-data or release APK/AAB action was
