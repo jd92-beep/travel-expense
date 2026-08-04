@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-compact",
   "private": true,
-  "version": "0.20.5",
+  "version": "0.20.6",
   "type": "module",
   "engines": {
     "node": "22.x"
@@ -37,10 +37,10 @@
     "smoke:scan": "playwright test tests/scan-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:split-editor": "playwright test tests/split-editor-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:timeline": "playwright test tests/timeline-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
-    "smoke:itinerary": "playwright test tests/itinerary-edit-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:itinerary": "node scripts/run-with-dev-server.mjs -- playwright test tests/itinerary-edit-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:weather": "playwright test tests/weather-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
-    "smoke:privacy": "playwright test tests/receipt-privacy-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
-    "smoke:offline": "playwright test tests/offline-sync-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:privacy": "node scripts/run-with-dev-server.mjs -- playwright test tests/receipt-privacy-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:offline": "node scripts/run-with-dev-server.mjs -- playwright test tests/offline-sync-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:session": "VITE_SUPABASE_URL=https://test-travel-expense.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa node scripts/run-with-dev-server.mjs -- ./node_modules/.bin/playwright test tests/session-persistence-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:sync-classify": "playwright test tests/sync-error-classify-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:sync-regression": "VITE_SUPABASE_URL=https://test-travel-expense.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa node scripts/run-with-dev-server.mjs -- playwright test tests/sync-regression-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
@@ -67,7 +67,7 @@
     "smoke:deploy-live": "node scripts/compact-live-verify.mjs",
     "smoke:live-checklist": "node scripts/compact-live-regression-checklist.mjs",
     "smoke:live-checklist:strict": "node scripts/compact-live-regression-checklist.mjs --strict",
-    "smoke:mobile-layout": "playwright test tests/mobile-layout-stability-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
+    "smoke:mobile-layout": "node scripts/run-with-dev-server.mjs -- playwright test tests/mobile-layout-stability-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:contact-sheet": "node scripts/mobile-contact-sheet.mjs",
     "smoke:final-nav": "playwright test tests/final-navigation-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:trip-intelligence": "playwright test tests/trip-intelligence-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line"
