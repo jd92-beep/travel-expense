@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-08-04 HKT
-- **Focus**: Session 81 refined the Session 80 Compact login surface (CSS-only calm/elegant pass, `taste-skill` redesign-evolve) in the Orca `penguin` worktree; uncommitted pending Boss review. Session 80 redesigned the Compact and Android login surface with the installed `taste-skill`, preserving every Supabase auth path.
+- **Focus**: Session 81 refined the Session 80 Compact login surface (CSS-only calm/elegant pass, `taste-skill` redesign-evolve); pushed to `origin main` (`2c66b5d`) and synced to the Android shell branch (`f568c64`, `0.20.5`). Session 80 redesigned the Compact and Android login surface with the installed `taste-skill`, preserving every Supabase auth path.
 - **Agent**: Codex.
 - **App version**: Compact `0.16.19`; Android `0.20.4` (versionCode 2004; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
@@ -109,10 +109,14 @@ you closed with your session number.
    `panelWidth 340 / viewportWidth 360`, zero horizontal overflow and zero page errors; screenshots
    were reviewed then deleted with the probe script.
 3. **Boundaries:** version bumped `0.16.19` to `0.16.20` (`constants.ts`, `package.json`,
-   `package-lock.json`). Work is UNCOMMITTED in the Orca `penguin` worktree awaiting Boss review;
-   the Android shell worktree still carries the Session 80 login CSS and needs the same
-   `styles.css` sync if Boss wants this refinement on Android. No schema, migration, RLS,
-   credential, live-data or release action was performed. No Current Open Items opened or closed.
+   `package-lock.json`). Pushed to `origin main` as `2c66b5d`. The same CSS was synced to the
+   Android shell worktree (`/Users/tommy/Documents/Projects/travel-expense-android-shell`, branch
+   `codex/admin-console-1.0-android`) as `0.20.5` / versionCode 2005, commit `f568c64`, with
+   typecheck, build, `security:scan` and mobile-layout smoke `1/1` green there (note: that branch's
+   bare `smoke:mobile-layout` script does not start a dev server; run it through
+   `scripts/run-with-dev-server.mjs`). No emulator QA or release APK/AAB was produced. No schema,
+   migration, RLS, credential or live-data action was performed. No Current Open Items opened or
+   closed.
 
 ### Session 80 (Codex — Compact/Android login redesign)
 
