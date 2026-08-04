@@ -20,8 +20,9 @@
 
 ## Project Scope
 
-- This file applies only to `/Users/tommy/Documents/Codex/travel-expense`.
-- Local project directory: `/Users/tommy/Documents/Codex/travel-expense`.
+- This file applies only to `/Users/tommy/Documents/Projects/travel-expense` (canonical checkout).
+- Local project directory: `/Users/tommy/Documents/Projects/travel-expense`. Orca-managed
+  worktrees live under `/Users/tommy/orca/workspaces/travel-expense/*` and share these rules.
 - GitHub repo: `https://github.com/jd92-beep/travel-expense`
 - GitHub connection: git remote `origin` uses `https://github.com/jd92-beep/travel-expense.git` for both fetch and push.
 - GitHub Pages legacy/root app: `https://jd92-beep.github.io/travel-expense/`
@@ -32,7 +33,7 @@
 - Public Compact Vercel app: `https://travel-expense-compact.vercel.app`
 - Public Compact Netlify app: `https://travel-expense-compact.netlify.app`
 - Admin Console production: `https://travel-expense-admin-kanban.vercel.app`
-- Android worktree: `/Users/tommy/Documents/Codex/travel-expense-android-shell`, branch
+- Android worktree: `/Users/tommy/Documents/Projects/travel-expense-android-shell`, branch
   `codex/admin-console-1.0-android`. Keep Android changes on that branch unless Boss explicitly asks
   for a reviewed merge; do not treat a debug APK as a published Android release.
 - Android branch HEAD and its latest app-code commit can differ after docs-only commits; check both
@@ -189,7 +190,7 @@ npm run check
 npm run self-test
 
 # Android worktree (debug/QA only; no release APK/AAB unless Boss explicitly asks)
-cd /Users/tommy/Documents/Codex/travel-expense-android-shell/app-compact
+cd /Users/tommy/Documents/Projects/travel-expense-android-shell/app-compact
 npm run typecheck
 npm run build
 npm run security:scan
@@ -201,8 +202,8 @@ npm run android:qa
 
 ## GitNexus Rules
 
-- This checkout is indexed by GitNexus at `/Users/tommy/Documents/Codex/travel-expense`.
-- There are other checkouts with the same repo name, so when using GitNexus MCP tools, pass `repo: "/Users/tommy/Documents/Codex/travel-expense"`.
+- This checkout is indexed by GitNexus at `/Users/tommy/Documents/Projects/travel-expense`.
+- There are other checkouts with the same repo name, so when using GitNexus MCP tools, pass `repo: "/Users/tommy/Documents/Projects/travel-expense"`.
 - Use GitNexus when it will answer a code-intelligence question better than normal repo tools: shared function/class/module edits, unfamiliar execution flows, call graph impact, risky refactors, symbol renames, or "what breaks if I change X?"
 - Do not use GitNexus for every task. Skip it for pure docs, CSS-only spacing, copy changes, single-file config edits, CI/deploy log triage, exact text search, or when tests/browser/runtime evidence is the direct proof.
 - Before editing a function, class, method, or shared module with unclear blast radius, run GitNexus impact analysis on the target symbol and report the blast radius if risk is HIGH or CRITICAL.
