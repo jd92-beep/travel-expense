@@ -6188,6 +6188,47 @@ input:checked + .washi-slider:before {
   cursor: default;
 }
 
+.compact-login-hint {
+  margin: 0;
+  color: var(--login-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.compact-login-resend {
+  justify-self: center;
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--login-accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color .18s ease, transform .18s ease;
+}
+
+.compact-login-resend:not(:disabled):hover {
+  background: rgba(176, 67, 47, .08);
+}
+
+.compact-login-resend:not(:disabled):active {
+  transform: scale(.97);
+}
+
+.compact-login-resend:disabled {
+  color: var(--login-muted);
+  cursor: default;
+}
+
+.compact-login-resend:focus-visible {
+  outline: 3px solid rgba(176, 67, 47, .24);
+  outline-offset: 2px;
+}
+
 .compact-login-privacy {
   margin: 0;
   display: flex;
@@ -6339,7 +6380,8 @@ input:checked + .washi-slider:before {
   .compact-login-tabs button,
   .compact-login-form input,
   .compact-login-primary,
-  .compact-login-google {
+  .compact-login-google,
+  .compact-login-resend {
     transition: none;
   }
 }

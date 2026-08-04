@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyRound, Link2, ShieldCheck, Sparkles } from 'lucide-react';
 import type { useSupabaseAuth } from '../lib/supabase';
 import travelAiAtlasImage from '../assets/atmosphere/travel-ai-atlas.webp';
@@ -11,12 +11,33 @@ type SupabaseGateProps = {
   children: ReactNode;
 };
 
+// Signup-only password policy: at least 8 chars with a letter and a digit.
+// Sign-in stays policy-free so existing accounts with older passwords still work.
+const SIGNUP_PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+const RESEND_COOLDOWN_SECONDS = 60;
+
 export function SupabaseGate({ auth, children }: SupabaseGateProps) {
   const [activeTab, setActiveTab] = useState<'signin' | 'signup' | 'magiclink'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [signupDone, setSignupDone] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
+
+  function switchTab(tab: 'signin' | 'signup' | 'magiclink') {
+    setActiveTab(tab);
+    setStatus('');
+    setSignupDone(false);
+    setConfirmPassword('');
+  }
 
   async function submit() {
     if (!email.trim()) return;
@@ -26,17 +47,35 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
       if (activeTab === 'magiclink') {
         await auth.sendMagicLink(email);
         setStatus('登入連結已寄出，請到 email 確認。');
+        setCooldown(RESEND_COOLDOWN_SECONDS);
       } else if (activeTab === 'signin') {
         if (!password) throw new Error('請輸入密碼');
         await auth.signInWithPassword(email, password);
         setStatus('登入成功！');
       } else if (activeTab === 'signup') {
-        if (password.length < 6) throw new Error('密碼長度最少需要 6 個字元');
+        if (!SIGNUP_PASSWORD_RULE.test(password)) throw new Error('密碼最少 8 個字元，並要包括英文字母同數字');
+        if (password !== confirmPassword) throw new Error('兩次輸入嘅密碼唔一致');
         await auth.signUpWithPassword(email, password);
         setStatus('註冊成功！如果你嘅 Supabase 專案有啟用 Email 驗證，請先去 email 點擊確認連結激活帳號；若無啟用，即可直接登入。');
+        setSignupDone(true);
       }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '認證操作失敗');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleResendConfirmation() {
+    if (!email.trim() || cooldown > 0) return;
+    setBusy(true);
+    setStatus('');
+    try {
+      await auth.resendSignupConfirmation(email);
+      setStatus('確認 Email 已重發，請到郵箱查看（記得檢查垃圾郵件）。');
+      setCooldown(RESEND_COOLDOWN_SECONDS);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '重發確認 Email 失敗');
     } finally {
       setBusy(false);
     }
@@ -108,7 +147,7 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
             <button
               aria-pressed={activeTab === 'signin'}
               className={activeTab === 'signin' ? 'is-active' : ''}
-              onClick={() => { setActiveTab('signin'); setStatus(''); }}
+              onClick={() => switchTab('signin')}
               type="button"
             >
               <KeyRound size={15} />
@@ -117,7 +156,7 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
             <button
               aria-pressed={activeTab === 'signup'}
               className={activeTab === 'signup' ? 'is-active' : ''}
-              onClick={() => { setActiveTab('signup'); setStatus(''); }}
+              onClick={() => switchTab('signup')}
               type="button"
             >
               <Sparkles size={15} />
@@ -126,7 +165,7 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
             <button
               aria-pressed={activeTab === 'magiclink'}
               className={activeTab === 'magiclink' ? 'is-active' : ''}
-              onClick={() => { setActiveTab('magiclink'); setStatus(''); }}
+              onClick={() => switchTab('magiclink')}
               type="button"
             >
               <Link2 size={15} />
@@ -158,7 +197,20 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
                   onChange={(event) => setPassword(event.target.value)}
                   type="password"
                   autoComplete={activeTab === 'signin' ? 'current-password' : 'new-password'}
-                  placeholder="請輸入密碼"
+                  placeholder={activeTab === 'signup' ? '最少 8 個字元，包括字母同數字' : '請輸入密碼'}
+                />
+              </label>
+            )}
+
+            {activeTab === 'signup' && (
+              <label>
+                <span>確認密碼</span>
+                <input
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="再輸入一次密碼"
                 />
               </label>
             )}
@@ -167,7 +219,13 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
             {status && <p className="muted compact-login-message compact-login-message--ok" role="status">{status}</p>}
 
             <button
-              disabled={busy || !email.trim() || (activeTab !== 'magiclink' && !password)}
+              disabled={
+                busy
+                || !email.trim()
+                || (activeTab === 'magiclink' && cooldown > 0)
+                || (activeTab !== 'magiclink' && !password)
+                || (activeTab === 'signup' && !confirmPassword)
+              }
               type="submit"
               className="compact-login-primary"
             >
@@ -175,6 +233,21 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
               {activeTab === 'signup' && (busy ? '註冊中...' : '註冊新帳號')}
               {activeTab === 'magiclink' && (busy ? '寄送中...' : '寄出登入連結')}
             </button>
+
+            {activeTab === 'magiclink' && cooldown > 0 && (
+              <p className="compact-login-hint" role="status">已寄出，{cooldown} 秒後可以再寄。</p>
+            )}
+
+            {activeTab === 'signup' && signupDone && (
+              <button
+                type="button"
+                className="compact-login-resend"
+                disabled={busy || cooldown > 0}
+                onClick={() => void handleResendConfirmation()}
+              >
+                {cooldown > 0 ? `重發確認 Email（${cooldown} 秒）` : '重發確認 Email'}
+              </button>
+            )}
 
             <div className="compact-login-divider"><span>或</span></div>
 
