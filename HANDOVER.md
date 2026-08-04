@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-08-04 HKT
-- **Focus**: Session 80 redesigned the Compact and Android login surface with the installed `taste-skill`, preserving every Supabase auth path while improving responsive hierarchy, accessibility and light/dark presentation.
+- **Focus**: Session 81 refined the Session 80 Compact login surface (CSS-only calm/elegant pass, `taste-skill` redesign-evolve) in the Orca `penguin` worktree; uncommitted pending Boss review. Session 80 redesigned the Compact and Android login surface with the installed `taste-skill`, preserving every Supabase auth path.
 - **Agent**: Codex.
 - **App version**: Compact `0.16.19`; Android `0.20.4` (versionCode 2004; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
@@ -92,6 +92,27 @@ you closed with your session number.
    schema, RLS, migration, credential or user-data change was made.
 
 ## What Was Done
+
+### Session 81 (Kimi — Compact login visual refinement, worktree `penguin`)
+
+1. **Design:** refined the Session 80 Compact login surface with the `taste-skill` redesign
+   protocol (redesign-evolve mode, dials 5/3/3). Calmer mist/sage layered background with a slow
+   18s ambient drift, softer panel elevation, single terracotta accent `#b0432f`, quieter caption
+   overlay with text shadow, 800-weight headline, wider kicker tracking, 52px fields/buttons, and a
+   gentle 0.55s panel entrance plus 1.8s image settle, all gated behind `prefers-reduced-motion`.
+   Dark palette rebalanced to match. Every auth path, field contract, tab structure, status message
+   and class hook in `SupabaseGate.tsx` is unchanged; the whole pass is CSS-only in
+   `app-compact/src/styles.css`.
+2. **Verification:** Compact `0.16.20` passed `typecheck`, production build (`✓ built in 12.52s`)
+   and `security:scan` (`Secret scan passed`). `smoke:mobile-layout` passed `1/1`. One-off
+   Playwright probe at 360x760 with fake Supabase env rendered the gate in light and dark with
+   `panelWidth 340 / viewportWidth 360`, zero horizontal overflow and zero page errors; screenshots
+   were reviewed then deleted with the probe script.
+3. **Boundaries:** version bumped `0.16.19` to `0.16.20` (`constants.ts`, `package.json`,
+   `package-lock.json`). Work is UNCOMMITTED in the Orca `penguin` worktree awaiting Boss review;
+   the Android shell worktree still carries the Session 80 login CSS and needs the same
+   `styles.css` sync if Boss wants this refinement on Android. No schema, migration, RLS,
+   credential, live-data or release action was performed. No Current Open Items opened or closed.
 
 ### Session 80 (Codex — Compact/Android login redesign)
 
