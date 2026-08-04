@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-04
+
+- **feat(compact/android): redesign the cloud login experience.** Compact `0.16.19` and Android
+  `0.20.4` / versionCode `2004` now share a responsive, accessible travel welcome screen with the
+  existing atlas artwork, automatic light/dark styling, clearer auth hierarchy and 44px+ touch
+  targets. Password sign-in, account creation, magic link, Google OAuth and native browser-return
+  handling are unchanged. Both surfaces passed typecheck, build, security, session and configured
+  auth smokes; Android debug assembly and emulator QA also passed. No database or release action
+  occurred.
+
 ## 2026-08-01
 
 - **fix(compact/android): close sync regressions and preserve repair identity.** Compact `0.16.18`

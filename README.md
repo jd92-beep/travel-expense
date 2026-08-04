@@ -38,8 +38,8 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.8`；Android worktree
-目前版本是 `0.19.5`（versionCode `1950`）。Admin Console production 是 `1.0.2`，由 protected
+Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.19`；Android worktree
+目前版本是 `0.20.4`（versionCode `2004`）。Admin Console production 是 `1.0.2`，由 protected
 workflow `29415119909` 以 Git SHA `67cde57a42bc43f1bda026d81d555260e25bb564` promotion；live
 `/api/health` 回 `200`、exact SHA 及 `acceptingReadTraffic=true`。Console Providers 會列出五個
 既有 Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output

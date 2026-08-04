@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-01 HKT
-- **Focus**: Session 79 completed the Compact/Android sync-regression review, repaired stable cloud identity and itinerary backfill, and verified both surfaces end to end.
+- **Date**: 2026-08-04 HKT
+- **Focus**: Session 80 redesigned the Compact and Android login surface with the installed `taste-skill`, preserving every Supabase auth path while improving responsive hierarchy, accessibility and light/dark presentation.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.18`; Android `0.20.3` (versionCode 2003; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
+- **App version**: Compact `0.16.19`; Android `0.20.4` (versionCode 2004; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -92,6 +92,24 @@ you closed with your session number.
    schema, RLS, migration, credential or user-data change was made.
 
 ## What Was Done
+
+### Session 80 (Codex — Compact/Android login redesign)
+
+1. **Design:** installed `Leonxlnx/taste-skill` and rebuilt the shared Supabase login gate as a calm,
+   mobile-first travel welcome screen. The existing travel atlas asset, one warm accent, responsive
+   split layout and automatic light/dark palettes replace the old floating-card composition without
+   adding a dependency or a generated asset.
+2. **Auth/accessibility:** preserved password sign-in, account creation, magic link, Google OAuth,
+   native browser-return status and every existing field/auth contract. Semantic submit forms,
+   grouped mode controls, status/alert announcements, visible focus rings, 44px+ targets and reduced
+   motion keep keyboard, screen-reader and touch behavior explicit.
+3. **Verification:** Compact `0.16.19` and Android `0.20.4` passed `typecheck`, production build,
+   `security:scan`, session smoke `3/3` and configured Supabase security smoke. Responsive probes at
+   360px, 390px and 1366px had zero horizontal overflow and valid touch targets. Android JDK 21
+   debug assembly passed; emulator QA returned `status=passed`, `appLinksVerified=true` and
+   `launchMode=login` at `/tmp/travel-expense-android-qa-2026-08-04T03-23-26-276Z`.
+4. **Boundaries:** no schema, migration, RLS, credential, live-data or release APK/AAB action was
+   performed. Existing Current Open Items remain unchanged.
 
 ### Session 79 (Codex — Compact/Android sync regression and full review)
 
