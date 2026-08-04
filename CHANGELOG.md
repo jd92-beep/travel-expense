@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-04 HKT (Android login redesign)
+
+- **v0.20.4 / versionCode 2004.** Rebuilt the Supabase login gate as a responsive, accessible
+  travel welcome screen using the existing atlas artwork, automatic light/dark styling and 44px+
+  touch targets. Password sign-in, account creation, magic link, Google OAuth and native
+  browser-return handling remain unchanged.
+  - Evidence: typecheck, production build, security scan, session `3/3`, configured security `4`
+    plus one intentional skip, JDK 21 debug build and emulator QA passed with verified App Links.
+  - Debug APK only. No release APK/AAB, database, RLS, credential or live-data action.
+
 ## 2026-08-01 HKT (Android sync regression review)
 
 - **v0.20.3 / versionCode 2003.** Serialized native push/pull/sync triggers, restored

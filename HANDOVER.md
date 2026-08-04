@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-01 HKT
-- **Focus (latest)**: Completed the Android/Compact sync-regression review: stable cloud identity, serialized native sync, recoverable retry evidence, itinerary repair backfill, secret-free manual retry and native reachability/storage hardening.
-- **App version (this sweep)**: Compact/Android `0.20.3` (versionCode `2003`); local branch `codex/admin-console-1.0-android`.
-- **Verification (this sweep)**: full production gate passed in `268.9s`; sync regression `10/10`, Supabase backfill `2/2`, offline `2/2`, session `3/3`, privacy `3/3`, configured security `4` with one intentional local-storage skip, unit contracts, `typecheck`, `build`, `security:scan`, JBR 21 debug build and `android:qa` all passed. QA verified App Links and the native login surface; artifact `/tmp/travel-expense-android-qa-2026-08-01T01-52-57-679Z`. No release APK/AAB was built.
+- **Date**: 2026-08-04 HKT
+- **Focus (latest)**: Redesigned the shared Supabase login surface with the installed `taste-skill`, preserving every Android auth path while improving responsive hierarchy, accessibility and light/dark presentation.
+- **App version (this sweep)**: Compact/Android `0.20.4` (versionCode `2004`); local branch `codex/admin-console-1.0-android`.
+- **Verification (this sweep)**: `typecheck`, production build, `security:scan`, session smoke `3/3`, configured security smoke `4` with one intentional local-storage skip, JDK 21 debug build and `android:qa` passed. QA returned `appLinksVerified=true`, `launchMode=login` and artifact `/tmp/travel-expense-android-qa-2026-08-04T03-23-26-276Z`. No release APK/AAB was built.
 - **Current cutover gates**: Do not make live receipt photos private until active Compact/Android compatibility is confirmed. Do not rewrite live Nagoya rows without Boss approval, a backup and server preview. Real-device Google/magic-link and authenticated selected-model clicks remain pending. No release APK/AAB was built or published in this session.
 - **Contract status**: The previous Compact/React fixture drift is resolved. Nagoya round-trip is exactly six days (`2026-04-20` through `2026-04-25`); partial updates retain untouched days; range-external scenery and stale overwrites fail.
 
@@ -180,6 +180,21 @@ agent does not restart from stale Phase 5 notes.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## What Was Done
+
+### Session 80 (Codex — v0.20.4 Android login redesign)
+
+1. **Design:** installed `Leonxlnx/taste-skill` and rebuilt the shared Supabase login gate as a calm,
+   mobile-first travel welcome screen using the existing atlas asset, one warm accent, a responsive
+   split layout and automatic light/dark palettes. No new dependency or generated asset was added.
+2. **Auth/accessibility:** preserved password sign-in, account creation, magic link, Google OAuth
+   and native browser-return status. Semantic forms, grouped mode controls, status/alert regions,
+   visible focus rings, 44px+ targets and reduced motion cover keyboard, screen-reader and touch use.
+3. **Verification:** `typecheck`, production build, `security:scan`, session smoke `3/3` and
+   configured Supabase security smoke passed. Responsive probes at 360px, 390px and 1366px had zero
+   horizontal overflow. JDK 21 debug assembly passed; emulator QA returned `status=passed`,
+   `appLinksVerified=true` and `launchMode=login` at
+   `/tmp/travel-expense-android-qa-2026-08-04T03-23-26-276Z`.
+4. **Boundary:** debug APK only; no release APK/AAB, database, RLS, credential or live-data action.
 
 ### Session 65 (Codex — v0.20.0 Android Volcano Kimi K3)
 
