@@ -38,10 +38,10 @@ you closed with your session number.
    live write: a positive shared-receipt write and Notion mirror result still need separate proof.
 6. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-7. 🟠 **Compact Netlify credit block is active again** — Session 78 workflow `30455269747` built and
-   typechecked Compact `0.16.17`, then Netlify rejected the production deploy with `403 Account
-   credit usage exceeded`. The public alias still serves the previous bundle; add credits before
-   retrying this workflow.
+7. 🟠 **Compact Netlify credit block remains active** — Session 80 workflow `30875160196` built and
+   typechecked Compact `0.16.19`, then Netlify rejected the production deploy with `403 Account
+   credit usage exceeded`. Vercel and GitHub Pages serve `0.16.19`; the Netlify alias still serves
+   the previous bundle. Add credits before retrying this workflow.
 8. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
    unused `hkd` imports in History/Stats. (Old Pending list.)
 9. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
@@ -108,8 +108,10 @@ you closed with your session number.
    360px, 390px and 1366px had zero horizontal overflow and valid touch targets. Android JDK 21
    debug assembly passed; emulator QA returned `status=passed`, `appLinksVerified=true` and
    `launchMode=login` at `/tmp/travel-expense-android-qa-2026-08-04T03-23-26-276Z`.
-4. **Boundaries:** no schema, migration, RLS, credential, live-data or release APK/AAB action was
-   performed. Existing Current Open Items remain unchanged.
+4. **Production/boundaries:** main commit `6fa5cbf` was pushed. GitHub Pages workflow `30875160158`
+   passed and both Pages and Vercel serve Compact `0.16.19`. Netlify workflow `30875160196` passed
+   build/typecheck but its deploy remains credit-blocked under Current Open Item 7. No schema,
+   migration, RLS, credential, live-data or release APK/AAB action was performed.
 
 ### Session 79 (Codex — Compact/Android sync regression and full review)
 
