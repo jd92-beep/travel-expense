@@ -112,9 +112,11 @@ you closed with your session number.
    `package-lock.json`). Pushed to `origin main` as `2c66b5d`. The same CSS was synced to the
    Android shell worktree (`/Users/tommy/Documents/Projects/travel-expense-android-shell`, branch
    `codex/admin-console-1.0-android`) as `0.20.5` / versionCode 2005, commit `f568c64`, with
-   typecheck, build, `security:scan` and mobile-layout smoke `1/1` green there (note: that branch's
-   bare `smoke:mobile-layout` script does not start a dev server; run it through
-   `scripts/run-with-dev-server.mjs`). No emulator QA or release APK/AAB was produced. No schema,
+   typecheck, build, `security:scan` and mobile-layout smoke `1/1` green there. Follow-up `3707596`
+   (`0.20.6` / versionCode 2006) fixed that branch's bare `smoke:mobile-layout`, `smoke:itinerary`,
+   `smoke:privacy` and `smoke:offline` scripts to run through `scripts/run-with-dev-server.mjs`
+   like main; `npm run smoke:mobile-layout` now passes `1/1` directly on the branch. No emulator QA
+   or release APK/AAB was produced. No schema,
    migration, RLS, credential or live-data action was performed. No Current Open Items opened or
    closed.
 
