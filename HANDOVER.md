@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-08-04 HKT
-- **Focus**: Session 81 refined the Session 80 Compact login surface (CSS-only calm/elegant pass, `taste-skill` redesign-evolve); pushed to `origin main` (`2c66b5d`) and synced to the Android shell branch (`f568c64`, `0.20.5`). Session 80 redesigned the Compact and Android login surface with the installed `taste-skill`, preserving every Supabase auth path.
+- **Focus**: Session 82 fixed the four registration-review findings on main (`0f8783c`, Compact `0.16.21`) and the Android branch (`6ec8db4`, `0.20.7`): signup confirm-password + stronger policy, resend-confirmation with cooldown, magic-link cooldown, and AuthGate offline banner replacing alert(). The full main→Android merge was assessed and deferred (Open Item 20). Session 81 refined the Session 80 Compact login surface (CSS-only calm/elegant pass, `taste-skill` redesign-evolve); pushed to `origin main` (`2c66b5d`) and synced to the Android shell branch (`f568c64`).
 - **Agent**: Codex.
 - **App version**: Compact `0.16.19`; Android `0.20.4` (versionCode 2004; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
@@ -90,8 +90,38 @@ you closed with your session number.
    `INACTIVE` to `ACTIVE_HEALTHY`. Compact, React and Android now leave the reconnect screen after a
    five-second unreachable-session watchdog and show the login surface with network evidence. No
    schema, RLS, migration, credential or user-data change was made.
+20. 🟠 **Full `main` → Android-branch merge deferred to a dedicated reviewed session** — Session 82
+   attempted the merge to close the structural drift found in the registration review and aborted
+   it: 48 conflicted files where BOTH sides evolved (`supabase.ts`, `useSyncEngine.ts`, `App.tsx`,
+   `styles.css`, tests, docs; merge-base is `f27af14` v0.8.0). Registration-related code is already
+   reconciled by port (`6ec8db4`); the remaining drift (outbox drainer refactor, RLS error mapping,
+   settlement category, tabs/tests) needs a planned merge with the full Android gate battery and
+   emulator QA. Do not attempt it as a side task.
 
 ## What Was Done
+
+### Session 82 (Kimi — registration mechanism review fixes, Compact + Android)
+
+1. **Review-driven fixes (both surfaces):** after reviewing the Compact/Android registration
+   mechanism, four findings were fixed on `main` (`0f8783c`, Compact `0.16.21`) and ported to the
+   Android branch (`6ec8db4`, `0.20.7` / versionCode 2007): (a) signup now has a confirm-password
+   field and a stronger client policy (8+ chars with a letter and a digit; sign-in stays
+   policy-free for legacy passwords); (b) new `resendSignupConfirmation()` via
+   `supabase.auth.resend({ type: 'signup' })` with a 60s cooldown, shown after successful signup;
+   (c) magic-link sends share the same 60s cooldown with a visible countdown hint, so the
+   previously throttle-free public signup path now has client-side pacing on top of Supabase rate
+   limits; (d) `AuthGate`'s broker-unreachable path no longer blocks on `alert()` — a new
+   `onOfflineMode` prop routes the offline-mode warning into the app sync banner, which survives
+   the gate unmounting after unlock.
+2. **Verification:** Compact `0.16.21` passed `typecheck`, build, `security:scan`,
+   `smoke:mobile-layout` `1/1` and `smoke:session` `3/3`; a 360px Playwright probe of the new
+   signup tab showed the confirm-password field and policy placeholder with zero overflow and zero
+   page errors. Android `0.20.7` passed `typecheck`, build, `security:scan`, `smoke:mobile-layout`
+   `1/1` (now running through the fixed dev-server harness) and `smoke:session` `3/3`.
+3. **Drift finding disposition:** the registration/auth code paths are now identical in behavior
+   across both branches. The wider `supabase.ts`/branch structural drift is NOT resolved by this
+   session — see Current Open Item 20 for the aborted-merge evidence and the required approach.
+   No schema, migration, RLS, credential, live-data or release action was performed.
 
 ### Session 81 (Kimi — Compact login visual refinement, worktree `penguin`)
 
