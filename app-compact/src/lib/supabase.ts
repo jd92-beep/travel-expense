@@ -749,6 +749,19 @@ export function useSupabaseAuth() {
     if (signUpError) throw signUpError;
   }, [supabase]);
 
+  const resendSignupConfirmation = useCallback(async (email: string) => {
+    if (!supabase) throw new Error('Supabase is not configured');
+    const cleaned = email.trim().toLowerCase();
+    const { error: resendError } = await supabase.auth.resend({
+      type: 'signup',
+      email: cleaned,
+      options: {
+        emailRedirectTo: authRedirectUrl(),
+      },
+    });
+    if (resendError) throw resendError;
+  }, [supabase]);
+
   const updatePassword = useCallback(async (password: string) => {
     if (!supabase) throw new Error('Supabase is not configured');
     if (password.length < 6) throw new Error('密碼長度最少需要 6 個字元');
@@ -792,6 +805,7 @@ export function useSupabaseAuth() {
     sendMagicLink,
     signInWithPassword,
     signUpWithPassword,
+    resendSignupConfirmation,
     updatePassword,
     signInWithGoogle,
     signOut,

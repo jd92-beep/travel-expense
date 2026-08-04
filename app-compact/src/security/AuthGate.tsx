@@ -29,11 +29,13 @@ export function AuthGate({
   credentialBrokerUrl,
   onBrokerSession,
   onUnlocked,
+  onOfflineMode,
 }: {
   children: ReactNode;
   credentialBrokerUrl?: string;
   onBrokerSession?: (session: BrokerSession) => void;
   onUnlocked?: () => void;
+  onOfflineMode?: (message: string) => void;
 }) {
   const [unlocked, setUnlocked] = useState(() => hasDeviceTrust());
   const [checking, setChecking] = useState(() => false);
@@ -122,8 +124,10 @@ export function AuthGate({
         onBrokerSession?.(brokerSession);
       } catch (brokerError) {
         console.warn('Credential Broker connection failed during unlock, entering offline mode:', brokerError);
-        // Fix Bug 1.4: Surface a soft warning about broker/sync being limited
-        alert('本地解鎖成功！但無法連接 Credential Broker（正處於離線模式），Notion 同步及 AI 功能將暫時受限。');
+        // Surface the degraded mode through the app banner instead of a blocking
+        // alert(): the gate unmounts on unlock, so an inline gate notice would vanish
+        // before the user could read it.
+        onOfflineMode?.('本地解鎖成功，但未能連接 Credential Broker（離線模式）：Notion 同步及 AI 功能暫時受限。');
       }
 
       setUnlocked(true);

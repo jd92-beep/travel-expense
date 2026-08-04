@@ -684,6 +684,7 @@ export function App() {
       onUnlocked={() => {
         changeTab('dashboard');
       }}
+      onOfflineMode={(message) => updateState({ syncError: message })}
     >
       {appContent}
     </AuthGate>
