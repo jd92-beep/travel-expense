@@ -4,7 +4,6 @@ import { brokerAiJson, hasCredentialBrokerSession, testProviderConnection } from
 import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, ReceiptLineItem, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
-import { perHkdForCurrency } from './currency';
 import { currentSupabaseAccessToken } from './supabase';
 import { isCurrencyCode, SUPPORTED_CURRENCIES } from './currency';
 
@@ -99,6 +98,35 @@ function coerceModelJsonSafe(raw: unknown): unknown {
   } catch {
     return raw;
   }
+}
+
+function parseLineItems(raw: unknown): ReceiptLineItem[] {
+  if (!Array.isArray(raw)) return [];
+  const items: ReceiptLineItem[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const r = entry as Record<string, unknown>;
+    const desc = String(r.desc || r.name || r.description || '').trim();
+    // coerceAmount tolerates weak-model output: "¥1,580", "１５８０円", numeric strings.
+    const amount = Math.round(coerceAmount(r.amount ?? r.price ?? r.total));
+    if (!desc) continue;
+    const qty = Math.round(coerceAmount(r.qty));
+    items.push({
+      id: `li_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      desc,
+      amount,
+      qty: qty > 0 ? qty : undefined,
+    });
+  }
+  return items;
+}
+
+function deriveItemsText(lineItems: ReceiptLineItem[]): string {
+  if (!lineItems.length) return '';
+  return lineItems.map((item) => {
+    const qty = item.qty && item.qty > 1 ? ` x ${item.qty}` : '';
+    return `- ${item.desc}${qty}: ¥${item.amount.toLocaleString()}`;
+  }).join('\n');
 }
 
 function slug(value: string): string {
@@ -785,9 +813,9 @@ function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' 
     baseAttempts = [
       { provider: 'google', model: 'gemini-3.1-flash-lite', label: 'Google Gemini 3.1 Flash Lite (Fast Fallback)' },
       { provider: 'google', model: 'gemini-2.5-flash', label: 'Google Gemini 2.5 Flash (Fast Fallback)' },
-      { provider: 'kimi', model: 'kimi-code', label: 'Kimi kimi-code (1st Fallback)' },
-      { provider: 'google', model: 'gemma-4-31b-it', label: 'Google Gemma 4 31B (2nd Fallback)' },
-      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (3rd Fallback)' },
+      { provider: 'kimi', model: 'kimi-code', label: 'Kimi kimi-code (Fallback)' },
+      { provider: 'google', model: 'gemma-4-31b-it', label: 'Google Gemma 4 31B (Fallback)' },
+      { provider: 'google', model: 'gemma-4-26b', label: 'Google Gemma 4 26B (Fallback)' },
     ];
     for (const modelInfo of AI_MODELS) {
       const attempt = selectedModelAttempt(modelInfo.id);
@@ -827,8 +855,18 @@ async function callModelAttemptJson(
 ) {
   if (attempt.provider === 'kimi') return callKimiJson(state, prompt, kind, image, attempt.model);
   if (attempt.provider === 'mimo') return callMimoJson(state, prompt, kind, image, attempt.model);
-  if (attempt.provider === 'volcano') return brokerAiJson(state, 'volcano', prompt, kind, image, attempt.model);
+  if (attempt.provider === 'volcano') return callVolcanoJson(state, prompt, kind, image, attempt.model);
   return callGoogleJson(state, prompt, kind, image, attempt.model);
+}
+
+async function callVolcanoJson(
+  state: AppState,
+  prompt: string,
+  kind: 'scan' | 'voice' | 'email' | 'trip',
+  image?: { base64: string; mime: string },
+  overrideModel?: string,
+) {
+  return brokerAiJson(state, 'volcano', prompt, kind, image, overrideModel);
 }
 
 async function callGoogleJson(
@@ -904,35 +942,6 @@ export async function testGoogleBackupConnection(state: AppState): Promise<strin
     : `指定 backup model 未喺 models.list 出現，會暫用：${selected}`;
 }
 
-function parseLineItems(raw: unknown): ReceiptLineItem[] {
-  if (!Array.isArray(raw)) return [];
-  const items: ReceiptLineItem[] = [];
-  for (const entry of raw) {
-    if (!entry || typeof entry !== 'object') continue;
-    const r = entry as Record<string, unknown>;
-    const desc = String(r.desc || r.name || r.description || '').trim();
-    // coerceAmount tolerates weak-model output: "¥1,580", "１５８０円", numeric strings.
-    const amount = Math.round(coerceAmount(r.amount ?? r.price ?? r.total));
-    if (!desc) continue;
-    const qty = Math.round(coerceAmount(r.qty));
-    items.push({
-      id: `li_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      desc,
-      amount,
-      qty: qty > 0 ? qty : undefined,
-    });
-  }
-  return items;
-}
-
-function deriveItemsText(lineItems: ReceiptLineItem[]): string {
-  if (!lineItems.length) return '';
-  return lineItems.map((item) => {
-    const qty = item.qty && item.qty > 1 ? ` x ${item.qty}` : '';
-    return `- ${item.desc}${qty}: ¥${item.amount.toLocaleString()}`;
-  }).join('\n');
-}
-
 export async function scanReceiptImage(file: File, state: AppState): Promise<Receipt> {
   const image = await fileToBase64(file);
   const imageForOCR = await prepareForOCR(image.base64, image.mime);
@@ -954,6 +963,7 @@ FIELD RULES:
 - "time": 24-hour HH:MM from the receipt timestamp; "" if absent.
 - "category" and "payment" MUST be one of the listed values exactly.
 - "currency": the ISO 4217 code of the currency actually printed on the receipt (e.g. "JPY","EUR","CZK","INR"). Infer it from the receipt's language, currency symbols, and any country/address hints. Omit (use "") if you are not confident.
+- "lineItems": one entry per purchased item; "amount" is the LINE TOTAL (qty × unit price); [] if the receipt has no itemized lines.
 
 EXAMPLE OUTPUT (structure reference only — read the actual values from the image):
 {"store":"桜町商店 (櫻町商店)","total":3240,"date":"2026-04-21","time":"12:45","address":"東京都千代田区丸の内1-1-1 (東京都千代田區丸之內1-1-1)","bookingRef":"","category":"food","payment":"cash","itemsText":"- 天ぷら定食 (天婦羅定食) x 1: ¥1580\\n- ビール (啤酒) x 2: ¥1660","note":"","lineItems":[{"desc":"天ぷら定食 (天婦羅定食)","amount":1580,"qty":1},{"desc":"ビール (啤酒)","amount":1660,"qty":2}],"tax":0,"tip":0}
@@ -978,46 +988,30 @@ CRITICAL ITEMS FORMATTING RULES:
    Example:
    - 牛乳 (牛奶) x 1: ¥180
    - 삼각김밥 (三角飯糰) x 2: ₩2,400`;
-  const parsed = coerceModelJson(await callPreferredJson(state, prompt, 'scan', imageForOCR)) as Partial<Receipt> & {
-    lineItems?: unknown;
-    tax?: unknown;
-    tip?: unknown;
-  };
+  const parsed = coerceModelJson(await callPreferredJson(state, prompt, 'scan', imageForOCR)) as Partial<Receipt> & { lineItems?: unknown };
   const lineItems = parseLineItems(parsed.lineItems);
-  const itemsTextRaw = String(parsed.itemsText || '');
-  const itemsText = lineItems.length > 0 ? deriveItemsText(lineItems) : itemsTextRaw;
-  const receiptDate = ymdFromText(String(parsed.date || ''), state.tripDateRange.start);
-  // AI-detected receipt currency wins (multi-currency trips); otherwise keep the
-  // long-standing trip-currency stamp as the fallback.
-  const receiptCurrency = validCurrency(parsed.currency) || state.tripCurrency || 'JPY';
-  const fxRate = receiptCurrency === 'HKD' ? undefined : perHkdForCurrency(state, receiptCurrency);
-  // Manual entry blocks a negative total outright (ReceiptEditor validAmount); AI parsing has no such
-  // guard, so a misread refund/credit line as the grand total would otherwise silently flow into
-  // computeSettlements, which skips amount<=0 entirely — the receipt would still reduce Dashboard's
-  // spend total but contribute nothing to anyone's settlement balance. Normalize to the same invariant.
-  const receiptTotal = coerceAmount(parsed.total);
+  const currency = validCurrency(parsed.currency);
   return {
     id: `scan_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     store: String(parsed.store || file.name.replace(/\.[^.]+$/, '') || '掃描收據'),
-    total: receiptTotal,
-    date: receiptDate,
+    total: coerceAmount(parsed.total),
+    date: ymdFromText(String(parsed.date || ''), state.tripDateRange.start),
     time: coerceTime(parsed.time),
     address: String(parsed.address || ''),
     bookingRef: String(parsed.bookingRef || ''),
     category: validCategory(parsed.category),
     payment: validPayment(parsed.payment),
-    itemsText,
-    lineItems: lineItems.length > 0 ? lineItems : undefined,
+    // normalize.ts falls back to the itinerary day's currency when this is undefined.
+    currency,
+    originalCurrency: currency,
+    itemsText: lineItems.length ? deriveItemsText(lineItems) : String(parsed.itemsText || ''),
+    lineItems: lineItems.length ? lineItems : undefined,
     note: String(parsed.note || ''),
     personId: state.persons?.[0]?.id || '',
     splitMode: 'shared',
     source: 'react-ocr',
     photoThumb: photoThumb || undefined,
     createdAt: Date.now(),
-    currency: receiptCurrency,
-    originalCurrency: receiptCurrency,
-    exchangeRate: fxRate,
-    hkdAmount: fxRate ? Math.round(receiptTotal / Math.max(0.1, fxRate)) : undefined,
   };
 }
 
@@ -1062,30 +1056,26 @@ CRITICAL ITEMS FORMATTING RULES:
   }
   return rows.map((row, i) => {
     const r = row as Partial<Receipt>;
-    const receiptTotal = coerceAmount(r.total); // same non-negative invariant as manual entry
-    // AI-detected currency wins (multi-currency trips); trip currency stays the fallback.
-    const receiptCurrency = validCurrency(r.currency) || state.tripCurrency || 'JPY';
-    const fxRate = receiptCurrency === 'HKD' ? undefined : perHkdForCurrency(state, receiptCurrency);
+    const currency = validCurrency(r.currency);
     return {
       id: `${source}_${Date.now()}_${i}_${Math.random().toString(16).slice(2)}`,
       store: String(r.store || '文字匯入'),
-      total: receiptTotal,
+      total: coerceAmount(r.total),
       date: ymdFromText(String(r.date || ''), state.tripDateRange.start),
       time: String(r.time || ''),
       address: String(r.address || ''),
       bookingRef: String(r.bookingRef || ''),
       category: validCategory(r.category),
       payment: validPayment(r.payment),
+      // normalize.ts falls back to the itinerary day's currency when this is undefined.
+      currency,
+      originalCurrency: currency,
       itemsText: String(r.itemsText || ''),
       note: String(r.note || ''),
       personId: state.persons?.[0]?.id || '',
       splitMode: 'shared',
       source,
       createdAt: Date.now(),
-      currency: receiptCurrency,
-      originalCurrency: receiptCurrency,
-      exchangeRate: fxRate,
-      hkdAmount: fxRate ? Math.round(receiptTotal / Math.max(0.1, fxRate)) : undefined,
     };
   });
 }

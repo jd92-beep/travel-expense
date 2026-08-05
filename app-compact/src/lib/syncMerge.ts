@@ -34,7 +34,7 @@ function tripUpdatedAt(trip: TripProfile, isLocal = false) {
 function validTripRange(trip: TripProfile, fallback?: TripProfile): { start: string; end: string } | null {
   const start = String(trip.startDate || fallback?.startDate || '');
   const end = String(trip.endDate || fallback?.endDate || '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end < start) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '') || end < start) return null;
   return { start, end };
 }
 

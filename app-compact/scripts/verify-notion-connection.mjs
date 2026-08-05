@@ -11,7 +11,8 @@
 
 const BROKER_URL = 'https://travel-expense-credential-broker.ftjdfr.workers.dev';
 const DEFAULT_DB = '3438d94d5f7c81878221fcda6d65d39d';
-const ADMIN_PASSPHRASE = 'fYhg8JxeXPJdihVyWm8PznRgF7HC0qVi';
+const BROKER_UNLOCK_PASSWORD = process.env.BROKER_UNLOCK_PASSWORD?.trim()
+  || process.env.BROKER_ADMIN_PASSPHRASE?.trim();
 
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, {
@@ -31,6 +32,9 @@ async function fetchJson(url, options = {}) {
 
 async function main() {
   console.log('=== Notion Connection Verification ===\n');
+  if (!BROKER_UNLOCK_PASSWORD) {
+    throw new Error('Missing BROKER_UNLOCK_PASSWORD or BROKER_ADMIN_PASSPHRASE');
+  }
 
   // Step 1: Check broker health
   console.log('1. Checking broker health...');
@@ -48,11 +52,11 @@ async function main() {
   try {
     const unlock = await fetchJson(`${BROKER_URL}/session/unlock`, {
       method: 'POST',
-      body: JSON.stringify({ passphrase: ADMIN_PASSPHRASE }),
+      body: JSON.stringify({ password: BROKER_UNLOCK_PASSWORD }),
     });
-    sessionToken = unlock.session?.token;
+    sessionToken = unlock.session;
     if (sessionToken) {
-      console.log(`   ✅ Broker session unlocked (expires: ${unlock.session?.expiresAt})`);
+      console.log(`   ✅ Broker session unlocked (expires: ${unlock.expiresAt})`);
     } else {
       console.log(`   ⚠️ No session token returned`);
       return;
@@ -67,7 +71,7 @@ async function main() {
   try {
     const status = await fetchJson(`${BROKER_URL}/credentials/status`, {
       method: 'GET',
-      headers: { 'Authorization': `Bearer ${sessionToken}` },
+      headers: { 'X-Travel-Session': sessionToken },
     });
     const notionProvider = status.providers?.find(p => p.provider === 'notion');
     if (notionProvider) {
@@ -89,7 +93,7 @@ async function main() {
   try {
     const test = await fetchJson(`${BROKER_URL}/credentials/test`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${sessionToken}` },
+      headers: { 'X-Travel-Session': sessionToken },
       body: JSON.stringify({ provider: 'notion' }),
     });
     console.log(`   ✅ Notion test: ${test.status?.status || 'unknown'}`);
@@ -116,7 +120,7 @@ async function main() {
   console.log('1. Open the compact app');
   console.log('2. Go to Settings > Credentials & Connection');
   console.log('3. Verify Notion shows "connected"');
-  console.log('4. If not connected, enter broker password: ' + ADMIN_PASSPHRASE);
+  console.log('4. If not connected, enter the broker password from your secure vault');
   console.log('5. Create a test receipt and verify it appears in Notion');
   console.log('\nReceipt photos will be automatically uploaded to Notion native storage.');
 }

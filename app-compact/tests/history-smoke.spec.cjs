@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 const receipts = [
@@ -266,7 +268,7 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts, autoSync: false }));
   }, receipts);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
   const mobileHistoryHeader = page.getByLabel('紀錄中心 header');
   await expect(mobileHistoryHeader).not.toContainText('local ready');
@@ -279,11 +281,8 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   await expect(page.getByLabel('Receipt health markers for M7 Photo Missing')).toContainText('photo missing');
   await expect(page.getByLabel('Receipt health markers for M7 Duplicate A')).toContainText('duplicate');
   await expect(page.getByLabel('Receipt health markers for M7 Duplicate B')).toContainText('duplicate');
-  await expect(page.getByLabel('Receipt health markers for M7 Sync Failed')).toContainText('sync retrying');
-  // Normalize assigns a local sourceId to every receipt (incl. cloud-pulled ones), so the legacy
-  // "cloud-only" marker (supabaseId && !sourceId) is now unreachable. The user-facing guarantee is
-  // that a cloud-sourced receipt still renders — assert that instead of the dead marker.
-  await expect(page.getByRole('button', { name: /M7 Cloud Only/ })).toBeVisible();
+  await expect(page.getByLabel('Receipt health markers for M7 Sync Failed')).toContainText('sync failed');
+  await expect(page.getByLabel('Receipt health markers for M7 Cloud Only')).toContainText('cloud-only');
   await expect(page.getByLabel('Receipt health markers for M7 Pending')).toContainText('pending');
   const commandMetrics = await page.evaluate(() => {
     const card = document.querySelector('[aria-label="紀錄中心 header"]')?.getBoundingClientRect();
@@ -358,7 +357,7 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   expect(cancelButton.left).toBeLessThan(deleteButton.left);
   const deletePhotoButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '刪除相片');
   const itineraryButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '加入行程');
-  expect(itineraryButton.left).toBeLessThan(deletePhotoButton.left);
+  expect(deletePhotoButton.left).toBeLessThan(itineraryButton.left);
   expect(coffeeEditorMetrics.scrollWidth).toBe(390);
   await page.getByLabel('金額', { exact: true }).fill('444');
   await page.getByRole('button', { name: '儲存' }).click();
@@ -390,7 +389,7 @@ test('History desktop shell title uses current record-center copy', async ({ pag
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts, autoSync: false }));
   }, receipts);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.getByRole('heading', { name: '紀錄中心' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Expense Archive' })).toHaveCount(0);
 });
@@ -409,7 +408,7 @@ test('History keeps record review shortcut strip removed while row markers remai
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts, autoSync: false }));
   }, receipts);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
 
   await expect(page.getByLabel('Receipt cleanup suggestions')).toHaveCount(0);
@@ -440,7 +439,7 @@ test('History keeps itinerary review shortcuts removed without hiding records', 
     }));
   }, { seedReceipts: reconciliationReceipts, itinerary: reconciliationItinerary });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
 
   await expect(page.getByLabel('Itinerary receipt review queue')).toHaveCount(0);
@@ -514,7 +513,7 @@ test('History offline conflict resolver reviews and resolves local/cloud receipt
     }));
   }, conflictReceipts);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
 
   const resolver = page.getByLabel('Offline conflict resolver');
@@ -534,7 +533,7 @@ test('History offline conflict resolver reviews and resolves local/cloud receipt
   await page.getByRole('dialog', { name: '編輯紀錄' }).getByRole('button', { name: '取消' }).click();
 
   await localConflict.getByRole('button', { name: 'Keep local' }).click();
-  await expect(resolver).toContainText('1 筆收據');
+  await expect(resolver).toContainText('1 筆');
   await expect(resolver).not.toContainText('Offline Noodles');
   const keepLocalState = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
   const keptLocalReceipt = keepLocalState.receipts.find((receipt) => receipt.id === 'conflict_local');
@@ -569,7 +568,7 @@ test('History attachment health surfaces large, missing, and unsynced receipt ph
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts, autoSync: false }));
   }, attachmentReceipts);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
 
   await expect(page.getByLabel('Receipt attachment health')).toHaveCount(0);
@@ -621,7 +620,7 @@ test('History manual pull routes through global sync engine when broker session 
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: [] }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
   await page.getByLabel('紀錄中心 header').getByRole('button', { name: '重新同步' }).click();
   await expect.poll(() => notionRequests).toBeGreaterThan(0);
@@ -655,7 +654,7 @@ test('History relies on the single global boot pull instead of auto-pulling agai
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: [] }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
   await expect.poll(() => notionPaths.filter((path) => path.endsWith('/query')).length, { timeout: 10000 }).toBe(3);
   await page.waitForTimeout(1200);

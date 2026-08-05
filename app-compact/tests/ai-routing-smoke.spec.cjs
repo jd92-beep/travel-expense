@@ -4,7 +4,7 @@ const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-test('AI routing migrates legacy scan and voice defaults without overriding selected email and trip models', async ({ page }) => {
+test('AI routing keeps user-selected primary models ahead of fallbacks', async ({ page }) => {
   test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
   const calls = [];
 
@@ -121,8 +121,17 @@ test('AI routing migrates legacy scan and voice defaults without overriding sele
           warnings: [],
           changes: ['Detected new Seoul trip.'],
         }
-      : [{
-          store: 'Kimi Email Lunch',
+      : body.kind === 'scan'
+        ? {
+          store: 'Kimi Scan Mart',
+          total: 888,
+          date: '2026-05-08',
+          time: '12:30',
+          category: 'food',
+          payment: 'credit',
+        }
+        : [{
+          store: body.kind === 'voice' ? 'Kimi Voice Cafe' : 'Kimi Email Lunch',
           total: 888,
           date: '2026-05-08',
           time: '12:30',
@@ -231,14 +240,17 @@ test('AI routing migrates legacy scan and voice defaults without overriding sele
     ),
   });
   await expect(page.getByText('編輯紀錄')).toBeVisible();
-  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Mimo Scan Mart');
+  expect(calls.filter((call) => call.kind === 'scan')).toEqual([
+    { provider: 'kimi', kind: 'scan', model: 'kimi-code' },
+  ]);
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Kimi Scan Mart');
   await page.getByRole('button', { name: '取消' }).click();
 
   await page.getByRole('button', { name: '語音' }).click();
   await page.getByPlaceholder('例：喺全家買飯糰同飲品 580 yen，用 Suica').fill('2026-05-08 喺 Voice Cafe 1234 yen，用 Suica，09:30');
   await page.getByRole('button', { name: '解析' }).click();
   await expect(page.getByText('編輯紀錄')).toBeVisible();
-  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Mimo Voice Cafe');
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Kimi Voice Cafe');
   await page.getByRole('button', { name: '取消' }).click();
 
   await page.getByRole('button', { name: 'Email' }).click();
@@ -249,7 +261,7 @@ test('AI routing migrates legacy scan and voice defaults without overriding sele
   await expect(page.getByText('已儲存 1 筆 email 待確認紀錄。')).toBeVisible();
 
   await nav.getByRole('button', { name: '設定', exact: true }).click();
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
   const tripUpdate = page.getByRole('button', { name: /AI 行程更新/ });
   if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
   await page.getByPlaceholder(/下次/).fill('下次 2026-07-10 至 2026-07-12 去首爾，第一晚住弘大。');
@@ -260,15 +272,15 @@ test('AI routing migrates legacy scan and voice defaults without overriding sele
   await expect(tripConfirm).toContainText('Google BBQ');
 
   expect(calls).toEqual(expect.arrayContaining([
-    expect.objectContaining({ provider: 'mimo', kind: 'scan', model: 'mimo-v2.5' }),
-    expect.objectContaining({ provider: 'mimo', kind: 'voice', model: 'mimo-v2.5' }),
+    expect.objectContaining({ provider: 'kimi', kind: 'scan', model: 'kimi-code' }),
+    expect.objectContaining({ provider: 'kimi', kind: 'voice', model: 'kimi-code' }),
     expect.objectContaining({ provider: 'google', kind: 'email', model: 'gemini-3.1-flash' }),
     expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash' }),
   ]));
-  expect(calls.some((call) => call.kind === 'scan' && call.provider !== 'mimo')).toBe(false);
-  expect(calls.some((call) => call.kind === 'voice' && call.provider !== 'mimo')).toBe(false);
-  expect(calls.some((call) => call.kind === 'email' && call.provider !== 'google')).toBe(false);
-  expect(calls.some((call) => call.kind === 'trip' && call.provider !== 'google')).toBe(false);
+  expect(calls.some((call) => call.kind === 'scan' && call.provider === 'google')).toBe(false);
+  expect(calls.some((call) => call.kind === 'voice' && call.provider === 'google')).toBe(false);
+  expect(calls.some((call) => call.kind === 'email' && call.provider === 'kimi')).toBe(false);
+  expect(calls.some((call) => call.kind === 'trip' && call.provider === 'kimi')).toBe(false);
 });
 
 test('selected Volcano Kimi K3 image model uses the exact broker route without fallback', async ({ page }) => {
@@ -303,6 +315,57 @@ test('selected Volcano Kimi K3 image model uses the exact broker route without f
     kind: 'scan',
     model: 'kimi-k3',
   }]);
+});
+
+test('selected Volcano model routes to the Volcano broker endpoint without Google fallback', async ({ page }) => {
+  test.skip(process.env.SUPABASE_AI_SMOKE === '1', 'Run this broker-session smoke without Supabase env.');
+  const calls = [];
+  await page.route('**/secrets.local.js', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: 'window.DEV_SECRETS = {};',
+  }));
+  await page.route('**/volcano/json', async (route) => {
+    const body = route.request().postDataJSON();
+    calls.push({ provider: 'volcano', kind: body.kind, model: body.model });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: { store: 'Volcano Scan Mart', total: 88, date: '2026-05-08', category: 'food', payment: 'cash' },
+      }),
+    });
+  });
+  await page.route('**/google/json', async (route) => {
+    calls.push({ provider: 'google' });
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Wrong provider' }) });
+  });
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('boss-japan-tracker:credential-session:v1', JSON.stringify({
+      credentialSession: 'volcano-routing-session',
+      credentialSessionExpiresAt: Date.now() + 60_000,
+    }));
+    localStorage.setItem('boss-japan-tracker', JSON.stringify({
+      lastTab: 'scan',
+      receipts: [],
+      scanModel: 'volcano/doubao-seed-2.0-pro',
+    }));
+  });
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await page.getByLabel('主要分頁').getByRole('button', { name: '記帳', exact: true }).click();
+  await page.locator('#scan-gallery-input').setInputFiles({
+    name: 'receipt.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64'),
+  });
+  await expect(page.getByText('編輯紀錄')).toBeVisible();
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Volcano Scan Mart');
+  expect(calls).toEqual([{ provider: 'volcano', kind: 'scan', model: 'doubao-seed-2.0-pro' }]);
 });
 
 test('Trip update does not treat the current itinerary as a successful extraction', async ({ page }) => {
@@ -636,9 +699,9 @@ test('AI routing stops provider fallback when broker quota is exceeded', async (
     body: 'window.DEV_SECRETS = {};',
   }));
 
-  await page.route('**/google/json', async (route) => {
+  await page.route('**/volcano/json', async (route) => {
     const body = route.request().postDataJSON();
-    calls.push({ provider: 'google', kind: body.kind, model: body.model });
+    calls.push({ provider: 'volcano', kind: body.kind, model: body.model });
     await route.fulfill({
       status: 429,
       contentType: 'application/json',
@@ -649,16 +712,16 @@ test('AI routing stops provider fallback when broker quota is exceeded', async (
     });
   });
 
-  await page.route('**/kimi/json', async (route) => {
+  await page.route('**/mimo/json', async (route) => {
     const body = route.request().postDataJSON();
-    calls.push({ provider: 'kimi', kind: body.kind, model: body.model });
+    calls.push({ provider: 'mimo', kind: body.kind, model: body.model });
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         ok: true,
         data: {
-          store: 'Unexpected Kimi Fallback',
+          store: 'Unexpected Mimo Fallback',
           total: 999,
           date: '2026-05-08',
           category: 'food',
@@ -679,7 +742,7 @@ test('AI routing stops provider fallback when broker quota is exceeded', async (
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'scan',
       receipts: [],
-      scanModel: 'kimi/kimi-code',
+      scanModel: 'volcano/minimax-m3',
     }));
   });
 
@@ -699,7 +762,7 @@ test('AI routing stops provider fallback when broker quota is exceeded', async (
   await expect(page.getByLabel('備註')).toHaveValue(/Supabase AI daily quota exceeded/);
 
   expect(calls).toEqual([
-    expect.objectContaining({ provider: 'google', kind: 'scan', model: 'gemma-4-31b-it' }),
+    expect.objectContaining({ provider: 'volcano', kind: 'scan', model: 'minimax-m3' }),
   ]);
 });
 
@@ -902,7 +965,7 @@ test('Supabase users can call required AI primaries without a broker password se
   await expect(page.getByText('已儲存 1 筆 email 待確認紀錄。')).toBeVisible();
 
   await nav.getByRole('button', { name: '設定', exact: true }).click();
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
   const tripUpdate = page.getByRole('button', { name: /AI 行程更新/ });
   if ((await tripUpdate.getAttribute('aria-expanded')) !== 'true') await tripUpdate.click();
   await page.getByPlaceholder(/下次/).fill('下次 2026-07-10 至 2026-07-12 去首爾。');

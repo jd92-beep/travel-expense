@@ -1,24 +1,41 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const repoRoot = join(import.meta.dirname, '..');
-const files = [
-  'supabase/migrations/20260526071500_enforce_user_isolation_rls.sql',
-  'supabase/migrations/20260526075811_revoke_anon_private_table_grants.sql',
-  'supabase/migrations/20260526093000_scope_receipt_owner_updates.sql',
-  'supabase/migrations/20260526094500_keep_notion_scope_private.sql',
-  'supabase/migrations/20260526101000_tighten_shared_private_rows.sql',
-  'supabase/migrations/20260612153000_trip_sharing_dual_backend.sql',
-  'supabase/migrations/20260612165000_shared_ledger_receipt_rpc.sql',
-  'supabase/migrations/20260613000000_receipt_photo_storage.sql',
-  'supabase/migrations/20260613001000_harden_shared_invites_and_receipt_versions.sql',
-  'supabase/migrations/20260620235000_fix_expense_comments_insert_membership.sql',
-  'supabase/migrations/20260621013000_limit_expense_comments_grants.sql',
-];
+const files = readdirSync(join(repoRoot, 'supabase/migrations'))
+  .filter((file) => file.endsWith('.sql'))
+  .sort()
+  .map((file) => `supabase/migrations/${file}`);
 
-const sql = files
+const stagedFiles = [
+  'supabase/migrations-staged/20260710161000_private_receipt_photo_storage.sql',
+];
+const receiptPhotoCompatibilityMigration =
+  'supabase/migrations/20260712122500_restore_receipt_photo_compatibility.sql';
+const adminOperationKernelMigration =
+  'supabase/migrations/20260710187000_admin_operation_kernel.sql';
+const adminPasskeyRemovalMigration =
+  'supabase/migrations/20260712123000_admin_passkey_removal.sql';
+const receiptSyncWorkerContractMigration =
+  'supabase/migrations/20260710191000_receipt_sync_worker_contract.sql';
+const staleReceiptSyncLeaseRecoveryMigration =
+  'supabase/migrations/20260724110000_reclaim_stale_receipt_sync_processing_leases.sql';
+
+const activeSql = files
   .map((file) => readFileSync(join(repoRoot, file), 'utf8'))
   .join('\n\n');
+const stagedSql = stagedFiles
+  .map((file) => readFileSync(join(repoRoot, file), 'utf8'))
+  .join('\n\n');
+const receiptPhotoCompatibilitySql = files.includes(receiptPhotoCompatibilityMigration)
+  ? readFileSync(join(repoRoot, receiptPhotoCompatibilityMigration), 'utf8')
+  : '';
+const staleReceiptSyncLeaseRecoverySql = files.includes(staleReceiptSyncLeaseRecoveryMigration)
+  ? readFileSync(join(repoRoot, staleReceiptSyncLeaseRecoveryMigration), 'utf8')
+  : '';
+const receiptSyncWorkerContractSql = files.includes(receiptSyncWorkerContractMigration)
+  ? readFileSync(join(repoRoot, receiptSyncWorkerContractMigration), 'utf8')
+  : '';
 
 const requiredPatterns = [
   {
@@ -64,6 +81,14 @@ const requiredPatterns = [
   {
     name: 'receipt photo select is owner-only',
     re: /create policy receipt_photos_select_own[\s\S]*?using\s*\(\s*owner_id\s*=\s*\(select auth\.uid\(\)\)\s*\)/i,
+  },
+  {
+    name: 'trip-visible receipt items are shared without exposing private items',
+    re: /create policy receipt_items_select_trip_members[\s\S]*?r\.visibility\s*=\s*'trip'[\s\S]*?private\.can_access_trip\(r\.trip_id\)/i,
+  },
+  {
+    name: 'trip-visible receipt photos are shared without exposing private photos',
+    re: /create policy receipt_photos_select_trip_members[\s\S]*?r\.visibility\s*=\s*'trip'[\s\S]*?private\.can_access_trip\(r\.trip_id\)/i,
   },
   {
     name: 'receipt sync job select is owner-only',
@@ -130,6 +155,14 @@ const requiredPatterns = [
     re: /insert into storage\.buckets[\s\S]*?on conflict \(id\) do nothing[\s\S]*?drop policy if exists "receipt_photos_upload_own" on storage\.objects/i,
   },
   {
+    name: 'browser receipt writes cannot retain private Notion identifiers',
+    re: /create or replace function public\.enforce_receipt_private_fields\(\)[\s\S]*?coalesce\(auth\.role\(\), ''\)\s*<>\s*'service_role'[\s\S]*?new\.notion_page_id\s*:=\s*null[\s\S]*?new\.notion_database_id\s*:=\s*null/i,
+  },
+  {
+    name: 'adjacent security definer functions deny anonymous execute',
+    re: /revoke execute on function public\.delete_own_user_account\(\) from public, anon[\s\S]*?revoke execute on function public\.trip_member_display_names\(uuid\[\]\) from public, anon/i,
+  },
+  {
     name: 'shared ledger receipt delete only deletes receipts owned by current user',
     re: /create or replace function public\.delete_shared_trip_receipt[\s\S]*?if v_receipt\.owner_id <> v_user then[\s\S]*?Only the original receipt owner can delete this receipt/i,
   },
@@ -155,7 +188,223 @@ const requiredPatterns = [
   },
 ];
 
-const findings = requiredPatterns.filter((item) => !item.re.test(sql));
+const receiptPhotoCompatibilityPatterns = [
+  {
+    name: 'final receipt photo compatibility migration keeps only the receipt-photos bucket public',
+    re: /update storage\.buckets\s+set public = true\s+where id = 'receipt-photos'/i,
+  },
+  {
+    name: 'final receipt photo compatibility migration restores the exact public read policy',
+    re: /create policy "receipt_photos_public_read"\s+on storage\.objects for select\s+using\s*\(\s*bucket_id\s*=\s*'receipt-photos'\s*\)/i,
+  },
+  {
+    name: 'final receipt photo compatibility migration removes the interim owner-only read policy',
+    re: /drop policy if exists "receipt_photos_read_own" on storage\.objects/i,
+  },
+  {
+    name: 'final receipt photo compatibility migration sets local lock and statement timeouts',
+    re: /set local lock_timeout = '5s';[\s\S]*?set local statement_timeout = '30s';/i,
+  },
+];
+
+const stagedReceiptPhotoPatterns = [
+  {
+    name: 'staged receipt photo migration makes the bucket private',
+    re: /update storage\.buckets[\s\S]*?set public = false[\s\S]*?where id = 'receipt-photos'/i,
+  },
+  {
+    name: 'staged receipt photo migration removes public storage reads',
+    re: /drop policy if exists "receipt_photos_public_read" on storage\.objects/i,
+  },
+  {
+    name: 'staged receipt photo migration requires authenticated trip access for storage reads',
+    re: /create policy "receipt_photos_read_trip_members"[\s\S]*?on storage\.objects for select to authenticated[\s\S]*?private\.can_access_trip\(r\.trip_id\)[\s\S]*?r\.visibility\s*=\s*'trip'[\s\S]*?r\.owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
+  },
+];
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stripSqlComments(sql) {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/--[^\r\n]*/g, '');
+}
+
+function extractFunctionStatement(sql, functionName) {
+  const match = new RegExp(
+    `\\bcreate\\s+or\\s+replace\\s+function\\s+${escapeRegExp(functionName)}\\s*\\(`,
+    'i',
+  ).exec(sql);
+  if (!match) return null;
+  const end = sql.indexOf('\n$$;', match.index);
+  if (end === -1) return null;
+  return {
+    start: match.index,
+    end: end + 4,
+    sql: sql.slice(match.index, end + 4),
+  };
+}
+
+function normalizeSqlStatement(statement) {
+  return statement.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+const findings = [
+  ...requiredPatterns.filter((item) => !item.re.test(activeSql)),
+  ...receiptPhotoCompatibilityPatterns.filter(
+    (item) => !item.re.test(receiptPhotoCompatibilitySql),
+  ),
+  ...stagedReceiptPhotoPatterns.filter((item) => !item.re.test(stagedSql)),
+];
+
+const strippedStaleLeaseSql = stripSqlComments(staleReceiptSyncLeaseRecoverySql);
+const strippedWorkerContractSql = stripSqlComments(receiptSyncWorkerContractSql);
+const recreatedStaleLeaseFunctions = [
+  ...strippedStaleLeaseSql.matchAll(
+    /create\s+or\s+replace\s+function\s+(public\.[a-z_][a-z0-9_]*)\s*\(/gi,
+  ),
+].map((match) => match[1].toLowerCase());
+if (
+  recreatedStaleLeaseFunctions.length !== 1
+  || recreatedStaleLeaseFunctions[0] !== 'public.claim_receipt_sync_jobs_worker'
+) {
+  findings.push({
+    name: 'stale receipt-sync lease recovery migration replaces only the worker claim function',
+  });
+}
+
+if (/create\s+or\s+replace\s+function\s+public\.claim_receipt_sync_jobs\s*\(/i.test(strippedStaleLeaseSql)) {
+  findings.push({
+    name: 'stale receipt-sync lease recovery migration leaves the browser claim function absent',
+  });
+}
+
+const recoveryWorkerFunction = extractFunctionStatement(
+  strippedStaleLeaseSql,
+  'public.claim_receipt_sync_jobs_worker',
+);
+const canonicalWorkerFunction = extractFunctionStatement(
+  strippedWorkerContractSql,
+  'public.claim_receipt_sync_jobs_worker',
+);
+if (!recoveryWorkerFunction || !canonicalWorkerFunction) {
+  findings.push({
+    name: 'worker claim function is available for mechanical source comparison',
+  });
+} else {
+  const scopedRecoverySelector =
+    "and job.status in ('pending', 'failed', 'processing')\n      and job.next_attempt_at";
+  const canonicalSelector =
+    "and job.status in ('pending', 'failed')\n      and job.next_attempt_at";
+  const normalizedRecoveryWorker = recoveryWorkerFunction.sql.replace(
+    scopedRecoverySelector,
+    canonicalSelector,
+  );
+  if (normalizedRecoveryWorker === recoveryWorkerFunction.sql) {
+    findings.push({
+      name: 'worker claim adds processing only to the scoped candidate selector',
+    });
+  } else if (normalizedRecoveryWorker !== canonicalWorkerFunction.sql) {
+    findings.push({
+      name: 'worker claim matches canonical source after normalizing only the scoped status selector',
+    });
+  }
+}
+
+const maskedStaleLeaseSql = recoveryWorkerFunction
+  ? `${strippedStaleLeaseSql.slice(0, recoveryWorkerFunction.start)}
+__worker_claim_function__;
+${strippedStaleLeaseSql.slice(recoveryWorkerFunction.end)}`
+  : strippedStaleLeaseSql;
+const staleLeaseStatements = maskedStaleLeaseSql
+  .split(';')
+  .map(normalizeSqlStatement)
+  .filter(Boolean);
+const expectedStaleLeaseStatements = [
+  'begin',
+  "set local lock_timeout = '5s'",
+  "set local statement_timeout = '30s'",
+  '__worker_claim_function__',
+  'alter function public.claim_receipt_sync_jobs_worker(text, integer) owner to receipt_sync_owner',
+  'revoke all on function public.claim_receipt_sync_jobs_worker(text, integer) from public, anon, authenticated',
+  'grant execute on function public.claim_receipt_sync_jobs_worker(text, integer) to service_role',
+  'commit',
+];
+if (JSON.stringify(staleLeaseStatements) !== JSON.stringify(expectedStaleLeaseStatements)) {
+  findings.push({
+    name: 'stale receipt-sync lease recovery migration has the exact statement and privilege allowlist',
+  });
+}
+
+if (/\b(?:begin|commit)\s*;/i.test(receiptPhotoCompatibilitySql)) {
+  findings.push({
+    name: 'final receipt photo compatibility migration relies on the migration runner transaction',
+  });
+}
+
+if (/drop policy if exists "receipt_photos_(?:upload|delete)_own" on storage\.objects/i.test(receiptPhotoCompatibilitySql)) {
+  findings.push({
+    name: 'final receipt photo compatibility migration preserves upload and delete policies',
+  });
+}
+
+const receiptPhotoCompatibilityIndex = files.indexOf(receiptPhotoCompatibilityMigration);
+const adminOperationKernelIndex = files.indexOf(adminOperationKernelMigration);
+if (
+  adminOperationKernelIndex === -1
+  || receiptPhotoCompatibilityIndex <= adminOperationKernelIndex
+  || files[receiptPhotoCompatibilityIndex + 1] !== adminPasskeyRemovalMigration
+) {
+  findings.push({
+    name: 'final receipt photo compatibility migration is ordered after 20260710187000 and immediately before 20260712123000',
+  });
+}
+
+const storageBucketMutations = [
+  ...receiptPhotoCompatibilitySql.matchAll(
+    /\b(?:insert\s+into|update|delete\s+from|alter\s+table)\s+storage\.buckets\b[^;]*;/gi,
+  ),
+];
+if (
+  !/^\s*update\s+storage\.buckets\s+set\s+[^;]*?\bpublic\s*=\s*true\b[^;]*?\bwhere\s+id\s*=\s*'receipt-photos'\s*;\s*$/i.test(
+    storageBucketMutations.at(-1)?.[0] ?? '',
+  )
+) {
+  findings.push({
+    name: 'final receipt photo compatibility storage.buckets mutation leaves receipt-photos public',
+  });
+}
+
+const storageObjectPolicyActions = [
+  ...receiptPhotoCompatibilitySql.matchAll(
+    /\b(drop|create|alter)\s+policy(?:\s+if\s+exists)?\s+(?:"([^"]+)"|([^\s]+))\s+on\s+storage\.objects\b/gi,
+  ),
+];
+const finalStorageObjectPolicyAction = storageObjectPolicyActions.at(-1);
+if (
+  finalStorageObjectPolicyAction?.[1].toLowerCase() !== 'create'
+  || (finalStorageObjectPolicyAction?.[2] ?? finalStorageObjectPolicyAction?.[3])
+    !== 'receipt_photos_public_read'
+) {
+  findings.push({
+    name: 'final receipt photo compatibility public-read create is the final storage.objects policy action',
+  });
+}
+
+if (receiptPhotoCompatibilityIndex !== -1) {
+  const laterActiveStorageMutationFiles = files.slice(receiptPhotoCompatibilityIndex + 1).filter((file) => {
+    const sql = readFileSync(join(repoRoot, file), 'utf8');
+    return /\bstorage\.buckets\b/i.test(sql)
+      || /\b(?:create|drop|alter)\s+policy\b[\s\S]*?\bon\s+storage\.objects\b/i.test(sql);
+  });
+  if (laterActiveStorageMutationFiles.length) {
+    findings.push({
+      name: `later active migrations mutate Storage state: ${laterActiveStorageMutationFiles.join(', ')}`,
+    });
+  }
+}
 
 if (findings.length) {
   console.error('Supabase migration policy scan failed:');

@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 function trustAndState(state) {
@@ -345,7 +347,7 @@ test('Weather tab auto-jumps from Scan to the current live day slot', async ({ p
     ],
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect(page.getByRole('main').getByRole('heading', { name: /掃描收據/ })).toBeVisible();
   await page.getByLabel('主要分頁').getByRole('button', { name: '天氣', exact: true }).click();
   const liveSlot = page.locator('[data-weather-day="2026-06-14"] [data-weather-live="true"]').first();
@@ -392,7 +394,7 @@ test('Japan weather uses JMA official first and renders slots', async ({ page })
     await route.fulfill({ json: weatherFixture() });
   });
   await installState(page, {});
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.getByText(/Day 1 · JMA official/)).toBeVisible();
   const command = page.locator('.weather-command-fancy');
@@ -498,7 +500,7 @@ test('Japan weather shows fallback reason when JMA official fails and Open-Meteo
     await route.fulfill({ json: weatherFixture({ temp: 23, feels: 24 }) });
   });
   await installState(page, {});
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText(/Day 1 · Open-Meteo/)).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · Open-Meteo');
   await expect(page.locator('.weather-fallback-chip').first()).toContainText('Fallback ·');
@@ -530,7 +532,7 @@ test('JMA official stays preferred when broker session is active', async ({ page
       await route.fulfill({
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin': 'http://localhost:8903',
+          'Access-Control-Allow-Origin': APP_ORIGIN,
           'Access-Control-Allow-Methods': 'POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, X-Travel-Session, X-Supabase-Auth',
         },
@@ -541,7 +543,7 @@ test('JMA official stays preferred when broker session is active', async ({ page
     const payload = route.request().postDataJSON();
     brokerPayloads.push(payload);
     await route.fulfill({
-      headers: { 'Access-Control-Allow-Origin': 'http://localhost:8903' },
+      headers: { 'Access-Control-Allow-Origin': APP_ORIGIN },
       json: { ok: true, data: { ...weatherFixture({ hourlyTemps: { 9: 22, 12: 27, 16: 24, 21: 23 }, hourlyFeels: { 9: 25, 12: 30, 16: 27, 21: 24 } }), source: 'WeatherAPI.com' } },
     });
   });
@@ -553,7 +555,7 @@ test('JMA official stays preferred when broker session is active', async ({ page
     credentialSession: 'test.session.token',
     credentialSessionExpiresAt: fixed + 60_000,
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText(/Day 1 · JMA official/)).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA official');
   await expect(page.locator('.weather-screen')).not.toContainText('WeatherAPI.com');
@@ -639,7 +641,7 @@ test('Ended trip ignores stale same-coordinate cache and shows current forecast'
   });
   await routeJmaOfficial(page, { failForecast: true });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
   await expect(page.getByText('25°C').first()).toBeVisible();
@@ -669,7 +671,7 @@ test('Ended trip shows current weather for every itinerary day location', async 
   });
   await routeJmaOfficial(page, { failForecast: true });
   await installState(page, {});
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
   await expect(page.getByText(/Day 1 · JMA/)).toBeVisible();
   await expect(page.getByText(/Day 6 · JMA/)).toBeVisible();
@@ -721,7 +723,7 @@ test('US trip uses NWS official before Open-Meteo fallback fill', async ({ page 
       spots: [{ time: '09:00', name: 'Ferry Building', type: 'other', lat: 37.7955, lon: -122.3937 }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText('San Francisco').first()).toBeVisible();
   await expect(page.getByText('Day 1 · NWS official')).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · NWS official');
@@ -766,7 +768,7 @@ test('Singapore trip uses NEA official live data with fallback fill', async ({ p
       spots: [{ time: '09:00', name: 'Marina Bay', type: 'ticket', lat: 1.283, lon: 103.86 }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText(/Day 1 · NEA official/)).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · NEA official');
   await expect(page.getByText('30°C').first()).toBeVisible();
@@ -808,7 +810,7 @@ test('Canada trip uses MSC official current conditions with fallback fill', asyn
       spots: [{ time: '09:00', name: 'Canada Place', type: 'other', lat: 49.2888, lon: -123.1111 }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText(/Day 1 · MSC official/)).toBeVisible();
   await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · MSC official');
   await expect(page.getByText('14°C').first()).toBeVisible();
@@ -837,7 +839,7 @@ test('Missing coordinates show warning and do not crash', async ({ page }) => {
       spots: [{ time: '09:00', name: 'Mystery Stop', type: 'other' }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText('未有座標')).toBeVisible();
   expect(requestCount).toBe(0);
 });
@@ -894,7 +896,7 @@ test('City and country names resolve a weather target when itinerary has no coor
       spots: [{ time: '09:00', name: 'Louvre Museum', type: 'ticket' }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText('Paris').first()).toBeVisible();
   await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
   await expect(page.getByText('21°C').first()).toBeVisible();
@@ -956,7 +958,7 @@ test('Jeju Korea city fallback uses the South Korea weather target', async ({ pa
       spots: [{ time: '09:00', name: 'Seongsan Ilchulbong', type: 'ticket' }],
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
   await expect(page.locator('.weather-location h3').filter({ hasText: '濟州' }).first()).toBeVisible();
   await expect(page.locator('.weather-location h3').filter({ hasText: 'Jeju City' })).toHaveCount(0);
@@ -1025,7 +1027,7 @@ test('Stale wrong-country spot coords self-heal and never show the wrong city', 
       sourceId: 'trip_trip_2026_04_nagoya',
     }],
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.locator('.weather-location h3').first()).toBeVisible();
   await expect(page.locator('.weather-screen')).not.toContainText('濟州');
@@ -1094,7 +1096,7 @@ test('Multi-city day renders two forecast locations and live slot', async ({ pag
     }],
   };
   await installState(page, multiCityState);
-  await page.goto('http://localhost:8903/travel-expense/compact/#weather');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByRole('main').getByRole('heading', { name: '天氣預報' })).toBeVisible();
   await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉', '長野']);
   await expect(page.locator('.live-badge')).toHaveCount(3);

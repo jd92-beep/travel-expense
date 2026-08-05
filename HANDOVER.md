@@ -2,6 +2,12 @@
 
 ## Last Worked On
 - **Date**: 2026-08-04 HKT
+- **Focus**: Session 82 fixed the four registration-review findings on main (`0f8783c`, Compact `0.16.21`) and the Android branch (`6ec8db4`, `0.20.7`): signup confirm-password + stronger policy, resend-confirmation with cooldown, magic-link cooldown, and AuthGate offline banner replacing alert(). The full main→Android merge was assessed and deferred (Open Item 20). Session 81 refined the Session 80 Compact login surface (CSS-only calm/elegant pass, `taste-skill` redesign-evolve); pushed to `origin main` (`2c66b5d`) and synced to the Android shell branch (`f568c64`).
+- **Agent**: Codex.
+- **App version**: Compact `0.16.19`; Android `0.20.4` (versionCode 2004; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
+
+### Android worktree detail (Session 80 snapshot — superseded by the Session 81/82 summary above, kept for Android verification evidence)
+
 - **Focus (latest)**: Redesigned the shared Supabase login surface with the installed `taste-skill`, preserving every Android auth path while improving responsive hierarchy, accessibility and light/dark presentation.
 - **App version (this sweep)**: Compact/Android `0.20.4` (versionCode `2004`); local branch `codex/admin-console-1.0-android`.
 - **Verification (this sweep)**: `typecheck`, production build, `security:scan`, session smoke `3/3`, configured security smoke `4` with one intentional local-storage skip, JDK 21 debug build and `android:qa` passed. QA returned `appLinksVerified=true`, `launchMode=login` and artifact `/tmp/travel-expense-android-qa-2026-08-04T03-23-26-276Z`. No release APK/AAB was built.
@@ -176,10 +182,1147 @@ agent does not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact/Android is currently at `0.20.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.16`; the Android branch is `0.20.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
+## Current Open Items (LIVE — reconcile every session)
+
+This is the ONLY live to-do list in this file. Everything under "What Was Done", and the old
+"Pending Tasks" / "Bugs Pending Fix" sections further down, are historical snapshots — re-verify
+before acting on them. Every session must reconcile this list: add items you opened, mark items
+you closed with your session number.
+
+1. 🟡 **Final post-bootstrap fresh login check (Boss is doing this now)** — passkey enrollment and
+   bootstrap removal are complete. Record this one fresh Chrome login result before closing the item;
+   do not claim it has passed yet.
+2. 🟠 **Real ordinary authenticated JWT privilege smoke is pending** — repeat the production
+   privilege check with an ordinary authenticated JWT; do not substitute privileged/service access.
+3. 🟠 **Admin DB platform-owner hardening remains pending** — complete the platform-owner operation
+   for the planned non-login helper owner; browser grants, policies and RPC execute remain closed.
+4. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — `receipt-photos` remains in public
+   compatibility mode until Compact/Android signed-URL heartbeats prove active compatibility. Do
+   not apply the staged private receipt-photo migration before that proof.
+5. 🟡 **Receipt-sync/Notion outbox worker execution remains unproven** — worker `v38` is deployed
+   and passed a negative canary, so deployment is no longer unverified. Do not claim an end-to-end
+   live write: a positive shared-receipt write and Notion mirror result still need separate proof.
+6. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
+   binding before "visible to some members" can be enforced. (Session 40.)
+7. 🟠 **Compact Netlify credit block remains active** — Session 80 workflow `30875160196` built and
+   typechecked Compact `0.16.19`, then Netlify rejected the production deploy with `403 Account
+   credit usage exceeded`. Vercel and GitHub Pages serve `0.16.19`; the Netlify alias still serves
+   the previous bundle. Add credits before retrying this workflow.
+8. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
+   unused `hkd` imports in History/Stats. (Old Pending list.)
+9. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
+   settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
+10. 🟡 **Admin intentionally excludes R3 and generic controls** — account consolidation,
+    scheduled deletion, Notion write repair, device commands, runtime writes, arbitrary SQL/table
+    editing and session revoke stay server-disabled. Session 63 adds a narrow
+    production `provider_probe_only` mode; it does not enable the general operation allowlist.
+11. 🟠 **`puiyuchau@gmail.com` root cause — owner_id mismatch** — the infinite backfill loop is now
+    broken (Session 49), but the underlying `owner_id ≠ auth.uid()` mismatch needs DB-side
+    investigation (Admin Kanban gateway blocked access). If re-invite or trip re-creation doesn't
+    fix it, a manual `UPDATE trips SET owner_id = '<correct_uid>'` may be needed.
+12. 🟢 **Compact Supabase backfill fixture resolved in Session 79** — equal-version local-wins
+    merges now preserve the cloud itinerary repair flag. The focused backfill suite passes `2/2`
+    on Compact and Android, including `update_trip_itinerary` and revoked-trip purge.
+13. 🟡 **Live trip-intelligence schema drift** — Session 57 confirmed production `trips` has
+    `itinerary_version` but not `country_code`, `theme_key`, `locale`, `weather_region` or
+    `trip_intelligence`. Compact `0.16.6` safely falls back to the legacy row contract, but reconcile
+    the migration history on a reviewed branch before adding these columns. Do not use `db push` or
+    migration repair without Boss approval.
+14. 🟡 **One-time stale Chrome tab reload confirmation** — the currently open Compact tab was
+    created at 10:11 on `0.16.4`, before Sessions 57/58 deployed. It cannot run the new freshness
+    detector until Boss performs one hard refresh after `0.16.6` reaches production. Do not claim
+    that specific tab is on `0.16.6` until the refreshed asset/version is confirmed. Future stale
+    tabs running `0.16.6+` will show the explicit update notice without a service worker.
+15. 🟢 **Session 59/60 production cutover closed** — Admin `1.0.2` protected workflow
+    `29415119909`, Edge `admin-kanban` v95, Compact `0.16.8` on Vercel/Netlify/Pages and Broker
+    `2026.07.15.2` are live. Five authenticated Volcano probes returned `200`; Chrome 150 no-store
+    cold-open waited 15 seconds with neither generic sync-error banner. (Session 60.)
+16. 🟡 **Authenticated Admin heartbeat click evidence** — Session 63 deployed the exact-model
+    probe path and all production gates passed, but no controllable authenticated Chrome session was
+   available for the final operator click. Record one provider-row heartbeat result from Boss's
+   session; it must reach preview/commit without `ADMIN_WRITES_DISABLED` and name the selected model.
+17. 🟡 **Authenticated in-app Kimi K3 click evidence** — Session 64 proved the Android request
+   shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
+   and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
+   selected-model click when a human account session is available; do not bypass auth to obtain it.
+18. 🟢 **All four main source milestones complete; Android port and QA are next** — Session 76 adds the
+   secret-free catalog and thin Compact, Broker, Admin BFF and Admin Edge adapters. Compact keeps K3
+   excluded; Broker, Admin BFF and Admin Edge recognise all six safe Volcano LLMs, and the Android
+   catalog surface retains K3 for the later port. No Android file changed in main. The tracked
+   stale-lease migration is still not live-applied, and positive shared-receipt/Notion outbox plus
+   live claim/finish evidence remain open under Item 5. Keep authenticated operator evidence in Items
+   16 and 17 open; no deployment, push, credential, database, RLS or live-data action occurred.
+19. 🟢 **Supabase pause/login hang resolved in Session 78** — the free-plan project was restored from
+   `INACTIVE` to `ACTIVE_HEALTHY`. Compact, React and Android now leave the reconnect screen after a
+   five-second unreachable-session watchdog and show the login surface with network evidence. No
+   schema, RLS, migration, credential or user-data change was made.
+20. 🟢 **Full `main` → Android-branch merge COMPLETED in Session 83** — the deferred merge was
+   executed as a reviewed dedicated operation: 47 conflicted files resolved with main as the
+   baseline plus every Android-only layer preserved (native auth, Capacitor shell, settlement and
+   split engines, `ANDROID_AI_MODELS` with kimi-k3, backoff sync journal). Merged as `0.21.0` /
+   versionCode 2100 with the full gate battery green (typecheck, build, security:scan, 6 node unit
+   suites, 11 playwright smoke suites incl. sync-regression 10/10, offline 5/5, settings 12/12).
+   Emulator QA and a real-device Google login check remain human follow-ups.
+
 ## What Was Done
+
+### Session 83 (Kimi — main → Android reviewed mega-merge, `0.21.0`)
+
+Merged `origin/main` (through `d81139c` + Admin CI fix chain) into `codex/admin-console-1.0-android`.
+Main is now the shared baseline; Android keeps only genuine platform deltas. Registration/auth code
+is identical in behavior on both branches. Follow-up fixes during integration: auth-error marker
+union in `useSyncEngine.ts` (main's `session`/`expired` + android's JWT markers), settings/history
+smoke expectations realigned to main's current UI contracts (see main Session 83 entry for the full
+evidence list, including the Admin Console 1.0 CI repair that landed alongside).
+
+### Session 82 (Kimi — registration mechanism review fixes, Compact + Android)
+
+1. **Review-driven fixes (both surfaces):** after reviewing the Compact/Android registration
+   mechanism, four findings were fixed on `main` (`0f8783c`, Compact `0.16.21`) and ported to the
+   Android branch (`6ec8db4`, `0.20.7` / versionCode 2007): (a) signup now has a confirm-password
+   field and a stronger client policy (8+ chars with a letter and a digit; sign-in stays
+   policy-free for legacy passwords); (b) new `resendSignupConfirmation()` via
+   `supabase.auth.resend({ type: 'signup' })` with a 60s cooldown, shown after successful signup;
+   (c) magic-link sends share the same 60s cooldown with a visible countdown hint, so the
+   previously throttle-free public signup path now has client-side pacing on top of Supabase rate
+   limits; (d) `AuthGate`'s broker-unreachable path no longer blocks on `alert()` — a new
+   `onOfflineMode` prop routes the offline-mode warning into the app sync banner, which survives
+   the gate unmounting after unlock.
+2. **Verification:** Compact `0.16.21` passed `typecheck`, build, `security:scan`,
+   `smoke:mobile-layout` `1/1` and `smoke:session` `3/3`; a 360px Playwright probe of the new
+   signup tab showed the confirm-password field and policy placeholder with zero overflow and zero
+   page errors. Android `0.20.7` passed `typecheck`, build, `security:scan`, `smoke:mobile-layout`
+   `1/1` (now running through the fixed dev-server harness) and `smoke:session` `3/3`.
+3. **Drift finding disposition:** the registration/auth code paths are now identical in behavior
+   across both branches. The wider `supabase.ts`/branch structural drift is NOT resolved by this
+   session — see Current Open Item 20 for the aborted-merge evidence and the required approach.
+   No schema, migration, RLS, credential, live-data or release action was performed.
+
+### Session 81 (Kimi — Compact login visual refinement, worktree `penguin`)
+
+1. **Design:** refined the Session 80 Compact login surface with the `taste-skill` redesign
+   protocol (redesign-evolve mode, dials 5/3/3). Calmer mist/sage layered background with a slow
+   18s ambient drift, softer panel elevation, single terracotta accent `#b0432f`, quieter caption
+   overlay with text shadow, 800-weight headline, wider kicker tracking, 52px fields/buttons, and a
+   gentle 0.55s panel entrance plus 1.8s image settle, all gated behind `prefers-reduced-motion`.
+   Dark palette rebalanced to match. Every auth path, field contract, tab structure, status message
+   and class hook in `SupabaseGate.tsx` is unchanged; the whole pass is CSS-only in
+   `app-compact/src/styles.css`.
+2. **Verification:** Compact `0.16.20` passed `typecheck`, production build (`✓ built in 12.52s`)
+   and `security:scan` (`Secret scan passed`). `smoke:mobile-layout` passed `1/1`. One-off
+   Playwright probe at 360x760 with fake Supabase env rendered the gate in light and dark with
+   `panelWidth 340 / viewportWidth 360`, zero horizontal overflow and zero page errors; screenshots
+   were reviewed then deleted with the probe script.
+3. **Boundaries:** version bumped `0.16.19` to `0.16.20` (`constants.ts`, `package.json`,
+   `package-lock.json`). Pushed to `origin main` as `2c66b5d`. The same CSS was synced to the
+   Android shell worktree (`/Users/tommy/Documents/Projects/travel-expense-android-shell`, branch
+   `codex/admin-console-1.0-android`) as `0.20.5` / versionCode 2005, commit `f568c64`, with
+   typecheck, build, `security:scan` and mobile-layout smoke `1/1` green there. Follow-up `3707596`
+   (`0.20.6` / versionCode 2006) fixed that branch's bare `smoke:mobile-layout`, `smoke:itinerary`,
+   `smoke:privacy` and `smoke:offline` scripts to run through `scripts/run-with-dev-server.mjs`
+   like main; `npm run smoke:mobile-layout` now passes `1/1` directly on the branch. No emulator QA
+   or release APK/AAB was produced. No schema,
+   migration, RLS, credential or live-data action was performed. No Current Open Items opened or
+   closed.
+
+### Session 80 (Codex — Compact/Android login redesign)
+
+1. **Design:** installed `Leonxlnx/taste-skill` and rebuilt the shared Supabase login gate as a calm,
+   mobile-first travel welcome screen. The existing travel atlas asset, one warm accent, responsive
+   split layout and automatic light/dark palettes replace the old floating-card composition without
+   adding a dependency or a generated asset.
+2. **Auth/accessibility:** preserved password sign-in, account creation, magic link, Google OAuth,
+   native browser-return status and every existing field/auth contract. Semantic submit forms,
+   grouped mode controls, status/alert announcements, visible focus rings, 44px+ targets and reduced
+   motion keep keyboard, screen-reader and touch behavior explicit.
+3. **Verification:** Compact `0.16.19` and Android `0.20.4` passed `typecheck`, production build,
+   `security:scan`, session smoke `3/3` and configured Supabase security smoke. Responsive probes at
+   360px, 390px and 1366px had zero horizontal overflow and valid touch targets. Android JDK 21
+   debug assembly passed; emulator QA returned `status=passed`, `appLinksVerified=true` and
+   `launchMode=login` at `/tmp/travel-expense-android-qa-2026-08-04T03-23-26-276Z`.
+4. **Production/boundaries:** main commit `6fa5cbf` was pushed. GitHub Pages workflow `30875160158`
+   passed and both Pages and Vercel serve Compact `0.16.19`. Netlify workflow `30875160196` passed
+   build/typecheck but its deploy remains credit-blocked under Current Open Item 7. No schema,
+   migration, RLS, credential, live-data or release APK/AAB action was performed.
+
+### Session 79 (Codex — Compact/Android sync regression and full review)
+
+1. **Sync/data fixes:** preserved `supabaseId` after stale receipt/trip pushes, kept stable local trip
+   IDs during re-home, serialized Android push/pull/sync triggers, restored authoritative empty-pull
+   owner-trip backfill, retained cloud itinerary repair flags during local-wins merges, and made RLS
+   failures visible for the current session while allowing one cold-boot retry after access may
+   have been restored. Stale deployment notices now take priority over the
+   generic sync banner; raw backend errors are no longer rendered in that banner.
+2. **Android/native fixes:** native reachability now requires a successful response, manual retry
+   rebuilds a secret-free receipt payload, trip AI restores the fast Google fallback ladder, and
+   exported camera files are limited to the app-specific Pictures directory.
+3. **Verification:** Compact `0.16.18` full production gate passed in `293.9s`; Android `0.20.3`
+   passed in `268.9s`. Both sync-regression suites passed `10/10`, focused Supabase backfill passed
+   `2/2`, itinerary merge and journal tests passed, and security/build/mobile/a11y/shared-contract
+   gates were green. Compact offline recovery passed `4/4`; Android offline `2/2`, session `3/3`, privacy `3/3`, configured security `4`
+   with one intentional local-storage skip, JBR 21 `assembleDebug`, and emulator QA passed with
+   verified App Links; artifact `/tmp/travel-expense-android-qa-2026-08-01T01-52-57-679Z`.
+4. **Boundaries:** no schema, migration, RLS, credential, live-data or release APK/AAB action was
+   performed. Real-device Google/magic-link and authenticated selected-model clicks remain human
+   verification items; Android's non-blocking `636 kB` main-chunk warning remains an optimization.
+
+### Session 78 (Codex — Supabase restore and auth-bootstrap recovery)
+
+1. **Live root cause and recovery:** production Compact stayed on `Supabase reconnect` while
+   `getSession()` repeatedly failed to fetch. The project `travel-expense-public` was confirmed
+   `INACTIVE`, restored through the Supabase control plane and rechecked as `ACTIVE_HEALTHY`; the
+   public auth endpoint again resolved and responded. No database write, schema, RLS, migration,
+   credential or user-data operation occurred.
+2. **TDD fix across three surfaces:** a fake expired session plus an aborted Supabase origin first
+   reproduced the permanent reconnect screen. Catching a rejected promise alone still failed
+   because the client can keep refresh work pending; a five-second bootstrap watchdog now releases
+   loading, clears the unusable in-memory session and displays the network failure. Compact and
+   React versions are `0.16.17` and `0.2.5`; the Android working tree is `0.20.2` / versionCode
+   `2002`.
+3. **Verification:** Compact session smoke passed `3/3`; React session smoke passed `1/1`; Compact
+   Supabase security smoke passed `7` with `1` intentional skip; React passed `3` with `1`
+   intentional skip. Both web apps passed `typecheck`, production build and `security:scan`.
+   Android passed `typecheck`, production web build, `security:scan`, session smoke `3/3` and debug
+   APK assembly. Emulator QA passed with verified App Links and the native login surface visible.
+4. **Production:** source commit `715f879` was pushed to `main`. GitHub Pages workflow
+   `30455273522` passed, Compact Vercel deployment `dpl_7bS2RbEM7vyxUuED8z6fwoH8zWu6` is
+   `READY`, and manual root-linked React Vercel deployment `dpl_2fDbkkwBczVJboVbKb4VTNXnXYoT`
+   is `READY`. Fresh Chrome checks on Compact Vercel/Pages/Netlify and React Vercel/Pages all
+   returned `200`, left the reconnect screen and rendered the Supabase login surface. Netlify
+   deployment failed only at its external credit gate as recorded in Open Item 7.
+5. **Git boundary:** Boss's pre-existing main `AGENTS.md` / `CLAUDE.md` edits remain untouched.
+   Android already contained a broad uncommitted `0.20.1` milestone spanning the same version and
+   Supabase files, so its `0.20.2` auth repair is verified in place but must not be staged or pushed
+   independently until that milestone is reviewed.
+
+### Session 77 (Codex — Milestone 4 source approval)
+
+1. **Independent approval:** focused static re-review approved catalog/filter parity, the six-model
+   Volcano boundary, Compact K3 exclusion, Android K3 inclusion, Seedance exclusion, task defaults,
+   unchanged routing/quota/fallback semantics, runtime adapter shapes, version bumps and contract
+   coverage with no actionable code finding.
+2. **Review remediation:** reconciled the handover after approval and removed the accidentally tracked
+   `.superpowers/sdd/milestone-4-report.md` from Git while retaining it as ignored local SDD evidence.
+   Boss dirty `AGENTS.md` and `CLAUDE.md` remain untouched and unstaged.
+3. **Boundary:** no Android source, credential, database, migration, RLS, Admin write mode, deployment,
+   production probe or live data changed. Android remains `0.20.0` / versionCode `2000` until its
+   isolated four-commit port starts.
+
+### Session 76 (Codex — Milestone 4 Provider Catalog)
+
+1. **Single catalog, four adapters:** added `contracts/ai-provider-catalog.json` with the approved Kimi,
+   Google, Mimo and six safe Volcano LLM records only. Compact filters `compact` and excludes
+   `volcano/kimi-k3`; Broker, Admin BFF and Admin Edge filter their own surfaces and include it.
+   Seedance/media models, routes, regex validation, base URLs, defaults, `kind=test`, 8-token cap,
+   no-fallback behaviour and quota/`429` hard stops are unchanged.
+2. **TDD evidence:** the new contract test first failed with `ERR_MODULE_NOT_FOUND` for
+   `contracts/ai-provider-catalog.json`, then passed with `provider catalog contract passed` after the
+   catalog and adapters were added. Broker self-test, Admin gateway contract and Edge tests assert K3
+   through their exported adapters; the root contract asserts Compact exclusion and Android inclusion.
+3. **Completed gates:** provider contract passed; Compact `typecheck`, build (`2381 modules`),
+   `security:scan`, AI routing (`5 passed, 1 skipped`) and Settings (`10 passed, 1 skipped`) passed.
+   The browser smokes used the stable wrapper plus `npm exec`; the first bare `playwright` invocation
+   stopped before assertions with `unknown command 'test'` and was rerun without weakening coverage.
+   Broker `check` and `self-test` passed. Admin `typecheck`, build (`2244 modules`), security,
+   unit (`33/33`) and contract (`24/24`) passed. Deno fmt/lint checked 28 files, Edge check passed and
+   Deno test passed `73/73`; root security printed `Secret scan passed`. Staged GitNexus detection
+   reported `21 files, 19 symbols, 0 affected processes, low`; `git diff --check` and
+   `git diff --cached --check` both exited `0` with no output.
+4. **Versions and boundary:** Compact is `0.16.16`, Admin candidate is `1.3.2` and Broker candidate is
+   `2026.07.23.1`. No Android source, credential, database, migration, RLS, Admin write mode,
+   deployment, production probe, push or live data changed. Boss dirty `AGENTS.md` and `CLAUDE.md`
+   remain untouched and unstaged.
+
+### Session 75 (Codex — Milestone 3 source approval)
+
+1. **Independent approval:** final re-review approved the Compact outbox changes and worker-only stale-lease recovery source with no actionable finding. The canonical browser claim remains `pending`/`failed`; only request-unique server workers can reclaim expired `processing` jobs.
+2. **Fencing evidence:** the rollback-only SQL smokes cover browser non-reclaim, server-worker takeover, fresh/exhausted/future exclusions and old-browser finish rejection with SQLSTATE `40001`. The static verifier enforces canonical worker body parity plus an exact DDL/privilege allowlist.
+3. **Verification and boundary:** migration policy scan, Compact outbox/typecheck, SQL formatting, security scan and `git diff --check` pass. Docker is unavailable, so SQL runtime smokes are written but unrun. Migration `20260724110000_reclaim_stale_receipt_sync_processing_leases.sql` is tracked only and not live-applied; no DB push, migration repair, Management API, deployment or live-data action occurred.
+
+### Session 74 (Codex — Milestone 3 lease-fencing review remediation)
+
+1. **Safer minimal migration:** removed the browser `claim_receipt_sync_jobs(uuid[], text, text, integer)` replacement entirely. The transactional migration now `CREATE OR REPLACE`s only `claim_receipt_sync_jobs_worker(text, integer)`, preserving its canonical body byte-for-byte after normalizing the single scoped selector from `pending, failed, processing` back to `pending, failed`.
+2. **Lease fencing and exact smoke states:** the browser smoke proves a stale `processing` row locked by the browser UUID remains untouched by the browser claim, is then reclaimed by a request-unique `receipt-sync:*` worker, and rejects the old browser finish with SQLSTATE `40001`. Browser and worker paths require every protected/reclaimed row to exist in its exact expected status, attempts, due-time and lock state, so deleted rows cannot pass.
+3. **Static DDL boundary:** the migration verifier strips comments, requires exactly one worker function replacement, mechanically compares it with the canonical worker source, and enforces an exact transaction/timeout/owner/revoke/grant statement allowlist. Browser function DDL and any broadened or additional privilege statement fail the scan.
+4. **Current evidence:** `npm --prefix app-compact run db:policy:scan` and direct `node scripts/verify-supabase-migrations.mjs` print `Supabase migration policy scan passed`; `node scripts/security-scan.mjs` prints `Secret scan passed`; relevant SQL `deno fmt --check` prints `Checked 3 files`; `git diff --check` exits `0`. The current shell has no Docker CLI (`docker: command not found`, exit `127`), so no ephemeral database harness was started and the rollback-only SQL runtime smokes are written but unrun.
+5. **Version and boundary:** Milestone 3 initially bumped Compact `0.16.14` to `0.16.15` in `ecf9dff`; it has remained `0.16.15` only since the `45f064e` review-remediation baseline. The migration remains tracked and not live-applied. No live DB command, `supabase db push`, migration repair, Management API, deployment or push occurred; Boss dirty `AGENTS.md` and `CLAUDE.md` remain untouched and unstaged.
+
+### Session 73 (Codex — Milestone 3 stale processing lease recovery candidate)
+
+1. **Scoped migration (corrected by Session 74):** added transactional `20260724110000_reclaim_stale_receipt_sync_processing_leases.sql`. Session 74 removed its browser-function replacement; the surviving candidate `CREATE OR REPLACE`s only the unchanged server-worker claim signature, retaining `SECURITY DEFINER`, `search_path = ''`, due-time/attempts/backoff behavior, `FOR UPDATE SKIP LOCKED`, payload shape and all callers. Its sole behavioral change is `status in ('pending', 'failed', 'processing')` behind the existing 120-second stale-lock condition.
+2. **Privilege boundary (corrected by Session 74):** the migration does not touch browser grants. Worker execution remains `service_role` only, with `receipt_sync_owner` ownership reasserted. It does not change tables, RLS, finish RPCs, Worker source, credentials or live data.
+3. **Synthetic coverage (superseded by Session 74):** the browser path now protects stale processing work; the request-unique worker path reclaims it. Both paths assert exact fresh-processing, exhausted-processing and future-retry states. Existing worker payload, retry and terminal-state assertions remain present.
+4. **Current evidence:** `node scripts/verify-supabase-migrations.mjs` and `npm --prefix app-compact run db:policy:scan` both printed `Supabase migration policy scan passed`; the inline function-parity check printed `claim function parity check passed: only stale processing selectors differ`; `node scripts/security-scan.mjs` printed `Secret scan passed`; relevant SQL `deno fmt --check` printed `Checked 3 files`; `git diff --check` exited `0`. GitNexus `detect-changes` reported `6 files`, `18 symbols`, `0` affected processes and `low` risk; the new SQL migration remains symbol-invisible as expected. `supabase status` could not connect to Docker, so the disposable SQL runtime smokes are written but unrun; no local or live database was touched.
+5. **Boundary:** Compact remains `0.16.15`. This migration is tracked, not live-applied. No `supabase db push`, migration repair, Management API, deployment or push occurred. Boss dirty `AGENTS.md` and `CLAUDE.md` remain untouched and unstaged.
+
+### Session 72 (Codex — Compact Milestone 3 non-DB review remediation)
+
+1. **Outbox truth and scope:** `notionState` now sets both root `notionDb` and the selected trip backend. Claimed jobs missing a local trip/backend call `finish(...failed, safe reason)`; backend-list and claim failures return explicit redacted transport evidence instead of empty success. Completion transport failures remain failed and observable to `useSyncEngine`.
+2. **Safe errors and edge contracts:** the outbox deep module owns one pure transport-agnostic redactor. Bearer, `ntn_...`, and `key=...` values are removed before the 300-character cap. Port tests cover the 5×20/100 ceiling, missing receipt success, missing trip/backend failure completion, list/claim truth, Notion+finish double failure, duplicate single completion, and photo dedupe only after a successful upsert.
+3. **Personal Notion regression repaired:** the existing connect/check/disconnect controls are restored inside `Credentials & Connection`. Browser smoke proves connect authorization, secret non-persistence, root DB persistence, stale trip DB removal, settings queue creation, and a claimed shared receipt writing to its per-trip DB even while root Personal Notion points elsewhere.
+4. **Verification:** outbox, change-journal, scoped persistence, typecheck, build (2,379 modules), security scan, mirror `7/7`, Settings `10 passed + 1 intentional skip`, offline `4/4`, sync regression `8/8`, mobile layout `1/1`, and shared-ledger contract passed. Guarded backfill exited 0 with `2 skipped`; Current Open Item 12 remains.
+5. **Approval boundary:** Compact stays `0.16.15`. No migration, RPC signature, RLS, Worker, live DB/data, push or deployment changed. Milestone 3 remains blocked pending Boss-approved live DB lease-recovery verification/scope for ambiguous completion transport failures. Boss dirty `AGENTS.md` and `CLAUDE.md` remain untouched and unstaged.
+
+### Session 71 (Codex — Compact Milestone 3 mirror-smoke fixture repair)
+
+1. **Baseline truth:** a detached `/tmp/travel-expense-m3-baseline` worktree at `039a5e6` reproduced all six focused mirror-smoke failures: two stale accordion names (`Notion Sync`, `Email / Shortcut`) timed out, and four history cases hit the three-element strict `紀錄中心` locator. The current fixture now targets the rendered `.accordion-summary`, the labelled mobile history banner, current Credentials status, and Scan Email intake.
+2. **Current contracts, not skipped assertions:** the fixture supplies current `pullSupabaseData()` response shapes for profile lists, authorized trips and ledger RPCs. The shared-owner case drives `upsert_shared_trip_receipt` before `claim_receipt_sync_jobs`, verifies the scoped Notion database and Supabase auth header, then requires `finish_receipt_sync_job(...succeeded)`. The public case writes the ledger through the same RPC and asserts zero Notion requests and no Notion metadata in the ledger payload.
+3. **Green gates:** focused `smoke:supabase-notion-mirror` passed `6/6 (10.2s)`; outbox, change-journal, scoped persistence, typecheck, build, security scan, offline `4/4`, sync regression `8/8`, and the shared-ledger contract all passed. `smoke:supabase-backfill` exited 0 with its guard-driven `2 skipped`; keep Current Open Item 12.
+4. **Boundary:** the repair is test-only and Compact remains `0.16.15`; Milestone 4 retains ownership of `0.16.16`. No DB/RLS/RPC signature, Worker, credentials, live data, push or deployment changed. Pre-existing dirty `AGENTS.md` and `CLAUDE.md` remain untouched and unstaged.
+
+### Session 70 (Codex — Compact Milestone 3 Shared-trip Notion Outbox)
+
+1. **Isolated shared-trip mirror orchestration:** extracted the bounded 5x20 shared-trip Notion job drain into `sharedTripNotionOutbox.ts`. The port deduplicates a repeated claim by job ID, maps each job to its explicit per-trip Notion backend, settles missing receipts as succeeded, continues after individual failures, bounds error text to 300 characters, and treats `finish_receipt_sync_job` failure as a failed result.
+2. **Supabase adapter only:** `supabase.ts` now owns the unchanged `claim_receipt_sync_jobs` / `finish_receipt_sync_job` RPC calls, receipt lookup, signed Storage URL, FileReader conversion and session photo dedupe. Photo lookup remains best-effort: missing, oversized, signed-URL and fetch failures return `null`, allowing the text receipt to mirror; photo IDs are marked only after the Notion upsert succeeds.
+3. **Sync wiring:** `useSyncEngine` computes only owner/admin Supabase trip IDs and passes the existing `pushReceipt` / `archiveReceipt` callbacks through the new port. No DB/RLS/RPC signature, Worker, credential or live-data change occurred. Compact is `0.16.15`.
+4. **TDD evidence:** new `test:shared-trip-outbox` first failed with `ERR_MODULE_NOT_FOUND`, then passed. It covers empty queues, update/delete success, continuation after Notion failure, duplicate claims, photo pass-through, and completion failure. `test:change-journal`, `test:scoped-persistence`, typecheck, build, security scan, offline (`4 passed`), sync regression (`8 passed`), and the root shared-ledger contract passed.
+5. **Known gate status:** `smoke:supabase-backfill` ran as `2 skipped` without its optional fixture/server. Existing `smoke:supabase-notion-mirror` remains red before any Milestone 3 test change: three cases timeout in `setAccordion`, and three have the pre-existing strict `getByText('紀錄中心')` locator ambiguity (three matching elements). The stale fixture was not weakened or edited. `AGENTS.md` and `CLAUDE.md` were pre-existing dirty files and remain untouched and unstaged.
+
+
+### Session 69 (Codex — Compact Milestone 2 Scoped Hydration)
+
+1. **Canonical scoped persistence:** added `scopedPersistence.ts` with the narrow localStorage and
+   IndexedDB adapter seam. It reads both scoped snapshots with `Promise.allSettled`, chooses global
+   freshness, merges receipts by identity/timestamp before a single normalization pass, retains
+   companion trip context, restores the Milestone 1 journal through `normalizeState()`, and removes
+   the public demo only after the account-specific merge.
+2. **Isolation and secrets:** raw adapters keep existing storage/IndexedDB keys unchanged; only
+   local scope reloads credentials, while both snapshot targets receive `stripSensitiveState()`.
+   A localStorage failure still attempts IndexedDB through the Settings compatibility wrapper;
+   canonical persistence records `succeeded`/`degraded`/`failed` evidence without hiding a failed
+   terminal journal item.
+3. **Lifecycle:** `useAppState` now delegates hydration/persistence only. Its cancellation guard
+   prevents an old scope response from replacing a newer account scope, and it does not persist
+   until that scope is ready.
+4. **TDD and regression:** `test:scoped-persistence` first failed with the expected missing-module
+   error, then exposed the public scoped partial-snapshot trip-ID regression. The final focused
+   script passes and covers IndexedDB-only hydration, per-receipt merge, public scope isolation,
+   secret stripping, retained terminal conflict evidence, malformed primary fallback, and one/both
+   write failures. Compact version is `0.16.14`.
+5. **Completed gates:** `test:scoped-persistence`, `test:change-journal`, `typecheck`, `build`,
+   `security:scan`, `smoke:session` (2 passed), full fake-env `smoke:security` (4 passed, 1
+   pre-existing skip), `smoke:offline` (4 passed), `smoke:sync-regression` (8 passed),
+   `smoke:settings` (10 passed, 1 pre-existing skip), and `smoke:mobile-layout` (1 passed).
+   `git diff --check` passed with no output. The first `smoke:session` attempt only lacked a local
+   Vite server and was rerun successfully; it was not an assertion failure.
+6. **Safety:** no DB/RLS/credential/live-data/deploy/push operation occurred. `AGENTS.md` and
+   `CLAUDE.md` were pre-existing dirty files and remained untouched and unstaged.
+7. **Approved review remediation:** commits `8a005ec` (`fix: harden scoped hydration`) and
+   `fc757dc` (`fix: secure scoped bootstrap`) close every Milestone 2 review finding. Tombstones
+   merge by canonical identity, so a newer deletion prevents an older receipt resurrection; a newer
+   receipt can clear an older tombstone only under the existing `syncRevision` tie contract. Every
+   raw adapter read is sanitized before merge, removing session, provider, credential, and sharing
+   invite fields. `safeInitialState()` replaces bootstrap `loadState(scope)`: only `local` overlays
+   approved local credentials, while scoped blobs are read solely by canonical `hydrateScope()`.
+   Persistence logs the actual `failed`/`degraded` outcome, and a delayed old-scope account-switch
+   browser regression proves only the new scope can set or persist.
+8. **Final evidence:** focused scoped hydration and journal tests passed; session `2 passed`,
+   offline `4 passed`, sync regression `8 passed`, fake-env security `7 passed, 1 skipped`, and
+   Settings, mobile layout, typecheck, build, and security scans passed. Final root security scan
+   and `git diff --check` passed for this handover. No push, deploy, DB/RLS, credential, or
+   live-data operation occurred.
+
+### Session 68 (Codex — Milestone 1 completion proof)
+
+1. **Authenticated photo interruption regression:** added the `sync-regression-smoke` case using
+   the existing fake Supabase auth/rest route pattern plus real `storage/v1/object` and signed-URL
+   routes. Its first Storage upload is aborted with `internetdisconnected`; the in-memory server
+   returns the upserted trip/receipt on pull, the journal stays at exactly one receipt identity, and
+   dispatching `online` triggers the second upload.
+2. **Completed gates:** the exact `run-with-dev-server` Settings command finished `10 passed, 1
+   skipped (35.1s)`; `npm run smoke:sync-regression` finished `8 passed (26.6s)`; the focused photo
+   case passed in `3.2s`; `test:change-journal`, `typecheck`, `build`, `security:scan`, and
+   `smoke:offline` (`4 passed`) passed on the final tree.
+3. **Safety:** no database, RLS, credentials, deployment, push, or live-data operation occurred.
+   Existing dirty `AGENTS.md` and `CLAUDE.md` remained untouched and unstaged.
+4. **Review remediation:** `4e043b7` adds an `expectedUpdatedAt` stale-settlement guard without
+   changing the three-argument journal API, and keeps status transitions from overwriting the queue
+   content revision. A newer enqueue during sync therefore remains queued after the old success.
+5. **Photo retry ledger:** a failed upload now settles the existing receipt journal item instead of
+   rebuilding it with zero attempts. Three failures persist `error/attempts=3`; manual retry alone
+   resets journal and unsynced-photo attempts. `test:change-journal`, focused photo `1/1`, sync
+   regression `8/8`, offline `4/4`, typecheck, build, and security scan passed. The companion
+   cleanup commit removes the accidental tracked SDD report while keeping the local scratch report.
+
+### Session 67 (Codex — Compact Milestone 1 Offline Change Journal)
+
+1. **Authoritative journal:** added `changeJournal.ts` with bounded identity enqueue, lifecycle settlement,
+   terminal-error preservation, manual-only retry reset, and cold-open restore summary. Compact `0.16.13`
+   routes receipt, trip, settings, tombstone, photo retry, repair and backfill queue creation through it.
+2. **Risk containment:** `normalizeState()` only replaces the prior queue restore/status derivation with
+   `restoreJournal()`; storage keys, all other normalization and `AppState` remain unchanged. A photo retry
+   now settles its completed queue item before enqueueing the same journal identity, so it cannot be removed
+   by the preceding success transition.
+3. **Regression coverage:** journal sequence assertions pass; offline smoke `4/4` includes a duplicate
+   offline receipt save; sync regression `7/7` includes durable `40001` cold-open evidence. A later rerun
+   of sync regression reached test `5/7` before the execution runner lost its completion token.
+4. **Verification:** `test:change-journal`, `typecheck`, `build`, `security:scan`, `smoke:offline` and an
+   earlier complete `smoke:sync-regression` passed. `git diff --check` passed. `smoke:settings` first failed
+   only because its script starts no dev server; with a pre-started dev server it reached test `9/11` before
+   the runner lost its completion token. The requested authenticated Storage photo-abort browser fixture is
+   not yet present, so this session is `DONE_WITH_CONCERNS`, not full release proof.
+5. **Safety:** no database, RLS, credential, deployment, push or live-data operation occurred. Existing
+   dirty `AGENTS.md` and `CLAUDE.md` were left unstaged and untouched.
+
+### Session 66 (Codex — architecture deepening implementation plans)
+
+1. **Five executable plans:** added separate TDD plans for Offline Change Journal, Scoped Hydration,
+   shared-trip Notion Outbox, Provider Catalog, and the Android port/extreme offline QA. Each plan
+   names exact files, interfaces, red/green tests, GitNexus impact/detect gates, version bumps,
+   staging lists, commits, pushes, and expected results.
+2. **Data-safety coverage:** the plans preserve queue identity and bounds, manual-only terminal
+   reset, cross-adapter terminal evidence, Account Scope isolation, ledger-first mirroring,
+   duplicate Mirror Job suppression, completion-failure recovery, and hard-stop AI quota behavior.
+3. **Android proof boundary:** Android remains isolated and ports four verified main milestones as
+   `0.20.1` through `0.20.4` / versionCodes `2001` through `2004`. Deterministic adb/CDP cold-open
+   recovery is distinct from the real authenticated backend reconnect gate; unavailable login
+   evidence remains open instead of being bypassed.
+4. **Provider invariant:** the catalog plan keeps Compact Web exposure unchanged, preserves Android
+   Kimi K3, and makes Broker/Admin BFF/Supabase Edge consume one secret-free root catalog. Admin's
+   six-model Volcano set is asserted without enabling writes or changing routes.
+5. **Scope:** documentation only. No app code, app version, dependency, database, RLS, credential,
+   production deployment, Android build artifact, or user data changed.
+6. **Verification:** the plan structure/placeholder/fence check printed
+   `plan structure check passed: 5 files`; `git diff --check` exited `0` with no output; and
+   `node scripts/security-scan.mjs` printed `Secret scan passed`. App builds and runtime smokes were
+   intentionally deferred because this session changes documentation only.
+
+### Session 65 (Codex — architecture deepening design)
+
+1. **Recent-change review:** weighted the scan toward Compact queue/retry, scoped persistence,
+   shared-trip Notion outbox and cross-runtime AI model catalog paths. `CONTEXT.md` and `docs/adr/`
+   were absent before this session; no existing ADR constrained the design.
+2. **Approved rollout:** Boss approved behavior-preserving incremental deepening as four independent
+   milestones: Offline Change Journal, Scoped Hydration, shared-trip Notion Outbox, then Provider
+   Catalog. Main is completed first; applicable changes are ported to Android only after all main
+   gates pass.
+3. **Design contract:** storage keys, `AppState`, Supabase schema/RLS, Broker routes, quota hard
+   stops, terminal sync evidence and protected Admin write mode remain unchanged. The only observable
+   correction is restoring the documented six-model Volcano Admin catalog, including Kimi K3.
+4. **Documentation:** added the project domain glossary in `CONTEXT.md` and the approved design at
+   `docs/superpowers/specs/2026-07-23-architecture-deepening-design.md`. No app code, app version,
+   database, RLS, credential, production deployment or user data changed.
+5. **Verification:** placeholder/ambiguity/contradiction self-review passed; `git diff --check`
+   returned exit `0` with no output, the repository security scan returned `Secret scan passed`,
+   and `origin/main` was still `f72dfc3`. App builds and smokes were intentionally deferred because
+   this session changes documentation only.
+
+### Session 64 (Codex — production Broker Kimi K3 route)
+
+1. **Safe model contract:** added `volcano/kimi-k3` to `PROVIDER_MODELS`, so Android may use Kimi K3
+   for Scan image, Voice text, Email and Trip update recognition without opening arbitrary model IDs.
+2. **Regression proof:** Broker syntax check and self-test passed; self-test verifies status exposes
+   the new safe ID and both public/internal exact-model paths forward `kimi-k3` to Volcano.
+3. **Production cutover:** deploy preflight passed and Cloudflare Worker version
+   `29a61b5a-5b6d-416e-a753-db56b137f7f4` is active. No-store `/health` returned HTTP `200` with
+   Broker `2026.07.20.1`; unauthenticated `/volcano/json` remained fail-closed with `401`.
+4. **Provider proof:** direct Volcano one-shots returned HTTP `200`, `model=kimi-k3` for both text
+   and a valid 820x538 WebP. A 1x1 PNG correctly failed provider image validation and was replaced
+   by the valid app asset for the capability proof.
+5. **Boundary:** no credential value was printed, rotated or committed; no database, RLS, Admin
+   write mode or live user data changed. Authenticated in-app evidence remains Open Item 17.
+
+### Session 63 (Codex — Admin provider heartbeat probe-only repair)
+
+1. **Root cause:** production correctly remained `ADMIN_WRITE_MODE=deny_all`, while Providers
+   heartbeat used the generic operation mutation kernel. Edge rejected preview before any Broker or
+   model request, producing `ADMIN_WRITES_DISABLED`. The operation also sent only a provider name;
+   Volcano's Broker test therefore always used `doubao-seed-2.0-lite`.
+2. **Scoped repair:** `provider_probe_only` admits the signed kernel but authorizes only
+   `provider_probe` after signature/session verification. Commit rechecks the stored action;
+   support, sync, integrity and all R2 actions remain blocked. BFF, Edge and Broker validate and
+   preserve the exact provider/model pair.
+3. **Low-token contract:** Console sends the row's exact required model. Broker tests it directly
+   with 8 output tokens, temperature 0 and no provider/model fallback; non-empty `content` or
+   `reasoning_content` is availability proof for this probe only.
+4. **TDD evidence:** before implementation BFF rejected `model`, Edge lacked probe-only mode,
+   Broker changed requested `volcano/minimax-m2.7` to `volcano/doubao-seed-2.0-lite`, and browser
+   preview omitted the model. All four regression paths pass after the repair.
+5. **Local gates:** Admin typecheck/build/security, unit `32/32`, contract `24/24`, full smoke
+   `49 passed + 1 intentional skip`, a11y `2/2`, mobile `3/3` and audit 0 vulnerabilities passed.
+   Edge fmt/lint/check and `73/73` tests passed. Broker check/self-test and audit 0 vulnerabilities
+   passed. No passphrase, passkey, credential value, RLS, migration or live user data changed.
+6. **Production cutover:** implementation commit `889ec74` and deployment hardening commit
+   `760b63d` are on `origin/main`. Broker `2026.07.19.1` deployed as Worker version
+   `9d742877-9223-47c6-aeca-c931383c4182`; Edge `admin-kanban` v101 is active with
+   `provider_probe_only`. Protected workflow `29693521861` passed and promoted Admin `1.3.1` as
+   Vercel deployment `dpl_DEkCHHofMYw2ebMDRBRN1YYFcDP2`; `/api/health` returned `200`, exact SHA
+   `760b63db2a673a1772a8f24348abe74a495868b3` and `acceptingReadTraffic=true`.
+7. **Pipeline root cause and guard:** two earlier promotion attempts exposed stale provenance and a
+   Vercel CLI `54.17.3` project-retrieval hang. The production helper now pins `56.3.2` and applies
+   a five-minute timeout to child processes; its regression suite passes `6/6`. The final protected
+   run completed in 4m23s. An authenticated operator heartbeat click remains recorded as open item
+   16 because no Boss session was available to automate it.
+
+### Session 62 (Codex — Baton documentation findings repair)
+
+1. **Exact evidence recorded:** supplied verification was `git diff --check f575a5e^ f575a5e` →
+   exit `0`, no output; `node scripts/security-scan.mjs` → `Secret scan passed`; and Compact
+   `npm run smoke:deploy-live` → `status=passed`, `head/originMain=6683219`, Vercel HTTP `200`,
+   Netlify HTTP `200`. Admin `/api/health` → HTTP `200`, source SHA
+   `67cde57a42bc43f1bda026d81d555260e25bb564`, deployment
+   `dpl_B4bGNsxLudia3k38BMuP5PXsD7kZ`, `acceptingReadTraffic=true`; Broker `/health` →
+   `ok=true`, version `2026.07.15.2`. Admin workflow `29415119909` succeeded at its exact SHA,
+   Edge suffix is `_95`, and Pages workflow `29421527793` for `f575a5e` succeeded. These exact
+   results correct Session 61's unquoted pass assertions without rewriting its historical entry.
+2. **Generated-hunk custody:** `f575a5e` also included the pre-existing generated GitNexus count
+   hunk (`7550`/`18296` to `7564`/`18319`) without explicit custody disclosure. Do not manually edit
+   the generated GitNexus block or counts. For future commits, stage and review at hunk level; either
+   own every staged generated hunk explicitly or leave it out.
+3. **Durable handoff wording:** current release/open-item detail now belongs here rather than in a
+   dated `AGENTS.md` snapshot. Android branch HEAD is `60be98e`, while its latest app-code commit is
+   `8eb1bd4`; both describe app `0.19.5` / versionCode `1950`, and no release APK/AAB exists.
+4. **Shared-receipt worker status:** worker `v38` is deployed and passed a negative canary. Current
+   Open Item 5 remains open: a positive shared-receipt write plus Notion mirror result is still
+   unproven.
+5. **Scope:** this session deliberately changed only `AGENTS.md`, `HANDOVER.md`, and `README.md`;
+   no code, version, package, Git index, branch, deployment, DB, RLS, secret, or user data changed.
+   Existing `CLAUDE.md` work and concurrently appearing `app-admin-kanban` package/style changes
+   remain untouched, unreviewed and unstaged.
+6. **Repair verification:** `git diff --check -- AGENTS.md HANDOVER.md README.md` → exit `0`, no
+   output; `node scripts/security-scan.mjs` → `Secret scan passed`. No app build or version bump
+   was required because this repair changes documentation only.
+
+### Session 61 (Codex — current agent instructions refresh)
+
+1. **Live truth refresh:** confirmed `origin/main`, Compact `0.16.8` Vercel/Netlify live verification,
+   Admin `1.0.2` health with `acceptingReadTraffic=true`, and Broker `2026.07.15.2` health before
+   updating operational instructions.
+2. **Agent instructions:** added the Admin URL, Android worktree/release boundary, current release
+   snapshot, production hard stops, all-five Volcano catalog, 8-token selected-model probe contract,
+   sync hydration/banner invariants, current smoke commands and protected Admin deployment rules.
+   Updated Compact Netlify evidence from `0.16.6` to `0.16.8` and switched local GitNexus commands
+   to the repo runner because npm 11 can fail through `npx`.
+3. **Safety and verification:** docs only; no app version, passphrase, secret, RLS, migration or live
+   data changed. `git diff --check` and the repository security scan passed. Existing `CLAUDE.md`
+   worktree changes were preserved and not staged.
+
+### Session 60 (Codex Sol + Terra — low-token Volcano live closure)
+
+1. **Deeper provider root cause:** all five configured Volcano IDs and the existing credential were
+   valid. `minimax-m2.7` returned HTTP success but used a tiny completion entirely for
+   `reasoning_content`; `finish_reason=length` and empty `content` made the strict JSON parser create
+   a false failure. Increasing the cap to 16/24/64 was rejected as the final approach.
+2. **Minimal availability contract:** Compact and Android send the explicit selected-model prompt
+   `Return only JSON: {"ok":true}`. Broker `kind=test` now accepts a non-empty provider `content` or
+   `reasoning_content` and returns its own `{ok:true}` availability result. All five models use 8
+   output tokens, exact routing and no fallback; normal AI tasks retain strict JSON parsing.
+3. **Live proof:** authenticated probes returned `200` and `ok=true` for both Doubao Seed 2.0 text
+   models, both MiniMax models and Doubao Mini. Broker health reports `2026.07.15.2`.
+4. **Compact release:** commit `24f4ad1` is live as `0.16.8` on Vercel, Netlify and GitHub Pages;
+   workflows `29417694544`, `29417694505` and Admin CI `29417694469` passed. Google Chrome
+   `150.0.7871.124` waited 15 seconds with zero generic sync banners, zero page errors and 390px body
+   width at a 390px viewport. One pre-existing CSP inline-handler console warning remains.
+5. **Android proof:** branch commit `8eb1bd4` is `0.19.5` / versionCode `1950`. Persisted-state
+   offline `2/2`, selected-model Settings `1/1`, mobile layout `1/1`, debug APK build and emulator QA
+   passed; App Link evidence is `/tmp/travel-expense-android-qa-2026-07-15T13-01-24-550Z`.
+6. **Safety:** no passphrase, secret value, provider credential, RLS, migration, write mode or live
+   user data changed. Three touched package audits found zero vulnerabilities.
+
+### Session 59 (Codex Sol + Terra — Volcano model closure and Android sync-state hardening)
+
+1. **Root cause locked**: Compact and Android `callModelAttemptJson()` only handled Kimi/Mimo, so a
+   selected Volcano model fell through to Google. Admin aggregation and Broker status exposed one
+   required model instead of the app catalog, and env-only `VOLCANO_KEY` was falsely reported missing.
+2. **Exact model contract**: all five existing Volcano app LLM IDs now route to `/volcano/json`.
+   Compact/Android Settings add four selected-model tests using `kind=test`, 8 output tokens, no
+   fallback and a required `{ok:true}` response. Quota/429 hard stops remain unchanged; Seedance
+   media models stay outside the LLM contract.
+3. **Admin/provider truth**: Broker status returns the complete safe model catalog without credential
+   values and recognizes the env-backed Volcano binding. Admin keeps one row per provider and renders
+   every supported model with responsive reflow.
+4. **Android banner prevention**: both localStorage and IndexedDB hydration use the same normalizer.
+   Only non-exhausted retryable failures requeue; exhausted and version-conflict failures remain
+   visible evidence, preventing stale generic banners without hiding genuine terminal failures.
+   Stale trip completion also preserves `supabaseId`.
+5. **Verification**: Broker check/self-test passed; Edge format/lint/check and `53/53` tests passed;
+   Compact typecheck/build/security plus AI routing, Settings, offline `4/4`, sync regression `6/6`
+   and mobile `1/1` passed. Admin typecheck/build/security, unit `32/32`, contract `24/24`, mobile
+   `3/3`, a11y `2/2` and full smoke `48 passed + 1 intentional skip` passed. Android typecheck,
+   build, security, targeted browser smokes, JBR 21 debug build and emulator QA passed with verified
+   App Link at `/tmp/travel-expense-android-qa-2026-07-15T12-16-37-029Z`.
+6. **Safety scope**: no passphrase, secret value, provider credential, RLS, migration, write mode or
+   live user data changed. The verified release candidate still requires commit/push and production
+   cutover, tracked as Open Item 15.
+
+### Session 58 (Codex Sol + Sol explorers — Compact 0.16.6 stale-tab and trip identity recovery)
+
+1. **Root cause locked by live timing**: the active Chrome Compact tab was created at 10:11 and
+   therefore loaded `0.16.4`; the Session 57 repair was committed/deployed at 10:52–10:57. Two
+   independent explorers confirmed the old guide-save failure path kept the local trip, wrote a
+   generic global sync error and created no queue item. The later all-`200` Supabase reads and final
+   `synced` state were subsequent pulls, not evidence that the old tab had loaded `0.16.5`.
+2. **Dead update path repaired**: `Shell` previously set `updateReady` only from
+   `serviceWorker.controllerchange`, but Compact's security smoke requires zero registrations. It
+   now performs a no-store same-origin index check on mount, focus/foreground and every five minutes,
+   compares the loaded/current module assets and exposes the existing explicit reload action. The
+   update notice suppresses the stale runtime's generic sync banner; it does not auto-reload or alter
+   sync/offline state.
+3. **Cloud identity invariant repaired**: `applyTripSyncResult` still preserves newer local trip
+   content, but now merges `supabaseId` together with Notion/source links after a successful stale
+   queue result. A successful cloud write can no longer clear the queue while leaving the local trip
+   falsely unlinked.
+4. **Test-first proof**: the two new regressions initially failed exactly as expected: no update
+   notice was found, and the stale trip result ended with `queue=[]` plus `supabaseId=undefined`.
+   After the fixes, `npm run smoke:sync-regression` passed `6/6`; `smoke:offline` passed `4/4`,
+   `smoke:security` passed its active case with four environment-dependent skips, and mobile layout
+   passed `1/1`.
+5. **Full gates**: typecheck, production build and security scan passed independently. The Compact
+   production gate passed in `108.2s`: final navigation `10/10`, mobile layout, accessibility/touch,
+   all seven 390px contact-sheet routes with zero console/network/layout failures, live Broker
+   preflight, vault fail-closed guard, security scan and production build were green. GitNexus impact
+   was LOW for `Shell`, `applyTripSyncResult` and `useSyncEngine`; index counts refreshed to 7,543
+   symbols and 18,267 relationships. No passphrase, secret, provider credential, RLS, migration or
+   live user-data mutation occurred.
+6. **Production deployment proven**: commit `882de8e` was pushed to `origin/main`. Vercel deployment
+   `dpl_5mH5juftaFiFyJUH5t4w1gvq4zjq` reached Ready; GitHub Pages run `29397584920`, Compact Netlify
+   run `29397584955` and Admin CI run `29397585050` all completed successfully. Direct no-store
+   downloads from all three Compact public origins found `0.16.6`, `__compact_deploy_check` and
+   `sync_trip_backfill_` in the served JavaScript. `npm run smoke:deploy-live` also passed against
+   both Vercel and Netlify. Only Boss's one-time hard refresh of the pre-existing `0.16.4` Chrome tab
+   remains as Open Item 14; that old runtime cannot execute code added after it loaded.
+
+### Session 57 (Codex Sol + Terra — Compact 0.16.5 production trip-sync recovery)
+
+1. **Live root cause**: Chrome reproduced the exact generic sync banner while the matching scoped
+   state held one local trip, `globalSyncStatus='error'` and `syncQueue=[]`. Supabase Edge logs showed
+   `POST /rest/v1/trips` returning `400`, then `403`, `403`; Postgres logged two `42501` trip RLS
+   violations. The authenticated log identity matched the current session, the auth user/profile
+   existed, and read-only DB checks found zero owned trips and zero source/UUID collisions.
+2. **Insert contract repair**: the live schema lacks optional intelligence columns, so the first POST
+   correctly enters the legacy fallback. For a lookup-proven new owned trip, both full and legacy
+   rows now use INSERT without `RETURNING`; this avoids asking the SELECT policy's stable self-query
+   to return a row created inside the same statement. Existing and explicitly shared trips retain
+   their update/upsert/version paths.
+3. **Durable recovery**: failed guide saves keep the trip locally and create one deduplicated queued
+   trip job with the original safe error. A successful authoritative pull now queues non-archived
+   local owner trips missing `supabaseId`, including the already-stranded production state; viewer,
+   editor and existing failed jobs are not reset. IndexedDB hydration alone applies `normalizeState`,
+   while normal state updates keep `migrateAppState` and cannot revive exhausted failures.
+4. **Regression proof**: the new fake-Supabase smoke passed `4/4`, covering queue creation, IndexedDB
+   recovery, legacy no-RETURNING insert and one-time local-trip backfill. Independent checks passed
+   typecheck, build, security scan, session `2/2`, sync classifier `2/2`, offline `4/4` and Welcome
+   Guide `1/1`. The full production gate passed in `75.2s`: final navigation `10/10`, mobile layout,
+   accessibility/touch, all 390px contact-sheet routes, broker preflight/vault guards, security scan
+   and production build were green. GitHub Pages run `29385148652` completed successfully. Vercel
+   deployment `dpl_hst2wvwwiD5S1WUHuRxtLYmGuQ5i` reached Ready and the production alias served main
+   asset `index-BZEkCpa1.js`; that live bundle contains `sync_trip_backfill_` and omits the obsolete
+   false-retry copy. The live verifier now checks the required main script, broker script and CSS by
+   asset type instead of assuming a minimum chunk count; the Vercel-only live smoke passed against
+   the three production assets with HTTP `200`.
+5. **Baseline and scope**: a detached untouched `282f610` worktree reproduced both pre-existing test
+   failures: Welcome Guide waited for the retired Dashboard default, and Supabase backfill expected one
+   itinerary RPC but received zero. No passphrase, secret, provider credential, RLS, migration or live
+   user-data mutation was performed.
+
+### Session 56 (Codex Sol + Terra — Compact 0.16.4 cold-open sync reliability)
+
+1. **Live root cause**: the latest 100 Supabase API logs contained 98 `200`, one `201`, and one
+   `/auth/v1/user` `403` immediately after a successful refresh-token `200`; subsequent trips,
+   receipts, profile and photo reads were `200`. The backend recovered, but a Compact hydration
+   regression persisted that transient auth failure as a durable queue error, skipped it on later
+   pushes and replayed the generic red connection banner on every launch.
+2. **Recovery contract**: boot sync now uses the existing quiet auth-retry path. Non-exhausted
+   persisted failures requeue on hydration; version conflicts and exhausted failures remain durable.
+   Failed rows are no longer discarded and recreated with zero attempts, and a manual retry clears
+   the access-denied/backfill latches before one authoritative deferred sync.
+3. **Accurate UI**: raw RLS, `42501`, `permission denied` and translated access errors now use the
+   permission-specific banner instead of 「有資料連線失敗，請檢查連線或設定。」. Transient cold-open
+   failures stay quiet while retrying; genuine exhausted failures remain visible and actionable.
+4. **Regression proof**: `npm run smoke:offline` passed `4/4`; focused existing manual-retry tests
+   passed `2/2`; privacy `3/3` and sync-classifier `2/2` passed. `npm run smoke:production-gate`
+   passed: typecheck, final navigation `10/10`, mobile layout, accessibility/touch, broker preflight,
+   fail-closed vault guard, secret scan and production build. `git diff --check` passed.
+5. **Baseline debt and scope**: `smoke:supabase-backfill` returned `1 passed, 1 failed` because the
+   itinerary RPC count was `0`; an untouched `origin/main` worktree at `3cede8a` reproduced the same
+   failure. No passphrase, secret, RLS, migration, provider credential or live user data changed.
+
+### Session 55 (Codex Sol + Terra — Admin 1.0.1 verified production promotion)
+
+1. **Fail-closed release evidence**: workflow `29336763253` rejected the first candidate because
+   `/api/health` still reported `1.0.0`; PR #51 bound health to `package.json` and added a regression.
+   Workflow `29337850114` attempt 1 then rejected candidate readiness because live Edge still carried
+   the prior source. Neither failed candidate was promoted.
+2. **Edge and provenance cutover**: deployed the reviewed `admin-kanban` bundle as version `92` and
+   updated only the non-sensitive frontend/Edge provenance SHA markers to
+   `697a9c9522b14a1a67e77ab4088136e48de369b2`. Direct unsigned runtime access still returns
+   `401 ADMIN_SIGNATURE_MISSING`. No passphrase or credential value changed.
+3. **Verified production**: workflow `29337850114` attempt 2 passed at that exact SHA. Production is
+   Admin `1.0.1`, Vercel `dpl_6R3tZEYhwmiJ5CyeykdnqKhYshSv`, Edge
+   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_92`, schema `20260712123000`.
+   Live health returns `200`, exact version/SHA/deployment and `acceptingReadTraffic=true`; Broker
+   health returns exact service `travel-expense-credential-broker`, version `2026.06.12`.
+4. **Requested fixes live**: deployed Edge source contains Volcano model
+   `volcano/doubao-seed-2.0-lite`, strict Broker health and `awaiting_heartbeat`; the production asset
+   contains `待首次心跳`. Bounded max-two prefetch and idle-poll suppression are in the promoted build.
+5. **Final gates**: all seven workflow groups passed; protected promotion reran Admin typecheck,
+   build, security, unit `32/32`, contract `24/24`, full smoke `47 passed + 1 intentional skip`,
+   Edge `72/72`, cross-client and clean-database contracts, with `npm audit` at 0 vulnerabilities.
+   Writes remain `deny_all`; no RLS, migration or live user-data mutation occurred.
+
+### Session 54 (Codex Sol + Terra — Admin 1.0.1 performance and runtime-status candidate)
+
+1. **Measured root cause**: live Edge logs showed each tab paying sequential session verification
+   plus Admin Edge latency, while `EXPLAIN ANALYZE public.admin_read_overview()` completed in about
+   `10.5ms`. The fix keeps the complete authentication boundary and optimizes work after verification.
+2. **Loading behavior**: bounded default workspace prefetch warms Overview、Accounts、Incidents、
+   Providers 同 Audit with at most two concurrent reads. Idle operation polling stops; Activity
+   Center refreshes explicitly and active operations retain the 10-second interval.
+3. **Provider and overview truth**: Volcano is present end-to-end with required model
+   `volcano/doubao-seed-2.0-lite`. Overview reads DB、operations 同 strict Broker `/health` in
+   parallel. Broker health requires exact `200`/service/version evidence; missing client heartbeats
+   render `awaiting_heartbeat` / `待首次心跳` instead of Unknown or a false green state.
+4. **Independent gates**: Admin typecheck/build/security passed; unit `31/31`, contract `24/24`,
+   full smoke `47 passed + 1 intentional skip`; Edge format/lint/check passed with `72/72` tests;
+   `npm audit` found 0 vulnerabilities; GitNexus detect_changes reported LOW risk and 0 affected
+   processes. The first full smoke exposed one StrictMode-only test assumption; the test now compares
+   against its settled request baseline, focused rerun passed, and the full suite passed.
+5. **Security scope**: Admin version bumped to `1.0.1`. No passphrase, secret, RLS, migration, live
+   user data, provider credential or write-mode change occurred. Production promotion and live Chrome
+   verification remain open above until protected deployment completes.
+
+### Session 53 (Terra — Admin 1.0 passkey bootstrap closure and final production promotion)
+
+1. **Passkey and Edge proof**: first passkey enrollment BFF begin/finish returned `200`. Edge
+   credential register, revoke-all, session create and session verify all returned `200`; the current
+   passphrase text is unchanged and remains necessary.
+2. **Bootstrap closure**: `ADMIN_PASSKEY_BOOTSTRAP_SECRET` was removed from Vercel Production and
+   temporary Keychain items were removed. Workflow `29303308607` produced bootstrap-closure deployment
+   `dpl_59zhH1QnLEXtPnfNq8yHkscPczJe`.
+3. **Final release and direct canaries**: PR #49 merged as
+   `0a71608e2b0c888eb7e7e4efb194a21a59ad935b` with localized Chrome focus guidance. Edge versions are
+   `admin-auth-state` `37`, `admin-kanban` `90`, and `receipt-sync-worker` `37`. Direct negative
+   canaries returned `401 ADMIN_SIGNATURE_MISSING` and `401 UNAUTHORIZED` as expected.
+4. **Verified final production deployment**: workflow `29303864302` succeeded at exact SHA
+   `0a71608e2b0c888eb7e7e4efb194a21a59ad935b`; Vercel deployment
+   `dpl_A7o26cPYDieYCa1RaNcVvGpJ4XWh`; Edge deployment
+   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_90`; schema `20260712123000`.
+   `/api/health` returned `200` with `acceptingReadTraffic=true`, production asset
+   `/assets/index-BbcEP-GN.js` contains the focus guidance, and bootstrap env is absent.
+5. **Current posture and scope**: `ADMIN_WRITE_MODE` remains `deny_all` and R3 remains disabled.
+   The only passkey/bootstrap follow-up is Boss's in-progress fresh-login check in Current Open Items.
+   Documentation only: no app code, secret value, commit or push was changed; run `git diff --check`
+   before handoff.
+
+### Session 52 (Terra — Admin 1.0 verified production promotion)
+
+1. **Failed-closed retry retained as evidence**: workflow `29301851315` failed at candidate readiness
+   with `503`; no Edge `/api/runtime` request occurred. Candidate Vercel deployment
+   `dpl_9yRX6HWGUfDHtnAS1vt7so5c4uma` was not promoted.
+2. **Official production configuration update**: `ADMIN_KANBAN_HASH` was updated through the official
+   Vercel CLI, sourced from Keychain through stdin without exposing its value. Temporary OIDC
+   `.env.local` and link metadata created by the CLI were removed afterwards.
+3. **Verified promotion and runtime**: workflow `29302288203` completed all seven prerequisites and
+   protected promotion at exact SHA `72ee62507349e245b8613d9531958d428237bc90`. Production is Admin
+   `1.0.0`, Vercel `dpl_J6huupag1ur7GwmPCVU6k7b7kJsn`, Edge
+   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_88`, schema `20260712123000`.
+   Live `/api/health` returned `200`, version `1.0.0`, the exact SHA and
+   `acceptingReadTraffic=true`; unauthenticated session returned `401`, while direct catch-all
+   session query returned `404`.
+4. **Security posture at that interim promotion**: passphrase text was unchanged. First Boss passkey
+   enrollment and bootstrap removal were still pending then; Session 53 records their completion.
+   `ADMIN_WRITE_MODE` remained `deny_all` and R3 stayed disabled.
+5. **Version correction and scope**: this worktree reports Compact `APP_VERSION` `0.16.3` and React
+   `APP_VERSION` `0.2.4`; current-doc claims were corrected. Documentation only: no app code, secret
+   value, commit or push was changed. Run `git diff --check` before handoff.
+
+### Session 51 (Terra — Admin 1.0 cutover documentation reconciliation)
+
+1. **Reconciled branch state**: rebased this documentation-only worktree onto `origin/main`
+   `72ee62507349e245b8613d9531958d428237bc90` without touching the root checkout. PR #48 adds the
+   readiness guard that validates the configured hash before any Edge request.
+2. **Corrected production-auth truth**: the prior Admin `1.0.0` production deployment at
+   `90cfab891665300cdd8b9765f34c02cfea6d8169` did not complete a usable login cutover because
+   production `ADMIN_KANBAN_HASH` remained legacy `PBKDF2`; Admin 1.0 accepts only strict `scrypt`.
+   A new valid `scrypt` hash was generated locally and set in Vercel Production. The passphrase text
+   remains unchanged, but a fresh deployment and live login verification are still pending.
+3. **Remaining auth operations**: first Boss passkey enrollment and bootstrap removal remain pending;
+   neither is claimed complete. `ADMIN_WRITE_MODE` remains `deny_all`, and R3 stays disabled.
+4. **Receipt worker correction**: `receipt-sync-worker`/Notion outbox worker `v33` is deployed and
+   has passed a negative canary. No end-to-end live write execution is claimed or verified.
+5. **Technical correlation only**: root request IDs are
+   `c1e45c92-2cc6-4a05-acde-eeed3a46aa83`,
+   `4299f645-f4a0-4ea1-a1ee-e6c075fd8bd2`, and
+   `91b4075e-9077-44f3-b4b2-3bb7a1016ebf`.
+6. **Scope and verification**: documentation only; no application code, Vercel configuration,
+   credential value, passphrase, migration, user data, commit or push was changed. `git diff --check`
+   and docs-consistency searches are required before handoff.
+
+### Session 50 (Codex — Admin Console 1.0 live cutover documentation)
+
+1. **Verified live promotion**: GitHub Actions workflow `29268903409` succeeded for exact commit
+   `90cfab891665300cdd8b9765f34c02cfea6d8169`; all CI groups and the protected promotion passed.
+   Production is `https://travel-expense-admin-kanban.vercel.app`, Vercel deployment
+   `dpl_83w5XAgVae9Twssb4RSRmQmxGyUU`, Edge deployment
+   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_86`, and schema `20260712123000`.
+2. **Live read-path proof**: `/api/health` returned `200` with `acceptingReadTraffic=true`;
+   unauthenticated `/api/admin/session` and a rewritten nested itinerary request returned typed
+   `401 UNAUTHORIZED`; direct `/api/admin?__admin_path=session` returned typed `404 NOT_FOUND`.
+3. **Security and data invariants**: the current passphrase remains unchanged and necessary;
+   passkey is additive and the first Boss enrollment remains pending. Writes remain `deny_all` and
+   R3 is server-disabled. Nagoya acceptance is exactly six days (`2026-04-20` through
+   `2026-04-25`) with `21/21` scenery spots in range.
+4. **Scope**: documentation only. No code, configuration, secret, passphrase, hash, token,
+   bootstrap material, migration, data, commit, push or PR was changed or created.
+
+### Session 49 (Antigravity — sync backfill infinite loop fix)
+1. **Root cause identified**: User `puiyuchau@gmail.com` had 61 failed sync items because:
+   - The trip's `owner_id` doesn't match the user's `auth.uid()` (likely Magic Link email case mismatch)
+   - RLS `can_edit_trip()` blocks all receipt upserts
+   - The backfill sweep in `pull()` re-queues all 61 items with `attempts: 0` after every pull cycle
+   - This creates an infinite failure loop that never self-heals
+2. **Fix 1 — Break backfill infinite loop** (`app-compact/src/lib/useSyncEngine.ts`):
+   - Promoted `accessDeniedTrips` from a local variable inside `push()` to a `useRef` persisting across push/pull cycles
+   - Backfill sweep now skips receipts whose trip is in `accessDeniedTripsRef`
+   - When a trip push succeeds (e.g. after re-invite), the denied flag is cleared for recovery
+3. **Fix 2 — Defensive `trip_members` auto-seed** (`supabase.ts`, both compact + react):
+   - After every successful trip upsert, fire-and-forget upserts a `trip_members` row with `role='owner'`
+   - Provides a second RLS path so `can_edit_trip()` never fails for the actual trip creator
+   - Tolerates missing `trip_members` table (pre-sharing schema) via `isMissingSharingTableError`
+4. **Verification**: Compact + React typecheck ✅, build ✅, security:scan ✅.
+5. **Remaining**: DB-side investigation of the user's actual `owner_id` vs `auth.uid()` values
+   requires Admin Kanban access (currently blocked by gateway `ADMIN_ROUTE_NOT_ALLOWED`).
+
+### Session 48 (Codex — receipt-photo cutover compatibility)
+1. Added active forward migration `20260712122500_restore_receipt_photo_compatibility.sql` after
+   the operation/privacy migrations and before `20260712123000`. It sets local `5s`/`30s` timeouts,
+   keeps only the `receipt-photos` bucket public, removes `receipt_photos_read_own`, and restores
+   exact public `receipt_photos_public_read`; it has no `BEGIN`/`COMMIT` and does not alter upload,
+   delete, or table-level receipt visibility policies.
+2. Split the static migration scanner into active final-state and staged-private-contract inputs.
+   `admin_operation_kernel_smoke.sql` now requires public compatibility mode while also asserting
+   the upload/delete and `public.receipt_photos` visibility policies remain present.
+3. Reviewer follow-up hardened the photo gate: the bucket check requires exactly one public row;
+   the public policy check validates its complete `pg_policies` shape and normalized predicate;
+   upload/delete and table visibility checks now validate roles, commands, and predicate substance.
+   The scanner requires `20260712122500` after `20260710187000` and immediately before
+   `20260712123000`, final public actions, and no later active receipt-photo mutation.
+4. Verification: `node scripts/verify-supabase-migrations.mjs` passed; `node
+   scripts/verify-shared-ledger-contract.mjs` passed; Admin `typecheck`, `build`, `security:scan`
+   (`Secret scan passed`, `Admin trust-boundary scan passed`), unit `19/19`, and contract `21/21`
+   passed again after the review changes. Local Docker CLI/socket were unavailable, so no clean local Supabase rebuild or SQL
+   smoke ran and no live database was used; CI must run the disposable-database fixture. No
+   production migration, deployment, secret, or data mutation occurred.
+5. Second reviewer follow-up makes the final-state guard conservative: any later active
+   `storage.buckets` reference or `storage.objects` policy action fails the scanner, while the
+   compatibility migration's public bucket update and public policy `CREATE` must be the final
+   Storage actions. The smoke now compares normalized expressions exactly, rejects `OR`/extra
+   predicates, and rejects the staged-only `receipt_photos_read_trip_members` policy.
+
+### Session 47 (Codex — Admin 1.0.0 cutover preparation)
+
+1. **Release metadata**: promoted only the local Admin package, both package-lock root entries and
+   `/api/health` version from `1.0.0-rc.1` to cutover candidate `1.0.0`; Compact `0.16.2`, Android
+   `0.19.2` / versionCode `1920`, and React `0.2.4` were preserved.
+2. **Evidence**: final-SHA PR #36 run `29202450339` passed Admin/BFF, clean database, Compact,
+   React, cross-client, Edge and Broker at `8aa2f8a`; protected production promotion skipped. React
+   `0.2.4` has typecheck/build/security green, clear-device `12/12`, and security smoke `3 passed,
+   1 intentional skip`. This pass: Admin typecheck/build/security green; unit `19/19`; contract
+   `21/21`.
+3. **Release truth**: Boss has approved cutover preparation, but no production deploy or migration
+   has completed. The existing `ADMIN_KANBAN_HASH` and current passphrase remain unchanged; passkey
+   is additive, and no live enrollment occurred in this pass. Current Open Items remain open, and
+   Admin production remains `0.8.3` read-only until verified promotion.
+
+### Session 46 (Codex Sol + GPT-5.6 Terra — React 0.2.4 clear-device persistence race)
+
+1. **Root cause and fix**:
+   - `App.clearSupabaseDeviceData()` removed the scoped localStorage/IndexedDB snapshots while
+     `useAppState` still persisted the authenticated scope. A state or sync effect before
+     `signOut()` completed could write the old in-memory state back to that scope.
+   - `useAppState` now quiesces the cleared scope before deletion and suppresses persistence for it
+     until the app leaves and later re-enters that scope; `App` delegates the clear to this guard.
+2. **Deterministic regression and verification**:
+   - The RED smoke holds `/logout`, triggers a post-clear React state commit, then proves both scoped
+     localStorage and IndexedDB remain empty. It failed before the fix by recreating the scoped key.
+   - Focused clear-device repeat: `12/12` passed. Full React security smoke: `3 passed, 1 intentional
+     skip`. React `typecheck`, production `build`, and `security:scan` all passed.
+3. **Release truth**:
+   - Current Open Items were reconciled without additions or removals. No production mutation or
+     deployment occurred; live Admin remains `0.8.3` read-only.
+
+### Session 45 (Codex Sol + GPT-5.6 Terra - final production-hardening review)
+
+1. **Closed remaining Console reliability and security gaps**:
+   - The real catch-all BFF handler now rejects Edge redirects, transport failures, malformed
+     envelopes, mismatched request IDs and unproven photo streams with typed fail-closed errors.
+   - Broker health requires its exact health contract; provider-probe transport ambiguity is saved
+     as `outcome_unknown`; bounded account lookup no longer treats an incomplete directory scan as
+     proof that an email is unregistered.
+   - Added normal non-final passkey rotation with opaque selectors, credential-set drift protection,
+     passphrase-plus-passkey step-up, an atomic Audit v2 event and full Admin-session revocation.
+     Removing the final passkey remains prohibited outside the break-glass runbook.
+2. **Completed operator-path browser evidence**:
+   - Added a browser login journey with mocked WebAuthn, login axe/320px checks, exact support-bundle
+     download, every visible operation preview family, a full R2 grant/commit path and all 18 routes
+     across seven release viewports.
+   - Visual capture found and closed the remaining receipt-table badge/date wrapping defect; the
+     table remains locally scrollable while desktop and mobile documents retain zero overflow.
+   - Admin gates: typecheck/build/security green; unit `19/19`; contract `21/21`; browser smoke
+     `42 passed, 1 intentional visual-capture skip`; `npm audit` found `0` vulnerabilities.
+   - Edge gates: 28 files format/lint green, three entrypoints checked and Deno `69 passed, 0 failed`.
+     Static migration policy, shared-ledger contract and Admin workflow YAML checks passed.
+3. **Release truth**:
+   - PR #36 current-code run `29201116294` passed all seven required jobs: Admin, Edge, clean
+     database, Compact, React, Broker and cross-client browser round trip. The protected production
+     job correctly skipped on the pull request.
+   - Fixed two CI-evidence defects exposed by that run: runner-portable database container lookup
+     and deterministic owned-Vite shutdown. SQL fixtures now model genuine sync version drift and
+     count all versioned R2 itinerary operations without weakening production guards.
+   - No production deployment, migration, secret/passphrase change, passkey enrollment/removal or
+     live user-data mutation was performed. Live Admin remains `0.8.3` read-only.
+
+### Session 44 (Codex + GPT-5.6 Terra — Oscar integration and final branch verification)
+
+1. **Integrated concurrent Compact/Android work without reverting it**:
+   - Rebased `codex/admin-console-1.0` onto `origin/main` `a27cc3d` and kept Oscar's Compact `0.16.2`
+     access-denial recovery, multi-currency, motion, navigation and sync behavior.
+   - Merged only compatible Admin shared-contract additions: canonical itinerary versions, receipt
+     tombstones/sync revisions, private photo handling and trip-scoped identity. Android worktree
+     `9365ea7` reports `0.19.2` / versionCode `1920`.
+2. **Post-rebase verification evidence**:
+   - Admin: typecheck/build/security green; unit `17/17`; contract `13/13`; browser smoke
+     `34 passed, 1 intentional visual-capture skip`; audit `0` vulnerabilities.
+   - Edge: 28 files format/lint green, three entrypoints checked, Deno `65 passed, 0 failed`.
+   - Compact: 9/9 command gates green, including itinerary merge, tombstone, privacy, offline,
+     mobile layout and final navigation. React: typecheck/build/security, itinerary, security,
+     mobile and final navigation green; final navigation is `6/6` after routing it through the
+     existing owned dev-server wrapper. Broker check/self-test green.
+   - Static migration policy and shared-ledger contract scans passed; workflow YAML parsed. Local
+     SQL runtime was unavailable, so disposable Supabase SQL remains CI evidence, not a claimed
+     post-rebase local result.
+3. **Release truth**:
+   - Live `/api/health` returned Admin `0.8.3` with read traffic enabled. No production deploy,
+     migration, secret change, passkey enrollment or live user-data mutation was performed.
+
+### Session 43 (Codex — Admin 1.0 RC)
+
+1. **Admin architecture and security boundary**:
+   - Replaced the prototype board with React Router, TanStack Query, five operations workspaces,
+     responsive navigation, complete data states and an Activity Center.
+   - Added async scrypt passphrase verification, SimpleWebAuthn passkeys, opaque HttpOnly sessions,
+     CSRF/origin checks, durable login throttles, fixed-route BFF allowlisting and signed BFF-to-Edge
+     requests. Legacy browser bearer/direct-Edge paths are absent from the RC.
+2. **Read APIs and safe operations**:
+   - Split the giant snapshot into typed overview, search, account, trip, itinerary, receipt,
+     reliability, provider, runtime, audit and operation endpoints with cursor pagination and DTO
+     allowlists.
+   - Added preview/step-up/version/idempotency/audit kernels for R1 and approved R2 actions. R3 remains
+     backend-disabled; unsupported session revoke is not faked in the UI.
+3. **Shared data contracts**:
+   - Added canonical receipt version/tombstone/split/settlement/privacy semantics, authoritative
+     membership pull and versioned itinerary merge across Compact, React and Android.
+   - Nagoya is locked to six inclusive local dates from `2026-04-20` to `2026-04-25`; partial updates
+     preserve the other days, out-of-range spots fail, and stale offline clients cannot overwrite a
+     newer itinerary.
+4. **Migration discipline and operations**:
+   - Reconciled split migration history into forward-only artifacts and rebuilt disposable Supabase
+     locally without `db push` or `migration repair`. Added Admin CI, CODEOWNERS, receipt worker
+     workflow and Admin runbooks. No new production schema, auth secret or live user-data write was
+     performed.
+5. **Verification evidence**:
+   - Admin `1.0.0-rc.1`: typecheck/build/security scan; unit `8/8`; contract `12/12`; full smoke
+     `14 passed + 1 intentional visual skip`; dedicated mobile `3/3`; axe serious/critical `0` across
+     all 16 routes at desktop/mobile; audit `0` vulnerabilities.
+   - Edge: 21 files format/lint/check green and Deno tests `50 passed, 0 failed`. Disposable Supabase:
+     all ten Admin/auth/read/R2/receipt/itinerary/membership/security worker SQL suites passed.
+   - Compact `0.13.6`: isolated 21-stage production gate passed. React `0.2.3`: core gates green and
+     browser suite `30 passed, 5 intentional skips`. Broker check/self-test/audit green.
+   - Android `0.18.2`: typecheck/build/security/audit, contract/unit suites and isolated browser
+     suites (`28 passed, 2 intentional skips`) passed. The JDK-wrapper self-test, debug APK and
+     `android:qa` passed; App Links verified; artifact
+     `/tmp/travel-expense-android-qa-2026-07-12T02-10-31-087Z`.
+6. **Release truth**:
+   - Code is a verified local release candidate, not a production promotion. Live Admin is still
+     `0.8.3` read-only. Production cutover, passkey enrollment, environment keys, private-photo
+     transition and live Nagoya repair remain explicit approval gates.
+7. **Final audit fixes (2026-07-12)**:
+   - Newer partial itinerary payloads preserve omitted dates, itinerary version beats device clock
+     skew, and duplicate `SourceID` values stay isolated by trip across Compact, React and Android.
+   - Focused browser evidence: Compact `13/13`, React `7/7`, Android `13/13`; Compact full production
+     gate passed all 21 stages in 236 seconds.
+
+### Session 42 (Codex — Admin 1.0 Tasks 0/1)
+
+1. **Preserved concurrent work**:
+   - Recorded dirty-worktree status/checksums and stored an external patch plus untracked archive in
+     `/tmp`; created isolated worktrees/branches without reverting Oscar or Boss changes.
+   - Rebuilt the GitNexus runner/index and reviewed Oscar's changes individually. Unsafe old-auth,
+     false-green and hardcoded-FX pieces were not copied blindly.
+2. **Production write containment**:
+   - Edge `ADMIN_WRITE_MODE` defaults and unknown values to `deny_all`; every mutation and external
+     side effect is rejected before auth/route dispatch with `503 ADMIN_WRITES_DISABLED` and a
+     request ID. Only a fixed GET route map remains readable.
+   - Live unauthenticated mutation smoke returned the expected `503`; Deno tests: `10 passed`.
+3. **Admin DB exposure closed**:
+   - Live policies/grants for `admin_action_requests`, `admin_console_config` and
+     `admin_identity_links` are now `service_role` only; browser execute on
+     `admin_kanban_rls_state()` is revoked and its `search_path` is empty.
+   - Real anon table GET/POST/PATCH/DELETE and RPC calls returned `401/42501`; SQL privilege smoke
+     returned `admin_console_privilege_smoke_passed`. Before/after reports and fingerprints are in
+     `/tmp/admin-console-*20260710.json`.
+4. **Credential/provider containment**:
+   - Rotated the exposed Edge-to-Broker key without printing or persisting it, deployed both sides,
+     verified the scoped route, removed the old `ADMIN_TOKEN` bindings, and confirmed current-tree
+     secret scans are clean. Historical Git commits still contain the old name/value and must not be
+     restored as rollback.
+   - Provider normalization now separates Configured from Healthy; broker liveness cannot paint all
+     providers green, and HTTP 200 with invalid provider status fails the probe.
+5. **Adjacent security hardening**:
+   - Live anon execute is revoked from `delete_own_user_account`, `trip_member_display_names` and
+     `trip_member_role_rank`; all three use `search_path=''`. Live smoke returned
+     `adjacent_security_privilege_smoke_passed`.
+   - Compact `0.13.6` and Android `0.16.4` use signed receipt-photo URLs. Android branch commit
+     `d294648` is pushed as `origin/codex/admin-console-1.0-android`; Android QA passed with verified
+     App Links. The private-bucket migration remains unapplied pending the compatibility gate.
+6. **Verification**:
+   - Admin: `npm ci --ignore-scripts`, `typecheck`, build, smoke `15/15` and `npm audit` all green.
+   - Compact: `typecheck`, build, `security:scan`, `db:policy:scan`, and signed-photo backfill smoke
+     `1/1` green.
+   - Edge: containment verifier green; Deno unit tests `10/10`; focused Deno format checks green.
+   - Broker: `npm run check` and `npm run self-test` green. Current admin source secret scan green.
+7. **Do not claim Admin 1.0 complete**: production remains intentionally read-only. Migration
+   reconciliation, new auth/BFF, paginated read API, five-workspace UI, full canonical contracts and
+   verified R2 operations remain open in the accepted plan.
+8. **Deployment provenance guard**:
+   - Admin `0.8.3` adds `scripts/deploy-production.mjs`: it refuses dirty worktrees, pins the exact
+     Vercel project with `--project`, runs all Admin gates, injects the current Git SHA, verifies
+     production `/api/health`, and removes CLI-created local link/OIDC files.
+   - The runner removes npm lifecycle-only `allow-scripts` config before nested `npm audit`; audit
+     remains mandatory and is never skipped.
+   - An accidentally created empty `app-admin-kanban` Vercel project was immediately deleted; the
+     canonical production project and alias remain `travel-expense-admin-kanban`.
+
+### Session 41 (Antigravity / Teamwork Orchestrator)
+
+1. **Admin Console Upgrade & Modularization (Version 0.8.0)**:
+   - **Bug Fix**: Fixed the `puiyuchau@gmail.com` 0-receipt bug. The root cause was the snapshot receipts limit in the Edge function which capped the receipts retrieval. Raised the snapshot receipts cap to 10000 and added explicit sorting by `created_at desc` in the Edge function, ensuring all recent receipts are properly fetched.
+   - **Refactoring**: Successfully refactored the monolithic 1300+ line `App.tsx` by splitting it into 15 modular components under `src/components/`, ensuring each component remains highly maintainable and under 400 lines.
+   - **New Features**: Implemented 5 brand new tabs:
+     1. *Trip Management*: View, edit, and manage metadata for all active and archived trips.
+     2. *Audit Trail log timeline*: Track actions, errors, and logins in a chronologically organized timeline.
+     3. *Analytics dashboard*: Visualize expense distribution, trends, and budget metrics using pure React SVG charts.
+     4. *Batch Ops*: Perform operations on multiple records simultaneously, including multi-select actions and CSV exporting.
+     5. *AI Provider Monitoring*: Monitor latency trends, tokens used, cost tracking, and test run logs across various AI providers.
+   - **Verification & Outcome**: Ran `npm run typecheck`, `npm run build`, and `npm run smoke` in the `app-admin-kanban` directory. All 15/15 smoke tests pass successfully. Deployed changes to the active branch.
+
+### Session 40 (Oscar / Claude Code — current session)
+
+1. **Private receipts (Boss request: hide some expenses from other trip members)** — main `0.13.0`/`0.13.1` (`337fd2e`, `8b1f38b`), android `0.16.0` (`d2c5abb`):
+   - `Receipt.visibility 'trip'|'private'`; enforcement is **server-side** — RLS select policy gates on visibility, and `upsert_shared_trip_receipt` RPC maps the field + skips Notion sync jobs for private rows. Live DB migrated via Management API (never `db push`); migration file `supabase/migrations/20260706090000_receipt_visibility.sql` passes `db:policy:scan`.
+   - Consistency invariant (`canBePrivateReceipt` in domain.ts, duplicated intentionally in storage.ts normalize): private visibility ⇢ 私人 split without cross-person 代付, so hidden records never affect anyone else's settlement. Editor locks 可見度 otherwise; changing 受惠人 to another person revokes it live.
+   - History shows 🔒 on private rows; editor hints in Cantonese; Notion `pushReceipt` no-ops for private records.
+   - `smoke:privacy` (3 tests) green both branches. Android merge preserved its richer editor (splitType/splits/payers, 進階拆數) — watch for `splitEngine` re-exports when porting domain.ts changes to android (roundZeroSum/sharePercents live in splitEngine there, NOT domain.ts).
+   - Pre-existing failures (stash-bisected, NOT from this work, tracked via session chip): history conflict-resolver test (both branches), android final-nav sync-error-indicator test.
+   - Note: Codex CLI was asked to build this first but hit its usage limit (resets Aug 4) after exploration only — no Codex commits; implemented by Oscar.
+
+### Session 39 (Oscar / Claude Code — earlier today)
+
+1. **Jeju-weather root cause (Boss report: 名古屋 Day 1 showed 濟州 weather)**:
+   - Live Supabase trip `ee4adff8` had 中部國際機場 stored with Jeju-airport coords — legacy damage from the old unscoped `/機場|airport/→Jeju` GEO_DICTIONARY entry (that poison pattern survived on the **Android branch** until this session). Healed the row via SQL (trip version → 6).
+   - Client self-heal in `normalizeItinerary`: stored spot coords >150km from the name's dictionary match are replaced (fixes stale localStorage copies everywhere).
+   - `resolveGeoCoordinate(name, countryHint)` is now country-scoped (`countryHintFor` from `day.country`/timezone) — generic Korea patterns can't contaminate Japan/HK days. Android `geo.ts` re-synced from main.
+   - Weather tab geocode fallback rewired (`resolveCoordsForDay`): dictionary-miss destinations geocode via Open-Meteo instead of showing 缺少座標.
+2. **Weather card spec changes (Boss)**: humidity removed; per-slot condition theme (晴橙/多雲灰/霧淺灰/微雨淺藍/落雨藍/大雨深藍/雪冰藍/雷暴紫) driven by `--weather-accent`; double-flash "you are here" glow after auto-scroll to the live slot (`.weather-arrive-flash`, reduced-motion safe).
+3. **weather-smoke suite repaired (was 6–7 failing on HEAD before this session)**: bare-fixture default restored to the Nagoya trip, Jeju-era ended-trip expectations rewritten, humidity assertion inverted per new spec, new self-heal regression test. 14/14 both branches; dashboard 8, timeline 8–9, itinerary 3, final-nav 8 all green.
+4. **Android v0.15.0**: ported main v0.12.0 weather overhaul + main v0.11.1 Timeline polish; killed the android-only `/機場|airport/→Jeju` dictionary entry; signed APK rebuilt and delivered (versionCode 1500, cert SHA-256 digest unchanged `30e99f89…f99b`).
+   - **Files changed (main)**: `app-compact/src/lib/{geo,weather,constants}.ts`, `src/domain/trip/normalize.ts`, `src/tabs/Weather.tsx`, `src/styles.css`, `tests/weather-smoke.spec.cjs`, `package.json`. Commits: main `c1f9807`, android `74ef33f`.
+
+### Session 38 (Antigravity — previous session)
+
+1. **Compact Itinerary Editing Bugs & UX Polish**:
+   - **BUG 1 (Option Mismatch)**: Fixed the category dropdown in the single spot edit sheet by using the global `SPOT_TYPE_OPTIONS` constant, preventing data loss for flight and sightseeing categories.
+   - **BUG 2 (timeEnd in Day Editor)**: Added a time input for `timeEnd` inside the Day Editor rows.
+   - **BUG 3 & UX 1 (Details jump)**: Added a "Details" gear button next to the delete button in each row. Clicking it saves current edits, sets the spot as `editing`, and opens the detailed per-spot editor sheet.
+   - **BUG 4 (Mobile Layout Grid)**: Updated `timeline.css` to render a clean 4-column layout on screens <= 430px with Touch Targets >= 40px, ensuring no overlaps or layout breakages.
+   - **BUG 5 (Unsaved Changes Warning)**: Implemented dirty state check for the Day Editor, prompting the user via `window.confirm` before closing if changes exist.
+   - **UX 2 (Custom HTML Day Swap Modal)**: Replaced browser `window.confirm` with a custom HTML confirmation modal, and updated the Playwright E2E test `itinerary-edit-smoke.spec.cjs`.
+   - **UX 3 (Smart default times)**: Implemented `getNextSpotDefaultTime(spots)` to default new spot times to 30 mins after the last spot's time.
+   - **Test Fix**: Fixed a pre-existing bug in the `timeline-smoke.spec.cjs` E2E test where direct edits in owner mode were expected to render a viewer-only "還原" button instead of "刪除". Aligned the test to expect and click "刪除" and accept the browser dialog.
+   - **Version bump**: Bumped Compact app version to `0.11.1`.
+   - **Verification**: `typecheck` ✅, `build` ✅ (1.64s), Playwright itinerary smoke tests ✅, Playwright timeline smoke tests ✅.
+   - **Files changed**: `app-compact/src/tabs/Timeline.tsx`, `app-compact/src/styles/timeline.css`, `app-compact/tests/itinerary-edit-smoke.spec.cjs`, `app-compact/tests/timeline-smoke.spec.cjs`, `app-compact/src/lib/constants.ts`, `app-compact/package.json`.
+
+### Session 37 (Antigravity — previous session)
+
+1. **Stats budget currency edit fix**:
+   - When `displayCurrency` is HKD, the budget edit field now pre-fills the HKD-converted value and converts user input back to the trip's native currency via `hkdToCurrency()` before saving.
+   - Files changed: `app-compact/src/tabs/Stats.tsx`.
+
+2. **Weather tab date display improvement**:
+   - Added `formatWeatherDate()` helper that renders `7月12日 (六)` style dates.
+   - New `.weather-day-date` element at 15px desktop / 13px mobile replaces the invisible `Day X` eyebrow.
+   - Files changed: `app-compact/src/tabs/Weather.tsx`, `app-compact/src/styles.css`.
+
+3. **GEO_DICTIONARY cross-trip contamination fix**:
+   - Replaced generic `/機場|airport/` pattern → `/濟州機場|jeju.*airport/` (Jeju-specific only).
+   - Added 13 Japan/Nagoya landmarks to prevent Nagoya trips from resolving to Jeju coordinates.
+   - Files changed: `app-compact/src/lib/geo.ts`.
+
+4. **Hong Kong Observatory (HKO) official weather provider**:
+   - Added `'hko'` to `OfficialWeatherProviderId` type union.
+   - Routes HK by country text (`香港`/`Hong Kong`/`HK`), city/region keywords, and geo bounding box (22.15°-22.56°N, 113.82°-114.44°E).
+   - `fetchHkoOfficialWeather()` combines HKO `rhrread` (live temp/humidity/UV/rainfall from nearest station) with `fnd` (9-day daily forecast distributed across 4 display slots).
+   - HKO icon codes (50-93) mapped to WMO weather codes; Beaufort force wind text parsed to km/h; PSR mapped to rain percentage.
+   - Added 11 HK landmarks to `GEO_DICTIONARY` (airport, Victoria Peak, TST, Mong Kok, Causeway Bay, Central, Sha Tin, Lantau, Sai Kung, Disneyland, Ocean Park).
+   - Files changed: `app-compact/src/lib/weather.ts`, `app-compact/src/lib/geo.ts`.
+
+5. **Verification**: `typecheck` ✅, `build` ✅ (959ms). Commits: `a977efe`, `463421d`.
+
+### Session 36 (Codex — previous session)
+
+1. **Compact Nagoya itinerary recovery**:
+   - Root cause: the canonical `ITINERARY` still contained all six Nagoya dates (`2026-04-20` to `2026-04-25`), but `getItinerary()` trusted any non-empty active-trip `itinerary`. A backend/account sync or AI update that returned only a partial trip itinerary could therefore hide the missing days.
+   - `app-compact/src/lib/domain.ts` now repairs the default Nagoya trip by clamping display to the active trip date range, backfilling missing canonical Nagoya dates, and dropping scenery spots outside `2026-04-20` to `2026-04-25`.
+   - `app-compact/src/lib/syncMerge.ts` now deep-merges pulled trip itineraries by date. A partial remote trip can update matching dates, but it cannot erase complete local dates or keep out-of-range itinerary days.
+   - Added `Timeline restores Nagoya canonical days and hides out-of-range scenery after partial trip sync` to `app-compact/tests/timeline-smoke.spec.cjs`.
+   - Bumped Compact to `0.9.1` and synchronized `package-lock.json`.
+   - Verification passed: `npm run typecheck`, served `npm run smoke:timeline` (`9 passed`), `npm run build`, `npm run security:scan`, served `npm run smoke:mobile-layout`.
+   - GitNexus note: `node .gitnexus/run.cjs analyze` repaired the missing LadybugDB native dependency but the full analyze hung; impact was run against the existing index with repo/path disambiguation. `getItinerary` returned CRITICAL blast radius; `mergePulledTrips` returned LOW.
+
+### Session 35 (Codex — previous session)
+
+1. **Oscar console update verification and docs alignment**:
+   - Verified Oscar's pushed console work through commit `2eaaea7`: Admin Console is `0.7.0`, Compact is `0.8.7`.
+   - Admin Console now includes richer Notion/Supabase reconciliation, mirror repair, photo viewing, runtime status, sync jobs, data doctor, and identity tools.
+   - Compact sync now includes Supabase backfill/photo recovery for receipts that never reached Supabase or whose storage photo disappeared server-side.
+   - Fixed the committed `workers/credential-broker/package.json` / `package-lock.json` mismatch in commit `0caab16`.
+   - Verification passed: `app-admin-kanban` typecheck/build/smoke, `app-compact` typecheck/build/security/settings smoke, focused Supabase backfill smoke, and Credential Broker check/self-test.
+   - Live checks on 2026-07-02 returned `200` for Admin Vercel, Compact Vercel, Compact GitHub Pages, React Netlify, and Compact Netlify. GitHub Pages deploy succeeded; Compact Netlify workflow is still blocked by Netlify account credits.
+
+### Session 34 (Codex — previous session)
+
+1. **Compact console diagnostics and account-switch watchdog**:
+   - Added Settings console cards for `Account Sync Health` and `Sync Queue Inspector`.
+   - Account health now surfaces active account, scoped storage, backend target, session expiry, last push/pull age, and active trip without exposing tokens.
+   - Queue inspector shows pending/failed/oldest queue state plus sanitized queue rows and copyable diagnostics.
+   - Added a final-navigation account-switch watchdog smoke to prove Compact swaps Supabase-scoped state between backend accounts without leaking the previous account's active trip.
+   - Bumped Compact to `0.8.3`.
+
+### Session 33 (Codex — previous session)
+
+1. **Compact console/backend sync reliability polish**:
+   - Added failed-queue accounting to the Compact sync engine so console/status UI no longer reports `Queue · clear` while failed/error queue items still need attention.
+   - Hardened sync reliability by preventing overlapping pull/push operations from racing each other, and aligned the sync engine with the same effective Supabase session used for account-scoped storage.
+   - Ignored expired stored Supabase sessions during boot so stale local auth cannot make the app select a cloud account scope that is no longer valid.
+   - Updated header, Settings status pills, and Settings readiness console to show failed vs pending queue counts clearly.
+   - Added a final-navigation smoke covering failed queue visibility and retry transition back to pending.
+   - Bumped Compact to `0.8.2`.
+
+### Session 32 (Codex — previous session)
+
+1. **Splitwise roadmap Phase 0 security fix**:
+   - Reviewed `/Users/tommy/Downloads/temp can delete/travel_expense_splitwise_super_app_roadmap(1).md` and confirmed the hardcoded broker/admin passphrase finding existed in `app-compact/scripts/verify-notion-connection.mjs`.
+   - Removed the inline passphrase and made the script require `BROKER_UNLOCK_PASSWORD` or legacy `BROKER_ADMIN_PASSPHRASE` from the local environment.
+   - Updated the script to match the live Credential Broker contract: `/session/unlock` receives `{ password }`, returns a session string, and authenticated calls send `X-Travel-Session`.
+   - Rotated the live Credential Broker `APP_UNLOCK_HASH` and `APP_SESSION_SECRET`; the new unlock passphrase is stored in macOS Keychain service `travel-expense credential broker unlock`.
+   - Verified the new unlock path with `BROKER_UNLOCK_PASSWORD="$(security find-generic-password -a tommy -s 'travel-expense credential broker unlock' -w)" node app-compact/scripts/verify-notion-connection.mjs`, which passed broker health, session unlock, Notion credential status, and Notion test.
+   - Added a `security:scan` pattern for inline broker/admin passphrase assignments.
+   - Restored the Compact typecheck gate by adding the missing Node type dependency and importing the existing `AppState` type in `App.tsx`; `npm audit fix` also patched the Vite high-severity audit finding.
+   - Synced README/package-lock version drift and bumped Compact to `0.8.1`.
 
 ### Session 80 (Codex — v0.20.4 Android login redesign)
 
@@ -644,7 +1787,7 @@ Capacitor native check, so the live web app is unchanged. Branch stays off `main
    - Passed `npm audit --omit=dev`, `npm audit`, and `git diff --check`.
    - Debug APK output: `app-compact/android/app/build/outputs/apk/debug/app-debug.apk`.
 
-### Session 31 (Antigravity — current session)
+### Session 31 (Antigravity — previous session)
 
 1. **Admin Console (Phases 1-7)**:
    - Deployed the complete cyber-themed independent admin KanBan board under `app-admin-kanban/`.
@@ -923,6 +2066,9 @@ Capacitor native check, so the live web app is unchanged. Branch stays off `main
 
 ## Pending Tasks
 
+> **Historical snapshot (~Session 18 era).** The live list is "Current Open Items" at the top of
+> this file — reconcile there; do not act from this section without re-verifying.
+
 ### 🔴 HIGH PRIORITY
 1. **Reconcile Supabase migration history divergence**: The live project `fbnnjoahvtdrnigevrtw` has ~17 migrations in its `schema_migrations` table that are **not** in `supabase/migrations/`, and many repo migrations are not recorded as applied. `supabase db push` therefore refuses ("Remote migration versions not found in local migrations directory"). **Do NOT blind-push or blind-`migration repair`** — it could re-run old non-idempotent migrations on live data. Reconcile via `supabase db pull` into a branch, diff, then decide. Until then, apply single idempotent statements via the Management API (token in macOS keychain `security find-generic-password -s "Supabase CLI" -w`, `POST /v1/projects/<ref>/database/query`).
 
@@ -936,6 +2082,10 @@ Capacitor native check, so the live web app is unchanged. Branch stays off `main
 3. **Stronger private photo sharing**: Current Storage bucket uses public URLs for rendering shared receipt photos. This is functional, but a later privacy upgrade could move to signed URLs scoped by `receipt_photos` RLS.
 
 ## Bugs Pending Fix
+
+> **Historical snapshot (~Session 18 era).** New bugs go into "Current Open Items" at the top of
+> this file, then get detailed in your session entry.
+
 - _None currently known._ All bugs found in Session 18 (cross-trip settlement leak, expired-invite acceptance, Notion 2000-char truncation, unwritten `trip_accounting_people`) were fixed. The Session 16 audit's Critical/High/Medium/Low items were all addressed in Sessions 16–17. Add new entries here as they are discovered, with file + symptom + severity.
 
 ### Session 16 (MiMo Code — previous session)

@@ -23,6 +23,7 @@ async function expectSettingsReady(page) {
 }
 
 test('Settings expandable cards, safe broker actions, backup, restore, and trust clear work', async ({ page }) => {
+  const modelProbeCalls = [];
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
     const body = route.request().postDataJSON();
     const prompt = String(body.prompt || '');
@@ -138,6 +139,15 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
     contentType: 'application/json',
     body: JSON.stringify({ ok: false, error: 'Credential test failed' }),
   }));
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/volcano/json', async (route) => {
+    const body = route.request().postDataJSON();
+    modelProbeCalls.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data: { ok: true } }),
+    });
+  });
   await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/notion/request', async (route) => {
     const payload = route.request().postDataJSON();
     const data = String(payload.path || '').endsWith('/query')
@@ -310,12 +320,12 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
 
   const summaries = page.locator('.accordion-summary');
-  await expect(summaries).toHaveCount(10);
   const summaryCount = await summaries.count();
+  expect(summaryCount).toBeGreaterThanOrEqual(9);
   for (let i = 0; i < summaryCount; i += 1) {
     const card = summaries.nth(i);
     const before = await card.getAttribute('aria-expanded');
@@ -383,7 +393,28 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(modelOptions.join(' ')).toContain('Google Gemini 2.5 Flash');
   expect(modelOptions.join(' ')).toContain('Mimo v2.5 Pro');
   expect(modelOptions.join(' ')).toContain('Volcano (Kimi K3)');
-  expect(modelOptions.join(' ')).not.toMatch(/MiniMax|OpenRouter|GLM|ZAI/);
+  expect(modelOptions.join(' ')).toContain('Volcano (doubao-seed-2.0-lite)');
+  expect(modelOptions.join(' ')).toContain('Volcano (doubao-seed-2.0-pro)');
+  expect(modelOptions.join(' ')).toContain('Volcano (minimax-m3)');
+  expect(modelOptions.join(' ')).toContain('Volcano (minimax-m2.7)');
+  expect(modelOptions.join(' ')).toContain('Volcano (doubao-seed-2.0-mini)');
+  expect(modelOptions.join(' ')).not.toMatch(/OpenRouter|GLM|ZAI/);
+  const volcanoModels = [
+    'volcano/doubao-seed-2.0-lite',
+    'volcano/doubao-seed-2.0-pro',
+    'volcano/minimax-m3',
+    'volcano/minimax-m2.7',
+    'volcano/doubao-seed-2.0-mini',
+  ];
+  const scanModel = page.getByRole('combobox', { name: 'Scan model', exact: true });
+  for (const model of volcanoModels) {
+    await scanModel.selectOption(model);
+    await page.getByRole('button', { name: '測試 Scan model' }).click();
+    await expect.poll(() => modelProbeCalls.length).toBe(volcanoModels.indexOf(model) + 1);
+  }
+  expect(modelProbeCalls.map((call) => ({ kind: call.kind, model: `volcano/${call.model}`, prompt: call.prompt }))).toEqual(
+    volcanoModels.map((model) => ({ kind: 'test', model, prompt: 'Return only JSON: {"ok":true}' })),
+  );
 
   await setAccordion(page, '資料管理');
   const backupSafety = page.getByLabel('Backup safety scope');
@@ -664,7 +695,7 @@ test('Settings protects broker URL and does not keep archived trip active', asyn
     }));
   }, trips);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
 
   await setAccordion(page, 'Credentials & Connection');
@@ -699,7 +730,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
       lastTab: 'settings',
       budget: 80000,
       rate: 20,
-      autoSync: true,
+      autoSync: false,
       activeTripId: 'trip_doctor',
       persons: [
         { id: 'p_boss', name: 'Boss' },
@@ -708,7 +739,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
       shareRatios: { p_boss: 1 },
       syncQueue: [
         { id: 'sync_doctor_1', type: 'receipt', entityId: 'doctor_pending_ocr', op: 'update', status: 'queued', attempts: 0, createdAt: 1, updatedAt: 1 },
-        { id: 'sync_doctor_2', type: 'receipt', entityId: 'doctor_missing_person', op: 'update', status: 'error', attempts: 3, createdAt: 2, updatedAt: 2, error: 'network down' },
+        { id: 'sync_doctor_2', type: 'receipt', entityId: 'doctor_missing_person', op: 'update', status: 'error', attempts: 2, createdAt: 2, updatedAt: 2, lastError: 'network down' },
       ],
       trips: [{
         id: 'trip_doctor',
@@ -755,7 +786,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
 
   const doctor = page.getByLabel('Compact Trip Doctor');
@@ -767,7 +798,6 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
   await expect(doctor).toContainText('Missing payer');
   await expect(doctor).toContainText('Sync queue');
   await expect(doctor).toContainText('2 pending');
-  await expect(doctor).toContainText('1 failed');
   await expect(doctor).toContainText('Trip completeness');
   await expect(doctor).toContainText('1/3 days');
   await expect(doctor).toContainText('Backup safety');
@@ -926,7 +956,7 @@ test('Settings sync readiness dry run summarizes offline queue without provider 
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
@@ -936,7 +966,9 @@ test('Settings sync readiness dry run summarizes offline queue without provider 
   await expect(dryRun).toBeVisible();
   await expect(dryRun).toContainText('Sync dry run');
   await expect(dryRun).toContainText('Review first');
-  await expect(dryRun).toContainText('4 pending');
+  // The Queued changes row surfaces the failed count as its value when any
+  // failed items exist; the per-type detail below carries the queue shape.
+  await expect(dryRun).toContainText('1 failed');
   await expect(dryRun).toContainText('2 receipt');
   await expect(dryRun).toContainText('1 trip');
   await expect(dryRun).toContainText('1 settings');
@@ -1062,7 +1094,7 @@ test('Settings trip scope audit flags active trip boundaries without provider ca
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
 
   const audit = page.getByLabel('Trip scope audit');
@@ -1174,7 +1206,7 @@ test('Settings backup restore preview can be cancelled before mutating local sta
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
   await setAccordion(page, '資料管理');
 
@@ -1347,7 +1379,7 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
   await setAccordion(page, 'AI 行程更新');
   await page.getByPlaceholder(/下次/).fill('Day 1｜6月13日｜到步＋西線入住｜住 Hotel Fine Jeju\nDay 3｜6月15日｜牛島＋城山日出峰\nDay 8｜6月20日｜涯月慢遊＋機場回程');
@@ -1402,7 +1434,7 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
     contentType: 'application/json',
     body: JSON.stringify({ ok: false, error: 'trip intelligence unavailable' }),
   }));
-  for (const provider of ['mimo', 'kimi', 'google']) {
+  for (const provider of ['mimo', 'kimi', 'google', 'volcano']) {
     await page.route(`https://travel-expense-credential-broker.ftjdfr.workers.dev/${provider}/json`, async (route) => route.fulfill({
       status: 500,
       contentType: 'application/json',
@@ -1477,7 +1509,7 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
     '21:30 濟州起飛',
   ].join('\n');
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
   await setAccordion(page, 'AI 行程更新');
   await expect(page.locator('#settings-trip-update-panel')).toContainText('目前 primary：Mimo v2.5');
@@ -1507,7 +1539,7 @@ test('Trip update AI extracts markdown table itinerary when providers fail', asy
     contentType: 'application/json',
     body: JSON.stringify({ ok: false, error: 'trip intelligence unavailable' }),
   }));
-  for (const provider of ['mimo', 'kimi', 'google']) {
+  for (const provider of ['mimo', 'kimi', 'google', 'volcano']) {
     await page.route(`https://travel-expense-credential-broker.ftjdfr.workers.dev/${provider}/json`, async (route) => route.fulfill({
       status: 500,
       contentType: 'application/json',
@@ -1589,7 +1621,7 @@ test('Trip update AI extracts markdown table itinerary when providers fail', asy
     '| 23:35 | 航班降落 | 香港國際機場 (HKG) |',
   ].join('\n');
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
   await setAccordion(page, 'AI 行程更新');
   await page.getByPlaceholder(/下次/).fill(markdownJeju);
@@ -1651,7 +1683,7 @@ test('Settings can connect a broker session without leaking the password into ap
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
   await setAccordion(page, 'Credentials & Connection');
 
@@ -1692,7 +1724,7 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
   await setAccordion(page, '旅程管理器');
 

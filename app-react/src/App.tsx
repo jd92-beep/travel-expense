@@ -6,12 +6,13 @@ import { Shell } from './components/Shell';
 import { LoadingState } from './components/ui';
 import { Loader2 } from 'lucide-react';
 import { activeTrip, stampReceiptForTrip, stableSpotId } from './domain/trip/normalize';
+import { applyItineraryEdit, bakeItineraryOverrides } from './lib/domain';
 import { hasCredentialBrokerSession } from './lib/credentialBroker';
 import { canUseNotionMirror } from './lib/notionAccess';
 import { mergePulledData } from './lib/syncMerge';
 import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
-import { clearCredentialSession, clearStoredState } from './lib/storage';
+import { clearCredentialSession } from './lib/storage';
 import type { Receipt, SyncQueueItem, TabId, TripInviteSummary, TripProfile } from './lib/types';
 import { TAB_MANIFEST } from './lib/tabs';
 import { isBoss } from './lib/constants';
@@ -22,7 +23,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import { shouldDisableHeavyEffects } from './lib/performance';
 import { acceptSupabaseTripInvite, createSupabaseTripInvite, hasSupabaseSession, useSupabaseAuth } from './lib/supabase';
 import { SupabaseGate } from './security/SupabaseGate';
-import { clearIndexedState } from './storage/indexedDb';
 import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/WelcomeGuidePopup';
 import { upsertSupabaseTrip } from './lib/supabase';
 import { createTripProfile } from './domain/trip/normalize';
@@ -69,11 +69,13 @@ function storedSupabaseSession(): Session | null {
 export function App() {
   const supabaseAuth = useSupabaseAuth();
   const localSupabaseSession = storedSupabaseSession();
-  const effectiveSupabaseSession = supabaseAuth.session || localSupabaseSession;
+  // The stored session is only a first-paint hint while supabase-js resolves it.
+  // Once auth settles, a null session means its refresh token is no longer valid.
+  const effectiveSupabaseSession = supabaseAuth.session || (supabaseAuth.loading ? localSupabaseSession : null);
   const isCloudSyncActive = hasSupabaseSession(effectiveSupabaseSession);
   const userEmail = effectiveSupabaseSession?.user?.email || null;
   const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';
-  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope } = useAppState(isCloudSyncActive, storageScope, userEmail);
+  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, clearPersistedScope, isHydratingScope } = useAppState(isCloudSyncActive, storageScope, userEmail);
   
   const [globalOcrBusy, setGlobalOcrBusy] = useState('');
   const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
@@ -176,8 +178,7 @@ export function App() {
   const safeTab = safeTabId(tab);
   const clearSupabaseDeviceData = async () => {
     const scope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : storageScope;
-    clearStoredState(scope);
-    await clearIndexedState(scope);
+    await clearPersistedScope(scope);
     clearCredentialSession();
     await clearDeviceTrust();
   };
@@ -292,6 +293,18 @@ export function App() {
     };
   }, [effectiveSupabaseSession, isCloudSyncActive, isHydratingScope, state, pull, sync, userEmail]);
 
+  useEffect(() => {
+    if (isHydratingScope) return;
+    setState((prev) => {
+      if (!Object.keys(prev.itineraryOverrides || {}).length) return prev;
+      if (activeTrip(prev).sharing?.role === 'viewer') return prev;
+      const baked = bakeItineraryOverrides(prev);
+      if (!baked) return prev;
+      console.log('[App] Baking itinerary overrides into trip itinerary (one-shot migration)');
+      return { ...applyItineraryEdit(prev, baked), itineraryOverrides: {} };
+    });
+  }, [isHydratingScope, setState]);
+
   const changeTab = (next: TabId) => {
     const normalized = safeTabId(next);
     const currentIndex = TAB_MANIFEST.findIndex((t) => t.id === safeTab);
@@ -308,6 +321,10 @@ export function App() {
   };
 
   const importReceipts = (receipts: Receipt[]) => {
+    if (activeTrip(state).sharing?.role === 'viewer') {
+      updateState({ syncError: '你係呢個旅程嘅檢視者（viewer），冇權新增收據。' });
+      return;
+    }
     for (const receipt of receipts) {
       upsertReceipt(stampReceiptForTrip(state, receipt));
     }

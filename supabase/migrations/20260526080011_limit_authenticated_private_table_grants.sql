@@ -21,4 +21,4 @@ grant select, insert, update, delete on table public.receipts to authenticated;
 grant select, insert, update, delete on table public.receipt_items to authenticated;
 grant select, insert, update, delete on table public.receipt_photos to authenticated;
 grant select, insert, update, delete on table public.integrations to authenticated;
-grant select, insert, update, delete on table public.receipt_sync_jobs to authenticated;
+grant select, insert, update, delete on table public.receipt_sync_jobs to authenticated;;

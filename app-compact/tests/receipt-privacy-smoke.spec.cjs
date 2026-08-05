@@ -1,8 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
-const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
-
 test.use({ viewport: { width: 390, height: 844 } });
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
 const PERSONS = [
   { id: 'p_boss', name: 'A', emoji: '👤', color: '#CC2929' },

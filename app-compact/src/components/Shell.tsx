@@ -320,9 +320,10 @@ export function Shell({
         const latestDocument = new DOMParser().parseFromString(html, 'text/html');
         const latestSource = latestDocument.querySelector<HTMLScriptElement>('script[type="module"][src]')?.getAttribute('src');
         if (!latestSource) return;
-        if (new URL(latestSource, response.url).href !== loadedScript) onControllerChange();
+        const latestScript = new URL(latestSource, response.url).href;
+        if (latestScript !== loadedScript) onControllerChange();
       } catch {
-        // Advisory only: freshness discovery must not affect offline or sync state.
+        // Version discovery is advisory and must never affect offline or sync state.
       } finally {
         deploymentCheckInFlight = false;
       }
@@ -389,6 +390,16 @@ export function Shell({
   const cacheTime = Math.max(syncState?.lastSyncedAt || 0, Number(state?.settingsPulledAt || 0));
   const cacheLabel = relativeFreshness(cacheTime);
   const motionLabel = prefersReducedMotion || fxTier === 'lite' ? 'reduced' : fxTier === 'balanced' ? 'balanced' : 'rich';
+  const failedSyncCount = syncState?.failedCount || 0;
+  const pendingSyncCount = syncState?.pendingCount || 0;
+  const hasSyncProblem = syncState?.status === 'error' || failedSyncCount > 0;
+  const queueLabel = failedSyncCount
+    ? `${failedSyncCount} failed${pendingSyncCount ? ` · ${pendingSyncCount} pending` : ''}`
+    : pendingSyncCount
+      ? `${pendingSyncCount} pending`
+      : syncState?.status === 'offline'
+        ? 'paused'
+        : 'clear';
 
   useEffect(() => {
     const handlePerformanceAndEffects = () => {
@@ -504,7 +515,7 @@ export function Shell({
           <button type="button" onClick={() => location.reload()}>立即更新</button>
         </div>
       )}
-      {syncState?.status === 'error' && !updateReady && (
+      {hasSyncProblem && !updateReady && (
         <div className="top-notice text-red-700 bg-red-50 border border-red-200/60 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-300 backdrop-blur-md flex items-center justify-between gap-4 w-full" style={{ background: 'rgba(253, 240, 240, 0.95)', border: '1px solid rgba(194, 59, 94, 0.3)', color: '#A83030' }}>
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 relative">
@@ -514,9 +525,9 @@ export function Shell({
             <span className="truncate max-w-[200px] xs:max-w-xs md:max-w-md font-semibold">
               {/* An access/permission failure is NOT a connectivity problem — telling the user to
                   "check the connection" sends them chasing the wrong cause (observed live). */}
-              {/存取權/.test(syncState.error || '')
-                ? `有記帳因為權限問題未能同步。${syncState.error ? `(${syncState.error})` : ''}`
-                : '有資料同步失敗，請檢查連線或設定。'}
+              {/存取權|permission denied|row-level security|\bRLS\b|42501/i.test(syncState?.error || '')
+                ? `有記帳因為權限問題未能同步。${failedSyncCount ? `${failedSyncCount} 筆受影響。` : ''}${syncState?.error ? `(${syncState.error})` : ''}`
+                : `有資料同步失敗，請檢查連線或設定。${failedSyncCount ? `${failedSyncCount} 筆待重試。` : ''}`}
             </span>
           </div>
           {onRetryFailed && (
@@ -604,7 +615,7 @@ export function Shell({
           ) : null}
         </div>
         {syncState && (
-          <div className={`compact-sync-slot relative z-10 ${syncState.status === 'error' ? 'has-error' : 'is-quiet'}`}>
+          <div className={`compact-sync-slot relative z-10 ${hasSyncProblem ? 'has-error' : 'is-quiet'}`}>
             <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} />
           </div>
         )}
@@ -673,9 +684,9 @@ export function Shell({
             {online ? <Wifi size={13} /> : <WifiOff size={13} />}
             Network · {online ? 'online' : 'offline'}
           </span>
-          <span className={`pwa-chip ${syncState?.pendingCount ? 'warning' : syncState?.status === 'error' ? 'danger' : 'ok'}`}>
+          <span className={`pwa-chip ${failedSyncCount ? 'danger' : pendingSyncCount ? 'warning' : syncState?.status === 'error' ? 'danger' : 'ok'}`}>
             <Archive size={13} />
-            Queue · {syncState?.pendingCount ? `${syncState.pendingCount} pending` : syncState?.status === 'offline' ? 'paused' : 'clear'}
+            Queue · {queueLabel}
           </span>
           {installReady && (
             <button className="pwa-chip install" type="button" onClick={handleInstallClick}>

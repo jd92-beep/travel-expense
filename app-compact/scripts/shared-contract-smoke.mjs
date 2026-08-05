@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
@@ -8,10 +9,11 @@ const compactDir = resolve(scriptDir, '..');
 const repoRoot = resolve(compactDir, '..');
 const reactDir = resolve(repoRoot, 'app-react');
 
-const compactUrl = process.env.COMPACT_SHARED_CONTRACT_COMPACT_URL || 'http://127.0.0.1:8913/travel-expense/compact/';
-const reactUrl = process.env.COMPACT_SHARED_CONTRACT_REACT_URL || 'http://127.0.0.1:8914/travel-expense/react/';
+let compactUrl = process.env.COMPACT_SHARED_CONTRACT_COMPACT_URL || 'http://127.0.0.1:8913/travel-expense/compact/';
+let reactUrl = process.env.COMPACT_SHARED_CONTRACT_REACT_URL || 'http://127.0.0.1:8914/travel-expense/react/';
 const userId = '55555555-5555-4555-8555-555555555555';
 const storageKey = 'boss-japan-tracker';
+const scopedStorageKey = `${storageKey}:state:supabase:${userId}`;
 
 const fixture = {
   schemaVersion: 4,
@@ -31,6 +33,7 @@ const fixture = {
       date: '2026-07-11',
       time: '12:30',
       category: 'food',
+      recordKind: 'expense',
       payment: 'credit',
       region: 'Seoul',
       regionSnapshot: 'Seoul',
@@ -40,6 +43,9 @@ const fixture = {
       itemsText: 'Bibimbap; market snacks',
       personId: 'p_boss',
       splitMode: 'shared',
+      splitType: 'exact',
+      splits: [{ personId: 'p_boss', amount: 18000 }, { personId: 'p_xinxin', amount: 18000 }],
+      payers: [{ personId: 'p_boss', amount: 36000 }],
       tripId: 'contract_trip_korea',
       tripVersion: 3,
       tripDayId: 'contract_trip_korea_day_20260711',
@@ -48,6 +54,8 @@ const fixture = {
       source: 'email',
       sourceId: 'email_contract_food_20260711',
       ownerId: userId,
+      version: 4,
+      syncRevision: 101,
       createdByLabel: 'You',
       ledgerSyncStatus: 'queued',
       createdAt: 1_780_000_100_000,
@@ -64,19 +72,55 @@ const fixture = {
       exchangeRate: 175.5,
       date: '2026-07-12',
       category: 'shopping',
+      recordKind: 'expense',
       payment: 'cash',
       personId: 'p_trip_3',
       beneficiaryId: 'p_trip_3',
       splitMode: 'private',
+      splitType: 'exact',
+      splits: [{ personId: 'p_trip_3', amount: 64000 }],
+      payers: [{ personId: 'p_trip_3', amount: 64000 }],
+      visibility: 'private',
       tripId: 'contract_trip_korea',
       tripVersion: 3,
       syncStatus: 'local',
       sourceId: 'manual_contract_private_20260712',
       ownerId: '66666666-6666-4666-8666-666666666666',
+      version: 2,
+      syncRevision: 102,
       createdByLabel: 'Trip member',
       ledgerSyncStatus: 'synced',
       createdAt: 1_780_010_100_000,
       updatedAt: 1_780_010_200_000,
+    },
+    {
+      id: 'contract_receipt_settlement',
+      supabaseId: '00000000-0000-4000-8000-000000000103',
+      store: 'Settle up',
+      total: 5000,
+      originalAmount: 5000,
+      originalCurrency: 'KRW',
+      currency: 'KRW',
+      hkdAmount: 28,
+      exchangeRate: 175.5,
+      rateSource: 'fixture',
+      date: '2026-07-13',
+      category: 'other',
+      recordKind: 'settlement',
+      isSettlement: true,
+      payment: 'cash',
+      personId: 'p_xinxin',
+      beneficiaryId: 'p_boss',
+      splitMode: 'shared',
+      splitType: 'exact',
+      splits: [{ personId: 'p_boss', amount: 5000 }],
+      payers: [{ personId: 'p_xinxin', amount: 5000 }],
+      tripId: 'contract_trip_korea',
+      sourceId: 'settlement_contract_20260713',
+      version: 1,
+      syncRevision: 103,
+      createdAt: 1_780_020_100_000,
+      updatedAt: 1_780_020_200_000,
     },
   ],
   budget: 2_500_000,
@@ -211,6 +255,16 @@ const fixture = {
   top10IncludeBigItems: false,
   lastTab: 'dashboard',
   notionDeletedSourceIds: ['email_old_deleted_source'],
+  receiptTombstones: {
+    'contract_trip_korea::email_deleted_contract': {
+      supabaseId: '00000000-0000-4000-8000-000000000109',
+      sourceId: 'email_deleted_contract',
+      tripId: 'contract_trip_korea',
+      version: 3,
+      syncRevision: 104,
+      deletedAt: 1_780_030_000_000,
+    },
+  },
   syncQueue: [
     {
       id: 'sync_contract_receipt_food',
@@ -226,6 +280,8 @@ const fixture = {
         supabaseId: '00000000-0000-4000-8000-000000000101',
         tripId: 'contract_trip_korea',
         sourceId: 'email_contract_food_20260711',
+        version: 4,
+        syncRevision: 101,
         updatedAt: 1_780_000_200_000,
       },
     },
@@ -291,12 +347,40 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function probe(url) {
+function waitForClose(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const finish = (closed) => {
+      clearTimeout(timeout);
+      child.off('close', onClose);
+      resolve(closed);
+    };
+    const onClose = () => finish(true);
+    const timeout = setTimeout(() => finish(false), timeoutMs);
+    child.once('close', onClose);
+  });
+}
+
+async function stopServer(child, label) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  const gracefulClose = waitForClose(child, 5_000);
+  child.kill('SIGTERM');
+  if (await gracefulClose) return;
+
+  console.warn(`[shared-contract] ${label} ignored SIGTERM; sending SIGKILL`);
+  const forcedClose = waitForClose(child, 1_000);
+  child.kill('SIGKILL');
+  if (!await forcedClose) throw new Error(`[shared-contract] ${label} did not close after SIGKILL`);
+}
+
+async function probe(url, expectedMarker) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 900);
   try {
     const response = await fetch(url, { signal: controller.signal });
-    return response.ok;
+    if (!response.ok) return false;
+    const html = await response.text();
+    return html.includes(expectedMarker);
   } catch {
     return false;
   } finally {
@@ -304,13 +388,40 @@ async function probe(url) {
   }
 }
 
-async function ensureServer({ name, cwd, url, port, base }) {
-  if (await probe(url)) {
-    console.log(`[shared-contract] using existing ${name} server at ${url}`);
-    return null;
+async function portIsAvailable(port) {
+  return await new Promise((resolveAvailable) => {
+    const server = createServer();
+    server.unref();
+    server.once('error', () => resolveAvailable(false));
+    server.listen({ host: '127.0.0.1', port }, () => {
+      server.close(() => resolveAvailable(true));
+    });
+  });
+}
+
+async function nextAvailableUrl(url, startPort) {
+  const target = new URL(url);
+  for (let port = startPort; port < startPort + 50; port += 1) {
+    if (await portIsAvailable(port)) {
+      target.port = String(port);
+      return target.toString();
+    }
   }
-  const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const server = spawn(npx, ['vite', '--host', '127.0.0.1', '--port', String(port)], {
+  throw new Error(`No free shared-contract test port found from ${startPort}`);
+}
+
+async function ensureServer({ name, cwd, url, port, base, expectedMarker, allowPortFallback }) {
+  if (await probe(url, expectedMarker)) {
+    console.log(`[shared-contract] using existing ${name} server at ${url}`);
+    return { process: null, url };
+  }
+  const targetUrl = allowPortFallback ? await nextAvailableUrl(url, port) : url;
+  if (!allowPortFallback && !(await portIsAvailable(Number(new URL(url).port)))) {
+    throw new Error(`${name} server at ${url} does not match ${expectedMarker}`);
+  }
+  const targetPort = Number(new URL(targetUrl).port);
+  const viteCli = resolve(cwd, 'node_modules', 'vite', 'bin', 'vite.js');
+  const server = spawn(process.execPath, [viteCli, '--host', '127.0.0.1', '--port', String(targetPort), '--strictPort'], {
     cwd,
     env: safeEnv({ FORCE_COLOR: '0', VITE_BASE_PATH: base }),
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -318,18 +429,22 @@ async function ensureServer({ name, cwd, url, port, base }) {
   let output = '';
   server.stdout.on('data', (chunk) => { output += String(chunk); });
   server.stderr.on('data', (chunk) => { output += String(chunk); });
-  for (let i = 0; i < 160; i += 1) {
-    if (server.exitCode !== null) {
-      throw new Error(`${name} server exited early with code ${server.exitCode}\n${output.slice(-2000)}`);
+  try {
+    for (let i = 0; i < 160; i += 1) {
+      if (server.exitCode !== null) {
+        throw new Error(`${name} server exited early with code ${server.exitCode}\n${output.slice(-2000)}`);
+      }
+      if (await probe(targetUrl, expectedMarker)) {
+        console.log(`[shared-contract] started ${name} server at ${targetUrl}`);
+        return { process: server, url: targetUrl };
+      }
+      await delay(250);
     }
-    if (await probe(url)) {
-      console.log(`[shared-contract] started ${name} server at ${url}`);
-      return server;
-    }
-    await delay(250);
+    throw new Error(`Timed out waiting for ${name} server at ${targetUrl}\n${output.slice(-2000)}`);
+  } catch (error) {
+    await stopServer(server, `owned ${name} server`);
+    throw error;
   }
-  server.kill('SIGTERM');
-  throw new Error(`Timed out waiting for ${name} server at ${url}\n${output.slice(-2000)}`);
 }
 
 function stable(value) {
@@ -472,7 +587,15 @@ function summarizeState(state) {
       itemsText: optionalText(receipt.itemsText),
       personId: receipt.personId,
       splitMode: receipt.splitMode,
+      splitType: receipt.splitType,
+      splits: receipt.splits || [],
+      payers: receipt.payers || [],
       beneficiaryId: receipt.beneficiaryId,
+      visibility: receipt.visibility,
+      version: receipt.version,
+      syncRevision: receipt.syncRevision,
+      recordKind: receipt.recordKind,
+      isSettlement: !!receipt.isSettlement,
       ownerId: optionalText(receipt.ownerId),
       createdByEmail: optionalText(receipt.createdByEmail),
       createdByLabel: optionalText(receipt.createdByLabel),
@@ -486,7 +609,8 @@ function summarizeState(state) {
       updatedAt: receipt.updatedAt,
     })),
     notionDeletedSourceIds: state.notionDeletedSourceIds || [],
-    settingsUpdatedAt: state.settingsUpdatedAt,
+    receiptTombstones: state.receiptTombstones || {},
+    settingsUpdatedAtAdvanced: Number(state.settingsUpdatedAt) > Number(fixture.settingsUpdatedAt),
     settingsPulledAt: state.settingsPulledAt,
     displayCurrency: state.displayCurrency,
   });
@@ -536,7 +660,7 @@ async function collectNormalizedState(browser, target) {
       body: JSON.stringify({ ok: true, rates: { JPY: 20, KRW: 175.5, HKD: 1 }, source: 'contract-stub' }),
     });
   });
-  await page.addInitScript(({ fixture: input, storageKey: key, userId: uid }) => {
+  await page.addInitScript(({ fixture: input, storageKey: key, scopedStorageKey: scopedKey, userId: uid }) => {
     localStorage.clear();
     indexedDB.deleteDatabase('travel-expense-react');
     window.__disable_supabase_configured = true;
@@ -554,24 +678,27 @@ async function collectNormalizedState(browser, target) {
       },
     }));
     localStorage.setItem(key, JSON.stringify(input));
-  }, { fixture, storageKey, userId });
+    localStorage.setItem(scopedKey, JSON.stringify(input));
+  }, { fixture, storageKey, scopedStorageKey, userId });
   await page.goto(target.url);
-  await page.waitForFunction((key) => {
+  await page.waitForFunction(({ key, initialSettingsUpdatedAt }) => {
     const raw = localStorage.getItem(key);
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw);
       return parsed?.activeTripId === 'contract_trip_korea'
         && Array.isArray(parsed.trips)
-        && parsed.trips[0]?.itinerary?.[0]?.dayId
+        && parsed.trips[0]?.itinerary?.length === 3
+        && parsed.trips[0]?.itinerary?.every((day) => day?.dayId)
+        && Object.keys(parsed.itineraryOverrides || {}).length === 0
+        && Number(parsed.settingsUpdatedAt) > Number(initialSettingsUpdatedAt)
         && Array.isArray(parsed.receipts)
-        && parsed.receipts.length === 2;
+        && parsed.receipts.length === 3;
     } catch {
       return false;
     }
-  }, storageKey, { timeout: 15_000 });
-  await page.waitForTimeout(350);
-  const state = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '{}'), storageKey);
+  }, { key: target.stateKey, initialSettingsUpdatedAt: fixture.settingsUpdatedAt }, { timeout: 15_000 });
+  const state = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '{}'), target.stateKey);
   await page.close();
   return state;
 }
@@ -596,36 +723,50 @@ const startedServers = [];
 let browser;
 
 try {
-  startedServers.push(await ensureServer({
+  const compactServer = await ensureServer({
     name: 'compact',
     cwd: compactDir,
     url: compactUrl,
     port: 8913,
     base: '/travel-expense/compact/',
-  }));
-  startedServers.push(await ensureServer({
+    expectedMarker: '<title>旅費 Compact</title>',
+    allowPortFallback: !process.env.COMPACT_SHARED_CONTRACT_COMPACT_URL,
+  });
+  compactUrl = compactServer.url;
+  startedServers.push(compactServer.process);
+
+  const reactServer = await ensureServer({
     name: 'react',
     cwd: reactDir,
     url: reactUrl,
     port: 8914,
     base: '/travel-expense/react/',
-  }));
+    expectedMarker: '<title>旅費 React Fresh</title>',
+    allowPortFallback: !process.env.COMPACT_SHARED_CONTRACT_REACT_URL,
+  });
+  reactUrl = reactServer.url;
+  startedServers.push(reactServer.process);
 
   browser = await chromium.launch();
   const compactState = await collectNormalizedState(browser, {
     name: 'compact',
     url: compactUrl,
     origin: new URL(compactUrl).origin,
+    stateKey: scopedStorageKey,
   });
   const reactState = await collectNormalizedState(browser, {
     name: 'react',
     url: reactUrl,
     origin: new URL(reactUrl).origin,
+    stateKey: storageKey,
   });
 
   const compactSummary = summarizeState(compactState);
   const reactSummary = summarizeState(reactState);
   assertDeepEqual('shared storage contract', compactSummary, reactSummary);
+  if (!compactSummary.settingsUpdatedAtAdvanced || !reactSummary.settingsUpdatedAtAdvanced) {
+    throw new Error('itinerary override migration did not advance settingsUpdatedAt on both clients');
+  }
   const compactSchemaVersion = assertCompatibleSchema('compact', compactState);
   const reactSchemaVersion = assertCompatibleSchema('react', reactState);
 
@@ -661,12 +802,14 @@ try {
       'supabaseMetadata',
       'tripSharingMetadata',
       'receiptOwnershipMetadata',
+      'receiptVersionAndTombstoneMetadata',
+      'receiptRecordKindAndSplitMetadata',
     ],
     compactOnlyPreserved: compactExtras,
   }, null, 2));
 } finally {
   if (browser) await browser.close();
   for (const server of startedServers.reverse()) {
-    if (server) server.kill('SIGTERM');
+    if (server) await stopServer(server, 'owned dev server');
   }
 }

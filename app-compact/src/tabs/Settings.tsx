@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, Cloud, Copy, Download, KeyRound, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, Cloud, Copy, Download, FlaskConical, KeyRound, LoaderCircle, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useMemo, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
@@ -44,14 +44,14 @@ import {
 } from '../lib/notion';
 import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
 import { receiptSourceTombstoneKey } from '../lib/syncMerge';
-import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, RecurringRule, SyncEngineState, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, RecurringRule, SyncEngineState, SyncQueueItem, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
 import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
 import { createSupabaseTripInvite, inviteLinkForToken, leaveSupabaseTrip, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { GlassCard, SegmentedControl, StatefulActionButton, StatusPill, Toast } from '../components/ui';
-import { GradientButton } from '../components/ui/gradient-button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
+import { GradientButton } from '../components/ui/gradient-button';
 import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
 
@@ -172,6 +172,16 @@ function inclusiveTripDayCount(trip: TripProfile): number {
   return Math.max(1, Math.round((end - start) / 86_400_000) + 1);
 }
 
+function syncQueueSummary(queue: SyncQueueItem[] = []) {
+  const active = queue.filter((item) => item.status !== 'synced');
+  const failed = active.filter((item) => item.status === 'error' || item.status === 'failed');
+  return {
+    active,
+    failed,
+    pending: active.filter((item) => item.status !== 'error' && item.status !== 'failed'),
+  };
+}
+
 function compactTripDoctor(
   state: AppState,
   trip: TripProfile,
@@ -190,10 +200,10 @@ function compactTripDoctor(
   const unsyncedPhotos = tripReceipts.filter(receiptPhotoNeedsSync).length;
   const attachmentIssues = largePhotos + missingPhotos + unsyncedPhotos;
   const dataIssues = pendingOcr + missingPayer;
-  const queue = state.syncQueue || [];
-  const pendingQueue = Math.max(syncState?.pendingCount || 0, queue.filter((item) => item.status !== 'synced').length);
-  const queueFailures = queue.filter((item) => item.status === 'error' || item.status === 'failed').length;
-  const failedQueue = queueFailures || (syncState?.status === 'error' ? 1 : 0);
+  const queue = syncQueueSummary(state.syncQueue);
+  const pendingQueue = Math.max(syncState?.pendingCount || 0, queue.pending.length);
+  const failedQueueCount = Math.max(syncState?.failedCount || 0, queue.failed.length);
+  const failedQueue = failedQueueCount + (syncState?.status === 'error' && !failedQueueCount ? 1 : 0);
   const expectedDays = inclusiveTripDayCount(trip);
   const plannedDates = new Set((trip.itinerary || []).map((day) => day.date).filter(Boolean));
   const plannedDays = Math.min(expectedDays, Math.max(0, plannedDates.size || (trip.itinerary?.length || 0)));
@@ -215,8 +225,8 @@ function compactTripDoctor(
       {
         key: 'sync',
         title: 'Sync queue',
-        value: pendingQueue ? `${pendingQueue} pending` : 'Clear',
-        detail: failedQueue ? `${failedQueue} failed · ${storageLabel}` : storageLabel,
+        value: failedQueue ? `${failedQueue} failed` : pendingQueue ? `${pendingQueue} pending` : 'Clear',
+        detail: [pendingQueue ? `${pendingQueue} pending` : '', storageLabel].filter(Boolean).join(' · '),
       },
       {
         key: 'attachments',
@@ -245,6 +255,60 @@ function compactTripDoctor(
 function aiModelLabel(modelId: string | undefined): string {
   const id = modelId || DEFAULT_KIMI_PRIMARY_MODEL_ID;
   return AI_MODELS.find((model) => model.id === id)?.name || id;
+}
+
+function AiModelField({
+  label,
+  value,
+  state,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  state: AppState;
+  onChange: (value: string) => void;
+}) {
+  const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+  const runTest = async () => {
+    setStatus('testing');
+    setMessage('測試中');
+    try {
+      const modelName = await testAiModel(state, value);
+      setStatus('success');
+      setMessage(`${modelName} 可用`);
+    } catch (error) {
+      setStatus('error');
+      setMessage(`未能使用：${redactedError(error)}`);
+    }
+  };
+  return (
+    <div className="ai-model-field">
+      <label>{label}
+        <select
+          value={value}
+          onChange={(event) => {
+            setStatus('idle');
+            setMessage('');
+            onChange(event.target.value);
+          }}
+        >
+          {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="secondary compact ai-model-test-button"
+        aria-label={`測試 ${label}`}
+        disabled={status === 'testing'}
+        onClick={() => void runTest()}
+      >
+        {status === 'testing' ? <LoaderCircle size={16} className="spin" /> : <FlaskConical size={16} />}
+        測試
+      </button>
+      <small className={`ai-model-test-status ${status}`} aria-live="polite">{message}</small>
+    </div>
+  );
 }
 
 function tripDraftPreviewStats(draft: TripDraft) {
@@ -555,10 +619,10 @@ function buildDiagnosticsPreview(
   storageScope: string,
 ): DiagnosticsPreview {
   const tripReceipts = scopedReceiptsForTrip(state, trip);
-  const queue = state.syncQueue || [];
-  const pendingQueue = queue.filter((item) => item.status !== 'synced');
-  const failedQueue = pendingQueue.filter((item) => item.status === 'error' || item.status === 'failed');
-  const deleteQueue = pendingQueue.filter((item) => item.op === 'delete' || item.type === 'delete-receipt');
+  const queue = syncQueueSummary(state.syncQueue);
+  const failedQueue = queue.failed;
+  const pendingQueue = queue.pending;
+  const deleteQueue = queue.active.filter((item) => item.op === 'delete' || item.type === 'delete-receipt');
   const validPersonIds = new Set(persons.map((person) => person.id));
   const categories = tripReceipts.reduce<Record<string, number>>((counts, receipt) => {
     const label = categoryById(receipt.category).name || 'Other';
@@ -625,7 +689,7 @@ function buildDiagnosticsPreview(
     },
     checks: [
       { label: 'Trip scope', status: tripReceipts.length === (state.receipts || []).length ? 'single-trip' : 'multi-trip', detail: `${tripReceipts.length} current-trip receipts` },
-      { label: 'Sync queue', status: pendingQueue.length ? 'pending' : 'clear', detail: `${failedQueue.length} failed · ${deleteQueue.length} delete queued` },
+      { label: 'Sync queue', status: failedQueue.length ? 'failed' : pendingQueue.length ? 'pending' : 'clear', detail: `${pendingQueue.length} pending · ${failedQueue.length} failed · ${deleteQueue.length} delete queued` },
       { label: 'Data quality', status: pendingOcr + missingPayer + syncErrors ? 'review' : 'clean', detail: `${pendingOcr} pending OCR · ${missingPayer} missing payer · ${syncErrors} sync errors` },
       { label: 'Backup safety', status: 'safe-preview', detail: 'No raw IDs, tokens, photos, or queue payloads included' },
     ],
@@ -706,6 +770,19 @@ function formatSyncAge(timestamp: number): string {
   return `${Math.floor(hours / 24)}d old`;
 }
 
+function formatSessionExpiry(expiresAt: number): string {
+  if (!expiresAt || !Number.isFinite(expiresAt)) return 'none';
+  const leftMs = expiresAt - Date.now();
+  if (leftMs <= 0) return 'expired';
+  const minutes = Math.ceil(leftMs / 60_000);
+  if (minutes < 60) return `${minutes}m left`;
+  return `${Math.ceil(minutes / 60)}h left`;
+}
+
+function shortId(value: string): string {
+  return value && value.length > 14 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value || 'none';
+}
+
 function buildSyncReadinessDryRun(
   state: AppState,
   trip: TripProfile,
@@ -717,7 +794,7 @@ function buildSyncReadinessDryRun(
 ) {
   const tripReceipts = scopedReceiptsForTrip(state, trip);
   const tripReceiptIds = new Set(tripReceipts.map((receipt) => receipt.id));
-  const queue = (state.syncQueue || []).filter((item) => item.status !== 'synced');
+  const queue = syncQueueSummary(state.syncQueue).active;
   const relevantQueue = queue.filter((item) => (
     item.type === 'settings'
     || item.entityId === trip.id
@@ -725,6 +802,7 @@ function buildSyncReadinessDryRun(
     || tripReceiptIds.has(item.entityId)
   ));
   const failedQueue = relevantQueue.filter((item) => item.status === 'error' || item.status === 'failed');
+  const pendingQueue = relevantQueue.filter((item) => item.status !== 'error' && item.status !== 'failed');
   const destructiveQueue = relevantQueue.filter((item) => item.op === 'delete' || item.type === 'delete-receipt');
   const receiptQueue = relevantQueue.filter((item) => item.type === 'receipt' || item.type === 'delete-receipt');
   const tripQueue = relevantQueue.filter((item) => item.type === 'trip');
@@ -760,8 +838,8 @@ function buildSyncReadinessDryRun(
     items: [
       {
         key: 'pending',
-        title: 'Pending changes',
-        value: relevantQueue.length ? `${relevantQueue.length} pending` : 'None',
+        title: 'Queued changes',
+        value: failedQueue.length ? `${failedQueue.length} failed` : pendingQueue.length ? `${pendingQueue.length} pending` : 'None',
         detail: `${receiptQueue.length} receipt · ${tripQueue.length} trip · ${settingsQueue.length} settings`,
       },
       {
@@ -853,6 +931,8 @@ export function Settings({
   onPushSettings,
   cloudSyncAvailable = false,
   storageScope = 'local',
+  supabaseAccountId = '',
+  supabaseSessionExpiresAt = 0,
   changeTab,
   updatePassword,
   userEmail = null,
@@ -869,6 +949,8 @@ export function Settings({
   onPushSettings?: () => Promise<void>;
   cloudSyncAvailable?: boolean;
   storageScope?: string;
+  supabaseAccountId?: string;
+  supabaseSessionExpiresAt?: number;
   changeTab?: (tabId: any) => void;
   updatePassword?: (password: string) => Promise<void>;
   userEmail?: string | null;
@@ -948,18 +1030,6 @@ export function Settings({
   const [newRuleNextRun, setNewRuleNextRun] = useState(() => todayYmd());
   const tripUpdateModelId = state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
   const tripUpdateModelName = aiModelLabel(tripUpdateModelId);
-  const testSelectedAiModel = async (label: string, selectedModel: string) => {
-    setBusy(`測試 ${label} model`);
-    setStatus('');
-    try {
-      const modelName = await testAiModel(state, selectedModel);
-      setStatus(`${label} model 連線正常：${modelName}`);
-    } catch (error) {
-      setStatus(`${label} model 測試失敗：${redactedError(error)}`);
-    } finally {
-      setBusy('');
-    }
-  };
   const tripPreviewStats = tripDraft ? tripDraftPreviewStats(tripDraft) : null;
   const tripReviewDraft = editableTripDraft || tripDraft;
   const tripReviewStats = tripReviewDraft ? tripDraftPreviewStats(tripReviewDraft) : null;
@@ -1113,6 +1183,46 @@ export function Settings({
   const tripDoctor = useMemo(() => compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope), [state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope]);
   const syncReadiness = useMemo(() => buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope), [state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope]);
   const tripScopeAudit = useMemo(() => buildTripScopeAudit(state, currentTrip), [state, currentTrip]);
+  const failedSyncCount = syncState?.failedCount || 0;
+  const pendingSyncCount = syncState?.pendingCount || 0;
+  const syncPillTone = syncState?.status === 'error' || failedSyncCount ? 'danger' : pendingSyncCount ? 'warning' : 'ok';
+  const syncPillDetail = failedSyncCount
+    ? ` · ${failedSyncCount} failed${pendingSyncCount ? ` · ${pendingSyncCount} pending` : ''}`
+    : pendingSyncCount
+      ? ` · ${pendingSyncCount}`
+      : '';
+  const queueSummary = syncQueueSummary(state.syncQueue);
+  const queuePendingCount = Math.max(pendingSyncCount, queueSummary.pending.length);
+  const queueFailedCount = Math.max(failedSyncCount, queueSummary.failed.length);
+  const syncTarget = cloudSyncAvailable ? (notionMirrorReady ? 'Supabase + Notion' : 'Supabase only') : (brokerReady ? 'Broker / Notion' : storageScope);
+  const storageAccountId = storageScope.startsWith('supabase:') ? storageScope.slice('supabase:'.length) : '';
+  const accountSyncHealth = [
+    { key: 'account', title: 'Account', value: userEmail ? 'Signed in' : 'Local device', detail: userEmail || shortId(supabaseAccountId || storageAccountId) },
+    { key: 'session', title: 'Session', value: cloudSyncAvailable ? formatSessionExpiry(supabaseSessionExpiresAt) : 'Local', detail: brokerReady ? 'Broker active' : 'Broker missing' },
+    { key: 'storage', title: 'Storage scope', value: storageAccountId ? 'Supabase scoped' : 'Local', detail: storageAccountId ? shortId(storageAccountId) : storageScope },
+    { key: 'backend', title: 'Backend target', value: syncTarget, detail: syncState?.status || state.globalSyncStatus || 'local' },
+    { key: 'trip', title: 'Active trip', value: currentTrip.name || 'Current trip', detail: shortId(currentTrip.id || state.activeTripId || '') },
+    { key: 'push', title: 'Last push', value: formatSyncAge(syncState?.lastSyncedAt || state.lastSyncedAt || 0), detail: `${queuePendingCount} pending · ${queueFailedCount} failed` },
+    { key: 'pull', title: 'Last pull', value: formatSyncAge(state.settingsPulledAt || 0), detail: `Auto sync ${state.autoSync ? 'on' : 'off'}` },
+  ];
+  const activeQueue = queueSummary.active;
+  const queueReportText = JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    storageScope,
+    account: userEmail || shortId(supabaseAccountId || storageAccountId),
+    syncStatus: syncState?.status || state.globalSyncStatus || 'local',
+    pending: queuePendingCount,
+    failed: queueFailedCount,
+    queue: activeQueue.map((item) => ({
+      type: item.type,
+      op: item.op,
+      status: item.status,
+      attempts: item.attempts,
+      age: formatSyncAge(item.updatedAt || item.createdAt),
+      entity: shortId(item.entityId),
+      error: item.error || '',
+    })),
+  }, null, 2);
 
   // Local state for Trip Manager
   const [managerTripId, setManagerTripId] = useState(currentTrip.id);
@@ -1683,8 +1793,13 @@ export function Settings({
   }
 
   function saveLocalSettingsNow() {
-    saveState(migrateAppState(state), storageScope);
-    setStatus('本機設定已保存；provider credentials/session 已自動排除。');
+    try {
+      saveState(migrateAppState(state), storageScope);
+      setStatus('本機設定已保存；provider credentials/session 已自動排除。');
+    } catch (error) {
+      console.warn('[Settings] local settings write failed:', error instanceof Error ? error.message : String(error));
+      setStatus('localStorage 未能寫入；已嘗試 IndexedDB 安全 fallback。');
+    }
   }
 
   async function pullPendingEmail() {
@@ -1972,6 +2087,7 @@ export function Settings({
         }
       }
 
+      const currentQueue = prev.syncQueue || [];
       patch.receiptTombstones = {
         ...(prev.receiptTombstones || {}),
         ...Object.fromEntries(deletedReceipts.map((receipt) => {
@@ -2002,7 +2118,7 @@ export function Settings({
           syncRevision: receipt.syncRevision,
           updatedAt: receipt.updatedAt,
         },
-      }), enqueueChange(prev.syncQueue, {
+      }), enqueueChange(currentQueue, {
         type: 'trip',
         entityId: managerTripId,
         op: 'update',
@@ -2178,6 +2294,10 @@ export function Settings({
     }
   }
 
+  async function copyQueueReport() {
+    await copyText(queueReportText, '已複製 sync queue report');
+  }
+
   async function importBackup(file?: File) {
     if (!file) return;
     try {
@@ -2238,9 +2358,9 @@ export function Settings({
               {syncState && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span><StatusPill tone={syncState.status === 'error' ? 'danger' : syncState.pendingCount ? 'warning' : 'ok'}><Cloud size={14} /> Sync {syncState.status}{syncState.pendingCount ? ` · ${syncState.pendingCount}` : ''}</StatusPill></span>
+                    <span><StatusPill tone={syncPillTone}><Cloud size={14} /> Sync {syncState.status}{syncPillDetail}</StatusPill></span>
                   </TooltipTrigger>
-                  <TooltipContent>雲端同步狀態與等待上傳隊列</TooltipContent>
+                  <TooltipContent>雲端同步狀態、等待上傳隊列與失敗重試數</TooltipContent>
                 </Tooltip>
               )}
               <Tooltip>
@@ -2339,10 +2459,74 @@ export function Settings({
             </button>
           </div>
         </section>
-      </GlassCard>)}
+	      </GlassCard>)}
 
-      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${tripScopeAudit.tone}`}>
-        <section role="region" aria-label="Trip scope audit">
+	      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${queueFailedCount ? 'warning' : 'ok'}`}>
+	        <section role="region" aria-label="Account Sync Health">
+	          <div className="settings-trip-doctor-head">
+	            <span><Server size={16} /> Account Sync Health</span>
+	            <strong>{queueFailedCount ? `${queueFailedCount} failed` : syncState?.status || 'local'}</strong>
+	          </div>
+	          <div className="settings-trip-doctor-grid">
+	            {accountSyncHealth.map((item) => (
+	              <div className="settings-trip-doctor-item" key={item.key}>
+	                <span>{item.title}</span>
+	                <strong>{item.value}</strong>
+	                <small>{item.detail}</small>
+	              </div>
+	            ))}
+	          </div>
+	        </section>
+	      </GlassCard>)}
+
+	      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${queueFailedCount ? 'warning' : 'ok'}`}>
+	        <section role="region" aria-label="Sync Queue Inspector">
+	          <div className="settings-trip-doctor-head">
+	            <span><Cloud size={16} /> Sync Queue Inspector</span>
+	            <strong>{activeQueue.length ? `${activeQueue.length} active` : 'clear'}</strong>
+	          </div>
+	          <div className="settings-trip-doctor-grid">
+	            <div className="settings-trip-doctor-item">
+	              <span>Pending</span>
+	              <strong>{queuePendingCount}</strong>
+	              <small>Ready for retry</small>
+	            </div>
+	            <div className="settings-trip-doctor-item">
+	              <span>Failed</span>
+	              <strong>{queueFailedCount}</strong>
+	              <small>{syncState?.error || 'No engine error'}</small>
+	            </div>
+	            <div className="settings-trip-doctor-item">
+	              <span>Oldest</span>
+	              <strong>{activeQueue[0] ? formatSyncAge(activeQueue[0].createdAt) : 'none'}</strong>
+	              <small>{activeQueue[0]?.type || 'Queue clear'}</small>
+	            </div>
+	          </div>
+	          <div className="mini-list" aria-label="Sync Queue Inspector Items">
+	            {activeQueue.slice(0, 6).map((item) => (
+	              <span key={item.id}>{item.type} · {item.op} · {item.status} · {item.attempts} tries · {shortId(item.entityId)}</span>
+	            ))}
+	            {!activeQueue.length && <span>Queue clear</span>}
+	          </div>
+	          <div className="settings-trip-doctor-actions">
+	            <button type="button" disabled={!onPush || !activeQueue.length} onClick={() => void onPush?.()}>
+	              <RotateCcw size={14} />
+	              <span>Retry queue</span>
+	            </button>
+	            <button type="button" onClick={() => void copyQueueReport()}>
+	              <Copy size={14} />
+	              <span>Copy report</span>
+	            </button>
+	            <button type="button" disabled={!onPull} onClick={() => void onPull?.()}>
+	              <Cloud size={14} />
+	              <span>Pull now</span>
+	            </button>
+	          </div>
+	        </section>
+	      </GlassCard>)}
+
+	      {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-scope-audit settings-trip-scope-audit--${tripScopeAudit.tone}`}>
+	        <section role="region" aria-label="Trip scope audit">
           <div className="settings-trip-doctor-head">
             <span><ShieldCheck size={16} /> Trip Scope Audit</span>
             <strong>{tripScopeAudit.statusLabel}</strong>
@@ -2420,36 +2604,12 @@ export function Settings({
       </AccordionCard>
 
       <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
-        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。失敗時會按固定 fallback ladder 重試；429、quota 同 daily-limit 會 hard stop，唔會轉 provider。Volcano Engine key 只會留喺 Credential Broker vault，唔會進入 React state。</p>
-        <div className="form-grid">
-          <div><label>Scan model
-              <select value={state.scanModel} onChange={(e) => updateState({ scanModel: e.target.value })}>
-                {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-              </select>
-            </label>
-            <button className="secondary compact" type="button" disabled={!!busy || !brokerReady} aria-label="測試 Scan model" onClick={() => void testSelectedAiModel('Scan', state.scanModel)}>測試</button>
-          </div>
-          <div><label>Voice model
-              <select value={state.voiceModel} onChange={(e) => updateState({ voiceModel: e.target.value })}>
-                {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-              </select>
-            </label>
-            <button className="secondary compact" type="button" disabled={!!busy || !brokerReady} aria-label="測試 Voice model" onClick={() => void testSelectedAiModel('Voice', state.voiceModel)}>測試</button>
-          </div>
-        </div>
-        <div><label>Email model
-            <select value={state.emailModel} onChange={(e) => updateState({ emailModel: e.target.value })}>
-              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
-          <button className="secondary compact" type="button" disabled={!!busy || !brokerReady} aria-label="測試 Email model" onClick={() => void testSelectedAiModel('Email', state.emailModel)}>測試</button>
-        </div>
-        <div><label>Trip update model
-            <select value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} onChange={(e) => updateState({ tripUpdateModel: e.target.value })}>
-              {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
-          <button className="secondary compact" type="button" disabled={!!busy || !brokerReady} aria-label="測試 Trip update model" onClick={() => void testSelectedAiModel('Trip update', state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID)}>測試</button>
+        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。如果失敗，會自動 fallback 到 contract default（Scan/Voice → Mimo v2.5，Email/Trip → Mimo v2.5 Pro），再使用其他備用模型。測試只會向所選 model 發出一次極短 JSON request，唔會 fallback。Provider keys 不會進入 React state。</p>
+        <div className="form-grid ai-model-grid">
+          <AiModelField label="Scan model" value={state.scanModel} state={state} onChange={(scanModel) => updateState({ scanModel })} />
+          <AiModelField label="Voice model" value={state.voiceModel} state={state} onChange={(voiceModel) => updateState({ voiceModel })} />
+          <AiModelField label="Email model" value={state.emailModel} state={state} onChange={(emailModel) => updateState({ emailModel })} />
+          <AiModelField label="Trip update model" value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} state={state} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
         </div>
         <label>Google backup model
           <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
@@ -3043,6 +3203,40 @@ export function Settings({
           {statusPill('google')}
           {statusPill('weatherapi')}
         </div>
+        {cloudSyncAvailable && (
+          <div className="rotation-box">
+            <div className="section-head">
+              <h2>個人 Notion notebook</h2>
+              <span className={`pill ${personalNotionStatus?.status === 'connected' ? 'ok' : 'hot'}`}>
+                {personalNotionStatus?.status || 'not checked'}
+              </span>
+            </div>
+            <p className="muted">呢度只綁定目前 Supabase 帳號。Connector secret 會直接送去 Credential Broker 加密保存，唔會寫入 browser、backup、Supabase row 或 GitHub。</p>
+            <label>Personal Notion database ID
+              <input value={personalNotionDb} onChange={(e) => setPersonalNotionDb(e.target.value)} placeholder="你自己 Notion database ID" />
+            </label>
+            <label>Personal Notion connector secret
+              <input
+                type="password"
+                value={personalNotionToken}
+                onChange={(e) => setPersonalNotionToken(e.target.value)}
+                placeholder="貼上你自己 Notion connector secret"
+                autoComplete="off"
+              />
+            </label>
+            <div className="action-row wrap">
+              <button className="secondary" type="button" disabled={!!busy} onClick={() => void refreshPersonalNotion()}>
+                Check Personal Notion
+              </button>
+              <button className="primary" type="button" disabled={!!busy || !personalNotionToken.trim() || !personalNotionDb.trim()} onClick={() => void connectPersonalNotion()}>
+                <ShieldCheck size={18} /> Connect Personal Notion
+              </button>
+              <button className="danger" type="button" disabled={!!busy || personalNotionStatus?.status !== 'connected'} onClick={() => void disconnectPersonalNotion()}>
+                Disconnect
+              </button>
+            </div>
+          </div>
+        )}
         {!brokerReady && !cloudSyncAvailable && (
           <div className="form-grid">
             <label>Broker password
@@ -3194,7 +3388,7 @@ export function Settings({
           <button className="secondary" type="button" onClick={previewTripShareExport}><Copy size={18} /> Preview trip share</button>
           <button className="secondary" type="button" onClick={previewDiagnosticsExport}><ShieldCheck size={18} /> Preview diagnostics</button>
           <button className="danger" type="button" onClick={() => { clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); }}><KeyRound size={18} /> 清除 broker session</button>
-          <button className="danger" type="button" onClick={() => { clearDeviceTrust(); void clearTrustedDevice(); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
+          <button className="danger" type="button" onClick={() => { clearDeviceTrust(); void clearTrustedDevice(); clearCredentialSession(); updateState({ credentialSession: '', credentialSessionExpiresAt: 0 }); setStatus('已清除此裝置信任，下次開 app 會重新鎖定。'); }}><ShieldCheck size={18} /> 清除裝置信任</button>
         </div>)}
         {showStressPanel && tripSharePreview && (
           <div className="settings-trip-share-preview" role="region" aria-label="Private trip-share preview">
@@ -3742,6 +3936,7 @@ export function Settings({
                   <option value="kimi">Kimi (kimi-code, kimi-8k, kimi-32k, kimi-k2.6, kimi-for-coding)</option>
                   <option value="google">Google (Gemini, Gemma — all Google models)</option>
                   <option value="mimo">Mimo (Mimo v2.5, Mimo v2.5 Pro)</option>
+                  <option value="volcano">Volcano Engine (5 app LLM models)</option>
                   <option value="weatherapi">WeatherAPI (weather forecasts)</option>
                 </select>
               </label>

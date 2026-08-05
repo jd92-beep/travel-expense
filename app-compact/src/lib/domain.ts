@@ -3,9 +3,8 @@ import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
 import { computeShares, roundZeroSum, sharePercents, simplifyDebts } from './splitEngine';
-import { enqueueChange } from './changeJournal';
 export { roundZeroSum, sharePercents } from './splitEngine';
-import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, ReceiptPayer, RecurringRule, SettlementSnapshot, TripPhase, TripProfile } from './types';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, ReceiptPayer, RecurringRule, SettlementSnapshot, SyncQueueItem, TripPhase, TripProfile } from './types';
 
 export const fmt = (n: number | string | undefined) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -16,33 +15,73 @@ export const categoryById = (id: CategoryId | string | undefined) =>
 export const paymentById = (id: PaymentId | string | undefined) =>
   PAYMENTS.find((p) => p.id === id) || PAYMENTS[0];
 
+const DEFAULT_NAGOYA_START = '2026-04-20';
+const DEFAULT_NAGOYA_END = '2026-04-25';
+
+function isIsoDate(value: string | undefined): value is string {
+  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 function itineraryRangeForTrip(state: AppState, trip: TripProfile): { start: string; end: string } | null {
   const start = trip.startDate || state.tripDateRange?.start;
   const end = trip.endDate || state.tripDateRange?.end;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '') || end < start) return null;
+  if (!isIsoDate(start) || !isIsoDate(end) || end < start) return null;
   return { start, end };
 }
 
-function repairItineraryForTrip(state: AppState, trip: TripProfile, source: ItineraryDay[], currency: string): ItineraryDay[] {
+function dateSeries(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(last.getTime()) || cursor > last) return dates;
+  while (cursor <= last) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function isDefaultNagoyaTrip(state: AppState, trip: TripProfile): boolean {
   const range = itineraryRangeForTrip(state, trip);
-  const normalized = normalizeItinerary(source, trip.id, currency);
-  if (!range) return normalized;
-  const isNagoya = isNagoyaCanonicalRange({
+  return !!range && isNagoyaCanonicalRange({
     id: trip.id,
     name: `${trip.name} ${state.tripName || ''}`,
     destinationSummary: trip.destinationSummary,
     startDate: range.start,
     endDate: range.end,
   });
+}
+
+function mergeItineraryDay(primary: ItineraryDay | undefined, fallback: ItineraryDay | undefined, date: string, idx: number, currency: string): ItineraryDay {
+  const base = fallback || primary;
+  return {
+    ...base,
+    ...primary,
+    date,
+    day: idx + 1,
+    region: primary?.region || fallback?.region || `Day ${idx + 1}`,
+    timezone: primary?.timezone || fallback?.timezone || 'Asia/Tokyo',
+    currency: primary?.currency || fallback?.currency || currency,
+    highlight: primary?.highlight || fallback?.highlight || '',
+    lodging: primary?.lodging?.name ? primary.lodging : fallback?.lodging,
+    spots: primary?.spots?.length ? primary.spots : fallback?.spots || [],
+  };
+}
+
+function repairItineraryForTrip(state: AppState, trip: TripProfile, source: ItineraryDay[], currency: string): ItineraryDay[] {
+  const range = itineraryRangeForTrip(state, trip);
+  const normalized = normalizeItinerary(source, trip.id, currency);
+  if (!range) return normalized;
+  const fallback = [
+    ...(state.customItinerary || []),
+    ...(isDefaultNagoyaTrip(state, trip) ? ITINERARY : []),
+  ];
   return canonicalizeItineraryRange({
     tripId: trip.id,
     startDate: range.start,
     endDate: range.end,
     itinerary: normalized,
-    fallbackItinerary: [
-      ...(state.customItinerary || []),
-      ...(isNagoya ? ITINERARY : []),
-    ],
+    fallbackItinerary: fallback,
     fallbackCurrency: currency,
     fallbackRegion: trip.destinationSummary || trip.name,
     fallbackTimezone: trip.timezones?.[0],
@@ -56,14 +95,7 @@ export function getItinerary(state: AppState): ItineraryDay[] {
   if (trip?.itinerary?.length) return repairItineraryForTrip(state, trip, trip.itinerary, currency);
   if (state.customItinerary && state.customItinerary.length) return repairItineraryForTrip(state, trip, state.customItinerary, currency);
   // Fallback: always normalize the constant ITINERARY to ensure stable dayId/spotId
-  const isNagoya = isNagoyaCanonicalRange({
-    id: trip.id,
-    name: `${trip.name} ${state.tripName || ''}`,
-    destinationSummary: trip.destinationSummary,
-    startDate: trip.startDate,
-    endDate: trip.endDate,
-  });
-  return repairItineraryForTrip(state, trip, isNagoya ? ITINERARY : [], currency || state.tripCurrency || 'JPY');
+  return repairItineraryForTrip(state, trip, isDefaultNagoyaTrip(state, trip) ? ITINERARY : [], currency || state.tripCurrency || 'JPY');
 }
 
 export function validateItinerary(input: unknown): { ok: true; itinerary: ItineraryDay[] } | { ok: false; error: string } {
@@ -386,23 +418,27 @@ export function applyItineraryEdit(state: AppState, nextItinerary: ItineraryDay[
   const trips = baseTrips.some((t) => t.id === trip.id)
     ? baseTrips.map((t) => (t.id === trip.id ? nextTrip : t))
     : [...baseTrips, nextTrip];
-  const withTrip = enqueueChange(state.syncQueue, {
-    type: 'trip',
-    entityId: trip.id,
+  const stamp = (type: SyncQueueItem['type'], entityId: string, payload: SyncQueueItem['payload']): SyncQueueItem => ({
+    id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+    type,
+    entityId,
     op: 'update',
-    payload: { sourceId: nextTrip.sourceId || `trip_${trip.id}`, updatedAt: now },
+    status: 'queued',
+    attempts: 0,
+    createdAt: now,
+    updatedAt: now,
+    payload,
   });
   return {
     ...state,
     trips,
     customItinerary: nextItinerary,
     settingsUpdatedAt: now,
-    syncQueue: enqueueChange(withTrip, {
-      type: 'settings',
-      entityId: 'app-settings',
-      op: 'update',
-      payload: { updatedAt: now },
-    }),
+    syncQueue: [
+      ...(state.syncQueue || []),
+      stamp('trip', trip.id, { sourceId: nextTrip.sourceId || `trip_${trip.id}`, updatedAt: now }),
+      stamp('settings', 'app-settings', { updatedAt: now }),
+    ].slice(-500),
   };
 }
 

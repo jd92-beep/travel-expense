@@ -1,5 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = (process.env.REACT_TEST_ORIGIN || 'http://localhost:8902').replace(/\/+$/, '');
+const APP_URL = `${APP_ORIGIN}/travel-expense/react/`;
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 test.skip(process.env.SUPABASE_MIRROR_SMOKE !== '1', 'Set SUPABASE_MIRROR_SMOKE=1 and start Vite with fake Supabase env for this focused integration smoke.');
@@ -165,7 +168,7 @@ test('Supabase public Notion panel clearly stays Supabase-only before Personal N
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8902/travel-expense/react/#settings');
+  await page.goto(`${APP_URL}#settings`);
   await expect(page.getByText('設定控制中心')).toBeVisible();
   await setAccordion(page, 'Notion Sync');
 
@@ -266,7 +269,7 @@ test('Supabase personal Notion connect persists database scope and queues active
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8902/travel-expense/react/#settings');
+  await page.goto(`${APP_URL}#settings`);
   await expect(page.getByText('設定控制中心')).toBeVisible();
   await setAccordion(page, 'Email / Shortcut');
   await expect(page.getByText(/Public Supabase mode 不使用共享 Gmail inbox/)).toBeVisible();
@@ -301,7 +304,6 @@ test('Supabase personal Notion connect persists database scope and queues active
 
 test('Supabase personal Notion connection mirrors without a broker password session', async ({ page }) => {
   const receiptUpserts = [];
-  const receiptIdLookups = [];
   const notionRequests = [];
   const profilePatches = [];
 
@@ -356,26 +358,31 @@ test('Supabase personal Notion connection mirrors without a broker password sess
     }
     if (table === 'receipts' && method === 'GET') {
       if (url.searchParams.get('select') === 'id') {
-        receiptIdLookups.push({
-          ownerId: url.searchParams.get('owner_id'),
-          tripId: url.searchParams.get('trip_id'),
-          sourceId: url.searchParams.get('source_id'),
-        });
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(null) });
       } else {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
       }
       return;
     }
-    if (table === 'receipts' && method === 'POST') {
+    if (table === 'upsert_shared_trip_receipt' && method === 'POST') {
       receiptUpserts.push(body);
+      const receipt = body.p_receipt || {};
       await route.fulfill({
-        status: 201,
+        status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          ...body,
-          id: receiptUuid,
+          ...receipt,
+          id: body.p_receipt_id || receiptUuid,
+          trip_id: body.p_trip_id,
           owner_id: userId,
+          source_id: body.p_source_id,
+          status: 'confirmed',
+          notion_page_id: null,
+          notion_database_id: null,
+          notion_sync_status: 'pending',
+          version: Number(receipt.version || 1),
+          sync_revision: receiptUpserts.length,
+          deleted_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }),
@@ -481,24 +488,30 @@ test('Supabase personal Notion connection mirrors without a broker password sess
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8902/travel-expense/react/#history');
+  await page.goto(`${APP_URL}#history`);
   await expect(page.getByText('紀錄中心')).toBeVisible();
 
-  await expect.poll(() => receiptUpserts.length, { timeout: 10000 }).toBeGreaterThanOrEqual(2);
-  expect(receiptIdLookups.some((lookup) => (
-    lookup.ownerId === `eq.${userId}` &&
-    lookup.tripId === `eq.${tripUuid}` &&
-    lookup.sourceId === 'eq.receipt_mirror_source'
-  ))).toBe(true);
+  await expect.poll(() => receiptUpserts.length, { timeout: 10000 }).toBeGreaterThanOrEqual(1);
+  await page.waitForTimeout(500);
+  expect(receiptUpserts).toHaveLength(1);
+  expect(receiptUpserts[0]).toMatchObject({
+    p_trip_id: tripUuid,
+    p_source_id: 'receipt_mirror_source',
+    p_receipt: {
+      source_id: 'receipt_mirror_source',
+      store: 'Mirror Cafe',
+      amount: 1800,
+    },
+  });
+  expect(receiptUpserts[0].p_idempotency_key).toContain(`${tripUuid}:receipt_mirror_source:upsert:`);
   expect(notionRequests.length).toBeGreaterThan(0);
   expect(notionRequests.every((request) => request.supabaseAuth === 'Bearer test-access-token')).toBe(true);
   expect(notionRequests.every((request) => !request.brokerSession)).toBe(true);
   expect(notionRequests.every((request) => request.databaseId === 'db_mirror')).toBe(true);
   await expect.poll(() => profilePatches.some((patch) => patch?.app_settings?.notionDb === 'db_mirror'), { timeout: 10000 }).toBe(true);
   expect(profilePatches.every((patch) => patch?.app_settings?.notionDb !== '3438d94d5f7c81878221fcda6d65d39d')).toBe(true);
-  expect(receiptUpserts[0].notion_page_id).toBeNull();
-  expect(receiptUpserts.at(-1).notion_page_id).toBeNull();
-  expect(receiptUpserts.at(-1).notion_database_id).toBeNull();
+  expect(Object.hasOwn(receiptUpserts[0].p_receipt, 'notion_page_id')).toBe(false);
+  expect(Object.hasOwn(receiptUpserts[0].p_receipt, 'notion_database_id')).toBe(false);
 });
 
 test('Supabase profile settings stay authoritative over stale Notion meta in public mode', async ({ page }) => {
@@ -637,7 +650,7 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
     }));
   }, { userId, session: sessionPayload(), now });
 
-  await page.goto('http://localhost:8902/travel-expense/react/#history');
+  await page.goto(`${APP_URL}#history`);
   await expect(page.getByText('紀錄中心')).toBeVisible();
   await page.getByRole('button', { name: '重新同步' }).click();
 
@@ -656,7 +669,7 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
   expect(settingsMetaQueries).toBe(0);
 });
 
-test('Supabase pull ignores stale profile activeTripId that is not in the user trip list', async ({ page }) => {
+test('Supabase pull ignores stale profile activeTripId and preserves the current local preference', async ({ page }) => {
   const now = Date.now();
   const supabaseTripRow = {
     id: tripUuid,
@@ -751,7 +764,7 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
     }));
   }, { userId, session: sessionPayload(), now });
 
-  await page.goto('http://localhost:8902/travel-expense/react/#history');
+  await page.goto(`${APP_URL}#history`);
   await expect(page.getByText('紀錄中心')).toBeVisible();
   await page.getByRole('button', { name: '重新同步' }).click();
 
@@ -762,10 +775,10 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
       activeFlags: (state.trips || []).map((trip) => ({ id: trip.id, active: trip.active, archived: !!trip.archived })),
     };
   }, userId), { timeout: 10000 }).toEqual({
-    activeTripId: 'trip_valid_supabase',
+    activeTripId: 'trip_local',
     activeFlags: [
-      { id: 'trip_local', active: false, archived: false },
-      { id: 'trip_valid_supabase', active: true, archived: false },
+      { id: 'trip_local', active: true, archived: false },
+      { id: 'trip_valid_supabase', active: false, archived: false },
     ],
   });
 });
@@ -826,15 +839,25 @@ test('Supabase public account without own Notion database does not use shared No
       }
       return;
     }
-    if (table === 'receipts' && method === 'POST') {
+    if (table === 'upsert_shared_trip_receipt' && method === 'POST') {
       receiptUpserts.push(body);
+      const receipt = body.p_receipt || {};
       await route.fulfill({
-        status: 201,
+        status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          ...body,
-          id: receiptUuid,
+          ...receipt,
+          id: body.p_receipt_id || receiptUuid,
+          trip_id: body.p_trip_id,
           owner_id: userId,
+          source_id: body.p_source_id,
+          status: 'confirmed',
+          notion_page_id: null,
+          notion_database_id: null,
+          notion_sync_status: 'pending',
+          version: Number(receipt.version || 1),
+          sync_revision: receiptUpserts.length,
+          deleted_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }),
@@ -906,12 +929,23 @@ test('Supabase public account without own Notion database does not use shared No
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8902/travel-expense/react/#history');
+  await page.goto(`${APP_URL}#history`);
   await expect(page.getByText('紀錄中心')).toBeVisible();
 
   await expect.poll(() => receiptUpserts.length, { timeout: 10000 }).toBeGreaterThanOrEqual(1);
   await page.waitForTimeout(1500);
+  expect(receiptUpserts).toHaveLength(1);
+  expect(receiptUpserts[0]).toMatchObject({
+    p_trip_id: tripUuid,
+    p_source_id: 'receipt_public_source',
+    p_receipt: {
+      source_id: 'receipt_public_source',
+      store: 'Public Cafe',
+      amount: 1200,
+    },
+  });
+  expect(receiptUpserts[0].p_idempotency_key).toContain(`${tripUuid}:receipt_public_source:upsert:`);
   expect(notionRequests).toHaveLength(0);
-  expect(receiptUpserts.at(-1).notion_page_id).toBeNull();
-  expect(receiptUpserts.at(-1).notion_database_id).toBeNull();
+  expect(Object.hasOwn(receiptUpserts[0].p_receipt, 'notion_page_id')).toBe(false);
+  expect(Object.hasOwn(receiptUpserts[0].p_receipt, 'notion_database_id')).toBe(false);
 });

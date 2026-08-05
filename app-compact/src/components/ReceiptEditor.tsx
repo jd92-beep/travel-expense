@@ -460,7 +460,8 @@ export function ReceiptEditor({
             ...draft,
             store: draft.store.trim() || '未命名',
             total,
-            originalAmount,
+            // 原金額 UI field was removed — the schema field now simply mirrors 金額.
+            originalAmount: total,
             originalCurrency: draft.originalCurrency || draft.currency || currencyForDate(draft.date),
             currency: savedCurrency,
             exchangeRate: fxRate ?? draft.exchangeRate,
@@ -767,6 +768,7 @@ export function ReceiptEditor({
             </button>
           )}
           <div className="photo-tool-buttons">
+            {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>刪除相片</button>}
             <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>
             {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
               const total = validAmount(draft.total);
@@ -776,7 +778,6 @@ export function ReceiptEditor({
               }
               onAddToItinerary({ ...draft, store: draft.store.trim() || '未命名', total });
             }}>加入行程</button>}
-            {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>刪除相片</button>}
           </div>
         </div>
 

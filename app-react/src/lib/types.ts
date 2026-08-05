@@ -11,6 +11,9 @@ export type CategoryId =
 
 export type PaymentId = 'cash' | 'credit' | 'paypay' | 'suica';
 export type SplitMode = 'shared' | 'private';
+export type SplitType = 'equal' | 'shares' | 'exact' | 'percent' | 'adjustment' | 'itemized';
+export type ReceiptVisibility = 'trip' | 'private';
+export type ReceiptRecordKind = 'expense' | 'settlement';
 export type TripPhase = 'prep' | 'trip' | 'post';
 export type SyncStatus = 'local' | 'queued' | 'syncing' | 'synced' | 'error' | 'failed';
 export type GlobalSyncStatus = 'idle' | 'queued' | 'pushing' | 'pulling' | 'synced' | 'error' | 'offline';
@@ -42,6 +45,19 @@ export interface Person {
   color: string;
 }
 
+export interface ReceiptSplit {
+  personId: string;
+  weight?: number;
+  amount?: number;
+  pct?: number;
+  adjust?: number;
+}
+
+export interface ReceiptPayer {
+  personId: string;
+  amount: number;
+}
+
 export interface Receipt {
   id: string;
   supabaseId?: string;
@@ -49,6 +65,9 @@ export interface Receipt {
   createdByEmail?: string;
   createdByLabel?: string;
   version?: number;
+  syncRevision?: number;
+  deletedAt?: number;
+  recordKind?: ReceiptRecordKind;
   ledgerSyncStatus?: 'synced' | 'queued' | 'notion_pending' | 'notion_failed' | 'conflict';
   store: string;
   total: number;
@@ -76,7 +95,12 @@ export interface Receipt {
   _photoBodyBlockAdded?: boolean;
   personId?: string;
   splitMode?: SplitMode;
+  splitType?: SplitType;
+  splits?: ReceiptSplit[];
+  payers?: ReceiptPayer[];
   beneficiaryId?: string;
+  isSettlement?: boolean;
+  visibility?: ReceiptVisibility;
   phase?: TripPhase;
   createdAt?: number;
   notionPageId?: string;
@@ -89,6 +113,16 @@ export interface Receipt {
   spotId?: string;
   syncStatus?: SyncStatus;
   updatedAt?: number;
+}
+
+export interface ReceiptTombstone {
+  supabaseId: string;
+  sourceId: string;
+  tripId: string;
+  version: number;
+  syncRevision: number;
+  deletedAt: number;
+  pending?: boolean;
 }
 
 export interface AppCredentials {
@@ -154,6 +188,8 @@ export interface TripProfile {
   currencies: string[];
   timezones: string[];
   version: number;
+  itineraryVersion?: number;
+  _itineraryNeedsRepair?: boolean;
   active: boolean;
   archived?: boolean;
   budget?: number;
@@ -257,6 +293,8 @@ export interface SyncQueueItem {
     tripId?: string;
     sourceId?: string;
     tombstoneKey?: string;
+    version?: number;
+    syncRevision?: number;
     updatedAt?: number;
   };
 }
@@ -289,6 +327,8 @@ export interface AppState {
   googleBackupModel?: string;
   persons: Person[];
   shareRatios: Record<string, number>;
+  peopleByTripId?: Record<string, Person[]>;
+  shareRatiosByTripId?: Record<string, Record<string, number>>;
   tripName: string;
   tripDateRange: { start: string; end: string };
   activeTripId?: string;
@@ -300,6 +340,7 @@ export interface AppState {
   lastTab: TabId;
   notionDeletedIds?: string[];
   notionDeletedSourceIds?: string[];
+  receiptTombstones?: Record<string, ReceiptTombstone>;
   syncQueue?: SyncQueueItem[];
   settingsUpdatedAt?: number;
   lastSyncedAt?: number;

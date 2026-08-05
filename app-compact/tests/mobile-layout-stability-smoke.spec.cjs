@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 const longReceiptName = 'Very Long Mobile Width Receipt Name - Shinkansen Platform Bento And Souvenir Bundle';
 const longSpotName = 'Very Long Itinerary Stop Name - Nagoya Station Underground Shopping Street With Extra Details';
 
@@ -165,7 +167,7 @@ test('Mobile Records cards and Itinerary timeline stay within the viewport durin
   });
 
   await seedMobileStressState(page);
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
   await expect(page.locator('.receipt-row').filter({ hasText: longReceiptName })).toBeVisible();
   await assertNoHorizontalOverflow(page);

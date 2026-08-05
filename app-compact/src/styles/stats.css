@@ -1269,9 +1269,8 @@
 
 .stats-tab.stats-cockpit .spending-compass {
   width: 100% !important;
-  /* Was capped at 460px, which is NARROWER than the 2-column overview grid's ~558px minimum, so the
-     donut column and the number column overlapped. Let the card fill the content column instead, and
-     make it a query container so the overview lays out by CARD width, not viewport width. */
+  /* Was capped at 460px, narrower than the 2-column overview — the donut and numbers overlapped.
+     Fill the content column and become a query container so the overview lays out by CARD width. */
   max-width: 100%;
   container-type: inline-size;
 }
@@ -1357,9 +1356,6 @@
 
 .stats-tab.stats-cockpit .preview-budget-overview {
   display: grid;
-  /* Single column by default so the donut and the number breakdown never overlap on a narrow card;
-     the 2-column side-by-side layout only kicks in when the CARD itself is wide enough (container
-     query — responds to the card, not the viewport, so it's correct at every screen ratio). */
   grid-template-columns: minmax(0, 1fr);
   gap: 22px;
   align-items: center;

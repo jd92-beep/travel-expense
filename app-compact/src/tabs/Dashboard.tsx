@@ -407,6 +407,8 @@ function aiProviderForModel(modelId: string | undefined): { provider: 'kimi' | '
       ? 'mimo'
       : /kimi/i.test(id)
         ? 'kimi'
+        : /volcano|doubao|minimax/i.test(id)
+          ? 'volcano'
         : 'google';
   return { provider, model: modelRaw || id, id };
 }

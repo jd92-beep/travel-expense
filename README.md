@@ -18,10 +18,11 @@
 
 - 主要公開 app: https://travel-expense-react.vercel.app
 - Compact app: https://travel-expense-compact.vercel.app
+- Admin Console: https://travel-expense-admin-kanban.vercel.app
 - GitHub Pages React app: https://jd92-beep.github.io/travel-expense/react/
 - 舊版備用 app: https://jd92-beep.github.io/travel-expense/
 
-請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。Netlify project 也存在，但 `https://travel-expense-react.netlify.app` 目前顯示 `usage_exceeded`，暫時不是平常使用的入口。
+請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。2026-07-15 live check 已確認 Compact Vercel、Netlify 及 GitHub Pages 全部提供 `0.16.8`；Vercel 仍是主要 Compact 入口。Admin `1.0.2` 同 Broker `2026.07.15.2` 亦已完成 production cutover。
 
 ## Compact App Developer Quick Start
 
@@ -37,7 +38,19 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Android worktree 的 Compact 目前版本：`0.19.5`。
+Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.19`；Android worktree
+目前版本是 `0.20.7`（versionCode `2007`）。Admin Console production 是 `1.0.2`，由 protected
+workflow `29415119909` 以 Git SHA `67cde57a42bc43f1bda026d81d555260e25bb564` promotion；live
+`/api/health` 回 `200`、exact SHA 及 `acceptingReadTraffic=true`。Console Providers 會列出五個
+既有 Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output
+tokens 嘅 request 測試 availability。Seedance 係 media model，唔會混入 LLM selector。
+
+Admin Console production URL 是 `https://travel-expense-admin-kanban.vercel.app`。readiness 會在呼叫 Edge
+前拒絕格式錯誤嘅 hash；production health 與 unauthenticated route 行為已驗證：未登入 session 回 `401`，
+direct catch-all session query 回 `404`。現有 Admin passphrase 維持不變並仍然需要；passkey 只會新增保護，不會取代它。
+第一個 Boss passkey 已完成登記，bootstrap secret 已從 production 移除。Boss 正進行最後一次 post-bootstrap
+fresh login check，完成前不會宣稱該項 check 已通過。所有寫入仍由 Edge backend 以 `deny_all` 拒絕，R3 與
+generic controls 保持 server-disabled。任何 passphrase、token 或 secret 都不會寫入 README、GitHub 或前端程式碼。
 
 ## Compact Android Developer Quick Start
 
@@ -57,7 +70,7 @@ Debug APK 會輸出到：
 app-compact/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-本次 `0.19.5` 的 Settings model test 會送出明確指令 `Return only JSON: {"ok":true}`，仍然只測試所選 model、不使用 fallback。Credential Broker 對每個 model test 都只使用 8 個 output tokens，並以非空 provider response 作 availability proof。呢個 Broker 行為由 main 的 orchestrator 更新，Android shell 不會修改 Worker source。正式上架前仍需要處理 release signing、Play Store metadata、native camera/gallery QA、offline sync QA、以及 Android 真機回歸測試。
+本次 `0.20.7` 的 Settings model test 會送出明確指令 `Return only JSON: {"ok":true}`，仍然只測試所選 model、不使用 fallback。Credential Broker 對每個 model test 都只使用 8 個 output tokens，並以非空 provider response 作 availability proof。呢個 Broker 行為由 main 的 orchestrator 更新，Android shell 不會修改 Worker source。正式上架前仍需要處理 release signing、Play Store metadata、native camera/gallery QA、offline sync QA、以及 Android 真機回歸測試。
 
 Android Google/Supabase login uses the App Link callback `https://travel-expense-compact.vercel.app/android-auth`. The debug certificate SHA-256 is already listed in `app-compact/public/.well-known/assetlinks.json`; add the release SHA-256 after creating the release keystore.
 
@@ -110,7 +123,7 @@ Compact app 的 Weather 頁會根據行程城市、國家和景點座標抓天�
 - Editor 會用同一個共享 ledger 新增自己的記錄。
 - Viewer 只應該看資料，不能新增或修改。
 - Shared-trip 記帳會經 Supabase RPC 寫入，不再由瀏覽器直接寫 shared Notion。
-- Notion 會作為同一個 trip notebook 的後端副本；目前 RPC 已會建立 pending Notion retry job，下一步仍要部署 worker / Trip Ledger Broker 去處理這些 jobs。
+- Notion 會作為同一個 trip notebook 的後端副本；RPC 會建立 pending Notion retry job。處理這些 jobs 的 worker `v38` 已部署並通過 negative canary（只確認失敗路徑）；一筆 shared-trip receipt 成功寫入再同步到 Notion 的完整正向流程仍未有實際證明。
 
 注意：`supabase/migrations/20260612153000_trip_sharing_dual_backend.sql` 和 `supabase/migrations/20260612165000_shared_ledger_receipt_rpc.sql` 已於 2026-06-12 套用到 live Supabase project，migration 名稱分別是 `trip_sharing_dual_backend` 和 `shared_ledger_receipt_rpc`。不要把 Supabase service role、Notion token 或 invite token 寫入前端或 GitHub。
 
@@ -170,7 +183,7 @@ Trip Update AI 會先顯示確認視窗，逐日列出 AI 抽到的日期、酒�
 
 ### 4. 查看行程
 
-Itinerary tab 會顯示目前旅程的行程。
+Itinerary tab 會顯示目前旅程的行程。Compact app 會以目前旅程的開始/結束日期做邊界；景點只會出現在旅程日期內。預設 Nagoya trip 是 `2026-04-20` 至 `2026-04-25`，如果同步資料暫時只帶回部分日期，app 會補回原本六日行程。
 
 它可以顯示：
 
@@ -217,10 +230,12 @@ App 只會經 server-side Credential Broker 使用 AI。瀏覽器不應該存放
 
 目前主要模型規則：
 
-- Email parsing: Kimi `kimi/kimi-code` first.
-- Trip update parsing: Kimi `kimi/kimi-code` first.
-- Receipt scan: Google Gemma 4 31B first.
-- Voice parsing: Google Gemma 4 31B first.
+- 每一種 AI 工作都先用 Settings 選定的 primary model。
+- 新裝置預設：Receipt scan / Voice 使用 `mimo-v2.5`。
+- 新裝置預設：Email / Trip Update 使用 `mimo-v2.5-pro`。
+- Trip Update 會按固定次序嘗試 contract default、Google fast fallbacks，再到其他允許的
+  slower fallbacks；每一步都會保留實際 model evidence。
+- `429`、quota或daily-limit是 hard stop，不會偷偷換 provider 繞過用量限制。
 
 如果 AI 暫時不能用，你仍然可以自己打字記帳。
 
@@ -313,6 +328,7 @@ SUPABASE_TRIP_ACTIVE_SMOKE=1 npx playwright test tests/supabase-trip-active-smok
 ```text
 travel-expense/
   app-react/                 React 19 + Vite public app
+  app-admin-kanban/          Admin Console 1.0 Vercel surface
   index.html                 Legacy root app kept as backup
   legacy-notion.js           Legacy Notion sync helper
   email-to-notion.gs         Google Apps Script email importer
@@ -334,9 +350,11 @@ git push origin main
 
 GitHub Actions builds `app-react/`, publishes the legacy app at the root, and publishes the React app under `/react/`.
 
-Vercel is connected to the same GitHub repo and serves the React app at `/`.
+Vercel is connected to the same GitHub repo and serves the React app at `/`; the separate Admin
+Console production URL is `https://travel-expense-admin-kanban.vercel.app`.
 
-Netlify config is present, but the current public Netlify URL is blocked by account usage limits.
+Netlify config is present. The Compact Netlify workflow and public URL were healthy in the
+2026-07-15 `0.16.6` live verification; Vercel remains the primary production entry point.
 
 ## For The Next Agent
 

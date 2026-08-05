@@ -1,0 +1,126 @@
+-- Reclaim only expired receipt-sync processing leases. Fresh leases remain owned.
+
+begin;
+
+set local lock_timeout = '5s';
+set local statement_timeout = '30s';
+
+-- The function below is owned by receipt_sync_owner (see
+-- 20260710191000_receipt_sync_worker_contract.sql). Migrations applied by the
+-- Supabase CLI disposable stack are not guaranteed to run as a superuser, so
+-- `create or replace` / `alter function` on that function fail with SQLSTATE
+-- 42501 unless the migrator first becomes the owning role. This mirrors the
+-- `set local role <owner>` pattern used by the admin owner migrations.
+set local role receipt_sync_owner;
+
+create or replace function public.claim_receipt_sync_jobs_worker(
+  p_worker text,
+  p_limit integer default 10
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_result jsonb;
+begin
+  if p_worker !~ '^receipt-sync:[A-Za-z0-9._:-]{8,112}$'
+    or p_limit < 1 or p_limit > 20 then
+    raise exception 'Invalid receipt sync worker claim' using errcode = '22023';
+  end if;
+
+  update public.receipt_sync_jobs job
+  set status = 'cancelled', locked_at = null, locked_by = null,
+      last_error = 'Private receipts are never mirrored to Notion',
+      updated_at = clock_timestamp()
+  from public.receipts receipt
+  where receipt.id = job.receipt_id
+    and receipt.visibility = 'private'
+    and job.status in ('pending', 'failed', 'processing');
+
+  update public.receipts receipt
+  set notion_sync_status = 'disabled', notion_sync_error = null,
+      updated_at = clock_timestamp()
+  where receipt.visibility = 'private'
+    and receipt.notion_sync_status <> 'disabled';
+
+  with candidate as materialized (
+    select job.id
+    from public.receipt_sync_jobs job
+    join public.receipts receipt on receipt.id = job.receipt_id
+    join public.trip_backend_links link on link.trip_id = job.trip_id
+    where job.provider = 'notion'
+      and job.status in ('pending', 'failed', 'processing')
+      and job.next_attempt_at <= clock_timestamp()
+      and job.attempts < 5
+      and (job.locked_at is null or job.locked_at < clock_timestamp() - interval '120 seconds')
+      and receipt.visibility = 'trip'
+      and link.status = 'active'
+      and link.sync_mode = 'dual_write'
+    order by job.next_attempt_at, job.id
+    limit p_limit
+    for update of job skip locked
+  ), claimed as (
+    update public.receipt_sync_jobs job
+    set status = 'processing', locked_at = clock_timestamp(), locked_by = p_worker,
+        last_error = null, updated_at = clock_timestamp()
+    from candidate
+    where job.id = candidate.id
+    returning job.*
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', job.id,
+    'receiptId', job.receipt_id,
+    'tripId', job.trip_id,
+    'ownerId', job.owner_id,
+    'operation', case when receipt.deleted_at is null then job.operation else 'delete' end,
+    'attempts', job.attempts,
+    'payload', job.payload,
+    'databaseRef', link.notion_database_ref,
+    'notionOwnerUserId', link.notion_owner_user_id,
+    'notionTripId', coalesce(
+      nullif(trip.app_metadata ->> 'localTripId', ''),
+      nullif(trip.legacy_source_id, ''),
+      trip.id::text
+    ),
+    'receipt', jsonb_build_object(
+      'id', receipt.id,
+      'sourceId', receipt.source_id,
+      'store', receipt.store,
+      'recordDate', receipt.record_date,
+      'recordTime', receipt.record_time,
+      'amount', receipt.amount,
+      'currency', receipt.currency,
+      'category', receipt.category,
+      'paymentMethod', receipt.payment_method,
+      'note', receipt.note,
+      'address', receipt.address,
+      'itemsText', receipt.items_text,
+      'recordKind', receipt.record_kind,
+      'visibility', receipt.visibility,
+      'version', receipt.version,
+      'deletedAt', receipt.deleted_at
+    )
+  ) order by job.next_attempt_at, job.id), '[]'::jsonb)
+  into v_result
+  from claimed job
+  join public.receipts receipt on receipt.id = job.receipt_id
+  join public.trips trip on trip.id = job.trip_id
+  join public.trip_backend_links link on link.trip_id = job.trip_id;
+
+  return v_result;
+end;
+$$;
+
+alter function public.claim_receipt_sync_jobs_worker(text, integer)
+  owner to receipt_sync_owner;
+
+revoke all on function public.claim_receipt_sync_jobs_worker(text, integer)
+  from public, anon, authenticated;
+grant execute on function public.claim_receipt_sync_jobs_worker(text, integer)
+  to service_role;
+
+reset role;
+
+commit;

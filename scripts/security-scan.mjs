@@ -19,6 +19,7 @@ const patterns = [
   { name: 'Hardcoded bearer token', re: /Bearer\s+(?!\[redacted\]|<|TOKEN|PLACEHOLDER|\$\{)[A-Za-z0-9._-]{16,}/gi },
   { name: 'Likely plaintext unlock PIN', re: /\b(?:pin|passcode|password|unlock)\w*\b.{0,80}(['"`])\d{4}\1/gi },
   { name: 'Inline session secret assignment', re: /\b(APP_SESSION_SECRET|CREDENTIALS_KEK|ADMIN_ROTATION_HASH)\s*[:=]\s*(['"`])(?!(?:<|replace-|placeholder|pbkdf2:|\$\{))/gi },
+  { name: 'Inline broker/admin passphrase assignment', re: /\b(ADMIN_PASSPHRASE|BROKER_ADMIN_PASSPHRASE|BROKER_UNLOCK_PASSWORD|APP_UNLOCK_PASSPHRASE)\s*[:=]\s*(['"`])(?!(?:<|replace-|placeholder|test-|fake-|dummy-|\$\{))[^'"`\r\n]{12,}\2/gi },
 ];
 
 const publicBuildPatterns = [

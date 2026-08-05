@@ -4,6 +4,7 @@ import { activeTrip, normalizeItinerary, normalizeTripIntelligence, stampReceipt
 import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
 import { tripIntelligenceColumns } from '../domain/trip/context';
 import { DEFAULT_NOTION_DB, ITINERARY, normalizeAiModelSettings } from './constants';
+import type { MirrorJob, SharedTripOutboxAdapters } from './sharedTripNotionOutbox';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, ReceiptPayer, ReceiptSplit, ReceiptTombstone, SplitType, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
 
 const VALID_CATEGORIES = new Set(['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'other']);
@@ -15,9 +16,7 @@ const RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS = 15 * 60;
 // and go straight to the user's own row.
 const rehomedTripIds = new Map<string, string>();
 
-// Receipts whose photo has already been mirrored to Notion this session (see
-// drainSharedTripNotionOutbox) — avoids re-downloading/re-uploading the same
-// image when repeat update jobs arrive for one receipt.
+// Receipts whose photo has already been mirrored to Notion this session.
 const notionPhotoMirroredReceipts = new Set<string>();
 
 function withTimeout<T>(promise: PromiseLike<T>, ms = 30000): Promise<T> {
@@ -47,13 +46,13 @@ function safeSplitType(value: unknown): SplitType | undefined {
 function safeReceiptSplits(value: unknown): ReceiptSplit[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const rows = value.map((raw) => {
-    const row = raw as any;
+    const row = raw as Record<string, unknown>;
     return {
-      personId: String(row?.personId || ''),
-      weight: Number.isFinite(Number(row?.weight)) ? Number(row.weight) : undefined,
-      amount: Number.isFinite(Number(row?.amount)) ? Number(row.amount) : undefined,
-      pct: Number.isFinite(Number(row?.pct)) ? Number(row.pct) : undefined,
-      adjust: Number.isFinite(Number(row?.adjust)) ? Number(row.adjust) : undefined,
+      personId: String(row.personId || ''),
+      weight: Number.isFinite(Number(row.weight)) ? Number(row.weight) : undefined,
+      amount: Number.isFinite(Number(row.amount)) ? Number(row.amount) : undefined,
+      pct: Number.isFinite(Number(row.pct)) ? Number(row.pct) : undefined,
+      adjust: Number.isFinite(Number(row.adjust)) ? Number(row.adjust) : undefined,
     };
   }).filter((row) => row.personId);
   return rows.length ? rows : undefined;
@@ -62,11 +61,8 @@ function safeReceiptSplits(value: unknown): ReceiptSplit[] | undefined {
 function safeReceiptPayers(value: unknown): ReceiptPayer[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const rows = value.map((raw) => {
-    const row = raw as any;
-    return {
-      personId: String(row?.personId || ''),
-      amount: Number(row?.amount) || 0,
-    };
+    const row = raw as Record<string, unknown>;
+    return { personId: String(row.personId || ''), amount: Number(row.amount) || 0 };
   }).filter((row) => row.personId && row.amount >= 0);
   return rows.length ? rows : undefined;
 }
@@ -655,7 +651,7 @@ function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: Tri
     exchangeRate: Number(row.exchange_rate || 0) || undefined,
     date: row.record_date,
     time: row.record_time ? String(row.record_time).slice(0, 5) : undefined,
-    category: recordKind === 'settlement' ? 'settlement' : safeCategoryId(row.category),
+    category: safeCategoryId(recordKind === 'settlement' ? 'other' : row.category),
     recordKind,
     isSettlement: recordKind === 'settlement',
     payment: safePaymentId(row.payment_method),
@@ -1087,6 +1083,9 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     .eq('id', id)
     .maybeSingle());
   if (contractLookup.error && !isMissingItineraryContractError(contractLookup.error)) {
+    if (/row-level security|42501|permission denied/i.test(contractLookup.error.message || '')) {
+      throw new Error(`旅程「${trip.name || ''}」存取權失效：你唔係呢個旅程嘅成員。請旅程擁有者重新邀請你，接受後先可以同步。`);
+    }
     throw contractLookup.error;
   }
 
@@ -1118,7 +1117,12 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
         p_itinerary: canonicalItinerary.itinerary,
         p_source: isNativeAndroidShell() ? 'android' : 'compact',
       }));
-      if (rpcResult.error) throw rpcResult.error;
+      if (rpcResult.error) {
+        if (/row-level security|42501|permission denied/i.test(rpcResult.error.message || '')) {
+          throw new Error(`旅程「${trip.name || ''}」存取權失效：你唔係呢個旅程嘅成員。請旅程擁有者重新邀請你，接受後先可以同步。`);
+        }
+        throw rpcResult.error;
+      }
       itineraryResult = rpcResult.data as Record<string, any> | null;
     }
 
@@ -1257,22 +1261,34 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
       }
     }
     if (error) {
-      throw new Error(`旅程「${trip.name || ''}」存取權失效：你唔係呢個旅程嘅成員。請旅程擁有者重新邀請你，接受後先可以同步。`);
+      const accessError = new Error(`旅程「${trip.name || ''}」存取權失效：你唔係呢個旅程嘅成員。請旅程擁有者重新邀請你，接受後先可以同步。`);
+      (accessError as Error & { backendError?: string }).backendError = error.message || '';
+      throw accessError;
     }
   }
-  // Defensive auto-seed: ensure the creator always has a trip_members row with role='owner'.
-  // This provides a second RLS path so can_edit_trip() never fails for the actual trip creator,
-  // even if owner_id got mismatched (e.g. account migration, device setup edge case).
-  try {
-    await supabase.from('trip_members').upsert(
+  // Belt-and-suspenders: ensure the trip creator always has a trip_members row with role='owner'.
+  // can_edit_trip() checks trips.owner_id first, but if that path fails (e.g. the id was rehomed,
+  // or a stale session produced a different owner_id), having an explicit trip_members entry
+  // provides a second RLS path so receipts can still sync. Fire-and-forget — tolerate missing
+  // table (pre-sharing schema) or RLS restrictions.
+  if (!explicitSharedTrip) {
+    supabase.from('trip_members').upsert(
       { trip_id: id, user_id: userId, role: 'owner', status: 'active' },
       { onConflict: 'trip_id,user_id' },
-    );
-  } catch (seedError) {
-    // Fire-and-forget: tolerate missing trip_members table (pre-sharing schema).
-    if (!isMissingSharingTableError(seedError)) {
-      console.warn('[supabase] trip_members auto-seed failed (non-fatal):', seedError);
-    }
+    ).then(({ error: memberError }) => {
+      if (memberError && !isMissingSharingTableError(memberError)) {
+        console.warn('[supabase] trip_members auto-seed failed:', memberError.message);
+      }
+    });
+  }
+  if (row.active && !explicitSharedTrip) {
+    const { error: deactivateError } = await withTimeout(supabase
+      .from('trips')
+      .update({ active: false, updated_at: row.updated_at })
+      .eq('owner_id', userId)
+      .neq('id', id)
+      .eq('active', true));
+    if (deactivateError) throw deactivateError;
   }
   return rowToTrip(data as SupabaseTripRow, state, trip.sharing);
 }
@@ -1327,13 +1343,13 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     source_id: sourceIdForReceipt(receipt),
     visibility,
     split_mode: visibility === 'private' || receipt.splitMode === 'private' ? 'private' : 'shared',
-    confidence: null,
-    map_url: receipt.mapUrl || null,
     split_type: receipt.splitType || null,
     splits: receipt.splits?.length ? receipt.splits : null,
     payers: receipt.payers?.length ? receipt.payers : null,
     person_id: receipt.personId || null,
     beneficiary_id: receipt.beneficiaryId || null,
+    confidence: null,
+    map_url: receipt.mapUrl || null,
     version: Math.max(1, Number(receipt.version) || 1),
   };
   const { data, error } = await withTimeout(supabase.rpc('upsert_shared_trip_receipt', {
@@ -1386,165 +1402,103 @@ export async function uploadReceiptPhoto(
   return { storagePath, publicUrl: urlData.signedUrl };
 }
 
-// Shared-trip Notion outbox drainer (client-side worker).
-// Shared-trip receipts are written by every member to Supabase via the RPC, which enqueues a
-// receipt_sync_jobs row for the Notion mirror. There is no server worker (the Notion token lives
-// only in the owner's credential-broker session, never in the DB), so the TRIP OWNER/ADMIN drains
-// the outbox here when online: claim a job, push the receipt to the trip's Notion backend DB
-// (idempotent — pushReceipt finds the page by sourceId), and mark the job done. Fail-safe: bounded
-// batch, owner-only, explicit backend DB (no DEFAULT fallback), never throws, never blocks sync.
-export async function drainSharedTripNotionOutbox(
+function rowToMirrorJob(row: Record<string, unknown>): MirrorJob {
+  const payload = row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+    ? row.payload as Record<string, unknown>
+    : {};
+  return {
+    id: String(row.id || ''),
+    tripId: String(row.trip_id || ''),
+    receiptId: String(row.receipt_id || ''),
+    operation: row.operation === 'delete' ? 'delete' : 'update',
+    payload: typeof payload.sourceId === 'string' ? { sourceId: payload.sourceId } : {},
+  };
+}
+
+async function loadMirrorReceipt(
+  supabase: SupabaseClient,
   session: Session,
   state: AppState,
-  push: (state: AppState, receipt: Receipt) => Promise<Receipt>,
-  archive: (state: AppState, receipt: Receipt) => Promise<void>,
-): Promise<{ processed: number; failed: number }> {
-  const supabase = getSupabaseClient();
-  if (!supabase) return { processed: 0, failed: 0 };
+  job: MirrorJob,
+): Promise<Receipt | null> {
+  if (!job.receiptId) return null;
+  const trip = (state.trips || []).find((candidate) =>
+    candidate.supabaseId === job.tripId || candidate.id === job.tripId);
+  if (!trip) return null;
+  const { data, error } = await withTimeout(
+    supabase.from('receipts').select('*').eq('id', job.receiptId).is('deleted_at', null).maybeSingle(),
+  );
+  if (error) throw error;
+  return data ? rowToReceiptForTrip(data as SupabaseReceiptRow, state, trip, undefined, session.user.id) : null;
+}
+
+async function loadMirrorPhotoDataUrl(supabase: SupabaseClient, receiptId: string): Promise<string | null> {
+  if (!receiptId || notionPhotoMirroredReceipts.has(receiptId)) return null;
   try {
-    const adminTripUuids = (state.trips || [])
-      .filter((trip) => trip.supabaseId && (trip.sharing?.role === 'owner' || trip.sharing?.role === 'admin'))
-      .map((trip) => cleanUuid(trip.supabaseId))
-      .filter((id): id is string => !!id);
-    if (!adminTripUuids.length) return { processed: 0, failed: 0 };
-
-    // Resolve each shared trip's Notion backend database (explicit — never fall back to a default DB).
-    const { data: backendRows, error: backendError } = await withTimeout(
-      supabase.from('trip_backend_links').select('trip_id,notion_database_ref').in('trip_id', adminTripUuids),
+    const { data: photoRow } = await withTimeout(
+      supabase.from('receipt_photos').select('storage_path').eq('receipt_id', receiptId).maybeSingle(),
     );
-    if (backendError) return { processed: 0, failed: 0 };
-    const dbByTrip = new Map<string, string>();
-    for (const row of (backendRows || []) as { trip_id: string; notion_database_ref: string | null }[]) {
-      if (row.notion_database_ref) dbByTrip.set(row.trip_id, row.notion_database_ref);
-    }
-    if (!dbByTrip.size) return { processed: 0, failed: 0 };
+    const storagePath = String((photoRow as { storage_path?: string } | null)?.storage_path || '');
+    if (!storagePath) return null;
+    const { data: signed } = await withTimeout(
+      supabase.storage.from('receipt-photos').createSignedUrl(storagePath, RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS),
+    );
+    if (!signed?.signedUrl) return null;
+    const response = await fetch(signed.signedUrl);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    if (blob.size <= 0 || blob.size > 6_000_000) return null;
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
 
-    const tripIdArray = [...dbByTrip.keys()];
-
-    const finishJob = async (jobId: string, status: 'succeeded' | 'failed', error?: unknown) => {
+export function createSharedTripOutboxSupabaseAdapter(
+  session: Session,
+  state: AppState,
+): SharedTripOutboxAdapters['supabase'] {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error('Supabase client unavailable');
+  return {
+    async listBackends(tripIds) {
+      const { data, error } = await withTimeout(
+        supabase.from('trip_backend_links').select('trip_id,notion_database_ref').in('trip_id', tripIds),
+      );
+      if (error) throw error;
+      return new Map((data || [])
+        .filter((row) => row.notion_database_ref)
+        .map((row) => [row.trip_id, row.notion_database_ref]));
+    },
+    async claim(tripIds, workerId, limit) {
+      const { data, error } = await withTimeout(supabase.rpc('claim_receipt_sync_jobs', {
+        p_trip_ids: tripIds,
+        p_provider: 'notion',
+        p_worker: workerId,
+        p_limit: limit,
+      }));
+      if (error) throw error;
+      return (data || []).map(rowToMirrorJob);
+    },
+    loadReceipt: (job) => loadMirrorReceipt(supabase, session, state, job),
+    loadPhoto: (receiptId) => loadMirrorPhotoDataUrl(supabase, receiptId),
+    markPhotoMirrored(receiptId) {
+      notionPhotoMirroredReceipts.add(receiptId);
+    },
+    async finish(jobId, status, error) {
       const result = await withTimeout(supabase.rpc('finish_receipt_sync_job', {
         p_job_id: jobId,
         p_status: status,
-        p_error: status === 'failed' ? String((error as Error)?.message || error || 'Notion sync failed').slice(0, 300) : null,
+        p_error: status === 'failed' ? error || 'Notion sync failed' : null,
       }));
       if (result.error) throw result.error;
-    };
-
-    let processed = 0;
-    let failed = 0;
-    // Up to 5 claim rounds per drain (100 jobs): a backlog — e.g. after the grants
-    // outage or an offline stretch — previously trickled out at 20 jobs per whole
-    // sync cycle. Stop early when a round comes back short (queue empty).
-    for (let round = 0; round < 5; round++) {
-    const { data: rpcJobs, error: rpcError } = await withTimeout(
-      supabase.rpc('claim_receipt_sync_jobs', {
-        p_trip_ids: tripIdArray,
-        p_provider: 'notion',
-        p_worker: session.user.id,
-        p_limit: 20,
-      }),
-    );
-    if (rpcError) break;
-    const jobs = (rpcJobs || []) as Array<Record<string, any>>;
-    if (!jobs?.length) break;
-    for (const job of jobs as Array<Record<string, any>>) {
-      const notionDb = dbByTrip.get(job.trip_id);
-      const trip = (state.trips || []).find((candidate) => cleanUuid(candidate.supabaseId) === job.trip_id);
-      if (!notionDb || !trip) continue;
-      try {
-        if (job.operation === 'delete') {
-          const sourceId = String(job.payload?.sourceId || '').trim();
-          const receiptId = String(job.receipt_id || '').trim();
-          const notionState: AppState = {
-            ...state,
-            activeTripId: trip.id,
-            trips: (state.trips || []).map((candidate) =>
-              candidate.id === trip.id ? { ...candidate, notionDb } : candidate
-            ),
-          };
-          const tombstone = {
-            id: receiptId || sourceId,
-            sourceId: sourceId || receiptId,
-            tripId: trip.id,
-            store: '',
-            date: trip.startDate || state.tripDateRange.start,
-            total: 0,
-            category: 'other' as const,
-            payment: 'cash' as const,
-          } as Receipt;
-          await archive(notionState, tombstone);
-          await finishJob(job.id, 'succeeded');
-          processed += 1;
-          continue;
-        }
-        const { data: receiptRow, error: receiptError } = await withTimeout(
-          supabase.from('receipts').select('*').eq('id', job.receipt_id).is('deleted_at', null).maybeSingle(),
-        );
-        if (receiptError) throw receiptError;
-        if (!receiptRow) {
-          await finishJob(job.id, 'succeeded');
-          processed += 1;
-          continue;
-        }
-        const receipt = rowToReceiptForTrip(receiptRow as SupabaseReceiptRow, state, trip, undefined, session.user.id);
-        // Member receipts exist here only as Supabase rows — the draining owner's device
-        // never held the photo locally, so pushReceipt's photoThumb path would silently
-        // mirror the record WITHOUT its image. Backfill it from Storage (trip members can
-        // sign each other's photos — the same policy the pull path relies on) so the
-        // broker's native Notion upload attaches it. Best-effort: a photo failure never
-        // fails the record's mirror job.
-        if (!receipt.photoThumb && !notionPhotoMirroredReceipts.has(String(job.receipt_id))) {
-          try {
-            const { data: photoRow } = await withTimeout(
-              supabase.from('receipt_photos').select('storage_path').eq('receipt_id', job.receipt_id).maybeSingle(),
-            );
-            const storagePath = String((photoRow as { storage_path?: string } | null)?.storage_path || '');
-            if (storagePath) {
-              const { data: signed } = await withTimeout(
-                supabase.storage.from('receipt-photos').createSignedUrl(storagePath, RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS),
-              );
-              if (signed?.signedUrl) {
-                const res = await fetch(signed.signedUrl);
-                if (res.ok) {
-                  const blob = await res.blob();
-                  if (blob.size > 0 && blob.size <= 6_000_000) {
-                    receipt.photoThumb = await new Promise<string>((resolve, reject) => {
-                      const reader = new FileReader();
-                      reader.onload = () => resolve(String(reader.result));
-                      reader.onerror = () => reject(reader.error);
-                      reader.readAsDataURL(blob);
-                    });
-                  }
-                }
-              }
-            }
-          } catch {
-            // ponytail: photo mirror is best-effort; the record row still mirrors.
-          }
-        }
-        const notionState: AppState = {
-          ...state,
-          activeTripId: trip.id,
-          trips: (state.trips || []).map((candidate) => candidate.id === trip.id ? { ...candidate, notionDb } : candidate),
-        };
-        await push(notionState, { ...receipt, tripId: trip.id });
-        // Session-scoped dedupe: repeat UPDATE jobs for the same receipt would re-upload
-        // the identical image each time (Notion replaces the files property, so no
-        // duplicates appear — this just avoids the wasted upload).
-        if (receipt.photoThumb) notionPhotoMirroredReceipts.add(String(job.receipt_id));
-        await finishJob(job.id, 'succeeded');
-        processed += 1;
-      } catch (err) {
-        failed += 1;
-        await finishJob(job.id, 'failed', err).catch(() => {});
-      }
-    }
-    if (jobs.length < 20) break;
-    }
-    return { processed, failed };
-  } catch {
-    return { processed: 0, failed: 0 };
-  }
+    },
+  };
 }
 
 export async function archiveSupabaseReceipt(session: Session, state: AppState, receipt: Receipt): Promise<void> {

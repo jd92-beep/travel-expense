@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function openDashboard(page, statsIncludeTransportLodging, extraState = {}) {
@@ -47,7 +49,7 @@ async function openDashboard(page, statsIncludeTransportLodging, extraState = {}
       ...extra,
     }));
   }, { includeToggle: statsIncludeTransportLodging, extraState });
-  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect(page.locator('.today-itinerary-card').getByText('今日行程')).toHaveCount(1);
   await expect(page.getByText('Budget Settings')).toHaveCount(0);
@@ -560,7 +562,7 @@ test('Dashboard compact itinerary and recent expenses show denser Home informati
     }));
   });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
   await expect(page.locator('.dashboard-compact-itinerary-row')).toHaveCount(4);
   await expect(page.locator('.dashboard-compact-itinerary-row').first()).toContainText('09:00');
   await expect(page.locator('.dashboard-compact-itinerary-row').first()).toContainText('Station Coffee');

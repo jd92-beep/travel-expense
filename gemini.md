@@ -6,8 +6,12 @@
 - **Project 名**: Travel Expense (語音輸入可能會變咗 "Triple Expansion" 🤣，明晒！)
 - **Repo 路徑**: `/Users/tommy/Documents/Codex/travel-expense`
 - **Live URL**: `https://jd92-beep.github.io/travel-expense/` (GitHub Pages) / `https://travel-expense-react.vercel.app` (Public React Vercel)
-- **目的**: 幫 Boss (Tony) 記 2026 年名古屋旅行嘅帳，支持 AI OCR、Email 解析同行程 tracking。
-- **Tech Stack**: Vanilla JS + HTML (Legacy 主版) / React 18 + Vite (Fresh React 喺 `app-react/`) / Google Apps Script (Email-to-Notion) / Notion API 做 Database。
+- **目的**: 原本係幫 Boss (Tony) 記 2026 年名古屋旅行嘅帳，而家已經演化成公開多用戶產品：Supabase 多用戶 RLS、旅程共享（editor/viewer）、私人收據可見度、獨立 Admin 後台，支持 AI OCR、Email 解析同行程 tracking。
+- **Tech Stack**: Vanilla JS + HTML (Legacy 主版) / React 19 + Vite + TS (`app-react/`) / React 19 + Vite (現役 Compact `app-compact/`) / Admin Kanban (`app-admin-kanban/`) / Google Apps Script (Email-to-Notion) / Notion API 做 Database。
+
+## ⚖️ 全 Agent 共同規則（必讀）
+- 睇 `AGENTS.md` → **Ground Rules For All Agents**：真相優先序、hard stops（Supabase migration 唔准 blind push）、done 嘅定義（要貼證據）、retry 紀律、HANDOVER 衛生規矩。所有 agent（包括我 Antigravity）都要跟。
+- `HANDOVER.md` 頂部而家有 **Current Open Items（live 清單）**——開工前睇佢，收工前 reconcile 佢；中段嘅舊 Pending 區係歷史快照，唔好照做。
 
 ## 🤖 Antigravity 專屬工作守則
 
@@ -33,7 +37,7 @@
 
 ---
 
-## 🛠️ 核心架構與最新升級 (2026-06-11 HKT)
+## 🛠️ 核心架構與最新升級 (2026-07-06 HKT)
 
 ### 0. 📍 React Itinerary Timeline 最新狀態
 - **Spot-index progress**：React `/react/` Itinerary rail 依家跟「目前時間所屬嘅景點位置」推進，而唔係用 24 小時比例硬拉條線。
@@ -118,12 +122,43 @@ Antigravity 同 Codex 協作完成咗 Trip Update AI 嘅深度強化：
 - **mergeTripDrafts**：LLM 同 local parser 結果合併——如果 LLM 返回嘅日數少過 local parser，會從 local draft 補返缺失嘅日數同景點。
 - **48 個 Unit Tests**：`app-compact/scripts/test-local-parser.mjs` 覆蓋 tab 解析、pipe 表格、純文字、`computeTimeEnd` 邊界（午夜 wrap、零 duration、空 input）同 `parseDuration` 邊界。
 
+### 11. 🇭🇰 香港天文台 (HKO) Official Weather Provider + Stats/Weather/GEO 修正 (2026-07-06 新增)
+Antigravity 完成咗四項 Compact 修正：
+- **Stats 預算貨幣 Bug**：`handleUpdateBudget` 加入 `hkdToCurrency()` 轉換，HKD 模式下用戶輸入會正確轉返 trip currency 先至存；編輯初始值亦會顯示正確嘅 HKD 金額。
+- **Weather 日期顯示**：新增 `formatWeatherDate()` helper，Weather card 依家顯示 `7月12日 (六)` 格式嘅大字日期 (15px desktop / 13px mobile)，取代舊嘅 9.5px `Day X` eyebrow。
+- **GEO_DICTIONARY 污染修正**：`/機場|airport/` → `/濟州機場|jeju.*airport/`，防止名古屋 trip 誤 match 到濟州座標。加咗 13 個日本地標 + 11 個香港地標。
+- **HKO 天文台 Official Provider**：
+  1. 新增 `'hko'` 到 `OfficialWeatherProviderId` type union。
+  2. 路由支援 `香港`/`Hong Kong`/`HK` 關鍵字 + geo bounding box (22.15°-22.56°N, 113.82°-114.44°E)。
+  3. `fetchHkoOfficialWeather()` 平行 fetch `rhrread`（即時溫度/濕度/UV/降雨）同 `fnd`（9 日預報），將 min/max 溫度分佈到 4 個 display slot (9am/12pm/4pm/9pm)。
+  4. HKO icon codes (50-93) → WMO 天氣代碼 mapping；Beaufort force → km/h；PSR → 雨量概率。
+  5. Open-Meteo 自動 merge 填補 HKO 冇提供嘅 hourly 數據（cloud_cover、wind_gusts 等）。
+
+### 12. ✏️ In-place Itinerary Editing + Bug Fix & UX Polish (2026-07-06 新增)
+Oscar (Claude Code) 完成咗 `v0.11.0` 嘅改行程功能，Antigravity Teamwork 做咗 code review 同修正至 `v0.11.1`：
+- **v0.11.0 (Oscar) — 改行程功能**：
+  1. **Day Editor**：每日標題有 ✏️ 編輯掣，開 modal 可以改地區、逐行改時間/名/類別、🗑 刪點、➕ 新增行程點、按時間排序。
+  2. **Day Swap**：⇆ 對調掣，揀另一日 confirm 後兩日全部內容（地區/景點/住宿）即刻交換，日期唔郁。
+  3. **Per-spot Edit 升級**：加入「移至日子」下拉（單個景點搬日）同「刪除」掣（取代舊嘅「還原」）。
+  4. **統一寫入 `applyItineraryEdit()`**：所有編輯直接寫入 `trip.itinerary` 本體（version bump + sync queue），唔再用 `itineraryOverrides` memo 紙層。旅伴可以睇到修改、AI 行程更新唔會冚走手改。
+  5. **Override Bake 一次性遷移**：App 啟動時自動將舊 `itineraryOverrides` bake 入行程本體。Viewer 角色保留舊行為。
+- **v0.11.1 (Antigravity Teamwork) — Bug Fix & UX Polish**：
+  1. **BUG 1 修正**：Per-spot editor 類別選單統一用 `SPOT_TYPE_OPTIONS` 常量（10 種類別含 `flight` 同 `sightseeing`），防止類別數據被降級為 `other`。
+  2. **BUG 2 修正**：Day Editor 每行加入 `timeEnd` 結束時間欄位。
+  3. **BUG 3 & UX 1 修正**：Day Editor 每行加入 ⚙️ Details 跳轉鈕，click 後儲存當前編輯、打開完整 Per-spot Editor（有 note/address/移至日子等進階欄位）。
+  4. **BUG 4 修正**：Mobile ≤430px grid 重新設計為 4 欄 2 行佈局，Touch Targets ≥ 40px，避免 overflow。
+  5. **BUG 5 修正**：Day Editor 加入 dirty state check，離開時有 unsaved changes 確認。
+  6. **UX 2 修正**：Day Swap 用 custom HTML confirmation modal 取代 `window.confirm()`，同 app 風格一致。
+  7. **UX 3 修正**：`getNextSpotDefaultTime(spots)` helper，新景點預設時間為最後一個景點 +30 分鐘（fallback `09:00`）。
+  8. **Test 修正**：`timeline-smoke.spec.cjs` 對齊 owner mode 下嘅「刪除」掣行為。
+
 ---
 
 ## 🗂 重點檔案地圖
 - `index.html`: Legacy 主程式 (~10,000 行，已全面剔除 Zhipu，升級為 Kimi-first connections/voice/OCR fallback)。
 - `legacy-notion.js`: 由 index.html 抽離 the legacy Notion sync module，要 keep 住 compatible。
-- `app-react/`: 新版 React 18 + Vite + TS 專案，已 100% 編譯通過。核心 AI 調用在 `src/lib/ai.ts` 與 `src/lib/credentialBroker.ts`。
+- `app-react/`: 新版 React 19 + Vite + TS 專案，已 100% 編譯通過。核心 AI 調用在 `src/lib/ai.ts` 與 `src/lib/credentialBroker.ts`。
+- `app-compact/`: 現役部署版 React 19 + Vite + TS 專案（手機優化），獨立版本管理。
 - `email-to-notion.gs`: 後端 Apps Script。已全面更換為 Kimi 接口與 OpenAI 格式 retry，並實現 PropertiesService 查重防重複機制。
 - `workers/credential-broker`: Cloudflare Worker 項目。`wrangler.jsonc` 包含 `KIMI_PROXY_URL` 配置，`src/index.js` 將設備 TTL 縮短至 90 天以硬化安全。
 - `HANDOVER.md`: 最 update 嘅狀態同 next steps，每次完 session 都要 update。

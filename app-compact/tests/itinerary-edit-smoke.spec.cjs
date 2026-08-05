@@ -1,8 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
-const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
-
 test.use({ viewport: { width: 390, height: 844 } });
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
 // In-place itinerary editing (v0.11.0): Timeline day editor, day swap, and per-spot
 // edits must write into trip.itinerary (version bump + sync queue), NOT the legacy

@@ -26,6 +26,13 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   const activeDay = dayReceipts ? itinerary.find((day) => day.date === dayReceipts) : null;
   const looseReceipts = activeDay ? dayLooseReceipts(state, activeDay) : [];
   const hasOpenModal = Boolean(editing || activeDay || viewPhoto);
+  const editingOverrideKey = editing
+    ? editing.original.spotId || editing.original.id || `${editing.date}_${editing.idx}`
+    : '';
+  const hasEditingOverride = !!editing && !!(
+    state.itineraryOverrides?.[editingOverrideKey]
+    || state.itineraryOverrides?.[`${editing.date}_${editing.idx}`]
+  );
   const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
 
   useEffect(() => {
@@ -228,10 +235,12 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
           <label>地址<input name="address" defaultValue={editing.original.address || ''} /></label>
           <label>備註<input name="note" defaultValue={editing.original.note || ''} /></label>
           <div className="modal-actions">
-            <button type="button" className="danger" onClick={() => {
-              setState((prev) => setItineraryOverride(prev, editing.date, editing.idx, null));
-              setEditing(null);
-            }}><RotateCcw size={15} /> 還原</button>
+            {hasEditingOverride && (
+              <button type="button" className="danger" onClick={() => {
+                setState((prev) => setItineraryOverride(prev, editing.date, editing.idx, null));
+                setEditing(null);
+              }}><RotateCcw size={15} /> 還原</button>
+            )}
             <div className="action-row">
               <button type="button" className="secondary" onClick={() => setEditing(null)}>取消</button>
               <button type="submit" className="primary">儲存</button>

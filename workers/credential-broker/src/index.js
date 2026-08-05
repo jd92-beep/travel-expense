@@ -1,20 +1,24 @@
+import { PROVIDER_MODELS } from './provider-catalog.js';
+
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.06.12';
+const VERSION = '2026.07.23.1';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const TRUSTED_DEVICE_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const SESSION_CHALLENGE_TTL_MS = 1000 * 60 * 5;
 const MAX_JSON_BYTES = 4500000;
-const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi', 'mimo'];
+const PROVIDERS = ['notion', 'kimi', 'google', 'weatherapi', 'mimo', 'volcano'];
 const NOTION_VERSION = '2022-06-28';
 const KIMI_DEFAULT_BASE = 'https://api.kimi.com/coding/v1';
 const MIMO_DEFAULT_BASE = 'https://token-plan-sgp.xiaomimimo.com/v1';
 const MIMO_PAYG_BASE = 'https://api.xiaomimimo.com/v1';
+const VOLCANO_DEFAULT_BASE = 'https://ark.cn-beijing.volces.com/api/plan/v3';
 const GOOGLE_DEFAULT_MODEL = 'gemma-4-31b-it';
 const RATE_WINDOW_MS = 1000 * 60 * 15;
 const DEFAULT_SUPABASE_AI_DAILY_LIMIT = 50;
 const BOSS_EMAIL = 'vc06456@gmail.com';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TRIP_THEME_KEYS = ['japan_washi', 'korea_editorial', 'taiwan_nightmarket', 'europe_rail', 'global_journal'];
 const TRIP_CONTEXTS = [
   { countryCode: 'JP', countryName: 'Japan', primaryCurrency: 'JPY', themeKey: 'japan_washi', locale: 'ja-JP', timezone: 'Asia/Tokyo', weatherRegion: 'Japan', pattern: /日本|東京|东京|大阪|名古屋|京都|札幌|沖繩|冲绳|japan|tokyo|osaka|nagoya|kyoto|sapporo|okinawa|jpy/i },
@@ -138,6 +142,18 @@ function constantTimeEqual(a, b) {
   let diff = 0;
   for (let i = 0; i < a.length; i += 1) diff |= a[i] ^ b[i];
   return diff === 0;
+}
+
+async function isEdgeBrokerRequest(request, env) {
+  const expected = String(env.EDGE_BROKER_KEY || '');
+  const provided = String(request.headers.get('X-Admin-Internal') || '');
+  if (expected.length < 32 || !provided) return false;
+  const encoder = new TextEncoder();
+  const [expectedHash, providedHash] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(expected)),
+    crypto.subtle.digest('SHA-256', encoder.encode(provided)),
+  ]);
+  return constantTimeEqual(new Uint8Array(expectedHash), new Uint8Array(providedHash));
 }
 
 async function hmacKey(secret) {
@@ -407,6 +423,12 @@ async function readWeatherApiCredential(env) {
   return readCredential(env, 'weatherapi');
 }
 
+async function readVolcanoCredential(env) {
+  const envSecret = String(env.VOLCANO_KEY || '').trim();
+  if (envSecret) return { provider: 'volcano', secret: envSecret, extra: { source: 'env' }, status: 'connected' };
+  return readCredential(env, 'volcano');
+}
+
 async function readUserCredential(env, provider, userId) {
   const raw = await env.CREDENTIALS_VAULT.get(await userVaultId(provider, userId), 'json');
   if (!raw) return null;
@@ -554,17 +576,22 @@ async function consumeSupabaseAiQuota(env, user, provider, request) {
 }
 
 async function providerStatus(env, provider) {
+  const models = PROVIDER_MODELS[provider] || [];
   if (provider === 'weatherapi' && String(env.WEATHERAPI_KEY || '').trim()) {
-    return { provider, status: 'connected', updatedAt: Date.now() };
+    return { provider, status: 'connected', updatedAt: Date.now(), models };
+  }
+  if (provider === 'volcano' && String(env.VOLCANO_KEY || '').trim()) {
+    return { provider, status: 'connected', updatedAt: Date.now(), models };
   }
   const raw = await env.CREDENTIALS_VAULT.get(vaultId(provider), 'json');
-  if (!raw) return { provider, status: 'missing' };
+  if (!raw) return { provider, status: 'missing', models };
   const data = await decryptVaultValue(env, raw);
   return {
     provider,
     status: data.status || 'unknown',
     updatedAt: data.updatedAt || raw.updatedAt,
     lastTestedAt: data.lastTestedAt,
+    models,
   };
 }
 
@@ -612,6 +639,13 @@ async function verifySupabaseUser(request, env) {
 async function optionalSupabaseUser(request, env) {
   if (!supabaseBearerToken(request)) return null;
   return verifySupabaseUser(request, env);
+}
+
+function internalNotionUser(body, edgeBrokerRequest) {
+  if (!edgeBrokerRequest || body?.internalUserId == null) return null;
+  const id = String(body.internalUserId || '').trim();
+  if (!UUID_RE.test(id)) throw new HttpError('Internal Notion user invalid', 400);
+  return { id, email: '' };
 }
 
 function notionCredentialRef(userId) {
@@ -878,8 +912,9 @@ async function kimiJson(env, prompt, kind, image, requestedModel) {
     body: JSON.stringify({
       model: requestedModel || env.KIMI_MODEL || 'kimi-code',
       messages,
-      temperature: kind === 'test' ? 0 : 0.1,
+      temperature: kind === 'test' ? 0 : 0.6,
       thinking: { type: 'disabled' },
+      max_tokens: kind === 'test' ? 8 : undefined,
     }),
   }));
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
@@ -901,7 +936,7 @@ async function mimoJson(env, prompt, kind, image, requestedModel) {
     temperature: kind === 'test' ? 0 : 0.1,
     stream: false,
     thinking: { type: 'disabled' },
-    max_tokens: kind === 'trip' ? 10000 : 800,
+    max_tokens: kind === 'test' ? 8 : kind === 'trip' ? 10000 : 800,
   });
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
 }
@@ -933,7 +968,7 @@ async function mimoChatCompletion(env, credential, body) {
   throw lastError || new Error('Mimo provider unavailable');
 }
 
-async function googleJson(env, prompt, _kind, image, requestedModel) {
+async function googleJson(env, prompt, kind, image, requestedModel) {
   const credential = await readCredential(env, 'google');
   if (!credential?.secret) throw new Error('Google credential missing');
   const model = String(requestedModel || env.GOOGLE_MODEL || GOOGLE_DEFAULT_MODEL).replace(/^models\//, '');
@@ -945,7 +980,11 @@ async function googleJson(env, prompt, _kind, image, requestedModel) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+      generationConfig: {
+        temperature: kind === 'test' ? 0 : 0.1,
+        responseMimeType: 'application/json',
+        maxOutputTokens: kind === 'test' ? 8 : undefined,
+      },
     }),
   }));
   return extractJson(data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
@@ -1173,15 +1212,30 @@ function normalizeTripAnalysis(data, body) {
 async function testProvider(env, provider, candidateSecret, extra = {}) {
   const credential = candidateSecret
     ? { secret: candidateSecret, extra }
-    : provider === 'weatherapi' ? await readWeatherApiCredential(env) : await readCredential(env, provider);
+    : provider === 'weatherapi' ? await readWeatherApiCredential(env)
+    : provider === 'volcano' ? await readVolcanoCredential(env)
+    : await readCredential(env, provider);
   if (!credential?.secret) return { provider, status: 'missing' };
+  const model = extra.model == null ? null : String(extra.model);
+  if (model && !PROVIDER_MODELS[provider]?.includes(model)) {
+    throw new HttpError('Provider model is not allowlisted', 400);
+  }
   try {
     if (provider === 'notion') await testNotion(env, credential);
-    if (provider === 'kimi') await kimiJsonWithCredential(env, credential);
-    if (provider === 'mimo') await mimoJsonWithCredential(env, credential);
-    if (provider === 'google') await googleModelsList(credential.secret);
+    if (provider === 'kimi') await kimiJsonWithCredential(env, credential, model);
+    if (provider === 'mimo') await mimoJsonWithCredential(env, credential, model);
+    if (provider === 'google') {
+      if (model) await googleJsonWithCredential(credential, model);
+      else await googleModelsList(credential.secret);
+    }
     if (provider === 'weatherapi') await testWeatherApi(credential.secret);
-    return { provider, status: 'connected', lastTestedAt: Date.now() };
+    if (provider === 'volcano') await volcanoJsonWithCredential(env, credential, model);
+    return {
+      provider,
+      status: 'connected',
+      lastTestedAt: Date.now(),
+      model: model || PROVIDER_MODELS[provider]?.[0] || null,
+    };
   } catch (error) {
     return { provider, status: 'invalid', lastTestedAt: Date.now(), message: redact(error?.message || error) };
   }
@@ -1199,7 +1253,20 @@ async function testWeatherApi(secret) {
   return data.current;
 }
 
-async function kimiJsonWithCredential(env, credential) {
+function providerModelName(provider, model, fallback) {
+  return String(model || fallback).replace(new RegExp(`^${provider}/`), '');
+}
+
+function requireModelTestResponse(data) {
+  const message = data?.choices?.[0]?.message;
+  const content = message?.content || data?.content || data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const reasoning = message?.reasoning_content || '';
+  if (!String(content).trim() && !String(reasoning).trim()) {
+    throw new Error('Model test returned an empty response');
+  }
+}
+
+async function kimiJsonWithCredential(env, credential, requestedModel) {
   const base = String(env.KIMI_PROXY_URL || env.KIMI_API_BASE || KIMI_DEFAULT_BASE).replace(/\/+$/, '');
   const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
     method: 'POST',
@@ -1210,25 +1277,97 @@ async function kimiJsonWithCredential(env, credential) {
       'User-Agent': 'claude-code/0.1.0',
     },
     body: JSON.stringify({
-      model: env.KIMI_MODEL || 'kimi-code',
+      model: providerModelName('kimi', requestedModel, env.KIMI_MODEL || 'kimi-code'),
       messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
       temperature: 0,
       thinking: { type: 'disabled' },
+      max_tokens: 8,
     }),
   }));
-  return extractJson(data?.choices?.[0]?.message?.content || '');
+  requireModelTestResponse(data);
 }
 
-async function mimoJsonWithCredential(env, credential) {
+async function volcanoJson(env, prompt, kind, image, requestedModel) {
+  const credential = await readVolcanoCredential(env);
+  if (!credential?.secret) throw new Error('Volcano credential missing');
+  const base = String(env.VOLCANO_API_BASE || VOLCANO_DEFAULT_BASE).replace(/\/+$/, '');
+  const messages = [
+    { role: 'system', content: 'Return strict JSON only. No markdown.' },
+    { role: 'user', content: image ? [
+      { type: 'text', text: prompt },
+      { type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.base64}` } },
+    ] : prompt },
+  ];
+  const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${credential.secret}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      model: requestedModel || 'doubao-seed-2.0-lite',
+      messages,
+      temperature: kind === 'test' ? 0 : 0.6,
+      thinking: kind === 'test' ? { type: 'disabled' } : undefined,
+      max_tokens: kind === 'test' ? 8 : undefined,
+    }),
+  }));
+  const choice = data?.choices?.[0];
+  const content = choice?.message?.content || data?.content || '';
+  if (kind === 'test') {
+    const reasoning = choice?.message?.reasoning_content || '';
+    if (!String(content).trim() && !String(reasoning).trim()) {
+      throw new Error('Model test returned an empty response');
+    }
+    return { ok: true, provider: 'volcano' };
+  }
+  return extractJson(content);
+}
+
+async function volcanoJsonWithCredential(env, credential, requestedModel) {
+  const base = String(env.VOLCANO_API_BASE || VOLCANO_DEFAULT_BASE).replace(/\/+$/, '');
+  const data = await parseProviderJson(await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${credential.secret}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      model: providerModelName('volcano', requestedModel, 'doubao-seed-2.0-lite'),
+      messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
+      temperature: 0,
+      max_tokens: 8,
+    }),
+  }));
+  requireModelTestResponse(data);
+}
+
+async function mimoJsonWithCredential(env, credential, requestedModel) {
   const data = await mimoChatCompletion(env, credential, {
-    model: env.MIMO_MODEL || 'mimo-v2.5',
+    model: providerModelName('mimo', requestedModel, env.MIMO_MODEL || 'mimo-v2.5'),
     messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
     temperature: 0,
     stream: false,
     thinking: { type: 'disabled' },
-    max_tokens: 800,
+    max_tokens: 8,
   });
-  return extractJson(data?.choices?.[0]?.message?.content || '');
+  requireModelTestResponse(data);
+}
+
+async function googleJsonWithCredential(credential, requestedModel) {
+  const model = providerModelName('google', requestedModel, GOOGLE_DEFAULT_MODEL);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(credential.secret)}`;
+  const data = await parseProviderJson(await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: 'Return only JSON: {"ok":true}' }] }],
+      generationConfig: { temperature: 0, responseMimeType: 'application/json', maxOutputTokens: 8 },
+    }),
+  }));
+  requireModelTestResponse(data);
 }
 
 async function googleModelsList(key) {
@@ -1250,6 +1389,7 @@ async function handleRequest(request, env) {
       return json({ ok: true, service: SERVICE, version: VERSION }, 200, cors);
     }
     enforceAllowedOrigin(request, env);
+    const edgeBrokerRequest = await isEdgeBrokerRequest(request, env);
     if (url.pathname === '/session/unlock') {
       const rateKey = await enforceRateLimit(request, env, 'unlock');
       const body = await readJson(request);
@@ -1294,9 +1434,11 @@ async function handleRequest(request, env) {
       return json({ ok: true, status: result }, 200, cors);
     }
     if (url.pathname === '/notion/request') {
-      const user = await optionalSupabaseUser(request, env);
-      if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
+      const user = edgeBrokerRequest
+        ? internalNotionUser(body, edgeBrokerRequest)
+        : await optionalSupabaseUser(request, env);
+      if (!user && !edgeBrokerRequest) await verifySession(request.headers.get(SESSION_HEADER), env);
       const data = await fetchNotion(env, body.path, body.method, body.body, body.databaseId, user);
       return json({ ok: true, data }, 200, cors);
     }
@@ -1329,6 +1471,13 @@ async function handleRequest(request, env) {
       await consumeSupabaseAiQuota(env, user, 'mimo', request);
       return json({ ok: true, data: await mimoJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
     }
+    if (url.pathname === '/volcano/json') {
+      const user = await optionalSupabaseUser(request, env);
+      if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
+      const body = await readJson(request);
+      await consumeSupabaseAiQuota(env, user, 'volcano', request);
+      return json({ ok: true, data: await volcanoJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
+    }
     if (url.pathname === '/trip/intelligence') {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
@@ -1344,9 +1493,8 @@ async function handleRequest(request, env) {
       return json({ ok: true, data: await weatherApiForecast(env, body) }, 200, cors);
     }
 
-    // Server-to-server auth bypass (Edge Function internal calls)
-    const isInternalCall = request.headers.get('X-Admin-Internal') === env.ADMIN_TOKEN;
-    if (!isInternalCall) {
+    const edgeBrokerRoute = url.pathname === '/credentials/status' || url.pathname === '/credentials/test';
+    if (!(edgeBrokerRequest && edgeBrokerRoute)) {
       const user = await optionalSupabaseUser(request, env);
       if (!user) {
         await verifySession(request.headers.get(SESSION_HEADER), env);
@@ -1366,7 +1514,7 @@ async function handleRequest(request, env) {
     }
     if (url.pathname === '/credentials/test') {
       const body = await readJson(request);
-      return json({ ok: true, status: await testProvider(env, body.provider) }, 200, cors);
+      return json({ ok: true, status: await testProvider(env, body.provider, undefined, { model: body.model }) }, 200, cors);
     }
     if (url.pathname === '/credentials/test-all') {
       return json({ ok: true, providers: await Promise.all(PROVIDERS.map((provider) => testProvider(env, provider))) }, 200, cors);

@@ -579,7 +579,11 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
                   type="button"
                   aria-label="編輯預算"
                   onClick={() => {
-                    setEditBudgetVal(String(state.budget || ''));
+                    // Show the value in the currently active display currency
+                    const initVal = showTripCurrency
+                      ? String(state.budget || '')
+                      : String(Math.round(amountToHkd(Number(state.budget) || 0, resolvedTripCurrency, state)) || '');
+                    setEditBudgetVal(initVal);
                     setIsEditingBudget(true);
                   }}
                   style={{ cursor: 'pointer' }}

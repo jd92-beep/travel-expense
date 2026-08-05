@@ -4,11 +4,12 @@ import { activeTrip } from '../domain/trip/normalize';
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
 import { recordClientHeartbeat } from './clientHeartbeat';
-import { archiveSupabaseReceipt, drainSharedTripNotionOutbox, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
+import { archiveSupabaseReceipt, createSharedTripOutboxSupabaseAdapter, hasSupabaseSession, isSupabaseConfigured, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
+import { drainSharedTripOutbox } from './sharedTripNotionOutbox';
 import { filterSupersededTripQueue, isReceiptTombstoned, mergePulledData, rawReceiptSourceId, receiptSourceTombstoneKey } from './syncMerge';
 import { enqueueChange, settleChange, type JournalOutcome } from './changeJournal';
-import { MAX_RETRY_ATTEMPTS, queueItemReady, releaseReconnectBackoff } from './syncBackoff';
-import { NATIVE_REACHABILITY_ONLINE_EVENT } from './constants';
+import { queueItemReady, releaseReconnectBackoff } from './syncBackoff';
+import { MAX_SYNC_RETRY_ATTEMPTS, NATIVE_REACHABILITY_ONLINE_EVENT } from './constants';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
 import type { Session } from '@supabase/supabase-js';
 
@@ -16,6 +17,16 @@ const DEBOUNCE_MS = 3000;
 const BACKGROUND_INTERVAL_MS = 120_000;
 const MIN_SYNC_INTERVAL_MS = 30_000;
 const RECONNECT_DEBOUNCE_MS = 100;
+
+// A stale-access-token race right after foregrounding (visibilitychange/interval/reconnect/boot)
+// looks identical to a genuinely dead session at the moment of the very first request, but
+// supabase-js's autoRefreshToken mints a fresh access_token within ~1s of noticing the old one
+// is expired. Auto-triggered syncs get exactly one quiet retry after this delay before the red
+// banner paints; a manually-clicked retry does not (the user is already looking at the banner
+// and expects an immediate, honest result).
+export const AUTO_SYNC_AUTH_RETRY_DELAY_MS = 2500;
+
+type SyncOptions = { auto?: boolean };
 
 function redactError(error: unknown) {
   let raw = 'Sync failed';
@@ -39,10 +50,10 @@ function redactError(error: unknown) {
 }
 
 // A transient network hiccup (offline, radio waking on a cold open, DNS/first-request
-// flakiness, request timeout) is NOT an actionable failure — the interval + reconnect listener
-// heal it within seconds. Surfacing it as the persistent red "sync error" banner is a false
-// alarm; that's the "open the app after a few hours and it always shows sync error" bug — the
-// first request after the phone's radio has slept just flakes once. Reserve the banner for
+// flakiness, request timeout) is NOT an actionable failure — the 120s interval + reconnect
+// listener heal it within seconds. Surfacing it as the persistent red "sync error" banner is a
+// false alarm; that's the "open the app after a few hours and it always shows sync error" bug —
+// the first request after the phone's radio has slept just flakes once. Reserve the banner for
 // genuinely actionable errors (auth expired → re-login, permission denied, real data conflicts).
 export function isTransientSyncError(error: unknown): boolean {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
@@ -72,6 +83,10 @@ function pendingCount(queue: SyncQueueItem[] = []) {
   return queue.filter((item) => item.status !== 'synced' && item.status !== 'failed' && item.status !== 'error').length;
 }
 
+function failedCount(queue: SyncQueueItem[] = []) {
+  return queue.filter((item) => item.status === 'failed' || item.status === 'error').length;
+}
+
 function usesSharedLedger(state: AppState, receipt: Receipt): boolean {
   const trip = (state.trips || []).find((candidate) => candidate.id === receipt.tripId);
   return !!trip?.sharing?.isShared;
@@ -99,7 +114,7 @@ export function useSyncEngine(
   // backfill sweep in pull() doesn't eternally re-queue receipts that will always fail.
   // Cleared for a trip when a push for that trip succeeds (e.g. after a re-invite).
   const accessDeniedTripsRef = useRef(new Set<string>());
-  // Receipt IDs that have exhausted MAX_RETRY_ATTEMPTS at least once this session.
+  // Receipt IDs that have exhausted MAX_SYNC_RETRY_ATTEMPTS at least once this session.
   // The backfill sweep skips these so it doesn't reset attempts to 0 and create an
   // infinite loop. Cleared for a receipt when its push eventually succeeds.
   const backfillSuspendedRef = useRef(new Set<string>());
@@ -117,8 +132,8 @@ export function useSyncEngine(
     return () => {
       aliveRef.current = false;
       processingRef.current = false;
-      syncingRef.current = false;
       pullingRef.current = false;
+      syncingRef.current = false;
       needsSyncAfterCurrentRef.current = false;
       if (reconnectSyncTimerRef.current) window.clearTimeout(reconnectSyncTimerRef.current);
       if (tripPullDebounceRef.current) window.clearTimeout(tripPullDebounceRef.current);
@@ -141,6 +156,7 @@ export function useSyncEngine(
     status: state.globalSyncStatus || 'idle',
     lastSyncedAt: state.lastSyncedAt || 0,
     pendingCount: pendingCount(state.syncQueue),
+    failedCount: failedCount(state.syncQueue),
     error: state.syncError || undefined,
   }), [state.globalSyncStatus, state.lastSyncedAt, state.syncQueue, state.syncError]);
 
@@ -225,15 +241,14 @@ export function useSyncEngine(
   const settlePushStatus = useCallback((failures: number, lastError?: string) => {
     if (!aliveRef.current) return;
     setState((current) => {
-      const failedItem = (current.syncQueue || []).find((item) =>
-        item.status === 'failed' || item.status === 'error');
+      const failedItem = (current.syncQueue || []).find((item) => item.status === 'failed' || item.status === 'error');
       const hasFailure = failures > 0 || !!failedItem;
       lastPushSucceededRef.current = !hasFailure;
       return {
         ...current,
         globalSyncStatus: hasFailure ? 'error' : (pendingCount(current.syncQueue) ? 'queued' : 'synced'),
         lastSyncedAt: hasFailure ? current.lastSyncedAt || 0 : Date.now(),
-        syncError: hasFailure ? lastError || failedItem?.error || current.syncError || '' : '',
+        syncError: failures ? lastError || '' : failedItem?.error || '',
       };
     });
   }, [setState]);
@@ -271,7 +286,7 @@ export function useSyncEngine(
           const attempts = item.attempts + 1;
           synced = { ...synced, _photoSyncedToSupabase: false, _photoSyncAttempts: attempts };
           photoError = redactError(photoErr);
-          console.warn(`[SyncEngine] Supabase photo upload failed (attempt ${attempts}/${MAX_RETRY_ATTEMPTS}):`, photoErr);
+          console.warn(`[SyncEngine] Supabase photo upload failed (attempt ${attempts}/${MAX_SYNC_RETRY_ATTEMPTS}):`, photoErr);
         }
       }
       if (hasNotionSync && !sharedLedger) {
@@ -320,7 +335,7 @@ export function useSyncEngine(
     if (hasNotionSync) await pushSettingsMeta(current);
   }, [applyReceiptSyncResult, applyTripSyncResult]);
 
-  const push = useCallback(async () => {
+  const push = useCallback(async (options?: SyncOptions) => {
     console.log('[SyncEngine] push() started');
     if (processingRef.current) {
       lastPushSucceededRef.current = false;
@@ -350,6 +365,13 @@ export function useSyncEngine(
     try {
       let failures = 0;
       let lastError = '';
+      // Trips whose push already failed with an access/RLS denial THIS sweep. Every receipt
+      // push re-ensures its trip first (upsertSupabaseReceipt → upsertSupabaseTrip), so one
+      // revoked shared trip with N queued receipts would otherwise fire N doomed trip upserts
+      // per sweep (observed live: 61 receipts × 2 POSTs per boot). Access denial is permanent
+      // within a session — fail the remaining siblings locally without touching the network.
+      // NOTE: accessDeniedTripsRef persists across push/pull cycles to prevent the backfill
+      // sweep from re-queueing receipts whose trip is permanently blocked.
       const accessDeniedTrips = accessDeniedTripsRef.current;
       const tripKeyForItem = (item: SyncQueueItem): string => String(
         (item.payload as { tripId?: string } | undefined)?.tripId
@@ -359,7 +381,7 @@ export function useSyncEngine(
       );
       const pushStartedAt = Date.now();
       for (const item of dedupeQueue(stateRef.current.syncQueue || [])) {
-        if (!queueItemReady(item, pushStartedAt, MAX_RETRY_ATTEMPTS)) continue;
+        if (!queueItemReady(item, pushStartedAt, MAX_SYNC_RETRY_ATTEMPTS)) continue;
         const tripKey = tripKeyForItem(item);
         if (tripKey && accessDeniedTrips.has(tripKey)) {
           failures += 1;
@@ -371,7 +393,7 @@ export function useSyncEngine(
         try {
           const outcome = await processItem(item);
           settleQueueItem(item, outcome || { kind: 'succeeded' });
-          if (outcome?.kind === 'retryable-error' && item.attempts + 1 >= MAX_RETRY_ATTEMPTS) {
+          if (outcome?.kind === 'retryable-error' && item.attempts + 1 >= MAX_SYNC_RETRY_ATTEMPTS) {
             failures += 1;
             lastError = outcome.error;
           }
@@ -392,6 +414,8 @@ export function useSyncEngine(
                               lowerError.includes('jwt') ||
                               lowerError.includes('invalid token') ||
                               lowerError.includes('token expired') ||
+                              lowerError.includes('session') ||
+                              lowerError.includes('expired') ||
                               lastError.includes('登入憑證'); // redactError's friendly auth message
           // A concurrent editor bumped the server version (RPC raises 40001). Retrying with our now-stale
           // version is futile AND dangerous: it silently parks then gets overwritten on the next pull,
@@ -408,6 +432,29 @@ export function useSyncEngine(
           const isAccessError = /row-level security|42501|permission denied|存取權/i.test(lastError);
           if (isAccessError && tripKey) accessDeniedTrips.add(tripKey);
 
+          // A transient network hiccup is never terminal — requeue with backoff and let the
+          // retry loop heal it (main: classify transient before any parking decision).
+          const retryable = isTransientSyncError(error) && !isAuthError && !isVersionConflict && !isAccessError;
+          if (retryable) {
+            settleQueueItem(item, { kind: 'retryable-error', error: lastError });
+            continue;
+          }
+
+          // Quiet retry: only for auto-triggered syncs (see AUTO_SYNC_AUTH_RETRY_DELAY_MS above).
+          // A genuinely dead refresh_token will fail again after the wait and fall through to the
+          // normal error handling below, so the banner still surfaces real auth failures.
+          if (isAuthError && options?.auto) {
+            await new Promise((resolve) => window.setTimeout(resolve, AUTO_SYNC_AUTH_RETRY_DELAY_MS));
+            if (!aliveRef.current) break;
+            try {
+              const outcome = await processItem(item);
+              settleQueueItem(item, outcome || { kind: 'succeeded' });
+              continue;
+            } catch (retryError) {
+              lastError = redactError(retryError);
+            }
+          }
+
           const safeMessage = isVersionConflict
             ? '有人啱啱改咗呢筆單，你嘅修改未有套用。請下拉同步後再改一次。'
             : lastError;
@@ -417,7 +464,7 @@ export function useSyncEngine(
           } else if (isAccessError) {
             failures += 1;
             settleQueueItem(item, { kind: 'terminal-error', error: safeMessage });
-          } else if (isAuthError || nextAttempts >= MAX_RETRY_ATTEMPTS) {
+          } else if (isAuthError || nextAttempts >= MAX_SYNC_RETRY_ATTEMPTS) {
             failures += 1;
             settleQueueItem(item, { kind: 'terminal-error', error: safeMessage });
             if (isAuthError) console.log('[SyncEngine] Auth error detected mid-push, skipping item');
@@ -429,19 +476,18 @@ export function useSyncEngine(
       if (aliveRef.current) {
         setState((current) => {
           const before = dedupeQueue(current.syncQueue || []);
-          // Track receipt IDs that are about to be evicted for exhausting MAX_RETRY_ATTEMPTS.
-          // This prevents the backfill sweep from re-queueing them with attempts=0.
+          // Keep exhausted receipt IDs out of backfill so durable failures cannot be replaced
+          // by fresh attempts=0 items.
           for (const item of before) {
-            if (item.type === 'receipt' && item.attempts >= MAX_RETRY_ATTEMPTS) {
+            if (item.type === 'receipt' && item.attempts >= MAX_SYNC_RETRY_ATTEMPTS) {
               backfillSuspendedRef.current.add(item.entityId);
             }
           }
+          const durableFailures = before.filter((item) => item.status === 'error' || item.status === 'failed');
+          const activeQueue = before.filter((item) => item.status !== 'error' && item.status !== 'failed').slice(-500);
           return {
             ...current,
-            syncQueue: [
-              ...before.filter((item) => item.status === 'error' || item.status === 'failed'),
-              ...before.filter((item) => item.status !== 'error' && item.status !== 'failed').slice(-500),
-            ],
+            syncQueue: [...durableFailures, ...activeQueue],
           };
         });
       }
@@ -527,6 +573,7 @@ export function useSyncEngine(
       // it (and its receipts) so a removed member doesn't keep stale shared data. Never purge on a
       // failed pull or in Notion-only mode (guarded by cloudPullOk).
       const cloudPullOk = !!cloudSession && supabaseResult.status === 'fulfilled';
+      const cloudPullAuthoritative = cloudPullOk;
       const authorizedSupabaseIds = new Set(
         supabaseData.trips.map((trip) => trip.supabaseId).filter((id): id is string => !!id),
       );
@@ -589,7 +636,7 @@ export function useSyncEngine(
               };
             }
           }
-          if (cloudPullOk) {
+          if (cloudPullAuthoritative) {
             const purgedTripIds = new Set(
               (finalState.trips || [])
                 .filter((trip) => trip.supabaseId && !authorizedSupabaseIds.has(trip.supabaseId))
@@ -683,7 +730,7 @@ export function useSyncEngine(
               }), freshQueue);
             }
           }
-          if (cloudPullOk && finalState.autoSync) {
+          if (cloudPullAuthoritative && finalState.autoSync) {
             const queuedTripIds = new Set(freshQueue.filter((item) => item.type === 'trip').map((item) => item.entityId));
             const localTrips = (finalState.trips || []).filter((trip) =>
               !trip.archived
@@ -700,17 +747,17 @@ export function useSyncEngine(
               }), freshQueue);
             }
           }
-          // Backfill sweep (ported from main v0.8.6): heal receipts that never reached
-          // Supabase — created before cloud login, marked synced in the Notion-only era,
-          // or whose queue item was dropped after MAX_RETRY_ATTEMPTS. After merge, anything
-          // still missing supabaseId (or with an un-uploaded photo) is provably absent
-          // server-side, so re-queue it. Push is idempotent (findReceiptUuid matches by
-          // trip+source_id), so this never duplicates.
+          // Backfill sweep: heal receipts that never reached Supabase — created before cloud
+          // login, marked synced in the Notion-only era, or whose queue item was dropped after
+          // MAX_SYNC_RETRY_ATTEMPTS. After merge, anything still missing supabaseId (or with an
+          // un-uploaded photo) is provably absent server-side, so re-queue it. Push is
+          // idempotent (findReceiptUuid matches by trip+source_id), so this never duplicates.
           // ponytail: unbounded photo re-tries are rate-limited to one attempt per pull cycle.
           if (cloudPullOk && finalState.autoSync) {
             const queuedIds = new Set(freshQueue.filter((item) => item.type === 'receipt').map((item) => item.entityId));
             // Break the backfill infinite loop: skip receipts whose trip is permanently
-            // access-denied or that have exhausted MAX_RETRY_ATTEMPTS this session.
+            // access-denied. Without this, the sweep re-queues them with attempts=0,
+            // push fails, and the cycle repeats forever (the 61-item bug).
             const deniedTrips = accessDeniedTripsRef.current;
             const suspended = backfillSuspendedRef.current;
             const needsBackfill = (finalState.receipts || []).filter((receipt) =>
@@ -790,7 +837,7 @@ export function useSyncEngine(
     }
   }, [updateSyncState]);
 
-  const sync = useCallback(async () => {
+  const sync = useCallback(async (options?: SyncOptions) => {
     if (syncingRef.current) {
       scheduleSyncAfterCurrent();
       console.log('[SyncEngine] sync() skipped — already syncing');
@@ -799,7 +846,7 @@ export function useSyncEngine(
     syncingRef.current = true;
     console.log('[SyncEngine] sync() started');
     try {
-      await push();
+      await push(options);
       await yieldToStateFlush();
       if (!navigator.onLine) {
         console.log('[SyncEngine] Offline — skipping pull');
@@ -812,13 +859,30 @@ export function useSyncEngine(
       console.log('[SyncEngine] Running pull()...');
       await pull();
       // Owner/admin drains the shared-trip Notion outbox (receipt_sync_jobs) when online with
-      // Notion connected. Fire-and-forget + never throws, so it can't block or fail the sync.
+      // Notion connected. Transport failures stay observable without blocking the main sync.
       const cloudSession = hasSupabaseSession(supabaseSessionRef.current) ? supabaseSessionRef.current : null;
-      if (cloudSession && canUseNotionMirror(stateRef.current, true, cloudSession.user?.email || null)) {
+      if (cloudSession && isSupabaseConfigured() && canUseNotionMirror(stateRef.current, true, cloudSession.user?.email || null)) {
         await yieldToStateFlush();
-        const outbox = await drainSharedTripNotionOutbox(cloudSession, stateRef.current, pushReceipt, archiveReceipt).catch(() => null);
+        const tripIds = (stateRef.current.trips || [])
+          .filter((trip) => trip.supabaseId
+            && (trip.sharing?.role === 'owner' || trip.sharing?.role === 'admin'))
+          .map((trip) => trip.supabaseId as string);
+        const outbox = await drainSharedTripOutbox({
+          state: stateRef.current,
+          tripIds,
+          workerId: cloudSession.user.id,
+        }, {
+          supabase: createSharedTripOutboxSupabaseAdapter(cloudSession, stateRef.current),
+          notion: {
+            async upsert(notionState, receipt) { await pushReceipt(notionState, receipt); },
+            archive: archiveReceipt,
+          },
+        }).catch(() => null);
         if (outbox && (outbox.processed || outbox.failed)) {
           console.log(`[SyncEngine] Notion outbox drained: ${outbox.processed} ok, ${outbox.failed} failed`);
+        }
+        if (outbox?.transportError) {
+          console.warn(`[SyncEngine] Notion outbox transport failure: ${outbox.transportError}`);
         }
       }
     } finally {
@@ -850,18 +914,18 @@ export function useSyncEngine(
           ? { ...receipt, _photoSyncAttempts: 0 }
           : receipt),
         syncQueue: (current.syncQueue || []).reduce(
-          (queue, item) =>
-            item.status === 'error' || item.status === 'failed'
-              ? settleChange(queue, item.id, { kind: 'manual-retry' }).queue
-              : queue,
-          current.syncQueue || [],
+        (queue, item) =>
+          item.status === 'error' || item.status === 'failed'
+            ? settleChange(queue, item.id, { kind: 'manual-retry' }).queue
+            : queue,
+        current.syncQueue || [],
         ),
         globalSyncStatus: 'queued',
         syncError: '',
       };
     });
     setTimeout(() => {
-      void sync();
+      void sync({ auto: true });
     }, 100);
   }, [setState, sync]);
 
@@ -890,7 +954,7 @@ export function useSyncEngine(
   useEffect(() => {
     if (!state.autoSync || !pendingCount(state.syncQueue) || (!hasSupabaseSession(supabaseSession) && !canUseNotionMirror(state, false, (supabaseSession as any)?.user?.email || null))) return;
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(() => void push(), DEBOUNCE_MS);
+    debounceRef.current = window.setTimeout(() => void push({ auto: true }), DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
@@ -900,14 +964,14 @@ export function useSyncEngine(
     if (!state.autoSync) return;
     const now = Date.now();
     const soonest = (state.syncQueue || []).reduce((min, item) => (
-      item.nextRetryAt && item.nextRetryAt > now && item.attempts < MAX_RETRY_ATTEMPTS
+      item.nextRetryAt && item.nextRetryAt > now && item.attempts < MAX_SYNC_RETRY_ATTEMPTS
         && item.status !== 'error' && item.status !== 'failed'
         ? Math.min(min, item.nextRetryAt)
         : min
     ), Infinity);
     if (!Number.isFinite(soonest)) return;
     const timer = window.setTimeout(
-      () => { void push(); },
+      () => { void push({ auto: true }); },
       Math.min(Math.max(soonest - now, 0), BACKGROUND_INTERVAL_MS),
     );
     return () => window.clearTimeout(timer);
@@ -918,7 +982,7 @@ export function useSyncEngine(
       if (reconnectSyncTimerRef.current) window.clearTimeout(reconnectSyncTimerRef.current);
       reconnectSyncTimerRef.current = window.setTimeout(() => {
         reconnectSyncTimerRef.current = null;
-        if (stateRef.current.autoSync) void sync();
+        if (stateRef.current.autoSync) void sync({ auto: true });
       }, RECONNECT_DEBOUNCE_MS);
     };
     const onReconnect = () => {
@@ -940,10 +1004,10 @@ export function useSyncEngine(
       scheduleReconnectSync();
     };
     const onVisibility = () => {
-      if (!document.hidden && stateRef.current.autoSync && Date.now() - (stateRef.current.lastSyncedAt || 0) >= MIN_SYNC_INTERVAL_MS) void sync();
+      if (!document.hidden && stateRef.current.autoSync && Date.now() - (stateRef.current.lastSyncedAt || 0) >= MIN_SYNC_INTERVAL_MS) void sync({ auto: true });
     };
     const timer = window.setInterval(() => {
-      if (stateRef.current.autoSync && Date.now() - (stateRef.current.lastSyncedAt || 0) >= MIN_SYNC_INTERVAL_MS) void sync();
+      if (stateRef.current.autoSync && Date.now() - (stateRef.current.lastSyncedAt || 0) >= MIN_SYNC_INTERVAL_MS) void sync({ auto: true });
     }, BACKGROUND_INTERVAL_MS);
     window.addEventListener('online', onReconnect);
     window.addEventListener(NATIVE_REACHABILITY_ONLINE_EVENT, onReconnect);

@@ -9,56 +9,6 @@ import { currentSupabaseAccessToken } from './supabase';
 const KIMI_API_MODEL = 'kimi-code';
 const KIMI_NON_THINKING = { type: 'disabled' } as const;
 
-function extractJson(text: string): unknown {
-  const cleaned = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const firstBrace = cleaned.indexOf('{');
-    const firstBracket = cleaned.indexOf('[');
-    let start = -1;
-    if (firstBrace !== -1 && firstBracket !== -1) start = Math.min(firstBrace, firstBracket);
-    else if (firstBrace !== -1) start = firstBrace;
-    else if (firstBracket !== -1) start = firstBracket;
-    if (start === -1) throw new Error('AI 回覆唔係 JSON');
-
-    let str = cleaned.slice(start);
-    let inString = false;
-    let escape = false;
-    const stack: ('}' | ']')[] = [];
-    let endIdx = -1;
-    for (let i = 0; i < str.length; i++) {
-      const char = str[i];
-      if (escape) { escape = false; continue; }
-      if (char === '\\') { escape = true; continue; }
-      if (char === '"') { inString = !inString; continue; }
-      if (!inString) {
-        if (char === '{') stack.push('}');
-        else if (char === '[') stack.push(']');
-        else if (char === '}' || char === ']') {
-          if (stack.length > 0 && stack[stack.length - 1] === char) {
-            stack.pop();
-            if (stack.length === 0) { endIdx = i; break; }
-          }
-        }
-      }
-    }
-    
-    if (endIdx !== -1) {
-      str = str.slice(0, endIdx + 1);
-    } else {
-      if (inString) str += '"';
-      while (stack.length > 0) str += stack.pop();
-    }
-    
-    try {
-      return JSON.parse(str);
-    } catch {
-      throw new Error('AI 回覆唔係 JSON');
-    }
-  }
-}
-
 function slug(value: string): string {
   return String(value || '')
     .toLowerCase()
@@ -187,7 +137,7 @@ async function googleModelForRequest(state: AppState): Promise<string> {
 }
 
 interface ModelAttempt {
-  provider: 'kimi' | 'google' | 'mimo';
+  provider: 'kimi' | 'google' | 'mimo' | 'volcano';
   model?: string;
   label: string;
 }
@@ -632,11 +582,11 @@ function selectedModelAttempt(chosenModelId: string): ModelAttempt | null {
   if (!chosenModelId) return null;
   const parts = chosenModelId.split('/');
   if (parts.length === 2) {
-    const provider = parts[0] as 'kimi' | 'google' | 'mimo';
+    const provider = parts[0] as 'kimi' | 'google' | 'mimo' | 'volcano';
     return {
       provider,
       model: parts[1],
-      label: `${provider === 'kimi' ? 'Kimi' : provider === 'mimo' ? 'Mimo' : 'Google'} (${parts[1]}) [Selected]`,
+      label: `${provider === 'kimi' ? 'Kimi' : provider === 'mimo' ? 'Mimo' : provider === 'volcano' ? 'Volcano' : 'Google'} (${parts[1]}) [Selected]`,
     };
   }
   if (/kimi/i.test(chosenModelId)) {
@@ -644,6 +594,9 @@ function selectedModelAttempt(chosenModelId: string): ModelAttempt | null {
   }
   if (/mimo/i.test(chosenModelId)) {
     return { provider: 'mimo', model: chosenModelId, label: `Mimo (${chosenModelId}) [Selected]` };
+  }
+  if (/volcano|doubao|minimax/i.test(chosenModelId)) {
+    return { provider: 'volcano', model: chosenModelId, label: `Volcano (${chosenModelId}) [Selected]` };
   }
   return { provider: 'google', model: chosenModelId, label: `Google (${chosenModelId}) [Selected]` };
 }

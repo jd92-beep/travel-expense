@@ -1,0 +1,49 @@
+name: Drain receipt sync outbox
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Maximum jobs to claim
+        required: false
+        default: "10"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: receipt-sync-worker
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      RECEIPT_SYNC_WORKER_KEY: ${{ secrets.RECEIPT_SYNC_WORKER_KEY }}
+      RECEIPT_SYNC_WORKER_URL: ${{ secrets.RECEIPT_SYNC_WORKER_URL }}
+      REQUEST_LIMIT: ${{ inputs.limit || '10' }}
+    steps:
+      - name: Validate worker bindings
+        shell: bash
+        run: |
+          test -n "$RECEIPT_SYNC_WORKER_URL"
+          test -n "$RECEIPT_SYNC_WORKER_KEY"
+          [[ "$REQUEST_LIMIT" =~ ^([1-9]|1[0-9]|20)$ ]]
+
+      - name: Drain bounded outbox batch
+        shell: bash
+        run: |
+          response="$(curl --silent --show-error --fail-with-body \
+            --connect-timeout 10 \
+            --max-time 180 \
+            --retry 2 \
+            --retry-all-errors \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --header "X-Sync-Worker-Key: $RECEIPT_SYNC_WORKER_KEY" \
+            --data "{\"limit\":$REQUEST_LIMIT}" \
+            "$RECEIPT_SYNC_WORKER_URL")"
+          jq -e '.ok == true and (.outcomeUnknown | tonumber) == 0' <<<"$response" >/dev/null

@@ -204,9 +204,15 @@ export function scopedReceiptsForTrip(state: AppState, trip: TripProfile = activ
 
 export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: { preserveUpdatedAt?: boolean } = {}): Receipt {
   const trips = Array.isArray(state.trips) && state.trips.length ? state.trips : [];
-  let trip: TripProfile | undefined;
-  if (receipt.date) {
-    trip = trips.find((t) => receipt.date >= t.startDate && receipt.date <= t.endDate && !t.archived);
+  const explicitTrip = receipt.tripId && receipt.tripId !== 'trip_default' && receipt.tripId !== 'default'
+    ? trips.find((candidate) => candidate.id === receipt.tripId && !candidate.archived)
+    : undefined;
+  let trip: TripProfile | undefined = explicitTrip;
+
+  // An explicit valid trip is canonical. Date inference is only for legacy/unscoped receipts;
+  // overlapping trip ranges must never move a cloud receipt into the first matching trip.
+  if (!trip && receipt.date) {
+    trip = trips.find((candidate) => receipt.date >= candidate.startDate && receipt.date <= candidate.endDate && !candidate.archived);
   }
   
   // 增加 Prep-phase 大額預付項目智能歸位邏輯（升級版：覆蓋所有行前預付類別）：
@@ -219,11 +225,6 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
     }
   }
 
-  // 優先看 receipt 是否已有對應 tripId，有的話直接找該 trip
-  if (!trip && receipt.tripId) {
-    trip = trips.find((t) => t.id === receipt.tripId && !t.archived);
-  }
-  
   // 還是找不到就 fallback 到 activeTrip
   if (!trip) {
     trip = activeTrip(state);

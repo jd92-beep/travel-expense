@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "@supabase/functions-js/edge-runtime.d.ts";
 
 export const config = { verify_jwt: false };
 
@@ -93,7 +93,8 @@ Deno.serve(async (req: Request) => {
   }
 
   const resendApiKey = Deno.env.get("RESEND_API_KEY") || "";
-  const adminEmail = normalizeEmail(Deno.env.get("ADMIN_SIGNUP_NOTIFY_EMAIL")) || DEFAULT_ADMIN_EMAIL;
+  const adminEmail = normalizeEmail(Deno.env.get("ADMIN_SIGNUP_NOTIFY_EMAIL")) ||
+    DEFAULT_ADMIN_EMAIL;
   const from = Deno.env.get("SIGNUP_NOTIFY_FROM") || "Travel Expense <onboarding@resend.dev>";
   const message = buildEmail(payload);
 

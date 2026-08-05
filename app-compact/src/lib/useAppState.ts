@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { migrateAppState, stampReceiptForTrip } from '../domain/trip/normalize';
-import { DEFAULT_STATE, isBoss } from './constants';
+import { DEFAULT_STATE } from './constants';
 import { hasCredentialBrokerSession } from './credentialBroker';
 import { hasDirectNotionToken } from './notion';
-import { clearStoredCredentials, hasStoredState, loadState, normalizeState, saveState } from './storage';
-import { clearIndexedState, loadIndexedState } from '../storage/indexedDb';
+import { clearStoredCredentials } from './storage';
+import { clearIndexedState } from '../storage/indexedDb';
+import { hydrateScope, persistScope, safeInitialState, sanitizePublicDemoState } from './scopedPersistence';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { clearCurrencyCache } from './currency';
@@ -40,92 +41,32 @@ function shouldQueueSettings(patch: Partial<AppState>) {
   return Object.keys(patch).some((key) => CLOUD_SETTINGS_KEYS.has(key as keyof AppState));
 }
 
-function stateFreshness(state: Partial<AppState>): number {
-  const receiptFreshness = Array.isArray(state.receipts)
-    ? Math.max(0, ...state.receipts.map((receipt) => Number(receipt.updatedAt || receipt.createdAt || 0)))
-    : 0;
-  return Math.max(
-    Number(state.settingsUpdatedAt || 0),
-    Number(state.lastSyncedAt || 0),
-    receiptFreshness,
-  );
-}
-
-function isPublicSupabaseScope(storageScope: string, userEmail: string | null): boolean {
-  return storageScope.startsWith('supabase:') && !isBoss(userEmail);
-}
-
-function withoutPublicDemoTrip(state: AppState, storageScope: string, userEmail: string | null): AppState {
-  if (!isPublicSupabaseScope(storageScope, userEmail)) return state;
-  const demoTripId = DEFAULT_STATE.activeTripId;
-  const trips = (state.trips || []).filter((trip) => trip.id !== demoTripId);
-  const activeTripId = trips.find((trip) => trip.id === state.activeTripId && !trip.archived)?.id
-    || trips.find((trip) => trip.active && !trip.archived)?.id
-    || trips.find((trip) => !trip.archived)?.id
-    || '';
-  const active = trips.find((trip) => trip.id === activeTripId);
-  return {
-    ...state,
-    trips: trips.map((trip) => ({ ...trip, active: trip.id === activeTripId && !trip.archived })),
-    receipts: (state.receipts || []).filter((receipt) => receipt.tripId !== demoTripId),
-    activeTripId,
-    tripName: active?.name || (trips.length ? state.tripName : ''),
-    tripDateRange: active ? { start: active.startDate, end: active.endDate } : state.tripDateRange,
-    customItinerary: active?.itinerary || (trips.length ? state.customItinerary : null),
-  };
-}
-
 function migrateScopedState(input: unknown, storageScope: string, userEmail: string | null): AppState {
-  return withoutPublicDemoTrip(migrateAppState(input), storageScope, userEmail);
-}
-
-function normalizeScopedState(input: unknown, storageScope: string, userEmail: string | null): AppState {
-  return withoutPublicDemoTrip(normalizeState(input), storageScope, userEmail);
+  return sanitizePublicDemoState(migrateAppState(input), storageScope, userEmail);
 }
 
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
-  const [state, setState] = useState<AppState>(() => {
-    return withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
-  });
+  const [state, setState] = useState<AppState>(() => safeInitialState(storageScope, userEmail));
   const [hydratedScope, setHydratedScope] = useState('');
   const [indexedReadyScope, setIndexedReadyScope] = useState('');
 
   useLayoutEffect(() => {
     let alive = true;
     setIndexedReadyScope('');
-    const hasPrimarySnapshot = hasStoredState(storageScope);
-    const filteredState = withoutPublicDemoTrip(loadState(storageScope), storageScope, userEmail);
-    setState(filteredState);
-    setHydratedScope(storageScope);
-    loadIndexedState(storageScope).then((indexed) => {
-      if (!alive || !indexed) return;
-      setState((prev) => {
-        if (!hasPrimarySnapshot) {
-          console.log('[useAppState] Hydrated from IndexedDB (no primary snapshot)');
-          return normalizeScopedState({ ...prev, ...indexed }, storageScope, userEmail);
-        }
-        const indexedGlobal = stateFreshness(indexed);
-        const localGlobal = stateFreshness(prev);
-        if (indexedGlobal <= localGlobal) return prev;
-        const localReceiptsById = new Map(prev.receipts.map((r) => [r.id, r]));
-        const mergedReceipts = (indexed.receipts || []).map((remote) => {
-          const local = localReceiptsById.get(remote.id);
-          if (!local) return remote;
-          const localUpdated = Number(local.updatedAt || local.createdAt || 0);
-          const remoteUpdated = Number(remote.updatedAt || remote.createdAt || 0);
-          return remoteUpdated > localUpdated ? remote : local;
-        });
-        for (const [id, local] of localReceiptsById) {
-          if (!mergedReceipts.some((r) => r.id === id)) mergedReceipts.push(local);
-        }
-        console.log('[useAppState] Hydrated newer state from IndexedDB (per-receipt merge)');
-        return normalizeScopedState({ ...prev, ...indexed, receipts: mergedReceipts }, storageScope, userEmail);
+    void hydrateScope(storageScope, userEmail)
+      .then((hydrated) => {
+        if (!alive) return;
+        setState(hydrated);
+        setHydratedScope(storageScope);
+        setIndexedReadyScope(storageScope);
+      })
+      .catch((error) => {
+        if (!alive) return;
+        console.warn('[useAppState] Hydration failed:',
+          error instanceof Error ? error.message : String(error));
+        setHydratedScope(storageScope);
+        setIndexedReadyScope(storageScope);
       });
-    }).catch(() => {
-      // localStorage remains the compatibility fallback.
-    }).finally(() => {
-      if (alive) setIndexedReadyScope(storageScope);
-    });
     return () => {
       alive = false;
     };
@@ -133,11 +74,11 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
 
   useEffect(() => {
     if (indexedReadyScope !== storageScope) return;
-    try {
-      saveState(migrateScopedState(state, storageScope, userEmail), storageScope);
-    } catch (error) {
-      console.warn('[useAppState] Persist failed:', error instanceof Error ? error.message : String(error));
-    }
+    void persistScope(storageScope, userEmail, state).then((result) => {
+      if (result.status !== 'succeeded') {
+        console.warn(`[useAppState] Persist ${result.status}:`, result.error);
+      }
+    });
   }, [indexedReadyScope, state, storageScope, userEmail]);
 
   const updateState = useCallback((patch: Partial<AppState>) => {
@@ -244,13 +185,18 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     clearStoredCredentials();
     clearDeviceTrust();
     clearCurrencyCache();
-    setState(withoutPublicDemoTrip({ ...DEFAULT_STATE, receipts: [] }, storageScope, userEmail));
+    setState(sanitizePublicDemoState({ ...DEFAULT_STATE, receipts: [] }, storageScope, userEmail));
   }, [storageScope, userEmail]);
 
-  // Both the sync localStorage load (hydratedScope) AND the async IndexedDB merge (indexedReadyScope)
-  // must catch up to the current scope before hydration is done — IndexedDB access is never synchronous,
-  // so gating on hydratedScope alone flips this false for at least one render while the merge is still
-  // in flight, letting the welcome-guide/recurring-rules effects act on a pre-merge, possibly-empty state.
-  const isHydratingScope = hydratedScope !== storageScope || indexedReadyScope !== storageScope;
-  return { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, hydratedScope, isHydratingScope };
+  return {
+    state,
+    setState,
+    updateState,
+    upsertReceipt,
+    deleteReceipt,
+    resetLocal,
+    hydratedScope,
+    isHydratingScope: hydratedScope !== storageScope,
+    isStorageReady: hydratedScope === storageScope && indexedReadyScope === storageScope,
+  };
 }

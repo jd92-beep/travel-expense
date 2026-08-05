@@ -1,6 +1,7 @@
 import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, TripPhase } from './types';
+import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, SyncQueueItem, TripPhase, TripProfile } from './types';
 
 export const fmt = (n: number | string | undefined) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -11,12 +12,55 @@ export const categoryById = (id: CategoryId | string | undefined) =>
 export const paymentById = (id: PaymentId | string | undefined) =>
   PAYMENTS.find((p) => p.id === id) || PAYMENTS[0];
 
+function isIsoDate(value: string | undefined): value is string {
+  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function itineraryRangeForTrip(state: AppState, trip: TripProfile): { start: string; end: string } | null {
+  const start = trip.startDate || state.tripDateRange?.start;
+  const end = trip.endDate || state.tripDateRange?.end;
+  if (!isIsoDate(start) || !isIsoDate(end) || end < start) return null;
+  return { start, end };
+}
+
+function isDefaultNagoyaTrip(state: AppState, trip: TripProfile): boolean {
+  const range = itineraryRangeForTrip(state, trip);
+  return !!range && isNagoyaCanonicalRange({
+    id: trip.id,
+    name: `${trip.name} ${state.tripName || ''}`,
+    destinationSummary: trip.destinationSummary,
+    startDate: range.start,
+    endDate: range.end,
+  });
+}
+
+function repairItineraryForTrip(state: AppState, trip: TripProfile, source: ItineraryDay[], currency: string): ItineraryDay[] {
+  const range = itineraryRangeForTrip(state, trip);
+  const normalized = normalizeItinerary(source, trip.id, currency);
+  if (!range) return normalized;
+  const fallback = [
+    ...(state.customItinerary || []),
+    ...(isDefaultNagoyaTrip(state, trip) ? ITINERARY : []),
+  ];
+  return canonicalizeItineraryRange({
+    tripId: trip.id,
+    startDate: range.start,
+    endDate: range.end,
+    itinerary: normalized,
+    fallbackItinerary: fallback,
+    fallbackCurrency: currency,
+    fallbackRegion: trip.destinationSummary || trip.name,
+    fallbackTimezone: trip.timezones?.[0],
+  }).itinerary;
+}
+
 export function getItinerary(state: AppState): ItineraryDay[] {
   const trip = activeTrip(state);
-  if (trip?.itinerary?.length) return normalizeItinerary(trip.itinerary, trip.id, trip.currencies?.[1] || state.tripCurrency || 'JPY');
-  if (state.customItinerary && state.customItinerary.length) return normalizeItinerary(state.customItinerary, state.activeTripId || 'trip_default', state.tripCurrency);
+  const currency = getResolvedTripCurrency(state, trip);
+  if (trip?.itinerary?.length) return repairItineraryForTrip(state, trip, trip.itinerary, currency);
+  if (state.customItinerary && state.customItinerary.length) return repairItineraryForTrip(state, trip, state.customItinerary, currency);
   // Fallback: always normalize the constant ITINERARY to ensure stable dayId/spotId
-  return normalizeItinerary(ITINERARY, state.activeTripId || 'trip_default', state.tripCurrency || 'JPY');
+  return repairItineraryForTrip(state, trip, isDefaultNagoyaTrip(state, trip) ? ITINERARY : [], currency || state.tripCurrency || 'JPY');
 }
 
 export function validateItinerary(input: unknown): { ok: true; itinerary: ItineraryDay[] } | { ok: false; error: string } {
@@ -211,6 +255,58 @@ export function setItineraryOverride(state: AppState, date: string, idx: number,
     delete itineraryOverrides[overrideKey(date, idx)];
   }
   return { ...state, itineraryOverrides };
+}
+
+export function applyItineraryEdit(state: AppState, nextItinerary: ItineraryDay[]): AppState {
+  const now = Date.now();
+  const trip = activeTrip(state);
+  const nextTrip: TripProfile = {
+    ...trip,
+    itinerary: nextItinerary,
+    version: (trip.version || 0) + 1,
+    itineraryVersion: (trip.itineraryVersion ?? trip.version ?? 0) + 1,
+    updatedAt: now,
+  };
+  const baseTrips = state.trips?.length ? state.trips : [trip];
+  const trips = baseTrips.some((item) => item.id === trip.id)
+    ? baseTrips.map((item) => (item.id === trip.id ? nextTrip : item))
+    : [...baseTrips, nextTrip];
+  const stamp = (type: SyncQueueItem['type'], entityId: string, payload: SyncQueueItem['payload']): SyncQueueItem => ({
+    id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+    type,
+    entityId,
+    op: 'update',
+    status: 'queued',
+    attempts: 0,
+    createdAt: now,
+    updatedAt: now,
+    payload,
+  });
+  return {
+    ...state,
+    trips,
+    customItinerary: nextItinerary,
+    settingsUpdatedAt: now,
+    syncQueue: [
+      ...(state.syncQueue || []),
+      stamp('trip', trip.id, { sourceId: nextTrip.sourceId || `trip_${trip.id}`, updatedAt: now }),
+      stamp('settings', 'app-settings', { updatedAt: now }),
+    ].slice(-500),
+  };
+}
+
+export function bakeItineraryOverrides(state: AppState): ItineraryDay[] | null {
+  const overrides = state.itineraryOverrides || {};
+  if (!Object.keys(overrides).length) return null;
+  const itinerary = getItinerary(state);
+  if (!itinerary.length) return null;
+  return itinerary.map((day) => ({
+    ...day,
+    spots: (day.spots || []).map((spot, idx) => ({
+      ...spot,
+      ...(overrides[spot.spotId || spot.id || overrideKey(day.date, idx)] || overrides[overrideKey(day.date, idx)] || {}),
+    })),
+  }));
 }
 
 export function getScheduleSpots(state: AppState, day: ItineraryDay): Array<ItinerarySpot & { _spotIdx: number; receiptId?: string }> {

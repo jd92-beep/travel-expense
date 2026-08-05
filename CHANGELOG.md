@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-04
+
+- **feat(compact/android): redesign the cloud login experience.** Compact `0.16.19` and Android
+  `0.20.4` / versionCode `2004` now share a responsive, accessible travel welcome screen with the
+  existing atlas artwork, automatic light/dark styling, clearer auth hierarchy and 44px+ touch
+  targets. Password sign-in, account creation, magic link, Google OAuth and native browser-return
+  handling are unchanged. Both surfaces passed typecheck, build, security, session and configured
+  auth smokes; Android debug assembly and emulator QA also passed. No database or release action
+  occurred.
+
 ## 2026-08-04 HKT (Android login redesign)
 
 - **v0.20.4 / versionCode 2004.** Rebuilt the Supabase login gate as a responsive, accessible
@@ -9,6 +19,17 @@
   - Evidence: typecheck, production build, security scan, session `3/3`, configured security `4`
     plus one intentional skip, JDK 21 debug build and emulator QA passed with verified App Links.
   - Debug APK only. No release APK/AAB, database, RLS, credential or live-data action.
+
+## 2026-08-01
+
+- **fix(compact/android): close sync regressions and preserve repair identity.** Compact `0.16.18`
+  and Android `0.20.3` retain Supabase IDs after stale local-wins merges, preserve stable local trip
+  links during re-home, requeue authoritative empty-cloud owner trips, keep cloud itinerary repairs
+  actionable, and keep RLS failures visible without blocking a later cold-boot recovery. Android additionally serializes sync
+  triggers, validates native reachability, strips secrets from manual retry payloads, restores fast
+  trip-model fallbacks, and limits exported camera files to app-specific Pictures storage.
+  Both full production gates, both `10/10` sync-regression suites, both `2/2` Supabase backfill
+  suites, Android debug build and emulator QA passed. No database or release operation occurred.
 
 ## 2026-08-01 HKT (Android sync regression review)
 
@@ -23,6 +44,24 @@
     offline `2/2`; session `3/3`; privacy `3/3`; configured security `4` plus one intentional skip;
     unit contracts, debug APK build and emulator QA passed with verified App Links.
   - Debug APK only. No release APK/AAB, database, RLS, credential or live-data action.
+
+## 2026-07-29
+
+- **fix(compact/react/android): recover from paused or unreachable Supabase during cold boot.**
+  The Supabase project was restored to `ACTIVE_HEALTHY`. Auth bootstrap now catches rejected session
+  checks and has a five-second watchdog for refresh calls that remain pending, so the app leaves the
+  reconnect screen and shows the login surface with a network error instead of loading forever.
+  Compact is `0.16.17`, React is `0.2.5`, and the Android working tree is `0.20.2` / versionCode
+  `2002`. No schema, RLS, migration, credential or user-data change was made.
+
+## 2026-07-20
+
+- **feat(broker): add Volcano Kimi K3 safe route.** Credential Broker `2026.07.20.1` adds
+  `volcano/kimi-k3` to the exposed provider catalog and exact-model test allowlist for the Android
+  app's Scan, Voice, Email and Trip update selectors. Broker check/self-test and deploy preflight
+  passed; production Worker version `29a61b5a-5b6d-416e-a753-db56b137f7f4` is live and `/health`
+  reports `2026.07.20.1`. Direct Volcano text and valid 820x538 WebP probes both returned `200` with
+  `model=kimi-k3`. No credential value, database, RLS or live user data changed.
 
 ## 2026-07-20 HKT (Android Volcano Kimi K3)
 
@@ -39,6 +78,124 @@
     WebP image. JBR 21 debug APK build and emulator QA passed with verified App Links; artifact
     `/tmp/travel-expense-android-qa-2026-07-20T09-22-33-082Z`.
   - Debug APK only. No release APK/AAB, database, RLS, credential value or live user data changed.
+
+## 2026-07-19
+
+- **fix(admin): v1.3.1 — provider heartbeat maintenance repair**:
+  - `provider_probe_only` permits only authenticated provider probe preview/commit; support, sync,
+    integrity and every R2 action remain blocked at Edge.
+  - Console, BFF, Edge and Broker now preserve and validate the exact provider/model pair. The
+    Broker sends one direct 8-output-token request with no model/provider fallback, so Volcano no
+    longer silently tests only `doubao-seed-2.0-lite`.
+  - Infrastructure distinguishes probe-only maintenance from general Admin writes. Passphrase,
+    passkeys, credential values, RLS, migrations and live user data are unchanged.
+
+- **feat(compact): v0.16.12 — shared-trip Notion mirror polish (multi-user)**:
+  - Member receipt PHOTOS now reach the Notion mirror: the owner-side outbox drain backfills
+    each receipt's image from Supabase Storage (signed URL → broker native Notion upload) —
+    previously member receipts mirrored as text-only rows because the draining device never
+    held the photo locally. Best-effort with session-level dedupe; a photo failure never
+    fails the record's mirror job. (Server-side receipt-sync-worker remains text-only —
+    photo mirroring rides the owner drain.)
+  - Outbox drain now claims up to 5×20 jobs per sync cycle instead of 20, so a backlog
+    (e.g. after the 07-19 grants outage) clears in one open instead of trickling.
+
+- **fix(compact): v0.16.11 — lag + blank-tab polish sweep (Fable direct)**:
+  - BlurFade reveal safety net: tab content (scan/dashboard/timeline/weather/history reveals)
+    gated visibility on IntersectionObserver, which never fires on occluded surfaces / WebView
+    background restores — the whole tab shipped blank (reproduced live: `visibilityState:
+    hidden` freezes both IO and rAF, so opacity-0 initial states never animated away). A 700ms
+    fallback now adds `.blur-fade-forced` (CSS `!important`, rAF-independent) so content always
+    appears; IO still drives the pretty path when it works.
+  - Turing backdrop de-lag: no longer mounts below the `full` tier (on phones it was invisible
+    behind the opaque washi shell yet still held two giant GPU layers); `filter: blur(88px)`
+    blobs replaced with equivalent wide radial-gradient ramps; `will-change` only while
+    drifting; mobile `.app-shell` washi background restored to opaque `#f7efe3` (the 0.85 alpha
+    forced per-frame blending during scroll for zero visual gain).
+  - Timeline now-marker mis-centering: `active-float` keyframes overwrote the marker's
+    `translateY(-50%)` centring, parking it 11px low on desktop whenever the float animation
+    ran — dedicated `active-float-centered` keyframes preserve the centring.
+- **fix(admin): v1.2.4 — same blur-blob de-lag for the console atmosphere layer** (gradient
+  ramps instead of `blur(88px)`, `will-change` gated to full tier).
+
+## 2026-07-18
+
+- **feat(compact): v0.16.10 — Turing landing ambient backdrop (`TuringBackdrop` + `turing-backdrop.css`), video layer replicated in pure CSS (dead 21st.dev S3 source), drift gated to effects tier `full`**
+- **fix(compact): v0.16.9 — 21st.dev GradientButton (radial-gradient @property morph effect) on Welcome/Editor-save/Settings-sync CTAs**
+
+## 2026-07-15
+
+- **Compact 0.16.8 / Android 0.19.5 / Broker 2026.07.15.2 low-token Volcano probes**:
+  - Live investigation proved all five Volcano model IDs and the existing credential work. The old
+    strict probe failed only because `minimax-m2.7` spent its tiny completion budget in
+    `reasoning_content` (`finish_reason=length`, empty final content), so the Broker JSON parser
+    incorrectly reported a model failure.
+  - Selected-model tests now send the explicit prompt `Return only JSON: {"ok":true}`. For
+    `kind=test`, a valid non-empty provider `content` or `reasoning_content` is availability proof;
+    normal scan/trip calls still require strict parsed JSON. Every model remains capped at 8 output
+    tokens, uses no fallback and preserves quota/`429` hard stops.
+  - Live authenticated Broker probes returned `200` and `ok=true` for `doubao-seed-2.0-lite`,
+    `doubao-seed-2.0-pro`, `minimax-m3`, `minimax-m2.7` and `doubao-seed-2.0-mini`.
+  - Compact `0.16.8` is verified on Vercel, Netlify and GitHub Pages. Google Chrome 150 waited 15
+    seconds on production with neither generic sync-error banner, no page error and no horizontal
+    overflow. Android `0.19.5` passed persisted-state `2/2`, model `1/1`, mobile `1/1`, debug APK and
+    emulator QA with verified App Link. No passphrase, secret value, RLS, migration or live user data
+    changed.
+
+- **Compact 0.16.7 / Admin 1.0.2 / Broker 2026.07.15 Volcano model closure**:
+  - 根因係 Compact/Android model dispatcher 只有 Kimi、Mimo 分支，Volcano selection 會跌入
+    Google path；Admin Edge 同 Broker status 亦只回報一個 required model，而 Broker status
+    忽略只存在 Worker env 嘅 `VOLCANO_KEY`。
+  - Compact 同 Android 而家會把五個既有 Volcano LLM 精確送去 `/volcano/json`；Settings 四個
+    task selector 各有直接測試掣，固定 `kind=test`、8 output tokens、無 fallback，並驗證
+    Broker 收到指定 model 嘅有效回應。`429`、quota、daily-limit hard stop 維持不變。
+  - Admin Providers 保持每 provider 一 row，但新增完整 model catalog，Volcano 會顯示
+    `doubao-seed-2.0-lite`、`doubao-seed-2.0-pro`、`minimax-m3`、`minimax-m2.7` 同
+    `doubao-seed-2.0-mini`。Seedance media models唔會混入 LLM selector/probe。
+  - Android cold-start 同 IndexedDB hydration 使用相同 sync normalizer：只重排未耗盡、可重試
+    failure；exhausted/`40001` conflict 保留真實 error evidence，避免錯誤 banner 無限重播或
+    真失敗被靜默清除。stale trip result 同時保留 `supabaseId`。
+  - 本地證據：Compact typecheck/build/security、AI routing、Settings、offline、sync regression
+    同 mobile smoke 全綠；Admin unit `32/32`、contract `24/24`、full smoke `48 passed + 1 skip`；
+    Edge `53/53`；Broker check/self-test；Android debug APK 同 emulator QA 全部通過。
+    Passphrase、secret values、RLS、migration、write mode 同 live user data 均冇改動。
+
+- **Compact App 0.16.6 stale-tab and trip identity recovery**:
+  - Live Chrome timing proved the reported banner came from a tab opened on `0.16.4` at 10:11,
+    before the `0.16.5` trip-sync repair deployed at 10:52. The tab had never reloaded, so later
+    successful Supabase pulls could not make the old in-memory JavaScript adopt the repair.
+  - Compact previously marked updates ready only on `serviceWorker.controllerchange`, while its
+    security contract intentionally registers no service worker. It now checks the same-origin
+    index on load, foreground/focus and a five-minute interval with `cache: no-store`, compares the
+    loaded module asset with the current deployment and shows the existing explicit reload notice.
+    An update notice takes priority over stale-runtime sync errors; the app never auto-reloads while
+    the user may be editing.
+  - A successful trip push now always preserves its `supabaseId` identity link when newer local trip
+    content wins the timestamp merge. This closes the `synced + empty queue + missing supabaseId`
+    state without overwriting the newer itinerary or metadata.
+  - Two regressions failed before the fix and now pass; the sync suite is `6/6`. Typecheck, build,
+    security scan, security smoke, offline `4/4`, mobile layout and the full production gate all
+    passed. No passphrase, secret, provider credential, RLS, migration or live user data changed.
+  - Commit `882de8e` is live on Compact Vercel, Netlify and GitHub Pages. Direct production-bundle
+    checks found version `0.16.6` plus both repair markers on all three origins; GitHub Pages run
+    `29397584920`, Netlify run `29397584955` and Admin CI run `29397585050` all passed.
+
+- **Compact App 0.16.5 production trip-sync recovery**:
+  - Live Chrome state and Supabase logs proved the recurring banner was not a generic connection
+    failure: a new trip hit `400` on live-schema column drift, then two `403` RLS failures while the
+    app kept the trip locally but created no retry job.
+  - Confirmed new owned trips now use INSERT without `RETURNING`; the legacy-column fallback uses the
+    same safe path, avoiding a false SELECT-RLS failure after a valid owner INSERT. Existing-trip and
+    shared-trip update behavior is unchanged.
+  - A failed guide save now creates one deduplicated trip queue item instead of claiming it will retry
+    with an empty queue. Successful authoritative pulls also backfill old local-only owner trips, so
+    data stranded by `0.16.4` can heal automatically.
+  - IndexedDB-only hydration now uses the same retry normalization as localStorage without re-running
+    that normalization on ordinary state updates. Four production-shaped regressions cover all four
+    paths; session and sync-classifier smokes remain green.
+  - The live schema still lacks the optional trip-intelligence columns; the client remains compatible,
+    and durable schema reconciliation stays tracked without `db push`, migration repair or RLS changes.
+    No passphrase, secret, provider credential or live user data changed.
 
 ## 2026-07-15 HKT (Android MiniMax model-test prompt)
 
@@ -71,6 +228,179 @@
     and wrote `/tmp/travel-expense-android-qa-2026-07-15T12-16-37-029Z`.
   - Debug APK only. No release APK/AAB, deployment, secret, or live-data action.
 
+## 2026-07-14
+
+- **Compact App 0.16.4 cold-open sync reliability**:
+  - A temporary Supabase auth refresh race no longer becomes a permanent queue failure and generic
+    connection banner on every launch. Boot sync uses bounded quiet auth retry, and non-exhausted
+    persisted failures safely requeue after hydration.
+  - Exhausted and version-conflict failures remain durable; manual retry clears stale access/backfill
+    latches and schedules one authoritative sync, including when another sync is already running.
+  - Permission/RLS failures now show the permission-specific message rather than 「有資料連線失敗，
+    請檢查連線或設定。」
+  - Offline/cold-open regression tests passed `4/4`, focused manual retry passed `2/2`, and the full
+    Compact production gate passed typecheck, final navigation `10/10`, mobile, a11y/touch, broker
+    guards, security scan and production build. No passphrase, secret, RLS, migration or live user
+    data changed.
+
+- **Admin Console 1.0.1 performance and runtime-status correction**:
+  - Default Overview、Accounts、Incidents、Providers 與 Audit reads 使用最多兩個併發嘅 bounded
+    prefetch；idle Activity Center 停止每 60 秒重讀，打開時先明確 refresh。
+  - Volcano 已加入 provider aggregation、required model `volcano/doubao-seed-2.0-lite`、BFF
+    validation 與 Edge operation allowlist。
+  - Overview 喺 signed request 驗證後並行讀 DB、recent operations 同 Broker health；Broker 只會
+    喺 exact health contract 成功時顯示 healthy。未有 Compact/Android heartbeat 會顯示
+    `待首次心跳`，唔再係 generic Unknown，亦唔會偽裝 healthy。
+  - Admin `typecheck`、build、security、unit `32/32`、contract `24/24`、full smoke
+    `47 passed + 1 intentional skip`、Edge `72/72`、`npm audit` 0 vulnerabilities 全部通過。
+    Passphrase、secrets、RLS、migration、live user data 及 `ADMIN_WRITE_MODE=deny_all` 均冇改動。
+  - Protected workflow `29336763253` 先因 health/package version drift fail closed；PR #51 加入
+    package-bound health version regression。Workflow `29337850114` attempt 1 再因舊 Edge source
+    fail closed，兩個 candidate 均未 promotion。
+  - Reviewed `admin-kanban` Edge bundle 已部署為 `v92`；workflow `29337850114` attempt 2 最終於
+    exact Git SHA `697a9c9522b14a1a67e77ab4088136e48de369b2` 成功 promotion。Production Vercel deployment
+    是 `dpl_6R3tZEYhwmiJ5CyeykdnqKhYshSv`，Edge deployment 是
+    `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_92`，schema `20260712123000`。
+    Live health 回 `200` 同 `acceptingReadTraffic=true`；passphrase、credential values、RLS、
+    migration、live user data 同 write mode 均冇改動。
+
+- **Admin Console 1.0 passkey bootstrap closure and final production promotion**:
+  - First passkey enrollment BFF begin/finish returned `200`; Edge credential register, revoke-all,
+    session create and session verify also returned `200`. The existing passphrase text remains
+    unchanged and necessary.
+  - `ADMIN_PASSKEY_BOOTSTRAP_SECRET` was removed from Vercel Production. Bootstrap-closure workflow
+    `29303308607` deployed `dpl_59zhH1QnLEXtPnfNq8yHkscPczJe`; temporary Keychain material was
+    removed.
+  - PR #49 merged at `0a71608e2b0c888eb7e7e4efb194a21a59ad935b` with localized Chrome passkey-focus
+    guidance. Final workflow `29303864302` succeeded at that SHA and deployed Vercel
+    `dpl_A7o26cPYDieYCa1RaNcVvGpJ4XWh`, Edge
+    `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_90`, schema `20260712123000`.
+  - Live `/api/health` returned `200` with `acceptingReadTraffic=true`; production asset
+    `/assets/index-BbcEP-GN.js` includes the localized focus guidance, and the bootstrap environment
+    is absent. Writes remain `deny_all`, and R3 remains server-disabled.
+
+- **Admin Console 1.0 successful production promotion**:
+  - Retry workflow `29301851315` failed closed at candidate readiness with `503`; no Edge
+    `/api/runtime` request occurred, and candidate Vercel deployment
+    `dpl_9yRX6HWGUfDHtnAS1vt7so5c4uma` was not promoted.
+  - `ADMIN_KANBAN_HASH` was updated through the official Vercel CLI without changing the passphrase.
+    Workflow `29302288203` then completed all seven prerequisites and protected promotion at exact
+    Git SHA `72ee62507349e245b8613d9531958d428237bc90`.
+  - Production is Admin `1.0.0`: Vercel `dpl_J6huupag1ur7GwmPCVU6k7b7kJsn`, Edge
+    `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_88`, schema `20260712123000`.
+    Live `/api/health` returned `200`, version `1.0.0`, the exact SHA and
+    `acceptingReadTraffic=true`; unauthenticated session returned `401` and direct catch-all session
+    query returned `404`.
+  - This interim promotion was superseded by the completed passkey bootstrap closure and final
+    production promotion above. Writes remain `deny_all`, and R3 remains server-disabled.
+
+- **Admin Console 1.0 deployment readiness follow-up**:
+  - Production promotion workflow `29268903409` deployed the prior Admin `1.0.0` release at exact
+    Git SHA `90cfab891665300cdd8b9765f34c02cfea6d8169`, but production login failed because its
+    configured `ADMIN_KANBAN_HASH` was a legacy `PBKDF2` value rather than the strict `scrypt`
+    format required by Admin 1.0.
+  - PR #48 merged at `72ee62507349e245b8613d9531958d428237bc90`; readiness now fails closed on a
+    malformed hash before any Edge call. A new valid `scrypt` hash was generated locally and set in
+    Vercel Production without changing the passphrase.
+  - At that interim point, passkey enrollment and bootstrap removal were still pending. Both were
+    subsequently completed and verified by the final production promotion above.
+  - Writes remain `deny_all`, and R3 remains server-disabled.
+
+## 2026-07-13
+
+- **Compact App 0.16.3 idempotent trip re-home**: fix(compact): v0.16.3 — idempotent trip re-home.
+  The v0.16.2 re-home inserted a fresh UUID row on every RLS-denied trip upsert while the local
+  trip's supabaseId stayed stale, so a queue of N receipts would create up to N duplicate trips.
+  Re-home now reuses the existing re-homed row (owner_id + suffixed legacy_source_id lookup,
+  upsert not insert) and a per-session contested→re-homed id map skips the doomed contested
+  attempt on subsequent pushes.
+
+- **Receipt-photo cutover compatibility**:
+  - Added forward migration `20260712122500_restore_receipt_photo_compatibility.sql` to retain the
+    public `receipt-photos` bucket and exact public read policy until Compact/Android signed-URL
+    heartbeats prove active compatibility.
+  - The static migration gate now verifies the final active public state separately from the staged
+    private-bucket contract, locks the migration ordering/final actions, and rejects later active
+    Storage mutations; the Admin SQL smoke verifies exact normalized policy metadata/predicates and
+    rejects staged-only read policy activation.
+  - No production migration, deployment, secret, or data mutation occurred.
+
+- **Admin Console 1.0.0 cutover preparation**:
+  - Promoted the verified branch metadata from `1.0.0-rc.1` to cutover candidate `1.0.0` in the
+    Admin package, both package-lock root entries and `/api/health`.
+  - Final-SHA PR #36 run `29202450339` passed Admin/BFF, clean database, Compact, React,
+    cross-client, Edge and Credential Broker at `8aa2f8a`; protected production promotion skipped.
+    React `0.2.4` evidence remains typecheck/build/security green, clear-device `12/12`, and
+    security smoke `3 passed, 1 intentional skip`.
+  - Admin metadata gates passed: typecheck/build/security, unit `19/19`, contract `21/21`. Boss
+    explicitly approved cutover preparation, but production deploy and migrations are not complete.
+    The existing `ADMIN_KANBAN_HASH` and current passphrase remain unchanged; passkey is additive and
+    no live enrollment occurred. Production remains Admin `0.8.3` read-only until verified promotion.
+
+- **React App 0.2.4 clear-device persistence race**: clearing device data now quiesces the active
+  Supabase storage scope before sign-out, so state/sync effects cannot recreate its scoped
+  localStorage or IndexedDB snapshots; a deterministic regression covers the writeback race.
+
+- **Admin Console 1.0.0-rc.1 current-SHA CI closure**:
+  - PR #36 run `29201116294` passed all seven required jobs: Admin/BFF, Edge, clean disposable
+    Supabase, Compact, React, Credential Broker and the Compact/React browser round trip.
+  - The clean database applied every forward migration through `20260712123000` and passed all 15
+    Admin/shared SQL fixtures, including passkey removal, sync conflict, R2 itinerary and Nagoya
+    six-day invariants.
+  - Fixed CI portability and lifecycle defects without changing app behavior: the database job no
+    longer assumes `rg` exists, and owned Vite servers now launch directly, close deterministically
+    and never terminate an external server. Previously the browser test printed `passed` in six
+    seconds but remained alive until the job timeout.
+  - Corrected stale SQL fixture expectations to exercise genuine underlying-row version drift and
+    count all versioned itinerary mutations/restores. Production triggers and mutation guards were
+    not weakened.
+  - Production remains Admin `0.8.3` read-only; no live migration, secret, passkey or data mutation
+    was performed.
+
+## 2026-07-12
+
+- **Compact App 0.16.2 / Android 0.19.2 contested-trip recovery**:
+  - If a locally owned trip identity collides with another account's row, the client retries once
+    with a current-user-scoped trip identity so receipts and photos can sync to the correct account.
+    Genuine shared-trip access denial still requires a fresh owner invitation.
+
+- **Admin Console 1.0.0-rc.1 final branch hardening**:
+  - Rebased onto Compact `0.16.2` without dropping Oscar's access-denial, multi-currency, motion or
+    sync fixes. Canonical itinerary versions, receipt tombstones/sync revisions and private-photo
+    contracts remain aligned across web clients.
+  - Added safe non-final Boss passkey rotation. Removal is bound to the selected opaque credential,
+    complete passkey-set hash and single-use R2 step-up; the server protects the final passkey,
+    appends Audit v2 and revokes every Admin session after success.
+  - Hardened the real BFF path: Edge redirects, transport failures, malformed envelopes, mismatched
+    request IDs and unproven photo streams now fail closed. Broker health requires the explicit
+    Broker contract, provider-probe ambiguity remains `outcome_unknown`, and account-directory
+    lookup fails closed when its bounded search cannot prove an email is absent.
+  - Receipt-list status/date cells no longer split short operational values into unreadable fragments;
+    wide tables stay keyboard-scrollable inside their own region without document overflow.
+  - Post-rebase gates: Admin unit `19/19`, contract `21/21`, browser `42 passed + 1 intentional
+    capture skip`; Edge `69/69`; Compact 9/9 selected gates; React final navigation `6/6`; Broker
+    check/self-test; security, migration-policy and shared-ledger scans green.
+  - Production is unchanged at Admin `0.8.3` read-only. No production deploy, migration, secret or
+    live user-data change was made.
+
+- **Compact App 0.16.1 Access-Denial Sync Fix — the real "sync fail" banner root cause (main) / Android 0.19.1**:
+  - **Live diagnosis (puiyuchau@gmail.com, 61 failed queue items, photos stuck)**: her device holds a local copy of the owner's shared South Korea trip but she has NO `trip_members` row server-side (and no local sharing metadata), so every receipt push re-ran `upsertSupabaseTrip` down the OWNER path → upsert collided with the owner's `trips` row → Postgres `new row violates row-level security policy` → all 61 receipts + 66 photos failed, ~122 doomed POSTs per boot (server logs wall-to-wall RLS errors). Every cold open replayed the whole doomed sweep (boot hydrate-reset requeues error items and resets `attempts`), repainting the misleading「請檢查連線」banner — this loop, not connectivity, was the banner.
+  - **Fixes**: (1) `upsertSupabaseTrip` translates RLS violations into an actionable Cantonese error（旅程存取權失效：請旅程擁有者重新邀請）; (2) `push()` classifies access/RLS denials (`isAccessError`) and fail-fasts all sibling receipts of a denied trip within the sweep — one network probe instead of N; manual retry still gets a fresh attempt; (3) the Shell banner shows a permission-specific headline instead of「請檢查連線」when the failure is access-shaped.
+  - **Remaining (needs the trip owner, not code)**: the user must be re-invited to the shared trip from the owner's app (adding `trip_members` rows is an access-control change the assistant does not perform). Once she accepts, her client links the trip and the 61 receipts sync via the shared-trip RPC.
+  - **Verified**: typecheck clean; smokes final-nav 10/10 (incl. the 403 permission-denied rigs and manual-retry recovery), offline/session/sync-classify/history/stats/dashboard/mobile-layout green; settings 9/10 (known pre-existing Trip Doctor rig).
+
+- **Compact App 0.16.0 Multi-Currency Trips (main) / Android 0.19.0**:
+  - **Phase 1 — capture**: `SUPPORTED_CURRENCIES` 17 → 32 (adds CZK/DKK/NOK/SEK/PLN/HUF/RON/TRY/ISK/AED/SAR/ILS/INR/IDR/EGP) with coarse offline `FALLBACK_PER_HKD` rates (kills the silent 1:1-HKD conversion for these codes; a dev-time self-check warns if any supported code ever lacks a fallback), display prefixes, and ISK zero-decimal. OCR (`scanReceiptImage`), voice/email (`parseTextWithAi`), and the local no-AI heuristic all now detect and set per-receipt `currency` (AI prompts request an ISO code validated by `isCurrencyCode`; heuristic recognizes €/£/₹/₺/₪/฿/₩/₫/₱/Kč/zł/Ft/CHF/Rp/RM plus bare ISO codes next to digits — a bare "kr" deliberately stays unmapped since DKK/NOK/SEK/ISK are indistinguishable). Verified against 14 mixed samples.
+  - **Phase 2 — per-day intelligence**: the trip-extraction prompt's per-day schema now requests `city`/`country`/`timezone`/`currency` (Zürich day → CHF, Prague day → CZK — different days, different currencies). `mergeAnalyzedTrip`/`normalizeItinerary` already preserved per-day currency; the prompt simply never asked. `trip.currencies` becomes the true union (HKD + every distinct per-day currency). Wizard currency selects now render all 32 supported codes from `SUPPORTED_CURRENCIES` (was two divergent hardcoded 14/15-option lists); additional currencies flow in automatically from the AI itinerary rather than a manual multi-select.
+  - **Phase 3 — display**: the Stats「顯示貨幣」binary HKD/tripCurrency pill becomes **HKD + one chip per currency the trip actually uses** (trip.currencies + per-receipt currencies, capped at 6, stale selection falls back to HKD). Totals/budget/daily lines convert into any selected chip via the HKD anchor; budget edits under any chip convert back to the trip-currency denomination correctly. Settlement stays HKD-anchored; Top-10 rows keep native per-receipt currency.
+  - **Verified**: typecheck clean; smokes stats/scan/dashboard/six-person/history/final-nav/itinerary green (settings 9/10 — the 1 failure is the known pre-existing Trip Doctor stale rig, fails on clean HEAD, tracked separately); live 390×844 rig (CHF+EUR+CZK trip, fixed rates): chips render [HKD CHF EUR CZK], HKD total HK$1,516 ✓, CZK view Kč4,39x ✓, CHF view CHF16x ✓, Top-10 shows each receipt in native currency, editor dropdown offers CZK and defaults from the itinerary day.
+
+- **Admin 1.0 shared client contract audit**:
+  - Partial itinerary writes preserve every omitted in-range day; itinerary version wins over device clock skew.
+  - Receipt identity is `(TripID, SourceID)`; legacy raw `SourceID` matching is allowed only for one unique unscoped candidate.
+  - Compact carries receipt tombstones, private photo signed-URL handling, and canonical sync revisions across pull, upsert, and delete flows.
+  - Focused itinerary and Compact browser contract coverage remains part of the Admin RC gate.
+
 ## 2026-07-12 HKT (Admin 1.0 shared contracts)
 
 - **v0.18.2 / versionCode 1820.** Aligned Android with the Admin 1.0 canonical data contract on top
@@ -98,6 +428,55 @@
   - No release APK/AAB was built or published in this session. Live photo privacy and Admin production
     cutover remain approval/compatibility-gated.
 
+## 2026-07-11
+
+- **Compact App 0.15.1 Sync-Banner Hardening + Worldwide 譯名 + Dashboard Weather Chip (main) / Android 0.18.1**:
+  - **"切 tab 見到同步失敗" (#1)** — two-front fix: (a) the v0.18.0 APK had been built from a working tree carrying another session's half-finished sync overhaul (vite bundles the tree, not the git index) — rebuilt from committed-only code (bundle grep-verified clean, same cert digest); (b) committed path hardened: the `visibilitychange`/interval/reconnect auto-sync surfaced auth-shaped errors instantly, so a stale-JWT race right after foregrounding painted the red banner — auto-triggered syncs now get ONE quiet retry after 2.5s (`AUTO_SYNC_AUTH_RETRY_DELAY_MS`, lets supabase-js autoRefreshToken finish) before the banner; manual retries stay immediate; a genuinely dead session still surfaces.
+  - **Top-10 譯名 worldwide (#2)**: `needsTranslation` now detects Arabic/Hebrew/Devanagari+7 Indic scripts/Thai/Lao/Khmer/Myanmar/Cyrillic/Greek and diacritic Latin (é ü ř ğ å …) in addition to kana/hangul; pure-ASCII stays untranslated (indistinguishable from English brand names). Prompt wording widened to any language. Verified against 21 mixed-script cases.
+  - **Dashboard 今日狀態 weather chip (#4)**: the top-right indicator was dead JSX showing `-- --` since 1b5d037 (never wired). New shared `DashboardWeatherChip` (used by the 今日狀態 pill AND the itinerary badge) reuses Weather.tsx's cache/coord/provider chain + tier-aware `WeatherIcon`; live-verified 「27° 多雲」at 390×844. Fallbacks: cached rows → one ref-guarded lazy fetch → quiet 「天氣 --」. Includes a StrictMode-double-mount guard release (without it the dev chip stuck on fallback forever).
+  - **Pre-existing final-nav failures fixed (#3, main)**: `:180` was a real regression from c215eb4 — `effectiveSupabaseSession` discarded the localStorage session hint whenever Supabase is unconfigured (loading never flips true); now the unconfigured branch trusts the hint, the configured branch keeps the dead-refresh-token protection. `:100`/`:140` rigs pre-dated the deliberate a9b5748 hydrate-reset (which wipes persisted error state on boot — intentional, kept); rigs rewritten to drive a REAL `push()` failure (Notion permission-denied 403 stub) so the banner state is produced by the live engine. `smoke:final-nav` 10/10 ×2 runs.
+  - **Known left as-is**: android `history-smoke:465` (offline conflict resolver) is a committed regression (2c1fe02's hydrate-reset erases version-conflict queue items before render) whose exact fix is already in-flight as another session's uncommitted WIP in the main tree (isVersionConflictError export + storage guard) — not duplicated here to avoid a two-session collision; android also skips the auto-sync quiet-retry this round (its useSyncEngine.ts carries 9 uncommitted foreign hunks).
+
+- **Compact App 0.15.0 Timeline De-Lag + Real Windmill + Top10 Translated Names (main) / Android 0.18.0**:
+  - **Fixed "entering the itinerary tab is laggy"** (root causes, ranked): (1) `BorderBeam` animates `offsetDistance` — a motion-path property that runs on the main thread every frame, not the compositor — with `repeat: Infinity`, and `TimelineRail` mounted one **per itinerary day**; it had no fx-tier gate (the only decorative component that missed one). Now gated inside the component to the `full` desktop tier. (2) `Timeline.tsx` had zero memoization: `getScheduleSpots`/`dayLooseReceipts` (which internally re-ran `getScheduleSpots` + a full trip-scoped receipt filter) recomputed 2–5× per render across the command card, the per-day loop, and the orphan block — now precomputed once per day in `useMemo` (`perDayTimeline`), with `dayLooseReceipts` accepting optional precomputed spots (back-compat). (3) `.timeline-rail-sweep` (infinite, one per day) and `.timeline-now-marker` float were missed by the mobile-hardening CSS block — now disabled on phones. (4) `MagicCard`'s theme-sync MutationObserver no longer created when heavy effects are off.
+  - **Real windmill tab transition** (the previously requested effect finally exists). Three stacked root causes: (1) the old `WindmillTransition` was only a faint conic-gradient overlay flash, not a content transition; (2) it was desktop-gated (`fxTier === 'full'`), and phones are always `balanced`, so mobile never saw anything — deleted; (3) **the deepest one**: `<ErrorBoundary key={safeTab}>` wrapped App.tsx's `AnimatePresence`, so every tab switch remounted AnimatePresence itself, and with `initial={false}` no enter/exit animation EVER ran — meaning even the old x-slide had silently never animated. The keyed ErrorBoundary now lives inside the keyed `motion.div` (AnimatePresence persists across switches; ReceiptEditor got its own unkeyed boundary). The page content now swings like a launcher-style windmill blade around a hub below the screen (`transformOrigin: '50% 130%'`, direction-aware rotate ±14° balanced / ±18° full, rotate+opacity only = compositor-safe, ≤300ms, lite = instant swap). Verified live: sampled `rotate(13.99° → 3.8°)` spring frames mid-switch at 390×844.
+  - **Stats Top-10 translated shop names**: foreign-script names (Hiragana/Katakana/Hangul — Han-only and Latin stay untouched) get a Cantonese/official-Chinese name on a second line under the original. Sources in order: inline `原文 (譯文)` already embedded by scan/voice AI (split + seeded to cache, zero AI calls), then one **batched** AI call (`callPreferredJson` kind `'trip'`) for uncached names asking for official Chinese → official English → natural Cantonese; results cached in local-only `state.storeTranslations` (not cloud-synced — derivable data). Silent on failure (offline/no session → originals only); in-flight + attempted-name guards prevent refetch loops.
+  - **Verified**: typecheck clean; smokes green — timeline 9, dashboard 8, weather 14, history 8, final-nav 7, stats/scan/mobile-layout/a11y-touch pass; visual at 390×844: zero `offset-path` animations on Timeline, sweep `animation: none`, Top-10 shows translated second line (スシロー → 壽司郎). Known pre-existing: 3 final-nav sync-console tests (`:100/:140/:180`) fail on clean v0.14.0 HEAD too (stash-bisected — unrelated to this change).
+
+- **Compact App 0.14.0 Motion Layer v2 (main) / Android 0.17.0**:
+  - **Root cause of "app feels static on phones"**: `shouldDisableHeavyEffects()` treated ANY mobile UA as low-end, stripping tab transitions and all rich motion on the primary platform while desktop kept the fancy path. Replaced with a 3-tier system (`getEffectsTier`: full / balanced / lite) — **balanced** (normal phones) now runs compositor-safe motion everywhere (transform/opacity only); **lite** (reduced-motion, ≤2GB RAM, ≤2 cores, save-data) keeps the old stripped behavior. Tier stamped on `<html>` as `fx-*` so CSS scales densities without JS.
+  - **Tab transitions on mobile**: direction-aware slide (±24px, tuned spring, ≤250ms) via the existing AnimatePresence path; instant swap on lite. The two duplicated tab-render branches in App.tsx were deduplicated. The full-screen WindmillTransition (which leaked onto mobile) is now desktop-only.
+  - **Weather showpiece**: vendored 13 Meteocons animated SVGs (Bas Milius, MIT — `src/assets/meteocons/`, ~70KB, offline-safe) replacing static lucide icons at hero/hourly/slot levels with day/night variants by slot hour; lite keeps lucide (SMIL can't honor reduced-motion). WeatherFX rewritten: 2-depth-layer slanted rain + ground splash blooms, precipitation-scaled intensity (`wfx-i1/2/3` from precipMm/rain%), breathing sun corona + drifting light shafts, SVG snow crystals (fall+sway+rotate, varied scale) replacing ❄ text glyphs, 3-layer parallax clouds, storm cloud silhouettes + dual offset lightning. All keyframes audited transform/opacity/rotate-only; `contain: paint`; all FX pause when the page is hidden (battery).
+  - **Shell/nav polish**: floating-dock active tab is a `layoutId` pill that glides between tabs + press scale feedback; sticky mobile header condenses on scroll (`--header-shrink` 0→1 over 96px, transform/opacity only).
+  - **Micro-interactions**: BorderBeam travelling light on the Dashboard hero budget card; History ledger rows stagger-rise (first 12 only); subtle washi-palette confetti on Scan batch save (`canvas-confetti`, reduced-motion aware, lite skips); press-dip on rows/chips.
+  - **Cleanup**: deleted dead `ui/timeline.tsx`, `ui/file-upload.tsx`, `ui/confetti.tsx` (0 importers).
+  - **Verified**: keyframe property audit 100% compositor-safe; typecheck + `npm run build` clean; smokes green — weather 14, final-nav 7, dashboard 8, history 8, timeline 9, settings 9, privacy 3, scan/stats/six-person/mobile-layout/a11y-touch/offline/session/sync-classify all pass. `smoke:welcome-guide` fails on pre-Motion-v2 HEAD too (stash-bisected, pre-existing) — flagged as a separate task.
+
+## 2026-07-10
+
+- **Admin Console 0.8.3 emergency containment / Compact 0.13.6**:
+  - Production Admin Edge is read-only by default. All mutations and external side effects now fail
+    before route dispatch with `503 ADMIN_WRITES_DISABLED`; hidden buttons or direct Edge requests
+    cannot bypass the kill switch.
+  - Removed permissive browser policies/grants from the three admin state tables and denied anon or
+    authenticated execution of the admin RLS helper. Real PostgREST/RPC denial smokes and SQL
+    privilege reports passed against live Supabase.
+  - Rotated the exposed Edge-to-Broker machine key, removed the old static `ADMIN_TOKEN` path and
+    bindings, and limited Broker internal authentication to fixed scoped routes.
+  - Provider health now separates Configured from Healthy. Broker liveness and HTTP 200 with an
+    invalid nested status can no longer paint providers green.
+  - Hardened adjacent browser-executable functions: anon execute revoked and `search_path=''` for
+    account deletion, trip-member display names and member-role ranking.
+  - Compact receipt-photo upload/pull now uses 15-minute signed URLs; the Admin Edge photo route uses
+    60-second signed URLs and fails closed if signing is unavailable. Android `0.16.4` has the same
+    compatibility change on `codex/admin-console-1.0-android`.
+  - Added a tracked private `receipt-photos` bucket migration with authenticated trip-member Storage
+    RLS. It is intentionally not live until Compact and Android compatibility deployment is proven.
+  - Verification: Admin typecheck/build/audit green; Compact typecheck/build/security/policy scan and
+    signed-photo smoke green; Edge 10/10 Deno tests; Broker check/self-test green.
+  - Added a guarded Admin production deploy command that refuses dirty worktrees, pins the canonical
+    Vercel project, injects the exact Git SHA and verifies live health provenance after promotion.
+
 ## 2026-07-10 HKT (private receipt photos compatibility)
 
 - **v0.16.4 / versionCode 1604.** Prepared Android for the production move from a public
@@ -118,6 +497,65 @@
     `/tmp/travel-expense-android-qa-2026-07-10T08-08-00-057Z`.
   - Cutover remains blocked until this build and the matching Compact Web build are deployed and
     active compatibility is confirmed. No live Storage privacy change was made in this branch.
+
+## 2026-07-08
+
+- **Compact App 0.13.5 No False "Sync Error" On Cold Boot (main) / Android 0.16.3**:
+  - **Fixed "open the app after a few hours → always shows sync error, check the connection"**: the boot `pull()`/`push()` painted the persistent red banner (`globalSyncStatus: 'error'`) on **any** thrown error, including a transient network blip. After the phone's radio has slept for hours, the very first request on open is the flakiest (radio wake, DNS, and the expired-JWT refresh round-trip) — one blip set the sticky banner even though the 120s interval + reconnect listener healed it seconds later.
+  - **Fix**: new `isTransientSyncError()` classifier — offline, `Failed to fetch`, `NetworkError`, `Load failed`, timeouts, `ERR_CONNECTION_*`, 502/503/504 are transient and stay quiet (`queued`/`idle`, no banner, no lost timestamp); only actionable failures (auth expired → re-login, RLS/permission denied, 40001 version conflict) still surface the banner. In `push()`, a transient item failure no longer counts as a failure **nor burns a retry attempt** — previously 3 quick transient strikes could drop a pending receipt from the queue (backfill later re-queued it, but churny). The interval/reconnect loop re-drives it.
+  - **Tests**: new `smoke:sync-classify` exercises the real classifier through Vite's module graph in-browser (no network, no live Notion) — 7 network shapes → transient, 5 actionable shapes → hard, and offline forces transient even for an auth-shaped message. Green; offline + session smokes regression-green; typecheck clean.
+
+- **Compact App 0.13.4 Stay-Logged-In On Device (main) / Android 0.16.2**:
+  - **Fixed re-login every ~1 hour**: `storedSupabaseSession()` (App.tsx cold-boot hint) deleted the entire persisted Supabase session — refresh_token included — the instant the access_token (JWT) expired. Since Supabase JWTs default to a 1-hour lifetime, reopening the app an hour later forced a full re-login even though the long-lived refresh_token could have silently renewed. Now the hint never mutates storage and never rejects an expired-but-refreshable session; supabase-js (`persistSession` + `autoRefreshToken`) owns eviction and only clears the key when the refresh_token is genuinely dead. Net effect: log in once on a phone and stay logged in for as long as the Supabase refresh token is valid.
+  - **Clean logout when the token really dies**: `effectiveSupabaseSession` now trusts the local first-paint hint only while `supabaseAuth.loading`; once auth resolves to null the hint is dropped, so a dead session shows the login screen instead of a broken "authenticated" state that 401s every call.
+  - **Tests**: new `smoke:session` (`tests/session-persistence-smoke.spec.cjs`) — an expired-access-token session with a refresh_token survives a cold boot (key + refresh_token intact); a malformed blob is ignored without crashing. Green; offline + privacy smokes regression-green; typecheck clean.
+
+- **Compact App 0.13.3 Offline-First Hardening (main) / Android 0.16.1**:
+  - **Audit result**: the Android APK bundles the full app locally (Capacitor `webDir: dist`, no `server.url`) — it boots and records expenses with zero dependency on GitHub Pages/Vercel. Sync gating uses `navigator.onLine` only; receipts written offline queue locally and the `'online'` event auto-triggers sync (backoff released, 100ms debounce), with 120s interval + visibilitychange as fallbacks. AI recognition holds no failure state (no cooldown/circuit in `ai.ts`/`credentialBroker.ts`) — every scan is a fresh request, so it works on the first attempt after reconnecting; offline OCR failure falls back to manual entry with the photo kept.
+  - **Fix (android)**: native reachability probe no longer depends on our Vercel deployment — it probes the Supabase health endpoint first, Vercel as fallback (`NATIVE_REACHABILITY_URLS`). Previously Vercel-down meant the offline pill lied and fast-reconnect sync never fired.
+  - **Fix (both)**: Google Fonts stylesheet loads non-blocking (`media="print"` + onload) so an offline cold boot never stalls on `fonts.googleapis.com`; Android falls back to system Noto Sans CJK.
+  - **Tests**: new `smoke:offline` (`tests/offline-sync-smoke.spec.cjs`, hermetic — all external routes aborted): offline edit persists + queues, debounced push bails on the offline gate, reconnect event alone starts sync, unreachable backend keeps the item queued for retry. Green on both branches; `smoke:privacy` 3/3 regression-green.
+
+## 2026-07-07
+
+- **Admin Console (app-admin-kanban) 0.8.0 — Admin Console Upgrade**:
+  - **Bug Fixes**: Fixed the puiyuchau@gmail.com 0-receipt bug by raising snapshot receipts cap to 10000 and sorting by `created_at desc` in the Edge function.
+  - **Refactoring**: Split the monolithic `App.tsx` (1300+ lines) into 15 modular components under `src/components/` (each under 400 lines).
+  - **New Features**: Implemented 5 new tabs (Trip Management, Audit Trail log timeline, Analytics dashboard using pure React SVG charts, Batch Ops with multi-select and CSV export, AI Provider Monitoring with latency trends and test run logs).
+
+## 2026-07-06
+
+- **Compact App 0.13.0–0.13.1 Private Receipts (main) / Android 0.16.0**:
+  - **Per-record visibility**: `Receipt.visibility 'trip'|'private'` — 🔒只有自己 records are readable only by their owner. Enforced server-side: Supabase RLS `receipts_select_trip_members` now gates on visibility, and the `upsert_shared_trip_receipt` RPC maps the field and skips Notion mirror jobs for private rows (old clients / direct API calls cannot leak them). Live DB migrated via the Management API (`supabase/migrations/20260706090000_receipt_visibility.sql`, idempotent).
+  - **Consistency rule**: privacy is only offered on personal records — 私人 split with no cross-person 代付 (`canBePrivateReceipt`). The editor locks the 可見度 control otherwise, `normalizeState` strips illegal combos, so a hidden record can never change another member's balance and every pairwise debt is computed identically by both parties.
+  - **UI**: 可見度 select (全團可見 / 🔒只有自己) with Cantonese hints in the receipt editor; 🔒 marker on private rows in History.
+  - **Notion**: client `pushReceipt` no-ops for private records (treated as synced so the queue doesn't retry forever) + server-side sync-job skip.
+  - **Tests**: new `smoke:privacy` (editor gating incl. 代付 revocation, normalize strip, settlement neutrality — transfers identical with/without the private record). 3/3 on both branches; dashboard/six-person green; the history conflict-resolver and android final-nav failures are pre-existing on HEAD (stash-bisected) and tracked separately. 0.13.1 makes the spec selectors portable across both branches' History markup.
+  - Deferred (documented): per-member `visible_to` subset visibility needs a trip-member↔person binding that doesn't exist server-side yet.
+
+- **Compact App 0.12.0 Weather Overhaul (main) / Android 0.15.0**:
+  - **Root-caused Nagoya Day 1 showing Jeju weather**: the live Supabase trip carried 中部國際機場 with Jeju-airport coordinates (33.5113, 126.493), stamped by the old unscoped `/機場|airport/→Jeju` GEO_DICTIONARY pattern (still live on the Android branch until 0.15.0) and synced to every device. Healed the Supabase row directly (trip version bump) and added client self-heal: `normalizeItinerary` replaces stored spot coords sitting >150km from the name's dictionary entry.
+  - **Country-scoped geo resolution**: `resolveGeoCoordinate(name, countryHint)` only matches dictionary entries of the day's country (from `day.country` or timezone), so generic Korea patterns (中央地下街/鯖魚/umu/rainbow…) can never stamp Korea coords onto Japan/HK days again. Android's dictionary re-synced from main.
+  - **Weather geocode fallback restored**: the Weather tab now geocodes city/region names via Open-Meteo when the dictionary has no match (Paris, Jeju-by-name, any future trip) instead of dead-ending on 缺少座標.
+  - **Slot cards**: humidity removed per Boss spec; per-slot condition theme colors — 晴橙 / 多雲灰 / 霧淺灰 / 微雨淺藍 / 落雨藍 / 大雨深藍 / 雪冰藍 / 雷暴紫 (card gradient + border + type badge follow `--weather-accent`).
+  - **Arrive flash**: entering the Weather tab auto-scrolls to the live slot and plays a double-flash glow ring on it (reduced-motion safe).
+  - **weather-smoke suite repaired**: 6 pre-existing failures were stale fixtures (bare `installState({})` no longer produced the default Nagoya trip; Jeju-era expectations; Android had baked the Jeju bug into its expectations). Fixtures updated, humidity assertion inverted, new self-heal regression test. 14/14 green on both branches; dashboard/timeline/itinerary/final-nav green; Android also received the 0.11.1 Timeline port. Signed APK rebuilt (versionCode 1500, cert digest unchanged).
+
+- **Compact App 0.11.1 Itinerary Editing Fixes & UX Polish**:
+  - **Fixed Spot Type Option Mismatch (Bug 1)**: Unified the per-spot editing select with the global `SPOT_TYPE_OPTIONS` constant to support all 10 categories (including flight and sightseeing) and prevent category data loss on save.
+  - **Added `timeEnd` in Day Editor (Bug 2)**: Added a time input for `timeEnd` (end time) to each spot row in the Timeline Day Editor.
+  - **Added details jump button (Bug 3 & UX 1)**: Added a "Details" gear button next to the Trash button in each row. Clicking it saves current edits via `saveDayEditor()`, sets the selected spot as `editing`, and closes the Day Editor.
+  - **Redesigned mobile row grid (Bug 4)**: Updated `timeline.css` to align all 6 fields on desktop, and reflow to a clean 4-column, 2-row grid on screens <= 430px with Touch Targets >= 40px.
+  - **Added unsaved changes warning (Bug 5)**: Implemented dirty state check for the Day Editor, prompting the user with `window.confirm` if they attempt to discard unsaved edits.
+  - **Implemented custom day swap confirm modal (UX 2)**: Replaced browser `window.confirm` for day swapping with a custom HTML-based confirmation sheet, and aligned the Playwright E2E smoke tests.
+  - **Smart default times for new spots (UX 3)**: Implemented `getNextSpotDefaultTime(spots)` helper to default new spot times to 30 mins after the last spot's time (fallback to `'09:00'`).
+  - **Version bump**: Bumped Compact app version to `0.11.1`.
+
+- Fixed Compact Stats budget editing currency bug: when `displayCurrency` is HKD, user input is now correctly converted back to the trip's native currency via `hkdToCurrency()` before saving, and the edit field pre-fills the correctly converted HKD amount.
+- Improved Compact Weather tab date visibility: each day's weather card now shows the actual date prominently (e.g. `7月12日 (六)`) via a new `.weather-day-date` element at 15px desktop / 13px mobile, replacing the previous barely-visible `Day X` eyebrow.
+- Fixed GEO_DICTIONARY cross-trip contamination: replaced the overly-broad `/機場|airport/` pattern (which mapped any airport to Jeju coordinates) with Jeju-specific patterns, and added 13 Japan/Nagoya landmarks to prevent Nagoya trips showing Jeju weather data.
+- Added Hong Kong Observatory (HKO) as an official weather provider for the Compact app. HKO combines `rhrread` (live temperature, humidity, UV, rainfall from HK Observatory stations) with `fnd` (9-day daily forecast distributed across display slots). Routing supports `香港`/`Hong Kong`/`HK` keywords plus a geo bounding box for the HK SAR area. Added 11 Hong Kong landmark entries to `GEO_DICTIONARY`.
+- Verification passed for Compact `typecheck` and production `build`.
 
 ## 2026-07-05 HKT (percentage sharing + 3-agent sharing audit)
 
@@ -154,6 +592,23 @@
   - Evidence: typecheck clean both branches; split-engine unit test green; smokes green — android:
     six-person 1, settings 11, split-editor 1, settle-up 2, split-payer 1, stats 1; main: six-person
     1, settings 10+1skip, stats 1. Same fixes on `main` as v0.9.6.
+
+## 2026-07-03
+
+- Fixed Compact `0.9.1` itinerary recovery for the default Nagoya trip (`2026-04-20` to `2026-04-25`): if a backend/account sync returns a partial active-trip itinerary, the Timeline now restores the missing canonical Nagoya days instead of hiding them.
+- Clamped Compact itinerary display to the active trip date range, so scenery spots from dates outside the trip no longer appear in the Itinerary/Timeline tab.
+- Hardened Compact trip pull/import merging so a newer remote trip with only partial itinerary days no longer overwrites complete local days; same-date remote updates still apply while missing days are preserved.
+- Added a Timeline regression smoke that seeds a broken Nagoya state with only `2026-04-20`, `2026-04-25`, and an out-of-range `2026-04-26` scenery spot, then verifies the app shows all six Nagoya dates and hides the out-of-range spot.
+- Verification passed for Compact `typecheck`, served `smoke:timeline` (`9 passed`), production `build`, `security:scan`, and served `smoke:mobile-layout`.
+
+## 2026-07-02
+
+- Verified Oscar's console update on `main`: Admin Console is live as `0.7.0` at `https://travel-expense-admin-kanban.vercel.app`, and Compact is `0.8.7`.
+- Admin Console gained Notion/Supabase reconciliation, mirror repair, receipt-photo viewing, runtime status, sync job controls, data doctor, and identity merge tooling.
+- Compact sync was hardened with Supabase backfill/photo recovery so local or Notion-era receipts that never reached Supabase are re-queued, and server-missing receipt photos are uploaded again from local thumbnails.
+- Synchronized `workers/credential-broker/package-lock.json` with the committed `wrangler` dev dependency in `workers/credential-broker/package.json`.
+- Verification passed for `app-admin-kanban` typecheck/build/smoke, `app-compact` typecheck/build/security/settings smoke, the focused Supabase backfill smoke, and Credential Broker check/self-test.
+- Live checks returned `200` for Admin Vercel, Compact Vercel, Compact GitHub Pages, React Netlify, and Compact Netlify. GitHub Pages deploy succeeded; Compact Netlify deploy workflow is still blocked by Netlify account credits.
 
 ## 2026-07-02 HKT (multi-currency display sweep)
 
@@ -429,6 +884,15 @@
     `@capacitor/camera` (`CameraUtils.java`) writes captured photos to `getExternalFilesDir(PICTURES)`
     and shares them via this app's FileProvider, so removing `external-path` would break camera capture.
 
+## 2026-06-21
+
+- Added Compact console diagnostics for account/backend stability: Settings now has Account Sync Health and Sync Queue Inspector cards that show active account scope, session expiry, backend target, last push/pull age, queue counts, and sanitized queue rows.
+- Added an account-switch watchdog smoke so Compact verifies Supabase-scoped storage changes from one backend account to another without leaking the prior account's trip state.
+- Bumped Compact to `0.8.3`.
+- Polished the Compact console/backend sync status: failed queue items now surface clearly in the header, Settings status pills, and Settings readiness strip instead of appearing as a clear queue.
+- Hardened Compact account sync reliability by preventing overlapping pull/push races, aligning the sync engine with the effective Supabase account session used for scoped storage, and ignoring expired stored Supabase sessions during boot.
+- Added a regression smoke for failed queue visibility and retry behavior, and bumped Compact to `0.8.2`.
+
 ## 2026-06-21 HKT (Android online/offline reliability)
 
 - **v0.12.12 / versionCode 1212.** Offline/online reliability pass for the Android shell after the
@@ -630,6 +1094,12 @@
 - Hardened the Android QA smoke so emulator `adb logcat -c` clear failures do not abort before launch; the smoke still captures the logcat tail and package crash filter.
 - Bumped Compact Android branch version to `0.8.6` / Android `versionCode 806`.
 
+## 2026-06-19
+
+- Fixed the Compact Phase 0 security finding from the Splitwise roadmap: `app-compact/scripts/verify-notion-connection.mjs` no longer contains a hardcoded broker passphrase, reads the unlock password from local environment variables only, and uses the current broker `password` payload plus `X-Travel-Session` session header.
+- Rotated the live Credential Broker `APP_UNLOCK_HASH` and `APP_SESSION_SECRET`; the new unlock passphrase is stored in macOS Keychain, and the updated verification script confirms broker unlock plus Notion status/test still pass.
+- Added a security scan rule that fails on inline broker/admin passphrase assignments, restored the Compact typecheck gate by declaring the missing Node type dependency and `AppState` type import, patched Vite via `npm audit fix`, synchronized Compact package-lock/version docs, and bumped Compact to `0.8.1`.
+
 ## 2026-06-18
 
 - Polished the isolated Compact Android shell on branch `codex/android-compact-shell` without merging to `main` or deploying production web builds.
@@ -644,7 +1114,6 @@
 - Added `app-compact/ANDROID.md` with branch safety rules, Android commands, debug APK path, and release-signing notes.
 - Upgraded Compact Vite to `8.0.16`, added `@types/node`, fixed a type-only `AppState` import, and adjusted brittle smoke selectors/default broker smoke origin so the production gate passes on the Android branch.
 - Verification passed with `app-compact npm run smoke:production-gate`, `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`, `npm audit --omit=dev`, `npm audit`, and `git diff --check`.
-
 ## 2026-06-15
 
 - Rebuilt the Compact Settings `Trip Update AI` confirmation modal into a readable day-by-day review editor. The popup now hides technical warnings inside a collapsed `需要留意` section, uses day chips/tabs, and lets users edit lodging plus each itinerary spot's start time, end time, name, category, address, and note before applying the trip.

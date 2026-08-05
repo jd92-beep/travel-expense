@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
+import { PROVIDER_MODELS } from '../src/provider-catalog.js';
 
 const ORIGIN = 'http://localhost:8902';
 const UNLOCK_PASSWORD = 'test-unlock';
 const ADMIN_PASSWORD = 'test-admin';
+const SUPABASE_USER_ID = '97000000-0000-4000-8000-000000000001';
 
 class MemoryKv {
   constructor() {
@@ -86,6 +88,7 @@ function makeEnv() {
     KIMI_API_BASE: 'https://kimi.test/v1',
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_PUBLISHABLE_KEY: 'test-supabase-publishable-key',
+    EDGE_BROKER_KEY: 'test-edge-broker-key-with-32-bytes-minimum',
     UNLOCK_MAX_FAILURES: '2',
     ADMIN_MAX_FAILURES: '2',
   };
@@ -95,11 +98,12 @@ function bearer(value) {
   return ['Bearer', value].join(' ');
 }
 
-function request(path, { method = 'GET', session, supabaseToken, body, origin = ORIGIN } = {}) {
+function request(path, { method = 'GET', session, supabaseToken, internalKey, body, origin = ORIGIN } = {}) {
   const headers = new Headers();
   if (origin) headers.set('Origin', origin);
   if (session) headers.set('X-Travel-Session', session);
   if (supabaseToken) headers.set('X-Supabase-Auth', bearer(supabaseToken));
+  if (internalKey) headers.set('X-Admin-Internal', internalKey);
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   return new Request(`https://broker.test${path}`, {
     method,
@@ -119,8 +123,11 @@ function installProviderFetchStub() {
   const originalFetch = globalThis.fetch;
   const integrations = [];
   const kimiModels = [];
+  const kimiBodies = [];
   const googleModels = [];
+  const googleBodies = [];
   const mimoBodies = [];
+  const volcanoBodies = [];
   const weatherQueries = [];
   let notionCalls = 0;
   globalThis.fetch = async (url, init = {}) => {
@@ -130,7 +137,7 @@ function installProviderFetchStub() {
 
     if (href === 'https://test.supabase.co/auth/v1/user') {
       assert.equal(auth, bearer('supabase-user-token'));
-      return Response.json({ id: 'user-12345678', email: 'boss@example.com' });
+      return Response.json({ id: SUPABASE_USER_ID, email: 'boss@example.com' });
     }
 
     if (href.startsWith('https://test.supabase.co/rest/v1/integrations')) {
@@ -171,6 +178,7 @@ function installProviderFetchStub() {
     if (href.includes('kimi.test/v1/chat/completions')) {
       assert.equal(auth, bearer('kimi-secret-for-test'));
       const body = JSON.parse(init.body || '{}');
+      kimiBodies.push(body);
       kimiModels.push(body.model);
       const promptText = JSON.stringify(body.messages || body.prompt || '');
       if (promptText.includes('Analyze the user')) {
@@ -227,8 +235,19 @@ function installProviderFetchStub() {
 
     if (href.includes('generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent')) {
       assert.match(href, /key=google-secret-for-test/);
+      googleBodies.push(JSON.parse(init.body || '{}'));
       googleModels.push('gemma-4-31b-it');
       return Response.json({ candidates: [{ content: { parts: [{ text: '{"ok":true,"provider":"google"}' }] } }] });
+    }
+
+    if (href.includes('ark.cn-beijing.volces.com/api/plan/v3/chat/completions')) {
+      assert.equal(auth, bearer('volcano-secret-for-test'));
+      const body = JSON.parse(init.body || '{}');
+      volcanoBodies.push(body);
+      if (body.model === 'minimax-m2.7') {
+        return Response.json({ choices: [{ finish_reason: 'length', message: { content: '', reasoning_content: 'provider answered' } }] });
+      }
+      return Response.json({ choices: [{ message: { content: '{"ok":true,"provider":"volcano"}' } }] });
     }
 
     if (href.startsWith('https://api.weatherapi.com/v1/current.json')) {
@@ -268,14 +287,18 @@ function installProviderFetchStub() {
   };
   restore.notionCalls = () => notionCalls;
   restore.kimiModels = () => kimiModels.slice();
+  restore.kimiBodies = () => kimiBodies.slice();
   restore.googleModels = () => googleModels.slice();
+  restore.googleBodies = () => googleBodies.slice();
   restore.mimoBodies = () => mimoBodies.slice();
+  restore.volcanoBodies = () => volcanoBodies.slice();
   restore.weatherQueries = () => weatherQueries.slice();
   return restore;
 }
 
 async function run() {
   const env = makeEnv();
+  assert.equal(PROVIDER_MODELS.volcano.includes('volcano/kimi-k3'), true);
   env.APP_UNLOCK_HASH = await passwordSpec(UNLOCK_PASSWORD, 'unlock-salt');
   env.ADMIN_ROTATION_HASH = await passwordSpec(ADMIN_PASSWORD, 'admin-salt');
   const restoreFetch = installProviderFetchStub();
@@ -386,7 +409,22 @@ async function run() {
 
     const initialStatus = await jsonFetch(env, '/credentials/status', { session });
     assert.equal(initialStatus.response.status, 200);
-    assert.deepEqual(initialStatus.data.providers.map((item) => item.status), ['missing', 'missing', 'missing', 'missing', 'missing']);
+    assert.deepEqual(initialStatus.data.providers.map((item) => item.status), ['missing', 'missing', 'missing', 'missing', 'missing', 'missing']);
+    assert.deepEqual(
+      initialStatus.data.providers.find((item) => item.provider === 'volcano')?.models,
+      [
+        'volcano/doubao-seed-2.0-lite',
+        'volcano/doubao-seed-2.0-pro',
+        'volcano/minimax-m3',
+        'volcano/minimax-m2.7',
+        'volcano/doubao-seed-2.0-mini',
+        'volcano/kimi-k3',
+      ],
+    );
+
+    env.VOLCANO_KEY = 'volcano-secret-for-test';
+    const envVolcanoStatus = await jsonFetch(env, '/credentials/status', { session });
+    assert.equal(envVolcanoStatus.data.providers.find((item) => item.provider === 'volcano')?.status, 'connected');
 
     const adminRotateBlockedOrigin = await jsonFetch(env, '/credentials/admin-rotate', {
       method: 'POST',
@@ -432,6 +470,25 @@ async function run() {
     assert.equal(malformedSession.response.status, 401);
     assert.equal(malformedSession.data.error, 'Session invalid');
 
+    const internalStatus = await jsonFetch(env, '/credentials/status', {
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+    });
+    assert.equal(internalStatus.response.status, 200);
+    assert.equal(internalStatus.data.ok, true);
+
+    const wrongInternalStatus = await jsonFetch(env, '/credentials/status', {
+      internalKey: 'wrong-edge-key-with-32-bytes-minimum',
+      origin: 'https://travel-expense-compact.vercel.app',
+    });
+    assert.equal(wrongInternalStatus.response.status, 401);
+
+    const internalCannotBypassArbitraryRoute = await jsonFetch(env, '/session/devices', {
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: trustedOrigin,
+    });
+    assert.equal(internalCannotBypassArbitraryRoute.response.status, 401);
+
     const notionRotate = await jsonFetch(env, '/credentials/rotate', {
       method: 'POST',
       session,
@@ -452,6 +509,15 @@ async function run() {
     });
     assert.equal(notion.response.status, 200);
     assert.equal(notion.data.data.id, 'page-1');
+
+    const internalNotion = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: { path: '/pages', method: 'POST', body: { parent: {}, properties: {} } },
+    });
+    assert.equal(internalNotion.response.status, 200);
+    assert.equal(internalNotion.data.data.id, 'page-1');
 
     const personalMissing = await jsonFetch(env, '/integrations/notion/status', {
       supabaseToken: 'supabase-user-token',
@@ -477,6 +543,50 @@ async function run() {
     });
     assert.equal(personalNotion.response.status, 200);
     assert.equal(personalNotion.data.data.id, 'personal-page-1');
+
+    const internalPersonalNotion = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: {
+        path: '/pages',
+        method: 'POST',
+        databaseId: 'personal-db',
+        internalUserId: SUPABASE_USER_ID,
+        body: { parent: {}, properties: {} },
+      },
+    });
+    assert.equal(internalPersonalNotion.response.status, 200);
+    assert.equal(internalPersonalNotion.data.data.id, 'personal-page-1');
+
+    const notionCallsBeforeInvalidInternalUser = restoreFetch.notionCalls();
+    const invalidInternalUser = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: {
+        path: '/databases/personal-db/query',
+        method: 'POST',
+        databaseId: 'personal-db',
+        internalUserId: 'not-a-user-id',
+        body: { page_size: 1 },
+      },
+    });
+    assert.equal(invalidInternalUser.response.status, 400);
+    assert.equal(restoreFetch.notionCalls(), notionCallsBeforeInvalidInternalUser);
+
+    const browserCannotImpersonate = await jsonFetch(env, '/notion/request', {
+      method: 'POST',
+      session,
+      body: {
+        path: '/pages',
+        method: 'POST',
+        internalUserId: SUPABASE_USER_ID,
+        body: { parent: {}, properties: {} },
+      },
+    });
+    assert.equal(browserCannotImpersonate.response.status, 200);
+    assert.equal(browserCannotImpersonate.data.data.id, 'page-1');
 
     const notionCallsBeforeBlockedPersonal = restoreFetch.notionCalls();
     const blockedPersonalNotion = await jsonFetch(env, '/notion/request', {
@@ -526,6 +636,7 @@ async function run() {
     });
     assert.equal(kimiRotate.response.status, 200);
     assert.equal(restoreFetch.kimiModels().at(-1), 'kimi-code');
+    assert.equal(restoreFetch.kimiBodies().at(-1).max_tokens, 8);
 
     const kimi = await jsonFetch(env, '/kimi/json', {
       method: 'POST',
@@ -597,6 +708,7 @@ async function run() {
     assert.equal(google.response.status, 200);
     assert.equal(google.data.data.provider, 'google');
     assert.equal(restoreFetch.googleModels().at(-1), 'gemma-4-31b-it');
+    assert.equal(restoreFetch.googleBodies().at(-1).generationConfig.maxOutputTokens, 8);
 
     const supabaseGoogle = await jsonFetch(env, '/google/json', {
       method: 'POST',
@@ -615,7 +727,7 @@ async function run() {
     assert.equal(mimoRotate.response.status, 200);
     assert.deepEqual(restoreFetch.mimoBodies().at(-1).thinking, { type: 'disabled' });
     assert.equal(restoreFetch.mimoBodies().at(-1).stream, false);
-    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 800);
+    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 8);
 
     const mimo = await jsonFetch(env, '/mimo/json', {
       method: 'POST',
@@ -628,6 +740,54 @@ async function run() {
     assert.deepEqual(restoreFetch.mimoBodies().at(-1).thinking, { type: 'disabled' });
     assert.equal(restoreFetch.mimoBodies().at(-1).stream, false);
     assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 10000);
+
+    const mimoTest = await jsonFetch(env, '/mimo/json', {
+      method: 'POST',
+      session,
+      body: { prompt: '{"ok":true}', kind: 'test', model: 'mimo-v2.5' },
+    });
+    assert.equal(mimoTest.response.status, 200);
+    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 8);
+
+    for (const model of [
+      'doubao-seed-2.0-lite',
+      'doubao-seed-2.0-pro',
+      'minimax-m3',
+      'minimax-m2.7',
+      'doubao-seed-2.0-mini',
+      'kimi-k3',
+    ]) {
+      const volcano = await jsonFetch(env, '/volcano/json', {
+        method: 'POST',
+        session,
+        body: { prompt: '{"ok":true}', kind: 'test', model },
+      });
+      assert.equal(volcano.response.status, 200);
+      assert.equal(volcano.data.data.ok, true);
+      assert.equal(volcano.data.data.provider, 'volcano');
+      assert.equal(restoreFetch.volcanoBodies().at(-1).model, model);
+      assert.deepEqual(restoreFetch.volcanoBodies().at(-1).thinking, { type: 'disabled' });
+      assert.equal(restoreFetch.volcanoBodies().at(-1).max_tokens, 8);
+    }
+
+    const exactInternalVolcano = await jsonFetch(env, '/credentials/test', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: { provider: 'volcano', model: 'volcano/minimax-m2.7' },
+    });
+    assert.equal(exactInternalVolcano.response.status, 200);
+    assert.equal(exactInternalVolcano.data.status.model, 'volcano/minimax-m2.7');
+    assert.equal(restoreFetch.volcanoBodies().at(-1).model, 'minimax-m2.7');
+    assert.equal(restoreFetch.volcanoBodies().at(-1).max_tokens, 8);
+
+    const mismatchedInternalModel = await jsonFetch(env, '/credentials/test', {
+      method: 'POST',
+      internalKey: env.EDGE_BROKER_KEY,
+      origin: 'https://travel-expense-compact.vercel.app',
+      body: { provider: 'volcano', model: 'google/gemma-4-31b-it' },
+    });
+    assert.equal(mismatchedInternalModel.response.status, 400);
 
     const weatherApiRotate = await jsonFetch(env, '/credentials/rotate', {
       method: 'POST',

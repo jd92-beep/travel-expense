@@ -1,4 +1,5 @@
 const DEFAULT_BROKER_URL = 'https://travel-expense-credential-broker.ftjdfr.workers.dev';
+// Live deploy moved to Vercel; the broker's origin allowlist no longer includes Netlify.
 const DEFAULT_ORIGIN = 'https://travel-expense-compact.vercel.app';
 const brokerUrl = (process.env.COMPACT_BROKER_URL || DEFAULT_BROKER_URL).replace(/\/+$/, '');
 const origin = process.env.COMPACT_BROKER_ORIGIN || DEFAULT_ORIGIN;

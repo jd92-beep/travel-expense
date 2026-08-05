@@ -63,16 +63,15 @@ function fetchBootCurrencySnapshot(): Promise<CurrencySnapshot> {
 // authenticated storage scope instead of flashing the login screen while supabase-js's async
 // getSession() runs. Deliberately does NOT reject on an expired access_token and NEVER deletes
 // storage — the access_token (JWT) expires ~hourly but the refresh_token is long-lived, and
-// supabase-js silently mints a fresh access_token from it. Rejecting on expiry dropped the hint
-// and flashed the login/local scope on every cold boot after the first hour. supabase-js owns
-// eviction: it clears this key itself only when the refresh_token is truly dead (see the
-// loading-gated fallback below, which returns the app to the login screen in that case).
+// supabase-js silently mints a fresh access_token from it. The old code deleted the whole blob
+// (refresh_token included) the moment the JWT expired, forcing a full re-login every ~1 hour.
+// supabase-js owns eviction: it clears this key itself only when the refresh_token is truly dead.
 function storedSupabaseSession(): Session | null {
   try {
     const raw = localStorage.getItem('travel-expense:supabase-auth:v1');
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!(parsed?.user?.id && parsed?.access_token)) return null;
+    if (!parsed?.user?.id || !parsed?.access_token) return null;
     return parsed as Session;
   } catch {
     return null;
@@ -97,7 +96,7 @@ export function App() {
   const isCloudSyncActive = hasSupabaseSession(effectiveSupabaseSession);
   const userEmail = effectiveSupabaseSession?.user?.email || null;
   const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';
-  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isHydratingScope } = useAppState(isCloudSyncActive, storageScope, userEmail);
+  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isStorageReady } = useAppState(isCloudSyncActive, storageScope, userEmail);
   // Stable ref so the mount-once native deep-link effect doesn't re-run when updateState's identity
   // changes on login (storageScope flip) — re-running would re-drain the single-use PKCE launch URL.
   const updateStateRef = useRef(updateState);
@@ -238,6 +237,25 @@ export function App() {
     } catch (error) {
       const now = Date.now();
       console.warn('[WelcomeGuide] Cloud save failed; queued for retry:', redactedError(error));
+      const queue: SyncQueueItem = {
+        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+        type: 'trip',
+        entityId: trip.id,
+        op: 'upsert',
+        status: 'queued',
+        attempts: 0,
+        error: error instanceof Error
+          ? (error as Error & { backendError?: string }).backendError || error.message
+          : String(error),
+        createdAt: now,
+        updatedAt: now,
+        payload: {
+          notionPageId: trip.notionPageId,
+          supabaseId: trip.supabaseId,
+          sourceId: trip.sourceId || trip.id,
+          updatedAt: trip.updatedAt,
+        },
+      };
       setState((prev) => ({
         ...prev,
         trips: [trip],
@@ -250,18 +268,10 @@ export function App() {
         persons,
         shareRatios,
         settingsUpdatedAt: now,
-        syncQueue: enqueueChange(prev.syncQueue, {
-          type: 'trip',
-          entityId: trip.id,
-          op: 'upsert',
-          payload: {
-            notionPageId: trip.notionPageId,
-            supabaseId: trip.supabaseId,
-            sourceId: trip.sourceId || trip.id,
-            updatedAt: trip.updatedAt,
-          },
-          error: redactedError(error),
-        }),
+        syncQueue: [
+          ...(prev.syncQueue || []).filter((item) => item.type !== queue.type || item.entityId !== queue.entityId),
+          queue,
+        ].slice(-500),
         syncError: '',
         globalSyncStatus: 'queued',
       }));
@@ -287,10 +297,10 @@ export function App() {
     hasSupabaseSession(effectiveSupabaseSession) &&
     !isBoss(userEmail) &&
     (state.trips || []).length === 0 &&
-    !isHydratingScope &&
+    isStorageReady &&
     !skippedGuide;
 
-  const syncEngine = useSyncEngine(state, setState, supabaseAuth.session);
+  const syncEngine = useSyncEngine(state, setState, effectiveSupabaseSession);
   const { pull, sync } = syncEngine;
   const [tab, setTab] = useState<TabId>(() => safeTabId((typeof window !== 'undefined' && window.location.hash.slice(1)) || DEFAULT_LAUNCH_TAB));
   const [direction, setDirection] = useState<number>(0);
@@ -441,12 +451,12 @@ export function App() {
   // Fix Bug 8.1: Lock automatic bootPull/bootSync logic behind bootSyncInitiated.current
   useEffect(() => {
     if (bootSyncInitiated.current) return;
-    if (isHydratingScope) return;
+    if (!isStorageReady) return;
     if (!navigator.onLine) return;
-    if (!hasSupabaseSession(supabaseAuth.session) && !canUseNotionMirror(state, false, userEmail)) return;
+    if (!hasSupabaseSession(effectiveSupabaseSession) && !canUseNotionMirror(state, false, userEmail)) return;
 
     const bootSyncKey = [
-      hasSupabaseSession(supabaseAuth.session) ? `supabase:${supabaseAuth.session.user.id}` : hasCredentialBrokerSession(state) ? `broker:${state.credentialSessionExpiresAt || 0}` : 'local-dev-credential',
+      hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : hasCredentialBrokerSession(state) ? `broker:${state.credentialSessionExpiresAt || 0}` : 'local-dev-credential',
       receiptCountRef.current === 0 ? 'pull' : 'sync',
     ].join(':');
     if (bootSyncKeys.current.has(bootSyncKey) || bootSyncScheduledKey.current === bootSyncKey) return;
@@ -462,20 +472,35 @@ export function App() {
         void pull();
       } else {
         console.log('[App] Boot sync — existing local data');
-        void sync();
+        void sync({ auto: true });
       }
     }, 800);
     return () => {
       window.clearTimeout(timer);
       if (!bootSyncKeys.current.has(bootSyncKey)) bootSyncScheduledKey.current = '';
     };
-  }, [isHydratingScope, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, supabaseAuth.session]);
+  }, [isStorageReady, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, effectiveSupabaseSession, userEmail]);
+
+  // One-shot migration: fold legacy per-spot itinerary overrides (personal memo layer)
+  // into the trip itinerary so they survive AI updates and reach shared-trip members.
+  // Viewers keep the old local-only behaviour — they can't push trip changes.
+  useEffect(() => {
+    if (!isStorageReady) return;
+    setState((prev) => {
+      if (!Object.keys(prev.itineraryOverrides || {}).length) return prev;
+      if (activeTrip(prev).sharing?.role === 'viewer') return prev;
+      const baked = bakeItineraryOverrides(prev);
+      if (!baked) return prev;
+      console.log('[App] Baking itinerary overrides into trip itinerary (one-shot migration)');
+      return { ...applyItineraryEdit(prev, baked), itineraryOverrides: {} };
+    });
+  }, [isStorageReady, setState]);
 
   // Process recurring rules once the scope's state has finished hydrating (localStorage is sync but
   // IndexedDB merges async — running on bare mount could miss rules that arrive from IndexedDB).
   // processRecurringRules is idempotent (it advances nextRun), so a re-run after a scope change is safe.
   useEffect(() => {
-    if (isHydratingScope || !state.recurringRules?.length) return;
+    if (!isStorageReady || !state.recurringRules?.length) return;
     const { receipts: newReceipts, updatedRules } = processRecurringRules(state);
     if (newReceipts.length) {
       // Route through upsertReceipt so each spawned receipt is stamped + enqueued for cloud sync —
@@ -485,22 +510,7 @@ export function App() {
       console.log(`[App] Recurring: spawned ${newReceipts.length} receipt(s) from ${updatedRules.length} rule(s)`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHydratingScope]);
-
-  // One-shot migration: fold legacy per-spot itinerary overrides (personal memo layer)
-  // into the trip itinerary so they survive AI updates and reach shared-trip members.
-  // Viewers keep the old local-only behaviour — they can't push trip changes.
-  useEffect(() => {
-    if (isHydratingScope) return;
-    setState((prev) => {
-      if (!Object.keys(prev.itineraryOverrides || {}).length) return prev;
-      if (activeTrip(prev).sharing?.role === 'viewer') return prev;
-      const baked = bakeItineraryOverrides(prev);
-      if (!baked) return prev;
-      console.log('[App] Baking itinerary overrides into trip itinerary (one-shot migration)');
-      return { ...applyItineraryEdit(prev, baked), itineraryOverrides: {} };
-    });
-  }, [isHydratingScope, setState]);
+  }, [isStorageReady]);
 
   // Auto-connect Notion for Boss when Supabase session is available
   useEffect(() => {
@@ -725,7 +735,7 @@ export function App() {
                   )}
                   {safeTab === 'weather' && <Weather state={state} />}
                   {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} upsertReceipt={upsertReceipt} deleteReceipt={deleteReceipt} />}
-                  {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
+                  {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} supabaseAccountId={effectiveSupabaseSession?.user?.id || ''} supabaseSessionExpiresAt={(effectiveSupabaseSession?.expires_at || 0) * 1000} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
                 </>
               );
               // The keyed ErrorBoundary must live INSIDE the motion.div: when it wrapped
@@ -836,7 +846,11 @@ export function App() {
   );
 
   if (supabaseAuth.configured) {
-    if (hasSupabaseSession(supabaseAuth.session) && isHydratingScope) {
+    // isStorageReady (not isHydratingScope) is the correct gate here: isHydratingScope flips false
+    // right after the synchronous localStorage read, before the async IndexedDB merge lands, letting
+    // the app render with a pre-merge (possibly stale/incomplete) snapshot for one paint. isStorageReady
+    // additionally waits for indexedReadyScope, matching how showGuide already gates below.
+    if (hasSupabaseSession(supabaseAuth.session) && !isStorageReady) {
       return <LoadingState label="載入帳號資料" />;
     }
     return <SupabaseGate auth={supabaseAuth}>{appContent}</SupabaseGate>;

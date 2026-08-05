@@ -1,5 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = (process.env.REACT_TEST_ORIGIN || 'http://localhost:8902').replace(/\/+$/, '');
+const APP_URL = `${APP_ORIGIN}/travel-expense/react/`;
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 const persons = [
@@ -17,6 +20,11 @@ const receipts = [
 ];
 
 test('Stats settlement, filters, top expenses, and trend are usable', async ({ page }) => {
+  await page.route('https://open.er-api.com/**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ result: 'success', provider: 'qa-rate', rates: { HKD: 1, JPY: 20.36 } }),
+  }));
   await page.addInitScript((payload) => {
     window.__disable_supabase_configured = true;
     
@@ -45,7 +53,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
 
 
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#stats`);
   await expect(page.getByText('預算使用分析')).toBeVisible();
   await expect(page.getByText('6 筆紀錄')).toBeVisible();
   await expect(page.locator('.stats-command-title-row')).toContainText('預算使用分析');

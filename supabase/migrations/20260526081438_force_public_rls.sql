@@ -12,4 +12,4 @@ alter table public.receipts force row level security;
 alter table public.receipt_items force row level security;
 alter table public.receipt_photos force row level security;
 alter table public.integrations force row level security;
-alter table public.receipt_sync_jobs force row level security;
+alter table public.receipt_sync_jobs force row level security;;

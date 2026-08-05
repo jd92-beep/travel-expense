@@ -3,8 +3,7 @@ import { activeTrip } from '../domain/trip/normalize';
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
 import { archiveSupabaseReceipt, hasSupabaseSession, pullSupabaseData, pushSupabaseSettings, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
-import { mergePulledData } from './syncMerge';
-import { rawReceiptSourceId } from './syncMerge';
+import { filterSupersededTripQueue, mergePulledData, rawReceiptSourceId, receiptSourceTombstoneKey } from './syncMerge';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
 import type { Session } from '@supabase/supabase-js';
 
@@ -197,9 +196,11 @@ export function useSyncEngine(
         ? await upsertSupabaseReceipt(supabaseSession, current, { ...receipt, syncStatus: 'syncing' })
         : { ...receipt, syncStatus: 'syncing' as const };
       if (hasNotionSync && !sharedLedger) {
-        synced = await pushReceipt(current, synced);
-        if (supabaseSession) {
-          synced = await upsertSupabaseReceipt(supabaseSession, current, synced);
+        if (receipt.visibility === 'private') {
+          if (receipt.notionPageId) await archiveReceipt(current, receipt);
+          synced = { ...synced, notionPageId: undefined };
+        } else {
+          synced = await pushReceipt(current, { ...synced, notionPageId: receipt.notionPageId });
         }
       }
       applyReceiptSyncResult(item, synced);
@@ -217,6 +218,8 @@ export function useSyncEngine(
         supabaseId: item.payload?.supabaseId,
         tripId: item.payload?.tripId,
         sourceId: rawReceiptSourceId(item.payload?.sourceId || item.entityId, item.payload?.tripId),
+        version: item.payload?.version,
+        syncRevision: item.payload?.syncRevision,
       } as Receipt;
       if (hasSupabaseSession(session)) await archiveSupabaseReceipt(session, current, tombstone);
       if (hasNotionSync && !usesSharedLedger(current, tombstone)) await archiveReceipt(current, tombstone);
@@ -320,12 +323,12 @@ export function useSyncEngine(
       const hasCloudSync = !!cloudSession;
       const hasNotionSync = canUseNotionMirror(stateRef.current, hasCloudSync, cloudSession?.user?.email || null);
       const [supabaseResult, tripsResult, receiptsResult, settingsResult] = await Promise.allSettled([
-        cloudSession ? pullSupabaseData(cloudSession, stateRef.current) : Promise.resolve({ trips: [], receipts: [], settings: undefined }),
+        cloudSession ? pullSupabaseData(cloudSession, stateRef.current) : Promise.resolve({ trips: [], receipts: [], tombstones: [], settings: undefined }),
         hasNotionSync ? pullTrips(stateRef.current) : Promise.resolve([]),
         hasNotionSync ? pullAll(stateRef.current) : Promise.resolve([]),
         hasNotionSync && !hasCloudSync ? pullSettingsMeta(stateRef.current) : Promise.resolve(null),
       ]);
-      const supabaseData = supabaseResult.status === 'fulfilled' ? supabaseResult.value : { trips: [], receipts: [] };
+      const supabaseData = supabaseResult.status === 'fulfilled' ? supabaseResult.value : { trips: [], receipts: [], tombstones: [] };
       const trips = [...supabaseData.trips, ...(tripsResult.status === 'fulfilled' ? tripsResult.value : [])];
       const receipts = [...supabaseData.receipts, ...(receiptsResult.status === 'fulfilled' ? receiptsResult.value : [])];
       const settingsCandidates = [
@@ -349,13 +352,33 @@ export function useSyncEngine(
           overwrittenIds.add(remote.id);
         }
       }
+      const serverTombstoneKeys = new Set(supabaseData.tombstones.map((tombstone) =>
+        receiptSourceTombstoneKey({ id: tombstone.supabaseId, sourceId: tombstone.sourceId, tripId: tombstone.tripId })));
       const prePullQueue = stateRef.current.syncQueue || [];
-      const filteredQueue = prePullQueue.filter((item) => !overwrittenIds.has(item.entityId));
+      const filteredQueue = filterSupersededTripQueue(
+        prePullQueue,
+        stateRef.current.trips || [],
+        trips,
+      )
+        .filter((item) => !overwrittenIds.has(item.entityId))
+        .filter((item) => {
+          if (item.type !== 'receipt' && item.type !== 'delete-receipt') return true;
+          const key = item.payload?.tombstoneKey || receiptSourceTombstoneKey({
+            id: item.payload?.sourceId || item.entityId,
+            sourceId: item.payload?.sourceId,
+            tripId: item.payload?.tripId,
+          });
+          return !serverTombstoneKeys.has(key);
+        });
       const pending = pendingCount(filteredQueue);
       const nextSyncedAt = pullErrors.length ? stateRef.current.lastSyncedAt || 0 : mergedAt;
+      const cloudPullOk = !!cloudSession && supabaseResult.status === 'fulfilled';
+      const authorizedSupabaseIds = new Set(
+        supabaseData.trips.map((trip) => trip.supabaseId).filter((id): id is string => !!id),
+      );
       if (aliveRef.current) {
         setState((current) => {
-          const mergedBase = mergePulledData(current, receipts, trips);
+          const mergedBase = mergePulledData(current, receipts, trips, supabaseData.tombstones);
           let finalState = mergedBase;
           if (settings) {
             const remoteTs = Number(settings.settingsUpdatedAt || 0);
@@ -402,9 +425,47 @@ export function useSyncEngine(
               };
             }
           }
+          let nextQueue = filteredQueue;
+          if (cloudPullOk) {
+            const purgedTripIds = new Set(
+              (finalState.trips || [])
+                .filter((trip) => trip.supabaseId && !authorizedSupabaseIds.has(trip.supabaseId))
+                .map((trip) => trip.id),
+            );
+            if (purgedTripIds.size) {
+              const removedReceiptIds = new Set(
+                (finalState.receipts || []).filter((receipt) => receipt.tripId && purgedTripIds.has(receipt.tripId)).map((receipt) => receipt.id),
+              );
+              const remainingTrips = (finalState.trips || []).filter((trip) => !purgedTripIds.has(trip.id));
+              const nextActiveTripId = remainingTrips.some((trip) => trip.id === finalState.activeTripId && !trip.archived)
+                ? finalState.activeTripId
+                : (remainingTrips.find((trip) => !trip.archived)?.id || remainingTrips[0]?.id || finalState.activeTripId);
+              const peopleByTripId = Object.fromEntries(
+                Object.entries(finalState.peopleByTripId || {}).filter(([tripId]) => !purgedTripIds.has(tripId)),
+              );
+              const shareRatiosByTripId = Object.fromEntries(
+                Object.entries(finalState.shareRatiosByTripId || {}).filter(([tripId]) => !purgedTripIds.has(tripId)),
+              );
+              nextQueue = nextQueue.filter((item) =>
+                !removedReceiptIds.has(item.entityId)
+                && !(item.type === 'trip' && purgedTripIds.has(item.entityId))
+                && !(item.payload?.tripId && purgedTripIds.has(item.payload.tripId)));
+              finalState = {
+                ...finalState,
+                trips: remainingTrips,
+                receipts: (finalState.receipts || []).filter((receipt) => !receipt.tripId || !purgedTripIds.has(receipt.tripId)),
+                activeTripId: nextActiveTripId,
+                peopleByTripId,
+                shareRatiosByTripId,
+                receiptTombstones: Object.fromEntries(
+                  Object.entries(finalState.receiptTombstones || {}).filter(([, tombstone]) => !purgedTripIds.has(tombstone.tripId)),
+                ),
+              };
+            }
+          }
           return {
             ...finalState,
-            syncQueue: (current.syncQueue || []).filter((item) => !overwrittenIds.has(item.entityId)),
+            syncQueue: nextQueue,
             globalSyncStatus: pullErrors.length ? 'error' : (pending ? 'queued' : 'synced'),
             lastSyncedAt: nextSyncedAt,
             syncError: pullErrors.join(' | '),

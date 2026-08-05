@@ -51,6 +51,9 @@ test('malformed session blob is ignored without crashing the app', async ({ page
   await expect(page.getByRole('banner').first()).toBeVisible();
 });
 
+// Regression: if Supabase is paused or unreachable, getSession() can reject or
+// remain pending while refreshing the saved token. Cold boot must leave the reconnect screen and
+// show the sign-in surface with the network error instead of loading forever.
 test('unreachable Supabase releases the reconnect screen after session refresh fails', async ({ page }) => {
   await page.route('https://test-travel-expense.supabase.co/**', (route) => route.abort('failed'));
   await page.addInitScript((key) => {

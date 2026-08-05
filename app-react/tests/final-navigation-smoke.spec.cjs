@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const APP_ORIGIN = (process.env.REACT_TEST_ORIGIN || 'http://localhost:8902').replace(/\/+$/, '');
+const APP_URL = `${APP_ORIGIN}/travel-expense/react/`;
 
 
 const tabs = [
@@ -50,7 +52,7 @@ for (const [name, viewport] of [
     const context = await browser.newContext({ viewport });
     const page = await context.newPage();
     await installTrust(page);
-    await page.goto('http://localhost:8902/travel-expense/react/');
+    await page.goto(`${APP_URL}#dashboard`);
     if (viewport.width <= 390) {
       await expect(page.locator('.hyperframe-layer')).toHaveCount(2);
       await expect(page.locator('canvas')).toHaveCount(0);
@@ -66,6 +68,7 @@ for (const [name, viewport] of [
 
 test('Final lock gate smoke without trusted device', async ({ page }) => {
   await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
     localStorage.clear();
     localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify({
       access_token: 'fake-access-token',
@@ -85,7 +88,7 @@ test('Final lock gate smoke without trusted device', async ({ page }) => {
       },
     }));
   });
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#dashboard`);
   await expect(page.getByText(/本機安全防護鎖|先解鎖再使用/).first()).toBeVisible();
 });
 
@@ -93,7 +96,7 @@ test('Sync error indicator is clickable and retries sync', async ({ page }) => {
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
   });
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#dashboard`);
   await page.evaluate(async () => {
     const clearIndexedSnapshot = () => new Promise((resolve) => {
       const req = indexedDB.open('travel-expense-react', 1);
@@ -211,7 +214,7 @@ test('Boot currency and sync effects run once without noisy mobile 403s', async 
       }]
     }));
   });
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.goto(`${APP_URL}#dashboard`);
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect.poll(() => notionPaths.filter((path) => path.includes('/query')).length).toBeGreaterThanOrEqual(2);
   await page.waitForTimeout(1200);
