@@ -14,6 +14,9 @@ set local statement_timeout = '30s';
 -- the exact grant/set-role/revoke pattern the admin owner migrations use in
 -- the same disposable stack.
 grant receipt_sync_owner to postgres;
+-- 20260710191000 hardens the role by revoking CREATE on schema public at the
+-- end; the replace below needs it back for the duration of this transaction.
+grant create on schema public to receipt_sync_owner;
 set local role receipt_sync_owner;
 
 create or replace function public.claim_receipt_sync_jobs_worker(
@@ -126,6 +129,7 @@ grant execute on function public.claim_receipt_sync_jobs_worker(text, integer)
 
 reset role;
 
+revoke create on schema public from receipt_sync_owner;
 revoke receipt_sync_owner from postgres;
 
 commit;
