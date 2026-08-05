@@ -318,10 +318,13 @@ const expectedStaleLeaseStatements = [
   'begin',
   "set local lock_timeout = '5s'",
   "set local statement_timeout = '30s'",
+  'grant receipt_sync_owner to supabase_admin',
+  'set local role receipt_sync_owner',
   '__worker_claim_function__',
   'alter function public.claim_receipt_sync_jobs_worker(text, integer) owner to receipt_sync_owner',
   'revoke all on function public.claim_receipt_sync_jobs_worker(text, integer) from public, anon, authenticated',
   'grant execute on function public.claim_receipt_sync_jobs_worker(text, integer) to service_role',
+  'reset role',
   'commit',
 ];
 if (JSON.stringify(staleLeaseStatements) !== JSON.stringify(expectedStaleLeaseStatements)) {
