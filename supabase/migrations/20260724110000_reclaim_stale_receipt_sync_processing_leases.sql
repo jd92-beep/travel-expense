@@ -5,6 +5,14 @@ begin;
 set local lock_timeout = '5s';
 set local statement_timeout = '30s';
 
+-- The function below is owned by receipt_sync_owner (see
+-- 20260710191000_receipt_sync_worker_contract.sql). Migrations applied by the
+-- Supabase CLI disposable stack are not guaranteed to run as a superuser, so
+-- `create or replace` / `alter function` on that function fail with SQLSTATE
+-- 42501 unless the migrator first becomes the owning role. This mirrors the
+-- `set local role <owner>` pattern used by the admin owner migrations.
+set local role receipt_sync_owner;
+
 create or replace function public.claim_receipt_sync_jobs_worker(
   p_worker text,
   p_limit integer default 10
@@ -112,5 +120,7 @@ revoke all on function public.claim_receipt_sync_jobs_worker(text, integer)
   from public, anon, authenticated;
 grant execute on function public.claim_receipt_sync_jobs_worker(text, integer)
   to service_role;
+
+reset role;
 
 commit;
