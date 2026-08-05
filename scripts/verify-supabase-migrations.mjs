@@ -318,7 +318,7 @@ const expectedStaleLeaseStatements = [
   'begin',
   "set local lock_timeout = '5s'",
   "set local statement_timeout = '30s'",
-  'set local role receipt_sync_owner',
+  'set local role postgres',
   '__worker_claim_function__',
   'alter function public.claim_receipt_sync_jobs_worker(text, integer) owner to receipt_sync_owner',
   'revoke all on function public.claim_receipt_sync_jobs_worker(text, integer) from public, anon, authenticated',

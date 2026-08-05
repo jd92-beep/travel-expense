@@ -7,11 +7,12 @@ set local statement_timeout = '30s';
 
 -- The function below is owned by receipt_sync_owner (see
 -- 20260710191000_receipt_sync_worker_contract.sql). Migrations applied by the
--- Supabase CLI disposable stack do not run as superuser, so `create or
--- replace` / `alter function` on that function fail with SQLSTATE 42501
--- unless the migrator first becomes the owning role. Mirrors the
--- `set local role <owner>` pattern used by the admin owner migrations.
-set local role receipt_sync_owner;
+-- Supabase CLI disposable stack run as supabase_admin, which is neither
+-- superuser nor a SET-privileged member of receipt_sync_owner, so replacing
+-- the function directly fails with SQLSTATE 42501. supabase_admin does hold
+-- SET privilege on the postgres role, and as postgres (superuser in the
+-- disposable stack) the replace and the ownership hand-back below both pass.
+set local role postgres;
 
 create or replace function public.claim_receipt_sync_jobs_worker(
   p_worker text,
