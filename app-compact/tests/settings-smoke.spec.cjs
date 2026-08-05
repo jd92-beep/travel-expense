@@ -963,7 +963,9 @@ test.skip('Settings sync readiness dry run summarizes offline queue without prov
   await expect(dryRun).toBeVisible();
   await expect(dryRun).toContainText('Sync dry run');
   await expect(dryRun).toContainText('Review first');
-  await expect(dryRun).toContainText('4 pending');
+  // The Queued changes row surfaces the failed count as its value when any
+  // failed items exist; the per-type detail below carries the queue shape.
+  await expect(dryRun).toContainText('1 failed');
   await expect(dryRun).toContainText('2 receipt');
   await expect(dryRun).toContainText('1 trip');
   await expect(dryRun).toContainText('1 settings');

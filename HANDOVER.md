@@ -2,7 +2,7 @@
 
 ## Last Worked On
 - **Date**: 2026-08-04 HKT
-- **Focus**: Session 82 fixed the four registration-review findings on main (`0f8783c`, Compact `0.16.21`) and the Android branch (`6ec8db4`, `0.20.7`): signup confirm-password + stronger policy, resend-confirmation with cooldown, magic-link cooldown, and AuthGate offline banner replacing alert(). The full main→Android merge was assessed and deferred (Open Item 20). Session 81 refined the Session 80 Compact login surface (CSS-only calm/elegant pass, `taste-skill` redesign-evolve); pushed to `origin main` (`2c66b5d`) and synced to the Android shell branch (`f568c64`).
+- **Focus**: Session 83 repaired Admin Console 1.0 CI end to end on main (five gates, final run `31027807933` all green) and executed the reviewed main→Android mega-merge (`2a2a9f5`, Android `0.21.0` / versionCode 2100, full gate battery green). Session 82 fixed the four registration-review findings on main (`0f8783c`, Compact `0.16.21`) and the Android branch (`6ec8db4`, `0.20.7`).
 - **Agent**: Codex.
 - **App version**: Compact `0.16.19`; Android `0.20.4` (versionCode 2004; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
@@ -90,15 +90,46 @@ you closed with your session number.
    `INACTIVE` to `ACTIVE_HEALTHY`. Compact, React and Android now leave the reconnect screen after a
    five-second unreachable-session watchdog and show the login surface with network evidence. No
    schema, RLS, migration, credential or user-data change was made.
-20. 🟠 **Full `main` → Android-branch merge deferred to a dedicated reviewed session** — Session 82
-   attempted the merge to close the structural drift found in the registration review and aborted
-   it: 48 conflicted files where BOTH sides evolved (`supabase.ts`, `useSyncEngine.ts`, `App.tsx`,
-   `styles.css`, tests, docs; merge-base is `f27af14` v0.8.0). Registration-related code is already
-   reconciled by port (`6ec8db4`); the remaining drift (outbox drainer refactor, RLS error mapping,
-   settlement category, tabs/tests) needs a planned merge with the full Android gate battery and
-   emulator QA. Do not attempt it as a side task.
+20. 🟢 **Full `main` → Android-branch merge COMPLETED in Session 83** — executed as the reviewed
+   dedicated operation (`2a2a9f5`, Android `0.21.0` / versionCode 2100): 47 conflicted files
+   resolved with main as baseline plus all Android-only layers preserved. Full gate battery green
+   (11 playwright suites + 6 node unit suites + typecheck/build/security:scan). Emulator QA and a
+   real-device Google login check remain human follow-ups.
 
 ## What Was Done
+
+### Session 83 (Kimi — Admin Console CI repair + main→Android mega-merge)
+
+1. **Admin Console 1.0 CI repaired end to end (was red since 2026-07-29).** Five failing gates
+   fixed across four pushes: (a) Credential Broker `npm audit --audit-level=high` — `undici`
+   override `^7.29.0` for the dev-only wrangler/miniflare chain; (b) Admin frontend audit —
+   `react-router` `^7.18.1` → `^8.3.0` (RSC-mode CSRF advisory; the app is SPA-only) plus a
+   `postcss` patch, verified with typecheck, unit, contract, build and browser smoke 49/49;
+   (c) Cross-client policy scan — allowlist updated alongside each migration edit; (d) the
+   disposable-Supabase `SQLSTATE 42501` chain — root cause was that `20260710191000` revokes
+   `receipt_sync_owner` from postgres before committing, so `20260724110000`'s
+   `create or replace function` had no ownership path; the fix mirrors the admin owner migrations:
+   `grant receipt_sync_owner to postgres` + `grant create on schema public` + `set local role
+   receipt_sync_owner`, all revoked again before commit to preserve the hardened end state
+   (final push `0b2f1fa`, run `31027807933` all jobs green). Both edited migrations were already
+   applied in production; the edits only realign fresh-apply behavior (checksum drift acknowledged,
+   no `db push` or repair performed). React shared-contract's one red run was a dev-server-start
+   flake and passed on rerun.
+2. **Mega-merge executed (`2a2a9f5`).** 47 conflicted files resolved by eight parallel batch
+   resolutions with main as baseline; Android-only layers verified preserved (native auth,
+   Capacitor shell, settlement/split engines, `ANDROID_AI_MODELS` incl. kimi-k3, backoff sync
+   journal). Integration fixes: auth-error classification in `useSyncEngine.ts` now unions main's
+   `session`/`expired` markers with android's JWT markers; history/settings smoke expectations
+   realigned to main's current UI contracts (sync-failed/cloud-only markers, delete-before-
+   itinerary photo-button order, Trip Doctor retryable `attempts: 2` seed, dry-run failed-count
+   value — the last also fixed on main, whose `smoke:settings` is not CI-gated and had rotted).
+3. **Verification evidence.** Android `0.21.0`: typecheck, build, `security:scan`, node units
+   (split-engine, notion-split-meta, scoped-persistence, shared-trip-outbox, android-jdk,
+   change-journal), provider-catalog contract, and 11 playwright suites — sync-regression 10/10,
+   offline 5/5, session 3/3, settings 12/12, ai-routing 6/6, timeline 10/10, history 8/8,
+   itinerary 3/3, privacy 3/3, scan 1/1, mobile-layout 1/1. Main settings smoke re-verified green
+   after the dry-run spec fix. No emulator QA, release artifact, schema, RLS, credential or
+   live-data action was performed.
 
 ### Session 82 (Kimi — registration mechanism review fixes, Compact + Android)
 
