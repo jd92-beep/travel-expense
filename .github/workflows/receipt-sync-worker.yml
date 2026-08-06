@@ -1,8 +1,11 @@
 name: Drain receipt sync outbox
 
+# Manual backstop only. The automatic drain is event-driven inside the database
+# since 20260806090000_receipt_sync_event_drain.sql: a shared ledger entering its
+# travel window (trip dates +/- 7 days) schedules a 20-minute pg_cron tick that
+# calls the same worker endpoint, and the tick unschedules itself when no shared
+# ledger is in window. No always-on polling.
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       limit:
