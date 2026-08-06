@@ -93,8 +93,17 @@ you closed with your session number.
 20. 🟢 **Full `main` → Android-branch merge COMPLETED in Session 83** — executed as the reviewed
    dedicated operation (`2a2a9f5`, Android `0.21.0` / versionCode 2100): 47 conflicted files
    resolved with main as baseline plus all Android-only layers preserved. Full gate battery green
-   (11 playwright suites + 6 node unit suites + typecheck/build/security:scan). Emulator QA and a
-   real-device Google login check remain human follow-ups.
+   (11 playwright suites + 6 node unit suites + typecheck/build/security:scan). Emulator QA passed
+   (`appLinksVerified=true`, `launchMode=login`) and a signed release AAB was built locally. A
+   real-device Google login check remains a human follow-up.
+21. 🟢 **Receipt-sync drain cron enabled in Session 83** — the `Drain receipt sync outbox`
+   scheduled workflow was failing in 8s because the `RECEIPT_SYNC_WORKER_URL` and
+   `RECEIPT_SYNC_WORKER_KEY` repo secrets were never set. A fresh 64-hex key was generated and
+   installed on BOTH sides (Supabase edge secret `RECEIPT_SYNC_WORKER_SECRET` on project
+   `fbnnjoahvtdrnigevrtw`, plus the two GitHub repo secrets); the key was never printed or
+   committed. Manual dispatch `31063346381` passed (`ok=true`, `outcomeUnknown=0`) — the first
+   successful drain execution. Open Item 5's remaining piece is a positive shared-receipt Notion
+   mirror write proof; the cron now runs every 5 minutes on its own.
 
 ## What Was Done
 
