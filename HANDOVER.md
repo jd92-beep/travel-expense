@@ -128,8 +128,14 @@ you closed with your session number.
    change-journal), provider-catalog contract, and 11 playwright suites — sync-regression 10/10,
    offline 5/5, session 3/3, settings 12/12, ai-routing 6/6, timeline 10/10, history 8/8,
    itinerary 3/3, privacy 3/3, scan 1/1, mobile-layout 1/1. Main settings smoke re-verified green
-   after the dry-run spec fix. No emulator QA, release artifact, schema, RLS, credential or
-   live-data action was performed.
+   after the dry-run spec fix. Post-merge device evidence (Boss-requested): `assembleDebug` green
+   on JDK 21, emulator QA `status=passed` / `appLinksVerified=true` / `launchMode=login` at
+   `/tmp/travel-expense-android-qa-2026-08-06T01-28-27-935Z`, and a signed release AAB `0.21.0`
+   built and `jarsigner`-verified at `app-compact/android/app/build/outputs/bundle/release/
+   app-release.aab` (local artifact only, NOT published anywhere). Caveat recorded: `android:bundle`
+   bypasses the JDK wrapper — pass `JAVA_HOME` (JDK 17-21) explicitly. No schema, RLS, credential
+   or live-data action was performed; a real-device interactive Google login still needs Boss's
+   physical device and account.
 
 ### Session 82 (Kimi — registration mechanism review fixes, Compact + Android)
 
