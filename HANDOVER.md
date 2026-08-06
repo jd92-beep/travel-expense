@@ -276,7 +276,15 @@ Main is now the shared baseline; Android keeps only genuine platform deltas. Reg
 is identical in behavior on both branches. Follow-up fixes during integration: auth-error marker
 union in `useSyncEngine.ts` (main's `session`/`expired` + android's JWT markers), settings/history
 smoke expectations realigned to main's current UI contracts (see main Session 83 entry for the full
-evidence list, including the Admin Console 1.0 CI repair that landed alongside).
+evidence list, including the Admin Console 1.0 CI repair that landed alongside). Post-merge device
+evidence: `assembleDebug` green (JDK 21 via homebrew `openjdk@21` — Android Studio's JBR is Java 25
+and the wrapper rejects it), emulator QA `status=passed`, `appLinksVerified=true`,
+`launchMode=login` at `/tmp/travel-expense-android-qa-2026-08-06T01-28-27-935Z` (one earlier ANR
+was an install/replace race flake), and a signed release AAB `0.21.0` was built at
+`app-compact/android/app/build/outputs/bundle/release/app-release.aab` (`jarsigner -verify` OK) on
+Boss's explicit request. Note: `android:bundle` does NOT use `run-with-android-jdk.mjs` — run
+gradle with `JAVA_HOME` pointed at a JDK 17-21 install or the capacitor-android JdkImageTransform
+grabs the default Java 26 jlink and fails.
 
 ### Session 82 (Kimi — registration mechanism review fixes, Compact + Android)
 
