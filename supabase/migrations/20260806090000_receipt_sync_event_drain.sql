@@ -38,8 +38,7 @@ as $$
     select 1
     from public.trip_backend_links link
     join public.trips trip on trip.id = link.trip_id
-    where trip.deleted_at is null
-      and (trip.start_date is null or trip.start_date <= (current_date + 7))
+    where (trip.start_date is null or trip.start_date <= (current_date + 7))
       and (trip.end_date is null or trip.end_date >= (current_date - 7))
   );
 $$;
