@@ -96,14 +96,18 @@ you closed with your session number.
    (11 playwright suites + 6 node unit suites + typecheck/build/security:scan). Emulator QA passed
    (`appLinksVerified=true`, `launchMode=login`) and a signed release AAB was built locally. A
    real-device Google login check remains a human follow-up.
-21. 🟢 **Receipt-sync drain cron enabled in Session 83** — the `Drain receipt sync outbox`
-   scheduled workflow was failing in 8s because the `RECEIPT_SYNC_WORKER_URL` and
-   `RECEIPT_SYNC_WORKER_KEY` repo secrets were never set. A fresh 64-hex key was generated and
-   installed on BOTH sides (Supabase edge secret `RECEIPT_SYNC_WORKER_SECRET` on project
-   `fbnnjoahvtdrnigevrtw`, plus the two GitHub repo secrets); the key was never printed or
-   committed. Manual dispatch `31063346381` passed (`ok=true`, `outcomeUnknown=0`) — the first
-   successful drain execution. Open Item 5's remaining piece is a positive shared-receipt Notion
-   mirror write proof; the cron now runs every 5 minutes on its own.
+21. 🟢 **Receipt-sync drain is now event-driven (Session 83)** — Boss replaced the always-on
+   5-minute cron design: migration `20260806090000_receipt_sync_event_drain.sql` (applied live via
+   Management API) adds `private.receipt_sync_drain_kick()` triggers on `trip_backend_links`,
+   `receipt_sync_jobs` and `trips` date changes. When a shared ledger sits inside its travel
+   window (trip dates +/- 7 days), the kick schedules a `*/20` pg_cron job
+   (`receipt-sync-drain`) and fires an immediate debounced drain; the tick calls the same worker
+   endpoint and **unschedules itself** when no shared ledger is in window. Zero polling outside
+   trips. The GitHub workflow keeps the same secrets as a manual `workflow_dispatch` backstop.
+   Live-verified with zero shared trips present: window=false, tick recorded
+   `unscheduled: no shared trip in window`, `cron.job` empty. Drain secret was rotated once more
+   and is consistent across edge secret, GitHub secret and `private.receipt_sync_drain_config`.
+   Open Item 5's remaining piece stays a positive shared-receipt Notion mirror write proof.
 
 ## What Was Done
 
