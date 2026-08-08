@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-04 HKT
-- **Focus**: Session 83 repaired Admin Console 1.0 CI end to end on main (five gates, final run `31027807933` all green) and executed the reviewed main→Android mega-merge (`2a2a9f5`, Android `0.21.0` / versionCode 2100, full gate battery green). Session 82 fixed the four registration-review findings on main (`0f8783c`, Compact `0.16.21`) and the Android branch (`6ec8db4`, `0.20.7`).
+- **Date**: 2026-08-08 HKT
+- **Focus**: Session 84 fixed the Compact Vercel cold-open false sync/manual-retry warning by giving exhausted transient network failures one bounded fresh retry while keeping genuine terminal failures visible; the same journal contract was ported to Android.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.19`; Android `0.20.4` (versionCode 2004; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
+- **App version**: Compact `0.16.22`; Android `0.21.1` (versionCode 2101; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -108,8 +108,35 @@ you closed with your session number.
    `unscheduled: no shared trip in window`, `cron.job` empty. Drain secret was rotated once more
    and is consistent across edge secret, GitHub secret and `private.receipt_sync_drain_config`.
    Open Item 5's remaining piece stays a positive shared-receipt Notion mirror write proof.
+22. 🟢 **Compact cold-open false sync warning resolved in Session 84** — an exhausted persisted
+   transient network failure now receives exactly one fresh cold-boot retry instead of remaining a
+   permanent generic sync/manual-retry warning. Version conflicts, permission/data failures and
+   other genuine terminal evidence remain visible. The Vercel-root regression seeds both scoped
+   localStorage and IndexedDB with the production keys and asserts that neither the update notice
+   nor either sync-warning surface appears.
 
 ## What Was Done
+
+### Session 84 (Codex — Compact Vercel cold-open sync recovery, `0.16.22` / Android `0.21.1`)
+
+1. **Root cause reproduced and fixed at the journal boundary.** A scoped queue item persisted as
+   `status=error`, `attempts=3`, `error=Failed to fetch` was restored as a durable terminal failure
+   on every cold open. Hydration then rewrote the global sync summary from that stale item, while
+   the engine correctly skipped terminal/exhausted work, so a healthy backend could never clear the
+   banner. `restoreJournal()` now classifies only transient network messages and grants them one
+   bounded cold-boot attempt (`queued`, attempts `2`, cleared error); a new failure returns the item
+   to terminal attempt `3`. No banner component was hidden or weakened.
+2. **Durable failures and shared-client parity preserved.** Version conflicts and exhausted
+   permission/data/auth failures still remain terminal for manual review. Compact and Android share
+   the pure transient-message classifier; Android additionally clears its stale `nextRetryAt` when
+   granting the one recovery attempt. Versions are Compact `0.16.22` and Android `0.21.1` /
+   versionCode `2101`.
+3. **Verification evidence.** Compact passed change-journal unit tests, `typecheck`, production
+   build, `security:scan`, sync regression `11/11`, offline `4/4`, mobile layout `1/1`, and the
+   dedicated `VITE_BASE_PATH=/` Vercel-root cold-open case `1/1`. Android passed change-journal
+   unit tests, `typecheck`, production build, `security:scan`, sync regression `10/10`, offline
+   `5/5`, and `git diff --check`. No schema, RLS, migration, credential, user-data or native release
+   action was performed.
 
 ### Session 83 (Kimi — Admin Console CI repair + main→Android mega-merge)
 

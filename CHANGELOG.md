@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-08
+
+- **fix(compact/android): recover stale transient sync failures quietly on cold open.** Compact
+  `0.16.22` and Android `0.21.1` / versionCode `2101` give an exhausted persisted network failure
+  exactly one fresh cold-boot retry, clearing the stale generic sync/manual-retry warning while the
+  retry runs. Version conflicts and genuine exhausted permission/data failures remain visible and
+  terminal. Compact adds scoped localStorage + IndexedDB Vercel-root regression coverage; both
+  clients passed their journal units, typecheck, build, security, sync and offline gates.
+
 ## 2026-08-04
 
 - **feat(compact/android): redesign the cloud login experience.** Compact `0.16.19` and Android

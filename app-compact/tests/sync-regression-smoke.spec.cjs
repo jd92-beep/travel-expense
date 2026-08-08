@@ -1,8 +1,10 @@
 const { test, expect } = require('@playwright/test');
 
 const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://127.0.0.1:8903';
+const COLD_START_PATH = process.env.COMPACT_COLD_START_PATH || '/travel-expense/compact/';
 const userId = '44444444-4444-4444-8444-444444444444';
 const scopedStorageKey = `boss-japan-tracker:state:supabase:${userId}`;
+const scopedIndexedKey = `app-state:supabase:${userId}`;
 
 test.use({ viewport: { width: 390, height: 844 } });
 test.setTimeout(90_000);
@@ -127,6 +129,112 @@ test('IndexedDB-only scoped snapshot requeues a recoverable sync failure without
     return { status: item?.status, attempts: item?.attempts, error: item?.error, globalSyncStatus: state.globalSyncStatus, syncError: state.syncError };
   })).toEqual({ status: 'queued', attempts: 1, error: undefined, globalSyncStatus: 'queued', syncError: '' });
   await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
+});
+
+test('fresh Vercel-root cold open quietly retries an exhausted transient error without warning bars', async ({ page }) => {
+  await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: sessionPayload().user }) });
+  });
+  await page.route('https://test-travel-expense.supabase.co/rest/v1/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+  });
+
+  const now = Date.now();
+  const staleTransientState = {
+    autoSync: false,
+    activeTripId: 'trip_exhausted_transient',
+    trips: [{
+      id: 'trip_exhausted_transient',
+      name: 'Exhausted transient trip',
+      destinationSummary: 'Tokyo',
+      startDate: '2026-08-08',
+      endDate: '2026-08-10',
+      homeCurrency: 'HKD',
+      currencies: ['HKD', 'JPY'],
+      timezones: ['Asia/Tokyo'],
+      version: 1,
+      active: true,
+      itinerary: [],
+      createdAt: now,
+      updatedAt: now,
+    }],
+    receipts: [],
+    syncQueue: [{
+      id: 'sync_exhausted_transient',
+      type: 'trip',
+      entityId: 'trip_exhausted_transient',
+      op: 'upsert',
+      status: 'error',
+      attempts: 3,
+      error: 'Failed to fetch',
+      createdAt: now - 1_000,
+      updatedAt: now - 1_000,
+    }],
+  };
+
+  await page.goto(`${APP_ORIGIN}${COLD_START_PATH}`);
+  const loadedScriptPath = await page.locator('script[type="module"][src]').first().getAttribute('src');
+  expect(loadedScriptPath).toBeTruthy();
+  await page.route('**/*__compact_deploy_check*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: `<!doctype html><html><head><script type="module" src="${loadedScriptPath}"></script></head><body></body></html>`,
+    });
+  });
+  await page.evaluate(async ({ session, localKey, indexedKey, state }) => {
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify(session));
+    localStorage.setItem(localKey, JSON.stringify(state));
+    await new Promise((resolve, reject) => {
+      const deletion = indexedDB.deleteDatabase('travel-expense-react');
+      deletion.onsuccess = () => resolve();
+      deletion.onerror = () => reject(deletion.error);
+      deletion.onblocked = () => resolve();
+    });
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.open('travel-expense-react', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('state');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const transaction = request.result.transaction('state', 'readwrite');
+        transaction.objectStore('state').put(state, indexedKey);
+        transaction.oncomplete = () => { request.result.close(); resolve(); };
+        transaction.onerror = () => reject(transaction.error);
+      };
+    });
+  }, {
+    session: sessionPayload(),
+    localKey: scopedStorageKey,
+    indexedKey: scopedIndexedKey,
+    state: staleTransientState,
+  });
+
+  await page.reload();
+  await expect(page.locator('.app-shell')).toBeVisible();
+  await expect(page.getByText('發現新版本')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
+  await expect(page.getByText(/有資料同步失敗/)).toHaveCount(0);
+  await expect.poll(async () => page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || '{}');
+    const item = state.syncQueue?.find((entry) => entry.id === 'sync_exhausted_transient');
+    return {
+      status: item?.status,
+      attempts: item?.attempts,
+      error: item?.error,
+      globalSyncStatus: state.globalSyncStatus,
+      syncError: state.syncError,
+    };
+  }, scopedStorageKey)).toEqual({
+    status: 'queued',
+    attempts: 2,
+    error: undefined,
+    globalSyncStatus: 'queued',
+    syncError: '',
+  });
+  const serviceWorkers = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
+  expect(serviceWorkers).toBe(0);
 });
 
 test('cold-open keeps a version conflict as durable terminal evidence', async ({ page }) => {

@@ -52,6 +52,21 @@ assert.equal(retryQueue[0].attempts, 3);
 assert.equal(retryQueue[0].status, 'error');
 assert.equal(restoreJournal(retryQueue).queue[0].status, 'error');
 
+let transientRestoreQueue = enqueueChange([], receipt('transient-restore'));
+for (let attempt = 1; attempt <= 3; attempt += 1) {
+  transientRestoreQueue = settleChange(transientRestoreQueue, transientRestoreQueue[0].id, {
+    kind: 'retryable-error',
+    error: 'Failed to fetch',
+  }).queue;
+}
+assert.equal(transientRestoreQueue[0].status, 'error');
+const restoredTransient = restoreJournal(transientRestoreQueue);
+assert.equal(restoredTransient.queue[0].status, 'queued');
+assert.equal(restoredTransient.queue[0].attempts, 2);
+assert.equal(restoredTransient.queue[0].error, undefined);
+assert.equal(restoredTransient.status, 'queued');
+assert.equal(restoredTransient.failedCount, 0);
+
 let photoRetryQueue = enqueueChange([], receipt('photo-retry'));
 for (let attempt = 1; attempt <= 3; attempt += 1) {
   const photoItem = photoRetryQueue[0];
