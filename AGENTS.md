@@ -16,7 +16,7 @@
 - Keep replies concise and direct.
 - Use many varied emojis naturally in replies.
 - Use English only for code, commands, file paths, API names, exact model names, and technical identifiers.
-- At the start of a task, use the Codex app `using-superpowers` / `Using Superpowers` skill when available, then continue with the relevant project skill or workflow.
+- Route every task through the global handbook's workflow router. Do not open `using-superpowers` as a startup habit.
 
 ## Project Scope
 
@@ -289,7 +289,7 @@ npm run android:qa
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **travel-expense** (9152 symbols, 22558 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **travel-expense** (10803 symbols, 26116 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
