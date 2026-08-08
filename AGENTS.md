@@ -2,8 +2,11 @@
 
 ## Global Handbook
 
-- Inherit the core rules and progressive-loading index from
-  `/Users/tommy/.codex/AGENTS.md`.
+- Inherit the core rules, workflow router, skill discovery, and
+  progressive-loading index from the global handbook: Codex reads
+  `/Users/tommy/.codex/AGENTS.md`, Claude Code reads
+  `/Users/tommy/.claude/CLAUDE.md`. They are kept in sync and point at the same
+  reference files.
 - Load `/Users/tommy/.codex/ai-agents.md` only for named-agent, runtime, host,
   SSH, or cross-agent work. Do not preload the global agent directory for
   ordinary travel-expense tasks.
@@ -16,7 +19,7 @@
 - Keep replies concise and direct.
 - Use many varied emojis naturally in replies.
 - Use English only for code, commands, file paths, API names, exact model names, and technical identifiers.
-- At the start of a task, use the Codex app `using-superpowers` / `Using Superpowers` skill when available, then continue with the relevant project skill or workflow.
+- Route every task through the global handbook's workflow router. Do not open `using-superpowers` as a startup habit.
 
 ## Project Scope
 
@@ -289,7 +292,7 @@ npm run android:qa
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **travel-expense** (7564 symbols, 18319 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **travel-expense** (7935 symbols, 18937 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
