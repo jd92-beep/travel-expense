@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-09
+
+- **build(android): bump Android to `0.21.2` / versionCode `2102`.** Generated and verified the
+  debug APK at `app-compact/android/app/build/outputs/apk/debug/app-debug.apk`; APK metadata reports
+  package `com.ftjdfr.travelexpensecompact`, versionName `0.21.2` and versionCode `2102`.
+  Typecheck, production web build and security scan passed. This is a debug APK only; no release
+  signing or emulator QA was performed.
+
 ## 2026-08-08
 
 - **fix(android): retry exhausted transient sync failures once after a cold start.** Android

@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-08 HKT
-- **Focus**: Session 84 ported the Compact cold-open sync recovery contract to Android: exhausted transient network failures receive one bounded fresh retry while genuine terminal failures remain visible.
+- **Date**: 2026-08-09 HKT
+- **Focus**: Session 85 bumped Android to `0.21.2` / versionCode `2102` and generated a verified debug APK.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.22`; Android `0.21.1` (versionCode 2101; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
+- **App version**: Compact `0.16.22`; Android `0.21.2` (versionCode 2102; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
 ### Android worktree detail (Session 80 snapshot — superseded by the Session 81/82 summary above, kept for Android verification evidence)
 
@@ -270,8 +270,24 @@ you closed with your session number.
    persisted network failure receives one new cold-boot attempt (`attempts=2`) with stale error and
    backoff timestamp cleared. Version conflicts and exhausted non-transient failures remain durable
    manual-retry evidence, matching the Compact web contract.
+22. 🟢 **Android `0.21.2` debug APK generated in Session 85** — versionName/versionCode were
+   independently read from the APK as `0.21.2` / `2102`. Artifact:
+   `app-compact/android/app/build/outputs/apk/debug/app-debug.apk` (11,269,379 bytes; SHA-256
+   `d12ad575f29758f8ffd0c1ed48a0e74b9d020279a7cf1e640a3f0b816760a89a`). No release signing or
+   emulator QA was requested or performed.
 
 ## What Was Done
+
+### Session 85 (Codex — Android version bump and debug APK, `0.21.2` / versionCode 2102)
+
+1. Bumped the Android package, shared `APP_VERSION`, Gradle `versionName` and `versionCode` from
+   `0.21.1` / `2101` to `0.21.2` / `2102`.
+2. Verification passed: `npm run typecheck`, `npm run build`, `npm run security:scan`,
+   `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`,
+   and `git diff --check`. APK metadata was independently verified as package
+   `com.ftjdfr.travelexpensecompact`, versionName `0.21.2`, versionCode `2102`; SHA-256 is
+   `d12ad575f29758f8ffd0c1ed48a0e74b9d020279a7cf1e640a3f0b816760a89a`.
+3. No schema, RLS, migration, credential, user-data, release-signing or emulator action occurred.
 
 ### Session 84 (Codex — Android cold-open sync recovery, `0.21.1` / versionCode 2101)
 
