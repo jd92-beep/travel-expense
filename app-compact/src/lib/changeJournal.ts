@@ -25,6 +25,12 @@ export type JournalResult = {
 };
 
 const terminalError = (error: string) => /40001|version conflict|版本衝突/i.test(error);
+export function isTransientSyncErrorMessage(error: unknown): boolean {
+  const raw = (error instanceof Error
+    ? error.message
+    : String((error as { message?: unknown } | null)?.message || error || '')).toLowerCase();
+  return /failed to fetch|networkerror|network error|load failed|fetch failed|request timeout|timed out|timeout|connection|econn|enotfound|dns|socket|aborted|err_network|err_internet|err_connection|internet connection appears to be offline|service unavailable|\b502\b|\b503\b|\b504\b/.test(raw);
+}
 const queueKey = (item: Pick<SyncQueueItem, 'type' | 'entityId'>) =>
   `${item.type}:${item.entityId}`;
 const definedPayload = (payload: SyncQueueItem['payload'] = {}) =>
@@ -113,11 +119,21 @@ export function settleChange(
 
 export function restoreJournal(queue: SyncQueueItem[] | undefined): JournalResult {
   const restored = (queue || []).map((item): SyncQueueItem => {
-    const retryable = (item.status === 'error' || item.status === 'failed')
-      && item.attempts < MAX_SYNC_RETRY_ATTEMPTS
-      && !terminalError(item.error || '');
+    const failed = item.status === 'error' || item.status === 'failed';
+    const exhaustedTransient = failed
+      && item.attempts >= MAX_SYNC_RETRY_ATTEMPTS
+      && isTransientSyncErrorMessage(item.error || '');
+    const retryable = failed
+      && !terminalError(item.error || '')
+      && (item.attempts < MAX_SYNC_RETRY_ATTEMPTS || exhaustedTransient);
     return item.status === 'syncing' || retryable
-      ? { ...item, status: 'queued', error: undefined }
+      ? {
+          ...item,
+          status: 'queued',
+          attempts: exhaustedTransient ? Math.max(0, MAX_SYNC_RETRY_ATTEMPTS - 1) : item.attempts,
+          error: undefined,
+          nextRetryAt: undefined,
+        }
       : item;
   });
   return summarize(restored);

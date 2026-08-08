@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-04 HKT
-- **Focus**: Session 82 fixed the four registration-review findings on main (`0f8783c`, Compact `0.16.21`) and the Android branch (`6ec8db4`, `0.20.7`): signup confirm-password + stronger policy, resend-confirmation with cooldown, magic-link cooldown, and AuthGate offline banner replacing alert(). The full main→Android merge was assessed and deferred (Open Item 20). Session 81 refined the Session 80 Compact login surface (CSS-only calm/elegant pass, `taste-skill` redesign-evolve); pushed to `origin main` (`2c66b5d`) and synced to the Android shell branch (`f568c64`).
+- **Date**: 2026-08-08 HKT
+- **Focus**: Session 84 ported the Compact cold-open sync recovery contract to Android: exhausted transient network failures receive one bounded fresh retry while genuine terminal failures remain visible.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.19`; Android `0.20.4` (versionCode 2004; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
+- **App version**: Compact `0.16.22`; Android `0.21.1` (versionCode 2101; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
 ### Android worktree detail (Session 80 snapshot — superseded by the Session 81/82 summary above, kept for Android verification evidence)
 
@@ -266,8 +266,21 @@ you closed with your session number.
    versionCode 2100 with the full gate battery green (typecheck, build, security:scan, 6 node unit
    suites, 11 playwright smoke suites incl. sync-regression 10/10, offline 5/5, settings 12/12).
    Emulator QA and a real-device Google login check remain human follow-ups.
+21. 🟢 **Android cold-open transient sync recovery resolved in Session 84** — an exhausted
+   persisted network failure receives one new cold-boot attempt (`attempts=2`) with stale error and
+   backoff timestamp cleared. Version conflicts and exhausted non-transient failures remain durable
+   manual-retry evidence, matching the Compact web contract.
 
 ## What Was Done
+
+### Session 84 (Codex — Android cold-open sync recovery, `0.21.1` / versionCode 2101)
+
+Ported Compact's pure transient-message classifier into Android's journal restoration path. Only an
+exhausted transient network failure receives one bounded cold-boot retry; a new failure returns it
+to terminal attempt `3`, while version conflicts and exhausted permission/data/auth failures remain
+visible. Android also clears `nextRetryAt` on recovery. Change-journal units, `typecheck`, production
+build, `security:scan`, sync regression `10/10`, offline `5/5`, and `git diff --check` passed. No
+schema, RLS, migration, credential, user-data, APK/AAB or release action was performed.
 
 ### Session 83 (Kimi — main → Android reviewed mega-merge, `0.21.0`)
 

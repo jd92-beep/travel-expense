@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-08
+
+- **fix(android): retry exhausted transient sync failures once after a cold start.** Android
+  `0.21.1` / versionCode `2101` clears the stale network error and backoff timestamp, then grants one
+  bounded retry. Version conflicts and genuine exhausted permission/data failures remain visible
+  and terminal. Journal units, typecheck, build, security, sync regression `10/10` and offline
+  `5/5` passed; no APK/AAB or release action occurred.
+
 ## 2026-08-04
 
 - **feat(compact/android): redesign the cloud login experience.** Compact `0.16.19` and Android

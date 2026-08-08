@@ -7,7 +7,7 @@ import { recordClientHeartbeat } from './clientHeartbeat';
 import { archiveSupabaseReceipt, createSharedTripOutboxSupabaseAdapter, hasSupabaseSession, isSupabaseConfigured, pullSupabaseData, pushSupabaseSettings, uploadReceiptPhoto, upsertSupabaseReceipt, upsertSupabaseTrip } from './supabase';
 import { drainSharedTripOutbox } from './sharedTripNotionOutbox';
 import { filterSupersededTripQueue, isReceiptTombstoned, mergePulledData, rawReceiptSourceId, receiptSourceTombstoneKey } from './syncMerge';
-import { enqueueChange, settleChange, type JournalOutcome } from './changeJournal';
+import { enqueueChange, isTransientSyncErrorMessage, settleChange, type JournalOutcome } from './changeJournal';
 import { queueItemReady, releaseReconnectBackoff } from './syncBackoff';
 import { MAX_SYNC_RETRY_ATTEMPTS, NATIVE_REACHABILITY_ONLINE_EVENT } from './constants';
 import type { AppState, Receipt, SyncEngineState, SyncQueueItem, TripProfile } from './types';
@@ -57,8 +57,7 @@ function redactError(error: unknown) {
 // genuinely actionable errors (auth expired → re-login, permission denied, real data conflicts).
 export function isTransientSyncError(error: unknown): boolean {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
-  const raw = (error instanceof Error ? error.message : String((error as any)?.message || error || '')).toLowerCase();
-  return /failed to fetch|networkerror|network error|load failed|fetch failed|request timeout|timed out|timeout|connection|econn|enotfound|dns|socket|aborted|err_network|err_internet|err_connection|internet connection appears to be offline|service unavailable|\b502\b|\b503\b|\b504\b/.test(raw);
+  return isTransientSyncErrorMessage(error);
 }
 
 function queueKey(item: SyncQueueItem) {
