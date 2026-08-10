@@ -21,6 +21,7 @@ export type TripMemberRole = 'owner' | 'admin' | 'editor' | 'viewer';
 export type TripInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
 export type TripBackendStatus = 'active' | 'pending' | 'error' | 'disabled';
 export type TripThemeKey = 'japan_washi' | 'korea_editorial' | 'taiwan_nightmarket' | 'europe_rail' | 'global_journal';
+export type ThemePreference = 'auto' | TripThemeKey;
 
 export interface TripIntelligence {
   countryCode: string;
@@ -366,6 +367,7 @@ export interface AppState {
   emailModel: string;
   tripUpdateModel?: string;
   googleBackupModel?: string;
+  themePreference: ThemePreference;
   persons: Person[];
   shareRatios: Record<string, number>;
   peopleByTripId?: Record<string, Person[]>;

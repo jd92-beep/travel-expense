@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import './styles.css';
 import './styles/weather-fx.css';
+import './styles/themes.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 

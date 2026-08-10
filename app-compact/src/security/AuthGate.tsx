@@ -18,6 +18,7 @@ import {
   saveTrustedDevice,
   signTrustedDeviceChallenge,
 } from './trustedDevice';
+import { useTripTheme } from '../theme/tripTheme';
 
 function shouldAutoFocusUnlockInput(): boolean {
   if (typeof window === 'undefined') return false;
@@ -37,12 +38,20 @@ export function AuthGate({
   onUnlocked?: () => void;
   onOfflineMode?: (message: string) => void;
 }) {
+  const { theme } = useTripTheme();
   const [unlocked, setUnlocked] = useState(() => hasDeviceTrust());
   const [checking, setChecking] = useState(() => false);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const onBrokerSessionRef = useRef(onBrokerSession);
+  const routeStop = theme.id === 'japan_washi'
+    ? 'TYO'
+    : theme.id === 'taiwan_nightmarket'
+      ? 'TPE'
+      : theme.id === 'korea_editorial'
+        ? 'SEL'
+        : 'TRIP';
 
   useEffect(() => {
     onBrokerSessionRef.current = onBrokerSession;
@@ -165,7 +174,7 @@ export function AuthGate({
         <div className="lock-ledger-map" aria-hidden="true">
           <span>HKG</span>
           <i />
-          <span>TYO</span>
+          <span>{routeStop}</span>
           <i />
           <span>Notion</span>
         </div>

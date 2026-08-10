@@ -209,8 +209,9 @@ test('React Notion pull prefers plain fields, skips itinerary/settings rows, and
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.locator('header h1').first()).toContainText('紀錄中心');
-  await expect(page.locator('.receipt-row').filter({ hasText: 'Conflict Rail' })).toContainText('JPY2,860');
+  await expect(page.locator('.receipt-row').filter({ hasText: 'Conflict Rail' })).toContainText('¥2,860');
   await expect(page.getByText('🗓 行程更新：黑部立山三日遊')).toHaveCount(0);
   await expect(page.getByText('⚙️ App Settings（請勿刪除）')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /HK Express UO690 HKG→NGO/ })).toBeVisible();
@@ -266,6 +267,7 @@ test('Settings mapping diagnostics stay read-only and surface mixed-schema issue
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await expect(page.getByText('設定控制中心')).toBeVisible();
   await openAccordion(page, 'Notion Sync');
   await page.getByRole('button', { name: '檢查 Mapping' }).click();
@@ -379,6 +381,7 @@ test('Notion receipt push uses the receipt trip database even when another trip 
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.locator('header h1').first()).toContainText('紀錄中心');
 
   await expect.poll(() => requestLog.some((entry) => entry.path === '/pages')).toBe(true);
@@ -480,6 +483,7 @@ test('Personal Notion app database overrides stale active trip database', async 
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.locator('header h1').first()).toContainText('紀錄中心');
 
   await expect.poll(() => requestLog.some((entry) => entry.path === '/pages')).toBe(true);
@@ -572,8 +576,9 @@ test('Notion pull does not let a legacy SourceID tombstone hide another trip rec
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.locator('header h1').first()).toContainText('紀錄中心');
-  await expect(page.locator('.receipt-row').filter({ hasText: 'Trip B Shared Source Cafe' })).toContainText('JPY880');
+  await expect(page.locator('.receipt-row').filter({ hasText: 'Trip B Shared Source Cafe' })).toContainText('¥880');
 });
 
 test('Notion pull assigns legacy rows without TripID by receipt date instead of active trip', async ({ page }) => {
@@ -658,6 +663,7 @@ test('Notion pull assigns legacy rows without TripID by receipt date instead of 
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.locator('header h1').first()).toContainText('紀錄中心');
   await expect.poll(async () => page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
@@ -750,6 +756,7 @@ test('Personal Notion pull skips rows without a known TripID', async ({ page }) 
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.locator('header h1').first()).toContainText('紀錄中心');
   await expect.poll(async () => page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
@@ -854,6 +861,7 @@ test('Notion receipt archive uses the deleted receipt trip database even after a
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.locator('header h1').first()).toContainText('紀錄中心');
 
   await expect.poll(() => requestLog.some((entry) => entry.path === '/pages/page_trip_a_deleted')).toBe(true);

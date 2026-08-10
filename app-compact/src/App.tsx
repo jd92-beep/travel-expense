@@ -30,7 +30,7 @@ import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/Welcome
 import { upsertSupabaseTrip } from './lib/supabase';
 import { createTripProfile } from './domain/trip/normalize';
 import { hasDeviceTrust, clearDeviceTrust } from './security/deviceTrust';
-import { TripThemeProvider } from './theme/tripTheme';
+import { clearThemeHint, TripThemeProvider } from './theme/tripTheme';
 
 // Trigger Vercel build
 
@@ -123,19 +123,6 @@ export function App() {
       || (!!capacitor?.isNativePlatform?.() && /android/i.test(window.navigator.userAgent || ''));
     if (!nativeAndroid) return undefined;
     document.body.classList.add('compact-native-android');
-
-    // targetSdk 35+ forces edge-to-edge and ignores the android:statusBarColor / windowLightStatusBar
-    // theme attrs at runtime, so the status-bar icons can render invisible on a light bar. Set the
-    // appearance via the plugin (WindowInsetsController) instead. Best-effort, native-only.
-    void (async () => {
-      try {
-        const { StatusBar, Style } = await import('@capacitor/status-bar');
-        await StatusBar.setStyle({ style: Style.Light }); // dark icons for the light washi bar
-        await StatusBar.setBackgroundColor({ color: '#F8F3EA' }).catch(() => {});
-      } catch {
-        // @capacitor/status-bar unavailable (web / plugin missing) — theme attrs remain the fallback.
-      }
-    })();
 
     let cancelled = false;
     let removeAppUrlListener: (() => void) | undefined;
@@ -317,6 +304,7 @@ export function App() {
     await clearIndexedState(scope);
     clearCredentialSession();
     await clearDeviceTrust();
+    clearThemeHint();
   };
 
   useEffect(() => {
@@ -674,7 +662,7 @@ export function App() {
     : { rotate: { type: 'spring' as const, stiffness: 420, damping: 40, mass: 0.9 }, opacity: { duration: 0.12 } };
 
   const appContent = (
-    <TripThemeProvider state={state}>
+    <>
       <HyperframeBackground />
       <TuringBackdrop />
       {showGuide && (
@@ -842,7 +830,7 @@ export function App() {
       )}
         </ErrorBoundary>
       </Shell>
-    </TripThemeProvider>
+    </>
   );
 
   if (supabaseAuth.configured) {
@@ -851,22 +839,24 @@ export function App() {
     // the app render with a pre-merge (possibly stale/incomplete) snapshot for one paint. isStorageReady
     // additionally waits for indexedReadyScope, matching how showGuide already gates below.
     if (hasSupabaseSession(supabaseAuth.session) && !isStorageReady) {
-      return <LoadingState label="載入帳號資料" />;
+      return <TripThemeProvider state={state}><LoadingState label="載入帳號資料" /></TripThemeProvider>;
     }
-    return <SupabaseGate auth={supabaseAuth}>{appContent}</SupabaseGate>;
+    return <TripThemeProvider state={state}><SupabaseGate auth={supabaseAuth}>{appContent}</SupabaseGate></TripThemeProvider>;
   }
 
 
   return (
-    <AuthGate
-      credentialBrokerUrl={state.credentialBrokerUrl}
-      onBrokerSession={(session) => updateState(session)}
-      onUnlocked={() => {
-        changeTab('dashboard');
-      }}
-      onOfflineMode={(message) => updateState({ syncError: message })}
-    >
-      {appContent}
-    </AuthGate>
+    <TripThemeProvider state={state}>
+      <AuthGate
+        credentialBrokerUrl={state.credentialBrokerUrl}
+        onBrokerSession={(session) => updateState(session)}
+        onUnlocked={() => {
+          changeTab('dashboard');
+        }}
+        onOfflineMode={(message) => updateState({ syncError: message })}
+      >
+        {appContent}
+      </AuthGate>
+    </TripThemeProvider>
   );
 }

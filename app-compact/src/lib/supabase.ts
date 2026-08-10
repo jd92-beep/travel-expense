@@ -4,6 +4,7 @@ import { activeTrip, normalizeItinerary, normalizeTripIntelligence, stampReceipt
 import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
 import { tripIntelligenceColumns } from '../domain/trip/context';
 import { DEFAULT_NOTION_DB, ITINERARY, normalizeAiModelSettings } from './constants';
+import { parseRemoteThemePreference } from './themePreference';
 import type { MirrorJob, SharedTripOutboxAdapters } from './sharedTripNotionOutbox';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, ReceiptPayer, ReceiptSplit, ReceiptTombstone, SplitType, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
 
@@ -450,6 +451,7 @@ function buildAppSettings(state: AppState) {
     credentialBrokerUrl: state.credentialBrokerUrl,
     personalNotionConnected: state.personalNotionConnected === true,
     notionDeletedSourceIds: state.notionDeletedSourceIds || [],
+    themePreference: state.themePreference,
     settingsUpdatedAt: state.settingsUpdatedAt || Date.now(),
   };
 }
@@ -479,6 +481,7 @@ function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState> | und
     credentialBrokerUrl: typeof payload.credentialBrokerUrl === 'string' ? payload.credentialBrokerUrl : undefined,
     personalNotionConnected: typeof payload.personalNotionConnected === 'boolean' ? payload.personalNotionConnected : undefined,
     notionDeletedSourceIds: Array.isArray(payload.notionDeletedSourceIds) ? payload.notionDeletedSourceIds.filter((item): item is string => typeof item === 'string') : undefined,
+    themePreference: parseRemoteThemePreference(payload.themePreference),
     settingsUpdatedAt: Number(payload.settingsUpdatedAt) || undefined,
   });
 }

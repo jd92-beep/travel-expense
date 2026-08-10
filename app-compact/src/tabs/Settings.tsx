@@ -54,6 +54,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { GradientButton } from '../components/ui/gradient-button';
 import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
+import { THEME_OPTIONS } from '../theme/tripTheme';
 
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
 const MAX_SAFE_AMOUNT = 1_000_000_000;
@@ -2390,6 +2391,18 @@ export function Settings({
           </div>
         </div>
       </GlassCard>
+
+      <AccordionCard id="settings-theme" title="外觀主題" defaultOpen>
+        <fieldset className="theme-choice-grid" role="radiogroup" aria-label="App theme">
+          <legend className="muted">即時預覽並同步到此帳號，毋須另存。</legend>
+          {THEME_OPTIONS.map((theme) => (
+            <label className="theme-choice" key={theme.id}>
+              <span><input type="radio" name="theme-preference" value={theme.id} checked={state.themePreference === theme.id} onChange={() => updateState({ themePreference: theme.id })} /> <strong>{theme.label}</strong></span>
+              <small>{theme.detail}</small>
+            </label>
+          ))}
+        </fieldset>
+      </AccordionCard>
 
       {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-doctor--${tripDoctor.tone}`}>
         <section role="region" aria-label="Compact Trip Doctor">

@@ -1,4 +1,5 @@
 import { APP_SCHEMA_VERSION, DEFAULT_STATE, ITINERARY } from '../../lib/constants';
+import { normalizeThemePreference } from '../../lib/themePreference';
 import { perHkdForCurrency } from '../../lib/currency';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile } from '../../lib/types';
 import { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
@@ -413,6 +414,7 @@ export function migrateAppState(input: unknown): AppState {
     ...DEFAULT_STATE,
     ...parsed,
     schemaVersion: APP_SCHEMA_VERSION,
+    themePreference: normalizeThemePreference(parsed.themePreference),
     activeTripId: nextActiveId,
     trips: finalTrips,
     budget: resolvedBudget,

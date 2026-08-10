@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-09 HKT
-- **Focus**: Session 85 bumped Android to `0.21.2` / versionCode `2102` and generated a verified debug APK.
+- **Date**: 2026-08-10 HKT
+- **Focus**: Session 86 shipped five account-wide Android themes, semantic contrast coverage and Capacitor 8 system-bar integration.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.22`; Android `0.21.2` (versionCode 2102; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
+- **App version**: Compact `0.17.0`; Android `0.22.0` (versionCode 2200; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.6`
 
 ### Android worktree detail (Session 80 snapshot — superseded by the Session 81/82 summary above, kept for Android verification evidence)
 
@@ -182,7 +182,7 @@ agent does not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.16`; the Android branch is `0.20.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.17.0`; the Android branch is `0.22.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -275,8 +275,44 @@ you closed with your session number.
    `app-compact/android/app/build/outputs/apk/debug/app-debug.apk` (11,269,379 bytes; SHA-256
    `d12ad575f29758f8ffd0c1ed48a0e74b9d020279a7cf1e640a3f0b816760a89a`). No release signing or
    emulator QA was requested or performed.
+23. 🟢 **Android account-wide themes completed in Session 86** — five curated worlds plus
+   `自動（依旅程）` cover pre-React paint, auth/loading gates, all seven tabs and native system bars.
+   Taiwan is the only dark world. The preference uses existing local, IndexedDB, backup,
+   Supabase and Notion settings transport; no database migration was added.
+24. 🟡 **One Notion diagnostic smoke is stale** — production settings/meta pull paths pass, but the
+   mixed-schema diagnostic case still expects removed `Notion Sync` / `檢查 Mapping` controls.
+   Preserve its schema assertions until an approved diagnostic surface or navigation contract is
+   selected.
 
 ## What Was Done
+
+### Session 86 (Codex — Android global themes, `0.22.0` / versionCode 2200)
+
+1. Added schema-v4 `ThemePreference = 'auto' | TripThemeKey`, automatic active-trip resolution,
+   manual account-wide persistence, remote invalid/missing preservation and the existing
+   newer-wins settings transport across localStorage, IndexedDB, backup, Supabase and Notion meta.
+   Settings exposes six accessible radio cards with instant preview. Five semantic catalogs cover
+   canvas/surface/text/border/focus, status, charts, art, motion and native/browser chrome; Japan
+   art is isolated and Taiwan alone uses dark scheme.
+2. The pre-React bootstrap applies the last validated theme without inventing trip intelligence.
+   Capacitor 8 `SystemBars` uses light icons for Taiwan and dark icons for light worlds; the old
+   `@capacitor/status-bar` runtime/Gradle seams were removed. The WebView extends edge to edge while
+   the native cold-launch splash stays neutral.
+3. API 36 emulator QA passed App Links, all seven themed tabs and native Camera/Photo Picker.
+   Taiwan checked 311 visible text samples with zero below 4.5:1. Cold launch, pre-login,
+   portrait/landscape, gesture/three-button navigation and IME screenshots were inspected. A real
+   `font_scale=2.0` rerun confirmed the dock wraps, all seven controls remain visible and adjacent
+   labels keep at least 4px separation; emulator font, rotation and navigation state were restored.
+4. Verification passed: `typecheck`, production build, `security:scan`, theme `9/9`, session `4/4`,
+   Settings `12/12`, a11y `1/1`, sync `10/10`, mobile layout `1/1`, configured-auth `7/7` plus one
+   intentional skip and seven production Notion flows. The debug APK manifest independently reports
+   package `com.ftjdfr.travelexpensecompact`, versionCode `2200`, versionName `0.22.0`, minSdk 24 and
+   targetSdk 36; the generated plugin manifest contains only App, Browser, Camera, Filesystem and
+   Share.
+5. Debug APK only: `app-compact/android/app/build/outputs/apk/debug/app-debug.apk` (11,521,369 bytes;
+   SHA-256 `48f60003f980b11b449a4a35d04ed78e37ad959e2b2776842a4d1f1c67675133`). No release
+   signing/publishing, schema, RLS, migration, credential or live-user-data action occurred. Open
+   Item 24 records the retained diagnostic-only Notion smoke gap; its assertions were not weakened.
 
 ### Session 85 (Codex — Android version bump and debug APK, `0.21.2` / versionCode 2102)
 

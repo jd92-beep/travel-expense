@@ -628,6 +628,7 @@ export function useSyncEngine(
                 emailModel: settings.emailModel ?? finalState.emailModel,
                 tripUpdateModel: settings.tripUpdateModel ?? finalState.tripUpdateModel,
                 googleBackupModel: settings.googleBackupModel ?? finalState.googleBackupModel,
+                themePreference: settings.themePreference ?? finalState.themePreference,
                 credentialBrokerUrl: settings.credentialBrokerUrl ?? finalState.credentialBrokerUrl,
                 notionDeletedSourceIds: settings.notionDeletedSourceIds ?? finalState.notionDeletedSourceIds,
                 settingsUpdatedAt: remoteTs,

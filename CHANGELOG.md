@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-10
+
+- **feat(android): add five account-wide visual themes.** Android `0.22.0` / versionCode `2200`
+  adds `自動（依旅程）` plus Japan Washi, Korea Editorial, Taiwan Night Market, Europe Rail and
+  Global Journal choices. The resolved theme covers first paint, login/loading gates, semantic
+  surfaces, focus/status/chart roles and Capacitor 8 `SystemBars`; Taiwan is the only true-dark
+  world. The preference uses the existing local/IndexedDB/backup, Supabase and Notion settings
+  transports with newer-wins timestamps and no database migration. The legacy
+  `@capacitor/status-bar` runtime seam is removed; the launch splash remains neutral.
+
 ## 2026-08-09
 
 - **build(android): bump Android to `0.21.2` / versionCode `2102`.** Generated and verified the

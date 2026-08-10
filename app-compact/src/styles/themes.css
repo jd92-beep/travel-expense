@@ -1,0 +1,959 @@
+/* Loaded after every legacy/mobile stylesheet from main.tsx: this is the semantic cascade owner. */
+:root {
+  --theme-canvas: #F1F0E9;
+  --theme-canvas-mid: #E7EAE4;
+  --theme-canvas-end: #DCE5DE;
+  --theme-surface: #F9F8F1;
+  --theme-card: #FFFDF8;
+  --theme-text: #28251F;
+  --theme-ink: #28251F;
+  --theme-muted: #656D67;
+  --theme-border: rgba(52, 92, 124, .2);
+  --theme-focus: #345C7C;
+  --theme-accent: #BF5048;
+  --theme-on-accent: #FFFFFF;
+  --theme-status-info: #345C7C;
+  --theme-status-success: #3F6A4B;
+  --theme-status-warning: #725600;
+  --theme-status-danger: #9F4038;
+  --theme-chart-1: #345C7C;
+  --theme-chart-2: #C4584E;
+  --theme-chart-3: #D1A54D;
+  --theme-chart-4: #517A5B;
+  --theme-motion-duration: 32s;
+  --theme-motif-image: none;
+}
+
+:root[data-app-theme='japan_washi'] {
+  --theme-canvas: #F5F0E8;
+  --theme-canvas-mid: #F0EBDF;
+  --theme-canvas-end: #E8E2D4;
+  --theme-surface: #FAF7F0;
+  --theme-card: #FFFDF7;
+  --theme-text: #2A2119;
+  --theme-ink: #2A2119;
+  --theme-muted: #7A7068;
+  --theme-border: rgba(139, 115, 85, .2);
+  --theme-focus: #1E4D6B;
+  --theme-accent: #C23B5E;
+  --theme-on-accent: #FFFFFF;
+  --theme-status-info: #1E4D6B;
+  --theme-status-success: #2D6E48;
+  --theme-status-warning: #7A5800;
+  --theme-status-danger: #A82C4C;
+  --theme-chart-1: #1E4D6B;
+  --theme-chart-2: #C23B5E;
+  --theme-chart-3: #D4A843;
+  --theme-chart-4: #2D6E48;
+  --theme-motion-duration: 18s;
+}
+
+:root[data-app-theme='korea_editorial'] {
+  --theme-canvas: #F7F4F0;
+  --theme-canvas-mid: #EEF2F5;
+  --theme-canvas-end: #E7EBE8;
+  --theme-surface: #FBF9F6;
+  --theme-card: #FFFFFF;
+  --theme-text: #202329;
+  --theme-ink: #202329;
+  --theme-muted: #66707D;
+  --theme-border: rgba(82, 109, 174, .2);
+  --theme-focus: #526DAE;
+  --theme-accent: #D85B73;
+  --theme-on-accent: #111827;
+  --theme-status-info: #40578F;
+  --theme-status-success: #346D5A;
+  --theme-status-warning: #765900;
+  --theme-status-danger: #A5334F;
+  --theme-chart-1: #526DAE;
+  --theme-chart-2: #D85B73;
+  --theme-chart-3: #4C8F78;
+  --theme-chart-4: #C9A85D;
+  --theme-motion-duration: 24s;
+}
+
+:root[data-app-theme='taiwan_nightmarket'] {
+  --theme-canvas: #111827;
+  --theme-canvas-mid: #172554;
+  --theme-canvas-end: #0F172A;
+  --theme-surface: #172033;
+  --theme-card: #202B3F;
+  --theme-text: #F8FAFC;
+  --theme-ink: #F8FAFC;
+  --theme-muted: #B8C3D3;
+  --theme-border: rgba(148, 163, 184, .32);
+  --theme-focus: #FBBF24;
+  --theme-accent: #FB7185;
+  --theme-on-accent: #111827;
+  --theme-status-info: #7DD3FC;
+  --theme-status-success: #86EFAC;
+  --theme-status-warning: #FDE68A;
+  --theme-status-danger: #FDA4AF;
+  --theme-chart-1: #38BDF8;
+  --theme-chart-2: #FB7185;
+  --theme-chart-3: #FBBF24;
+  --theme-chart-4: #4ADE80;
+  --theme-motion-duration: 28s;
+}
+
+:root[data-app-theme='europe_rail'] {
+  --theme-canvas: #EEF1EC;
+  --theme-canvas-mid: #E5EAE8;
+  --theme-canvas-end: #DCE4E5;
+  --theme-surface: #F7F6EF;
+  --theme-card: #FFFDF8;
+  --theme-text: #25231F;
+  --theme-ink: #25231F;
+  --theme-muted: #606963;
+  --theme-border: rgba(24, 73, 86, .22);
+  --theme-focus: #184956;
+  --theme-accent: #A8323A;
+  --theme-on-accent: #FFFFFF;
+  --theme-status-info: #184956;
+  --theme-status-success: #335C49;
+  --theme-status-warning: #6F5200;
+  --theme-status-danger: #912A31;
+  --theme-chart-1: #184956;
+  --theme-chart-2: #A8323A;
+  --theme-chart-3: #B89042;
+  --theme-chart-4: #426A57;
+  --theme-motion-duration: 0s;
+}
+
+:root[data-app-theme='global_journal'] {
+  --theme-canvas: #F1F0E9;
+  --theme-canvas-mid: #E7EAE4;
+  --theme-canvas-end: #DCE5DE;
+  --theme-surface: #F9F8F1;
+  --theme-card: #FFFDF8;
+  --theme-text: #28251F;
+  --theme-ink: #28251F;
+  --theme-muted: #656D67;
+  --theme-border: rgba(52, 92, 124, .2);
+  --theme-focus: #345C7C;
+  --theme-accent: #BF5048;
+  --theme-on-accent: #FFFFFF;
+  --theme-status-info: #345C7C;
+  --theme-status-success: #3F6A4B;
+  --theme-status-warning: #725600;
+  --theme-status-danger: #9F4038;
+  --theme-chart-1: #345C7C;
+  --theme-chart-2: #C4584E;
+  --theme-chart-3: #D1A54D;
+  --theme-chart-4: #517A5B;
+  --theme-motion-duration: 32s;
+}
+
+html[data-color-scheme='dark'] { color-scheme: dark; }
+html[data-color-scheme='light'] { color-scheme: light; }
+
+html[data-app-theme] {
+  --bg: var(--theme-canvas) !important;
+  --surface: var(--theme-surface) !important;
+  --card: var(--theme-card) !important;
+  --ink: var(--theme-text) !important;
+  --muted: var(--theme-muted) !important;
+  --line: var(--theme-border) !important;
+  --glass: color-mix(in srgb, var(--theme-card) 82%, transparent) !important;
+  --glass-strong: color-mix(in srgb, var(--theme-card) 94%, transparent) !important;
+  --hairline: var(--theme-border) !important;
+  --compact-preview-paper: var(--theme-canvas) !important;
+  --compact-preview-panel: var(--theme-card) !important;
+  --compact-preview-ink: var(--theme-text) !important;
+  --compact-preview-muted: var(--theme-muted) !important;
+  --compact-preview-line: var(--theme-border) !important;
+  --compact-preview-red: var(--theme-accent) !important;
+  --compact-preview-blue: var(--theme-chart-1) !important;
+  --compact-preview-gold: var(--theme-chart-3) !important;
+  --compact-preview-green: var(--theme-chart-4) !important;
+  --compact-preview-shadow: 0 16px 42px color-mix(in srgb, var(--theme-text) 13%, transparent) !important;
+}
+
+html[data-app-theme='japan_washi'] {
+  --theme-motif-image:
+    radial-gradient(ellipse at 84% 8%, color-mix(in srgb, var(--theme-chart-2) 13%, transparent), transparent 38%),
+    radial-gradient(ellipse at 12% 18%, color-mix(in srgb, var(--theme-chart-1) 8%, transparent), transparent 42%);
+}
+
+html[data-app-theme='korea_editorial'] {
+  --theme-motif-image:
+    radial-gradient(circle at 88% 14%, color-mix(in srgb, var(--theme-chart-2) 17%, transparent) 0 5.5rem, transparent 5.65rem),
+    linear-gradient(118deg, transparent 0 44%, color-mix(in srgb, var(--theme-chart-1) 10%, transparent) 44.1% 44.4%, transparent 44.5%),
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--theme-text) 3%, transparent) 0 1px, transparent 1px 18px);
+}
+
+html[data-app-theme='taiwan_nightmarket'] {
+  --theme-motif-image:
+    radial-gradient(circle at 82% 11%, color-mix(in srgb, var(--theme-chart-2) 28%, transparent) 0 3.6rem, transparent 3.75rem),
+    radial-gradient(circle at 13% 23%, color-mix(in srgb, var(--theme-chart-1) 23%, transparent), transparent 25%),
+    repeating-linear-gradient(90deg, transparent 0 44px, color-mix(in srgb, var(--theme-chart-3) 11%, transparent) 45px 46px, transparent 47px 88px);
+}
+
+html[data-app-theme='europe_rail'] {
+  --theme-motif-image:
+    repeating-linear-gradient(90deg, transparent 0 72px, color-mix(in srgb, var(--theme-chart-1) 12%, transparent) 73px 74px, transparent 75px 146px),
+    repeating-linear-gradient(180deg, transparent 0 42px, color-mix(in srgb, var(--theme-chart-2) 9%, transparent) 43px 44px, transparent 45px 86px);
+}
+
+html[data-app-theme='global_journal'] {
+  --theme-motif-image:
+    radial-gradient(ellipse at 18% 20%, transparent 0 24%, color-mix(in srgb, var(--theme-chart-1) 13%, transparent) 24.2% 24.7%, transparent 25%),
+    radial-gradient(ellipse at 82% 80%, transparent 0 20%, color-mix(in srgb, var(--theme-chart-4) 13%, transparent) 20.2% 20.7%, transparent 21%),
+    repeating-linear-gradient(90deg, transparent 0 92px, color-mix(in srgb, var(--theme-chart-1) 5%, transparent) 93px 94px);
+}
+
+html[data-app-theme] body,
+html[data-app-theme] #root {
+  min-height: 100%;
+  background-color: var(--theme-canvas) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme] body {
+  background-image: linear-gradient(180deg, var(--theme-canvas), var(--theme-canvas-mid) 45%, var(--theme-canvas-end)) !important;
+}
+
+.hyperframe-background::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--theme-motif-image);
+  background-size: cover;
+  opacity: .72;
+}
+
+html[data-app-theme] .hyperframe-background {
+  display: block !important;
+  background-color: var(--theme-canvas) !important;
+  background-image: linear-gradient(180deg, var(--theme-canvas), var(--theme-canvas-mid) 46%, var(--theme-canvas-end)) !important;
+}
+
+html:not([data-app-theme='japan_washi']) .hyperframe-light-field {
+  background: transparent !important;
+}
+
+/* Semantic surface ownership. Shorthands deliberately clear legacy white gradients and images. */
+html[data-app-theme] .app-shell,
+html[data-app-theme] .lock-screen,
+html[data-app-theme] .compact-login-shell,
+html[data-app-theme] .loading-state,
+html[data-app-theme] .empty-state {
+  background: var(--theme-canvas) !important;
+  background-image: var(--theme-motif-image) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme] .compact-login-screen {
+  --login-accent: var(--theme-accent);
+  --login-accent-strong: var(--theme-focus);
+  --login-ink: var(--theme-text);
+  --login-muted: var(--theme-muted);
+  --login-surface: var(--theme-card);
+  --login-field: var(--theme-surface);
+  --login-line: var(--theme-border);
+}
+
+html[data-app-theme] .compact-login-brand-mark {
+  background: var(--theme-accent) !important;
+  color: var(--theme-on-accent) !important;
+}
+
+html[data-app-theme] .compact-login-divider,
+html[data-app-theme] .compact-login-privacy {
+  color: var(--theme-muted) !important;
+}
+
+html[data-app-theme] .compact-login-divider::before,
+html[data-app-theme] .compact-login-divider::after {
+  background: var(--theme-border) !important;
+}
+
+html[data-app-theme] .compact-login-message--ok { color: var(--theme-status-success) !important; }
+html[data-app-theme] .compact-login-message.lock-error { color: var(--theme-status-danger) !important; }
+
+html[data-app-theme] .topbar,
+html[data-app-theme] .topbar-canva,
+html[data-app-theme] .compact-mobile-header,
+html[data-app-theme] .compact-desktop-rail,
+html[data-app-theme] .compact-pwa-readiness,
+html[data-app-theme] .compact-release-notes {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme] .glass-card,
+html[data-app-theme] .card,
+html[data-app-theme] .metric,
+html[data-app-theme] .metric-card,
+html[data-app-theme] .notice,
+html[data-app-theme] .accordion-card,
+html[data-app-theme] .weather-day,
+html[data-app-theme] .weather-slot-detailed,
+html[data-app-theme] .stats-panel,
+html[data-app-theme] .stats-controls,
+html[data-app-theme] .dashboard-budget,
+html[data-app-theme] .timeline-day,
+html[data-app-theme] .history-command,
+html[data-app-theme] .weather-command-fancy,
+html[data-app-theme] .settings-command,
+html[data-app-theme] .stats-command,
+html[data-app-theme] .scan-hero-card,
+html[data-app-theme] .compact-login-card,
+html[data-app-theme] .compact-login-panel,
+html[data-app-theme] .canva-lock-panel,
+html[data-app-theme] .lock-panel,
+html[data-app-theme] .modal,
+html[data-app-theme] .modal-sheet,
+html[data-app-theme] [role='dialog'],
+html[data-app-theme] [data-slot='dialog-content'],
+html[data-app-theme] .toast,
+html[data-app-theme] [data-sonner-toaster] [data-sonner-toast] {
+  background: var(--theme-card) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+  box-shadow: 0 16px 42px color-mix(in srgb, var(--theme-text) 13%, transparent) !important;
+}
+
+html[data-app-theme] .accordion-card::before,
+html[data-app-theme] .glass-card::before,
+html[data-app-theme] .card::before {
+  background: transparent !important;
+}
+
+html[data-app-theme] input,
+html[data-app-theme] select,
+html[data-app-theme] textarea,
+html[data-app-theme] .theme-choice,
+html[data-app-theme] .compact-login-tabs,
+html[data-app-theme] .compact-login-google {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme] input::placeholder,
+html[data-app-theme] textarea::placeholder { color: var(--theme-muted) !important; opacity: 1; }
+html[data-app-theme] :focus-visible { outline-color: var(--theme-focus) !important; }
+
+html[data-app-theme] .compact-mobile-heading,
+html[data-app-theme] .compact-mobile-heading p,
+html[data-app-theme] .compact-mobile-status,
+html[data-app-theme] .topbar-title-block,
+html[data-app-theme] .topbar-title-block h1,
+html[data-app-theme] .topbar-trip-trigger-title,
+html[data-app-theme] .compact-mobile-title-art {
+  color: var(--theme-text) !important;
+  -webkit-text-fill-color: var(--theme-text) !important;
+}
+
+html[data-app-theme] .compact-mobile-title-art,
+html[data-app-theme] .topbar-trip-trigger-title {
+  background: none !important;
+  text-shadow: none !important;
+}
+
+html[data-app-theme] .muted,
+html[data-app-theme] small { color: var(--theme-muted) !important; }
+
+html[data-app-theme] .app-floating-dock-mobile,
+html[data-app-theme] .app-floating-dock-desktop,
+html[data-app-theme] .fixed-tab-bar .floating-dock {
+  background: color-mix(in srgb, var(--theme-card) 94%, transparent) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+  box-shadow: 0 14px 38px color-mix(in srgb, var(--theme-text) 18%, transparent) !important;
+}
+
+html[data-app-theme] .app-floating-dock-mobile button:not(.dock-item-scan),
+html[data-app-theme] .app-floating-dock-desktop button:not(.dock-item-scan) {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--theme-muted) !important;
+}
+
+html[data-app-theme] .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan),
+html[data-app-theme] .app-floating-dock-desktop [aria-current='page']:not(.dock-item-scan) {
+  color: var(--theme-accent) !important;
+}
+
+html[data-app-theme] .primary,
+html[data-app-theme] .compact-login-primary,
+html[data-app-theme] .app-floating-dock-mobile .dock-item-scan,
+html[data-app-theme] .app-floating-dock-desktop .dock-item-scan {
+  background: var(--theme-accent) !important;
+  border-color: var(--theme-accent) !important;
+  color: var(--theme-on-accent) !important;
+  transition-property: transform, box-shadow, filter, opacity !important;
+}
+
+html[data-app-theme] .secondary,
+html[data-app-theme] .button-like,
+html[data-app-theme] .action-list a,
+html[data-app-theme] .icon-btn {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme] .modal-backdrop,
+html[data-app-theme] [data-slot='dialog-overlay'] {
+  background: color-mix(in srgb, var(--theme-text) 44%, transparent) !important;
+}
+
+html[data-app-theme] .status-pill,
+html[data-app-theme] .sync-status-indicator {
+  background: var(--theme-card) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme] .status-pill.info,
+html[data-app-theme] .toast.info,
+html[data-app-theme] .top-notice.update {
+  background: color-mix(in srgb, var(--theme-status-info) 10%, var(--theme-card)) !important;
+  border-color: color-mix(in srgb, var(--theme-status-info) 42%, var(--theme-border)) !important;
+  color: var(--theme-status-info) !important;
+}
+
+html[data-app-theme] .status-pill.ok,
+html[data-app-theme] .toast.success {
+  background: color-mix(in srgb, var(--theme-status-success) 10%, var(--theme-card)) !important;
+  border-color: color-mix(in srgb, var(--theme-status-success) 42%, var(--theme-border)) !important;
+  color: var(--theme-status-success) !important;
+}
+
+html[data-app-theme] .status-pill.warning,
+html[data-app-theme] .toast.warning,
+html[data-app-theme] .top-notice.offline {
+  background: color-mix(in srgb, var(--theme-status-warning) 10%, var(--theme-card)) !important;
+  border-color: color-mix(in srgb, var(--theme-status-warning) 42%, var(--theme-border)) !important;
+  color: var(--theme-status-warning) !important;
+}
+
+html[data-app-theme] .status-pill.danger,
+html[data-app-theme] .toast.danger,
+html[data-app-theme] .lock-error {
+  background: color-mix(in srgb, var(--theme-status-danger) 10%, var(--theme-card)) !important;
+  border-color: color-mix(in srgb, var(--theme-status-danger) 42%, var(--theme-border)) !important;
+  color: var(--theme-status-danger) !important;
+}
+
+html[data-app-theme] .chart-container,
+html[data-app-theme] .budget-pace-chart,
+html[data-app-theme] .preview-dashboard-today-chart,
+html[data-app-theme] canvas {
+  background: color-mix(in srgb, var(--theme-card) 88%, var(--theme-canvas)) !important;
+  border-color: var(--theme-border) !important;
+}
+
+html[data-app-theme] .chart-legend-dot:nth-child(4n + 1) { background: var(--theme-chart-1) !important; }
+html[data-app-theme] .chart-legend-dot:nth-child(4n + 2) { background: var(--theme-chart-2) !important; }
+html[data-app-theme] .chart-legend-dot:nth-child(4n + 3) { background: var(--theme-chart-3) !important; }
+html[data-app-theme] .chart-legend-dot:nth-child(4n) { background: var(--theme-chart-4) !important; }
+
+/* Japan-only output: both rendering and fallback CSS are gated. */
+html:not([data-app-theme='japan_washi']) body::before,
+html:not([data-app-theme='japan_washi']) body::after,
+html:not([data-app-theme='japan_washi']) .app-shell::before,
+html:not([data-app-theme='japan_washi']) .app-shell::after,
+html:not([data-app-theme='japan_washi']) .japanese-washi-bg::before,
+html:not([data-app-theme='japan_washi']) .japanese-washi-bg::after,
+html:not([data-app-theme='japan_washi']) .japanese-sun-decor,
+html:not([data-app-theme='japan_washi']) .japanese-sakura-decor,
+html:not([data-app-theme='japan_washi']) .washi-nippon-stamp,
+html:not([data-app-theme='japan_washi']) .compact-rail-mark,
+html:not([data-app-theme='japan_washi']) .compact-topbar-mark,
+html:not([data-app-theme='japan_washi']) .compact-mobile-mark,
+html:not([data-app-theme='japan_washi']) .compact-mobile-mark::before,
+html:not([data-app-theme='japan_washi']) .compact-mobile-mark::after,
+html:not([data-app-theme='japan_washi']) .stats-tab.stats-cockpit .stats-command-copy::before,
+html:not([data-app-theme='japan_washi']) .topbar > svg,
+html:not([data-app-theme='japan_washi']) .compact-mobile-header > svg,
+html:not([data-app-theme='japan_washi']) .compact-mobile-header::before,
+html:not([data-app-theme='japan_washi']) .compact-mobile-header::after,
+html:not([data-app-theme='japan_washi']) img[src*='compact-japan-mark'] {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+}
+
+.theme-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.theme-choice {
+  min-height: 48px;
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  border: 1px solid var(--theme-border);
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.theme-choice:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--theme-focus) 50%, transparent); outline-offset: 2px; }
+.theme-choice:has(input:checked) { border-color: var(--theme-accent) !important; box-shadow: inset 0 0 0 1px var(--theme-accent); }
+.theme-choice input { inline-size: 18px; block-size: 18px; accent-color: var(--theme-accent); }
+.theme-choice strong { font-size: .92rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* Taiwan is the only dark catalog theme; replace late light-preview ink at its real surfaces. */
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .compact-mobile-status {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .dock-item-scan,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .dock-item-scan .dock-mobile-label {
+  color: var(--theme-on-accent) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-budget-head h2,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-today-head h3,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .stats-command-title {
+  background: none !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] :is(
+  .preview-dashboard-currency button,
+  .preview-dashboard-budget-tip,
+  .preview-dashboard-weather-mini,
+  .dashboard-compact-itinerary-row,
+  .dashboard-compact-recent-row,
+  .history-filter-deck .search-field,
+  .history-filter-button,
+  .history-chip,
+  .history-activity-row,
+  .history-date-title .pill,
+  .timeline-command,
+  .preview-timeline-overview,
+  .preview-timeline-date,
+  .timeline-live-card,
+  .timeline-trip-days,
+  .timeline-preview-date-badge,
+  .timeline-event,
+  .timeline-loose-receipts,
+  .preview-scan-ai-strip,
+  .scan-secondary-button,
+  .scan-utility-button,
+  .scan-fx-wide-button,
+  .preview-weather-source-strip span,
+  .weather-location-meta span,
+  .preview-weather-facts span,
+  .preview-weather-hourly-chip,
+  .weather-slot-detailed,
+  .metric-tag,
+  .stats-story-card,
+  .settlement-action-card,
+  .rank-modern,
+  .transfer-modern,
+  .settlement-visual-map,
+  .stats-currency-toggle button,
+  .stats-switch,
+  .accordion-summary,
+  .settings-trip-panel,
+  .settings-trip-doctor-item
+) {
+  background: var(--theme-surface) !important;
+  background-image: none !important;
+  border-color: var(--theme-border) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] :is(
+  .preview-dashboard-ring-copy strong,
+  .preview-dashboard-budget-row strong,
+  .preview-dashboard-today-grid strong,
+  .preview-dashboard-today-chart-copy strong,
+  .preview-dashboard-today-chart-text strong,
+  .dashboard-compact-itinerary-main strong,
+  .dashboard-compact-recent-main strong,
+  .dashboard-compact-recent-amount strong,
+  .dashboard-compact-itinerary h3,
+  .dashboard-compact-recent h3,
+  .history-filter-deck .search-field svg,
+  .history-filter-button,
+  .history-chip:not(.active),
+  .history-date-title h2,
+  .history-ledger-main strong,
+  .history-ledger-amount strong,
+  .history-day-subtotal > span,
+  .timeline-command-title,
+  .preview-timeline-copy strong,
+  .preview-timeline-stats b,
+  .timeline-day-title h2,
+  .timeline-title,
+  .timeline-live-card b,
+  .timeline-preview-date-badge strong,
+  .timeline-loose-copy strong,
+  .timeline-loose-total,
+  .scan-hero-card h2.text-black,
+  .preview-scan-ai-strip strong,
+  .preview-scan-ai-strip b,
+  .scan-secondary-button strong,
+  .scan-utility-button strong,
+  .scan-fx-wide-button strong,
+  .preview-weather-temp strong,
+  .preview-weather-temp span,
+  .weather-location h2,
+  .weather-location h3,
+  .preview-weather-source-strip span,
+  .weather-location-meta span,
+  .preview-weather-hourly-chip,
+  .temp-num,
+  .stats-command-title,
+  .preview-budget-side,
+  .preview-budget-heading > span,
+  .preview-budget-total strong,
+  .preview-budget-row strong,
+  .spending-compass-copy strong,
+  .stats-panel h2,
+  .stats-panel .bar-row span,
+  .top-expenses-panel .rank-row span,
+  .stats-story-card > strong,
+  .settlement-action-card > strong,
+  .transfer-modern strong,
+  .accordion-summary,
+  .accordion-title strong,
+  .settings-trip-panel strong
+) {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] :is(
+  .preview-dashboard-ring-copy span,
+  .preview-dashboard-budget-row span,
+  .preview-dashboard-budget-tip span,
+  .preview-dashboard-today-head > span,
+  .preview-dashboard-today-head small,
+  .preview-dashboard-today-grid span,
+  .preview-dashboard-today-grid small,
+  .preview-dashboard-today-chart-copy span,
+  .preview-dashboard-today-chart-text span,
+  .preview-dashboard-today-chart-text small,
+  .dashboard-compact-itinerary-main span,
+  .dashboard-compact-itinerary-main small,
+  .dashboard-compact-recent-main span,
+  .dashboard-compact-recent-amount span,
+  .history-filter-deck input::placeholder,
+  .history-date-total,
+  .history-ledger-main small,
+  .history-ledger-amount small,
+  .history-day-subtotal strong,
+  .history-row-chevron,
+  .history-photo-slot,
+  .history-activity-verb,
+  .history-activity-date,
+  .preview-timeline-copy > span,
+  .preview-timeline-copy > small,
+  .preview-timeline-stats span,
+  .preview-timeline-date small,
+  .preview-timeline-date em,
+  .timeline-live-card em,
+  .timeline-live-card small,
+  .timeline-day-date-primary,
+  .timeline-day-status > span,
+  .timeline-time small,
+  .timeline-main small,
+  .timeline-preview-date-badge small,
+  .timeline-preview-date-badge em,
+  .timeline-loose-total small,
+  .preview-scan-ai-strip span,
+  .scan-secondary-button .scan-card-copy span,
+  .scan-utility-button .scan-card-copy span,
+  .scan-fx-wide-button .scan-card-copy span,
+  .preview-weather-temp small,
+  .preview-weather-facts span,
+  .weather-location-meta small,
+  .temp-label,
+  .preview-budget-total span,
+  .preview-budget-row span,
+  .preview-budget-stack small,
+  .spending-compass-copy span,
+  .spending-compass-copy small,
+  .spending-compass-slice,
+  .stats-panel .bar-row b,
+  .stats-controls p,
+  .top-expenses-panel .rank-store-translation,
+  .stats-story-card > span,
+  .stats-story-card > small,
+  .settlement-action-card > span,
+  .settlement-action-card > small,
+  .transfer-modern span,
+  .transfer-modern small,
+  .accordion-title .eyebrow,
+  .accordion-meta,
+  .settings-trip-panel .eyebrow
+) {
+  color: var(--theme-muted) !important;
+  opacity: 1;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] :is(
+  .preview-dashboard-budget-row.is-used span,
+  .preview-dashboard-budget-row.is-used strong,
+  .preview-dashboard-today-grid > div:first-child strong,
+  .preview-weather-facts .hot
+) { color: var(--theme-status-danger) !important; }
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] :is(
+  .preview-dashboard-budget-row.is-left strong,
+  .preview-dashboard-today-grid > div:nth-child(3) strong
+) { color: var(--theme-status-success) !important; }
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] :is(
+  .dashboard-compact-itinerary-row time,
+  .timeline-time > span,
+  .timeline-live-clock,
+  .preview-weather-source-strip .weather-fallback-chip,
+  .weather-location-meta .weather-fallback-chip
+) { color: var(--theme-status-warning) !important; }
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] :is(
+  .history-activity-person,
+  .history-activity-store
+) { color: var(--theme-text) !important; }
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] :is(
+  .history-activity-amount,
+  .preview-weather-place,
+  .preview-weather-facts b,
+  .top-expenses-panel .rank-row strong,
+  .transfer-modern strong
+) { color: var(--theme-status-info) !important; }
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-currency button.is-active,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .stats-currency-toggle button.is-active,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .timeline-now.timeline-state-is-live,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .live-pulse-badge {
+  background: var(--theme-accent) !important;
+  border-color: var(--theme-accent) !important;
+  color: var(--theme-on-accent) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .timeline-now:not(.timeline-state-is-live) {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .timeline-command :is(.timeline-command-blend, .timeline-command-texture, .timeline-command-wash),
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .scan-hero-card > .absolute.inset-0 {
+  display: none !important;
+  background: none !important;
+}
+
+/* The mock receipt remains paper; use paper ink instead of dark-theme ink on that one surface. */
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-receipt-paper {
+  background: #FFFDF8 !important;
+  color: #2A2119 !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-receipt-paper :is(b, span, strong) {
+  color: #2A2119 !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-receipt-paper small {
+  color: #5F554B !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] :is(.rain-tag, .wind-tag, .humidity-tag, .sun-tag) {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] :is(.rain-tag, .wind-tag, .humidity-tag, .sun-tag) * {
+  color: inherit !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--stats :is(
+  .preview-stats-budget,
+  .preview-daily-pace,
+  .preview-stats-screen .stats-panel,
+  .preview-stats-screen .stats-controls,
+  .preview-stats-screen .settlement-card,
+  .preview-stats-screen .top-expenses-panel,
+  .preview-stats-screen .payer-panel,
+  .preview-stats-screen .category-panel,
+  .preview-stats-screen .payment-panel
+) {
+  background: var(--theme-card) !important;
+  background-image: none !important;
+  border-color: var(--theme-border) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .stats-tab.stats-cockpit .spending-compass-ring {
+  background: radial-gradient(circle, var(--theme-surface) 0 45%, transparent 46%), var(--compass-ring) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .stats-switch button.active {
+  background: var(--theme-accent) !important;
+  color: var(--theme-on-accent) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .settings-trip-panel .pill,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .accordion-meta .pill {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .settings-screen > .stack > div[style*='justify-content: center'] > span {
+  color: var(--theme-muted) !important;
+}
+
+/* Late Android/mobile preview rules carry light ink and materials; keep their real descendants semantic. */
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--dashboard .preview-dashboard-budget-strip > div,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--stats .stats-tab.stats-cockpit :is(
+  .preview-budget-currency,
+  .top10-toggle,
+  .preview-budget-selected-day
+),
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--settings .settings-preview-controls button {
+  background: var(--theme-surface) !important;
+  background-image: none !important;
+  border-color: var(--theme-border) !important;
+  box-shadow: none !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--dashboard :is(
+  .preview-dashboard-currency button:not(.is-active),
+  .preview-dashboard-weather-mini,
+  .dashboard-compact-itinerary > div:first-child > div:first-child > span,
+  .dashboard-compact-itinerary > .compact-touch-action,
+  .dashboard-compact-recent > div:first-child button
+),
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--stats .stats-tab.stats-cockpit :is(
+  .preview-budget-currency button:not(.is-active),
+  .top10-toggle button:not(.active),
+  .preview-budget-selected-day b,
+  .stats-switch > span:last-child
+),
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--settings .settings-preview-controls button span {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--dashboard .preview-dashboard-budget-strip strong {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--dashboard .preview-dashboard-budget-strip :is(span, small),
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--dashboard .preview-dashboard-weather-mini small,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--stats .stats-tab.stats-cockpit .preview-budget-selected-day small,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--settings .settings-preview-controls button small {
+  color: var(--theme-muted) !important;
+  opacity: 1 !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--dashboard .washi-add-expense-btn,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--history .history-chip.active,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--stats .stats-tab.stats-cockpit :is(
+  .preview-budget-currency button.is-active,
+  .top10-toggle button.active
+) {
+  background: var(--theme-accent) !important;
+  background-image: none !important;
+  border-color: var(--theme-accent) !important;
+  color: var(--theme-on-accent) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--history .history-filter-deck input::placeholder {
+  color: var(--theme-muted) !important;
+  opacity: 1 !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--history .history-date-title .pill,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--timeline .timeline-trip-days,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--timeline .preview-timeline-date :is(span, strong),
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--weather .weather-day .section-head h2 {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--stats .stats-tab.stats-cockpit .preview-budget-selected-day strong {
+  color: var(--theme-status-info) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--dashboard .dashboard-compact-itinerary span[class*='text-[#8C7864]'],
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--dashboard .dashboard-compact-itinerary button.compact-touch-action span {
+  color: var(--theme-muted) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--dashboard .dashboard-compact-recent button.compact-touch-action {
+  color: var(--theme-status-info) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--weather .weather-command-row h2,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--stats .stats-tab.stats-cockpit .preview-daily-pace .budget-pace-summary b {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--stats .stats-tab.stats-cockpit .preview-daily-pace .budget-pace-day small {
+  color: var(--theme-muted) !important;
+  opacity: 1 !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--stats .stats-tab.stats-cockpit .rank-modern > b {
+  color: var(--theme-status-warning) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--stats .stats-tab.stats-cockpit .preview-daily-pace .budget-pace-summary small {
+  color: var(--theme-muted) !important;
+  opacity: 1 !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .app-shell--dashboard .dashboard-compact-itinerary-actions :is(button, span) {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-status-info) !important;
+}
+
+@media (max-width: 767px) {
+  html[data-app-theme] .app-floating-dock-mobile {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    column-gap: 4px !important;
+    row-gap: 4px !important;
+    height: auto !important;
+  }
+
+  html[data-app-theme] .app-floating-dock-mobile button {
+    flex: 1 1 3em !important;
+    width: auto !important;
+    min-width: max-content !important;
+    max-width: calc((100% - 58px) / 6) !important;
+  }
+
+  html[data-app-theme] .app-floating-dock-mobile .dock-item-scan {
+    flex: 0 0 58px !important;
+    width: 58px !important;
+    min-width: 58px !important;
+    max-width: 58px !important;
+    margin-top: clamp(-42px, calc(3em - 90px), 0px) !important;
+  }
+
+  body.compact-native-android .content > .stack,
+  body.compact-native-android .japanese-washi-bg {
+    padding-bottom: max(calc(176px + env(safe-area-inset-bottom)), calc(13em + env(safe-area-inset-bottom))) !important;
+  }
+}

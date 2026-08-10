@@ -38,8 +38,8 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.19`；Android worktree
-目前版本是 `0.20.7`（versionCode `2007`）。Admin Console production 是 `1.0.2`，由 protected
+Compact app 和 React app 獨立版本管理。主線 Compact Web 目前版本是 `0.17.0`；Android worktree
+目前版本是 `0.22.0`（versionCode `2200`）；React transport compatibility 版本是 `0.2.6`。Admin Console production 是 `1.0.2`，由 protected
 workflow `29415119909` 以 Git SHA `67cde57a42bc43f1bda026d81d555260e25bb564` promotion；live
 `/api/health` 回 `200`、exact SHA 及 `acceptingReadTraffic=true`。Console Providers 會列出五個
 既有 Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output
@@ -70,7 +70,18 @@ Debug APK 會輸出到：
 app-compact/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-本次 `0.20.7` 的 Settings model test 會送出明確指令 `Return only JSON: {"ok":true}`，仍然只測試所選 model、不使用 fallback。Credential Broker 對每個 model test 都只使用 8 個 output tokens，並以非空 provider response 作 availability proof。呢個 Broker 行為由 main 的 orchestrator 更新，Android shell 不會修改 Worker source。正式上架前仍需要處理 release signing、Play Store metadata、native camera/gallery QA、offline sync QA、以及 Android 真機回歸測試。
+### 外觀主題
+
+Android Settings 頂部有「外觀主題」選擇器，毋須另外儲存：
+
+- `自動（依旅程）` 會跟目前旅程建議的主題。
+- 亦可以手動固定 `日本和紙`、`韓國韓紙`、`台灣夜市`、`歐洲鐵路` 或 `全球旅誌`，切換旅程後仍然保留。
+- `台灣夜市` 是真正 dark theme；其餘四款是 light theme。Status/navigation bars 會同步轉換 icon 明暗。
+- 選擇會留在裝置並經現有 account settings 同步；登出不會造成下次 cold launch 閃色，只有「清除此裝置資料」才會刪除裝置提示。
+
+首版只有這五款 reviewed themes，沒有 user color builder 或 runtime AI theme generator。新增 curated theme 應留在 catalog／semantic token、可選細 SVG、contrast contract 同 contact-sheet review，不應修改個別 page component。
+
+Settings model test 會送出明確指令 `Return only JSON: {"ok":true}`，仍然只測試所選 model、不使用 fallback。Credential Broker 對每個 model test 都只使用 8 個 output tokens，並以非空 provider response 作 availability proof。呢個 Broker 行為由 main 的 orchestrator 更新，Android shell 不會修改 Worker source。正式上架前仍需要處理 release signing、Play Store metadata、native camera/gallery QA、offline sync QA、以及 Android 真機回歸測試。
 
 Android Google/Supabase login uses the App Link callback `https://travel-expense-compact.vercel.app/android-auth`. The debug certificate SHA-256 is already listed in `app-compact/public/.well-known/assetlinks.json`; add the release SHA-256 after creating the release keystore.
 

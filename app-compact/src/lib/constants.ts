@@ -5,7 +5,7 @@ import { ANDROID_AI_MODELS } from './providerCatalog.ts';
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.21.2';
+export const APP_VERSION = '0.22.0';
 export const MAX_SYNC_RETRY_ATTEMPTS = 3;
 
 export const STORAGE_KEY = 'boss-japan-tracker';
@@ -13,7 +13,7 @@ export const DEFAULT_NOTION_DB = '3438d94d5f7c81878221fcda6d65d39d';
 export const DEFAULT_CREDENTIAL_BROKER_URL = 'https://travel-expense-credential-broker.ftjdfr.workers.dev';
 export const ALLOWED_CREDENTIAL_BROKER_URLS = [DEFAULT_CREDENTIAL_BROKER_URL] as const;
 export const NATIVE_REACHABILITY_ONLINE_EVENT = 'travel-expense:native-reachability-online';
-export const APP_SCHEMA_VERSION = 3;
+export const APP_SCHEMA_VERSION = 4;
 export const DEFAULT_GOOGLE_BACKUP_MODEL = 'gemma-4-31b-it';
 export const DEFAULT_SCAN_VOICE_MODEL_ID = 'mimo/mimo-v2.5';
 export const DEFAULT_KIMI_PRIMARY_MODEL_ID = 'kimi/kimi-code';
@@ -123,6 +123,7 @@ export const DEFAULT_STATE: AppState = {
   emailModel: DEFAULT_TRIP_UPDATE_MODEL_ID,
   tripUpdateModel: DEFAULT_TRIP_UPDATE_MODEL_ID,
   googleBackupModel: DEFAULT_GOOGLE_BACKUP_MODEL,
+  themePreference: 'auto',
   persons: [
     { id: 'p_boss', name: 'User 1', emoji: '👤', color: '#CC2929' },
   ],

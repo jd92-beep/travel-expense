@@ -3,7 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#f7f2ea" />
+    <meta name="theme-color" content="#f1f0e9" />
+    <script>
+      (() => {
+        const key = 'boss-japan-tracker:theme:v1';
+        const themes = ['japan_washi', 'korea_editorial', 'taiwan_nightmarket', 'europe_rail', 'global_journal'];
+        const colors = { japan_washi: '#f7f2ea', korea_editorial: '#f7f4f0', taiwan_nightmarket: '#111827', europe_rail: '#eef1ec', global_journal: '#f1f0e9' };
+        let theme = 'global_journal';
+        try {
+          const hint = localStorage.getItem(key);
+          if (themes.includes(hint)) theme = hint;
+        } catch { /* storage is unavailable; use the validated neutral world. */ }
+        const root = document.documentElement;
+        const dark = theme === 'taiwan_nightmarket';
+        root.dataset.appTheme = theme;
+        root.dataset.themeSource = 'auto';
+        root.dataset.colorScheme = dark ? 'dark' : 'light';
+        root.classList.toggle('dark', dark);
+        root.style.colorScheme = dark ? 'dark' : 'light';
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors[theme]);
+      })();
+    </script>
+    <link rel="stylesheet" href="/src/styles/themes.css" />
     <link rel="icon" href="%BASE_URL%favicon.svg" type="image/svg+xml" />
     <!-- media="print"+onload = non-blocking: offline boot must never stall on Google Fonts.
          Android ships Noto Sans CJK natively, so the fallback is near-identical. -->

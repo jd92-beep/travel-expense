@@ -13,8 +13,10 @@ const apkPath = path.join(appRoot, 'android/app/build/outputs/apk/debug/app-debu
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const artifactDir = process.env.ANDROID_QA_ARTIFACT_DIR || path.join('/tmp', `travel-expense-android-qa-${stamp}`);
 const cdpPort = Number(process.env.ANDROID_QA_CDP_PORT || 9223);
+const nativeVisualTheme = process.env.ANDROID_QA_THEME || 'auto';
 const nativeVisualState = {
-  schemaVersion: 3,
+  schemaVersion: 4,
+  themePreference: nativeVisualTheme,
   lastTab: 'dashboard',
   budget: 120000,
   rate: 20,
@@ -357,17 +359,34 @@ async function tryNativePhotoAction(serial, labels, slug) {
 }
 
 async function captureNativeVisualTabs(serial) {
-  const visualStateJson = JSON.stringify(nativeVisualState);
   await bringAppToFront(serial);
   {
     const { page } = await webViewTarget(serial);
     await cdpEvaluate(page.webSocketDebuggerUrl, `
-      localStorage.setItem('boss-japan-tracker', ${JSON.stringify(visualStateJson)});
-      localStorage.removeItem('travel-expense:supabase-auth:v1');
-      localStorage.removeItem('boss-japan-tracker:credential-session:v1');
-      location.hash = 'dashboard';
-      location.reload();
-      true;
+      (async () => {
+        const visualState = JSON.parse(${JSON.stringify(JSON.stringify(nativeVisualState))});
+        localStorage.setItem('boss-japan-tracker', JSON.stringify(visualState));
+        ${nativeVisualTheme === 'auto'
+          ? "localStorage.removeItem('boss-japan-tracker:theme:v1');"
+          : `localStorage.setItem('boss-japan-tracker:theme:v1', ${JSON.stringify(nativeVisualTheme)});`}
+        localStorage.removeItem('travel-expense:supabase-auth:v1');
+        localStorage.removeItem('boss-japan-tracker:credential-session:v1');
+        const db = await new Promise((resolve, reject) => {
+          const request = indexedDB.open('travel-expense-react', 1);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        await new Promise((resolve, reject) => {
+          const transaction = db.transaction('state', 'readwrite');
+          transaction.objectStore('state').put(visualState, 'app-state');
+          transaction.oncomplete = resolve;
+          transaction.onerror = () => reject(transaction.error);
+        });
+        db.close();
+        location.hash = 'dashboard';
+        location.reload();
+        return true;
+      })()
     `);
     await delay(5000);
   }
@@ -385,6 +404,11 @@ async function captureNativeVisualTabs(serial) {
     if (/有資料同步失敗|FATAL EXCEPTION|Something went wrong/i.test(text)) {
       throw new Error(`Native visual check for ${hash} found an error banner. Saw: ${text.slice(0, 180)}`);
     }
+    const { page } = await webViewTarget(serial);
+    const theme = await cdpEvaluate(page.webSocketDebuggerUrl, '({ appTheme: document.documentElement.dataset.appTheme, scheme: document.documentElement.dataset.colorScheme })');
+    if (nativeVisualTheme !== 'auto' && theme?.appTheme !== nativeVisualTheme) {
+      throw new Error(`Native visual check for ${hash} expected ${nativeVisualTheme}, received ${theme?.appTheme || 'none'}`);
+    }
     const ui = dumpUi(serial, `${slug}.xml`);
     const xml = await fsp.readFile(ui, 'utf8');
     assertNoSystemAnrDialog(xml, `Native visual check for ${hash}`);
@@ -393,6 +417,7 @@ async function captureNativeVisualTabs(serial) {
       hash,
       screenshot: await captureScreenshot(serial, `${slug}.png`),
       ui,
+      theme,
       textSample: text.slice(0, 180),
     });
   }
@@ -568,6 +593,7 @@ console.log(JSON.stringify({
   packageName,
   appLinksVerified,
   launchMode,
+  nativeVisualTheme,
   trustedSeed,
   logcatClearWarning: logcatClearWarning || null,
   launchTextSample: launchText.slice(0, 400),
