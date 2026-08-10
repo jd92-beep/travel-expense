@@ -2,6 +2,14 @@
 
 ## 2026-08-10
 
+- **feat(compact/android): add five account-wide visual themes.** Compact `0.17.0` and Android
+  `0.22.0` / versionCode `2200` add `自動（依旅程）` plus Japan Washi, Korea Editorial, Taiwan
+  Night Market, Europe Rail and Global Journal choices. The resolved theme now covers first paint,
+  login/loading gates, semantic surfaces, charts, focus/status roles and browser/native chrome;
+  Taiwan is the only true-dark world. The preference uses the existing local/IndexedDB/backup,
+  Supabase and Notion settings transports with newer-wins timestamps and no database migration.
+  React `0.2.6` preserves the field as a transport-only compatibility shim without adding theme UI.
+
 - **fix(compact): recognise Supabase's unavailable-network wording during cold recovery.** Compact
   `0.16.23` now treats `network unavailable` and `network is unavailable` as the same transient
   failure class as `Failed to fetch`, so an exhausted persisted item receives the existing single

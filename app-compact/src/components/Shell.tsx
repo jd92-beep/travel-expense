@@ -13,6 +13,7 @@ import { SyncStatusIndicator } from './SyncStatusIndicator';
 import { getEffectsTier } from '../lib/performance';
 import { activeTrip, switchTrip } from '../domain/trip/normalize';
 import compactJapanMark from '../assets/generated/compact-japan-mark.svg';
+import { useTripTheme } from '../theme/tripTheme';
 
 function TripDropdown({
   trips,
@@ -183,6 +184,7 @@ export function Shell({
   onPull?: () => Promise<void>;
   onOpenNewTripWizard?: () => void;
 }) {
+  const { theme } = useTripTheme();
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
   const [installReady, setInstallReady] = useState(false);
@@ -193,7 +195,7 @@ export function Shell({
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const prefersReducedMotion = useReducedMotion();
   // Desktop-class effects (rAF canvas particles, full-screen mix-blend noise): full tier only.
-  const richVisualEffects = !prefersReducedMotion && fxTier === 'full';
+  const richVisualEffects = theme.id === 'japan_washi' && !prefersReducedMotion && fxTier === 'full';
   // Compositor-safe motion (aurora text bg-position, scroll-linked vars): full + balanced.
   const motionOk = !prefersReducedMotion && fxTier !== 'lite';
 
@@ -425,7 +427,7 @@ export function Shell({
         />
       )}
       <nav className="compact-desktop-rail" aria-label="主要分頁">
-        <img className="compact-rail-mark" src={compactJapanMark} alt="" aria-hidden="true" />
+        {theme.id === 'japan_washi' && <img className="compact-rail-mark" src={compactJapanMark} alt="" aria-hidden="true" />}
         <div className="compact-rail-items">
           {TAB_MANIFEST.map((tab) => (
             <button
@@ -477,7 +479,7 @@ export function Shell({
         </div>
       )}
       <header className="topbar topbar-canva relative overflow-hidden">
-        {active === 'dashboard' && (
+        {theme.id === 'japan_washi' && active === 'dashboard' && (
           <svg className="absolute right-4 bottom-0 opacity-15 pointer-events-none h-full w-48 text-[#D4A843] dark:text-[#C23B5E] z-0" viewBox="0 0 120 40" fill="none" stroke="currentColor">
             <path d="M10,40 Q40,12 60,5 Q80,12 110,40 Z" strokeWidth="1" />
             <path d="M48,15 L60,5 L72,15 Z" fill="currentColor" opacity="0.3" stroke="none" />
@@ -485,7 +487,7 @@ export function Shell({
           </svg>
         )}
         <div className="topbar-title-block relative z-10">
-          <img className="compact-topbar-mark" src={compactJapanMark} alt="" aria-hidden="true" />
+          {theme.id === 'japan_washi' && <img className="compact-topbar-mark" src={compactJapanMark} alt="" aria-hidden="true" />}
           {active === 'dashboard' && state ? (
             <div className="flex items-center gap-2">
               <TripDropdown
@@ -555,16 +557,16 @@ export function Shell({
         )}
       </header>
       <header className="compact-mobile-header relative overflow-hidden" aria-label={`${activeCopy.mobileTitle} header`}>
-        {active === 'dashboard' && (
+        {theme.id === 'japan_washi' && active === 'dashboard' && (
           <svg className="absolute right-12 bottom-0 opacity-15 pointer-events-none h-14 w-36 text-[#D4A843] dark:text-[#C23B5E] z-0" viewBox="0 0 100 40" fill="none" stroke="currentColor">
             <path d="M5,40 Q30,15 50,5 Q70,15 95,40 Z" strokeWidth="1" />
             <path d="M38,12 L50,5 L62,12 Z" fill="currentColor" opacity="0.3" stroke="none" />
             <path d="M72,40 L72,24 M82,40 L82,24 M68,22 L86,22 M70,26 L84,26 M69,19 L85,19" strokeWidth="1.5" stroke="#C23B5E" />
           </svg>
         )}
-        <span className="compact-mobile-mark relative z-10" aria-hidden="true">
+        {theme.id === 'japan_washi' && <span className="compact-mobile-mark relative z-10" aria-hidden="true">
           <img src={compactJapanMark} alt="" />
-        </span>
+        </span>}
         <div className="compact-mobile-heading relative z-10">
           {active === 'dashboard' && state ? (
             <div className="flex items-center gap-1.5">

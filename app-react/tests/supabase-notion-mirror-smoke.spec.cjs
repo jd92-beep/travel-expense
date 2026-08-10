@@ -83,6 +83,7 @@ function sessionPayload() {
 
 test('Supabase public Notion panel clearly stays Supabase-only before Personal Notion is connected', async ({ page }) => {
   const notionRequests = [];
+  let profileReads = 0;
 
   await page.route('**/travel-expense/secrets.local.js', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/javascript', body: 'window.DEV_SECRETS = {};' });
@@ -102,6 +103,7 @@ test('Supabase public Notion panel clearly stays Supabase-only before Personal N
       return;
     }
     if (table === 'profiles' && method === 'GET') {
+      profileReads += 1;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ app_settings: {} }) });
       return;
     }
@@ -148,6 +150,7 @@ test('Supabase public Notion panel clearly stays Supabase-only before Personal N
       activeTripId: 'trip_supabase_only',
       notionDb: '3438d94d5f7c81878221fcda6d65d39d',
       personalNotionConnected: false,
+      themePreference: 'japan_washi',
       trips: [{
         id: 'trip_supabase_only',
         name: 'Supabase Only Trip',
@@ -169,6 +172,7 @@ test('Supabase public Notion panel clearly stays Supabase-only before Personal N
   }, { userId, session: sessionPayload() });
 
   await page.goto(`${APP_URL}#settings`);
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await expect(page.getByText('設定控制中心')).toBeVisible();
   await setAccordion(page, 'Notion Sync');
 
@@ -183,6 +187,11 @@ test('Supabase public Notion panel clearly stays Supabase-only before Personal N
   await page.getByRole('button', { name: /Push Supabase$/ }).click();
   await expect(page.getByText(/已透過 Sync Engine 推送 pending queue/)).toBeVisible();
   await page.waitForTimeout(500);
+  await expect.poll(() => page.evaluate((userId) => {
+    const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
+    return state.themePreference;
+  }, userId)).toBe('japan_washi');
+  expect(profileReads).toBeGreaterThan(0);
   expect(notionRequests).toHaveLength(0);
 });
 
@@ -582,6 +591,7 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
         body: JSON.stringify({
           app_settings: {
             activeTripId: 'trip_supabase',
+            themePreference: 'europe_rail',
             settingsUpdatedAt: now + 1_000,
           },
         }),
@@ -628,6 +638,7 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
       activeTripId: 'trip_local',
       notionDb: 'default_db',
       personalNotionConnected: true,
+      themePreference: 'japan_washi',
       settingsUpdatedAt: now,
       trips: [{
         id: 'trip_local',
@@ -651,14 +662,16 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
   }, { userId, session: sessionPayload(), now });
 
   await page.goto(`${APP_URL}#history`);
+  await page.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.getByText('紀錄中心')).toBeVisible();
   await page.getByRole('button', { name: '重新同步' }).click();
 
   await expect.poll(() => page.evaluate((userId) => {
     const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
-    return { activeTripId: state.activeTripId, tripNames: (state.trips || []).map((trip) => trip.name) };
+    return { activeTripId: state.activeTripId, themePreference: state.themePreference, tripNames: (state.trips || []).map((trip) => trip.name) };
   }, userId), { timeout: 10000 }).toEqual({
     activeTripId: 'trip_supabase',
+    themePreference: 'europe_rail',
     tripNames: ['Local Trip', 'Supabase Trip'],
   });
   const tripNames = await page.evaluate((userId) => {
@@ -718,6 +731,7 @@ test('Supabase pull ignores stale profile activeTripId and preserves the current
         body: JSON.stringify({
           app_settings: {
             activeTripId: 'foreign_or_deleted_trip',
+            themePreference: 'not-a-theme',
             settingsUpdatedAt: now + 10_000,
           },
         }),
@@ -743,6 +757,7 @@ test('Supabase pull ignores stale profile activeTripId and preserves the current
       lastTab: 'history',
       autoSync: false,
       activeTripId: 'trip_local',
+      themePreference: 'japan_washi',
       settingsUpdatedAt: now,
       trips: [{
         id: 'trip_local',
@@ -765,6 +780,7 @@ test('Supabase pull ignores stale profile activeTripId and preserves the current
   }, { userId, session: sessionPayload(), now });
 
   await page.goto(`${APP_URL}#history`);
+  await page.getByRole('button', { name: '紀錄', exact: true }).click();
   await expect(page.getByText('紀錄中心')).toBeVisible();
   await page.getByRole('button', { name: '重新同步' }).click();
 
@@ -772,10 +788,12 @@ test('Supabase pull ignores stale profile activeTripId and preserves the current
     const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
     return {
       activeTripId: state.activeTripId,
+      themePreference: state.themePreference,
       activeFlags: (state.trips || []).map((trip) => ({ id: trip.id, active: trip.active, archived: !!trip.archived })),
     };
   }, userId), { timeout: 10000 }).toEqual({
     activeTripId: 'trip_local',
+    themePreference: 'japan_washi',
     activeFlags: [
       { id: 'trip_local', active: true, archived: false },
       { id: 'trip_valid_supabase', active: false, archived: false },

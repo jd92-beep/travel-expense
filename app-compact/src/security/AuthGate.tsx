@@ -18,6 +18,7 @@ import {
   saveTrustedDevice,
   signTrustedDeviceChallenge,
 } from './trustedDevice';
+import { useTripTheme } from '../theme/tripTheme';
 
 function shouldAutoFocusUnlockInput(): boolean {
   if (typeof window === 'undefined') return false;
@@ -37,12 +38,15 @@ export function AuthGate({
   onUnlocked?: () => void;
   onOfflineMode?: (message: string) => void;
 }) {
+  const { theme } = useTripTheme();
   const [unlocked, setUnlocked] = useState(() => hasDeviceTrust());
   const [checking, setChecking] = useState(() => false);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const passwordInputRef = useRef<HTMLInputElement>(null);
   const onBrokerSessionRef = useRef(onBrokerSession);
+  const routeStop = theme.id === 'japan_washi' ? 'TYO' : theme.id === 'taiwan_nightmarket' ? 'TPE' : theme.id === 'korea_editorial' ? 'SEL' : 'TRIP';
 
   useEffect(() => {
     onBrokerSessionRef.current = onBrokerSession;
@@ -137,6 +141,7 @@ export function AuthGate({
       setError(redactedError(submitError).includes('Unlock failed')
         ? '密碼唔正確，請再試一次。'
         : `解鎖失敗：${redactedError(submitError)}`);
+      window.requestAnimationFrame(() => passwordInputRef.current?.focus());
     } finally {
       setBusy(false);
     }
@@ -165,7 +170,7 @@ export function AuthGate({
         <div className="lock-ledger-map" aria-hidden="true">
           <span>HKG</span>
           <i />
-          <span>TYO</span>
+          <span>{routeStop}</span>
           <i />
           <span>Notion</span>
         </div>
@@ -182,6 +187,7 @@ export function AuthGate({
         <p className="muted">同一部手機成功一次之後，會用本機加密裝置信任換取短期 broker session；Notion token 唔會進入 browser。</p>
         <label>密碼
           <input
+            ref={passwordInputRef}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             onKeyDown={(event) => { if (event.key === 'Enter') void submit(); }}
@@ -189,9 +195,11 @@ export function AuthGate({
             type="password"
             autoComplete="current-password"
             autoFocus={shouldAutoFocusUnlockInput()}
+            aria-describedby={error ? 'auth-gate-error' : undefined}
+            aria-invalid={error ? true : undefined}
           />
         </label>
-        {error && <p className="lock-error">{error}</p>}
+        {error && <p className="lock-error" id="auth-gate-error" role="alert">{error}</p>}
         <button className="primary" type="button" disabled={busy || !password.trim()} onClick={submit}>
           <ShieldCheck size={18} /> {busy ? '檢查中' : '解鎖'}
         </button>

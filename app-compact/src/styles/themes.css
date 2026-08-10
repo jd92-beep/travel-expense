@@ -1,0 +1,576 @@
+/* One semantic theme layer. Legacy variables remain aliases in tripTheme.tsx. */
+:root,
+html[data-app-theme='japan_washi'] {
+  color-scheme: light;
+  --theme-canvas: #F5F0E8;
+  --theme-canvas-mid: #F0EBDF;
+  --theme-canvas-end: #E8E2D4;
+  --theme-surface: #FAF7F0;
+  --theme-card: #FFFDF7;
+  --theme-text: #2A2119;
+  --theme-muted: #7A7068;
+  --theme-border: rgba(139, 115, 85, .2);
+  --theme-focus: #1E4D6B;
+  --theme-accent: #C23B5E;
+  --theme-on-accent: #FFFFFF;
+  --theme-status-info: #1E4D6B;
+  --theme-status-success: #2D6E48;
+  --theme-status-warning: #7A5800;
+  --theme-status-danger: #A82C4C;
+  --theme-chart-1: #1E4D6B;
+  --theme-chart-2: #C23B5E;
+  --theme-chart-3: #D4A843;
+  --theme-chart-4: #2D6E48;
+  --theme-motion-duration: 18s;
+}
+
+html[data-app-theme='korea_editorial'] {
+  --theme-canvas: #F7F4F0;
+  --theme-canvas-mid: #EEF2F5;
+  --theme-canvas-end: #E7EBE8;
+  --theme-surface: #FBF9F6;
+  --theme-card: #FFFFFF;
+  --theme-text: #202329;
+  --theme-muted: #66707D;
+  --theme-border: rgba(82, 109, 174, .2);
+  --theme-focus: #526DAE;
+  --theme-accent: #D85B73;
+  --theme-on-accent: #111827;
+  --theme-status-info: #40578F;
+  --theme-status-success: #346D5A;
+  --theme-status-warning: #765900;
+  --theme-status-danger: #A5334F;
+  --theme-chart-1: #526DAE;
+  --theme-chart-2: #D85B73;
+  --theme-chart-3: #4C8F78;
+  --theme-chart-4: #C9A85D;
+  --theme-motion-duration: 24s;
+}
+
+html[data-app-theme='taiwan_nightmarket'] {
+  --theme-canvas: #111827;
+  --theme-canvas-mid: #172554;
+  --theme-canvas-end: #0F172A;
+  --theme-surface: #172033;
+  --theme-card: #202B3F;
+  --theme-text: #F8FAFC;
+  --theme-muted: #B8C3D3;
+  --theme-border: rgba(148, 163, 184, .32);
+  --theme-focus: #FBBF24;
+  --theme-accent: #FB7185;
+  --theme-on-accent: #111827;
+  --theme-status-info: #7DD3FC;
+  --theme-status-success: #86EFAC;
+  --theme-status-warning: #FDE68A;
+  --theme-status-danger: #FDA4AF;
+  --theme-chart-1: #38BDF8;
+  --theme-chart-2: #FB7185;
+  --theme-chart-3: #FBBF24;
+  --theme-chart-4: #4ADE80;
+  --theme-motion-duration: 28s;
+}
+
+html[data-app-theme='europe_rail'] {
+  --theme-canvas: #EEF1EC;
+  --theme-canvas-mid: #E5EAE8;
+  --theme-canvas-end: #DCE4E5;
+  --theme-surface: #F7F6EF;
+  --theme-card: #FFFDF8;
+  --theme-text: #25231F;
+  --theme-muted: #606963;
+  --theme-border: rgba(24, 73, 86, .22);
+  --theme-focus: #184956;
+  --theme-accent: #A8323A;
+  --theme-on-accent: #FFFFFF;
+  --theme-status-info: #184956;
+  --theme-status-success: #335C49;
+  --theme-status-warning: #6F5200;
+  --theme-status-danger: #912A31;
+  --theme-chart-1: #184956;
+  --theme-chart-2: #A8323A;
+  --theme-chart-3: #B89042;
+  --theme-chart-4: #426A57;
+  --theme-motion-duration: 0s;
+}
+
+html[data-app-theme='global_journal'] {
+  --theme-canvas: #F1F0E9;
+  --theme-canvas-mid: #E7EAE4;
+  --theme-canvas-end: #DCE5DE;
+  --theme-surface: #F9F8F1;
+  --theme-card: #FFFDF8;
+  --theme-text: #28251F;
+  --theme-muted: #656D67;
+  --theme-border: rgba(52, 92, 124, .2);
+  --theme-focus: #345C7C;
+  --theme-accent: #BF5048;
+  --theme-on-accent: #FFFFFF;
+  --theme-status-info: #345C7C;
+  --theme-status-success: #3F6A4B;
+  --theme-status-warning: #725600;
+  --theme-status-danger: #9F4038;
+  --theme-chart-1: #345C7C;
+  --theme-chart-2: #C4584E;
+  --theme-chart-3: #D1A54D;
+  --theme-chart-4: #517A5B;
+  --theme-motion-duration: 32s;
+}
+
+html[data-color-scheme='dark'] { color-scheme: dark; }
+
+body {
+  background:
+    var(--theme-art, none),
+    linear-gradient(180deg, var(--theme-canvas), var(--theme-canvas-mid) 42%, var(--theme-canvas-end));
+  color: var(--theme-text);
+}
+
+html[data-app-theme='japan_washi'] {
+  --theme-art: radial-gradient(ellipse at 84% 8%, color-mix(in srgb, var(--theme-chart-2) 13%, transparent), transparent 38%), radial-gradient(ellipse at 12% 18%, color-mix(in srgb, var(--theme-chart-1) 8%, transparent), transparent 42%);
+}
+
+html[data-app-theme='korea_editorial'] {
+  --theme-art: linear-gradient(118deg, transparent 0 44%, color-mix(in srgb, var(--theme-chart-1) 7%, transparent) 44.1% 44.4%, transparent 44.5%), radial-gradient(ellipse at 88% 14%, color-mix(in srgb, var(--theme-chart-2) 12%, transparent), transparent 35%);
+}
+
+html[data-app-theme='taiwan_nightmarket'] {
+  --theme-art: radial-gradient(circle at 82% 12%, color-mix(in srgb, var(--theme-chart-2) 26%, transparent), transparent 22%), radial-gradient(circle at 12% 22%, color-mix(in srgb, var(--theme-chart-1) 22%, transparent), transparent 28%), linear-gradient(90deg, transparent 0 12%, color-mix(in srgb, var(--theme-chart-3) 9%, transparent) 12.1% 12.35%, transparent 12.45% 100%);
+}
+
+html[data-app-theme='europe_rail'] {
+  --theme-art: linear-gradient(90deg, transparent 0 8%, color-mix(in srgb, var(--theme-chart-1) 12%, transparent) 8.1% 8.3%, transparent 8.4% 100%), linear-gradient(180deg, transparent 0 17%, color-mix(in srgb, var(--theme-chart-2) 10%, transparent) 17.1% 17.25%, transparent 17.35% 100%);
+}
+
+html[data-app-theme='global_journal'] {
+  --theme-art: radial-gradient(ellipse at 18% 20%, transparent 0 24%, color-mix(in srgb, var(--theme-chart-1) 10%, transparent) 24.2% 24.7%, transparent 25%), radial-gradient(ellipse at 82% 80%, transparent 0 20%, color-mix(in srgb, var(--theme-chart-4) 11%, transparent) 20.2% 20.7%, transparent 21%);
+}
+
+html[data-app-theme='taiwan_nightmarket'] body::before,
+html[data-app-theme='taiwan_nightmarket'] body::after {
+  opacity: .12;
+}
+
+html:not([data-app-theme='japan_washi']) .japanese-sun-decor,
+html:not([data-app-theme='japan_washi']) .japanese-sakura-decor,
+html:not([data-app-theme='japan_washi']) .washi-nippon-stamp,
+html:not([data-app-theme='japan_washi']) .stats-command-copy::before { display: none !important; content: none; }
+
+html:not([data-app-theme='japan_washi']) .japanese-washi-bg::before,
+html:not([data-app-theme='japan_washi']) .japanese-washi-bg::after {
+  display: none !important;
+  content: none !important;
+  background: none !important;
+}
+
+html[data-app-theme][data-color-scheme] .app-shell,
+html[data-app-theme][data-color-scheme] .lock-screen {
+  color: var(--theme-text);
+  background-color: var(--theme-canvas) !important;
+  background-image:
+    var(--theme-art, none),
+    linear-gradient(180deg, var(--theme-canvas), var(--theme-canvas-mid) 48%, var(--theme-canvas-end)) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+}
+
+html[data-app-theme][data-color-scheme] .app-shell::before {
+  background: var(--theme-art, none) !important;
+}
+
+html[data-app-theme][data-color-scheme] .japanese-washi-bg {
+  background: transparent !important;
+}
+
+html[data-app-theme][data-color-scheme] .glass-card,
+html[data-app-theme][data-color-scheme] .card,
+html[data-app-theme][data-color-scheme] .accordion-card,
+html[data-app-theme][data-color-scheme] .metric-card,
+html[data-app-theme][data-color-scheme] .lock-panel,
+html[data-app-theme][data-color-scheme] .modal,
+html[data-app-theme][data-color-scheme] .modal-sheet,
+html[data-app-theme][data-color-scheme] .trip-confirm-modal,
+html[data-app-theme][data-color-scheme] .receipt-delete-confirm,
+html[data-app-theme][data-color-scheme] .action-sheet,
+html[data-app-theme][data-color-scheme] .receipt-row,
+html[data-app-theme][data-color-scheme] .person-card,
+html[data-app-theme][data-color-scheme] .toast,
+html[data-app-theme][data-color-scheme] [data-sonner-toaster] [data-sonner-toast] {
+  background: var(--theme-card) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme][data-color-scheme] .topbar,
+html[data-app-theme][data-color-scheme] .compact-mobile-header,
+html[data-app-theme][data-color-scheme] .app-floating-dock-mobile,
+html[data-app-theme][data-color-scheme] .app-floating-dock-desktop,
+html[data-app-theme][data-color-scheme] .fixed-tab-bar > nav {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme][data-color-scheme] .app-floating-dock-mobile button,
+html[data-app-theme][data-color-scheme] .app-floating-dock-desktop button {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme][data-color-scheme] .compact-mobile-title-art,
+html[data-app-theme][data-color-scheme] .compact-mobile-heading h1,
+html[data-app-theme][data-color-scheme] .settings-command h2 {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme][data-color-scheme] .compact-mobile-heading p,
+html[data-app-theme][data-color-scheme] .settings-preview-controls button small {
+  color: var(--theme-muted) !important;
+}
+
+html[data-app-theme][data-color-scheme] .settings-preview-controls button,
+html[data-app-theme][data-color-scheme] .compact-mobile-status,
+html[data-app-theme][data-color-scheme] .pwa-chip {
+  background: var(--theme-card) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme][data-color-scheme] .pwa-chip.ok { color: var(--theme-status-success) !important; }
+html[data-app-theme][data-color-scheme] .pwa-chip.warning { color: var(--theme-status-warning) !important; }
+
+html[data-app-theme][data-color-scheme] .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan),
+html[data-app-theme][data-color-scheme] .app-floating-dock-desktop [aria-current='page']:not(.dock-item-scan) {
+  color: var(--theme-accent) !important;
+}
+
+html[data-app-theme][data-color-scheme] .app-floating-dock-mobile .dock-item-scan,
+html[data-app-theme][data-color-scheme] .app-floating-dock-desktop .dock-item-scan {
+  background: var(--theme-accent) !important;
+  border-color: var(--theme-accent) !important;
+  color: var(--theme-on-accent) !important;
+}
+
+html[data-app-theme][data-color-scheme] input,
+html[data-app-theme][data-color-scheme] select,
+html[data-app-theme][data-color-scheme] textarea {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme][data-color-scheme] .primary {
+  background: var(--theme-accent) !important;
+  border-color: var(--theme-accent) !important;
+  color: var(--theme-on-accent) !important;
+  transition-property: transform, box-shadow, filter, opacity !important;
+}
+
+html[data-app-theme][data-color-scheme] .secondary,
+html[data-app-theme][data-color-scheme] .button-like,
+html[data-app-theme][data-color-scheme] .action-list a,
+html[data-app-theme][data-color-scheme] .icon-btn {
+  background: var(--theme-card) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme][data-color-scheme] .status-pill,
+html[data-app-theme][data-color-scheme] .sync-status-indicator {
+  background: var(--theme-card) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme][data-color-scheme] .status-pill.info,
+html[data-app-theme][data-color-scheme] .toast.info,
+html[data-app-theme][data-color-scheme] .top-notice.update {
+  background: color-mix(in srgb, var(--theme-status-info) 10%, var(--theme-card)) !important;
+  border-color: color-mix(in srgb, var(--theme-status-info) 42%, var(--theme-border)) !important;
+  color: var(--theme-status-info) !important;
+}
+
+html[data-app-theme][data-color-scheme] .status-pill.ok,
+html[data-app-theme][data-color-scheme] .toast.success {
+  background: color-mix(in srgb, var(--theme-status-success) 10%, var(--theme-card)) !important;
+  border-color: color-mix(in srgb, var(--theme-status-success) 42%, var(--theme-border)) !important;
+  color: var(--theme-status-success) !important;
+}
+
+html[data-app-theme][data-color-scheme] .status-pill.warning,
+html[data-app-theme][data-color-scheme] .toast.warning,
+html[data-app-theme][data-color-scheme] .top-notice.offline {
+  background: color-mix(in srgb, var(--theme-status-warning) 10%, var(--theme-card)) !important;
+  border-color: color-mix(in srgb, var(--theme-status-warning) 42%, var(--theme-border)) !important;
+  color: var(--theme-status-warning) !important;
+}
+
+html[data-app-theme][data-color-scheme] .status-pill.danger,
+html[data-app-theme][data-color-scheme] .toast.danger,
+html[data-app-theme][data-color-scheme] .lock-error {
+  background: color-mix(in srgb, var(--theme-status-danger) 10%, var(--theme-card)) !important;
+  border-color: color-mix(in srgb, var(--theme-status-danger) 42%, var(--theme-border)) !important;
+  color: var(--theme-status-danger) !important;
+}
+
+html[data-app-theme][data-color-scheme] .lock-ledger-map { color: var(--theme-muted); }
+html[data-app-theme][data-color-scheme] .lock-icon {
+  background: var(--theme-surface);
+  color: var(--theme-focus);
+}
+html[data-app-theme][data-color-scheme] .lock-proof-strip span {
+  background: var(--theme-surface);
+  border-color: var(--theme-border);
+  color: var(--theme-text);
+}
+
+html[data-app-theme] :focus-visible { outline-color: var(--theme-focus) !important; }
+html[data-app-theme] .chart-legend-dot:nth-child(4n + 1) { background: var(--theme-chart-1); }
+html[data-app-theme] .chart-legend-dot:nth-child(4n + 2) { background: var(--theme-chart-2); }
+html[data-app-theme] .chart-legend-dot:nth-child(4n + 3) { background: var(--theme-chart-3); }
+html[data-app-theme] .chart-legend-dot:nth-child(4n) { background: var(--theme-chart-4); }
+
+html[data-app-theme] .canva-lock-panel,
+html[data-app-theme] .compact-login-panel,
+html[data-app-theme] .compact-login-tabs,
+html[data-app-theme] .compact-login-primary,
+html[data-app-theme] .compact-login-google {
+  --login-accent: var(--theme-accent);
+  --login-accent-strong: var(--theme-focus);
+  --login-ink: var(--theme-text);
+  --login-muted: var(--theme-muted);
+  --login-surface: var(--theme-surface);
+  --login-line: var(--theme-border);
+}
+
+html[data-app-theme] .canva-lock-panel,
+html[data-app-theme] .compact-login-panel { background: var(--theme-card) !important; }
+html[data-app-theme] .compact-login-brand-mark {
+  background: var(--theme-accent) !important;
+  color: var(--theme-on-accent) !important;
+}
+html[data-app-theme] .compact-login-primary {
+  background: var(--theme-accent) !important;
+  border-color: var(--theme-accent) !important;
+  color: var(--theme-on-accent) !important;
+}
+html[data-app-theme] .compact-login-divider,
+html[data-app-theme] .compact-login-privacy { color: var(--theme-muted) !important; }
+html[data-app-theme] .compact-login-divider::before,
+html[data-app-theme] .compact-login-divider::after { background: var(--theme-border) !important; }
+html[data-app-theme] .compact-login-message--ok { color: var(--theme-status-success) !important; }
+html[data-app-theme] .compact-login-message.lock-error { color: var(--theme-status-danger) !important; }
+html[data-app-theme][data-color-scheme] input::placeholder,
+html[data-app-theme][data-color-scheme] textarea::placeholder {
+  color: var(--theme-muted) !important;
+  opacity: 1;
+}
+html[data-app-theme='taiwan_nightmarket'] .compact-login-visual { filter: saturate(.75) brightness(.62); }
+
+html[data-app-theme='taiwan_nightmarket'] .glass-card::before,
+html[data-app-theme='taiwan_nightmarket'] .glass-card::after,
+html[data-app-theme='taiwan_nightmarket'] .card::before,
+html[data-app-theme='taiwan_nightmarket'] .card::after,
+html[data-app-theme='taiwan_nightmarket'] .accordion-card::before,
+html[data-app-theme='taiwan_nightmarket'] .compact-mobile-header::before,
+html[data-app-theme='taiwan_nightmarket'] .compact-mobile-header::after,
+html[data-app-theme='taiwan_nightmarket'] .glass-card > .opacity-70 {
+  display: none !important;
+  content: none !important;
+  background: none !important;
+}
+
+.theme-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.theme-option {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  color: var(--theme-text);
+  background: color-mix(in srgb, var(--theme-card) 88%, transparent);
+  border: 1px solid var(--theme-border);
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.theme-option:has(input:checked) {
+  border-color: var(--theme-focus);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--theme-focus) 18%, transparent);
+}
+
+.theme-option:focus-within { outline: 3px solid color-mix(in srgb, var(--theme-focus) 40%, transparent); outline-offset: 2px; }
+.theme-option input { inline-size: 18px; block-size: 18px; accent-color: var(--theme-accent); }
+.theme-option span { font-weight: 700; font-size: .84rem; line-height: 1.2; }
+
+@media (max-width: 560px) { .theme-selector { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { body::after { animation: none !important; } }
+
+/* Taiwan is the only dark catalog theme; replace late light-preview ink at its real surfaces. */
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-budget-head h2,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-today-head h3 {
+  background: none !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-ring-copy strong,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-budget-row strong,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-today-grid strong {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-ring-copy span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-budget-row span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-budget-tip,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-today-head > span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-today-head small,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-today-grid span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-today-grid small {
+  color: var(--theme-muted) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-budget-row.is-used span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-budget-row.is-used strong,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-today-grid > div:first-child strong {
+  color: var(--theme-status-danger) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-budget-row.is-left strong,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-dashboard-today-grid > div:nth-child(3) strong {
+  color: var(--theme-status-success) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-filter-deck .search-field,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-filter-button,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-chip {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  background-image: none !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-filter-deck .search-field svg,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-filter-button,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-chip:not(.active),
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-date-title h2,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-ledger-main strong,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-ledger-amount strong,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-day-subtotal {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-filter-deck input::placeholder,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-date-total,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-ledger-main small,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-ledger-amount small,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-day-subtotal strong,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-row-chevron,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-photo-slot {
+  color: var(--theme-muted) !important;
+  opacity: 1;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .history-date-title .pill {
+  background: var(--theme-surface) !important;
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-source-strip span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .weather-location-meta span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-facts span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-hourly-chip {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  background-image: none !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-temp strong,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-temp span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-source-strip span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .weather-location-meta span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-hourly-chip {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-temp small,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-facts span {
+  color: var(--theme-muted) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-place,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-facts b {
+  color: var(--theme-status-info) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-facts .hot {
+  color: var(--theme-status-danger) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-weather-source-strip .weather-fallback-chip,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .weather-location-meta .weather-fallback-chip {
+  color: var(--theme-status-warning) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .weather-command-row::before {
+  color: var(--theme-muted) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-budget-side,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-budget-heading > span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-budget-total strong,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-budget-row strong,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .stats-panel .bar-row span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .top-expenses-panel .rank-row span {
+  color: var(--theme-text) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-budget-total span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-budget-row span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-budget-stack small,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .stats-tab.stats-cockpit .preview-stats-budget .spending-compass-slice,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .stats-panel .bar-row b,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .stats-controls p,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .top-expenses-panel .rank-store-translation {
+  color: var(--theme-muted) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-budget-row.is-used span,
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .preview-budget-row.is-used strong {
+  color: var(--theme-status-danger) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .top-expenses-panel .rank-row strong {
+  color: var(--theme-status-info) !important;
+}
+
+html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .stats-switch {
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+@media (max-width: 767px) {
+  html[data-app-theme] .app-floating-dock-mobile {
+    grid-template-columns: repeat(auto-fit, minmax(3em, 1fr)) !important;
+    height: auto !important;
+  }
+
+  html[data-app-theme] .app-floating-dock-mobile button {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  html[data-app-theme] .app-floating-dock-mobile .dock-item-scan {
+    margin-top: clamp(-42px, calc(3em - 90px), 0px) !important;
+  }
+
+  html[data-app-theme] .app-shell {
+    padding-bottom: max(calc(76px + env(safe-area-inset-bottom)), calc(6em + env(safe-area-inset-bottom))) !important;
+  }
+}

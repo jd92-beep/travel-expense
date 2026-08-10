@@ -1,15 +1,16 @@
-import type { AppState, ItineraryDay } from './types';
+import { TRIP_THEME_KEYS } from '../domain/trip/context';
+import type { AppState, ItineraryDay, ThemePreference, TripThemeKey } from './types';
 
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.2.5';
+export const APP_VERSION = '0.2.6';
 
 export const STORAGE_KEY = 'boss-japan-tracker';
 export const DEFAULT_NOTION_DB = '3438d94d5f7c81878221fcda6d65d39d';
 export const DEFAULT_CREDENTIAL_BROKER_URL = 'https://travel-expense-credential-broker.ftjdfr.workers.dev';
 export const ALLOWED_CREDENTIAL_BROKER_URLS = [DEFAULT_CREDENTIAL_BROKER_URL] as const;
-export const APP_SCHEMA_VERSION = 3;
+export const APP_SCHEMA_VERSION = 4;
 export const DEFAULT_GOOGLE_BACKUP_MODEL = 'gemma-4-31b';
 export const DEFAULT_SCAN_VOICE_MODEL_ID = `google/${DEFAULT_GOOGLE_BACKUP_MODEL}`;
 export const DEFAULT_KIMI_PRIMARY_MODEL_ID = 'kimi/kimi-code';
@@ -38,6 +39,14 @@ export const AI_MODELS = [
   { id: 'volcano/minimax-m2.7', name: 'Volcano (minimax-m2.7)' },
   { id: 'volcano/doubao-seed-2.0-mini', name: 'Volcano (doubao-seed-2.0-mini)' },
 ] as const;
+
+export function parseThemePreference(value: unknown): ThemePreference | undefined {
+  return value === 'auto' || TRIP_THEME_KEYS.includes(value as TripThemeKey) ? value as ThemePreference : undefined;
+}
+
+export function normalizeThemePreference(value: unknown): ThemePreference {
+  return parseThemePreference(value) || 'auto';
+}
 
 export function normalizeAiModelSettings<T extends Partial<Pick<AppState, 'scanModel' | 'voiceModel' | 'emailModel' | 'tripUpdateModel' | 'googleBackupModel'>>>(settings: T): T {
   const next = { ...settings };
@@ -138,6 +147,7 @@ export const DEFAULT_STATE: AppState = {
   emailModel: DEFAULT_TRIP_UPDATE_MODEL_ID,
   tripUpdateModel: DEFAULT_TRIP_UPDATE_MODEL_ID,
   googleBackupModel: DEFAULT_GOOGLE_BACKUP_MODEL,
+  themePreference: 'auto',
   persons: [
     { id: 'p_boss', name: 'User 1', emoji: '👤', color: '#CC2929' },
   ],

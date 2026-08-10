@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-08-10 HKT
-- **Focus**: Session 85 closed the remaining Compact Vercel cold-open banner gap by recognising Supabase's `network is unavailable` wording as transient journal evidence.
+- **Focus**: Session 86 shipped account-wide curated themes for Compact and Android, with a React transport shim, semantic contrast contracts and API 36 native QA.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.23`; Android `0.21.2` (versionCode 2102; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
+- **App version**: Compact `0.17.0`; Android `0.22.0` (versionCode 2200; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.6`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.23`; the Android branch is `0.21.2`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.17.0`; the Android branch is `0.22.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -115,8 +115,56 @@ you closed with your session number.
    exposed the remaining classifier gap. Version conflicts, permission/data failures and other
    genuine terminal evidence remain visible. The Vercel-root regression seeds both scoped stores
    and asserts that neither the update notice nor either sync-warning surface appears.
+23. 🟢 **Compact/Android account-wide themes completed in Session 86** — five curated worlds plus
+   `自動（依旅程）` now cover first paint, auth/loading gates, the full Compact shell and Android
+   system bars. Taiwan is the only dark world. Preference transport reuses existing local,
+   IndexedDB, backup, Supabase and Notion settings with no database migration; React is a
+   transport-only compatibility shim.
+24. 🟡 **One Compact Notion diagnostic smoke is stale** — the production settings/meta pull paths
+   pass, but `Settings mapping diagnostics stay read-only and surface mixed-schema issues` still
+   expects the removed `Notion Sync` / `檢查 Mapping` controls. Do not delete or weaken its schema
+   assertions; either restore an approved diagnostic surface or realign the navigation contract.
 
 ## What Was Done
+
+### Session 86 (Codex — Compact/Android global themes, Compact `0.17.0`, Android `0.22.0`)
+
+1. **One preference contract, no second theme state machine.** Added schema-v4
+   `ThemePreference = 'auto' | TripThemeKey`, with invalid local values normalised to `auto` and
+   missing/invalid remote values preserving the local preference. Auto follows active-trip
+   intelligence; manual selection remains account-wide. The field round-trips through scoped
+   localStorage, IndexedDB, backup, Supabase `profiles.app_settings` and Notion
+   `SourceID=__meta_settings__` using the existing settings timestamp. React `0.2.6` only preserves
+   the field in transport and renders no selector or manual theme.
+2. **Five semantic visual worlds.** Compact `0.17.0` adds `自動（依旅程）`, Japan Washi, Korea
+   Editorial, Taiwan Night Market, Europe Rail and Global Journal radio cards at the top of
+   Settings. A shared semantic layer covers first paint, login/loading/error gates, surfaces,
+   forms, charts, focus and status roles; only Taiwan sets dark scheme. Japan art is isolated to
+   Japan, reduced motion is respected, and device hint `boss-japan-tracker:theme:v1` prevents a
+   cold-open flash while remaining until explicit device-data clear.
+3. **Android native seam and accessibility completed.** Android `0.22.0` / versionCode `2200`
+   uses Capacitor 8 `SystemBars` (light icons for Taiwan, dark icons for light worlds), removes the
+   old `@capacitor/status-bar` runtime, keeps a neutral launch splash and extends the themed WebView
+   edge to edge. API 36 QA passed all seven tabs plus native Camera/Photo Picker and App Links.
+   Taiwan's rendered seven-tab audit checked 311 visible text samples with zero below 4.5:1; a real
+   Android `font_scale=2.0` rerun confirmed the dock wraps, all seven controls stay visible and
+   adjacent labels retain at least 4px separation.
+4. **Verification evidence.** Compact passed `typecheck`, build, `security:scan`, preference unit,
+   theme `6/6`, session `4/4`, Settings `10/10` plus one intentional skip, a11y `1/1`, mobile
+   layout `1/1`, sync regression `11/11`, configured-auth `7/7` plus one skip and seven production
+   Notion flows. React passed preference unit, typecheck, build, security scan, full Notion `8/8`
+   and production Supabase missing/valid/invalid LWW cases. Android passed typecheck, build,
+   security scan, theme `9/9`, session `4/4`, Settings `12/12`, a11y `1/1`, sync `10/10`, mobile
+   `1/1`, configured-auth `7/7` plus one skip and seven production Notion flows. Five Compact
+   contact sheets and Android light/dark, cold-launch, pre-login, gesture/three-button,
+   portrait/landscape, IME and 200% screenshots were inspected.
+5. **Artifact and exclusions.** Debug APK only:
+   `app-compact/android/app/build/outputs/apk/debug/app-debug.apk` (11,521,369 bytes; SHA-256
+   `48f60003f980b11b449a4a35d04ed78e37ad959e2b2776842a4d1f1c67675133`). Manifest reports package
+   `com.ftjdfr.travelexpensecompact`, versionCode `2200`, versionName `0.22.0`, minSdk 24 and
+   targetSdk 36. No release signing/publishing, user theme builder, runtime AI generator, schema,
+   RLS, migration, credential or live-user-data action occurred. Open Item 24 records the one
+   retained diagnostic-only Notion smoke gap; its assertions were not weakened.
 
 ### Session 85 (Codex — Compact unavailable-network cold recovery, `0.16.23`)
 

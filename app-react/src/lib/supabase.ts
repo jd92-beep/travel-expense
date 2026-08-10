@@ -3,7 +3,7 @@ import { createClient, type Session, type SupabaseClient, type User } from '@sup
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, stampReceiptForTrip } from '../domain/trip/normalize';
 import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
 import { tripIntelligenceColumns } from '../domain/trip/context';
-import { DEFAULT_NOTION_DB, ITINERARY, normalizeAiModelSettings } from './constants';
+import { DEFAULT_NOTION_DB, ITINERARY, normalizeAiModelSettings, parseThemePreference } from './constants';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, ReceiptPayer, ReceiptSplit, ReceiptTombstone, SplitType, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
 
 const VALID_CATEGORIES = new Set(['flight', 'transport', 'food', 'shopping', 'lodging', 'ticket', 'localtour', 'medicine', 'other']);
@@ -316,7 +316,7 @@ function optionalRecord(value: unknown): Record<string, unknown> | undefined {
   return Object.keys(record).length ? record : undefined;
 }
 
-function buildAppSettings(state: AppState) {
+export function buildAppSettings(state: AppState) {
   return {
     budget: state.budget,
     rate: state.rate,
@@ -334,6 +334,7 @@ function buildAppSettings(state: AppState) {
     emailModel: state.emailModel,
     tripUpdateModel: state.tripUpdateModel,
     googleBackupModel: state.googleBackupModel,
+    themePreference: state.themePreference,
     credentialBrokerUrl: state.credentialBrokerUrl,
     personalNotionConnected: state.personalNotionConnected === true,
     notionDeletedSourceIds: state.notionDeletedSourceIds || [],
@@ -341,7 +342,7 @@ function buildAppSettings(state: AppState) {
   };
 }
 
-function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState> | undefined {
+export function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState> | undefined {
   const payload = jsonObject(row?.app_settings);
   if (!Object.keys(payload).length) return undefined;
   return normalizeAiModelSettings({
@@ -361,6 +362,7 @@ function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState> | und
     emailModel: typeof payload.emailModel === 'string' ? payload.emailModel : undefined,
     tripUpdateModel: typeof payload.tripUpdateModel === 'string' ? payload.tripUpdateModel : undefined,
     googleBackupModel: typeof payload.googleBackupModel === 'string' ? payload.googleBackupModel : undefined,
+    themePreference: parseThemePreference(payload.themePreference),
     credentialBrokerUrl: typeof payload.credentialBrokerUrl === 'string' ? payload.credentialBrokerUrl : undefined,
     personalNotionConnected: typeof payload.personalNotionConnected === 'boolean' ? payload.personalNotionConnected : undefined,
     notionDeletedSourceIds: Array.isArray(payload.notionDeletedSourceIds) ? payload.notionDeletedSourceIds.filter((item): item is string => typeof item === 'string') : undefined,

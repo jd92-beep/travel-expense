@@ -1,4 +1,5 @@
 import { useEffectsTier } from '../lib/performance';
+import { useTripTheme } from '../theme/tripTheme';
 
 /**
  * Ambient blue glow backdrop ported from the 21st.dev "Turing landing"
@@ -16,14 +17,15 @@ import { useEffectsTier } from '../lib/performance';
  */
 export function TuringBackdrop() {
   const tier = useEffectsTier();
+  const { theme } = useTripTheme();
 
   // Full tier only. On phones (balanced/lite) the layer sat behind the opaque washi
   // .app-shell and was invisible — yet its two giant blurred blobs still held GPU
   // layers and blended on every scroll frame. Zero visual value, real jank cost.
-  if (tier !== 'full') return null;
+  if (tier !== 'full' || !theme.motion.ambient) return null;
 
   return (
-    <div className="turing-backdrop turing-backdrop--drift" aria-hidden="true">
+    <div className="turing-backdrop turing-backdrop--drift" data-art-motif={theme.art} aria-hidden="true">
       <div className="turing-backdrop__overlay turing-backdrop__overlay--1" />
       <div className="turing-backdrop__overlay turing-backdrop__overlay--2" />
       <div className="turing-backdrop__shimmer" />

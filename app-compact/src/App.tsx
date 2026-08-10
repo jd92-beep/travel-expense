@@ -231,6 +231,7 @@ export function App() {
     await clearIndexedState(scope);
     clearCredentialSession();
     await clearDeviceTrust();
+    try { localStorage.removeItem('boss-japan-tracker:theme:v1'); } catch { /* explicit device clear stays best-effort */ }
   };
 
   useEffect(() => {
@@ -486,7 +487,7 @@ export function App() {
     : { rotate: { type: 'spring' as const, stiffness: 420, damping: 40, mass: 0.9 }, opacity: { duration: 0.12 } };
 
   const appContent = (
-    <TripThemeProvider state={state}>
+    <>
       <HyperframeBackground />
       <TuringBackdrop />
       {showGuide && (
@@ -662,7 +663,7 @@ export function App() {
       )}
         </ErrorBoundary>
       </Shell>
-    </TripThemeProvider>
+    </>
   );
 
   if (supabaseAuth.configured) {
@@ -671,14 +672,14 @@ export function App() {
     // the app render with a pre-merge (possibly stale/incomplete) snapshot for one paint. isStorageReady
     // additionally waits for indexedReadyScope, matching how showGuide already gates below.
     if (hasSupabaseSession(supabaseAuth.session) && !isStorageReady) {
-      return <LoadingState label="載入帳號資料" />;
+      return <TripThemeProvider state={state}><LoadingState label="載入帳號資料" /></TripThemeProvider>;
     }
-    return <SupabaseGate auth={supabaseAuth}>{appContent}</SupabaseGate>;
+    return <TripThemeProvider state={state}><SupabaseGate auth={supabaseAuth}>{appContent}</SupabaseGate></TripThemeProvider>;
   }
 
 
   return (
-    <AuthGate
+    <TripThemeProvider state={state}><AuthGate
       credentialBrokerUrl={state.credentialBrokerUrl}
       onBrokerSession={(session) => updateState(session)}
       onUnlocked={() => {
@@ -687,6 +688,6 @@ export function App() {
       onOfflineMode={(message) => updateState({ syncError: message })}
     >
       {appContent}
-    </AuthGate>
+    </AuthGate></TripThemeProvider>
   );
 }

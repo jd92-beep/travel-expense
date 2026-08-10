@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-react-fresh",
   "private": true,
-  "version": "0.2.5",
+  "version": "0.2.6",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -14,6 +14,7 @@
     "preview": "vite preview --host 0.0.0.0 --port 4174",
     "typecheck": "tsc --noEmit",
     "test:itinerary-merge": "node scripts/run-itinerary-sync-merge-test.mjs",
+    "test:theme-preference": "node --experimental-strip-types scripts/theme-preference.test.ts",
     "parity:tabs": "node ../scripts/tab-parity.mjs",
     "security:scan": "node ../scripts/security-scan.mjs",
     "db:policy:scan": "node ../scripts/verify-supabase-migrations.mjs",

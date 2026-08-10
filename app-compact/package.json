@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-compact",
   "private": true,
-  "version": "0.16.23",
+  "version": "0.17.0",
   "type": "module",
   "engines": {
     "node": "22.x"
@@ -18,6 +18,7 @@
     "test:shared-trip-outbox": "node --experimental-strip-types scripts/shared-trip-notion-outbox.test.ts",
     "test:receipt-tombstone": "node --experimental-strip-types scripts/receipt-tombstone.test.ts",
     "test:itinerary-merge": "node scripts/run-itinerary-sync-merge-test.mjs",
+    "test:theme-preference": "node --experimental-strip-types scripts/theme-preference.test.ts",
     "parity:tabs": "node ../scripts/tab-parity.mjs",
     "security:scan": "node ../scripts/security-scan.mjs",
     "db:policy:scan": "node ../scripts/verify-supabase-migrations.mjs",

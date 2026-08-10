@@ -44,7 +44,7 @@ import {
   notionFetch,
 } from '../lib/notion';
 import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
-import type { AppState, ItineraryDay, ItinerarySpot, Person, Receipt, SyncEngineState, SyncQueueItem, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
+import type { AppState, ItineraryDay, ItinerarySpot, Person, Receipt, SyncEngineState, SyncQueueItem, ThemePreference, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
 import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
 import { createSupabaseTripInvite, inviteLinkForToken, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
 import { clearDeviceTrust } from '../security/deviceTrust';
@@ -54,6 +54,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { GradientButton } from '../components/ui/gradient-button';
 import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
+import { THEME_OPTIONS, useTripTheme } from '../theme/tripTheme';
 
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
 const MAX_SAFE_AMOUNT = 1_000_000_000;
@@ -958,8 +959,10 @@ export function Settings({
   onClearDeviceData?: () => Promise<void> | void;
 }) {
   const supabaseAuth = useSupabaseAuth();
+  const { theme } = useTripTheme();
   const persons = getPersons(state);
   const currentTrip = activeTrip(state);
+  const themePreference: ThemePreference = state.themePreference;
   const trips = state.trips?.length ? state.trips : [currentTrip];
   const currenciesForTrip = (trip: Partial<TripProfile> | undefined) => {
     const tripCurrencies = Array.isArray(trip?.currencies) && trip.currencies.length ? trip.currencies : [];
@@ -2315,6 +2318,28 @@ export function Settings({
         </div>
       </GlassCard>
 
+      <GlassCard className="settings-theme-card">
+        <section aria-labelledby="settings-theme-title">
+          <h2 id="settings-theme-title">外觀主題</h2>
+          <p className="muted">揀手動主題會套用到所有旅程；揀自動就跟返而家旅程嘅目的地。毋須另存。</p>
+          <div className="theme-selector" role="radiogroup" aria-label="App theme">
+            {THEME_OPTIONS.map((option) => (
+              <label className="theme-option" key={option.value}>
+                <input
+                  type="radio"
+                  name="app-theme"
+                  value={option.value}
+                  checked={themePreference === option.value}
+                  onChange={() => updateState({ themePreference: option.value })}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+          <p className="muted" aria-live="polite">目前：{THEME_OPTIONS.find((option) => option.value === themePreference)?.label || '自動（依旅程）'}</p>
+        </section>
+      </GlassCard>
+
       {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-doctor--${tripDoctor.tone}`}>
         <section role="region" aria-label="Compact Trip Doctor">
           <div className="settings-trip-doctor-head">
@@ -2561,7 +2586,7 @@ export function Settings({
         </AccordionCard>
       )}
 
-      <AccordionCard id="settings-trip" eyebrow="Trip Manager" title="旅程管理器 🏯🌸" meta={<span className="pill">v{managedTrip.version}</span>}>
+      <AccordionCard id="settings-trip" eyebrow="Trip Manager" title={theme.id === 'japan_washi' ? '旅程管理器 🏯🌸' : '旅程管理器'} meta={<span className="pill">v{managedTrip.version}</span>}>
         <div className="settings-trip-manager">
         <div className="settings-trip-panel settings-trip-panel--active">
           <div className="settings-trip-panel-head">

@@ -8,6 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
 const defaultBaseUrl = 'http://127.0.0.1:8903/travel-expense/compact/';
 const baseUrl = process.env.COMPACT_CONTACT_SHEET_BASE_URL || defaultBaseUrl;
+const themePreference = process.env.COMPACT_CONTACT_SHEET_THEME || 'auto';
 const viewport = { width: 390, height: 844 };
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const outDir = process.env.COMPACT_CONTACT_SHEET_OUT || path.join('/tmp', `compact-contact-sheet-${stamp}`);
@@ -92,7 +93,7 @@ function weatherPayload() {
   };
 }
 
-function seedScript() {
+function seedScript(themePreference) {
   const now = Date.now();
   const userId = '11111111-1111-4111-8111-111111111111';
   localStorage.clear();
@@ -122,7 +123,8 @@ function seedScript() {
   const state = {
     lastTab: 'dashboard',
     autoSync: false,
-    schemaVersion: 3,
+    schemaVersion: 4,
+    themePreference,
     budget: 50_000,
     tripDateRange: { start: '2026-05-08', end: '2026-05-13' },
     trips: [{
@@ -265,7 +267,7 @@ async function captureTabs() {
     await fs.rm(outDir, { recursive: true, force: true });
     await fs.mkdir(outDir, { recursive: true });
     await stubExternalRequests(page);
-    await page.addInitScript(seedScript);
+    await page.addInitScript(seedScript, themePreference);
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
     await page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]').waitFor({ state: 'visible', timeout: 15000 });
 
@@ -281,7 +283,8 @@ async function captureTabs() {
         await page.getByText(tab.expected).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 7000 });
       }
       await page.locator(tab.selector).first().waitFor({ state: 'visible', timeout: 9000 });
-      await page.waitForTimeout(tab.id === 'stats' ? 900 : 300);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(1000);
 
       const file = path.join(outDir, `${tab.id}.png`);
       await page.screenshot({ path: file, fullPage: false });
@@ -297,6 +300,7 @@ async function captureTabs() {
         const timelineMain = document.querySelector('.timeline-main')?.getBoundingClientRect();
         return {
           tab: location.hash.replace('#', '') || 'dashboard',
+          appTheme: document.documentElement.dataset.appTheme,
           viewport: window.innerWidth,
           docScrollWidth: document.documentElement.scrollWidth,
           bodyScrollWidth: document.body.scrollWidth,
@@ -324,6 +328,9 @@ body{margin:0;background:#f4ecdf;font-family:-apple-system,BlinkMacSystemFont,'S
 
     const failures = [];
     for (const capture of captures) {
+      if (themePreference !== 'auto' && capture.appTheme !== themePreference) {
+        failures.push(`${capture.id}: expected theme ${themePreference}, received ${capture.appTheme || 'none'}`);
+      }
       if (capture.docScrollWidth > viewport.width + 1 || capture.bodyScrollWidth > viewport.width + 1) {
         failures.push(`${capture.id}: horizontal overflow doc=${capture.docScrollWidth} body=${capture.bodyScrollWidth}`);
       }
@@ -337,10 +344,12 @@ body{margin:0;background:#f4ecdf;font-family:-apple-system,BlinkMacSystemFont,'S
 
     const summary = {
       baseUrl,
+      themePreference,
       outDir,
       contactSheet,
-      captures: captures.map(({ id, docScrollWidth, bodyScrollWidth, dockVisible, dockTop, timelineRailClear, timelineRailRight, timelineMainLeft }) => ({
+      captures: captures.map(({ id, appTheme, docScrollWidth, bodyScrollWidth, dockVisible, dockTop, timelineRailClear, timelineRailRight, timelineMainLeft }) => ({
         id,
+        appTheme,
         docScrollWidth,
         bodyScrollWidth,
         dockVisible,

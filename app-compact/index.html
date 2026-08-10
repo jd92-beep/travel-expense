@@ -4,10 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f7f2ea" />
+    <link rel="stylesheet" href="/src/styles/themes.css" />
     <link rel="icon" href="%BASE_URL%favicon.svg" type="image/svg+xml" />
     <!-- media="print"+onload = non-blocking: offline boot must never stall on Google Fonts. -->
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;600;700&family=Noto+Serif+JP:wght@400;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
     <title>旅費 Compact</title>
+    <script>
+      (() => {
+        const key = 'boss-japan-tracker:theme:v1';
+        const themes = ['japan_washi', 'korea_editorial', 'taiwan_nightmarket', 'europe_rail', 'global_journal'];
+        const colors = { japan_washi: '#f7f2ea', korea_editorial: '#f7f4f0', taiwan_nightmarket: '#111827', europe_rail: '#eef1ec', global_journal: '#f1f0e9' };
+        let theme = 'japan_washi';
+        try {
+          const hint = localStorage.getItem(key);
+          if (themes.includes(hint)) theme = hint;
+        } catch { /* storage can be unavailable during private browsing */ }
+        const root = document.documentElement;
+        root.dataset.appTheme = theme;
+        root.dataset.themeSource = 'auto';
+        root.dataset.colorScheme = theme === 'taiwan_nightmarket' ? 'dark' : 'light';
+        root.classList.toggle('dark', theme === 'taiwan_nightmarket');
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors[theme]);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

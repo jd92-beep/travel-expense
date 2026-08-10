@@ -38,12 +38,26 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.16.19`；Android worktree
-目前版本是 `0.20.4`（versionCode `2004`）。Admin Console production 是 `1.0.2`，由 protected
+Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.17.0`；Android worktree
+目前版本是 `0.22.0`（versionCode `2200`）；React transport compatibility 版本是 `0.2.6`。Admin Console production 是 `1.0.2`，由 protected
 workflow `29415119909` 以 Git SHA `67cde57a42bc43f1bda026d81d555260e25bb564` promotion；live
 `/api/health` 回 `200`、exact SHA 及 `acceptingReadTraffic=true`。Console Providers 會列出五個
 既有 Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output
 tokens 嘅 request 測試 availability。Seedance 係 media model，唔會混入 LLM selector。
+
+## 外觀主題（Compact／Android）
+
+Compact 同 Android Settings 頂部有「外觀主題」選擇器，毋須另外儲存：
+
+- `自動（依旅程）` 會跟目前旅程建議的主題。
+- 亦可以手動固定 `日本和紙`、`韓國韓紙`、`台灣夜市`、`歐洲鐵路` 或 `全球旅誌`，切換旅程後仍然保留。
+- `台灣夜市` 是真正 dark theme；其餘四款是 light theme。Android status/navigation bars 會跟主題轉換 icon 明暗。
+- 選擇會保存在這部裝置，並透過現有 account settings 同步；切回 `自動（依旅程）` 就會重新跟旅程。
+- 登出會保留最後使用的主題，避免下次開 app 閃色；只有「清除此裝置資料」才會刪除裝置提示。
+
+React app 只保留相同資料欄位，避免同步時刪除 Compact／Android 的選擇；React 本身今次沒有新增主題 UI。
+
+首版只提供這五款 reviewed themes，沒有 user color builder 或 runtime AI theme generator。新增第六款 curated theme 應只新增 catalog／semantic token 定義、可選細 SVG、contrast contract 同 reviewed contact sheets；如果需要改個別 page component，就代表 semantic theme contract 仍未完整。
 
 Admin Console production URL 是 `https://travel-expense-admin-kanban.vercel.app`。readiness 會在呼叫 Edge
 前拒絕格式錯誤嘅 hash；production health 與 unauthenticated route 行為已驗證：未登入 session 回 `401`，

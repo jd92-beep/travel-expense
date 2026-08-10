@@ -1,5 +1,6 @@
 import { useMemo, type CSSProperties } from 'react';
 import { shouldDisableHeavyEffects } from '../lib/performance';
+import { useTripTheme } from '../theme/tripTheme';
 
 const WALLPAPERS = Array.from({ length: 9 }, (_, i) => `wallpapers/bg-${i + 1}.png`);
 
@@ -13,11 +14,12 @@ const ALL_LAYERS = [
 const LOW_PERF_LAYERS = ALL_LAYERS.slice(0, 2); // Only base + sun if system requires low performance mode
 
 export function HyperframeBackground() {
+  const { theme } = useTripTheme();
   const disableHeavy = shouldDisableHeavyEffects();
-  const layers = useMemo(() => (disableHeavy ? LOW_PERF_LAYERS : ALL_LAYERS), [disableHeavy]);
+  const layers = useMemo(() => (theme.id === 'japan_washi' ? (disableHeavy ? LOW_PERF_LAYERS : ALL_LAYERS) : []), [disableHeavy, theme.id]);
 
   return (
-    <div className="hyperframe-background" aria-hidden="true">
+    <div className="hyperframe-background" data-art-motif={theme.art} aria-hidden="true">
       {layers.map((layer) => (
         <span
           key={layer.className}

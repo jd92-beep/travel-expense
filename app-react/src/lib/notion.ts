@@ -1,4 +1,4 @@
-import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS, normalizeAiModelSettings, isBoss } from './constants';
+import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS, normalizeAiModelSettings, parseThemePreference, isBoss } from './constants';
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { brokerNotionRequest, hasCredentialBrokerSession, brokerNotionUploadFile } from './credentialBroker';
 import { displayStore, getPersons, hkd, receiptRegion } from './domain';
@@ -1396,6 +1396,7 @@ export async function pushSettingsMeta(state: AppState): Promise<void> {
     emailModel: state.emailModel,
     tripUpdateModel: state.tripUpdateModel,
     googleBackupModel: state.googleBackupModel,
+    themePreference: state.themePreference,
   };
   const properties = {
     [propName(schema, 'objectType')]: { select: { name: 'settings' } },
@@ -1451,6 +1452,7 @@ export async function pullSettingsMeta(state: AppState): Promise<Partial<AppStat
         emailModel: payload.emailModel,
         tripUpdateModel: payload.tripUpdateModel,
         googleBackupModel: payload.googleBackupModel,
+        themePreference: parseThemePreference(payload.themePreference),
       });
     }
   } catch (err) {
