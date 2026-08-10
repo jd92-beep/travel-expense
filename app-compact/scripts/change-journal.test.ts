@@ -35,22 +35,27 @@ let retryQueue = enqueueChange([], receipt('retry'));
 const retryId = retryQueue[0].id;
 retryQueue = settleChange(retryQueue, retryId, {
   kind: 'retryable-error',
-  error: 'network unavailable',
+  error: 'Supabase network is unavailable. Please try again.',
 }).queue;
 assert.equal(retryQueue[0].attempts, 1);
 assert.equal(retryQueue[0].status, 'queued');
 
 retryQueue = settleChange(retryQueue, retryId, {
   kind: 'retryable-error',
-  error: 'network unavailable',
+  error: 'Supabase network is unavailable. Please try again.',
 }).queue;
 retryQueue = settleChange(retryQueue, retryId, {
   kind: 'retryable-error',
-  error: 'network unavailable',
+  error: 'Supabase network is unavailable. Please try again.',
 }).queue;
 assert.equal(retryQueue[0].attempts, 3);
 assert.equal(retryQueue[0].status, 'error');
-assert.equal(restoreJournal(retryQueue).queue[0].status, 'error');
+const restoredNetworkUnavailable = restoreJournal(retryQueue);
+assert.equal(restoredNetworkUnavailable.queue[0].status, 'queued');
+assert.equal(restoredNetworkUnavailable.queue[0].attempts, 2);
+assert.equal(restoredNetworkUnavailable.queue[0].error, undefined);
+assert.equal(restoredNetworkUnavailable.status, 'queued');
+assert.equal(restoredNetworkUnavailable.failedCount, 0);
 
 let transientRestoreQueue = enqueueChange([], receipt('transient-restore'));
 for (let attempt = 1; attempt <= 3; attempt += 1) {

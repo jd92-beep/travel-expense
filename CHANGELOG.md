@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-10
+
+- **fix(compact): recognise Supabase's unavailable-network wording during cold recovery.** Compact
+  `0.16.23` now treats `network unavailable` and `network is unavailable` as the same transient
+  failure class as `Failed to fetch`, so an exhausted persisted item receives the existing single
+  bounded cold-boot retry instead of restoring the generic sync/manual-retry banner forever.
+  Version conflicts and exhausted permission/data failures remain visible. The production-shaped
+  regression failed before the fix and passed afterwards; change-journal tests, typecheck, build,
+  security scan, sync regression `11/11` and offline smoke `4/4` are green.
+
 ## 2026-08-08
 
 - **fix(compact/android): recover stale transient sync failures quietly on cold open.** Compact

@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-08 HKT
-- **Focus**: Session 84 fixed the Compact Vercel cold-open false sync/manual-retry warning by giving exhausted transient network failures one bounded fresh retry while keeping genuine terminal failures visible; the same journal contract was ported to Android.
+- **Date**: 2026-08-10 HKT
+- **Focus**: Session 85 closed the remaining Compact Vercel cold-open banner gap by recognising Supabase's `network is unavailable` wording as transient journal evidence.
 - **Agent**: Codex.
-- **App version**: Compact `0.16.22`; Android `0.21.1` (versionCode 2101; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
+- **App version**: Compact `0.16.23`; Android `0.21.2` (versionCode 2102; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.5`
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.16`; the Android branch is `0.20.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.16.23`; the Android branch is `0.21.2`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -108,14 +108,33 @@ you closed with your session number.
    `unscheduled: no shared trip in window`, `cron.job` empty. Drain secret was rotated once more
    and is consistent across edge secret, GitHub secret and `private.receipt_sync_drain_config`.
    Open Item 5's remaining piece stays a positive shared-receipt Notion mirror write proof.
-22. 🟢 **Compact cold-open false sync warning resolved in Session 84** — an exhausted persisted
+22. 🟢 **Compact cold-open false sync warning resolved in Sessions 84/85** — an exhausted persisted
    transient network failure now receives exactly one fresh cold-boot retry instead of remaining a
-   permanent generic sync/manual-retry warning. Version conflicts, permission/data failures and
-   other genuine terminal evidence remain visible. The Vercel-root regression seeds both scoped
-   localStorage and IndexedDB with the production keys and asserts that neither the update notice
-   nor either sync-warning surface appears.
+   permanent generic sync/manual-retry warning. Session 85 added Supabase's `network unavailable`
+   and `network is unavailable` wording to that recovery class after the production-shaped case
+   exposed the remaining classifier gap. Version conflicts, permission/data failures and other
+   genuine terminal evidence remain visible. The Vercel-root regression seeds both scoped stores
+   and asserts that neither the update notice nor either sync-warning surface appears.
 
 ## What Was Done
+
+### Session 85 (Codex — Compact unavailable-network cold recovery, `0.16.23`)
+
+1. **Remaining classifier gap reproduced.** Against the current Vercel root at 390x844, a scoped
+   persisted item with `status=error`, `attempts=3` and Supabase's own `network is unavailable`
+   wording restored the generic sync/manual-retry banner after about 1.5 seconds even while all
+   mocked auth and REST requests succeeded. An unscoped stale error plus a clean scoped state did
+   not show the banner, ruling out the legacy storage key; the focused unit and browser regressions
+   both failed before the fix.
+2. **One shared classifier fixed; UI unchanged.** `isTransientSyncErrorMessage()` now recognises
+   `network unavailable` and `network is unavailable`, so `restoreJournal()` grants the same single
+   bounded cold-boot retry already used for `Failed to fetch`. Version conflicts and exhausted
+   permission/data failures remain terminal; no banner component or manual-retry control was hidden.
+3. **Verification evidence.** Change-journal tests and the focused production-shaped browser case
+   passed after the fix. Compact also passed `typecheck`, production build, `security:scan`, full
+   sync regression `11/11`, offline smoke `4/4`, and `git diff --check`. Sentry was explicitly
+   waived by Boss; no Sentry SDK/config, schema, RLS, migration, credential, user-data or Android
+   change was made.
 
 ### Session 84 (Codex — Compact Vercel cold-open sync recovery, `0.16.22` / Android `0.21.1`)
 

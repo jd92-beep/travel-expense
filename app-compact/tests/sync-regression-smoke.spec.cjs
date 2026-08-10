@@ -166,7 +166,7 @@ test('fresh Vercel-root cold open quietly retries an exhausted transient error w
       op: 'upsert',
       status: 'error',
       attempts: 3,
-      error: 'Failed to fetch',
+      error: 'Supabase network is unavailable. Please try again.',
       createdAt: now - 1_000,
       updatedAt: now - 1_000,
     }],
