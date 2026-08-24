@@ -458,7 +458,7 @@ test('Japan weather uses JMA official first and renders slots', async ({ page })
     expect(child.right, JSON.stringify(currentCardMetrics, null, 2)).toBeLessThanOrEqual(currentCardMetrics.card.right + 1);
     expect(child.bottom, JSON.stringify(currentCardMetrics, null, 2)).toBeLessThanOrEqual(currentCardMetrics.card.bottom + 1);
   }
-  const weatherAtmosphere = await page.locator('.weather-command-fancy').evaluate((node) => getComputedStyle(node).backgroundImage);
+  const weatherAtmosphere = await page.locator('.weather-screen').evaluate((node) => getComputedStyle(node, '::before').backgroundImage);
   const weatherDrift = await page.locator('.weather-slot-detailed').first().evaluate((node) => getComputedStyle(node, '::after').animationName);
   expect(weatherAtmosphere).toContain('travel-ai-atlas');
   expect(weatherDrift).toContain('weather-sky-drift');

@@ -189,11 +189,6 @@ async function routeNotion(page) {
   });
 }
 
-async function openAccordion(page, title) {
-  const button = page.getByRole('button', { name: new RegExp(title) });
-  if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
-}
-
 test('React Notion pull prefers plain fields, skips itinerary/settings rows, and recovers structured note meta', async ({ page }) => {
   await routeNotion(page);
   await page.addInitScript(() => {
@@ -258,7 +253,7 @@ test('React Notion pull prefers plain fields, skips itinerary/settings rows, and
   });
 });
 
-test('Settings mapping diagnostics stay read-only and surface mixed-schema issues', async ({ page }) => {
+test('Notion mapping diagnostics preserve mixed-schema issue contracts without a settings UI', async ({ page }) => {
   await routeNotion(page);
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
@@ -269,7 +264,7 @@ test('Settings mapping diagnostics stay read-only and surface mixed-schema issue
       credentialSessionExpiresAt: Date.now() + 60_000,
     }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
-      lastTab: 'settings',
+      lastTab: 'history',
       receipts: [],
       tripDateRange: { start: '2026-04-20', end: '2026-04-25' },
       activeTripId: 'trip_2026_04_nagoya',
@@ -277,14 +272,20 @@ test('Settings mapping diagnostics stay read-only and surface mixed-schema issue
   });
 
   await page.goto('http://localhost:8903/travel-expense/compact/');
-  await page.getByRole('button', { name: '設定', exact: true }).click();
-  await expect(page.getByText('設定控制中心')).toBeVisible();
-  await openAccordion(page, 'Notion Sync');
-  await page.getByRole('button', { name: '檢查 Mapping' }).click();
-  await expect(page.getByText(/已掃描 .*issues/)).toBeVisible();
-  await expect(page.getByText('conflicting-duplicate')).toHaveCount(7);
-  await expect(page.getByText('meta-fallback')).toHaveCount(5);
-  await expect(page.getByText('skipped-row')).toHaveCount(2);
+  const diagnostics = await page.evaluate(async () => {
+    const [{ diagnoseReactReceiptMapping }, { loadState }] = await Promise.all([
+      import('/travel-expense/compact/src/lib/notion.ts'),
+      import('/travel-expense/compact/src/lib/storage.ts'),
+    ]);
+    return diagnoseReactReceiptMapping(loadState());
+  });
+
+  expect(diagnostics.scanned).toBe(5);
+  expect(diagnostics.receiptCandidates).toBe(3);
+  expect(diagnostics.skipped).toBe(2);
+  expect(diagnostics.counts['conflicting-duplicate']).toBe(7);
+  expect(diagnostics.counts['meta-fallback']).toBe(5);
+  expect(diagnostics.counts['skipped-row']).toBe(2);
 });
 
 test('Notion receipt push uses the receipt trip database even when another trip is active', async ({ page }) => {

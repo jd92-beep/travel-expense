@@ -653,6 +653,20 @@ async function run() {
     });
     assert.equal(kimiWithoutAuth.response.status, 401);
 
+    const kimiInvalidKind = await jsonFetch(env, '/kimi/json', {
+      method: 'POST',
+      session,
+      body: { prompt: 'Return JSON', kind: 'unbounded' },
+    });
+    assert.equal(kimiInvalidKind.response.status, 400);
+
+    const kimiInvalidModel = await jsonFetch(env, '/kimi/json', {
+      method: 'POST',
+      session,
+      body: { prompt: 'Return JSON', kind: 'test', model: 'attacker/model' },
+    });
+    assert.equal(kimiInvalidModel.response.status, 400);
+
     const supabaseKimi = await jsonFetch(env, '/kimi/json', {
       method: 'POST',
       supabaseToken: 'supabase-user-token',

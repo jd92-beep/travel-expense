@@ -20,6 +20,8 @@ const receiptSyncWorkerContractMigration =
   'supabase/migrations/20260710191000_receipt_sync_worker_contract.sql';
 const staleReceiptSyncLeaseRecoveryMigration =
   'supabase/migrations/20260724110000_reclaim_stale_receipt_sync_processing_leases.sql';
+const receiptSecurityHardeningMigration =
+  'supabase/migrations/20260824011000_harden_receipt_ownership_and_photo_storage.sql';
 
 const activeSql = files
   .map((file) => readFileSync(join(repoRoot, file), 'utf8'))
@@ -35,6 +37,9 @@ const staleReceiptSyncLeaseRecoverySql = files.includes(staleReceiptSyncLeaseRec
   : '';
 const receiptSyncWorkerContractSql = files.includes(receiptSyncWorkerContractMigration)
   ? readFileSync(join(repoRoot, receiptSyncWorkerContractMigration), 'utf8')
+  : '';
+const receiptSecurityHardeningSql = files.includes(receiptSecurityHardeningMigration)
+  ? readFileSync(join(repoRoot, receiptSecurityHardeningMigration), 'utf8')
   : '';
 
 const requiredPatterns = [
@@ -214,6 +219,29 @@ const stagedReceiptPhotoPatterns = [
   },
 ];
 
+const receiptSecurityHardeningPatterns = [
+  {
+    name: 'final Notion enqueue contract requires receipt ownership',
+    re: /create or replace function public\.enqueue_notion_receipt_sync[\s\S]*?v_receipt\.owner_id\s*<>\s*\(select auth\.uid\(\)\)[\s\S]*?only the receipt owner can enqueue sync/i,
+  },
+  {
+    name: 'final receipt item update policy checks the resulting parent owner',
+    re: /create policy receipt_items_update_trip_editors[\s\S]*?with check[\s\S]*?r\.id\s*=\s*receipt_items\.receipt_id[\s\S]*?r\.owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
+  },
+  {
+    name: 'final receipt photo update policy checks the resulting parent owner',
+    re: /create policy receipt_photos_update_trip_editors[\s\S]*?with check[\s\S]*?r\.id\s*=\s*receipt_photos\.receipt_id[\s\S]*?r\.owner_id\s*=\s*\(select auth\.uid\(\)\)/i,
+  },
+  {
+    name: 'final receipt photo bucket is private with server-enforced upload limits',
+    re: /update storage\.buckets[\s\S]*?set public = false[\s\S]*?file_size_limit = 6000000[\s\S]*?allowed_mime_types = array\['image\/jpeg', 'image\/png', 'image\/webp'\]::text\[\][\s\S]*?where id = 'receipt-photos'/i,
+  },
+  {
+    name: 'final receipt photo storage reads require authenticated trip access',
+    re: /create policy "receipt_photos_read_trip_members"[\s\S]*?for select to authenticated[\s\S]*?private\.can_access_trip\(r\.trip_id\)[\s\S]*?r\.visibility = 'trip'[\s\S]*?r\.owner_id = \(select auth\.uid\(\)\)/i,
+  },
+];
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -249,6 +277,7 @@ const findings = [
     (item) => !item.re.test(receiptPhotoCompatibilitySql),
   ),
   ...stagedReceiptPhotoPatterns.filter((item) => !item.re.test(stagedSql)),
+  ...receiptSecurityHardeningPatterns.filter((item) => !item.re.test(receiptSecurityHardeningSql)),
 ];
 
 const strippedStaleLeaseSql = stripSqlComments(staleReceiptSyncLeaseRecoverySql);
@@ -358,50 +387,6 @@ if (
   findings.push({
     name: 'final receipt photo compatibility migration is ordered after 20260710187000 and immediately before 20260712123000',
   });
-}
-
-const storageBucketMutations = [
-  ...receiptPhotoCompatibilitySql.matchAll(
-    /\b(?:insert\s+into|update|delete\s+from|alter\s+table)\s+storage\.buckets\b[^;]*;/gi,
-  ),
-];
-if (
-  !/^\s*update\s+storage\.buckets\s+set\s+[^;]*?\bpublic\s*=\s*true\b[^;]*?\bwhere\s+id\s*=\s*'receipt-photos'\s*;\s*$/i.test(
-    storageBucketMutations.at(-1)?.[0] ?? '',
-  )
-) {
-  findings.push({
-    name: 'final receipt photo compatibility storage.buckets mutation leaves receipt-photos public',
-  });
-}
-
-const storageObjectPolicyActions = [
-  ...receiptPhotoCompatibilitySql.matchAll(
-    /\b(drop|create|alter)\s+policy(?:\s+if\s+exists)?\s+(?:"([^"]+)"|([^\s]+))\s+on\s+storage\.objects\b/gi,
-  ),
-];
-const finalStorageObjectPolicyAction = storageObjectPolicyActions.at(-1);
-if (
-  finalStorageObjectPolicyAction?.[1].toLowerCase() !== 'create'
-  || (finalStorageObjectPolicyAction?.[2] ?? finalStorageObjectPolicyAction?.[3])
-    !== 'receipt_photos_public_read'
-) {
-  findings.push({
-    name: 'final receipt photo compatibility public-read create is the final storage.objects policy action',
-  });
-}
-
-if (receiptPhotoCompatibilityIndex !== -1) {
-  const laterActiveStorageMutationFiles = files.slice(receiptPhotoCompatibilityIndex + 1).filter((file) => {
-    const sql = readFileSync(join(repoRoot, file), 'utf8');
-    return /\bstorage\.buckets\b/i.test(sql)
-      || /\b(?:create|drop|alter)\s+policy\b[\s\S]*?\bon\s+storage\.objects\b/i.test(sql);
-  });
-  if (laterActiveStorageMutationFiles.length) {
-    findings.push({
-      name: `later active migrations mutate Storage state: ${laterActiveStorageMutationFiles.join(', ')}`,
-    });
-  }
 }
 
 if (findings.length) {

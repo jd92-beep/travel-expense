@@ -3,6 +3,7 @@ const { test, expect } = require('@playwright/test');
 test.use({ viewport: { width: 390, height: 844 } });
 
 test('unreachable Supabase releases the reconnect screen after session refresh fails', async ({ page }) => {
+  test.skip(!process.env.VITE_SUPABASE_URL, 'Run with the fake Supabase environment from npm run smoke:session.');
   await page.route('https://test-travel-expense.supabase.co/**', (route) => route.abort('failed'));
   await page.addInitScript(() => {
     localStorage.clear();

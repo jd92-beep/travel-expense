@@ -1,8 +1,15 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-07-19 HKT
+Last updated: 2026-08-24 HKT
 
 ## Current Status
+
+- Candidate `1.3.3` lazy-loads feature route groups, reducing the main application chunk from
+  roughly 623 kB to 224 kB while keeping the Three.js login scene isolated. The root route now
+  supplies `hydrateFallbackElement`, so React Router no longer emits the lazy initial-route
+  fallback warning. Typecheck, build, unit `33/33`, contract `24/24`, targeted browser `11/11`,
+  security scan, and production dependency audit are green. This is source-ready, not a production
+  deployment claim.
 
 - Production `1.3.1` repairs provider heartbeat under maintenance without enabling general Admin
   writes. `provider_probe_only` admits only `provider_probe`; Edge rechecks action on preview and

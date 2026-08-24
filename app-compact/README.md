@@ -20,7 +20,8 @@ This is the independent compact version of the Travel Expense app.
 
 The compact version is an independent React + Vite app with its own package,
 Vite base path, Netlify site, Vercel project, mobile scroll contract, and centered circular Scan
-dock. Changes here should not be mirrored into `app-react/` or the legacy root app
+dock. The Pages root is a stateless CSP-protected redirect to this maintained app. Changes here
+should not be mirrored into `app-react/`
 unless Boss explicitly asks for parity work.
 
 ## Shared Trip Contract Notes

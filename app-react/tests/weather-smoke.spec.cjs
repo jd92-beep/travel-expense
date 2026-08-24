@@ -63,6 +63,11 @@ async function installState(page, state) {
   }, trustAndState(state));
 }
 
+async function openWeather(page) {
+  await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.getByLabel('主要分頁').getByRole('button', { name: '天氣', exact: true }).click();
+}
+
 test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
   const fixed = new Date('2026-04-20T10:00:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {
@@ -84,7 +89,7 @@ test('Japan weather uses JMA candidate and renders slots', async ({ page }) => {
     await route.fulfill({ json: weatherFixture() });
   });
   await installState(page, {});
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await openWeather(page);
   await expect(page.getByText('天氣預報')).toBeVisible();
   await expect(page.getByText(/Day 1 · JMA/)).toBeVisible();
   const command = page.locator('.weather-command-fancy');
@@ -172,7 +177,7 @@ test('WeatherAPI broker forecast is preferred when broker session is active', as
     credentialSession: 'test.session.token',
     credentialSessionExpiresAt: fixed + 60_000,
   });
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await openWeather(page);
   await expect(page.getByText(/Day 1 · WeatherAPI.com/)).toBeVisible();
   await expect(page.getByText('21°C').first()).toBeVisible();
   expect(brokerCalls).toBeGreaterThan(0);
@@ -222,7 +227,7 @@ test('Ended trip ignores stale same-coordinate cache and shows current forecast'
     },
   });
 
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await openWeather(page);
   await expect(page.getByText('天氣預報')).toBeVisible();
   await expect(page.getByText('旅程日期超出目前預報範圍')).toHaveCount(0);
   await expect(page.getByText('25°C').first()).toBeVisible();
@@ -265,7 +270,7 @@ test('Non-Japan trip uses Open-Meteo without JMA', async ({ page }) => {
       spots: [{ time: '09:00', name: 'Ferry Building', type: 'other', lat: 37.7955, lon: -122.3937 }],
     }],
   });
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await openWeather(page);
   await expect(page.getByText('San Francisco').first()).toBeVisible();
   await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
   expect(urls.length).toBeGreaterThan(0);
@@ -294,7 +299,7 @@ test('Missing coordinates show warning and do not crash', async ({ page }) => {
       spots: [{ time: '09:00', name: 'Mystery Stop', type: 'other' }],
     }],
   });
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await openWeather(page);
   await expect(page.getByText('未有座標')).toBeVisible();
   expect(requestCount).toBe(0);
 });
@@ -351,7 +356,7 @@ test('City and country names are geocoded when itinerary has no coordinates', as
       spots: [{ time: '09:00', name: 'Louvre Museum', type: 'ticket' }],
     }],
   });
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await openWeather(page);
   await expect(page.getByText('Paris').first()).toBeVisible();
   await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
   await expect(page.getByText('21°C').first()).toBeVisible();
@@ -412,7 +417,7 @@ test('Jeju Korea city fallback chooses the South Korea geocoding result', async 
       spots: [{ time: '09:00', name: 'Seongsan Ilchulbong', type: 'ticket' }],
     }],
   });
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await openWeather(page);
   await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
   await expect(page.getByText('21°C').first()).toBeVisible();
   expect(geocodeUrls.some((url) => url.includes('name=Jeju%20South%20Korea'))).toBe(true);
@@ -456,7 +461,7 @@ test('Multi-city day renders two forecast locations and live slot', async ({ pag
       ],
     }],
   });
-  await page.goto('http://localhost:8902/travel-expense/react/');
+  await openWeather(page);
   await expect(page.getByText('天氣預報')).toBeVisible();
   await expect(page.locator('.weather-location h3')).toHaveText(['高山', '白川鄉']);
   await expect(page.locator('.live-badge')).toHaveCount(2);

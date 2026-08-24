@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-24
+
+- **security(frontend/backend): retire the unsafe legacy root and close credential, tenant and Storage gaps.** The Pages root is now a stateless CSP-protected redirect to Compact; React `0.2.7` and Compact `0.17.1` no longer ship an offline password verifier or unlock when Broker verification fails. A forward-only Supabase migration restricts Notion enqueue and child-row reparenting to the receipt owner, makes receipt photos private, and enforces a 6 MB image MIME allowlist. The migration is tracked only and still requires an approved live apply.
+- **security(broker): bound paid-provider traffic and make production limits atomic.** Broker `2026.08.24.1` validates AI kind/model/prompt/image inputs, caps output tokens, quotas AI/weather/provider probes, and configures a SQLite-backed Durable Object for atomic unlock/admin and daily quota counters. Wrangler dry-run, syntax check and self-test pass; no Worker deployment occurred.
+- **perf/qa(web): reconcile dependencies, split bundles and repair executable test contracts.** All three web apps now have zero production `npm audit` findings. React splits React/Supabase vendors, Admin lazy-loads feature routes, standalone React/Compact smoke scripts own their dev server, Compact Node contract tests use Vite's loader, and stale navigation/UI tests match the current Scan-first and Credentials flows.
+
 ## 2026-08-10
 
 - **feat(compact/android): add five account-wide visual themes.** Compact `0.17.0` and Android

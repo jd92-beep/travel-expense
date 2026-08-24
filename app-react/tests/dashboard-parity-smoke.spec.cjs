@@ -58,6 +58,7 @@ async function openDashboard(page, statsIncludeTransportLodging) {
     }));
   }, statsIncludeTransportLodging);
   await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.getByLabel('主要分頁').getByRole('button', { name: '主頁', exact: true }).click();
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect(page.locator('.today-itinerary-card').getByText('今日行程')).toHaveCount(1);
   await expect(page.getByText('Budget Settings')).toHaveCount(0);

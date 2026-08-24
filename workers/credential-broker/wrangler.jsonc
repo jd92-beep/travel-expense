@@ -20,5 +20,21 @@
       "binding": "CREDENTIALS_VAULT",
       "id": "f49c27e59b1648a3a3e79d4973cac768"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "RATE_LIMITER",
+        "class_name": "RateLimiter"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "RateLimiter"
+      ]
+    }
   ]
 }

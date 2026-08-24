@@ -57,6 +57,7 @@ test('Trip intelligence drives the shared destination theme contract', async ({ 
   }, seededState);
 
   await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.getByLabel('主要分頁').getByRole('button', { name: '主頁', exact: true }).click();
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
 
   const theme = await page.evaluate(() => ({

@@ -16,13 +16,13 @@
 
 ## 打開 App
 
-- 主要公開 app: https://travel-expense-react.vercel.app
-- Compact app: https://travel-expense-compact.vercel.app
+- Compact app（主要公開 app）: https://travel-expense-compact.vercel.app
+- React app: https://travel-expense-react.vercel.app
 - Admin Console: https://travel-expense-admin-kanban.vercel.app
 - GitHub Pages React app: https://jd92-beep.github.io/travel-expense/react/
-- 舊版備用 app: https://jd92-beep.github.io/travel-expense/
+- GitHub Pages root（安全轉址到 Compact）: https://jd92-beep.github.io/travel-expense/
 
-請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。2026-07-15 live check 已確認 Compact Vercel、Netlify 及 GitHub Pages 全部提供 `0.16.8`；Vercel 仍是主要 Compact 入口。Admin `1.0.2` 同 Broker `2026.07.15.2` 亦已完成 production cutover。
+請優先使用 Compact app。GitHub Pages root 只係無狀態安全轉址，唔再部署舊版內嵌 vault／provider-key app；React 版仍保留獨立入口。GitHub Pages 有時會因 GitHub Actions 下載問題而比 Vercel 慢更新。
 
 ## Compact App Developer Quick Start
 
@@ -38,8 +38,8 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。Compact Web 目前版本是 `0.17.0`；Android worktree
-目前版本是 `0.22.0`（versionCode `2200`）；React transport compatibility 版本是 `0.2.6`。Admin Console production 是 `1.0.2`，由 protected
+Compact app 和 React app 獨立版本管理。今次候選版本係 Compact Web `0.17.1`、React `0.2.7`、Admin `1.3.3` 同 Broker `2026.08.24.1`；Android worktree
+仍係 `0.22.0`（versionCode `2200`）。今次只 commit source，Supabase migration、Broker Durable Object 同各 hosting production 狀態要另行 deployment/live verification。Admin Console production 是 `1.0.2`，由 protected
 workflow `29415119909` 以 Git SHA `67cde57a42bc43f1bda026d81d555260e25bb564` promotion；live
 `/api/health` 回 `200`、exact SHA 及 `acceptingReadTraffic=true`。Console Providers 會列出五個
 既有 Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output
@@ -321,7 +321,7 @@ SUPABASE_TRIP_ACTIVE_SMOKE=1 npx playwright test tests/supabase-trip-active-smok
 travel-expense/
   app-react/                 React 19 + Vite public app
   app-admin-kanban/          Admin Console 1.0 Vercel surface
-  index.html                 Legacy root app kept as backup
+  index.html                 Stateless CSP-protected redirect to Compact
   legacy-notion.js           Legacy Notion sync helper
   email-to-notion.gs         Google Apps Script email importer
   workers/credential-broker/ Cloudflare Worker for secrets and AI provider access
@@ -340,7 +340,7 @@ Normal deploy is:
 git push origin main
 ```
 
-GitHub Actions builds `app-react/`, publishes the legacy app at the root, and publishes the React app under `/react/`.
+GitHub Actions builds both maintained web apps, publishes a CSP-protected Compact redirect at the root, React under `/react/`, and Compact under `/compact/`.
 
 Vercel is connected to the same GitHub repo and serves the React app at `/`; the separate Admin
 Console production URL is `https://travel-expense-admin-kanban.vercel.app`.

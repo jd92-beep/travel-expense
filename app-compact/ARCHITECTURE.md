@@ -2,11 +2,11 @@
 
 ## Safety Contract
 
-- Root `index.html` remains the legacy app.
+- Root `index.html` is a stateless CSP-protected redirect to the maintained Compact app.
 - `/travel-expense/compact/` and the `travel-expense-compact` Vercel project are built from `app-compact/` only.
 - Compact does not import or depend on legacy `app/`, `app3/`, or the main `app-react/` UI.
 - Provider credentials are server-only. Compact stores only the Credential Broker URL and a short-lived broker session; provider keys are stripped from local backup, IndexedDB snapshots, Notion settings meta rows, docs, and production build output.
-- The unlock PIN is not stored as plaintext. The app unlocks by decrypting a WebCrypto payload, then stores a local device trust marker.
+- No password verifier or encrypted verifier payload is shipped to the browser. Device trust is stored only after the Credential Broker accepts the password and registers the device.
 
 ## Runtime Layers
 
@@ -39,8 +39,7 @@ Mobile Chrome URL
 
 ## AI Flow
 
-- Google `gemma-4-31b-it` is primary for receipt image OCR and voice parsing.
-- Kimi `kimi-code` is primary for email parsing and trip paragraph analysis.
+- The user's valid selected model is primary for scan, voice, email and trip analysis; stale model settings migrate to the reviewed catalog defaults.
 - Broker-routed fallback models are tested server-side before use.
 - MiniMax, GLM/ZAI, and OpenRouter are not shown in the Compact model picker.
 - Trip update always creates a preview first. Apply updates local trip state; Notion sync creates/updates the trip page when the broker session is active.
@@ -73,7 +72,7 @@ Mobile Chrome URL
 
 ## Deployment Targets
 
-- GitHub Pages remains the canonical public legacy deployment. Root `index.html` stays at `/travel-expense/`; the Compact build is published at `/travel-expense/compact/` when the Pages workflow includes it.
+- GitHub Pages root redirects to `/travel-expense/compact/` without application state or credentials; Compact is the canonical Pages UI.
 - Vercel hosts the standalone Compact app from `app-compact/` at `/` through the linked `travel-expense-compact` project.
 - `vite.config.ts` resolves base path in this order: `VITE_BASE_PATH`, then Vercel `/`, then the GitHub Pages/local `/travel-expense/compact/` default.
 - Vercel Preview Deployments should be Git-connected branch/PR previews only. Provider credentials do not belong in Vercel frontend env vars; live Notion/Kimi/Google access still goes through the Credential Broker.
@@ -82,8 +81,8 @@ Mobile Chrome URL
 
 ```text
 Unlock password
-  -> Compact WebCrypto local unlock
-  -> POST /session/unlock
+  -> POST /session/unlock (server-side password verification)
+  -> trusted-device registration + local trust marker
   -> short-lived broker session
   -> /notion/request, /kimi/json, /google/json
   -> Worker injects provider credentials from encrypted KV vault

@@ -9,7 +9,6 @@ import {
   requestBrokerSessionChallenge,
   unlockCredentialBroker,
 } from '../lib/credentialBroker';
-import { unlockWithPassword } from './cryptoUnlock';
 import { hasDeviceTrust, setDeviceTrust } from './deviceTrust';
 import {
   clearTrustedDevice,
@@ -106,33 +105,23 @@ export function AuthGate({
     setBusy(true);
     setError('');
     try {
-      if (!await unlockWithPassword(password)) throw new Error('Unlock failed');
-      
-      // Fix Bug 1.2: Persist device trust immediately after successful local unlock
+      const trustedDevice = await createTrustedDeviceRegistration();
+      const brokerSession = await unlockCredentialBroker(password, { credentialBrokerUrl }, {
+        devicePublicKey: trustedDevice.devicePublicKey,
+        deviceName: trustedDevice.deviceName,
+      });
+      if (!brokerSession.device) throw new Error('Credential Broker did not register this device');
+      await saveTrustedDevice(brokerSession.device, trustedDevice.privateKey);
       setDeviceTrust();
-      
-      try {
-        const trustedDevice = await createTrustedDeviceRegistration();
-        const brokerSession = await unlockCredentialBroker(password, { credentialBrokerUrl }, {
-          devicePublicKey: trustedDevice.devicePublicKey,
-          deviceName: trustedDevice.deviceName,
-        });
-        if (!brokerSession.device) throw new Error('Credential Broker did not register this device');
-        await saveTrustedDevice(brokerSession.device, trustedDevice.privateKey);
-        onBrokerSession?.(brokerSession);
-      } catch (brokerError) {
-        console.warn('Credential Broker connection failed during unlock, entering offline mode:', brokerError);
-        // Fix Bug 1.4: Surface a soft warning about broker/sync being limited
-        alert('本地解鎖成功！但無法連接 Credential Broker（正處於離線模式），Notion 同步及 AI 功能將暫時受限。');
-      }
-      
+      onBrokerSession?.(brokerSession);
       setUnlocked(true);
       setPassword('');
       onUnlocked?.();
     } catch (submitError) {
-      setError(redactedError(submitError).includes('Unlock failed')
+      const message = redactedError(submitError);
+      setError(message.includes('401') || /invalid|unlock failed/i.test(message)
         ? '密碼唔正確，請再試一次。'
-        : `解鎖失敗：${redactedError(submitError)}`);
+        : `解鎖失敗：${message}`);
     } finally {
       setBusy(false);
     }

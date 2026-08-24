@@ -1,6 +1,8 @@
 # travel-expense — Per-Tab Technical Documentation
 
-This folder contains a technical reference for each of the 7 tabs in `index.html`. The app is a single-file HTML PWA (~10,200 lines, vanilla JS + Tailwind CDN + Chart.js) — there is no build step, no bundler, no framework, and no separate JS modules. Everything lives in one file.
+This folder preserves a historical technical reference for the retired seven-tab legacy runtime.
+Root `index.html` is now only a stateless CSP-protected redirect to the maintained Compact app;
+the old line numbers and state-machine notes below describe revision history, not executable root code.
 
 > Note: this project is **not** part of the WAT (Workflows / Agents / Tools) framework that appears in the global `~/CLAUDE.md`. WAT applies to Oscar-agent-style multi-tool agents. This is a vanilla browser PWA — keep that mental model.
 
@@ -18,9 +20,12 @@ This folder contains a technical reference for each of the 7 tabs in `index.html
 
 The bottom navigation tab bar is at lines 1098–1130.
 
-## React public app notes
+## Current public app notes
 
-The primary public UI is now the React app under `app-react/`, deployed at `/react/` on GitHub Pages and at the Vercel root. The legacy tab docs in this folder still describe `index.html`; when React behavior differs, the tab file should call that out explicitly. As of 2026-05-30, `timeline.md` includes the React Itinerary rail behavior: compact header, single date display, Magic UI rail beam, spot-index progress, and dimmed-but-coloured rails outside the trip date window.
+The canonical public UI is `app-compact/`, deployed at `/compact/` on GitHub Pages and through its
+dedicated Vercel project. `app-react/` remains a separately built compatibility app under `/react/`.
+The tab files in this directory continue to document the retired legacy implementation for audit
+history; consult each active app's `ARCHITECTURE.md` and source for current behaviour.
 
 ## Shared concepts referenced from tab docs
 
@@ -31,7 +36,8 @@ Single global `state` object (line 1747) persisted to `localStorage` under key `
 - `state.budget` (JPY), `state.rate` (HKD per 100 JPY), `state.tripCurrency`
 - `state.persons[]`, `state.shareRatios{}` — split-bill setup
 - `state.scanModel` / `state.voiceModel` / `state.emailModel` — selected LLM per use-case
-- Legacy root app still has local key fields, but React `/react/` uses `state.credentialBrokerUrl`, `state.credentialSession`, and broker-routed Kimi/Google/Notion calls instead of browser-held provider keys.
+- Historical legacy state included local provider-key fields. Active Compact and React clients use
+  broker sessions and never ship or persist provider keys.
 - `state.notionDb`, `state.proxy` (legacy proxy URL), `state.autoSync`
 - `state.top10IncludeBigItems`, `state.statsIncludeTransportLodging` — UI toggles (Stats tab)
 - `state.customItinerary` — overrides the built-in `ITINERARY` constant when non-null

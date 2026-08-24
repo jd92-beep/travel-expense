@@ -31,15 +31,11 @@ import { saveReceiptRepairIntent } from '../lib/repairIntent';
 import { receiptSourceTombstoneKey } from '../lib/syncMerge';
 import { enqueueChange } from '../lib/changeJournal';
 import {
-  diagnoseNotionSchema,
-  diagnoseReactReceiptMapping,
   hasDirectNotionToken,
-  migrateNotionSchema,
   pullAll,
   pushSettingsMeta,
   pushTripPage,
   testNotion,
-  type ReactMappingDiagnostics,
   archiveReceipt,
   notionFetch,
 } from '../lib/notion';
@@ -1009,7 +1005,6 @@ export function Settings({
   const [personalNotionDb, setPersonalNotionDb] = useState(state.notionDb || '');
   const [personalNotionStatus, setPersonalNotionStatus] = useState<PersonalNotionStatus | null>(null);
   const [schemaDiag, setSchemaDiag] = useState<Array<{ name: string; type: string; mapped: string | null }> | null>(null);
-  const [mappingDiag, setMappingDiag] = useState<ReactMappingDiagnostics | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);

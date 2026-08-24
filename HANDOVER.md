@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-10 HKT
-- **Focus**: Session 86 shipped account-wide curated themes for Compact and Android, with a React transport shim, semantic contrast contracts and API 36 native QA.
+- **Date**: 2026-08-24 HKT
+- **Focus**: Session 87 repository-wide frontend/backend audit, security hardening, dependency reconciliation, bundle splitting and verification.
 - **Agent**: Codex.
-- **App version**: Compact `0.17.0`; Android `0.22.0` (versionCode 2200; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.6`
+- **App version**: Compact candidate `0.17.1`; Android `0.22.0` (versionCode 2200; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.3`; Broker candidate `2026.08.24.1`; React candidate `0.2.7`. Production versions were not changed or claimed in this session.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -13,7 +13,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.17.0`; the Android branch is `0.22.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web candidate is `0.17.1`; the Android branch is `0.22.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -30,73 +30,77 @@ you closed with your session number.
    privilege check with an ordinary authenticated JWT; do not substitute privileged/service access.
 3. 🟠 **Admin DB platform-owner hardening remains pending** — complete the platform-owner operation
    for the planned non-login helper owner; browser grants, policies and RPC execute remain closed.
-4. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — `receipt-photos` remains in public
-   compatibility mode until Compact/Android signed-URL heartbeats prove active compatibility. Do
-   not apply the staged private receipt-photo migration before that proof.
-5. 🟡 **Receipt-sync/Notion outbox worker execution remains unproven** — worker `v38` is deployed
+4. 🟠 **Receipt-photo privacy cutover is ready but not live-applied** — Session 87 adds active
+   migration `20260824011000_harden_receipt_ownership_and_photo_storage.sql`; current Compact uses
+   signed URLs, but applying migrations is a separate approval gate. Until live apply and an
+   authenticated ordinary-user smoke, production may still retain the prior public compatibility state.
+5. 🟠 **Broker Durable Object hardening is source-ready, not deployed** — Session 87 adds the
+   SQLite-backed `RateLimiter`, AI/model/output validation and paid-route quotas. Wrangler dry-run
+   passes; deploy and live rate-limit evidence remain external gates.
+6. 🟡 **Receipt-sync/Notion outbox worker execution remains unproven** — worker `v38` is deployed
    and passed a negative canary, so deployment is no longer unverified. Do not claim an end-to-end
    live write: a positive shared-receipt write and Notion mirror result still need separate proof.
-6. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
+7. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-7. 🟠 **Compact Netlify credit block remains active** — Session 80 workflow `30875160196` built and
+8. 🟠 **Compact Netlify credit block remains active** — Session 80 workflow `30875160196` built and
    typechecked Compact `0.16.19`, then Netlify rejected the production deploy with `403 Account
    credit usage exceeded`. Vercel and GitHub Pages serve `0.16.19`; the Netlify alias still serves
    the previous bundle. Add credits before retrying this workflow.
-8. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
+9. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
    unused `hkd` imports in History/Stats. (Old Pending list.)
-9. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
+10. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
    settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
-10. 🟡 **Admin intentionally excludes R3 and generic controls** — account consolidation,
+11. 🟡 **Admin intentionally excludes R3 and generic controls** — account consolidation,
     scheduled deletion, Notion write repair, device commands, runtime writes, arbitrary SQL/table
     editing and session revoke stay server-disabled. Session 63 adds a narrow
     production `provider_probe_only` mode; it does not enable the general operation allowlist.
-11. 🟠 **`puiyuchau@gmail.com` root cause — owner_id mismatch** — the infinite backfill loop is now
+12. 🟠 **`puiyuchau@gmail.com` root cause — owner_id mismatch** — the infinite backfill loop is now
     broken (Session 49), but the underlying `owner_id ≠ auth.uid()` mismatch needs DB-side
     investigation (Admin Kanban gateway blocked access). If re-invite or trip re-creation doesn't
     fix it, a manual `UPDATE trips SET owner_id = '<correct_uid>'` may be needed.
-12. 🟢 **Compact Supabase backfill fixture resolved in Session 79** — equal-version local-wins
+13. 🟢 **Compact Supabase backfill fixture resolved in Session 79** — equal-version local-wins
     merges now preserve the cloud itinerary repair flag. The focused backfill suite passes `2/2`
     on Compact and Android, including `update_trip_itinerary` and revoked-trip purge.
-13. 🟡 **Live trip-intelligence schema drift** — Session 57 confirmed production `trips` has
+14. 🟡 **Live trip-intelligence schema drift** — Session 57 confirmed production `trips` has
     `itinerary_version` but not `country_code`, `theme_key`, `locale`, `weather_region` or
     `trip_intelligence`. Compact `0.16.6` safely falls back to the legacy row contract, but reconcile
     the migration history on a reviewed branch before adding these columns. Do not use `db push` or
     migration repair without Boss approval.
-14. 🟡 **One-time stale Chrome tab reload confirmation** — the currently open Compact tab was
+15. 🟡 **One-time stale Chrome tab reload confirmation** — the currently open Compact tab was
     created at 10:11 on `0.16.4`, before Sessions 57/58 deployed. It cannot run the new freshness
     detector until Boss performs one hard refresh after `0.16.6` reaches production. Do not claim
     that specific tab is on `0.16.6` until the refreshed asset/version is confirmed. Future stale
     tabs running `0.16.6+` will show the explicit update notice without a service worker.
-15. 🟢 **Session 59/60 production cutover closed** — Admin `1.0.2` protected workflow
+16. 🟢 **Session 59/60 production cutover closed** — Admin `1.0.2` protected workflow
     `29415119909`, Edge `admin-kanban` v95, Compact `0.16.8` on Vercel/Netlify/Pages and Broker
     `2026.07.15.2` are live. Five authenticated Volcano probes returned `200`; Chrome 150 no-store
     cold-open waited 15 seconds with neither generic sync-error banner. (Session 60.)
-16. 🟡 **Authenticated Admin heartbeat click evidence** — Session 63 deployed the exact-model
+17. 🟡 **Authenticated Admin heartbeat click evidence** — Session 63 deployed the exact-model
     probe path and all production gates passed, but no controllable authenticated Chrome session was
    available for the final operator click. Record one provider-row heartbeat result from Boss's
    session; it must reach preview/commit without `ADMIN_WRITES_DISABLED` and name the selected model.
-17. 🟡 **Authenticated in-app Kimi K3 click evidence** — Session 64 proved the Android request
+18. 🟡 **Authenticated in-app Kimi K3 click evidence** — Session 64 proved the Android request
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟢 **All four main source milestones complete; Android port and QA are next** — Session 76 adds the
+19. 🟢 **All four main source milestones complete; Android port and QA are next** — Session 76 adds the
    secret-free catalog and thin Compact, Broker, Admin BFF and Admin Edge adapters. Compact keeps K3
    excluded; Broker, Admin BFF and Admin Edge recognise all six safe Volcano LLMs, and the Android
    catalog surface retains K3 for the later port. No Android file changed in main. The tracked
    stale-lease migration is still not live-applied, and positive shared-receipt/Notion outbox plus
    live claim/finish evidence remain open under Item 5. Keep authenticated operator evidence in Items
    16 and 17 open; no deployment, push, credential, database, RLS or live-data action occurred.
-19. 🟢 **Supabase pause/login hang resolved in Session 78** — the free-plan project was restored from
+20. 🟢 **Supabase pause/login hang resolved in Session 78** — the free-plan project was restored from
    `INACTIVE` to `ACTIVE_HEALTHY`. Compact, React and Android now leave the reconnect screen after a
    five-second unreachable-session watchdog and show the login surface with network evidence. No
    schema, RLS, migration, credential or user-data change was made.
-20. 🟢 **Full `main` → Android-branch merge COMPLETED in Session 83** — executed as the reviewed
+21. 🟢 **Full `main` → Android-branch merge COMPLETED in Session 83** — executed as the reviewed
    dedicated operation (`2a2a9f5`, Android `0.21.0` / versionCode 2100): 47 conflicted files
    resolved with main as baseline plus all Android-only layers preserved. Full gate battery green
    (11 playwright suites + 6 node unit suites + typecheck/build/security:scan). Emulator QA passed
    (`appLinksVerified=true`, `launchMode=login`) and a signed release AAB was built locally. A
    real-device Google login check remains a human follow-up.
-21. 🟢 **Receipt-sync drain is now event-driven (Session 83)** — Boss replaced the always-on
+22. 🟢 **Receipt-sync drain is now event-driven (Session 83)** — Boss replaced the always-on
    5-minute cron design: migration `20260806090000_receipt_sync_event_drain.sql` (applied live via
    Management API) adds `private.receipt_sync_drain_kick()` triggers on `trip_backend_links`,
    `receipt_sync_jobs` and `trips` date changes. When a shared ledger sits inside its travel
@@ -108,24 +112,60 @@ you closed with your session number.
    `unscheduled: no shared trip in window`, `cron.job` empty. Drain secret was rotated once more
    and is consistent across edge secret, GitHub secret and `private.receipt_sync_drain_config`.
    Open Item 5's remaining piece stays a positive shared-receipt Notion mirror write proof.
-22. 🟢 **Compact cold-open false sync warning resolved in Sessions 84/85** — an exhausted persisted
+23. 🟢 **Compact cold-open false sync warning resolved in Sessions 84/85** — an exhausted persisted
    transient network failure now receives exactly one fresh cold-boot retry instead of remaining a
    permanent generic sync/manual-retry warning. Session 85 added Supabase's `network unavailable`
    and `network is unavailable` wording to that recovery class after the production-shaped case
    exposed the remaining classifier gap. Version conflicts, permission/data failures and other
    genuine terminal evidence remain visible. The Vercel-root regression seeds both scoped stores
    and asserts that neither the update notice nor either sync-warning surface appears.
-23. 🟢 **Compact/Android account-wide themes completed in Session 86** — five curated worlds plus
+24. 🟢 **Compact/Android account-wide themes completed in Session 86** — five curated worlds plus
    `自動（依旅程）` now cover first paint, auth/loading gates, the full Compact shell and Android
    system bars. Taiwan is the only dark world. Preference transport reuses existing local,
    IndexedDB, backup, Supabase and Notion settings with no database migration; React is a
    transport-only compatibility shim.
-24. 🟡 **One Compact Notion diagnostic smoke is stale** — the production settings/meta pull paths
-   pass, but `Settings mapping diagnostics stay read-only and surface mixed-schema issues` still
-   expects the removed `Notion Sync` / `檢查 Mapping` controls. Do not delete or weaken its schema
-   assertions; either restore an approved diagnostic surface or realign the navigation contract.
+25. 🟢 **Compact Notion diagnostic smoke realigned in Session 87** — the removed Settings UI is no
+   longer treated as a navigation contract. The diagnostic API is exercised directly and retains
+   the original mixed-schema `conflicting-duplicate=7`, `meta-fallback=5`, `skipped-row=2` assertions.
 
 ## What Was Done
+
+### Session 87 (Codex — repository audit and security hardening)
+
+1. **Frontend and deployment boundary:** retired the vulnerable 9k-line root runtime in favour of
+   a script-free CSP/no-referrer redirect to `/compact/`. React `0.2.7` and Compact `0.17.1` now
+   require successful Broker authentication plus device registration before setting trust; the
+   browser-side PBKDF2/AES unlock oracle was deleted. Stale Playwright navigation contracts were
+   realigned to the Scan-first boot, and bare smoke scripts now start and stop their own Vite server.
+2. **Backend and tenant boundary:** added forward-only migration
+   `20260824011000_harden_receipt_ownership_and_photo_storage.sql` to bind Notion enqueue and child
+   reparenting to the receipt owner, make `receipt-photos` private, enforce authenticated member
+   reads, and set a 6 MB JPEG/PNG/WebP allowlist. This migration is tracked only; it was not applied
+   to production. The static migration verifier now asserts the final hardened contract.
+3. **Broker cost and concurrency controls:** Broker `2026.08.24.1` validates operation kind,
+   prompt/image limits, provider model allowlists and output budgets. Weather and credential tests
+   join the daily quota. A SQLite Durable Object serializes password attempts and daily consumption,
+   with Wrangler migration/binding included. `wrangler deploy --dry-run` passed; no live deploy was
+   performed.
+4. **Dependency, bundle and structure repair:** upgraded Vite/PostCSS/nanoid and reconciled active
+   lockfiles; every production `npm audit --omit=dev` reports zero vulnerabilities. React vendor
+   splitting keeps all JS chunks below 500 kB. Admin `1.3.3` lazy-loads feature route groups, reducing
+   the main chunk from roughly 623 kB to 224 kB while isolating the Three.js login scene. A Compact
+   `storage.ts ↔ indexedDb.ts` cycle found by GitNexus was broken with a dedicated state-sanitizer seam;
+   final GitNexus structural check reports no circular imports.
+5. **Verification evidence:** Codex Security scan
+   `05e3e5ba-9c32-48d5-974a-a49e58f0947d` completed against the original `7ccc238` snapshot with
+   68 review receipts and 11 validated findings (`4 high`, `7 medium`); every source remediation is
+   present in this working tree, subject to the two live gates above. React browser coverage passed
+   `48` with `17` intentional mode skips; Compact targeted local regressions passed `22/22` and
+   Supabase-shaped session/sync coverage passed `15/15`; Admin browser coverage passed `49` with one
+   intentional skip plus post-fix route/login `11/11`. React/Compact/Admin typecheck, production
+   builds, unit/contract tests, secret scans and policy scans passed; Admin unit `33/33`, contract
+   `24/24`; Broker self-test and dry-run passed. Production dependency audits are zero across all
+   four active packages.
+6. **Boundaries and live items:** no database mutation, migration apply, credential rotation,
+   Cloudflare deploy, application deploy or production-data write occurred. Open Items 4 and 5
+   explicitly retain the required approved live apply/deploy and authenticated evidence.
 
 ### Session 86 (Codex — Compact/Android global themes, Compact `0.17.0`, Android `0.22.0`)
 

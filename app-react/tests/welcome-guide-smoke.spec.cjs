@@ -6,6 +6,7 @@ const userId = '22222222-2222-4222-8222-222222222222';
 const scopedStorageKey = `boss-japan-tracker:state:supabase:${userId}`;
 
 test('New Supabase account guide captures trip members and split ratios', async ({ page }) => {
+  test.skip(!process.env.VITE_SUPABASE_URL, 'Run with the fake Supabase environment from npm run smoke:welcome-guide.');
   await page.route('https://test-travel-expense.supabase.co/**', async (route) => {
     await route.fulfill({
       status: 500,
@@ -60,6 +61,7 @@ test('New Supabase account guide captures trip members and split ratios', async 
   await page.getByLabel('目的地國家/城市').fill('Seoul Korea');
   await page.getByRole('button', { name: /建立並進入 App/ }).click();
 
+  await page.getByLabel('主要分頁').getByRole('button', { name: '主頁', exact: true }).click();
   await expect(page.getByLabel('旅程總覽')).toBeVisible();
   await expect.poll(async () => page.evaluate((key) => {
     const raw = localStorage.getItem(key);
