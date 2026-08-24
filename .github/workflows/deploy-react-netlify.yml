@@ -1,0 +1,49 @@
+name: Deploy React to Netlify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app-react/**'
+      - 'netlify.toml'
+      - '.github/workflows/deploy-react-netlify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: react-netlify
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install React app deps
+        working-directory: app-react
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck React app
+        working-directory: app-react
+        run: npm run typecheck
+
+      - name: Build React app for Netlify
+        working-directory: app-react
+        env:
+          VITE_BASE_PATH: /
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+
+      - name: Deploy React app to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: npx --yes netlify-cli@26.1.0 deploy --prod --no-build --dir app-react/dist --site travel-expense-react --auth "$NETLIFY_AUTH_TOKEN"

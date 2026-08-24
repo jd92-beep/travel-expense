@@ -10,10 +10,19 @@ const deploySource = readFileSync(
   fileURLToPath(new URL('../../scripts/deploy-production.mjs', import.meta.url)),
   'utf8',
 );
+const providerCatalogSource = readFileSync(
+  fileURLToPath(new URL('../../server/admin/provider-catalog.js', import.meta.url)),
+  'utf8',
+);
 
 test('production deploy pins the current Vercel CLI and bounds child processes', () => {
   assert.match(deploySource, /vercel@56\.3\.2/);
   assert.match(deploySource, /timeout: CHILD_PROCESS_TIMEOUT_MS/);
+});
+
+test('production deploy packages a self-contained provider catalog', () => {
+  assert.match(deploySource, /'server\/admin\/provider-catalog\.js'/);
+  assert.doesNotMatch(providerCatalogSource, /\.\.\/\.\.\/\.\.\/contracts\//);
 });
 
 test('admin session route canary requires the canonical unauthorized JSON response', async () => {

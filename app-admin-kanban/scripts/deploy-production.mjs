@@ -74,6 +74,7 @@ function assertReleaseManifest(manifest, sourceDir) {
     'api/admin.js',
     'api/health.js',
     'api/readiness.js',
+    'server/admin/provider-catalog.js',
   ];
   if (path.resolve(String(manifest?.basePath || '')) !== sourceDir
     || !Number.isSafeInteger(manifest?.fileCount)
