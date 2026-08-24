@@ -83,7 +83,7 @@ Only the configured providers are rotated. The script never prints raw credentia
 
 All credential-bearing provider requests happen server-side. Browser code receives only a short-lived session token.
 AI routes validate request kind, prompt size, image MIME and the shared provider/model catalog before any provider call, and enforce bounded provider output tokens. AI, weather and credential-test routes consume daily quotas.
-Production unlock/admin attempt counters and daily quotas use the SQLite-backed `RateLimiter` Durable Object configured in `wrangler.jsonc`, avoiding Cloudflare KV read-modify-write races. Deploying this source is required before claiming the Durable Object is live.
+Production unlock/admin attempt counters and daily quotas use the SQLite-backed `RateLimiter` Durable Object configured in `wrangler.jsonc`, avoiding Cloudflare KV read-modify-write races. Broker `2026.08.24.1` is live as Cloudflare version `d86be18a-27a7-48dd-97a4-c9f47dd31733`; check, self-test, deploy dry-run, live fail-closed smoke and a redacted successful unlock/status path verified the deployment.
 For public Supabase users, Notion requests can also carry `X-Supabase-Auth:
 Bearer <access-token>`. In that mode the Worker uses the signed-in user's
 encrypted Notion token from KV and never falls back to the global Notion

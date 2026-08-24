@@ -38,10 +38,11 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。今次候選版本係 Compact Web `0.17.1`、React `0.2.7`、Admin `1.3.3` 同 Broker `2026.08.24.1`；Android worktree
-仍係 `0.22.0`（versionCode `2200`）。今次只 commit source，Supabase migration、Broker Durable Object 同各 hosting production 狀態要另行 deployment/live verification。Admin Console production 是 `1.0.2`，由 protected
-workflow `29415119909` 以 Git SHA `67cde57a42bc43f1bda026d81d555260e25bb564` promotion；live
-`/api/health` 回 `200`、exact SHA 及 `acceptingReadTraffic=true`。Console Providers 會列出五個
+Compact app 和 React app 獨立版本管理。現時 production 版本係 Compact Web `0.17.1`、React `0.2.7`、Admin `1.3.4` 同 Broker `2026.08.24.1`；Android worktree
+仍係 `0.22.0`（versionCode `2200`）。Compact 同 React 已部署到 Vercel、Netlify 同 GitHub Pages；Supabase 私有 receipt-photo cutover 同 Broker Durable Object 亦已套用。Admin Console 由 protected
+workflow `32687928249` 以 Git SHA `d92edfd3694e12e92651a8b43401624bb75f4c41` promotion 到 Vercel deployment
+`dpl_67SXrHRZoxKP1C7jkssnEThxSWDL`；live `/api/health` 回 `200`、exact SHA 及
+`acceptingReadTraffic=true`，未登入 `/api/admin/session` 回 canonical `401`。Console Providers 會列出五個
 既有 Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output
 tokens 嘅 request 測試 availability。Seedance 係 media model，唔會混入 LLM selector。
 

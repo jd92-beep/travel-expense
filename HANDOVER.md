@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-08-24 HKT
-- **Focus**: Session 87 repository-wide frontend/backend audit, security hardening, dependency reconciliation, bundle splitting and verification.
+- **Focus**: Session 88 production apply/deploy, Admin packaging repair and live verification.
 - **Agent**: Codex.
-- **App version**: Compact candidate `0.17.1`; Android `0.22.0` (versionCode 2200; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.3`; Broker candidate `2026.08.24.1`; React candidate `0.2.7`. Production versions were not changed or claimed in this session.
+- **App version**: Compact Web `0.17.1`; Android `0.22.0` (versionCode 2200; branch `codex/admin-console-1.0-android`); Admin `1.3.4`; Broker `2026.08.24.1`; React `0.2.7`. All web surfaces, Broker and the approved Supabase cutover are live; ordinary-user receipt-photo auth evidence remains open below.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -30,22 +30,22 @@ you closed with your session number.
    privilege check with an ordinary authenticated JWT; do not substitute privileged/service access.
 3. 🟠 **Admin DB platform-owner hardening remains pending** — complete the platform-owner operation
    for the planned non-login helper owner; browser grants, policies and RPC execute remain closed.
-4. 🟠 **Receipt-photo privacy cutover is ready but not live-applied** — Session 87 adds active
-   migration `20260824011000_harden_receipt_ownership_and_photo_storage.sql`; current Compact uses
-   signed URLs, but applying migrations is a separate approval gate. Until live apply and an
-   authenticated ordinary-user smoke, production may still retain the prior public compatibility state.
-5. 🟠 **Broker Durable Object hardening is source-ready, not deployed** — Session 87 adds the
-   SQLite-backed `RateLimiter`, AI/model/output validation and paid-route quotas. Wrangler dry-run
-   passes; deploy and live rate-limit evidence remain external gates.
+4. 🟡 **Receipt-photo privacy cutover is live; ordinary-user proof remains** — Session 88 applied
+   migration `20260824011000_harden_receipt_ownership_and_photo_storage.sql` live as
+   `20260824033202_harden_receipt_ownership_and_photo_storage`. Bucket privacy, MIME/size limits,
+   owner-bound policies and hardened RPC metadata were verified. Close this only after Item 2's
+   ordinary authenticated JWT signed-upload/read smoke; privileged access is not a substitute.
+5. 🟢 **Broker Durable Object hardening deployed in Session 88** — Worker version
+   `d86be18a-27a7-48dd-97a4-c9f47dd31733` serves Broker `2026.08.24.1`. Check, self-test, dry-run,
+   live health/CORS/no-session smoke and a redacted successful Durable Object unlock/status path passed;
+   no secret was rotated or printed.
 6. 🟡 **Receipt-sync/Notion outbox worker execution remains unproven** — worker `v38` is deployed
    and passed a negative canary, so deployment is no longer unverified. Do not claim an end-to-end
    live write: a positive shared-receipt write and Notion mirror result still need separate proof.
 7. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-8. 🟠 **Compact Netlify credit block remains active** — Session 80 workflow `30875160196` built and
-   typechecked Compact `0.16.19`, then Netlify rejected the production deploy with `403 Account
-   credit usage exceeded`. Vercel and GitHub Pages serve `0.16.19`; the Netlify alias still serves
-   the previous bundle. Add credits before retrying this workflow.
+8. 🟢 **Compact Netlify credit block closed in Session 88** — workflow `32686457804` succeeded and
+   the Netlify alias serves Compact `0.17.1`.
 9. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
    unused `hkd` imports in History/Stats. (Old Pending list.)
 10. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
@@ -129,6 +129,29 @@ you closed with your session number.
    the original mixed-schema `conflicting-duplicate=7`, `meta-fallback=5`, `skipped-row=2` assertions.
 
 ## What Was Done
+
+### Session 88 (Codex — apply/deploy all approved production surfaces)
+
+1. **Supabase cutover:** restored project `fbnnjoahvtdrnigevrtw` to `ACTIVE_HEALTHY`, applied the
+   receipt ownership/private-photo migration, and verified the private bucket, 6 MB image allowlist,
+   owner/parent guards, authenticated trip-member read policy and hardened `SECURITY DEFINER` RPC.
+   Static migration and shared-ledger contract scans passed. The ordinary authenticated JWT smoke
+   remains Item 2; Supabase advisor warnings outside this cutover were not silently changed.
+2. **Broker and public web deploys:** deployed Broker `2026.08.24.1` as Cloudflare version
+   `d86be18a-27a7-48dd-97a4-c9f47dd31733`; live health, CORS, fail-closed routes and a redacted
+   unlock/status Durable Object path passed. Compact `0.17.1` is live on Vercel, Netlify and Pages;
+   React `0.2.7` is live on Vercel, Netlify and Pages. React Netlify workflow `32687744387`, Compact
+   Netlify workflow `32686457804`, and Pages workflow `32687744356` passed.
+3. **Admin production repair and promotion:** the first candidate exposed a real Vercel packaging
+   defect: the BFF imported `contracts/ai-provider-catalog.json` outside the function archive, so
+   `/api/admin/session` returned `500`. Admin `1.3.4` embeds the contract-verified BFF catalog and
+   asserts its release manifest. Unit `34/34`, contract `24/24`, security, typecheck, build and the
+   complete protected workflow passed. Workflow `32687928249` promoted exact SHA
+   `d92edfd3694e12e92651a8b43401624bb75f4c41` as Vercel deployment
+   `dpl_67SXrHRZoxKP1C7jkssnEThxSWDL`; live health reports `acceptingReadTraffic=true`, and the
+   unauthenticated session route returns canonical `401`.
+4. **Git boundary:** implementation commit `d92edfd` is pushed to `origin/main`. Only task-owned
+   code/workflow files were staged; Boss's pre-existing Markdown/path-cleanup work remains preserved.
 
 ### Session 87 (Codex — repository audit and security hardening)
 
