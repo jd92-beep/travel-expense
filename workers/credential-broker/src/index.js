@@ -1,7 +1,7 @@
 import { PROVIDER_MODELS } from './provider-catalog.js';
 
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.08.24.1';
+const VERSION = '2026.09.09.1';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -928,6 +928,37 @@ async function parseProviderJson(response) {
   return data;
 }
 
+// Every provider reports token counts and we used to discard them, so nothing
+// measured what a scan or a trip update actually costs. Two shapes cover all
+// four providers: OpenAI-compatible (Kimi/Mimo/Volcano) put them in `usage`,
+// Gemini in `usageMetadata`.
+function readUsage(data) {
+  const gemini = data?.usageMetadata;
+  if (gemini) {
+    return {
+      in: Number(gemini.promptTokenCount) || 0,
+      out: Number(gemini.candidatesTokenCount) || 0,
+      cached: Number(gemini.cachedContentTokenCount) || 0,
+    };
+  }
+  const openai = data?.usage;
+  if (openai) {
+    return {
+      in: Number(openai.prompt_tokens) || 0,
+      out: Number(openai.completion_tokens) || 0,
+      cached: Number(openai.prompt_tokens_details?.cached_tokens) || 0,
+    };
+  }
+  return null;
+}
+
+// Counts only — never prompt or completion text, and no user identifier.
+function logUsage(provider, model, kind, data) {
+  const usage = readUsage(data);
+  if (!usage) return;
+  console.log(JSON.stringify({ evt: 'ai_usage', provider, model: String(model || ''), kind, ...usage }));
+}
+
 async function testNotion(env, credential) {
   const db = credential.extra?.databaseId;
   if (!db) return 'connected';
@@ -968,6 +999,7 @@ async function kimiJson(env, prompt, kind, image, requestedModel) {
       max_tokens: aiOutputTokenLimit(kind),
     }),
   }));
+  logUsage('kimi', requestedModel || env.KIMI_MODEL || 'kimi-code', kind, data);
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
 }
 
@@ -989,6 +1021,7 @@ async function mimoJson(env, prompt, kind, image, requestedModel) {
     thinking: { type: 'disabled' },
     max_tokens: aiOutputTokenLimit(kind),
   });
+  logUsage('mimo', requestedModel || env.MIMO_MODEL || 'mimo-v2.5', kind, data);
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
 }
 
@@ -1038,6 +1071,7 @@ async function googleJson(env, prompt, kind, image, requestedModel) {
       },
     }),
   }));
+  logUsage('google', model, kind, data);
   return extractJson(data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
 }
 
@@ -1364,6 +1398,7 @@ async function volcanoJson(env, prompt, kind, image, requestedModel) {
       max_tokens: aiOutputTokenLimit(kind),
     }),
   }));
+  logUsage('volcano', requestedModel || 'doubao-seed-2.0-lite', kind, data);
   const choice = data?.choices?.[0];
   const content = choice?.message?.content || data?.content || '';
   if (kind === 'test') {
