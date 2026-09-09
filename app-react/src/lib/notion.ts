@@ -664,7 +664,7 @@ function receiptSkipReason(props: Record<string, any>, schema: SchemaMap) {
   const objectType = readSelectProp(props, 'objectType', schema, { allowLoose: false }) || '';
   const cleanTitle = storeTitle.replace(/^⏳\s+/, '').trim();
   const rawItems = readRichTextProp(props, 'items', schema, { allowLoose: false });
-  if (sourceId === '__meta_settings__' || storeTitle === '__meta_settings__' || storeTitle.includes('App Settings（請勿刪除）') || objectType === 'settings') return 'settings/meta row';
+  if (sourceId === '__meta_settings__' || storeTitle === '__meta_settings__' || sourceId === '__meta_backup__' || storeTitle === '__meta_backup__' || storeTitle.includes('App Settings（請勿刪除）') || objectType === 'settings') return 'settings/meta row';
   if (objectType === 'trip') return 'trip row';
   if (cleanTitle.startsWith('🗓 行程更新：') || /\[行程更新\]/.test(rawItems) || /_iu_\d+$/.test(sourceId)) return 'itinerary update row';
   return null;

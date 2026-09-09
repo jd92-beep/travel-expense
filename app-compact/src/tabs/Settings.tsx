@@ -38,6 +38,7 @@ import {
   testNotion,
   archiveReceipt,
   notionFetch,
+  pushBackupSnapshot,
 } from '../lib/notion';
 import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
 import type { AppState, ItineraryDay, ItinerarySpot, Person, Receipt, SyncEngineState, SyncQueueItem, ThemePreference, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
@@ -2133,6 +2134,27 @@ export function Settings({
     });
   }
 
+  async function backupToNotion() {
+    const guard = notionMirrorGuardMessage(state, cloudSyncAvailable, userEmail);
+    if (guard) {
+      setStatus(`備份到 Notion 失敗：${guard}`);
+      return;
+    }
+    setBusy('備份到 Notion');
+    setStatus('');
+    try {
+      const result = await pushBackupSnapshot(state, safeBackupState());
+      const omitted = result.photosOmitted
+        ? `，略過 ${result.photosOmitted} 張相片縮圖（相片行自己嘅 mirror）`
+        : '';
+      setStatus(`已備份到 Notion：${result.receipts} 筆記錄${omitted}。想要完整檔案請用「匯出 Backup」。`);
+    } catch (error) {
+      setStatus(`備份到 Notion 失敗：${redactedError(error)}`);
+    } finally {
+      setBusy('');
+    }
+  }
+
   function previewTripShareExport() {
     const preview = buildTripSharePreview(state, currentTrip, persons);
     setTripSharePreview(preview);
@@ -3202,6 +3224,7 @@ export function Settings({
         <div className="action-row wrap">
           <button className="secondary" type="button" onClick={() => exportCsv(state)}><Download size={18} /> 匯出 CSV</button>
           <button className="secondary" type="button" onClick={() => downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup</button>
+          <button className="secondary" type="button" disabled={!!busy} onClick={backupToNotion}><Upload size={18} /> 備份到 Notion</button>
           <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup</button>
           <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearLocalPreview(true)}><RotateCcw size={18} /> 清除本地資料</button>
         </div>
