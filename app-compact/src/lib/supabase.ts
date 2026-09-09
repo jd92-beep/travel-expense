@@ -684,10 +684,18 @@ export function useSupabaseAuth() {
       return undefined;
     }
     let alive = true;
+    // This deadline releases the reconnect screen when getSession() neither
+    // resolves nor rejects — but it must not clear the session. supabase-js
+    // serializes auth behind a cross-tab Web Lock, so getSession() blocks while
+    // another tab holds it, and opening the app in a second tab was enough to
+    // blow the deadline and sign the user out of a perfectly valid session.
+    // A slow resolve means "still checking", not "signed out": stop the
+    // spinner and let onAuthStateChange deliver INITIAL_SESSION once the lock
+    // clears. A genuinely unreachable Supabase still rejects into the catch
+    // below, which reports the real error and does clear the session.
     const sessionCheckTimeout = window.setTimeout(() => {
       if (!alive) return;
-      setError('Supabase network is unavailable. Please try again.');
-      setSession(null);
+      setError('Supabase session check is taking longer than expected — the network may be unavailable. Reload to retry.');
       setLoading(false);
     }, 5_000);
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
