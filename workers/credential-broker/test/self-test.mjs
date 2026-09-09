@@ -253,7 +253,10 @@ function installProviderFetchStub() {
       if (body.model === 'minimax-m2.7') {
         return Response.json({ choices: [{ finish_reason: 'length', message: { content: '', reasoning_content: 'provider answered' } }] });
       }
-      return Response.json({ choices: [{ message: { content: '{"ok":true,"provider":"volcano"}' } }] });
+      return Response.json({
+        choices: [{ message: { content: '{"ok":true,"provider":"volcano"}' } }],
+        usage: { prompt_tokens: 222, completion_tokens: 33 },
+      });
     }
 
     if (href.startsWith('https://api.weatherapi.com/v1/current.json')) {
@@ -801,6 +804,18 @@ async function run() {
       assert.deepEqual(restoreFetch.volcanoBodies().at(-1).thinking, { type: 'disabled' });
       assert.equal(restoreFetch.volcanoBodies().at(-1).max_tokens, 8);
     }
+
+    // Real-work kinds, not just `test`: reasoning must be disabled here too or
+    // it eats max_tokens, the reply comes back empty, and the whole payload is
+    // re-sent to the next provider.
+    const volcanoScan = await jsonFetch(env, '/volcano/json', {
+      method: 'POST',
+      session,
+      body: { prompt: '{"ok":true}', kind: 'scan', model: 'doubao-seed-2.0-lite' },
+    });
+    assert.equal(volcanoScan.response.status, 200);
+    assert.deepEqual(restoreFetch.volcanoBodies().at(-1).thinking, { type: 'disabled' });
+    assert.equal(restoreFetch.volcanoBodies().at(-1).max_tokens, 4000);
 
     const exactInternalVolcano = await jsonFetch(env, '/credentials/test', {
       method: 'POST',

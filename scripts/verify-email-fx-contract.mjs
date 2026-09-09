@@ -68,8 +68,23 @@ assert.equal(_convertToJpy(3240, 'JPY'), 3240);
 assert.equal(_convertToJpy(19.9, 'USD'), 19.9 * FX_TO_JPY.USD);
 // An unknown currency passes through as JPY rather than silently zeroing out.
 assert.equal(_convertToJpy(500, 'XYZ'), 500);
-// A missing amount must not become NaN in the Notion payload.
-assert.equal(_convertToJpy(null, 'HKD'), 0);
+
+// "Price TBD" bookings carry a null amount by design. Null must survive the
+// conversion: a 0 here writes a real ¥0 into Notion, which reads as "free".
+assert.equal(_convertToJpy(null, 'HKD'), null);
+assert.equal(_convertToJpy(undefined, 'HKD'), null);
+assert.equal(_convertToJpy('', 'HKD'), null);
+assert.equal(_convertToJpy('not-a-number', 'HKD'), null);
+// A genuine zero is still a zero, not a missing value.
+assert.equal(_convertToJpy(0, 'HKD'), 0);
+assert.ok(
+  /jpyRaw === null \? null : Math\.round\(jpyRaw\)/.test(src),
+  'pushToNotion must keep a null amount null rather than rounding it to 0',
+);
+assert.ok(
+  /const hkd = jpy === null \? null :/.test(src),
+  'the HKD column must stay blank when there is no amount',
+);
 
 // The rate a double conversion would have produced must not be reachable.
 assert.notEqual(_convertToJpy(1720.8 * FX_TO_JPY.HKD, 'HKD'), _convertToJpy(1720.8, 'HKD'));

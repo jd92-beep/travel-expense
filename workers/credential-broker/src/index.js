@@ -1,7 +1,7 @@
 import { PROVIDER_MODELS } from './provider-catalog.js';
 
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.09.09.1';
+const VERSION = '2026.09.09.2';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -1394,7 +1394,12 @@ async function volcanoJson(env, prompt, kind, image, requestedModel) {
       model: requestedModel || 'doubao-seed-2.0-lite',
       messages,
       temperature: kind === 'test' ? 0 : 0.1,
-      thinking: kind === 'test' ? { type: 'disabled' } : undefined,
+      // Disabled for every kind, matching Kimi and Mimo. These are strict-JSON
+      // extraction calls with no use for reasoning, and leaving it on let
+      // reasoning eat max_tokens: the reply came back truncated with empty
+      // content, extractJson threw, and the whole payload was re-sent to the
+      // next provider in the chain.
+      thinking: { type: 'disabled' },
       max_tokens: aiOutputTokenLimit(kind),
     }),
   }));

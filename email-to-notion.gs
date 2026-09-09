@@ -512,8 +512,9 @@ function _validateBookings(parsed) {
 function pushToNotion(b, source, emailSubject, threadId, bookingIdx) {
   // The model returns the amount in the receipt's own currency; FX_TO_JPY is the single
   // conversion point (the prompt used to convert too, which double-applied the rate).
-  const jpy = Math.round(_convertToJpy(b.original_amount, b.original_currency));
-  const hkd = Math.round((jpy / 20.36) * 100) / 100;
+  const jpyRaw = _convertToJpy(b.original_amount, b.original_currency);
+  const jpy = jpyRaw === null ? null : Math.round(jpyRaw);
+  const hkd = jpy === null ? null : Math.round((jpy / 20.36) * 100) / 100;
   const catMap = { transport:'交通', food:'餐飲', shopping:'購物', lodging:'住宿', ticket:'門票', localtour:'當地旅遊', medicine:'藥品', other:'其他' };
   const payMap = { cash:'現金', credit:'信用卡', paypay:'PayPay', suica:'Suica' };
   // Stable SourceID = email_<threadId>_<idx> — idempotent across retries.
@@ -563,7 +564,8 @@ function pushToNotion(b, source, emailSubject, threadId, bookingIdx) {
   if (currencyKey) props[currencyKey] = { select: { name: (b.original_currency || 'JPY').slice(0, 50) } };
   const originalAmountKey = pick('Original Amount', 'Original');
   if (originalAmountKey) {
-    const originalAmount = Number(b.original_amount);
+    const raw = b.original_amount;
+    const originalAmount = (raw === null || raw === undefined || raw === '') ? NaN : Number(raw);
     props[originalAmountKey] = { number: isNaN(originalAmount) ? null : originalAmount };
   }
 
@@ -703,7 +705,12 @@ function _getDbSchema() {
 
 // ── UTILITIES ──────────────────────────────────────────────
 function _convertToJpy(amount, currency) {
-  const n = Number(amount) || 0;
+  // "Price TBD" bookings (pay-at-store, unpriced reservations) carry a null
+  // amount by design. Returning 0 for those wrote a real ¥0 into Notion, which
+  // reads as "free" and drags the expense totals down — null must survive.
+  if (amount === null || amount === undefined || amount === '') return null;
+  const n = Number(amount);
+  if (!isFinite(n)) return null;
   if (!currency) return n; // assume already JPY
   const cc = String(currency).toUpperCase().trim();
   const rate = FX_TO_JPY[cc];

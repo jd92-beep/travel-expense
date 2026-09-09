@@ -81,7 +81,7 @@ live schema 同時有以下重覆欄位：
 | App-side field | legacy push -> Notion | React push -> Notion | Apps Script push -> Notion | legacy pull | React pull | Status | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `store` | `店名` preferred, fallback `🏪 店名` | plain-first alias, usually `店名` | `店名` only in current DB | reads schema-resolved title | content-aware title read | `duplicate/conflicting` | title family is less broken because current DB only has `店名` |
-| `total` | `金額` / fallback `💴 金額 ¥` from `r.total` | `amount` alias from `Receipt.total` | `💴 金額 ¥` or `金額` from JPY-converted `b.total` | reads mapped amount only | reads first amount-like field with content | `duplicate/conflicting` | same logical field is written to different property families |
+| `total` | `金額` / fallback `💴 金額 ¥` from `r.total` | `amount` alias from `Receipt.total` | `💴 金額 ¥` or `金額`, converted from `b.original_amount` via `FX_TO_JPY` | reads mapped amount only | reads first amount-like field with content | `duplicate/conflicting` | same logical field is written to different property families |
 | `subtotal` | `小計` / `🧮 小計 ¥` | not written | not written | reads `subtotal` separately | amount fallback can accidentally match subtotal | `lossy` | React can misread subtotal as total if amount missing |
 | `tax` | `稅金` / `💸 稅金 ¥` | not written | not written | reads tax separately | not mapped as receipt field | `lossy` | React receipt model has no dedicated tax field in Notion sync |
 | `date` | `日期` / `📅 日期` | plain-first alias, usually `日期` | `📅 日期` or `日期` | mapped property only | content-aware date read | `duplicate/conflicting` | live itinerary-update page has different plain vs emoji dates |
@@ -177,7 +177,7 @@ Code path:
 
 Observed behavior:
 
-- `b.total` is converted to JPY before writing Notion amount
+- the model returns `original_amount` in the receipt's own currency; `FX_TO_JPY` is the single conversion point, and a null amount stays null rather than becoming 0
 - original currency and original amount are not written to dedicated fields
 - address / booking ref / time are not written to dedicated properties
 - those values are packed into the first line of `備註` as:
@@ -228,7 +228,7 @@ Evidence:
   - 無 `Currency`
   - 無 `Original Amount`
 - Apps Script code 只做：
-  - `_convertToJpy(b.total, b.original_currency)`
+  - `_convertToJpy(b.original_amount, b.original_currency)`
   - 再寫 `💴 金額 ¥` / `HKD`
   - 冇寫 React extended multi-currency fields
 
