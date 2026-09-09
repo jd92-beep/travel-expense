@@ -124,6 +124,7 @@ function installProviderFetchStub() {
   const integrations = [];
   const kimiModels = [];
   const kimiBodies = [];
+  const kimiAuth = [];
   const googleModels = [];
   const googleBodies = [];
   const mimoBodies = [];
@@ -176,10 +177,14 @@ function installProviderFetchStub() {
     }
 
     if (href.includes('kimi.test/v1/chat/completions')) {
-      assert.equal(auth, bearer('kimi-secret-for-test'));
+      assert.ok(
+        auth === bearer('kimi-secret-for-test') || auth === bearer('kimi-env-secret-for-test'),
+        `unexpected kimi authorization header: ${auth}`,
+      );
       const body = JSON.parse(init.body || '{}');
       kimiBodies.push(body);
       kimiModels.push(body.model);
+      kimiAuth.push(auth);
       const promptText = JSON.stringify(body.messages || body.prompt || '');
       if (promptText.includes('Analyze the user')) {
         return Response.json({ choices: [{ message: { content: JSON.stringify({
@@ -308,6 +313,7 @@ function installProviderFetchStub() {
   restore.usageEvents = () => usageEvents.slice();
   restore.notionCalls = () => notionCalls;
   restore.kimiModels = () => kimiModels.slice();
+  restore.kimiAuth = () => kimiAuth.slice();
   restore.kimiBodies = () => kimiBodies.slice();
   restore.googleModels = () => googleModels.slice();
   restore.googleBodies = () => googleBodies.slice();
@@ -446,6 +452,23 @@ async function run() {
     env.VOLCANO_KEY = 'volcano-secret-for-test';
     const envVolcanoStatus = await jsonFetch(env, '/credentials/status', { session });
     assert.equal(envVolcanoStatus.data.providers.find((item) => item.provider === 'volcano')?.status, 'connected');
+
+    // A Worker secret must override the vault for the AI providers too. Without
+    // this, a stale vault entry can only be replaced through an unlock session or
+    // the admin passphrase — which is exactly how Kimi and Google stayed broken.
+    env.KIMI_KEY = 'kimi-env-secret-for-test';
+    const envKimi = await jsonFetch(env, '/kimi/json', {
+      method: 'POST',
+      session,
+      body: { prompt: '{"ok":true}', kind: 'test' },
+    });
+    assert.equal(envKimi.response.status, 200);
+    assert.equal(
+      restoreFetch.kimiAuth().at(-1),
+      'Bearer kimi-env-secret-for-test',
+      'KIMI_KEY must take precedence over the vault entry',
+    );
+    delete env.KIMI_KEY;
 
     const adminRotateBlockedOrigin = await jsonFetch(env, '/credentials/admin-rotate', {
       method: 'POST',

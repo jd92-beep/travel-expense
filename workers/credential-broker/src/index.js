@@ -1,7 +1,7 @@
 import { PROVIDER_MODELS } from './provider-catalog.js';
 
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.09.09.2';
+const VERSION = '2026.09.09.3';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -449,6 +449,25 @@ async function readWeatherApiCredential(env) {
   const envSecret = String(env.WEATHERAPI_KEY || '').trim();
   if (envSecret) return { provider: 'weatherapi', secret: envSecret, extra: { source: 'env' }, status: 'connected' };
   return readCredential(env, 'weatherapi');
+}
+
+// Kimi, Google and Mimo were vault-only while Volcano and WeatherAPI could also
+// read a Worker secret. That asymmetry is why a stale vault entry took Kimi and
+// Google down while Volcano kept working: there was no way to supply a fresh key
+// without an unlock session or the admin passphrase. `wrangler secret put
+// KIMI_KEY` (or GOOGLE_KEY / MIMO_KEY) now overrides the vault, which is also the
+// safest path for the operator — the value goes straight to Cloudflare and never
+// transits a form, a log, or a chat transcript. The vault stays the fallback.
+const PROVIDER_ENV_SECRET = Object.freeze({
+  kimi: 'KIMI_KEY',
+  google: 'GOOGLE_KEY',
+  mimo: 'MIMO_KEY',
+});
+
+async function readAiCredential(env, provider) {
+  const envSecret = String(env[PROVIDER_ENV_SECRET[provider]] || '').trim();
+  if (envSecret) return { provider, secret: envSecret, extra: { source: 'env' }, status: 'connected' };
+  return readCredential(env, provider);
 }
 
 async function readVolcanoCredential(env) {
@@ -973,7 +992,7 @@ async function testNotion(env, credential) {
 }
 
 async function kimiJson(env, prompt, kind, image, requestedModel) {
-  const credential = await readCredential(env, 'kimi');
+  const credential = await readAiCredential(env, 'kimi');
   if (!credential?.secret) throw new Error('Kimi credential missing');
   const base = String(env.KIMI_PROXY_URL || env.KIMI_API_BASE || KIMI_DEFAULT_BASE).replace(/\/+$/, '');
   const messages = [
@@ -1004,7 +1023,7 @@ async function kimiJson(env, prompt, kind, image, requestedModel) {
 }
 
 async function mimoJson(env, prompt, kind, image, requestedModel) {
-  const credential = await readCredential(env, 'mimo');
+  const credential = await readAiCredential(env, 'mimo');
   if (!credential?.secret) throw new Error('Mimo credential missing');
   const messages = [
     { role: 'system', content: 'Return strict JSON only. No markdown.' },
@@ -1053,7 +1072,7 @@ async function mimoChatCompletion(env, credential, body) {
 }
 
 async function googleJson(env, prompt, kind, image, requestedModel) {
-  const credential = await readCredential(env, 'google');
+  const credential = await readAiCredential(env, 'google');
   if (!credential?.secret) throw new Error('Google credential missing');
   const model = String(requestedModel || env.GOOGLE_MODEL || GOOGLE_DEFAULT_MODEL).replace(/^models\//, '');
   const parts = [{ text: prompt }];
