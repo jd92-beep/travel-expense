@@ -963,7 +963,7 @@ async function kimiJson(env, prompt, kind, image, requestedModel) {
     body: JSON.stringify({
       model: requestedModel || env.KIMI_MODEL || 'kimi-code',
       messages,
-      temperature: kind === 'test' ? 0 : 0.6,
+      temperature: kind === 'test' ? 0 : 0.1,
       thinking: { type: 'disabled' },
       max_tokens: aiOutputTokenLimit(kind),
     }),
@@ -1359,7 +1359,7 @@ async function volcanoJson(env, prompt, kind, image, requestedModel) {
     body: JSON.stringify({
       model: requestedModel || 'doubao-seed-2.0-lite',
       messages,
-      temperature: kind === 'test' ? 0 : 0.6,
+      temperature: kind === 'test' ? 0 : 0.1,
       thinking: kind === 'test' ? { type: 'disabled' } : undefined,
       max_tokens: aiOutputTokenLimit(kind),
     }),
