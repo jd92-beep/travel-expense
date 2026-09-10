@@ -402,9 +402,9 @@ test('Japan weather uses JMA official first and renders slots', async ({ page })
   await expect(command.locator('.weather-target-pill')).toContainText('Today');
   await expect(command).not.toContainText('刷新');
   await expect(command.getByLabel('刷新天氣')).toBeVisible();
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA official');
-  await expect(page.locator('.preview-weather-source-strip')).toContainText(/Live ·|Cache ·/);
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('來源 · JMA official');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText(/即時|快取/);
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('行程城市');
   await expect(page.locator('.preview-weather-place')).toContainText('名古屋');
   const commandMetrics = await command.evaluate((node) => {
     const card = node.getBoundingClientRect();
@@ -502,9 +502,9 @@ test('Japan weather shows fallback reason when JMA official fails and Open-Meteo
   await installState(page, {});
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText(/Day 1 · Open-Meteo/)).toBeVisible();
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · Open-Meteo');
-  await expect(page.locator('.weather-fallback-chip').first()).toContainText('Fallback ·');
-  await expect(page.locator('.weather-fallback-chip').first()).toContainText('JMA official unavailable');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('來源 · Open-Meteo');
+  await expect(page.locator('.weather-fallback-chip').first()).toContainText('官方數據暫時不可用');
+  await expect(page.locator('.weather-fallback-chip').first()).toHaveAttribute('title', /JMA official unavailable/);
   await expect(page.getByText('23°C').first()).toBeVisible();
 });
 
@@ -557,9 +557,9 @@ test('JMA official stays preferred when broker session is active', async ({ page
   });
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText(/Day 1 · JMA official/)).toBeVisible();
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · JMA official');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('來源 · JMA official');
   await expect(page.locator('.weather-screen')).not.toContainText('WeatherAPI.com');
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Target · trip city');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('行程城市');
   await expect(page.locator('.preview-weather-temp strong')).toHaveText('21°C');
   await expect(page.locator('.preview-weather-temp small')).toContainText('體感 30°C');
   await expect(page.locator('.weather-slot-detailed .weather-temp-block').first().locator('.temp-num')).toContainText('21');
@@ -726,8 +726,9 @@ test('US trip uses NWS official before Open-Meteo fallback fill', async ({ page 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText('San Francisco').first()).toBeVisible();
   await expect(page.getByText('Day 1 · NWS official')).toBeVisible();
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · NWS official');
-  await expect(page.locator('.weather-fallback-chip').first()).toContainText('NWS official missing some hourly fields');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('來源 · NWS official');
+  await expect(page.locator('.weather-fallback-chip').first()).toContainText('官方數據不完整');
+  await expect(page.locator('.weather-fallback-chip').first()).toHaveAttribute('title', /NWS official missing some hourly fields/);
   await expect(page.getByText('21°C').first()).toBeVisible();
   expect(nwsCalls.some((url) => url.includes('api.weather.gov/points/'))).toBe(true);
   expect(urls.length).toBeGreaterThan(0);
@@ -770,7 +771,7 @@ test('Singapore trip uses NEA official live data with fallback fill', async ({ p
   });
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText(/Day 1 · NEA official/)).toBeVisible();
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · NEA official');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('來源 · NEA official');
   await expect(page.getByText('30°C').first()).toBeVisible();
   expect(neaCalls.some((url) => url.includes('two-hr-forecast'))).toBe(true);
   expect(neaCalls.some((url) => url.includes('air-temperature'))).toBe(true);
@@ -812,7 +813,7 @@ test('Canada trip uses MSC official current conditions with fallback fill', asyn
   });
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText(/Day 1 · MSC official/)).toBeVisible();
-  await expect(page.locator('.preview-weather-source-strip')).toContainText('Provider · MSC official');
+  await expect(page.locator('.preview-weather-source-strip')).toContainText('來源 · MSC official');
   await expect(page.getByText('14°C').first()).toBeVisible();
   expect(mscCalls.some((url) => url.includes('citypageweather-realtime'))).toBe(true);
 });

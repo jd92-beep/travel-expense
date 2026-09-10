@@ -153,7 +153,9 @@ export function resolveOfficialWeatherProvider(coord: WeatherCoord, context: Off
   if (coord.lat >= 22.15 && coord.lat <= 22.56 && coord.lon >= 113.82 && coord.lon <= 114.44) return 'hko';
   if (coord.lat >= 24 && coord.lat <= 46 && coord.lon >= 122 && coord.lon <= 146) return 'jma';
   if (coord.lat >= 1.13 && coord.lat <= 1.48 && coord.lon >= 103.55 && coord.lon <= 104.15) return 'nea-sg';
-  if (coord.lat >= 41 && coord.lat <= 84 && coord.lon >= -141 && coord.lon <= -52) return 'msc-ca';
+  // Canada proper (lat >= 49) first, then NWS — the old MSC box (lat 41-84) was checked
+  // before NWS and swallowed the northern CONUS (Seattle/Chicago/Boston → msc-ca, always failing).
+  if (coord.lat >= 49 && coord.lat <= 84 && coord.lon >= -141 && coord.lon <= -52) return 'msc-ca';
   if (coord.lat >= 18 && coord.lat <= 72 && coord.lon >= -170 && coord.lon <= -60) return 'nws-us';
   return null;
 }
@@ -456,6 +458,32 @@ async function fetchText(url: string, timeoutMs = 10000) {
   }
 }
 
+// Short-TTL memo for provider endpoints that are identical across location groups
+// (HKO fnd/rhrread, JMA forecast/AMeDAS, NEA readings). Without this a 7-day 2-group
+// trip issues ~28 identical requests per load cycle. Failures are NOT memoized.
+const FETCH_MEMO_TTL_MS = 60 * 1000;
+const _fetchMemo = new Map<string, { ts: number; promise: Promise<unknown> }>();
+
+function memoizedFetch<T>(url: string, fetcher: (u: string) => Promise<T>): Promise<T> {
+  const now = Date.now();
+  const hit = _fetchMemo.get(url);
+  if (hit && now - hit.ts < FETCH_MEMO_TTL_MS) return hit.promise as Promise<T>;
+  const promise = fetcher(url).catch((err) => {
+    _fetchMemo.delete(url);
+    throw err;
+  });
+  _fetchMemo.set(url, { ts: now, promise });
+  return promise;
+}
+
+function fetchJsonShared(url: string, timeoutMs = 10000) {
+  return memoizedFetch(url, (u) => fetchJson(u, timeoutMs));
+}
+
+function fetchTextShared(url: string, timeoutMs = 10000) {
+  return memoizedFetch(url, (u) => fetchText(u, timeoutMs));
+}
+
 function resolveJmaLocationProfile(coord: WeatherCoord): JmaLocationProfile | null {
   const hay = `${coord.label || ''} ${coord.query || ''}`;
   const textMatch = JMA_LOCATION_PROFILES.find((profile) => profile.matcher.test(hay));
@@ -599,9 +627,9 @@ async function applyJmaAmedasObservation(data: WeatherData, profile: JmaLocation
   if (currentYmdInTimezone(timezone) !== targetDate) return;
   const slotIndex = liveSlotIndexForDate(targetDate, timezone);
   if (slotIndex < 0) return;
-  const latestTime = (await fetchText('https://www.jma.go.jp/bosai/amedas/data/latest_time.txt')).trim();
+  const latestTime = (await fetchTextShared('https://www.jma.go.jp/bosai/amedas/data/latest_time.txt')).trim();
   const mapTime = formatJmaAmedasMapTime(latestTime);
-  const map = await fetchJson(`https://www.jma.go.jp/bosai/amedas/data/map/${mapTime}.json`) as Record<string, Record<string, unknown>>;
+  const map = await fetchJsonShared(`https://www.jma.go.jp/bosai/amedas/data/map/${mapTime}.json`) as Record<string, Record<string, unknown>>;
   const record = map?.[profile.stationCode];
   setHourlyValue(data, 'temperature_2m', slotIndex, firstAmedasValue(record, 'temp'));
   setHourlyValue(data, 'relative_humidity_2m', slotIndex, firstAmedasValue(record, 'humidity'));
@@ -622,7 +650,7 @@ async function fetchJmaOfficialWeather(coord: WeatherCoord, timezone: string, ta
   const profile = resolveJmaLocationProfile(coord);
   if (!profile) throw new Error('No matching JMA office/station');
   const data = emptyWeatherDataForDate(date);
-  const forecast = await fetchJson(`https://www.jma.go.jp/bosai/forecast/data/forecast/${profile.officeCode}.json`);
+  const forecast = await fetchJsonShared(`https://www.jma.go.jp/bosai/forecast/data/forecast/${profile.officeCode}.json`);
   applyJmaForecast(data, forecast, profile, date);
   try {
     await applyJmaAmedasObservation(data, profile, date, timezone === 'auto' ? 'Asia/Tokyo' : timezone);
@@ -652,9 +680,10 @@ function nearestByDistance<T>(items: T[], coord: WeatherCoord, latOf: (item: T) 
     .sort((a, b) => a.distance - b.distance)[0]?.item;
 }
 
-async function fetchSingaporeReading(endpoint: string, coord: WeatherCoord): Promise<number | undefined> {
-  const json = await fetchJson(`https://api-open.data.gov.sg/v2/real-time/api/${endpoint}`) as {
+async function fetchSingaporeReading(endpoint: string, coord: WeatherCoord): Promise<{ value?: number; unit?: string }> {
+  const json = await fetchJsonShared(`https://api-open.data.gov.sg/v2/real-time/api/${endpoint}`) as {
     data?: {
+      readingUnit?: string;
       stations?: Array<{ id?: string; location?: { latitude?: number; longitude?: number } }>;
       readings?: Array<{ data?: Array<{ stationId?: string; value?: number }> }>;
     };
@@ -663,11 +692,12 @@ async function fetchSingaporeReading(endpoint: string, coord: WeatherCoord): Pro
   const nearest = nearestByDistance(stations, coord, (station) => Number(station.location?.latitude), (station) => Number(station.location?.longitude));
   const reading = json.data?.readings?.[0]?.data?.find((item) => item.stationId === nearest?.id);
   const value = Number(reading?.value);
-  return Number.isFinite(value) ? value : undefined;
+  const unit = typeof json.data?.readingUnit === 'string' ? json.data.readingUnit : undefined;
+  return { value: Number.isFinite(value) ? value : undefined, unit };
 }
 
 async function fetchSingaporeForecastCode(coord: WeatherCoord): Promise<number | undefined> {
-  const json = await fetchJson('https://api-open.data.gov.sg/v2/real-time/api/two-hr-forecast') as {
+  const json = await fetchJsonShared('https://api-open.data.gov.sg/v2/real-time/api/two-hr-forecast') as {
     data?: {
       area_metadata?: Array<{ name?: string; label_location?: { latitude?: number; longitude?: number } }>;
       items?: Array<{ forecasts?: Array<{ area?: string; forecast?: string }> }>;
@@ -686,7 +716,7 @@ async function fetchSingaporeOfficialWeather(coord: WeatherCoord, timezone: stri
   const data = emptyWeatherDataForDate(date);
   const slotIndex = liveSlotIndexForDate(date, safeTimezone);
   if (slotIndex < 0) throw new Error('NEA official live slot unavailable');
-  const [temp, humidity, rainMm, windSpeed, windDirection, code] = await Promise.all([
+  const [temp, humidity, rainMm, wind, windDirection, code] = await Promise.all([
     fetchSingaporeReading('air-temperature', coord),
     fetchSingaporeReading('relative-humidity', coord),
     fetchSingaporeReading('rainfall', coord),
@@ -694,11 +724,16 @@ async function fetchSingaporeOfficialWeather(coord: WeatherCoord, timezone: stri
     fetchSingaporeReading('wind-direction', coord),
     fetchSingaporeForecastCode(coord),
   ]);
-  setHourlyValue(data, 'temperature_2m', slotIndex, temp);
-  setHourlyValue(data, 'relative_humidity_2m', slotIndex, humidity);
-  setHourlyValue(data, 'precipitation', slotIndex, rainMm);
-  setHourlyValue(data, 'wind_speed_10m', slotIndex, windSpeed);
-  setHourlyValue(data, 'wind_direction_10m', slotIndex, windDirection);
+  // NEA wind-speed readings are in knots; everything downstream stores/displays km/h.
+  const windUnit = String(wind.unit || 'knots');
+  const windKmh = wind.value != null && /knot|\bkt\b/i.test(windUnit)
+    ? Math.round(wind.value * 1.852 * 10) / 10
+    : wind.value;
+  setHourlyValue(data, 'temperature_2m', slotIndex, temp.value);
+  setHourlyValue(data, 'relative_humidity_2m', slotIndex, humidity.value);
+  setHourlyValue(data, 'precipitation', slotIndex, rainMm.value);
+  setHourlyValue(data, 'wind_speed_10m', slotIndex, windKmh);
+  setHourlyValue(data, 'wind_direction_10m', slotIndex, windDirection.value);
   setHourlyValue(data, 'weather_code', slotIndex, code);
   if (!hasMeaningfulWeatherData(data)) throw new Error('NEA official returned no matching weather values');
   return { data, source: 'NEA official', provider: 'NEA official', cached: false, fetchedAt: Date.now() };
@@ -842,12 +877,12 @@ function hkoIconToWmo(icon?: number): number | undefined {
   if (icon === 75) return 3;   // Cloudy (Night)
   if (icon === 76) return 3;   // Overcast (Night)
   if (icon === 77) return 51;  // Light Rain (Night)
-  if (icon === 80) return 95;  // Windy
-  if (icon === 81) return 61;  // Dry
-  if (icon === 82) return 95;  // Humid
+  if (icon === 80) return 3;   // Windy → 多雲 (wind has no dedicated WMO code; 95 was wrong)
+  if (icon === 81) return 1;   // Dry → mainly clear
+  if (icon === 82) return 2;   // Humid → partly cloudy
   if (icon === 83) return 45;  // Fog
   if (icon === 84) return 45;  // Mist
-  if (icon === 85) return 95;  // Haze
+  if (icon === 85) return 45;  // Haze → fog/haze (was thunderstorm — wrong)
   if (icon === 90) return 0;   // Hot
   if (icon === 91) return 0;   // Warm
   if (icon === 92) return 2;   // Cool
@@ -891,8 +926,8 @@ async function fetchHkoOfficialWeather(coord: WeatherCoord, timezone: string, ta
 
   // Fetch both endpoints in parallel
   const [fndJson, rhrJson] = await Promise.all([
-    fetchJson('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=fnd&lang=en') as Promise<{ weatherForecast?: HkoForecastDay[] }>,
-    fetchJson('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=en').catch(() => null) as Promise<HkoRhrData | null>,
+    fetchJsonShared('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=fnd&lang=en') as Promise<{ weatherForecast?: HkoForecastDay[] }>,
+    fetchJsonShared('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=en').catch(() => null) as Promise<HkoRhrData | null>,
   ]);
 
   // ── 9-day forecast: find the matching date ──
@@ -1023,14 +1058,15 @@ function normalizeOfficialProvider(value: OfficialWeatherProviderId | boolean | 
   return value;
 }
 
-export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', officialProviderInput: OfficialWeatherProviderId | boolean | null = null, state?: WeatherBrokerState, targetDate?: string): Promise<WeatherFetchResult> {
+export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', officialProviderInput: OfficialWeatherProviderId | boolean | null = null, state?: WeatherBrokerState, targetDate?: string, options: { force?: boolean } = {}): Promise<WeatherFetchResult> {
   if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) throw new Error(`${coord.label} 缺少 lat/lon，請喺行程 spot 加座標或用 Kimi 更新行程。`);
   const officialProvider = normalizeOfficialProvider(officialProviderInput);
   const officialSource = officialProvider ? officialProviderSource(officialProvider) : '';
   const cacheKey = weatherCacheKey(coord);
   const safeTimezone = normalizeWeatherTimezone(timezone);
   try {
-    const cached = cacheKey ? JSON.parse(localStorage.getItem(cacheKey) || 'null') : null;
+    // `force` (manual refresh) bypasses the cache READ but still writes it below.
+    const cached = !options.force && cacheKey ? JSON.parse(localStorage.getItem(cacheKey) || 'null') : null;
     const cachedSource = String(cached?.source || '');
     const officialCacheAllowed = !officialProvider || cachedSource === officialSource;
     if (cached && officialCacheAllowed && Date.now() - cached.ts < 60 * 60 * 1000 && weatherDataIncludesDate(cached.data, targetDate)) {

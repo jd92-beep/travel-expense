@@ -367,6 +367,9 @@ export interface AppState {
   notionDeletedIds?: string[];
   notionDeletedSourceIds?: string[];
   receiptTombstones?: Record<string, ReceiptTombstone>;
+  // Local-only tombstones for trips deleted on this device. There is no delete_trip RPC yet,
+  // so a pull would otherwise resurrect a locally deleted trip from the server copy.
+  deletedTripIds?: string[];
   syncQueue?: SyncQueueItem[];
   settingsUpdatedAt?: number;
   lastSyncedAt?: number;

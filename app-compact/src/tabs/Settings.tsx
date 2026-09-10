@@ -17,7 +17,6 @@ import {
   registerPersonalNotionIntegration,
   rotateProviderCredential,
   testAiModel,
-  testProviderConnection,
   unlockCredentialBroker,
   type CredentialProvider,
   type ConnectionStatus,
@@ -29,24 +28,21 @@ import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 import { saveReceiptRepairIntent } from '../lib/repairIntent';
 import { receiptSourceTombstoneKey } from '../lib/syncMerge';
-import { enqueueChange } from '../lib/changeJournal';
+import { enqueueChange, settleChange } from '../lib/changeJournal';
 import {
   hasDirectNotionToken,
-  pullAll,
-  pushSettingsMeta,
   pushTripPage,
-  testNotion,
   archiveReceipt,
   notionFetch,
   pushBackupSnapshot,
 } from '../lib/notion';
 import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
 import type { AppState, ItineraryDay, ItinerarySpot, Person, Receipt, SyncEngineState, SyncQueueItem, ThemePreference, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
-import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
+import { clearCredentialSession, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
 import { createSupabaseTripInvite, inviteLinkForToken, leaveSupabaseTrip, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
-import { GlassCard, SegmentedControl, StatefulActionButton, StatusPill, Toast } from '../components/ui';
+import { GlassCard, SegmentedControl, StatusPill, Toast } from '../components/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { GradientButton } from '../components/ui/gradient-button';
 import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
@@ -309,6 +305,53 @@ function AiModelField({
   );
 }
 
+// Fixed/live rate editor for the ACTIVE trip currency (state.tripCurrency — the same key
+// perHkdForCurrency reads). Keeps a local draft string while typing so rates < 1 (e.g. "0.128")
+// don't get clobbered by the parsed-value write-back; commits a valid value on blur/Enter and
+// reverts to the committed rate when the draft is empty or invalid.
+function TripRateInput({
+  state,
+  updateState,
+}: {
+  state: AppState;
+  updateState: (patch: Partial<AppState>) => void;
+}) {
+  const code = String(state.tripCurrency || 'JPY').toUpperCase();
+  const committed = perHkdForCurrency(state, code);
+  const [draft, setDraft] = useState<string | null>(null);
+  useEffect(() => setDraft(null), [code]);
+  const commit = () => {
+    if (draft === null) return;
+    const val = parseFloat(draft);
+    setDraft(null);
+    if (!Number.isFinite(val) || val <= 0) return; // invalid → revert to committed
+    const safe = Math.min(1_000_000, val);
+    // Also stamp rateTable[code] so perHkdForCurrency (used by Dashboard/Stats/ReceiptEditor)
+    // picks up the same value — it checks rateTable before falling back to state.rate, so
+    // without this a stale live-fetched table entry would silently override a manual edit.
+    updateState({
+      rate: safe,
+      rateTable: { ...state.rateTable, [code]: { currency: code, perHkd: safe, source: 'manual', fetchedAt: Date.now() } },
+    });
+  };
+  return (
+    <input
+      type="number"
+      min="0.01"
+      step="0.01"
+      value={draft ?? String(committed)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit();
+        }
+      }}
+    />
+  );
+}
+
 function tripDraftPreviewStats(draft: TripDraft) {
   const days = draft.trip.itinerary || [];
   const spots = days.flatMap((day) => day.spots || []);
@@ -423,6 +466,7 @@ type BackupImportPreview = {
   tripCount: number;
   receiptCount: number;
   targetTripName: string;
+  nextActiveTripId?: string;
   warnings: string[];
 };
 
@@ -588,7 +632,13 @@ function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Pers
       payer: personNameById.get(receipt.personId || '') || 'Unassigned',
     })),
   };
-  const nextStop = payload.itinerary.flatMap((day) => day.spots.map((spot) => `${day.date} ${spot.time} ${spot.name}`)).find(Boolean) || 'No itinerary spot';
+  const spotEntries = payload.itinerary.flatMap((day) => day.spots.map((spot) => ({
+    date: day.date,
+    line: `${day.date} ${spot.time} ${spot.name}`,
+  })));
+  const today = todayLocalDate();
+  const upcoming = spotEntries.find((entry) => entry.date >= today);
+  const nextStop = (upcoming || spotEntries[spotEntries.length - 1])?.line || 'No itinerary spot';
   const receiptLine = payload.receipts.length
     ? payload.receipts.slice(0, 3).map((receipt) => `${receipt.store} ${receipt.currency} ${Math.round(receipt.amount).toLocaleString('en-US')}`).join(' · ')
     : 'No receipts yet';
@@ -716,6 +766,7 @@ function buildBackupImportPreview(fileName: string, payload: Partial<AppState>, 
     syncQueue: _syncQueue,
     notionDeletedIds: _notionDeletedIds,
     notionDeletedSourceIds: _notionDeletedSourceIds,
+    deletedTripIds: _deletedTripIds,
     lastSyncedAt: _lastSyncedAt,
     globalSyncStatus: _globalSyncStatus,
     syncError: _syncError,
@@ -733,6 +784,18 @@ function buildBackupImportPreview(fileName: string, payload: Partial<AppState>, 
   const fallbackTripId = requestedActiveTripId || currentTrip.id || nextTrips.find((trip) => !trip.archived)?.id || nextTrips[0]?.id;
   const receipts = sanitizeImportedReceipts(payload.receipts, currentTrip.startDate || state.tripDateRange.start, allowedTripIds, fallbackTripId);
   const targetTrip = nextTrips.find((trip) => trip.id === fallbackTripId) || currentTrip;
+  // Per-trip maps from another device/account must not reference trips this restore doesn't
+  // know about — keep only keys for trips that will exist after the import.
+  if (safePayload.peopleByTripId) {
+    safePayload.peopleByTripId = Object.fromEntries(
+      Object.entries(safePayload.peopleByTripId).filter(([tripId]) => allowedTripIds.has(tripId)),
+    );
+  }
+  if (safePayload.shareRatiosByTripId) {
+    safePayload.shareRatiosByTripId = Object.fromEntries(
+      Object.entries(safePayload.shareRatiosByTripId).filter(([tripId]) => allowedTripIds.has(tripId)),
+    );
+  }
   const warnings = [
     'Secrets stripped',
     'Cloud IDs removed',
@@ -747,6 +810,7 @@ function buildBackupImportPreview(fileName: string, payload: Partial<AppState>, 
     tripCount: importedTrips?.length || 0,
     receiptCount: receipts.length,
     targetTripName: targetTrip.name || currentTrip.name || 'Current trip',
+    nextActiveTripId: fallbackTripId,
     warnings,
   };
 }
@@ -780,93 +844,6 @@ function formatSessionExpiry(expiresAt: number): string {
 
 function shortId(value: string): string {
   return value && value.length > 14 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value || 'none';
-}
-
-function buildSyncReadinessDryRun(
-  state: AppState,
-  trip: TripProfile,
-  syncState: SyncEngineState | undefined,
-  cloudSyncAvailable: boolean,
-  notionMirrorReady: boolean,
-  brokerReady: boolean,
-  storageScope: string,
-) {
-  const tripReceipts = scopedReceiptsForTrip(state, trip);
-  const tripReceiptIds = new Set(tripReceipts.map((receipt) => receipt.id));
-  const queue = syncQueueSummary(state.syncQueue).active;
-  const relevantQueue = queue.filter((item) => (
-    item.type === 'settings'
-    || item.entityId === trip.id
-    || item.payload?.tripId === trip.id
-    || tripReceiptIds.has(item.entityId)
-  ));
-  const failedQueue = relevantQueue.filter((item) => item.status === 'error' || item.status === 'failed');
-  const pendingQueue = relevantQueue.filter((item) => item.status !== 'error' && item.status !== 'failed');
-  const destructiveQueue = relevantQueue.filter((item) => item.op === 'delete' || item.type === 'delete-receipt');
-  const receiptQueue = relevantQueue.filter((item) => item.type === 'receipt' || item.type === 'delete-receipt');
-  const tripQueue = relevantQueue.filter((item) => item.type === 'trip');
-  const settingsQueue = relevantQueue.filter((item) => item.type === 'settings');
-  const queueKeyCounts = new Map<string, number>();
-  relevantQueue.forEach((item) => {
-    const key = `${item.type}:${item.entityId}`;
-    queueKeyCounts.set(key, (queueKeyCounts.get(key) || 0) + 1);
-  });
-  const duplicateQueueKeys = Array.from(queueKeyCounts.values()).filter((count) => count > 1).length;
-  const failedQueueKeys = new Set(failedQueue.map((item) => `${item.type}:${item.entityId}`));
-  const receiptConflictCount = tripReceipts.filter((receipt) => (
-    (receipt.syncStatus === 'error' || receipt.syncStatus === 'failed') && !failedQueueKeys.has(`receipt:${receipt.id}`)
-  )).length;
-  const conflictSignals = failedQueue.length + duplicateQueueKeys + receiptConflictCount;
-  const oldestQueuedAt = relevantQueue.reduce((oldest, item) => {
-    const stamp = Number(item.createdAt || item.updatedAt || 0);
-    if (!stamp) return oldest;
-    return oldest ? Math.min(oldest, stamp) : stamp;
-  }, 0);
-  const target = cloudSyncAvailable
-    ? notionMirrorReady ? 'Supabase + Notion' : 'Supabase only'
-    : brokerReady ? 'Broker / Notion' : storageScope;
-  const statusLabel = conflictSignals
-    ? 'Review first'
-    : relevantQueue.length
-      ? 'Ready dry run'
-      : 'Queue clear';
-  return {
-    tone: conflictSignals ? 'warning' : relevantQueue.length ? 'info' : 'ok',
-    statusLabel,
-    helper: 'Local dry run only; no provider, broker, Supabase, or Notion calls are made here.',
-    items: [
-      {
-        key: 'pending',
-        title: 'Queued changes',
-        value: failedQueue.length ? `${failedQueue.length} failed` : pendingQueue.length ? `${pendingQueue.length} pending` : 'None',
-        detail: `${receiptQueue.length} receipt · ${tripQueue.length} trip · ${settingsQueue.length} settings`,
-      },
-      {
-        key: 'conflicts',
-        title: 'Conflict signals',
-        value: conflictSignals ? `${conflictSignals} signal${conflictSignals === 1 ? '' : 's'}` : 'Clear',
-        detail: failedQueue.length ? `${failedQueue.length} failed queue item${failedQueue.length === 1 ? '' : 's'}` : 'No failed queue',
-      },
-      {
-        key: 'age',
-        title: 'Offline age',
-        value: oldestQueuedAt ? formatSyncAge(oldestQueuedAt) : 'No queue',
-        detail: `Last sync ${formatSyncAge(syncState?.lastSyncedAt || state.lastSyncedAt || 0)}`,
-      },
-      {
-        key: 'target',
-        title: 'Push target',
-        value: target,
-        detail: syncState?.status ? `Engine ${syncState.status}` : 'Local queue snapshot',
-      },
-    ],
-    warnings: [
-      'Dry run only',
-      'No provider calls',
-      ...(destructiveQueue.length ? [`${destructiveQueue.length} delete queued`] : []),
-      ...(conflictSignals ? ['Review conflicts before Push All'] : relevantQueue.length ? ['Backup before long offline push'] : ['Nothing pending to push']),
-    ],
-  };
 }
 
 function buildTripScopeAudit(state: AppState, trip: TripProfile) {
@@ -960,8 +937,13 @@ export function Settings({
 }) {
   const supabaseAuth = useSupabaseAuth();
   const { theme } = useTripTheme();
-  const persons = getPersons(state);
-  const currentTrip = activeTrip(state);
+  // Memoized on the slices they actually read so the doctor/audit useMemos below hold across
+  // unrelated re-renders (typing in the Trip Manager form no longer recomputes everything).
+  const persons = useMemo(() => getPersons(state), [state.persons]);
+  const currentTrip = useMemo(
+    () => activeTrip(state),
+    [state.trips, state.activeTripId, state.tripName, state.tripDateRange, state.customItinerary, state.tripCurrency, state.budget],
+  );
   const themePreference: ThemePreference = state.themePreference;
   const trips = state.trips?.length ? state.trips : [currentTrip];
   const currenciesForTrip = (trip: Partial<TripProfile> | undefined) => {
@@ -971,13 +953,16 @@ export function Settings({
   const nonHomeCurrencyForTrip = (trip: Partial<TripProfile> | undefined, fallback = 'JPY') => (
     currenciesForTrip(trip).find((code) => code !== (trip?.homeCurrency || 'HKD')) || fallback
   );
-  const activeTripSettlementState = {
-    ...state,
-    receipts: scopedReceiptsForTrip(state, currentTrip),
-  };
-  const settlement = computeSettlements(activeTripSettlementState);
+  const settlement = useMemo(
+    () => computeSettlements({ ...state, receipts: scopedReceiptsForTrip(state, currentTrip) }),
+    [state, currentTrip],
+  );
   const tripPrefix = currencyPrefix(getResolvedTripCurrency(state, currentTrip));
-  const shareRatios = state.shareRatios || {};
+  const shareRatios = useMemo(() => state.shareRatios || {}, [state.shareRatios]);
+  const personSharePercents = useMemo(
+    () => sharePercents(persons.map((person) => person.id), shareRatios),
+    [persons, shareRatios],
+  );
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -1004,11 +989,9 @@ export function Settings({
   const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [apiKeyMessage, setApiKeyMessage] = useState('');
   const [brokerPassword, setBrokerPassword] = useState('');
-  const [directNotionToken, setDirectNotionToken] = useState(getDirectNotionToken);
   const [personalNotionToken, setPersonalNotionToken] = useState('');
   const [personalNotionDb, setPersonalNotionDb] = useState(state.notionDb || '');
   const [personalNotionStatus, setPersonalNotionStatus] = useState<PersonalNotionStatus | null>(null);
-  const [schemaDiag, setSchemaDiag] = useState<Array<{ name: string; type: string; mapped: string | null }> | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);
@@ -1177,7 +1160,6 @@ export function Settings({
   const directTokenEnabled = true;
   const buildLabel = `v${APP_VERSION}`;
   const tripDoctor = useMemo(() => compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope), [state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope]);
-  const syncReadiness = useMemo(() => buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope), [state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope]);
   const tripScopeAudit = useMemo(() => buildTripScopeAudit(state, currentTrip), [state, currentTrip]);
   const failedSyncCount = syncState?.failedCount || 0;
   const pendingSyncCount = syncState?.pendingCount || 0;
@@ -1202,7 +1184,8 @@ export function Settings({
     { key: 'pull', title: 'Last pull', value: formatSyncAge(state.settingsPulledAt || 0), detail: `Auto sync ${state.autoSync ? 'on' : 'off'}` },
   ];
   const activeQueue = queueSummary.active;
-  const queueReportText = JSON.stringify({
+  // Built on demand in copyQueueReport — stringifying the queue on every render is wasted work.
+  const buildQueueReportText = () => JSON.stringify({
     generatedAt: new Date().toISOString(),
     storageScope,
     account: userEmail || shortId(supabaseAccountId || storageAccountId),
@@ -1237,6 +1220,9 @@ export function Settings({
   const [mgrHomeCity, setMgrHomeCity] = useState(managedTrip.intelligence?.homeCity || 'Hong Kong');
   const [mgrWeatherPreference, setMgrWeatherPreference] = useState(managedTrip.intelligence?.weatherPreference || 'balanced');
   const managedTripVersionKey = `${managedTrip.id}:${managedTrip.updatedAt || 0}:${managedTrip.version || 0}`;
+  // Set when the user has unsaved Trip Manager edits; background merges/invites bump the trip's
+  // updatedAt/version and must not wipe the form while it's dirty.
+  const mgrDirtyRef = useRef(false);
   const [newManagedTripName, setNewManagedTripName] = useState('');
   const [newManagedTripDest, setNewManagedTripDest] = useState('');
   const [newManagedTripStart, setNewManagedTripStart] = useState('');
@@ -1250,6 +1236,7 @@ export function Settings({
   const handleSelectManagedTrip = (tripId: string) => {
     const target = trips.find(t => t.id === tripId);
     if (!target) return;
+    mgrDirtyRef.current = false;
     setManagerTripId(tripId);
     setMgrName(target.name);
     setMgrDest(target.destinationSummary || '');
@@ -1268,8 +1255,10 @@ export function Settings({
     handleSelectManagedTrip(currentTrip.id);
   }, [currentTrip.id]);
 
-  // Keep form fields updated if the underlying trip in the list is updated
+  // Keep form fields updated if the underlying trip in the list is updated —
+  // but never while the user has unsaved edits in the form.
   useEffect(() => {
+    if (mgrDirtyRef.current) return;
     const target = trips.find(t => t.id === managerTripId);
     if (target) {
       setMgrName(target.name);
@@ -1536,6 +1525,25 @@ export function Settings({
     });
   }
 
+  // Always-available recovery for normal users (the stress-gated inspector has its own buttons):
+  // requeue failed/error items via the change journal — same manual-retry semantics as the sync
+  // engine's retryFailedItems — then push (or pull when only a pull handler is available).
+  async function retrySyncNow() {
+    setState((current) => ({
+      ...current,
+      syncQueue: (current.syncQueue || []).reduce(
+        (queue, item) => (item.status === 'error' || item.status === 'failed'
+          ? settleChange(queue, item.id, { kind: 'manual-retry' }).queue
+          : queue),
+        current.syncQueue || [],
+      ),
+      globalSyncStatus: 'queued',
+      syncError: '',
+    }));
+    if (onPush) await onPush();
+    else if (onPull) await onPull();
+  }
+
   function requireBroker(label: string, allowCloudSync = false) {
     if (brokerReady || hasDirectNotionToken() || (allowCloudSync && cloudSyncAvailable)) return true;
     setStatus(`${label} 已安全暫停：Credential Broker session 未連線；未送出任何 provider key/token。`);
@@ -1565,7 +1573,13 @@ export function Settings({
       emoji: '旅',
       color: COLORS[persons.length % COLORS.length],
     };
-    updateState({ persons: [...persons, next], shareRatios: { ...state.shareRatios, [next.id]: 1 } });
+    // Match addInvitePersonToSplit: default the new person to the mean of the current ratios
+    // so existing custom percentages keep their proportions (a flat 1 would normalize to ~1%
+    // once the other entries are percentages).
+    const ratios = state.shareRatios || {};
+    const existing = persons.map((person) => Number(ratios[person.id]) || 0);
+    const avg = existing.length ? existing.reduce((acc, value) => acc + value, 0) / existing.length : 1;
+    updateState({ persons: [...persons, next], shareRatios: { ...ratios, [next.id]: Math.max(1, Math.round(avg)) } });
     setNewPersonName('');
     setStatus(`已新增旅伴：${next.name}`);
   }
@@ -1839,32 +1853,6 @@ export function Settings({
     });
   }
 
-  function saveLocalSettingsNow() {
-    try {
-      saveState(migrateAppState(state), storageScope);
-      setStatus('本機設定已保存；provider credentials/session 已自動排除。');
-    } catch (error) {
-      console.warn('[Settings] local settings write failed:', error instanceof Error ? error.message : String(error));
-      setStatus('localStorage 未能寫入；已嘗試 IndexedDB 安全 fallback。');
-    }
-  }
-
-  async function pullPendingEmail() {
-    if (!requireNotionMirror('Pull pending email')) return;
-    await run('Pull pending email', async () => {
-      const pulled = await pullAll(state);
-      const pending = pulled.filter(isPendingReceipt);
-      if (pending.length) {
-        setState((prev) => {
-          const map = new Map(prev.receipts.map((receipt) => [receipt.id, receipt]));
-          for (const receipt of pending) map.set(receipt.id, { ...map.get(receipt.id), ...receipt });
-          return migrateAppState({ ...prev, receipts: [...map.values()] });
-        });
-      }
-      return pending.length ? `已拉取 ${pending.length} 筆待確認 email 紀錄` : `已同步檢查 ${pulled.length} 筆，暫時無待確認 email`;
-    });
-  }
-
   function selectTrip(tripId: string) {
     const trip = trips.find((item) => item.id === tripId);
     if (!trip) return;
@@ -1975,17 +1963,6 @@ export function Settings({
     }));
   }
 
-  function updateCurrentTrip(patch: Partial<TripProfile>) {
-    const nextTrip = { ...currentTrip, ...patch, version: currentTrip.version + 1, updatedAt: Date.now() };
-    updateState({
-      trips: trips.map((trip) => trip.id === currentTrip.id ? nextTrip : trip),
-      tripName: nextTrip.name,
-      tripDateRange: { start: nextTrip.startDate, end: nextTrip.endDate },
-      tripCurrency: nonHomeCurrencyForTrip(nextTrip, state.tripCurrency),
-      customItinerary: nextTrip.itinerary,
-    });
-  }
-
   function handleSaveManagedTrip() {
     const target = trips.find(t => t.id === managerTripId);
     if (!target) return;
@@ -2080,6 +2057,7 @@ export function Settings({
       });
     });
 
+    mgrDirtyRef.current = false;
     setStatus(`🎉 成功儲存旅程「${nextTrip.name}」嘅修改，並已加入 Notion 同步隊列！`);
   }
 
@@ -2098,6 +2076,7 @@ export function Settings({
       setShowDeleteConfirm(false);
       return;
     }
+    const deletedCount = (state.receipts || []).filter((r) => r.tripId === managerTripId).length;
 
     setState((prev) => {
       const updatedTrips = (prev.trips || []).filter((t) => t.id !== managerTripId);
@@ -2108,6 +2087,10 @@ export function Settings({
       const patch: Partial<AppState> = {
         trips: updatedTrips,
         receipts: remainingReceipts,
+        // Local trip tombstone: there is no delete_trip RPC, so remember the deletion and let
+        // mergePulledTrips filter the server copy out of future pulls. True remote deletion
+        // needs a delete_trip RPC + migration (Boss approval required).
+        deletedTripIds: Array.from(new Set([...(prev.deletedTripIds || []), managerTripId])),
       };
 
       if (isActive) {
@@ -2140,6 +2123,8 @@ export function Settings({
           }];
         })),
       };
+      // Only the receipts get delete ops. No trip op is queued: the old {type:'trip',op:'update'}
+      // could not find the deleted trip in state and would upsert the WRONG (active) trip.
       patch.syncQueue = deletedReceipts.reduce((queue, receipt) => enqueueChange(queue, {
         type: 'delete-receipt',
         entityId: receipt.id,
@@ -2154,15 +2139,7 @@ export function Settings({
           syncRevision: receipt.syncRevision,
           updatedAt: receipt.updatedAt,
         },
-      }), enqueueChange(currentQueue, {
-        type: 'trip',
-        entityId: managerTripId,
-        op: 'update',
-        payload: {
-          sourceId: target.sourceId || `trip_${target.id}`,
-          updatedAt: Date.now(),
-        },
-      }));
+      }), currentQueue);
 
       return migrateAppState({
         ...prev,
@@ -2176,7 +2153,7 @@ export function Settings({
     }
 
     setShowDeleteConfirm(false);
-    setStatus(`🎉 成功刪除旅程「${target.name}」同佢關聯嘅所有消費紀錄，同步已排隊！`);
+    setStatus(`🎉 已刪除旅程「${target.name}」同佢 ${deletedCount} 筆消費紀錄；消費紀錄刪除已排隊同步，旅程本身暫時只喺呢部裝置移除（雲端真正刪除需要 delete_trip RPC，暫未支援）。`);
   }
 
   function createManagedTrip() {
@@ -2229,12 +2206,14 @@ export function Settings({
     setMgrBudget(String(newTrip.budget || 0));
     setMgrCurrency(nonHomeCurrencyForTrip(newTrip));
     setMgrArchived(false);
+    mgrDirtyRef.current = false;
     setNewManagedTripName('');
     setNewManagedTripDest('');
     setNewManagedTripStart('');
     setNewManagedTripEnd('');
     setNewManagedTripBudget('');
     setNewManagedTripCurrency('JPY');
+    setNewTripPanelOpen(false);
     setStatus(`已建立並切換到新旅程：${newTrip.name}`);
   }
 
@@ -2353,7 +2332,7 @@ export function Settings({
   }
 
   async function copyQueueReport() {
-    await copyText(queueReportText, '已複製 sync queue report');
+    await copyText(buildQueueReportText(), '已複製 sync queue report');
   }
 
   async function importBackup(file?: File) {
@@ -2363,7 +2342,7 @@ export function Settings({
       if (!validateBackupSchema(payload)) throw new Error('Backup JSON 格式無效或結構損壞');
       const preview = buildBackupImportPreview(file.name, payload, state, currentTrip);
       setBackupPreview(preview);
-      setStatus(`Backup preview ready：${preview.receiptCount || state.receipts.length} 筆，確認後先匯入`);
+      setStatus(`Backup preview ready：${preview.receiptCount} 筆，確認後先匯入`);
     } catch (error) {
       setBackupPreview(null);
       setStatus(`Backup 匯入失敗：${redactedError(error)}`);
@@ -2380,9 +2359,12 @@ export function Settings({
       ...preview.safePayload,
       trips: preview.importedTrips || prev.trips,
       receipts: preview.receipts.length ? preview.receipts : prev.receipts,
+      // Restore contract: activeTripId must reference an imported/existing trip — never an
+      // unknown foreign id from the backup file.
+      activeTripId: preview.nextActiveTripId || prev.activeTripId,
     }));
     setBackupPreview(null);
-    setStatus(`已匯入 backup：${preview.receiptCount || state.receipts.length} 筆`);
+    setStatus(`已匯入 backup：${preview.receiptCount} 筆`);
   }
 
   function cancelBackupPreview() {
@@ -2429,6 +2411,18 @@ export function Settings({
               </Tooltip>
             </div>
           </TooltipProvider>
+          {(queueFailedCount > 0 || syncState?.status === 'error' || !!state.syncError) && (onPush || onPull) && (
+            <div className="settings-sync-retry" role="group" aria-label="同步修復">
+              <button type="button" className="secondary compact" disabled={!!busy} onClick={() => void retrySyncNow()} aria-label="重試同步">
+                <RotateCcw size={14} /> 重試同步{queueFailedCount ? `（${queueFailedCount} 項失敗）` : ''}
+              </button>
+              {onPull && (
+                <button type="button" className="secondary compact" disabled={!!busy} onClick={() => void onPull()} aria-label="拉取雲端資料">
+                  <Cloud size={14} /> 拉取
+                </button>
+              )}
+            </div>
+          )}
           <div className="settings-preview-controls" aria-label="設定快速操作">
             <button type="button" onClick={() => openSettingsPanel('settings-trip')}>
               <Plane size={17} />
@@ -2495,9 +2489,9 @@ export function Settings({
               <ShieldCheck size={14} />
               <span>Data safety</span>
             </button>
-            <button type="button" onClick={() => openSettingsPanel('settings-notion')}>
+            <button type="button" onClick={() => openSettingsPanel('settings-credentials')}>
               <Cloud size={14} />
-              <span>Sync settings</span>
+              <span>Connection</span>
             </button>
           </div>
         </section>
@@ -2605,7 +2599,7 @@ export function Settings({
       <AccordionCard id="settings-people" title="旅伴 / 分帳比例" meta={<span className="pill">{persons.length} 人</span>}>
         <p className="muted">分帳用百分比。填頭幾位嘅百分比，最後一位會自動計（100 − 其他總和）。預設全部均分。</p>
         {(() => {
-          const pcts = sharePercents(persons.map((person) => person.id), shareRatios);
+          const pcts = personSharePercents;
           const lastIdx = persons.length - 1;
           return persons.map((p, idx) => (
             <div className="person-edit" key={p.id}>
@@ -2618,10 +2612,10 @@ export function Settings({
                   min={0}
                   max={100}
                   value={pcts[idx] ?? 0}
-                  readOnly={idx === lastIdx && lastIdx >= 1}
+                  readOnly={idx === lastIdx}
                   onChange={(e) => setPersonPercent(idx, clampFinite(e.target.value, 0, 0, 100))}
                   aria-label={`${p.name} share percent`}
-                  title={idx === lastIdx && lastIdx >= 1 ? '最後一位自動計算' : undefined}
+                  title={idx === lastIdx ? (lastIdx >= 1 ? '最後一位自動計算' : '得一位旅伴，自動 100%') : undefined}
                 />
                 <small>%</small>
               </span>
@@ -2634,7 +2628,7 @@ export function Settings({
           <button className="primary" type="button" onClick={addPerson}><Plus size={18} /> 新增</button>
         </div>
         <div className="mini-list">
-          <span>比例總和：{sharePercents(persons.map((person) => person.id), shareRatios).reduce((a, b) => a + b, 0)}% · Shared {tripPrefix}{Math.round(settlement.sharedTotal).toLocaleString()}</span>
+          <span>比例總和：{personSharePercents.reduce((a, b) => a + b, 0)}% · Shared {tripPrefix}{Math.round(settlement.sharedTotal).toLocaleString()}</span>
           {settlement.transfers.map((t) => <span key={`${t.from.id}-${t.to.id}`}>{t.from.name} → {t.to.name} {tripPrefix}{Math.round(t.amount).toLocaleString()}</span>)}
           {!settlement.transfers.length && <span>暫時唔需要互相轉帳</span>}
           {settlement.balances.map((b) => <span key={b.id}>{b.name}: 已付 shared {tripPrefix}{Math.round(b.paidShared).toLocaleString()} · 應付 {tripPrefix}{Math.round(b.shouldPayShared).toLocaleString()}</span>)}
@@ -2822,18 +2816,18 @@ export function Settings({
         {editTripPanelOpen && <div id="settings-trip-edit-panel" className="settings-trip-panel-body">
         <div className="form-grid">
           <label>旅程名
-            <input value={mgrName} onChange={(e) => setMgrName(e.target.value)} placeholder="例如：名古屋 2026" />
+            <input value={mgrName} onChange={(e) => { mgrDirtyRef.current = true; setMgrName(e.target.value); }} placeholder="例如：名古屋 2026" />
           </label>
           <label>目的地摘要
-            <input value={mgrDest} onChange={(e) => setMgrDest(e.target.value)} placeholder="例如：名古屋、白川鄉" />
+            <input value={mgrDest} onChange={(e) => { mgrDirtyRef.current = true; setMgrDest(e.target.value); }} placeholder="例如：名古屋、白川鄉" />
           </label>
         </div>
         <div className="form-grid">
           <label>開始日期
-            <input type="date" value={mgrStart} onChange={(e) => setMgrStart(e.target.value)} />
+            <input type="date" value={mgrStart} onChange={(e) => { mgrDirtyRef.current = true; setMgrStart(e.target.value); }} />
           </label>
           <label>結束日期
-            <input type="date" value={mgrEnd} onChange={(e) => setMgrEnd(e.target.value)} />
+            <input type="date" value={mgrEnd} onChange={(e) => { mgrDirtyRef.current = true; setMgrEnd(e.target.value); }} />
           </label>
         </div>
         <div className="form-grid">
@@ -2844,6 +2838,7 @@ export function Settings({
               step="1"
               value={mgrBudget}
               onChange={(e) => {
+                mgrDirtyRef.current = true;
                 setMgrBudget(e.target.value);
               }}
               placeholder="例如：200000"
@@ -2856,6 +2851,7 @@ export function Settings({
               step="1"
               value={Math.round((Number(mgrBudget) || 0) / Math.max(0.1, perHkdForCurrency(state, mgrCurrency)))}
               onChange={(e) => {
+                mgrDirtyRef.current = true;
                 const val = parseFloat(e.target.value);
                 const safe = Number.isFinite(val) && val >= 0 ? val : 0;
                 setMgrBudget(String(Math.round(safe * Math.max(0.1, perHkdForCurrency(state, mgrCurrency)))));
@@ -2865,20 +2861,22 @@ export function Settings({
         </div>
         <div className="form-grid">
           <label>目的地貨幣
-            <select value={mgrCurrency} onChange={(e) => setMgrCurrency(e.target.value)}>
+            <select value={mgrCurrency} onChange={(e) => { mgrDirtyRef.current = true; setMgrCurrency(e.target.value); }}>
               {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
             </select>
           </label>
           <label>旅程狀態
-            <select value={mgrArchived ? 'archived' : 'active'} onChange={(e) => setMgrArchived(e.target.value === 'archived')}>
+            <select value={mgrArchived ? 'archived' : 'active'} onChange={(e) => { mgrDirtyRef.current = true; setMgrArchived(e.target.value === 'archived'); }}>
               <option value="active">🟢 進行中 (Active)</option>
               <option value="archived">📁 已封存 (Archived)</option>
             </select>
           </label>
         </div>
 
-        {/* Quick Itinerary View / Edit - opens confirmation modal with current trip data */}
-        {getItinerary(state).length > 0 && (
+        {/* Quick Itinerary View / Edit - opens confirmation modal with current trip data.
+            getItinerary(state) always resolves the ACTIVE trip's itinerary, so only offer this
+            when the managed trip IS the active trip — never mix it into another trip. */}
+        {managerTripId === currentTrip.id && getItinerary(state).length > 0 && (
           <div className="settings-trip-itinerary-quick">
             <div className="settings-trip-panel-head">
               <div>
@@ -2950,21 +2948,8 @@ export function Settings({
             }}
           />
           <div className="form-grid">
-            <label>{state.rateMode === 'fixed' ? '固定' : '即時'}匯率（1 HKD = {mgrCurrency || '目的地貨幣'}）
-              <input type="number" min="0.01" step="0.01" value={perHkdForCurrency(state, String(state.tripCurrency || 'JPY').toUpperCase())} onChange={(e) => {
-                const val = parseFloat(e.target.value);
-                const safe = Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : 20.36;
-                // Also stamp rateTable[code] so perHkdForCurrency (used by Dashboard/Stats/ReceiptEditor)
-                // picks up the same value — it checks rateTable before falling back to state.rate, so
-                // without this a stale live-fetched table entry would silently override a manual edit.
-                // Keyed on state.tripCurrency (what perHkdForCurrency actually reads), not mgrCurrency
-                // (a Trip Manager form-local variable that can diverge while editing a different trip).
-                const code = String(state.tripCurrency || 'JPY').toUpperCase();
-                updateState({
-                  rate: safe,
-                  rateTable: { ...state.rateTable, [code]: { currency: code, perHkd: safe, source: 'manual', fetchedAt: Date.now() } },
-                });
-              }} />
+            <label>{state.rateMode === 'fixed' ? '固定' : '即時'}匯率（1 HKD = {String(state.tripCurrency || 'JPY').toUpperCase()}）
+              <TripRateInput state={state} updateState={updateState} />
             </label>
             {state.rateMode !== 'fixed' && (
               <label>
@@ -3066,7 +3051,7 @@ export function Settings({
 
         <div className="section-head">
           <h2>Pending invites</h2>
-          <span className="pill">{sharingInvites.length} pending</span>
+          <span className="pill">{sharingInvites.filter((invite) => invite.status === 'pending').length} pending</span>
         </div>
         <div className="mini-list">
           {sharingInvites.map((invite) => {
@@ -3961,29 +3946,24 @@ export function Settings({
                 disabled={!apiKeySecret.trim() || !apiKeyAdmin.trim() || apiKeyStatus === 'testing'}
                 onClick={async () => {
                   setApiKeyStatus('testing');
-                  setApiKeyMessage('Testing API key...');
-                  try {
-                    const testResult = await testProviderConnection(state, apiKeyProvider);
-                    if (testResult.includes('connected')) {
-                      setApiKeyMessage('Existing key still works. Rotating to new key...');
-                    }
-                  } catch {
-                    // Test with new key will happen during rotation
-                  }
+                  setApiKeyMessage('Testing new API key...');
+                  // rotateProviderCredential is atomic server-side: the broker tests the CANDIDATE
+                  // key first and only writes it to the vault when the test passes, so a failed
+                  // test aborts here with the existing key untouched.
                   try {
                     const result = await rotateProviderCredential(state, apiKeyProvider, apiKeySecret.trim(), apiKeyAdmin.trim(), {});
                     if (result.status === 'connected') {
                       setApiKeyStatus('success');
-                      setApiKeyMessage(`API key updated for ${apiKeyProvider}. All related models now use the new key.`);
+                      setApiKeyMessage(`New key tested OK and saved for ${apiKeyProvider}. All related models now use the new key.`);
                       setApiKeySecret('');
                       setApiKeyAdmin('');
                     } else {
                       setApiKeyStatus('error');
-                      setApiKeyMessage(`API key rotation returned status: ${result.status}. Key was not updated.`);
+                      setApiKeyMessage(`New ${apiKeyProvider} key failed the connection test (${result.status}). Key was not updated — the existing key is unchanged.`);
                     }
                   } catch (err) {
                     setApiKeyStatus('error');
-                    setApiKeyMessage(`Failed to update API key: ${err instanceof Error ? err.message : 'Unknown error'}. The new key may not be working.`);
+                    setApiKeyMessage(`New key failed testing, nothing was saved: ${redactedError(err)}`);
                   }
                 }}
               >
@@ -4046,7 +4026,7 @@ export function Settings({
                   ❌ 此操作將會連帶刪除該旅程下所有關聯嘅 {deleteCount} 筆消費紀錄！
                 </span>
                 <span style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '13px', display: 'block', marginTop: '4px' }}>
-                  * 此物理級連鎖刪除一旦執行就無法撤銷，並會同步推送至雲端資料庫（Supabase & Notion）！
+                  * 消費紀錄嘅刪除會同步推送至雲端（Supabase & Notion）；旅程本身會即時喺呢部裝置移除，雲端旅程副本要等有 delete_trip RPC 先可以真正刪除。
                 </span>
               </p>
 
