@@ -465,7 +465,7 @@ async function run() {
     assert.equal(envKimi.response.status, 200);
     assert.equal(
       restoreFetch.kimiAuth().at(-1),
-      'Bearer kimi-env-secret-for-test',
+      bearer('kimi-env-secret-for-test'),
       'KIMI_KEY must take precedence over the vault entry',
     );
     delete env.KIMI_KEY;
