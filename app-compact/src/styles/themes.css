@@ -193,8 +193,7 @@ html[data-app-theme][data-color-scheme] .receipt-delete-confirm,
 html[data-app-theme][data-color-scheme] .action-sheet,
 html[data-app-theme][data-color-scheme] .receipt-row,
 html[data-app-theme][data-color-scheme] .person-card,
-html[data-app-theme][data-color-scheme] .toast,
-html[data-app-theme][data-color-scheme] [data-sonner-toaster] [data-sonner-toast] {
+html[data-app-theme][data-color-scheme] .toast {
   background: var(--theme-card) !important;
   border-color: var(--theme-border) !important;
   color: var(--theme-text) !important;
@@ -305,7 +304,8 @@ html[data-app-theme][data-color-scheme] .top-notice.offline {
 
 html[data-app-theme][data-color-scheme] .status-pill.danger,
 html[data-app-theme][data-color-scheme] .toast.danger,
-html[data-app-theme][data-color-scheme] .lock-error {
+html[data-app-theme][data-color-scheme] .lock-error,
+html[data-app-theme][data-color-scheme] .top-notice.sync-problem-notice {
   background: color-mix(in srgb, var(--theme-status-danger) 10%, var(--theme-card)) !important;
   border-color: color-mix(in srgb, var(--theme-status-danger) 42%, var(--theme-border)) !important;
   color: var(--theme-status-danger) !important;
@@ -358,6 +358,15 @@ html[data-app-theme] .compact-login-divider::before,
 html[data-app-theme] .compact-login-divider::after { background: var(--theme-border) !important; }
 html[data-app-theme] .compact-login-message--ok { color: var(--theme-status-success) !important; }
 html[data-app-theme] .compact-login-message.lock-error { color: var(--theme-status-danger) !important; }
+/* The app owns its theme; the OS prefers-color-scheme pass in styles.css must not restyle these. */
+html[data-app-theme] .compact-login-panel {
+  border-color: var(--theme-border) !important;
+  box-shadow: 0 20px 56px var(--cream-shadow) !important;
+}
+html[data-app-theme] .compact-login-primary:disabled {
+  background: color-mix(in srgb, var(--theme-muted) 26%, var(--theme-surface)) !important;
+  color: var(--theme-muted) !important;
+}
 html[data-app-theme][data-color-scheme] input::placeholder,
 html[data-app-theme][data-color-scheme] textarea::placeholder {
   color: var(--theme-muted) !important;
@@ -572,5 +581,98 @@ html[data-app-theme='taiwan_nightmarket'][data-color-scheme='dark'] .stats-switc
 
   html[data-app-theme] .app-shell {
     padding-bottom: max(calc(76px + env(safe-area-inset-bottom)), calc(6em + env(safe-area-inset-bottom))) !important;
+  }
+}
+
+/* ---------- Desktop rail/workspace skin (desktop.css hardcodes the japan cream palette) ---------- */
+@media (min-width: 768px) {
+  html[data-app-theme] body {
+    background:
+      var(--theme-art, none),
+      linear-gradient(180deg, var(--theme-canvas), var(--theme-canvas-mid) 42%, var(--theme-canvas-end)) !important;
+    color: var(--theme-text);
+  }
+
+  html[data-app-theme] .compact-desktop-rail {
+    background: var(--theme-surface) !important;
+    border-right-color: var(--theme-border) !important;
+    box-shadow: 10px 0 32px var(--cream-shadow) !important;
+  }
+
+  html[data-app-theme] .compact-rail-mark {
+    background: var(--theme-card) !important;
+    border-color: var(--theme-border) !important;
+    box-shadow: 0 8px 18px var(--cream-shadow) !important;
+  }
+
+  html[data-app-theme] .rail-brand { border-bottom-color: var(--theme-border) !important; }
+  html[data-app-theme] .rail-footer { border-top-color: var(--theme-border) !important; }
+
+  html[data-app-theme] .rail-brand-copy strong,
+  html[data-app-theme] .rail-trip-name { color: var(--theme-text) !important; }
+  html[data-app-theme] .rail-brand-copy span,
+  html[data-app-theme] .rail-trip-label,
+  html[data-app-theme] .rail-trip-dates { color: var(--theme-muted) !important; }
+
+  html[data-app-theme] .rail-trip-card {
+    background: var(--theme-card) !important;
+    border-color: var(--theme-border) !important;
+    box-shadow: 0 8px 20px var(--cream-shadow) !important;
+  }
+
+  html[data-app-theme] .compact-rail-button { color: var(--theme-muted) !important; }
+  html[data-app-theme] .compact-rail-button:hover {
+    background: color-mix(in srgb, var(--theme-focus) 9%, transparent) !important;
+  }
+  html[data-app-theme] .compact-rail-button.active {
+    background: color-mix(in srgb, var(--theme-focus) 13%, var(--theme-card)) !important;
+    color: var(--theme-text) !important;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--theme-focus) 30%, transparent),
+      0 8px 18px var(--cream-shadow) !important;
+  }
+  html[data-app-theme] .compact-rail-button.active .compact-rail-icon { color: var(--theme-accent) !important; }
+  html[data-app-theme] .compact-rail-button.active::after {
+    background: conic-gradient(from 180deg at 100% 0%, color-mix(in srgb, var(--theme-chart-3) 34%, transparent), transparent 32%) !important;
+  }
+
+  html[data-app-theme] .rail-net.is-online {
+    color: var(--theme-status-success) !important;
+    background: color-mix(in srgb, var(--theme-status-success) 12%, transparent) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-status-success) 24%, transparent) !important;
+  }
+  html[data-app-theme] .rail-net.is-offline {
+    color: var(--theme-status-warning) !important;
+    background: color-mix(in srgb, var(--theme-status-warning) 12%, transparent) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-status-warning) 26%, transparent) !important;
+  }
+}
+
+@media (min-width: 1100px) {
+  html[data-app-theme] .app-shell[data-active-tab] .topbar-canva {
+    border-color: var(--theme-border) !important;
+    box-shadow: 0 18px 40px var(--cream-shadow) !important;
+  }
+
+  html[data-app-theme] .app-shell--history .history-screen .stack > .history-filter-deck {
+    background: var(--theme-card) !important;
+    border-color: var(--theme-border) !important;
+    box-shadow: 0 14px 34px var(--cream-shadow) !important;
+  }
+
+  html[data-app-theme] .app-shell--history .history-screen .stack > .history-chip-rail {
+    background: color-mix(in srgb, var(--theme-card) 72%, transparent) !important;
+    border-color: var(--theme-border) !important;
+  }
+
+  html[data-app-theme] .app-shell--history .history-chip:hover {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border) !important;
+  }
+
+  html[data-app-theme] .app-shell--history .history-chip.active {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border) !important;
+    box-shadow: 0 8px 18px var(--cream-shadow), inset 3px 0 0 var(--chip-color, var(--theme-accent)) !important;
   }
 }

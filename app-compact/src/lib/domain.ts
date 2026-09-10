@@ -246,6 +246,13 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   if (cur === 'HKD') {
     return Number(r.total) || 0;
   }
+
+  // 鎖定匯率：用户手動釘死嘅匯率永遠優先，唔做自我修復、唔用而家嘅匯率覆蓋。
+  const pinnedRate = r.exchangeRatePinned ? Number(r.exchangeRate) : 0;
+  if (pinnedRate > 0 && Number.isFinite(pinnedRate)) {
+    return Math.round((Number(r.total) || 0) / Math.max(0.1, pinnedRate));
+  }
+
   const rate = Math.max(0.1, Number(r.exchangeRate) || perHkdForCurrency(state, cur));
 
   // 增加強大嘅自我修復 Self-Healing 校驗：

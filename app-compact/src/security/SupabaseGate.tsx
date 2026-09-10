@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { KeyRound, Link2, ShieldCheck, Sparkles } from 'lucide-react';
+import { KeyRound, Link2, Mail, ShieldCheck, Sparkles } from 'lucide-react';
 import type { useSupabaseAuth } from '../lib/supabase';
 import travelAiAtlasImage from '../assets/atmosphere/travel-ai-atlas.webp';
 
@@ -119,6 +119,10 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
 
   if (auth.session) return <>{children}</>;
 
+  // Set by App when an #accept-invite link arrives while logged out; read on every render so
+  // the line appears as soon as auth settles, and disappears once App accepts/clears it.
+  const hasPendingInvite = typeof window !== 'undefined' && !!localStorage.getItem('travel-expense:pending-invite-token');
+
   return (
     <main className="lock-screen compact-login-screen">
       <section className="lock-panel compact-login-panel" aria-label="Travel Expense Supabase login">
@@ -142,6 +146,13 @@ export function SupabaseGate({ auth, children }: SupabaseGateProps) {
             </h1>
             <p>旅程、收據、天氣同 AI 筆記，只屬於你嘅帳號。</p>
           </div>
+
+          {hasPendingInvite && (
+            <p className="compact-login-hint" role="status" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Mail size={14} aria-hidden="true" />
+              <span>你收到一個旅程邀請 — 登入後會自動加入。</span>
+            </p>
+          )}
 
           <div className="compact-login-tabs" role="group" aria-label="Login options">
             <button

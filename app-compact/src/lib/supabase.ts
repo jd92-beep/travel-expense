@@ -1612,7 +1612,7 @@ export async function createSupabaseTripInvite(
   state: AppState,
   trip: TripProfile,
   invite: TripSharingInviteDraft,
-): Promise<TripInviteSummary> {
+): Promise<{ invite: TripInviteSummary; trip: TripProfile }> {
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error('Supabase is not configured');
   const syncedTrip = cleanUuid(trip.supabaseId) ? trip : await upsertSupabaseTrip(session, state, trip);
@@ -1628,13 +1628,17 @@ export async function createSupabaseTripInvite(
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.invite_id || !row?.token) throw new Error('Invite token was not returned');
   return {
-    id: String(row.invite_id),
-    email: String(row.email_normalized || invite.email).trim().toLowerCase(),
-    role: cleanInviteRole(row.role),
-    status: 'pending',
-    expiresAt: String(row.expires_at || ''),
-    createdAt: new Date().toISOString(),
-    token: String(row.token),
+    trip: syncedTrip,
+    invite: {
+      id: String(row.invite_id),
+      email: String(row.email_normalized || invite.email).trim().toLowerCase(),
+      role: cleanInviteRole(row.role),
+      status: 'pending',
+      expiresAt: String(row.expires_at || ''),
+      createdAt: new Date().toISOString(),
+      token: String(row.token),
+      displayName: invite.displayName,
+    },
   };
 }
 
@@ -1669,5 +1673,13 @@ export async function removeSupabaseTripMember(_session: Session, trip: TripProf
   const tripUuid = cleanUuid(trip.supabaseId);
   if (!supabase || !tripUuid) throw new Error('Supabase trip id missing');
   const { error } = await supabase.rpc('remove_trip_member', { p_trip_id: tripUuid, p_user_id: userId });
+  if (error) throw error;
+}
+
+export async function leaveSupabaseTrip(_session: Session, trip: TripProfile): Promise<void> {
+  const supabase = getSupabaseClient();
+  const tripUuid = cleanUuid(trip.supabaseId);
+  if (!supabase || !tripUuid) throw new Error('Supabase trip id missing');
+  const { error } = await supabase.rpc('leave_trip', { p_trip_id: tripUuid });
   if (error) throw error;
 }

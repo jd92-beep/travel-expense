@@ -100,15 +100,6 @@ export interface CurrencySnapshot {
   source: string;
 }
 
-interface FetchCurrencyOptions {
-  /**
-   * Manual refresh can still prefer Visa first, but app boot should avoid the
-   * public CORS proxy path because it frequently returns 403 and pollutes the
-   * mobile console on every launch.
-   */
-  officialFirst?: boolean;
-}
-
 const CACHE_KEY = 'boss-japan-tracker:react-currency';
 const MAX_AGE = 60 * 60 * 1000; // 1 hour cache
 
@@ -228,43 +219,10 @@ async function fetchExchangeRateSnapshot(): Promise<CurrencySnapshot> {
   });
 }
 
-async function fetchVisaSnapshot(): Promise<CurrencySnapshot | null> {
-  // 嘗試 Visa 官方匯率 (需要透過 CORS proxy，因為 Visa 阻擋跨域)
-  try {
-    const d = new Date();
-    const datePart = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
-    const visaUrl = `https://www.visa.com.tw/cmsapi/fx/rates?amount=1&fee=0&utcConvertedDate=${encodeURIComponent(datePart)}&exchangedate=${encodeURIComponent(datePart)}&fromCurr=HKD&toCurr=JPY&_t=${Date.now()}`;
-
-    // 使用 corsproxy.io 作為代理
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(visaUrl)}`;
-    const visaResponse = await fetch(proxyUrl, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-
-    if (visaResponse.ok) {
-      const visaData = await visaResponse.json();
-      const rate = parseFloat(visaData.convertedAmount || visaData.fxRateVisa);
-
-      if (rate && rate > 0 && Number.isFinite(rate)) {
-        return persistCurrencySnapshot({
-          base: 'HKD',
-          rates: { HKD: 1, JPY: rate },
-          fetchedAt: Date.now(),
-          source: 'Visa (官方即時)',
-        });
-      }
-    }
-  } catch (err) {
-    console.warn('Visa rate fetch failed:', err);
-  }
-  return null;
-}
-
-export async function fetchLiveCurrencySnapshot(options: FetchCurrencyOptions = {}): Promise<CurrencySnapshot> {
-  if (!options.officialFirst) return fetchExchangeRateSnapshot();
-  return (await fetchVisaSnapshot()) || fetchExchangeRateSnapshot();
+// Live rates come from open.er-api.com only (free, no key, CORS-friendly). The old Visa
+// official-rate path went through a public CORS proxy that reliably 403s, so it was removed.
+export async function fetchLiveCurrencySnapshot(): Promise<CurrencySnapshot> {
+  return fetchExchangeRateSnapshot();
 }
 
 export function usableSnapshot(snapshot: CurrencySnapshot | null): CurrencySnapshot | null {
@@ -272,22 +230,23 @@ export function usableSnapshot(snapshot: CurrencySnapshot | null): CurrencySnaps
   return Date.now() - snapshot.fetchedAt < MAX_AGE ? snapshot : null;
 }
 
-export function convertAmount(amount: number, from: string, to: string, state: AppState, snapshot: CurrencySnapshot | null): number | null {
+export function convertAmount(amount: number, from: string, to: string, state: AppState, snapshot: CurrencySnapshot | null): number {
   const n = Number(amount) || 0;
-  if (from === to) return n;
-  // Prefer a freshly-fetched snapshot's JPY rate over the persisted state.rate for this pair — the
-  // one caller (Scan's FX quick-reference calculator) fetches `snapshot` on demand specifically so
-  // "更新匯率" shows an up-to-date number; without this, the success toast would quote a new rate
-  // while the displayed converted amount silently kept using the old persisted rate.
-  const liveJpy = usableSnapshot(snapshot)?.rates?.JPY;
-  const rate = Number.isFinite(liveJpy) && Number(liveJpy) > 0 ? Number(liveJpy) : jpyPerHkd(state);
-  if (from === 'JPY' && to === 'HKD') return n / rate;
-  if (from === 'HKD' && to === 'JPY') return n * rate;
-  const rates = usableSnapshot(snapshot)?.rates;
-  if (rates && Number.isFinite(rates[from]) && Number.isFinite(rates[to]) && rates[from] !== 0 && rates[to] !== 0) {
-    const hkd = n / Number(rates[from]);
-    return hkd * Number(rates[to]);
+  const fromCode = String(from || '').toUpperCase();
+  const toCode = String(to || '').toUpperCase();
+  if (fromCode === toCode) return n;
+  // Prefer a freshly-fetched snapshot over persisted state for this pair — the one caller
+  // (Scan's FX quick-reference calculator) fetches `snapshot` on demand in live mode so
+  // "更新匯率" shows an up-to-date number; without this, the success toast would quote a new
+  // rate while the displayed converted amount silently kept using the old persisted rate.
+  // 固定匯率模式下永遠用 persisted state（rateTable → state.rate → fallback），snapshot 唔會覆蓋。
+  const rates = state.rateMode === 'fixed' ? undefined : usableSnapshot(snapshot)?.rates;
+  if (rates
+    && Number.isFinite(rates[fromCode]) && Number(rates[fromCode]) > 0
+    && Number.isFinite(rates[toCode]) && Number(rates[toCode]) > 0) {
+    const hkd = n / Number(rates[fromCode]);
+    return hkd * Number(rates[toCode]);
   }
-  const viaHkd = amountToHkd(n, from, state);
-  return hkdToCurrency(viaHkd, to, state);
+  const viaHkd = amountToHkd(n, fromCode, state);
+  return hkdToCurrency(viaHkd, toCode, state);
 }

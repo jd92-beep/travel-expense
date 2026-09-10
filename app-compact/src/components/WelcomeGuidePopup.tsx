@@ -1,5 +1,5 @@
-import { useState, type CSSProperties } from 'react';
-import { Compass, Sparkles, Calendar, DollarSign, MapPin, Loader2, ArrowRight, Info, Check, Mail, Plus, Minus, Trash2, Users } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Compass, Sparkles, Calendar, Loader2, ArrowRight, Info, Check, Mail, Plus, Minus, Trash2, Users } from 'lucide-react';
 import { parseTripParagraph } from '../lib/ai';
 import { sharePercents } from '../lib/domain';
 import { createTripProfile, normalizeTripIntelligence } from '../domain/trip/normalize';
@@ -31,7 +31,7 @@ export type WelcomeGuideResult = {
 type WelcomeGuidePopupProps = {
   state: AppState;
   onSave: (result: WelcomeGuideResult) => void;
-  onSkip: () => void;
+  onDismiss: () => void;
 };
 
 const GUIDE_COLORS = ['#CC2929', '#FF91A4', '#1E4D6B', '#2D6E48', '#D4A843', '#7C5CFF', '#0EA5E9', '#F97316'];
@@ -87,11 +87,35 @@ function makeGuidePersons(count: number, current: Array<{ name: string; ratio: s
   }));
 }
 
-export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupProps) {
+export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopupProps) {
   const [activeTab, setActiveTab] = useState<'ai' | 'manual'>('ai');
   const [tripText, setTripText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const hasExistingTrips = (state.trips || []).length > 0;
+
+  // Dialog a11y: focus moves into the dialog on open, Tab is trapped inside, Escape dismisses
+  // (same dismissal as the backdrop — session-only, no data written).
+  const modalRef = useRef<HTMLDivElement>(null);
+  const prevFocusRef = useRef<HTMLElement | null>(null);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  useEffect(() => {
+    prevFocusRef.current = document.activeElement as HTMLElement;
+    modalRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); onDismissRef.current(); }
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (!focusable.length) return;
+        const first = focusable[0]; const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => { document.removeEventListener('keydown', handleKeyDown); prevFocusRef.current?.focus?.(); };
+  }, []);
 
   // Manual Form States
   const [tripName, setTripName] = useState('新旅行 2026');
@@ -107,7 +131,16 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   });
   const [budget, setBudget] = useState('50000');
   const [currency, setCurrency] = useState('JPY');
-  const [guidePersons, setGuidePersons] = useState(() => makeGuidePersons(1));
+  const [guidePersons, setGuidePersons] = useState(() => {
+    const existing = Array.isArray(state.persons) ? state.persons : [];
+    if (existing.length) {
+      return existing.slice(0, 8).map((person) => ({
+        name: person.name,
+        ratio: String(Number(state.shareRatios?.[person.id]) || 1),
+      }));
+    }
+    return makeGuidePersons(1);
+  });
   const [tripStyle, setTripStyle] = useState<(typeof TRIP_STYLE_OPTIONS)[number]['value']>('balanced');
   const [homeCity, setHomeCity] = useState('Hong Kong');
   const [weatherPreference, setWeatherPreference] = useState<(typeof WEATHER_PREFERENCE_OPTIONS)[number]['value']>('balanced');
@@ -122,6 +155,14 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   const [aiSummary, setAiSummary] = useState('');
   const [aiChanges, setAiChanges] = useState<string[]>([]);
 
+  // Home currency is fixed HKD, so neither currency select offers it; if state ever holds a
+  // value outside the option list, fall back to a valid default instead of a blank select.
+  useEffect(() => {
+    if (!(TRIP_CURRENCY_OPTIONS as string[]).includes(currency)) {
+      setCurrency((TRIP_CURRENCY_OPTIONS as string[]).includes('JPY') ? 'JPY' : TRIP_CURRENCY_OPTIONS[0]);
+    }
+  }, [currency]);
+
   // Call AI to parse trip text
   async function handleAiParse() {
     if (!tripText.trim()) return;
@@ -134,17 +175,21 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
         result.trip.itinerary.some((day) => Array.isArray(day.spots) && day.spots.length > 0);
       if (hasSpots) {
         setAiDraft(result.trip);
-        setAiSummary(result.summary || '已成功分析您嘅行程計畫！');
+        setAiSummary(result.summary || '已成功分析你嘅行程計畫！');
         setAiChanges(result.changes || []);
+        // Sync the 當地貨幣 select to the AI-detected currency so the preview and the saved
+        // trip agree (personalizeTrip would otherwise overwrite it with the select default).
+        const detected = result.trip.intelligence?.primaryCurrency || result.trip.currencies?.find((code) => code !== 'HKD') || '';
+        if (detected && (TRIP_CURRENCY_OPTIONS as string[]).includes(detected)) setCurrency(detected);
       } else {
         const warningMsg = (result && result.warnings && result.warnings.join(' | ')) || '';
-        throw new Error(warningMsg || 'AI 智能解析未成功提取任何日程景點，請檢查您貼入嘅文字內容是否包含行程細節。');
+        throw new Error(warningMsg || 'AI 智能解析未能提取任何日程景點 — 請檢查你貼入嘅文字係咪包含行程細節，再試一次。');
       }
     } catch (err) {
       console.error('[WelcomeGuide] AI parse failed:', err);
       const errorMsg = err instanceof Error ? err.message : String(err);
       // Keep the user's pasted text intact — only surface the error in the banner.
-      setError(`${errorMsg}｜可檢查 API 金鑰設定，或改用下面「手動輸入旅行細節」建立旅程。`);
+      setError(`${errorMsg}｜可以檢查網絡連線後再試，或者改用「✍️ 手動輸入旅行細節」分頁建立旅程。`);
     } finally {
       setBusy(false);
     }
@@ -153,7 +198,18 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   const partyCount = guidePersons.length;
   function setPartyCount(next: number) {
     const count = Math.max(1, Math.min(8, Math.round(next) || 1));
-    setGuidePersons((current) => makeGuidePersons(count, current));
+    setGuidePersons((current) => {
+      // New persons inherit the average of the current ratios, so existing percentages keep
+      // their relative proportions instead of shifting against a fresh '1'.
+      const avg = current.length
+        ? current.reduce((sum, person) => sum + (Number(person.ratio) || 0), 0) / current.length
+        : 1;
+      const newRatio = String(Math.max(0, Math.round(avg)));
+      return Array.from({ length: count }, (_, idx) => ({
+        name: current[idx]?.name || `User ${idx + 1}`,
+        ratio: idx < current.length ? current[idx].ratio : newRatio,
+      }));
+    });
   }
 
   function updateGuidePerson(index: number, patch: Partial<{ name: string; ratio: string }>) {
@@ -227,7 +283,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
     };
   }
 
-  function personalizeTrip(trip: TripProfile): TripProfile {
+  function personalizeTrip(trip: TripProfile, source: 'manual' | 'ai' = 'manual'): TripProfile {
     const now = Date.now();
     const intelligence = normalizeTripIntelligence(
       {
@@ -236,7 +292,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
         tripStyle,
         homeCity: homeCity.trim() || 'Hong Kong',
         weatherPreference,
-        source: 'manual',
+        source,
         updatedAt: now,
       },
       trip.destinationSummary,
@@ -255,7 +311,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
   // Create trip based on current active tab
   function handleCreate() {
     if (activeTab === 'ai' && aiDraft) {
-      onSave(buildGuideResult(personalizeTrip(aiDraft)));
+      onSave(buildGuideResult(personalizeTrip(aiDraft, 'ai')));
     } else {
       // Validate dates instead of letting createTripProfile silently swap them.
       if (startDate && endDate && endDate < startDate) {
@@ -282,9 +338,20 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
     }
   }
 
+  // The welcome-guide-* classes carry no CSS rules; they are kept as stable selectors for the
+  // welcome-guide smoke test (tests/welcome-guide-smoke.spec.cjs).
   return (
-    <div className="modal-backdrop welcome-guide-backdrop" style={{ display: 'grid', placeItems: 'center', background: 'rgba(23, 18, 12, 0.6)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', zIndex: 1500 }} onClick={onSkip}>
-      <div className="modal welcome-guide-modal" style={{ width: 'min(680px, 95vw)', maxHeight: '92vh', overflowY: 'auto', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid rgba(255, 255, 255, 0.6)', borderRadius: '24px', padding: '28px', boxShadow: '0 30px 70px rgba(42, 30, 18, 0.22)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', animation: 'page-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop welcome-guide-backdrop" style={{ display: 'grid', placeItems: 'center', background: 'rgba(23, 18, 12, 0.6)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', zIndex: 1500 }} onClick={onDismiss}>
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={hasExistingTrips ? '建立另一個旅程' : '歡迎指南'}
+        tabIndex={-1}
+        className="modal welcome-guide-modal"
+        style={{ width: 'min(680px, 95vw)', maxHeight: '92vh', overflowY: 'auto', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid rgba(255, 255, 255, 0.6)', borderRadius: '24px', padding: '28px', boxShadow: '0 30px 70px rgba(42, 30, 18, 0.22)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', animation: 'page-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1)', outline: 'none' }}
+        onClick={(e) => e.stopPropagation()}
+      >
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -292,10 +359,15 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             <Compass size={28} className="spin-once" />
           </div>
           <h1 style={{ margin: '0 0 6px 0', fontSize: '24px', fontWeight: 900, background: 'linear-gradient(135deg, #2A1E12 30%, #623815 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            歡迎使用 Travel Expense Cloud！
+            {hasExistingTrips ? '建立另一個旅程 📓' : '歡迎嚟到 Travel Expense Cloud！'}
           </h1>
           <p style={{ margin: 0, fontSize: '13px', color: '#6B7280', fontWeight: 600 }}>
-            開啟您嘅新旅程，建立專屬記帳筆記本 📓✨
+            {hasExistingTrips
+              ? '儲存後會新增一個旅程，唔會影響你現有嘅旅程。'
+              : '第一步：建立你嘅旅程記帳簿 — 貼上行程畀 AI 分析，或者手動輸入資料。'}
+          </p>
+          <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: '#9CA3AF', fontWeight: 600 }}>
+            所有資料只屬於你嘅帳號，唔會公開；想邀請旅伴，之後随时可以喺 設定 → 旅程共享 補發。
           </p>
         </div>
 
@@ -322,7 +394,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             }}
           >
             <Sparkles size={15} />
-            <span>🤖 AI 智能行程分析</span>
+            <span>🤖 貼上行程 · AI 分析</span>
           </button>
           <button
             onClick={() => { setActiveTab('manual'); setError(''); }}
@@ -424,11 +496,11 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             <div>
               <strong style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: '#2D6E48', fontWeight: 900 }}>
                 <Users size={15} />
-                分享這個旅程
+                分享呢個旅程
               </strong>
-              <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 700 }}>邀請同行者登入後加入同一本共享記帳簿。</span>
+              <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 700 }}>邀請同行者登入後加入同一本共享記帳簿；而家唔填都可以，之後喺 設定 → 旅程共享 補發。</span>
             </div>
-            <span style={{ padding: '5px 9px', borderRadius: '999px', background: 'white', border: '1px solid rgba(45, 110, 72, 0.14)', color: '#2D6E48', fontSize: '11px', fontWeight: 900 }}>{sharingInvites.length} invites</span>
+            <span style={{ padding: '5px 9px', borderRadius: '999px', background: 'white', border: '1px solid rgba(45, 110, 72, 0.14)', color: '#2D6E48', fontSize: '11px', fontWeight: 900 }}>{sharingInvites.length} 個邀請</span>
           </div>
           <label style={{ display: 'grid', gap: '4px', fontSize: '11px', color: '#6B7280', fontWeight: 800 }}>
             Email
@@ -570,7 +642,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             {!aiDraft ? (
               <div style={{ display: 'grid', gap: '12px' }}>
                 <p style={{ margin: 0, fontSize: '12px', color: '#6B7280', lineHeight: 1.5 }}>
-                  複製並貼上您嘅機票、酒店訂單確認郵件，或者隨性嘅行程計畫大綱。AI 模型會自動為您填充時間、地點、預算及生成每日行程！
+                  複製並貼上你嘅機票、酒店訂單確認郵件，或者隨性嘅行程計畫大綱。AI 模型會自動為你填充時間、地點、預算及生成每日行程！
                 </p>
                 <textarea
                   value={tripText}
@@ -710,7 +782,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                       boxShadow: '0 4px 12px rgba(204, 41, 41, 0.15)'
                     }}
                   >
-                    <span>確認建立，開啟旅程</span>
+                    <span>{hasExistingTrips ? '確認建立新旅程' : '確認建立，開啟旅程'}</span>
                     <ArrowRight size={14} />
                   </button>
                 </div>
@@ -787,7 +859,6 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
                   onChange={(e) => setCurrency(e.target.value)}
                   style={{ padding: '10px 12px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white', fontFamily: 'inherit', height: '39px' }}
                 >
-                  <option value="HKD">HKD ({CURRENCY_LABELS.HKD})</option>
                   {TRIP_CURRENCY_OPTIONS.map((code) => (
                     <option key={code} value={code}>{code} ({CURRENCY_LABELS[code] || code})</option>
                   ))}
@@ -800,16 +871,16 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
               type="button"
               className="mt-1.5 w-full gap-1.5 text-[13px]"
             >
-              <span>建立並進入 App</span>
+              <span>{hasExistingTrips ? '建立新旅程' : '建立並進入 App'}</span>
               <ArrowRight size={15} />
             </GradientButton>
           </div>
         )}
 
-        {/* Actions / Skip Button */}
+        {/* Actions / Dismiss Button */}
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(139, 115, 85, 0.08)' }}>
           <button
-            onClick={onSkip}
+            onClick={onDismiss}
             type="button"
             style={{
               border: 0,
@@ -825,7 +896,7 @@ export function WelcomeGuidePopup({ state, onSave, onSkip }: WelcomeGuidePopupPr
             onMouseEnter={(e) => { e.currentTarget.style.color = '#6B7280'; e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.03)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = '#9CA3AF'; e.currentTarget.style.backgroundColor = 'transparent'; }}
           >
-            暫時跳過，晏啲先填 ↩
+            {hasExistingTrips ? '取消' : '跳過，直接入 App ↩'}
           </button>
         </div>
 

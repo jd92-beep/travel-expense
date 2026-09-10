@@ -63,7 +63,7 @@ function TripDropdown({
         onClick={() => setOpen(!open)}
       >
         {children && <span className="shell-trip-trigger-content">{children}</span>}
-        <ChevronDown size={18} className="text-[#C23B5E] dark:text-[#D4A843] shrink-0" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        <ChevronDown size={18} className="text-[var(--theme-accent)] shrink-0" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
       </button>
       {open && (
         <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} mt-2 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]`}>
@@ -487,7 +487,7 @@ export function Shell({
         </div>
       )}
       {hasSyncProblem && !updateReady && (
-        <div className="top-notice text-red-700 bg-red-50 border border-red-200/60 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-300 backdrop-blur-md flex items-center justify-between gap-4 w-full" style={{ background: 'rgba(253, 240, 240, 0.95)', border: '1px solid rgba(194, 59, 94, 0.3)', color: '#A83030' }}>
+        <div className="top-notice sync-problem-notice backdrop-blur-md flex items-center justify-between gap-4 w-full">
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -505,8 +505,8 @@ export function Shell({
             <button
               type="button"
               onClick={onRetryFailed}
-              className="compact-touch-action px-3 py-1 text-xs font-semibold bg-[#C23B5E] hover:bg-[#A83030] text-white rounded-full transition-all duration-200 active:scale-95 shadow-sm shrink-0"
-              style={{ border: 0, padding: '4px 12px', height: 'auto', background: '#C23B5E', color: 'white' }}
+              className="compact-touch-action px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 active:scale-95 shadow-sm shrink-0"
+              style={{ border: 0, padding: '4px 12px', height: 'auto', background: 'var(--theme-accent)', color: 'var(--theme-on-accent)' }}
             >
               手動重試
             </button>
@@ -515,10 +515,10 @@ export function Shell({
       )}
       <header className="topbar topbar-canva relative overflow-hidden">
         {theme.id === 'japan_washi' && active === 'dashboard' && (
-          <svg className="absolute right-4 bottom-0 opacity-15 pointer-events-none h-full w-48 text-[#D4A843] dark:text-[#C23B5E] z-0" viewBox="0 0 120 40" fill="none" stroke="currentColor">
+          <svg className="absolute right-4 bottom-0 opacity-15 pointer-events-none h-full w-48 text-[var(--theme-chart-3)] z-0" viewBox="0 0 120 40" fill="none" stroke="currentColor">
             <path d="M10,40 Q40,12 60,5 Q80,12 110,40 Z" strokeWidth="1" />
             <path d="M48,15 L60,5 L72,15 Z" fill="currentColor" opacity="0.3" stroke="none" />
-            <path d="M85,40 L85,25 M95,40 L95,25 M81,23 L99,23 M83,27 L97,27 M82,20 L98,20" strokeWidth="1.5" stroke="#C23B5E" />
+            <path d="M85,40 L85,25 M95,40 L95,25 M81,23 L99,23 M83,27 L97,27 M82,20 L98,20" strokeWidth="1.5" style={{ stroke: 'var(--theme-chart-2)' }} />
           </svg>
         )}
         <div className="topbar-title-block relative z-10">
@@ -593,10 +593,10 @@ export function Shell({
       </header>
       <header className="compact-mobile-header relative overflow-hidden" aria-label={`${activeCopy.mobileTitle} header`}>
         {theme.id === 'japan_washi' && active === 'dashboard' && (
-          <svg className="absolute right-12 bottom-0 opacity-15 pointer-events-none h-14 w-36 text-[#D4A843] dark:text-[#C23B5E] z-0" viewBox="0 0 100 40" fill="none" stroke="currentColor">
+          <svg className="absolute right-12 bottom-0 opacity-15 pointer-events-none h-14 w-36 text-[var(--theme-chart-3)] z-0" viewBox="0 0 100 40" fill="none" stroke="currentColor">
             <path d="M5,40 Q30,15 50,5 Q70,15 95,40 Z" strokeWidth="1" />
             <path d="M38,12 L50,5 L62,12 Z" fill="currentColor" opacity="0.3" stroke="none" />
-            <path d="M72,40 L72,24 M82,40 L82,24 M68,22 L86,22 M70,26 L84,26 M69,19 L85,19" strokeWidth="1.5" stroke="#C23B5E" />
+            <path d="M72,40 L72,24 M82,40 L82,24 M68,22 L86,22 M70,26 L84,26 M69,19 L85,19" strokeWidth="1.5" style={{ stroke: 'var(--theme-chart-2)' }} />
           </svg>
         )}
         {theme.id === 'japan_washi' && <span className="compact-mobile-mark relative z-10" aria-hidden="true">

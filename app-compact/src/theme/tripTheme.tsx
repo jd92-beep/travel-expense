@@ -76,7 +76,7 @@ function isThemeKey(value: unknown): value is TripThemeKey {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(TRIP_THEMES, value);
 }
 
-export function TripThemeProvider({ state, children }: { state: AppState; children: ReactNode }) {
+export function TripThemeProvider({ state, ready = true, children }: { state: AppState; ready?: boolean; children: ReactNode }) {
   const trip = activeTrip(state);
   const currency = trip.currencies?.find((code) => code !== 'HKD') || state.tripCurrency || 'JPY';
   const intelligence = normalizeTripIntelligence(trip.intelligence, trip.destinationSummary, currency, trip.timezones?.[0]);
@@ -87,6 +87,10 @@ export function TripThemeProvider({ state, children }: { state: AppState; childr
   const theme = TRIP_THEMES[resolvedTheme] || TRIP_THEMES.global_journal;
 
   useLayoutEffect(() => {
+    // Before storage hydration lands, `state` is still the default snapshot: writing the
+    // default theme here would clobber the boot hint from index.html and flash the wrong
+    // theme. Leave attributes, CSS vars, theme-color, and the localStorage hint untouched.
+    if (!ready) return;
     const root = document.documentElement;
     const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     root.dataset.tripTheme = intelligence.themeKey;
@@ -109,9 +113,14 @@ export function TripThemeProvider({ state, children }: { state: AppState; childr
       '--trip-glow-primary': `${theme.chart[1]}22`, '--trip-glow-secondary': `${theme.chart[0]}1a`, '--trip-glow-tertiary': `${theme.chart[2]}1a`,
       '--surface': colors.surface, '--card': colors.card, '--ink': colors.text, '--muted': colors.muted, '--line': colors.border,
       '--red': colors.red, '--blue': colors.blue, '--navy': colors.blue, '--gold': colors.gold, '--green': colors.green, '--brown': colors.brown,
+      '--glass': `color-mix(in srgb, ${colors.card} 24%, transparent)`,
+      '--glass-strong': `color-mix(in srgb, ${colors.card} 48%, transparent)`,
+      '--cream-shadow': `color-mix(in srgb, ${colors.text} 12%, transparent)`,
+      '--shadow-soft': `0 12px 32px color-mix(in srgb, ${colors.text} 8%, transparent)`,
+      '--shadow-glass': `0 20px 56px color-mix(in srgb, ${colors.text} 12%, transparent), inset 0 1px 1px ${theme.scheme === 'dark' ? 'rgba(255, 255, 255, .12)' : 'rgba(255, 255, 255, .88)'}`,
     };
     Object.entries(vars).forEach(([name, value]) => root.style.setProperty(name, value));
-  }, [intelligence.countryCode, intelligence.themeKey, source, theme]);
+  }, [intelligence.countryCode, intelligence.themeKey, source, theme, ready]);
 
   return <ThemeContext.Provider value={{ theme, tripTheme: intelligence.themeKey, source }}>{children}</ThemeContext.Provider>;
 }

@@ -5,7 +5,7 @@ import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
-import { amountToHkd, formatCurrencyAmount, hkdToCurrency } from '../lib/currency';
+import { amountToHkd, formatCurrencyAmount, hkdToCurrency, perHkdForCurrency } from '../lib/currency';
 import { needsTranslation, splitInlineTranslation, translateStoreNames } from '../lib/storeTranslation';
 import { EmptyState, GlassCard, StatusPill, TickerMoney } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
@@ -24,12 +24,7 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
   const toHkd = (amt: number) => {
     if (resolvedTripCurrency === 'HKD') return amt;
-    const rate = Math.max(
-      0.1,
-      Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
-      (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
-      20.36
-    );
+    const rate = Math.max(0.1, perHkdForCurrency(state, resolvedTripCurrency));
     return Math.round(amt / rate);
   };
   const analysisReceipts = scopedState.receipts.filter((r) => state.statsIncludeTransportLodging || !isBigTripItem(r));
@@ -655,12 +650,7 @@ function BudgetPaceChart({ trend, dailyBudget, dailyAverage, state }: { trend: A
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
   const toHkd = (amt: number) => {
     if (resolvedTripCurrency === 'HKD') return amt;
-    const rate = Math.max(
-      0.1,
-      Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
-      (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
-      20.36
-    );
+    const rate = Math.max(0.1, perHkdForCurrency(state, resolvedTripCurrency));
     return Math.round(amt / rate);
   };
   const currencySymbol = resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' ';
@@ -770,12 +760,7 @@ function Bar({ label, leading, value, state, color, max }: { label: string; lead
   if (resolvedTripCurrency === 'HKD') {
     valueHkd = value;
   } else {
-    const rate = Math.max(
-      0.1,
-      Number(state.rateTable?.[resolvedTripCurrency]?.perHkd) ||
-      (resolvedTripCurrency === 'JPY' ? Number(state.rate) : undefined) ||
-      20.36
-    );
+    const rate = Math.max(0.1, perHkdForCurrency(state, resolvedTripCurrency));
     valueHkd = Math.round(value / rate);
   }
 

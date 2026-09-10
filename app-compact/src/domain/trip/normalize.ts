@@ -314,9 +314,12 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   const day = trip.itinerary?.find((item) => item.date === receipt.date);
   const region = receipt.regionSnapshot || receipt.region || day?.region || '';
   const currency = receipt.currency || receipt.originalCurrency || day?.currency || state.tripCurrency || 'JPY';
+  // 鎖定匯率嘅收據（用户手動釘死，例如出發前唱錢）唔准用而家嘅匯率重新 stamp。
+  const pinnedRate = receipt.exchangeRatePinned ? Number(receipt.exchangeRate) : 0;
   const rate = Math.max(
     0.1,
-    Number(receipt.exchangeRate)
+    (Number.isFinite(pinnedRate) && pinnedRate > 0 ? pinnedRate : 0)
+      || Number(receipt.exchangeRate)
       || perHkdForCurrency(state, currency),
   );
 

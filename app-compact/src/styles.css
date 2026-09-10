@@ -97,7 +97,7 @@ body::after {
   background:
     linear-gradient(115deg, transparent 0 36%, rgba(255,253,247,.40) 47%, transparent 58%),
     linear-gradient(78deg, transparent 0 58%, rgba(212,168,67,.10) 68%, transparent 78%);
-  animation: travel-light-sweep 18s ease-in-out infinite alternate;
+  animation: travel-light-sweep var(--theme-motion-duration, 18s) ease-in-out infinite alternate;
 }
 
 .hyperframe-background {
@@ -2485,6 +2485,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .toast.danger { background: #FDF0F0; color: #A83030; border-color: #E8B8B8; }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.spin-once { animation: spin-once .9s cubic-bezier(0.4, 0, 0.2, 1) 1; }
+@keyframes spin-once { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spin-once { animation: none; }
+}
 .tabbar {
   position: fixed;
   left: 50%;

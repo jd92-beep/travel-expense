@@ -24,7 +24,7 @@ import {
   type PersonalNotionStatus,
   type ProviderStatus,
 } from '../lib/credentialBroker';
-import { appRatePatchFromSnapshot, currencyPrefix, fetchLiveCurrencySnapshot, SUPPORTED_CURRENCIES } from '../lib/currency';
+import { appRatePatchFromSnapshot, currencyPrefix, fetchLiveCurrencySnapshot, perHkdForCurrency, SUPPORTED_CURRENCIES } from '../lib/currency';
 import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, getResolvedTripCurrency, isPendingReceipt, safePhotoUrl, sharePercents, validateItinerary } from '../lib/domain';
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 import { saveReceiptRepairIntent } from '../lib/repairIntent';
@@ -43,7 +43,7 @@ import {
 import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
 import type { AppState, ItineraryDay, ItinerarySpot, Person, Receipt, SyncEngineState, SyncQueueItem, ThemePreference, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
 import { clearCredentialSession, getDirectNotionToken, saveDirectNotionToken, saveState, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
-import { createSupabaseTripInvite, inviteLinkForToken, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
+import { createSupabaseTripInvite, inviteLinkForToken, leaveSupabaseTrip, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
 import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { GlassCard, SegmentedControl, StatefulActionButton, StatusPill, Toast } from '../components/ui';
@@ -536,8 +536,9 @@ function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Pers
     return day.date >= trip.startDate && day.date <= trip.endDate;
   });
   const personNameById = new Map(persons.map((person) => [person.id, person.name]));
+  const shareTripCurrency = getResolvedTripCurrency(state, trip);
   const spentHkd = tripReceipts.reduce((sum, receipt) => sum + (Number(receipt.hkdAmount ?? receipt.total) || 0), 0);
-  const budgetHkd = Number(trip.budget || state.budget || 0) / Math.max(1, Number(state.rate || 1));
+  const budgetHkd = Number(trip.budget || state.budget || 0) / Math.max(0.1, perHkdForCurrency(state, shareTripCurrency));
   const remainingHkd = Math.max(0, budgetHkd - spentHkd);
   const payload: TripSharePreview['payload'] = {
     exportType: 'private-trip-share',
@@ -558,7 +559,7 @@ function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Pers
       destination: trip.destinationSummary || '',
       startDate: trip.startDate || state.tripDateRange.start,
       endDate: trip.endDate || state.tripDateRange.end,
-      currency: trip.currencies?.[1] || state.tripCurrency || 'JPY',
+      currency: trip.currencies?.find((c) => c !== 'HKD') || state.tripCurrency || 'JPY',
       budget: Number(trip.budget || state.budget || 0),
       days: inclusiveTripDayCount(trip),
     },
@@ -936,6 +937,7 @@ export function Settings({
   userEmail = null,
   onSignOut,
   onClearDeviceData,
+  onReopenGuide,
 }: {
   state: AppState;
   setState: Dispatch<SetStateAction<AppState>>;
@@ -954,6 +956,7 @@ export function Settings({
   userEmail?: string | null;
   onSignOut?: () => Promise<void> | void;
   onClearDeviceData?: () => Promise<void> | void;
+  onReopenGuide?: () => void;
 }) {
   const supabaseAuth = useSupabaseAuth();
   const { theme } = useTripTheme();
@@ -1525,7 +1528,11 @@ export function Settings({
       // when this async function started — the user could have switched to Fixed (and typed a manual
       // rate) while this fetch was in flight; a stale live response must not silently overwrite that.
       setState((current) => current.rateMode === 'fixed' ? current : { ...current, ...appRatePatchFromSnapshot(snapshot) });
-      return `已更新：1 HKD = ${snapshot.rates.JPY.toFixed(2)} JPY（${snapshot.source}）`;
+      const code = getResolvedTripCurrency(state, activeTrip(state));
+      const rate = Number(snapshot.rates[code]);
+      return Number.isFinite(rate) && rate > 0
+        ? `已更新：1 HKD = ${rate.toFixed(2)} ${code}（${snapshot.source}）`
+        : `已更新匯率（${snapshot.source}）`;
     });
   }
 
@@ -1625,6 +1632,39 @@ export function Settings({
     });
   }
 
+  // The invite RPC upserts the trip server-side when it has no supabaseId yet; keep the returned
+  // id locally so member role/remove actions work before the next pull.
+  function writeBackSyncedTrip(syncedTrip: TripProfile) {
+    if (!syncedTrip.supabaseId || syncedTrip.supabaseId === currentTrip.supabaseId) return;
+    setState((prev) => ({
+      ...prev,
+      trips: (prev.trips || []).map((item) => item.id === currentTrip.id
+        ? { ...item, supabaseId: syncedTrip.supabaseId, sourceId: syncedTrip.sourceId || item.sourceId, notionPageId: syncedTrip.notionPageId || item.notionPageId }
+        : item),
+    }));
+  }
+
+  // Client-side invite option the RPC does not own: add the invitee to the split list with an
+  // equal-proportion default (average of current ratios keeps existing percentages intact).
+  function addInvitePersonToSplit(draft: TripSharingInviteDraft) {
+    const name = (draft.displayName || '').trim() || draft.email.split('@')[0] || draft.email;
+    setState((prev) => {
+      const existingPersons = getPersons(prev);
+      if (existingPersons.some((person) => person.name.trim().toLowerCase() === name.toLowerCase())) return prev;
+      const id = `p_invite_${draft.email.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`;
+      if (existingPersons.some((person) => person.id === id)) return prev;
+      const ratios = prev.shareRatios || {};
+      const existing = existingPersons.map((person) => Number(ratios[person.id]) || 0);
+      const avg = existing.length ? existing.reduce((acc, value) => acc + value, 0) / existing.length : 1;
+      return {
+        ...prev,
+        persons: [...existingPersons, { id, name, emoji: '👤', color: COLORS[existingPersons.length % COLORS.length] }],
+        shareRatios: { ...ratios, [id]: Math.max(1, Math.round(avg)) },
+        settingsUpdatedAt: Date.now(),
+      };
+    });
+  }
+
   async function createSharingInvite() {
     const email = sharingInviteEmail.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -1646,7 +1686,8 @@ export function Settings({
       createAccountingPerson: sharingInvitePerson,
     };
     await run('建立旅程邀請', async () => {
-      const invite = await createSupabaseTripInvite(sharingSession, state, currentTrip, draft);
+      const { invite, trip: syncedTrip } = await createSupabaseTripInvite(sharingSession, state, currentTrip, draft);
+      writeBackSyncedTrip(syncedTrip);
       const link = invite.token ? inviteLinkForToken(invite.token) : '';
       patchCurrentTripSharing((sharing) => {
         const nextInvites = [
@@ -1662,11 +1703,50 @@ export function Settings({
         };
       });
       if (link) setCreatedInviteLinks((current) => [{ email: invite.email, link }, ...current.filter((item) => item.email !== invite.email)].slice(0, 6));
+      if (draft.createAccountingPerson) addInvitePersonToSplit(draft);
       setSharingInviteEmail('');
       setSharingInviteName('');
       setSharingInviteRole('editor');
       setSharingInvitePerson(true);
       return link ? `已建立 ${invite.email} 邀請；可複製 invite link。` : `已建立 ${invite.email} 邀請。`;
+    });
+  }
+
+  async function regenerateSharingInviteLink(invite: TripInviteSummary) {
+    if (!cloudSyncAvailable || !sharingSession) {
+      setStatus('旅程共享需要先登入 Supabase。');
+      return;
+    }
+    if (!canManageTripSharing) {
+      setStatus('只有 owner/admin 可以管理邀請。');
+      return;
+    }
+    await run('重新產生邀請連結', async () => {
+      // The server upserts the pending row for the same email/role and returns a fresh token.
+      const { invite: fresh, trip: syncedTrip } = await createSupabaseTripInvite(sharingSession, state, currentTrip, {
+        email: invite.email,
+        role: invite.role,
+        displayName: invite.displayName,
+      });
+      writeBackSyncedTrip(syncedTrip);
+      patchCurrentTripSharing((sharing) => {
+        const nextInvites = [
+          ...(sharing.invites || []).filter((item) => item.id !== invite.id && item.email.toLowerCase() !== fresh.email.toLowerCase()),
+          fresh,
+        ];
+        return {
+          ...sharing,
+          role: sharing.role || 'owner',
+          isShared: true,
+          invites: nextInvites,
+          pendingInviteCount: nextInvites.filter((item) => item.status === 'pending').length,
+        };
+      });
+      if (fresh.token) {
+        const link = inviteLinkForToken(fresh.token);
+        setCreatedInviteLinks((current) => [{ email: fresh.email, link }, ...current.filter((item) => item.email !== fresh.email)].slice(0, 6));
+      }
+      return `已重新產生 ${fresh.email} 嘅邀請連結，可以複製發送。`;
     });
   }
 
@@ -1676,7 +1756,10 @@ export function Settings({
       return;
     }
     await run('撤回旅程邀請', async () => {
-      await revokeSupabaseTripInvite(sharingSession, invite.id);
+      // Local-only pending rows (saved while offline) never reached the server — just drop them.
+      if (!invite.id.startsWith('local_')) {
+        await revokeSupabaseTripInvite(sharingSession, invite.id);
+      }
       patchCurrentTripSharing((sharing) => {
         const nextInvites = (sharing.invites || []).filter((item) => item.id !== invite.id);
         return {
@@ -1723,6 +1806,36 @@ export function Settings({
         };
       });
       return `已移除 ${label || 'member'}。`;
+    });
+  }
+
+  async function leaveSharedTrip() {
+    if (!sharingSession) {
+      setStatus('請先登入 Supabase。');
+      return;
+    }
+    if (!window.confirm(`確定退出「${currentTrip.name}」？你會即時失去呢個旅程嘅存取權；已同步嘅記帳會保留喺旅程入面。`)) return;
+    await run('退出旅程', async () => {
+      await leaveSupabaseTrip(sharingSession, currentTrip);
+      setState((prev) => {
+        const nextTrips = (prev.trips || []).filter((trip) => trip.id !== currentTrip.id);
+        const nextActive = nextTrips[0];
+        return migrateAppState({
+          ...prev,
+          trips: nextTrips,
+          ...(nextActive ? {
+            activeTripId: nextActive.id,
+            tripName: nextActive.name,
+            tripDateRange: { start: nextActive.startDate, end: nextActive.endDate },
+            budget: nextActive.budget ?? 0,
+            tripCurrency: nextActive.currencies?.find((code) => code !== 'HKD') || prev.tripCurrency,
+            customItinerary: nextActive.itinerary || [],
+          } : {}),
+          settingsUpdatedAt: Date.now(),
+        });
+      });
+      if (onPull) await onPull();
+      return '已退出旅程。';
     });
   }
 
@@ -2234,7 +2347,8 @@ export function Settings({
       await navigator.clipboard.writeText(text);
       setStatus(ok);
     } catch {
-      setStatus(text);
+      // Never dump the secret link into a toast — a prompt keeps it selectable for manual copy.
+      window.prompt('複製呢條連結', text);
     }
   }
 
@@ -2740,11 +2854,11 @@ export function Settings({
               type="number"
               min="0"
               step="1"
-              value={Math.round((Number(mgrBudget) || 0) / Math.max(0.1, Number(state.rate) || 20.36))}
+              value={Math.round((Number(mgrBudget) || 0) / Math.max(0.1, perHkdForCurrency(state, mgrCurrency)))}
               onChange={(e) => {
                 const val = parseFloat(e.target.value);
                 const safe = Number.isFinite(val) && val >= 0 ? val : 0;
-                setMgrBudget(String(Math.round(safe * Math.max(0.1, Number(state.rate) || 20.36))));
+                setMgrBudget(String(Math.round(safe * Math.max(0.1, perHkdForCurrency(state, mgrCurrency)))));
               }}
             />
           </label>
@@ -2827,7 +2941,7 @@ export function Settings({
             ariaLabel="匯率模式"
             value={state.rateMode === 'fixed' ? 'fixed' : 'live'}
             options={[
-              { value: 'live', label: '即時 (Visa)' },
+              { value: 'live', label: '即時 (ER-API)' },
               { value: 'fixed', label: '固定匯率' },
             ]}
             onChange={(mode) => {
@@ -2837,7 +2951,7 @@ export function Settings({
           />
           <div className="form-grid">
             <label>{state.rateMode === 'fixed' ? '固定' : '即時'}匯率（1 HKD = {mgrCurrency || '目的地貨幣'}）
-              <input type="number" min="0.01" step="0.01" value={state.rateTable?.[String(state.tripCurrency || 'JPY').toUpperCase()]?.perHkd || state.rate} onChange={(e) => {
+              <input type="number" min="0.01" step="0.01" value={perHkdForCurrency(state, String(state.tripCurrency || 'JPY').toUpperCase())} onChange={(e) => {
                 const val = parseFloat(e.target.value);
                 const safe = Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : 20.36;
                 // Also stamp rateTable[code] so perHkdForCurrency (used by Dashboard/Stats/ReceiptEditor)
@@ -2862,7 +2976,7 @@ export function Settings({
             )}
           </div>
           {state.rateMode === 'fixed' && (
-            <p className="muted">已鎖定手動匯率 — 出發前兌換嘅價錢唔會被即時匯率覆蓋。想返去自動更新，撳返「即時 (Visa)」。</p>
+            <p className="muted">已鎖定手動匯率 — 出發前兌換嘅價錢唔會被即時匯率覆蓋。想返去自動更新，撳返「即時 (ER-API)」。</p>
           )}
           {state.rateMode === 'fixed' && !state.rateTable?.[String(state.tripCurrency || 'JPY').toUpperCase()] && (
             <p className="muted">⚠️ 未為 {String(state.tripCurrency || 'JPY').toUpperCase()} 設定固定匯率 — 而家用緊內置近似值，請喺上面輸入你實際兌換到嘅匯率。</p>
@@ -2960,10 +3074,14 @@ export function Settings({
             const inviteLink = invite.token ? inviteLinkForToken(invite.token) : generated?.link;
             return (
               <span key={invite.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', alignItems: 'center', gap: '8px' }}>
-                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invite.email} · {invite.role}</span>
-                {inviteLink && (
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invite.displayName ? `${invite.displayName} · ` : ''}{invite.email} · {invite.role}</span>
+                {inviteLink ? (
                   <button className="secondary" type="button" onClick={() => copyText(inviteLink, `已複製 ${invite.email} invite link`)}>
                     <Copy size={14} /> Link
+                  </button>
+                ) : (
+                  <button className="secondary" type="button" disabled={!!busy || !canManageTripSharing || !cloudSyncAvailable} onClick={() => void regenerateSharingInviteLink(invite)}>
+                    <RotateCcw size={14} /> 重新產生連結
                   </button>
                 )}
                 <button className="danger" type="button" disabled={!!busy || !canManageTripSharing} onClick={() => void revokeSharingInvite(invite)}>
@@ -3008,6 +3126,14 @@ export function Settings({
           })}
           {!sharingMembers.length && <span>登入並 pull cloud 後會顯示成員列表。</span>}
         </div>
+
+        {tripSharing.isShared && tripSharing.role !== 'owner' && (
+          <div className="action-row wrap">
+            <button className="danger" type="button" disabled={!!busy || !cloudSyncAvailable} onClick={() => void leaveSharedTrip()}>
+              <LogOut size={16} /> 退出呢個旅程
+            </button>
+          </div>
+        )}
       </AccordionCard>
 
       <AccordionCard id="settings-trip-update" eyebrow="Trip Update AI" title="AI 行程更新" icon={<Sparkles />}>
@@ -3974,6 +4100,14 @@ export function Settings({
       })()}
 
       {status && <Toast tone={/失敗|未連線|暫停|請輸入/.test(status) ? 'warning' : 'success'}>{status}</Toast>}
+
+      {onReopenGuide && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '2rem' }}>
+          <button type="button" className="secondary" onClick={onReopenGuide}>
+            <Sparkles size={14} /> 重新開啟歡迎指南
+          </button>
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: '2rem', paddingBottom: '2rem' }}>
         <span onClick={handleVersionClick} style={{ cursor: 'pointer', userSelect: 'none', color: '#000000', fontSize: '12px', letterSpacing: '0.05em' }}>

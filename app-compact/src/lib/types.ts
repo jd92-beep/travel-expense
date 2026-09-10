@@ -84,6 +84,10 @@ export interface Receipt {
   currency?: string;
   hkdAmount?: number;
   exchangeRate?: number;
+  // 鎖定匯率：true = 呢張單嘅 exchangeRate 係用户手動釘死嘅（例如出發前唱錢價），
+  // normalize/sync 唔准用而家嘅匯率覆蓋佢。Local-only flag — Supabase/Notion schema 冇對應欄位，
+  // 所以 cloud pull 之後會甩，但 exchangeRate 本身會保留（仍優先於當前匯率）。
+  exchangeRatePinned?: boolean;
   rateSource?: string;
   date: string;
   time?: string;
@@ -237,6 +241,7 @@ export interface TripInviteSummary {
   expiresAt: string;
   createdAt: string;
   token?: string;
+  displayName?: string;
 }
 
 export interface TripBackendHealth {
@@ -328,7 +333,7 @@ export interface AppState {
   budget: number;
   rate: number;
   rateTable?: Record<string, ExchangeRateEntry>;
-  // Absent/'live' = today's behavior (auto-refresh from Visa/open.er-api on boot + manual refresh).
+  // Absent/'live' = today's behavior (auto-refresh from open.er-api on boot + manual refresh).
   // 'fixed' = the user pre-exchanged currency before the trip and locked in that rate; nothing
   // auto-overwrites `rate`/`rateTable[tripCurrency]` until they switch back to 'live'.
   rateMode?: 'live' | 'fixed';
