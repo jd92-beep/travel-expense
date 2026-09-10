@@ -10546,6 +10546,11 @@ textarea,
     padding-top: 0;
   }
 
+  .preview-dashboard-budget-row.is-total {
+    /* keep the figure clear of the absolutely-positioned 編輯 button */
+    padding-right: 62px;
+  }
+
   .preview-dashboard-budget-row span {
     color: #2d2a25;
     font-size: 17px;

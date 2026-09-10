@@ -427,7 +427,31 @@ export function Shell({
         />
       )}
       <nav className="compact-desktop-rail" aria-label="主要分頁">
-        {theme.id === 'japan_washi' && <img className="compact-rail-mark" src={compactJapanMark} alt="" aria-hidden="true" />}
+        <div className="rail-brand">
+          {theme.id === 'japan_washi' && <img className="compact-rail-mark" src={compactJapanMark} alt="" aria-hidden="true" />}
+          <div className="rail-brand-copy">
+            <strong>Travel Ledger</strong>
+            <span>旅行 · 記帳</span>
+          </div>
+        </div>
+        {state && (
+          <div className="rail-trip">
+            <TripDropdown
+              trips={state.trips || []}
+              activeTripId={trip?.id || ''}
+              onSelect={handleSwitchTrip}
+              onCreateNew={onOpenNewTripWizard}
+              align="left"
+              buttonClassName="rail-trip-trigger"
+            >
+              <span className="rail-trip-card">
+                <span className="rail-trip-label">目前旅程</span>
+                <span className="rail-trip-name">{activeTripName}</span>
+                <span className="rail-trip-dates">{activeTripDates}</span>
+              </span>
+            </TripDropdown>
+          </div>
+        )}
         <div className="compact-rail-items">
           {TAB_MANIFEST.map((tab) => (
             <button
@@ -439,9 +463,20 @@ export function Shell({
               onClick={() => onTab(tab.id)}
             >
               <span className="compact-rail-icon">{icons[tab.id]}</span>
-              <span>{tab.label}</span>
+              <span className="compact-rail-label">{tab.label}</span>
             </button>
           ))}
+        </div>
+        <div className="rail-footer">
+          {syncState && !isMobile && (
+            <div className={`rail-sync ${hasSyncProblem ? 'has-error' : ''}`}>
+              <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} />
+            </div>
+          )}
+          <span className={`rail-net ${online ? 'is-online' : 'is-offline'}`}>
+            {online ? <Wifi size={13} aria-hidden="true" /> : <WifiOff size={13} aria-hidden="true" />}
+            <span className="rail-net-label">{online ? '已連線' : '離線'}</span>
+          </span>
         </div>
       </nav>
       {!online && <div className="top-notice offline">離線模式：資料會繼續保存在本機</div>}
@@ -550,7 +585,7 @@ export function Shell({
             <span className="text-xs text-slate-500 font-medium">{activeCopy.subtitle}</span>
           ) : null}
         </div>
-        {syncState && (
+        {syncState && isMobile && (
           <div className={`compact-sync-slot relative z-10 ${hasSyncProblem ? 'has-error' : 'is-quiet'}`}>
             <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} />
           </div>
