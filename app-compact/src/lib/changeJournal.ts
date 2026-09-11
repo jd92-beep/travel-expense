@@ -29,7 +29,7 @@ export function isTransientSyncErrorMessage(error: unknown): boolean {
   const raw = (error instanceof Error
     ? error.message
     : String((error as { message?: unknown } | null)?.message || error || '')).toLowerCase();
-  return /failed to fetch|networkerror|network error|load failed|fetch failed|request timeout|timed out|timeout|connection|econn|enotfound|dns|socket|aborted|err_network|err_internet|err_connection|internet connection appears to be offline|service unavailable|\b502\b|\b503\b|\b504\b/.test(raw);
+  return /failed to fetch|networkerror|network error|network (?:is )?unavailable|load failed|fetch failed|request timeout|timed out|timeout|connection|econn|enotfound|dns|socket|aborted|err_network|err_internet|err_connection|internet connection appears to be offline|service unavailable|\b502\b|\b503\b|\b504\b/.test(raw);
 }
 const queueKey = (item: Pick<SyncQueueItem, 'type' | 'entityId'>) =>
   `${item.type}:${item.entityId}`;
@@ -133,6 +133,7 @@ export function restoreJournal(queue: SyncQueueItem[] | undefined): JournalResul
           attempts: exhaustedTransient ? Math.max(0, MAX_SYNC_RETRY_ATTEMPTS - 1) : item.attempts,
           error: undefined,
           nextRetryAt: undefined,
+
         }
       : item;
   });

@@ -1,10 +1,10 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-10 HKT
-- **Focus**: Session 86 shipped five account-wide Android themes, semantic contrast coverage and Capacitor 8 system-bar integration.
+- **Date**: 2026-08-24 HKT
+- **Focus**: Session 88 production apply/deploy, Admin packaging repair and live verification.
 - **Agent**: Codex.
-- **App version**: Compact `0.17.0`; Android `0.22.0` (versionCode 2200; branch `codex/admin-console-1.0-android`); Admin candidate `1.3.2` (production `1.3.1`); Broker candidate `2026.07.23.1` (production `2026.07.20.1`); React `0.2.6`
+- **App version**: Compact Web `0.17.1`; Android `0.22.0` (versionCode 2200; branch `codex/admin-console-1.0-android`); Admin `1.3.4`; Broker `2026.08.24.1`; React `0.2.7`. All web surfaces, Broker and the approved Supabase cutover are live; ordinary-user receipt-photo auth evidence remains open below.
 
 ### Android worktree detail (Session 80 snapshot — superseded by the Session 81/82 summary above, kept for Android verification evidence)
 
@@ -182,7 +182,7 @@ agent does not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is currently `0.17.0`; the Android branch is `0.22.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web candidate is `0.17.1`; the Android branch is `0.22.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -199,122 +199,229 @@ you closed with your session number.
    privilege check with an ordinary authenticated JWT; do not substitute privileged/service access.
 3. 🟠 **Admin DB platform-owner hardening remains pending** — complete the platform-owner operation
    for the planned non-login helper owner; browser grants, policies and RPC execute remain closed.
-4. 🟡 **Receipt-photo privacy cutover is compatibility-gated** — `receipt-photos` remains in public
-   compatibility mode until Compact/Android signed-URL heartbeats prove active compatibility. Do
-   not apply the staged private receipt-photo migration before that proof.
-5. 🟡 **Receipt-sync/Notion outbox worker execution remains unproven** — worker `v38` is deployed
+4. 🟡 **Receipt-photo privacy cutover is live; ordinary-user proof remains** — Session 88 applied
+   migration `20260824011000_harden_receipt_ownership_and_photo_storage.sql` live as
+   `20260824033202_harden_receipt_ownership_and_photo_storage`. Bucket privacy, MIME/size limits,
+   owner-bound policies and hardened RPC metadata were verified. Close this only after Item 2's
+   ordinary authenticated JWT signed-upload/read smoke; privileged access is not a substitute.
+5. 🟢 **Broker Durable Object hardening deployed in Session 88** — Worker version
+   `d86be18a-27a7-48dd-97a4-c9f47dd31733` serves Broker `2026.08.24.1`. Check, self-test, dry-run,
+   live health/CORS/no-session smoke and a redacted successful Durable Object unlock/status path passed;
+   no secret was rotated or printed.
+6. 🟡 **Receipt-sync/Notion outbox worker execution remains unproven** — worker `v38` is deployed
    and passed a negative canary, so deployment is no longer unverified. Do not claim an end-to-end
    live write: a positive shared-receipt write and Notion mirror result still need separate proof.
-6. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
+7. 🟡 **Per-member private-receipt visibility deferred** — needs server-side trip-member↔person
    binding before "visible to some members" can be enforced. (Session 40.)
-7. 🟠 **Compact Netlify credit block remains active** — Session 80 workflow `30875160196` built and
-   typechecked Compact `0.16.19`, then Netlify rejected the production deploy with `403 Account
-   credit usage exceeded`. Vercel and GitHub Pages serve `0.16.19`; the Netlify alias still serves
-   the previous bundle. Add credits before retrying this workflow.
-8. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
+8. 🟢 **Compact Netlify credit block closed in Session 88** — workflow `32686457804` succeeded and
+   the Netlify alias serves Compact `0.17.1`.
+9. 🟢 **Dead code cleanup**: `extractJson()` in `ai.ts`, `pushAll()` in `notion.ts`; possible
    unused `hkd` imports in History/Stats. (Old Pending list.)
-9. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
+10. 🟢 **Session 18 items never live-verified** (unknown if later sessions covered them): Notion
    settings round-trip with a real token; non-owner sees correct party data on a real shared trip.
-10. 🟡 **Admin intentionally excludes R3 and generic controls** — account consolidation,
+11. 🟡 **Admin intentionally excludes R3 and generic controls** — account consolidation,
     scheduled deletion, Notion write repair, device commands, runtime writes, arbitrary SQL/table
     editing and session revoke stay server-disabled. Session 63 adds a narrow
     production `provider_probe_only` mode; it does not enable the general operation allowlist.
-11. 🟠 **`puiyuchau@gmail.com` root cause — owner_id mismatch** — the infinite backfill loop is now
+12. 🟠 **`puiyuchau@gmail.com` root cause — owner_id mismatch** — the infinite backfill loop is now
     broken (Session 49), but the underlying `owner_id ≠ auth.uid()` mismatch needs DB-side
     investigation (Admin Kanban gateway blocked access). If re-invite or trip re-creation doesn't
     fix it, a manual `UPDATE trips SET owner_id = '<correct_uid>'` may be needed.
-12. 🟢 **Compact Supabase backfill fixture resolved in Session 79** — equal-version local-wins
+13. 🟢 **Compact Supabase backfill fixture resolved in Session 79** — equal-version local-wins
     merges now preserve the cloud itinerary repair flag. The focused backfill suite passes `2/2`
     on Compact and Android, including `update_trip_itinerary` and revoked-trip purge.
-13. 🟡 **Live trip-intelligence schema drift** — Session 57 confirmed production `trips` has
+14. 🟡 **Live trip-intelligence schema drift** — Session 57 confirmed production `trips` has
     `itinerary_version` but not `country_code`, `theme_key`, `locale`, `weather_region` or
     `trip_intelligence`. Compact `0.16.6` safely falls back to the legacy row contract, but reconcile
     the migration history on a reviewed branch before adding these columns. Do not use `db push` or
     migration repair without Boss approval.
-14. 🟡 **One-time stale Chrome tab reload confirmation** — the currently open Compact tab was
+15. 🟡 **One-time stale Chrome tab reload confirmation** — the currently open Compact tab was
     created at 10:11 on `0.16.4`, before Sessions 57/58 deployed. It cannot run the new freshness
     detector until Boss performs one hard refresh after `0.16.6` reaches production. Do not claim
     that specific tab is on `0.16.6` until the refreshed asset/version is confirmed. Future stale
     tabs running `0.16.6+` will show the explicit update notice without a service worker.
-15. 🟢 **Session 59/60 production cutover closed** — Admin `1.0.2` protected workflow
+16. 🟢 **Session 59/60 production cutover closed** — Admin `1.0.2` protected workflow
     `29415119909`, Edge `admin-kanban` v95, Compact `0.16.8` on Vercel/Netlify/Pages and Broker
     `2026.07.15.2` are live. Five authenticated Volcano probes returned `200`; Chrome 150 no-store
     cold-open waited 15 seconds with neither generic sync-error banner. (Session 60.)
-16. 🟡 **Authenticated Admin heartbeat click evidence** — Session 63 deployed the exact-model
+17. 🟡 **Authenticated Admin heartbeat click evidence** — Session 63 deployed the exact-model
     probe path and all production gates passed, but no controllable authenticated Chrome session was
    available for the final operator click. Record one provider-row heartbeat result from Boss's
    session; it must reach preview/commit without `ADMIN_WRITES_DISABLED` and name the selected model.
-17. 🟡 **Authenticated in-app Kimi K3 click evidence** — Session 64 proved the Android request
+18. 🟡 **Authenticated in-app Kimi K3 click evidence** — Session 64 proved the Android request
    shape, deployed the Broker allowlist and returned live direct Volcano `200` responses for text
    and a valid image. Emulator QA stopped at the login gate, so record one authenticated Android
    selected-model click when a human account session is available; do not bypass auth to obtain it.
-18. 🟢 **All four main source milestones complete; Android port and QA are next** — Session 76 adds the
+19. 🟢 **All four main source milestones complete; Android port and QA are next** — Session 76 adds the
    secret-free catalog and thin Compact, Broker, Admin BFF and Admin Edge adapters. Compact keeps K3
    excluded; Broker, Admin BFF and Admin Edge recognise all six safe Volcano LLMs, and the Android
    catalog surface retains K3 for the later port. No Android file changed in main. The tracked
    stale-lease migration is still not live-applied, and positive shared-receipt/Notion outbox plus
    live claim/finish evidence remain open under Item 5. Keep authenticated operator evidence in Items
    16 and 17 open; no deployment, push, credential, database, RLS or live-data action occurred.
-19. 🟢 **Supabase pause/login hang resolved in Session 78** — the free-plan project was restored from
+20. 🟢 **Supabase pause/login hang resolved in Session 78** — the free-plan project was restored from
    `INACTIVE` to `ACTIVE_HEALTHY`. Compact, React and Android now leave the reconnect screen after a
    five-second unreachable-session watchdog and show the login surface with network evidence. No
    schema, RLS, migration, credential or user-data change was made.
-20. 🟢 **Full `main` → Android-branch merge COMPLETED in Session 83** — the deferred merge was
-   executed as a reviewed dedicated operation: 47 conflicted files resolved with main as the
-   baseline plus every Android-only layer preserved (native auth, Capacitor shell, settlement and
-   split engines, `ANDROID_AI_MODELS` with kimi-k3, backoff sync journal). Merged as `0.21.0` /
-   versionCode 2100 with the full gate battery green (typecheck, build, security:scan, 6 node unit
-   suites, 11 playwright smoke suites incl. sync-regression 10/10, offline 5/5, settings 12/12).
-   Emulator QA and a real-device Google login check remain human follow-ups.
-21. 🟢 **Android cold-open transient sync recovery resolved in Session 84** — an exhausted
-   persisted network failure receives one new cold-boot attempt (`attempts=2`) with stale error and
-   backoff timestamp cleared. Version conflicts and exhausted non-transient failures remain durable
-   manual-retry evidence, matching the Compact web contract.
-22. 🟢 **Android `0.21.2` debug APK generated in Session 85** — versionName/versionCode were
-   independently read from the APK as `0.21.2` / `2102`. Artifact:
+21. 🟢 **Full `main` → Android-branch merge COMPLETED in Session 83** — executed as the reviewed
+   dedicated operation (`2a2a9f5`, Android `0.21.0` / versionCode 2100): 47 conflicted files
+   resolved with main as baseline plus all Android-only layers preserved. Full gate battery green
+   (11 playwright suites + 6 node unit suites + typecheck/build/security:scan). Emulator QA passed
+   (`appLinksVerified=true`, `launchMode=login`) and a signed release AAB was built locally. A
+   real-device Google login check remains a human follow-up.
+22. 🟢 **Receipt-sync drain is now event-driven (Session 83)** — Boss replaced the always-on
+   5-minute cron design: migration `20260806090000_receipt_sync_event_drain.sql` (applied live via
+   Management API) adds `private.receipt_sync_drain_kick()` triggers on `trip_backend_links`,
+   `receipt_sync_jobs` and `trips` date changes. When a shared ledger sits inside its travel
+   window (trip dates +/- 7 days), the kick schedules a `*/20` pg_cron job
+   (`receipt-sync-drain`) and fires an immediate debounced drain; the tick calls the same worker
+   endpoint and **unschedules itself** when no shared ledger is in window. Zero polling outside
+   trips. The GitHub workflow keeps the same secrets as a manual `workflow_dispatch` backstop.
+   Live-verified with zero shared trips present: window=false, tick recorded
+   `unscheduled: no shared trip in window`, `cron.job` empty. Drain secret was rotated once more
+   and is consistent across edge secret, GitHub secret and `private.receipt_sync_drain_config`.
+   Open Item 5's remaining piece stays a positive shared-receipt Notion mirror write proof.
+23. 🟢 **Compact cold-open false sync warning resolved in Sessions 84/85** — an exhausted persisted
+   transient network failure now receives exactly one fresh cold-boot retry instead of remaining a
+   permanent generic sync/manual-retry warning. Session 85 added Supabase's `network unavailable`
+   and `network is unavailable` wording to that recovery class after the production-shaped case
+   exposed the remaining classifier gap. Version conflicts, permission/data failures and other
+   genuine terminal evidence remain visible. The Vercel-root regression seeds both scoped stores
+   and asserts that neither the update notice nor either sync-warning surface appears.
+24. 🟢 **Compact/Android account-wide themes completed in Session 86** — five curated worlds plus
+   `自動（依旅程）` now cover first paint, auth/loading gates, the full Compact shell and Android
+   system bars. Taiwan is the only dark world. Preference transport reuses existing local,
+   IndexedDB, backup, Supabase and Notion settings with no database migration; React is a
+   transport-only compatibility shim.
+25. 🟢 **Compact Notion diagnostic smoke realigned in Session 87** — the removed Settings UI is no
+   longer treated as a navigation contract. The diagnostic API is exercised directly and retains
+   the original mixed-schema `conflicting-duplicate=7`, `meta-fallback=5`, `skipped-row=2` assertions.
+26. 🟢 **Android `0.21.2` debug APK generated in Session 85 (Android branch)** — versionName/versionCode
+   were independently read from the APK as `0.21.2` / `2102`. Artifact:
    `app-compact/android/app/build/outputs/apk/debug/app-debug.apk` (11,269,379 bytes; SHA-256
    `d12ad575f29758f8ffd0c1ed48a0e74b9d020279a7cf1e640a3f0b816760a89a`). No release signing or
    emulator QA was requested or performed.
-23. 🟢 **Android account-wide themes completed in Session 86** — five curated worlds plus
-   `自動（依旅程）` cover pre-React paint, auth/loading gates, all seven tabs and native system bars.
-   Taiwan is the only dark world. The preference uses existing local, IndexedDB, backup,
-   Supabase and Notion settings transport; no database migration was added.
-24. 🟡 **One Notion diagnostic smoke is stale** — production settings/meta pull paths pass, but the
-   mixed-schema diagnostic case still expects removed `Notion Sync` / `檢查 Mapping` controls.
-   Preserve its schema assertions until an approved diagnostic surface or navigation contract is
-   selected.
 
 ## What Was Done
 
-### Session 86 (Codex — Android global themes, `0.22.0` / versionCode 2200)
+### Session 88 (Codex — apply/deploy all approved production surfaces)
 
-1. Added schema-v4 `ThemePreference = 'auto' | TripThemeKey`, automatic active-trip resolution,
-   manual account-wide persistence, remote invalid/missing preservation and the existing
-   newer-wins settings transport across localStorage, IndexedDB, backup, Supabase and Notion meta.
-   Settings exposes six accessible radio cards with instant preview. Five semantic catalogs cover
-   canvas/surface/text/border/focus, status, charts, art, motion and native/browser chrome; Japan
-   art is isolated and Taiwan alone uses dark scheme.
-2. The pre-React bootstrap applies the last validated theme without inventing trip intelligence.
-   Capacitor 8 `SystemBars` uses light icons for Taiwan and dark icons for light worlds; the old
-   `@capacitor/status-bar` runtime/Gradle seams were removed. The WebView extends edge to edge while
-   the native cold-launch splash stays neutral.
-3. API 36 emulator QA passed App Links, all seven themed tabs and native Camera/Photo Picker.
-   Taiwan checked 311 visible text samples with zero below 4.5:1. Cold launch, pre-login,
-   portrait/landscape, gesture/three-button navigation and IME screenshots were inspected. A real
-   `font_scale=2.0` rerun confirmed the dock wraps, all seven controls remain visible and adjacent
-   labels keep at least 4px separation; emulator font, rotation and navigation state were restored.
-4. Verification passed: `typecheck`, production build, `security:scan`, theme `9/9`, session `4/4`,
-   Settings `12/12`, a11y `1/1`, sync `10/10`, mobile layout `1/1`, configured-auth `7/7` plus one
-   intentional skip and seven production Notion flows. The debug APK manifest independently reports
-   package `com.ftjdfr.travelexpensecompact`, versionCode `2200`, versionName `0.22.0`, minSdk 24 and
-   targetSdk 36; the generated plugin manifest contains only App, Browser, Camera, Filesystem and
-   Share.
-5. Debug APK only: `app-compact/android/app/build/outputs/apk/debug/app-debug.apk` (11,521,369 bytes;
-   SHA-256 `48f60003f980b11b449a4a35d04ed78e37ad959e2b2776842a4d1f1c67675133`). No release
-   signing/publishing, schema, RLS, migration, credential or live-user-data action occurred. Open
-   Item 24 records the retained diagnostic-only Notion smoke gap; its assertions were not weakened.
+1. **Supabase cutover:** restored project `fbnnjoahvtdrnigevrtw` to `ACTIVE_HEALTHY`, applied the
+   receipt ownership/private-photo migration, and verified the private bucket, 6 MB image allowlist,
+   owner/parent guards, authenticated trip-member read policy and hardened `SECURITY DEFINER` RPC.
+   Static migration and shared-ledger contract scans passed. The ordinary authenticated JWT smoke
+   remains Item 2; Supabase advisor warnings outside this cutover were not silently changed.
+2. **Broker and public web deploys:** deployed Broker `2026.08.24.1` as Cloudflare version
+   `d86be18a-27a7-48dd-97a4-c9f47dd31733`; live health, CORS, fail-closed routes and a redacted
+   unlock/status Durable Object path passed. Compact `0.17.1` is live on Vercel, Netlify and Pages;
+   React `0.2.7` is live on Vercel, Netlify and Pages. React Netlify workflow `32687744387`, Compact
+   Netlify workflow `32686457804`, and Pages workflow `32687744356` passed.
+3. **Admin production repair and promotion:** the first candidate exposed a real Vercel packaging
+   defect: the BFF imported `contracts/ai-provider-catalog.json` outside the function archive, so
+   `/api/admin/session` returned `500`. Admin `1.3.4` embeds the contract-verified BFF catalog and
+   asserts its release manifest. Unit `34/34`, contract `24/24`, security, typecheck, build and the
+   complete protected workflow passed. Workflow `32687928249` promoted exact SHA
+   `d92edfd3694e12e92651a8b43401624bb75f4c41` as Vercel deployment
+   `dpl_67SXrHRZoxKP1C7jkssnEThxSWDL`; live health reports `acceptingReadTraffic=true`, and the
+   unauthenticated session route returns canonical `401`.
+4. **Git boundary:** implementation commit `d92edfd` is pushed to `origin/main`. Only task-owned
+   code/workflow files were staged; Boss's pre-existing Markdown/path-cleanup work remains preserved.
 
-### Session 85 (Codex — Android version bump and debug APK, `0.21.2` / versionCode 2102)
+### Session 87 (Codex — repository audit and security hardening)
+
+1. **Frontend and deployment boundary:** retired the vulnerable 9k-line root runtime in favour of
+   a script-free CSP/no-referrer redirect to `/compact/`. React `0.2.7` and Compact `0.17.1` now
+   require successful Broker authentication plus device registration before setting trust; the
+   browser-side PBKDF2/AES unlock oracle was deleted. Stale Playwright navigation contracts were
+   realigned to the Scan-first boot, and bare smoke scripts now start and stop their own Vite server.
+2. **Backend and tenant boundary:** added forward-only migration
+   `20260824011000_harden_receipt_ownership_and_photo_storage.sql` to bind Notion enqueue and child
+   reparenting to the receipt owner, make `receipt-photos` private, enforce authenticated member
+   reads, and set a 6 MB JPEG/PNG/WebP allowlist. This migration is tracked only; it was not applied
+   to production. The static migration verifier now asserts the final hardened contract.
+3. **Broker cost and concurrency controls:** Broker `2026.08.24.1` validates operation kind,
+   prompt/image limits, provider model allowlists and output budgets. Weather and credential tests
+   join the daily quota. A SQLite Durable Object serializes password attempts and daily consumption,
+   with Wrangler migration/binding included. `wrangler deploy --dry-run` passed; no live deploy was
+   performed.
+4. **Dependency, bundle and structure repair:** upgraded Vite/PostCSS/nanoid and reconciled active
+   lockfiles; every production `npm audit --omit=dev` reports zero vulnerabilities. React vendor
+   splitting keeps all JS chunks below 500 kB. Admin `1.3.3` lazy-loads feature route groups, reducing
+   the main chunk from roughly 623 kB to 224 kB while isolating the Three.js login scene. A Compact
+   `storage.ts ↔ indexedDb.ts` cycle found by GitNexus was broken with a dedicated state-sanitizer seam;
+   final GitNexus structural check reports no circular imports.
+5. **Verification evidence:** Codex Security scan
+   `05e3e5ba-9c32-48d5-974a-a49e58f0947d` completed against the original `7ccc238` snapshot with
+   68 review receipts and 11 validated findings (`4 high`, `7 medium`); every source remediation is
+   present in this working tree, subject to the two live gates above. React browser coverage passed
+   `48` with `17` intentional mode skips; Compact targeted local regressions passed `22/22` and
+   Supabase-shaped session/sync coverage passed `15/15`; Admin browser coverage passed `49` with one
+   intentional skip plus post-fix route/login `11/11`. React/Compact/Admin typecheck, production
+   builds, unit/contract tests, secret scans and policy scans passed; Admin unit `33/33`, contract
+   `24/24`; Broker self-test and dry-run passed. Production dependency audits are zero across all
+   four active packages.
+6. **Boundaries and live items:** no database mutation, migration apply, credential rotation,
+   Cloudflare deploy, application deploy or production-data write occurred. Open Items 4 and 5
+   explicitly retain the required approved live apply/deploy and authenticated evidence.
+
+### Session 86 (Codex — Compact/Android global themes, Compact `0.17.0`, Android `0.22.0`)
+
+1. **One preference contract, no second theme state machine.** Added schema-v4
+   `ThemePreference = 'auto' | TripThemeKey`, with invalid local values normalised to `auto` and
+   missing/invalid remote values preserving the local preference. Auto follows active-trip
+   intelligence; manual selection remains account-wide. The field round-trips through scoped
+   localStorage, IndexedDB, backup, Supabase `profiles.app_settings` and Notion
+   `SourceID=__meta_settings__` using the existing settings timestamp. React `0.2.6` only preserves
+   the field in transport and renders no selector or manual theme.
+2. **Five semantic visual worlds.** Compact `0.17.0` adds `自動（依旅程）`, Japan Washi, Korea
+   Editorial, Taiwan Night Market, Europe Rail and Global Journal radio cards at the top of
+   Settings. A shared semantic layer covers first paint, login/loading/error gates, surfaces,
+   forms, charts, focus and status roles; only Taiwan sets dark scheme. Japan art is isolated to
+   Japan, reduced motion is respected, and device hint `boss-japan-tracker:theme:v1` prevents a
+   cold-open flash while remaining until explicit device-data clear.
+3. **Android native seam and accessibility completed.** Android `0.22.0` / versionCode `2200`
+   uses Capacitor 8 `SystemBars` (light icons for Taiwan, dark icons for light worlds), removes the
+   old `@capacitor/status-bar` runtime, keeps a neutral launch splash and extends the themed WebView
+   edge to edge. API 36 QA passed all seven tabs plus native Camera/Photo Picker and App Links.
+   Taiwan's rendered seven-tab audit checked 311 visible text samples with zero below 4.5:1; a real
+   Android `font_scale=2.0` rerun confirmed the dock wraps, all seven controls stay visible and
+   adjacent labels retain at least 4px separation.
+4. **Verification evidence.** Compact passed `typecheck`, build, `security:scan`, preference unit,
+   theme `6/6`, session `4/4`, Settings `10/10` plus one intentional skip, a11y `1/1`, mobile
+   layout `1/1`, sync regression `11/11`, configured-auth `7/7` plus one skip and seven production
+   Notion flows. React passed preference unit, typecheck, build, security scan, full Notion `8/8`
+   and production Supabase missing/valid/invalid LWW cases. Android passed typecheck, build,
+   security scan, theme `9/9`, session `4/4`, Settings `12/12`, a11y `1/1`, sync `10/10`, mobile
+   `1/1`, configured-auth `7/7` plus one skip and seven production Notion flows. Five Compact
+   contact sheets and Android light/dark, cold-launch, pre-login, gesture/three-button,
+   portrait/landscape, IME and 200% screenshots were inspected.
+5. **Artifact and exclusions.** Debug APK only:
+   `app-compact/android/app/build/outputs/apk/debug/app-debug.apk` (11,521,369 bytes; SHA-256
+   `48f60003f980b11b449a4a35d04ed78e37ad959e2b2776842a4d1f1c67675133`). Manifest reports package
+   `com.ftjdfr.travelexpensecompact`, versionCode `2200`, versionName `0.22.0`, minSdk 24 and
+   targetSdk 36. No release signing/publishing, user theme builder, runtime AI generator, schema,
+   RLS, migration, credential or live-user-data action occurred. Open Item 24 records the one
+   retained diagnostic-only Notion smoke gap; its assertions were not weakened.
+
+### Session 85 (Codex — Compact unavailable-network cold recovery, `0.16.23`)
+
+1. **Remaining classifier gap reproduced.** Against the current Vercel root at 390x844, a scoped
+   persisted item with `status=error`, `attempts=3` and Supabase's own `network is unavailable`
+   wording restored the generic sync/manual-retry banner after about 1.5 seconds even while all
+   mocked auth and REST requests succeeded. An unscoped stale error plus a clean scoped state did
+   not show the banner, ruling out the legacy storage key; the focused unit and browser regressions
+   both failed before the fix.
+2. **One shared classifier fixed; UI unchanged.** `isTransientSyncErrorMessage()` now recognises
+   `network unavailable` and `network is unavailable`, so `restoreJournal()` grants the same single
+   bounded cold-boot retry already used for `Failed to fetch`. Version conflicts and exhausted
+   permission/data failures remain terminal; no banner component or manual-retry control was hidden.
+3. **Verification evidence.** Change-journal tests and the focused production-shaped browser case
+   passed after the fix. Compact also passed `typecheck`, production build, `security:scan`, full
+   sync regression `11/11`, offline smoke `4/4`, and `git diff --check`. Sentry was explicitly
+   waived by Boss; no Sentry SDK/config, schema, RLS, migration, credential, user-data or Android
+   change was made.
+
+### Session 85 (Android branch) (Codex — Android version bump and debug APK, `0.21.2` / versionCode 2102)
 
 1. Bumped the Android package, shared `APP_VERSION`, Gradle `versionName` and `versionCode` from
    `0.21.1` / `2101` to `0.21.2` / `2102`.
@@ -325,31 +432,65 @@ you closed with your session number.
    `d12ad575f29758f8ffd0c1ed48a0e74b9d020279a7cf1e640a3f0b816760a89a`.
 3. No schema, RLS, migration, credential, user-data, release-signing or emulator action occurred.
 
-### Session 84 (Codex — Android cold-open sync recovery, `0.21.1` / versionCode 2101)
+### Session 84 (Codex — Compact Vercel cold-open sync recovery, `0.16.22` / Android `0.21.1`)
 
-Ported Compact's pure transient-message classifier into Android's journal restoration path. Only an
-exhausted transient network failure receives one bounded cold-boot retry; a new failure returns it
-to terminal attempt `3`, while version conflicts and exhausted permission/data/auth failures remain
-visible. Android also clears `nextRetryAt` on recovery. Change-journal units, `typecheck`, production
-build, `security:scan`, sync regression `10/10`, offline `5/5`, and `git diff --check` passed. No
-schema, RLS, migration, credential, user-data, APK/AAB or release action was performed.
+1. **Root cause reproduced and fixed at the journal boundary.** A scoped queue item persisted as
+   `status=error`, `attempts=3`, `error=Failed to fetch` was restored as a durable terminal failure
+   on every cold open. Hydration then rewrote the global sync summary from that stale item, while
+   the engine correctly skipped terminal/exhausted work, so a healthy backend could never clear the
+   banner. `restoreJournal()` now classifies only transient network messages and grants them one
+   bounded cold-boot attempt (`queued`, attempts `2`, cleared error); a new failure returns the item
+   to terminal attempt `3`. No banner component was hidden or weakened.
+2. **Durable failures and shared-client parity preserved.** Version conflicts and exhausted
+   permission/data/auth failures still remain terminal for manual review. Compact and Android share
+   the pure transient-message classifier; Android additionally clears its stale `nextRetryAt` when
+   granting the one recovery attempt. Versions are Compact `0.16.22` and Android `0.21.1` /
+   versionCode `2101`.
+3. **Verification evidence.** Compact passed change-journal unit tests, `typecheck`, production
+   build, `security:scan`, sync regression `11/11`, offline `4/4`, mobile layout `1/1`, and the
+   dedicated `VITE_BASE_PATH=/` Vercel-root cold-open case `1/1`. Android passed change-journal
+   unit tests, `typecheck`, production build, `security:scan`, sync regression `10/10`, offline
+   `5/5`, and `git diff --check`. No schema, RLS, migration, credential, user-data or native release
+   action was performed.
 
-### Session 83 (Kimi — main → Android reviewed mega-merge, `0.21.0`)
+### Session 83 (Kimi — Admin Console CI repair + main→Android mega-merge)
 
-Merged `origin/main` (through `d81139c` + Admin CI fix chain) into `codex/admin-console-1.0-android`.
-Main is now the shared baseline; Android keeps only genuine platform deltas. Registration/auth code
-is identical in behavior on both branches. Follow-up fixes during integration: auth-error marker
-union in `useSyncEngine.ts` (main's `session`/`expired` + android's JWT markers), settings/history
-smoke expectations realigned to main's current UI contracts (see main Session 83 entry for the full
-evidence list, including the Admin Console 1.0 CI repair that landed alongside). Post-merge device
-evidence: `assembleDebug` green (JDK 21 via homebrew `openjdk@21` — Android Studio's JBR is Java 25
-and the wrapper rejects it), emulator QA `status=passed`, `appLinksVerified=true`,
-`launchMode=login` at `/tmp/travel-expense-android-qa-2026-08-06T01-28-27-935Z` (one earlier ANR
-was an install/replace race flake), and a signed release AAB `0.21.0` was built at
-`app-compact/android/app/build/outputs/bundle/release/app-release.aab` (`jarsigner -verify` OK) on
-Boss's explicit request. Note: `android:bundle` does NOT use `run-with-android-jdk.mjs` — run
-gradle with `JAVA_HOME` pointed at a JDK 17-21 install or the capacitor-android JdkImageTransform
-grabs the default Java 26 jlink and fails.
+1. **Admin Console 1.0 CI repaired end to end (was red since 2026-07-29).** Five failing gates
+   fixed across four pushes: (a) Credential Broker `npm audit --audit-level=high` — `undici`
+   override `^7.29.0` for the dev-only wrangler/miniflare chain; (b) Admin frontend audit —
+   `react-router` `^7.18.1` → `^8.3.0` (RSC-mode CSRF advisory; the app is SPA-only) plus a
+   `postcss` patch, verified with typecheck, unit, contract, build and browser smoke 49/49;
+   (c) Cross-client policy scan — allowlist updated alongside each migration edit; (d) the
+   disposable-Supabase `SQLSTATE 42501` chain — root cause was that `20260710191000` revokes
+   `receipt_sync_owner` from postgres before committing, so `20260724110000`'s
+   `create or replace function` had no ownership path; the fix mirrors the admin owner migrations:
+   `grant receipt_sync_owner to postgres` + `grant create on schema public` + `set local role
+   receipt_sync_owner`, all revoked again before commit to preserve the hardened end state
+   (final push `0b2f1fa`, run `31027807933` all jobs green). Both edited migrations were already
+   applied in production; the edits only realign fresh-apply behavior (checksum drift acknowledged,
+   no `db push` or repair performed). React shared-contract's one red run was a dev-server-start
+   flake and passed on rerun.
+2. **Mega-merge executed (`2a2a9f5`).** 47 conflicted files resolved by eight parallel batch
+   resolutions with main as baseline; Android-only layers verified preserved (native auth,
+   Capacitor shell, settlement/split engines, `ANDROID_AI_MODELS` incl. kimi-k3, backoff sync
+   journal). Integration fixes: auth-error classification in `useSyncEngine.ts` now unions main's
+   `session`/`expired` markers with android's JWT markers; history/settings smoke expectations
+   realigned to main's current UI contracts (sync-failed/cloud-only markers, delete-before-
+   itinerary photo-button order, Trip Doctor retryable `attempts: 2` seed, dry-run failed-count
+   value — the last also fixed on main, whose `smoke:settings` is not CI-gated and had rotted).
+3. **Verification evidence.** Android `0.21.0`: typecheck, build, `security:scan`, node units
+   (split-engine, notion-split-meta, scoped-persistence, shared-trip-outbox, android-jdk,
+   change-journal), provider-catalog contract, and 11 playwright suites — sync-regression 10/10,
+   offline 5/5, session 3/3, settings 12/12, ai-routing 6/6, timeline 10/10, history 8/8,
+   itinerary 3/3, privacy 3/3, scan 1/1, mobile-layout 1/1. Main settings smoke re-verified green
+   after the dry-run spec fix. Post-merge device evidence (Boss-requested): `assembleDebug` green
+   on JDK 21, emulator QA `status=passed` / `appLinksVerified=true` / `launchMode=login` at
+   `/tmp/travel-expense-android-qa-2026-08-06T01-28-27-935Z`, and a signed release AAB `0.21.0`
+   built and `jarsigner`-verified at `app-compact/android/app/build/outputs/bundle/release/
+   app-release.aab` (local artifact only, NOT published anywhere). Caveat recorded: `android:bundle`
+   bypasses the JDK wrapper — pass `JAVA_HOME` (JDK 17-21) explicitly. No schema, RLS, credential
+   or live-data action was performed; a real-device interactive Google login still needs Boss's
+   physical device and account.
 
 ### Session 82 (Kimi — registration mechanism review fixes, Compact + Android)
 
@@ -1397,469 +1538,6 @@ grabs the default Java 26 jlink and fails.
    - Restored the Compact typecheck gate by adding the missing Node type dependency and importing the existing `AppState` type in `App.tsx`; `npm audit fix` also patched the Vite high-severity audit finding.
    - Synced README/package-lock version drift and bumped Compact to `0.8.1`.
 
-### Session 80 (Codex — v0.20.4 Android login redesign)
-
-1. **Design:** installed `Leonxlnx/taste-skill` and rebuilt the shared Supabase login gate as a calm,
-   mobile-first travel welcome screen using the existing atlas asset, one warm accent, a responsive
-   split layout and automatic light/dark palettes. No new dependency or generated asset was added.
-2. **Auth/accessibility:** preserved password sign-in, account creation, magic link, Google OAuth
-   and native browser-return status. Semantic forms, grouped mode controls, status/alert regions,
-   visible focus rings, 44px+ targets and reduced motion cover keyboard, screen-reader and touch use.
-3. **Verification:** `typecheck`, production build, `security:scan`, session smoke `3/3` and
-   configured Supabase security smoke passed. Responsive probes at 360px, 390px and 1366px had zero
-   horizontal overflow. JDK 21 debug assembly passed; emulator QA returned `status=passed`,
-   `appLinksVerified=true` and `launchMode=login` at
-   `/tmp/travel-expense-android-qa-2026-08-04T03-23-26-276Z`.
-4. **Boundary:** debug APK only; no release APK/AAB, database, RLS, credential or live-data action.
-
-### Session 65 (Codex — v0.20.0 Android Volcano Kimi K3)
-
-1. **Four-task catalog:** added `volcano/kimi-k3` / `Volcano (Kimi K3)` to the one shared
-   `AI_MODELS` catalog consumed by Scan, Voice, Email and Trip update selectors. Existing selected
-   model routing removes the `volcano/` prefix and sends exact `model: kimi-k3` to `/volcano/json`.
-2. **Backend contract:** main's production Credential Broker added the same safe provider model,
-   bumped to `2026.07.20.1`, passed check/self-test/deploy preflight and deployed as Worker version
-   `29a61b5a-5b6d-416e-a753-db56b137f7f4`. No credential value was read into app state or docs.
-3. **Functional proof:** Settings smoke selected K3 independently for all four tasks and asserted
-   exact provider/model/prompt requests. The image recognition smoke uploaded a receipt image and
-   asserted one K3 request with no fallback. Both focused tests passed (`2/2`).
-4. **Provider proof:** direct Volcano probes returned HTTP `200`, `model=kimi-k3` for text and a
-   real 820x538 WebP image. A 1x1 PNG was first rejected with `InvalidParameter`; retrying a valid
-   app asset proved this was image validation, not lack of multimodal support.
-5. **Gates:** `typecheck`, production build and `security:scan` exited `0`; JBR 21 debug APK build
-   succeeded. `android:qa` passed with `appLinksVerified=true`, `launchMode=login`, no app crash/ANR,
-   and artifacts at `/tmp/travel-expense-android-qa-2026-07-20T09-22-33-082Z`.
-6. **Boundary:** Android was bumped to `0.20.0` / versionCode `2000`; the previously stale lockfile
-   version was aligned. Debug APK only; no release APK/AAB, database, RLS or live user data changed.
-
-### Session 64 (Codex — v0.19.5 Android MiniMax model-test follow-up)
-
-1. **Explicit JSON probe:** `testAiModel()` now sends exactly `Return only JSON: {"ok":true}` for
-   `kind=test`. It still sends only the selected provider/model and validates `{ok:true}` with no
-   fallback. GitNexus impact after a fresh `ab854ae` index was LOW: one direct caller
-   (`testSelectedAiModel`), one Settings process and one module.
-2. **Broker boundary:** Android documents that Broker tests use 8 output tokens for every model and
-   accept a non-empty provider response as availability proof. The Worker source belongs to main
-   orchestration and was not modified here.
-3. **Versioning and regression proof:** bumped `package.json`, `package-lock.json`, `APP_VERSION`,
-   Gradle and Android docs to `0.19.5` / versionCode `1950`. The Settings smoke now asserts the exact
-   prompt for all four selected Volcano models plus the changed Scan selector.
-4. **Verification:** `npm run typecheck`, `npm run build` and `npm run security:scan` exited `0`;
-   persisted-state offline `2/2`, focused Settings model-test `1/1` and mobile layout `1/1` passed.
-   JBR 21 `android:debug` succeeded, and `android:qa` passed with verified App Link at
-   `/tmp/travel-expense-android-qa-2026-07-15T13-01-24-550Z`. Full `npm run smoke:settings` was
-   `11 passed, 1 failed`: unrelated Trip Doctor line `769` expects `1 failed` but the current rendered
-   state is `2 pending`. `npm audit --audit-level=high` found zero vulnerabilities.
-5. **Release/data boundary:** no Worker source, main checkout, secret, live-data or release APK/AAB
-   was changed or produced. Only the local debug build and emulator QA were run.
-
-### Session 63 (Codex — v0.19.4 Android sync-state and Volcano routing)
-
-1. **Persisted sync correctness:** ported queue-derived global sync state so terminal exhausted
-   retries and `40001` conflicts remain visible after `normalizeState()`; only retryable persisted
-   failures are queued again. Both scoped IndexedDB hydration paths now apply that normalization,
-   closing the stale-state banner resurrection after cold start.
-2. **Android invariants retained:** native auth, item `idempotencyKey`, 5,000 tombstone cap and
-   `isHydratingScope` behaviour remain. The stale trip-result path preserves a known `supabaseId`.
-3. **Volcano and Settings tests:** `callModelAttemptJson()` routes Volcano through the broker with
-   the selected model; Dashboard recognizes the provider. Scan, Voice, Email and Trip selectors now
-   offer accessible direct `kind=test` checks with minimal JSON and no fallback. Rate/quota hard-stop
-   rules were not changed.
-4. **Verification:** `npm run typecheck`, `npm run build`, and `npm run security:scan` passed.
-   Isolated browser evidence: offline persisted-state `2/2`, selected Volcano scan routing `1/1`,
-   Settings exact Volcano provider/model/kind/prompt `1/1`, and mobile layout `1/1`. JBR 21
-   `npm run android:debug` succeeded; `npm run android:qa` exited `0`, and its App Link artifact
-   reports `travel-expense-compact.vercel.app: verified` at
-   `/tmp/travel-expense-android-qa-2026-07-15T12-05-37-272Z`.
-5. **Release/data boundary:** debug APK only. No release APK/AAB, commit, push, deployment,
-   credential change, or live-data action occurred. The existing real-device Google/magic-link
-   human-account verification remains an external follow-up.
-
-### Session 62 (Codex — v0.18.2 Admin 1.0 shared contracts)
-
-1. **Canonical contracts:** added versioned itinerary merging, durable receipt tombstones and
-   authoritative membership synchronization while preserving Android's richer split/payer model.
-2. **Nagoya invariant:** contract and browser tests prove exactly six dates from `2026-04-20` to
-   `2026-04-25`; missing days remain visible/preserved, out-of-range scenery is rejected, and stale
-   offline data cannot overwrite the latest itinerary.
-   Final audit additionally fixed newer partial payload loss, version-vs-clock skew and cross-trip
-   `SourceID` matching; canonical receipt identity is `(TripID, SourceID)`.
-3. **Stable test/runtime boundary:** browser suites accept an explicit origin and no longer attach to
-   another checkout's fixed-port server. `run-with-android-jdk.mjs` chooses JDK 17-21 and skips JDK 26;
-   both `android:debug` and `android:qa` use it.
-4. **Verification:** typecheck/build/security/audit and all focused contract/unit suites passed.
-   The combined isolated browser run passed `28` tests with `2` intentional environment skips,
-   including Timeline `10/10`, itinerary `3/3`, privacy `3/3`, offline `1/1`, settle-up `2/2` and
-   fake-env Supabase backfill `2/2`. JBR 21 debug build succeeded; `android:qa` passed with verified
-   App Links. Artifact: `/tmp/travel-expense-android-qa-2026-07-12T02-10-31-087Z`.
-5. **Release truth:** no release APK/AAB or production deployment was created. Live photo privacy,
-   real-device login and Admin cutover remain separate approval/compatibility gates.
-
-### Session 61 (Codex — v0.12.14 Android reconnect sync hardening)
-
-1. **Version metadata:** Compact/Android bumped to `0.12.14` / versionCode `1214` across
-   `APP_VERSION`, `package.json`, `package-lock.json`, Gradle, and `ANDROID.md`.
-2. **Review tools:** used Ponytail and Open Code Review. OCR reviewed the v0.12.13 latest-commit diff
-   and only reported low-priority export cleanup readability/logging comments; the working-diff review
-   then caught reconnect race risks, which were fixed before commit. GitNexus impact for `Shell` and
-   `useSyncEngine` was LOW.
-3. **Native reconnect sync fixed:** `Shell` emits `travel-expense:native-reachability-online` when the
-   Android `/android-auth` reachability probe flips offline→online. `useSyncEngine` listens for it,
-   clears only queued transient `nextRetryAt` backoff, keeps attempts, leaves active `syncing` and parked
-   auth/error items alone, synchronizes React state + `stateRef` with `flushSync`, debounces duplicate reconnect events, and schedules
-   sync immediately.
-4. **Extreme-condition coverage:** added pure and browser smoke coverage for the mid-upload disconnect
-   shape (`Failed to fetch`, future `nextRetryAt`) and verified duplicate receipt health markers plus
-   offline conflict resolver behavior.
-5. **Verification:** `sync-backoff.test.ts`, `typecheck`, production `build`, `security:scan`, targeted
-   native reconnect smoke, full `smoke:final-nav` (`9/9`), History duplicate marker smoke, History
-   offline conflict/attachment health smokes, Settings offline queue dry-run, configured Android QA
-   (`/tmp/travel-expense-android-qa-2026-06-27T12-28-13-666Z`, `launchMode=login`), and true
-   airplane-mode Android QA (`/tmp/travel-expense-android-qa-2026-06-27T12-29-08-455Z`,
-   `launchMode=scan`, all 7 native tabs, Camera/Gallery picker proof, Settings `Network · offline`).
-6. **Remaining follow-up:** real-device Google/magic-link login still requires a human account/device.
-
-### Session 60 (Codex — v0.12.12 Android online/offline reliability)
-
-1. **Version metadata:** Compact/Android bumped to `0.12.12` / versionCode `1212` across
-   `APP_VERSION`, `package.json`, `package-lock.json`, Gradle, and `ANDROID.md`.
-2. **Native offline status fixed:** `Shell` now uses a native-only reachability probe for the Capacitor
-   `https://localhost` WebView, so the app does not trust `navigator.onLine` when Android has no real
-   route. True airplane-mode QA now shows the Settings status chip as `Network · offline`.
-3. **Settings sync actions fixed:** Trip Doctor's `Sync settings` button now opens
-   `settings-credentials` instead of the removed `settings-notion` panel.
-4. **Sync-readiness dry run restored:** the existing `buildSyncReadinessDryRun()` output is rendered in
-   the developer Trip Doctor panel, with actions to review records, back up first, and open sync settings.
-   The previously skipped smoke is active and asserts offline mode plus zero Credential Broker calls.
-5. **Verification:** passed `typecheck`, production `build`, `security:scan`, split-engine and
-   Notion split metadata tests, `sync-backoff.test.ts`, targeted Settings readiness smoke, full
-   Settings smoke (`10/10`), final-nav smoke (`8/8`), configured Android QA
-   (`/tmp/travel-expense-android-qa-2026-06-21T11-47-04-234Z`, `launchMode=login`), and true
-   airplane-mode Android QA (`/tmp/travel-expense-android-qa-2026-06-21T11-49-05-565Z`,
-   `launchMode=scan`, all 7 native tabs, Camera/Gallery picker proof, Settings `Network · offline`).
-6. **Remaining follow-up:** real-device Google/magic-link login still requires a human account/device.
-
-### Session 59 (Oscar/Claude Code — v0.12.8 + v0.12.9 bug-review fix passes)
-
-1. **Version metadata:** Compact/Android bumped to `0.12.9` / versionCode `1209` across `APP_VERSION`, `package.json`, Gradle, `ANDROID.md`. (v0.12.8 / 1208 was the intermediate commit.)
-2. **v0.12.8 — 11 bugs from a 3-agent review** (commit `8ddcc78`): recurring-rule UTC duplicate spawning (local YMD + `todayYmd()` + bounded catch-up loop); decimal point un-typable in split/payer/amount/batch inputs (new shared `NumberTextInput` keeping the raw typed string); recurring receipts never reaching cloud (routed via `upsertReceipt`); stale stored session shown as "synced" (`storedSupabaseSession` rejects expired `expires_at`); magic-link/email-confirm native stranding (`handleNativeAuthRedirectUrl` handles `token_hash`/`type` via `verifyOtp`); cross-currency multi-payer mis-settlement (redistribute converted total by `computeShares('shares')`, locked with a unit test).
-3. **v0.12.9 — 10 findings from an adversarial verification workflow** (commit `3129aba`): **[CRITICAL]** photo-sync clobbering a newer local money edit — `mergePulledReceipts` OR'd `photoUrlChanged` into full-overwrite with no `updatedAt` guard; now a photo-only change adopts ONLY photo + identity-link fields (`syncMerge.ts`). **[HIGH]** spurious "login failed" right after a successful Android login — deep-link effect re-consumed the single-use PKCE launch URL on the login-triggered re-render; made mount-once via `updateStateRef` (`App.tsx`). **[MED]** cross-currency double-rounding through integer-HKD intermediate → unrounded helper (`domain.ts`); transient sync errors mis-parked as auth errors → tightened to specific auth signals (`useSyncEngine.ts`). **[LOW]** UTC "today" off-by-one across 8 sites → `todayYmd()` + new pure `addDaysYmd()`; monthly-recurring month-end clamp (no Jan-31→Mar-3); recurring runs after IndexedDB hydration; cross-currency sub-unit split falls back to ratios; tombstone caps 500→5000. **Deferred** (documented): simplifyDebts sub-unit dust (inherent integer-settlement tradeoff); recovery-link → reset-password routing (recovery still authenticates).
-4. **Verification:** `typecheck`, unit tests (incl. new cross-currency split test), smokes (settle-up, split-editor, split-payer, history 8/8, scan, welcome-guide; 3 stale June-14-drift smokes repaired). `android:qa` BUILD SUCCESSFUL, installed + launched, no logcat FATAL/ANR; CDP driver confirmed "Build: v0.12.9" in Settings + Dashboard render.
-5. **Pending for next agent:** build a fresh **signed release AAB at v0.12.9** (prior signed AAB was v0.12.8) for Play submission; real-device login round-trip still needs a human.
-
-### Session 58 (Codex — v0.12.7 Android log cleanup + QA hardening)
-
-1. **Version metadata updated locally:** Compact/Android is now `0.12.7` / versionCode `1207`
-   across `APP_VERSION`, `package.json`, `package-lock.json`, Gradle, and `ANDROID.md`.
-2. **Configured-login safe-area console error fixed:** disabled Capacitor SystemBars CSS inset injection
-   through `capacitor.config.ts` because configured Supabase cold start logged
-   `Error injecting safe area CSS` before `document.documentElement` was ready. The app already uses
-   `env(safe-area-inset-*)` and native CSS guards, so the change removes the log error without changing
-   the intended layout model.
-3. **Native picker cancel console errors fixed:** Capacitor Camera returns normal user cancels as plugin
-   rejects, and the Capacitor native bridge logs rejects before app-level `catch` runs. `Scan` now treats
-   Camera/Gallery user cancels as handled and temporarily silences bridge result logging only around the
-   native picker call; true non-cancel errors still restore logging and warn as strings.
-4. **Android QA harness hardened:** raised the debug build timeout from 60s to 180s, and `dumpUi()` now
-   trusts a successfully pulled XML file so harmless `uiautomator dump` status-137 exits after writing XML
-   do not kill visual QA.
-5. **Configured Android QA passed:** `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:qa`
-   passed with `appLinksVerified=true`, `launchMode=login`, artifact folder
-   `/tmp/travel-expense-android-qa-2026-06-20T22-41-03-660Z`, and no safe-area injection error,
-   `E Capacitor/Console`, app fatal, or package ANR in the targeted grep.
-6. **Local visual Android QA passed:** latest local visual rerun passed with `appLinksVerified=true`,
-   `launchMode=scan`, all 7 native tabs captured, Camera/Gallery foreground proof, and no app-side error
-   strings in `/tmp/travel-expense-android-qa-2026-06-20T22-38-40-896Z`. Broad error grep only found
-   emulator Camera service lines, not app failures.
-7. **Remaining follow-up:** real-device Google/magic-link login round-trip still requires a human
-   account/device.
-
-### Session 57 (Codex — v0.12.5 native Android visual stabilization)
-
-1. **Version metadata updated:** Compact/Android is now `0.12.5` / versionCode `1205`
-   across `APP_VERSION`, `package.json`, `package-lock.json`, Gradle, and `ANDROID.md`.
-2. **Timeline native visual blocker fixed:** kept the native Android Timeline CSS guards and disabled
-   Timeline auto-scroll on native Android after screenshots showed receipt cards and previous day
-   content entering the Android status/header area. Latest `native-timeline.png` no longer shows the
-   duplicated/ghost overlay blocker.
-3. **Weather native visual blocker fixed:** disabled Weather auto-jump on native Android after a clean
-   QA pass exposed a blank preserved-offset Weather screenshot. Latest `native-weather.png` renders the
-   Weather header, provider controls, current card, and forecast content correctly.
-4. **Android QA harness hardened:** `uiautomator dump` timeout is now 30s; local visual tab capture now
-   waits for each expected tab heading, avoids capturing while the page still says `Loading page`,
-   force-stops stale picker apps before launch, and fails if a visible Android ANR dialog appears.
-5. **Checks already passed:** `npm run typecheck`, `node --check app-compact/scripts/android-qa-smoke.mjs`,
-   wrapped Timeline smoke (`8 passed`), wrapped Weather smoke (`13 passed`), wrapped mobile-layout smoke
-   (`1 passed`), `git diff --check`, and local visual
-   `ANDROID_QA_DISABLE_SUPABASE=1 ... npm run android:qa`.
-6. **Latest artifact:** `/tmp/travel-expense-android-qa-2026-06-20T18-40-52-435Z` passed automation with
-   `appLinksVerified=true`, `launchMode=scan`, all 7 native tabs captured, Camera/Gallery foreground
-   proof, clean app-specific ANR/crash grep, and clean manual screenshot inspection.
-7. **Still pending before production invitation:** real-device Google/magic-link login round-trip with
-   a human account/device.
-
-### Session 56 (Codex — current handover refresh after v0.12.4 visual audit)
-
-1. **Current branch recorded:** branch head is `3c2af9c` on `codex/android-compact-shell`, aligned with
-   `origin/codex/android-compact-shell` before this docs-only update.
-2. **Latest local visual QA recorded:** `ANDROID_QA_DISABLE_SUPABASE=1 ... npm run android:qa` passed
-   with all 7 native tabs and Camera/Gallery foreground checks captured in
-   `/tmp/travel-expense-android-qa-2026-06-20T17-29-38-692Z`.
-3. **Pending visual bug documented:** Timeline native screenshot still shows safe-area/status-bar
-   pressure and receipt-summary overlay around the timeline rail; fix before claiming the final visual
-   Android pass is clean.
-4. **Scope:** docs-only handover update; no app code or version bump.
-
-### Session 55 (Codex — live Supabase comments migration, v0.12.4)
-
-1. **Live comments schema applied:** applied the missing live `expense_comments` base migration through the Supabase connector, not `db push`.
-2. **Live comment insert RLS tightened:** applied `fix_expense_comments_insert_membership` so inserts require the author to be an active member of the receipt's trip.
-3. **Direct grants tightened:** added and applied `limit_expense_comments_grants`; `anon` has no direct `expense_comments` privileges and `authenticated` has only `select`, `insert`, and `delete`.
-4. **Verification:** live SQL check confirmed table exists, RLS is enabled, old owner-only insert policy is gone, membership insert policy is present, `authenticated.update=false`, and `anon` direct privileges are all false. Local `typecheck`, `db:policy:scan`, `git diff --check`, and configured Android `android:qa` pass.
-5. **Versioning:** Compact/Android bumped to `0.12.4` / versionCode `1204`; package-lock metadata synced.
-
-### Session 54 (Codex — Android review fixes, v0.12.3)
-
-1. **Android auth handoff restored:** added missing `app-compact/public/android-auth.html` and the `/android-auth` Vercel rewrite to the Android branch so preview/future deploys use the standalone return-to-app page instead of the SPA catch-all.
-2. **Shared Notion outbox fixes:** delete jobs now call `archiveReceipt`, successful upsert/delete jobs clear `notion_sync_status` to `synced`, and shared delete idempotency uses stable receipt timestamps instead of `Date.now()`.
-3. **Comment RLS tightened:** added a follow-up migration so `expense_comments` inserts require both `user_id = auth.uid()` and active membership in the receipt trip.
-4. **Itemized split guard:** over-total line items are blocked in `ReceiptEditor` and rejected by `foldLineItemsToSplits()`.
-5. **Android QA hardening:** `android:qa` now parses `pm get-app-links`, fails when `travel-expense-compact.vercel.app` is not verified, captures all 7 native tabs in local visual mode, and asserts Camera/Gallery taps leave the app package for Android `CaptureActivity` / `PhotoPicker`.
-6. **Weather geocode fix:** Weather now resolves itinerary city/country coordinates asynchronously before grouping, so city-only trip days no longer show false `缺少座標` cards.
-7. **Verification status:** passed `typecheck`, `build`, `security:scan`, `test:split-engine`, `test:notion-split-meta`, `sync-backoff.test.ts`, `db:policy:scan`, `smoke:shared-ledger`, `smoke:shared-contract`, `smoke:settle-up`, `smoke:settings`, `smoke:dashboard`, `smoke:stats`, `smoke:scan`, `smoke:split-editor`, `smoke:weather`, `smoke:mobile-layout`, `smoke:final-nav`, `smoke:welcome-guide`, local/redirect `smoke:security`, `smoke:a11y-touch`, `smoke:trip-intelligence`, `node --check app-compact/scripts/android-qa-smoke.mjs`, configured Android `android:qa`, local visual Android `android:qa`, native screenshot inspection, `npx gitnexus detect-changes`, `git diff --check`, and both production/development audits.
-8. **Versioning:** Compact/Android bumped to `0.12.3` / versionCode `1203`; package-lock metadata synced.
-
-### Session 53 (Codex — v0.12.2 polish + full emulator verification)
-
-1. **JWT error masking:** `redactError` now maps malformed/expired JWT/JWS parse errors (including
-   "Expected 3 parts in JWT; got 1") to a friendly re-login sync message instead of exposing raw
-   Supabase internals.
-2. **Stale smoke repair:** fixed 3 existing Playwright smoke scripts whose assertions had drifted from
-   current June-14 UI/conflict semantics; these were test drift issues, not app regressions.
-3. **Full emulator verification:** verified all 7 tabs, login, onboarding, History, Stats settlement
-   math, settle-up E2E, split editor modes, FX live rate, voice, email, manual entry, and native camera
-   permission → `CaptureActivity` on `codex_api36_pixel_8`; no app crashes appeared in logcat.
-4. **Versioning:** Compact/Android bumped to `0.12.2` / versionCode `1202`; package-lock metadata synced.
-
-### Session 52 (Codex — Phase 4 sync backoff follow-up, v0.12.1)
-
-1. **Real retry/backoff fix:** `useSyncEngine.push()` no longer parks transient push failures as
-   permanent errors after one attempt. Transient failures now retry with exponential backoff
-   (30s → 2m, capped 15m), while auth failures and exhausted attempts still require manual action.
-2. **Backoff wake-up:** added a timer so 30s/2m retry windows fire promptly instead of waiting for the
-   120s background interval.
-3. **Pure helper coverage:** extracted `syncBackoffMs` and `queueItemReady` to `src/lib/syncBackoff.ts`
-   and covered backoff windows, eligibility, and failure progression in `scripts/sync-backoff.test.ts`.
-4. **Versioning:** Compact/Android bumped to `0.12.1` / versionCode `1201`; signed AAB build was verified.
-
-### Session 51 (Codex — Phase 5 polish & GTM, v0.12.0 — ALL PHASES COMPLETE)
-
-1. **T5.1 onboarding:** added dismissible onboarding tip card on Dashboard. Shows when `receipts.length === 0` and not dismissed. Teaches "3 步記帳：掃描 → 分帳 → 結清". Dismiss persists in `localStorage`.
-2. **T5.2 Play Store listing:** created `PLAY_STORE_LISTING.md` with app name, short/full description, keywords, and "free where Splitwise charges" positioning.
-3. **T5.3 signed release verified:** confirmed keystore wiring in `build.gradle`, assetlinks.json has both debug SHA-256 (`AE:F5:...`) and release SHA-256 (`30:E9:...`). Ready for signed AAB build.
-4. **Versioning:** Compact/Android bumped to `0.12.0` / versionCode `1200`; package-lock metadata synced.
-5. **ALL ROADMAP PHASES (0-5) NOW COMPLETE.**
-
-### Session 50 (Codex — Phase 4 robustness & reach, v0.11.0)
-
-1. **T4.1 outbox hardening:** added explicit `idempotencyKey` field to `SyncQueueItem` type. `queueItem()` now generates `type:entityId:op:timestamp` keys. Existing deduplication (`dedupeQueue`) + exponential backoff (`syncBackoffMs`) + ordered replay already covered.
-2. **T4.2 identity unification:** `pullSupabaseData` now auto-creates `Person` entries for shared trip members not yet in `trip_accounting_people`. Members get `defaultPersonId || member_{userId}` as their person ID, with default emoji/color. Share ratios default to 1.
-3. **T4.3 recurring expenses:** added `RecurringRule` type (store, total, category, payment, frequency, nextRun, active). Added `processRecurringRules()` in domain.ts that spawns receipts for due rules on app load. Added "定期消費" AccordionCard in Settings with toggle/delete. `AppState.recurringRules` persists via existing sync.
-4. **Versioning:** Compact/Android bumped to `0.11.0` / versionCode `1100`; package-lock metadata synced.
-
-### Session 49 (Codex — Phase 3 accuracy & social, v0.10.0)
-
-1. **T3.1 FX snapshot:** `ReceiptEditor`, `scanReceiptImage`, and `parseTextWithAi` now auto-populate `exchangeRate` (per-HKD rate) and `hkdAmount` when the receipt currency is not HKD. `getReceiptHkdAmount` already prefers `r.exchangeRate`, so historical receipts keep their original-date rate.
-2. **T3.2 comments:** added `expense_comments` Supabase migration (append-only, RLS: trip members read, authors insert/delete). Added `fetchExpenseComments`, `insertExpenseComment`, `deleteExpenseComment` in `supabase.ts`. Added `ExpenseComments` component in `ReceiptEditor` (lazy-loaded, shows when `receipt.supabaseId` exists).
-3. **T3.3 activity feed:** added "最近活動" collapsible section in History tab showing last 20 receipt events (added/edited/settled) with person emoji, verb, store, amount, date.
-4. **Versioning:** Compact/Android bumped to `0.10.0` / versionCode `1000`; package-lock metadata synced.
-
-### Session 48 (Codex — Phase 2 AI itemization, v0.9.0)
-
-1. **T2.1 structured OCR:** `scanReceiptImage` prompt now requests `lineItems: [{desc, amount, qty}]` + `tax` + `tip`. `parseLineItems()` validates and normalizes the AI response. `Receipt.lineItems` stores structured items when available.
-2. **T2.2 derived itemsText:** when `lineItems` are present, `itemsText` is auto-derived via `deriveItemsText()`. Original `itemsText` preserved as fallback when no structured items returned.
-3. **T2.3 item-assignment sheet:** `ReceiptEditor` gains an "品項" split mode (only when `lineItems` exist). Each line item shows as a row with `AvatarBadge` toggles — tap to assign/unassign a person to that item. Default = all people assigned. CSS: `.receipt-itemized-*` classes.
-4. **T2.4 fold engine:** `foldLineItemsToSplits()` moved to `splitEngine.ts` (pure, no React imports). Converts item assignments into per-person `splits[]` using largest-remainder rounding. Unallocated remainder (lineItems sum < total) distributed evenly.
-5. **T2.5 quick actions:** "一鍵均分所有人" (assign all items to everyone) and "清除全部分配" (unassign all) buttons in the itemized editor.
-6. **T2.6 test coverage:** 6 new unit tests for `foldLineItemsToSplits` (basic even, uneven assignment, rounding, odd amounts, empty assignedTo, unallocated total). All existing tests pass: `split-engine`, `notion-split-meta`, `split-editor` E2E, `scan` E2E.
-7. **Versioning:** Compact/Android bumped to `0.9.0` / versionCode `900`; package-lock metadata synced.
-
-### Session 47 (Codex — Phase 1 final version tick, v0.8.16)
-
-1. **Roadmap:** marked T1.7 complete; Phase 1 is now fully ticked in `app-compact/SUPER_APP_ROADMAP.md`.
-2. **Versioning:** Compact/Android bumped to `0.8.16` / versionCode `816`; package-lock metadata synced.
-3. **Scope:** no Phase 2 implementation was started; next task is T2.1 structured OCR `lineItems[]`.
-
-### Session 46 (Codex — Phase 1 split-editor E2E, v0.8.15)
-
-1. **E2E coverage:** added `tests/split-editor-smoke.spec.cjs` to create equal, shares, exact, percent, adjustment, and multi-payer receipts through the real `ReceiptEditor`.
-2. **Balance assertion:** the smoke verifies stored split metadata and confirms Stats emits the expected single transfer (`Friend → Boss ¥270`).
-3. **Script:** added `npm run smoke:split-editor` for repeatable Phase 1 regression coverage.
-4. **Versioning:** Compact/Android bumped to `0.8.15` / versionCode `815`; package-lock metadata synced.
-
-### Session 45 (Codex — Phase 1 Notion split round-trip, v0.8.14)
-
-1. **Notion marker:** `pushReceipt()` now serializes `splitType`, `splits`, and `payers` into the existing note rich-text field with a versioned marker, so databases without new columns still preserve split metadata.
-2. **Pull parsing:** Notion receipt import strips the marker back out of the visible note and restores the split arrays before trip stamping.
-3. **Coverage:** added `npm run test:notion-split-meta` for a focused split metadata round-trip assertion.
-4. **Versioning:** Compact/Android bumped to `0.8.14` / versionCode `814`; package-lock metadata synced.
-
-### Session 44 (Codex — Phase 1 Supabase split columns, v0.8.13)
-
-1. **Supabase columns:** applied nullable `split_type text`, `splits jsonb`, and `payers jsonb` to live project `fbnnjoahvtdrnigevrtw` via Supabase Management API, with a `split_type` check constraint.
-2. **Shared-trip RPC:** updated `upsert_shared_trip_receipt` so shared-ledger writes preserve `split_type`, `splits`, and `payers`.
-3. **Client mapping:** `upsertSupabaseReceipt` now writes the split fields and pull parses them back into `Receipt`.
-4. **Versioning:** Compact/Android bumped to `0.8.13` / versionCode `813`; package-lock metadata synced.
-
-### Session 43 (Codex — Phase 1 multiple-payer editor, v0.8.12)
-
-1. **Multiple-payer reveal:** `ReceiptEditor` now has a `多人付款` checkbox inside `進階拆數`.
-2. **Per-payer rows:** each person gets a payer amount row; valid saves write `payers[]`, invalid sums or one-person-only payer states are blocked.
-3. **Smoke coverage:** added `tests/split-payer-smoke.spec.cjs` for two-payer validation and save.
-4. **Versioning:** Compact/Android bumped to `0.8.12` / versionCode `812`; package-lock metadata synced.
-
-### Session 42 (Codex — Phase 1 per-person split rows, v0.8.11)
-
-1. **Per-person rows:** `ReceiptEditor` now shows `AvatarBadge` rows for `份數`, `實額`, `百分比`, and `加減`.
-2. **Live validation:** the split panel shows `已對數` or the exact gap (`差/多`) and blocks saving invalid advanced splits.
-3. **Smoke coverage:** Scan/manual-entry smoke now checks exact split row defaults, validation gap text, and editing a split-backed receipt.
-4. **Versioning:** Compact/Android bumped to `0.8.11` / versionCode `811`; package-lock metadata synced.
-
-### Session 41 (Codex — Phase 1 split-mode disclosure, v0.8.10)
-
-1. **Progressive split UI:** added `ReceiptEditor` `進階拆數` disclosure using the existing `SegmentedControl`.
-2. **Split modes surfaced:** users can select `均分`, `份數`, `實額`, `百分比`, or `加減`; default remains equal + single payer and no settlement math was changed.
-3. **Smoke coverage:** extended the Scan/manual-entry smoke to open the disclosure and assert the selected split mode tab state.
-4. **Versioning:** Compact/Android bumped to `0.8.10` / versionCode `810`; package-lock metadata synced.
-
-### Session 40 (Codex — Phase 0 split-array enabler, v0.8.9)
-
-1. **Receipt array model:** added optional `splitType`, `splits`, `payers`, and `lineItems` fields, leaving old receipts unchanged.
-2. **Pure split math:** added `computeShares()` with equal/shares/exact/percent/adjustment/itemized modes and largest-remainder rounding so shares sum exactly.
-3. **Settlement fallback:** `computeSettlements()` now consumes valid `splits`/`payers` and falls back to trip ratios for old or invalid split data.
-4. **Coverage:** extended `scripts/split-engine.test.ts` for split modes/validation and `settle-up-smoke` for explicit split + multi-payer balances.
-5. **Versioning:** Compact/Android bumped to `0.8.9` / versionCode `809`; package-lock metadata synced.
-
-### Session 39 (Codex — Android native camera/gallery bridge, v0.8.6)
-
-1. **Native Scan capture:** added `@capacitor/camera` and routed Compact Scan camera/gallery taps through Capacitor Camera on native Android only.
-2. **Existing OCR flow preserved:** native `Photo.webPath` is fetched into a browser `File`, then passed into the existing `handleImage()` path, keeping thumbnail compression, AI OCR, and manual-draft fallback unchanged.
-3. **Web fallback preserved:** non-native web builds and native plugin failures still fall back to the existing hidden file inputs.
-4. **Android QA hardening:** `android:qa` now treats emulator `adb logcat -c` clear failures as warnings and still performs launch/logcat tail crash filtering.
-5. **Versioning:** Compact/Android bumped to `0.8.6` / versionCode `806`.
-
-### Session 38 (Codex + open-code-review — Android QA hardening, v0.8.5)
-
-1. **Open-code-review pass:** `ocr review --audience agent` reviewed the latest Android branch diff and found only one low-risk cleanup: back-button comment numbering in `App.tsx` jumped from `1)` to `3)`. Fixed it.
-2. **Version metadata consistency:** previous Android v0.8.4 work updated `package.json`, `APP_VERSION`, and Gradle, but left `package-lock.json` at `0.8.3`. Bumped Compact/Android consistently to `0.8.5` / versionCode `805`.
-3. **Android QA ANR hardening:** found that the QA artifact could contain an Android `ANR` while the script still reported pass. The cause was the QA harness always forcing a WebView `location.reload()` after CDP trust seeding. `seedTrustedDevice()` now reloads only when the local unlock gate is actually visible, and `android:qa` now fails on package-specific ANR signals.
-4. **Verification:** passed `typecheck`, `build:root`, Gradle `lintDebug`, Gradle `testDebugUnitTest`, signed `android:bundle` with OpenJDK 21, `jarsigner -verify`, `android:qa`, `npm audit --omit=dev`, and full `npm audit`.
-
-### Session 37 (Claude/Oscar — Android hardware back modal polish, v0.8.4)
-
-1. **Hardware back modal handling:** Android back now closes the top-most custom `.modal-backdrop` first, so nested confirmation dialogs close before their parent editor/modal.
-2. **Versioning:** Compact/Android bumped to `0.8.4` / versionCode `804`.
-
-### Session 36 (Codex — Android production polish, v0.8.3)
-
-1. **QA harness stability:** `android:qa` found an emulator `exec-out screencap` failure after launch
-   despite a successful build/install. `captureScreenshot()` now retries and falls back to
-   `adb shell screencap` + `adb pull`, so production QA is less flaky while still surfacing real
-   screenshot failures.
-   It also now treats the Supabase login gate as the expected signed-out first screen; Scan
-   camera/gallery probes only run when the test session actually reaches Scan.
-2. **Versioning:** Compact/Android bumped to `0.8.3` / versionCode `803`.
-
-### Session 35 (Codex — Android go-live infra verification)
-
-1. **Vercel App Links live check passed:** verified `assetlinks.json` is served as real JSON from
-   `travel-expense-compact.vercel.app`, and `/android-auth` is served by the standalone handoff page.
-2. **Supabase redirect allow list completed:** used the Supabase Management API with the local CLI
-   keychain token to preserve the existing allow list and add the exact Android auth redirect URL:
-   `https://travel-expense-compact.vercel.app/android-auth`.
-3. **Android QA passed after the live config update:** `npm run android:qa` built the debug APK,
-   installed it on `codex_api36_pixel_8`, launched the app on the Scan tab, verified App Links, and
-   captured camera/gallery tap smoke artifacts without crash.
-4. **Main worktree safety:** main still has unrelated local edits from another agent
-   (`AGENTS.md`, `CLAUDE.md`, `.mimocode/plans/...`); they were not touched.
-
-### Session 34 (Claude/Oscar — Android production-readiness, v0.8.2)
-
-Full review (direct reading + 2 review agents) + fixes. All native-only changes are guarded by a
-Capacitor native check, so the live web app is unchanged. Branch stays off `main`.
-
-1. **Release signing (was missing → blocked any shippable build):** generated
-   `android/keystore/release.jks` (alias `release`), creds in gitignored `android/keystore.properties`;
-   `app/build.gradle` loads it and signs the `release` build type. `bundleRelease` now emits a signed
-   AAB (`jar verified`). Release SHA-256 added to `assetlinks.json` alongside debug. Documented in `ANDROID.md`.
-2. **Native login App Links (was broken end-to-end):** the redirect domain served the SPA for both
-   `/.well-known/assetlinks.json` (so App Links couldn't verify) and `/android-auth` (so the implicit-flow
-   token got consumed in-browser). Fixed on `main` (commit `36f6f97`): assetlinks served as JSON + a
-   standalone `/android-auth` handoff page + a vercel rewrite above the SPA catch-all. See PENDING above
-   for the deploy + Supabase steps.
-3. **Redirect handler hardening** (`src/App.tsx`): register the `appUrlOpen` listener before draining
-   `getLaunchUrl()`, and dedupe processed URLs so a cold-start deep link isn't handled twice.
-4. **Hardware back button** (`src/App.tsx`): was unhandled → instantly exited the app. Now: close an open
-   editor/wizard/overlay → return to home tab → press-again-to-exit.
-5. **CSV/JSON export** (`src/lib/domain.ts`): blob+anchor download is a silent no-op in a WebView. On
-   native, write to cache + open the OS share sheet via `@capacitor/filesystem` + `@capacitor/share`
-   (two new deps).
-6. **External/map links** (`src/lib/domain.ts` `openMapExternal`): hand off to the OS (`intent://`
-   interceptor / `@capacitor/browser`) instead of a `_blank` tab that strands the user in the WebView.
-7. **Polish:** clarify the Android voice-unsupported message (`src/tabs/Scan.tsx`), a "waiting for browser"
-   login state (`src/security/SupabaseGate.tsx`), and an oversized-image guard before decode (Scan).
-8. **Discounted as false positives:** `updateState`-in-deps re-subscribe (it's `useCallback`-stable),
-   geolocation permission (not used), broker CORS (native origin `https://localhost` returns 204).
-9. **Verified:** `typecheck`, `assembleDebug`, signed `bundleRelease`, and `npm run android:qa` on
-   `codex_api36_pixel_8` all pass — Scan camera tap triggers the runtime permission dialog, no crash.
-10. **Versioning:** Compact/Android bumped to `0.8.2` / versionCode `802`.
-
-### Session 33 (Codex — current Android branch)
-
-1. **Android manifest/privacy fixes**:
-   - Added `<uses-feature android:name="android.hardware.camera" android:required="false" />` to fix the current Android lint failure.
-   - Removed broad `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE` permissions; WebView file input should use Android's system picker instead of library-wide read access.
-   - Added `backup_rules.xml` and `data_extraction_rules.xml` to explicitly exclude files, databases, shared preferences, root, and external data from backup/device transfer.
-2. **Native auth/App Links**:
-   - Added `@capacitor/app` and `@capacitor/browser`.
-   - Added App Link intent handling for `https://travel-expense-compact.vercel.app/android-auth`.
-   - Added `public/.well-known/assetlinks.json` with the current local debug SHA-256 for `com.ftjdfr.travelexpensecompact`.
-   - Added native Supabase redirect handling so Android Google OAuth opens in the system browser and returned `code` or token URLs become the normal Supabase session.
-3. **Android polish and QA harness**:
-   - Added Android status/nav bar colors and a monochrome launcher icon resource.
-   - Added `smoke:android-broker-origin` to report candidate Capacitor WebView origins for the Credential Broker CORS preflight.
-   - Added `android:qa` to build, install, launch, seed the local trusted-device flag through debug WebView CDP, capture screenshot/UI tree/logcat, and lightly probe Scan camera/gallery buttons on `codex_api36_pixel_8`.
-4. **Versioning**:
-   - Bumped Compact to `0.8.1` and Android to `versionCode 801`.
-5. **Important branch safety**:
-   - This work remains on `codex/android-compact-shell`.
-   - Do not merge to `main`, dispatch Pages, or trigger Vercel/Netlify production deployment until Boss approves.
-   - Release signing is not done yet; add the release SHA-256 to `assetlinks.json` after a real release keystore exists.
-
-### Session 32 (Codex — current Android branch)
-
-1. **Isolated Android build track**:
-   - Created separate worktree `/Users/tommy/Documents/Codex/travel-expense-android-shell` on branch `codex/android-compact-shell`.
-   - Kept the live Compact web app and `main` branch untouched during Android bootstrap.
-   - Added `app-compact/ANDROID.md` with branch safety rules, commands, APK path, native scope, and release-signing notes.
-2. **Capacitor Android shell**:
-   - Added Capacitor dependencies and generated `app-compact/android/`.
-   - Added `capacitor.config.ts` for app id `com.ftjdfr.travelexpensecompact`, app name `Travel Expense Compact`, and `dist` web assets.
-   - Added Android commands: `android:sync`, `android:debug`, `android:bundle`, and `android:open`.
-   - Configured native permissions for internet, camera, and image library access; Android backup is disabled for expense-data privacy.
-   - Set Android version to `0.8.0` / `versionCode 800`.
-3. **Build/tooling fixes**:
-   - Upgraded Vite to `8.0.16` to clear the npm audit vulnerability.
-   - Added `@types/node` so production-gate TypeScript checks pass.
-   - Fixed a Compact type-only import for `AppState`.
-   - Updated brittle smoke selectors so Timeline navigation checks target the visible `.timeline-command-title` instead of hidden text.
-   - Changed broker smoke defaults from the Netlify origin to the working Compact Vercel origin.
-4. **Verification**:
-   - Passed `npm run smoke:production-gate`.
-   - Passed `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug`.
-   - Passed `npm audit --omit=dev`, `npm audit`, and `git diff --check`.
-   - Debug APK output: `app-compact/android/app/build/outputs/apk/debug/app-debug.apk`.
-
 ### Session 31 (Antigravity — previous session)
 
 1. **Admin Console (Phases 1-7)**:
@@ -2127,15 +1805,37 @@ Capacitor native check, so the live web app is unchanged. Branch stays off `main
    - The new tags are the Node 24-generation Pages actions and should stop the Node.js 20 deprecation annotation on the next Pages deploy.
 
 ## Verified
-- `app-compact npm run typecheck` ✅ (0.9.0 Phase 2 AI itemization)
-- `app-compact npm run build` ✅ (0.9.0 Phase 2)
-- `app-compact npm run test:split-engine` ✅ (includes 6 foldLineItemsToSplits tests)
-- `app-compact npm run test:notion-split-meta` ✅
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:split-editor` ✅ (1/1)
-- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:scan` ✅ (1/1)
+- `app-compact npm run typecheck` ✅ (0.2.6 Scan/Home polish)
+- `app-compact npm run build` ✅ (0.2.6 Scan/Home polish)
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:scan` ✅
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:dashboard` ✅ (7/7)
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:a11y-touch` ✅
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:mobile-layout` ✅
+- `app-compact npm run typecheck` ✅ (0.2.2 timeline fix)
+- `app-react npm run typecheck` ✅ (0.2.2 timeline fix)
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:timeline` ✅ (8/8, includes Scan → Timeline live-spot auto-scroll)
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:mobile-layout` ✅
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:final-nav` ✅ (8/8)
+- `app-compact npm run build` ✅
+- `app-react npm run build` ✅
 - `app-compact npm run security:scan` ✅
-- `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug` ✅ (BUILD SUCCESSFUL)
 - `git diff --check` ✅
+- Live Supabase migration list includes `20260613044116_receipt_photo_storage` ✅
+- Live Supabase migration list includes `20260613044208_harden_shared_invites_and_receipt_versions` ✅
+- `node scripts/verify-supabase-migrations.mjs` ✅
+- `node scripts/verify-shared-ledger-contract.mjs` ✅
+- `git diff --check` ✅
+- `app-compact npm run typecheck` ✅
+- `app-react npm run typecheck` ✅
+- `app-compact npm run build` ✅
+- `app-compact npm run security:scan` ✅
+- `app-react npm run db:policy:scan` ✅
+- `app-compact npm run smoke:shared-ledger` ✅
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:mobile-layout` ✅
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:history` ✅ (8/8)
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:settings` ✅ (9 passed, 1 skipped)
+- `app-compact node scripts/run-with-dev-server.mjs -- npm run smoke:scan` ✅ (1/1)
+- Ruby/Psych YAML parse for `.github/workflows/*.yml` ✅
 
 ## Pending Tasks
 

@@ -1,4 +1,4 @@
-import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS, normalizeAiModelSettings, isBoss } from './constants';
+import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS, normalizeAiModelSettings, parseThemePreference, isBoss } from './constants';
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { brokerNotionRequest, hasCredentialBrokerSession, brokerNotionUploadFile } from './credentialBroker';
 import { displayStore, getPersons, hkd, receiptRegion } from './domain';
@@ -664,7 +664,7 @@ function receiptSkipReason(props: Record<string, any>, schema: SchemaMap) {
   const objectType = readSelectProp(props, 'objectType', schema, { allowLoose: false }) || '';
   const cleanTitle = storeTitle.replace(/^⏳\s+/, '').trim();
   const rawItems = readRichTextProp(props, 'items', schema, { allowLoose: false });
-  if (sourceId === '__meta_settings__' || storeTitle === '__meta_settings__' || storeTitle.includes('App Settings（請勿刪除）') || objectType === 'settings') return 'settings/meta row';
+  if (sourceId === '__meta_settings__' || storeTitle === '__meta_settings__' || sourceId === '__meta_backup__' || storeTitle === '__meta_backup__' || storeTitle.includes('App Settings（請勿刪除）') || objectType === 'settings') return 'settings/meta row';
   if (objectType === 'trip') return 'trip row';
   if (cleanTitle.startsWith('🗓 行程更新：') || /\[行程更新\]/.test(rawItems) || /_iu_\d+$/.test(sourceId)) return 'itinerary update row';
   return null;
@@ -1396,6 +1396,7 @@ export async function pushSettingsMeta(state: AppState): Promise<void> {
     emailModel: state.emailModel,
     tripUpdateModel: state.tripUpdateModel,
     googleBackupModel: state.googleBackupModel,
+    themePreference: state.themePreference,
   };
   const properties = {
     [propName(schema, 'objectType')]: { select: { name: 'settings' } },
@@ -1451,6 +1452,7 @@ export async function pullSettingsMeta(state: AppState): Promise<Partial<AppStat
         emailModel: payload.emailModel,
         tripUpdateModel: payload.tripUpdateModel,
         googleBackupModel: payload.googleBackupModel,
+        themePreference: parseThemePreference(payload.themePreference),
       });
     }
   } catch (err) {

@@ -241,9 +241,16 @@ export function Scan({
     const n = Number(amount) || 0;
     return convertAmount(n, from, to, state, fx);
   }, [amount, from, to, state, fx]);
+  const fxFixed = state.rateMode === 'fixed';
 
   useEffect(() => {
-    if (!fxOpen || fxAutoRefreshRef.current) return;
+    if (!fxOpen) {
+      // Reset on close so reopening the modal after the 1-hour cache window can refresh again.
+      fxAutoRefreshRef.current = false;
+      return;
+    }
+    // 固定匯率模式：唔好自動 fetch — 用返用户鎖定咗嘅匯率。
+    if (fxAutoRefreshRef.current || stateRef.current.rateMode === 'fixed') return;
     fxAutoRefreshRef.current = true;
     void handleFxRefresh();
   }, [fxOpen]);
@@ -628,13 +635,15 @@ export function Scan({
   }
 
   async function handleFxRefresh() {
+    if (stateRef.current.rateMode === 'fixed') return;
     setBusy('fx');
     try {
       const snapshot = await fetchLiveCurrencySnapshot();
       if (!mountedRef.current) return;
       setFx(snapshot);
-      const destinationRate = snapshot.rates[from] || snapshot.rates[mockReceipt.currency];
-      setStatus(destinationRate ? `已更新匯率：1 HKD = ${destinationRate.toFixed(2)} ${from}（${snapshot.source}）` : `已更新匯率（${snapshot.source}）`);
+      const toastCode = Number.isFinite(snapshot.rates[from]) ? from : mockReceipt.currency;
+      const destinationRate = snapshot.rates[toastCode];
+      setStatus(destinationRate ? `已更新匯率：1 HKD = ${destinationRate.toFixed(2)} ${toastCode}（${snapshot.source}）` : `已更新匯率（${snapshot.source}）`);
     } catch (error) {
       if (!mountedRef.current) return;
       setStatus(`匯率更新失敗：${redactedError(error)}`);
@@ -908,19 +917,19 @@ export function Scan({
 
       {status && <Toast tone={/失敗|未能|error/i.test(status) ? 'warning' : 'info'}>{status}</Toast>}
       {fxOpen && (
-        <div ref={fxContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label="即時匯率" onClick={() => setFxOpen(false)}>
+        <div ref={fxContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label={fxFixed ? '固定匯率' : '即時匯率'} onClick={() => setFxOpen(false)}>
           <div className="modal sheet scan-fx-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-head">
               <div>
-                <h2>即時匯率</h2>
-                <p className="muted">Live currency exchange for this trip.</p>
+                <h2>{fxFixed ? '固定匯率' : '即時匯率'}</h2>
+                <p className="muted">{fxFixed ? '用緊你喺設定鎖定嘅匯率，唔會自動更新。' : 'Live currency exchange for this trip.'}</p>
               </div>
               <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setFxOpen(false)}><X size={18} /></button>
             </div>
             <div className="scan-fx-result" aria-live="polite">
               <span>{Number(amount) || 0} {from}</span>
-              <strong>{converted == null ? '需要更新匯率' : (Number(amount) || 0) === 0 ? '輸入金額以計算' : `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${to}`}</strong>
-              <small>{fx?.source ? `Source: ${fx.source}` : 'Using saved or fallback app rates'}</small>
+              <strong>{(Number(amount) || 0) === 0 ? '輸入金額以計算' : `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${to}`}</strong>
+              <small>{fxFixed ? '固定匯率（設定頁可改）' : fx?.source ? `Source: ${fx.source}` : 'Using saved or fallback app rates'}</small>
             </div>
             <div className="scan-fx-panel">
               <label>
@@ -945,9 +954,11 @@ export function Scan({
             </div>
             <div className="scan-fx-actions">
               <button className="secondary" type="button" onClick={() => { setFrom(mockReceipt.currency); setTo('HKD'); }}>使用旅程貨幣</button>
-              <button className="primary" type="button" disabled={busy === 'fx'} onClick={handleFxRefresh}>
-                <RefreshCw size={16} className={busy === 'fx' ? 'spin' : ''} /> 更新匯率
-              </button>
+              {!fxFixed && (
+                <button className="primary" type="button" disabled={busy === 'fx'} onClick={handleFxRefresh}>
+                  <RefreshCw size={16} className={busy === 'fx' ? 'spin' : ''} /> 更新匯率
+                </button>
+              )}
             </div>
           </div>
         </div>

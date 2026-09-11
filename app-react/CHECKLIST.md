@@ -3,7 +3,7 @@
 Status labels:
 - `已驗證`: implemented and smoke/type/build covered in this pass.
 - `已實作`: implemented in code, needs live credential or real device data to fully verify.
-- `保留`: legacy remains available at root.
+- `保留`: a compatibility surface remains intentionally available.
 - `待 live`: blocked by missing local credential/token in this run.
 
 ## A. Boot / Mobile Web / Deploy
@@ -11,7 +11,7 @@ Status labels:
 | ID | Status | Evidence |
 |---|---|---|
 | A01 | 已驗證 | Local baseline opened at `/travel-expense/react/`. |
-| A02 | 保留 | Root `index.html` is not moved; deploy copies it to root. |
+| A02 | 已驗證 | Root `index.html` is a stateless CSP-protected redirect to `/compact/`; the legacy runtime is retired. |
 | A03 | 已驗證 | Vite base and deploy output target `_site/react/`. |
 | A04 | 已驗證 | React app code is inside `app-react/src`; no legacy import. |
 | A05 | 已驗證 | Mobile viewport smoke at 390px showed tab shell and Settings. |
@@ -19,14 +19,14 @@ Status labels:
 | A07 | 已實作 | Shell listens to online/offline and keeps local data. |
 | A08 | 已實作 | Service worker controller update notice is supported. |
 | A09 | 已實作 | No AI/Notion request is cached by app code. |
-| A10 | 已驗證 | Workflow keeps root legacy and `/react/`; no key injection. |
+| A10 | 已驗證 | Workflow publishes the safe root redirect and `/react/` output separately; no key injection. |
 
 ## B. Lock / Auth Gate
 
 | ID | Status | Evidence |
 |---|---|---|
 | B01 | 已驗證 | First page is `AuthGate` lock screen. |
-| B02 | 已驗證 | WebCrypto decrypt unlock smoke passed. |
+| B02 | 已驗證 | Broker password verification and registered-device response are required; no browser offline verifier remains. |
 | B03 | 已驗證 | Reload after unlock skipped password on same browser profile. |
 | B04 | 已驗證 | Settings clear device trust button works. |
 | B05 | 已實作 | Site data reset naturally removes local trust marker. |

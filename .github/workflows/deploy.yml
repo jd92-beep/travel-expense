@@ -62,19 +62,16 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build:pages
 
-      - name: Prepare _site (legacy at root, fresh React at /react/, compact at /compact/)
+      - name: Prepare _site (safe root redirect, React at /react/, Compact at /compact/)
         run: |
           mkdir -p _site/react
           mkdir -p _site/compact
-          # Legacy working app stays at root. Do not inject provider keys into
-          # GitHub Pages output: Pages HTML is public, so credentials must come
-          # from local-only settings on the device.
+          # The root page contains no application state or credentials; it only
+          # redirects existing bookmarks to the maintained Compact app.
           cp index.html _site/index.html
-          # Fresh React UI. This intentionally does not deploy the previous
-          # app/ or app3/ implementations because their feature parity was
-          # unreliable. The stable legacy app remains at the root.
+          # Maintained React UI. Historical app/ and app3/ stay undeployed.
           cp -r app-react/dist/* _site/react/
-          # Compact React UI.
+          # Canonical Compact UI.
           cp -r app-compact/dist/* _site/compact/
 
       - name: Security scan Pages output

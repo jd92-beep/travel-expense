@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { ErrorBoundary } from './app/ErrorBoundary';
 import { ReceiptEditor } from './components/ReceiptEditor';
@@ -14,7 +14,7 @@ import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
 import { enqueueChange } from './lib/changeJournal';
 import { clearCredentialSession, clearStoredState } from './lib/storage';
-import type { AppState, Receipt, SyncQueueItem, TabId, TripInviteSummary, TripProfile } from './lib/types';
+import type { AppState, Person, Receipt, SyncQueueItem, TabId, TripInviteSummary, TripProfile, TripSharingInviteDraft } from './lib/types';
 import { TAB_MANIFEST } from './lib/tabs';
 import { isBoss } from './lib/constants';
 import { AuthGate } from './security/AuthGate';
@@ -28,7 +28,6 @@ import { SupabaseGate } from './security/SupabaseGate';
 import { clearIndexedState } from './storage/indexedDb';
 import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/WelcomeGuidePopup';
 import { upsertSupabaseTrip } from './lib/supabase';
-import { createTripProfile } from './domain/trip/normalize';
 import { hasDeviceTrust, clearDeviceTrust } from './security/deviceTrust';
 import { clearThemeHint, TripThemeProvider } from './theme/tripTheme';
 
@@ -48,6 +47,14 @@ let bootCurrencyPromise: Promise<CurrencySnapshot> | null = null;
 
 function safeTabId(value: unknown): TabId {
   return typeof value === 'string' && VALID_TABS.has(value as TabId) ? value as TabId : DEFAULT_LAUNCH_TAB;
+}
+
+function inviteTokenFromHash(): string {
+  if (typeof window === 'undefined') return '';
+  const rawHash = window.location.hash.slice(1);
+  if (!rawHash.startsWith('accept-invite')) return '';
+  const query = rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : '';
+  return new URLSearchParams(query).get('token')?.trim() || '';
 }
 
 function fetchBootCurrencySnapshot(): Promise<CurrencySnapshot> {
@@ -104,13 +111,44 @@ export function App() {
 
   const [globalOcrBusy, setGlobalOcrBusy] = useState('');
   const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
-  const [skippedGuide, setSkippedGuide] = useState(false);
+  const [guideLatched, setGuideLatched] = useState(false);
+  const [guideClosed, setGuideClosed] = useState(false);
   const [isNewTripWizardOpen, setIsNewTripWizardOpen] = useState(false);
   const [acceptedInviteToken, setAcceptedInviteToken] = useState('');
+  const inviteInFlight = useRef(new Set<string>());
   const bootSyncKeys = useRef(new Set<string>());
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Client-side invite options the RPC does not own: `createAccountingPerson` adds the invitee
+  // to the split list (equal-proportion default), `displayName` labels the pending invite row.
+  const buildInvitePersons = (persons: Person[], shareRatios: Record<string, number>, drafts: TripSharingInviteDraft[]) => {
+    let nextPersons = persons;
+    let nextShareRatios = shareRatios;
+    for (const draft of drafts.filter((invite) => invite.createAccountingPerson)) {
+      const name = (draft.displayName || '').trim() || draft.email.split('@')[0] || draft.email;
+      if (nextPersons.some((person) => person.name.trim().toLowerCase() === name.toLowerCase())) continue;
+      const id = `p_invite_${draft.email.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`;
+      if (nextPersons.some((person) => person.id === id)) continue;
+      const existing = nextPersons.map((person) => Number(nextShareRatios[person.id]) || 0);
+      const avg = existing.length ? existing.reduce((acc, value) => acc + value, 0) / existing.length : 1;
+      nextPersons = [...nextPersons, { id, name, emoji: '👤', color: '#2D6E48' }];
+      nextShareRatios = { ...nextShareRatios, [id]: Math.max(1, Math.round(avg)) };
+    }
+    return { persons: nextPersons, shareRatios: nextShareRatios };
+  };
+
+  // Invites that could not reach the server stay visible as local pending rows so the user can
+  // regenerate the link from Settings → 旅程共享 instead of losing the invite entirely.
+  const localInviteSummary = (draft: TripSharingInviteDraft): TripInviteSummary => ({
+    id: `local_${draft.email}`,
+    email: draft.email,
+    role: draft.role,
+    status: 'pending',
+    expiresAt: '',
+    createdAt: new Date().toISOString(),
+    displayName: draft.displayName,
+  });
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const capacitor = (window as Window & {
@@ -184,33 +222,40 @@ export function App() {
     const guide = 'trip' in result
       ? result
       : { trip: result, persons: stateRef.current.persons, shareRatios: stateRef.current.shareRatios, sharingInvites: [] };
-    const { trip, persons, shareRatios, sharingInvites } = guide;
+    const { trip, sharingInvites } = guide;
+    const { persons, shareRatios } = buildInvitePersons(guide.persons, guide.shareRatios, sharingInvites || []);
+    setGuideClosed(true);
     try {
       if (!supabaseAuth.session) throw new Error('Supabase session unavailable');
       const syncedTrip = await upsertSupabaseTrip(supabaseAuth.session, stateRef.current, trip);
       const createdInvites: TripInviteSummary[] = [];
+      const failedInviteDrafts: TripSharingInviteDraft[] = [];
       for (const invite of sharingInvites || []) {
         try {
-          createdInvites.push(await createSupabaseTripInvite(supabaseAuth.session, stateRef.current, syncedTrip, invite));
+          createdInvites.push((await createSupabaseTripInvite(supabaseAuth.session, stateRef.current, syncedTrip, invite)).invite);
         } catch (inviteError) {
           console.warn('[WelcomeGuide] Failed to create trip invite:', inviteError);
+          failedInviteDrafts.push(invite);
         }
       }
-      const visibleTrip = createdInvites.length
+      const pendingLocal = failedInviteDrafts.map(localInviteSummary);
+      const visibleTrip = (createdInvites.length || pendingLocal.length)
         ? {
           ...syncedTrip,
           sharing: {
             ...(syncedTrip.sharing || { role: 'owner' as const, memberCount: 1, pendingInviteCount: 0, isShared: false }),
             role: syncedTrip.sharing?.role || 'owner',
             isShared: true,
-            pendingInviteCount: (syncedTrip.sharing?.pendingInviteCount || 0) + createdInvites.length,
-            invites: [...(syncedTrip.sharing?.invites || []), ...createdInvites],
+            pendingInviteCount: (syncedTrip.sharing?.pendingInviteCount || 0) + createdInvites.length + pendingLocal.length,
+            invites: [...(syncedTrip.sharing?.invites || []), ...createdInvites, ...pendingLocal],
           },
         }
         : syncedTrip;
       setState((prev) => ({
         ...prev,
-        trips: [visibleTrip],
+        trips: prev.trips?.length
+          ? [...prev.trips.map((item) => ({ ...item, active: false })), visibleTrip]
+          : [visibleTrip],
         activeTripId: visibleTrip.id,
         tripName: visibleTrip.name,
         tripDateRange: { start: visibleTrip.startDate, end: visibleTrip.endDate },
@@ -221,7 +266,23 @@ export function App() {
         shareRatios,
         settingsUpdatedAt: Date.now(),
       }));
+      if (failedInviteDrafts.length) {
+        updateState({ syncError: `有 ${failedInviteDrafts.length} 個邀請未能送出 — 可以喺 設定 → 旅程共享 重新產生邀請連結。` });
+      }
     } catch (error) {
+      const pendingLocal = (sharingInvites || []).map(localInviteSummary);
+      const offlineTrip = pendingLocal.length
+        ? {
+          ...trip,
+          sharing: {
+            role: 'owner' as const,
+            memberCount: 1,
+            isShared: true,
+            pendingInviteCount: pendingLocal.length,
+            invites: pendingLocal,
+          },
+        }
+        : trip;
       const now = Date.now();
       console.warn('[WelcomeGuide] Cloud save failed; queued for retry:', redactedError(error));
       const queue: SyncQueueItem = {
@@ -245,13 +306,15 @@ export function App() {
       };
       setState((prev) => ({
         ...prev,
-        trips: [trip],
-        activeTripId: trip.id,
-        tripName: trip.name,
-        tripDateRange: { start: trip.startDate, end: trip.endDate },
-        budget: trip.budget ?? 0,
-        tripCurrency: trip.currencies?.find((currency) => currency !== 'HKD') || prev.tripCurrency,
-        customItinerary: trip.itinerary || [],
+        trips: prev.trips?.length
+          ? [...prev.trips.map((item) => ({ ...item, active: false })), offlineTrip]
+          : [offlineTrip],
+        activeTripId: offlineTrip.id,
+        tripName: offlineTrip.name,
+        tripDateRange: { start: offlineTrip.startDate, end: offlineTrip.endDate },
+        budget: offlineTrip.budget ?? 0,
+        tripCurrency: offlineTrip.currencies?.find((currency) => currency !== 'HKD') || prev.tripCurrency,
+        customItinerary: offlineTrip.itinerary || [],
         persons,
         shareRatios,
         settingsUpdatedAt: now,
@@ -265,27 +328,30 @@ export function App() {
     }
   };
 
-  const handleSkipGuide = async () => {
-    const today = todayYmd();
-    const end = addDaysYmd(today, 5);
-    const placeholderTrip = createTripProfile({
-      name: '我嘅新旅程 📓',
-      destinationSummary: '未設定目的地',
-      startDate: today,
-      endDate: end,
-      budget: 0,
-      currency: 'JPY',
-    });
-    setSkippedGuide(true);
-    await handleSaveGuideTrip(placeholderTrip);
+  // Dismissal is session-only: no placeholder trip is written, so the guide simply reappears on
+  // the next launch while the account still has no trips.
+  const handleDismissGuide = () => {
+    setGuideClosed(true);
   };
 
-  const showGuide =
+  const autoShowGuide =
     hasSupabaseSession(effectiveSupabaseSession) &&
     !isBoss(userEmail) &&
     (state.trips || []).length === 0 &&
-    isStorageReady &&
-    !skippedGuide;
+    isStorageReady;
+
+  // Latch the guide open once shown: the boot pull landing trips underneath must not unmount the
+  // popup mid-use and discard typed input. It closes only on save or explicit dismiss.
+  useEffect(() => {
+    if (autoShowGuide) setGuideLatched(true);
+  }, [autoShowGuide]);
+
+  const showGuide = guideLatched && !guideClosed;
+
+  const handleReopenGuide = () => {
+    setGuideLatched(true);
+    setGuideClosed(false);
+  };
 
   const syncEngine = useSyncEngine(state, setState, effectiveSupabaseSession);
   const { pull, sync } = syncEngine;
@@ -307,67 +373,69 @@ export function App() {
     clearThemeHint();
   };
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const rawHash = window.location.hash.slice(1);
-    if (!rawHash.startsWith('accept-invite')) return;
-    const query = rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : '';
-    const token = new URLSearchParams(query).get('token')?.trim();
-    if (!token || token === acceptedInviteToken) return;
+  const attemptInviteAccept = useCallback((rawToken: string) => {
+    const token = rawToken.trim();
+    if (!token || token === acceptedInviteToken || inviteInFlight.current.has(token)) return;
+    const clearHash = () => window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
     if (!hasSupabaseSession(effectiveSupabaseSession)) {
-      localStorage.setItem('travel-expense:pending-invite-token', token);
-      window.history.replaceState(null, '', '#login');
+      // Logged out: stash the token so the login screen can mention it and the session-ready
+      // effect below picks it up after sign-in. Remove the hash so re-clicking the link re-fires.
+      try { localStorage.setItem('travel-expense:pending-invite-token', token); } catch { /* best effort */ }
+      clearHash();
       return;
     }
-    const pendingToken = localStorage.getItem('travel-expense:pending-invite-token');
-    const resolvedToken = token || pendingToken;
-    if (!resolvedToken) return;
-    localStorage.removeItem('travel-expense:pending-invite-token');
-    setAcceptedInviteToken(resolvedToken);
-    acceptSupabaseTripInvite(effectiveSupabaseSession, resolvedToken)
+    inviteInFlight.current.add(token);
+    acceptSupabaseTripInvite(effectiveSupabaseSession, token)
       .then(async () => {
+        try { localStorage.removeItem('travel-expense:pending-invite-token'); } catch { /* best effort */ }
+        // Mark accepted only on success — a failed attempt must stay retryable.
+        setAcceptedInviteToken(token);
         window.history.replaceState(null, '', '#settings');
         setTab('settings');
         await pull();
       })
       .catch((inviteError) => {
         console.error('[TripInvite] accept failed:', redactedError(inviteError));
+        try { localStorage.removeItem('travel-expense:pending-invite-token'); } catch { /* best effort */ }
+        // Clear the stranded hash so re-clicking the invite link triggers a fresh attempt.
+        clearHash();
         const msg = inviteError instanceof Error ? inviteError.message : 'Trip invite accept failed';
-        if (/expired/i.test(msg)) {
-          updateState({ syncError: '邀請已過期，請聯絡旅程管理員重新發送邀請。' });
-        } else {
-          updateState({ syncError: msg });
-        }
+        updateState({
+          syncError: /expired/i.test(msg)
+            ? '邀請已過期，請聯絡旅程管理員重新發送邀請。'
+            : `加入旅程失敗：${msg}。可以再撳一次邀請連結重試。`,
+        });
+      })
+      .finally(() => {
+        inviteInFlight.current.delete(token);
       });
   }, [acceptedInviteToken, effectiveSupabaseSession, pull, updateState]);
 
+  // Mount: the app was opened via an #accept-invite?token=... link.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const token = inviteTokenFromHash();
+    if (token) attemptInviteAccept(token);
+  }, [attemptInviteAccept]);
+
+  // Session ready: accept a pending invite stored while logged out.
   useEffect(() => {
     if (!hasSupabaseSession(effectiveSupabaseSession)) return;
-    const pendingToken = localStorage.getItem('travel-expense:pending-invite-token');
-    if (!pendingToken || pendingToken === acceptedInviteToken) return;
-    localStorage.removeItem('travel-expense:pending-invite-token');
-    setAcceptedInviteToken(pendingToken);
-    acceptSupabaseTripInvite(effectiveSupabaseSession, pendingToken)
-      .then(async () => {
-        window.history.replaceState(null, '', '#settings');
-        setTab('settings');
-        await pull();
-      })
-      .catch((inviteError) => {
-        console.error('[TripInvite] pending accept failed:', redactedError(inviteError));
-        const msg = inviteError instanceof Error ? inviteError.message : 'Trip invite accept failed';
-        if (/expired/i.test(msg)) {
-          updateState({ syncError: '邀請已過期，請聯絡旅程管理員重新發送邀請。' });
-        } else {
-          updateState({ syncError: msg });
-        }
-      });
-  }, [effectiveSupabaseSession, acceptedInviteToken, pull, updateState]);
+    let pendingToken = '';
+    try { pendingToken = (localStorage.getItem('travel-expense:pending-invite-token') || '').trim(); } catch { /* best effort */ }
+    if (pendingToken) attemptInviteAccept(pendingToken);
+  }, [effectiveSupabaseSession, attemptInviteAccept]);
 
   useEffect(() => {
     const onHash = () => {
       const rawHash = window.location.hash.slice(1);
-      if (rawHash.startsWith('accept-invite')) return;
+      if (rawHash.startsWith('accept-invite')) {
+        // App already running: clicking an invite link only changes the hash — run the same
+        // accept flow here instead of ignoring it.
+        const token = inviteTokenFromHash();
+        if (token) attemptInviteAccept(token);
+        return;
+      }
       const next = safeTabId(rawHash);
       // Fix Bug 9.1: Correct url hash address bar if corrupt
       if (rawHash && rawHash !== next) {
@@ -385,7 +453,7 @@ export function App() {
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, [updateState]);
+  }, [updateState, attemptInviteAccept]);
 
   // Open the app on Scan unless the URL explicitly requests another tab.
   useEffect(() => {
@@ -669,7 +737,7 @@ export function App() {
         <WelcomeGuidePopup
           state={state}
           onSave={handleSaveGuideTrip}
-          onSkip={handleSkipGuide}
+          onDismiss={handleDismissGuide}
         />
       )}
       {globalOcrBusy && (
@@ -723,7 +791,7 @@ export function App() {
                   )}
                   {safeTab === 'weather' && <Weather state={state} />}
                   {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} upsertReceipt={upsertReceipt} deleteReceipt={deleteReceipt} />}
-                  {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} supabaseAccountId={effectiveSupabaseSession?.user?.id || ''} supabaseSessionExpiresAt={(effectiveSupabaseSession?.expires_at || 0) * 1000} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} />}
+                  {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} supabaseAccountId={effectiveSupabaseSession?.user?.id || ''} supabaseSessionExpiresAt={(effectiveSupabaseSession?.expires_at || 0) * 1000} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} onReopenGuide={handleReopenGuide} />}
                 </>
               );
               // The keyed ErrorBoundary must live INSIDE the motion.div: when it wrapped
@@ -839,24 +907,22 @@ export function App() {
     // the app render with a pre-merge (possibly stale/incomplete) snapshot for one paint. isStorageReady
     // additionally waits for indexedReadyScope, matching how showGuide already gates below.
     if (hasSupabaseSession(supabaseAuth.session) && !isStorageReady) {
-      return <TripThemeProvider state={state}><LoadingState label="載入帳號資料" /></TripThemeProvider>;
+      return <TripThemeProvider state={state} ready={isStorageReady}><LoadingState label="載入帳號資料" /></TripThemeProvider>;
     }
-    return <TripThemeProvider state={state}><SupabaseGate auth={supabaseAuth}>{appContent}</SupabaseGate></TripThemeProvider>;
+    return <TripThemeProvider state={state} ready={isStorageReady}><SupabaseGate auth={supabaseAuth}>{appContent}</SupabaseGate></TripThemeProvider>;
   }
 
 
   return (
-    <TripThemeProvider state={state}>
-      <AuthGate
-        credentialBrokerUrl={state.credentialBrokerUrl}
-        onBrokerSession={(session) => updateState(session)}
-        onUnlocked={() => {
-          changeTab('dashboard');
-        }}
-        onOfflineMode={(message) => updateState({ syncError: message })}
-      >
-        {appContent}
-      </AuthGate>
-    </TripThemeProvider>
+    <TripThemeProvider state={state} ready={isStorageReady}><AuthGate
+      credentialBrokerUrl={state.credentialBrokerUrl}
+      onBrokerSession={(session) => updateState(session)}
+      onUnlocked={() => {
+        changeTab('dashboard');
+      }}
+      onOfflineMode={(message) => updateState({ syncError: message })}
+    >
+      {appContent}
+    </AuthGate></TripThemeProvider>
   );
 }

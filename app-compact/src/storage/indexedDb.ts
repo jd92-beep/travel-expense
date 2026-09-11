@@ -1,5 +1,5 @@
 import type { AppState } from '../lib/types';
-import { stripSensitiveState } from '../lib/storage';
+import { stripSensitiveState } from '../lib/sanitizeState';
 
 const DB_NAME = 'travel-expense-react';
 const DB_VERSION = 1;

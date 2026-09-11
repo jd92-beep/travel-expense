@@ -8,7 +8,7 @@ import { Meteors } from '../components/ui/meteors';
 import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import { coordForDay, coordsForDay, fetchWeather, getCachedWeatherRows, groupedCoordsForDay, resolveCoordsForDay, resolveOfficialWeatherProvider, setCachedWeatherRows, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type GroupedWeatherLocation, type WeatherCoord, type WeatherSlot } from '../lib/weather';
+import { fetchWeather, getCachedWeatherRows, groupedCoordsForDay, resolveCoordsForDay, resolveOfficialWeatherProvider, setCachedWeatherRows, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type GroupedWeatherLocation, type WeatherCoord } from '../lib/weather';
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
@@ -59,8 +59,13 @@ export function Weather({ state }: { state: AppState }) {
   }).join('|');
   const targetSummary = useMemo(() => weatherTargetSummary(displayItinerary, hasEnded, today), [displayItinerary, hasEnded, today]);
   const hasMissingTarget = useMemo(
-    () => displayItinerary.some((day) => (groupedCoordsByDay.get(day.date) || []).some((g) => g.missing)),
-    [displayItinerary, groupedCoordsByDay],
+    () => displayItinerary.some((day) => {
+      const dayRows = rows[day.date];
+      // Post-load rows reflect geocode results — a resolved city-geocode row clears the warning.
+      if (dayRows && dayRows.length) return dayRows.some((row) => row.source === '缺少座標' && !row.slots?.length);
+      return (groupedCoordsByDay.get(day.date) || []).some((g) => g.missing);
+    }),
+    [displayItinerary, groupedCoordsByDay, rows],
   );
   const activeWeatherDay = useMemo(() => {
     if (!displayItinerary.length) return undefined;
@@ -81,19 +86,19 @@ export function Weather({ state }: { state: AppState }) {
     || leadSourceSlots.find((slot) => slot.temp != null)
     || leadAllSlots.find((slot) => slot.temp != null)
     || leadAllSlots[0];
-  // Real daily high/low from the day's hourly slots (was previously faked as temp±offset).
+  // Real daily high/low from the day's hourly slots — no fabricated fallbacks.
   const leadTemps = (leadSource?.slots || leadAllSlots).map((slot) => slot.temp).filter((t): t is number => t != null);
-  const leadHigh = leadTemps.length ? Math.round(Math.max(...leadTemps)) : (leadSlot?.temp != null ? Math.round(leadSlot.temp + 2) : 24);
-  const leadLow = leadTemps.length ? Math.round(Math.min(...leadTemps)) : (leadSlot?.temp != null ? Math.round(leadSlot.temp - 6) : 16);
-  const previewHourlySlots = leadRows.flatMap((row) => row.slots || []).slice(0, 5);
-  const previewHourlyFallback: WeatherSlot[] = WEATHER_SLOTS.slice(0, 5).map((hour) => ({ hour, code: 2 }));
-  const previewHourly = previewHourlySlots.length ? previewHourlySlots : previewHourlyFallback;
+  const leadHigh = leadTemps.length ? Math.round(Math.max(...leadTemps)) : null;
+  const leadLow = leadTemps.length ? Math.round(Math.min(...leadTemps)) : null;
+  const heroHasData = leadSlot?.temp != null;
+  const previewHourly = leadRows.flatMap((row) => row.slots || []).slice(0, 5);
 
-  const loadRef = useRef<() => Promise<void>>(async () => {});
+  const loadRef = useRef<(options?: { force?: boolean }) => Promise<void>>(async () => {});
 
   useEffect(() => {
     const controller = new AbortController();
-    async function load() {
+    async function load(options?: { force?: boolean }) {
+      const force = Boolean(options?.force);
       const cached = getCachedWeatherRows();
       if (cached && cachedRowsMatchItinerary(cached, displayItinerary, groupedCoordsByDay)) {
         setRows(cached);
@@ -126,7 +131,7 @@ export function Weather({ state }: { state: AppState }) {
               }
               const coord: WeatherCoord = { label: group.label, lat: group.lat, lon: group.lon, timezone: group.timezone, origin: group.origin || 'known-region', query: group.query };
               const officialProvider = resolveOfficialWeatherProvider(coord, { country: day.country, region: day.region, city: day.city });
-              const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', officialProvider, state, forecastDate);
+              const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', officialProvider, state, forecastDate, { force });
               if (controller.signal.aborted) return null;
               return {
                 coord,
@@ -193,11 +198,11 @@ export function Weather({ state }: { state: AppState }) {
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const targetTop = Math.max(0, window.scrollY + rect.top - window.innerHeight * 0.36);
+      // window.scrollTo only — a simultaneous scrollIntoView fights this smooth scroll.
       window.scrollTo({ top: targetTop, behavior: b });
-      el.scrollIntoView({ behavior: b, block: 'center', inline: 'nearest' });
     };
     doScroll(behavior);
-    const correctionDelays = [90, 260, 520, 900, 1320];
+    const correctionDelays = [120, 420, 900];
     scrollCorrectionHandlesRef.current = correctionDelays.map((delay) => window.setTimeout(() => {
       const el = findTarget();
       if (!el) return;
@@ -256,7 +261,7 @@ export function Weather({ state }: { state: AppState }) {
             <button className="secondary weather-refresh-icon" type="button" aria-label="跳去今日天氣" title="跳去今日天氣" onClick={() => jumpToActiveDay('smooth')}>
               <LocateFixed size={17} />
             </button>
-            <button className="secondary weather-refresh-icon" type="button" aria-label="刷新天氣" title="刷新天氣" disabled={busy} onClick={() => loadRef.current()}>
+            <button className="secondary weather-refresh-icon" type="button" aria-label="刷新天氣" title="刷新天氣" disabled={busy} onClick={() => loadRef.current({ force: true })}>
               <RefreshCw size={17} className={busy ? 'spin' : ''} />
             </button>
           </div>
@@ -266,42 +271,60 @@ export function Weather({ state }: { state: AppState }) {
         {error && <Toast tone="warning">天氣拉取失敗：{error}</Toast>}
       </GlassCard>
       <GlassCard className="preview-weather-current-card">
-        <WeatherFX code={leadSlot?.code} rain={leadSlot?.rain} precipMm={leadSlot?.precipMm} />
-        <div className="preview-weather-source-strip" aria-label="Weather source status" style={{ position: 'relative', zIndex: 2 }}>
-          <span>{weatherProviderLabel(leadSource)}</span>
-          <span>{weatherFreshnessLabel(leadSource)}</span>
-          <span>{weatherTargetOriginLabel(leadSource?.coord)}</span>
-          {leadSource?.fallbackReason && <span className="weather-fallback-chip">{weatherFallbackLabel(leadSource.fallbackReason)}</span>}
-        </div>
-        <div className="preview-weather-current-layout relative z-40">
-          <div className="preview-weather-hero-icon">
-            <WeatherIcon code={leadSlot?.code} size={92} hour={leadSlot?.hour} />
+        {heroHasData ? (
+          <>
+            <WeatherFX code={leadSlot?.code} rain={leadSlot?.rain} precipMm={leadSlot?.precipMm} />
+            <div className="preview-weather-source-strip" aria-label="Weather source status" style={{ position: 'relative', zIndex: 2 }}>
+              <span>{weatherProviderLabel(leadSource)}</span>
+              <span>{weatherFreshnessLabel(leadSource)}</span>
+              <span>{weatherTargetOriginLabel(leadSource?.coord)}</span>
+              {leadSource?.fallbackReason && <span className="weather-fallback-chip" title={weatherFallbackTitle(leadSource.fallbackReason)}>{weatherFallbackLabel(leadSource.fallbackReason)}</span>}
+            </div>
+            <div className="preview-weather-current-layout relative z-40">
+              <div className="preview-weather-hero-icon">
+                <WeatherIcon code={leadSlot?.code} size={92} hour={leadSlot?.hour} />
+              </div>
+              <div className="preview-weather-temp">
+                <strong>{Math.round(leadSlot!.temp!)}°C</strong>
+                <span>{weatherLabel(leadSlot?.code)}</span>
+                <em className="preview-weather-place">{leadSource?.coord.label || leadDay?.region || '目前地點'}</em>
+                <small>實際氣溫 {Math.round(leadSlot!.temp!)}°C · 體感 {leadSlot?.feelsLike != null ? `${Math.round(leadSlot.feelsLike)}°C` : '—'}</small>
+              </div>
+              <div className="preview-weather-facts">
+                <span>最高 <b className="hot">{leadHigh != null ? `${leadHigh}°C` : '—'}</b></span>
+                <span>最低 <b>{leadLow != null ? `${leadLow}°C` : '—'}</b></span>
+                <span>風速 <b>{leadSlot?.windSpeed != null ? formatNumber(leadSlot.windSpeed, 'km/h') : '—'}</b></span>
+              </div>
+              <div className="preview-weather-hourly-rail" aria-label="今日逐時天氣">
+                {previewHourly.map((slot, index) => (
+                  <span className="preview-weather-hourly-chip" key={`preview-hour-${slot.hour}-${index}`}>
+                    <b>{formatHour(slot.hour)}</b>
+                    <WeatherIcon code={slot.code} size={18} hour={slot.hour} />
+                    <em>{slot.temp == null ? '—' : `${Math.round(slot.temp)}°C`}</em>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : busy ? (
+          <div className="preview-weather-skeleton" aria-label="天氣載入中">
+            <span className="skeleton-block skeleton-hero" />
+            <span className="skeleton-block skeleton-line" />
+            <span className="skeleton-block skeleton-line short" />
           </div>
-          <div className="preview-weather-temp">
-            <strong>{leadSlot?.temp != null ? Math.round(leadSlot.temp) : 22}°C</strong>
-            <span>{weatherLabel(leadSlot?.code)}</span>
-            <em className="preview-weather-place">{leadSource?.coord.label || leadDay?.region || '目前地點'}</em>
-            <small>實際氣溫 {leadSlot?.temp != null ? Math.round(leadSlot.temp) : 22}°C · 體感 {leadSlot?.feelsLike != null ? Math.round(leadSlot.feelsLike) : 21}°C</small>
+        ) : (
+          <div className="preview-weather-empty">
+            <CloudSun size={30} />
+            <strong>未有天氣資料</strong>
+            <small>{displayItinerary.length ? '稍後撳右上角刷新再試。' : '貼好行程之後，呢度會顯示目的地天氣。'}</small>
           </div>
-          <div className="preview-weather-facts">
-            <span>最高 <b className="hot">{leadHigh}°C</b></span>
-            <span>最低 <b>{leadLow}°C</b></span>
-            <span>風速 <b>{leadSlot?.windSpeed ?? 3} m/s</b></span>
-          </div>
-          <div className="preview-weather-hourly-rail" aria-label="今日逐時天氣">
-            {previewHourly.map((slot, index) => (
-              <span className="preview-weather-hourly-chip" key={`preview-hour-${slot.hour}-${index}`}>
-                <b>{formatHour(slot.hour)}</b>
-                <WeatherIcon code={slot.code} size={18} hour={slot.hour} />
-                <em>{slot.temp == null ? '—' : `${Math.round(slot.temp)}°C`}</em>
-              </span>
-            ))}
-          </div>
-        </div>
+        )}
       </GlassCard>
       {displayItinerary.map((day) => {
         const dayRows = rows[day.date] || [];
-        const missingAll = dayRows.length > 0 && dayRows.every((weather) => !weather.slots?.length);
+        const dayFailed = dayRows.length === 0 && Boolean(error) && !busy;
+        const missingAll = dayRows.length > 0 && dayRows.every((weather) => !weather.slots?.length && weather.source !== '拉取失敗');
+        const fetchFailed = dayRows.length > 0 && dayRows.some((weather) => !weather.slots?.length && weather.source === '拉取失敗');
         const dayCode = dayRows.flatMap((weather) => weather.slots || []).find((slot) => slot.code != null)?.code;
         return (
           <Reveal key={day.date} className="weather-day-reveal" delay={Math.min(0.14, day.day * 0.02)}>
@@ -311,24 +334,28 @@ export function Weather({ state }: { state: AppState }) {
                 <div className="section-head">
                   <div>
                     <p className="weather-day-date">{formatWeatherDate(day.date)}</p>
-                    <p className="eyebrow">{day.date < today ? `Current · Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || '載入中'}</p>
+                    <p className="eyebrow">{day.date < today ? `Current · Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || (dayFailed ? '拉取失敗' : '載入中')}</p>
                     <h2>{day.region}</h2>
                   </div>
-                  <StatusPill tone={missingAll ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{(groupedCoordsByDay.get(day.date) || []).map((g) => g.label).join(' / ') || day.region}</StatusPill>
+                  <StatusPill tone={missingAll || fetchFailed || dayFailed ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{(groupedCoordsByDay.get(day.date) || []).map((g) => g.label).join(' / ') || day.region}</StatusPill>
                 </div>
                 {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
+                {fetchFailed && <p className="notice">天氣拉取失敗，請稍後再試，可以撳右上角刷新重試。</p>}
+                {dayFailed && <p className="notice">天氣拉取失敗，請稍後再試，可以撳右上角刷新重試。</p>}
                 {dayRows.map((weather) => {
                   const emptyForecast = weather.slots?.length && weather.slots.every((slot) => slot.temp == null && slot.rain == null);
                   const liveHour = liveSlotHour(forecastDateFor(day.date), normalizedTimezone(day.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
                   return (
                     <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
                       <h3>{weather.coord.label}</h3>
-                      <div className="weather-location-meta" aria-label={`Weather metadata for ${weather.coord.label}`}>
-                        <span>{weatherProviderLabel(weather)}</span>
-                        <span>{weatherFreshnessLabel(weather)}</span>
-                        <span>{weatherTargetOriginLabel(weather.coord)}</span>
-                        {weather.fallbackReason && <span className="weather-fallback-chip">{weatherFallbackLabel(weather.fallbackReason)}</span>}
-                      </div>
+                      {Boolean(weather.slots?.length) && (
+                        <div className="weather-location-meta" aria-label={`Weather metadata for ${weather.coord.label}`}>
+                          <span>{weatherProviderLabel(weather)}</span>
+                          <span>{weatherFreshnessLabel(weather)}</span>
+                          <span>{weatherTargetOriginLabel(weather.coord)}</span>
+                          {weather.fallbackReason && <span className="weather-fallback-chip" title={weatherFallbackTitle(weather.fallbackReason)}>{weatherFallbackLabel(weather.fallbackReason)}</span>}
+                        </div>
+                      )}
                       {emptyForecast && <p className="notice">旅程日期超出目前預報範圍，會顯示佔位資料；稍後刷新會自動更新。</p>}
                       <div className="weather-grid weather-grid-detailed">
                         {(weather.slots || []).map((slot) => {
@@ -471,7 +498,7 @@ function cachedRowsMatchItinerary(
 
 function weatherProviderLabel(weather?: DayWeather): string {
   const provider = String(weather?.provider || weather?.source || '').replace(/\s+cache$/i, '').trim();
-  return provider ? `Provider · ${weatherDisplayProvider(provider)}` : 'Provider · 載入中';
+  return provider ? `來源 · ${weatherDisplayProvider(provider)}` : '來源 · 載入中';
 }
 
 function weatherSourceLabel(weather?: DayWeather): string {
@@ -484,26 +511,30 @@ function weatherDisplayProvider(value: string): string {
 }
 
 function weatherFreshnessLabel(weather?: DayWeather): string {
-  if (!weather) return 'Freshness · loading';
+  if (!weather) return '載入中';
   const ts = Number(weather.fetchedAt || 0);
-  if (!Number.isFinite(ts) || ts <= 0) return weather.cached ? 'Freshness · cached' : 'Freshness · live';
+  if (!Number.isFinite(ts) || ts <= 0) return weather.cached ? '快取' : '即時';
   const ageMs = Math.max(0, Date.now() - ts);
   const minutes = Math.round(ageMs / 60000);
-  const age = minutes < 1 ? 'just now' : minutes < 60 ? `${minutes}m ago` : `${Math.round(minutes / 60)}h ago`;
-  return `${weather.cached ? 'Cache' : 'Live'} · ${age}`;
+  const age = minutes < 1 ? '啱啱更新' : minutes < 60 ? `${minutes} 分鐘前` : `${Math.round(minutes / 60)} 小時前`;
+  return `${weather.cached ? '快取' : '即時'} · ${age}`;
 }
 
 function weatherTargetOriginLabel(coord?: DayWeather['coord']): string {
-  if (!coord) return 'Target · resolving';
-  if (coord.origin === 'spot-coordinate') return `Target · spot coord · ${coord.label}`;
-  if (coord.origin === 'city-geocode') return `Target · city geocode · ${coord.query || coord.label}`;
-  if (coord.origin === 'known-region') return `Target · trip city · ${coord.label}`;
-  return `Target · fallback needed · ${coord.label}`;
+  if (!coord) return '定位中';
+  if (coord.origin === 'spot-coordinate') return `景點座標 · ${coord.label}`;
+  if (coord.origin === 'city-geocode') return `城市定位 · ${coord.query || coord.label}`;
+  if (coord.origin === 'known-region') return `行程城市 · ${coord.label}`;
+  return `未能定位 · ${coord.label}`;
 }
 
 function weatherFallbackLabel(reason: string): string {
+  return /unavailable/i.test(reason) ? '官方數據暫時不可用，顯示備用來源' : '官方數據不完整，已用備用來源補充';
+}
+
+function weatherFallbackTitle(reason: string): string {
   const safeReason = reason.replace(/WeatherAPI\.com/gi, 'private weather provider');
-  return `Fallback · ${safeReason.replace(/\s+/g, ' ').slice(0, 96)}`;
+  return safeReason.replace(/\s+/g, ' ').slice(0, 120);
 }
 
 function weatherHint(slot: { rain?: number; precipMm?: number; windSpeed?: number; windGust?: number; uvIndex?: number; temp?: number; feelsLike?: number }) {

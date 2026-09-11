@@ -16,13 +16,13 @@
 
 ## 打開 App
 
-- 主要公開 app: https://travel-expense-react.vercel.app
-- Compact app: https://travel-expense-compact.vercel.app
+- Compact app（主要公開 app）: https://travel-expense-compact.vercel.app
+- React app: https://travel-expense-react.vercel.app
 - Admin Console: https://travel-expense-admin-kanban.vercel.app
 - GitHub Pages React app: https://jd92-beep.github.io/travel-expense/react/
-- 舊版備用 app: https://jd92-beep.github.io/travel-expense/
+- GitHub Pages root（安全轉址到 Compact）: https://jd92-beep.github.io/travel-expense/
 
-請優先使用主要公開 app。Compact app 是獨立的手機優化版本，改動不會影響主要 React app 或舊版備用 app。GitHub Pages 版有時會因為 GitHub Actions 下載問題而比 Vercel 慢更新。2026-07-15 live check 已確認 Compact Vercel、Netlify 及 GitHub Pages 全部提供 `0.16.8`；Vercel 仍是主要 Compact 入口。Admin `1.0.2` 同 Broker `2026.07.15.2` 亦已完成 production cutover。
+請優先使用 Compact app。GitHub Pages root 只係無狀態安全轉址，唔再部署舊版內嵌 vault／provider-key app；React 版仍保留獨立入口。GitHub Pages 有時會因 GitHub Actions 下載問題而比 Vercel 慢更新。
 
 ## Compact App Developer Quick Start
 
@@ -38,12 +38,27 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。主線 Compact Web 目前版本是 `0.17.0`；Android worktree
-目前版本是 `0.22.0`（versionCode `2200`）；React transport compatibility 版本是 `0.2.6`。Admin Console production 是 `1.0.2`，由 protected
-workflow `29415119909` 以 Git SHA `67cde57a42bc43f1bda026d81d555260e25bb564` promotion；live
-`/api/health` 回 `200`、exact SHA 及 `acceptingReadTraffic=true`。Console Providers 會列出五個
+Compact app 和 React app 獨立版本管理。現時 production 版本係 Compact Web `0.17.1`、React `0.2.7`、Admin `1.3.4` 同 Broker `2026.08.24.1`；Android worktree
+仍係 `0.22.0`（versionCode `2200`）。Compact 同 React 已部署到 Vercel、Netlify 同 GitHub Pages；Supabase 私有 receipt-photo cutover 同 Broker Durable Object 亦已套用。Admin Console 由 protected
+workflow `32687928249` 以 Git SHA `d92edfd3694e12e92651a8b43401624bb75f4c41` promotion 到 Vercel deployment
+`dpl_67SXrHRZoxKP1C7jkssnEThxSWDL`；live `/api/health` 回 `200`、exact SHA 及
+`acceptingReadTraffic=true`，未登入 `/api/admin/session` 回 canonical `401`。Console Providers 會列出五個
 既有 Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output
 tokens 嘅 request 測試 availability。Seedance 係 media model，唔會混入 LLM selector。
+
+## 外觀主題（Compact／Android）
+
+Compact 同 Android Settings 頂部有「外觀主題」選擇器，毋須另外儲存：
+
+- `自動（依旅程）` 會跟目前旅程建議的主題。
+- 亦可以手動固定 `日本和紙`、`韓國韓紙`、`台灣夜市`、`歐洲鐵路` 或 `全球旅誌`，切換旅程後仍然保留。
+- `台灣夜市` 是真正 dark theme；其餘四款是 light theme。Android status/navigation bars 會跟主題轉換 icon 明暗。
+- 選擇會保存在這部裝置，並透過現有 account settings 同步；切回 `自動（依旅程）` 就會重新跟旅程。
+- 登出會保留最後使用的主題，避免下次開 app 閃色；只有「清除此裝置資料」才會刪除裝置提示。
+
+React app 只保留相同資料欄位，避免同步時刪除 Compact／Android 的選擇；React 本身今次沒有新增主題 UI。
+
+首版只提供這五款 reviewed themes，沒有 user color builder 或 runtime AI theme generator。新增第六款 curated theme 應只新增 catalog／semantic token 定義、可選細 SVG、contrast contract 同 reviewed contact sheets；如果需要改個別 page component，就代表 semantic theme contract 仍未完整。
 
 Admin Console production URL 是 `https://travel-expense-admin-kanban.vercel.app`。readiness 會在呼叫 Edge
 前拒絕格式錯誤嘅 hash；production health 與 unauthenticated route 行為已驗證：未登入 session 回 `401`，
@@ -51,39 +66,6 @@ direct catch-all session query 回 `404`。現有 Admin passphrase 維持不變�
 第一個 Boss passkey 已完成登記，bootstrap secret 已從 production 移除。Boss 正進行最後一次 post-bootstrap
 fresh login check，完成前不會宣稱該項 check 已通過。所有寫入仍由 Edge backend 以 `deny_all` 拒絕，R3 與
 generic controls 保持 server-disabled。任何 passphrase、token 或 secret 都不會寫入 README、GitHub 或前端程式碼。
-
-## Compact Android Developer Quick Start
-
-Android app 在獨立 Android worktree 建立，避免影響正在使用的 Compact web app。
-
-```bash
-cd app-compact
-npm install
-npm run android:sync
-JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home npm run android:debug
-npm run android:qa
-```
-
-Debug APK 會輸出到：
-
-```text
-app-compact/android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-### 外觀主題
-
-Android Settings 頂部有「外觀主題」選擇器，毋須另外儲存：
-
-- `自動（依旅程）` 會跟目前旅程建議的主題。
-- 亦可以手動固定 `日本和紙`、`韓國韓紙`、`台灣夜市`、`歐洲鐵路` 或 `全球旅誌`，切換旅程後仍然保留。
-- `台灣夜市` 是真正 dark theme；其餘四款是 light theme。Status/navigation bars 會同步轉換 icon 明暗。
-- 選擇會留在裝置並經現有 account settings 同步；登出不會造成下次 cold launch 閃色，只有「清除此裝置資料」才會刪除裝置提示。
-
-首版只有這五款 reviewed themes，沒有 user color builder 或 runtime AI theme generator。新增 curated theme 應留在 catalog／semantic token、可選細 SVG、contrast contract 同 contact-sheet review，不應修改個別 page component。
-
-Settings model test 會送出明確指令 `Return only JSON: {"ok":true}`，仍然只測試所選 model、不使用 fallback。Credential Broker 對每個 model test 都只使用 8 個 output tokens，並以非空 provider response 作 availability proof。呢個 Broker 行為由 main 的 orchestrator 更新，Android shell 不會修改 Worker source。正式上架前仍需要處理 release signing、Play Store metadata、native camera/gallery QA、offline sync QA、以及 Android 真機回歸測試。
-
-Android Google/Supabase login uses the App Link callback `https://travel-expense-compact.vercel.app/android-auth`. The debug certificate SHA-256 is already listed in `app-compact/public/.well-known/assetlinks.json`; add the release SHA-256 after creating the release keystore.
 
 ## 第一次使用
 
@@ -340,7 +322,7 @@ SUPABASE_TRIP_ACTIVE_SMOKE=1 npx playwright test tests/supabase-trip-active-smok
 travel-expense/
   app-react/                 React 19 + Vite public app
   app-admin-kanban/          Admin Console 1.0 Vercel surface
-  index.html                 Legacy root app kept as backup
+  index.html                 Stateless CSP-protected redirect to Compact
   legacy-notion.js           Legacy Notion sync helper
   email-to-notion.gs         Google Apps Script email importer
   workers/credential-broker/ Cloudflare Worker for secrets and AI provider access
@@ -359,7 +341,7 @@ Normal deploy is:
 git push origin main
 ```
 
-GitHub Actions builds `app-react/`, publishes the legacy app at the root, and publishes the React app under `/react/`.
+GitHub Actions builds both maintained web apps, publishes a CSP-protected Compact redirect at the root, React under `/react/`, and Compact under `/compact/`.
 
 Vercel is connected to the same GitHub repo and serves the React app at `/`; the separate Admin
 Console production URL is `https://travel-expense-admin-kanban.vercel.app`.

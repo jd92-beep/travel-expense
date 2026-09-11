@@ -11,10 +11,10 @@ import { Particles } from './ui/particles';
 import { AuroraText } from './ui/aurora-text';
 import { SyncStatusIndicator } from './SyncStatusIndicator';
 import { getEffectsTier } from '../lib/performance';
-import { NATIVE_REACHABILITY_ONLINE_EVENT } from '../lib/constants';
 import { activeTrip, switchTrip } from '../domain/trip/normalize';
 import compactJapanMark from '../assets/generated/compact-japan-mark.svg';
 import { useTripTheme } from '../theme/tripTheme';
+import { NATIVE_REACHABILITY_ONLINE_EVENT } from '../lib/constants';
 
 function TripDropdown({
   trips,
@@ -64,7 +64,7 @@ function TripDropdown({
         onClick={() => setOpen(!open)}
       >
         {children && <span className="shell-trip-trigger-content">{children}</span>}
-        <ChevronDown size={18} className="text-[#C23B5E] dark:text-[#D4A843] shrink-0" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        <ChevronDown size={18} className="text-[var(--theme-accent)] shrink-0" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
       </button>
       {open && (
         <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} mt-2 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]`}>
@@ -145,6 +145,7 @@ const COMPACT_RELEASE_NOTES = [
 const COMPACT_RELEASE_NOTES_SEEN_KEY = 'travel-expense-compact:release-notes-seen';
 const DEPLOYMENT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const DEPLOYMENT_CHECK_QUERY = '__compact_deploy_check';
+
 // Probe the sync backbone (Supabase) first so the app never depends on our web deployment
 // being up to know it's online; the Vercel page is only a fallback probe target.
 const NATIVE_REACHABILITY_URLS = [
@@ -152,22 +153,6 @@ const NATIVE_REACHABILITY_URLS = [
   'https://travel-expense-compact.vercel.app/android-auth',
 ];
 const NATIVE_REACHABILITY_TIMEOUT_MS = 2500;
-
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice?: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
-};
-
-function relativeFreshness(value: number) {
-  if (!value) return 'local only';
-  const seconds = Math.max(1, Math.round((Date.now() - value) / 1000));
-  if (seconds < 60) return 'just now';
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
-}
 
 function isNativeWebViewOrigin() {
   // Use the Capacitor platform flag rather than assuming the default https://localhost origin — if the
@@ -193,6 +178,22 @@ async function checkNativeReachability() {
     }
   }
   return false;
+}
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice?: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
+
+function relativeFreshness(value: number) {
+  if (!value) return 'local only';
+  const seconds = Math.max(1, Math.round((Date.now() - value) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
 export function Shell({
@@ -339,31 +340,28 @@ export function Shell({
       installPromptRef.current = event as BeforeInstallPromptEvent;
       setInstallReady(true);
     };
+    void refreshOnline();
+    void checkForDeploymentUpdate();
+    const deploymentTimer = window.setInterval(() => void checkForDeploymentUpdate(), DEPLOYMENT_CHECK_INTERVAL_MS);
+    const reachabilityTimer = nativeReachability
+      ? window.setInterval(() => { void refreshOnline(); }, 30_000)
+      : null;
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
     window.addEventListener('focus', onFocus);
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
     document.addEventListener('visibilitychange', onVisibilityChange);
     navigator.serviceWorker?.addEventListener('controllerchange', onControllerChange);
-    void refreshOnline();
-    void checkForDeploymentUpdate();
-    const deploymentTimer = window.setInterval(
-      () => { void checkForDeploymentUpdate(); },
-      DEPLOYMENT_CHECK_INTERVAL_MS,
-    );
-    const reachabilityTimer = nativeReachability
-      ? window.setInterval(() => { void refreshOnline(); }, 30_000)
-      : null;
     return () => {
       alive = false;
+      window.clearInterval(deploymentTimer);
+      if (reachabilityTimer) window.clearInterval(reachabilityTimer);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange);
-      window.clearInterval(deploymentTimer);
-      if (reachabilityTimer) window.clearInterval(reachabilityTimer);
     };
   }, []);
 
@@ -493,7 +491,31 @@ export function Shell({
         />
       )}
       <nav className="compact-desktop-rail" aria-label="主要分頁">
-        {theme.id === 'japan_washi' && <img className="compact-rail-mark" src={compactJapanMark} alt="" aria-hidden="true" />}
+        <div className="rail-brand">
+          {theme.id === 'japan_washi' && <img className="compact-rail-mark" src={compactJapanMark} alt="" aria-hidden="true" />}
+          <div className="rail-brand-copy">
+            <strong>Travel Ledger</strong>
+            <span>旅行 · 記帳</span>
+          </div>
+        </div>
+        {state && (
+          <div className="rail-trip">
+            <TripDropdown
+              trips={state.trips || []}
+              activeTripId={trip?.id || ''}
+              onSelect={handleSwitchTrip}
+              onCreateNew={onOpenNewTripWizard}
+              align="left"
+              buttonClassName="rail-trip-trigger"
+            >
+              <span className="rail-trip-card">
+                <span className="rail-trip-label">目前旅程</span>
+                <span className="rail-trip-name">{activeTripName}</span>
+                <span className="rail-trip-dates">{activeTripDates}</span>
+              </span>
+            </TripDropdown>
+          </div>
+        )}
         <div className="compact-rail-items">
           {TAB_MANIFEST.map((tab) => (
             <button
@@ -505,9 +527,20 @@ export function Shell({
               onClick={() => onTab(tab.id)}
             >
               <span className="compact-rail-icon">{icons[tab.id]}</span>
-              <span>{tab.label}</span>
+              <span className="compact-rail-label">{tab.label}</span>
             </button>
           ))}
+        </div>
+        <div className="rail-footer">
+          {syncState && !isMobile && (
+            <div className={`rail-sync ${hasSyncProblem ? 'has-error' : ''}`}>
+              <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} />
+            </div>
+          )}
+          <span className={`rail-net ${online ? 'is-online' : 'is-offline'}`}>
+            {online ? <Wifi size={13} aria-hidden="true" /> : <WifiOff size={13} aria-hidden="true" />}
+            <span className="rail-net-label">{online ? '已連線' : '離線'}</span>
+          </span>
         </div>
       </nav>
       {!online && <div className="top-notice offline">離線模式：資料會繼續保存在本機</div>}
@@ -518,7 +551,7 @@ export function Shell({
         </div>
       )}
       {hasSyncProblem && !updateReady && (
-        <div className="top-notice text-red-700 bg-red-50 border border-red-200/60 dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-300 backdrop-blur-md flex items-center justify-between gap-4 w-full" style={{ background: 'rgba(253, 240, 240, 0.95)', border: '1px solid rgba(194, 59, 94, 0.3)', color: '#A83030' }}>
+        <div className="top-notice sync-problem-notice backdrop-blur-md flex items-center justify-between gap-4 w-full">
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -536,8 +569,8 @@ export function Shell({
             <button
               type="button"
               onClick={onRetryFailed}
-              className="compact-touch-action px-3 py-1 text-xs font-semibold bg-[#C23B5E] hover:bg-[#A83030] text-white rounded-full transition-all duration-200 active:scale-95 shadow-sm shrink-0"
-              style={{ border: 0, padding: '4px 12px', height: 'auto', background: '#C23B5E', color: 'white' }}
+              className="compact-touch-action px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 active:scale-95 shadow-sm shrink-0"
+              style={{ border: 0, padding: '4px 12px', height: 'auto', background: 'var(--theme-accent)', color: 'var(--theme-on-accent)' }}
             >
               手動重試
             </button>
@@ -546,10 +579,10 @@ export function Shell({
       )}
       <header className="topbar topbar-canva relative overflow-hidden">
         {theme.id === 'japan_washi' && active === 'dashboard' && (
-          <svg className="absolute right-4 bottom-0 opacity-15 pointer-events-none h-full w-48 text-[#D4A843] dark:text-[#C23B5E] z-0" viewBox="0 0 120 40" fill="none" stroke="currentColor">
+          <svg className="absolute right-4 bottom-0 opacity-15 pointer-events-none h-full w-48 text-[var(--theme-chart-3)] z-0" viewBox="0 0 120 40" fill="none" stroke="currentColor">
             <path d="M10,40 Q40,12 60,5 Q80,12 110,40 Z" strokeWidth="1" />
             <path d="M48,15 L60,5 L72,15 Z" fill="currentColor" opacity="0.3" stroke="none" />
-            <path d="M85,40 L85,25 M95,40 L95,25 M81,23 L99,23 M83,27 L97,27 M82,20 L98,20" strokeWidth="1.5" stroke="#C23B5E" />
+            <path d="M85,40 L85,25 M95,40 L95,25 M81,23 L99,23 M83,27 L97,27 M82,20 L98,20" strokeWidth="1.5" style={{ stroke: 'var(--theme-chart-2)' }} />
           </svg>
         )}
         <div className="topbar-title-block relative z-10">
@@ -616,7 +649,7 @@ export function Shell({
             <span className="text-xs text-slate-500 font-medium">{activeCopy.subtitle}</span>
           ) : null}
         </div>
-        {syncState && (
+        {syncState && isMobile && (
           <div className={`compact-sync-slot relative z-10 ${hasSyncProblem ? 'has-error' : 'is-quiet'}`}>
             <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} />
           </div>
@@ -624,10 +657,10 @@ export function Shell({
       </header>
       <header className="compact-mobile-header relative overflow-hidden" aria-label={`${activeCopy.mobileTitle} header`}>
         {theme.id === 'japan_washi' && active === 'dashboard' && (
-          <svg className="absolute right-12 bottom-0 opacity-15 pointer-events-none h-14 w-36 text-[#D4A843] dark:text-[#C23B5E] z-0" viewBox="0 0 100 40" fill="none" stroke="currentColor">
+          <svg className="absolute right-12 bottom-0 opacity-15 pointer-events-none h-14 w-36 text-[var(--theme-chart-3)] z-0" viewBox="0 0 100 40" fill="none" stroke="currentColor">
             <path d="M5,40 Q30,15 50,5 Q70,15 95,40 Z" strokeWidth="1" />
             <path d="M38,12 L50,5 L62,12 Z" fill="currentColor" opacity="0.3" stroke="none" />
-            <path d="M72,40 L72,24 M82,40 L82,24 M68,22 L86,22 M70,26 L84,26 M69,19 L85,19" strokeWidth="1.5" stroke="#C23B5E" />
+            <path d="M72,40 L72,24 M82,40 L82,24 M68,22 L86,22 M70,26 L84,26 M69,19 L85,19" strokeWidth="1.5" style={{ stroke: 'var(--theme-chart-2)' }} />
           </svg>
         )}
         {theme.id === 'japan_washi' && <span className="compact-mobile-mark relative z-10" aria-hidden="true">

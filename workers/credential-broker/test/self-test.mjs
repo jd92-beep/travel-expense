@@ -124,6 +124,7 @@ function installProviderFetchStub() {
   const integrations = [];
   const kimiModels = [];
   const kimiBodies = [];
+  const kimiAuth = [];
   const googleModels = [];
   const googleBodies = [];
   const mimoBodies = [];
@@ -176,10 +177,14 @@ function installProviderFetchStub() {
     }
 
     if (href.includes('kimi.test/v1/chat/completions')) {
-      assert.equal(auth, bearer('kimi-secret-for-test'));
+      assert.ok(
+        auth === bearer('kimi-secret-for-test') || auth === bearer('kimi-env-secret-for-test'),
+        `unexpected kimi authorization header: ${auth}`,
+      );
       const body = JSON.parse(init.body || '{}');
       kimiBodies.push(body);
       kimiModels.push(body.model);
+      kimiAuth.push(auth);
       const promptText = JSON.stringify(body.messages || body.prompt || '');
       if (promptText.includes('Analyze the user')) {
         return Response.json({ choices: [{ message: { content: JSON.stringify({
@@ -217,7 +222,10 @@ function installProviderFetchStub() {
           changes: ['Detected Korea currency and timezone'],
         }) } }] });
       }
-      return Response.json({ choices: [{ message: { content: '{"ok":true,"provider":"kimi"}' } }] });
+      return Response.json({
+        choices: [{ message: { content: '{"ok":true,"provider":"kimi"}' } }],
+        usage: { prompt_tokens: 111, completion_tokens: 22, prompt_tokens_details: { cached_tokens: 5 } },
+      });
     }
 
     if (href.includes('xiaomimimo.com/v1/chat/completions')) {
@@ -237,7 +245,10 @@ function installProviderFetchStub() {
       assert.match(href, /key=google-secret-for-test/);
       googleBodies.push(JSON.parse(init.body || '{}'));
       googleModels.push('gemma-4-31b-it');
-      return Response.json({ candidates: [{ content: { parts: [{ text: '{"ok":true,"provider":"google"}' }] } }] });
+      return Response.json({
+        candidates: [{ content: { parts: [{ text: '{"ok":true,"provider":"google"}' }] } }],
+        usageMetadata: { promptTokenCount: 333, candidatesTokenCount: 44, cachedContentTokenCount: 7 },
+      });
     }
 
     if (href.includes('ark.cn-beijing.volces.com/api/plan/v3/chat/completions')) {
@@ -247,7 +258,10 @@ function installProviderFetchStub() {
       if (body.model === 'minimax-m2.7') {
         return Response.json({ choices: [{ finish_reason: 'length', message: { content: '', reasoning_content: 'provider answered' } }] });
       }
-      return Response.json({ choices: [{ message: { content: '{"ok":true,"provider":"volcano"}' } }] });
+      return Response.json({
+        choices: [{ message: { content: '{"ok":true,"provider":"volcano"}' } }],
+        usage: { prompt_tokens: 222, completion_tokens: 33 },
+      });
     }
 
     if (href.startsWith('https://api.weatherapi.com/v1/current.json')) {
@@ -282,11 +296,24 @@ function installProviderFetchStub() {
 
     return Response.json({ error: { message: 'Unexpected provider call' } }, { status: 500 });
   };
+  const originalLog = console.log;
+  const usageEvents = [];
+  console.log = (...args) => {
+    const [first] = args;
+    if (typeof first === 'string' && first.includes('"ai_usage"')) {
+      try { usageEvents.push(JSON.parse(first)); } catch { /* not our line */ }
+      return;
+    }
+    originalLog(...args);
+  };
   const restore = () => {
     globalThis.fetch = originalFetch;
+    console.log = originalLog;
   };
+  restore.usageEvents = () => usageEvents.slice();
   restore.notionCalls = () => notionCalls;
   restore.kimiModels = () => kimiModels.slice();
+  restore.kimiAuth = () => kimiAuth.slice();
   restore.kimiBodies = () => kimiBodies.slice();
   restore.googleModels = () => googleModels.slice();
   restore.googleBodies = () => googleBodies.slice();
@@ -425,6 +452,23 @@ async function run() {
     env.VOLCANO_KEY = 'volcano-secret-for-test';
     const envVolcanoStatus = await jsonFetch(env, '/credentials/status', { session });
     assert.equal(envVolcanoStatus.data.providers.find((item) => item.provider === 'volcano')?.status, 'connected');
+
+    // A Worker secret must override the vault for the AI providers too. Without
+    // this, a stale vault entry can only be replaced through an unlock session or
+    // the admin passphrase — which is exactly how Kimi and Google stayed broken.
+    env.KIMI_KEY = 'kimi-env-secret-for-test';
+    const envKimi = await jsonFetch(env, '/kimi/json', {
+      method: 'POST',
+      session,
+      body: { prompt: '{"ok":true}', kind: 'test' },
+    });
+    assert.equal(envKimi.response.status, 200);
+    assert.equal(
+      restoreFetch.kimiAuth().at(-1),
+      bearer('kimi-env-secret-for-test'),
+      'KIMI_KEY must take precedence over the vault entry',
+    );
+    delete env.KIMI_KEY;
 
     const adminRotateBlockedOrigin = await jsonFetch(env, '/credentials/admin-rotate', {
       method: 'POST',
@@ -653,6 +697,20 @@ async function run() {
     });
     assert.equal(kimiWithoutAuth.response.status, 401);
 
+    const kimiInvalidKind = await jsonFetch(env, '/kimi/json', {
+      method: 'POST',
+      session,
+      body: { prompt: 'Return JSON', kind: 'unbounded' },
+    });
+    assert.equal(kimiInvalidKind.response.status, 400);
+
+    const kimiInvalidModel = await jsonFetch(env, '/kimi/json', {
+      method: 'POST',
+      session,
+      body: { prompt: 'Return JSON', kind: 'test', model: 'attacker/model' },
+    });
+    assert.equal(kimiInvalidModel.response.status, 400);
+
     const supabaseKimi = await jsonFetch(env, '/kimi/json', {
       method: 'POST',
       supabaseToken: 'supabase-user-token',
@@ -770,6 +828,18 @@ async function run() {
       assert.equal(restoreFetch.volcanoBodies().at(-1).max_tokens, 8);
     }
 
+    // Real-work kinds, not just `test`: reasoning must be disabled here too or
+    // it eats max_tokens, the reply comes back empty, and the whole payload is
+    // re-sent to the next provider.
+    const volcanoScan = await jsonFetch(env, '/volcano/json', {
+      method: 'POST',
+      session,
+      body: { prompt: '{"ok":true}', kind: 'scan', model: 'doubao-seed-2.0-lite' },
+    });
+    assert.equal(volcanoScan.response.status, 200);
+    assert.deepEqual(restoreFetch.volcanoBodies().at(-1).thinking, { type: 'disabled' });
+    assert.equal(restoreFetch.volcanoBodies().at(-1).max_tokens, 4000);
+
     const exactInternalVolcano = await jsonFetch(env, '/credentials/test', {
       method: 'POST',
       internalKey: env.EDGE_BROKER_KEY,
@@ -820,6 +890,30 @@ async function run() {
       body: '{}',
     }), env, {});
     assert.equal(tooLarge.status, 413);
+
+    // Token accounting: both provider usage shapes are parsed and logged as
+    // counts only. Without this, nothing measures what an AI call costs.
+    const usageEvents = restoreFetch.usageEvents();
+    const kimiUsage = usageEvents.find((event) => event.provider === 'kimi');
+    assert.ok(kimiUsage, 'expected an ai_usage event for kimi');
+    assert.equal(kimiUsage.in, 111);
+    assert.equal(kimiUsage.out, 22);
+    assert.equal(kimiUsage.cached, 5);
+    assert.ok(kimiUsage.kind, 'ai_usage must carry the traffic class');
+
+    const googleUsage = usageEvents.find((event) => event.provider === 'google');
+    assert.ok(googleUsage, 'expected an ai_usage event for google');
+    assert.equal(googleUsage.in, 333);
+    assert.equal(googleUsage.out, 44);
+    assert.equal(googleUsage.cached, 7);
+
+    // Counts only - a usage line must never carry prompt or completion text.
+    for (const event of usageEvents) {
+      assert.deepEqual(
+        Object.keys(event).sort(),
+        ['cached', 'evt', 'in', 'kind', 'model', 'out', 'provider'],
+      );
+    }
   } finally {
     restoreFetch();
   }

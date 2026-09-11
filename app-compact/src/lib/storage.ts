@@ -2,7 +2,10 @@ import { ALLOWED_CREDENTIAL_BROKER_URLS, DEFAULT_CREDENTIAL_BROKER_URL, DEFAULT_
 import { restoreJournal } from './changeJournal';
 import { migrateAppState } from '../domain/trip/normalize';
 import { saveIndexedState } from '../storage/indexedDb';
+import { stripSensitiveState } from './sanitizeState';
 import type { AppCredentials, AppState } from './types';
+
+export { stripSensitiveState } from './sanitizeState';
 
 const CREDENTIALS_KEY = `${STORAGE_KEY}:react-credentials`;
 const BROKER_SESSION_KEY = `${STORAGE_KEY}:credential-session:v1`;
@@ -157,33 +160,6 @@ export function saveState(state: AppState, scope?: string): void {
     console.warn('[storage] IndexedDB snapshot write failed:', error instanceof Error ? error.message : String(error));
   });
   if (localError) throw localError;
-}
-
-export function stripSensitiveState<T extends Partial<AppState>>(state: T): T {
-  const {
-    notionToken: _notionToken,
-    apiKey: _apiKey,
-    googleKey: _googleKey,
-    zaiKey: _zaiKey,
-    minimaxKey: _minimaxKey,
-    openrouterKey: _openrouterKey,
-    kimiKey: _kimiKey,
-    kimiProxy: _kimiProxy,
-    credentialSession: _credentialSession,
-    credentialSessionExpiresAt: _credentialSessionExpiresAt,
-    ...safeState
-  } = state as T & LegacySecretFields;
-  // Also strip nested sharing-invite tokens — they grant trip access and must never be
-  // persisted to localStorage/IndexedDB. The link is shown once at creation time only.
-  const sanitized = safeState as T & Partial<AppState>;
-  if (Array.isArray(sanitized.trips)) {
-    sanitized.trips = sanitized.trips.map((trip) => {
-      const sharing = trip.sharing;
-      if (!sharing?.invites || !sharing.invites.length) return trip;
-      return { ...trip, sharing: { ...sharing, invites: sharing.invites.map(({ token: _token, ...rest }) => rest) } };
-    });
-  }
-  return sanitized as T;
 }
 
 export function stripPortableBackupState(state: AppState): Partial<AppState> {

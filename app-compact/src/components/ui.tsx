@@ -312,6 +312,13 @@ export function Toast({
   tone?: 'info' | 'success' | 'warning' | 'danger';
   children: ReactNode;
 }) {
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    setDismissed(false);
+    const timer = window.setTimeout(() => setDismissed(true), 4500);
+    return () => window.clearTimeout(timer);
+  }, [children]);
+  if (dismissed) return null;
   return <div className={`toast ${tone}`} role="status">{children}</div>;
 }
 

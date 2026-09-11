@@ -1,10 +1,20 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-07-19 HKT
+Last updated: 2026-08-24 HKT
 
 ## Current Status
 
-- Production `1.3.1` repairs provider heartbeat under maintenance without enabling general Admin
+- Production `1.3.4` lazy-loads feature route groups, reducing the main application chunk from
+  roughly 623 kB to 224 kB while keeping the Three.js login scene isolated. The root route now
+  supplies `hydrateFallbackElement`, so React Router no longer emits the lazy initial-route
+  fallback warning. Typecheck, build, unit `33/33`, contract `24/24`, targeted browser `11/11`,
+  security scan, and production dependency audit are green. It also embeds the contract-verified
+  provider catalog inside the BFF function archive, closing the candidate `/api/admin/session` 500
+  caused by an import outside Vercel's function root. Protected workflow `32687928249` promoted
+  exact SHA `d92edfd3694e12e92651a8b43401624bb75f4c41` as
+  `dpl_67SXrHRZoxKP1C7jkssnEThxSWDL`; live health and the canonical unauthenticated `401` passed.
+
+- Production `1.3.4` retains the `1.3.1` provider-heartbeat repair without enabling general Admin
   writes. `provider_probe_only` admits only `provider_probe`; Edge rechecks action on preview and
   commit. The exact required model is validated by BFF/Edge/Broker and tested with 8 output tokens,
   temperature 0 and no provider/model fallback. Protected workflow `29693521861` promoted exact
@@ -99,11 +109,11 @@ Last updated: 2026-07-19 HKT
   production promotion.
 
 - Production URL: `https://travel-expense-admin-kanban.vercel.app`
-- Verified production: Admin `1.3.1`, with bounded default-workspace prefetch, idle-polling removal,
+- Verified production: Admin `1.3.4`, with bounded default-workspace prefetch, idle-polling removal,
   Volcano provider coverage, strict live Broker health and explicit awaiting-heartbeat client status.
-  Workflow `29693521861` passed at exact SHA
-  `760b63db2a673a1772a8f24348abe74a495868b3`: Vercel
-  `dpl_DEkCHHofMYw2ebMDRBRN1YYFcDP2`; Edge `admin-kanban` v101; schema `20260712123000`.
+  Workflow `32687928249` passed at exact SHA
+  `d92edfd3694e12e92651a8b43401624bb75f4c41`: Vercel
+  `dpl_67SXrHRZoxKP1C7jkssnEThxSWDL`; Edge deployment suffix `_107`; schema `20260712123000`.
 - Completed passkey bootstrap closure: first passkey enrollment BFF begin/finish returned `200`; Edge
   credential register, revoke-all, session create and session verify all returned `200`. The current
   passphrase remains unchanged and necessary. `ADMIN_PASSKEY_BOOTSTRAP_SECRET` is removed from Vercel
@@ -113,18 +123,19 @@ Last updated: 2026-07-19 HKT
   `0a71608e2b0c888eb7e7e4efb194a21a59ad935b` with localized Chrome passkey-focus guidance. Final
   workflow `29303864302` succeeded at that SHA: Vercel `dpl_A7o26cPYDieYCa1RaNcVvGpJ4XWh`; Edge
   `fbnnjoahvtdrnigevrtw_c64e6bb8-1c80-4d69-a590-a69203830aa9_90`; schema `20260712123000`.
-- Current live proof: `/api/health` returns `200`, Admin `1.3.1`, exact SHA
-  `760b63db2a673a1772a8f24348abe74a495868b3`, deployment
-  `dpl_DEkCHHofMYw2ebMDRBRN1YYFcDP2` and `acceptingReadTraffic=true`. Broker `/health` returns exact
-  service `travel-expense-credential-broker`, version `2026.07.19.1`; deployed Edge
-  `admin-kanban` v101 is active with exact-model `provider_probe_only`. Direct unsigned runtime access returns
+- Current live proof: `/api/health` returns `200`, Admin `1.3.4`, exact SHA
+  `d92edfd3694e12e92651a8b43401624bb75f4c41`, deployment
+  `dpl_67SXrHRZoxKP1C7jkssnEThxSWDL` and `acceptingReadTraffic=true`. Broker `/health` returns exact
+  service `travel-expense-credential-broker`, version `2026.08.24.1`; deployed Edge
+  deployment suffix `_107` is active with exact-model `provider_probe_only`. Direct unsigned runtime access returns
   `401 ADMIN_SIGNATURE_MISSING`.
 - Production database contract: `20260712123000` (`admin-passkeys-v2`).
 - Compatibility baseline: Compact Web `0.16.12`, Android branch `0.19.5`, React `0.2.4`.
 - Supported scope: Compact Web, Android and their shared Supabase/Notion/Broker contracts.
 - All CI groups, protected promotion and current runtime/auth-route checks passed.
-- Receipt photos remain in public compatibility mode until client heartbeats prove signed-URL
-  compatibility; do not apply the staged private migration before that proof.
+- Receipt photos are private after live migration
+  `20260824033202_harden_receipt_ownership_and_photo_storage`; bucket and policy metadata passed.
+  An ordinary authenticated JWT signed-upload/read smoke is still required before closing the proof item.
 - The current passphrase remains unchanged and necessary; passkey is additive. Passkey enrollment and
   bootstrap removal are complete. Boss is performing the final post-bootstrap fresh login check now;
   do not mark that check complete until its result is recorded.

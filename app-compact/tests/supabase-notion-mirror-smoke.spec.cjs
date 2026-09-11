@@ -160,6 +160,7 @@ test.beforeEach(async ({ page }) => {
 
 test('Supabase public mirror status stays scoped before Personal Notion is connected', async ({ page }) => {
   const notionRequests = [];
+  let profileReads = 0;
 
 
   await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
@@ -176,6 +177,7 @@ test('Supabase public mirror status stays scoped before Personal Notion is conne
       return;
     }
     if (table === 'profiles' && method === 'GET') {
+      profileReads += 1;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ app_settings: {} }) });
       return;
     }
@@ -222,6 +224,7 @@ test('Supabase public mirror status stays scoped before Personal Notion is conne
       activeTripId: 'trip_supabase_only',
       notionDb: '3438d94d5f7c81878221fcda6d65d39d',
       personalNotionConnected: false,
+      themePreference: 'japan_washi',
       trips: [{
         id: 'trip_supabase_only',
         name: 'Supabase Only Trip',
@@ -243,6 +246,7 @@ test('Supabase public mirror status stays scoped before Personal Notion is conne
   }, { userId, session: sessionPayload() });
 
   await page.goto('http://localhost:8903/travel-expense/compact/#settings');
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await expect(page.getByText('設定控制中心')).toBeVisible();
   await setAccordion(page, 'Credentials & Connection');
 
@@ -250,6 +254,11 @@ test('Supabase public mirror status stays scoped before Personal Notion is conne
   await expect(page.getByLabel('Database ID', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Notion Sync/ })).toHaveCount(0);
   await expect(credentials).toContainText('Notion mirror: needs own DB');
+  await expect.poll(() => page.evaluate((userId) => {
+    const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
+    return state.themePreference;
+  }, userId)).toBe('japan_washi');
+  expect(profileReads).toBeGreaterThan(0);
   expect(notionRequests).toHaveLength(0);
 });
 
@@ -743,6 +752,7 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
         contentType: 'application/json',
         body: JSON.stringify(profileGetBody(url, {
           activeTripId: 'trip_supabase',
+          themePreference: 'europe_rail',
           settingsUpdatedAt: now + 1_000,
         })),
       });
@@ -788,6 +798,7 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
       activeTripId: 'trip_local',
       notionDb: 'default_db',
       personalNotionConnected: true,
+      themePreference: 'japan_washi',
       settingsUpdatedAt: now,
       trips: [{
         id: 'trip_local',
@@ -816,9 +827,10 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
 
   await expect.poll(() => page.evaluate((userId) => {
     const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
-    return { activeTripId: state.activeTripId, tripNames: (state.trips || []).map((trip) => trip.name) };
+    return { activeTripId: state.activeTripId, themePreference: state.themePreference, tripNames: (state.trips || []).map((trip) => trip.name) };
   }, userId), { timeout: 10000 }).toEqual({
     activeTripId: 'trip_supabase',
+    themePreference: 'europe_rail',
     tripNames: ['Local Trip', 'Supabase Trip'],
   });
   const tripNames = await page.evaluate((userId) => {
@@ -877,6 +889,7 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
         contentType: 'application/json',
         body: JSON.stringify(profileGetBody(url, {
           activeTripId: 'foreign_or_deleted_trip',
+          themePreference: 'not-a-theme',
           settingsUpdatedAt: now + 10_000,
         })),
       });
@@ -901,6 +914,7 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
       lastTab: 'history',
       autoSync: false,
       activeTripId: 'trip_local',
+      themePreference: 'japan_washi',
       settingsUpdatedAt: now,
       trips: [{
         id: 'trip_local',
@@ -930,10 +944,12 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
     const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
     return {
       activeTripId: state.activeTripId,
+      themePreference: state.themePreference,
       activeFlags: (state.trips || []).map((trip) => ({ id: trip.id, active: trip.active, archived: !!trip.archived })),
     };
   }, userId), { timeout: 10000 }).toEqual({
     activeTripId: 'trip_local',
+    themePreference: 'japan_washi',
     activeFlags: [
       { id: 'trip_local', active: true, archived: false },
       { id: 'trip_valid_supabase', active: false, archived: false },

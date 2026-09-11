@@ -9,7 +9,6 @@ import {
   requestBrokerSessionChallenge,
   unlockCredentialBroker,
 } from '../lib/credentialBroker';
-import { unlockWithPassword } from './cryptoUnlock';
 import { hasDeviceTrust, setDeviceTrust } from './deviceTrust';
 import {
   clearTrustedDevice,
@@ -44,14 +43,9 @@ export function AuthGate({
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const passwordInputRef = useRef<HTMLInputElement>(null);
   const onBrokerSessionRef = useRef(onBrokerSession);
-  const routeStop = theme.id === 'japan_washi'
-    ? 'TYO'
-    : theme.id === 'taiwan_nightmarket'
-      ? 'TPE'
-      : theme.id === 'korea_editorial'
-        ? 'SEL'
-        : 'TRIP';
+  const routeStop = theme.id === 'japan_washi' ? 'TYO' : theme.id === 'taiwan_nightmarket' ? 'TPE' : theme.id === 'korea_editorial' ? 'SEL' : 'TRIP';
 
   useEffect(() => {
     onBrokerSessionRef.current = onBrokerSession;
@@ -117,35 +111,24 @@ export function AuthGate({
     setBusy(true);
     setError('');
     try {
-      if (!await unlockWithPassword(password)) throw new Error('Unlock failed');
-
-      // Fix Bug 1.2: Persist device trust immediately after successful local unlock
+      const trustedDevice = await createTrustedDeviceRegistration();
+      const brokerSession = await unlockCredentialBroker(password, { credentialBrokerUrl }, {
+        devicePublicKey: trustedDevice.devicePublicKey,
+        deviceName: trustedDevice.deviceName,
+      });
+      if (!brokerSession.device) throw new Error('Credential Broker did not register this device');
+      await saveTrustedDevice(brokerSession.device, trustedDevice.privateKey);
       setDeviceTrust();
-
-      try {
-        const trustedDevice = await createTrustedDeviceRegistration();
-        const brokerSession = await unlockCredentialBroker(password, { credentialBrokerUrl }, {
-          devicePublicKey: trustedDevice.devicePublicKey,
-          deviceName: trustedDevice.deviceName,
-        });
-        if (!brokerSession.device) throw new Error('Credential Broker did not register this device');
-        await saveTrustedDevice(brokerSession.device, trustedDevice.privateKey);
-        onBrokerSession?.(brokerSession);
-      } catch (brokerError) {
-        console.warn('Credential Broker connection failed during unlock, entering offline mode:', brokerError);
-        // Surface the degraded mode through the app banner instead of a blocking
-        // alert(): the gate unmounts on unlock, so an inline gate notice would vanish
-        // before the user could read it.
-        onOfflineMode?.('本地解鎖成功，但未能連接 Credential Broker（離線模式）：Notion 同步及 AI 功能暫時受限。');
-      }
-
+      onBrokerSession?.(brokerSession);
       setUnlocked(true);
       setPassword('');
       onUnlocked?.();
     } catch (submitError) {
-      setError(redactedError(submitError).includes('Unlock failed')
+      const message = redactedError(submitError);
+      setError(message.includes('401') || /invalid|unlock failed/i.test(message)
         ? '密碼唔正確，請再試一次。'
-        : `解鎖失敗：${redactedError(submitError)}`);
+        : `解鎖失敗：${message}`);
+      window.requestAnimationFrame(() => passwordInputRef.current?.focus());
     } finally {
       setBusy(false);
     }
@@ -191,6 +174,7 @@ export function AuthGate({
         <p className="muted">同一部手機成功一次之後，會用本機加密裝置信任換取短期 broker session；Notion token 唔會進入 browser。</p>
         <label>密碼
           <input
+            ref={passwordInputRef}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             onKeyDown={(event) => { if (event.key === 'Enter') void submit(); }}
@@ -198,9 +182,11 @@ export function AuthGate({
             type="password"
             autoComplete="current-password"
             autoFocus={shouldAutoFocusUnlockInput()}
+            aria-describedby={error ? 'auth-gate-error' : undefined}
+            aria-invalid={error ? true : undefined}
           />
         </label>
-        {error && <p className="lock-error">{error}</p>}
+        {error && <p className="lock-error" id="auth-gate-error" role="alert">{error}</p>}
         <button className="primary" type="button" disabled={busy || !password.trim()} onClick={submit}>
           <ShieldCheck size={18} /> {busy ? '檢查中' : '解鎖'}
         </button>

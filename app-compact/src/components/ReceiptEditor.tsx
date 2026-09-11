@@ -294,31 +294,6 @@ export function ReceiptEditor({
     : 'equal';
   const totalForSplit = validAmount(draft.total) ?? 0;
   const editPrefix = currencyPrefix(draft.currency || draft.originalCurrency || currencyForDate(draft.date));
-  // 品項 rows: structured lineItems are the source of truth; legacy free-text receipts whose
-  // itemsText can't be parsed keep the old textarea instead.
-  const itemRowsMode = Boolean(draft.lineItems?.length) || !draft.itemsText?.trim();
-  const effectivePayerId = draft.personId || first?.id || '';
-  const privacyEligible = canBePrivateReceipt({ splitMode: draft.splitMode || 'shared', beneficiaryId: draft.beneficiaryId, personId: effectivePayerId });
-  const [newItem, setNewItem] = useState<{ desc: string; amount: number }>({ desc: '', amount: 0 });
-  const editPerHkd = Math.max(0.1, perHkdForCurrency(state, draft.currency || draft.originalCurrency || currencyForDate(draft.date)));
-  const hkdOfItem = (amount: number) => Math.round((amount / editPerHkd) * 100) / 100;
-  const fromHkdAmount = (hkdValue: number) => Math.round(hkdValue * editPerHkd * 100) / 100;
-  const updateItem = (idx: number, patch: Partial<ReceiptLineItem>) => setDraft((d) => ({
-    ...d,
-    lineItems: (d.lineItems || []).map((item, i) => (i === idx ? { ...item, ...patch } : item)),
-  }));
-  const removeItem = (idx: number) => setDraft((d) => ({
-    ...d,
-    lineItems: (d.lineItems || []).filter((_, i) => i !== idx),
-  }));
-  const appendNewItem = () => {
-    if (!newItem.desc.trim() && !newItem.amount) return;
-    setDraft((d) => ({
-      ...d,
-      lineItems: [...(d.lineItems || []), { id: newId(), desc: newItem.desc.trim() || '未命名品項', amount: newItem.amount }],
-    }));
-    setNewItem({ desc: '', amount: 0 });
-  };
   const splitRows = useMemo(
     () => splitRowsFor(persons, draft.splits, selectedSplitType, totalForSplit),
     [draft.splits, persons, selectedSplitType, totalForSplit],
@@ -375,6 +350,39 @@ export function ReceiptEditor({
     }
     return { ...d, [key]: value };
   });
+  // 品項 rows: structured lineItems are the source of truth; legacy free-text receipts whose
+  // itemsText can't be parsed keep the old textarea instead.
+  const itemRowsMode = Boolean(draft.lineItems?.length) || !draft.itemsText?.trim();
+  const [newItem, setNewItem] = useState<{ desc: string; amount: number }>({ desc: '', amount: 0 });
+  const editCurrencyCode = String(draft.currency || draft.originalCurrency || currencyForDate(draft.date) || 'JPY').toUpperCase();
+  const currentPerHkd = Math.max(0.1, perHkdForCurrency(state, editCurrencyCode));
+  // 鎖定匯率：pinned 就用呢張單自己嘅匯率，否則跟返而家 app 嘅匯率。
+  const pinnedPerHkd = draft.exchangeRatePinned ? Number(draft.exchangeRate) : 0;
+  const editPerHkd = pinnedPerHkd > 0 && Number.isFinite(pinnedPerHkd) ? Math.max(0.1, pinnedPerHkd) : currentPerHkd;
+  const hkdOfItem = (amount: number) => Math.round((amount / editPerHkd) * 100) / 100;
+  const fromHkdAmount = (hkdValue: number) => Math.round(hkdValue * editPerHkd * 100) / 100;
+  const effectivePayerId = draft.personId || first?.id || '';
+  const privacyEligible = canBePrivateReceipt({ splitMode: draft.splitMode || 'shared', beneficiaryId: draft.beneficiaryId, personId: effectivePayerId });
+  const parseAmountInput = (raw: string) => {
+    const parsed = parseFloat(raw);
+    return !isNaN(parsed) && parsed >= 0 ? Math.min(parsed, MAX_RECEIPT_AMOUNT) : 0;
+  };
+  const updateItem = (idx: number, patch: Partial<ReceiptLineItem>) => setDraft((d) => ({
+    ...d,
+    lineItems: (d.lineItems || []).map((item, i) => (i === idx ? { ...item, ...patch } : item)),
+  }));
+  const removeItem = (idx: number) => setDraft((d) => ({
+    ...d,
+    lineItems: (d.lineItems || []).filter((_, i) => i !== idx),
+  }));
+  const appendNewItem = () => {
+    if (!newItem.desc.trim() && !newItem.amount) return;
+    setDraft((d) => ({
+      ...d,
+      lineItems: [...(d.lineItems || []), { id: newId(), desc: newItem.desc.trim() || '未命名品項', amount: newItem.amount }],
+    }));
+    setNewItem({ desc: '', amount: 0 });
+  };
 
   const setSplitValue = (personId: string, raw: string) => {
     const field = splitFieldFor(selectedSplitType);
@@ -455,7 +463,6 @@ export function ReceiptEditor({
             : [];
           const finalLineItems = [...(draft.lineItems || []), ...pendingNewItem];
           const savedCurrency = draft.currency || draft.originalCurrency || currencyForDate(draft.date);
-          const fxRate = savedCurrency === 'HKD' ? undefined : perHkdForCurrency(state, savedCurrency);
           onSave({
             ...draft,
             store: draft.store.trim() || '未命名',
@@ -464,10 +471,12 @@ export function ReceiptEditor({
             originalAmount: total,
             originalCurrency: draft.originalCurrency || draft.currency || currencyForDate(draft.date),
             currency: savedCurrency,
-            exchangeRate: fxRate ?? draft.exchangeRate,
-            hkdAmount: fxRate ? Math.round(total / Math.max(0.1, fxRate)) : draft.hkdAmount,
             personId: draft.personId || first?.id || '',
             splitMode: draft.splitMode || 'shared',
+            // 鎖定匯率：pinned 就 stamp 用户輸入嘅匯率；HKD 永遠 1:1 唔使 pin。
+            // 冇 pin 就照舊俾 normalize 處理（保留已有 exchangeRate，冇就用而家嘅匯率）。
+            exchangeRate: draft.exchangeRatePinned && editCurrencyCode !== 'HKD' ? editPerHkd : draft.exchangeRate,
+            exchangeRatePinned: draft.exchangeRatePinned && editCurrencyCode !== 'HKD' ? true : undefined,
             splitType: keepSplits ? selectedSplitType : undefined,
             splits: keepSplits ? finalSplits : undefined,
             visibility: privacyEligible && draft.visibility === 'private' ? 'private' : undefined,
@@ -510,6 +519,34 @@ export function ReceiptEditor({
             </select>
           </label>
         </div>
+        {editCurrencyCode !== 'HKD' && (
+          <div className="receipt-rate-pin">
+            <label className="check-row">
+              <input type="checkbox" checked={Boolean(draft.exchangeRatePinned)} onChange={(e) => {
+                const checked = e.target.checked;
+                setDraft((d) => ({
+                  ...d,
+                  exchangeRatePinned: checked ? true : undefined,
+                  // 勾選：預填呢張單已有嘅匯率，冇就用而家嘅匯率。
+                  // 取消：refresh 返而家嘅匯率，等 normalize 跟返 app 設定。
+                  exchangeRate: checked
+                    ? (Number(d.exchangeRate) > 0 ? Number(d.exchangeRate) : currentPerHkd)
+                    : currentPerHkd,
+                }));
+              }} />
+              鎖定匯率
+            </label>
+            {draft.exchangeRatePinned && (
+              <label>固定匯率（1 HKD = {editCurrencyCode}）
+                <input type="number" min="0.01" step="0.0001" value={draft.exchangeRate || ''} onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  set('exchangeRate', Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : undefined);
+                }} />
+                <small className="muted field-hint">釘死咗 — 之後匯率點變呢張單都唔會改 · 折合約 HK$ {Math.round((Number(draft.total) || 0) / editPerHkd).toLocaleString('en-US')}</small>
+              </label>
+            )}
+          </div>
+        )}
         <label>Booking Ref
           <input value={draft.bookingRef || ''} onChange={(e) => set('bookingRef', e.target.value)} placeholder="KNR358047 / booking id" />
         </label>

@@ -1,7 +1,7 @@
 import { PROVIDER_MODELS } from './provider-catalog.js';
 
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.07.23.1';
+const VERSION = '2026.09.09.3';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -20,6 +20,8 @@ const DEFAULT_SUPABASE_AI_DAILY_LIMIT = 50;
 const BOSS_EMAIL = 'vc06456@gmail.com';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TRIP_THEME_KEYS = ['japan_washi', 'korea_editorial', 'taiwan_nightmarket', 'europe_rail', 'global_journal'];
+const AI_KINDS = new Set(['scan', 'voice', 'email', 'trip', 'test']);
+const MAX_AI_PROMPT_CHARS = 100000;
 const TRIP_CONTEXTS = [
   { countryCode: 'JP', countryName: 'Japan', primaryCurrency: 'JPY', themeKey: 'japan_washi', locale: 'ja-JP', timezone: 'Asia/Tokyo', weatherRegion: 'Japan', pattern: /日本|東京|东京|大阪|名古屋|京都|札幌|沖繩|冲绳|japan|tokyo|osaka|nagoya|kyoto|sapporo|okinawa|jpy/i },
   { countryCode: 'KR', countryName: 'Korea', primaryCurrency: 'KRW', themeKey: 'korea_editorial', locale: 'ko-KR', timezone: 'Asia/Seoul', weatherRegion: 'South Korea', pattern: /韓國|韩国|首爾|首尔|釜山|濟州|济州|korea|seoul|busan|jeju|krw/i },
@@ -43,6 +45,32 @@ class HttpError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+function aiOutputTokenLimit(kind) {
+  if (kind === 'test') return 8;
+  if (kind === 'trip') return 10000;
+  return 4000;
+}
+
+function providerModel(provider, requestedModel) {
+  if (requestedModel == null || requestedModel === '') return undefined;
+  const model = String(requestedModel).replace(new RegExp(`^${provider}/`), '');
+  const allowed = (PROVIDER_MODELS[provider] || [])
+    .map((candidate) => candidate.replace(new RegExp(`^${provider}/`), ''));
+  if (!allowed.includes(model)) throw new HttpError('Provider model is not allowlisted', 400);
+  return model;
+}
+
+function validateAiRequest(provider, body) {
+  const prompt = String(body?.prompt || '');
+  const kind = String(body?.kind || '');
+  if (!AI_KINDS.has(kind)) throw new HttpError('AI request kind is invalid', 400);
+  if (!prompt.trim() || prompt.length > MAX_AI_PROMPT_CHARS) throw new HttpError('AI prompt is invalid', 400);
+  if (body?.image && !['image/jpeg', 'image/png', 'image/webp'].includes(String(body.image.mime || ''))) {
+    throw new HttpError('AI image type is not allowed', 400);
+  }
+  return { prompt, kind, image: body?.image, model: providerModel(provider, body?.model) };
 }
 
 function json(data, status = 200, headers = {}) {
@@ -423,6 +451,25 @@ async function readWeatherApiCredential(env) {
   return readCredential(env, 'weatherapi');
 }
 
+// Kimi, Google and Mimo were vault-only while Volcano and WeatherAPI could also
+// read a Worker secret. That asymmetry is why a stale vault entry took Kimi and
+// Google down while Volcano kept working: there was no way to supply a fresh key
+// without an unlock session or the admin passphrase. `wrangler secret put
+// KIMI_KEY` (or GOOGLE_KEY / MIMO_KEY) now overrides the vault, which is also the
+// safest path for the operator — the value goes straight to Cloudflare and never
+// transits a form, a log, or a chat transcript. The vault stays the fallback.
+const PROVIDER_ENV_SECRET = Object.freeze({
+  kimi: 'KIMI_KEY',
+  google: 'GOOGLE_KEY',
+  mimo: 'MIMO_KEY',
+});
+
+async function readAiCredential(env, provider) {
+  const envSecret = String(env[PROVIDER_ENV_SECRET[provider]] || '').trim();
+  if (envSecret) return { provider, secret: envSecret, extra: { source: 'env' }, status: 'connected' };
+  return readCredential(env, provider);
+}
+
 async function readVolcanoCredential(env) {
   const envSecret = String(env.VOLCANO_KEY || '').trim();
   if (envSecret) return { provider: 'volcano', secret: envSecret, extra: { source: 'env' }, status: 'connected' };
@@ -505,16 +552,27 @@ function rateLimitMax(env, scope) {
 
 async function enforceRateLimit(request, env, scope) {
   const key = await rateLimitKey(request, scope);
-  const record = await env.CREDENTIALS_VAULT.get(key, 'json');
   const now = Date.now();
+  if (env.RATE_LIMITER) {
+    const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(key));
+    const response = await stub.fetch('https://rate-limiter/consume', {
+      method: 'POST',
+      body: JSON.stringify({ limit: rateLimitMax(env, scope), resetAt: now + RATE_WINDOW_MS }),
+    });
+    if (response.status === 429) throw new HttpError('Too many attempts', 429);
+    if (!response.ok) throw new HttpError('Rate limiter unavailable', 503);
+    return { key, atomic: true };
+  }
+  const record = await env.CREDENTIALS_VAULT.get(key, 'json');
   if (record?.resetAt && record.resetAt > now && Number(record.count || 0) >= rateLimitMax(env, scope)) {
     throw new HttpError('Too many attempts', 429);
   }
-  return key;
+  return { key, atomic: false };
 }
 
-async function recordFailedAttempt(env, key) {
-  if (!key) return;
+async function recordFailedAttempt(env, rateLimit) {
+  if (!rateLimit?.key || rateLimit.atomic) return;
+  const { key } = rateLimit;
   const now = Date.now();
   const current = await env.CREDENTIALS_VAULT.get(key, 'json');
   const resetAt = current?.resetAt && current.resetAt > now ? current.resetAt : now + RATE_WINDOW_MS;
@@ -522,8 +580,15 @@ async function recordFailedAttempt(env, key) {
   await env.CREDENTIALS_VAULT.put(key, JSON.stringify({ count, resetAt, updatedAt: now }));
 }
 
-async function clearFailedAttempts(env, key) {
-  if (!key) return;
+async function clearFailedAttempts(env, rateLimit) {
+  if (!rateLimit?.key) return;
+  const { key } = rateLimit;
+  if (rateLimit.atomic) {
+    const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(key));
+    const response = await stub.fetch('https://rate-limiter/clear', { method: 'POST' });
+    if (!response.ok) throw new HttpError('Rate limiter unavailable', 503);
+    return;
+  }
   if (typeof env.CREDENTIALS_VAULT.delete === 'function') {
     await env.CREDENTIALS_VAULT.delete(key);
   } else {
@@ -542,6 +607,27 @@ function supabaseAiDailyLimit(env) {
   return DEFAULT_SUPABASE_AI_DAILY_LIMIT;
 }
 
+async function consumeDailyQuota(env, key, provider, limit, resetAt, now) {
+  if (env.RATE_LIMITER) {
+    const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(key));
+    const response = await stub.fetch('https://rate-limiter/consume', {
+      method: 'POST',
+      body: JSON.stringify({ limit, resetAt }),
+    });
+    if (response.status === 429) throw new HttpError('Daily quota exceeded', 429);
+    if (!response.ok) throw new HttpError('Rate limiter unavailable', 503);
+    return { provider, ...(await response.json()), limit, resetAt };
+  }
+  const current = await env.CREDENTIALS_VAULT.get(key, 'json');
+  const count = current?.resetAt && current.resetAt > now ? Number(current.count || 0) : 0;
+  if (count >= limit) throw new HttpError('Daily quota exceeded', 429);
+  const next = { provider, count: count + 1, limit, resetAt, updatedAt: now };
+  await env.CREDENTIALS_VAULT.put(key, JSON.stringify(next), {
+    expirationTtl: Math.max(60, Math.ceil((resetAt - now) / 1000) + 3600),
+  });
+  return next;
+}
+
 async function consumeSupabaseAiQuota(env, user, provider, request) {
   if (!user?.id) {
     const fallbackId = request?.headers?.get(SESSION_HEADER) || request?.headers?.get('CF-Connecting-IP') || 'anon';
@@ -549,30 +635,14 @@ async function consumeSupabaseAiQuota(env, user, provider, request) {
     const now = Date.now();
     const day = new Date(now).toISOString().slice(0, 10);
     const key = `${quotaKey}:${day}`;
-    const current = await env.CREDENTIALS_VAULT.get(key, 'json');
-    const resetAt = current?.resetAt && current.resetAt > now ? current.resetAt : nextUtcMidnight(now);
-    const count = current?.resetAt && current.resetAt > now ? Number(current.count || 0) : 0;
     const limit = supabaseAiDailyLimit(env);
-    if (count >= limit) throw new HttpError('AI daily quota exceeded', 429);
-    const next = { provider, count: count + 1, limit, resetAt, updatedAt: now };
-    await env.CREDENTIALS_VAULT.put(key, JSON.stringify(next), {
-      expirationTtl: Math.max(60, Math.ceil((resetAt - now) / 1000) + 3600),
-    });
-    return next;
+    return consumeDailyQuota(env, key, provider, limit, nextUtcMidnight(now), now);
   }
   const now = Date.now();
   const day = new Date(now).toISOString().slice(0, 10);
   const key = `ai-quota:${day}:${provider}:${await sha256Id(user.id)}`;
-  const current = await env.CREDENTIALS_VAULT.get(key, 'json');
-  const resetAt = current?.resetAt && current.resetAt > now ? current.resetAt : nextUtcMidnight(now);
-  const count = current?.resetAt && current.resetAt > now ? Number(current.count || 0) : 0;
   const limit = supabaseAiDailyLimit(env);
-  if (count >= limit) throw new HttpError('Supabase AI daily quota exceeded', 429);
-  const next = { provider, count: count + 1, limit, resetAt, updatedAt: now };
-  await env.CREDENTIALS_VAULT.put(key, JSON.stringify(next), {
-    expirationTtl: Math.max(60, Math.ceil((resetAt - now) / 1000) + 3600),
-  });
-  return next;
+  return consumeDailyQuota(env, key, provider, limit, nextUtcMidnight(now), now);
 }
 
 async function providerStatus(env, provider) {
@@ -877,6 +947,37 @@ async function parseProviderJson(response) {
   return data;
 }
 
+// Every provider reports token counts and we used to discard them, so nothing
+// measured what a scan or a trip update actually costs. Two shapes cover all
+// four providers: OpenAI-compatible (Kimi/Mimo/Volcano) put them in `usage`,
+// Gemini in `usageMetadata`.
+function readUsage(data) {
+  const gemini = data?.usageMetadata;
+  if (gemini) {
+    return {
+      in: Number(gemini.promptTokenCount) || 0,
+      out: Number(gemini.candidatesTokenCount) || 0,
+      cached: Number(gemini.cachedContentTokenCount) || 0,
+    };
+  }
+  const openai = data?.usage;
+  if (openai) {
+    return {
+      in: Number(openai.prompt_tokens) || 0,
+      out: Number(openai.completion_tokens) || 0,
+      cached: Number(openai.prompt_tokens_details?.cached_tokens) || 0,
+    };
+  }
+  return null;
+}
+
+// Counts only — never prompt or completion text, and no user identifier.
+function logUsage(provider, model, kind, data) {
+  const usage = readUsage(data);
+  if (!usage) return;
+  console.log(JSON.stringify({ evt: 'ai_usage', provider, model: String(model || ''), kind, ...usage }));
+}
+
 async function testNotion(env, credential) {
   const db = credential.extra?.databaseId;
   if (!db) return 'connected';
@@ -891,7 +992,7 @@ async function testNotion(env, credential) {
 }
 
 async function kimiJson(env, prompt, kind, image, requestedModel) {
-  const credential = await readCredential(env, 'kimi');
+  const credential = await readAiCredential(env, 'kimi');
   if (!credential?.secret) throw new Error('Kimi credential missing');
   const base = String(env.KIMI_PROXY_URL || env.KIMI_API_BASE || KIMI_DEFAULT_BASE).replace(/\/+$/, '');
   const messages = [
@@ -912,16 +1013,17 @@ async function kimiJson(env, prompt, kind, image, requestedModel) {
     body: JSON.stringify({
       model: requestedModel || env.KIMI_MODEL || 'kimi-code',
       messages,
-      temperature: kind === 'test' ? 0 : 0.6,
+      temperature: kind === 'test' ? 0 : 0.1,
       thinking: { type: 'disabled' },
-      max_tokens: kind === 'test' ? 8 : undefined,
+      max_tokens: aiOutputTokenLimit(kind),
     }),
   }));
+  logUsage('kimi', requestedModel || env.KIMI_MODEL || 'kimi-code', kind, data);
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
 }
 
 async function mimoJson(env, prompt, kind, image, requestedModel) {
-  const credential = await readCredential(env, 'mimo');
+  const credential = await readAiCredential(env, 'mimo');
   if (!credential?.secret) throw new Error('Mimo credential missing');
   const messages = [
     { role: 'system', content: 'Return strict JSON only. No markdown.' },
@@ -936,8 +1038,9 @@ async function mimoJson(env, prompt, kind, image, requestedModel) {
     temperature: kind === 'test' ? 0 : 0.1,
     stream: false,
     thinking: { type: 'disabled' },
-    max_tokens: kind === 'test' ? 8 : kind === 'trip' ? 10000 : 800,
+    max_tokens: aiOutputTokenLimit(kind),
   });
+  logUsage('mimo', requestedModel || env.MIMO_MODEL || 'mimo-v2.5', kind, data);
   return extractJson(data?.choices?.[0]?.message?.content || data?.content || '');
 }
 
@@ -969,7 +1072,7 @@ async function mimoChatCompletion(env, credential, body) {
 }
 
 async function googleJson(env, prompt, kind, image, requestedModel) {
-  const credential = await readCredential(env, 'google');
+  const credential = await readAiCredential(env, 'google');
   if (!credential?.secret) throw new Error('Google credential missing');
   const model = String(requestedModel || env.GOOGLE_MODEL || GOOGLE_DEFAULT_MODEL).replace(/^models\//, '');
   const parts = [{ text: prompt }];
@@ -983,10 +1086,11 @@ async function googleJson(env, prompt, kind, image, requestedModel) {
       generationConfig: {
         temperature: kind === 'test' ? 0 : 0.1,
         responseMimeType: 'application/json',
-        maxOutputTokens: kind === 'test' ? 8 : undefined,
+        maxOutputTokens: aiOutputTokenLimit(kind),
       },
     }),
   }));
+  logUsage('google', model, kind, data);
   return extractJson(data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
 }
 
@@ -1308,11 +1412,17 @@ async function volcanoJson(env, prompt, kind, image, requestedModel) {
     body: JSON.stringify({
       model: requestedModel || 'doubao-seed-2.0-lite',
       messages,
-      temperature: kind === 'test' ? 0 : 0.6,
-      thinking: kind === 'test' ? { type: 'disabled' } : undefined,
-      max_tokens: kind === 'test' ? 8 : undefined,
+      temperature: kind === 'test' ? 0 : 0.1,
+      // Disabled for every kind, matching Kimi and Mimo. These are strict-JSON
+      // extraction calls with no use for reasoning, and leaving it on let
+      // reasoning eat max_tokens: the reply came back truncated with empty
+      // content, extractJson threw, and the whole payload was re-sent to the
+      // next provider in the chain.
+      thinking: { type: 'disabled' },
+      max_tokens: aiOutputTokenLimit(kind),
     }),
   }));
+  logUsage('volcano', requestedModel || 'doubao-seed-2.0-lite', kind, data);
   const choice = data?.choices?.[0];
   const content = choice?.message?.content || data?.content || '';
   if (kind === 'test') {
@@ -1454,42 +1564,48 @@ async function handleRequest(request, env) {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
+      const ai = validateAiRequest('kimi', body);
       await consumeSupabaseAiQuota(env, user, 'kimi', request);
-      return json({ ok: true, data: await kimiJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
+      return json({ ok: true, data: await kimiJson(env, ai.prompt, ai.kind, ai.image, ai.model) }, 200, cors);
     }
     if (url.pathname === '/google/json') {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
+      const ai = validateAiRequest('google', body);
       await consumeSupabaseAiQuota(env, user, 'google', request);
-      return json({ ok: true, data: await googleJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
+      return json({ ok: true, data: await googleJson(env, ai.prompt, ai.kind, ai.image, ai.model) }, 200, cors);
     }
     if (url.pathname === '/mimo/json') {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
+      const ai = validateAiRequest('mimo', body);
       await consumeSupabaseAiQuota(env, user, 'mimo', request);
-      return json({ ok: true, data: await mimoJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
+      return json({ ok: true, data: await mimoJson(env, ai.prompt, ai.kind, ai.image, ai.model) }, 200, cors);
     }
     if (url.pathname === '/volcano/json') {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
+      const ai = validateAiRequest('volcano', body);
       await consumeSupabaseAiQuota(env, user, 'volcano', request);
-      return json({ ok: true, data: await volcanoJson(env, body.prompt, body.kind, body.image, body.model) }, 200, cors);
+      return json({ ok: true, data: await volcanoJson(env, ai.prompt, ai.kind, ai.image, ai.model) }, 200, cors);
     }
     if (url.pathname === '/trip/intelligence') {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
       await consumeSupabaseAiQuota(env, user, 'kimi', request);
-      const parsed = await kimiJson(env, tripAnalysisPrompt(body), 'trip', undefined, body.model || 'kimi-code');
+      const model = providerModel('kimi', body.model || 'kimi-code');
+      const parsed = await kimiJson(env, tripAnalysisPrompt(body), 'trip', undefined, model);
       return json({ ok: true, data: normalizeTripAnalysis(parsed, body) }, 200, cors);
     }
     if (url.pathname === '/weather/forecast') {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
+      await consumeSupabaseAiQuota(env, user, 'weather', request);
       return json({ ok: true, data: await weatherApiForecast(env, body) }, 200, cors);
     }
 
@@ -1514,9 +1630,11 @@ async function handleRequest(request, env) {
     }
     if (url.pathname === '/credentials/test') {
       const body = await readJson(request);
+      await consumeSupabaseAiQuota(env, null, 'credential-test', request);
       return json({ ok: true, status: await testProvider(env, body.provider, undefined, { model: body.model }) }, 200, cors);
     }
     if (url.pathname === '/credentials/test-all') {
+      await consumeSupabaseAiQuota(env, null, 'credential-test-all', request);
       return json({ ok: true, providers: await Promise.all(PROVIDERS.map((provider) => testProvider(env, provider))) }, 200, cors);
     }
     if (url.pathname === '/credentials/rotate') {
@@ -1537,3 +1655,39 @@ export default {
     return handleRequest(request, env);
   },
 };
+
+export class RateLimiter {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+    if (url.pathname === '/clear') {
+      await this.ctx.storage.delete('window');
+      return Response.json({ ok: true });
+    }
+    if (url.pathname !== '/consume') return new Response('Not found', { status: 404 });
+    const body = await request.json();
+    const limit = Number(body.limit);
+    const requestedResetAt = Number(body.resetAt);
+    if (!Number.isInteger(limit) || limit < 1 || !Number.isFinite(requestedResetAt)) {
+      return Response.json({ ok: false }, { status: 400 });
+    }
+    const result = await this.ctx.storage.transaction(async (txn) => {
+      const now = Date.now();
+      const current = await txn.get('window');
+      const active = current?.resetAt > now;
+      const count = active ? Number(current.count || 0) : 0;
+      if (count >= limit) return { allowed: false, count, resetAt: current.resetAt };
+      const next = {
+        count: count + 1,
+        resetAt: active ? current.resetAt : requestedResetAt,
+      };
+      await txn.put('window', next);
+      return { allowed: true, ...next };
+    });
+    return Response.json(result, { status: result.allowed ? 200 : 429 });
+  }
+}

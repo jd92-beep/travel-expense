@@ -1,0 +1,747 @@
+/* ==========================================================================
+   Epic Glass Workspace — wide-screen layout layer
+   Extends Epic Glass Field (DESIGN.md) to desktop: warm glass sidebar,
+   bento content grids, quiet hover motion. Loads last so it wins the cascade.
+   Breakpoints: 768–1099px = compact icon rail; ≥1100px = full workspace.
+   ========================================================================== */
+
+/* ---------- Shared warm-glass rail skin (≥768px) ---------- */
+@media (min-width: 768px) {
+  .compact-desktop-rail {
+    grid-template-rows: none !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    width: 88px !important;
+    padding: 18px 12px 16px !important;
+    background:
+      linear-gradient(165deg, rgba(255, 251, 242, .9), rgba(253, 245, 231, .74)) !important;
+    backdrop-filter: blur(18px) saturate(1.35);
+    -webkit-backdrop-filter: blur(18px) saturate(1.35);
+    border-right: 1px solid rgba(255, 255, 255, .68);
+    box-shadow:
+      10px 0 32px rgba(64, 43, 26, .10),
+      inset -1px 0 0 rgba(128, 99, 63, .10) !important;
+  }
+
+  /* Retire the hard-coded pseudo footer from the old rail */
+  .compact-desktop-rail::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  /* Sync indicator lives solely in the rail footer from 768px up —
+     rendering it in the topbar too duplicates the button (a11y + tests). */
+  .topbar .compact-sync-slot {
+    display: none !important;
+  }
+
+  .rail-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(128, 99, 63, .12);
+  }
+
+  .compact-rail-mark {
+    width: 46px !important;
+    height: 46px !important;
+    border-radius: 14px !important;
+    background: #fffdf8 !important;
+    border: 1px solid rgba(128, 99, 63, .16) !important;
+    box-shadow: 0 8px 18px rgba(67, 46, 24, .10) !important;
+    padding: 4px;
+  }
+
+  .rail-brand-copy {
+    display: none;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .rail-brand-copy strong {
+    font-family: "Noto Serif JP", Georgia, serif;
+    font-size: 17px;
+    font-weight: 900;
+    color: #25211b;
+    letter-spacing: .01em;
+    white-space: nowrap;
+  }
+
+  .rail-brand-copy span {
+    font-size: 11px;
+    font-weight: 700;
+    color: #7a6044;
+    letter-spacing: .12em;
+  }
+
+  /* Trip switcher card — hidden on the narrow rail */
+  .rail-trip {
+    display: none;
+  }
+
+  .compact-rail-items {
+    flex: 1;
+    display: flex !important;
+    flex-direction: column;
+    gap: 6px !important;
+    align-items: stretch !important;
+    padding-top: 4px !important;
+  }
+
+  .compact-rail-button {
+    position: relative;
+    width: 100% !important;
+    min-height: 58px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 6px;
+    border: 0 !important;
+    border-radius: 16px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: rgba(56, 81, 111, .78) !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform .18s cubic-bezier(.2, .8, .2, 1), background .18s, box-shadow .18s, color .18s;
+  }
+
+  .compact-rail-button svg {
+    width: 22px !important;
+    height: 22px !important;
+    stroke-width: 2;
+  }
+
+  .compact-rail-button:hover {
+    background: rgba(56, 81, 111, .07) !important;
+    transform: translateX(2px);
+  }
+
+  .compact-rail-button:active {
+    transform: scale(.97);
+  }
+
+  .compact-rail-button.active {
+    background:
+      linear-gradient(135deg, rgba(56, 81, 111, .16), rgba(56, 81, 111, .08)) !important;
+    color: #18395c !important;
+    box-shadow:
+      inset 0 0 0 1px rgba(56, 81, 111, .20),
+      0 8px 18px rgba(56, 81, 111, .10) !important;
+  }
+
+  .compact-rail-button.active .compact-rail-icon {
+    color: #b95c6b !important;
+  }
+
+  /* Corner glint — signature detail, active nav glass only */
+  .compact-rail-button.active::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 56px;
+    height: 56px;
+    background: conic-gradient(from 180deg at 100% 0%, rgba(213, 155, 71, .34), transparent 32%);
+    opacity: .18;
+    pointer-events: none;
+  }
+
+  .compact-rail-button.active:hover::after {
+    opacity: .34;
+  }
+
+  .rail-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(128, 99, 63, .12);
+  }
+
+  .rail-sync {
+    display: flex;
+    justify-content: center;
+    font-size: 11px;
+  }
+
+  .rail-net {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+  }
+
+  .rail-net.is-online {
+    color: #2d6e48;
+    background: rgba(45, 110, 72, .10);
+    box-shadow: inset 0 0 0 1px rgba(45, 110, 72, .18);
+  }
+
+  .rail-net.is-offline {
+    color: #b95c6b;
+    background: rgba(185, 92, 107, .10);
+    box-shadow: inset 0 0 0 1px rgba(185, 92, 107, .20);
+  }
+
+  .rail-net-label {
+    display: none;
+  }
+
+  /* Warm the field behind the workspace (keep the quiet graph paper) */
+  body {
+    background:
+      radial-gradient(circle at 88% 4%, rgba(213, 155, 71, .10), transparent 24%),
+      radial-gradient(circle at 6% 92%, rgba(56, 81, 111, .06), transparent 28%),
+      linear-gradient(90deg, rgba(111, 87, 57, .035) 0 1px, transparent 1px 58px),
+      linear-gradient(180deg, rgba(111, 87, 57, .028) 0 1px, transparent 1px 52px),
+      #faf4e9 !important;
+  }
+}
+
+/* ---------- Full workspace (≥1100px) ---------- */
+@media (min-width: 1100px) {
+  .compact-desktop-rail {
+    width: 264px !important;
+    padding: 22px 18px 18px !important;
+    gap: 18px;
+  }
+
+  .rail-brand {
+    justify-content: flex-start;
+    padding: 0 4px 16px;
+  }
+
+  .rail-brand-copy {
+    display: flex;
+  }
+
+  .rail-trip {
+    display: block;
+  }
+
+  .rail-trip-trigger {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .rail-trip-card {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background:
+      linear-gradient(145deg, rgba(255, 253, 248, .96), rgba(248, 238, 222, .82));
+    border: 1px solid rgba(128, 99, 63, .16);
+    box-shadow: 0 8px 20px rgba(67, 46, 24, .06);
+    transition: transform .18s cubic-bezier(.2, .8, .2, 1), box-shadow .18s;
+  }
+
+  .rail-trip-trigger:hover .rail-trip-card {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 26px rgba(67, 46, 24, .10);
+  }
+
+  .rail-trip-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .14em;
+    color: #7a6044;
+    text-transform: uppercase;
+  }
+
+  .rail-trip-name {
+    font-size: 15px;
+    font-weight: 900;
+    color: #25211b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .rail-trip-dates {
+    font-size: 11px;
+    font-weight: 600;
+    color: #7a6044;
+  }
+
+  .compact-rail-button {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    min-height: 46px !important;
+    padding: 10px 14px;
+    font-size: 14px !important;
+  }
+
+  .compact-rail-button svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .rail-footer {
+    align-items: stretch;
+  }
+
+  .rail-net {
+    justify-content: center;
+  }
+
+  .rail-net-label {
+    display: inline;
+  }
+
+  /* Content column: sidebar 264 + 32 breathing room.
+     [data-active-tab] bumps specificity above the lazy per-tab CSS (stats/timeline)
+     that loads after this file and otherwise wins equal-specificity ties. */
+  .app-shell[data-active-tab] {
+    padding: 0 32px 48px 296px !important;
+  }
+
+  .app-shell[data-active-tab] .stack.w-full {
+    max-width: none !important;
+    margin-inline: 0 !important;
+  }
+
+  /* Floating glass topbar */
+  .app-shell[data-active-tab] .topbar-canva {
+    position: sticky !important;
+    top: 14px !important;
+    z-index: 90 !important;
+    width: auto !important;
+    min-height: 64px !important;
+    margin: 14px 0 0 !important;
+    padding: 0 22px !important;
+    border-radius: 20px !important;
+    border: 1px solid rgba(255, 255, 255, .68) !important;
+    background:
+      linear-gradient(135deg, rgba(255, 250, 239, .82), rgba(255, 255, 255, .58)) !important;
+    backdrop-filter: blur(18px) saturate(1.35) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.35) !important;
+    box-shadow:
+      0 18px 40px rgba(64, 43, 26, .10),
+      inset 0 1px 0 rgba(255, 255, 255, .75) !important;
+  }
+
+  .topbar-title-block h1 {
+    font-size: clamp(22px, 1.8vw, 28px) !important;
+  }
+
+  .content {
+    padding: 0 !important;
+  }
+
+  .dashboard-screen,
+  .scan-screen,
+  .timeline-screen,
+  .history-screen,
+  .weather-screen,
+  .settings-screen,
+  .preview-stats-screen {
+    padding: 26px 0 32px !important;
+  }
+
+  /* Warm glass card skin replaces the squared spreadsheet pass */
+  .glass-card,
+  .card,
+  .metric-card,
+  .stats-panel,
+  .stats-controls,
+  .dashboard-budget,
+  .timeline-day,
+  .history-command,
+  .history-expandable-group,
+  .weather-command-fancy,
+  .weather-day,
+  .weather-slot-detailed,
+  .settings-command,
+  .settings-screen .accordion-card,
+  .scan-hero-card {
+    border: 1px solid rgba(128, 99, 63, .15) !important;
+    border-radius: 22px !important;
+    background:
+      linear-gradient(145deg, rgba(255, 253, 248, .95), rgba(248, 239, 224, .84)) !important;
+    box-shadow: 0 14px 34px rgba(67, 46, 24, .07) !important;
+    backdrop-filter: blur(10px) saturate(1.1) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(1.1) !important;
+  }
+
+  .glass-card:hover,
+  .card:hover,
+  .metric-card:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 20px 44px rgba(67, 46, 24, .11) !important;
+  }
+
+  /* ---------- Dashboard: 12-column bento ---------- */
+  .app-shell--dashboard .preview-dashboard-grid {
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    gap: 22px !important;
+    align-items: stretch;
+  }
+
+  .app-shell--dashboard .preview-dashboard-grid > .dashboard-reveal {
+    grid-column: span 12;
+    min-width: 0;
+  }
+
+  .app-shell--dashboard .preview-dashboard-grid > .dashboard-reveal:has(.preview-dashboard-budget) {
+    grid-column: span 7;
+  }
+
+  .app-shell--dashboard .preview-dashboard-grid > .dashboard-reveal:has(.preview-dashboard-today) {
+    grid-column: span 5;
+  }
+
+  .app-shell--dashboard .preview-dashboard-grid > .dashboard-reveal:has(.today-itinerary-card) {
+    grid-column: span 5;
+  }
+
+  .app-shell--dashboard .preview-dashboard-grid > .dashboard-reveal:has(.washi-recent-card) {
+    grid-column: span 7;
+  }
+
+  .app-shell--dashboard .preview-dashboard-grid .glass-card {
+    height: 100%;
+    margin-bottom: 0 !important;
+  }
+
+  /* The base ring/grid styles live inside max-width:767px, so desktop
+     previously ballooned the gauges to full card width — restore structure. */
+  .app-shell--dashboard .preview-dashboard-budget-grid {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 30px;
+    align-items: center;
+  }
+
+  .app-shell--dashboard .preview-dashboard-ring {
+    width: 208px;
+    aspect-ratio: 1;
+    align-self: center;
+    justify-self: center;
+  }
+
+  .app-shell--dashboard .preview-dashboard-ring .size-full {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .app-shell--dashboard .preview-dashboard-ring-copy {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .app-shell--dashboard .preview-dashboard-today-chart {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    gap: 16px;
+    align-items: center;
+    margin: 0 0 16px;
+    padding: 14px;
+    border: 1px solid rgba(116, 88, 53, .14);
+    border-radius: 16px;
+    background: rgba(255, 253, 248, .72);
+  }
+
+  .app-shell--dashboard .preview-dashboard-today-chart .size-full {
+    width: 132px !important;
+    height: 132px !important;
+  }
+
+  .app-shell--dashboard .preview-dashboard-today-chart-copy {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .app-shell--dashboard .preview-dashboard-today-chart-text {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  /* ---------- History: sticky filter rail + full-width ledger ---------- */
+  .app-shell--history .history-screen .stack {
+    display: grid !important;
+    grid-template-columns: 300px minmax(0, 1fr) !important;
+    gap: 20px 26px !important;
+    align-items: start;
+  }
+
+  .app-shell--history .history-screen .stack > * {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  .app-shell--history .history-screen .stack > .toast,
+  .app-shell--history .history-screen .stack > .history-conflict-resolver,
+  .app-shell--history .history-screen .stack > .history-pending-banner {
+    grid-column: 1 / -1;
+  }
+
+  .app-shell--history .history-screen .stack > .history-filter-deck {
+    grid-column: 1;
+    grid-row: 1;
+    position: sticky;
+    top: 100px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 20px;
+    background:
+      linear-gradient(145deg, rgba(255, 253, 248, .95), rgba(248, 239, 224, .84));
+    border: 1px solid rgba(128, 99, 63, .15);
+    box-shadow: 0 14px 34px rgba(67, 46, 24, .07);
+  }
+
+  .app-shell--history .history-screen .stack > .history-chip-rail {
+    grid-column: 1;
+    grid-row: 2;
+    position: sticky;
+    top: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 20px;
+    background: rgba(255, 251, 243, .66);
+    border: 1px solid rgba(128, 99, 63, .12);
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+  }
+
+  .app-shell--history .history-chip {
+    justify-content: flex-start;
+    width: 100%;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    padding: 8px 12px;
+    box-shadow: none;
+    transition: background .18s ease, border-color .18s ease, transform .18s ease;
+  }
+
+  .app-shell--history .history-chip:hover {
+    background: rgba(255, 255, 255, .78);
+    border-color: rgba(128, 99, 63, .14);
+    transform: translateX(2px);
+  }
+
+  .app-shell--history .history-chip.active {
+    background: linear-gradient(135deg, rgba(255, 255, 255, .96), rgba(247, 235, 214, .9));
+    border-color: rgba(128, 99, 63, .22);
+    box-shadow: 0 8px 18px rgba(67, 46, 24, .1), inset 3px 0 0 var(--chip-color, #b3541e);
+  }
+
+  /* ---------- Stats: 12-column bento (beats the lazy stats.css single-column repair) ---------- */
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    gap: 22px !important;
+    border: 0 !important;
+    width: 100% !important;
+  }
+
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .preview-stats-budget {
+    grid-column: span 7 !important;
+  }
+
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .preview-daily-pace {
+    grid-column: span 5 !important;
+  }
+
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .top-expenses-panel {
+    grid-column: span 7 !important;
+  }
+
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .settlement-card {
+    grid-column: span 5 !important;
+  }
+
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .payer-panel,
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .category-panel,
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .payment-panel {
+    grid-column: span 4 !important;
+  }
+
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .preview-stats-metrics,
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .stats-story-grid,
+  .app-shell--stats[data-active-tab="stats"] .stats-tab.stats-cockpit.preview-stats-screen > .preview-stats-grid > .stats-controls {
+    grid-column: 1 / -1 !important;
+  }
+
+  .app-shell--stats .preview-stats-budget,
+  .app-shell--stats .preview-daily-pace {
+    min-height: 0 !important;
+  }
+
+  .app-shell--stats .preview-stats-metrics .stats-metric {
+    border-right: 0 !important;
+  }
+
+  /* ---------- Scan: viewfinder left, action rail right ---------- */
+  /* GlassCard nests content in one non-absolute inner wrapper */
+  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr) !important;
+    grid-auto-flow: dense; /* backfill the action rail beside the viewfinder */
+    gap: 18px 26px !important;
+    align-items: start;
+  }
+
+  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > div.flex {
+    grid-column: 1 / -1;
+  }
+
+  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > .preview-scan-ai-strip {
+    grid-column: 1 / -1;
+  }
+
+  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > .preview-scan-camera {
+    grid-column: 1;
+  }
+
+  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > .preview-scan-tip {
+    grid-column: 1;
+  }
+
+  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > div.grid {
+    grid-column: 2;
+    grid-template-columns: 1fr !important;
+  }
+
+  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > .scan-fx-wide-button {
+    grid-column: 2;
+  }
+
+  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > .scan-workspace {
+    grid-column: 1 / -1;
+  }
+
+  /* tighten the oversized mobile touch targets inside the desktop action rail */
+  .app-shell--scan .scan-hero-card .scan-hero-button,
+  .app-shell--scan .scan-hero-card .scan-secondary-button {
+    min-height: 104px;
+    border-radius: 22px;
+  }
+
+  /* ---------- Timeline: command full width, days in pairs ---------- */
+  .app-shell--timeline .timeline-screen .stack {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 22px !important;
+    align-items: start;
+  }
+
+  .app-shell--timeline .timeline-screen .stack > * {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .app-shell--timeline .timeline-screen .stack > .timeline-day-reveal {
+    grid-column: span 1;
+  }
+
+  /* ---------- Weather: current conditions pinned, days scroll beside ---------- */
+  .app-shell--weather .weather-screen {
+    /* the mobile overflow-y-auto scrollport kills viewport sticky on desktop */
+    overflow: visible !important;
+  }
+
+  .app-shell--weather .weather-screen .stack {
+    display: grid !important;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr) !important;
+    gap: 22px !important;
+    align-items: start;
+  }
+
+  .app-shell--weather .weather-screen .stack > * {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  .app-shell--weather .weather-screen .stack > .weather-command-fancy,
+  .app-shell--weather .weather-screen .stack > *:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .app-shell--weather .weather-screen .stack > .preview-weather-current-card {
+    grid-column: 1;
+    /* span the implicit rows so the sticky range covers the day column */
+    grid-row: 2 / span 60;
+    align-self: start;
+    position: sticky;
+    top: 100px;
+  }
+
+  /* ---------- Settings: two-column control grid ---------- */
+  .app-shell--settings .settings-screen .stack {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 20px !important;
+    align-items: start;
+  }
+
+  .app-shell--settings .settings-screen .stack > * {
+    grid-column: span 1;
+    min-width: 0;
+  }
+
+  .app-shell--settings .settings-screen .stack > .settings-command,
+  .app-shell--settings .settings-screen .stack > .settings-auth-layout {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------- Motion safety ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .compact-rail-button,
+  .rail-trip-card,
+  .glass-card,
+  .card,
+  .metric-card {
+    transition: none !important;
+  }
+
+  .compact-rail-button:hover,
+  .glass-card:hover,
+  .card:hover,
+  .metric-card:hover {
+    transform: none !important;
+  }
+
+  .compact-rail-button.active::after {
+    opacity: .12;
+  }
+}

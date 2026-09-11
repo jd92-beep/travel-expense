@@ -97,7 +97,7 @@ body::after {
   background:
     linear-gradient(115deg, transparent 0 36%, rgba(255,253,247,.40) 47%, transparent 58%),
     linear-gradient(78deg, transparent 0 58%, rgba(212,168,67,.10) 68%, transparent 78%);
-  animation: travel-light-sweep 18s ease-in-out infinite alternate;
+  animation: travel-light-sweep var(--theme-motion-duration, 18s) ease-in-out infinite alternate;
 }
 
 .hyperframe-background {
@@ -2485,6 +2485,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .toast.danger { background: #FDF0F0; color: #A83030; border-color: #E8B8B8; }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.spin-once { animation: spin-once .9s cubic-bezier(0.4, 0, 0.2, 1) 1; }
+@keyframes spin-once { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spin-once { animation: none; }
+}
 .tabbar {
   position: fixed;
   left: 50%;
@@ -10810,6 +10815,11 @@ textarea,
     padding-top: 0;
   }
 
+  .preview-dashboard-budget-row.is-total {
+    /* keep the figure clear of the absolutely-positioned 編輯 button */
+    padding-right: 62px;
+  }
+
   .preview-dashboard-budget-row span {
     color: #2d2a25;
     font-size: 17px;
@@ -15258,4 +15268,49 @@ html.fx-balanced .preview-weather-hourly-chip:active {
 
 @media (prefers-reduced-motion: reduce) {
   .history-ledger-row { animation: none !important; }
+}
+
+/* Weather hero: honest loading skeleton + empty state (no fabricated numbers). */
+.preview-weather-skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 8px 2px;
+  position: relative;
+  z-index: 2;
+}
+.preview-weather-skeleton .skeleton-block {
+  display: block;
+  border-radius: 12px;
+  background: linear-gradient(100deg, rgba(30, 77, 107, 0.08) 30%, rgba(30, 77, 107, 0.16) 50%, rgba(30, 77, 107, 0.08) 70%);
+  background-size: 200% 100%;
+}
+.preview-weather-skeleton .skeleton-hero { height: 84px; }
+.preview-weather-skeleton .skeleton-line { height: 14px; width: 72%; }
+.preview-weather-skeleton .skeleton-line.short { width: 44%; }
+@media (prefers-reduced-motion: no-preference) {
+  .preview-weather-skeleton .skeleton-block {
+    animation: preview-weather-shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes preview-weather-shimmer {
+    0% { background-position: 120% 0; }
+    100% { background-position: -80% 0; }
+  }
+}
+.preview-weather-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 26px 12px;
+  text-align: center;
+  color: rgba(30, 77, 107, 0.72);
+  position: relative;
+  z-index: 2;
+}
+.preview-weather-empty strong {
+  font-size: 0.95rem;
+  color: #1e4d6b;
+}
+.preview-weather-empty small {
+  font-size: 0.76rem;
+  opacity: 0.75;
 }

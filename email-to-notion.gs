@@ -192,7 +192,7 @@ function processExpenseEmails() {
 
       result.bookings.forEach((b, idx) => {
         // Skip semantically empty bookings (LLM hallucinated null row)
-        if (!b || (!b.store && !b.total)) {
+        if (!b || (!b.store && !b.original_amount)) {
           console.log('⏭ Skipping empty booking #' + idx + ' in "' + subject + '"');
           return;
         }
@@ -206,7 +206,7 @@ function processExpenseEmails() {
         if (!iu || (!iu.date && !iu.name)) return;
         const storeName = '🗓 行程更新：' + (iu.name || '?') + (iu.time ? (' @ ' + iu.time) : '');
         const fake = {
-          store: storeName, total: null, date: iu.date || null,
+          store: storeName, original_amount: null, original_currency: null, date: iu.date || null,
           category: iu.type || 'other', payment: null,
           items_text: '[行程更新]', note: iu.note || '', address: null, booking_ref: null,
           itinerary_note: null,
@@ -510,8 +510,11 @@ function _validateBookings(parsed) {
 // Deterministic SourceID: same email + same booking index = same ID.
 // Prevents duplicate entries when a trigger re-fires or retry processes same email twice.
 function pushToNotion(b, source, emailSubject, threadId, bookingIdx) {
-  const jpy = _convertToJpy(b.total, b.original_currency);
-  const hkd = Math.round((jpy / 20.36) * 100) / 100;
+  // The model returns the amount in the receipt's own currency; FX_TO_JPY is the single
+  // conversion point (the prompt used to convert too, which double-applied the rate).
+  const jpyRaw = _convertToJpy(b.original_amount, b.original_currency);
+  const jpy = jpyRaw === null ? null : Math.round(jpyRaw);
+  const hkd = jpy === null ? null : Math.round((jpy / 20.36) * 100) / 100;
   const catMap = { transport:'交通', food:'餐飲', shopping:'購物', lodging:'住宿', ticket:'門票', localtour:'當地旅遊', medicine:'藥品', other:'其他' };
   const payMap = { cash:'現金', credit:'信用卡', paypay:'PayPay', suica:'Suica' };
   // Stable SourceID = email_<threadId>_<idx> — idempotent across retries.
@@ -561,7 +564,8 @@ function pushToNotion(b, source, emailSubject, threadId, bookingIdx) {
   if (currencyKey) props[currencyKey] = { select: { name: (b.original_currency || 'JPY').slice(0, 50) } };
   const originalAmountKey = pick('Original Amount', 'Original');
   if (originalAmountKey) {
-    const originalAmount = (b.original_amount !== null && b.original_amount !== undefined) ? Number(b.original_amount) : Number(b.total);
+    const raw = b.original_amount;
+    const originalAmount = (raw === null || raw === undefined || raw === '') ? NaN : Number(raw);
     props[originalAmountKey] = { number: isNaN(originalAmount) ? null : originalAmount };
   }
 
@@ -701,7 +705,12 @@ function _getDbSchema() {
 
 // ── UTILITIES ──────────────────────────────────────────────
 function _convertToJpy(amount, currency) {
-  const n = Number(amount) || 0;
+  // "Price TBD" bookings (pay-at-store, unpriced reservations) carry a null
+  // amount by design. Returning 0 for those wrote a real ¥0 into Notion, which
+  // reads as "free" and drags the expense totals down — null must survive.
+  if (amount === null || amount === undefined || amount === '') return null;
+  const n = Number(amount);
+  if (!isFinite(n)) return null;
   if (!currency) return n; // assume already JPY
   const cc = String(currency).toUpperCase().trim();
   const rate = FX_TO_JPY[cc];
@@ -826,6 +835,8 @@ function debugEmail() {
 }
 
 // ── TRIP ITINERARY CONTEXT (for AI cross-reference) ──────────
+// Trip window the extraction prompt cross-references. Keep in sync with TRIP_ITINERARY below.
+const TRIP_RANGE = { start: '2026-04-20', end: '2026-04-25' };
 const TRIP_ITINERARY = `
 名古屋旅行行程（2026年4月20–25日，6日5夜）:
 Day 1 (2026-04-20): 名古屋市區。中部國際機場抵達→JR名古屋站→蓬萊軒鰻魚飯→熱田神宮→大須商店街→矢場とん→Daiwa Roynet酒店Check-in(23:00)
@@ -894,28 +905,22 @@ const MULTI_BOOKING_PROMPT = `你係專業旅遊 email → 支出紀錄 解析 A
   ❌ 單程機票 → 一筆，唔拆
 
 ══════════════════════════════════════════════════════
-【第 2 步 — 金額（total 必須係 JPY 整數）】
+【第 2 步 — 金額（照收據原幣，唔好換算）】
 ══════════════════════════════════════════════════════
 
-匯率表（近似，用喺 original → JPY 換算）：
-   1 HKD ≈ 20 JPY    1 USD ≈ 150 JPY   1 CNY ≈ 20 JPY   1 EUR ≈ 160 JPY
-   1 AUD ≈ 102 JPY   1 TWD ≈ 5 JPY     1 KRW ≈ 0.11 JPY  1 GBP ≈ 185 JPY
-   1 SGD ≈ 110 JPY   1 THB ≈ 4.3 JPY   1 MYR ≈ 33 JPY
-
 嚴格規則：
-  ① 永遠記錄 original_currency + original_amount（無論幾種幣）
-  ② total = Math.round(original_amount × rate)（取整數 JPY）
-  ③ 若 email 已經用 JPY → original_currency="JPY", original_amount=JPY 金額, total 相同
-  ④ 價錢未定（"TBD" / "Pay at store" / "到付")→ total=null,
+  ① 永遠記錄 original_currency + original_amount，用 email 上面印住嘅原幣同金額
+  ② 唔好做任何匯率換算。App 會自己換 JPY。
+  ③ 若 email 已經用 JPY → original_currency="JPY", original_amount=JPY 金額
+  ④ 價錢未定（"TBD" / "Pay at store" / "到付")→ original_amount=null,
      items_text="預訂座位，價格現場確認", confidence="medium"
   ⑤ 有折扣：用【實付金額】，唔好用「原價」
      例：「原價 HKD 3,500，特價 HKD 3,200」→ original_amount=3200
   ⑥ 稅/服務費：用【含稅總額】（grand total），唔好減稅
 
 ❌ 常見致命錯：
-  - 將 "HKD 860.40" 填入 total 當 JPY（應該 ×20 = 17208）
   - 用 "Subtotal" 而非 "Grand Total"
-  - 忘記 ×匯率
+  - 自己換算成 JPY（換算係 app 嘅責任）
 
 ══════════════════════════════════════════════════════
 【第 3 步 — 日期（service date，當地時區）】
@@ -933,7 +938,7 @@ const MULTI_BOOKING_PROMPT = `你係專業旅遊 email → 支出紀錄 解析 A
   "23/04/2026" (日/月/年) → "2026-04-23"
   ⚠️ "4/5/2026" 歧義！若上下文係北美 email → "2026-04-05"；若亞洲/歐洲 email → "2026-05-04"。有疑問返 null
 
-日期唔喺行程範圍內（2026-04-20 至 04-25）但 email 明顯係呢次旅行：
+日期唔喺行程範圍內（${TRIP_RANGE.start} 至 ${TRIP_RANGE.end}）但 email 明顯係呢次旅行：
   → 保留 email 日期，寫入 itinerary_note="日期 2026-XX-XX 不在行程範圍"
 
 ══════════════════════════════════════════════════════
@@ -1049,19 +1054,15 @@ confidence
 ⚠️ itinerary_updates 只記錄【時間 + 地點承諾】，唔係重複 bookings 內容：
   - note 寫一句 context（例：「訂單 UO-ABC123 · 2 位」「KKday 三日團 Day 1」）
   - 唔好放金額 / 卡號 / 付款狀態
-  - 日期超過行程範圍（2026-04-20 ~ 04-25）嘅 booking，仍然要建 itinerary_updates（用戶可能延長行程）
+  - 日期超過行程範圍（${TRIP_RANGE.start} ~ ${TRIP_RANGE.end}）嘅 booking，仍然要建 itinerary_updates（用戶可能延長行程）
 
 ══════════════════════════════════════════════════════
 【第 7 步 — 返回前 Self-Check（逐項心裡 review）】
 ══════════════════════════════════════════════════════
 
 返 JSON 前，逐個 booking 檢查：
-  □ total 係整數 JPY？有冇忘記 ×匯率？
   □ date 係 service date（當地）唔係 email 發送日？
   □ ★ 呢個 booking 有冇具體時間/地點承諾？有嘅話 itinerary_updates 裡面係咪都已建立對應條目？（機票/tour/酒店/訂座 = 必建）
-  □ store 有冇夾雜金額/訂單號？
-  □ address 係實際街道地址唔係城市名？
-  □ note 有冇夾雜金額/卡號/付款狀態？
   □ 來回機票有冇拆成 2 筆？多晚酒店有冇合成 1 筆？
   □ 係咪取消/退款 email？（若係 → empty bookings）
   □ 所有 string 都用 "..."，冇 markdown、冇 code fence
@@ -1075,7 +1076,6 @@ confidence
   "bookings": [
     {
       "store": "商戶真實名（繁中優先）",
-      "total": number_JPY_or_null,
       "original_currency": "HKD|USD|JPY|CNY|EUR|AUD|TWD|KRW",
       "original_amount": number_in_original_currency,
       "date": "YYYY-MM-DD",
@@ -1110,7 +1110,7 @@ Input: "Agoda confirmation — Daiwa Roynet Hotel Nagoya Taiko-dori, Check-in 20
 Output:
 {"source":"agoda","bookings":[{
   "store":"Daiwa Roynet Hotel 名古屋太閤通口",
-  "total":34416,"original_currency":"HKD","original_amount":1720.80,
+  "original_currency":"HKD","original_amount":1720.80,
   "date":"2026-04-20","time":"15:00",
   "category":"lodging","payment":"credit",
   "address":"〒450-0002 愛知県名古屋市中村区名駅4-6-25",
@@ -1124,9 +1124,9 @@ Output:
 Input: "KKday 中部三日遊 — Day 1: 飛驒高山/白川鄉 2026-04-21 07:30 pickup @ 名古屋站太閤通口, Day 2: 立山黑部 2026-04-22 08:00 長野集合, Day 3: 上高地/金澤 2026-04-23 08:30 pickup, 訂單 KKD-ABC123, 總價 HKD 4,500, 信用卡尾數 0373"
 Output:
 {"source":"kkday","bookings":[
-  {"store":"KKday 飛驒高山/白川鄉一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-21","time":"07:30","category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"三日團 Day 1 · 名古屋站集合","note":"三日團 Day 1/3","itinerary_note":null,"confidence":"high"},
-  {"store":"KKday 立山黑部一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-22","time":"08:00","category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"三日團 Day 2 · 雪之大谷","note":"三日團 Day 2/3","itinerary_note":null,"confidence":"high"},
-  {"store":"KKday 上高地/金澤一日遊","total":30000,"original_currency":"HKD","original_amount":1500,"date":"2026-04-23","time":"08:30","category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"三日團 Day 3 · 兼六園","note":"三日團 Day 3/3","itinerary_note":null,"confidence":"high"}
+  {"store":"KKday 飛驒高山/白川鄉一日遊","original_currency":"HKD","original_amount":1500,"date":"2026-04-21","time":"07:30","category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"三日團 Day 1 · 名古屋站集合","note":"三日團 Day 1/3","itinerary_note":null,"confidence":"high"},
+  {"store":"KKday 立山黑部一日遊","original_currency":"HKD","original_amount":1500,"date":"2026-04-22","time":"08:00","category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"三日團 Day 2 · 雪之大谷","note":"三日團 Day 2/3","itinerary_note":null,"confidence":"high"},
+  {"store":"KKday 上高地/金澤一日遊","original_currency":"HKD","original_amount":1500,"date":"2026-04-23","time":"08:30","category":"localtour","payment":"credit","address":null,"booking_ref":"KKD-ABC123","items_text":"三日團 Day 3 · 兼六園","note":"三日團 Day 3/3","itinerary_note":null,"confidence":"high"}
 ],"itinerary_updates":[
   {"date":"2026-04-21","time":"07:30","name":"KKday Day 1 · 名古屋站集合","type":"transport","note":"三日團 Day 1 pickup · 訂單 KKD-ABC123"},
   {"date":"2026-04-22","time":"08:00","name":"KKday Day 2 · 長野集合 (立山黑部)","type":"transport","note":"三日團 Day 2 · 雪之大谷"},
@@ -1138,7 +1138,7 @@ Input: "HotPepper — 壽司匠 蔵 予約完了 2026-04-23 19:00, 2 名様, 予
 Output:
 {"source":"hotpepper","bookings":[{
   "store":"壽司匠 蔵",
-  "total":null,"original_currency":null,"original_amount":null,
+  "original_currency":null,"original_amount":null,
   "date":"2026-04-23","time":"19:00",
   "category":"food","payment":null,
   "address":"〒920-0981 石川県金沢市片町1-7-4",
@@ -1152,8 +1152,8 @@ Output:
 Input: "Cathay Pacific — CX568 HKG→NGO 2026-04-20 09:15 depart, CX569 NGO→HKG 2026-04-25 17:00 depart, 2 passengers, List price HKD 7,200, Promotional fare HKD 6,400, PNR: ABC123, paid with Visa ending 0373"
 Output:
 {"source":"cathay","bookings":[
-  {"store":"國泰 CX568 HKG→NGO","total":64000,"original_currency":"HKD","original_amount":3200,"date":"2026-04-20","time":"09:15","category":"transport","payment":"credit","address":null,"booking_ref":"ABC123","items_text":"去程航班 · 2 位","note":"CX568 · 2 位","itinerary_note":null,"confidence":"high"},
-  {"store":"國泰 CX569 NGO→HKG","total":64000,"original_currency":"HKD","original_amount":3200,"date":"2026-04-25","time":"17:00","category":"transport","payment":"credit","address":null,"booking_ref":"ABC123","items_text":"回程航班 · 2 位","note":"CX569 · 2 位","itinerary_note":null,"confidence":"high"}
+  {"store":"國泰 CX568 HKG→NGO","original_currency":"HKD","original_amount":3200,"date":"2026-04-20","time":"09:15","category":"transport","payment":"credit","address":null,"booking_ref":"ABC123","items_text":"去程航班 · 2 位","note":"CX568 · 2 位","itinerary_note":null,"confidence":"high"},
+  {"store":"國泰 CX569 NGO→HKG","original_currency":"HKD","original_amount":3200,"date":"2026-04-25","time":"17:00","category":"transport","payment":"credit","address":null,"booking_ref":"ABC123","items_text":"回程航班 · 2 位","note":"CX569 · 2 位","itinerary_note":null,"confidence":"high"}
 ],"itinerary_updates":[
   {"date":"2026-04-20","time":"07:00","name":"CX568 HKG 機場 check-in (起飛 09:15)","type":"transport","note":"PNR ABC123 · 2 位 · 起飛前 2h 抵機場"},
   {"date":"2026-04-25","time":"15:00","name":"CX569 NGO 機場 check-in (起飛 17:00)","type":"transport","note":"PNR ABC123 · 2 位 · 回程"}
@@ -1178,7 +1178,7 @@ Input: "Trip.com — Japan Unlimited eSIM, 8 days (2026-04-20 to 2026-04-27), US
 Output:
 {"source":"trip","bookings":[{
   "store":"Trip.com Japan eSIM 8 日",
-  "total":2985,"original_currency":"USD","original_amount":19.90,
+  "original_currency":"USD","original_amount":19.90,
   "date":"2026-04-20","time":null,
   "category":"other","payment":"credit",
   "address":null,
@@ -1196,7 +1196,7 @@ Input: "HK Express 訂單確認 TD87QN
 Output:
 {"source":"hkexpress","bookings":[{
   "store":"HK Express UO690 HKG→NGO",
-  "total":65000,"original_currency":"HKD","original_amount":3250,
+  "original_currency":"HKD","original_amount":3250,
   "date":"2026-04-20","time":"10:50",
   "category":"transport","payment":"credit",
   "address":null,
@@ -1206,7 +1206,7 @@ Output:
   "itinerary_note":null,"confidence":"high"
 },{
   "store":"HK Express UO691 NGO→HKG",
-  "total":70840,"original_currency":"HKD","original_amount":3542,
+  "original_currency":"HKD","original_amount":3542,
   "date":"2026-04-25","time":"16:45",
   "category":"transport","payment":"credit",
   "address":null,
@@ -1225,7 +1225,7 @@ Input: "Agoda — Daiwa Roynet Hotel Nagoya Taiko-dori, Check-in 2026-04-20 15:0
 Output:
 {"source":"agoda","bookings":[{
   "store":"Daiwa Roynet Hotel 名古屋太閤通口",
-  "total":34400,"original_currency":"HKD","original_amount":1720,
+  "original_currency":"HKD","original_amount":1720,
   "date":"2026-04-20","time":"15:00",
   "category":"lodging","payment":"credit",
   "address":"愛知県名古屋市中村区名駅4-6-25",

@@ -8,34 +8,35 @@ begin
   if (select count(*) from storage.buckets where id = 'receipt-photos') <> 1
     or not exists (
       select 1 from storage.buckets
-      where id = 'receipt-photos' and public = true
+      where id = 'receipt-photos'
+        and public = false
+        and file_size_limit = 6000000
+        and allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp']::text[]
     ) then
-    raise exception 'receipt photo bucket is not exactly one public compatibility bucket';
-  end if;
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'storage' and tablename = 'objects'
-      and policyname = 'receipt_photos_public_read'
-      and permissive = 'PERMISSIVE'
-      and cmd = 'SELECT'
-      and roles = array['public']::name[]
-      and with_check is null
-      and lower(coalesce(qual, '')) !~ '(^|[^[:alnum:]_])or([^[:alnum:]_]|$)'
-      and translate(
-        replace(replace(regexp_replace(lower(coalesce(qual, '')), '\s+|::[[:alnum:]_]+', '', 'g'), 'public.', ''), 'asuid', ''),
-        '()',
-        ''
-      )
-        = 'bucket_id=''receipt-photos'''
-  ) then
-    raise exception 'public receipt photo compatibility policy shape is wrong';
+    raise exception 'receipt photo bucket privacy or content constraints are wrong';
   end if;
   if exists (
     select 1 from pg_policies
     where schemaname = 'storage' and tablename = 'objects'
-      and policyname in ('receipt_photos_read_own', 'receipt_photos_read_trip_members')
+      and policyname = 'receipt_photos_public_read'
   ) then
-    raise exception 'interim or staged receipt photo read policy still exists';
+    raise exception 'public receipt photo compatibility policy still exists';
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname = 'receipt_photos_read_trip_members'
+      and permissive = 'PERMISSIVE'
+      and cmd = 'SELECT'
+      and roles = array['authenticated']::name[]
+      and with_check is null
+      and lower(coalesce(qual, '')) like '%bucket_id%receipt-photos%'
+      and lower(coalesce(qual, '')) like '%receipt_photos%'
+      and lower(coalesce(qual, '')) like '%can_access_trip%'
+      and lower(coalesce(qual, '')) like '%visibility%trip%'
+      and lower(coalesce(qual, '')) like '%owner_id%auth.uid%'
+  ) then
+    raise exception 'authenticated receipt photo trip-member policy shape is wrong';
   end if;
   if not exists (
     select 1 from pg_policies

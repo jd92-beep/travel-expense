@@ -18,10 +18,7 @@ const LOW_PERF_LAYERS = ALL_LAYERS.slice(0, 1);
 export function HyperframeBackground() {
   const { theme } = useTripTheme();
   const disableHeavy = shouldDisableHeavyEffects();
-  const layers = useMemo(
-    () => (theme.id === 'japan_washi' ? (disableHeavy ? LOW_PERF_LAYERS : ALL_LAYERS) : []),
-    [disableHeavy, theme.id],
-  );
+  const layers = useMemo(() => (theme.id === 'japan_washi' ? (disableHeavy ? LOW_PERF_LAYERS : ALL_LAYERS) : []), [disableHeavy, theme.id]);
 
   return (
     <div className="hyperframe-background" data-art-motif={theme.art} aria-hidden="true">

@@ -39,6 +39,7 @@ test('Click camera icon in record tab and display receipt image modal', async ({
   }, receipts);
 
   await page.goto('http://localhost:8902/travel-expense/react/');
+  await page.getByLabel('主要分頁').getByRole('button', { name: '紀錄', exact: true }).click();
   
   // 驗證紀錄中心 (Record Tab) 正常渲染
   await expect(page.getByText('紀錄中心')).toBeVisible();
@@ -59,10 +60,4 @@ test('Click camera icon in record tab and display receipt image modal', async ({
   const src = await modalImg.getAttribute('src');
   expect(src).toContain('data:image/png;base64,');
   
-  // 稍微等待 1000ms 確保 Modal 的 fade-in 動畫徹底播放完畢、且瀏覽器完成圖片二進制渲染！
-  await page.waitForTimeout(1000);
-  
-  // 影張相（截圖）作為 smoke test 成功嘅鐵證！
-  await page.screenshot({ path: '/Users/tommy/.gemini/antigravity/brain/ab0eafa7-8cf5-461d-b30f-d2a653d32ede/receipt_modal_smoke_success.png' });
-  console.log('Smoke test screenshot captured successfully with real visual photo!');
 });

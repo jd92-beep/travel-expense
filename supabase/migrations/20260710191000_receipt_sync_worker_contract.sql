@@ -9,7 +9,11 @@ set local statement_timeout = '30s';
 do $$
 begin
   if not exists (select 1 from pg_roles where rolname = 'receipt_sync_owner') then
-    create role receipt_sync_owner nologin noinherit;
+    -- nologin only: this role owns security-definer functions and holds table
+    -- grants via policies. NOINHERIT was dropped so migration runners that hold
+    -- an indirect membership (e.g. supabase_admin via postgres) may SET ROLE
+    -- into it when re-applying later worker migrations in disposable stacks.
+    create role receipt_sync_owner nologin;
   end if;
 end
 $$;

@@ -7,8 +7,10 @@ on:
       - "app-compact/**"
       - "app-react/**"
       - "workers/credential-broker/**"
+      - "scripts/verify-email-fx-contract.mjs"
       - "scripts/verify-shared-ledger-contract.mjs"
       - "scripts/verify-supabase-migrations.mjs"
+      - "email-to-notion.gs"
       - "supabase/functions/_shared/**"
       - "supabase/functions/admin-auth-state/**"
       - "supabase/functions/admin-kanban/**"
@@ -23,8 +25,10 @@ on:
       - "app-compact/**"
       - "app-react/**"
       - "workers/credential-broker/**"
+      - "scripts/verify-email-fx-contract.mjs"
       - "scripts/verify-shared-ledger-contract.mjs"
       - "scripts/verify-supabase-migrations.mjs"
+      - "email-to-notion.gs"
       - "supabase/functions/_shared/**"
       - "supabase/functions/admin-auth-state/**"
       - "supabase/functions/admin-kanban/**"
@@ -302,6 +306,7 @@ jobs:
         run: |
           node scripts/verify-supabase-migrations.mjs
           node scripts/verify-shared-ledger-contract.mjs
+          node scripts/verify-email-fx-contract.mjs
 
       - name: Compact and React browser round trip
         working-directory: app-compact

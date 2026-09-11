@@ -6,33 +6,6 @@ import {
 } from "react-router";
 import { LoginGate } from "../components/LoginGate";
 import { EmptyState } from "../components/primitives/ConsolePrimitives";
-import {
-  AccountDetailPage,
-  AccountsPage,
-} from "../features/data/accounts/AccountsPage";
-import {
-  ReceiptDetailPage,
-  ReceiptsPage,
-} from "../features/data/receipts/ReceiptsPage";
-import {
-  ItineraryPage,
-  TripDetailPage,
-  TripsPage,
-} from "../features/data/trips/TripsPage";
-import { OverviewPage } from "../features/overview/OverviewPage";
-import {
-  IncidentsPage,
-  IntegrityPage,
-  ReconciliationPage,
-  SyncJobsPage,
-} from "../features/reliability/ReliabilityPages";
-import {
-  InfrastructurePage,
-  ProvidersPage,
-  ReleasesPage,
-} from "../features/system/SystemPages";
-import { AuditDetailPage, AuditPage } from "../features/audit/AuditPages";
-import { SearchPage } from "../features/search/SearchPage";
 import { AdminShell } from "./AdminShell";
 import {
   RequireAdminSession,
@@ -75,26 +48,27 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <ProtectedShell />,
+    hydrateFallbackElement: <SessionSplash />,
     children: [
       { index: true, element: <Navigate to="/overview" replace /> },
-      { path: "overview", element: <OverviewPage /> },
-      { path: "search", element: <SearchPage /> },
-      { path: "data/accounts", element: <AccountsPage /> },
-      { path: "data/accounts/:accountId", element: <AccountDetailPage /> },
-      { path: "data/trips", element: <TripsPage /> },
-      { path: "data/trips/:tripId", element: <TripDetailPage /> },
-      { path: "data/trips/:tripId/itinerary", element: <ItineraryPage /> },
-      { path: "data/receipts", element: <ReceiptsPage /> },
-      { path: "data/receipts/:receiptId", element: <ReceiptDetailPage /> },
-      { path: "reliability/incidents", element: <IncidentsPage /> },
-      { path: "reliability/sync", element: <SyncJobsPage /> },
-      { path: "reliability/integrity", element: <IntegrityPage /> },
-      { path: "reliability/reconciliation", element: <ReconciliationPage /> },
-      { path: "system/providers", element: <ProvidersPage /> },
-      { path: "system/releases", element: <ReleasesPage /> },
-      { path: "system/infrastructure", element: <InfrastructurePage /> },
-      { path: "audit", element: <AuditPage /> },
-      { path: "audit/:eventId", element: <AuditDetailPage /> },
+      { path: "overview", lazy: async () => ({ Component: (await import("../features/overview/OverviewPage")).OverviewPage }) },
+      { path: "search", lazy: async () => ({ Component: (await import("../features/search/SearchPage")).SearchPage }) },
+      { path: "data/accounts", lazy: async () => ({ Component: (await import("../features/data/accounts/AccountsPage")).AccountsPage }) },
+      { path: "data/accounts/:accountId", lazy: async () => ({ Component: (await import("../features/data/accounts/AccountsPage")).AccountDetailPage }) },
+      { path: "data/trips", lazy: async () => ({ Component: (await import("../features/data/trips/TripsPage")).TripsPage }) },
+      { path: "data/trips/:tripId", lazy: async () => ({ Component: (await import("../features/data/trips/TripsPage")).TripDetailPage }) },
+      { path: "data/trips/:tripId/itinerary", lazy: async () => ({ Component: (await import("../features/data/trips/TripsPage")).ItineraryPage }) },
+      { path: "data/receipts", lazy: async () => ({ Component: (await import("../features/data/receipts/ReceiptsPage")).ReceiptsPage }) },
+      { path: "data/receipts/:receiptId", lazy: async () => ({ Component: (await import("../features/data/receipts/ReceiptsPage")).ReceiptDetailPage }) },
+      { path: "reliability/incidents", lazy: async () => ({ Component: (await import("../features/reliability/ReliabilityPages")).IncidentsPage }) },
+      { path: "reliability/sync", lazy: async () => ({ Component: (await import("../features/reliability/ReliabilityPages")).SyncJobsPage }) },
+      { path: "reliability/integrity", lazy: async () => ({ Component: (await import("../features/reliability/ReliabilityPages")).IntegrityPage }) },
+      { path: "reliability/reconciliation", lazy: async () => ({ Component: (await import("../features/reliability/ReliabilityPages")).ReconciliationPage }) },
+      { path: "system/providers", lazy: async () => ({ Component: (await import("../features/system/SystemPages")).ProvidersPage }) },
+      { path: "system/releases", lazy: async () => ({ Component: (await import("../features/system/SystemPages")).ReleasesPage }) },
+      { path: "system/infrastructure", lazy: async () => ({ Component: (await import("../features/system/SystemPages")).InfrastructurePage }) },
+      { path: "audit", lazy: async () => ({ Component: (await import("../features/audit/AuditPages")).AuditPage }) },
+      { path: "audit/:eventId", lazy: async () => ({ Component: (await import("../features/audit/AuditPages")).AuditDetailPage }) },
       {
         path: "*",
         element: (

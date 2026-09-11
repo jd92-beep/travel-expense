@@ -487,6 +487,9 @@ export function Dashboard({
   const [newTripEndDate, setNewTripEndDate] = useState('');
   const [newTripBudget, setNewTripBudget] = useState('');
   const [newTripCurrency, setNewTripCurrency] = useState('JPY');
+  // Once the user picks a currency manually on step 3, the destination→currency auto-link must
+  // stop overwriting their choice. Reset when the wizard is closed/reopened.
+  const [newTripCurrencyTouched, setNewTripCurrencyTouched] = useState(false);
   const [newTripDetails, setNewTripDetails] = useState('');
   const [destinationIdeas, setDestinationIdeas] = useState<DestinationIdea[]>([]);
   const [destinationIdeaStatus, setDestinationIdeaStatus] = useState<'idle' | 'loading' | 'online' | 'fallback' | 'error'>('idle');
@@ -533,6 +536,7 @@ export function Dashboard({
   useEffect(() => {
     const dest = newTripDestination.trim().toLowerCase();
     if (!dest) return;
+    if (newTripCurrencyTouched) return;
     const jpyKeywords = ['名古屋', '東京', '大阪', '京都', '北海道', '沖繩', '日本', 'japan', 'jp', 'nagoya', 'tokyo', 'osaka', 'kyoto', 'hokkaido', 'okinawa'];
     const hkdKeywords = ['香港', 'hong kong', 'hongkong', 'hk'];
     const usdKeywords = ['美國', 'usa', 'us', 'united states'];
@@ -546,7 +550,7 @@ export function Dashboard({
     } else if (destinationLooksLikeKorea(dest)) {
       setNewTripCurrency('KRW');
     }
-  }, [newTripDestination]);
+  }, [newTripDestination, newTripCurrencyTouched]);
 
   useEffect(() => {
     if (!activeIsWizardOpen) return;
@@ -592,6 +596,7 @@ export function Dashboard({
     setNewTripEndDate('');
     setNewTripBudget('');
     setNewTripCurrency('JPY');
+    setNewTripCurrencyTouched(false);
     setNewTripDetails('');
     setDestinationIdeas([]);
     setDestinationIdeaStatus('idle');
@@ -664,9 +669,17 @@ export function Dashboard({
     if (patch) updateState(patch);
   };
 
-  const handleCreateTrip = async (overrideName?: string) => {
+  const wizardDateInvalid = !!(newTripStartDate && newTripEndDate && newTripEndDate < newTripStartDate);
+
+  const handleCreateTrip = async (overrideName?: string, options?: { skipAi?: boolean }) => {
     const finalName = (overrideName || newTripName).trim();
     if (!finalName) return;
+    // Validate instead of letting createTripProfile silently swap/clamp the dates.
+    if (wizardDateInvalid) {
+      setTripCreateError('結束日期唔可以早過開始日期');
+      setWizardStep(2);
+      return;
+    }
 
     const now = Date.now();
     const newTrip = createTripProfile({
@@ -680,43 +693,46 @@ export function Dashboard({
     });
     const fallbackItinerary = buildFallbackItinerary(newTrip, destinationIdeas, newTripDetails);
     let finalTrip = mergeAnalyzedTrip(newTrip, null, fallbackItinerary, now, newTripCurrency || 'JPY');
-    const paragraph = buildTripCreateParagraph({
-      name: finalName,
-      destination: newTripDestination,
-      startDate: newTripStartDate,
-      endDate: newTripEndDate,
-      budget: newTripBudget,
-      currency: newTripCurrency || 'JPY',
-      details: newTripDetails,
-      ideas: destinationIdeas,
-    });
 
     setTripCreateError('');
-    setTripCreateStatus('analyzing');
-    try {
-      const draft = await parseTripParagraph(paragraph, {
-        ...state,
-        trips: [...(state.trips || []).map((trip) => ({ ...trip, active: false })), newTrip],
-        activeTripId: newTrip.id,
-        tripName: newTrip.name,
-        tripDateRange: { start: newTrip.startDate, end: newTrip.endDate },
-        tripCurrency: newTripCurrency || 'JPY',
-        budget: newTrip.budget || 0,
-        customItinerary: newTrip.itinerary,
+    if (!options?.skipAi) {
+      const paragraph = buildTripCreateParagraph({
+        name: finalName,
+        destination: newTripDestination,
+        startDate: newTripStartDate,
+        endDate: newTripEndDate,
+        budget: newTripBudget,
+        currency: newTripCurrency || 'JPY',
+        details: newTripDetails,
+        ideas: destinationIdeas,
       });
-      if (hasMeaningfulItinerary(draft.trip.itinerary)) {
-        finalTrip = mergeAnalyzedTrip(newTrip, draft.trip, fallbackItinerary, Date.now(), newTripCurrency || 'JPY');
-      } else {
+
+      setTripCreateStatus('analyzing');
+      try {
+        const draft = await parseTripParagraph(paragraph, {
+          ...state,
+          trips: [...(state.trips || []).map((trip) => ({ ...trip, active: false })), newTrip],
+          activeTripId: newTrip.id,
+          tripName: newTrip.name,
+          tripDateRange: { start: newTrip.startDate, end: newTrip.endDate },
+          tripCurrency: newTripCurrency || 'JPY',
+          budget: newTrip.budget || 0,
+          customItinerary: newTrip.itinerary,
+        });
+        if (hasMeaningfulItinerary(draft.trip.itinerary)) {
+          finalTrip = mergeAnalyzedTrip(newTrip, draft.trip, fallbackItinerary, Date.now(), newTripCurrency || 'JPY');
+        } else {
+          setTripCreateStatus('fallback');
+        }
+      } catch (error) {
+        if (isQuotaHardStop(error)) {
+          setTripCreateStatus('idle');
+          setTripCreateError(`AI quota / rate limit：${redactedError(error)}`);
+          return;
+        }
+        console.warn('[Dashboard] New trip AI analysis failed, using destination fallback:', error);
         setTripCreateStatus('fallback');
       }
-    } catch (error) {
-      if (isQuotaHardStop(error)) {
-        setTripCreateStatus('idle');
-        setTripCreateError(`AI quota / rate limit：${redactedError(error)}`);
-        return;
-      }
-      console.warn('[Dashboard] New trip AI analysis failed, using destination fallback:', error);
-      setTripCreateStatus('fallback');
     }
 
     const updatedAt = Date.now();
@@ -760,6 +776,7 @@ export function Dashboard({
     setNewTripEndDate('');
     setNewTripBudget('');
     setNewTripCurrency('JPY');
+    setNewTripCurrencyTouched(false);
     setNewTripDetails('');
     setDestinationIdeas([]);
     setDestinationIdeaStatus('idle');
@@ -1546,6 +1563,11 @@ export function Dashboard({
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all"
                     />
                   </div>
+                  {wizardDateInvalid && (
+                    <div className="px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-[11px] font-bold text-red-700">
+                      結束日期唔可以早過開始日期
+                    </div>
+                  )}
                   {newTripStartDate && newTripEndDate && (
                     <div className="bg-[#6D5643]/5 border border-[#6D5643]/10 px-4 py-2.5 rounded-xl flex items-center justify-between text-xs text-[#6D5643] font-bold">
                       <span>📅 計算天數 (Duration)</span>
@@ -1573,7 +1595,7 @@ export function Dashboard({
                     <select
                       aria-label="主結算幣種"
                       value={newTripCurrency}
-                      onChange={(e) => setNewTripCurrency(e.target.value)}
+                      onChange={(e) => { setNewTripCurrency(e.target.value); setNewTripCurrencyTouched(true); }}
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-[#6D5643] bg-slate-50/50 focus:bg-white text-sm focus:outline-none transition-all cursor-pointer"
                     >
                       <option value="JPY">💴 日圓 (JPY)</option>
@@ -1657,7 +1679,7 @@ export function Dashboard({
                   disabled={tripCreateStatus === 'analyzing'}
                   onClick={() => {
                     const defaultName = `新旅程_${new Date().toLocaleDateString('zh-HK')}`;
-                    handleCreateTrip(newTripName.trim() || defaultName);
+                    handleCreateTrip(newTripName.trim() || defaultName, { skipAi: true });
                   }}
                   className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-all border-none focus:outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1668,10 +1690,10 @@ export function Dashboard({
               {wizardStep < 4 ? (
                 <button
                   type="button"
-                  disabled={(wizardStep === 1 && !newTripName.trim()) || tripCreateStatus === 'analyzing'}
+                  disabled={(wizardStep === 1 && !newTripName.trim()) || (wizardStep === 2 && wizardDateInvalid) || tripCreateStatus === 'analyzing'}
                   onClick={() => setWizardStep(wizardStep + 1)}
                   className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all border-none focus:outline-none cursor-pointer ${
-                    wizardStep === 1 && !newTripName.trim()
+                    (wizardStep === 1 && !newTripName.trim()) || (wizardStep === 2 && wizardDateInvalid)
                       ? 'bg-slate-300 cursor-not-allowed'
                       : 'bg-[#6D5643] hover:bg-[#5C4837]'
                   }`}

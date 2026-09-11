@@ -221,8 +221,12 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
 export function mergePulledTrips(state: AppState, pulledTrips: TripProfile[]) {
   const fallbackTrips = state.trips?.length ? state.trips : (pulledTrips.length ? [activeTrip(state)] : []);
   const byId = new Map(fallbackTrips.map((trip) => [trip.id, trip]));
+  const deletedTripIds = new Set(state.deletedTripIds || []);
   let activeTripId = state.activeTripId;
   for (const remoteTrip of pulledTrips) {
+    // Locally deleted trips stay deleted: with no delete_trip RPC the server still holds the
+    // trip, so an unfiltered pull would resurrect it on this device.
+    if (deletedTripIds.has(remoteTrip.id)) continue;
     const localTrip = byId.get(remoteTrip.id);
     const remoteUpdated = tripUpdatedAt(remoteTrip);
     const localUpdated = localTrip ? tripUpdatedAt(localTrip) : 0;

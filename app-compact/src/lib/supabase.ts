@@ -3,8 +3,7 @@ import { createClient, type Session, type SupabaseClient, type User } from '@sup
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, stampReceiptForTrip } from '../domain/trip/normalize';
 import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
 import { tripIntelligenceColumns } from '../domain/trip/context';
-import { DEFAULT_NOTION_DB, ITINERARY, normalizeAiModelSettings } from './constants';
-import { parseRemoteThemePreference } from './themePreference';
+import { DEFAULT_NOTION_DB, ITINERARY, normalizeAiModelSettings, parseThemePreference } from './constants';
 import type { MirrorJob, SharedTripOutboxAdapters } from './sharedTripNotionOutbox';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Person, Receipt, ReceiptPayer, ReceiptSplit, ReceiptTombstone, SplitType, TripInviteSummary, TripMemberRole, TripMemberSummary, TripProfile, TripSharingInviteDraft, TripSharingState } from './types';
 
@@ -428,7 +427,7 @@ function optionalRecord(value: unknown): Record<string, unknown> | undefined {
   return Object.keys(record).length ? record : undefined;
 }
 
-function buildAppSettings(state: AppState) {
+export function buildAppSettings(state: AppState) {
   return {
     budget: state.budget,
     rate: state.rate,
@@ -448,15 +447,15 @@ function buildAppSettings(state: AppState) {
     emailModel: state.emailModel,
     tripUpdateModel: state.tripUpdateModel,
     googleBackupModel: state.googleBackupModel,
+    themePreference: state.themePreference,
     credentialBrokerUrl: state.credentialBrokerUrl,
     personalNotionConnected: state.personalNotionConnected === true,
     notionDeletedSourceIds: state.notionDeletedSourceIds || [],
-    themePreference: state.themePreference,
     settingsUpdatedAt: state.settingsUpdatedAt || Date.now(),
   };
 }
 
-function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState> | undefined {
+export function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState> | undefined {
   const payload = jsonObject(row?.app_settings);
   if (!Object.keys(payload).length) return undefined;
   return normalizeAiModelSettings({
@@ -478,10 +477,10 @@ function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState> | und
     emailModel: typeof payload.emailModel === 'string' ? payload.emailModel : undefined,
     tripUpdateModel: typeof payload.tripUpdateModel === 'string' ? payload.tripUpdateModel : undefined,
     googleBackupModel: typeof payload.googleBackupModel === 'string' ? payload.googleBackupModel : undefined,
+    themePreference: parseThemePreference(payload.themePreference),
     credentialBrokerUrl: typeof payload.credentialBrokerUrl === 'string' ? payload.credentialBrokerUrl : undefined,
     personalNotionConnected: typeof payload.personalNotionConnected === 'boolean' ? payload.personalNotionConnected : undefined,
     notionDeletedSourceIds: Array.isArray(payload.notionDeletedSourceIds) ? payload.notionDeletedSourceIds.filter((item): item is string => typeof item === 'string') : undefined,
-    themePreference: parseRemoteThemePreference(payload.themePreference),
     settingsUpdatedAt: Number(payload.settingsUpdatedAt) || undefined,
   });
 }
@@ -767,10 +766,18 @@ export function useSupabaseAuth() {
       return undefined;
     }
     let alive = true;
+    // This deadline releases the reconnect screen when getSession() neither
+    // resolves nor rejects — but it must not clear the session. supabase-js
+    // serializes auth behind a cross-tab Web Lock, so getSession() blocks while
+    // another tab holds it, and opening the app in a second tab was enough to
+    // blow the deadline and sign the user out of a perfectly valid session.
+    // A slow resolve means "still checking", not "signed out": stop the
+    // spinner and let onAuthStateChange deliver INITIAL_SESSION once the lock
+    // clears. A genuinely unreachable Supabase still rejects into the catch
+    // below, which reports the real error and does clear the session.
     const sessionCheckTimeout = window.setTimeout(() => {
       if (!alive) return;
-      setError('Supabase network is unavailable. Please try again.');
-      setSession(null);
+      setError('Supabase session check is taking longer than expected — the network may be unavailable. Reload to retry.');
       setLoading(false);
     }, 5_000);
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
@@ -1719,7 +1726,7 @@ export async function createSupabaseTripInvite(
   state: AppState,
   trip: TripProfile,
   invite: TripSharingInviteDraft,
-): Promise<TripInviteSummary> {
+): Promise<{ invite: TripInviteSummary; trip: TripProfile }> {
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error('Supabase is not configured');
   const syncedTrip = cleanUuid(trip.supabaseId) ? trip : await upsertSupabaseTrip(session, state, trip);
@@ -1735,13 +1742,17 @@ export async function createSupabaseTripInvite(
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.invite_id || !row?.token) throw new Error('Invite token was not returned');
   return {
-    id: String(row.invite_id),
-    email: String(row.email_normalized || invite.email).trim().toLowerCase(),
-    role: cleanInviteRole(row.role),
-    status: 'pending',
-    expiresAt: String(row.expires_at || ''),
-    createdAt: new Date().toISOString(),
-    token: String(row.token),
+    trip: syncedTrip,
+    invite: {
+      id: String(row.invite_id),
+      email: String(row.email_normalized || invite.email).trim().toLowerCase(),
+      role: cleanInviteRole(row.role),
+      status: 'pending',
+      expiresAt: String(row.expires_at || ''),
+      createdAt: new Date().toISOString(),
+      token: String(row.token),
+      displayName: invite.displayName,
+    },
   };
 }
 
@@ -1779,8 +1790,7 @@ export async function removeSupabaseTripMember(_session: Session, trip: TripProf
   if (error) throw error;
 }
 
-// Self-service leave for a non-owner member. The RPC itself blocks the owner (raises an exception),
-// so no client-side owner check is needed here.
+
 export async function leaveSupabaseTrip(_session: Session, trip: TripProfile): Promise<void> {
   const supabase = getSupabaseClient();
   const tripUuid = cleanUuid(trip.supabaseId);

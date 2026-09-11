@@ -52,22 +52,6 @@ function isDefaultNagoyaTrip(state: AppState, trip: TripProfile): boolean {
   });
 }
 
-function mergeItineraryDay(primary: ItineraryDay | undefined, fallback: ItineraryDay | undefined, date: string, idx: number, currency: string): ItineraryDay {
-  const base = fallback || primary;
-  return {
-    ...base,
-    ...primary,
-    date,
-    day: idx + 1,
-    region: primary?.region || fallback?.region || `Day ${idx + 1}`,
-    timezone: primary?.timezone || fallback?.timezone || 'Asia/Tokyo',
-    currency: primary?.currency || fallback?.currency || currency,
-    highlight: primary?.highlight || fallback?.highlight || '',
-    lodging: primary?.lodging?.name ? primary.lodging : fallback?.lodging,
-    spots: primary?.spots?.length ? primary.spots : fallback?.spots || [],
-  };
-}
-
 function repairItineraryForTrip(state: AppState, trip: TripProfile, source: ItineraryDay[], currency: string): ItineraryDay[] {
   const range = itineraryRangeForTrip(state, trip);
   const normalized = normalizeItinerary(source, trip.id, currency);
@@ -239,12 +223,12 @@ export function addDaysYmd(date: string, days: number): string {
   return parsed.toISOString().slice(0, 10);
 }
 
-export function todayForReceipts(state: AppState): string {
+export function todayForReceipts(state: AppState, precomputedItinerary?: ItineraryDay[]): string {
   const hkt = todayYmd('Asia/Hong_Kong');
   const trip = activeTrip(state);
   const start = trip.startDate || state.tripDateRange.start;
   const end = trip.endDate || state.tripDateRange.end;
-  if (hkt >= start && hkt <= end) return todayYmd(trip.timezones?.[0] || getItinerary(state)[0]?.timezone || 'Asia/Hong_Kong');
+  if (hkt >= start && hkt <= end) return todayYmd(trip.timezones?.[0] || (precomputedItinerary || getItinerary(state))[0]?.timezone || 'Asia/Hong_Kong');
   return hkt;
 }
 
@@ -319,6 +303,13 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   if (cur === 'HKD') {
     return Number(r.total) || 0;
   }
+
+  // 鎖定匯率：用户手動釘死嘅匯率永遠優先，唔做自我修復、唔用而家嘅匯率覆蓋。
+  const pinnedRate = r.exchangeRatePinned ? Number(r.exchangeRate) : 0;
+  if (pinnedRate > 0 && Number.isFinite(pinnedRate)) {
+    return Math.round((Number(r.total) || 0) / Math.max(0.1, pinnedRate));
+  }
+
   const rate = Math.max(0.1, Number(r.exchangeRate) || perHkdForCurrency(state, cur));
 
   // 增加強大嘅自我修復 Self-Healing 校驗：
@@ -482,9 +473,16 @@ export function bakeItineraryOverrides(state: AppState): ItineraryDay[] | null {
   }));
 }
 
-export function getScheduleSpots(state: AppState, day: ItineraryDay): Array<ItinerarySpot & { _spotIdx: number; receiptId?: string }> {
-  const trip = activeTrip(state);
-  const tripReceipts = scopedReceiptsForTrip(state, trip);
+// Time-less spots sort AFTER timed spots: '' < any time string, so a plain localeCompare
+// would poison the first position (and the day's now-rail). Sort is stable, so order is
+// preserved within the timed and time-less groups.
+export function compareSpotsByTime(a: Pick<ItinerarySpot, 'time'>, b: Pick<ItinerarySpot, 'time'>): number {
+  const missing = (value?: string) => (value ? 0 : 1);
+  return missing(a.time) - missing(b.time) || String(a.time || '').localeCompare(String(b.time || ''));
+}
+
+export function getScheduleSpots(state: AppState, day: ItineraryDay, precomputedReceipts?: Receipt[]): Array<ItinerarySpot & { _spotIdx: number; receiptId?: string }> {
+  const tripReceipts = precomputedReceipts || scopedReceiptsForTrip(state, activeTrip(state));
   const base = (day.spots || []).map((spot, idx) => ({
     ...spot,
     ...(state.itineraryOverrides?.[spot.spotId || spot.id || overrideKey(day.date, idx)] || state.itineraryOverrides?.[overrideKey(day.date, idx)] || {}),
@@ -517,18 +515,19 @@ export function getScheduleSpots(state: AppState, day: ItineraryDay): Array<Itin
     else spots.push(flightSpot);
   }
 
-  return spots.sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
+  return spots.sort(compareSpotsByTime);
 }
 
 export function dayLooseReceipts(
   state: AppState,
   day: ItineraryDay,
   precomputedSpots?: Array<ItinerarySpot & { _spotIdx: number; receiptId?: string }>,
+  precomputedReceipts?: Receipt[],
 ): Receipt[] {
-  const trip = activeTrip(state);
-  const spots = precomputedSpots || getScheduleSpots(state, day);
+  const spots = precomputedSpots || getScheduleSpots(state, day, precomputedReceipts);
   const spotIds = new Set(spots.map((s) => s.receiptId).filter(Boolean));
-  return scopedReceiptsForTrip(state, trip).filter((r) => r.date === day.date && !spotIds.has(r.id) && !isSettlementReceipt(r));
+  const tripReceipts = precomputedReceipts || scopedReceiptsForTrip(state, activeTrip(state));
+  return tripReceipts.filter((r) => r.date === day.date && !spotIds.has(r.id) && !isSettlementReceipt(r));
 }
 
 export function mapsUrl(name: string, address?: string): string {

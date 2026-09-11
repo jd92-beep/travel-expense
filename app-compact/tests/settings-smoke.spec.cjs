@@ -1763,7 +1763,7 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
   expect(afterReload.rateTable.JPY.perHkd).toBe(19.5);
 
   // Switching back to live mode triggers an immediate refresh and re-enables the button.
-  await page.getByRole('tab', { name: '即時 (Visa)' }).click();
+  await page.getByRole('tab', { name: '即時 (ER-API)' }).click();
   await expect(refreshButton).toBeVisible();
   await expect(rateInput).toHaveValue('25');
   const afterLive = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));

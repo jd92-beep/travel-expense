@@ -966,7 +966,7 @@ FIELD RULES:
 - "lineItems": one entry per purchased item; "amount" is the LINE TOTAL (qty × unit price); [] if the receipt has no itemized lines.
 
 EXAMPLE OUTPUT (structure reference only — read the actual values from the image):
-{"store":"桜町商店 (櫻町商店)","total":3240,"date":"2026-04-21","time":"12:45","address":"東京都千代田区丸の内1-1-1 (東京都千代田區丸之內1-1-1)","bookingRef":"","category":"food","payment":"cash","itemsText":"- 天ぷら定食 (天婦羅定食) x 1: ¥1580\\n- ビール (啤酒) x 2: ¥1660","note":"","lineItems":[{"desc":"天ぷら定食 (天婦羅定食)","amount":1580,"qty":1},{"desc":"ビール (啤酒)","amount":1660,"qty":2}],"tax":0,"tip":0}
+{"store":"桜町商店 (櫻町商店)","total":3240,"date":"2026-04-21","time":"12:45","currency":"JPY","address":"東京都千代田区丸の内1-1-1 (東京都千代田區丸之內1-1-1)","bookingRef":"","category":"food","payment":"cash","itemsText":"- 天ぷら定食 (天婦羅定食) x 1: ¥1580\\n- ビール (啤酒) x 2: ¥1660","note":"","lineItems":[{"desc":"天ぷら定食 (天婦羅定食)","amount":1580,"qty":1},{"desc":"ビール (啤酒)","amount":1660,"qty":2}]}
 
 CRITICAL TRANSLATION RULES:
 1. For any fields like "store", "address", "itemsText", or "note" containing foreign languages (Japanese, Korean, English, etc.), you MUST preserve the original language text AND append its Cantonese (廣東話) translation in Traditional Chinese (繁體中文) in brackets right next to it.

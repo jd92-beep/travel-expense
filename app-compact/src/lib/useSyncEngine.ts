@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { flushSync } from 'react-dom';
 import { activeTrip } from '../domain/trip/normalize';
+
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
 import { recordClientHeartbeat } from './clientHeartbeat';
@@ -320,7 +321,15 @@ export function useSyncEngine(
       return;
     }
     if (item.type === 'trip') {
-      const trip = current.trips?.find((candidate) => candidate.id === item.entityId) || activeTrip(current);
+      const trip = current.trips?.find((candidate) => candidate.id === item.entityId);
+      // Never fall back to activeTrip(current): when the queued trip is gone (deleted locally),
+      // upserting the ACTIVE trip under this queue item would push the wrong trip to the cloud.
+      if (!trip) {
+        return {
+          kind: 'terminal-error',
+          error: `同步旅程失敗：本機已搵唔到旅程 ${String(item.entityId).slice(0, 12)}（可能已刪除）；已停止重試，未有改動其他旅程。`,
+        };
+      }
       let synced = hasSupabaseSession(session) ? await upsertSupabaseTrip(session, current, trip) : trip;
       if (hasNotionSync) synced = await pushTripPage(current, synced);
       applyTripSyncResult(item, synced);

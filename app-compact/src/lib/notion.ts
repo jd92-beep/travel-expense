@@ -1,9 +1,7 @@
-import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS, normalizeAiModelSettings, isBoss } from './constants';
-import { parseRemoteThemePreference } from './themePreference';
+import { CATEGORIES, DEFAULT_NOTION_DB, PAYMENTS, normalizeAiModelSettings, parseThemePreference, isBoss } from './constants';
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { brokerNotionRequest, hasCredentialBrokerSession, brokerNotionUploadFile } from './credentialBroker';
 import { displayStore, getPersons, getReceiptHkdAmount, receiptRegion } from './domain';
-import { parseNotionSplitNote, serializeNotionSplitNote } from './notionSplitMeta';
 import { getDirectNotionToken } from './storage';
 import { isReceiptTombstoned } from './syncMerge';
 import { currentSupabaseUserEmail } from './supabase';
@@ -371,7 +369,7 @@ function buildProps(state: AppState, receipt: Receipt, schema: SchemaMap) {
     [propName(schema, 'address')]: { rich_text: [{ text: { content: (receipt.address || '').slice(0, 500) } }] },
     [propName(schema, 'bookingRef')]: { rich_text: [{ text: { content: (receipt.bookingRef || '').slice(0, 200) } }] },
     [propName(schema, 'items')]: { rich_text: [{ text: { content: (receipt.itemsText || '').slice(0, 1900) } }] },
-    [propName(schema, 'note')]: { rich_text: [{ text: { content: serializeNotionSplitNote(receipt) } }] },
+    [propName(schema, 'note')]: { rich_text: [{ text: { content: (receipt.note || '').slice(0, 1900) } }] },
     [photoCol]: photoProp,
     [propName(schema, 'person')]: { rich_text: [{ text: { content: person ? `${person.emoji} ${person.name}` : '' } }] },
     [propName(schema, 'sourceId')]: { rich_text: [{ text: { content: receipt.sourceId || receipt.id } }] },
@@ -703,7 +701,7 @@ function receiptSkipReason(props: Record<string, any>, schema: SchemaMap) {
   const objectType = readSelectProp(props, 'objectType', schema, { allowLoose: false }) || '';
   const cleanTitle = storeTitle.replace(/^⏳\s+/, '').trim();
   const rawItems = readRichTextProp(props, 'items', schema, { allowLoose: false });
-  if (sourceId === '__meta_settings__' || storeTitle === '__meta_settings__' || storeTitle.includes('App Settings（請勿刪除）') || objectType === 'settings') return 'settings/meta row';
+  if (sourceId === '__meta_settings__' || storeTitle === '__meta_settings__' || sourceId === BACKUP_META_SOURCE_ID || storeTitle === BACKUP_META_SOURCE_ID || storeTitle.includes('App Settings（請勿刪除）') || objectType === 'settings') return 'settings/meta row';
   if (objectType === 'trip') return 'trip row';
   if (cleanTitle.startsWith('🗓 行程更新：') || /\[行程更新\]/.test(rawItems) || /_iu_\d+$/.test(sourceId)) return 'itinerary update row';
   return null;
@@ -864,8 +862,7 @@ function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt
   const personText = readRichTextProp(props, 'person', schema, { allowLoose: false });
   const rawNote = readRichTextProp(props, 'note', schema, { allowLoose: false });
   const rawItems = readRichTextProp(props, 'items', schema, { allowLoose: false });
-  const splitMeta = parseNotionSplitNote(rawNote);
-  const parsedMeta = parseStructuredNoteMeta(splitMeta.note);
+  const parsedMeta = parseStructuredNoteMeta(rawNote);
   const persons = getPersons(state);
   const tripId = readRichTextProp(props, 'tripId', schema, { allowLoose: false }) || undefined;
   const appDb = String(state.notionDb || '').trim();
@@ -889,9 +886,6 @@ function receiptFromPage(state: AppState, page: any, schema: SchemaMap): Receipt
     bookingRef: readRichTextProp(props, 'bookingRef', schema, { allowLoose: false }) || parsedMeta.bookingRef,
     itemsText: rawItems,
     note: parsedMeta.note,
-    splitType: splitMeta.splitType,
-    splits: splitMeta.splits,
-    payers: splitMeta.payers,
     photoUrl: readUrlProp(props, 'photoUrl', schema, { allowLoose: false }),
     personId: personIdFromText(personText, persons),
     splitMode: String(readSelectProp(props, 'split', schema, { allowLoose: false }) || '').includes('私人') ? 'private' as const : 'shared' as const,
@@ -1495,6 +1489,89 @@ export async function pushSettingsMeta(state: AppState): Promise<void> {
   if (created?.id) await replaceSettingsBlocks(state, created.id, fullJson);
 }
 
+// Backup snapshots live in one dedicated row, the same shape pushSettingsMeta uses.
+// objectType stays 'settings' on purpose: every existing reader — this client and
+// app-react — already skips that objectType, so an older client can never mistake a
+// backup row for a receipt.
+export const BACKUP_META_SOURCE_ID = '__meta_backup__';
+
+// richTextChunks caps at 80 chunks of 1800 chars and silently drops the rest. That is
+// survivable for settings; for a backup it is not — a truncated snapshot that reports
+// success is worse than no snapshot. Everything below refuses rather than truncates.
+export const NOTION_BACKUP_MAX_CHARS = 80 * 1800;
+
+/**
+ * The Notion copy of a backup, minus photo thumbnails.
+ *
+ * photoThumb is a ~30KB base64 JPEG per receipt, so two photographed receipts alone
+ * would breach the ceiling above. Photos have their own mirror path (native Notion
+ * file upload in pushReceipt, plus Supabase storage); the snapshot carries the
+ * structured records a restore actually rebuilds from.
+ */
+export function buildNotionBackupPayload(portable: Partial<AppState>): Partial<AppState> {
+  const receipts = (portable.receipts || []).map((receipt) => {
+    const { photoThumb: _photoThumb, ...rest } = receipt as Receipt & { photoThumb?: string };
+    return rest as Receipt;
+  });
+  return { ...portable, receipts };
+}
+
+export interface NotionBackupResult {
+  pageId: string;
+  chars: number;
+  receipts: number;
+  photosOmitted: number;
+}
+
+/** Upsert the backup snapshot row. Throws rather than writing a truncated snapshot. */
+export async function pushBackupSnapshot(
+  state: AppState,
+  portable: Partial<AppState>,
+): Promise<NotionBackupResult> {
+  const activeDb = getActiveNotionDb(state);
+  if (!activeDb) throw new Error('未設定 Notion database，無法備份到 Notion');
+
+  const payload = buildNotionBackupPayload(portable);
+  const photosOmitted = (portable.receipts || []).filter((r) => !!(r as { photoThumb?: string }).photoThumb).length;
+  const json = JSON.stringify({
+    kind: 'travel-expense-backup',
+    savedAt: new Date().toISOString(),
+    payload,
+  });
+
+  if (json.length > NOTION_BACKUP_MAX_CHARS) {
+    throw new Error(
+      `備份太大：${json.length.toLocaleString()} 字元，超過 Notion 上限 ${NOTION_BACKUP_MAX_CHARS.toLocaleString()}。`
+      + ' 請改用「匯出 Backup」下載完整 JSON。',
+    );
+  }
+
+  const schema = await ensureWritableSchema(state);
+  const properties = {
+    [propName(schema, 'objectType')]: { select: { name: 'settings' } },
+    [propName(schema, 'store')]: { title: [{ text: { content: BACKUP_META_SOURCE_ID } }] },
+    [propName(schema, 'sourceId')]: { rich_text: [{ text: { content: BACKUP_META_SOURCE_ID } }] },
+    [propName(schema, 'note')]: {
+      rich_text: [{ text: { content: `backup ${new Date().toISOString()} · ${payload.receipts?.length || 0} receipts` } }],
+    },
+    [propName(schema, 'updatedAt')]: { date: { start: new Date().toISOString() } },
+  };
+
+  let pageId = await findPageBySourceId(state, schema, BACKUP_META_SOURCE_ID).catch(() => null);
+  if (pageId) {
+    await notionFetch(state, `/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ properties }) });
+  } else {
+    const created = await notionFetch<{ id?: string }>(state, '/pages', {
+      method: 'POST',
+      body: JSON.stringify({ parent: { database_id: activeDb }, properties }),
+    });
+    if (!created?.id) throw new Error('Notion 冇回傳 backup page id');
+    pageId = created.id;
+  }
+  await replaceSettingsBlocks(state, pageId, json);
+  return { pageId, chars: json.length, receipts: payload.receipts?.length || 0, photosOmitted };
+}
+
 export async function pullSettingsMeta(state: AppState): Promise<Partial<AppState> | null> {
   const activeDb = getActiveNotionDb(state);
   if (!activeDb) return null;
@@ -1530,7 +1607,7 @@ export async function pullSettingsMeta(state: AppState): Promise<Partial<AppStat
         emailModel: payload.emailModel,
         tripUpdateModel: payload.tripUpdateModel,
         googleBackupModel: payload.googleBackupModel,
-        themePreference: parseRemoteThemePreference(payload.themePreference),
+        themePreference: parseThemePreference(payload.themePreference),
       });
     }
   } catch (err) {
