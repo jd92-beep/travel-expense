@@ -232,6 +232,21 @@ export function activeTrip(state: AppState): TripProfile {
 export function switchTrip(state: AppState, tripId: string): Partial<AppState> | null {
   const target = state.trips?.find((t) => t.id === tripId && !t.archived);
   if (!target) return null;
+  // Snapshot the outgoing active trip's people into the map so a later switch-back restores them.
+  const prevTripId = state.activeTripId;
+  const nextPeopleByTripId = { ...(state.peopleByTripId || {}) };
+  const nextShareByTripId = { ...(state.shareRatiosByTripId || {}) };
+  if (prevTripId && prevTripId !== tripId && state.persons?.length) {
+    nextPeopleByTripId[prevTripId] = state.persons;
+    if (state.shareRatios) nextShareByTripId[prevTripId] = state.shareRatios;
+  }
+  // First visit to a never-snapshotted trip should not inherit the previous trip's companions.
+  const targetPeople = nextPeopleByTripId[tripId];
+  const targetShares = nextShareByTripId[tripId];
+  const hasAnySnapshot = Object.keys(nextPeopleByTripId).length > 0;
+  const fallbackPersons = hasAnySnapshot
+    ? [{ id: 'p_boss', name: 'User 1', emoji: '👦', color: '#CC2929' }]
+    : state.persons;
   return {
     activeTripId: tripId,
     trips: (state.trips || []).map((item) => ({ ...item, active: item.id === tripId && !item.archived })),
@@ -240,8 +255,10 @@ export function switchTrip(state: AppState, tripId: string): Partial<AppState> |
     tripCurrency: target.currencies?.find((c) => c !== 'HKD') || state.tripCurrency,
     customItinerary: target.itinerary || [],
     tripDateRange: { start: target.startDate, end: target.endDate },
-    persons: state.peopleByTripId?.[tripId] || state.persons,
-    shareRatios: state.shareRatiosByTripId?.[tripId] || state.shareRatios,
+    persons: targetPeople?.length ? targetPeople : fallbackPersons,
+    shareRatios: targetShares || (hasAnySnapshot ? {} : state.shareRatios),
+    peopleByTripId: nextPeopleByTripId,
+    shareRatiosByTripId: nextShareByTripId,
   };
 }
 

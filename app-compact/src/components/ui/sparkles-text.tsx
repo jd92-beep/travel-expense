@@ -93,6 +93,8 @@ export const SparklesText: React.FC<SparklesTextProps> = ({
 }) => {
   const [sparkles, setSparkles] = useState<Sparkle[]>([])
 
+  // Generate once per color/count change. Each Sparkle self-loops via motion (repeat: Infinity),
+  // so the old 100ms lifespan tick — which re-rendered the whole text 10×/sec — is gone.
   useEffect(() => {
     const generateStar = (): Sparkle => {
       const starX = `${Math.random() * 100}%`
@@ -105,27 +107,7 @@ export const SparklesText: React.FC<SparklesTextProps> = ({
       return { id, x: starX, y: starY, color, delay, scale, lifespan }
     }
 
-    const initializeStars = () => {
-      const newSparkles = Array.from({ length: sparklesCount }, generateStar)
-      setSparkles(newSparkles)
-    }
-
-    const updateStars = () => {
-      setSparkles((currentSparkles) =>
-        currentSparkles.map((star) => {
-          if (star.lifespan <= 0) {
-            return generateStar()
-          } else {
-            return { ...star, lifespan: star.lifespan - 0.1 }
-          }
-        })
-      )
-    }
-
-    initializeStars()
-    const interval = setInterval(updateStars, 100)
-
-    return () => clearInterval(interval)
+    setSparkles(Array.from({ length: sparklesCount }, generateStar))
   }, [colors.first, colors.second, sparklesCount])
 
   return (

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, version as reactVersion } from 'r
 import { AccordionCard } from '../components/AccordionCard';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { parseTripParagraph, testGoogleBackupConnection, testKimiConnection } from '../lib/ai';
-import { activeTrip, createTripProfile, migrateAppState, normalizeTripIntelligence, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import { activeTrip, createTripProfile, migrateAppState, normalizeTripIntelligence, scopedReceiptsForTrip, switchTrip } from '../domain/trip/normalize';
 import { AI_MODELS, APP_VERSION, DEFAULT_KIMI_PRIMARY_MODEL_ID, ITINERARY } from '../lib/constants';
 import {
   brokerHealth,
@@ -353,11 +353,12 @@ function TripRateInput({
 }
 
 function tripDraftPreviewStats(draft: TripDraft) {
+  // Always count the LIVE editable itinerary so modal header tracks add/delete/reorder.
   const days = draft.trip.itinerary || [];
-  const spots = days.flatMap((day) => day.spots || []);
-  const report = draft.extractionReport;
+  const spots = days.flatMap((day) => day.spots || []).filter((spot) => String(spot.name || '').trim());
   const lodgingNames = new Set<string>();
   const foodNames = new Set<string>();
+  const transportNames = new Set<string>();
   const detailNames = new Set<string>();
   for (const day of days) {
     if (day.lodging?.name) lodgingNames.add(day.lodging.name);
@@ -367,19 +368,20 @@ function tripDraftPreviewStats(draft: TripDraft) {
       if (!name) continue;
       if (spot.type === 'lodging' || /hotel|酒店|住宿|旅館/i.test(name)) lodgingNames.add(name);
       if (spot.type === 'food' || /restaurant|cafe|餐|飯|食|咖啡|壽司|拉麵|bbq/i.test(name)) foodNames.add(name);
+      if (spot.type === 'flight' || spot.type === 'transport') transportNames.add(name);
       if (spot.note || spot.address || spot.mapUrl || spot.time || spot.bookingRef || spot.sourceText) detailNames.add(name);
     }
   }
   return {
-    dayCount: report?.daysExtracted ?? days.length,
-    spotCount: report?.spotsExtracted ?? spots.filter((spot) => String(spot.name || '').trim()).length,
-    lodgingCount: report?.hotelsExtracted ?? lodgingNames.size,
-    foodCount: report?.restaurantsExtracted ?? foodNames.size,
-    transportCount: report?.transportsExtracted ?? 0,
-    detailCount: report?.importantDetailsExtracted ?? detailNames.size,
-    sourceQuality: report?.sourceQuality || 'medium',
-    missingCriticalFields: report?.missingCriticalFields || [],
-    assumptions: report?.assumptions || [],
+    dayCount: days.length,
+    spotCount: spots.length,
+    lodgingCount: lodgingNames.size,
+    foodCount: foodNames.size,
+    transportCount: transportNames.size,
+    detailCount: detailNames.size,
+    sourceQuality: draft.extractionReport?.sourceQuality || 'medium',
+    missingCriticalFields: draft.extractionReport?.missingCriticalFields || [],
+    assumptions: draft.extractionReport?.assumptions || [],
     organizedItinerary: draft.organizedItinerary || '',
     lodgingNames: Array.from(lodgingNames).slice(0, 4),
     foodNames: Array.from(foodNames).slice(0, 4),
@@ -574,7 +576,9 @@ function safeDiagnosticsFilename(): string {
 }
 
 function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Person[]): TripSharePreview {
-  const tripReceipts = scopedReceiptsForTrip(state, trip);
+  // Owner-private rows stay out of share exports unless explicitly opted in later.
+  const tripReceipts = scopedReceiptsForTrip(state, trip).filter((receipt) => receipt.visibility !== 'private');
+  const privateExcluded = scopedReceiptsForTrip(state, trip).filter((receipt) => receipt.visibility === 'private').length;
   const itinerary = (trip.itinerary?.length ? trip.itinerary : getItinerary(state)).filter((day) => {
     if (!day.date) return true;
     return day.date >= trip.startDate && day.date <= trip.endDate;
@@ -596,6 +600,7 @@ function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Pers
         'sync queue',
         'deleted cloud markers',
         'other trips',
+        ...(privateExcluded ? [`${privateExcluded} owner-private receipt(s)`] : []),
       ],
     },
     trip: {
@@ -645,10 +650,10 @@ function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Pers
   const copiedText = [
     `${payload.trip.name} · Private trip share`,
     `${payload.trip.startDate} to ${payload.trip.endDate} · ${payload.trip.destination || 'Destination pending'}`,
-    `Spend: ${formatMoney(spentHkd)} · Remaining: ${formatMoney(remainingHkd)} · Receipts: ${tripReceipts.length}`,
+    `Spend: ${formatMoney(spentHkd)} · Remaining: ${formatMoney(remainingHkd)} · Receipts: ${tripReceipts.length}${privateExcluded ? ` (${privateExcluded} private excluded)` : ''}`,
     `Next: ${nextStop}`,
     `Receipts: ${receiptLine}`,
-    'Safe export: current trip only; no API keys, broker sessions, Notion/Supabase IDs, sync queue, or other trips.',
+    'Safe export: current trip only; no API keys, broker sessions, Notion/Supabase IDs, sync queue, other trips, or owner-private receipts.',
   ].join('\n');
   return {
     filename: safeShareFilename(payload.trip.name),
@@ -1159,8 +1164,18 @@ export function Settings({
   const notionActionDisabled = !!busy || publicSupabaseOnly;
   const directTokenEnabled = true;
   const buildLabel = `v${APP_VERSION}`;
-  const tripDoctor = useMemo(() => compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope), [state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope]);
-  const tripScopeAudit = useMemo(() => buildTripScopeAudit(state, currentTrip), [state, currentTrip]);
+  const tripDoctor = useMemo(() => compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope), [
+    state.receipts,
+    state.syncQueue,
+    state.trips,
+    currentTrip,
+    persons,
+    syncState,
+    cloudSyncAvailable,
+    notionMirrorReady,
+    storageScope,
+  ]);
+  const tripScopeAudit = useMemo(() => buildTripScopeAudit(state, currentTrip), [state.receipts, state.trips, currentTrip]);
   const failedSyncCount = syncState?.failedCount || 0;
   const pendingSyncCount = syncState?.pendingCount || 0;
   const syncPillTone = syncState?.status === 'error' || failedSyncCount ? 'danger' : pendingSyncCount ? 'warning' : 'ok';
@@ -1250,8 +1265,9 @@ export function Settings({
     setMgrWeatherPreference(target.intelligence?.weatherPreference || 'balanced');
   };
 
-  // Keep managed trip in sync when active trip changes
+  // Keep managed trip in sync when active trip changes — but never while dirty.
   useEffect(() => {
+    if (mgrDirtyRef.current) return;
     handleSelectManagedTrip(currentTrip.id);
   }, [currentTrip.id]);
 
@@ -1579,7 +1595,15 @@ export function Settings({
     const ratios = state.shareRatios || {};
     const existing = persons.map((person) => Number(ratios[person.id]) || 0);
     const avg = existing.length ? existing.reduce((acc, value) => acc + value, 0) / existing.length : 1;
-    updateState({ persons: [...persons, next], shareRatios: { ...ratios, [next.id]: Math.max(1, Math.round(avg)) } });
+    const nextPersons = [...persons, next];
+    const nextRatios = { ...ratios, [next.id]: Math.max(1, Math.round(avg)) };
+    const tripId = currentTrip.id || state.activeTripId;
+    updateState({
+      persons: nextPersons,
+      shareRatios: nextRatios,
+      peopleByTripId: { ...(state.peopleByTripId || {}), ...(tripId ? { [tripId]: nextPersons } : {}) },
+      shareRatiosByTripId: { ...(state.shareRatiosByTripId || {}), ...(tripId ? { [tripId]: nextRatios } : {}) },
+    });
     setNewPersonName('');
     setStatus(`已新增旅伴：${next.name}`);
   }
@@ -1592,10 +1616,14 @@ export function Settings({
     const fallback = persons.find((p) => p.id !== id) || persons[0];
     const shareRatios = { ...state.shareRatios };
     delete shareRatios[id];
+    const nextPersons = persons.filter((p) => p.id !== id);
+    const tripId = currentTrip.id || state.activeTripId;
     setState((prev) => ({
       ...prev,
-      persons: persons.filter((p) => p.id !== id),
+      persons: nextPersons,
       shareRatios,
+      peopleByTripId: { ...(prev.peopleByTripId || {}), ...(tripId ? { [tripId]: nextPersons } : {}) },
+      shareRatiosByTripId: { ...(prev.shareRatiosByTripId || {}), ...(tripId ? { [tripId]: shareRatios } : {}) },
       receipts: prev.receipts.map((r) => ({
         ...r,
         personId: r.personId === id ? fallback.id : r.personId,
@@ -1608,7 +1636,12 @@ export function Settings({
   function resetShareRatios() {
     const ids = persons.map((person) => person.id);
     const equal = sharePercents(ids, {}); // {} → equal split summing to 100
-    updateState({ shareRatios: Object.fromEntries(ids.map((id, idx) => [id, equal[idx]])) });
+    const nextRatios = Object.fromEntries(ids.map((id, idx) => [id, equal[idx]]));
+    const tripId = currentTrip.id || state.activeTripId;
+    updateState({
+      shareRatios: nextRatios,
+      shareRatiosByTripId: { ...(state.shareRatiosByTripId || {}), ...(tripId ? { [tripId]: nextRatios } : {}) },
+    });
     setStatus('已重設為均分比例');
   }
 
@@ -1627,7 +1660,12 @@ export function Settings({
       sumOthers = next.reduce((acc, v, idx) => (idx === lastIdx ? acc : acc + v), 0);
     }
     next[lastIdx] = Math.max(0, 100 - sumOthers);
-    updateState({ shareRatios: Object.fromEntries(ids.map((id, idx) => [id, next[idx]])) });
+    const nextRatios = Object.fromEntries(ids.map((id, idx) => [id, next[idx]]));
+    const tripId = currentTrip.id || state.activeTripId;
+    updateState({
+      shareRatios: nextRatios,
+      shareRatiosByTripId: { ...(state.shareRatiosByTripId || {}), ...(tripId ? { [tripId]: nextRatios } : {}) },
+    });
   }
 
   function patchCurrentTripSharing(updater: (sharing: TripSharingState) => TripSharingState) {
@@ -1670,10 +1708,15 @@ export function Settings({
       const ratios = prev.shareRatios || {};
       const existing = existingPersons.map((person) => Number(ratios[person.id]) || 0);
       const avg = existing.length ? existing.reduce((acc, value) => acc + value, 0) / existing.length : 1;
+      const nextPersons = [...existingPersons, { id, name, emoji: '👤', color: COLORS[existingPersons.length % COLORS.length] }];
+      const nextRatios = { ...ratios, [id]: Math.max(1, Math.round(avg)) };
+      const tripId = prev.activeTripId || currentTrip.id;
       return {
         ...prev,
-        persons: [...existingPersons, { id, name, emoji: '👤', color: COLORS[existingPersons.length % COLORS.length] }],
-        shareRatios: { ...ratios, [id]: Math.max(1, Math.round(avg)) },
+        persons: nextPersons,
+        shareRatios: nextRatios,
+        peopleByTripId: { ...(prev.peopleByTripId || {}), ...(tripId ? { [tripId]: nextPersons } : {}) },
+        shareRatiosByTripId: { ...(prev.shareRatiosByTripId || {}), ...(tripId ? { [tripId]: nextRatios } : {}) },
         settingsUpdatedAt: Date.now(),
       };
     });
@@ -1860,15 +1903,16 @@ export function Settings({
       setStatus('呢個旅程已封存；請先改回「進行中」並儲存，然後再切換為 active。');
       return;
     }
-    const selectedTrip = { ...trip, archived: false, active: true, updatedAt: Date.now() };
+    const patch = switchTrip(state, tripId);
+    if (!patch) {
+      setStatus('切換旅程失敗；請再試一次。');
+      return;
+    }
     updateState({
-      activeTripId: selectedTrip.id,
-      trips: trips.map((item) => item.id === selectedTrip.id ? selectedTrip : { ...item, active: false }),
-      tripName: selectedTrip.name,
-      tripDateRange: { start: selectedTrip.startDate, end: selectedTrip.endDate },
-      tripCurrency: nonHomeCurrencyForTrip(selectedTrip, state.tripCurrency),
-      budget: selectedTrip.budget ?? state.budget,
-      customItinerary: selectedTrip.itinerary,
+      ...patch,
+      trips: (patch.trips || trips).map((item) => item.id === tripId
+        ? { ...item, archived: false, active: true, updatedAt: Date.now() }
+        : { ...item, active: false }),
     });
   }
 
@@ -1876,12 +1920,15 @@ export function Settings({
     setState((prev) => {
       const now = Date.now();
       const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
+      // Snapshot outgoing active-trip people before switching to the applied draft trip.
+      const peoplePatch = switchTrip(prev, draft.trip.id) || {};
       const exists = prevTrips.some((trip) => trip.id === draft.trip.id);
       const tripsNext = exists
         ? prevTrips.map((trip) => trip.id === draft.trip.id ? { ...draft.trip, active: true, archived: false } : { ...trip, active: false })
         : [...prevTrips.map((trip) => ({ ...trip, active: false })), { ...draft.trip, active: true, archived: false }];
       return migrateAppState({
         ...prev,
+        ...peoplePatch,
         activeTripId: draft.trip.id,
         trips: tripsNext,
         tripName: draft.trip.name,
@@ -1889,6 +1936,8 @@ export function Settings({
         tripCurrency: nonHomeCurrencyForTrip(draft.trip, prev.tripCurrency),
         budget: draft.trip.budget,
         customItinerary: draft.trip.itinerary,
+        // Personal day/spot patches must not re-key onto a newly extracted itinerary.
+        itineraryOverrides: {},
         settingsUpdatedAt: now,
         syncQueue: enqueueChange(enqueueChange(prev.syncQueue, {
           type: 'trip',

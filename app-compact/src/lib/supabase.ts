@@ -259,7 +259,8 @@ function cleanInviteRole(value: unknown): Exclude<TripMemberRole, 'owner' | 'adm
 }
 
 function cleanMemberRole(value: unknown): TripMemberRole {
-  return value === 'owner' || value === 'admin' || value === 'viewer' ? value : 'editor';
+  // Unknown/missing role must not grant write UI — default to viewer, not editor.
+  return value === 'owner' || value === 'admin' || value === 'editor' ? value : 'viewer';
 }
 
 function canManageSharing(role?: TripMemberRole): boolean {

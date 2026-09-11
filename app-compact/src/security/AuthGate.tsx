@@ -9,7 +9,7 @@ import {
   requestBrokerSessionChallenge,
   unlockCredentialBroker,
 } from '../lib/credentialBroker';
-import { hasDeviceTrust, setDeviceTrust } from './deviceTrust';
+import { clearDeviceTrust, hasDeviceTrust, setDeviceTrust } from './deviceTrust';
 import {
   clearTrustedDevice,
   createTrustedDeviceRegistration,
@@ -38,24 +38,27 @@ export function AuthGate({
   onOfflineMode?: (message: string) => void;
 }) {
   const { theme } = useTripTheme();
-  const [unlocked, setUnlocked] = useState(() => hasDeviceTrust());
-  const [checking, setChecking] = useState(() => false);
+  const [unlocked, setUnlocked] = useState(() => false);
+  const [checking, setChecking] = useState(() => hasDeviceTrust());
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const onBrokerSessionRef = useRef(onBrokerSession);
+  const onOfflineModeRef = useRef(onOfflineMode);
   const routeStop = theme.id === 'japan_washi' ? 'TYO' : theme.id === 'taiwan_nightmarket' ? 'TPE' : theme.id === 'korea_editorial' ? 'SEL' : 'TRIP';
 
   useEffect(() => {
     onBrokerSessionRef.current = onBrokerSession;
-  }, [onBrokerSession]);
+    onOfflineModeRef.current = onOfflineMode;
+  }, [onBrokerSession, onOfflineMode]);
 
   useEffect(() => {
     let alive = true;
     async function restoreSession() {
       if (!hasDeviceTrust()) {
         setChecking(false);
+        setUnlocked(false);
         return;
       }
       const existing = currentBrokerSession();
@@ -66,10 +69,13 @@ export function AuthGate({
         return;
       }
       const device = loadTrustedDevice();
+      // Trust meta without the crypto key: open offline (smoke seeds / legacy devices) but say so.
       if (!device) {
+        if (!alive) return;
         setChecking(false);
         setUnlocked(true);
         setError('');
+        onOfflineModeRef.current?.('未找到裝置金鑰，已以離線模式開啟。重新解鎖可恢復雲端同步。');
         return;
       }
       try {
@@ -83,9 +89,13 @@ export function AuthGate({
       } catch (refreshError) {
         if (!alive) return;
         console.info('Credential Broker trusted-device refresh failed:', redactedError(refreshError));
+        // Drop durable trust so the next cold open requires password; allow offline this session.
+        clearDeviceTrust();
         await clearTrustedDevice();
+        if (!alive) return;
         setUnlocked(true);
         setError('');
+        onOfflineModeRef.current?.('Broker session 已失效，已切換離線模式。請重新解鎖以恢復雲端同步。');
       } finally {
         if (alive) setChecking(false);
       }

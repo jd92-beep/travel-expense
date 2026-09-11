@@ -44,3 +44,30 @@
 @media (prefers-reduced-motion: reduce) {
   .windmill-transition { display: none; }
 }
+
+/* BorderBeam travel — CSS offset-path (replaces motion.div MotionValue loop).
+   Keyframes stay literal; CSS vars drive duration/delay only. */
+.border-beam-dash {
+  offset-distance: 0%;
+  animation: border-beam-travel var(--border-beam-duration, 8s) linear infinite;
+  animation-delay: var(--border-beam-delay, 0s);
+}
+
+.border-beam-dash--reverse {
+  offset-distance: 100%;
+  animation-name: border-beam-travel-reverse;
+}
+
+@keyframes border-beam-travel {
+  from { offset-distance: 0%; }
+  to { offset-distance: 100%; }
+}
+
+@keyframes border-beam-travel-reverse {
+  from { offset-distance: 100%; }
+  to { offset-distance: 0%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .border-beam-dash { animation: none !important; }
+}

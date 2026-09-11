@@ -130,6 +130,80 @@ you closed with your session number.
 
 ## What Was Done
 
+### Session 89c (MiMo — trip polish, live modal stats, private share filter, pre-merge review)
+
+Same worktree/branch. Compact Web `0.23.1`.
+
+1. **Trip paste polish:** HTML table strip; multi-night lodging carry; spot sort; `第N日`; trip name
+   from `行程：`; overnight arrival note; city guess from region.
+2. **Modal live stats** from editable itinerary (not extractionReport). **Private share** export
+   excludes `visibility: 'private'` receipts and notes the exclusion in `safety.stripped`.
+3. **Pre-merge review fixes:** partial paste keeps active trip id/dates (no accidental new trip);
+   Settings `selectTrip`/`applyTripDraft` use `switchTrip` people snapshots; partial day merge
+   never overwrites city/country/region with empty LLM strings; intent detection uses real
+   `state` year; first visit to unsnapshotted trip does not inherit previous companions.
+4. **Evidence:** typecheck, build, security:scan, `test:trip-local-parser`,
+   `test:change-journal`, `smoke:settings` (10), `smoke:history` (8), `smoke:offline` (4),
+   `smoke:auth-broker`, `smoke:dashboard` (8), `smoke:mobile-layout`, `smoke:six-person` — green.
+   `smoke:sync-regression` has 2 failures that **also fail on `main`** (pre-existing).
+
+### Session 89b (MiMo — login, trip paste→itinerary, sharing)
+
+Same worktree/branch as Session 89. Compact Web `0.23.0`.
+
+1. **Trip paste → itinerary:** local day headers accept `Day`/`D`/`第N天`/ISO/`7月10日`/`Jul 10 2026`/
+   date-only lines; sequential date fill when headers omit dates; spots accept time ranges, `9時30分`,
+   `9:30pm`, compound `/、＋` and `A → B` splits, table Chinese times, untimed bullets, PNR/bookingRef,
+   overnight `22:00-26:00`. Partial merge is **spot-level** (keeps unmatched existing spots). Paste with
+   zero detectable dates + existing itinerary → forced `partial` (no accidental full wipe). Quota/429
+   in `parseTripParagraph` is a hard stop (no local paper-over). `applyTripDraft` clears
+   `itineraryOverrides`. New unit suite `npm run test:trip-local-parser` (12 combination groups).
+2. **Login:** AuthGate starts locked until restore settles (`checking`); trust meta without device key
+   opens **offline with message** (smoke seeds stay green); refresh failure clears durable trust +
+   device key and surfaces offline mode for the current session only.
+3. **Sharing:** `switchTrip` snapshots outgoing trip people into `peopleByTripId`/`shareRatiosByTripId`;
+   Settings person/ratio/invite edits write those maps; `peopleForTrip`/`shareRatiosForTrip` prefer live
+   persons for the **active** trip; unknown member role → `viewer` (not editor).
+4. **Evidence:** typecheck, build, security:scan, `test:trip-local-parser`, `test:change-journal`,
+   `smoke:settings` (10), `smoke:history` (8), `smoke:auth-broker`, `smoke:six-person` — green.
+5. **Still open (from audits, not implemented):** modal live stats vs extractionReport; per-day
+   currency/TZ edit in modal; Settings unlock trusted-device registration parity; invite token cleanup
+   after accept; `private-trip-share` still includes owner-private rows (opt-out needed); multi-user
+   invite/RLS live smoke; HANDOVER Item 7 per-member privacy design.
+
+### Session 89 (MiMo — compact polish: bugs, web perf, theme diversity)
+
+Isolated worktree branch `compact/perf-bugs-themes` from `main` @ `252003d`. Compact Web
+`0.22.0` (`APP_VERSION` + `package.json`). **Not merged or pushed** — Boss must review/merge.
+
+1. **Confirmed bugs fixed (10):** History trip switch now uses shared `switchTrip()` (restores
+   people/share ratios); `enqueueChange` re-queues terminal items when a strictly newer
+   `payload.updatedAt` lands (40001 evidence kept otherwise); AuthGate refresh failure surfaces
+   offline/sync message; unlock no longer forces Dashboard over deep links; Shell trip dropdown
+   uses theme CSS vars; Weather refetches when broker session arrives; Settings Trip Manager
+   dirty-guard on active-trip effect; Timeline spot keys use stable id; `index.html` `lang="zh-Hant"`;
+   `android-auth.html` HOST derived from `location.host`.
+2. **Web performance (transitions preserved):** persist coalesced via timer + **sync localStorage
+   write on flush** (pagehide/smoke-safe; 0ms same-tick coalesce — a longer debounce broke Settings
+   trip-AI smokes that assert localStorage immediately); History builds one failed-queue Map instead
+   of O(rows×queue); ThemeContext value memoized; Settings doctor/audit deps narrowed to slices;
+   sparkles-text no longer 10ms React interval; BorderBeam moved to CSS `offset-path`; particles
+   pause when `document.hidden`; light-sweep keyframes no longer consume `--scroll-*` every frame;
+   History/receipt rows get `content-visibility: auto`.
+3. **Theme catalog 5 → 12:** added `tokyo_neon` (cyberpunk), `tropical_candy` (活潑開朗),
+   `uk_london` (GB destination remap), `nordic_aurora`, `mexico_fiesta`, `india_holi`,
+   `brazil_carnival`. Each has CSS tokens, `--theme-art` layer, boot-hint dark list, smoke tokens.
+   Dark-preview ink fixes generalized to `html[data-color-scheme='dark']`. Status-pill contrast
+   fixed for tropical/india/brazil after catalog smoke. `theme-smoke` catalog test expects 13 radios.
+4. **Evidence:** `typecheck`, `build`, `security:scan`, `test:change-journal`,
+   `test:theme-preference`, `smoke:settings` (10 pass), `smoke:history` (8), `smoke:offline` (4),
+   `smoke:mobile-layout`, `smoke:dashboard` (8), theme catalog smoke — all green in worktree.
+   `timeline-smoke` command-card height fail and `theme-smoke` Taiwan dark contrast fail **also
+   reproduce on `main`** (pre-existing). Change-journal terminal re-queue assertions updated to the
+   new contract.
+5. **Android/iOS note:** Android remains the external Capacitor shell worktree; iOS is web-only.
+   No Play Store release. Auth bridge host fix is web-side only.
+
 ### Session 88 (Codex — apply/deploy all approved production surfaces)
 
 1. **Supabase cutover:** restored project `fbnnjoahvtdrnigevrtw` to `ACTIVE_HEALTHY`, applied the

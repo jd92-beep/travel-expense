@@ -11,6 +11,7 @@ import { clearTrustedDevice } from '../security/trustedDevice';
 import { clearCurrencyCache } from './currency';
 import { enqueueChange } from './changeJournal';
 import { receiptSourceTombstoneKey } from './syncMerge';
+import { saveStoredSnapshot } from './storage';
 import type { AppState, Receipt } from './types';
 
 const CLOUD_SETTINGS_KEYS = new Set<keyof AppState>([
@@ -46,10 +47,42 @@ function migrateScopedState(input: unknown, storageScope: string, userEmail: str
   return sanitizePublicDemoState(migrateAppState(input), storageScope, userEmail);
 }
 
+const PERSIST_DEBOUNCE_MS = 0;
+
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
   const [state, setState] = useState<AppState>(() => safeInitialState(storageScope, userEmail));
   const [hydratedScope, setHydratedScope] = useState('');
   const [indexedReadyScope, setIndexedReadyScope] = useState('');
+  const persistTimerRef = useRef<number | null>(null);
+  const pendingPersistRef = useRef<{ scope: string; userEmail: string | null; state: AppState } | null>(null);
+
+  // Coalesce the full-AppState snapshot write: typing/upserting would otherwise serialize the
+  // entire state to localStorage + IndexedDB on every setState. Flushed on hide/unmount/scope change.
+  const flushPersist = useCallback(() => {
+    if (persistTimerRef.current != null) {
+      window.clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    const pending = pendingPersistRef.current;
+    if (!pending) return;
+    pendingPersistRef.current = null;
+    // Sync localStorage first so pagehide and smoke tests always observe the latest snapshot;
+    // IndexedDB still goes through persistScope.
+    try {
+      saveStoredSnapshot(migrateAppState(pending.state), pending.scope);
+    } catch { /* persistScope reports storage failures below */ }
+    void persistScope(pending.scope, pending.userEmail, pending.state).then((result) => {
+      if (result.status !== 'succeeded') {
+        console.warn(`[useAppState] Persist ${result.status}:`, result.error);
+      }
+    });
+  }, []);
+
+  const schedulePersist = useCallback((scope: string, email: string | null, next: AppState, delayMs: number) => {
+    pendingPersistRef.current = { scope, userEmail: email, state: next };
+    if (persistTimerRef.current != null) window.clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = window.setTimeout(flushPersist, delayMs);
+  }, [flushPersist]);
 
   useLayoutEffect(() => {
     let alive = true;
@@ -75,12 +108,24 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
 
   useEffect(() => {
     if (indexedReadyScope !== storageScope) return;
-    void persistScope(storageScope, userEmail, state).then((result) => {
-      if (result.status !== 'succeeded') {
-        console.warn(`[useAppState] Persist ${result.status}:`, result.error);
-      }
-    });
-  }, [indexedReadyScope, state, storageScope, userEmail]);
+    schedulePersist(storageScope, userEmail, state, PERSIST_DEBOUNCE_MS);
+  }, [indexedReadyScope, state, storageScope, userEmail, schedulePersist]);
+
+  // Reliability net: write immediately when the tab hides, the page unloads, or the storage
+  // identity tears down — the debounce must never lose the last keystroke.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushPersist();
+    };
+    const onPageHide = () => flushPersist();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', onPageHide);
+      flushPersist();
+    };
+  }, [flushPersist, storageScope, userEmail]);
 
   const updateState = useCallback((patch: Partial<AppState>) => {
     setState((prev) => {

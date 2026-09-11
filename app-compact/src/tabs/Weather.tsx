@@ -9,6 +9,7 @@ import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
 import { fetchWeather, getCachedWeatherRows, groupedCoordsForDay, resolveCoordsForDay, resolveOfficialWeatherProvider, setCachedWeatherRows, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type GroupedWeatherLocation, type WeatherCoord } from '../lib/weather';
+import { hasCredentialBrokerSession } from '../lib/credentialBroker';
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
@@ -57,6 +58,8 @@ export function Weather({ state }: { state: AppState }) {
     const coords = groups.map((g) => `${g.label}:${g.lat}:${g.lon}`).join(',');
     return `${day.date}:${day.region}:${day.country || ''}:${forecastDateFor(day.date)}:${coords}`;
   }).join('|');
+  // Late broker session must re-trigger the effect so credentialed weather paths can refetch.
+  const sessionReady = hasCredentialBrokerSession(state);
   const targetSummary = useMemo(() => weatherTargetSummary(displayItinerary, hasEnded, today), [displayItinerary, hasEnded, today]);
   const hasMissingTarget = useMemo(
     () => displayItinerary.some((day) => {
@@ -170,7 +173,7 @@ export function Weather({ state }: { state: AppState }) {
     loadRef.current = load;
     load();
     return () => { controller.abort(); };
-  }, [itineraryKey]);
+  }, [itineraryKey, sessionReady]);
 
   const scrollCorrectionHandlesRef = useRef<number[]>([]);
 

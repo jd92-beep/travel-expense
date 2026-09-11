@@ -202,13 +202,17 @@ export function getPersons(state: AppState): Person[] {
 
 export function peopleForTrip(state: AppState, tripId?: string): Person[] {
   const id = tripId || state.activeTripId;
-  if (id && state.peopleByTripId?.[id]?.length) return state.peopleByTripId[id];
+  // Active trip: live persons/shareRatios are the source of truth (Settings edits them).
+  // Maps are for other trips after cloud pull / trip switch.
+  if (!id || id === state.activeTripId) return getPersons(state);
+  if (state.peopleByTripId?.[id]?.length) return state.peopleByTripId[id];
   return getPersons(state);
 }
 
 export function shareRatiosForTrip(state: AppState, tripId?: string): Record<string, number> {
   const id = tripId || state.activeTripId;
-  if (id && state.shareRatiosByTripId?.[id]) return state.shareRatiosByTripId[id];
+  if (!id || id === state.activeTripId) return state.shareRatios || {};
+  if (state.shareRatiosByTripId?.[id]) return state.shareRatiosByTripId[id];
   return state.shareRatios || {};
 }
 

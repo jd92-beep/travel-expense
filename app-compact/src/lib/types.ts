@@ -20,7 +20,19 @@ export type GlobalSyncStatus = 'idle' | 'queued' | 'pushing' | 'pulling' | 'sync
 export type TripMemberRole = 'owner' | 'admin' | 'editor' | 'viewer';
 export type TripInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
 export type TripBackendStatus = 'active' | 'pending' | 'error' | 'disabled';
-export type TripThemeKey = 'japan_washi' | 'korea_editorial' | 'taiwan_nightmarket' | 'europe_rail' | 'global_journal';
+export type TripThemeKey =
+  | 'japan_washi'
+  | 'korea_editorial'
+  | 'taiwan_nightmarket'
+  | 'europe_rail'
+  | 'global_journal'
+  | 'tokyo_neon'
+  | 'tropical_candy'
+  | 'uk_london'
+  | 'nordic_aurora'
+  | 'mexico_fiesta'
+  | 'india_holi'
+  | 'brazil_carnival';
 export type ThemePreference = 'auto' | TripThemeKey;
 
 export interface TripIntelligence {

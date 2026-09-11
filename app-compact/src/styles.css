@@ -2875,8 +2875,10 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
 }
 
 @keyframes travel-light-sweep {
-  from { transform: translate3d(calc(var(--scroll-progress, 0) * 18px - 1.8%), calc(var(--scroll-progress, 0) * 16px - 1%), 0) rotate(.2deg); }
-  to { transform: translate3d(calc(var(--scroll-progress, 0) * 18px + 1.8%), calc(var(--scroll-progress, 0) * 16px + 1%), 0) rotate(-.2deg); }
+  /* Pure transform loop — do NOT consume --scroll-* here: that re-invalidates the
+     infinite animation every scroll frame. Scroll parallax stays on .hyperframe-layer. */
+  from { transform: translate3d(-1.8%, -1%, 0) rotate(.2deg); }
+  to { transform: translate3d(1.8%, 1%, 0) rotate(-.2deg); }
 }
 
 @keyframes page-rise {

@@ -498,7 +498,7 @@ export function App() {
     }
   }, [supabaseAuth.session, state.personalNotionConnected, state.notionDb, state.autoSync, userEmail, updateState]);
 
-  const changeTab = (next: TabId) => {
+  const changeTab = useCallback((next: TabId) => {
     const normalized = safeTabId(next);
     const currentIndex = TAB_MANIFEST.findIndex((t) => t.id === safeTab);
     const nextIndex = TAB_MANIFEST.findIndex((t) => t.id === normalized);
@@ -511,7 +511,7 @@ export function App() {
     if (typeof window !== 'undefined' && window.location.hash !== hash) {
       window.history.pushState(null, '', hash);
     }
-  };
+  }, [safeTab, updateState]);
 
   const importReceipts = (receipts: Receipt[]) => {
     for (const receipt of receipts) {
@@ -523,9 +523,13 @@ export function App() {
     setState((prev) => mergePulledData(prev, receipts, trips));
   };
 
-  const handleSyncRetry = () => {
+  const handleSyncRetry = useCallback(() => {
     syncEngine.retryFailedItems();
-  };
+  }, [syncEngine]);
+
+  const handleOpenNewTripWizard = useCallback(() => {
+    setIsNewTripWizardOpen(true);
+  }, []);
 
   const fxTier = useEffectsTier();
 
@@ -576,7 +580,7 @@ export function App() {
           </span>
         </div>
       )}
-      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} updateState={updateState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)}>
+      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} updateState={updateState} onPull={syncEngine.pull} onOpenNewTripWizard={handleOpenNewTripWizard}>
         {(() => {
               // Single source of truth for tab content — previously duplicated verbatim in the
               // animated and non-animated branches, which invited drift.
@@ -750,7 +754,10 @@ export function App() {
       credentialBrokerUrl={state.credentialBrokerUrl}
       onBrokerSession={(session) => updateState(session)}
       onUnlocked={() => {
-        changeTab('dashboard');
+        // Preserve deep links; only force dashboard when no tab hash is present.
+        if (typeof window === 'undefined' || !window.location.hash || window.location.hash === '#') {
+          changeTab('dashboard');
+        }
       }}
       onOfflineMode={(message) => updateState({ syncError: message })}
     >

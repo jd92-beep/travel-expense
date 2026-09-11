@@ -641,7 +641,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
           <label>地區<input value={dayEdit.region} onChange={(e) => setDayEdit({ ...dayEdit, region: e.target.value })} /></label>
           <div className="timeline-day-editor-spots">
             {dayEdit.spots.map((spot, idx) => (
-              <div className="timeline-day-editor-row" key={idx}>
+              <div className="timeline-day-editor-row" key={spot.id || `${spot.time}-${spot.name}`}>
                 <input type="time" value={spot.time} aria-label="時間" onChange={(e) => setDayEdit({ ...dayEdit, spots: dayEdit.spots.map((s, i) => i === idx ? { ...s, time: e.target.value } : s) })} />
                 <input type="time" value={spot.timeEnd || ''} aria-label="結束時間" onChange={(e) => setDayEdit({ ...dayEdit, spots: dayEdit.spots.map((s, i) => i === idx ? { ...s, timeEnd: e.target.value || undefined } : s) })} />
                 <input value={spot.name} placeholder="景點 / 餐廳名" aria-label="名稱" onChange={(e) => setDayEdit({ ...dayEdit, spots: dayEdit.spots.map((s, i) => i === idx ? { ...s, name: e.target.value } : s) })} />
