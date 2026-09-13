@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
-import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
+import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency, todayForReceipts } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { amountToHkd, formatCurrencyAmount, hkdToCurrency, perHkdForCurrency } from '../lib/currency';
 import { needsTranslation, splitInlineTranslation, translateStoreNames } from '../lib/storeTranslation';
@@ -32,7 +32,7 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
   const payTotals = paymentTotals(analysisReceipts, state, resolvedTripCurrency);
   const analysisTotal = analysisReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
   const trueTotal = scopedState.receipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
-  const maxPersonTotal = Math.max(1, ...persons.map((_, i) => settlement.sharedByPayer[i] + settlement.privateByOwner[i]));
+  const maxPersonTotal = Math.max(1, ...persons.map((_, i) => (settlement.sharedByPayer[i] || 0) + (settlement.privateByOwner[i] || 0)));
   const settlementActionPlan = buildSettlementActionPlan(settlement, resolvedTripCurrency, toHkd);
   const topReceipts = scopedState.receipts
     .filter((r) => state.top10IncludeBigItems || !isFlightOrHotelItem(r))
@@ -81,9 +81,17 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
       .then((result) => {
         if (!result || !Object.keys(result).length) return;
         const now = Date.now();
-        const patch = { ...(state.storeTranslations || {}) };
-        for (const [name, translated] of Object.entries(result)) patch[name] = { t: translated, at: now };
-        updateState({ storeTranslations: patch });
+        if (setState) {
+          setState((prev) => {
+            const patch = { ...(prev.storeTranslations || {}) };
+            for (const [name, translated] of Object.entries(result)) patch[name] = { t: translated, at: now };
+            return { ...prev, storeTranslations: patch };
+          });
+        } else {
+          const patch = { ...(state.storeTranslations || {}) };
+          for (const [name, translated] of Object.entries(result)) patch[name] = { t: translated, at: now };
+          updateState({ storeTranslations: patch });
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -109,6 +117,7 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
     itinerary,
     resolvedTripCurrency,
     toHkd,
+    today: todayForReceipts(state, itinerary),
   });
 
   return (
@@ -267,7 +276,7 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
 
       <DataPanel className="payer-panel" icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全 receipts</StatusPill>}>
         {persons.map((p, i) => (
-          <Bar key={p.id} label={p.name} leading={<AvatarBadge person={p} size="sm" />} value={settlement.sharedByPayer[i] + settlement.privateByOwner[i]} max={maxPersonTotal} state={scopedState} color={p.color} />
+          <Bar key={p.id} label={p.name} leading={<AvatarBadge person={p} size="sm" />} value={(settlement.sharedByPayer[i] || 0) + (settlement.privateByOwner[i] || 0)} max={maxPersonTotal} state={scopedState} color={p.color} />
         ))}
         {settlement.crossPrivate.length > 0 && (
           <div className="mini-list">
@@ -547,11 +556,12 @@ function buildBudgetStoryCards({
   itinerary,
   resolvedTripCurrency,
   toHkd,
-}: BudgetStoryInput) {
+  today,
+}: BudgetStoryInput & { today?: string }) {
   const safeBudget = Math.max(0, budget);
   const usedPercent = safeBudget > 0 ? Math.round(analysisTotal / safeBudget * 100) : 0;
   const remaining = Math.max(0, safeBudget - analysisTotal);
-  const remainingDays = remainingTripDays(tripDayCount, trend, itinerary);
+  const remainingDays = remainingTripDays(tripDayCount, trend, itinerary, today);
   const remainingPerDay = Math.round(remaining / remainingDays);
 
   const formatTrip = (amt: number) => `${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(amt)}`;
@@ -612,8 +622,7 @@ function buildSettlementActionPlan(
   ] as const;
 }
 
-function remainingTripDays(tripDayCount: number, trend: Array<[string, number]>, itinerary: ReturnType<typeof getItinerary>) {
-  const today = new Date().toISOString().slice(0, 10);
+function remainingTripDays(tripDayCount: number, trend: Array<[string, number]>, itinerary: ReturnType<typeof getItinerary>, today = new Date().toISOString().slice(0, 10)) {
   const dates = (itinerary.length ? itinerary.map((day) => day.date) : trend.map(([date]) => date)).filter(Boolean).sort();
   if (!dates.length) return Math.max(1, tripDayCount);
   const elapsed = today < dates[0]

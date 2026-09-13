@@ -570,7 +570,14 @@ export function canBePrivateReceipt(r: Pick<Receipt, 'splitMode' | 'beneficiaryI
 export function computeSettlements(state: AppState): SettlementSnapshot {
   const persons = getPersons(state);
   const empty: SettlementSnapshot = { transfers: [], balances: [], sharedTotal: 0, sharedByPayer: [], privateByOwner: [], crossPrivate: [] };
-  if (persons.length < 2) return empty;
+  // Always size payer arrays to persons.length so single-trip Stats bars never read undefined → NaN.
+  if (persons.length < 2) {
+    return {
+      ...empty,
+      sharedByPayer: persons.map(() => 0),
+      privateByOwner: persons.map(() => 0),
+    };
+  }
 
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);

@@ -148,18 +148,29 @@ export function Weather({ state }: { state: AppState }) {
             } catch (innerErr) {
               if (controller.signal.aborted) return null;
               console.warn(`[Weather] Load failed for ${group.label}:`, innerErr);
-              return { coord: { label: group.label, lat: group.lat, lon: group.lon } as WeatherCoord, source: '拉取失敗', slots: [] };
+              // Keep the previous in-memory row on failure so offline force-refresh does not wipe cache.
+              return null;
             }
           });
           const results = (await Promise.all(coordPromises)).filter((r): r is NonNullable<typeof r> => r != null);
+          if (!results.length) return { date: day.date, rows: null as DayWeather[] | null };
           return { date: day.date, rows: results };
         });
         const dayResults = await Promise.all(dayPromises);
         if (controller.signal.aborted) return;
         const next: Record<string, DayWeather[]> = {};
-        for (const { date, rows: dayRows } of dayResults) next[date] = dayRows;
-        setRows(next);
-        setCachedWeatherRows(next);
+        const priorCache = getCachedWeatherRows() || {};
+        for (const { date, rows: dayRows } of dayResults) {
+          if (dayRows) next[date] = dayRows;
+          else if (priorCache[date]) next[date] = priorCache[date];
+        }
+        // Only overwrite when we actually got usable rows; otherwise keep prior cache.
+        if (Object.keys(next).length) {
+          setRows(next);
+          setCachedWeatherRows(next);
+        } else {
+          setStale(true);
+        }
       } catch (err) {
         if (controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : String(err));

@@ -335,7 +335,9 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       const timeEndDiff = (s.timeEnd || '') !== (orig.timeEnd || '');
       const nameDiff = (s.name || '').trim() !== (orig.name || '').trim();
       const typeDiff = (s.type || 'other') !== (orig.type || 'other');
-      return timeDiff || timeEndDiff || nameDiff || typeDiff;
+      const noteDiff = (s.note || '') !== (orig.note || '');
+      const addressDiff = (s.address || '') !== (orig.address || '');
+      return timeDiff || timeEndDiff || nameDiff || typeDiff || noteDiff || addressDiff;
     });
   };
 
@@ -901,9 +903,11 @@ function formatTimelineMinutes(total: number): string {
 }
 
 function minutesForTime(value?: string): number {
-  const match = String(value || '').match(/^(\d{1,2}):(\d{2})/);
+  const match = String(value || '').match(/^(\d{1,3}):(\d{2})/);
   if (!match) return Number.POSITIVE_INFINITY;
-  return Math.min(23, Number(match[1]) || 0) * 60 + Math.min(59, Number(match[2]) || 0);
+  // Keep 24+ hour spill (overnight flights) as later-than-midnight instead of clamping to 23.
+  const hour = Math.max(0, Number(match[1]) || 0);
+  return hour * 60 + Math.min(59, Number(match[2]) || 0);
 }
 
 function normalizeTimelineTimezone(value?: string): string {

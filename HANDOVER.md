@@ -130,6 +130,26 @@ you closed with your session number.
 
 ## What Was Done
 
+### Session 89e (MiMo — production-ready pass: History hydrate race + tab P1s)
+
+Compact `0.23.3`.
+
+1. **History keep-local / hydrate race:** `useAppState` now tracks a mutation sequence; late
+   IndexedDB hydrate no longer clobbers live receipts/queue after the user edits. History
+   conflict smoke is **8/8**.
+2. **Tabs:** Stats single-person settlement bars sized (no NaN); Stats remaining-days uses
+   trip-TZ `todayForReceipts`; Timeline day-editor dirty includes note/address; overnight
+   `minutesForTime` keeps 24+ hours; Scan cloud-pull button matches `busy==='cloud'`;
+   Weather force-refresh failures keep prior cache; Dashboard wizard uses local calendar dates;
+   store-translation writes use functional `setState`.
+3. **Evidence:** typecheck, build, security:scan; smokes: settings(10), history(8), dashboard(8),
+   offline(4), weather(14), timeline(10), scan, itinerary, privacy, session(4), sync-regression(11),
+   stats, auth-broker, mobile-layout, six-person, final-nav, a11y-touch, welcome-guide,
+   trip-intelligence, sync-classify; units: change-journal, trip-local-parser, theme-preference,
+   scoped-persistence, receipt-tombstone, itinerary-merge, shared-trip-outbox, notion-backup.
+   Theme catalog smoke green. `smoke:security` skips Supabase-auth cases without fake env
+   (expected). `smoke:shared-contract` needs a local module path outside this sandbox.
+
 ### Session 89d (MiMo — deeper logic hunt: login / trip / sharing)
 
 Compact `0.23.2`. Multi-agent logic audit + targeted fixes.

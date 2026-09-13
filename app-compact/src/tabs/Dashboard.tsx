@@ -494,10 +494,12 @@ export function Dashboard({
   useEffect(() => {
     if (activeIsWizardOpen) {
       if (!newTripStartDate && !newTripEndDate) {
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const futureDate = new Date();
-        futureDate.setDate(futureDate.getDate() + 6); // 7天 (today + 6 days)
-        const futureStr = futureDate.toISOString().slice(0, 10);
+        // Local calendar date — never UTC ISO (wrong "today" before 08:00 in UTC+8).
+        const now = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        const futureDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 6);
+        const futureStr = `${futureDate.getFullYear()}-${pad(futureDate.getMonth() + 1)}-${pad(futureDate.getDate())}`;
         setNewTripStartDate(todayStr);
         setNewTripEndDate(futureStr);
       }

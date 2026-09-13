@@ -745,8 +745,8 @@ export function Scan({
           {mode === 'email' && (
             <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm flex flex-col gap-3">
               <div className="flex gap-2">
-                <button className="secondary bg-white text-black flex-1 font-bold" type="button" disabled={busy === 'notion'} onClick={handlePullPending}>
-                  <RefreshCw size={18} className={busy === 'notion' ? 'spin' : ''} /> 即時同步
+                <button className="secondary bg-white text-black flex-1 font-bold" type="button" disabled={busy === 'notion' || busy === 'cloud'} onClick={handlePullPending}>
+                  <RefreshCw size={18} className={busy === 'notion' || busy === 'cloud' ? 'spin' : ''} /> 即時同步
                 </button>
                 {!cloudSyncAvailable && (
                   <button className="secondary bg-white text-black flex-1 font-bold" type="button" onClick={handleCopyGmail}>

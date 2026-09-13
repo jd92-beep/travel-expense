@@ -304,8 +304,6 @@ export function History({
       };
     });
     setStatus('已保留本機版本，稍後會重新同步。');
-    // Ensure the keep-local write hits localStorage before the next paint/test snapshot.
-    try { window.dispatchEvent(new Event('pagehide')); } catch { /* best effort */ }
   }
 
   function handleKeepCloud(conflict: ReceiptConflictItem) {
