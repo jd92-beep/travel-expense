@@ -206,12 +206,66 @@ html.wfx-page-hidden .wfx * { animation-play-state: paused !important; }
 .weather-day > *:not(.wfx) { position: relative; z-index: 1; }
 .preview-weather-current-card > *:not(.wfx) { position: relative; z-index: 1; }
 
-/* Polish: gently floating hero icon + soft card lift on hover */
+/* Theme-aware weather ink — always readable on card; uses regional weather accent. */
+html[data-app-theme] .preview-weather-temp strong {
+  color: var(--theme-text) !important;
+  background: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  -webkit-text-fill-color: currentColor !important;
+  text-shadow: 0 2px 18px color-mix(in srgb, var(--theme-fn-weather, var(--theme-accent)) 28%, transparent);
+}
+html[data-app-theme] .preview-weather-temp span,
+html[data-app-theme] .preview-weather-temp small {
+  color: var(--theme-muted) !important;
+}
+html[data-app-theme] .preview-weather-place {
+  color: var(--theme-fn-weather, var(--theme-status-info)) !important;
+}
+html[data-app-theme] .preview-weather-facts span {
+  color: var(--theme-muted) !important;
+}
+html[data-app-theme] .preview-weather-facts b {
+  color: var(--theme-text) !important;
+}
+html[data-app-theme] .preview-weather-facts .hot {
+  color: var(--theme-status-danger) !important;
+}
+html[data-app-theme] .preview-weather-hourly-chip {
+  background: color-mix(in srgb, var(--theme-surface) 82%, transparent) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+html[data-app-theme] .preview-weather-hourly-chip b,
+html[data-app-theme] .preview-weather-hourly-chip em {
+  color: inherit !important;
+}
+html[data-app-theme] .preview-weather-source-strip span {
+  background: color-mix(in srgb, var(--theme-surface) 88%, transparent) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+html[data-app-theme] .preview-weather-source-strip .weather-fallback-chip {
+  color: var(--theme-status-warning) !important;
+}
+html[data-app-theme] .weather-day-date {
+  color: var(--theme-text) !important;
+}
+html[data-app-theme] .weather-stale-hint {
+  color: var(--theme-muted) !important;
+}
+
+/* Card lift uses theme weather glow instead of a hardcoded blue shadow */
 .preview-weather-hero-icon { animation: wfx-float 6s ease-in-out infinite; will-change: transform; }
 @keyframes wfx-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-.weather-day { transition: transform 0.3s ease, box-shadow 0.3s ease; }
+.weather-day {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
 @media (hover: hover) {
-  .weather-day:hover { transform: translateY(-2px); box-shadow: 0 18px 40px rgba(30, 77, 107, 0.14); }
+  .weather-day:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 40px color-mix(in srgb, var(--theme-fn-weather, var(--theme-accent)) 18%, transparent);
+  }
 }
 
 /* Meteocons sit on tight line-height contexts (badges/chips) — keep them optically centered */
@@ -221,4 +275,5 @@ html.wfx-page-hidden .wfx * { animation-play-state: paused !important; }
   .wfx-cloud, .wfx-cloud-highlight, .wfx-fog-band, .wfx-rain-plane, .wfx-drop, .wfx-splash, .wfx-flake,
   .wfx-sun-rays, .wfx-sun-glow, .wfx-sun-corona, .wfx-shaft, .wfx-flash, .wfx-storm-cloud { animation: none !important; display: none; }
   .preview-weather-hero-icon { animation: none !important; }
+  .weather-day { transition: none; }
 }

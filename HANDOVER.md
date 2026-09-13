@@ -130,6 +130,20 @@ you closed with your session number.
 
 ## What Was Done
 
+### Session 89g (MiMo — weather APIs + themed weather UI)
+
+Compact `0.23.5`.
+
+1. **APIs:** added **MET Norway Locationforecast 2.0** as official provider for UK / Nordics /
+   Western Europe (CORS-friendly, no key). Open-Meteo fallback ladder now prefers regional
+   models: `jma_seamless`, `icon_seamless`, `meteofrance_seamless`, `ukmo_seamless`,
+   `kma_seamless` — still keyless. Korea/TW/AU stay on Open-Meteo models (no clean official
+   browser JSON). WeatherAPI.com remains broker-backed.
+2. **UI colors:** weather temp/place/hourly/source ink now uses `--theme-fn-weather` and
+   `--theme-text/muted/surface` so regional themes stay consistent; hover glow uses weather
+   accent instead of a hardcoded blue. FX animations remain transform/opacity-only.
+3. **Evidence:** typecheck, build; `smoke:weather` **14/14**; settings(10), dashboard(8).
+
 ### Session 89f (MiMo — theme polish: smooth switch, regional identity, readability)
 
 Compact `0.23.4`.
