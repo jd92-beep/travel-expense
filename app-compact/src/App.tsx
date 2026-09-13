@@ -28,6 +28,7 @@ import { clearIndexedState } from './storage/indexedDb';
 import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/WelcomeGuidePopup';
 import { upsertSupabaseTrip } from './lib/supabase';
 import { hasDeviceTrust, clearDeviceTrust } from './security/deviceTrust';
+import { clearTrustedDevice } from './security/trustedDevice';
 import { TripThemeProvider } from './theme/tripTheme';
 
 // Trigger Vercel build
@@ -296,6 +297,7 @@ export function App() {
     await clearIndexedState(scope);
     clearCredentialSession();
     await clearDeviceTrust();
+    await clearTrustedDevice();
     try { localStorage.removeItem('boss-japan-tracker:theme:v1'); } catch { /* explicit device clear stays best-effort */ }
   };
 
@@ -312,12 +314,16 @@ export function App() {
     }
     inviteInFlight.current.add(token);
     acceptSupabaseTripInvite(effectiveSupabaseSession, token)
-      .then(async () => {
+      .then(async (accepted) => {
         try { localStorage.removeItem('travel-expense:pending-invite-token'); } catch { /* best effort */ }
         // Mark accepted only on success — a failed attempt must stay retryable.
         setAcceptedInviteToken(token);
         window.history.replaceState(null, '', '#settings');
         setTab('settings');
+        // Activate the accepted trip before pull so first visit shows the right people/itinerary.
+        if (accepted?.tripId) {
+          updateState({ activeTripId: accepted.tripId });
+        }
         await pull();
       })
       .catch((inviteError) => {
@@ -752,7 +758,10 @@ export function App() {
   return (
     <TripThemeProvider state={state} ready={isStorageReady}><AuthGate
       credentialBrokerUrl={state.credentialBrokerUrl}
-      onBrokerSession={(session) => updateState(session)}
+      onBrokerSession={(session) => updateState({
+        credentialSession: session.credentialSession,
+        credentialSessionExpiresAt: session.credentialSessionExpiresAt,
+      })}
       onUnlocked={() => {
         // Preserve deep links; only force dashboard when no tab hash is present.
         if (typeof window === 'undefined' || !window.location.hash || window.location.hash === '#') {

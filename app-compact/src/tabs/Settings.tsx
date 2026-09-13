@@ -1874,12 +1874,30 @@ export function Settings({
     if (!window.confirm(`確定退出「${currentTrip.name}」？你會即時失去呢個旅程嘅存取權；已同步嘅記帳會保留喺旅程入面。`)) return;
     await run('退出旅程', async () => {
       await leaveSupabaseTrip(sharingSession, currentTrip);
+      const leftTripId = currentTrip.id;
       setState((prev) => {
-        const nextTrips = (prev.trips || []).filter((trip) => trip.id !== currentTrip.id);
+        const nextTrips = (prev.trips || []).filter((trip) => trip.id !== leftTripId);
         const nextActive = nextTrips[0];
+        const peopleByTripId = { ...(prev.peopleByTripId || {}) };
+        const shareRatiosByTripId = { ...(prev.shareRatiosByTripId || {}) };
+        delete peopleByTripId[leftTripId];
+        delete shareRatiosByTripId[leftTripId];
+        const nextPeople = (nextActive && peopleByTripId[nextActive.id]?.length)
+          ? peopleByTripId[nextActive.id]
+          : prev.persons;
+        const nextRatios = (nextActive && shareRatiosByTripId[nextActive.id])
+          ? shareRatiosByTripId[nextActive.id]
+          : prev.shareRatios;
         return migrateAppState({
           ...prev,
           trips: nextTrips,
+          peopleByTripId,
+          shareRatiosByTripId,
+          receipts: prev.receipts.filter((receipt) => receipt.tripId !== leftTripId),
+          syncQueue: (prev.syncQueue || []).filter((item) => {
+            const payloadTripId = (item.payload as { tripId?: string } | undefined)?.tripId;
+            return item.entityId !== leftTripId && payloadTripId !== leftTripId;
+          }),
           ...(nextActive ? {
             activeTripId: nextActive.id,
             tripName: nextActive.name,
@@ -1887,6 +1905,8 @@ export function Settings({
             budget: nextActive.budget ?? 0,
             tripCurrency: nextActive.currencies?.find((code) => code !== 'HKD') || prev.tripCurrency,
             customItinerary: nextActive.itinerary || [],
+            persons: nextPeople,
+            shareRatios: nextRatios,
           } : {}),
           settingsUpdatedAt: Date.now(),
         });
@@ -1920,15 +1940,26 @@ export function Settings({
     setState((prev) => {
       const now = Date.now();
       const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
-      // Snapshot outgoing active-trip people before switching to the applied draft trip.
-      const peoplePatch = switchTrip(prev, draft.trip.id) || {};
+      // Snapshot outgoing active-trip people even when the draft trip id is brand new
+      // (switchTrip returns null if the target trip does not exist yet).
+      const prevTripId = prev.activeTripId;
+      const peopleByTripId = { ...(prev.peopleByTripId || {}) };
+      const shareRatiosByTripId = { ...(prev.shareRatiosByTripId || {}) };
+      if (prevTripId && prevTripId !== draft.trip.id && prev.persons?.length) {
+        peopleByTripId[prevTripId] = prev.persons;
+        if (prev.shareRatios) shareRatiosByTripId[prevTripId] = prev.shareRatios;
+      }
       const exists = prevTrips.some((trip) => trip.id === draft.trip.id);
       const tripsNext = exists
         ? prevTrips.map((trip) => trip.id === draft.trip.id ? { ...draft.trip, active: true, archived: false } : { ...trip, active: false })
         : [...prevTrips.map((trip) => ({ ...trip, active: false })), { ...draft.trip, active: true, archived: false }];
       return migrateAppState({
         ...prev,
-        ...peoplePatch,
+        peopleByTripId,
+        shareRatiosByTripId,
+        // Applying a trip draft does not change the live companion list; maps snapshot the outgoing trip.
+        persons: prev.persons,
+        shareRatios: prev.shareRatios,
         activeTripId: draft.trip.id,
         trips: tripsNext,
         tripName: draft.trip.name,

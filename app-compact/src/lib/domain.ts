@@ -216,6 +216,27 @@ export function shareRatiosForTrip(state: AppState, tripId?: string): Record<str
   return state.shareRatios || {};
 }
 
+/** Ratios must cover every person id or settlement treats missing keys as 0. */
+export function ensureShareRatiosCoverPersons(
+  persons: Person[],
+  ratios: Record<string, number> | undefined,
+): Record<string, number> {
+  const next = { ...(ratios || {}) };
+  let missing = false;
+  for (const person of persons) {
+    if (Number(next[person.id]) <= 0) {
+      missing = true;
+      break;
+    }
+  }
+  if (!missing) return next;
+  const equal = Math.floor(100 / Math.max(1, persons.length));
+  for (const person of persons) {
+    if (Number(next[person.id]) <= 0) next[person.id] = equal;
+  }
+  return next;
+}
+
 export function displayStore(receipt: Receipt): string {
   return receipt.store?.startsWith('⏳ ') ? receipt.store.slice(2) : receipt.store || '';
 }

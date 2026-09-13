@@ -255,7 +255,7 @@ function jsonMatches(left: unknown, right: unknown): boolean {
 }
 
 function cleanInviteRole(value: unknown): Exclude<TripMemberRole, 'owner' | 'admin'> {
-  return value === 'viewer' ? 'viewer' : 'editor';
+  return value === 'editor' ? 'editor' : 'viewer';
 }
 
 function cleanMemberRole(value: unknown): TripMemberRole {

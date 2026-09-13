@@ -544,17 +544,24 @@ export function collectLocalDayHeaders(text: string, year: string): LocalDayHead
   const firstKnown = dated[0]?.date || `${year}-01-01`;
   const [fy, fm, fd] = firstKnown.split('-').map(Number);
   const base = Date.UTC(fy || Number(year), (fm || 1) - 1, fd || 1);
-  const seen = new Set<string>();
+  const seenIndex = new Set<string>();
+  const seenDate = new Set<string>();
   const filled = headers
     .sort((a, b) => a.index - b.index)
     .filter((header) => {
-      if (seen.has(String(header.index))) return false;
-      seen.add(String(header.index));
+      if (seenIndex.has(String(header.index))) return false;
+      seenIndex.add(String(header.index));
+      // Drop a second header that claims the same calendar date as an earlier one.
+      if (header.date) {
+        if (seenDate.has(header.date)) return false;
+        seenDate.add(header.date);
+      }
       return true;
     })
     .map((header, i) => {
       if (header.date) return header;
-      const d = new Date(base + i * 86400000);
+      const dayOffset = Math.max(0, (header.dayNo || i + 1) - 1);
+      const d = new Date(base + dayOffset * 86400000);
       const iso = d.toISOString().slice(0, 10);
       return { ...header, date: iso, dayNo: header.dayNo || i + 1 };
     });
@@ -754,9 +761,10 @@ function sortSpotsByTime(spots: ItineraryDay['spots']): ItineraryDay['spots'] {
 }
 
 function extractLodgingName(block: string): string | undefined {
+  // Require an explicit lodging cue + separator so 住吉大社 is not treated as lodging.
   const patterns = [
-    /(?:住宿|住|Stay|Hotel|酒店)[:：]?\s*([^\n｜|]+)/i,
-    /(?:check-?in|入住)[:：]?\s*([^\n｜|]+)/i,
+    /(?:住宿|Stay|Hotel|酒店|入住|check-?in)\s*[:：]\s*([^\n｜|]+)/i,
+    /(?:住宿|Stay)\s*[:：]?\s*([^\n｜|]+)/i,
   ];
   for (const pattern of patterns) {
     const match = block.match(pattern);
@@ -1363,13 +1371,14 @@ function detectItineraryIntent(
     return { intent: 'full', pastedDates, existingDates };
   }
 
+  // Full replace only when the paste covers EVERY existing day. Partial coverage
+  // (e.g. 4 of 5 days) must stay partial so the missing day is not wiped.
   let matched = 0;
-  for (const d of pastedDates) {
-    if (existingDates.has(d)) matched++;
+  for (const d of existingDates) {
+    if (pastedDates.has(d)) matched++;
   }
-
   const coverage = matched / existingDates.size;
-  if (coverage >= 0.8) {
+  if (coverage >= 1) {
     return { intent: 'full', pastedDates, existingDates };
   }
 
@@ -1543,6 +1552,8 @@ function mergeTripDrafts(
     }
 
     mergedDays.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    // Re-number after sort so Day tabs and Timeline stay aligned with chronological order.
+    mergedDays.forEach((day, index) => { day.day = index + 1; });
 
     return {
       ...llmDraft,
@@ -1555,27 +1566,47 @@ function mergeTripDrafts(
   const localDays = localDraft.trip.itinerary;
   if (llmDays.length >= localDays.length) return llmDraft;
 
-  const mergedDays: ItineraryDay[] = [];
-  const maxDays = Math.max(llmDays.length, localDays.length);
-  for (let i = 0; i < maxDays; i++) {
-    const llmDay = llmDays[i];
-    const localDay = localDays[i];
-    if (llmDay && localDay) {
-      mergedDays.push({
-        ...llmDay,
-        note: llmDay.note || localDay.note,
-        lodging: llmDay.lodging?.name ? llmDay.lodging : localDay.lodging,
-        spots: mergeDaySpots(llmDay.spots, localDay.spots),
-      });
-    } else {
-      mergedDays.push(llmDay || localDay!);
+  // Date-based merge so reordered/shorter LLM output cannot attach local spots to the wrong day.
+  const localByDate = new Map(localDays.map((d) => [d.date, d]));
+  const mergedDays: ItineraryDay[] = llmDays.map((llmDay) => {
+    const localDay = llmDay.date ? localByDate.get(llmDay.date) : undefined;
+    if (!localDay) return llmDay;
+    return {
+      ...llmDay,
+      note: llmDay.note || localDay.note,
+      lodging: llmDay.lodging?.name ? llmDay.lodging : localDay.lodging,
+      spots: mergeDaySpots(llmDay.spots, localDay.spots),
+    };
+  });
+  for (const localDay of localDays) {
+    if (localDay.date && !llmDays.some((d) => d.date === localDay.date)) {
+      mergedDays.push(localDay);
     }
   }
+  mergedDays.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+  mergedDays.forEach((day, index) => { day.day = index + 1; });
 
   return {
     ...llmDraft,
     trip: { ...llmDraft.trip, itinerary: mergedDays },
     warnings: [...llmDraft.warnings, ...(localDraft.warnings || [])].filter(Boolean),
+  };
+}
+
+function clampPartialTripDraft(draft: TripDraft, current: { id: string; name: string; startDate: string; endDate: string; version: number }): TripDraft {
+  const dates = draft.trip.itinerary.map((d) => d.date).filter(Boolean).sort();
+  const startDate = [current.startDate, ...dates].filter(Boolean).sort()[0] || current.startDate;
+  const endDate = [current.endDate, ...dates].filter(Boolean).sort().slice(-1)[0] || current.endDate;
+  return {
+    ...draft,
+    trip: {
+      ...draft.trip,
+      id: current.id,
+      name: draft.trip.name || current.name,
+      startDate,
+      endDate,
+      version: current.version + 1,
+    },
   };
 }
 
@@ -1616,7 +1647,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
       if (hasFastLocalDraft && Date.now() - startedAt > TRIP_FAST_LOCAL_DEADLINE_MS) {
         warnings.push('AI provider analysis exceeded the fast response window; local itinerary extraction is ready for confirmation.');
         const draft = localDraftWithWarnings(warnings);
-        if (draft) return draft;
+        if (draft) return intent === 'partial' ? clampPartialTripDraft(draft, current) : draft;
       }
       try {
         const timeoutMs = tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft);
@@ -1658,20 +1689,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
         }, state, organizedItinerary);
         if (hasUsefulTripItinerary(draft)) {
           const merged = mergeTripDrafts(draft, fastLocalDraft, intent, current.itinerary || []);
-          // Partial paste updates the active trip in place — never mint a new trip id
-          // or shrink the active date range from a subset of pasted days.
-          const safeMerged = intent === 'partial'
-            ? {
-                ...merged,
-                trip: {
-                  ...merged.trip,
-                  id: current.id,
-                  startDate: current.startDate,
-                  endDate: current.endDate,
-                  version: current.version + 1,
-                },
-              }
-            : merged;
+          const safeMerged = intent === 'partial' ? clampPartialTripDraft(merged, current) : merged;
           return {
             ...safeMerged,
             warnings: [...warnings, ...safeMerged.warnings].filter(Boolean),
@@ -1689,14 +1707,18 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
       }
     }
     const localDraft = localDraftWithWarnings(warnings) || localTripDraftFromParagraph(paragraph, state, warnings);
-    if (localDraft && hasUsefulTripItinerary(localDraft)) return localDraft;
+    if (localDraft && hasUsefulTripItinerary(localDraft)) {
+      return intent === 'partial' ? clampPartialTripDraft(localDraft, current) : localDraft;
+    }
     throw new Error([...warnings, last instanceof Error ? last.message : '', 'All trip LLM attempts returned no usable itinerary spots.'].filter(Boolean).join(' | '));
   } catch (error) {
     // Preserve metering hard stops — do not paper over them with a local draft.
     if (isQuotaHardStopError(error)) throw error;
     const localDraft = localDraftWithWarnings([error instanceof Error ? error.message : String(error)])
       || localTripDraftFromParagraph(paragraph, state, [error instanceof Error ? error.message : String(error)]);
-    if (localDraft && hasUsefulTripItinerary(localDraft)) return localDraft;
+    if (localDraft && hasUsefulTripItinerary(localDraft)) {
+      return intent === 'partial' ? clampPartialTripDraft(localDraft, current) : localDraft;
+    }
     const fallback = tripFromLegacyState({
       ...state,
       tripName: current.name,

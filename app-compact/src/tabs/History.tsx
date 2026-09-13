@@ -262,7 +262,7 @@ export function History({
         updatedAt: now,
       };
       let matched = false;
-      const nextQueue = (prev.syncQueue || []).map((item) => {
+      const mappedQueue = (prev.syncQueue || []).map((item) => {
         const matches = item.id === conflict.queueItem?.id || queueItemMatchesReceipt(item, currentReceipt);
         if (!matches || item.type !== 'receipt') return item;
         matched = true;
@@ -276,7 +276,7 @@ export function History({
         };
       });
       if (!matched) {
-        nextQueue.push({
+        mappedQueue.push({
           id: `receipt-conflict-${updatedReceipt.id}-${now}`,
           type: 'receipt',
           entityId: updatedReceipt.id,
@@ -288,6 +288,12 @@ export function History({
           payload: buildSafeReceiptPayload(updatedReceipt, now),
         });
       }
+      // Drop any other failed copies of this receipt so hydration cannot re-mark it failed.
+      const nextQueue = mappedQueue.filter((item) => !(
+        item.type === 'receipt'
+        && isFailedQueueItem(item)
+        && queueItemMatchesReceipt(item, updatedReceipt)
+      ));
       const stillHasFailedQueue = nextQueue.some(isFailedQueueItem);
       return {
         ...prev,
@@ -298,6 +304,8 @@ export function History({
       };
     });
     setStatus('已保留本機版本，稍後會重新同步。');
+    // Ensure the keep-local write hits localStorage before the next paint/test snapshot.
+    try { window.dispatchEvent(new Event('pagehide')); } catch { /* best effort */ }
   }
 
   function handleKeepCloud(conflict: ReceiptConflictItem) {

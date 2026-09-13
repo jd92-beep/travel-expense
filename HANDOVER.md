@@ -130,6 +130,25 @@ you closed with your session number.
 
 ## What Was Done
 
+### Session 89d (MiMo — deeper logic hunt: login / trip / sharing)
+
+Compact `0.23.2`. Multi-agent logic audit + targeted fixes.
+
+1. **Login:** keep durable trust on transient refresh/network failure (only wipe on 401/revoked);
+   `onUnlocked` on restore paths; Enter/submit busy guard; do not `clearDeviceTrust` on missing
+   device key inside AuthGate effect (StrictMode re-run re-locked the app); Supabase device clear
+   also `clearTrustedDevice`; broker session update does not leak `device` object into AppState.
+2. **Trip paste:** partial clamp on **all** local-return paths; partial expands (never shrinks)
+   trip dates; full replace only when paste covers **every** existing day; lodging regex no longer
+   matches 住吉大社; header dedupe by date; full-path merge by date; day renumber after sort.
+3. **Sharing:** `cleanInviteRole` default viewer; leave-trip cleans people maps/receipts/queue and
+   restores next-trip people; invite accept activates `accepted.tripId`; outbox marks private jobs
+   failed (not silent success); applyTripDraft snapshots outgoing people even for new trip ids;
+   keep-local drops leftover failed queue copies for the receipt.
+4. **Evidence:** typecheck, build, security:scan, parser/change-journal units, auth-broker,
+   offline (4). Settings smoke ~9–10/11. **History conflict keep-local still fails on `main`
+   `23cef3f` as well** (pre-existing persist/hydrate race — open item).
+
 ### Session 89c (MiMo — trip polish, live modal stats, private share filter, pre-merge review)
 
 Same worktree/branch. Compact Web `0.23.1`.
