@@ -147,6 +147,7 @@ export function History({
   onOpen,
   onConfirmPending,
   onPull,
+  onFlushPersist,
   cloudSyncAvailable = false,
 }: {
   state: AppState;
@@ -157,6 +158,7 @@ export function History({
   onOpen: (receipt: Receipt) => void;
   onConfirmPending: (receipt: Receipt) => void;
   onPull?: () => Promise<void>;
+  onFlushPersist?: () => void;
   cloudSyncAvailable?: boolean;
 }) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
@@ -170,7 +172,6 @@ export function History({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
-
 
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
@@ -254,80 +255,81 @@ export function History({
   function handleKeepLocal(conflict: ReceiptConflictItem) {
     if (!setState) return;
     const now = Date.now();
-    setState((prev) => {
-      const currentReceipt = prev.receipts.find((receipt) => receipt.id === conflict.receipt.id) || conflict.receipt;
-      const updatedReceipt: Receipt = {
-        ...currentReceipt,
-        syncStatus: 'queued',
-        updatedAt: now,
-      };
-      let matched = false;
-      const mappedQueue = (prev.syncQueue || []).map((item) => {
-        const matches = item.id === conflict.queueItem?.id || queueItemMatchesReceipt(item, currentReceipt);
-        if (!matches || item.type !== 'receipt') return item;
-        matched = true;
-        return {
-          ...item,
-          error: undefined,
-          status: 'queued' as const,
-          attempts: 0,
-          updatedAt: now,
-          payload: buildSafeReceiptPayload(updatedReceipt, now),
-        };
-      });
-      if (!matched) {
-        mappedQueue.push({
-          id: `receipt-conflict-${updatedReceipt.id}-${now}`,
-          type: 'receipt',
-          entityId: updatedReceipt.id,
-          op: updatedReceipt.supabaseId || updatedReceipt.notionPageId ? 'update' : 'create',
-          status: 'queued',
-          attempts: 0,
-          createdAt: now,
-          updatedAt: now,
-          payload: buildSafeReceiptPayload(updatedReceipt, now),
-        });
-      }
-      // Drop any other failed copies of this receipt so hydration cannot re-mark it failed.
-      const nextQueue = mappedQueue.filter((item) => !(
-        item.type === 'receipt'
-        && isFailedQueueItem(item)
-        && queueItemMatchesReceipt(item, updatedReceipt)
-      ));
-      const stillHasFailedQueue = nextQueue.some(isFailedQueueItem);
+    const prev = state;
+    const currentReceipt = prev.receipts.find((receipt) => receipt.id === conflict.receipt.id) || conflict.receipt;
+    const updatedReceipt: Receipt = {
+      ...currentReceipt,
+      syncStatus: 'queued',
+      updatedAt: now,
+    };
+    let matched = false;
+    const mappedQueue = (prev.syncQueue || []).map((item) => {
+      const matches = item.id === conflict.queueItem?.id || queueItemMatchesReceipt(item, currentReceipt);
+      if (!matches || item.type !== 'receipt') return item;
+      matched = true;
       return {
-        ...prev,
-        receipts: prev.receipts.map((receipt) => receipt.id === updatedReceipt.id ? updatedReceipt : receipt),
-        syncQueue: nextQueue.slice(-500),
-        globalSyncStatus: stillHasFailedQueue ? prev.globalSyncStatus : 'queued',
-        syncError: stillHasFailedQueue ? prev.syncError : '',
+        ...item,
+        error: undefined,
+        status: 'queued' as const,
+        attempts: 0,
+        updatedAt: now,
+        payload: buildSafeReceiptPayload(updatedReceipt, now),
       };
     });
+    if (!matched) {
+      mappedQueue.push({
+        id: `receipt-conflict-${updatedReceipt.id}-${now}`,
+        type: 'receipt',
+        entityId: updatedReceipt.id,
+        op: updatedReceipt.supabaseId || updatedReceipt.notionPageId ? 'update' : 'create',
+        status: 'queued',
+        attempts: 0,
+        createdAt: now,
+        updatedAt: now,
+        payload: buildSafeReceiptPayload(updatedReceipt, now),
+      });
+    }
+    // Drop any other failed copies of this receipt so hydration cannot re-mark it failed.
+    const nextQueue = mappedQueue.filter((item) => !(
+      item.type === 'receipt'
+      && isFailedQueueItem(item)
+      && queueItemMatchesReceipt(item, updatedReceipt)
+    ));
+    const stillHasFailedQueue = nextQueue.some(isFailedQueueItem);
+    const next: AppState = {
+      ...prev,
+      receipts: prev.receipts.map((receipt) => receipt.id === updatedReceipt.id ? updatedReceipt : receipt),
+      syncQueue: nextQueue.slice(-500),
+      globalSyncStatus: stillHasFailedQueue ? prev.globalSyncStatus : 'queued',
+      syncError: stillHasFailedQueue ? prev.syncError : '',
+    };
+    // Plain-object commit persists synchronously (see useAppState.commitState).
+    setState(next);
     setStatus('已保留本機版本，稍後會重新同步。');
   }
 
   function handleKeepCloud(conflict: ReceiptConflictItem) {
     if (!setState) return;
     const now = Date.now();
-    setState((prev) => {
-      const currentReceipt = prev.receipts.find((receipt) => receipt.id === conflict.receipt.id) || conflict.receipt;
-      const cloudStatus = currentReceipt.supabaseId || currentReceipt.notionPageId ? 'synced' : 'local';
-      const nextQueue = (prev.syncQueue || []).filter((item) => (
-        item.id !== conflict.queueItem?.id && !queueItemMatchesReceipt(item, currentReceipt)
-      ));
-      const stillHasFailedQueue = nextQueue.some(isFailedQueueItem);
-      return {
-        ...prev,
-        receipts: prev.receipts.map((receipt) => receipt.id === currentReceipt.id ? {
-          ...receipt,
-          syncStatus: cloudStatus,
-          updatedAt: now,
-        } : receipt),
-        syncQueue: nextQueue,
-        globalSyncStatus: stillHasFailedQueue ? prev.globalSyncStatus : (nextQueue.length ? 'queued' : 'idle'),
-        syncError: stillHasFailedQueue ? prev.syncError : '',
-      };
-    });
+    const prev = state;
+    const currentReceipt = prev.receipts.find((receipt) => receipt.id === conflict.receipt.id) || conflict.receipt;
+    const cloudStatus = currentReceipt.supabaseId || currentReceipt.notionPageId ? 'synced' : 'local';
+    const nextQueue = (prev.syncQueue || []).filter((item) => (
+      item.id !== conflict.queueItem?.id && !queueItemMatchesReceipt(item, currentReceipt)
+    ));
+    const stillHasFailedQueue = nextQueue.some(isFailedQueueItem);
+    const next: AppState = {
+      ...prev,
+      receipts: prev.receipts.map((receipt) => receipt.id === currentReceipt.id ? {
+        ...receipt,
+        syncStatus: cloudStatus,
+        updatedAt: now,
+      } : receipt),
+      syncQueue: nextQueue,
+      globalSyncStatus: stillHasFailedQueue ? prev.globalSyncStatus : (nextQueue.length ? 'queued' : 'idle'),
+      syncError: stillHasFailedQueue ? prev.syncError : '',
+    };
+    setState(next);
     setStatus('已信任雲端版本，停止重試本機衝突。');
   }
 

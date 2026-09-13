@@ -59,11 +59,6 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   // (e.g. History "Keep local" racing an in-flight hydrateScope).
   const mutationSeqRef = useRef(0);
 
-  const commitState = useCallback((action: SetStateAction<AppState>) => {
-    mutationSeqRef.current += 1;
-    setState(action);
-  }, []);
-
   // Coalesce the full-AppState snapshot write: typing/upserting would otherwise serialize the
   // entire state to localStorage + IndexedDB on every setState. Flushed on hide/unmount/scope change.
   const flushPersist = useCallback(() => {
@@ -86,10 +81,30 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     });
   }, []);
 
+  const commitState = useCallback((action: SetStateAction<AppState>) => {
+    mutationSeqRef.current += 1;
+    // Plain object updates (e.g. History keep-local) persist immediately so UI observers
+    // that snapshot localStorage in the same turn see the write.
+    if (action && typeof action === 'object' && !Array.isArray(action)) {
+      const next = action as AppState;
+      pendingPersistRef.current = { scope: storageScope, userEmail, state: next };
+      setState(next);
+      flushPersist();
+      return;
+    }
+    setState(action);
+  }, [storageScope, userEmail, flushPersist]);
+
+  const persistGenRef = useRef(0);
   const schedulePersist = useCallback((scope: string, email: string | null, next: AppState, delayMs: number) => {
+    persistGenRef.current += 1;
+    const gen = persistGenRef.current;
     pendingPersistRef.current = { scope, userEmail: email, state: next };
     if (persistTimerRef.current != null) window.clearTimeout(persistTimerRef.current);
-    persistTimerRef.current = window.setTimeout(flushPersist, delayMs);
+    persistTimerRef.current = window.setTimeout(() => {
+      if (gen !== persistGenRef.current) return;
+      flushPersist();
+    }, delayMs);
   }, [flushPersist]);
 
   useLayoutEffect(() => {
@@ -264,6 +279,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     upsertReceipt,
     deleteReceipt,
     resetLocal,
+    flushPersist,
     hydratedScope,
     isHydratingScope: hydratedScope !== storageScope,
     isStorageReady: hydratedScope === storageScope && indexedReadyScope === storageScope,

@@ -130,6 +130,22 @@ you closed with your session number.
 
 ## What Was Done
 
+### Session 89f (MiMo — theme polish: smooth switch, regional identity, readability)
+
+Compact `0.23.4`.
+
+1. **Smooth themes:** `html.theme-switching` eases canvas/card/rail/input/CTA colors for ~420ms
+   on theme change; `prefers-reduced-motion` disables it. Selector options have hover lift +
+   color swatches (canvas/accent/charts) + regional motif subtitle.
+2. **Regional + functional:** every theme has `region.label/motif` and `functional` tokens
+   (`--theme-fn-scan/weather/timeline/stats`) wired to Scan CTA, weather emphasis, dock current
+   tab, stats titles. Europe Rail ambient motion enabled (was 0s). Art layers enriched (washi
+   floor glow, UK gold corner). Glass vars raised to ~72/88% so art never eats body copy.
+3. **History keep-local/cloud persist:** plain-object `setState` flushes storage synchronously
+   (`commitState`); keep-cloud also uses plain object — history conflict smoke **8/8**.
+4. **Evidence:** typecheck, build, security:scan; settings(10), history(8), dashboard(8), stats,
+   offline(4), theme catalog — green.
+
 ### Session 89e (MiMo — production-ready pass: History hydrate race + tab P1s)
 
 Compact `0.23.3`.

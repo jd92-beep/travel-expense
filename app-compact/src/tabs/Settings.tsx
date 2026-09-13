@@ -47,7 +47,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { GradientButton } from '../components/ui/gradient-button';
 import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
-import { THEME_OPTIONS, useTripTheme } from '../theme/tripTheme';
+import { THEME_OPTIONS, TRIP_THEMES, useTripTheme } from '../theme/tripTheme';
 
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
 const MAX_SAFE_AMOUNT = 1_000_000_000;
@@ -2528,18 +2528,32 @@ export function Settings({
           <h2 id="settings-theme-title">外觀主題</h2>
           <p className="muted">揀手動主題會套用到所有旅程；揀自動就跟返而家旅程嘅目的地。毋須另存。</p>
           <div className="theme-selector" role="radiogroup" aria-label="App theme">
-            {THEME_OPTIONS.map((option) => (
-              <label className="theme-option" key={option.value}>
-                <input
-                  type="radio"
-                  name="app-theme"
-                  value={option.value}
-                  checked={themePreference === option.value}
-                  onChange={() => updateState({ themePreference: option.value })}
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
+            {THEME_OPTIONS.map((option) => {
+              const definition = option.value === 'auto' ? null : TRIP_THEMES[option.value as keyof typeof TRIP_THEMES];
+              return (
+                <label className="theme-option" key={option.value}>
+                  <input
+                    type="radio"
+                    name="app-theme"
+                    value={option.value}
+                    checked={themePreference === option.value}
+                    onChange={() => updateState({ themePreference: option.value })}
+                  />
+                  <span className="theme-option-copy">
+                    <span>{option.label}</span>
+                    {definition ? <small>{definition.region.motif}</small> : <small>跟目的地自動換色</small>}
+                    {definition ? (
+                      <span className="theme-option-swatches" aria-hidden="true">
+                        <i style={{ background: definition.colors.canvas }} />
+                        <i style={{ background: definition.colors.accent }} />
+                        <i style={{ background: definition.chart[0] }} />
+                        <i style={{ background: definition.chart[1] }} />
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              );
+            })}
           </div>
           <p className="muted" aria-live="polite">目前：{THEME_OPTIONS.find((option) => option.value === themePreference)?.label || '自動（依旅程）'}</p>
         </section>

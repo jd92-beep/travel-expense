@@ -103,7 +103,7 @@ export function App() {
   const isCloudSyncActive = hasSupabaseSession(effectiveSupabaseSession);
   const userEmail = effectiveSupabaseSession?.user?.email || null;
   const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';
-  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isStorageReady } = useAppState(isCloudSyncActive, storageScope, userEmail);
+  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, flushPersist, isStorageReady } = useAppState(isCloudSyncActive, storageScope, userEmail);
 
   const [globalOcrBusy, setGlobalOcrBusy] = useState('');
   const [batch, setBatch] = useState<Array<Receipt & { selected?: boolean }>>([]);
@@ -620,6 +620,7 @@ export function App() {
                         upsertReceipt(next);
                       }}
                       onPull={syncEngine.pull}
+                      onFlushPersist={flushPersist}
                       cloudSyncAvailable={isCloudSyncActive}
                     />
                   )}
