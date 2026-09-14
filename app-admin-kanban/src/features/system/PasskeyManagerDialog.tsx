@@ -219,7 +219,7 @@ export function PasskeyManagerDialog({
                       <strong>移除 {removalPreview.target.label}</strong>
                       <p>Server 已確認此操作會保留 {removalPreview.remainingCount} 把 passkey；完成後全部 admin session 會登出。</p>
                       <label>
-                        <span>Current passphrase</span>
+                        <span>目前通行片語</span>
                         <input className="passkey-removal-input" type="password" autoComplete="current-password" value={passphrase} disabled={busy} onChange={(event) => setPassphrase(event.target.value)} />
                       </label>
                     </div>
@@ -232,7 +232,7 @@ export function PasskeyManagerDialog({
                       <input value={label} maxLength={128} disabled={busy} onChange={(event) => setLabel(event.target.value)} />
                     </label>
                     <label>
-                      <span>Current passphrase</span>
+                      <span>目前通行片語</span>
                       <input type="password" autoComplete="current-password" value={passphrase} disabled={busy} onChange={(event) => setPassphrase(event.target.value)} />
                     </label>
                     <small><ShieldCheck size={14} />提交時必須再驗證現有 Boss passkey。</small>

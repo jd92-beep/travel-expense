@@ -510,7 +510,7 @@ test('awaiting heartbeat has a pending label and explicit last-seen explanation'
   await expect(android).not.toContainText('Healthy');
 });
 
-test('opening Activity Center explicitly refreshes idle operation status', async ({ page }) => {
+test('opening 操作中心 explicitly refreshes idle operation status', async ({ page }) => {
   const requests = [];
   await setupApi(page, { requests, activityOperationStatuses: ['completed'] });
   await page.goto('/overview');
@@ -518,7 +518,7 @@ test('opening Activity Center explicitly refreshes idle operation status', async
   const baseline = requests.filter(request => request.pathname === '/api/admin/operations').length;
   expect(baseline).toBeGreaterThan(0);
 
-  await page.getByRole('button', { name: '開啟 Activity Center' }).click();
+  await page.getByRole('button', { name: '開啟操作中心' }).click();
   await expect.poll(() => requests.filter(request => request.pathname === '/api/admin/operations').length)
     .toBe(baseline + 1);
 });
@@ -698,10 +698,10 @@ test('audit defaults to 24 hours and datetime filters retain local input values'
   await expect(endInput).toHaveValue('2026-07-12T10:30');
   expect(Number.isFinite(Date.parse(new URL(page.url()).searchParams.get('endAt')))).toBe(true);
 
-  await page.getByRole('button', { name: '全部時間' }).click();
+  await page.getByRole('radio', { name: '全部時間' }).click();
   await expect(page).not.toHaveURL(/startAt=/);
   await expect(startInput).toHaveValue('');
-  await page.getByRole('button', { name: '24 小時' }).click();
+  await page.getByRole('radio', { name: '24 小時' }).click();
   await expect(page).not.toHaveURL(/cursor=/);
   await expect(startInput).not.toHaveValue('');
   expect(requests.some((request) => request.pathname === '/api/admin/audit' && request.search.includes('startAt='))).toBe(true);
@@ -753,11 +753,11 @@ test('tablet shell reports its environment and restores focus from modal panels'
   const accountHeading = page.getByRole('heading', { name: '帳戶', exact: true });
   await expect(accountHeading).toBeFocused();
 
-  const activity = page.getByRole('button', { name: '開啟 Activity Center' });
+  const activity = page.getByRole('button', { name: '開啟操作中心' });
   await activity.click();
-  await expect(page.getByRole('dialog', { name: 'Activity Center' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '操作中心' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Activity Center' })).not.toBeVisible();
+  await expect(page.getByRole('dialog', { name: '操作中心' })).not.toBeVisible();
   await expect(activity).toBeFocused();
 });
 
@@ -765,7 +765,7 @@ test('query filters preserve focus and the Activity count is an anchored badge',
   await setupApi(page, { activityOperationStatuses: ['queued'] });
   await page.goto('/data/accounts');
 
-  const activity = page.getByRole('button', { name: '開啟 Activity Center' });
+  const activity = page.getByRole('button', { name: '開啟操作中心' });
   const badge = activity.getByText('1', { exact: true });
   await expect(activity).toHaveClass(/activity-trigger/);
   await expect(badge).toHaveCSS('position', 'absolute');
@@ -785,7 +785,7 @@ test('session security dialog lists redacted passkeys and backup capacity', asyn
   const dialog = page.getByRole('dialog', { name: 'Boss passkeys' });
   await expect(dialog).toContainText('Boss Mac');
   await expect(dialog).toContainText('1 / 3');
-  await expect(dialog.getByLabel('Current passphrase')).toBeVisible();
+  await expect(dialog.getByLabel('目前通行片語')).toBeVisible();
   await expect(dialog.getByRole('button', { name: '新增備用 passkey' })).toBeDisabled();
   await dialog.getByRole('button', { name: '關閉 passkey 管理' }).click();
   await expect(trigger).toBeFocused();
@@ -823,7 +823,7 @@ test('non-final passkey removal shows a bound confirmation and returns to login 
   const dialog = page.getByRole('dialog', { name: 'Boss passkeys' });
   await dialog.getByRole('button', { name: '移除 Boss backup' }).click();
   await expect(dialog.getByRole('alert')).toContainText('保留 1 把 passkey');
-  await expect(dialog.getByLabel('Current passphrase')).toHaveClass(/passkey-removal-input/);
+  await expect(dialog.getByLabel('目前通行片語')).toHaveClass(/passkey-removal-input/);
   await page.setViewportSize({ width: 320, height: 700 });
   await expect(dialog.getByRole('button', { name: '關閉', exact: true })).toHaveCount(0);
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -831,7 +831,7 @@ test('non-final passkey removal shows a bound confirmation and returns to login 
   await dialog.getByRole('button', { name: '取消移除' }).click();
   await expect(dialog.getByRole('button', { name: '新增備用 passkey' })).toBeVisible();
   await dialog.getByRole('button', { name: '移除 Boss backup' }).click();
-  await dialog.getByLabel('Current passphrase').fill('passphrase');
+  await dialog.getByLabel('目前通行片語').fill('passphrase');
   await expect(dialog.getByRole('button', { name: '驗證並移除' })).toBeEnabled();
   await dialog.getByRole('button', { name: '驗證並移除' }).click();
   await expect(page).toHaveURL('/login');
@@ -942,7 +942,7 @@ test('non-terminal operation responses never claim verified completion', async (
   await page.getByRole('button', { name: 'Probe Google Gemma' }).click();
   await page.getByRole('button', { name: '確認執行' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('queued');
+  await expect(dialog).toContainText('排隊中');
   await expect(dialog).not.toContainText('操作已由 server 驗證完成');
   await expect(dialog.getByRole('button', { name: '關閉並追蹤' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: '確認執行' })).toHaveCount(0);
@@ -963,17 +963,17 @@ test('network loss after commit enters outcome unknown and recovers from operati
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('結果未確認');
   await expect(dialog).not.toContainText('操作已由 server 驗證完成');
-  await dialog.getByRole('button', { name: '查看 Activity Center' }).click();
-  const activityCenter = page.getByRole('dialog', { name: 'Activity Center' });
-  await expect(activityCenter).toContainText('outcome_unknown');
+  await dialog.getByRole('button', { name: '查看操作中心' }).click();
+  const activityCenter = page.getByRole('dialog', { name: '操作中心' });
+  await expect(activityCenter).toContainText('結果待確認');
   const activityReadsBefore = requests.filter((request) => request.pathname === '/api/admin/operations').length;
   await activityCenter.getByRole('button', { name: `重新檢查操作 ${operationId.slice(0, 8)}` }).click();
   await expect.poll(() => requests.filter((request) => request.pathname === '/api/admin/operations').length)
     .toBeGreaterThan(activityReadsBefore);
   await activityCenter.getByRole('button', { name: '關閉' }).click();
-  await page.getByRole('button', { name: '開啟 Activity Center' }).click();
-  await expect(page.getByRole('dialog', { name: 'Activity Center' })).toContainText('outcome_unknown');
-  await page.getByRole('dialog', { name: 'Activity Center' }).getByRole('button', { name: '關閉' }).click();
+  await page.getByRole('button', { name: '開啟操作中心' }).click();
+  await expect(page.getByRole('dialog', { name: '操作中心' })).toContainText('結果待確認');
+  await page.getByRole('dialog', { name: '操作中心' }).getByRole('button', { name: '關閉' }).click();
 });
 
 test('integrity scan is a previewed R1 operation and refreshes the run', async ({ page }) => {
@@ -1133,9 +1133,9 @@ test('receipt R2 editor creates a versioned before-and-after preview', async ({ 
   await page.getByRole('button', { name: '預覽修改' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('R2');
-  await expect(dialog.getByRole('heading', { name: '目前資料' })).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: '提交後' })).toBeVisible();
-  await expect(dialog.getByLabel('Current passphrase')).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: '現行資料' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: '提交後資料' })).toBeVisible();
+  await expect(dialog.getByLabel('目前通行片語')).toBeVisible();
   if (process.env.CAPTURE_UI === '1') await page.screenshot({ path: 'test-results/visual-audit/receipt-r2-preview.png', fullPage: true });
 });
 
@@ -1148,7 +1148,7 @@ test('R2 receipt trash reauthenticates with a mocked passkey, grants, and commit
   expect(latestPreview(requests)).toMatchObject({ action: 'receipt_trash', targetId: receiptId, payload: { expectedVersion: 3 } });
 
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Current passphrase').fill('step-up passphrase');
+  await dialog.getByLabel('目前通行片語').fill('step-up passphrase');
   await dialog.getByRole('button', { name: '驗證並執行' }).click();
   await expect.poll(() => page.locator('html').getAttribute('data-mock-webauthn')).toBe('pending');
   const reauthBegin = requests.find(request => request.pathname === '/api/admin/reauth/begin');
@@ -1174,7 +1174,7 @@ test('itinerary editor preserves six days and previews one full canonical payloa
   await page.getByLabel('標題').first().fill('名古屋抵達日');
   await page.getByRole('button', { name: '預覽完整行程' }).click();
   await expect(page.getByRole('dialog')).toContainText('itinerary amend');
-  await expect(page.getByRole('dialog').getByLabel('Current passphrase')).toBeVisible();
+  await expect(page.getByRole('dialog').getByLabel('目前通行片語')).toBeVisible();
 });
 
 test('date shrink requires and transmits explicit removal of a title-only itinerary day', async ({ page }) => {
@@ -1219,8 +1219,8 @@ test('R2 passkey remains available on a zoomed desktop viewport', async ({ page 
   await setupApi(page);
   await page.goto(`/data/receipts/${receiptId}`);
   await page.getByRole('button', { name: '移至 Trash' }).click();
-  await expect(page.getByRole('dialog').getByLabel('Current passphrase')).toBeVisible();
-  await page.getByRole('dialog').getByLabel('Current passphrase').fill('passphrase');
+  await expect(page.getByRole('dialog').getByLabel('目前通行片語')).toBeVisible();
+  await page.getByRole('dialog').getByLabel('目前通行片語').fill('passphrase');
   await expect(page.getByRole('button', { name: '驗證並執行' })).toBeEnabled();
 });
 

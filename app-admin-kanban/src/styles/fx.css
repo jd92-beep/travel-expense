@@ -81,7 +81,8 @@ html[data-fx-tier="full"] .login-panel::after {
   position: relative;
   overflow: clip;
 }
-.admin-shell::before {
+/* Hex-grid atmosphere: `full` tier only so scanning stays clean on balanced/lite. */
+html[data-fx-tier="full"] .admin-shell::before {
   content: "";
   position: fixed;
   inset: 0;

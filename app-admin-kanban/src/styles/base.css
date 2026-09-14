@@ -11,9 +11,9 @@ h1, h2, h3, p { overflow-wrap: anywhere; }
 h1, h2, h3 { margin: 0; letter-spacing: 0; }
 h1 {
   position: relative;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1.25;
   letter-spacing: .01em;
 }
@@ -22,20 +22,21 @@ h1::after {
   position: absolute;
   left: 0;
   bottom: 0;
-  width: 48px;
-  height: 3px;
-  background: var(--grad-accent);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  width: 36px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
 }
-h2 { font-size: 16px; line-height: 1.35; font-family: var(--font-display); font-weight: 600; }
+h2 { font-size: 15px; line-height: 1.35; font-family: var(--font-display); font-weight: 650; }
 h2::before {
-  content: "▮▮";
+  content: "";
   display: inline-block;
-  margin-right: 7px;
-  color: var(--neon-cyan);
-  font-size: .7em;
-  letter-spacing: 1px;
-  vertical-align: middle;
+  width: 3px;
+  height: 0.95em;
+  margin-right: 8px;
+  border-radius: 1px;
+  background: var(--accent);
+  vertical-align: -0.08em;
 }
 h3 { font-size: 14px; line-height: 1.4; }
 p { margin: 0; line-height: 1.55; }

@@ -38,6 +38,7 @@ import {
   useCursorPagination,
   useOnline,
   WorkspaceNav,
+  Breadcrumbs,
 } from "../../../components/primitives/ConsolePrimitives";
 import { useAdminWritePolicy } from "../../../lib/writePolicy";
 
@@ -96,6 +97,8 @@ export function ReceiptsPage() {
   useEffect(() => {
     if (selectedIdsRef.current.length > 0) {
       setSelectionNotice("篩選或頁面已變更，已清除選取");
+    } else {
+      setSelectionNotice("");
     }
     setSelectedIds([]);
   }, [selectionScope]);
@@ -476,9 +479,13 @@ export function ReceiptDetailPage() {
   const patch = draft ? receiptAmendPatch(receipt, draft) : {};
   return (
     <div className="workspace-stack">
-      <Link className="back-link" to="/data/receipts">
-        <ArrowLeft size={16} />返回收據
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "資料", to: "/data/accounts" },
+          { label: "收據", to: "/data/receipts" },
+          { label: receipt.store },
+        ]}
+      />
       <PageHeader
         title={receipt.store}
         description={`${receipt.record_date} · ${

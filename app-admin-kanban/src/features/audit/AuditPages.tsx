@@ -193,8 +193,22 @@ export function AuditPage() {
           onChange={(event) => setDraftRequestId(event.target.value)}
         />
         <button className="button secondary" type="submit">套用文字篩選</button>
-        <button className="button secondary" type="button" aria-pressed={!allTime} onClick={() => setRange("24h")}>24 小時</button>
-        <button className="button secondary" type="button" aria-pressed={allTime} onClick={() => setRange("all")}>全部時間</button>
+        <div className="filter-range" role="radiogroup" aria-label="時間範圍">
+          <button
+            className="button secondary"
+            type="button"
+            role="radio"
+            aria-checked={!allTime}
+            onClick={() => setRange("24h")}
+          >24 小時</button>
+          <button
+            className="button secondary"
+            type="button"
+            role="radio"
+            aria-checked={allTime}
+            onClick={() => setRange("all")}
+          >全部時間</button>
+        </div>
       </form>
       {query.isLoading
         ? <LoadingState label="載入審計紀錄" />

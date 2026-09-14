@@ -257,8 +257,8 @@ export function AdminShell() {
             ref={activityButtonRef}
             className="icon-button activity-trigger"
             type="button"
-            title="Activity Center"
-            aria-label="開啟 Activity Center"
+            title="操作中心"
+            aria-label="開啟操作中心"
             aria-expanded={activityOpen}
             onClick={() => setActivityOpen((value) => !value)}
           >
@@ -309,7 +309,7 @@ export function AdminShell() {
         <dialog
           ref={activityDialogRef}
           className="activity-center"
-          aria-label="Activity Center"
+          aria-label="操作中心"
           onCancel={(event) => {
             event.preventDefault();
             setActivityOpen(false);
@@ -320,12 +320,12 @@ export function AdminShell() {
           }}
         >
             <header>
-              <strong>Activity Center</strong>
+              <strong>操作中心</strong>
               <button
                 className="icon-button"
                 type="button"
                 title="關閉"
-                aria-label="關閉 Activity Center"
+                aria-label="關閉操作中心"
                 onClick={() =>
                   setActivityOpen(false)}
               >

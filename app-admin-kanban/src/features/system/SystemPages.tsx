@@ -19,7 +19,7 @@ import {
 } from "../operations/OperationFlow";
 
 const SYSTEM_NAV = [
-  { to: "/system/providers", label: "Providers" },
+  { to: "/system/providers", label: "AI Provider" },
   { to: "/system/releases", label: "版本發佈" },
   { to: "/system/infrastructure", label: "基礎設施" },
 ];
@@ -106,8 +106,8 @@ export function ProvidersPage() {
     <div className="workspace-stack">
       <WorkspaceNav items={SYSTEM_NAV} />
       <PageHeader
-        title="Providers"
-        description="Configured、Healthy、實際 model、latency、errors 及 quota 分開顯示"
+        title="AI Providers"
+        description="設定狀態、健康、實際模型、延遲與錯誤分開顯示；Broker online 不等於 provider healthy"
         actions={
           <button
             className="button secondary"
@@ -159,16 +159,16 @@ export function ProvidersPage() {
                       <thead>
                         <tr>
                           <th scope="col">Provider</th>
-                          <th scope="col">Configured</th>
-                          <th scope="col">Health</th>
-                          <th scope="col">App models</th>
-                          <th scope="col">Required model</th>
-                          <th scope="col">Actual model</th>
-                          <th scope="col">Last success</th>
-                          <th scope="col">Last probe</th>
+                          <th scope="col">已設定</th>
+                          <th scope="col">健康</th>
+                          <th scope="col">應用模型</th>
+                          <th scope="col">必需模型</th>
+                          <th scope="col">實際模型</th>
+                          <th scope="col">最後成功</th>
+                          <th scope="col">最後探測</th>
                           <th scope="col">p50 / p95</th>
-                          <th scope="col">Errors 24h</th>
-                          <th scope="col">429 24h</th>
+                          <th scope="col">24h 錯誤</th>
+                          <th scope="col">24h 429</th>
                           <th scope="col"><span className="sr-only">操作</span></th>
                         </tr>
                       </thead>
@@ -189,20 +189,20 @@ export function ProvidersPage() {
                                   ? "error"
                                   : "unknown"}
                                 label={provider.configured === true
-                                  ? "Configured"
+                                  ? "已設定"
                                   : provider.configured === false
-                                  ? "Missing"
-                                  : "Unknown"}
+                                  ? "缺少設定"
+                                  : "未知"}
                               />
                             </td>
                             <td data-label="Health">
                               <StatusBadge
                                 value={provider.status}
                                 label={provider.healthy === true
-                                  ? "Healthy"
+                                  ? "健康"
                                   : provider.healthy === false
-                                  ? "Failed"
-                                  : "Unknown"}
+                                  ? "探測失敗"
+                                  : "未知"}
                               />
                             </td>
                             <td data-label="App models">

@@ -276,11 +276,11 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
               flow.operation.preview.proposed !== undefined) && (
               <div className="operation-diff" aria-label="操作前後差異">
                 <section>
-                  <h3>目前資料</h3>
+                  <h3>現行資料</h3>
                   <pre>{JSON.stringify(flow.operation.preview.before ?? {}, null, 2)}</pre>
                 </section>
                 <section>
-                  <h3>提交後</h3>
+                  <h3>提交後資料</h3>
                   <pre>{JSON.stringify(flow.operation.preview.proposed ?? {}, null, 2)}</pre>
                 </section>
               </div>
@@ -307,7 +307,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
               supportsPasskey
                 ? (
                   <label className="operation-passphrase">
-                    <span>Current passphrase</span>
+                    <span>目前通行片語</span>
                     <input
                       type="password"
                       autoComplete="current-password"
@@ -397,7 +397,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
                 <StatusBadge value={flow.operation.status} />
                 {flow.operation.error?.message
                   ? ` ${flow.operation.error.message}`
-                  : " 請喺 Activity Center 追蹤或重新整理最新結果。"}
+                  : " 請喺操作中心追蹤或重新整理最新結果。"}
               </p>
               {flow.recoveryError && (
                 <small>暫時未能讀取最新狀態；自動查詢會繼續，亦可立即重新檢查。</small>
@@ -435,7 +435,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
                     window.dispatchEvent(new Event("admin:activity-open"));
                   }}
                 >
-                  查看 Activity Center
+                  查看操作中心
                 </button>
               )}
               <button className="button primary" type="button" onClick={flow.close}>

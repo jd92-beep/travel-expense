@@ -4,14 +4,22 @@ Last updated: 2026-08-24 HKT
 
 ## Current Status
 
-- **Local RC `1.3.5`** (branch `admin/console-production-ready`) — production-readiness sweep:
-  UI write-policy gate via `/runtime` (`provider_probe_only` keeps only probe enabled; R2/R1
-  non-probe CTAs disable with an explicit reason), safe cursor previous (no `navigate(-1)`),
-  LoginGate bootstrap enrollment removed in favour of break-glass recovery guidance, CSRF
-  fail-closed on auth POSTs, query-cache clear on logout/401, Audit filter submit, StrictMode-safe
-  receipts selection notice, security-scan walks `server/admin`, CSP `worker-src`. Gates green:
-  typecheck, build, unit `34/34`, contract `24/24`, security scan, smoke `49/1`.
-  Not yet promoted — requires Boss's protected `admin-production` workflow approval.
+- **Local RC `1.3.6`** (branch `admin/console-production-ready`) — continued production-readiness
+  + modern admin UX pass on top of 1.3.5:
+  - Quiet chrome: solid content frames, accent bar headings (no neon blocks), hex-grid gated to
+    `full` fx tier only; denser sticky tables; breadcrumbs on detail pages; Overview KPI deep-links.
+  - Status system: zh-HK labels for raw tokens (`outcome_unknown`→結果待確認, etc.); severity
+    keeps mono/uppercase; Providers/System/Reliability nav + Activity→操作中心 copy normalized.
+  - Bug fixes: IntegrityPage uses `useCursorPagination`; `formatMoney(null)` shows 未有金額;
+    support-bundle ObjectURL revoke deferred; receipts selection notice clears on empty scope;
+    Trips/Itinerary wire `useOnline`; Audit 24h/all is a radiogroup.
+  - Provider catalog contract test wired into `test:contract`.
+  - Gates green: typecheck, build, unit `34/34`, contract `24/24` + catalog, security scan,
+    smoke `49 passed / 1 skipped`. Not promoted — needs Boss protected workflow approval.
+
+- **`1.3.5`** (same branch, prior commit) — write-policy UI gate, safe cursor previous, LoginGate
+  bootstrap removal, CSRF fail-closed, query-cache clear on logout/401, Audit filter submit,
+  StrictMode-safe receipts selection, security-scan `server/admin` walk, CSP `worker-src`.
 
 - Production `1.3.4` lazy-loads feature route groups, reducing the main application chunk from
   roughly 623 kB to 224 kB while keeping the Three.js login scene isolated. The root route now

@@ -30,7 +30,7 @@ import {
 import { useAdminWritePolicy } from "../../lib/writePolicy";
 
 const RELIABILITY_NAV = [
-  { to: "/reliability/incidents", label: "Incidents" },
+  { to: "/reliability/incidents", label: "事件" },
   { to: "/reliability/sync", label: "同步工作" },
   { to: "/reliability/integrity", label: "資料完整性" },
   { to: "/reliability/reconciliation", label: "Notion 對數" },
@@ -409,6 +409,7 @@ export function SyncJobsPage() {
 
 export function IntegrityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const cursorPager = useCursorPagination(searchParams, setSearchParams);
   const writePolicy = useAdminWritePolicy();
   const values = queryFromSearchParams(searchParams, [
     "severity",
@@ -610,19 +611,11 @@ export function IntegrityPage() {
                 </section>
               )}
             <Pagination
-              hasCursor={Boolean(searchParams.get("cursor"))}
+              hasCursor={cursorPager.hasCursor}
               nextCursor={query.data.meta.nextCursor}
               disabled={query.isFetching || query.isPlaceholderData}
-              onPrevious={() => {
-                const next = new URLSearchParams(searchParams);
-                next.delete("cursor");
-                setSearchParams(next);
-              }}
-              onNext={(cursor) => {
-                const next = new URLSearchParams(searchParams);
-                next.set("cursor", cursor);
-                setSearchParams(next);
-              }}
+              onPrevious={cursorPager.previous}
+              onNext={cursorPager.next}
             />
           </>
         )}

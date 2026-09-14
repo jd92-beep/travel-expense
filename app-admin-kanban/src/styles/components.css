@@ -74,13 +74,20 @@
 .page-header {
   min-height: 52px; display: flex; align-items: flex-start; justify-content: space-between; gap: 18px;
   padding: 14px 16px;
-  --aug-border-all: 1px;
-  --aug-border-bg: linear-gradient(120deg, var(--neon-cyan), transparent 45%, var(--neon-magenta-hot));
-  --aug-tl1: 12px;
-  --aug-br1: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
 }
-.page-header p { margin-top: 4px; color: var(--muted); }
-.page-actions { display: flex; gap: 8px; }
+.page-header h1 { font-size: 20px; letter-spacing: .01em; }
+.page-header p { margin-top: 4px; color: var(--muted); font-size: 13px; }
+.page-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.breadcrumbs {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  color: var(--muted); font-size: 12px;
+}
+.breadcrumbs a { color: var(--accent); text-decoration: none; }
+.breadcrumbs a:hover { text-decoration: underline; }
+.breadcrumbs [aria-current="page"] { color: var(--text); font-weight: 650; }
+.breadcrumb-sep { opacity: .55; }
 .button, .primary-command, .ghost-command {
   position: relative; overflow: clip; min-height: 36px; display: inline-flex; align-items: center; justify-content: center;
   gap: 7px; padding: 0 12px; border: 1px solid var(--border); color: var(--text); background: var(--elevated);
@@ -146,25 +153,19 @@
 .status-strip { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 8px; }
 .status-unit {
   position: relative; min-width: 0; min-height: 88px; display: grid; gap: 8px; align-content: start;
-  padding: 10px; background: var(--surface); box-shadow: var(--shadow-1);
-  /* augmented-ui chamfered frame replaces the old plain border + gradient hairline */
-  --aug-border-all: 1px;
-  --aug-border-bg: linear-gradient(120deg, var(--neon-cyan), transparent 45%, var(--neon-magenta-hot));
-  --aug-tl1: 9px;
-  --aug-br1: 9px;
+  padding: 10px; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-1);
 }
 .status-unit > span:first-child { display: flex; align-items: center; gap: 7px; font-weight: 700; }
-/* Metric strip: switched from a single continuous divided bar to a gapped row of
-   discrete chamfered HUD readout modules — reads more like instrument panels. */
+/* Metric strip: gapped row of discrete readout modules. */
 .metric-strip { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; }
 .metric-block {
   min-width: 0; min-height: 74px; display: grid; align-content: center; gap: 5px; padding: 10px 14px;
-  background: var(--surface); box-shadow: var(--shadow-1);
-  --aug-border-all: 1px;
-  --aug-border-bg: linear-gradient(120deg, var(--neon-cyan), transparent 45%, var(--neon-magenta-hot));
-  --aug-tl1: 9px;
-  --aug-br1: 9px;
+  border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-1);
+  transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
 }
+a.metric-block, .metric-block a { text-decoration: none; color: inherit; }
+.metric-link { display: grid; gap: 5px; min-width: 0; color: inherit; text-decoration: none; }
+a.metric-block:hover, .metric-block:hover { border-color: #52606f; background: var(--elevated); }
 .metric-block span { color: var(--muted); font-size: 12px; }
 .metric-block strong { font-size: 20px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .metric-identity strong { font: 700 13px/1.4 var(--font-mono); }
@@ -191,8 +192,13 @@
   width: fit-content; max-width: 100%; min-height: 24px; display: inline-flex; align-items: center; gap: 5px;
   padding: 2px 8px 2px 6px; border: 1px solid var(--border);
   clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
-  font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  font-size: 11px; font-weight: 700;
   overflow-wrap: anywhere;
+}
+.status-badge.status-severity {
+  font-family: var(--font-mono);
+  letter-spacing: .04em;
+  text-transform: uppercase;
 }
 .status-success { border-color: #326c3d; color: #9be6a6; background: #17271a; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 35%, transparent); }
 .status-warning { border-color: #6f5e2b; color: #eed477; background: #2a2515; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 35%, transparent); }
@@ -214,6 +220,8 @@
 .filter-search { min-width: 220px; flex: 1; height: 36px; display: flex; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-s); color: var(--muted); background: var(--bg); }
 .filter-search input { width: 100%; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; }
 .filter-bar select { min-width: 140px; }
+.filter-range { display: inline-flex; gap: 8px; align-items: center; }
+.filter-range [aria-checked="true"] { border-color: #4e7fbd; color: var(--text); background: #285487; }
 .admin-form { display: grid; gap: 14px; padding: 14px; }
 .admin-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .admin-form label, .member-add-form label, .itinerary-range-fields label, .day-editor-fields label, .spot-editor-row label { min-width: 0; display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
@@ -227,7 +235,7 @@
 .member-add-form { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, .4fr) auto; align-items: end; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border-soft); }
 .table-scroll { width: 100%; max-width: 100%; overflow: auto; }
 table { width: 100%; min-width: 760px; border-collapse: collapse; }
-.provider-table { min-width: 1380px; }
+.provider-table { min-width: 1100px; }
 .provider-table .status-badge { white-space: nowrap; overflow-wrap: normal; }
 .provider-table code, .release-table code { white-space: nowrap; }
 .provider-model-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -236,9 +244,9 @@ table { width: 100%; min-width: 760px; border-collapse: collapse; }
   table:has(td[data-label="狀態"]) .status-badge { white-space: nowrap; overflow-wrap: normal; }
   table:has(td[data-label="日期"]) td:is([data-label="日期"], [data-label="更新"]) { white-space: nowrap; }
 }
-th, td { height: 44px; padding: 8px 12px; border-bottom: 1px solid var(--border-soft); text-align: left; vertical-align: middle; }
-th { position: sticky; top: 0; z-index: 1; color: var(--muted); background: var(--elevated); font-size: 12px; font-weight: 750; }
-td { max-width: 260px; }
+th, td { height: 40px; padding: 6px 10px; border-bottom: 1px solid var(--border-soft); text-align: left; vertical-align: middle; }
+th { position: sticky; top: 0; z-index: 1; color: var(--muted); background: var(--elevated); font-size: 12px; font-weight: 750; box-shadow: 0 1px 0 var(--border); }
+td { max-width: 260px; font-variant-numeric: tabular-nums; }
 td > small, td > strong { display: block; }
 tbody tr { transition: background var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
 /* Hover = HUD row lock: cyan edge tint sweeping in from the left + a hairline

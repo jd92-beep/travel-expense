@@ -30,6 +30,7 @@ import {
   StatusBadge,
   useCursorPagination,
   WorkspaceNav,
+  Breadcrumbs,
 } from "../../../components/primitives/ConsolePrimitives";
 import {
   OperationDialog,
@@ -331,7 +332,7 @@ function downloadSupportBundle(bundle: Record<string, unknown>) {
   anchor.href = url;
   anchor.download = `travel-expense-support-${new Date().toISOString().slice(0, 10)}.json`;
   anchor.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export function AccountDetailPage() {
@@ -368,9 +369,13 @@ export function AccountDetailPage() {
   const detail = account.data.data;
   return (
     <div className="workspace-stack">
-      <Link className="back-link" to="/data/accounts">
-        <ArrowLeft size={16} />返回帳戶
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "資料", to: "/data/accounts" },
+          { label: "帳戶", to: "/data/accounts" },
+          { label: detail.identity.display_name || detail.identity.masked_email },
+        ]}
+      />
       <PageHeader
         title={detail.identity.display_name || detail.identity.masked_email}
         description={detail.identity.email || detail.identity.masked_email}

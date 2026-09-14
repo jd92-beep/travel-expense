@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-08-24 HKT
-- **Focus**: Session 89 Admin console production-readiness sweep (worktree `admin/console-production-ready`).
+- **Focus**: Session 89 Admin console production-readiness + UX modernization (worktree `admin/console-production-ready`).
 - **Agent**: MiMo.
-- **App version**: Admin `1.3.5` (was `1.3.4`). Compact Web / Android / React / Broker unchanged this session.
+- **App version**: Admin `1.3.6` (was `1.3.4`). Compact Web / Android / React / Broker unchanged this session.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -130,19 +130,19 @@ you closed with your session number.
 
 ## What Was Done
 
-### Session 89 (MiMo — Admin console production-readiness sweep)
+### Session 89 (MiMo — Admin console production-readiness + UX modernization)
 
-Admin `1.3.5` on branch `admin/console-production-ready` (worktree `.worktrees/admin-console-hardening`).
+Admin `1.3.6` on branch `admin/console-production-ready` (worktree `.worktrees/admin-console-hardening`).
 
 1. **Write-policy UI gate** — new `src/lib/writePolicy.ts` reads `/runtime` policy. Providers probe stays available under `provider_probe_only`; receipt/trip/itinerary/member/sync-job/support-bundle/integrity-scan CTAs require `allowlisted` and are disabled with an explicit label otherwise (Edge already rejected them with `WRITES_DISABLED` 503).
-2. **Pagination safety** — `useCursorPagination.previous()` no longer calls `navigate(-1)`; restores the prior cursor from the mount stack or falls back to page 1. Prevents ejecting operators out of the SPA after remount/browser Back desync.
+2. **Pagination safety** — `useCursorPagination.previous()` no longer calls `navigate(-1)`; restores the prior cursor from the mount stack or falls back to page 1. Integrity page now uses the same hook.
 3. **LoginGate** — removed dead bootstrap-secret enrollment UI (bootstrap is permanently closed). `PROTECTED_TARGET` / enrollment-required now shows recovery guidance + 「返回登入」. CTA is 「使用通行片語與 Passkey 登入」.
 4. **CSRF fail-closed** — `adminApi.ts` POST path now throws `CSRF_REJECTED` when the `__Host-admin_csrf` cookie is missing (parity with `adminClient.ts`).
 5. **Session cache** — logout and `admin:unauthorized` clear `["admin"]` React Query cache.
-6. **Audit filters** — free-text fields use draft + submit (no per-keystroke request storm).
-7. **Receipts selection** — selection-notice side effect moved out of the `setState` updater (StrictMode-safe).
-8. **Hardening polish** — security-scan walks `server/admin/**`; FreshnessBanner names blocking sources; EmptyState uses Inbox icon; drawer `aria-expanded`; global search clears after submit; OperationFlow/Reconciliation drop non-null asserts; CSP adds `worker-src 'self' blob:`; vite `server.fs.allow` for worktree symlinked node_modules.
-9. **Evidence**: typecheck, build, unit `34/34`, contract `24/24`, security scan, Playwright smoke `49 passed / 1 skipped`.
+6. **Correctness** — `formatMoney(null)` → 未有金額; support-bundle ObjectURL revoke deferred; receipts selection notice clears; Trips/Itinerary wire `useOnline`.
+7. **UX modernization** — quiet chrome (solid frames, accent-bar headings, hex-grid full-tier only), denser tables, breadcrumbs on detail pages, Overview KPI deep-links, zh-HK status labels, Providers/System/Reliability copy, Activity→操作中心, Audit range radiogroup.
+8. **Hardening** — security-scan walks `server/admin/**`; FreshnessBanner names blocking sources; CSP `worker-src`; provider catalog contract test in `test:contract`.
+9. **Evidence**: typecheck, build, unit `34/34`, contract `24/24` + catalog, security scan, Playwright smoke `49 passed / 1 skipped`.
 
 ### Session 89k (MiMo — android-auth tokens, backup photo strip, Scan overflow)
 
