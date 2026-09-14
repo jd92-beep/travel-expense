@@ -58,6 +58,15 @@ scan([...walk(join(appRoot, 'api'))], [
   { label: 'Legacy root session route', pattern: /(['"`])\/api\/session\1/g },
 ]);
 
+scan([...walk(join(appRoot, 'server'))], [
+  { label: 'Legacy signed bearer session', pattern: /ADMIN_KANBAN_SESSION_SECRET/g },
+  { label: 'Legacy synchronous PBKDF2', pattern: /\bpbkdf2Sync\b/g },
+  { label: 'Legacy external verify URL', pattern: /ADMIN_KANBAN_VERIFY_URL/g },
+  { label: 'Legacy external login URL', pattern: /ADMIN_KANBAN_LOGIN_URL/g },
+  { label: 'Legacy verify-session route', pattern: /\/api\/verify-session/g },
+  { label: 'Hardcoded passphrase literal', pattern: /ADMIN_PASSPHRASE\s*=\s*['"`][^'"`]+['"`]/g },
+]);
+
 const adminApiPath = join(appRoot, 'src/lib/adminApi.ts');
 const adminApi = readFileSync(adminApiPath, 'utf8');
 const legacyStorageKey = 'travel-expense-admin-kanban:session:v1';

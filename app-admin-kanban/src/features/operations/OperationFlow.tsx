@@ -138,8 +138,11 @@ export function useOperationFlow(
 
   const recovery = useQuery({
     queryKey: ["admin", "operation", operation?.id],
-    queryFn: ({ signal }) =>
-      adminGet<AdminOperation>(`/operations/${operation!.id}`, undefined, signal),
+    queryFn: ({ signal }) => {
+      const id = operation?.id;
+      if (!id) throw new AdminApiError("操作狀態暫時不可用", "OPERATION_MISSING", 404);
+      return adminGet<AdminOperation>(`/operations/${id}`, undefined, signal);
+    },
     enabled: submitted && tracking && Boolean(operation?.id),
     refetchInterval: tracking ? 10_000 : false,
     staleTime: 0,
@@ -221,7 +224,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
   const resultUnknown = flow.outcomeUnknown || flow.operation?.status === "outcome_unknown";
   const activeAfterSubmit = flow.submitted && Boolean(flow.operation) &&
     ["previewed", "authorized", "queued", "executing", "compensating", "outcome_unknown"]
-      .includes(flow.operation!.status);
+      .includes(flow.operation?.status ?? "");
 
   return (
     <dialog
@@ -273,11 +276,11 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
               flow.operation.preview.proposed !== undefined) && (
               <div className="operation-diff" aria-label="操作前後差異">
                 <section>
-                  <h3>目前資料</h3>
+                  <h3>現行資料</h3>
                   <pre>{JSON.stringify(flow.operation.preview.before ?? {}, null, 2)}</pre>
                 </section>
                 <section>
-                  <h3>提交後</h3>
+                  <h3>提交後資料</h3>
                   <pre>{JSON.stringify(flow.operation.preview.proposed ?? {}, null, 2)}</pre>
                 </section>
               </div>
@@ -304,7 +307,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
               supportsPasskey
                 ? (
                   <label className="operation-passphrase">
-                    <span>Current passphrase</span>
+                    <span>目前通行片語</span>
                     <input
                       type="password"
                       autoComplete="current-password"
@@ -352,7 +355,12 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
                   className="button secondary"
                   type="button"
                   onClick={() => {
-                    void navigator.clipboard.writeText(flow.completed!.invite!.link)
+                    const link = flow.completed?.invite?.link;
+                    if (!link) {
+                      setCopied(false);
+                      return;
+                    }
+                    void navigator.clipboard.writeText(link)
                       .then(() => setCopied(true))
                       .catch(() => setCopied(false));
                   }}
@@ -389,7 +397,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
                 <StatusBadge value={flow.operation.status} />
                 {flow.operation.error?.message
                   ? ` ${flow.operation.error.message}`
-                  : " 請喺 Activity Center 追蹤或重新整理最新結果。"}
+                  : " 請喺操作中心追蹤或重新整理最新結果。"}
               </p>
               {flow.recoveryError && (
                 <small>暫時未能讀取最新狀態；自動查詢會繼續，亦可立即重新檢查。</small>
@@ -427,7 +435,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
                     window.dispatchEvent(new Event("admin:activity-open"));
                   }}
                 >
-                  查看 Activity Center
+                  查看操作中心
                 </button>
               )}
               <button className="button primary" type="button" onClick={flow.close}>

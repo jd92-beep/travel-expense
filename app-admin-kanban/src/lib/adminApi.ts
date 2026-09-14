@@ -71,7 +71,10 @@ async function request<T>(path: string, options: { method?: string; body?: unkno
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (method !== 'GET' && method !== 'HEAD') {
     const token = csrfToken();
-    if (token) headers['X-Admin-CSRF'] = token;
+    if (!token) {
+      throw new AdminApiError('管理員 CSRF session 已失效', 'CSRF_REJECTED', 403);
+    }
+    headers['X-Admin-CSRF'] = token;
   }
   return parseJson<T>(await fetch(path, {
     method,

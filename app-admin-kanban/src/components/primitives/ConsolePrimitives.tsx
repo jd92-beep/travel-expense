@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  Inbox,
   Info,
   RefreshCw,
   TriangleAlert,
@@ -12,10 +13,30 @@ import {
 import { motion } from "motion/react";
 import { AdminApiError } from "../../lib/adminApi";
 import type { AdminMeta } from "../../lib/contracts/admin";
-import { NavLink, useNavigate } from "react-router";
+import { Link, NavLink } from "react-router";
 import { useEffectsTier } from "../../lib/performance";
 import { NumberTicker } from "../fx/NumberTicker";
 import { BlurFade } from "../fx/BlurFade";
+
+export function Breadcrumbs(
+  { items }: { items: Array<{ label: string; to?: string }> },
+) {
+  return (
+    <nav className="breadcrumbs" aria-label="麵包屑">
+      {items.map((item, index) => {
+        const last = index === items.length - 1;
+        return (
+          <span key={`${item.label}-${index}`}>
+            {item.to && !last
+              ? <Link to={item.to}>{item.label}</Link>
+              : <span aria-current={last ? "page" : undefined}>{item.label}</span>}
+            {!last && <span className="breadcrumb-sep" aria-hidden="true">/</span>}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
 
 export function PageHeader({
   title,
@@ -112,7 +133,48 @@ const WARNING = new Set([
   "unknown",
   "notion_only",
   "partial",
+  "P2",
+  "awaiting_heartbeat",
 ]);
+
+const STATUS_LABELS: Record<string, string> = {
+  outcome_unknown: "結果待確認",
+  partially_failed: "部分失敗",
+  failed_manual: "需人工處理",
+  notion_only: "僅 Notion",
+  previewed: "已預覽",
+  authorized: "已授權",
+  queued: "排隊中",
+  executing: "執行中",
+  compensating: "補償中",
+  completed: "已完成",
+  failed: "失敗",
+  cancelled: "已取消",
+  expired: "已過期",
+  pending: "待處理",
+  processing: "處理中",
+  succeeded: "成功",
+  healthy: "健康",
+  active: "啟用",
+  connected: "已連線",
+  stale: "過期",
+  degraded: "降級",
+  unavailable: "不可用",
+  awaiting_heartbeat: "待首次心跳",
+  no_issues: "沒有問題",
+  matched: "一致",
+  blocked: "缺少識別資料",
+  risk: "風險",
+  deleted: "已刪除",
+  issue: "有問題",
+  invalid: "無效",
+  P0: "P0",
+  P1: "P1",
+  P2: "P2",
+  P3: "P3",
+};
+
+const SEVERITY = new Set(["P0", "P1", "P2", "P3"]);
 
 export function StatusBadge(
   { value, label }: { value: string | null | undefined; label?: string },
@@ -132,12 +194,22 @@ export function StatusBadge(
     : tone === "warning"
     ? TriangleAlert
     : Info;
+  const text = label || STATUS_LABELS[normalized] || normalized;
   return (
-    <span className={`status-badge status-${tone}`}>
+    <span className={`status-badge status-${tone}${SEVERITY.has(normalized) ? " status-severity" : ""}`}>
       <Icon size={13} />
-      {label || normalized}
+      {text}
     </span>
   );
+}
+
+function blockingSourceLabels(meta: AdminMeta) {
+  const labels: string[] = [];
+  for (const [key, state] of Object.entries(meta.sources ?? {})) {
+    if (state !== "live") labels.push(key);
+  }
+  if (meta.warnings.length > 0) labels.push("warnings");
+  return labels;
 }
 
 export function FreshnessBanner({
@@ -151,6 +223,7 @@ export function FreshnessBanner({
 }) {
   if (!meta) return null;
   const { partial, stale } = adminMetaState(meta);
+  const blockers = partial ? blockingSourceLabels(meta) : [];
   return (
     <div
       className={`freshness-banner hud-corners ${
@@ -171,7 +244,7 @@ export function FreshnessBanner({
           : stale
           ? "資料已過期，寫入操作已停用"
           : partial
-          ? "部分資料來源不可用，寫入操作已停用"
+          ? `部分資料來源不可用（${blockers.join("、") || "unknown"}），寫入操作已停用`
           : "資料已更新"}
       </span>
       <span>
@@ -221,7 +294,9 @@ export function useCursorPagination(
   searchParams: URLSearchParams,
   setSearchParams: (next: URLSearchParams) => void,
 ) {
-  const navigate = useNavigate();
+  // Never navigate(-1): a remount or external back-entry desyncs the ref stack
+  // and can eject the operator out of the SPA. Restore the previous cursor from
+  // this mount's stack, or fall back to page 1.
   const history = useRef<string[]>([]);
   const cursor = searchParams.get("cursor") || "";
 
@@ -234,13 +309,10 @@ export function useCursorPagination(
       setSearchParams(next);
     },
     previous: () => {
-      if (history.current.length > 0) {
-        history.current.pop();
-        navigate(-1);
-        return;
-      }
+      const previousCursor = history.current.pop() || "";
       const next = new URLSearchParams(searchParams);
-      next.delete("cursor");
+      if (previousCursor) next.set("cursor", previousCursor);
+      else next.delete("cursor");
       setSearchParams(next);
     },
   };
@@ -286,7 +358,7 @@ export function EmptyState(
 ) {
   return (
     <div className="state-panel state-empty">
-      <CheckCircle2 size={24} />
+      <Inbox size={24} />
       <strong>{title}</strong>
       {detail && <p>{detail}</p>}
     </div>
@@ -334,11 +406,12 @@ export function Pagination({
 }
 
 export function Metric(
-  { label, value, tone = "neutral", delay = 0 }: {
+  { label, value, tone = "neutral", delay = 0, href }: {
     label: string;
     value: string | number;
     tone?: string;
     delay?: number;
+    href?: string;
   },
 ) {
   const numericValue = typeof value === "number"
@@ -346,18 +419,28 @@ export function Metric(
     : (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)))
     ? Number(value)
     : null;
+  const content = (
+    <>
+      <span>{label}</span>
+      <strong>{numericValue !== null ? <NumberTicker value={numericValue} /> : value}</strong>
+    </>
+  );
+  if (href) {
+    return (
+      <BlurFade
+        className={`metric-block metric-${tone}`}
+        delay={delay}
+      >
+        <Link className="metric-link" to={href}>{content}</Link>
+      </BlurFade>
+    );
+  }
   return (
-    // BlurFade is the root element itself (not a wrapper around a separate div) so
-    // .metric-block stays a direct child of .metric-strip — that preserves the grid
-    // item count. Each metric now renders as its own chamfered HUD readout module
-    // (metric-strip switched to a gapped grid — see components.css).
     <BlurFade
       className={`metric-block metric-${tone}`}
       delay={delay}
-      augmentedUi="tl-clip br-clip border"
     >
-      <span>{label}</span>
-      <strong>{numericValue !== null ? <NumberTicker value={numericValue} /> : value}</strong>
+      {content}
     </BlurFade>
   );
 }
@@ -377,6 +460,7 @@ export function formatMoney(
   amount: number | string | null | undefined,
   currency?: string | null,
 ) {
+  if (amount === null || amount === undefined || amount === "") return "未有金額";
   const numeric = Number(amount);
   if (!Number.isFinite(numeric)) return "未有金額";
   try {

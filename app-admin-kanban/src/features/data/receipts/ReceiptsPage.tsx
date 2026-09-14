@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Camera,
@@ -38,7 +38,9 @@ import {
   useCursorPagination,
   useOnline,
   WorkspaceNav,
+  Breadcrumbs,
 } from "../../../components/primitives/ConsolePrimitives";
+import { useAdminWritePolicy } from "../../../lib/writePolicy";
 
 const DATA_NAV = [
   { to: "/data/accounts", label: "帳戶" },
@@ -90,11 +92,15 @@ export function ReceiptsPage() {
   const [selectionNotice, setSelectionNotice] = useState("");
   useEffect(() => setDraft(queryText), [queryText]);
   const selectionScope = searchParams.toString();
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
   useEffect(() => {
-    setSelectedIds((current) => {
-      if (current.length > 0) setSelectionNotice("篩選或頁面已變更，已清除選取");
-      return [];
-    });
+    if (selectedIdsRef.current.length > 0) {
+      setSelectionNotice("篩選或頁面已變更，已清除選取");
+    } else {
+      setSelectionNotice("");
+    }
+    setSelectedIds([]);
   }, [selectionScope]);
   const queryValues = queryFromSearchParams(searchParams, [
     "q",
@@ -437,6 +443,7 @@ function receiptAmendPatch(
 export function ReceiptDetailPage() {
   const { receiptId = "" } = useParams();
   const online = useOnline();
+  const writePolicy = useAdminWritePolicy();
   const [photoAttempt, setPhotoAttempt] = useState(0);
   const [photoFailed, setPhotoFailed] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -467,13 +474,18 @@ export function ReceiptDetailPage() {
   }
   const detail = query.data.data;
   const receipt = detail.receipt;
-  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching, online);
+  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching, online)
+    && writePolicy.canMutateCanonical;
   const patch = draft ? receiptAmendPatch(receipt, draft) : {};
   return (
     <div className="workspace-stack">
-      <Link className="back-link" to="/data/receipts">
-        <ArrowLeft size={16} />返回收據
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "資料", to: "/data/accounts" },
+          { label: "收據", to: "/data/receipts" },
+          { label: receipt.store },
+        ]}
+      />
       <PageHeader
         title={receipt.store}
         description={`${receipt.record_date} · ${

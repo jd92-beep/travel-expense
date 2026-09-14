@@ -157,7 +157,18 @@ export function PasskeyManagerDialog({
           ? (
             <div className="operation-error" role="alert">
               <TriangleAlert size={20} />
-              <div><strong>未能載入 passkeys</strong><p>請重新整理後再試。</p></div>
+              <div>
+                <strong>未能載入 passkeys</strong>
+                <p>請重新整理後再試。</p>
+                <button
+                  className="button secondary"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void query.refetch()}
+                >
+                  重試
+                </button>
+              </div>
             </div>
           )
           : (
@@ -208,7 +219,7 @@ export function PasskeyManagerDialog({
                       <strong>移除 {removalPreview.target.label}</strong>
                       <p>Server 已確認此操作會保留 {removalPreview.remainingCount} 把 passkey；完成後全部 admin session 會登出。</p>
                       <label>
-                        <span>Current passphrase</span>
+                        <span>目前通行片語</span>
                         <input className="passkey-removal-input" type="password" autoComplete="current-password" value={passphrase} disabled={busy} onChange={(event) => setPassphrase(event.target.value)} />
                       </label>
                     </div>
@@ -221,7 +232,7 @@ export function PasskeyManagerDialog({
                       <input value={label} maxLength={128} disabled={busy} onChange={(event) => setLabel(event.target.value)} />
                     </label>
                     <label>
-                      <span>Current passphrase</span>
+                      <span>目前通行片語</span>
                       <input type="password" autoComplete="current-password" value={passphrase} disabled={busy} onChange={(event) => setPassphrase(event.target.value)} />
                     </label>
                     <small><ShieldCheck size={14} />提交時必須再驗證現有 Boss passkey。</small>

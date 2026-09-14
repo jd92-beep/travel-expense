@@ -2,9 +2,9 @@
 
 ## Last Worked On
 - **Date**: 2026-08-24 HKT
-- **Focus**: Session 88 production apply/deploy, Admin packaging repair and live verification.
-- **Agent**: Codex.
-- **App version**: Compact Web `0.17.1`; Android `0.22.0` (versionCode 2200; branch `codex/admin-console-1.0-android`); Admin `1.3.4`; Broker `2026.08.24.1`; React `0.2.7`. All web surfaces, Broker and the approved Supabase cutover are live; ordinary-user receipt-photo auth evidence remains open below.
+- **Focus**: Session 89 Admin console production-readiness + UX modernization (worktree `admin/console-production-ready`).
+- **Agent**: MiMo.
+- **App version**: Admin `1.3.6` (was `1.3.4`). Compact Web / Android / React / Broker unchanged this session.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -129,6 +129,20 @@ you closed with your session number.
    the original mixed-schema `conflicting-duplicate=7`, `meta-fallback=5`, `skipped-row=2` assertions.
 
 ## What Was Done
+
+### Session 89 (MiMo — Admin console production-readiness + UX modernization)
+
+Admin `1.3.6` on branch `admin/console-production-ready` (worktree `.worktrees/admin-console-hardening`).
+
+1. **Write-policy UI gate** — new `src/lib/writePolicy.ts` reads `/runtime` policy. Providers probe stays available under `provider_probe_only`; receipt/trip/itinerary/member/sync-job/support-bundle/integrity-scan CTAs require `allowlisted` and are disabled with an explicit label otherwise (Edge already rejected them with `WRITES_DISABLED` 503).
+2. **Pagination safety** — `useCursorPagination.previous()` no longer calls `navigate(-1)`; restores the prior cursor from the mount stack or falls back to page 1. Integrity page now uses the same hook.
+3. **LoginGate** — removed dead bootstrap-secret enrollment UI (bootstrap is permanently closed). `PROTECTED_TARGET` / enrollment-required now shows recovery guidance + 「返回登入」. CTA is 「使用通行片語與 Passkey 登入」.
+4. **CSRF fail-closed** — `adminApi.ts` POST path now throws `CSRF_REJECTED` when the `__Host-admin_csrf` cookie is missing (parity with `adminClient.ts`).
+5. **Session cache** — logout and `admin:unauthorized` clear `["admin"]` React Query cache.
+6. **Correctness** — `formatMoney(null)` → 未有金額; support-bundle ObjectURL revoke deferred; receipts selection notice clears; Trips/Itinerary wire `useOnline`.
+7. **UX modernization** — quiet chrome (solid frames, accent-bar headings, hex-grid full-tier only), denser tables, breadcrumbs on detail pages, Overview KPI deep-links, zh-HK status labels, Providers/System/Reliability copy, Activity→操作中心, Audit range radiogroup.
+8. **Hardening** — security-scan walks `server/admin/**`; FreshnessBanner names blocking sources; CSP `worker-src`; provider catalog contract test in `test:contract`.
+9. **Evidence**: typecheck, build, unit `34/34`, contract `24/24` + catalog, security scan, Playwright smoke `49 passed / 1 skipped`.
 
 ### Session 89k (MiMo — android-auth tokens, backup photo strip, Scan overflow)
 

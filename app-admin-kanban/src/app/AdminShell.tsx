@@ -232,7 +232,10 @@ export function AdminShell() {
             onSubmit={(event) => {
               event.preventDefault();
               const q = search.trim();
-              if (q) navigate(`/search?q=${encodeURIComponent(q)}`);
+              if (q) {
+                navigate(`/search?q=${encodeURIComponent(q)}`);
+                setSearch("");
+              }
             }}
           >
             <Search size={17} />
@@ -243,7 +246,7 @@ export function AdminShell() {
               id="admin-global-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜尋帳戶、行程或收據"
+              placeholder="搜尋名稱或 UUID"
               autoComplete="off"
             />
           </form>
@@ -254,8 +257,8 @@ export function AdminShell() {
             ref={activityButtonRef}
             className="icon-button activity-trigger"
             type="button"
-            title="Activity Center"
-            aria-label="開啟 Activity Center"
+            title="操作中心"
+            aria-label="開啟操作中心"
             aria-expanded={activityOpen}
             onClick={() => setActivityOpen((value) => !value)}
           >
@@ -306,7 +309,7 @@ export function AdminShell() {
         <dialog
           ref={activityDialogRef}
           className="activity-center"
-          aria-label="Activity Center"
+          aria-label="操作中心"
           onCancel={(event) => {
             event.preventDefault();
             setActivityOpen(false);
@@ -317,12 +320,12 @@ export function AdminShell() {
           }}
         >
             <header>
-              <strong>Activity Center</strong>
+              <strong>操作中心</strong>
               <button
                 className="icon-button"
                 type="button"
                 title="關閉"
-                aria-label="關閉 Activity Center"
+                aria-label="關閉操作中心"
                 onClick={() =>
                   setActivityOpen(false)}
               >
@@ -413,7 +416,12 @@ export function AdminShell() {
             </NavLink>
           );
         })}
-        <button type="button" onClick={() => setDrawerOpen(true)}>
+        <button
+          type="button"
+          aria-expanded={drawerOpen}
+          aria-label="開啟更多導覽"
+          onClick={() => setDrawerOpen(true)}
+        >
           <Menu size={19} />
           <span>更多</span>
         </button>
