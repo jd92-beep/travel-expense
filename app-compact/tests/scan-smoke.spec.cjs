@@ -67,10 +67,11 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.getByRole('button', { name: '相簿' }).first()).toBeVisible();
   await expect(page.locator('.scan-card-copy').first()).toHaveText(['相機', 'Camera'].join(''));
   await expect(page.locator('.scan-card-copy').nth(1)).toHaveText(['相簿', 'Gallery'].join(''));
-  await expect(page.locator('.scan-card-copy').nth(2)).toHaveText(['手動記帳', 'Manual Entry'].join(''));
-  await expect(page.locator('.scan-card-copy').nth(3)).toHaveText(['語音', 'Voice'].join(''));
-  await expect(page.locator('.scan-card-copy').nth(4)).toHaveText(['Email', 'Email'].join(''));
-  await expect(page.getByRole('button', { name: /匯率 Exchange Rate/ })).toBeVisible();
+  // Secondary modes live under 更多方式 (open by default; users can collapse).
+  await expect(page.locator('.scan-card-copy').nth(2)).toHaveText('手動記帳');
+  await expect(page.locator('.scan-card-copy').nth(3)).toHaveText('語音記帳');
+  await expect(page.locator('.scan-card-copy').nth(4)).toHaveText('貼 Email');
+  await expect(page.getByRole('button', { name: '匯率' })).toBeVisible();
   await expect(page.locator('.scan-hero-card')).not.toContainText('智能辨識');
   await expect(page.locator('.scan-hero-card')).not.toContainText('從手機相簿選取');
   await expect(page.locator('.scan-function-art')).toHaveCount(6);
@@ -179,7 +180,8 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await page.getByRole('button', { name: /全部儲存/ }).click();
   await expect(page.getByText('已儲存 1 筆 email 待確認紀錄。')).toBeVisible();
 
-  await page.getByRole('button', { name: /匯率 Exchange Rate/ }).click();
+  await page.locator('details.scan-more-ways').evaluate((el) => { el.open = true; });
+  await page.getByRole('button', { name: '匯率' }).click();
   const fxDialog = page.getByRole('dialog', { name: '即時匯率' });
   await expect(fxDialog).toBeVisible();
   await fxDialog.locator('input').first().fill('2000');

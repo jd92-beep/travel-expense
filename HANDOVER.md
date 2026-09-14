@@ -130,6 +130,16 @@ you closed with your session number.
 
 ## What Was Done
 
+### Session 89k (MiMo — android-auth tokens, backup photo strip, Scan overflow)
+
+Compact `0.23.9`.
+
+1. **android-auth.html:** no-referrer meta; OAuth params also as intent `S.*` extras;
+   `history.replaceState` scrubs tokens from the browser URL immediately after handoff.
+2. **Backup import:** strips `photoThumb` / `photoUrl` (blocks crafted base64/remote injection).
+3. **Scan:** 匯率 / 手動 / 語音 / Email moved into collapsible「更多方式」; English sublabels removed.
+4. **Evidence:** typecheck, build, security:scan; scan, settings(10), history(8), dashboard(8).
+
 ### Session 89j (MiMo — device-trust + broker session + UX danger zones)
 
 Compact `0.23.8`.

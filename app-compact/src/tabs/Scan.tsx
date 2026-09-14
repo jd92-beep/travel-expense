@@ -645,62 +645,64 @@ export function Scan({
           </button>
         </div>
 
-        <button
-          type="button"
-          className="scan-fx-wide-button relative z-10 mb-6"
-          aria-label="匯率 Exchange Rate"
-          onClick={() => setFxOpen(true)}
-        >
-          <span className="scan-function-art scan-function-art--currency" style={scanSuiteStyle} aria-hidden="true" />
-          <span>
-            <strong>匯率</strong>
-            <small>Exchange Rate</small>
-          </span>
-          <b>{from} → {to}</b>
-        </button>
-
-        {/* OTHER UTILITY MODES GRID */}
-        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-          <button
-            type="button"
-            onClick={onManual}
-            aria-label="手動"
-            className="scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer"
-          >
-            <span className="scan-function-art scan-function-art--manual" style={scanSuiteStyle} aria-hidden="true" />
-            <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
-              <strong className="text-xs font-black text-slate-800">手動記帳</strong>
-              <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Manual Entry</span>
-            </div>
-          </button>
+        {/* Secondary entry points — collapsible so the primary screen can stay Camera + Gallery. */}
+        <details className="scan-more-ways relative z-10 mb-6" open>
+          <summary style={{ cursor: 'pointer', fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.75rem' }}>
+            更多方式
+          </summary>
 
           <button
             type="button"
-            onClick={() => setMode('voice')}
-            aria-label="語音"
-            className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'voice' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
+            className="scan-fx-wide-button relative z-10 mb-4"
+            aria-label="匯率"
+            onClick={() => setFxOpen(true)}
           >
-            <span className="scan-function-art scan-function-art--voice" style={scanSuiteStyle} aria-hidden="true" />
-            <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
-              <strong className="text-xs font-black text-slate-800">語音</strong>
-              <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Voice</span>
-            </div>
+            <span className="scan-function-art scan-function-art--currency" style={scanSuiteStyle} aria-hidden="true" />
+            <span>
+              <strong>匯率</strong>
+              <small>換算金額</small>
+            </span>
+            <b>{from} → {to}</b>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setMode('email')}
-            aria-label="Email"
-            className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'email' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
-          >
-            <span className="scan-function-art scan-function-art--email" style={scanSuiteStyle} aria-hidden="true" />
-            <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
-              <strong className="text-xs font-black text-slate-800">Email</strong>
-              <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Email</span>
-            </div>
-          </button>
+          <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={onManual}
+              aria-label="手動"
+              className="scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer"
+            >
+              <span className="scan-function-art scan-function-art--manual" style={scanSuiteStyle} aria-hidden="true" />
+              <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
+                <strong className="text-xs font-black text-slate-800">手動記帳</strong>
+              </div>
+            </button>
 
-        </div>
+            <button
+              type="button"
+              onClick={() => setMode('voice')}
+              aria-label="語音"
+              className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'voice' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
+            >
+              <span className="scan-function-art scan-function-art--voice" style={scanSuiteStyle} aria-hidden="true" />
+              <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
+                <strong className="text-xs font-black text-slate-800">語音記帳</strong>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode('email')}
+              aria-label="Email"
+              className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'email' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
+            >
+              <span className="scan-function-art scan-function-art--email" style={scanSuiteStyle} aria-hidden="true" />
+              <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
+                <strong className="text-xs font-black text-slate-800">貼 Email</strong>
+              </div>
+            </button>
+          </div>
+        </details>
 
         {/* Embedded Workspaces */}
         <div className="scan-workspace relative z-10 w-full overflow-hidden transition-all duration-300">

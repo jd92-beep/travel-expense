@@ -109,6 +109,9 @@ function sanitizeImportedReceipts(input: unknown, fallbackDate: string, allowedT
         tripId: _tripId,
         tripVersion: _tripVersion,
         tripDayId: _tripDayId,
+        // Crafted backups must not inject large base64 thumbs or remote photo URLs.
+        photoThumb: _photoThumb,
+        photoUrl: _photoUrl,
         _photoSyncedToNotion,
         _photoBodyBlockAdded,
         ...localReceipt
