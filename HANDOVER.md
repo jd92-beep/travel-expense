@@ -130,6 +130,20 @@ you closed with your session number.
 
 ## What Was Done
 
+### Session 89j (MiMo — device-trust + broker session + UX danger zones)
+
+Compact `0.23.8`.
+
+1. **Device trust:** trust flag stores `deviceId` after real unlock; forged/mismatched
+   deviceId re-locks. Flag-only offline unlock (smoke/legacy) is **session-scoped** — durable
+   flag cleared, `sessionStorage` keeps same-tab StrictMode alive; next cold open needs password.
+2. **Broker session:** `currentBrokerSession(state)` always falls back to persisted session;
+   load uses `safeJsonParse`.
+3. **UX:** Scan English leftovers (ready/Last scan/Batch Confirm/…); WelcomeGuide `我`/`旅伴N`,
+   empty home city + confirm on first-run skip; Settings danger blocks under「不可逆操作」.
+4. **Evidence:** typecheck, build, security:scan; settings(10), auth-broker, offline(4),
+   history(8), dashboard(8), scan, timeline(10), welcome-guide.
+
 ### Session 89i (MiMo — full rescan + non-tech UX polish)
 
 Compact `0.23.7`.

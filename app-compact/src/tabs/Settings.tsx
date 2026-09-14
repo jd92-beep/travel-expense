@@ -2932,6 +2932,9 @@ export function Settings({
           >
             <CheckCircle2 size={18} /> 儲存旅程修改
           </button>
+        </div>
+        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(0,0,0,.12)' }}>
+          <p className="muted" style={{ margin: '0 0 0.4rem' }}>不可逆操作</p>
           <button
             className="settings-trip-delete"
             type="button"
@@ -3173,12 +3176,16 @@ export function Settings({
           </button>
           {tripDraft && <button className="secondary" type="button" onClick={() => setTripDraftModalOpen(true)}>開啟確認視窗</button>}
           {tripDraft && <button className="secondary" type="button" onClick={() => { setTripDraft(null); setTripDraftModalOpen(false); }}>清除 preview</button>}
-          <button
-            className="danger"
-            type="button"
-            disabled={!!busy}
-            onClick={() => {
-              if (!window.confirm('確定清空目前旅程嘅 AI 行程？其他設定會保留。')) return;
+        </div>
+        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(0,0,0,.12)' }}>
+          <p className="muted" style={{ margin: '0 0 0.4rem' }}>不可逆操作</p>
+          <div className="action-row wrap">
+            <button
+              className="danger"
+              type="button"
+              disabled={!!busy}
+              onClick={() => {
+                if (!window.confirm('確定清空目前旅程嘅 AI 行程？其他設定會保留。')) return;
               updateState({
                 customItinerary: [],
                 itineraryOverrides: {},
@@ -3190,10 +3197,11 @@ export function Settings({
               setTripDraft(null);
               setTripDraftModalOpen(false);
               setStatus('已清空 AI 行程，可以重新貼入或手動編輯。');
-            }}
-          >
-            <RotateCcw size={18} /> 清除 AI 行程
-          </button>
+              }}
+            >
+              <RotateCcw size={18} /> 清除 AI 行程
+            </button>
+          </div>
         </div>
         {tripDraft && tripPreviewStats && (
           <div className="trip-preview">
@@ -3357,7 +3365,12 @@ export function Settings({
           <button className="secondary" type="button" onClick={() => downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup</button>
           <button className="secondary" type="button" disabled={!!busy} onClick={backupToNotion}><Upload size={18} /> 備份到 Notion</button>
           <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup</button>
-          <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearLocalPreview(true)}><RotateCcw size={18} /> 清除本地資料</button>
+        </div>
+        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(0,0,0,.12)' }}>
+          <p className="muted" style={{ margin: '0 0 0.4rem' }}>不可逆操作</p>
+          <div className="action-row wrap">
+            <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearLocalPreview(true)}><RotateCcw size={18} /> 清除本地資料</button>
+          </div>
         </div>
         {showStressPanel && (<div className="action-row wrap" style={{ marginTop: '0.5rem' }}>
           <button className="secondary" type="button" onClick={previewTripShareExport}><Copy size={18} /> Preview trip share</button>
@@ -3511,6 +3524,11 @@ export function Settings({
                     <LogOut size={18} /> 登出
                   </button>
                 )}
+              </div>
+            </GlassCard>
+            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(0,0,0,.12)' }}>
+              <p className="muted" style={{ margin: '0 0 0.4rem' }}>不可逆操作</p>
+              <div className="settings-account-actions">
                 {onClearDeviceData && onSignOut && (
                   <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
                     <Trash2 size={18} /> 清除此裝置資料
@@ -3522,7 +3540,7 @@ export function Settings({
                   </button>
                 )}
               </div>
-            </GlassCard>
+            </div>
             <div className="settings-password-panel">
               <label>
                 <span>新密碼</span>

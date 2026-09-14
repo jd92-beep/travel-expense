@@ -166,15 +166,15 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
     mimeType: 'image/jpeg',
     buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
   });
-  await expect(page.getByRole('heading', { name: 'Batch Confirm' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '批次確認' })).toBeVisible();
   await expect(page.getByLabel('Batch recovery summary')).toContainText('1 需補資料');
   await page.getByRole('button', { name: '只選完成' }).click();
   await expect(page.getByRole('button', { name: /全部儲存/ })).toContainText('(0)');
   await page.getByRole('button', { name: '取消' }).click();
   await page.getByPlaceholder('貼 booking confirmation / email 文字').fill('2026-05-08 at M5 Email Lunch 888 yen booking REF55555');
   await page.getByRole('button', { name: '解析文字' }).click();
-  await expect(page.getByRole('heading', { name: 'Batch Confirm' })).toBeVisible();
-  await expect(page.getByLabel('Batch recovery summary')).toContainText('1 selected');
+  await expect(page.getByRole('heading', { name: '批次確認' })).toBeVisible();
+  await expect(page.getByLabel('Batch recovery summary')).toContainText('1 已選');
   await expect(page.getByLabel('Batch recovery summary')).toContainText('0 需補資料');
   await page.getByRole('button', { name: /全部儲存/ }).click();
   await expect(page.getByText('已儲存 1 筆 email 待確認紀錄。')).toBeVisible();

@@ -69,7 +69,9 @@ export function brokerUrl(state?: Pick<AppState, 'credentialBrokerUrl'>): string
 }
 
 export function currentBrokerSession(state?: Pick<AppState, 'credentialSession' | 'credentialSessionExpiresAt'>): BrokerSession | null {
-  const stored = state ? {} : loadCredentialSession();
+  // Always consider the persisted session as a fallback so in-memory AppState
+  // without a token does not disable broker-backed Notion/AI paths.
+  const stored = loadCredentialSession();
   const token = state?.credentialSession || stored.credentialSession || '';
   const exp = Number(state?.credentialSessionExpiresAt || stored.credentialSessionExpiresAt || 0);
   if (!token || exp <= Date.now()) return null;

@@ -9,7 +9,7 @@ import {
   requestBrokerSessionChallenge,
   unlockCredentialBroker,
 } from '../lib/credentialBroker';
-import { clearDeviceTrust, hasDeviceTrust, setDeviceTrust } from './deviceTrust';
+import { clearDeviceTrust, hasDeviceTrust, loadDeviceTrustMeta, setDeviceTrust } from './deviceTrust';
 import {
   clearTrustedDevice,
   createTrustedDeviceRegistration,
@@ -18,6 +18,8 @@ import {
   signTrustedDeviceChallenge,
 } from './trustedDevice';
 import { useTripTheme } from '../theme/tripTheme';
+
+const FLAG_ONLY_SESSION = 'travel-expense-react:device-trust:flag-only:v1';
 
 function shouldAutoFocusUnlockInput(): boolean {
   if (typeof window === 'undefined') return false;
@@ -58,7 +60,8 @@ export function AuthGate({
   useEffect(() => {
     let alive = true;
     async function restoreSession() {
-      if (!hasDeviceTrust()) {
+      const flagOnlySession = sessionStorage.getItem(FLAG_ONLY_SESSION) === '1';
+      if (!hasDeviceTrust() && !flagOnlySession) {
         setChecking(false);
         setUnlocked(false);
         return;
@@ -71,10 +74,23 @@ export function AuthGate({
         return;
       }
       const device = loadTrustedDevice();
-      // Trust meta without the crypto key: open offline this session (legacy seeds / expired meta).
-      // Do NOT clearDeviceTrust() here — React StrictMode re-runs this effect and would re-lock.
+      const trustMeta = loadDeviceTrustMeta();
+      // A trust flag that claims a deviceId the local crypto key cannot prove is a forgery
+      // (or a wiped key store) — re-lock instead of silently unlocking offline.
+      if (trustMeta?.deviceId && (!device || device.deviceId !== trustMeta.deviceId)) {
+        if (!alive) return;
+        clearDeviceTrust();
+        setChecking(false);
+        setUnlocked(false);
+        setError('裝置信任無效，請重新輸入密碼解鎖。');
+        return;
+      }
+      // Legacy/smoke trust flag without deviceId or crypto key: open offline for this
+      // page session only. Drop the durable flag so the next cold open requires password.
       if (!device) {
         if (!alive) return;
+        try { sessionStorage.setItem(FLAG_ONLY_SESSION, '1'); } catch { /* best effort */ }
+        if (hasDeviceTrust() && !trustMeta?.deviceId) clearDeviceTrust();
         setChecking(false);
         setUnlocked(true);
         setError('');
@@ -139,7 +155,8 @@ export function AuthGate({
       });
       if (!brokerSession.device) throw new Error('Credential Broker did not register this device');
       await saveTrustedDevice(brokerSession.device, trustedDevice.privateKey);
-      setDeviceTrust();
+      setDeviceTrust(brokerSession.device.deviceId);
+      try { sessionStorage.removeItem(FLAG_ONLY_SESSION); } catch { /* best effort */ }
       onBrokerSession?.(brokerSession);
       setUnlocked(true);
       setPassword('');

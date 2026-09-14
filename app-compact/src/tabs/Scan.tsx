@@ -566,7 +566,7 @@ export function Scan({
             掃描收據 📸
           </h2>
           <StatusPill tone={busy ? 'warning' : 'ok'} icon={busy ? <RefreshCw size={14} className="spin text-slate-800" /> : <CheckCircle2 size={14} className="text-slate-800" />}>
-            {busy || 'ready'}
+            {busy || '準備就緒'}
           </StatusPill>
         </div>
 
@@ -715,8 +715,8 @@ export function Scan({
                 </ActionRippleButton>
               </div>
               <div className="text-xs text-slate-600 flex flex-col gap-1">
-                <span>Last scan: {lastScanFile ? lastScanFile.name : '未有'}</span>
-                <span>Last draft: {lastDraft ? lastDraft.store || '未命名' : '未有'}</span>
+                <span>上次掃描：{lastScanFile ? lastScanFile.name : '未有'}</span>
+                <span>上次草稿：{lastDraft ? lastDraft.store || '未命名' : '未有'}</span>
               </div>
             </div>
           )}
@@ -779,14 +779,14 @@ export function Scan({
             <div className="modal-head">
               <div>
                 <h2>{fxFixed ? '固定匯率' : '即時匯率'}</h2>
-                <p className="muted">{fxFixed ? '用緊你喺設定鎖定嘅匯率，唔會自動更新。' : 'Live currency exchange for this trip.'}</p>
+                <p className="muted">{fxFixed ? '用緊你喺設定鎖定嘅匯率，唔會自動更新。' : '呢程即時匯率。'}</p>
               </div>
               <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setFxOpen(false)}><X size={18} /></button>
             </div>
             <div className="scan-fx-result" aria-live="polite">
               <span>{Number(amount) || 0} {from}</span>
               <strong>{(Number(amount) || 0) === 0 ? '輸入金額以計算' : `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${to}`}</strong>
-              <small>{fxFixed ? '固定匯率（設定頁可改）' : fx?.source ? `Source: ${fx.source}` : 'Using saved or fallback app rates'}</small>
+              <small>{fxFixed ? '固定匯率（設定頁可改）' : fx?.source ? `來源：${fx.source}` : '使用已儲存匯率'}</small>
             </div>
             <div className="scan-fx-panel">
               <label>
@@ -825,13 +825,13 @@ export function Scan({
           <div className="modal sheet" onClick={(event) => event.stopPropagation()}>
             <div className="modal-head">
               <div>
-                <h2>Batch Confirm</h2>
+                <h2>批次確認</h2>
                 <p className="muted">核對 email / 截圖解析結果，未勾選嘅唔會保存。</p>
               </div>
               <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setBatch([])}>×</button>
             </div>
             <div className="batch-recovery-bar" aria-label="Batch recovery summary">
-              <span><b>{batchQuality.selected}</b> selected</span>
+              <span><b>{batchQuality.selected}</b> 已選</span>
               <span><b>{batchQuality.complete}</b> 完成</span>
               <span><b>{batchQuality.review}</b> 需補資料</span>
               <button type="button" onClick={selectCompleteBatchRows}>只選完成</button>
@@ -848,7 +848,7 @@ export function Scan({
                     <label>店名<input value={row.store} onChange={(e) => updateBatch(row.id, { store: e.target.value })} /></label>
                     <label>金額<input type="text" inputMode="decimal" value={row.total || ''} onChange={(e) => { const n = Number(e.target.value); updateBatch(row.id, { total: Number.isFinite(n) && n >= 0 ? Math.min(n, 1_000_000_000) : 0 }); }} /></label>
                     <label>日期<input type="date" value={row.date} onChange={(e) => updateBatch(row.id, { date: e.target.value })} /></label>
-                    <label>Booking Ref<input value={row.bookingRef || ''} onChange={(e) => updateBatch(row.id, { bookingRef: e.target.value })} /></label>
+                    <label>訂單編號<input value={row.bookingRef || ''} onChange={(e) => updateBatch(row.id, { bookingRef: e.target.value })} /></label>
                   </div>
                   <label>備註<textarea rows={2} value={row.note || ''} onChange={(e) => updateBatch(row.id, { note: e.target.value })} /></label>
                 </div>
