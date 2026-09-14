@@ -2,6 +2,12 @@ const { test, expect } = require('@playwright/test');
 
 const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
+async function openThemeAccordion(page) {
+  const trigger = page.locator('[aria-controls="settings-theme-panel"]');
+  await expect(trigger).toBeVisible({ timeout: 15_000 });
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+}
+
 const exactThemeTokens = {
   japan_washi: {
     scheme: 'light', canvas: '#F5F0E8', canvasMid: '#F0EBDF', canvasEnd: '#E8E2D4', surface: '#FAF7F0', card: '#FFFDF7', text: '#2A2119', muted: '#7A7068', focus: '#1E4D6B', accent: '#C23B5E', onAccent: '#FFFFFF', info: '#1E4D6B', success: '#2D6E48', warning: '#7A5800', danger: '#A82C4C', chart1: '#1E4D6B', chart2: '#C23B5E', chart3: '#D4A843', chart4: '#2D6E48',
@@ -228,7 +234,7 @@ test('theme selector previews a manual Taiwan world while auto follows the activ
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await seedThemeState(page);
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
-
+  await openThemeAccordion(page);
   await expect(page.getByRole('radiogroup', { name: 'App theme' })).toBeVisible({ timeout: 15_000 });
   const rootAuto = await page.evaluate(() => ({
     tripTheme: document.documentElement.dataset.tripTheme,
@@ -485,6 +491,7 @@ test('mobile dock reflows at 200% text without overlapping navigation labels', a
 test('theme catalog exposes six choices, semantic roles, and accessible color schemes', async ({ page }) => {
   await seedThemeState(page);
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
+  await openThemeAccordion(page);
   const group = page.getByRole('radiogroup', { name: 'App theme' });
   await expect(group.getByRole('radio')).toHaveCount(13, { timeout: 15_000 });
   await page.getByRole('button', { name: /旅伴 \/ 分帳比例/ }).click();

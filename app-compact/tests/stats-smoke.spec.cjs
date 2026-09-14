@@ -135,7 +135,8 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
     };
   });
   expect(topExpenseOrder.top10Top, JSON.stringify(topExpenseOrder, null, 2)).toBeGreaterThanOrEqual(topExpenseOrder.budgetBottom - 4);
-  expect(topExpenseOrder.storyTop, JSON.stringify(topExpenseOrder, null, 2)).toBeGreaterThanOrEqual(topExpenseOrder.top10Bottom - 4);
+  expect(topExpenseOrder.storyTop, JSON.stringify(topExpenseOrder, null, 2)).toBeGreaterThanOrEqual(topExpenseOrder.budgetBottom - 4);
+  expect(topExpenseOrder.top10Top, JSON.stringify(topExpenseOrder, null, 2)).toBeGreaterThanOrEqual(topExpenseOrder.storyTop - 4);
   await expect(page.getByText('Xinxin').first()).toBeVisible();
   await expect(page.getByText('User 1').first()).toBeVisible();
   const actionPlan = page.getByLabel('Settlement action plan');

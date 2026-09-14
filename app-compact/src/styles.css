@@ -15001,3 +15001,17 @@ html.fx-balanced .preview-weather-hourly-chip:active {
   font-size: 0.76rem;
   opacity: 0.75;
 }
+
+/* Trip header vs in-progress chip: never overlap when header paints as a layer. */
+.compact-mobile-title-art,
+.topbar-trip-trigger-title {
+  max-width: min(100%, 185px) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.compact-mobile-status {
+  position: static !important;
+  justify-self: end;
+  z-index: 2;
+}

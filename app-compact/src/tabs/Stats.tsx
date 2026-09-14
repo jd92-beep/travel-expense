@@ -134,26 +134,13 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
       </GlassCard>
 
       <DataPanel
-        className="top-expenses-panel"
-        icon={<Trophy size={19} />}
-        title="TOP 10 支出"
-        status={<TopTenToggle includeBigItems={state.top10IncludeBigItems} onChange={(value) => updateState({ top10IncludeBigItems: value })} />}
+        className="trend-panel preview-daily-pace"
+        icon={<TrendingUp size={19} />}
+        title="每日 Budget Pace"
+        status={<StatusPill tone={overBudgetDays ? 'warning' : 'ok'}>{overBudgetDays ? `${overBudgetDays} 日超支` : '未超支'}</StatusPill>}
       >
-        {topReceipts.length ? topReceipts.map((r, idx) => {
-          const cat = categoryById(r.category);
-          const display = topStoreDisplay[idx];
-          const showTranslation = !!display?.translated && display.translated !== display.original;
-          return (
-            <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
-              <b>{idx + 1}</b>
-              <span>
-                <VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {display?.original ?? displayStore(r)}
-                {showTranslation && <span className="rank-store-translation">{display!.translated}</span>}
-              </span>
-              <strong>{formatCurrencyAmount(r.total, r.currency || resolvedTripCurrency)}</strong>
-            </motion.div>
-          );
-        }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
+        {trend.length ? <BudgetPaceChart trend={trend} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} /> : null}
+        {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
       </DataPanel>
 
       <section className="stats-story-grid" aria-label="Budget story cards">
@@ -171,16 +158,6 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
           </motion.article>
         ))}
       </section>
-
-      <DataPanel
-        className="trend-panel preview-daily-pace"
-        icon={<TrendingUp size={19} />}
-        title="每日 Budget Pace"
-        status={<StatusPill tone={overBudgetDays ? 'warning' : 'ok'}>{overBudgetDays ? `${overBudgetDays} 日超支` : '未超支'}</StatusPill>}
-      >
-        {trend.length ? <BudgetPaceChart trend={trend} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} /> : null}
-        {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
-      </DataPanel>
 
       <DataPanel
         className="settlement-card"
@@ -291,6 +268,29 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
 
       <DataPanel className="payment-panel" icon={<BarChart3 size={19} />} title="支付方式" status={<StatusPill tone="neutral">{payTotals.length} 種方式</StatusPill>}>
         {payTotals.length ? payTotals.map((p) => <Bar key={p.id} label={p.name} value={p.total} state={{ ...scopedState, receipts: analysisReceipts }} color={p.color} />) : <EmptyState title="未有紀錄" description="現金、信用卡、PayPay、Suica 會分開統計。" />}
+      </DataPanel>
+
+      <DataPanel
+        className="top-expenses-panel"
+        icon={<Trophy size={19} />}
+        title="TOP 10 支出"
+        status={<TopTenToggle includeBigItems={state.top10IncludeBigItems} onChange={(value) => updateState({ top10IncludeBigItems: value })} />}
+      >
+        {topReceipts.length ? topReceipts.map((r, idx) => {
+          const cat = categoryById(r.category);
+          const display = topStoreDisplay[idx];
+          const showTranslation = !!display?.translated && display.translated !== display.original;
+          return (
+            <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
+              <b>{idx + 1}</b>
+              <span>
+                <VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {display?.original ?? displayStore(r)}
+                {showTranslation && <span className="rank-store-translation">{display!.translated}</span>}
+              </span>
+              <strong>{formatCurrencyAmount(r.total, r.currency || resolvedTripCurrency)}</strong>
+            </motion.div>
+          );
+        }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
       </DataPanel>
 
       <GlassCard className="stats-controls stats-glass" tone="control">

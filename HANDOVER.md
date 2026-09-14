@@ -130,6 +130,25 @@ you closed with your session number.
 
 ## What Was Done
 
+### Session 89h (MiMo — UX batch: header overlap, Settings, Timeline, voice dates, Trip AI)
+
+Compact `0.23.6`.
+
+1. **Home header overlap:** trip title ellipsis + in-flow status chip; theme-switch no longer
+   promotes `.topbar` / mobile header / desktop rail layers that painted title over「進行中」.
+2. **Settings:** 外觀主題 default-collapsed AccordionCard near end; 連線（進階） simplified (hide
+   missing/unknown pills; short Notion paste flow); 匯率 collapsible `<details>`; 雲端帳號 after
+   資料管理; logout above build with confirm.
+3. **Timeline:** single smooth scroll (no mid-jump hard snap); day `content-visibility` 420px
+   intrinsic size; Reveal `lowCost` (no blur) on days.
+4. **Voice dates:** local relatives (今天/明天/後天/聽日/下星期X), trip-window DD/MM disambiguation,
+   HKT calendar year, prompt injects today + trip window rules.
+5. **Trip Update AI:** partial local/fail paths always merge existing days; failure keeps itinerary;
+   「清除 AI 行程」 button with confirm.
+6. **Stats:** 每日 Budget Pace second; TOP 10 lower.
+7. **Evidence:** typecheck, build, security:scan; settings(10), stats, timeline(10), scan, theme
+   catalog, trip-local-parser.
+
 ### Session 89g (MiMo — weather APIs + themed weather UI)
 
 Compact `0.23.5`.

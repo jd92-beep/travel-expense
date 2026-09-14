@@ -376,7 +376,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await page.getByRole('button', { name: '重設為均分' }).click();
   await expect(page.getByText('已重設為均分比例')).toBeVisible();
 
-  await setAccordion(page, 'Credentials & Connection');
+  await setAccordion(page, '連線（進階）');
   await page.getByLabel('New credential').fill('rotate-placeholder');
   await page.getByLabel('Admin maintenance passphrase').fill('admin-placeholder');
   await page.getByRole('button', { name: /Rotate safely/ }).click();
@@ -697,10 +697,13 @@ test('Settings protects broker URL and does not keep archived trip active', asyn
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
 
-  await setAccordion(page, 'Credentials & Connection');
+  await setAccordion(page, '連線（進階）');
   const brokerInput = page.getByLabel('Credential Broker URL');
-  await expect(brokerInput).toHaveValue(defaultBroker);
-  await expect(brokerInput).toHaveAttribute('readonly', '');
+  // URL field is hidden in the simplified UI; if present it must stay the default.
+  if (await brokerInput.count()) {
+    await expect(brokerInput).toHaveValue(defaultBroker);
+    await expect(brokerInput).toHaveAttribute('readonly', '');
+  }
   const storedCredentials = await page.evaluate(() => localStorage.getItem('boss-japan-tracker:react-credentials') || '');
   expect(storedCredentials).not.toContain('evil.example');
   expect(storedCredentials).toContain(defaultBroker);
@@ -1683,10 +1686,10 @@ test('Settings can connect a broker session without leaking the password into ap
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
-  await setAccordion(page, 'Credentials & Connection');
+  await setAccordion(page, '連線（進階）');
 
   await page.getByLabel('Broker password').fill('broker-pass');
-  await page.getByRole('button', { name: /Connect Broker/ }).click();
+  await page.getByRole('button', { name: /Connect Broker|^連接$/ }).click();
   await expect(page.getByText(/Broker session 已連上/)).toBeVisible();
   await expect.poll(() => unlockCount).toBe(1);
 
@@ -1727,6 +1730,11 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
   await setAccordion(page, '旅程管理器');
 
   const rateLabel = page.locator('label', { hasText: '匯率（1 HKD' });
+  const fxDetails = page.locator('details.settings-fx-panel');
+  if (await fxDetails.count()) {
+    const summary = fxDetails.locator('summary').first();
+    if (!(await fxDetails.evaluate((el) => el.open))) await summary.click();
+  }
   const rateInput = rateLabel.locator('input[type="number"]');
   const refreshButton = page.getByRole('button', { name: /更新 live rate/ });
 
@@ -1754,6 +1762,10 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
   await page.reload();
   await expectSettingsReady(page);
   await setAccordion(page, '旅程管理器');
+  const fxDetailsAfterReload = page.locator('details.settings-fx-panel');
+  if (await fxDetailsAfterReload.count()) {
+    if (!(await fxDetailsAfterReload.evaluate((el) => el.open))) await fxDetailsAfterReload.locator('summary').first().click();
+  }
   await page.waitForTimeout(500); // let the boot currency effect have a chance to fire
   await expect(rateInput).toHaveValue('19.5');
   const afterReload = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));

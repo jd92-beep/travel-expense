@@ -163,8 +163,59 @@ function validCurrency(value: unknown): string | undefined {
   return isCurrencyCode(v) ? v : undefined;
 }
 
-function ymdFromText(rawText: string, fallback: string): string {
+function localCalendarYmd(timeZone = 'Asia/Hong_Kong'): string {
+  const zone = timeZone || 'Asia/Hong_Kong';
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
+    return `${get('year')}-${get('month')}-${get('day')}`;
+  } catch {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  }
+}
+
+function addYmdDays(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  if (!y || !m || !d) return ymd;
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Resolve Cantonese/Mandarin relative day words into absolute YYYY-MM-DD. */
+export function resolveRelativeYmd(text: string, todayYmdValue: string): string | '' {
+  const raw = String(text || '');
+  if (/大後天|大后天/.test(raw)) return addYmdDays(todayYmdValue, 3);
+  if (/後天|后天/.test(raw)) return addYmdDays(todayYmdValue, 2);
+  if (/明天|聽日|听日|明日/.test(raw)) return addYmdDays(todayYmdValue, 1);
+  if (/昨天|尋日|寻日|昨日/.test(raw)) return addYmdDays(todayYmdValue, -1);
+  if (/今天|今日|今朝|今晚/.test(raw)) return todayYmdValue;
+  const nextWeek = raw.match(/(?:下個?星期|下个?星期|下週|下周)\s*([一二三四五六日天])/);
+  if (nextWeek) {
+    const map: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 0, 天: 0 };
+    const target = map[nextWeek[1]] ?? 0;
+    const [y, m, d] = todayYmdValue.split('-').map(Number);
+    const now = new Date(Date.UTC(y, m - 1, d));
+    const nowDow = now.getUTCDay();
+    const deltaToMonday = ((1 - nowDow) + 7) % 7 || 7;
+    const monday = new Date(now.getTime() + deltaToMonday * 86400000);
+    const offset = target === 0 ? 6 : target - 1;
+    return new Date(monday.getTime() + offset * 86400000).toISOString().slice(0, 10);
+  }
+  return '';
+}
+
+function ymdFromText(rawText: string, fallback: string, tripRange?: { start?: string; end?: string }): string {
   const text = toHalfWidthDigits(String(rawText || ''));
+  const today = localCalendarYmd('Asia/Hong_Kong');
+  const relative = resolveRelativeYmd(text, today);
+  if (relative) return relative;
   const cjk = text.match(/(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})/);
   if (cjk) return `${cjk[1]}-${cjk[2].padStart(2, '0')}-${cjk[3].padStart(2, '0')}`;
   const iso = text.match(/20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}/);
@@ -172,9 +223,28 @@ function ymdFromText(rawText: string, fallback: string): string {
     const [y, m, d] = iso[0].split(/[-/.]/);
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
-  const year = (fallback || '').slice(0, 4) || String(new Date().getFullYear());
+  const year = (fallback || '').slice(0, 4) || today.slice(0, 4);
+  // Prefer a slash date that lands inside the trip range (handles DD/MM vs MM/DD).
+  const slash = text.match(/(\d{1,2})\s*[/]\s*(\d{1,2})/);
+  if (slash && tripRange?.start && tripRange?.end) {
+    const a = Number(slash[1]);
+    const b = Number(slash[2]);
+    const asMd = `${year}-${String(a).padStart(2, '0')}-${String(b).padStart(2, '0')}`;
+    const asDm = `${year}-${String(b).padStart(2, '0')}-${String(a).padStart(2, '0')}`;
+    const inRange = (v: string) => v >= tripRange.start! && v <= tripRange.end!;
+    if (inRange(asMd) && !inRange(asDm)) return asMd;
+    if (inRange(asDm) && !inRange(asMd)) return asDm;
+  }
   const md = text.match(/(\d{1,2})\s*[月/]\s*(\d{1,2})\s*(?:日)?/);
-  if (md) return `${year}-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}`;
+  if (md) {
+    let a = Number(md[1]);
+    let b = Number(md[2]);
+    // Cantonese "15/3" is usually day/month — if first number > 12, swap.
+    if (slash && a > 12 && b <= 12) {
+      const tmp = a; a = b; b = tmp;
+    }
+    return `${year}-${String(a).padStart(2, '0')}-${String(b).padStart(2, '0')}`;
+  }
   return fallback;
 }
 
@@ -263,7 +333,7 @@ export function heuristicReceiptFromText(text: string, state: AppState): Receipt
     id: `text_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     store: storeMatch?.[1]?.trim() || firstLine || '文字匯入',
     total,
-    date: ymdFromText(text, state.tripDateRange.start),
+    date: ymdFromText(text, state.tripDateRange.start, state.tripDateRange),
     time: timeMatch ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}` : '',
     bookingRef: bookingMatch?.[1] || '',
     category,
@@ -1180,7 +1250,7 @@ CRITICAL ITEMS FORMATTING RULES:
     id: `scan_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     store: String(parsed.store || file.name.replace(/\.[^.]+$/, '') || '掃描收據'),
     total: coerceAmount(parsed.total),
-    date: ymdFromText(String(parsed.date || ''), state.tripDateRange.start),
+    date: ymdFromText(String(parsed.date || ''), state.tripDateRange.start, state.tripDateRange),
     time: coerceTime(parsed.time),
     address: String(parsed.address || ''),
     bookingRef: String(parsed.bookingRef || ''),
@@ -1202,9 +1272,21 @@ CRITICAL ITEMS FORMATTING RULES:
 
 
 export async function parseTextWithAi(text: string, state: AppState, source: string): Promise<Receipt[]> {
+  const todayHkt = localCalendarYmd('Asia/Hong_Kong');
+  const tripStart = state.tripDateRange?.start || todayHkt;
+  const tripEnd = state.tripDateRange?.end || tripStart;
   const prompt = `Extract travel expense receipts from the text. Return a JSON array ONLY — no markdown, no code fences, no explanations, no trailing commas. Numbers must be plain half-width digits (no currency symbols, no commas). Use "" / 0 for unknown values.
 Each item: {"store":string,"total":number,"date":"YYYY-MM-DD","time":"HH:MM","address":string,"bookingRef":string,"category":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other","payment":"cash|credit|paypay|suica","currency":string,"itemsText":string,"note":string}
 "currency": the ISO 4217 code of the currency the amount was actually spent in (e.g. "JPY","EUR","CZK","INR"), inferred from wording, symbols, or country hints in the text. Omit (use "") if unsure.
+
+DATE RULES (critical):
+- Today (Asia/Hong_Kong): ${todayHkt}. Active trip window: ${tripStart} .. ${tripEnd}.
+- Resolve relatives: 今天/今日 → today; 明天/聽日/明日 → +1 day; 後天 → +2; 大後天 → +3; 昨天/尋日 → -1 day.
+- If year is omitted, use the trip window year (or today's year as last resort).
+- If both M/D and D/M interpretations are possible (e.g. 3/4), prefer the date that falls inside the trip window; otherwise treat first number as month only when it is ≤12 and second >12.
+- When the text spans multiple days ("10號到12號", "玩三日"), emit one receipt per day or set the first mentioned day and put the range in note.
+- Never invent a date outside a plausible trip/today window without noting the assumption in note.
+
 TEXT:
 ${text.slice(0, 12000)}
 
@@ -1246,7 +1328,7 @@ CRITICAL ITEMS FORMATTING RULES:
       id: `${source}_${Date.now()}_${i}_${Math.random().toString(16).slice(2)}`,
       store: String(r.store || '文字匯入'),
       total: coerceAmount(r.total),
-      date: ymdFromText(String(r.date || ''), state.tripDateRange.start),
+      date: ymdFromText(String(r.date || '') || text, state.tripDateRange.start, state.tripDateRange),
       time: String(r.time || ''),
       address: String(r.address || ''),
       bookingRef: String(r.bookingRef || ''),
@@ -1639,6 +1721,11 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
       },
     };
   };
+  /** Partial returns must never drop existing days — always merge then clamp. */
+  const finalizePartial = (draft: TripDraft): TripDraft => {
+    const merged = mergeTripDrafts(draft, null, 'partial', current.itinerary || []);
+    return clampPartialTripDraft(merged, current);
+  };
   try {
     const warnings: string[] = [];
     const attempts = modelAttemptsForKind(state, 'trip');
@@ -1647,7 +1734,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
       if (hasFastLocalDraft && Date.now() - startedAt > TRIP_FAST_LOCAL_DEADLINE_MS) {
         warnings.push('AI provider analysis exceeded the fast response window; local itinerary extraction is ready for confirmation.');
         const draft = localDraftWithWarnings(warnings);
-        if (draft) return intent === 'partial' ? clampPartialTripDraft(draft, current) : draft;
+        if (draft) return intent === 'partial' ? finalizePartial(draft) : draft;
       }
       try {
         const timeoutMs = tripAttemptTimeoutMs(attempt, index, hasFastLocalDraft);
@@ -1689,7 +1776,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
         }, state, organizedItinerary);
         if (hasUsefulTripItinerary(draft)) {
           const merged = mergeTripDrafts(draft, fastLocalDraft, intent, current.itinerary || []);
-          const safeMerged = intent === 'partial' ? clampPartialTripDraft(merged, current) : merged;
+          const safeMerged = intent === 'partial' ? finalizePartial(merged) : merged;
           return {
             ...safeMerged,
             warnings: [...warnings, ...safeMerged.warnings].filter(Boolean),
@@ -1708,7 +1795,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
     }
     const localDraft = localDraftWithWarnings(warnings) || localTripDraftFromParagraph(paragraph, state, warnings);
     if (localDraft && hasUsefulTripItinerary(localDraft)) {
-      return intent === 'partial' ? clampPartialTripDraft(localDraft, current) : localDraft;
+      return intent === 'partial' ? finalizePartial(localDraft) : localDraft;
     }
     throw new Error([...warnings, last instanceof Error ? last.message : '', 'All trip LLM attempts returned no usable itinerary spots.'].filter(Boolean).join(' | '));
   } catch (error) {
@@ -1717,8 +1804,9 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
     const localDraft = localDraftWithWarnings([error instanceof Error ? error.message : String(error)])
       || localTripDraftFromParagraph(paragraph, state, [error instanceof Error ? error.message : String(error)]);
     if (localDraft && hasUsefulTripItinerary(localDraft)) {
-      return intent === 'partial' ? clampPartialTripDraft(localDraft, current) : localDraft;
+      return intent === 'partial' ? finalizePartial(localDraft) : localDraft;
     }
+    // Never wipe the existing itinerary on total failure — keep it for manual edit.
     const fallback = tripFromLegacyState({
       ...state,
       tripName: current.name,
@@ -1726,7 +1814,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
       customItinerary: current.itinerary,
     });
     return {
-      trip: { ...fallback, itinerary: [], version: current.version + 1, updatedAt: Date.now() },
+      trip: { ...fallback, itinerary: current.itinerary || [], version: current.version + 1, updatedAt: Date.now() },
       summary: 'AI 暫時未能完整分析，已保留現有旅程供手動修改。',
       warnings: [error instanceof Error ? error.message : String(error)],
       changes: ['沒有自動套用新資料。'],

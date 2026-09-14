@@ -464,7 +464,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
         const dayMonth = dayDateValid ? `${dayDate.getMonth() + 1}月` : '';
         const dayWeekday = dayDateValid ? zhWeekdayShortFmt.format(dayDate) : '';
         return (
-        <Reveal key={day.date} className="timeline-day-reveal" delay={Math.min(0.18, day.day * 0.018)}>
+        <Reveal key={day.date} className="timeline-day-reveal" delay={Math.min(0.18, day.day * 0.018)} lowCost>
         <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`} data-date={day.date}>
           <span className="timeline-day-anchor" data-date={day.date} hidden />
           <div className="section-head timeline-day-head">
@@ -758,18 +758,12 @@ function selectTimelineAutoScrollTarget(date: string): Element | null {
 }
 
 function scrollTimelineElementIntoCenter(element: Element) {
-  const scrollToElement = (behavior: ScrollBehavior) => {
+  // One smooth scroll after layout — a second hard snap mid-animation causes visible lag/jumps.
+  requestAnimationFrame(() => {
     const rect = element.getBoundingClientRect();
     const targetTop = Math.max(0, window.scrollY + rect.top - window.innerHeight * 0.42);
-    window.scrollTo({ top: targetTop, behavior });
-  };
-
-  scrollToElement('smooth');
-  window.setTimeout(() => {
-    const rect = element.getBoundingClientRect();
-    const center = rect.top + rect.height / 2;
-    if (center < 150 || center > window.innerHeight - 150) scrollToElement('auto');
-  }, 320);
+    window.scrollTo({ top: targetTop, behavior: 'smooth' });
+  });
 }
 
 function timelineProgress(date: string, timezone: string | undefined, spots: Array<ItinerarySpot & { _spotIdx: number }>, idx: number, nowMs: number): 'is-passed' | 'is-live' | 'is-future' {

@@ -1367,8 +1367,10 @@ export function Settings({
 
   function statusPill(provider: CredentialProvider) {
     const item = statusFor(provider);
+    // Kids/simple mode: hide missing/unknown provider noise — only show healthy or broken states.
+    if (item.status === 'unknown' || item.status === 'missing') return null;
     const ok = item.status === 'connected';
-    return <span className={`pill ${ok ? 'ok' : item.status === 'missing' ? '' : 'hot'}`}>{ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {provider}: {item.status}</span>;
+    return <span className={`pill ${ok ? 'ok' : 'hot'}`}>{ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {provider}: {item.status}</span>;
   }
 
   function openSettingsPanel(id: string) {
@@ -2523,42 +2525,6 @@ export function Settings({
         </div>
       </GlassCard>
 
-      <GlassCard className="settings-theme-card">
-        <section aria-labelledby="settings-theme-title">
-          <h2 id="settings-theme-title">外觀主題</h2>
-          <p className="muted">揀手動主題會套用到所有旅程；揀自動就跟返而家旅程嘅目的地。毋須另存。</p>
-          <div className="theme-selector" role="radiogroup" aria-label="App theme">
-            {THEME_OPTIONS.map((option) => {
-              const definition = option.value === 'auto' ? null : TRIP_THEMES[option.value as keyof typeof TRIP_THEMES];
-              return (
-                <label className="theme-option" key={option.value}>
-                  <input
-                    type="radio"
-                    name="app-theme"
-                    value={option.value}
-                    checked={themePreference === option.value}
-                    onChange={() => updateState({ themePreference: option.value })}
-                  />
-                  <span className="theme-option-copy">
-                    <span>{option.label}</span>
-                    {definition ? <small>{definition.region.motif}</small> : <small>跟目的地自動換色</small>}
-                    {definition ? (
-                      <span className="theme-option-swatches" aria-hidden="true">
-                        <i style={{ background: definition.colors.canvas }} />
-                        <i style={{ background: definition.colors.accent }} />
-                        <i style={{ background: definition.chart[0] }} />
-                        <i style={{ background: definition.chart[1] }} />
-                      </span>
-                    ) : null}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          <p className="muted" aria-live="polite">目前：{THEME_OPTIONS.find((option) => option.value === themePreference)?.label || '自動（依旅程）'}</p>
-        </section>
-      </GlassCard>
-
       {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-doctor--${tripDoctor.tone}`}>
         <section role="region" aria-label="Compact Trip Doctor">
           <div className="settings-trip-doctor-head">
@@ -2754,56 +2720,6 @@ export function Settings({
           </button>
         </div>
       </AccordionCard>
-
-      {cloudSyncAvailable && updatePassword && (
-        <AccordionCard id="settings-supabase-account" eyebrow="Supabase Auth" title="雲端帳號與密碼設定 🔐" icon={<KeyRound />}>
-          <div className="settings-auth-layout">
-            <GlassCard className="settings-account-card">
-              <div className="settings-account-copy">
-                <span className="eyebrow">目前帳號</span>
-                <strong>{userEmail || 'Supabase 帳號'}</strong>
-                <small>帳號、密碼同本機資料操作集中管理。</small>
-              </div>
-              <div className="settings-account-actions">
-                {onSignOut && (
-                  <button className="secondary" type="button" disabled={!!busy} onClick={() => void handleSupabaseSignOut()} aria-label="登出 Supabase">
-                    <LogOut size={18} /> 登出
-                  </button>
-                )}
-                {onClearDeviceData && onSignOut && (
-                  <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
-                    <Trash2 size={18} /> 清除此裝置資料
-                  </button>
-                )}
-                {onClearDeviceData && onSignOut && (
-                  <button className="danger settings-danger-solid" type="button" disabled={!!busy} onClick={() => setShowDeleteAccountConfirm(true)} aria-label="永久刪除帳戶">
-                    <UserMinus size={18} /> 永久刪除帳戶
-                  </button>
-                )}
-              </div>
-            </GlassCard>
-            <div className="settings-password-panel">
-              <label>
-                <span>設定新密碼</span>
-                <input
-                  type="password"
-                  value={newPasswordInput}
-                  onChange={(e) => setNewPasswordInput(e.target.value)}
-                  placeholder="最少 6 位"
-                />
-              </label>
-              <button
-                className="primary"
-                type="button"
-                disabled={!!busy || newPasswordInput.length < 6}
-                onClick={() => void handleUpdatePassword()}
-              >
-                <KeyRound size={17} /> 儲存雲端登入密碼
-              </button>
-            </div>
-          </div>
-        </AccordionCard>
-      )}
 
       <AccordionCard id="settings-trip" eyebrow="Trip Manager" title={theme.id === 'japan_washi' ? '旅程管理器 🏯🌸' : '旅程管理器'} meta={<span className="pill">v{managedTrip.version}</span>}>
         <div className="settings-trip-manager">
@@ -3022,13 +2938,9 @@ export function Settings({
         </div>}
         </div>
 
-        <div className="settings-trip-panel settings-trip-panel--compact">
-          <div className="settings-trip-panel-head">
-            <div>
-              <span className="eyebrow">Currency</span>
-              <h3>匯率與統計口徑</h3>
-            </div>
-          </div>
+        <details className="settings-fx-panel" style={{ marginTop: '0.75rem' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem' }}>匯率與統計口徑</summary>
+          <div className="settings-trip-panel settings-trip-panel--compact" style={{ marginTop: '0.5rem' }}>
           <SegmentedControl
             ariaLabel="匯率模式"
             value={state.rateMode === 'fixed' ? 'fixed' : 'live'}
@@ -3055,7 +2967,7 @@ export function Settings({
             )}
           </div>
           {state.rateMode === 'fixed' && (
-            <p className="muted">已鎖定手動匯率 — 出發前兌換嘅價錢唔會被即時匯率覆蓋。想返去自動更新，撳返「即時 (ER-API)」。</p>
+            <p className="muted">已鎖定手動匯率。想返自動，撳「即時 (ER-API)」。</p>
           )}
           {state.rateMode === 'fixed' && !state.rateTable?.[String(state.tripCurrency || 'JPY').toUpperCase()] && (
             <p className="muted">⚠️ 未為 {String(state.tripCurrency || 'JPY').toUpperCase()} 設定固定匯率 — 而家用緊內置近似值，請喺上面輸入你實際兌換到嘅匯率。</p>
@@ -3069,7 +2981,8 @@ export function Settings({
             <input type="checkbox" checked={state.top10IncludeBigItems} onChange={(e) => updateState({ top10IncludeBigItems: e.target.checked })} />
             TOP 10 包括機票/住宿/大型交通
           </label>
-        </div>
+          </div>
+        </details>
         </div>
       </AccordionCard>
 
@@ -3253,6 +3166,27 @@ export function Settings({
           </button>
           {tripDraft && <button className="secondary" type="button" onClick={() => setTripDraftModalOpen(true)}>開啟確認視窗</button>}
           {tripDraft && <button className="secondary" type="button" onClick={() => { setTripDraft(null); setTripDraftModalOpen(false); }}>清除 preview</button>}
+          <button
+            className="danger"
+            type="button"
+            disabled={!!busy}
+            onClick={() => {
+              if (!window.confirm('確定清空目前旅程嘅 AI 行程？其他設定會保留。')) return;
+              updateState({
+                customItinerary: [],
+                itineraryOverrides: {},
+              });
+              const tripsNext = (state.trips || []).map((trip) => trip.id === currentTrip.id
+                ? { ...trip, itinerary: [], version: (trip.version || 1) + 1, updatedAt: Date.now() }
+                : trip);
+              updateState({ trips: tripsNext });
+              setTripDraft(null);
+              setTripDraftModalOpen(false);
+              setStatus('已清空 AI 行程，可以重新貼入或手動編輯。');
+            }}
+          >
+            <RotateCcw size={18} /> 清除 AI 行程
+          </button>
         </div>
         {tripDraft && tripPreviewStats && (
           <div className="trip-preview">
@@ -3310,54 +3244,34 @@ export function Settings({
         )}
       </AccordionCard>
 
-      <AccordionCard id="settings-credentials" eyebrow="Server-side vault" title="Credentials & Connection" icon={<KeyRound />}>
-        <p className="muted">Notion、Kimi、Google、WeatherAPI keys 只喺 Credential Broker vault 入面。React 只保存短期 session；rotation input 唔會寫入 localStorage、IndexedDB、backup 或 Notion。</p>
-        <label>Credential Broker URL
-          <input value={isAllowedCredentialBrokerUrl(state.credentialBrokerUrl) ? state.credentialBrokerUrl || '' : ''} readOnly aria-readonly="true" />
-        </label>
-        <div className="credential-status-grid">
-          <span className={`pill ${brokerReady || cloudSyncAvailable ? 'ok' : 'hot'}`}>
-            <Server size={14} /> Session: {brokerReady ? 'active' : cloudSyncAvailable ? 'active (Supabase)' : 'missing'}
-          </span>
-          {directTokenEnabled && <span className={`pill ${hasDirectNotionToken() ? 'ok' : 'hot'}`}><KeyRound size={14} /> Local dev Notion: {hasDirectNotionToken() ? 'active' : 'missing'}</span>}
-          <span className={`pill ${notionMirrorReady ? 'ok' : 'hot'}`}>
-            <Cloud size={14} /> Notion mirror: {notionMirrorReady ? 'scoped' : userScopedNotionDb ? 'needs connect' : 'needs own DB'}
-          </span>
-          {statusPill('notion')}
-          {statusPill('kimi')}
-          {statusPill('google')}
-          {statusPill('weatherapi')}
-        </div>
+      <AccordionCard id="settings-credentials" eyebrow="Optional" title="連線（進階）" icon={<KeyRound />} defaultOpen={false}>
+        <p className="muted">一般登入 Supabase 之後，AI 同天氣已經自動用得。呢度只係想手動接 Notion 或測試先需要開。</p>
         {cloudSyncAvailable && (
           <div className="rotation-box">
             <div className="section-head">
-              <h2>個人 Notion notebook</h2>
-              <span className={`pill ${personalNotionStatus?.status === 'connected' ? 'ok' : 'hot'}`}>
-                {personalNotionStatus?.status || 'not checked'}
+              <h2>個人 Notion（可選）</h2>
+              <span className={`pill ${personalNotionStatus?.status === 'connected' ? 'ok' : ''}`}>
+                {personalNotionStatus?.status === 'connected' ? '已連接' : '未連接'}
               </span>
             </div>
-            <p className="muted">呢度只綁定目前 Supabase 帳號。Connector secret 會直接送去 Credential Broker 加密保存，唔會寫入 browser、backup、Supabase row 或 GitHub。</p>
-            <label>Personal Notion database ID
-              <input value={personalNotionDb} onChange={(e) => setPersonalNotionDb(e.target.value)} placeholder="你自己 Notion database ID" />
+            <label>Database ID
+              <input value={personalNotionDb} onChange={(e) => setPersonalNotionDb(e.target.value)} placeholder="Notion database ID" />
             </label>
-            <label>Personal Notion connector secret
+            <label>Connector secret
               <input
                 type="password"
                 value={personalNotionToken}
                 onChange={(e) => setPersonalNotionToken(e.target.value)}
-                placeholder="貼上你自己 Notion connector secret"
+                placeholder="貼上 secret"
                 autoComplete="off"
               />
             </label>
             <div className="action-row wrap">
-              <button className="secondary" type="button" disabled={!!busy} onClick={() => void refreshPersonalNotion()}>
-                Check Personal Notion
-              </button>
               <button className="primary" type="button" disabled={!!busy || !personalNotionToken.trim() || !personalNotionDb.trim()} onClick={() => void connectPersonalNotion()}>
-                <ShieldCheck size={18} /> Connect Personal Notion
+                連接
               </button>
-              <button className="danger" type="button" disabled={!!busy || personalNotionStatus?.status !== 'connected'} onClick={() => void disconnectPersonalNotion()}>
-                Disconnect
+              <button className="secondary" type="button" disabled={!!busy || personalNotionStatus?.status !== 'connected'} onClick={() => void disconnectPersonalNotion()}>
+                中斷連接
               </button>
             </div>
           </div>
@@ -3371,18 +3285,23 @@ export function Settings({
                 onChange={(e) => setBrokerPassword(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') void connectCredentialBroker(); }}
                 autoComplete="current-password"
-                placeholder="Enable AI / Notion mirror"
+                placeholder="解鎖 AI"
               />
             </label>
             <button className="primary" type="button" disabled={!!busy || !brokerPassword.trim()} onClick={() => void connectCredentialBroker()}>
-              <ShieldCheck size={18} /> Connect Broker
+              連接
             </button>
           </div>
         )}
-        {!brokerReady && cloudSyncAvailable && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', background: 'rgba(52, 211, 153, 0.08)', border: '1px solid rgba(52, 211, 153, 0.25)', borderRadius: '12px', color: '#047857', fontSize: '13px', fontWeight: 700, marginTop: '16px', width: '100%' }}>
-            <Sparkles size={16} className="spin-once" style={{ color: '#059669', flexShrink: 0 }} />
-            <span>已登入 Supabase 帳號，AI 智能記帳已自動激活，免輸入解鎖密碼！🔓🤖</span>
+        {showStressPanel && (
+          <div className="credential-status-grid">
+            <span className={`pill ${brokerReady || cloudSyncAvailable ? 'ok' : 'hot'}`}>
+              <Server size={14} /> Session: {brokerReady ? 'active' : cloudSyncAvailable ? 'active (Supabase)' : 'missing'}
+            </span>
+            {statusPill('notion')}
+            {statusPill('kimi')}
+            {statusPill('google')}
+            {statusPill('weatherapi')}
           </div>
         )}
         {showStressPanel && (<div className="action-row wrap">
@@ -3567,6 +3486,88 @@ export function Settings({
           <span><ShieldCheck size={15} /> CSV / Backup JSON 只包含目前旅程，不會匯出其他旅程紀錄。</span>
           <span><KeyRound size={15} /> Backup 不包含 API key、Notion token、broker session 或解鎖 secret。</span>
           <span><AlertTriangle size={15} /> 匯入 Backup 時會丟棄外部 cloud IDs、sync queue、舊 Trip links 同 credential 欄位。</span>
+        </div>
+      </AccordionCard>
+
+      {cloudSyncAvailable && updatePassword && (
+        <AccordionCard id="settings-supabase-account" eyebrow="Supabase Auth" title="雲端帳號與密碼設定" icon={<KeyRound />}>
+          <div className="settings-auth-layout">
+            <GlassCard className="settings-account-card">
+              <div className="settings-account-copy">
+                <strong>{userEmail || 'Supabase 帳號'}</strong>
+              </div>
+              <div className="settings-account-actions">
+                {onSignOut && (
+                  <button className="secondary" type="button" disabled={!!busy} onClick={() => {
+                    if (window.confirm('確定要登出帳號？')) void handleSupabaseSignOut();
+                  }} aria-label="登出 Supabase">
+                    <LogOut size={18} /> 登出
+                  </button>
+                )}
+                {onClearDeviceData && onSignOut && (
+                  <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
+                    <Trash2 size={18} /> 清除此裝置資料
+                  </button>
+                )}
+                {onClearDeviceData && onSignOut && (
+                  <button className="danger settings-danger-solid" type="button" disabled={!!busy} onClick={() => setShowDeleteAccountConfirm(true)} aria-label="永久刪除帳戶">
+                    <UserMinus size={18} /> 永久刪除帳戶
+                  </button>
+                )}
+              </div>
+            </GlassCard>
+            <div className="settings-password-panel">
+              <label>
+                <span>新密碼</span>
+                <input
+                  type="password"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  placeholder="最少 6 位"
+                />
+              </label>
+              <button
+                className="primary"
+                type="button"
+                disabled={!!busy || newPasswordInput.length < 6}
+                onClick={() => void handleUpdatePassword()}
+              >
+                儲存密碼
+              </button>
+            </div>
+          </div>
+        </AccordionCard>
+      )}
+
+      <AccordionCard id="settings-theme" eyebrow="Appearance" title="外觀主題" icon={<Sparkles />} defaultOpen={false} meta={<span className="pill">{THEME_OPTIONS.find((o) => o.value === themePreference)?.label || '自動'}</span>}>
+        <p className="muted">揀自動就跟返旅程目的地。</p>
+        <div className="theme-selector" role="radiogroup" aria-label="App theme">
+          {THEME_OPTIONS.map((option) => {
+            const definition = option.value === 'auto' ? null : TRIP_THEMES[option.value as keyof typeof TRIP_THEMES];
+            return (
+              <label className="theme-option" key={option.value}>
+                <input
+                  type="radio"
+                  name="app-theme"
+                  value={option.value}
+                  checked={themePreference === option.value}
+                  onChange={() => updateState({ themePreference: option.value })}
+                />
+                <span className="theme-option-copy">
+                  <span>{option.label}</span>
+                  {definition ? <small>{definition.region.motif}</small> : <small>跟目的地自動換色</small>}
+                  {definition ? (
+                    <span className="theme-option-swatches" aria-hidden="true">
+                      <i style={{ background: definition.colors.canvas }} />
+                      <i style={{ background: definition.colors.accent }} />
+                      <i style={{ background: definition.chart[0] }} />
+                      <i style={{ background: definition.chart[1] }} />
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            );
+          })}
         </div>
       </AccordionCard>
 
@@ -4179,6 +4180,21 @@ export function Settings({
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '2rem' }}>
           <button type="button" className="secondary" onClick={onReopenGuide}>
             <Sparkles size={14} /> 重新開啟歡迎指南
+          </button>
+        </div>
+      )}
+
+      {onSignOut && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.25rem' }}>
+          <button
+            type="button"
+            className="danger"
+            disabled={!!busy}
+            onClick={() => {
+              if (window.confirm('確定要登出帳號？')) void handleSupabaseSignOut();
+            }}
+          >
+            <LogOut size={16} /> 登出帳號
           </button>
         </div>
       )}
