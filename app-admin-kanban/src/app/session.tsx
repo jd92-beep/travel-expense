@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { Navigate, useLocation } from "react-router";
 import { LoaderCircle, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { AdminApiError, clearSession, currentSession, logoutAdmin } from "../lib/adminApi";
+import { queryClient } from "./queryClient";
 import type { AdminSession } from "../lib/types";
 
 type SessionContextValue = {
@@ -15,6 +16,10 @@ type SessionContextValue = {
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+
+function dropCachedAdminQueries() {
+  queryClient.removeQueries({ queryKey: ["admin"] });
+}
 
 export function AdminSessionProvider(
   { children }: { children: React.ReactNode },
@@ -53,6 +58,7 @@ export function AdminSessionProvider(
 
   useEffect(() => {
     const unauthorized = () => {
+      dropCachedAdminQueries();
       setSessionError(null);
       setSession(null);
     };
@@ -73,6 +79,7 @@ export function AdminSessionProvider(
       try {
         await logoutAdmin();
         clearSession();
+        dropCachedAdminQueries();
         setSessionError(null);
         setSession(null);
         setLogoutError(null);

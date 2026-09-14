@@ -232,7 +232,10 @@ export function AdminShell() {
             onSubmit={(event) => {
               event.preventDefault();
               const q = search.trim();
-              if (q) navigate(`/search?q=${encodeURIComponent(q)}`);
+              if (q) {
+                navigate(`/search?q=${encodeURIComponent(q)}`);
+                setSearch("");
+              }
             }}
           >
             <Search size={17} />
@@ -243,7 +246,7 @@ export function AdminShell() {
               id="admin-global-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜尋帳戶、行程或收據"
+              placeholder="搜尋名稱或 UUID"
               autoComplete="off"
             />
           </form>
@@ -413,7 +416,12 @@ export function AdminShell() {
             </NavLink>
           );
         })}
-        <button type="button" onClick={() => setDrawerOpen(true)}>
+        <button
+          type="button"
+          aria-expanded={drawerOpen}
+          aria-label="開啟更多導覽"
+          onClick={() => setDrawerOpen(true)}
+        >
           <Menu size={19} />
           <span>更多</span>
         </button>

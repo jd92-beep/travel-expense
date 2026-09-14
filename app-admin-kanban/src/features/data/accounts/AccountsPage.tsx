@@ -35,6 +35,7 @@ import {
   OperationDialog,
   useOperationFlow,
 } from "../../operations/OperationFlow";
+import { useAdminWritePolicy } from "../../../lib/writePolicy";
 
 const DATA_NAV = [
   { to: "/data/accounts", label: "帳戶" },
@@ -335,6 +336,7 @@ function downloadSupportBundle(bundle: Record<string, unknown>) {
 
 export function AccountDetailPage() {
   const { accountId = "" } = useParams();
+  const writePolicy = useAdminWritePolicy();
   const account = useQuery({
     queryKey: ["admin", "account", accountId],
     queryFn: ({ signal }) =>
@@ -378,7 +380,8 @@ export function AccountDetailPage() {
             <button
               className="button secondary"
               type="button"
-              disabled={account.isFetching}
+              disabled={account.isFetching || !writePolicy.canMutateCanonical}
+              title={writePolicy.canMutateCanonical ? undefined : writePolicy.policyLabel}
               onClick={() =>
                 operationFlow.begin({
                   action: "support_bundle",

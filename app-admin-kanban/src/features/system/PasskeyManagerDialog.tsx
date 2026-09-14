@@ -157,7 +157,18 @@ export function PasskeyManagerDialog({
           ? (
             <div className="operation-error" role="alert">
               <TriangleAlert size={20} />
-              <div><strong>未能載入 passkeys</strong><p>請重新整理後再試。</p></div>
+              <div>
+                <strong>未能載入 passkeys</strong>
+                <p>請重新整理後再試。</p>
+                <button
+                  className="button secondary"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void query.refetch()}
+                >
+                  重試
+                </button>
+              </div>
             </div>
           )
           : (

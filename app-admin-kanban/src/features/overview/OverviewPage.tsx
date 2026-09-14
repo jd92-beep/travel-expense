@@ -142,17 +142,17 @@ export function OverviewPage() {
       </section>
 
       <section className="metric-strip" aria-label="核心指標">
-        <Metric label="Active accounts" value={data.counts.activeAccounts} delay={0 * STAGGER_STEP_S} />
-        <Metric label="Open trips" value={data.counts.openTrips} delay={1 * STAGGER_STEP_S} />
-        <Metric label="Recent receipts" value={data.counts.recentReceipts} delay={2 * STAGGER_STEP_S} />
+        <Metric label="活躍帳戶" value={data.counts.activeAccounts} delay={0 * STAGGER_STEP_S} />
+        <Metric label="進行中行程" value={data.counts.openTrips} delay={1 * STAGGER_STEP_S} />
+        <Metric label="近期收據" value={data.counts.recentReceipts} delay={2 * STAGGER_STEP_S} />
         <Metric
-          label="Failed jobs"
+          label="失敗工作"
           value={data.counts.failedJobs}
           tone={data.counts.failedJobs ? "danger" : "success"}
           delay={3 * STAGGER_STEP_S}
         />
         <Metric
-          label="Integrity issues"
+          label="完整性問題"
           value={data.counts.integrityIssues}
           tone={data.counts.integrityIssues ? "warning" : "success"}
           delay={4 * STAGGER_STEP_S}

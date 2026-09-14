@@ -27,6 +27,7 @@ import {
   OperationDialog,
   useOperationFlow,
 } from "../operations/OperationFlow";
+import { useAdminWritePolicy } from "../../lib/writePolicy";
 
 const RELIABILITY_NAV = [
   { to: "/reliability/incidents", label: "Incidents" },
@@ -202,6 +203,7 @@ export function SyncJobsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const cursorPager = useCursorPagination(searchParams, setSearchParams);
   const online = useOnline();
+  const writePolicy = useAdminWritePolicy();
   const values = queryFromSearchParams(searchParams, [
     "status",
     "provider",
@@ -231,7 +233,7 @@ export function SyncJobsPage() {
     query.data.meta,
     query.isFetching || query.isPlaceholderData,
     online,
-  ));
+  ) && writePolicy.canMutateCanonical);
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
@@ -407,6 +409,7 @@ export function SyncJobsPage() {
 
 export function IntegrityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const writePolicy = useAdminWritePolicy();
   const values = queryFromSearchParams(searchParams, [
     "severity",
     "findingType",
@@ -460,9 +463,11 @@ export function IntegrityPage() {
         <button
           className="button primary"
           type="button"
+          title={writePolicy.canMutateCanonical ? undefined : writePolicy.policyLabel}
           disabled={
             query.isFetching || query.isPlaceholderData ||
-            query.data?.data.state === "running"
+            query.data?.data.state === "running" ||
+            !writePolicy.canMutateCanonical
           }
           onClick={() =>
             operationFlow.begin({
@@ -693,10 +698,12 @@ export function ReconciliationPage() {
     staleTime: 30_000,
   });
   const reconciliation = query.data?.data;
-  const reconciliationIncomplete = Boolean(reconciliation) && (
-    reconciliation!.notionSource !== "live" || reconciliation!.truncated ||
-    query.data!.meta.warnings.length > 0 ||
-    query.data!.meta.sources?.notion !== "live"
+  const reconciliationIncomplete = Boolean(
+    reconciliation &&
+      (reconciliation.notionSource !== "live" ||
+        reconciliation.truncated ||
+        (query.data?.meta.warnings?.length ?? 0) > 0 ||
+        query.data?.meta.sources?.notion !== "live"),
   );
   return (
     <ReliabilityFrame

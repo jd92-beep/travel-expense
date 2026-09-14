@@ -4,10 +4,19 @@ Last updated: 2026-08-24 HKT
 
 ## Current Status
 
+- **Local RC `1.3.5`** (branch `admin/console-production-ready`) — production-readiness sweep:
+  UI write-policy gate via `/runtime` (`provider_probe_only` keeps only probe enabled; R2/R1
+  non-probe CTAs disable with an explicit reason), safe cursor previous (no `navigate(-1)`),
+  LoginGate bootstrap enrollment removed in favour of break-glass recovery guidance, CSRF
+  fail-closed on auth POSTs, query-cache clear on logout/401, Audit filter submit, StrictMode-safe
+  receipts selection notice, security-scan walks `server/admin`, CSP `worker-src`. Gates green:
+  typecheck, build, unit `34/34`, contract `24/24`, security scan, smoke `49/1`.
+  Not yet promoted — requires Boss's protected `admin-production` workflow approval.
+
 - Production `1.3.4` lazy-loads feature route groups, reducing the main application chunk from
   roughly 623 kB to 224 kB while keeping the Three.js login scene isolated. The root route now
   supplies `hydrateFallbackElement`, so React Router no longer emits the lazy initial-route
-  fallback warning. Typecheck, build, unit `33/33`, contract `24/24`, targeted browser `11/11`,
+  fallback warning. Typecheck, build, unit `34/34`, contract `24/24`, targeted browser `11/11`,
   security scan, and production dependency audit are green. It also embeds the contract-verified
   provider catalog inside the BFF function archive, closing the candidate `/api/admin/session` 500
   caused by an import outside Vercel's function root. Protected workflow `32687928249` promoted

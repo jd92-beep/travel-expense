@@ -43,6 +43,7 @@ import {
   useCursorPagination,
   WorkspaceNav,
 } from "../../../components/primitives/ConsolePrimitives";
+import { useAdminWritePolicy } from "../../../lib/writePolicy";
 
 const DATA_NAV = [
   { to: "/data/accounts", label: "帳戶" },
@@ -379,6 +380,7 @@ export function TripDetailPage() {
   const [memberEmail, setMemberEmail] = useState("");
   const [memberRole, setMemberRole] = useState("editor");
   const [memberRoles, setMemberRoles] = useState<Record<string, string>>({});
+  const writePolicy = useAdminWritePolicy();
   const query = useQuery({
     queryKey: ["admin", "trip", tripId],
     queryFn: ({ signal }) =>
@@ -417,7 +419,8 @@ export function TripDetailPage() {
   }
   const trip = query.data.data;
   const auditEvents: Array<AuditRow | TripAuditRow> = auditQuery.data?.data.items || [];
-  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching);
+  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching)
+    && writePolicy.canMutateCanonical;
   const patch = draft ? tripAmendPatch(trip.overview, draft) : {};
   return (
     <div className="workspace-stack">
@@ -972,6 +975,7 @@ export function ItineraryPage() {
   const [draftEnd, setDraftEnd] = useState("");
   const [draftDays, setDraftDays] = useState<ItineraryDay[]>([]);
   const [explicitlyRemovedDates, setExplicitlyRemovedDates] = useState<string[]>([]);
+  const writePolicy = useAdminWritePolicy();
   const query = useQuery({
     queryKey: ["admin", "trip", tripId, "itinerary"],
     queryFn: ({ signal }) =>
@@ -1010,7 +1014,8 @@ export function ItineraryPage() {
     );
   }
   const itinerary = query.data.data;
-  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching);
+  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching)
+    && writePolicy.canMutateCanonical;
   const rangeDates = inclusiveCalendarDates(draftStart, draftEnd);
   const visibleDraftDays = daysForRange(draftStart, draftEnd, draftDays);
   const rangeDateSet = new Set(rangeDates);

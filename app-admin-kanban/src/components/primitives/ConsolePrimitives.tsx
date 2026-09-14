@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  Inbox,
   Info,
   RefreshCw,
   TriangleAlert,
@@ -12,7 +13,7 @@ import {
 import { motion } from "motion/react";
 import { AdminApiError } from "../../lib/adminApi";
 import type { AdminMeta } from "../../lib/contracts/admin";
-import { NavLink, useNavigate } from "react-router";
+import { NavLink } from "react-router";
 import { useEffectsTier } from "../../lib/performance";
 import { NumberTicker } from "../fx/NumberTicker";
 import { BlurFade } from "../fx/BlurFade";
@@ -140,6 +141,15 @@ export function StatusBadge(
   );
 }
 
+function blockingSourceLabels(meta: AdminMeta) {
+  const labels: string[] = [];
+  for (const [key, state] of Object.entries(meta.sources ?? {})) {
+    if (state !== "live") labels.push(key);
+  }
+  if (meta.warnings.length > 0) labels.push("warnings");
+  return labels;
+}
+
 export function FreshnessBanner({
   meta,
   fetching,
@@ -151,6 +161,7 @@ export function FreshnessBanner({
 }) {
   if (!meta) return null;
   const { partial, stale } = adminMetaState(meta);
+  const blockers = partial ? blockingSourceLabels(meta) : [];
   return (
     <div
       className={`freshness-banner hud-corners ${
@@ -171,7 +182,7 @@ export function FreshnessBanner({
           : stale
           ? "資料已過期，寫入操作已停用"
           : partial
-          ? "部分資料來源不可用，寫入操作已停用"
+          ? `部分資料來源不可用（${blockers.join("、") || "unknown"}），寫入操作已停用`
           : "資料已更新"}
       </span>
       <span>
@@ -221,7 +232,9 @@ export function useCursorPagination(
   searchParams: URLSearchParams,
   setSearchParams: (next: URLSearchParams) => void,
 ) {
-  const navigate = useNavigate();
+  // Never navigate(-1): a remount or external back-entry desyncs the ref stack
+  // and can eject the operator out of the SPA. Restore the previous cursor from
+  // this mount's stack, or fall back to page 1.
   const history = useRef<string[]>([]);
   const cursor = searchParams.get("cursor") || "";
 
@@ -234,13 +247,10 @@ export function useCursorPagination(
       setSearchParams(next);
     },
     previous: () => {
-      if (history.current.length > 0) {
-        history.current.pop();
-        navigate(-1);
-        return;
-      }
+      const previousCursor = history.current.pop() || "";
       const next = new URLSearchParams(searchParams);
-      next.delete("cursor");
+      if (previousCursor) next.set("cursor", previousCursor);
+      else next.delete("cursor");
       setSearchParams(next);
     },
   };
@@ -286,7 +296,7 @@ export function EmptyState(
 ) {
   return (
     <div className="state-panel state-empty">
-      <CheckCircle2 size={24} />
+      <Inbox size={24} />
       <strong>{title}</strong>
       {detail && <p>{detail}</p>}
     </div>

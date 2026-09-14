@@ -138,8 +138,11 @@ export function useOperationFlow(
 
   const recovery = useQuery({
     queryKey: ["admin", "operation", operation?.id],
-    queryFn: ({ signal }) =>
-      adminGet<AdminOperation>(`/operations/${operation!.id}`, undefined, signal),
+    queryFn: ({ signal }) => {
+      const id = operation?.id;
+      if (!id) throw new AdminApiError("操作狀態暫時不可用", "OPERATION_MISSING", 404);
+      return adminGet<AdminOperation>(`/operations/${id}`, undefined, signal);
+    },
     enabled: submitted && tracking && Boolean(operation?.id),
     refetchInterval: tracking ? 10_000 : false,
     staleTime: 0,
@@ -221,7 +224,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
   const resultUnknown = flow.outcomeUnknown || flow.operation?.status === "outcome_unknown";
   const activeAfterSubmit = flow.submitted && Boolean(flow.operation) &&
     ["previewed", "authorized", "queued", "executing", "compensating", "outcome_unknown"]
-      .includes(flow.operation!.status);
+      .includes(flow.operation?.status ?? "");
 
   return (
     <dialog
@@ -352,7 +355,12 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
                   className="button secondary"
                   type="button"
                   onClick={() => {
-                    void navigator.clipboard.writeText(flow.completed!.invite!.link)
+                    const link = flow.completed?.invite?.link;
+                    if (!link) {
+                      setCopied(false);
+                      return;
+                    }
+                    void navigator.clipboard.writeText(link)
                       .then(() => setCopied(true))
                       .catch(() => setCopied(false));
                   }}

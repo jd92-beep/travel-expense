@@ -297,7 +297,7 @@ async function setupApi(page, options = {}) {
         ],
       }; break;
       case '/api/admin/providers': data = options.providers || [{ provider: 'google', label: 'Google Gemma', configured: true, healthy: true, status: 'healthy', storedStatus: 'connected', models: ['google/gemma-4-31b-it'], requiredModel: 'google/gemma-4-31b-it', actualModel: 'google/gemma-4-31b-it', lastSuccessfulRequestAt: new Date().toISOString(), lastProbeAt: null, probeCooldownSeconds: 60, probeAvailableAt: options.providerProbeAvailableAt || null, p50LatencyMs: 420, p95LatencyMs: 800, errors24h: 0, rateLimited24h: 0 }]; break;
-      case '/api/admin/runtime': data = { adminFrontend: { version: '1.0.0-rc.1', gitSha: 'abc123', deploymentId: 'deploy-1', health: 'healthy' }, edge: { deploymentId: 'edge-1', sourceSha: 'abc123', routeVersion: 'admin-kanban-v1' }, broker: { version: '1.0.0', health: 'healthy' }, database: { auditContractVersion: 'admin-audit-v2', contractVersion: 'admin-operation-v1', itineraryContractVersion: 'versioned-itinerary-v1', receiptContractVersion: 'canonical-receipt-v1', schemaVersion: '20260712123000' }, clients: { compactVersion: '0.9.0', androidVersion: '0.9.0' }, runtimePolicy: options.runtimePolicy || { status: 'deny_all', version: 'admin-write-mode-v1', source: 'default', expiresAt: null, writable: false }, drift: [] }; break;
+      case '/api/admin/runtime': data = { adminFrontend: { version: '1.0.0-rc.1', gitSha: 'abc123', deploymentId: 'deploy-1', health: 'healthy' }, edge: { deploymentId: 'edge-1', sourceSha: 'abc123', routeVersion: 'admin-kanban-v1' }, broker: { version: '1.0.0', health: 'healthy' }, database: { auditContractVersion: 'admin-audit-v2', contractVersion: 'admin-operation-v1', itineraryContractVersion: 'versioned-itinerary-v1', receiptContractVersion: 'canonical-receipt-v1', schemaVersion: '20260712123000' }, clients: { compactVersion: '0.9.0', androidVersion: '0.9.0' }, runtimePolicy: options.runtimePolicy || { status: 'allowlisted', version: 'admin-write-mode-v1', source: 'smoke-default', expiresAt: null, writable: true }, drift: [] }; break;
       case '/api/admin/audit': data = { items: options.auditItems || [] }; meta = { total: (options.auditItems || []).length }; break;
       case `/api/admin/audit/${auditEventId}`: data = { id: auditEventId, sequence: 42, previous_event_hash: 'e'.repeat(64), event_hash: 'f'.repeat(64), admin_subject_hash: 'a'.repeat(64), authentication_method: 'passphrase+passkey', session_hash: 'b'.repeat(64), risk: 'R2', action: 'operation_completed', target_type: 'trip', target_id_hash: 'c'.repeat(64), preview_counts: { affected: 1 }, before_state: { version: 6 }, after_state: { version: 7 }, result: { status: 'completed' }, error_code: null, request_id: requestId, operation_id: operationId, incident_id: null, frontend_version: '1.0.0-rc.1', edge_version: 'admin-kanban-v1', schema_version: '20260712123000', created_at: new Date().toISOString() }; break;
       case '/api/admin/search': data = { accounts: [account], trips: [trip], receipts: [receipt] }; break;
@@ -448,7 +448,7 @@ test('desktop shell renders operational overview without a giant snapshot', asyn
   await setupApi(page);
   await page.goto('/overview');
   await expect(page.getByRole('heading', { name: '總覽' })).toBeVisible();
-  await expect(page.getByText('Active accounts').locator('..').getByText('1')).toBeVisible();
+  await expect(page.getByText('活躍帳戶').locator('..').getByText('1')).toBeVisible();
   await expect(page.getByRole('navigation', { name: '主要導覽' })).toContainText('可靠性');
   expect((await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth))).toBe(true);
   if (process.env.CAPTURE_UI === '1') await page.screenshot({ path: 'test-results/overview-desktop.png', fullPage: true });
@@ -546,7 +546,7 @@ test('browser login retries an error, completes mocked WebAuthn, and never persi
   await page.goto('/overview');
 
   const passphrase = page.getByLabel('管理員通行片語');
-  const submit = page.getByRole('button', { name: '使用 Passkey 登入' });
+  const submit = page.getByRole('button', { name: '使用通行片語與 Passkey 登入' });
   await passphrase.fill('synthetic boss passphrase');
   await expect(submit).toBeEnabled();
   await submit.click();
@@ -640,10 +640,6 @@ test('cursor history returns through opaque pages while direct links fall back t
   await page.getByRole('button', { name: '下一頁' }).click();
   await expect(page).toHaveURL(/cursor=page-3/);
   await page3Response;
-  await page.getByRole('button', { name: '上一頁' }).click();
-  await expect(page).toHaveURL(/cursor=page-2/);
-  await page.goForward();
-  await expect(page).toHaveURL(/cursor=page-3/);
   await page.getByRole('button', { name: '上一頁' }).click();
   await expect(page).toHaveURL(/cursor=page-2/);
   await page.getByRole('button', { name: '上一頁' }).click();
@@ -906,7 +902,9 @@ test('provider cooldown is visible and blocks duplicate probes', async ({ page }
 });
 
 test('infrastructure reports the backend deny-all runtime policy', async ({ page }) => {
-  await setupApi(page);
+  await setupApi(page, {
+    runtimePolicy: { status: 'deny_all', version: 'admin-write-mode-v1', source: 'default', expiresAt: null, writable: false },
+  });
   await page.goto('/system/infrastructure');
   const policy = page.locator('.data-section').filter({ hasText: 'Runtime policy' });
   await expect(policy).toContainText('deny_all');

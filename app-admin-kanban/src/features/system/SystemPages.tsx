@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, RefreshCw } from "lucide-react";
 import { adminGet } from "../../lib/api/adminClient";
+import { useAdminWritePolicy } from "../../lib/writePolicy";
 import {
   EmptyState,
   ErrorState,
@@ -19,8 +20,8 @@ import {
 
 const SYSTEM_NAV = [
   { to: "/system/providers", label: "Providers" },
-  { to: "/system/releases", label: "Releases" },
-  { to: "/system/infrastructure", label: "Infrastructure" },
+  { to: "/system/releases", label: "版本發佈" },
+  { to: "/system/infrastructure", label: "基礎設施" },
 ];
 
 type ProviderRow = {
@@ -82,6 +83,7 @@ function providerProbeCoolingDown(provider: ProviderRow, now = Date.now()) {
 
 export function ProvidersPage() {
   const [now, setNow] = useState(Date.now);
+  const writePolicy = useAdminWritePolicy();
   const query = useQuery({
     queryKey: ["admin", "providers"],
     queryFn: ({ signal }) =>
@@ -129,6 +131,12 @@ export function ProvidersPage() {
               meta={query.data.meta}
               fetching={query.isFetching}
             />
+            {!writePolicy.canProbe && !writePolicy.loading && (
+              <div className="integrity-warning" role="status">
+                <strong>Provider probe 目前停用</strong>
+                <span>{writePolicy.policyLabel}</span>
+              </div>
+            )}
             <section className="data-section">
               <header>
                 <div>
@@ -247,7 +255,7 @@ export function ProvidersPage() {
                                   ? `Probe cooldown until ${formatDateTime(provider.probeAvailableAt)}`
                                   : `Probe ${provider.requiredModel || provider.label}`}
                                 aria-label={`Probe ${provider.label}`}
-                                disabled={provider.configured === false || coolingDown || query.isFetching}
+                                disabled={provider.configured === false || coolingDown || query.isFetching || !writePolicy.canProbe}
                                 onClick={() =>
                                   operationFlow.begin({
                                     action: "provider_probe",
