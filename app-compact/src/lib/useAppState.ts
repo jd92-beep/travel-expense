@@ -83,17 +83,8 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
 
   const commitState = useCallback((action: SetStateAction<AppState>) => {
     mutationSeqRef.current += 1;
-    // Plain object updates (e.g. History keep-local) persist immediately so UI observers
-    // that snapshot localStorage in the same turn see the write.
-    if (action && typeof action === 'object' && !Array.isArray(action)) {
-      const next = action as AppState;
-      pendingPersistRef.current = { scope: storageScope, userEmail, state: next };
-      setState(next);
-      flushPersist();
-      return;
-    }
     setState(action);
-  }, [storageScope, userEmail, flushPersist]);
+  }, []);
 
   const persistGenRef = useRef(0);
   const schedulePersist = useCallback((scope: string, email: string | null, next: AppState, delayMs: number) => {

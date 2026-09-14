@@ -405,10 +405,11 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
     'volcano/minimax-m2.7',
     'volcano/doubao-seed-2.0-mini',
   ];
-  const scanModel = page.getByRole('combobox', { name: 'Scan model', exact: true });
+  await setAccordion(page, 'AI 模型選擇');
+  const scanModel = page.getByRole('combobox', { name: '掃描 receipt 模型', exact: true });
   for (const model of volcanoModels) {
     await scanModel.selectOption(model);
-    await page.getByRole('button', { name: '測試 Scan model' }).click();
+    await page.getByRole('button', { name: '測試 掃描 receipt 模型' }).click();
     await expect.poll(() => modelProbeCalls.length).toBe(volcanoModels.indexOf(model) + 1);
   }
   expect(modelProbeCalls.map((call) => ({ kind: call.kind, model: `volcano/${call.model}`, prompt: call.prompt }))).toEqual(
@@ -1398,8 +1399,9 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
   expect(await noticeBox.evaluate((node) => node.hasAttribute('open'))).toBe(false);
   await noticeBox.locator('summary').click();
   await expect(noticeBox).toContainText('Some exact addresses omitted');
-  await modal.locator('.trip-review-day-tabs').getByRole('tab', { name: /Day 3/ }).click();
-  await expect(modal).toContainText('Day 3 · 2026-06-15');
+  // Partial paste merges with the existing default itinerary — open the Jeju day by date.
+  await modal.locator('.trip-review-day-tabs').getByRole('tab', { name: /2026-06-15/ }).click();
+  await expect(modal).toContainText('2026-06-15');
   const day3Names = await modal.locator('.trip-review-spot-editor').evaluateAll((rows) => rows.map((row) => (row.querySelectorAll('input')[2] || {}).value || ''));
   const seongsanIndex = day3Names.findIndex((name) => String(name).includes('城山日出峰'));
   expect(seongsanIndex).toBeGreaterThanOrEqual(0);

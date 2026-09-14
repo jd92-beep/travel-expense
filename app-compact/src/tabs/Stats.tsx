@@ -251,7 +251,7 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
         ) : <EmptyState title="暫時唔需要互相轉帳" description="所有共同支出與代付已經平衡。" />}
       </DataPanel>
 
-      <DataPanel className="payer-panel" icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全 receipts</StatusPill>}>
+      <DataPanel className="payer-panel" icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全部紀錄</StatusPill>}>
         {persons.map((p, i) => (
           <Bar key={p.id} label={p.name} leading={<AvatarBadge person={p} size="sm" />} value={(settlement.sharedByPayer[i] || 0) + (settlement.privateByOwner[i] || 0)} max={maxPersonTotal} state={scopedState} color={p.color} />
         ))}
@@ -570,14 +570,14 @@ function buildBudgetStoryCards({
   return [
     {
       id: 'used-percent',
-      label: 'Used percent',
+      label: '已用比例',
       value: safeBudget > 0 ? `${usedPercent}%` : '未設定',
       detail: safeBudget <= 0 ? '先到 Settings 加預算' : usedPercent >= 100 ? `超出 ${formatTrip(analysisTotal - safeBudget)}` : `尚餘 ${formatTrip(remaining)} · ${formatHkd(remaining)}`,
       tone: usedPercent >= 100 ? 'danger' : usedPercent >= 80 ? 'warning' : 'ok',
     },
     {
       id: 'remaining-day',
-      label: 'Remaining / day',
+      label: '剩餘／每日',
       value: formatTrip(remainingPerDay),
       detail: `${remainingDays} 日口徑 · 等值 ${formatHkd(remainingPerDay)}`,
       tone: remainingPerDay <= 0 && safeBudget > 0 ? 'danger' : remainingPerDay < Math.max(1, budget / tripDayCount * 0.35) ? 'warning' : 'ok',
@@ -600,21 +600,21 @@ function buildSettlementActionPlan(
   return [
     {
       id: 'next-transfer',
-      label: 'Next action',
+      label: '下一步',
       value: firstTransfer ? `${firstTransfer.from.name} → ${firstTransfer.to.name}` : '已平衡',
       detail: firstTransfer ? `${formatTrip(firstTransfer.amount)} · ${formatHkd(firstTransfer.amount)}` : '暫時不用轉帳',
       tone: firstTransfer ? 'danger' : 'ok',
     },
     {
       id: 'transfer-total',
-      label: 'Total to settle',
+      label: '待結算',
       value: formatHkd(transferTotal),
       detail: `${settlement.transfers.length} 筆轉帳 · ${receiverCount || 0} 位收款人`,
       tone: transferTotal > 0 ? 'warning' : 'ok',
     },
     {
       id: 'private-repay',
-      label: 'Private repay',
+      label: '私人代付',
       value: formatTrip(crossPrivateTotal),
       detail: settlement.crossPrivate.length ? `${settlement.crossPrivate.length} 筆私人代付已納入結算` : '未有私人代付',
       tone: settlement.crossPrivate.length ? 'warning' : 'ok',

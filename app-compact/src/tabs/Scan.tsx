@@ -606,7 +606,7 @@ export function Scan({
 
         <div className="preview-scan-tip relative z-10">
           <span>將收據置於框內以獲得最佳辨識效果</span>
-          <b>自動拍攝：開啟</b>
+          <b>影相後會自動辨識</b>
         </div>
 
         {/* MAIN SCAN MODES GRID */}

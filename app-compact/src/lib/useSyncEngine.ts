@@ -540,7 +540,9 @@ export function useSyncEngine(
       // it (and its receipts) so a removed member doesn't keep stale shared data. Never purge on a
       // failed pull or in Notion-only mode (guarded by cloudPullOk).
       const cloudPullOk = !!cloudSession && supabaseResult.status === 'fulfilled';
-      const cloudPullAuthoritative = cloudPullOk;
+      // An empty trip list from a successful pull is ambiguous (cold start / RLS glitch).
+      // Only treat the pull as authoritative when the server actually returned trips.
+      const cloudPullAuthoritative = cloudPullOk && (supabaseData.trips?.length || 0) > 0;
       const authorizedSupabaseIds = new Set(
         supabaseData.trips.map((trip) => trip.supabaseId).filter((id): id is string => !!id),
       );

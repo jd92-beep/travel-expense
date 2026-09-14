@@ -639,7 +639,10 @@ export async function currentSupabaseAccessToken(): Promise<string> {
     const raw = localStorage.getItem('travel-expense:supabase-auth:v1');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed?.access_token) return String(parsed.access_token);
+      // Skip expired cached tokens so broker/AI calls don't send a stale JWT.
+      const expiresAt = Number(parsed?.expires_at || 0) * 1000;
+      const stillValid = !expiresAt || expiresAt > Date.now() + 30_000;
+      if (parsed?.access_token && stillValid) return String(parsed.access_token);
     }
   } catch {
     // Ignore

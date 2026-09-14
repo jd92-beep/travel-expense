@@ -107,9 +107,9 @@ test('Compact main controls keep accessible names, touch targets, reduced motion
 
   await expect(page.getByLabel('Compact travel readiness')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '更多操作' })).toHaveCount(0);
-  await expectTouchTarget(page.getByRole('button', { name: 'Add Expense' }), 'add expense primary action');
+  await expectTouchTarget(page.getByRole('button', { name: '記一筆' }), 'add expense primary action');
   await expectTouchTarget(page.getByRole('button', { name: /查看完整行程/ }), 'view full itinerary action');
-  await expectTouchTarget(page.getByRole('button', { name: 'View all' }), 'view all records action');
+  await expectTouchTarget(page.getByRole('button', { name: '全部' }), 'view all records action');
 
   const nav = page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]');
   for (const name of ['主頁', '紀錄', '行程', '記帳', '天氣', '統計', '設定']) {

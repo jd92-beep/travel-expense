@@ -96,9 +96,9 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   const story = page.locator('.stats-story-grid');
   await expect(story).toBeVisible();
   await expect(story.locator('.stats-story-card')).toHaveCount(2);
-  await expect(story).toContainText('Used percent');
+  await expect(story).toContainText('已用比例');
   await expect(story).toContainText('69%');
-  await expect(story).toContainText('Remaining / day');
+  await expect(story).toContainText('剩餘／每日');
   await expect(story).toContainText('¥750');
   await expect(story).not.toContainText('Fairness by person');
   await expect(story).not.toContainText('Category anomaly');
@@ -141,12 +141,12 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(page.getByText('User 1').first()).toBeVisible();
   const actionPlan = page.getByLabel('Settlement action plan');
   await expect(actionPlan).toBeVisible();
-  await expect(actionPlan).toContainText('Next action');
+  await expect(actionPlan).toContainText('下一步');
   await expect(actionPlan).toContainText('Xinxin Wong → User 1 Cheung');
   await expect(actionPlan).toContainText('¥2,850');
-  await expect(actionPlan).toContainText('Total to settle');
+  await expect(actionPlan).toContainText('待結算');
   await expect(actionPlan).toContainText('HK$ 140'); // deterministic once the live-rate fetch is blocked above
-  await expect(actionPlan).toContainText('Private repay');
+  await expect(actionPlan).toContainText('私人代付');
   await expect(actionPlan).toContainText('¥300');
   const actionMetrics = await actionPlan.evaluate((node) => {
     const rect = node.getBoundingClientRect();

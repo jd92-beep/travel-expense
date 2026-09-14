@@ -26,7 +26,7 @@ import { DashboardWeatherChip } from '../components/DashboardWeatherChip';
 import { GlassCard, Reveal, TickerMoney } from '../components/ui';
 import { BorderBeam } from '../components/ui/border-beam';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
-import { amountToHkd, currencyPrefix, formatCurrencyAmount } from '../lib/currency';
+import { amountToHkd, currencyPrefix, formatCurrencyAmount, perHkdForCurrency } from '../lib/currency';
 import {
   categoryById,
   displayStore,
@@ -669,7 +669,7 @@ export function Dashboard({
     const now = Date.now();
     const newTrip = createTripProfile({
       name: finalName,
-      destinationSummary: newTripDestination || 'Japan',
+      destinationSummary: newTripDestination.trim() || finalName,
       startDate: newTripStartDate,
       endDate: newTripEndDate,
       budget: newTripBudget.trim() ? Number(newTripBudget) : 150000,
@@ -793,7 +793,13 @@ export function Dashboard({
   const displayMoney = (amount: number, currency = activeDisplayCurrency || 'HKD') => formatCurrencyAmount(amount, currency);
 
   const handleUpdateBudget = (newBudgetVal: string) => {
-    const newBudget = Number(newBudgetVal) || 0;
+    const typed = Number(newBudgetVal) || 0;
+    // Budget is always stored in trip currency. If the user is editing the HKD view,
+    // convert HKD → trip currency so they never overwrite JPY with an HKD figure.
+    const rate = Math.max(0.1, perHkdForCurrency(state, resolvedTripCurrency));
+    const newBudget = showTripCurrency || resolvedTripCurrency === 'HKD'
+      ? typed
+      : Math.round(typed * rate);
     if (setState) {
       const now = Date.now();
       const nextTrip = {
@@ -1046,7 +1052,9 @@ export function Dashboard({
                     <>
                       <strong>{showTripCurrency ? displayMoney(state.budget, resolvedTripCurrency) : displayMoney(budgetHkd, 'HKD')}</strong>
                       <button type="button" onClick={() => {
-                        setEditBudgetVal(String(state.budget || ''));
+                        setEditBudgetVal(String(showTripCurrency || resolvedTripCurrency === 'HKD'
+                          ? (state.budget || '')
+                          : String(Math.round(budgetHkd || 0))));
                         setIsEditingBudget(true);
                       }}><Pencil size={16} /> 編輯</button>
                     </>
@@ -1239,13 +1247,13 @@ export function Dashboard({
       <Reveal className="dashboard-reveal" delay={0.12}>
       <GlassCard as="div" className="washi-recent-card dashboard-magic-records dashboard-compact-recent p-6 rounded-[28px] bg-white/50 backdrop-blur-md border border-white/60 shadow-sm mb-6 z-10">
         <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-bold text-slate-800">Recent Expenses</h3>
+          <h3 className="text-lg font-bold text-slate-800">最近花費</h3>
           <button
             className="compact-touch-action text-xs font-bold text-[#D94132] hover:underline border-none bg-transparent focus:outline-none"
             type="button"
             onClick={() => onTab('history')}
           >
-            View all
+            全部
           </button>
         </div>
 
@@ -1299,7 +1307,7 @@ export function Dashboard({
           onClick={onManual}
         >
           <Plus size={18} />
-          <span>Add Expense</span>
+          <span>記一筆</span>
         </button>
       </GlassCard>
       </Reveal>
@@ -1328,7 +1336,7 @@ export function Dashboard({
           <button
             className="washi-floating-add-btn"
             onClick={onManual}
-            aria-label="Add Expense"
+            aria-label="記一筆"
           >
             <Plus size={24} />
           </button>

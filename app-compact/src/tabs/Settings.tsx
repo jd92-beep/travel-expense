@@ -2679,7 +2679,10 @@ export function Settings({
                 />
                 <small>%</small>
               </span>
-              <button className="icon-btn" type="button" onClick={() => removePerson(p.id)} aria-label={`remove ${p.name}`}><Trash2 size={16} /></button>
+              <button className="icon-btn" type="button" onClick={() => {
+                if (!window.confirm(`確定刪除旅伴「${p.name}」？佢嘅帳單會轉去第一位旅伴。`)) return;
+                removePerson(p.id);
+              }} aria-label={`remove ${p.name}`}><Trash2 size={16} /></button>
             </div>
           ));
         })()}
@@ -2699,34 +2702,38 @@ export function Settings({
         </div>
       </AccordionCard>
 
-      <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
-        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。如果失敗，會自動 fallback 到 contract default（Scan/Voice → Mimo v2.5，Email/Trip → Mimo v2.5 Pro），再使用其他備用模型。測試只會向所選 model 發出一次極短 JSON request，唔會 fallback。Provider keys 不會進入 React state。</p>
+      <AccordionCard id="settings-ai-models" eyebrow="進階" title="AI 模型選擇" icon={<Sparkles />} defaultOpen={false} meta={<span className="pill">一般唔使改</span>}>
+        <p className="muted">平時唔使改。額度用盡時會停止，唔會自動換模型。</p>
         <div className="form-grid ai-model-grid">
-          <AiModelField label="Scan model" value={state.scanModel} state={state} onChange={(scanModel) => updateState({ scanModel })} />
-          <AiModelField label="Voice model" value={state.voiceModel} state={state} onChange={(voiceModel) => updateState({ voiceModel })} />
-          <AiModelField label="Email model" value={state.emailModel} state={state} onChange={(emailModel) => updateState({ emailModel })} />
-          <AiModelField label="Trip update model" value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} state={state} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
+          <AiModelField label="掃描 receipt 模型" value={state.scanModel} state={state} onChange={(scanModel) => updateState({ scanModel })} />
+          <AiModelField label="語音模型" value={state.voiceModel} state={state} onChange={(voiceModel) => updateState({ voiceModel })} />
+          <AiModelField label="Email 模型" value={state.emailModel} state={state} onChange={(emailModel) => updateState({ emailModel })} />
+          <AiModelField label="行程更新模型" value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} state={state} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
         </div>
-        <label>Google backup model
-          <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
-        </label>
-        <div style={{ marginTop: '0.75rem' }}>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setApiKeyModalOpen(true)}
-          >
-            <KeyRound size={14} /> Change API Key
-          </button>
-        </div>
+        {showStressPanel && (
+          <>
+            <label>Google backup model
+              <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
+            </label>
+            <div style={{ marginTop: '0.75rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setApiKeyModalOpen(true)}
+              >
+                <KeyRound size={14} /> Change API Key
+              </button>
+            </div>
+          </>
+        )}
       </AccordionCard>
 
-      <AccordionCard id="settings-trip" eyebrow="Trip Manager" title={theme.id === 'japan_washi' ? '旅程管理器 🏯🌸' : '旅程管理器'} meta={<span className="pill">v{managedTrip.version}</span>}>
+      <AccordionCard id="settings-trip" eyebrow="旅程" title={theme.id === 'japan_washi' ? '旅程管理器 🏯🌸' : '旅程管理器'} meta={<span className="pill">v{managedTrip.version}</span>}>
         <div className="settings-trip-manager">
         <div className="settings-trip-panel settings-trip-panel--active">
           <div className="settings-trip-panel-head">
             <div>
-              <span className="eyebrow">Active trip</span>
+              <span className="eyebrow">而家用緊</span>
               <h3>{managedTrip.name}</h3>
             </div>
             <span className="pill">{mgrCurrency}</span>
@@ -2988,20 +2995,20 @@ export function Settings({
 
       <AccordionCard
         id="settings-trip-sharing"
-        eyebrow="Trip sharing"
+        eyebrow="共享"
         title="旅程共享 👥"
         icon={<Users />}
         meta={<span className="pill">{tripSharing.isShared ? `${tripSharing.memberCount} members` : '只限自己'}{tripSharing.pendingInviteCount ? ` · ${tripSharing.pendingInviteCount} pending` : ''}</span>}
       >
         <div className="mini-list">
           <span>目前角色：{tripSharing.role}</span>
-          <span>Backend：Supabase {cloudSyncAvailable ? 'connected' : 'not signed in'} · Notion {tripSharing.backendHealth?.status || 'missing'}</span>
+          <span>{cloudSyncAvailable ? '已登入雲端，可以邀請朋友一齊記帳。' : '登入雲端帳號之後就可以邀請朋友。'}</span>
           <span>{canManageTripSharing ? '你可以邀請、撤回邀請、管理成員角色。' : '你可以查看共享狀態；只有 owner/admin 可以管理成員。'}</span>
         </div>
 
         <GlassCard className="settings-account-card">
           <div className="settings-account-copy">
-            <span className="eyebrow">Invite people</span>
+            <span className="eyebrow">邀請朋友</span>
             <strong>新增共享成員</strong>
             <small>Editor 可以新增自己嘅 expense；Viewer 只可查看共享帳簿。</small>
           </div>
@@ -3057,7 +3064,7 @@ export function Settings({
         )}
 
         <div className="section-head">
-          <h2>Pending invites</h2>
+          <h2>待接受邀請</h2>
           <span className="pill">{sharingInvites.filter((invite) => invite.status === 'pending').length} pending</span>
         </div>
         <div className="mini-list">
@@ -3086,8 +3093,8 @@ export function Settings({
         </div>
 
         <div className="section-head">
-          <h2>Members</h2>
-          <span className="pill">{sharingMembers.length || 1} active</span>
+          <h2>成員</h2>
+          <span className="pill">{sharingMembers.length || 1} 人</span>
         </div>
         <div className="mini-list">
           {sharingMembers.map((member) => {
@@ -3128,7 +3135,7 @@ export function Settings({
         )}
       </AccordionCard>
 
-      <AccordionCard id="settings-trip-update" eyebrow="Trip Update AI" title="AI 行程更新" icon={<Sparkles />}>
+      <AccordionCard id="settings-trip-update" eyebrow="AI" title="AI 行程更新" icon={<Sparkles />}>
         <p className="muted">目前 primary：{tripUpdateModelName}。貼入長行程後，AI 會先分析日程、景點、酒店、餐廳同重要細節；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
         <textarea
           rows={10}
@@ -3244,7 +3251,7 @@ export function Settings({
         )}
       </AccordionCard>
 
-      <AccordionCard id="settings-credentials" eyebrow="Optional" title="連線（進階）" icon={<KeyRound />} defaultOpen={false}>
+      <AccordionCard id="settings-credentials" eyebrow="可選" title="連線（進階）" icon={<KeyRound />} defaultOpen={false}>
         <p className="muted">一般登入 Supabase 之後，AI 同天氣已經自動用得。呢度只係想手動接 Notion 或測試先需要開。</p>
         {cloudSyncAvailable && (
           <div className="rotation-box">
@@ -3490,7 +3497,7 @@ export function Settings({
       </AccordionCard>
 
       {cloudSyncAvailable && updatePassword && (
-        <AccordionCard id="settings-supabase-account" eyebrow="Supabase Auth" title="雲端帳號與密碼設定" icon={<KeyRound />}>
+        <AccordionCard id="settings-supabase-account" eyebrow="帳號" title="雲端帳號與密碼設定" icon={<KeyRound />}>
           <div className="settings-auth-layout">
             <GlassCard className="settings-account-card">
               <div className="settings-account-copy">
@@ -3539,7 +3546,7 @@ export function Settings({
         </AccordionCard>
       )}
 
-      <AccordionCard id="settings-theme" eyebrow="Appearance" title="外觀主題" icon={<Sparkles />} defaultOpen={false} meta={<span className="pill">{THEME_OPTIONS.find((o) => o.value === themePreference)?.label || '自動'}</span>}>
+      <AccordionCard id="settings-theme" eyebrow="外觀" title="外觀主題" icon={<Sparkles />} defaultOpen={false} meta={<span className="pill">{THEME_OPTIONS.find((o) => o.value === themePreference)?.label || '自動'}</span>}>
         <p className="muted">揀自動就跟返旅程目的地。</p>
         <div className="theme-selector" role="radiogroup" aria-label="App theme">
           {THEME_OPTIONS.map((option) => {

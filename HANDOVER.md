@@ -130,6 +130,19 @@ you closed with your session number.
 
 ## What Was Done
 
+### Session 89i (MiMo — full rescan + non-tech UX polish)
+
+Compact `0.23.7`.
+
+1. **P0/P1 data safety:** empty successful cloud pull no longer purges local trips; JWT
+   `expires_at` checked before broker use; History keep-local/cloud uses functional setState.
+2. **Dashboard budget:** HKD display edit converts to trip currency (no JPY overwrite).
+3. **Non-tech UX:** Chinese labels for Recent/View all/記一筆, Stats story/settlement cards,
+   Settings eyebrows (進階/共享/可選/外觀); AI model section default-collapsed; remove-person
+   confirm; Scan copy 「影相後會自動辨識」.
+4. **Evidence:** typecheck, build, security:scan; settings(10), history(8), offline(4),
+   dashboard(8), stats, scan, a11y-touch.
+
 ### Session 89h (MiMo — UX batch: header overlap, Settings, Timeline, voice dates, Trip AI)
 
 Compact `0.23.6`.
