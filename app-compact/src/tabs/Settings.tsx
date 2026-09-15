@@ -1903,6 +1903,17 @@ export function Settings({
             const payloadTripId = (item.payload as { tripId?: string } | undefined)?.tripId;
             return item.entityId !== leftTripId && payloadTripId !== leftTripId;
           }),
+          // Tombstones/deleted-source keys for the left trip would suppress receipts
+          // if the trip is later re-joined or SourceIDs collide.
+          receiptTombstones: Object.fromEntries(
+            Object.entries(prev.receiptTombstones || {}).filter(([, tombstone]) => {
+              const tripId = (tombstone as { tripId?: string } | undefined)?.tripId;
+              return tripId !== leftTripId;
+            }),
+          ),
+          notionDeletedSourceIds: Object.fromEntries(
+            Object.entries(prev.notionDeletedSourceIds || {}).filter(([key]) => !key.includes(leftTripId)),
+          ),
           ...(nextActive ? {
             activeTripId: nextActive.id,
             tripName: nextActive.name,

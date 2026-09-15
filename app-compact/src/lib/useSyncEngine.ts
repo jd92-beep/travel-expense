@@ -210,6 +210,8 @@ export function useSyncEngine(
         if (candidate.id !== trip.id) return candidate;
         const queueUpdatedAt = Number(item.payload?.updatedAt || trip.updatedAt || trip.createdAt || 0);
         const currentUpdatedAt = Number(candidate.updatedAt || candidate.createdAt || Date.now());
+        // Mid-flight trip edit: keep local newer content; only adopt cloud identity.
+        // Next local edit re-queues a fresh payload (same contract as before).
         if (queueUpdatedAt && currentUpdatedAt > queueUpdatedAt) {
           return {
             ...candidate,
@@ -268,10 +270,12 @@ export function useSyncEngine(
           const { publicUrl, storagePath } = await uploadReceiptPhoto(supabaseSession, receiptUuid, receipt.photoThumb, 'image/jpeg', receipt.supabasePhotoPath);
           synced = { ...synced, photoUrl: publicUrl, supabasePhotoPath: storagePath, _photoSyncedToSupabase: true, _photoSyncAttempts: 0 };
         } catch (photoErr) {
-          const attempts = item.attempts + 1;
+          // Photo failures use their own attempt budget so a couple of receipt-push
+          // retries do not permanently mark the photo as terminal.
+          const attempts = Number(receipt._photoSyncAttempts || 0) + 1;
           synced = { ...synced, _photoSyncedToSupabase: false, _photoSyncAttempts: attempts };
           photoError = redactError(photoErr);
-          console.warn(`[SyncEngine] Supabase photo upload failed (attempt ${attempts}/${MAX_SYNC_RETRY_ATTEMPTS}):`, photoErr);
+          console.warn(`[SyncEngine] Supabase photo upload failed (photo attempt ${attempts}/${MAX_SYNC_RETRY_ATTEMPTS}):`, photoErr);
         }
       }
       if (hasNotionSync && !sharedLedger) {

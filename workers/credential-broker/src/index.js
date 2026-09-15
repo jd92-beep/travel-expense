@@ -539,9 +539,12 @@ async function rotateCredential(env, body) {
 }
 
 async function rateLimitKey(request, scope) {
-  const origin = request.headers.get('Origin') || 'no-origin';
-  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown-ip';
-  return `rate:${scope}:${await sha256Id(`${origin}|${ip}`)}`;
+  // Key on client IP only — rotating Origin (any localhost port) used to mint a
+  // fresh unlock/admin bucket and bypass passphrase rate limits.
+  const ip = request.headers.get('CF-Connecting-IP')
+    || request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
+    || 'unknown-ip';
+  return `rate:${scope}:${await sha256Id(ip)}`;
 }
 
 function rateLimitMax(env, scope) {
@@ -668,6 +671,9 @@ async function providerStatus(env, provider) {
 function safeNotionPath(path) {
   const clean = String(path || '').trim();
   if (!clean.startsWith('/')) throw new Error('Notion path invalid');
+  // Reject path traversal before the allowlist regex — `/pages/../users/me` must not
+  // escape the intended prefixes with the caller's token.
+  if (clean.includes('..')) throw new Error('Notion path not allowed');
   if (!/^\/(databases|pages|blocks|file_uploads|search)(\/|$)/.test(clean)) throw new Error('Notion path not allowed');
   return clean;
 }
@@ -941,9 +947,16 @@ async function parseProviderJson(response) {
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(redact(`${response.status} ${response.statusText || 'Invalid provider JSON'}`));
+    const invalid = new Error(redact(`${response.status} ${response.statusText || 'Invalid provider JSON'}`));
+    // Preserve HTTP status so 429/quota stay a hard stop for clients instead of becoming 500.
+    invalid.status = response.status;
+    throw invalid;
   }
-  if (!response.ok) throw new Error(redact(data?.error?.message || data?.message || `${response.status} ${response.statusText}`));
+  if (!response.ok) {
+    const failed = new Error(redact(data?.error?.message || data?.message || `${response.status} ${response.statusText}`));
+    failed.status = response.status;
+    throw failed;
+  }
   return data;
 }
 
@@ -1448,6 +1461,9 @@ async function volcanoJsonWithCredential(env, credential, requestedModel) {
       model: providerModelName('volcano', requestedModel, 'doubao-seed-2.0-lite'),
       messages: [{ role: 'user', content: 'Return {"ok":true} as JSON.' }],
       temperature: 0,
+      // Match production volcanoJson: reasoning can consume the 8-token budget and
+      // produce a false "empty response" health failure.
+      thinking: { type: 'disabled' },
       max_tokens: 8,
     }),
   }));

@@ -184,14 +184,36 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
     const remoteUpdated = receiptUpdatedAt(remoteReceipt, false);
     const remoteHasMissingLink = !localReceipt.notionPageId && !!remoteReceipt.notionPageId
       || !localReceipt.sourceId && !!remoteReceipt.sourceId;
-    const photoUrlChanged = !!remoteReceipt.photoUrl && remoteReceipt.photoUrl !== localReceipt.photoUrl;
-    if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink) || photoUrlChanged) {
+    // Signed photo URLs rotate on every pull. Only adopt a remote URL when the remote row is
+    // actually newer (or we are missing the link) — never treat a rotating URL as a full-row
+    // overwrite, which used to clobber newer local edits mid-flight.
+    const photoUrlOnlyChange = !!remoteReceipt.photoUrl
+      && remoteReceipt.photoUrl !== localReceipt.photoUrl
+      && remoteUpdated <= localUpdated
+      && !remoteHasMissingLink;
+    if (photoUrlOnlyChange) {
+      byId.set(localReceipt.id, {
+        ...localReceipt,
+        photoUrl: remoteReceipt.photoUrl,
+      });
+      if (remoteReceipt.supabaseId) idBySupabaseId.set(remoteReceipt.supabaseId, localReceipt.id);
+      if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, localReceipt.id);
+      if (tripSourceKey) idByTripSource.set(tripSourceKey, localReceipt.id);
+      indexRawSource(rawSourceKey, localReceipt.id);
+      continue;
+    }
+    if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
       byId.set(localReceipt.id, stampForRemote(state, {
         ...localReceipt,
         ...remoteReceipt,
         id: localReceipt.id,
         photoThumb: localReceipt.photoThumb || remoteReceipt.photoThumb,
         photoUrl: remoteReceipt.photoUrl || localReceipt.photoUrl,
+        // Local unsynced photo replacement must not be marked synced by a remote row merge.
+        _photoSyncedToSupabase: localReceipt.photoThumb && !localReceipt._photoSyncedToSupabase
+          ? false
+          : (localReceipt._photoSyncedToSupabase || remoteReceipt._photoSyncedToSupabase),
+        supabasePhotoPath: localReceipt.supabasePhotoPath || remoteReceipt.supabasePhotoPath,
         syncStatus: 'synced',
       }));
       if (remoteReceipt.supabaseId) idBySupabaseId.set(remoteReceipt.supabaseId, localReceipt.id);

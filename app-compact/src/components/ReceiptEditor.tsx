@@ -264,7 +264,16 @@ export function ReceiptEditor({
 
     // Auto compress to 800px width to keep localStorage lightweight (~50-80KB) and prevent size limit crashes
     const compressed = await compressPhoto(base64, mime, 800);
-    setDraft((d) => ({ ...d, photoThumb: compressed || base64 }));
+    if (!mountedRef.current) return;
+    // Replacing the photo must clear the cloud path/synced flags, otherwise sync skips upload.
+    setDraft((d) => ({
+      ...d,
+      photoThumb: compressed || base64,
+      photoUrl: '',
+      _photoSyncedToSupabase: false,
+      supabasePhotoPath: undefined,
+      _photoSyncAttempts: 0,
+    }));
 
     if (photoRef.current) photoRef.current.value = '';
   }
@@ -302,6 +311,14 @@ export function ReceiptEditor({
             exchangeRate: draft.exchangeRatePinned && editCurrencyCode !== 'HKD' ? editPerHkd : draft.exchangeRate,
             exchangeRatePinned: draft.exchangeRatePinned && editCurrencyCode !== 'HKD' ? true : undefined,
             visibility: privacyEligible && draft.visibility === 'private' ? 'private' : undefined,
+            // Photo replaced/deleted in this edit session must re-upload (or clear cloud path).
+            ...(receipt?.photoThumb !== draft.photoThumb
+              ? {
+                _photoSyncedToSupabase: false,
+                supabasePhotoPath: undefined,
+                _photoSyncAttempts: 0,
+              }
+              : {}),
             lineItems: finalLineItems.length ? finalLineItems : undefined,
             itemsText: itemRowsMode
               ? (finalLineItems.length ? serializeLineItems(finalLineItems, editPrefix) : '')
@@ -479,7 +496,14 @@ export function ReceiptEditor({
             </button>
           )}
           <div className="photo-tool-buttons">
-            {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>刪除相片</button>}
+            {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({
+              ...d,
+              photoThumb: '',
+              photoUrl: '',
+              _photoSyncedToSupabase: false,
+              supabasePhotoPath: undefined,
+              _photoSyncAttempts: 0,
+            }))}>刪除相片</button>}
             <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>
             {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
               const total = validAmount(draft.total);
