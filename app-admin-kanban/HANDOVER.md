@@ -1,11 +1,20 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-08-24 HKT
+Last updated: 2026-09-15 HKT
 
 ## Current Status
 
-- **Local RC `1.3.6`** (branch `admin/console-production-ready`) — continued production-readiness
-  + modern admin UX pass on top of 1.3.5:
+- **Production `1.3.6` LIVE** — protected workflow `34916648671` promoted exact SHA
+  `3ef88351710e0b9426c68d649a8a884444df0d78`. Live `/api/health` returns version `1.3.6`,
+  gitSha `3ef8835…`, deployment `dpl_6VNEkz8suZRj61TuXRjhwBZjdSSU`,
+  `acceptingReadTraffic=true`. Unauthenticated `/api/admin/session` returns `401`.
+  CSP now includes `worker-src 'self' blob:`. Edge deployment suffix `_108`; schema
+  `20260712123000`. Edge provenance secrets (`ADMIN_EDGE_SOURCE_SHA`,
+  `ADMIN_EXPECTED_EDGE_SOURCE_SHA`, `ADMIN_FRONTEND_GIT_SHA`) were aligned to this SHA
+  before the successful readiness verify (first promotion attempt failed readiness 503
+  while Edge still pointed at `1.3.4`).
+
+- **`1.3.6` contents** — production-readiness + UX modernization on top of 1.3.5:
   - Quiet chrome: solid content frames, accent bar headings (no neon blocks), hex-grid gated to
     `full` fx tier only; denser sticky tables; breadcrumbs on detail pages; Overview KPI deep-links.
   - Status system: zh-HK labels for raw tokens (`outcome_unknown`→結果待確認, etc.); severity
@@ -14,14 +23,12 @@ Last updated: 2026-08-24 HKT
     support-bundle ObjectURL revoke deferred; receipts selection notice clears on empty scope;
     Trips/Itinerary wire `useOnline`; Audit 24h/all is a radiogroup.
   - Provider catalog contract test wired into `test:contract`.
-  - Gates green: typecheck, build, unit `34/34`, contract `24/24` + catalog, security scan,
-    smoke `49 passed / 1 skipped`. Not promoted — needs Boss protected workflow approval.
 
-- **`1.3.5`** (same branch, prior commit) — write-policy UI gate, safe cursor previous, LoginGate
-  bootstrap removal, CSRF fail-closed, query-cache clear on logout/401, Audit filter submit,
-  StrictMode-safe receipts selection, security-scan `server/admin` walk, CSP `worker-src`.
+- **`1.3.5` contents** — write-policy UI gate, safe cursor previous, LoginGate bootstrap removal,
+  CSRF fail-closed, query-cache clear on logout/401, Audit filter submit, StrictMode-safe receipts
+  selection, security-scan `server/admin` walk, CSP `worker-src`.
 
-- Production `1.3.4` lazy-loads feature route groups, reducing the main application chunk from
+- Previous production `1.3.4` lazy-loads feature route groups, reducing the main application chunk from
   roughly 623 kB to 224 kB while keeping the Three.js login scene isolated. The root route now
   supplies `hydrateFallbackElement`, so React Router no longer emits the lazy initial-route
   fallback warning. Typecheck, build, unit `34/34`, contract `24/24`, targeted browser `11/11`,

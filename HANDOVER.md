@@ -1,10 +1,12 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-24 HKT
-- **Focus**: Session 89 Admin console production-readiness + UX modernization (worktree `admin/console-production-ready`).
+- **Date**: 2026-09-15 HKT
+- **Focus**: Session 89 Admin console 1.3.5/1.3.6 production apply (worktree `admin/console-production-ready`).
 - **Agent**: MiMo.
-- **App version**: Admin `1.3.6` (was `1.3.4`). Compact Web / Android / React / Broker unchanged this session.
+- **App version**: Admin `1.3.6` **LIVE** at `https://travel-expense-admin-kanban.vercel.app`
+  (workflow `34916648671`, SHA `3ef8835`, deployment `dpl_6VNEkz8suZRj61TuXRjhwBZjdSSU`).
+  Compact Web / Android / React / Broker unchanged this session.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -130,19 +132,25 @@ you closed with your session number.
 
 ## What Was Done
 
-### Session 89 (MiMo — Admin console production-readiness + UX modernization)
+### Session 89 (MiMo — Admin console 1.3.5/1.3.6 production apply)
 
-Admin `1.3.6` on branch `admin/console-production-ready` (worktree `.worktrees/admin-console-hardening`).
+Admin `1.3.6` **LIVE** on `main` @ `3ef8835`. Protected workflow `34916648671` all green
+(admin/broker/edge/compact/react/database/shared-contract + production promotion).
+Live evidence: `/api/health` `1.3.6` / `3ef8835` / `dpl_6VNEkz8suZRj61TuXRjhwBZjdSSU` /
+`acceptingReadTraffic=true`; unauth `/api/admin/session` `401`; CSP has `worker-src`;
+Edge `_108`; schema `20260712123000`. First promotion attempt failed readiness `503` because
+Edge provenance secrets still pointed at `1.3.4`; secrets were aligned to `3ef8835` then
+re-approved.
 
-1. **Write-policy UI gate** — new `src/lib/writePolicy.ts` reads `/runtime` policy. Providers probe stays available under `provider_probe_only`; receipt/trip/itinerary/member/sync-job/support-bundle/integrity-scan CTAs require `allowlisted` and are disabled with an explicit label otherwise (Edge already rejected them with `WRITES_DISABLED` 503).
-2. **Pagination safety** — `useCursorPagination.previous()` no longer calls `navigate(-1)`; restores the prior cursor from the mount stack or falls back to page 1. Integrity page now uses the same hook.
-3. **LoginGate** — removed dead bootstrap-secret enrollment UI (bootstrap is permanently closed). `PROTECTED_TARGET` / enrollment-required now shows recovery guidance + 「返回登入」. CTA is 「使用通行片語與 Passkey 登入」.
-4. **CSRF fail-closed** — `adminApi.ts` POST path now throws `CSRF_REJECTED` when the `__Host-admin_csrf` cookie is missing (parity with `adminClient.ts`).
-5. **Session cache** — logout and `admin:unauthorized` clear `["admin"]` React Query cache.
-6. **Correctness** — `formatMoney(null)` → 未有金額; support-bundle ObjectURL revoke deferred; receipts selection notice clears; Trips/Itinerary wire `useOnline`.
-7. **UX modernization** — quiet chrome (solid frames, accent-bar headings, hex-grid full-tier only), denser tables, breadcrumbs on detail pages, Overview KPI deep-links, zh-HK status labels, Providers/System/Reliability copy, Activity→操作中心, Audit range radiogroup.
-8. **Hardening** — security-scan walks `server/admin/**`; FreshnessBanner names blocking sources; CSP `worker-src`; provider catalog contract test in `test:contract`.
-9. **Evidence**: typecheck, build, unit `34/34`, contract `24/24` + catalog, security scan, Playwright smoke `49 passed / 1 skipped`.
+1. **Write-policy UI gate** — `src/lib/writePolicy.ts` reads `/runtime`. Probe stays available
+   under `provider_probe_only`; other R1/R2 CTAs require `allowlisted`.
+2. **Pagination safety** — no `navigate(-1)`; Integrity page uses the shared cursor hook.
+3. **LoginGate** — bootstrap enrollment UI removed; recovery guidance + 返回登入.
+4. **CSRF fail-closed** on auth POSTs; query cache cleared on logout/401.
+5. **Correctness** — `formatMoney(null)`, support-bundle revoke, selection notice, `useOnline`.
+6. **UX** — quiet chrome, breadcrumbs, Overview KPI deep-links, zh-HK status labels, denser tables.
+7. **Evidence** (worktree gates): typecheck, build, unit `34/34`, contract `24/24` + catalog,
+   security scan, smoke `49 passed / 1 skipped`.
 
 ### Session 89k (MiMo — android-auth tokens, backup photo strip, Scan overflow)
 
@@ -560,7 +568,7 @@ Isolated worktree branch `compact/perf-bugs-themes` from `main` @ `252003d`. Com
    were reviewed then deleted with the probe script.
 3. **Boundaries:** version bumped `0.16.19` to `0.16.20` (`constants.ts`, `package.json`,
    `package-lock.json`). Pushed to `origin main` as `2c66b5d`. The same CSS was synced to the
-   Android shell worktree (`/Users/tommy/Documents/Projects/travel-expense-android-shell`, branch
+   Android shell worktree (`/Users/tommy_1/Documents/Projects/travel-expense-android-shell`, branch
    `codex/admin-console-1.0-android`) as `0.20.5` / versionCode 2005, commit `f568c64`, with
    typecheck, build, `security:scan` and mobile-layout smoke `1/1` green there. Follow-up `3707596`
    (`0.20.6` / versionCode 2006) fixed that branch's bare `smoke:mobile-layout`, `smoke:itinerary`,
@@ -1557,7 +1565,7 @@ Isolated worktree branch `compact/perf-bugs-themes` from `main` @ `252003d`. Com
 ### Session 32 (Codex — previous session)
 
 1. **Splitwise roadmap Phase 0 security fix**:
-   - Reviewed `/Users/tommy/Downloads/temp can delete/travel_expense_splitwise_super_app_roadmap(1).md` and confirmed the hardcoded broker/admin passphrase finding existed in `app-compact/scripts/verify-notion-connection.mjs`.
+   - Reviewed `/Users/tommy_1/Downloads/temp can delete/travel_expense_splitwise_super_app_roadmap(1).md` and confirmed the hardcoded broker/admin passphrase finding existed in `app-compact/scripts/verify-notion-connection.mjs`.
    - Removed the inline passphrase and made the script require `BROKER_UNLOCK_PASSWORD` or legacy `BROKER_ADMIN_PASSPHRASE` from the local environment.
    - Updated the script to match the live Credential Broker contract: `/session/unlock` receives `{ password }`, returns a session string, and authenticated calls send `X-Travel-Session`.
    - Rotated the live Credential Broker `APP_UNLOCK_HASH` and `APP_SESSION_SECRET`; the new unlock passphrase is stored in macOS Keychain service `travel-expense credential broker unlock`.
