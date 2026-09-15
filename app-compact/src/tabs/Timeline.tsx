@@ -116,6 +116,24 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
   }, []);
 
   const lastAutoScrollKeyRef = useRef('');
+  const autoScrollRetryHandlesRef = useRef<number[]>([]);
+  const programmaticScrollRef = useRef(false);
+  const userScrollAtRef = useRef(0);
+
+  const markProgrammaticTimelineScroll = useCallback(() => {
+    programmaticScrollRef.current = true;
+    window.setTimeout(() => { programmaticScrollRef.current = false; }, 800);
+  }, []);
+
+  useEffect(() => {
+    const onUserScroll = () => {
+      if (programmaticScrollRef.current) return;
+      userScrollAtRef.current = Date.now();
+    };
+    window.addEventListener('scroll', onUserScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onUserScroll);
+  }, []);
+
   const scrollToLiveTimelineSpot = useCallback((force = false) => {
     if (typeof window === 'undefined') return;
     // ponytail: native WebView snapshots can smear during forced scroll; keep the tab stable there.
@@ -130,21 +148,32 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       liveContext.nextLabel,
     ].join('|');
     if (!force && lastAutoScrollKeyRef.current === scrollKey) return;
+    // Minute-tick label refresh must not yank a browsing user back to the live spot.
+    if (!force && Date.now() - userScrollAtRef.current < 4000) {
+      lastAutoScrollKeyRef.current = scrollKey;
+      return;
+    }
     lastAutoScrollKeyRef.current = scrollKey;
+
+    autoScrollRetryHandlesRef.current.forEach((handle) => window.clearTimeout(handle));
+    autoScrollRetryHandlesRef.current = [];
 
     let attempts = 0;
     const tryScroll = () => {
       const element = selectTimelineAutoScrollTarget(targetDate);
       if (element) {
+        markProgrammaticTimelineScroll();
         scrollTimelineElementIntoCenter(element);
         return;
       }
       attempts += 1;
-      if (attempts <= 8) window.setTimeout(tryScroll, 120);
+      if (attempts <= 8) {
+        autoScrollRetryHandlesRef.current.push(window.setTimeout(tryScroll, 120));
+      }
     };
 
-    window.setTimeout(tryScroll, force ? 80 : 180);
-  }, [commandDay?.date, liveContext.currentLabel, liveContext.date, liveContext.mode, liveContext.nextLabel]);
+    autoScrollRetryHandlesRef.current.push(window.setTimeout(tryScroll, force ? 80 : 180));
+  }, [commandDay?.date, liveContext.currentLabel, liveContext.date, liveContext.mode, liveContext.nextLabel, markProgrammaticTimelineScroll]);
 
   useLayoutEffect(() => {
     scrollToLiveTimelineSpot();
@@ -154,6 +183,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
     const handleTimelineEntry = () => {
       if (window.location.hash.slice(1) !== 'timeline') return;
       lastAutoScrollKeyRef.current = '';
+      userScrollAtRef.current = 0;
       scrollToLiveTimelineSpot(true);
     };
     window.addEventListener('hashchange', handleTimelineEntry);

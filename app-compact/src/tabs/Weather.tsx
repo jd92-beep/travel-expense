@@ -9,6 +9,8 @@ import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
 import { fetchWeather, getCachedWeatherRows, groupedCoordsForDay, resolveCoordsForDay, resolveOfficialWeatherProvider, setCachedWeatherRows, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type GroupedWeatherLocation, type WeatherCoord } from '../lib/weather';
+import { hasCredentialBrokerSession } from '../lib/credentialBroker';
+import { getEffectsTier } from '../lib/performance';
 import type { AppState, ItineraryDay } from '../lib/types';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 
@@ -23,12 +25,20 @@ function formatWeatherDate(dateStr: string): string {
 }
 
 export function Weather({ state }: { state: AppState }) {
-  const [rows, setRows] = useState<Record<string, DayWeather[]>>({});
-  const [busy, setBusy] = useState(false);
+  // Seed from the module cache so tab remount does not flash "未有天氣資料" for a frame
+  // before the load effect runs. busy starts true until the first load settles.
+  const [rows, setRows] = useState<Record<string, DayWeather[]>>(() => getCachedWeatherRows() || {});
+  const [busy, setBusy] = useState(true);
   const [stale, setStale] = useState(false);
   const [error, setError] = useState('');
   const trip = activeTrip(state);
-  const itinerary = useMemo(() => getItinerary(state), [state]);
+  // Same memo keys as Timeline — getItinerary normalizes on every call; depending on the
+  // whole state object recreated displayItinerary/groupedCoords on unrelated updates.
+  const itinerary = useMemo(
+    () => getItinerary(state),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.trips, state.customItinerary, state.activeTripId, state.tripDateRange, state.tripName, state.tripCurrency],
+  );
   const today = todayYmd(normalizedTimezone(trip.timezones?.[0]) || 'Asia/Hong_Kong');
   const hasEnded = trip.endDate ? today > trip.endDate : false;
   // Any PAST date (mid-trip or after the trip) shows the CURRENT weather at that location;
@@ -92,6 +102,8 @@ export function Weather({ state }: { state: AppState }) {
   const leadLow = leadTemps.length ? Math.round(Math.min(...leadTemps)) : null;
   const heroHasData = leadSlot?.temp != null;
   const previewHourly = leadRows.flatMap((row) => row.slots || []).slice(0, 5);
+  // Late broker session must re-trigger the effect so credentialed weather paths can refetch.
+  const sessionReady = hasCredentialBrokerSession(state);
 
   const loadRef = useRef<(options?: { force?: boolean }) => Promise<void>>(async () => {});
 
@@ -145,18 +157,29 @@ export function Weather({ state }: { state: AppState }) {
             } catch (innerErr) {
               if (controller.signal.aborted) return null;
               console.warn(`[Weather] Load failed for ${group.label}:`, innerErr);
-              return { coord: { label: group.label, lat: group.lat, lon: group.lon } as WeatherCoord, source: '拉取失敗', slots: [] };
+              // Keep the previous in-memory row on failure so offline force-refresh does not wipe cache.
+              return null;
             }
           });
           const results = (await Promise.all(coordPromises)).filter((r): r is NonNullable<typeof r> => r != null);
+          if (!results.length) return { date: day.date, rows: null as DayWeather[] | null };
           return { date: day.date, rows: results };
         });
         const dayResults = await Promise.all(dayPromises);
         if (controller.signal.aborted) return;
         const next: Record<string, DayWeather[]> = {};
-        for (const { date, rows: dayRows } of dayResults) next[date] = dayRows;
-        setRows(next);
-        setCachedWeatherRows(next);
+        const priorCache = getCachedWeatherRows() || {};
+        for (const { date, rows: dayRows } of dayResults) {
+          if (dayRows) next[date] = dayRows;
+          else if (priorCache[date]) next[date] = priorCache[date];
+        }
+        // Only overwrite when we actually got usable rows; otherwise keep prior cache.
+        if (Object.keys(next).length) {
+          setRows(next);
+          setCachedWeatherRows(next);
+        } else {
+          setStale(true);
+        }
       } catch (err) {
         if (controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : String(err));
@@ -170,15 +193,35 @@ export function Weather({ state }: { state: AppState }) {
     loadRef.current = load;
     load();
     return () => { controller.abort(); };
-  }, [itineraryKey]);
+  }, [itineraryKey, sessionReady]);
 
   const scrollCorrectionHandlesRef = useRef<number[]>([]);
+  // Distinguish user scrolls from programmatic auto-jump scrolls so we never fight the user.
+  const programmaticScrollRef = useRef(false);
+  const userScrollAtRef = useRef(0);
+  const markProgrammaticScroll = useCallback(() => {
+    programmaticScrollRef.current = true;
+    window.setTimeout(() => { programmaticScrollRef.current = false; }, 800);
+  }, []);
+
+  useEffect(() => {
+    const onUserScroll = () => {
+      if (programmaticScrollRef.current) return;
+      userScrollAtRef.current = Date.now();
+      scrollCorrectionHandlesRef.current.forEach((handle) => window.clearTimeout(handle));
+      scrollCorrectionHandlesRef.current = [];
+    };
+    window.addEventListener('scroll', onUserScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onUserScroll);
+  }, []);
 
   // Jump to the active day's card (live-hour slot if rendered). The Weather tab changes height
   // while provider rows and reveal animations settle, so keep correcting briefly after entry.
   // Used by both the auto-jump effect and the manual "今日" button.
-  const jumpToActiveDay = useCallback((behavior: ScrollBehavior = 'smooth') => {
+  const jumpToActiveDay = useCallback((behavior: ScrollBehavior = 'smooth', options?: { force?: boolean }) => {
     if (!leadDay) return;
+    // Auto path only: if the user just scrolled, stay put. Manual button always jumps.
+    if (!options?.force && Date.now() - userScrollAtRef.current < 2500) return;
     scrollCorrectionHandlesRef.current.forEach((handle) => window.clearTimeout(handle));
     scrollCorrectionHandlesRef.current = [];
     const forecastDate = forecastDateFor(leadDay.date);
@@ -196,6 +239,7 @@ export function Weather({ state }: { state: AppState }) {
     const doScroll = (b: ScrollBehavior) => {
       const el = findTarget();
       if (!el) return;
+      markProgrammaticScroll();
       const rect = el.getBoundingClientRect();
       const targetTop = Math.max(0, window.scrollY + rect.top - window.innerHeight * 0.36);
       // window.scrollTo only — a simultaneous scrollIntoView fights this smooth scroll.
@@ -204,6 +248,7 @@ export function Weather({ state }: { state: AppState }) {
     doScroll(behavior);
     const correctionDelays = [120, 420, 900];
     scrollCorrectionHandlesRef.current = correctionDelays.map((delay) => window.setTimeout(() => {
+      if (Date.now() - userScrollAtRef.current < 400) return;
       const el = findTarget();
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -220,7 +265,7 @@ export function Weather({ state }: { state: AppState }) {
       window.setTimeout(() => el.classList.remove('weather-arrive-flash'), 2100);
     }, 560));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leadDay, today, trip]);
+  }, [leadDay, today, trip, markProgrammaticScroll]);
 
   useEffect(() => () => {
     scrollCorrectionHandlesRef.current.forEach((handle) => window.clearTimeout(handle));
@@ -244,13 +289,20 @@ export function Weather({ state }: { state: AppState }) {
     return () => window.clearTimeout(t);
   }, [busy, leadDay, rows, today, jumpToActiveDay]);
 
+  // Manual "今日" button must always land, even if the user just scrolled.
+  const jumpToActiveDayForced = useCallback(() => {
+    jumpToActiveDay('smooth', { force: true });
+  }, [jumpToActiveDay]);
+
   return (
-    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto weather-screen" style={travelAtlasStyle}>
+    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative weather-screen" style={travelAtlasStyle}>
       <div className="japanese-sun-decor" />
       <div className="japanese-sakura-decor" />
       <div className="stack w-full relative z-10">
         <GlassCard className="weather-command weather-command-fancy">
-        <Meteors number={9} minDuration={4} maxDuration={9} className="weather-meteor" />
+        {getEffectsTier() === 'lite' ? null : (
+          <Meteors number={getEffectsTier() === 'full' ? 9 : 4} minDuration={4} maxDuration={9} className="weather-meteor" />
+        )}
         <ProgressiveBlur className="weather-command-blur" height="34%" position="bottom" blurLevels={[0.5, 1, 2, 4, 8, 12]} />
         <div className="weather-command-row relative z-10">
           <h2>天氣預報</h2>
@@ -258,7 +310,7 @@ export function Weather({ state }: { state: AppState }) {
             <span className="weather-target-pill">
               <StatusPill tone={hasMissingTarget ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{targetSummary}</StatusPill>
             </span>
-            <button className="secondary weather-refresh-icon" type="button" aria-label="跳去今日天氣" title="跳去今日天氣" onClick={() => jumpToActiveDay('smooth')}>
+            <button className="secondary weather-refresh-icon" type="button" aria-label="跳去今日天氣" title="跳去今日天氣" onClick={jumpToActiveDayForced}>
               <LocateFixed size={17} />
             </button>
             <button className="secondary weather-refresh-icon" type="button" aria-label="刷新天氣" title="刷新天氣" disabled={busy} onClick={() => loadRef.current({ force: true })}>

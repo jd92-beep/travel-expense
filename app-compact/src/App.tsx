@@ -806,8 +806,10 @@ export function App() {
               if (fxTier === 'lite') {
                 return <div className="w-full h-full">{bounded}</div>;
               }
+              // overflow:clip (not hidden) — hidden creates a scrollport that breaks
+              // position:sticky on Weather's hero card when the window scrolls.
               return (
-                <div className="w-full h-full" style={{ overflow: 'hidden' }}>
+                <div className="w-full h-full" style={{ overflow: 'clip' }}>
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
                       key={safeTab}

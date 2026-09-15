@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex" />
+    <meta name="referrer" content="no-referrer" />
     <meta name="theme-color" content="#f7f2ea" />
-    <title>返回 App...</title>
+    <title>返回 App…</title>
     <style>
       :root { color-scheme: light dark; }
       body {
@@ -27,7 +28,7 @@
   </head>
   <body>
     <div class="card">
-      <h1>正在返回 App...</h1>
+      <h1>正在返回 App…</h1>
       <p>如果冇自動跳返，請撳下面個掣完成登入。</p>
       <a class="btn" id="open" href="#">開啟 Travel Expense</a>
       <p class="hint">未安裝 App？請喺部機度開返 Travel Expense 再登入一次。</p>
@@ -36,13 +37,14 @@
       Standalone App Links fallback page. Intentionally does NOT boot the SPA, so the
       OAuth token in the URL hash is never consumed in a browser session. When the App
       Link is verified, Android opens the native app directly and this page is skipped.
-      Tokens arrive in the hash (implicit flow); we fold them into the query so the
-      intent: redirect preserves them for the native handler (which reads both).
+      Tokens arrive in the hash (implicit flow). We pass them to the native app via
+      intent extras (S.*) and keep a query copy only for older native handlers, then
+      immediately scrub the browser URL so tokens do not linger in history/referrer.
     -->
     <script>
       (function () {
         var PKG = 'com.ftjdfr.travelexpensecompact';
-        var HOST = 'travel-expense-compact.vercel.app';
+        var HOST = location.host;
         var params = new URLSearchParams((location.search || '').replace(/^\?/, ''));
         var hash = (location.hash || '').replace(/^#/, '');
         if (hash) {
@@ -50,10 +52,20 @@
             if (!params.has(key)) params.set(key, value);
           });
         }
-        var qs = params.toString();
+        var extras = '';
+        var qs = '';
+        params.forEach(function (value, key) {
+          // Native extras for new handlers; query retained for compatibility.
+          extras += ';S.' + encodeURIComponent(key) + '=' + encodeURIComponent(value);
+          qs += (qs ? '&' : '') + encodeURIComponent(key) + '=' + encodeURIComponent(value);
+        });
         var appUrl = 'intent://' + HOST + '/android-auth' + (qs ? '?' + qs : '') +
-          '#Intent;scheme=https;package=' + PKG + ';end';
+          '#Intent;scheme=https;package=' + PKG + extras + ';end';
         document.getElementById('open').setAttribute('href', appUrl);
+        // Scrub the browser address bar immediately — tokens must not stay in history.
+        try {
+          history.replaceState(null, '', location.pathname);
+        } catch (e) { /* ignore */ }
         try { window.location.href = appUrl; } catch (e) { /* manual button remains */ }
       })();
     </script>

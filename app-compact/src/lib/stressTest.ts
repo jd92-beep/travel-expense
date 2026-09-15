@@ -116,8 +116,9 @@ export function generateMockReceipts(count: number): Receipt[] {
   });
 }
 
-// Global fetch hijacking setup
-if (typeof window !== 'undefined' && !(window as any).__stressFetchHijacked) {
+// Global fetch hijacking setup — DEV only. A production APK must never ship a
+// fetch interceptor that any WebView script can arm via localStorage flags.
+if (import.meta.env.DEV && typeof window !== 'undefined' && !(window as any).__stressFetchHijacked) {
   (window as any).__stressFetchHijacked = true;
   const originalFetch = window.fetch;
 

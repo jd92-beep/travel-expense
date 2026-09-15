@@ -2108,6 +2108,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   pointer-events: none;
 }
 
+/* Single window scrollport (matches Timeline). Nested overflow-y-auto made
+   window.scrollTo auto-jump miss the weather cards and broke sticky hero. */
+.weather-screen,
+.weather-screen.overflow-y-auto {
+  overflow: visible !important;
+  overscroll-behavior-y: contain;
+}
+
 .weather-screen::before {
   content: '';
   position: fixed;
