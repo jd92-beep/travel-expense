@@ -191,6 +191,7 @@ export function Shell({
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
   const [fxTier, setFxTier] = useState(getEffectsTier);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const raf = useRef<number | null>(null);
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const prefersReducedMotion = useReducedMotion();
@@ -370,6 +371,24 @@ export function Shell({
         query.removeEventListener('change', handlePerformanceAndEffects);
       }
       window.removeEventListener('resize', handlePerformanceAndEffects);
+    };
+  }, []);
+
+  useEffect(() => {
+    // iOS Safari keyboard covers the fixed dock. visualViewport shrinks while the
+    // layout viewport stays the same — hide the dock so forms stay reachable.
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const update = () => {
+      const shrink = window.innerHeight - vv.height;
+      setKeyboardOpen(shrink > 120);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
     };
   }, []);
 
@@ -690,7 +709,7 @@ export function Shell({
       <main className="content">{children}</main>
 
       {/* Fixed bottom tab bar — never scrolls away */}
-      <div className="fixed-tab-bar">
+      <div className={`fixed-tab-bar${keyboardOpen ? ' is-keyboard-open' : ''}`}>
         <FloatingDock
           desktopClassName="app-floating-dock-desktop"
           mobileClassName="app-floating-dock-mobile"

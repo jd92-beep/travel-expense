@@ -703,77 +703,111 @@ export function exportCsv(state: AppState): void {
   window.setTimeout(() => URL.revokeObjectURL(a.href), 1500);
 }
 
+function isHeicLike(mime?: string): boolean {
+  return /image\/(heic|heif)/i.test(String(mime || ''));
+}
+
+async function decodeImageFromBase64(base64: string, mime?: string): Promise<HTMLImageElement | null> {
+  const url = `data:${mime || 'image/jpeg'};base64,${base64}`;
+  const img = new Image();
+  const loaded = await new Promise<boolean>((resolve) => {
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+  if (loaded) return img;
+  // iOS Safari often cannot decode HEIC via Image + data URL. Try createImageBitmap
+  // on the raw bytes and re-encode as JPEG before giving up.
+  try {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    const type = mime || 'image/heic';
+    const bitmap = await createImageBitmap(new Blob([bytes], { type }));
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0);
+    bitmap.close?.();
+    const jpegImg = new Image();
+    const jpegReady = await new Promise<boolean>((resolve) => {
+      jpegImg.onload = () => resolve(true);
+      jpegImg.onerror = () => resolve(false);
+      jpegImg.src = canvas.toDataURL('image/jpeg', 0.92);
+    });
+    return jpegReady ? jpegImg : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function compressPhoto(base64: string, mime?: string, maxWOverride?: number): Promise<string | null> {
   if (!base64) return null;
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const maxW = maxWOverride || 480;
-        const scale = Math.min(1, maxW / img.width);
-        const c = document.createElement('canvas');
-        c.width = Math.round(img.width * scale);
-        c.height = Math.round(img.height * scale);
-        const ctx = c.getContext('2d');
-        if (!ctx) {
-          resolve(null);
-          return;
-        }
-        ctx.drawImage(img, 0, 0, c.width, c.height);
-        // Keep the thumbnail comfortably under sync payload limits even for large/complex
-        // images by stepping quality down until the base64 fits (~1MB binary).
-        const MAX_B64 = 1_400_000;
-        let quality = 0.65;
-        let dataUrl = c.toDataURL('image/jpeg', quality);
-        while (dataUrl.length > MAX_B64 && quality > 0.3) {
-          quality -= 0.15;
-          dataUrl = c.toDataURL('image/jpeg', quality);
-        }
-        resolve(dataUrl.split(',')[1] || null);
-      } catch (e) {
-        console.warn('[compressPhoto] failed:', e instanceof Error ? e.message : String(e));
-        resolve(null);
-      }
-    };
-    img.onerror = () => resolve(null);
-    img.src = `data:${mime || 'image/jpeg'};base64,${base64}`;
-  });
+  const img = await decodeImageFromBase64(base64, mime);
+  if (!img) {
+    if (isHeicLike(mime)) {
+      console.warn('[compressPhoto] HEIC/HEIF decode failed on this browser — thumb skipped');
+    }
+    return null;
+  }
+  try {
+    const maxW = maxWOverride || 480;
+    const scale = Math.min(1, maxW / img.width);
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * scale);
+    c.height = Math.round(img.height * scale);
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    const MAX_B64 = 1_400_000;
+    let quality = 0.65;
+    let dataUrl = c.toDataURL('image/jpeg', quality);
+    while (dataUrl.length > MAX_B64 && quality > 0.3) {
+      quality -= 0.15;
+      dataUrl = c.toDataURL('image/jpeg', quality);
+    }
+    return dataUrl.split(',')[1] || null;
+  } catch (e) {
+    console.warn('[compressPhoto] failed:', e instanceof Error ? e.message : String(e));
+    return null;
+  }
 }
 
 export async function prepareForOCR(base64: string, mime?: string): Promise<{ base64: string; mime: string }> {
   if (!base64) return { base64, mime: mime || 'image/jpeg' };
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const longer = Math.max(img.width, img.height);
-        if (longer <= 2016) {
-          resolve({ base64, mime: mime || 'image/jpeg' });
-          return;
-        }
-        const scale = 2016 / longer;
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const c = document.createElement('canvas');
-        c.width = w;
-        c.height = h;
-        const ctx = c.getContext('2d');
-        if (!ctx) {
-          resolve({ base64, mime: mime || 'image/jpeg' });
-          return;
-        }
-        ctx.drawImage(img, 0, 0, w, h);
-        const dataUrl = c.toDataURL('image/jpeg', 0.85);
-        const out = dataUrl.split(',')[1] || base64;
-        resolve({ base64: out, mime: 'image/jpeg' });
-      } catch (e) {
-        console.warn('[prepareForOCR] failed, using original:', e instanceof Error ? e.message : String(e));
-        resolve({ base64, mime: mime || 'image/jpeg' });
-      }
-    };
-    img.onerror = () => resolve({ base64, mime: mime || 'image/jpeg' });
-    img.src = `data:${mime || 'image/jpeg'};base64,${base64}`;
-  });
+  const img = await decodeImageFromBase64(base64, mime);
+  if (!img) {
+    // Undecodable (often HEIC on older WebKit): do not invent a payload.
+    return { base64, mime: mime || 'image/jpeg' };
+  }
+  try {
+    // decodeImageFromBase64 may return a canvas-transcoded JPEG data URL (HEIC path).
+    if (img.src.startsWith('data:image/jpeg')) {
+      const transcoded = img.src.split(',')[1];
+      if (transcoded) return { base64: transcoded, mime: 'image/jpeg' };
+    }
+    const longer = Math.max(img.width, img.height);
+    if (longer <= 2016) {
+      return { base64, mime: mime || 'image/jpeg' };
+    }
+    const scale = 2016 / longer;
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d');
+    if (!ctx) {
+      return { base64, mime: mime || 'image/jpeg' };
+    }
+    ctx.drawImage(img, 0, 0, w, h);
+    const dataUrl = c.toDataURL('image/jpeg', 0.85);
+    const out = dataUrl.split(',')[1] || base64;
+    return { base64: out, mime: 'image/jpeg' };
+  } catch (e) {
+    console.warn('[prepareForOCR] failed, using original:', e instanceof Error ? e.message : String(e));
+    return { base64, mime: mime || 'image/jpeg' };
+  }
 }
 
 export function openMapExternal(mapUrl: string | undefined, name: string, address?: string): void {
@@ -782,6 +816,9 @@ export function openMapExternal(mapUrl: string | undefined, name: string, addres
   const ua = navigator.userAgent;
   const isAndroid = /Android/i.test(ua);
   const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = typeof navigator !== 'undefined'
+    && ((navigator as Navigator & { standalone?: boolean }).standalone === true
+      || window.matchMedia('(display-mode: standalone)').matches);
 
   // 1. Resolve raw URL if it's an intent:// link
   if (raw.startsWith('intent://')) {
@@ -834,28 +871,39 @@ export function openMapExternal(mapUrl: string | undefined, name: string, addres
   let opened = false;
 
   try {
-    const a = document.createElement('a');
-    a.href = targetUrl;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    opened = true;
+    // iOS installed PWA: target=_blank / Apple Maps often fail silently. Navigate in-place.
+    if (isIOS && isStandalone) {
+      window.location.href = targetUrl;
+      opened = true;
+    } else {
+      const a = document.createElement('a');
+      a.href = targetUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      opened = true;
+    }
   } catch (err) {
     console.error('Failed to open map via anchor click fallback to location.href:', err);
   }
 
   // Visibility detection fallback (highly robust for standalone PWA modes and restricted webviews)
   setTimeout(() => {
-    // If the browser did not go to background within 1.5s, it means the native scheme or redirect silently failed
+    // If the browser did not go to background within 1.5s, it means the native scheme or redirect silently failed.
+    // `opened` is only a best-effort flag: treat a still-visible standalone session as a failed launch.
     const duration = Date.now() - start;
-    if (duration < 2500 && !document.hidden && !opened) {
-      // Fallback to a standard HTTPS google maps web URL
+    const likelyFailed = !document.hidden && (isIOS && isStandalone ? duration < 2500 : (!opened || duration < 2500));
+    if (duration < 2500 && likelyFailed && !(isIOS && isStandalone && opened)) {
       const cleanQ = [name, address].filter(Boolean).join(' ') || name || '';
       const fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanQ)}`;
       console.log('Detect potential launch failure, falling back to HTTPS Web Google Maps:', fallbackUrl);
-      window.open(fallbackUrl, '_blank');
+      if (isIOS && isStandalone) {
+        window.location.href = fallbackUrl;
+      } else {
+        window.open(fallbackUrl, '_blank');
+      }
     }
   }, 1200);
 }

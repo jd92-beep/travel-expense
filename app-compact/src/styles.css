@@ -247,6 +247,12 @@ textarea:focus-visible {
 .modal-open .fixed-tab-bar > * {
   pointer-events: none !important;
 }
+/* iOS keyboard: hide the dock so inputs stay reachable above the software keyboard. */
+.fixed-tab-bar.is-keyboard-open {
+  opacity: 0;
+  pointer-events: none !important;
+  transform: translateX(-50%) translateY(120%);
+}
 
 .lock-screen {
   min-height: 100svh;
@@ -5083,7 +5089,7 @@ html.stable-effects .lock-panel {
 /* ========== 殿堂級名古屋和風 UI 專屬樣式 (Boss 2026 櫻花紅日) ========== */
 
 .japanese-washi-bg {
-  min-height: 100vh;
+  min-height: 100svh;
   background: transparent !important; /* 直接透明，露出底層 fixed 的 body 宣紙大背景，徹底防範手機端切換 Tab 閃爍！ */
   position: relative;
   overflow-x: hidden;
@@ -8858,7 +8864,7 @@ textarea,
   .app-shell {
     width: 100% !important;
     max-width: none !important;
-    min-height: 100vh;
+    min-height: 100svh;
     padding: 0 0 36px 83px !important;
     margin: 0 !important;
   }
@@ -9019,7 +9025,7 @@ textarea,
 
   .app-shell--stats .preview-stats-budget,
   .app-shell--stats .preview-daily-pace {
-    min-height: calc(100vh - 394px) !important;
+    min-height: calc(100svh - 394px) !important;
   }
 
   .app-shell--stats .preview-stats-budget .stats-command-title {

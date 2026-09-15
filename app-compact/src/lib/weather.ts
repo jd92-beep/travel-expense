@@ -610,7 +610,7 @@ function currentYmdInTimezone(timezone: string): string {
 
 function liveSlotIndexForDate(targetDate: string, timezone: string): number {
   const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false }).formatToParts(now);
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(now);
   const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
   const today = `${part('year')}-${part('month')}-${part('day')}`;
   if (today !== targetDate) return -1;

@@ -955,7 +955,7 @@ function datePartsForZone(nowMs: number, timezone: string): { date: string; minu
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-        hour12: false,
+        hourCycle: 'h23',
       });
       zonePartsFormatterCache.set(timezone, formatter);
     }
