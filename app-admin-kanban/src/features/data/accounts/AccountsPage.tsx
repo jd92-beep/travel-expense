@@ -396,6 +396,28 @@ export function AccountDetailPage() {
             >
               <Download size={16} />Support bundle
             </button>
+            <button
+              className="button danger"
+              type="button"
+              disabled={account.isFetching || !writePolicy.canPurgeUsers}
+              title={
+                writePolicy.canPurgeUsers
+                  ? "永久刪除 solo 帳戶資料與相片物件（不可復原）"
+                  : "R3 用戶刪除未啟用（需要 ADMIN_ALLOW_R3_USER_PURGE + allowlisted）"
+              }
+              onClick={() => {
+                if (!window.confirm(
+                  `確定永久刪除 ${detail.identity.email || accountId}？此操作不可復原，會刪 Auth / Supabase / storage 相片。`,
+                )) return;
+                operationFlow.begin({
+                  action: "admin_purge_user",
+                  targetId: accountId,
+                  payload: {},
+                });
+              }}
+            >
+              永久刪除用戶
+            </button>
           </>
         }
       />

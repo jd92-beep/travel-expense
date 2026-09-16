@@ -26,7 +26,8 @@ export type OperationRequest = {
     | "itinerary_restore"
     | "member_add"
     | "member_role"
-    | "member_remove";
+    | "member_remove"
+    | "admin_purge_user";
   targetId: string;
   payload?: Record<string, unknown>;
 };

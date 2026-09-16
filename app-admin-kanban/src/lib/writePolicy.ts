@@ -4,11 +4,13 @@ import { adminGet } from "./api/adminClient";
 export type AdminWritePolicy = {
   status: "allowlisted" | "provider_probe_only" | "deny_all";
   writable: boolean;
+  r3UserPurge?: boolean;
 };
 
 const DEFAULT_POLICY: AdminWritePolicy = {
   status: "deny_all",
   writable: false,
+  r3UserPurge: false,
 };
 
 type RuntimeData = {
@@ -32,8 +34,11 @@ export function useAdminWritePolicy() {
   const probesOnly = policy.status === "provider_probe_only";
   const canProbe = writesEnabled || probesOnly || query.isLoading;
   const canMutateCanonical = writesEnabled && !query.isLoading;
+  const canPurgeUsers = writesEnabled && Boolean(policy.r3UserPurge) && !query.isLoading;
   const policyLabel = policy.status === "allowlisted"
-    ? "寫入已啟用"
+    ? policy.r3UserPurge
+      ? "寫入已啟用（含用戶永久刪除）"
+      : "寫入已啟用"
     : policy.status === "provider_probe_only"
     ? "目前只允許 provider probe；其他寫入已停用"
     : "目前為唯讀；寫入操作已停用";
@@ -45,5 +50,6 @@ export function useAdminWritePolicy() {
     policyLabel,
     canProbe,
     canMutateCanonical,
+    canPurgeUsers,
   };
 }

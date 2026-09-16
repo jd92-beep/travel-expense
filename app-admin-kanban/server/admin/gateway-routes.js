@@ -25,6 +25,8 @@ const R2_ACTIONS = new Set([
   'member_add',
   'member_role',
   'member_remove',
+  // Double-gated in Edge by ADMIN_ALLOW_R3_USER_PURGE + allowlisted mode.
+  'admin_purge_user',
 ]);
 
 function queryObject(searchParams, allowed) {

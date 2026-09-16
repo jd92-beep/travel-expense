@@ -1,9 +1,15 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-09-15 HKT
+Last updated: 2026-09-16 HKT
 
 ## Current Status
 
+- **`1.3.7` code ready, production still `1.3.6`** — Session 90b adds `admin_purge_user` (R3).
+  Double-gated: `ADMIN_WRITE_MODE=allowlisted` **and** `ADMIN_ALLOW_R3_USER_PURGE=true`.
+  Default remains off; Edge must be re-deployed via the protected workflow before the flag
+  can take effect. Live DB already has `private.admin_purge_user_manifest` +
+  `public.admin_purge_user` (service_role only). Solo/unshared targets only; Notion pages
+  are listed for manual cleanup, not auto-deleted.
 - **Production `1.3.6` LIVE** — protected workflow `34916648671` promoted exact SHA
   `3ef88351710e0b9426c68d649a8a884444df0d78`. Live `/api/health` returns version `1.3.6`,
   gitSha `3ef8835…`, deployment `dpl_6VNEkz8suZRj61TuXRjhwBZjdSSU`,
