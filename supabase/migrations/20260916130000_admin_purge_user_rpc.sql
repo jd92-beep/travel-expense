@@ -67,6 +67,36 @@ $$;
 revoke all on function private.admin_purge_user_manifest(uuid) from public, anon, authenticated;
 grant execute on function private.admin_purge_user_manifest(uuid) to service_role;
 
+create or replace function private.admin_purge_user_notion_pages(p_target uuid)
+returns table(page_id text, database_id text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  return query
+  select distinct x.page_id::text, x.database_id::text
+  from (
+    select r.notion_page_id as page_id,
+           coalesce(t.notion_database_id, tbd.notion_database_ref) as database_id
+    from public.receipts r
+    left join public.trips t on t.id = r.trip_id
+    left join public.trip_backend_links tbd on tbd.trip_id = r.trip_id
+    where r.owner_id = p_target and r.notion_page_id is not null
+    union
+    select t.notion_page_id,
+           coalesce(t.notion_database_id, tbd.notion_database_ref)
+    from public.trips t
+    left join public.trip_backend_links tbd on tbd.trip_id = t.id
+    where t.owner_id = p_target and t.notion_page_id is not null
+  ) x
+  where x.page_id is not null;
+end;
+$$;
+
+revoke all on function private.admin_purge_user_notion_pages(uuid) from public, anon, authenticated;
+grant execute on function private.admin_purge_user_notion_pages(uuid) to service_role;
+
 create or replace function public.admin_purge_user(
   p_target uuid,
   p_expected_manifest_hash text

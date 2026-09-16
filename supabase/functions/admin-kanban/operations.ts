@@ -1116,6 +1116,63 @@ async function providerPreview(context: OperationContext, input: PreviewInput) {
   };
 }
 
+async function archiveNotionPagesForPurge(
+  context: OperationContext,
+  targetId: string,
+): Promise<{ attempted: number; archived: number; failed: number; skipped: number }> {
+  const pages = rpcResult<Array<{ page_id: string; database_id: string | null }>>(
+    await context.client.rpc("admin_purge_user_notion_pages", { p_target: targetId }),
+    "Notion page inventory could not be built",
+  ) || [];
+  if (!pages.length) return { attempted: 0, archived: 0, failed: 0, skipped: 0 };
+  const endpoint = new URL("/notion/request", `${context.brokerUrl.replace(/\/+$/, "")}/`);
+  let archived = 0;
+  let failed = 0;
+  let skipped = 0;
+  for (const row of pages) {
+    const pageId = String(row.page_id || "");
+    if (!UUID_RE.test(pageId)) {
+      skipped += 1;
+      continue;
+    }
+    const databaseId = String(row.database_id || "").trim();
+    if (!databaseId) {
+      // Personal Notion proxy requires a registered database id.
+      skipped += 1;
+      continue;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://travel-expense-admin-kanban.vercel.app",
+          "X-Admin-Internal": context.brokerKey,
+          "X-Admin-Request-Id": context.requestId,
+        },
+        body: JSON.stringify({
+          method: "PATCH",
+          path: `/pages/${pageId}`,
+          body: { archived: true },
+          databaseId,
+          internalUserId: targetId,
+        }),
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      if (response.ok) archived += 1;
+      else failed += 1;
+    } catch {
+      failed += 1;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { attempted: pages.length, archived, failed, skipped };
+}
+
 async function adminPurgeUserPreview(context: OperationContext, input: PreviewInput) {
   exactKeys(input.payload, new Set([]));
   if (!UUID_RE.test(input.targetId)) {
@@ -1639,6 +1696,7 @@ export async function commitAdminOperation(
       if (!/^[0-9a-f]{64}$/i.test(manifestHash)) {
         throw new AdminOperationError("VALIDATION_FAILED", "Purge manifest hash is invalid", 400);
       }
+      const notionArchive = await archiveNotionPagesForPurge(context, targetId);
       const purge = rpcResult<Record<string, unknown>>(
         await context.client.rpc("admin_purge_user", {
           p_target: targetId,
@@ -1646,7 +1704,10 @@ export async function commitAdminOperation(
         }),
         "User purge failed",
       );
-      const operation = await finishExternal(context, operationId, "completed", purge);
+      const operation = await finishExternal(context, operationId, "completed", {
+        ...purge,
+        notionArchive,
+      });
       return { operation, reused: false };
     }
     throw new AdminOperationError("OPERATION_UNKNOWN", "Operation action is not implemented", 409);
