@@ -47,9 +47,14 @@ export function validateReadinessData(data, { expectedGitSha, expectedSchemaVers
     });
   }
   if (!edgeSourceMatches) {
-    throw new HttpError('UPSTREAM_UNAVAILABLE', 'Release dependencies are not ready: edge source SHA mismatch', 503, {
-      retryable: true,
-    });
+    const expected = String(expectedGitSha || '').slice(0, 12);
+    const observed = String(data?.edge?.sourceSha || '').slice(0, 12);
+    throw new HttpError(
+      'UPSTREAM_UNAVAILABLE',
+      `Release dependencies are not ready: edge source SHA mismatch (edge=${observed} expected=${expected})`,
+      503,
+      { retryable: true },
+    );
   }
   if (unexpectedDrift.length > 0) {
     throw new HttpError('UPSTREAM_UNAVAILABLE', `Release dependencies are not ready: ${unexpectedDrift.join(',')}`, 503, {
