@@ -13,7 +13,7 @@ create or replace function public.enforce_trip_private_fields()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   if tg_op = 'UPDATE' and new.owner_id is distinct from old.owner_id then
