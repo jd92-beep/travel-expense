@@ -592,11 +592,13 @@ Deno.serve(async (req) => {
       const action = body && typeof body === "object" && "action" in body
         ? String(body.action)
         : "";
-      if (!isAdminOperationAllowed(
-        requestDecision.writeMode,
-        action,
-        Deno.env.get("ADMIN_ALLOW_R3_USER_PURGE") === "true",
-      )) {
+      if (
+        !isAdminOperationAllowed(
+          requestDecision.writeMode,
+          action,
+          Deno.env.get("ADMIN_ALLOW_R3_USER_PURGE") === "true",
+        )
+      ) {
         throw new AdminOperationError(
           "WRITES_DISABLED",
           "Admin action is disabled during maintenance",
@@ -621,11 +623,13 @@ Deno.serve(async (req) => {
     );
     if (req.method === "POST" && operationCommitRoute) {
       const operation = await getAdminOperation(operationContext, operationCommitRoute[1]);
-      if (!isAdminOperationAllowed(
-        requestDecision.writeMode,
-        operation.action,
-        Deno.env.get("ADMIN_ALLOW_R3_USER_PURGE") === "true",
-      )) {
+      if (
+        !isAdminOperationAllowed(
+          requestDecision.writeMode,
+          operation.action,
+          Deno.env.get("ADMIN_ALLOW_R3_USER_PURGE") === "true",
+        )
+      ) {
         throw new AdminOperationError(
           "WRITES_DISABLED",
           "Admin action is disabled during maintenance",

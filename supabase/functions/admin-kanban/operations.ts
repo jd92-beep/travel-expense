@@ -1136,7 +1136,8 @@ async function adminPurgeUserPreview(context: OperationContext, input: PreviewIn
     preview: {
       title: "永久刪除用戶資料",
       consequence: "刪除 Auth 帳戶、Supabase 資料列與 receipt-photos 物件。Notion 頁面需另行清理。",
-      affectedCount: Number(manifest?.receipts || 0) + Number(manifest?.trips || 0) + storagePaths.length,
+      affectedCount: Number(manifest?.receipts || 0) + Number(manifest?.trips || 0) +
+        storagePaths.length,
       before: manifest,
       rollbackBoundary: "此操作不可復原；請先確認 manifest 內容。",
       notionPagesRequireManualCleanup: notionPages.length,
@@ -1248,9 +1249,11 @@ export async function previewAdminOperation(context: OperationContext, body: unk
   let resolved;
   if (input.action === "provider_probe") resolved = await providerPreview(context, input);
   else if (input.action === "support_bundle") resolved = await supportPreview(context, input);
-  else if (input.action === "admin_purge_user") resolved = await adminPurgeUserPreview(context, input);
-  else if (input.action === "run_integrity_scan") resolved = await integrityPreview(context, input);
-  else if (["receipt_amend", "receipt_trash", "receipt_restore"].includes(input.action)) {
+  else if (input.action === "admin_purge_user") {
+    resolved = await adminPurgeUserPreview(context, input);
+  } else if (input.action === "run_integrity_scan") {
+    resolved = await integrityPreview(context, input);
+  } else if (["receipt_amend", "receipt_trash", "receipt_restore"].includes(input.action)) {
     resolved = await receiptR2Preview(context, input);
   } else if (input.action === "trip_amend") resolved = await tripR2Preview(context, input);
   else if (["itinerary_amend", "itinerary_restore"].includes(input.action)) {

@@ -185,11 +185,8 @@ alter function public.admin_purge_user(uuid, text) owner to postgres;
 revoke all on function public.admin_purge_user(uuid, text) from public, anon, authenticated;
 grant execute on function public.admin_purge_user(uuid, text) to service_role;
 
-commit;
-
 -- Restore search_path on the self-serve delete RPC (CREATE OR REPLACE in
 -- 20260916110000 dropped the hardened setting; CI security-definer smoke fails closed).
-begin;
 create or replace function public.delete_own_user_account()
 returns void as $$
 declare
