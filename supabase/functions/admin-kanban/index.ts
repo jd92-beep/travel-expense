@@ -22,6 +22,7 @@ import { fetchNoRedirect } from "./safe_fetch.ts";
 import { brokerHealthSucceeded } from "./provider_status.ts";
 import { aggregateProviderRows, normalizeOverviewStatusStrip } from "./system_status.ts";
 import { runtimePolicyFor } from "./runtime_policy.ts";
+import { EDGE_SOURCE_SHA } from "./source_provenance.ts";
 
 export const config = { verify_jwt: false };
 
@@ -268,7 +269,8 @@ async function adminRuntimeRead(supabase: SupabaseClientAny) {
     expectedFrontendSha !== observedFrontendSha
   ) drift.push("ADMIN_FRONTEND_GIT_SHA_MISMATCH");
   const expectedEdgeSha = Deno.env.get("ADMIN_EXPECTED_EDGE_SOURCE_SHA") || "";
-  const observedEdgeSha = Deno.env.get("ADMIN_EDGE_SOURCE_SHA") || "unknown";
+  // Prefer deploy-time baked SHA; env secret is a fallback for older deploys.
+  const observedEdgeSha = EDGE_SOURCE_SHA || Deno.env.get("ADMIN_EDGE_SOURCE_SHA") || "unknown";
   if (expectedEdgeSha && observedEdgeSha !== "unknown" && expectedEdgeSha !== observedEdgeSha) {
     drift.push("ADMIN_EDGE_SOURCE_SHA_MISMATCH");
   }
