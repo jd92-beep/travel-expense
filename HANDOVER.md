@@ -1,12 +1,13 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-09-15 HKT
-- **Focus**: Session 89 Admin console 1.3.5/1.3.6 production apply (worktree `admin/console-production-ready`).
+- **Date**: 2026-09-16 HKT
+- **Focus**: Session 90 — Compact/mobile/broker/DB production bug sweep (MiMo).
 - **Agent**: MiMo.
-- **App version**: Admin `1.3.6` **LIVE** at `https://travel-expense-admin-kanban.vercel.app`
-  (workflow `34916648671`, SHA `3ef8835`, deployment `dpl_6VNEkz8suZRj61TuXRjhwBZjdSSU`).
-  Compact Web / Android / React / Broker unchanged this session.
+- **App version**: Compact `0.23.12` (pushed `f2f1097`); Android branch `0.23.1` / versionCode `2301`
+  (commit `2094dd1` on `codex/admin-console-1.0-android`, already on origin); Broker
+  `2026.09.15.1` **LIVE** Cloudflare Version ID `294a48ed-9fa6-4862-b1ff-7ac4f70f7f5f`;
+  Admin unchanged (`1.3.6`).
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -25,6 +26,12 @@ This is the ONLY live to-do list in this file. Everything under "What Was Done",
 before acting on them. Every session must reconcile this list: add items you opened, mark items
 you closed with your session number.
 
+0. 🟢 **Session 90 closed the shared-trip account-deletion blocker** — live
+   `delete_own_user_account()` now transfers ownership (GUC-gated), demotes the old owner
+   member before promoting the successor, deletes private receipts instead of transferring
+   them, and leaves trip-visible receipts with the successor. Proven by live SQL smoke
+   `supabase/tests/account_deletion_transfer_smoke.sql` (transaction + rollback) on
+   `fbnnjoahvtdrnigevrtw`. Reopen only if a real user account deletion fails in product.
 1. 🟡 **Final post-bootstrap fresh login check (Boss is doing this now)** — passkey enrollment and
    bootstrap removal are complete. Record this one fresh Chrome login result before closing the item;
    do not claim it has passed yet.
@@ -131,6 +138,34 @@ you closed with your session number.
    the original mixed-schema `conflicting-duplicate=7`, `meta-fallback=5`, `skipped-row=2` assertions.
 
 ## What Was Done
+
+### Session 90 (MiMo — Compact/mobile/broker/DB production sweep)
+
+Compact `0.23.12` and Broker `2026.09.15.1` live; Android `0.23.1` already on origin.
+1. **Compact UX/scroll** — Weather hero cache seed + single window scrollport; Timeline user-scroll
+   cancel; tab wrapper `overflow:clip` (sticky hero); iOS PWA manifest/Apple meta/HEIC decode/map
+   standalone/keyboard dock/hourCycle h23.
+2. **Sync P0s** — pull no longer overwrites newer local receipts on rotating signed photo URLs;
+   replace/delete photo clears `_photoSyncedToSupabase`/`supabasePhotoPath`; photo retries use a
+   separate attempt budget; leave-trip purges tombstones/deleted-source keys.
+3. **Broker 2026.09.15.1 LIVE** (`294a48ed…`) — rate-limit keyed on client IP only (Origin rotation
+   bypass closed); provider HTTP status preserved (429 stays a hard stop); Notion `..` path
+   traversal blocked; Volcano health test disables thinking; 12-theme catalog aligned with Compact.
+   Self-test green including origin-rotation 429 assertion.
+4. **DB migrations applied live via Management API** (no `db push`):
+   - `20260916090000` expense-comments visibility + `receipt_sync_jobs_processing_lease_idx`
+     (first attempt used wrong schema `private.receipt_sync_jobs` and rolled back; corrected to
+     `public.` and re-applied).
+   - `20260916110000` account-deletion ownership transfer: GUC-gated owner change, demote old
+     owner before promote, delete private receipts instead of transferring them.
+5. **Live proof** — `supabase/tests/account_deletion_transfer_smoke.sql` (begin/rollback) passed on
+   `fbnnjoahvtdrnigevrtw`: successor owns trip + shared receipt; private receipt gone; auth user
+   row removed.
+6. **Evidence** — Compact typecheck/build/security/offline/weather green; broker check+self-test
+   green; health `{"version":"2026.09.15.1"}`. Note: `sync-regression` suite has 7 pre-existing
+   failures on clean `bebdac6` in this environment (not introduced by Session 90).
+7. **Not done** — photo storage public→private cutover remains gated; `sync-regression` baseline
+   failures still open; BOSS_EMAIL global Notion privilege unchanged.
 
 ### Session 89 (MiMo — Admin console 1.3.5/1.3.6 production apply)
 
