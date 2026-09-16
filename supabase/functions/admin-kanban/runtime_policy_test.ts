@@ -9,6 +9,7 @@ Deno.test("runtime policy reports validated write modes", () => {
     source: "ADMIN_WRITE_MODE",
     expiresAt: null,
     writable: false,
+    r3UserPurge: false,
   });
   assertEquals(runtimePolicyFor("allowlisted").writable, true);
   assertEquals(runtimePolicyFor("provider_probe_only"), {
@@ -17,6 +18,7 @@ Deno.test("runtime policy reports validated write modes", () => {
     source: "ADMIN_WRITE_MODE",
     version: "admin-write-mode-v1",
     expiresAt: null,
+    r3UserPurge: false,
   });
 });
 
@@ -27,6 +29,7 @@ Deno.test("unknown or missing write modes fail closed", () => {
     source: "ADMIN_WRITE_MODE_INVALID",
     expiresAt: null,
     writable: false,
+    r3UserPurge: false,
   });
   assertEquals(runtimePolicyFor(undefined).source, "default");
 });
