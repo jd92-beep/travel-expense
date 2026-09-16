@@ -25,7 +25,7 @@ create policy expense_comments_select_trip_members
 
 -- 2) Stale processing lease reclaim needs an index that includes processing + locked_at.
 create index if not exists receipt_sync_jobs_processing_lease_idx
-  on private.receipt_sync_jobs (locked_at)
+  on public.receipt_sync_jobs (locked_at)
   where status = 'processing' and locked_at is not null;
 
 commit;
