@@ -1,7 +1,7 @@
 import { PROVIDER_MODELS } from './provider-catalog.js';
 
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.09.09.3';
+const VERSION = '2026.09.15.1';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -19,19 +19,39 @@ const RATE_WINDOW_MS = 1000 * 60 * 15;
 const DEFAULT_SUPABASE_AI_DAILY_LIMIT = 50;
 const BOSS_EMAIL = 'vc06456@gmail.com';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const TRIP_THEME_KEYS = ['japan_washi', 'korea_editorial', 'taiwan_nightmarket', 'europe_rail', 'global_journal'];
+// Keep in lockstep with app-compact/src/domain/trip/context.ts TRIP_THEME_KEYS.
+// Stale lists silently rewrite AI-selected themes (e.g. uk_london → europe_rail).
+const TRIP_THEME_KEYS = [
+  'japan_washi',
+  'korea_editorial',
+  'taiwan_nightmarket',
+  'europe_rail',
+  'global_journal',
+  'tokyo_neon',
+  'tropical_candy',
+  'uk_london',
+  'nordic_aurora',
+  'mexico_fiesta',
+  'india_holi',
+  'brazil_carnival',
+];
 const AI_KINDS = new Set(['scan', 'voice', 'email', 'trip', 'test']);
 const MAX_AI_PROMPT_CHARS = 100000;
+// Keep themeKey + destination coverage aligned with app-compact/src/domain/trip/context.ts.
 const TRIP_CONTEXTS = [
   { countryCode: 'JP', countryName: 'Japan', primaryCurrency: 'JPY', themeKey: 'japan_washi', locale: 'ja-JP', timezone: 'Asia/Tokyo', weatherRegion: 'Japan', pattern: /日本|東京|东京|大阪|名古屋|京都|札幌|沖繩|冲绳|japan|tokyo|osaka|nagoya|kyoto|sapporo|okinawa|jpy/i },
   { countryCode: 'KR', countryName: 'Korea', primaryCurrency: 'KRW', themeKey: 'korea_editorial', locale: 'ko-KR', timezone: 'Asia/Seoul', weatherRegion: 'South Korea', pattern: /韓國|韩国|首爾|首尔|釜山|濟州|济州|korea|seoul|busan|jeju|krw/i },
   { countryCode: 'TW', countryName: 'Taiwan', primaryCurrency: 'TWD', themeKey: 'taiwan_nightmarket', locale: 'zh-TW', timezone: 'Asia/Taipei', weatherRegion: 'Taiwan', pattern: /台灣|台湾|台北|台中|台南|高雄|taiwan|taipei|taichung|tainan|kaohsiung|twd/i },
-  { countryCode: 'GB', countryName: 'United Kingdom', primaryCurrency: 'GBP', themeKey: 'europe_rail', locale: 'en-GB', timezone: 'Europe/London', weatherRegion: 'United Kingdom', pattern: /英國|英国|倫敦|伦敦|\buk\b|london|gbp/i },
+  { countryCode: 'GB', countryName: 'United Kingdom', primaryCurrency: 'GBP', themeKey: 'uk_london', locale: 'en-GB', timezone: 'Europe/London', weatherRegion: 'United Kingdom', pattern: /英國|英国|倫敦|伦敦|\buk\b|london|gbp|england|scotland|wales/i },
   { countryCode: 'EU', countryName: 'Europe', primaryCurrency: 'EUR', themeKey: 'europe_rail', locale: 'en-GB', timezone: 'Europe/Paris', weatherRegion: 'Europe', pattern: /歐洲|欧洲|歐元|法国|法國|巴黎|德國|德国|意大利|italy|france|paris|germany|europe|eur/i },
   { countryCode: 'HK', countryName: 'Hong Kong', primaryCurrency: 'HKD', themeKey: 'global_journal', locale: 'zh-HK', timezone: 'Asia/Hong_Kong', weatherRegion: 'Hong Kong', pattern: /香港|hong\s*kong|\bhk\b|hkd/i },
   { countryCode: 'CN', countryName: 'China', primaryCurrency: 'CNY', themeKey: 'global_journal', locale: 'zh-CN', timezone: 'Asia/Shanghai', weatherRegion: 'China', pattern: /中國|中国|上海|北京|深圳|廣州|广州|china|shanghai|beijing|shenzhen|guangzhou|cny/i },
   { countryCode: 'SG', countryName: 'Singapore', primaryCurrency: 'SGD', themeKey: 'global_journal', locale: 'en-SG', timezone: 'Asia/Singapore', weatherRegion: 'Singapore', pattern: /新加坡|singapore|sgd/i },
-  { countryCode: 'TH', countryName: 'Thailand', primaryCurrency: 'THB', themeKey: 'global_journal', locale: 'th-TH', timezone: 'Asia/Bangkok', weatherRegion: 'Thailand', pattern: /泰國|泰国|曼谷|清邁|清迈|thailand|bangkok|chiang\s*mai|thb/i },
+  { countryCode: 'TH', countryName: 'Thailand', primaryCurrency: 'THB', themeKey: 'tropical_candy', locale: 'th-TH', timezone: 'Asia/Bangkok', weatherRegion: 'Thailand', pattern: /泰國|泰国|曼谷|清邁|清迈|thailand|bangkok|chiang\s*mai|phuket|thb/i },
+  { countryCode: 'IN', countryName: 'India', primaryCurrency: 'INR', themeKey: 'india_holi', locale: 'en-IN', timezone: 'Asia/Kolkata', weatherRegion: 'India', pattern: /印度|新德里|孟買|孟买|india|delhi|mumbai|inr/i },
+  { countryCode: 'MX', countryName: 'Mexico', primaryCurrency: 'MXN', themeKey: 'mexico_fiesta', locale: 'es-MX', timezone: 'America/Mexico_City', weatherRegion: 'Mexico', pattern: /墨西哥|mexico|cancun|oaxaca|mxn/i },
+  { countryCode: 'BR', countryName: 'Brazil', primaryCurrency: 'BRL', themeKey: 'brazil_carnival', locale: 'pt-BR', timezone: 'America/Sao_Paulo', weatherRegion: 'Brazil', pattern: /巴西|brazil|rio|sao\s*paulo|brl/i },
+  { countryCode: 'NO', countryName: 'Nordics', primaryCurrency: 'NOK', themeKey: 'nordic_aurora', locale: 'en-GB', timezone: 'Europe/Oslo', weatherRegion: 'Scandinavia', pattern: /挪威|瑞典|芬蘭|芬兰|丹麥|丹麦|iceland|norway|sweden|finland|denmark|reykjavik|oslo|stockholm|nok|sek|dkk/i },
   { countryCode: 'MY', countryName: 'Malaysia', primaryCurrency: 'MYR', themeKey: 'global_journal', locale: 'ms-MY', timezone: 'Asia/Kuala_Lumpur', weatherRegion: 'Malaysia', pattern: /馬來西亞|马来西亚|吉隆坡|malaysia|kuala\s*lumpur|myr/i },
   { countryCode: 'VN', countryName: 'Vietnam', primaryCurrency: 'VND', themeKey: 'global_journal', locale: 'vi-VN', timezone: 'Asia/Ho_Chi_Minh', weatherRegion: 'Vietnam', pattern: /越南|河內|河内|胡志明|vietnam|hanoi|ho\s*chi\s*minh|vnd/i },
   { countryCode: 'PH', countryName: 'Philippines', primaryCurrency: 'PHP', themeKey: 'global_journal', locale: 'en-PH', timezone: 'Asia/Manila', weatherRegion: 'Philippines', pattern: /菲律賓|菲律宾|馬尼拉|马尼拉|philippines|manila|php/i },
@@ -1301,7 +1321,7 @@ ${JSON.stringify({
 }).slice(0, 12000)}
 
 Return:
-{"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":string,"countryName":string,"primaryCurrency":string,"themeKey":"japan_washi|korea_editorial|taiwan_nightmarket|europe_rail|global_journal","locale":string,"timezone":string,"weatherRegion":string,"confidence":"low|medium|high"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"highlight":string,"lodging":{"name":string,"address":string,"mapUrl":string,"checkIn":string,"checkOut":string},"spots":[{"time":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other|sightseeing","address":string,"mapUrl":string,"note":string,"timezone":string,"lat":number,"lon":number}]}]},"summary":string,"warnings":string[],"changes":string[]}
+{"trip":{"name":string,"destinationSummary":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","homeCurrency":"HKD","currencies":string[],"intelligence":{"countryCode":string,"countryName":string,"primaryCurrency":string,"themeKey":"${TRIP_THEME_KEYS.join('|')}","locale":string,"timezone":string,"weatherRegion":string,"confidence":"low|medium|high"},"itinerary":[{"date":"YYYY-MM-DD","day":number,"region":string,"city":string,"country":string,"timezone":string,"currency":string,"highlight":string,"lodging":{"name":string,"address":string,"mapUrl":string,"checkIn":string,"checkOut":string},"spots":[{"time":"HH:MM","name":string,"type":"flight|transport|food|shopping|lodging|ticket|localtour|medicine|other|sightseeing","address":string,"mapUrl":string,"note":string,"timezone":string,"lat":number,"lon":number}]}]},"summary":string,"warnings":string[],"changes":string[]}
 
 USER PARAGRAPH:
 ${paragraph}`;
