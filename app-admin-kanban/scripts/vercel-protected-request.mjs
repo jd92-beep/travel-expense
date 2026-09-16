@@ -65,7 +65,8 @@ export function parseProtectedResponse(value, label, { expectedStatus } = {}) {
     ? status >= 200 && status <= 299
     : status === expectedStatus;
   if (!Number.isInteger(status) || !accepted) {
-    throw new Error(`${label} failed (${Number.isInteger(status) ? status : 'unknown'})`);
+    const bodySnippet = output.slice(0, Math.max(0, separator)).replace(/\s+/g, ' ').trim().slice(0, 240);
+    throw new Error(`${label} failed (${Number.isInteger(status) ? status : 'unknown'})${bodySnippet ? `: ${bodySnippet}` : ''}`);
   }
   try {
     return JSON.parse(output.slice(0, separator));
