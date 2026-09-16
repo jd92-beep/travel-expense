@@ -8,7 +8,10 @@ export type RuntimePolicy = {
   r3UserPurge?: boolean;
 };
 
-export function runtimePolicyFor(value: string | undefined): RuntimePolicy {
+export function runtimePolicyFor(
+  value: string | undefined,
+  allowR3UserPurge = false,
+): RuntimePolicy {
   const configured = value === "deny_all" || value === "provider_probe_only" ||
     value === "allowlisted";
   const status = value === "allowlisted" || value === "provider_probe_only" ? value : "deny_all";
@@ -18,6 +21,6 @@ export function runtimePolicyFor(value: string | undefined): RuntimePolicy {
     source: configured ? "ADMIN_WRITE_MODE" : value ? "ADMIN_WRITE_MODE_INVALID" : "default",
     expiresAt: null,
     writable: status === "allowlisted",
-    r3UserPurge: Deno.env.get("ADMIN_ALLOW_R3_USER_PURGE") === "true",
+    r3UserPurge: Boolean(allowR3UserPurge),
   };
 }

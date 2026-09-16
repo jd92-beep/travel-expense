@@ -323,7 +323,10 @@ async function adminRuntimeRead(supabase: SupabaseClientAny) {
         compactVersion: latestVersion("compact"),
         androidVersion: latestVersion("android"),
       },
-      runtimePolicy: runtimePolicyFor(Deno.env.get("ADMIN_WRITE_MODE")),
+      runtimePolicy: runtimePolicyFor(
+        Deno.env.get("ADMIN_WRITE_MODE"),
+        Deno.env.get("ADMIN_ALLOW_R3_USER_PURGE") === "true",
+      ),
       drift,
     },
     sources: {
