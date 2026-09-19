@@ -181,6 +181,23 @@ export function MagicCard(props: MagicCardProps) {
 
   const MotionComponent = (motion as any)[Component as string] || motion.div
 
+  // Hooks must run unconditionally — calling useMotionTemplate only when !disableHeavy
+  // crashed every GlassCard ("Rendered fewer hooks than expected") on mobile/reduced-motion.
+  const surfaceBackground = useMotionTemplate`
+          linear-gradient(var(--surface) 0 0) padding-box,
+          radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
+            ${gradientFrom},
+            ${gradientTo},
+            rgba(121,89,55,.18) 100%
+          ) border-box
+        `
+  const hoverBackground = useMotionTemplate`
+              radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
+                ${gradientColor},
+                transparent 100%
+              )
+            `
+
   return (
     <MotionComponent
       className={cn(
@@ -194,14 +211,7 @@ export function MagicCard(props: MagicCardProps) {
         borderColor: "var(--border)",
         background: "var(--surface)",
       } : {
-        background: useMotionTemplate`
-          linear-gradient(var(--surface) 0 0) padding-box,
-          radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
-            ${gradientFrom},
-            ${gradientTo},
-            rgba(121,89,55,.18) 100%
-          ) border-box
-        `,
+        background: surfaceBackground,
       }}
     >
       <div
@@ -214,12 +224,7 @@ export function MagicCard(props: MagicCardProps) {
           suppressHydrationWarning
           className="pointer-events-none absolute inset-px -z-10 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
           style={{
-            background: useMotionTemplate`
-              radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
-                ${gradientColor},
-                transparent 100%
-              )
-            `,
+            background: hoverBackground,
             opacity: gradientOpacity,
           }}
         />

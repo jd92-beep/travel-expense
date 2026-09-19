@@ -69,15 +69,14 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
     [state.receipts, state.trips, state.activeTripId],
   );
 
-  // Precompute schedule spots / per-day receipts / day totals / rail metrics once per
-  // itinerary day. Deps cover everything getScheduleSpots/getReceiptTripAmount/
-  // timelineRailMetrics read from state: the memoized itinerary, the trip-scoped receipts,
-  // itinerary overrides, which trip is active (trips + activeTripId, since
-  // scopedReceiptsForTrip's hasMultipleTrips check depends on state.trips.length too), the
-  // exchange-rate slices used for trip-currency totals, plus nowTick and tripWindow for the
-  // rail metrics. Typing in the day editor only touches local component state, so none of
-  // these identities change per keystroke.
-  const perDayTimeline = useMemo(() => {
+  // Precompute schedule spots / per-day receipts / day totals once per itinerary day. Deps cover
+  // everything getScheduleSpots/getReceiptTripAmount read from state: the memoized itinerary,
+  // the trip-scoped receipts, itinerary overrides, which trip is active (trips + activeTripId,
+  // since scopedReceiptsForTrip's hasMultipleTrips check depends on state.trips.length too), the
+  // exchange-rate slices used for trip-currency totals. Rail metrics depend on the 60s nowTick
+  // instead, so they live in a separate cheap memo below — otherwise every minute tick re-ran
+  // the per-day receipt scans and currency conversion for the whole trip.
+  const perDayBase = useMemo(() => {
     return itinerary.map((day) => {
       const spots = getScheduleSpots(state, day, tripReceipts);
       // All of the day's receipts — including the ones backing lodging/transport spots —
@@ -86,11 +85,16 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       const dayReceiptsAll = tripReceipts.filter((r) => r.date === day.date);
       const tripTotal = dayReceiptsAll.reduce((sum, r) => sum + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
       const hkdTotal = dayReceiptsAll.reduce((sum, r) => sum + getReceiptHkdAmount(r, state), 0);
-      const rail = timelineRailMetrics(day.date, day.timezone, spots, nowTick, tripWindow);
-      return { day, spots, dayReceipts: dayReceiptsAll, tripTotal, hkdTotal, rail };
+      return { day, spots, dayReceipts: dayReceiptsAll, tripTotal, hkdTotal };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itinerary, tripReceipts, state.receipts, state.itineraryOverrides, state.trips, state.activeTripId, state.rateTable, state.rate, resolvedTripCurrency, nowTick, tripWindow]);
+  }, [itinerary, tripReceipts, state.receipts, state.itineraryOverrides, state.trips, state.activeTripId, state.rateTable, state.rate, resolvedTripCurrency]);
+  const perDayTimeline = useMemo(() => {
+    return perDayBase.map((entry) => ({
+      ...entry,
+      rail: timelineRailMetrics(entry.day.date, entry.day.timezone, entry.spots, nowTick, tripWindow),
+    }));
+  }, [perDayBase, nowTick, tripWindow]);
   const perDayTimelineByDate = useMemo(() => {
     const map = new Map<string, (typeof perDayTimeline)[number]>();
     for (const entry of perDayTimeline) map.set(entry.day.date, entry);
@@ -530,7 +534,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
               </span>
             )}
             {spots.map((spot, idx) => {
-              const progress = timelineProgress(day.date, spot.timezone || day.timezone, spots, idx, nowTick);
+              const progress = timelineProgress(day.date, nowPartsForZone(nowTick, normalizeTimelineTimezone(spot.timezone || day.timezone)), spots, idx);
               const stateLabel = timelineStateLabel(progress);
               const category = categoryById(spot.type);
               const stableKey = spotStableKey(day.date, spot, idx);
@@ -797,8 +801,22 @@ function scrollTimelineElementIntoCenter(element: Element) {
   });
 }
 
-function timelineProgress(date: string, timezone: string | undefined, spots: Array<ItinerarySpot & { _spotIdx: number }>, idx: number, nowMs: number): 'is-passed' | 'is-live' | 'is-future' {
-  const current = datePartsForZone(nowMs, normalizeTimelineTimezone(timezone));
+// "Now" parts cached per timezone for a single nowMs value: a render with N spots sharing a
+// timezone should format once, not N times. Cleared whenever the clock tick changes.
+let nowPartsCacheMs = -1;
+const nowPartsCache = new Map<string, { date: string; minutes: number } | null>();
+function nowPartsForZone(nowMs: number, timezone: string): { date: string; minutes: number } | null {
+  if (nowPartsCacheMs !== nowMs) {
+    nowPartsCacheMs = nowMs;
+    nowPartsCache.clear();
+  }
+  if (nowPartsCache.has(timezone)) return nowPartsCache.get(timezone) ?? null;
+  const parts = datePartsForZone(nowMs, timezone);
+  nowPartsCache.set(timezone, parts);
+  return parts;
+}
+
+function timelineProgress(date: string, current: { date: string; minutes: number } | null, spots: Array<ItinerarySpot & { _spotIdx: number }>, idx: number): 'is-passed' | 'is-live' | 'is-future' {
   if (!current) return 'is-future';
   if (date < current.date) return 'is-passed';
   if (date > current.date) return 'is-future';
@@ -862,9 +880,18 @@ function timelineLiveContext(itinerary: ItineraryDay[], nowMs: number, tripWindo
 
   const current = datePartsForZone(nowMs, normalizeTimelineTimezone(activeDay.timezone));
   const spots = spotsByDate.get(activeDay.date)?.spots ?? [];
-  const live = spots.find((spot, idx) => timelineProgress(activeDay.date, spot.timezone || activeDay.timezone, spots, idx, nowMs) === 'is-live');
-  const next = spots.find((spot, idx) => timelineProgress(activeDay.date, spot.timezone || activeDay.timezone, spots, idx, nowMs) === 'is-future');
-  const passedCount = spots.filter((spot, idx) => timelineProgress(activeDay.date, spot.timezone || activeDay.timezone, spots, idx, nowMs) === 'is-passed').length;
+  // Single pass: the old find/find/filter triple evaluated timelineProgress (and a
+  // formatToParts) three times per spot on every render.
+  let live: ScheduleSpot | undefined;
+  let next: ScheduleSpot | undefined;
+  let passedCount = 0;
+  for (let idx = 0; idx < spots.length; idx += 1) {
+    const spot = spots[idx];
+    const progress = timelineProgress(activeDay.date, nowPartsForZone(nowMs, normalizeTimelineTimezone(spot.timezone || activeDay.timezone)), spots, idx);
+    if (progress === 'is-live') { if (!live) live = spot; }
+    else if (progress === 'is-future') { if (!next) next = spot; }
+    else passedCount += 1;
+  }
 
   return {
     mode: 'active',

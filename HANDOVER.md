@@ -1,13 +1,12 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-09-16 HKT
-- **Focus**: Session 90 — Compact/mobile/broker/DB production bug sweep (MiMo).
-- **Agent**: MiMo.
-- **App version**: Compact `0.23.12` (pushed `f2f1097`); Android branch `0.23.1` / versionCode `2301`
-  (commit `2094dd1` on `codex/admin-console-1.0-android`, already on origin); Broker
-  `2026.09.15.1` **LIVE** Cloudflare Version ID `294a48ed-9fa6-4862-b1ff-7ac4f70f7f5f`;
-  Admin unchanged (`1.3.6`).
+- **Date**: 2026-09-19 HKT
+- **Focus**: Session 91 — Compact 0.24.0: Notion connection UX, Weather/Timeline de-lag,
+  MagicCard mobile crash fix, AI model catalog realignment (Kimi lineup), model-scan button.
+- **Agent**: Kimi Code.
+- **App version**: Compact `0.24.0` (uncommitted→committed this session; broker/admin
+  unchanged; live broker still serves the previous allowlist until its next deploy).
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -138,6 +137,47 @@ you closed with your session number.
    the original mixed-schema `conflicting-duplicate=7`, `meta-fallback=5`, `skipped-row=2` assertions.
 
 ## What Was Done
+
+### Session 91 (Kimi Code — Compact Notion UX, perf, model catalog + scan)
+
+Compact `0.24.0`. Client-only changes plus the shared provider catalog; no DB migration,
+no credential/vault change, no live-data action.
+1. **Notion connection UX (Settings)** — dead `refreshPersonalNotion` wired to a once-per-session
+   fetch on Settings mount (pill no longer shows 未連接 after restart; local flags reconciled only
+   on disagreement). Database field accepts a full Notion URL (ID auto-extracted via
+   `extractNotionDatabaseId`), Cantonese setup guidance, mapped connect errors, two-tap
+   disconnect confirm. Top-level status pill (desktop) + accordion-header pill (mobile).
+2. **Weather/Itinerary de-lag** — cached Intl formatters in Weather (live-hour computed once per
+   day, not per location); `ProgressiveBlur` gated to the full effects tier; auto-jump reduced to
+   one correction; Timeline now-parts cached per tick with a single-pass live context;
+   `perDayTimeline` split so the 60s tick only recomputes rail metrics; `content-visibility` on
+   `.timeline-event`/`.weather-slot-detailed`. Persist-debounce experiment **reverted** — the
+   settings smoke encodes "snapshot current right after a mutation".
+3. **MagicCard mobile crash (pre-existing, P0)** — `useMotionTemplate` was called inside a
+   `disableHeavy` conditional, so every GlassCard crashed ("Rendered fewer hooks than expected")
+   on mobile/reduced-motion tiers. Hooks now run unconditionally.
+4. **Settings defaults/spacing** — all Settings accordions default collapsed; mobile readiness
+   chips got 10px/16px margins (was 6px/8px).
+5. **AI model catalog** — Kimi lineup realigned per Boss: added `kimi/kimi-k3`,
+   `kimi/kimi-k2.7`, `kimi/kimi-k2.8-preview` (kept `kimi/kimi-for-coding`); `kimi-code`, `kimi-8k`,
+   `kimi-32k`, `kimi-k2.6` dropped from the `compact` surface only (kept on broker/android/admin so
+   the scan can still test and restore them). `DEFAULT_KIMI_PRIMARY_MODEL_ID` → `kimi/kimi-for-coding`.
+   Admin BFF catalog snapshot synced. **Veo 2.5: not present in any list or history — nothing to
+   remove; no Veo backend exists.** Volcano catalog untouched.
+6. **Model-scan button** — the AI 模型選擇 accordion meta pill is now a scan button: tests every
+   visible + hidden model with the exact-model `kind=test` contract (≤8 tokens, no fallback),
+   retries failures at +5s/+10s/+15s (4 attempts), hides models that never connect
+   (`hiddenAiModels`, synced via app settings), restores hidden models that pass again, and keeps
+   429/quota models in the list flagged 限額 (hard stop per provider contract, never auto-removed).
+   Pickers filter hidden models; a selected-but-hidden model stays visible as a disabled 暫停 option.
+7. **Verification** — provider-catalog contract, typecheck, build, security:scan, settings smoke
+   (10+1 skip), weather/timeline/itinerary/offline smokes green. `smoke:ai-routing` has 2
+   pre-existing failures on clean `f5e05e8` (verified via stash) — unchanged by this session.
+8. **Pending / open** — (a) live broker still runs the previous allowlist: the three new Kimi
+   models get 400 "not allowlisted" until the broker redeploys, so the first real scan should run
+   after that; (b) live Kimi model verification itself (Boss's ask to test each model) could not
+   run from the agent environment — no broker session/key here; the scan button performs it
+   automatically on first press with Boss's session.
 
 ### Session 90 (MiMo — Compact/mobile/broker/DB production sweep)
 

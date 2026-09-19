@@ -126,3 +126,15 @@
   content-visibility: auto;
   contain-intrinsic-size: auto 72px;
 }
+
+/* Same treatment for the Itinerary/Weather tab rows: each carries a backdrop-filter, so
+   letting the browser skip offscreen ones removes the biggest scroll cost on those tabs. */
+.timeline-event {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 84px;
+}
+
+.weather-slot-detailed {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}

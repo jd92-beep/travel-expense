@@ -247,7 +247,9 @@ export function Weather({ state }: { state: AppState }) {
       window.scrollTo({ top: targetTop, behavior: b });
     };
     doScroll(behavior);
-    const correctionDelays = [120, 420, 900];
+    // One correction pass only: the old 120/420/900ms triple snap re-scrolled while the user
+    // was already touching the page, which read as jank on entry.
+    const correctionDelays = [250];
     scrollCorrectionHandlesRef.current = correctionDelays.map((delay) => window.setTimeout(() => {
       if (Date.now() - userScrollAtRef.current < 400) return;
       const el = findTarget();
@@ -302,7 +304,9 @@ export function Weather({ state }: { state: AppState }) {
         {getEffectsTier() === 'lite' ? null : (
           <Meteors number={getEffectsTier() === 'full' ? 9 : 4} minDuration={4} maxDuration={9} className="weather-meteor" />
         )}
-        <ProgressiveBlur className="weather-command-blur" height="34%" position="bottom" blurLevels={[0.5, 1, 2, 4, 8, 12]} />
+        {getEffectsTier() === 'full' && (
+          <ProgressiveBlur className="weather-command-blur" height="34%" position="bottom" blurLevels={[0.5, 1, 2, 4, 8, 12]} />
+        )}
         <div className="weather-command-row relative z-10">
           <h2>天氣預報</h2>
           <div className="weather-command-actions">
@@ -377,6 +381,10 @@ export function Weather({ state }: { state: AppState }) {
         const missingAll = dayRows.length > 0 && dayRows.every((weather) => !weather.slots?.length && weather.source !== '拉取失敗');
         const fetchFailed = dayRows.length > 0 && dayRows.some((weather) => !weather.slots?.length && weather.source === '拉取失敗');
         const dayCode = dayRows.flatMap((weather) => weather.slots || []).find((slot) => slot.code != null)?.code;
+        // Live-hour marker is a per-day value — computing it per location row rebuilt an
+        // Intl.DateTimeFormat for every location on every render.
+        const dayTimezone = normalizedTimezone(day.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong';
+        const dayLiveHour = liveSlotHour(forecastDateFor(day.date), dayTimezone);
         return (
           <Reveal key={day.date} className="weather-day-reveal" delay={Math.min(0.14, day.day * 0.02)} lowCost>
             <div className="weather-day-anchor" data-weather-day={day.date}>
@@ -395,7 +403,7 @@ export function Weather({ state }: { state: AppState }) {
                 {dayFailed && <p className="notice">天氣拉取失敗，請稍後再試，可以撳右上角刷新重試。</p>}
                 {dayRows.map((weather) => {
                   const emptyForecast = weather.slots?.length && weather.slots.every((slot) => slot.temp == null && slot.rain == null);
-                  const liveHour = liveSlotHour(forecastDateFor(day.date), normalizedTimezone(day.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
+                  const liveHour = dayLiveHour;
                   return (
                     <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
                       <h3>{weather.coord.label}</h3>
@@ -617,16 +625,34 @@ function weatherAccent(slot: { code?: number; rain?: number; precipMm?: number }
   return '#1e6d86';
 }
 
-function liveSlotHour(date: string, timezone: string): number | null {
+// Formatters are expensive to construct and these run inside render loops (per day/location),
+// so cache them per timezone like Timeline's zonePartsFormatterCache does.
+const liveSlotFormatterCache = new Map<string, Intl.DateTimeFormat | null>();
+function liveSlotFormatter(timezone: string): Intl.DateTimeFormat | null {
+  if (liveSlotFormatterCache.has(timezone)) return liveSlotFormatterCache.get(timezone) || null;
+  let formatter: Intl.DateTimeFormat | null = null;
   try {
-    const parts = new Intl.DateTimeFormat('en-CA', {
+    formatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: timezone,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       hourCycle: 'h23',
-    }).formatToParts(new Date());
+    });
+  } catch {
+    formatter = null;
+  }
+  if (liveSlotFormatterCache.size > 24) liveSlotFormatterCache.clear();
+  liveSlotFormatterCache.set(timezone, formatter);
+  return formatter;
+}
+
+function liveSlotHour(date: string, timezone: string): number | null {
+  try {
+    const formatter = liveSlotFormatter(timezone);
+    if (!formatter) return null;
+    const parts = formatter.formatToParts(new Date());
     const value = (type: string) => parts.find((part) => part.type === type)?.value || '';
     const today = `${value('year')}-${value('month')}-${value('day')}`;
     if (today !== date) return null;
@@ -637,6 +663,7 @@ function liveSlotHour(date: string, timezone: string): number | null {
   }
 }
 
+const timezoneValidityCache = new Map<string, boolean>();
 function normalizedTimezone(value?: string): string {
   const zone = String(value || '').trim();
   const aliases: Record<string, string> = {
@@ -654,10 +681,16 @@ function normalizedTimezone(value?: string): string {
   };
   const candidate = aliases[zone] || zone || 'auto';
   if (candidate === 'auto') return candidate;
+  const known = timezoneValidityCache.get(candidate);
+  if (known === true) return candidate;
+  if (known === false) return 'auto';
   try {
     new Intl.DateTimeFormat('en', { timeZone: candidate }).format(new Date());
+    if (timezoneValidityCache.size > 64) timezoneValidityCache.clear();
+    timezoneValidityCache.set(candidate, true);
     return candidate;
   } catch {
+    timezoneValidityCache.set(candidate, false);
     return 'auto';
   }
 }

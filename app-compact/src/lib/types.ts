@@ -362,6 +362,11 @@ export interface AppState {
   emailModel: string;
   tripUpdateModel?: string;
   googleBackupModel?: string;
+  /** Models the model-scan found unreachable (failed every retry). Re-tested on each scan and
+   *  restored to the list automatically when they connect again. */
+  hiddenAiModels?: string[];
+  /** Latest model-scan results per model id (device-local). */
+  aiModelScan?: { at: number; results: Record<string, 'ok' | 'quota' | 'failed'> };
   themePreference: ThemePreference;
   persons: Person[];
   shareRatios: Record<string, number>;

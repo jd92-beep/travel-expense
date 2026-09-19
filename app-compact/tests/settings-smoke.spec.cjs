@@ -389,7 +389,14 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
 
   await setAccordion(page, 'AI 模型選擇');
   const modelOptions = await page.locator('#settings-ai-models-panel option').allTextContents();
-  expect(modelOptions.join(' ')).toContain('Kimi (kimi-code)');
+  expect(modelOptions.join(' ')).toContain('Kimi K3');
+  expect(modelOptions.join(' ')).toContain('Kimi K2.7');
+  expect(modelOptions.join(' ')).toContain('Kimi K2.8 Preview');
+  expect(modelOptions.join(' ')).toContain('Kimi for Coding');
+  expect(modelOptions.join(' ')).not.toContain('Kimi (kimi-code)');
+  expect(modelOptions.join(' ')).not.toContain('Kimi (kimi-8k)');
+  expect(modelOptions.join(' ')).not.toContain('Kimi (kimi-32k)');
+  expect(modelOptions.join(' ')).not.toContain('Kimi (kimi-k2.6)');
   expect(modelOptions.join(' ')).toContain('Google Gemini 2.5 Flash');
   expect(modelOptions.join(' ')).toContain('Mimo v2.5 Pro');
   expect(modelOptions.join(' ')).toContain('Volcano (doubao-seed-2.0-lite)');

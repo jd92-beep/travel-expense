@@ -34,6 +34,7 @@ const CLOUD_SETTINGS_KEYS = new Set<keyof AppState>([
   'emailModel',
   'tripUpdateModel',
   'googleBackupModel',
+  'hiddenAiModels',
   'themePreference',
   'credentialBrokerUrl',
   'notionDeletedSourceIds',

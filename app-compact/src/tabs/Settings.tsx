@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, Cloud, Copy, Download, FlaskConical, KeyRound, LoaderCircle, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, Cloud, Copy, Download, FlaskConical, KeyRound, LoaderCircle, LogOut, Mail, MapPin, NotebookText, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useMemo, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
@@ -36,7 +36,7 @@ import {
   notionFetch,
   pushBackupSnapshot,
 } from '../lib/notion';
-import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
+import { canUseNotionMirror, configuredNotionDatabaseId, extractNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
 import type { AppState, ItineraryDay, ItinerarySpot, Person, Receipt, SyncEngineState, SyncQueueItem, ThemePreference, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
 import { clearCredentialSession, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
 import { createSupabaseTripInvite, inviteLinkForToken, leaveSupabaseTrip, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
@@ -254,15 +254,51 @@ function aiModelLabel(modelId: string | undefined): string {
   return AI_MODELS.find((model) => model.id === id)?.name || id;
 }
 
+// Model-scan schedule: initial attempt, then automatic retries 5s / 10s / 15s after each
+// failure (4 attempts total). Models that still fail are hidden from the pickers; models that
+// later pass a scan are restored automatically.
+const MODEL_SCAN_RETRY_DELAYS_MS = [5000, 10000, 15000];
+
+function classifyModelScanError(error: unknown): 'quota' | 'unsupported' | 'retryable' {
+  const message = redactedError(error);
+  // Provider contract: 429/quota/daily-limit are hard stops — the model still exists,
+  // so it stays in the list (flagged 限額) instead of being removed.
+  if (/\b429\b|quota|rate.?limit|daily.?limit|額度/i.test(message)) return 'quota';
+  if (/not allowlisted|invalid model|model.*not.*(exist|found)|no longer|deprecated|unsupported/i.test(message)) return 'unsupported';
+  return 'retryable';
+}
+
+async function scanModelWithRetries(state: AppState, modelId: string): Promise<'ok' | 'quota' | 'failed'> {
+  for (let attempt = 0; attempt <= MODEL_SCAN_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, MODEL_SCAN_RETRY_DELAYS_MS[attempt - 1]));
+    }
+    try {
+      await testAiModel(state, modelId);
+      return 'ok';
+    } catch (error) {
+      const kind = classifyModelScanError(error);
+      if (kind === 'quota') return 'quota';
+      if (kind === 'unsupported') return 'failed';
+      // retryable → fall through to the next scheduled retry
+    }
+  }
+  return 'failed';
+}
+
 function AiModelField({
   label,
   value,
   state,
+  hiddenModels,
+  scanResults,
   onChange,
 }: {
   label: string;
   value: string;
   state: AppState;
+  hiddenModels: string[];
+  scanResults?: Record<string, 'ok' | 'quota' | 'failed'>;
   onChange: (value: string) => void;
 }) {
   const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -279,6 +315,8 @@ function AiModelField({
       setMessage(`未能使用：${redactedError(error)}`);
     }
   };
+  const visibleModels = AI_MODELS.filter((model) => !hiddenModels.includes(model.id));
+  const valueMissing = !visibleModels.some((model) => model.id === value);
   return (
     <div className="ai-model-field">
       <label>{label}
@@ -290,7 +328,16 @@ function AiModelField({
             onChange(event.target.value);
           }}
         >
-          {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+          {valueMissing && (
+            <option value={value}>
+              {AI_MODELS.find((model) => model.id === value)?.name || value}（暫停或舊型號）
+            </option>
+          )}
+          {visibleModels.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.name}{scanResults?.[model.id] === 'quota' ? '（限額）' : ''}
+            </option>
+          ))}
         </select>
       </label>
       <button
@@ -1000,6 +1047,9 @@ export function Settings({
   const [personalNotionToken, setPersonalNotionToken] = useState('');
   const [personalNotionDb, setPersonalNotionDb] = useState(state.notionDb || '');
   const [personalNotionStatus, setPersonalNotionStatus] = useState<PersonalNotionStatus | null>(null);
+  const [confirmDisconnectNotion, setConfirmDisconnectNotion] = useState(false);
+  const confirmDisconnectNotionTimerRef = useRef(0);
+  const [modelScanProgress, setModelScanProgress] = useState<{ done: number; total: number } | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);
@@ -1044,6 +1094,33 @@ export function Settings({
     setEditableTripDraft(cloneTripDraft(tripDraft));
     setTripReviewDayIndex(0);
   }, [tripDraft, tripDraftModalOpen]);
+
+  // Reconcile the Notion pill with the broker-held connection once per signed-in session:
+  // the pill state is session-only, so without this it shows 未連接 (and keeps 中斷連接
+  // disabled) after an app restart even when the server-side connection is still valid.
+  const personalNotionFetchedRef = useRef(false);
+  useEffect(() => {
+    if (!cloudSyncAvailable || personalNotionFetchedRef.current) return;
+    personalNotionFetchedRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await getPersonalNotionIntegration(state);
+        if (cancelled) return;
+        setPersonalNotionStatus(result);
+        if (result.databaseId) setPersonalNotionDb(result.databaseId);
+        const connected = result.status === 'connected';
+        if (connected !== state.personalNotionConnected || (connected && !!result.databaseId && result.databaseId !== state.notionDb)) {
+          applyPersonalNotionConnection(result.databaseId || '', connected);
+        }
+      } catch {
+        // Offline / broker unreachable: keep the last known pill instead of flashing 未連接.
+      }
+    })();
+    return () => { cancelled = true; };
+    // Runs once per signed-in session; state is read at fetch time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudSyncAvailable]);
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -1190,6 +1267,24 @@ export function Settings({
   const queueSummary = syncQueueSummary(state.syncQueue);
   const queuePendingCount = Math.max(pendingSyncCount, queueSummary.pending.length);
   const queueFailedCount = Math.max(failedSyncCount, queueSummary.failed.length);
+  const aiScanSummary = useMemo(() => {
+    const scan = state.aiModelScan;
+    if (!scan) return null;
+    const ids = Object.keys(scan.results);
+    if (!ids.length) return null;
+    const ok = ids.filter((id) => scan.results[id] === 'ok').length;
+    return {
+      ok,
+      total: ids.length,
+      hiddenCount: (state.hiddenAiModels || []).length,
+      atLabel: new Date(scan.at).toLocaleString('zh-HK', { hour12: false }),
+    };
+  }, [state.aiModelScan, state.hiddenAiModels]);
+  const aiScanPillLabel = !aiScanSummary
+    ? '掃描模型'
+    : aiScanSummary.ok === aiScanSummary.total
+      ? '全部可用'
+      : `${aiScanSummary.total - aiScanSummary.ok} 個未能連接`;
   const syncTarget = cloudSyncAvailable ? (notionMirrorReady ? 'Supabase + Notion' : 'Supabase only') : (brokerReady ? 'Broker / Notion' : storageScope);
   const storageAccountId = storageScope.startsWith('supabase:') ? storageScope.slice('supabase:'.length) : '';
   const accountSyncHealth = [
@@ -1495,27 +1590,95 @@ export function Settings({
     });
   }
 
+  function friendlyNotionConnectError(error: unknown): string {
+    const message = redactedError(error);
+    if (/credential test failed/i.test(message)) {
+      return 'Notion 拒絕咗呢個組合：請檢查 (1) secret 係咪正確嘅 integration token；(2) 個 database 有冇喺 Connections 邀請咗個 integration。';
+    }
+    if (/token missing/i.test(message)) return '未收到 secret：請重新貼上你嘅 Notion integration secret。';
+    if (/database id missing/i.test(message)) return '未收到 database：請貼上 Notion database 網址或 ID。';
+    if (/未連線|network|failed to fetch|timeout/i.test(message)) return '暫時連唔到 Credential Broker 或網絡不穩，請檢查網絡後再試。';
+    return message;
+  }
+
   async function connectPersonalNotion() {
     if (!cloudSyncAvailable) {
       setStatus('請先登入 Supabase，先可以綁定你自己嘅 Notion notebook。');
       return;
     }
     const secret = personalNotionToken.trim();
-    const databaseId = personalNotionDb.trim();
-    if (!secret || !databaseId) {
-      setStatus('請輸入你自己嘅 Notion connector secret 同 database ID。');
+    const databaseId = extractNotionDatabaseId(personalNotionDb);
+    if (!secret) {
+      setStatus('請輸入你自己嘅 Notion integration secret。');
+      return;
+    }
+    if (!databaseId) {
+      setStatus('個 database 資料睇落唔正確：可以貼成條 Notion database 網址，系統會自動抽出 ID。');
       return;
     }
     try {
-      await run('Connect Personal Notion', async () => {
-        const result = await registerPersonalNotionIntegration(state, secret, databaseId);
+      await run('連接 Personal Notion', async () => {
+        let result: PersonalNotionStatus;
+        try {
+          result = await registerPersonalNotionIntegration(state, secret, databaseId);
+        } catch (error) {
+          throw new Error(friendlyNotionConnectError(error));
+        }
         setPersonalNotionStatus(result);
         applyPersonalNotionConnection(result.databaseId || databaseId, result.status === 'connected');
-        return `Personal Notion 已安全連接：${result.databaseId || databaseId}`;
+        return result.status === 'connected'
+          ? 'Personal Notion 已安全連接；之後新嘅記帳會自動同步 Supabase 同鏡像到你嘅 Notion。'
+          : `Personal Notion 狀態：${result.status}`;
       });
     } finally {
       setPersonalNotionToken('');
     }
+  }
+
+  function armDisconnectNotion() {
+    if (!confirmDisconnectNotion) {
+      setConfirmDisconnectNotion(true);
+      window.clearTimeout(confirmDisconnectNotionTimerRef.current);
+      confirmDisconnectNotionTimerRef.current = window.setTimeout(() => setConfirmDisconnectNotion(false), 3000);
+      return;
+    }
+    window.clearTimeout(confirmDisconnectNotionTimerRef.current);
+    setConfirmDisconnectNotion(false);
+    void disconnectPersonalNotion();
+  }
+
+  // Full-catalog model scan: tests every visible model plus every hidden one (so revived
+  // models reappear), retrying failures at +5s/+10s/+15s, hiding models that never connect,
+  // and leaving quota-limited models in place per the provider contract.
+  async function runModelScan() {
+    if (modelScanProgress) return;
+    if (!brokerReady && !cloudSyncAvailable) {
+      setStatus('模型掃描需要先連接 Credential Broker 或者登入 Supabase。');
+      return;
+    }
+    const visibleIds = AI_MODELS.map((model) => model.id);
+    const candidates = Array.from(new Set([...visibleIds, ...(state.hiddenAiModels || [])]));
+    setModelScanProgress({ done: 0, total: candidates.length });
+    const results: Record<string, 'ok' | 'quota' | 'failed'> = {};
+    try {
+      for (const modelId of candidates) {
+        results[modelId] = await scanModelWithRetries(state, modelId);
+        setModelScanProgress((progress) => (progress ? { done: progress.done + 1, total: progress.total } : progress));
+      }
+    } finally {
+      setModelScanProgress(null);
+    }
+    const nextHidden = candidates.filter((id) => results[id] === 'failed');
+    const quotaIds = candidates.filter((id) => results[id] === 'quota');
+    const restored = (state.hiddenAiModels || []).filter((id) => results[id] === 'ok');
+    updateState({
+      hiddenAiModels: nextHidden,
+      aiModelScan: { at: Date.now(), results },
+    });
+    setStatus(`模型掃描完成:${candidates.length - nextHidden.length - quotaIds.length}/${candidates.length} 個可用`
+      + (quotaIds.length ? `;${quotaIds.length} 個額度用緊(保留喺清單)` : '')
+      + (restored.length ? `;恢復咗 ${restored.length} 個` : '')
+      + (nextHidden.length ? `;隱藏咗 ${nextHidden.length} 個` : '') + '。');
   }
 
   async function disconnectPersonalNotion() {
@@ -2501,6 +2664,12 @@ export function Settings({
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
+                  <span><StatusPill tone={personalNotionStatus?.status === 'connected' ? 'ok' : 'neutral'}><NotebookText size={14} /> Notion {personalNotionStatus?.status === 'connected' ? '鏡像已連接' : cloudSyncAvailable ? '鏡像未連接' : '鏡像（登入後可用）'}</StatusPill></span>
+                </TooltipTrigger>
+                <TooltipContent>Notion 係可選鏡像備份，唔影響 Supabase 同步。喺下方「連線（進階）」連接你自己嘅 Notion database，新記帳就會自動鏡像過去。</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <span><StatusPill tone="neutral"><ShieldCheck size={14} /> {buildLabel}</StatusPill></span>
                 </TooltipTrigger>
                 <TooltipContent>目前前端 build / security marker</TooltipContent>
@@ -2670,7 +2839,7 @@ export function Settings({
         </section>
       </GlassCard>)}
 
-      <AccordionCard id="settings-people" title="旅伴 / 分帳比例" meta={<span className="pill">{persons.length} 人</span>}>
+      <AccordionCard id="settings-people" title="旅伴 / 分帳比例" defaultOpen={false} meta={<span className="pill">{persons.length} 人</span>}>
         <p className="muted">分帳用百分比。填頭幾位嘅百分比，最後一位會自動計（100 − 其他總和）。預設全部均分。</p>
         {(() => {
           const pcts = personSharePercents;
@@ -2716,13 +2885,45 @@ export function Settings({
         </div>
       </AccordionCard>
 
-      <AccordionCard id="settings-ai-models" eyebrow="進階" title="AI 模型選擇" icon={<Sparkles />} defaultOpen={false} meta={<span className="pill">一般唔使改</span>}>
-        <p className="muted">平時唔使改。額度用盡時會停止，唔會自動換模型。</p>
+      <AccordionCard
+        id="settings-ai-models"
+        eyebrow="進階"
+        title="AI 模型選擇"
+        icon={<Sparkles />}
+        defaultOpen={false}
+        meta={(
+          <span
+            role="button"
+            tabIndex={0}
+            className={`pill ai-scan-pill${modelScanProgress ? ' busy' : ''}`}
+            aria-label="掃描所有模型"
+            onClick={(event) => { event.stopPropagation(); void runModelScan(); }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                void runModelScan();
+              }
+            }}
+          >
+            {modelScanProgress
+              ? <><LoaderCircle size={12} className="spin" /> 掃描中 {modelScanProgress.done}/{modelScanProgress.total}</>
+              : <><FlaskConical size={12} /> {aiScanPillLabel}</>}
+          </span>
+        )}
+      >
+        <p className="muted">平時唔使改。額度用盡時會停止，唔會自動換模型。撳右邊「掃描」會自動測試所有模型:唔到嘅會自動收起,恢復後會自動出返。</p>
+        {aiScanSummary && (
+          <p className="muted">
+            上次掃描:{aiScanSummary.atLabel} · {aiScanSummary.ok}/{aiScanSummary.total} 個連接到
+            {aiScanSummary.hiddenCount ? ` · ${aiScanSummary.hiddenCount} 個暫時隱藏(再掃描會自動測試同恢復)` : ''}
+          </p>
+        )}
         <div className="form-grid ai-model-grid">
-          <AiModelField label="掃描 receipt 模型" value={state.scanModel} state={state} onChange={(scanModel) => updateState({ scanModel })} />
-          <AiModelField label="語音模型" value={state.voiceModel} state={state} onChange={(voiceModel) => updateState({ voiceModel })} />
-          <AiModelField label="Email 模型" value={state.emailModel} state={state} onChange={(emailModel) => updateState({ emailModel })} />
-          <AiModelField label="行程更新模型" value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} state={state} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
+          <AiModelField label="掃描 receipt 模型" value={state.scanModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(scanModel) => updateState({ scanModel })} />
+          <AiModelField label="語音模型" value={state.voiceModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(voiceModel) => updateState({ voiceModel })} />
+          <AiModelField label="Email 模型" value={state.emailModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(emailModel) => updateState({ emailModel })} />
+          <AiModelField label="行程更新模型" value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
         </div>
         {showStressPanel && (
           <>
@@ -2742,7 +2943,7 @@ export function Settings({
         )}
       </AccordionCard>
 
-      <AccordionCard id="settings-trip" eyebrow="旅程" title={theme.id === 'japan_washi' ? '旅程管理器 🏯🌸' : '旅程管理器'} meta={<span className="pill">v{managedTrip.version}</span>}>
+      <AccordionCard id="settings-trip" eyebrow="旅程" title={theme.id === 'japan_washi' ? '旅程管理器 🏯🌸' : '旅程管理器'} defaultOpen={false} meta={<span className="pill">v{managedTrip.version}</span>}>
         <div className="settings-trip-manager">
         <div className="settings-trip-panel settings-trip-panel--active">
           <div className="settings-trip-panel-head">
@@ -3015,6 +3216,7 @@ export function Settings({
         eyebrow="共享"
         title="旅程共享 👥"
         icon={<Users />}
+        defaultOpen={false}
         meta={<span className="pill">{tripSharing.isShared ? `${tripSharing.memberCount} members` : '只限自己'}{tripSharing.pendingInviteCount ? ` · ${tripSharing.pendingInviteCount} pending` : ''}</span>}
       >
         <div className="mini-list">
@@ -3152,7 +3354,7 @@ export function Settings({
         )}
       </AccordionCard>
 
-      <AccordionCard id="settings-trip-update" eyebrow="AI" title="AI 行程更新" icon={<Sparkles />}>
+      <AccordionCard id="settings-trip-update" eyebrow="AI" title="AI 行程更新" icon={<Sparkles />} defaultOpen={false}>
         <p className="muted">目前 primary：{tripUpdateModelName}。貼入長行程後，AI 會先分析日程、景點、酒店、餐廳同重要細節；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
         <textarea
           rows={10}
@@ -3273,8 +3475,19 @@ export function Settings({
         )}
       </AccordionCard>
 
-      <AccordionCard id="settings-credentials" eyebrow="可選" title="連線（進階）" icon={<KeyRound />} defaultOpen={false}>
-        <p className="muted">一般登入 Supabase 之後，AI 同天氣已經自動用得。呢度只係想手動接 Notion 或測試先需要開。</p>
+      <AccordionCard
+        id="settings-credentials"
+        eyebrow="可選"
+        title="連線（進階）"
+        icon={<KeyRound />}
+        defaultOpen={false}
+        meta={(
+          <span className={`pill ${personalNotionStatus?.status === 'connected' ? 'ok' : ''}`}>
+            Notion {personalNotionStatus?.status === 'connected' ? '已連接' : cloudSyncAvailable ? '未連接' : '登入後可用'}
+          </span>
+        )}
+      >
+        <p className="muted">連接你自己嘅 Notion database 之後，新嘅記帳會自動同步 Supabase，同時鏡像一份落你嘅 Notion（可選備份）。連接狀態睇上面嘅 Notion 鏡像指示。</p>
         {cloudSyncAvailable && (
           <div className="rotation-box">
             <div className="section-head">
@@ -3283,15 +3496,16 @@ export function Settings({
                 {personalNotionStatus?.status === 'connected' ? '已連接' : '未連接'}
               </span>
             </div>
-            <label>Database ID
-              <input value={personalNotionDb} onChange={(e) => setPersonalNotionDb(e.target.value)} placeholder="Notion database ID" />
+            <p className="muted">1）喺 notion.so/my-integrations 建立 integration，複製個 secret；2）喺你嘅 Notion database 右上角「⋯」→ Connections 邀請返個 integration；3）貼資料落嚟按連接。Secret 只會送去 Credential Broker 加密保存，唔會留喺部機。</p>
+            <label>Notion database
+              <input value={personalNotionDb} onChange={(e) => setPersonalNotionDb(e.target.value)} placeholder="Database 網址或 ID" />
             </label>
-            <label>Connector secret
+            <label>Integration secret
               <input
                 type="password"
                 value={personalNotionToken}
                 onChange={(e) => setPersonalNotionToken(e.target.value)}
-                placeholder="貼上 secret"
+                placeholder="貼上 ntn_… secret"
                 autoComplete="off"
               />
             </label>
@@ -3299,10 +3513,11 @@ export function Settings({
               <button className="primary" type="button" disabled={!!busy || !personalNotionToken.trim() || !personalNotionDb.trim()} onClick={() => void connectPersonalNotion()}>
                 連接
               </button>
-              <button className="secondary" type="button" disabled={!!busy || personalNotionStatus?.status !== 'connected'} onClick={() => void disconnectPersonalNotion()}>
-                中斷連接
+              <button className={confirmDisconnectNotion ? 'primary' : 'secondary'} type="button" disabled={!!busy || personalNotionStatus?.status !== 'connected'} onClick={armDisconnectNotion}>
+                {confirmDisconnectNotion ? '確認中斷？' : '中斷連接'}
               </button>
             </div>
+            <p className="muted">中斷後會停止寫新紀錄入你嘅 Notion；已經寫入嘅內容會保留，Supabase 資料唔受影響。</p>
           </div>
         )}
         {!brokerReady && !cloudSyncAvailable && (
@@ -3372,7 +3587,7 @@ export function Settings({
         </div>)}
       </AccordionCard>
 
-      <AccordionCard id="settings-data" title="資料管理" icon={<ShieldCheck />}>
+      <AccordionCard id="settings-data" title="資料管理" icon={<ShieldCheck />} defaultOpen={false}>
         <input ref={backupInput} hidden type="file" accept="application/json,.json" onChange={(e) => importBackup(e.target.files?.[0])} />
         <div className="action-row wrap">
           <button className="secondary" type="button" onClick={() => exportCsv(state)}><Download size={18} /> 匯出 CSV</button>
@@ -3524,7 +3739,7 @@ export function Settings({
       </AccordionCard>
 
       {cloudSyncAvailable && updatePassword && (
-        <AccordionCard id="settings-supabase-account" eyebrow="帳號" title="雲端帳號與密碼設定" icon={<KeyRound />}>
+        <AccordionCard id="settings-supabase-account" eyebrow="帳號" title="雲端帳號與密碼設定" icon={<KeyRound />} defaultOpen={false}>
           <div className="settings-auth-layout">
             <GlassCard className="settings-account-card">
               <div className="settings-account-copy">
@@ -3610,7 +3825,7 @@ export function Settings({
         </div>
       </AccordionCard>
 
-      {showStressPanel && (<AccordionCard id="settings-itinerary-json" title="行程 JSON" meta={<span className="pill">{getItinerary(state).length} 日</span>}>
+      {showStressPanel && (<AccordionCard id="settings-itinerary-json" title="行程 JSON" defaultOpen={false} meta={<span className="pill">{getItinerary(state).length} 日</span>}>
         <input ref={itineraryInput} hidden type="file" accept="application/json,.json" onChange={(e) => importItinerary(e.target.files?.[0])} />
         <div className="action-row wrap">
           <button className="secondary" type="button" onClick={() => downloadJson(`${state.tripName || 'trip'}-itinerary.json`, getItinerary(state))}><Download size={18} /> 匯出行程</button>
@@ -3620,7 +3835,7 @@ export function Settings({
       </AccordionCard>)}
 
       {showStressPanel && (
-        <AccordionCard id="settings-stress-test" eyebrow="Stress Test Portal" title="極限壓力與故障測試面板 🚀" icon={<Sparkles />}>
+        <AccordionCard id="settings-stress-test" eyebrow="Stress Test Portal" title="極限壓力與故障測試面板 🚀" icon={<Sparkles />} defaultOpen={false}>
           <p className="muted">呢度係專為 Boss 設計嘅 Premium 測試中心！你可以一鍵模擬高達 1,000 筆數據、網絡延遲、API 斷網故障以及 Tab 內存洩漏測試！</p>
 
           <div className="action-row wrap" style={{ marginBottom: '1rem' }}>

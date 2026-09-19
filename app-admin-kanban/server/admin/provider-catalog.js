@@ -1,10 +1,13 @@
 export const PROVIDER_MODELS = Object.freeze({
   kimi: [
+    'kimi/kimi-k3',
+    'kimi/kimi-k2.7',
+    'kimi/kimi-k2.8-preview',
+    'kimi/kimi-for-coding',
     'kimi/kimi-code',
     'kimi/kimi-8k',
     'kimi/kimi-32k',
     'kimi/kimi-k2.6',
-    'kimi/kimi-for-coding',
   ],
   google: [
     'google/gemini-2.5-flash',
