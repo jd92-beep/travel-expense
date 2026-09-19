@@ -85,3 +85,27 @@ test('normal passkey login translates Chrome focus errors into actionable Tradit
   expect(loginBegins).toBe(1);
   await expect.poll(() => page.locator('html').getAttribute('data-authentication-called')).toBe('true');
 });
+
+test('fresh login without a CSRF cookie still reaches the auth begin endpoint', async ({ page }) => {
+  let loginBegins = 0;
+  await page.route('**/api/admin/**', async route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/admin/session') {
+      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify(errorEnvelope('UNAUTHORIZED', 'No admin session')) });
+      return;
+    }
+    if (pathname === '/api/admin/auth/begin') {
+      loginBegins += 1;
+      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify(errorEnvelope('UNAUTHORIZED', 'Synthetic passphrase rejected')) });
+      return;
+    }
+    await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify(errorEnvelope('NOT_FOUND', 'Synthetic route missing')) });
+  });
+  await page.goto('/login');
+  await page.getByLabel('管理員通行片語').fill('synthetic boss passphrase');
+  await page.getByRole('button', { name: LOGIN_CTA }).click();
+
+  await expect(page.getByText('Synthetic passphrase rejected')).toBeVisible();
+  await expect(page.getByText('管理員 CSRF session 已失效')).toHaveCount(0);
+  expect(loginBegins).toBe(1);
+});

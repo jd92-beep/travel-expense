@@ -2,11 +2,11 @@
 
 ## Last Worked On
 - **Date**: 2026-09-19 HKT
-- **Focus**: Session 91 — Compact 0.24.0: Notion connection UX, Weather/Timeline de-lag,
-  MagicCard mobile crash fix, AI model catalog realignment (Kimi lineup), model-scan button.
+- **Focus**: Session 92 — Admin `1.3.9`: fresh-login CSRF chicken-and-egg fix (client-only) +
+  Playwright regression test, found while running Open Item 1's fresh Chrome login check.
 - **Agent**: Kimi Code.
-- **App version**: Compact `0.24.0` (uncommitted→committed this session; broker/admin
-  unchanged; live broker still serves the previous allowlist until its next deploy).
+- **App version**: Admin `1.3.9` (committed; live production still serves `1.3.8` until the
+  protected dispatch). Compact `0.24.0` live from Session 91.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -31,9 +31,13 @@ you closed with your session number.
    them, and leaves trip-visible receipts with the successor. Proven by live SQL smoke
    `supabase/tests/account_deletion_transfer_smoke.sql` (transaction + rollback) on
    `fbnnjoahvtdrnigevrtw`. Reopen only if a real user account deletion fails in product.
-1. 🟡 **Final post-bootstrap fresh login check (Boss is doing this now)** — passkey enrollment and
-   bootstrap removal are complete. Record this one fresh Chrome login result before closing the item;
-   do not claim it has passed yet.
+1. 🟠 **Fresh login check exposed a live login blocker; fix pending production deploy** —
+   Boss's fresh Chrome login to the live Admin console failed with 「管理員 CSRF session 已失效」
+   before any network request: the client required the session-bound `__Host-admin_csrf` cookie
+   for `auth/begin`, but that cookie only exists after login finishes. Session 92 fixed the
+   client (Admin `1.3.9`). After the protected production dispatch lands the fix, re-run the
+   fresh login (passphrase + Boss passkey) and record the result here. Do not claim it has
+   passed yet.
 2. 🟠 **Real ordinary authenticated JWT privilege smoke is pending** — repeat the production
    privilege check with an ordinary authenticated JWT; do not substitute privileged/service access.
 3. 🟠 **Admin DB platform-owner hardening remains pending** — complete the platform-owner operation
@@ -137,6 +141,35 @@ you closed with your session number.
    the original mixed-schema `conflicting-duplicate=7`, `meta-fallback=5`, `skipped-row=2` assertions.
 
 ## What Was Done
+
+### Session 92 (Kimi Code — Admin fresh-login CSRF chicken-and-egg fix)
+
+Admin `1.3.9`. Client-only fix in `app-admin-kanban`; no DB migration, credential, vault or
+server-side change.
+1. **Bug found via Open Item 1's fresh-login check** — Boss's fresh Chrome login to the live
+   Admin console (`1.3.8`) failed client-side with 「管理員 CSRF session 已失效」 before any
+   request left the browser. Root cause: `request()` in `src/lib/adminApi.ts` required the
+   session-bound `__Host-admin_csrf` cookie for EVERY mutation, but the server only issues that
+   cookie at `auth/finish` — a chicken-and-egg that made fresh-browser login impossible. This
+   also explains why the authenticated Chrome login evidence (old items 17/18) was never
+   capturable, and why the Playwright specs had to pre-seed a synthetic `__Host-admin_csrf`
+   cookie via `addInitScript`.
+2. **Fix** — pre-session mutations (`/api/admin/auth/begin|finish`,
+   `/api/admin/passkeys/enroll/begin|finish`) no longer require the CSRF cookie client-side;
+   `X-Admin-CSRF` is attached only when the cookie exists. The BFF never validated CSRF on these
+   endpoints (no session exists yet); they are protected by strict same-origin checks plus the
+   WebAuthn ceremony. Authenticated mutations keep the fail-closed client check, and the BFF
+   session-bound CSRF verification is unchanged.
+3. **Regression test** — `tests/login-gate-focus.spec.cjs` new case: fresh login gate with no
+   CSRF cookie, login click must reach `auth/begin` and surface the server error (not the client
+   CSRF message). Proven to FAIL on the pre-fix client (via `git show HEAD:` file swap) and pass
+   with the fix.
+4. **Version** — Admin `1.3.8` → `1.3.9` (`package.json`; `/api/health` serves it).
+5. **Verification** — typecheck, build, unit, contract, security:scan, and the full Playwright
+   smoke (50 passed / 1 skipped, incl. the new regression test) all green.
+6. **Pending** — production deploy. Pushing to `main` runs CI, but the fix only goes live via
+   the protected Admin production dispatch; after that, re-run the fresh-login check and close
+   Open Item 1.
 
 ### Session 91 (Kimi Code — Compact Notion UX, perf, model catalog + scan)
 
