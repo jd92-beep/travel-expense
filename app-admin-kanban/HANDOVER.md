@@ -4,7 +4,15 @@ Last updated: 2026-09-16 HKT
 
 ## Current Status
 
-- **`1.3.7` code ready, production still `1.3.6`** — Session 90b adds `admin_purge_user` (R3).
+- **Production `1.3.9` LIVE** — protected workflow `35451419090` promoted exact SHA
+  `44d674e7193419960edfdd1ef49e2a4f740cb9f9`. Live `/api/health` returns version `1.3.9`,
+  gitSha `44d674e…`, deployment `dpl_BRSAuxpZAPVPeLUyYLiskkb4sxNB`, `acceptingReadTraffic=true`.
+  Contents: fresh-browser login CSRF fix (`auth/begin`/`auth/finish`/`passkeys/enroll/*` no
+  longer require the pre-session `__Host-admin_csrf` cookie client-side) + Playwright regression
+  spec. Edge provenance baked at `44d674e` and the three provenance secrets aligned before the
+  successful readiness verify (two earlier dispatches failed closed at candidate readiness, as
+  designed). Boss's fresh post-bootstrap Chrome login passed — root HANDOVER Open Item 1 closed.
+- **`1.3.7` code ready, previously production `1.3.6`** — Session 90b adds `admin_purge_user` (R3).
   Double-gated: `ADMIN_WRITE_MODE=allowlisted` **and** `ADMIN_ALLOW_R3_USER_PURGE=true`.
   Default remains off; Edge must be re-deployed via the protected workflow before the flag
   can take effect. Live DB already has `private.admin_purge_user_manifest` +

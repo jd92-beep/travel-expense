@@ -1,12 +1,12 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-09-19 HKT
-- **Focus**: Session 92 — Admin `1.3.9`: fresh-login CSRF chicken-and-egg fix (client-only) +
-  Playwright regression test, found while running Open Item 1's fresh Chrome login check.
+- **Date**: 2026-09-20 HKT
+- **Focus**: Session 92 — Admin `1.3.9` LIVE: fresh-login CSRF chicken-and-egg fix deployed via
+  the protected workflow; Boss's fresh Chrome login PASSED; Open Item 1 closed.
 - **Agent**: Kimi Code.
-- **App version**: Admin `1.3.9` (committed; live production still serves `1.3.8` until the
-  protected dispatch). Compact `0.24.0` live from Session 91.
+- **App version**: Admin `1.3.9` live (`44d674e`, Vercel `dpl_BRSAuxpZAPVPeLUyYLiskkb4sxNB`).
+  Compact `0.24.0` live from Session 91.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -31,13 +31,12 @@ you closed with your session number.
    them, and leaves trip-visible receipts with the successor. Proven by live SQL smoke
    `supabase/tests/account_deletion_transfer_smoke.sql` (transaction + rollback) on
    `fbnnjoahvtdrnigevrtw`. Reopen only if a real user account deletion fails in product.
-1. 🟠 **Fresh login check exposed a live login blocker; fix pending production deploy** —
-   Boss's fresh Chrome login to the live Admin console failed with 「管理員 CSRF session 已失效」
-   before any network request: the client required the session-bound `__Host-admin_csrf` cookie
-   for `auth/begin`, but that cookie only exists after login finishes. Session 92 fixed the
-   client (Admin `1.3.9`). After the protected production dispatch lands the fix, re-run the
-   fresh login (passphrase + Boss passkey) and record the result here. Do not claim it has
-   passed yet.
+1. 🟢 **CLOSED (Session 92) — Fresh post-bootstrap Chrome login PASSED on live Admin `1.3.9`** —
+   Boss completed a fresh login (passphrase + Boss passkey) on live `1.3.9` (`44d674e`, Vercel
+   `dpl_BRSAuxpZAPVPeLUyYLiskkb4sxNB`, protected workflow `35451419090`). The original blocker
+   was a client-side CSRF chicken-and-egg (`auth/begin` required the `__Host-admin_csrf` cookie
+   that login itself issues); fixed in `app-admin-kanban/src/lib/adminApi.ts` with a Playwright
+   regression spec.
 2. 🟠 **Real ordinary authenticated JWT privilege smoke is pending** — repeat the production
    privilege check with an ordinary authenticated JWT; do not substitute privileged/service access.
 3. 🟠 **Admin DB platform-owner hardening remains pending** — complete the platform-owner operation
@@ -167,9 +166,17 @@ server-side change.
 4. **Version** — Admin `1.3.8` → `1.3.9` (`package.json`; `/api/health` serves it).
 5. **Verification** — typecheck, build, unit, contract, security:scan, and the full Playwright
    smoke (50 passed / 1 skipped, incl. the new regression test) all green.
-6. **Pending** — production deploy. Pushing to `main` runs CI, but the fix only goes live via
-   the protected Admin production dispatch; after that, re-run the fresh-login check and close
-   Open Item 1.
+6. **Production deploy (protected workflow `35451419090`, after Boss's go-ahead)** — live
+   `/api/health` returns `1.3.9` / `44d674e` / `dpl_BRSAuxpZAPVPeLUyYLiskkb4sxNB` /
+   `acceptingReadTraffic=true`. Two earlier dispatches failed closed at candidate readiness by
+   design: (a) Edge provenance was still `f5e05e8` — fixed by running
+   `scripts/deploy-admin-edge.mjs 44d674e…` (bakes `EDGE_SOURCE_SHA`, functionally identical
+   Edge code); (b) `ADMIN_EDGE_SOURCE_SHA_MISMATCH` — fixed by aligning the three Edge provenance
+   secrets (`ADMIN_EDGE_SOURCE_SHA`, `ADMIN_EXPECTED_EDGE_SOURCE_SHA`, `ADMIN_FRONTEND_GIT_SHA`)
+   to `44d674e` via `supabase secrets set`, the documented release step in
+   `app-admin-kanban/HANDOVER.md`. Boss then completed the fresh Chrome login (passphrase +
+   passkey) — **Open Item 1 closed**. Baked `source_provenance.ts` left uncommitted, matching
+   the established deploy-tooling convention.
 
 ### Session 91 (Kimi Code — Compact Notion UX, perf, model catalog + scan)
 
