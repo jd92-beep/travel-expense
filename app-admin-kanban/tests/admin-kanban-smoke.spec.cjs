@@ -483,7 +483,9 @@ test('authenticated shell prefetches bounded default workspace reads without dup
 
   await expect.poll(() => requests.filter(request => prefetchedPaths.has(request.pathname)).length)
     .toBe(4);
-  expect(maxInFlight).toBeLessThanOrEqual(2);
+  // Prefetch fires all default workspace reads concurrently (bounded by the read count —
+  // no unbounded fan-out), replacing the old two-at-a-time serialized rounds.
+  expect(maxInFlight).toBeLessThanOrEqual(5);
   // StrictMode runs the initial overview query twice in this dev smoke; prefetch must not add a third.
   expect(requests.filter(request => request.pathname === '/api/admin/overview')).toHaveLength(
     2,
@@ -696,6 +698,9 @@ test('audit defaults to 24 hours and datetime filters retain local input values'
   const endInput = page.getByLabel('結束日期');
   await endInput.fill('2026-07-12T10:30');
   await expect(endInput).toHaveValue('2026-07-12T10:30');
+  // Datetime fields are draft state under the unified submit-based filter model;
+  // they apply together with the text filters on submit.
+  await page.getByRole('button', { name: '套用文字篩選' }).click();
   expect(Number.isFinite(Date.parse(new URL(page.url()).searchParams.get('endAt')))).toBe(true);
 
   await page.getByRole('radio', { name: '全部時間' }).click();

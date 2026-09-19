@@ -32,6 +32,8 @@ import {
   WorkspaceNav,
   Breadcrumbs,
 } from "../../../components/primitives/ConsolePrimitives";
+import { ConfirmDialog } from "../../../components/primitives/ConfirmDialog";
+import { useToast } from "../../../components/primitives/Toaster";
 import {
   OperationDialog,
   useOperationFlow,
@@ -46,7 +48,7 @@ const DATA_NAV = [
 
 export function AccountsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const cursorPager = useCursorPagination(searchParams, setSearchParams);
+  const cursorPager = useCursorPagination(searchParams, setSearchParams, "accounts");
   const queryText = searchParams.get("q") || "";
   const [draft, setDraft] = useState(queryText);
   useEffect(() => setDraft(queryText), [queryText]);
@@ -261,6 +263,17 @@ export function AccountsPage() {
                     title={searchParams.toString()
                       ? "沒有符合篩選條件的帳戶"
                       : "目前沒有帳戶"}
+                    action={searchParams.toString()
+                      ? (
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => setSearchParams(new URLSearchParams())}
+                        >
+                          清除篩選
+                        </button>
+                      )
+                      : undefined}
                   />
                 )}
             </section>
@@ -270,6 +283,7 @@ export function AccountsPage() {
               disabled={query.isFetching || query.isPlaceholderData}
               onPrevious={cursorPager.previous}
               onNext={cursorPager.next}
+              onFirst={cursorPager.first}
             />
           </>
         )}
@@ -338,6 +352,8 @@ function downloadSupportBundle(bundle: Record<string, unknown>) {
 export function AccountDetailPage() {
   const { accountId = "" } = useParams();
   const writePolicy = useAdminWritePolicy();
+  const toast = useToast();
+  const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
   const account = useQuery({
     queryKey: ["admin", "account", accountId],
     queryFn: ({ signal }) =>
@@ -355,7 +371,10 @@ export function AccountDetailPage() {
     enabled: Boolean(accountId),
   });
   const operationFlow = useOperationFlow((result) => {
-    if (result.bundle) downloadSupportBundle(result.bundle);
+    if (result.bundle) {
+      downloadSupportBundle(result.bundle);
+      toast.push("支援包下載已開始", { variant: "success" });
+    }
   });
   if (account.isLoading) return <LoadingState label="載入帳戶詳情" />;
   if (account.isError || !account.data) {
@@ -387,6 +406,9 @@ export function AccountDetailPage() {
               type="button"
               disabled={account.isFetching || !writePolicy.canMutateCanonical}
               title={writePolicy.canMutateCanonical ? undefined : writePolicy.policyLabel}
+              data-disabled-reason={writePolicy.canMutateCanonical
+                ? account.isFetching ? "正在更新資料，請稍後" : undefined
+                : writePolicy.policyLabel}
               onClick={() =>
                 operationFlow.begin({
                   action: "support_bundle",
@@ -405,16 +427,10 @@ export function AccountDetailPage() {
                   ? "永久刪除 solo 帳戶資料與相片物件（不可復原）"
                   : "R3 用戶刪除未啟用（需要 ADMIN_ALLOW_R3_USER_PURGE + allowlisted）"
               }
-              onClick={() => {
-                if (!window.confirm(
-                  `確定永久刪除 ${detail.identity.email || accountId}？此操作不可復原，會刪 Auth / Supabase / storage 相片。`,
-                )) return;
-                operationFlow.begin({
-                  action: "admin_purge_user",
-                  targetId: accountId,
-                  payload: {},
-                });
-              }}
+              data-disabled-reason={writePolicy.canPurgeUsers
+                ? account.isFetching ? "正在更新資料，請稍後" : undefined
+                : "R3 用戶刪除未啟用"}
+              onClick={() => setPurgeConfirmOpen(true)}
             >
               永久刪除用戶
             </button>
@@ -518,6 +534,7 @@ export function AccountDetailPage() {
               aria-label="Client installations 資料表"
             >
               <table>
+                <caption className="sr-only">Client installations 清單</caption>
                 <thead>
                   <tr>
                     <th scope="col">平台</th>
@@ -610,6 +627,7 @@ export function AccountDetailPage() {
                 aria-label="帳戶 integrations 資料表"
               >
                 <table>
+                  <caption className="sr-only">帳戶 integrations 清單</caption>
                   <thead>
                     <tr>
                       <th scope="col">Provider</th>
@@ -697,6 +715,25 @@ export function AccountDetailPage() {
           )
           : <EmptyState title="未有相關審計事件" />}
       </section>
+      <ConfirmDialog
+        open={purgeConfirmOpen}
+        title="永久刪除用戶"
+        confirmLabel="永久刪除"
+        cancelLabel="取消"
+        danger
+        onCancel={() => setPurgeConfirmOpen(false)}
+        onConfirm={() => {
+          setPurgeConfirmOpen(false);
+          operationFlow.begin({
+            action: "admin_purge_user",
+            targetId: accountId,
+            payload: {},
+          });
+        }}
+      >
+        確定永久刪除 <strong>{detail.identity.email || accountId}</strong>？
+        此操作不可復原，會刪 Auth / Supabase / storage 相片。
+      </ConfirmDialog>
       <OperationDialog flow={operationFlow} />
     </div>
   );

@@ -33,18 +33,28 @@ function localInputToIso(value: string) {
 
 export function AuditPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const cursorPager = useCursorPagination(searchParams, setSearchParams);
+  const cursorPager = useCursorPagination(searchParams, setSearchParams, "audit");
   const [defaultStartAt] = useState(defaultAuditStartAt);
   const allTime = searchParams.get("range") === "all";
   const [draftAction, setDraftAction] = useState(searchParams.get("action") || "");
   const [draftTargetId, setDraftTargetId] = useState(searchParams.get("targetId") || "");
   const [draftTargetType, setDraftTargetType] = useState(searchParams.get("targetType") || "");
   const [draftRequestId, setDraftRequestId] = useState(searchParams.get("requestId") || "");
+  const [draftStartAt, setDraftStartAt] = useState(() =>
+    isoToLocalInput(searchParams.get("startAt") || defaultStartAt)
+  );
+  const [draftEndAt, setDraftEndAt] = useState(() =>
+    isoToLocalInput(searchParams.get("endAt") || "")
+  );
   useEffect(() => {
     setDraftAction(searchParams.get("action") || "");
     setDraftTargetId(searchParams.get("targetId") || "");
     setDraftTargetType(searchParams.get("targetType") || "");
     setDraftRequestId(searchParams.get("requestId") || "");
+    setDraftStartAt(allTime
+      ? ""
+      : isoToLocalInput(searchParams.get("startAt") || defaultStartAt));
+    setDraftEndAt(isoToLocalInput(searchParams.get("endAt") || ""));
   }, [searchParams]);
   const values = queryFromSearchParams(searchParams, [
     "action",
@@ -90,11 +100,14 @@ export function AuditPage() {
       ["targetId", draftTargetId.trim()],
       ["targetType", draftTargetType.trim()],
       ["requestId", draftRequestId.trim()],
+      ["startAt", draftStartAt ? localInputToIso(draftStartAt) : ""],
+      ["endAt", draftEndAt ? localInputToIso(draftEndAt) : ""],
     ];
     for (const [key, value] of pairs) {
       if (value) next.set(key, value);
       else next.delete(key);
     }
+    next.delete("range");
     setSearchParams(next);
   };
   const setRange = (range: "24h" | "all") => {
@@ -110,6 +123,14 @@ export function AuditPage() {
     }
     setSearchParams(next);
   };
+  const hasActiveFilters = Boolean(
+    searchParams.get("action") || searchParams.get("targetId") ||
+      searchParams.get("targetType") || searchParams.get("requestId") ||
+      searchParams.get("result") || searchParams.get("risk") ||
+      searchParams.get("endAt") || allTime ||
+      (searchParams.get("startAt") &&
+        searchParams.get("startAt") !== defaultStartAt),
+  );
   return (
     <div className="workspace-stack">
       <PageHeader
@@ -175,16 +196,14 @@ export function AuditPage() {
         <input
           aria-label="開始日期"
           type="datetime-local"
-          value={allTime ? "" : isoToLocalInput(searchParams.get("startAt") || defaultStartAt)}
-          onChange={(event) =>
-            setFilter("startAt", localInputToIso(event.target.value))}
+          value={allTime ? "" : draftStartAt}
+          onChange={(event) => setDraftStartAt(event.target.value)}
         />
         <input
           aria-label="結束日期"
           type="datetime-local"
-          value={isoToLocalInput(searchParams.get("endAt") || "")}
-          onChange={(event) =>
-            setFilter("endAt", localInputToIso(event.target.value))}
+          value={draftEndAt}
+          onChange={(event) => setDraftEndAt(event.target.value)}
         />
         <input
           aria-label="Request ID"
@@ -237,6 +256,7 @@ export function AuditPage() {
                     aria-label="審計資料表"
                   >
                     <table>
+                      <caption className="sr-only">審計事件清單</caption>
                       <thead>
                         <tr>
                           <th scope="col">時間</th>
@@ -291,7 +311,22 @@ export function AuditPage() {
                     </table>
                   </div>
                 )
-                : <EmptyState title="沒有符合條件的審計事件" />}
+                : (
+                  <EmptyState
+                    title="沒有符合條件的審計事件"
+                    action={hasActiveFilters
+                      ? (
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => setSearchParams(new URLSearchParams())}
+                        >
+                          清除篩選
+                        </button>
+                      )
+                      : undefined}
+                  />
+                )}
             </section>
             <Pagination
               hasCursor={cursorPager.hasCursor}
@@ -299,6 +334,7 @@ export function AuditPage() {
               disabled={query.isFetching || query.isPlaceholderData}
               onPrevious={cursorPager.previous}
               onNext={cursorPager.next}
+              onFirst={cursorPager.first}
             />
           </>
         )}

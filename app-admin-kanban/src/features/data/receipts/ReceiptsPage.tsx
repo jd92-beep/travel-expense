@@ -31,6 +31,7 @@ import {
   formatMoney,
   FreshnessBanner,
   adminMetaAllowsMutation,
+  adminMutationDisabledReason,
   LoadingState,
   PageHeader,
   Pagination,
@@ -40,6 +41,7 @@ import {
   WorkspaceNav,
   Breadcrumbs,
 } from "../../../components/primitives/ConsolePrimitives";
+import { useToast } from "../../../components/primitives/Toaster";
 import { useAdminWritePolicy } from "../../../lib/writePolicy";
 
 const DATA_NAV = [
@@ -85,7 +87,8 @@ function downloadReceiptCsv(receipts: ReceiptRow[]) {
 
 export function ReceiptsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const cursorPager = useCursorPagination(searchParams, setSearchParams);
+  const cursorPager = useCursorPagination(searchParams, setSearchParams, "receipts");
+  const toast = useToast();
   const queryText = searchParams.get("q") || "";
   const [draft, setDraft] = useState(queryText);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -228,7 +231,10 @@ export function ReceiptsPage() {
                   type="button"
                   aria-label="匯出已選 CSV"
                   disabled={query.isFetching || query.isPlaceholderData}
-                  onClick={() => downloadReceiptCsv(selectedReceipts)}
+                  onClick={() => {
+                    downloadReceiptCsv(selectedReceipts);
+                    toast.push("CSV 匯出已開始", { variant: "success" });
+                  }}
                 >
                   <Download size={16} />匯出 CSV
                 </button>
@@ -257,7 +263,7 @@ export function ReceiptsPage() {
                     role="region"
                     aria-label="收據資料表"
                   >
-                    <table>
+                    <table className="receipts-table">
                       <caption className="sr-only">收據清單</caption>
                       <thead>
                         <tr>
@@ -366,6 +372,17 @@ export function ReceiptsPage() {
                     title={searchParams.toString()
                       ? "沒有符合篩選條件的收據"
                       : "目前沒有收據"}
+                    action={searchParams.toString()
+                      ? (
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => setSearchParams(new URLSearchParams())}
+                        >
+                          清除篩選
+                        </button>
+                      )
+                      : undefined}
                   />
                 )}
             </section>
@@ -375,6 +392,7 @@ export function ReceiptsPage() {
               disabled={query.isFetching || query.isPlaceholderData}
               onPrevious={cursorPager.previous}
               onNext={cursorPager.next}
+              onFirst={cursorPager.first}
             />
           </>
         )}
@@ -476,6 +494,13 @@ export function ReceiptDetailPage() {
   const receipt = detail.receipt;
   const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching, online)
     && writePolicy.canMutateCanonical;
+  const mutateReason = adminMutationDisabledReason({
+    meta: query.data.meta,
+    fetching: query.isFetching,
+    online,
+    canWrite: writePolicy.canMutateCanonical,
+    policyLabel: writePolicy.policyLabel,
+  });
   const patch = draft ? receiptAmendPatch(receipt, draft) : {};
   return (
     <div className="workspace-stack">
@@ -497,6 +522,9 @@ export function ReceiptDetailPage() {
               className="button secondary"
               type="button"
               disabled={!canMutate || Boolean(receipt.deleted_at)}
+              data-disabled-reason={receipt.deleted_at
+                ? "收據已在 Trash，請先還原"
+                : mutateReason}
               onClick={() => {
                 setDraft(receiptDraft(receipt));
                 setEditing((value) => !value);
@@ -508,6 +536,7 @@ export function ReceiptDetailPage() {
               className={`button secondary${receipt.deleted_at ? "" : " danger-action"}`}
               type="button"
               disabled={!canMutate}
+              data-disabled-reason={mutateReason}
               onClick={() =>
                 operationFlow.begin({
                   action: receipt.deleted_at ? "receipt_restore" : "receipt_trash",
@@ -648,6 +677,11 @@ export function ReceiptDetailPage() {
                 className="button primary"
                 type="submit"
                 disabled={!canMutate || Object.keys(patch).length === 0}
+                data-disabled-reason={!canMutate
+                  ? mutateReason
+                  : Object.keys(patch).length === 0
+                  ? "沒有欄位變更"
+                  : undefined}
               >
                 <Save size={16} />預覽修改
               </button>
@@ -829,6 +863,7 @@ export function ReceiptDetailPage() {
                           title="重試 sync job"
                           aria-label={`重試 sync job ${jobId}`}
                           disabled={!canMutate}
+                          data-disabled-reason={mutateReason}
                           onClick={() => operationFlow.begin({
                             action: "retry_sync_job",
                             targetId: jobId,
@@ -844,6 +879,7 @@ export function ReceiptDetailPage() {
                           title="取消 pending sync job"
                           aria-label={`取消 sync job ${jobId}`}
                           disabled={!canMutate}
+                          data-disabled-reason={mutateReason}
                           onClick={() => operationFlow.begin({
                             action: "cancel_sync_job",
                             targetId: jobId,

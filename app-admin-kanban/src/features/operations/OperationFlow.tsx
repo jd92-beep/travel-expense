@@ -460,6 +460,19 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
                 type="button"
                 disabled={!flow.operation || flow.previewing || flow.committing || Boolean(flow.previewError) ||
                   (requiresStepUp && (!supportsPasskey || !flow.passphrase))}
+                data-disabled-reason={!flow.operation
+                  ? "等待 server preview"
+                  : flow.previewing
+                  ? "正在建立 server preview"
+                  : flow.committing
+                  ? "正在執行並驗證結果"
+                  : flow.previewError
+                  ? "預覽未能建立，請先解決錯誤"
+                  : requiresStepUp && !supportsPasskey
+                  ? "此裝置不支援 passkey 驗證"
+                  : requiresStepUp && !flow.passphrase
+                  ? "請輸入目前通行片語"
+                  : undefined}
                 onClick={flow.commit}
               >
                 <Play size={16} />{requiresStepUp ? "驗證並執行" : "確認執行"}

@@ -4,13 +4,33 @@
 .product-lockup strong, .product-lockup small { display: block; }
 .product-lockup strong { font-family: var(--font-display); font-size: 14px; }
 .product-icon { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; border: 1px solid #446a9c; border-radius: var(--radius-s); color: var(--accent); background: #182539; }
-.primary-nav { display: grid; gap: 4px; padding: 12px 8px; }
+.primary-nav { position: relative; display: grid; gap: 4px; padding: 12px 8px; }
 .nav-link { position: relative; overflow: clip; min-height: 40px; display: flex; align-items: center; gap: 11px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--radius-s); color: var(--muted); text-decoration: none; font-weight: 650; transition: color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out); }
 .nav-link:hover { color: var(--text); background: var(--elevated); }
 .nav-link.active { color: var(--text); border-color: #1c5b61; background: #122a2d; }
 .nav-link.active svg { color: var(--neon-cyan); }
 .nav-link > svg, .nav-link > span:not(.nav-active-pill) { position: relative; z-index: 1; }
-.nav-active-pill { position: absolute; inset: 0; z-index: 0; border-radius: var(--radius-s); background: rgba(37, 225, 237, .12); box-shadow: inset 0 0 0 1px rgba(37, 225, 237, .35), 0 0 18px var(--glow-cyan); }
+/* Active-indicator pill (ex-layoutId): ONE pill per nav container, positioned by the active
+   item index via --nav-active-index and flown between rows with a composited transform.
+   Constants mirror this file's nav geometry: padding-top 12px, item min-height 40px, gap 4px
+   (all unchanged by the rail-collapse query, which only touches horizontal padding). Rendered
+   as the nav's LAST child at z-index 0 so it paints above the links' backgrounds while the
+   links' text/icons (z-index 1) stay above it. Hidden entirely on the `lite` tier by
+   AdminShell. */
+.nav-active-pill {
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: 40px;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: var(--radius-s);
+  background: rgba(37, 225, 237, .12);
+  box-shadow: inset 0 0 0 1px rgba(37, 225, 237, .35), 0 0 18px var(--glow-cyan);
+  transform: translateY(calc(12px + (40px + 4px) * var(--nav-active-index, 0)));
+  transition: transform var(--dur-2) var(--ease-out);
+}
 .sidebar-foot {
   margin-top: auto; display: grid; gap: 7px; padding: 14px 16px;
   color: var(--muted); font-size: 11px;
@@ -41,10 +61,25 @@
 .session-summary strong { font-size: 13px; }
 .workspace { width: 100%; padding: 20px 24px 48px; }
 .workspace-stack { display: grid; gap: 16px; min-width: 0; }
-.workspace-nav { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); }
+.workspace-nav { position: relative; display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); }
 .workspace-nav a { position: relative; flex: 0 0 auto; min-height: 38px; display: inline-flex; align-items: center; padding: 0 12px; border-bottom: 2px solid transparent; color: var(--muted); text-decoration: none; transition: color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out); }
 .workspace-nav a.active { border-bottom-color: var(--neon-cyan); color: var(--text); }
-.workspace-nav-underline { position: absolute; inset: auto 0 -2px 0; height: 2px; border-radius: 1px; background: var(--neon-cyan); box-shadow: 0 0 10px var(--glow-cyan); }
+/* Active-indicator underline (ex-layoutId): ONE underline per nav, its left/width driven by
+   the active link's measured offsetLeft/offsetWidth (see WorkspaceNav in ConsolePrimitives)
+   and flown between tabs with a left/width transition. The 2px target is decoration-only,
+   so animating layout properties here costs nothing noticeable. Hidden on `lite` tier. */
+.workspace-nav-underline {
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  pointer-events: none;
+  border-radius: 1px;
+  background: var(--neon-cyan);
+  box-shadow: 0 0 10px var(--glow-cyan);
+  transition: left var(--dur-2) var(--ease-out), width var(--dur-2) var(--ease-out);
+}
 .workspace-nav-underline::after {
   content: "";
   position: absolute;
@@ -57,7 +92,7 @@
   box-shadow: 0 0 6px var(--glow-magenta);
   translate: 0 -50%;
 }
-.mobile-menu, .mobile-drawer, .drawer-scrim, .mobile-bottom-nav { display: none; }
+.mobile-menu, .mobile-drawer, .mobile-bottom-nav { display: none; }
 .activity-center { position: fixed; inset: 56px 0 0 auto; z-index: 40; width: min(400px, 100vw); height: calc(100vh - 56px); max-height: none; margin: 0 0 0 auto; padding: 0; overflow: hidden; border: 0; border-left: 1px solid var(--border); color: var(--text); background: var(--surface); box-shadow: -18px 0 40px rgba(0, 0, 0, .3); }
 .activity-center::backdrop { background: rgba(0, 0, 0, .58); }
 .activity-center > header, .drawer-head { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--border); }
@@ -123,6 +158,12 @@
 }
 .danger-action { color: var(--neon-magenta); }
 .danger-action:hover { border-color: #8a2d54; color: var(--neon-magenta-hot); background: #2b1420; filter: drop-shadow(0 0 8px var(--glow-magenta)); }
+/* Standalone destructive button (e.g. the account-purge gate) — same magenta
+   danger language as .danger-action, but as a complete button treatment since
+   it carries no .secondary/.primary pairing. */
+.button.danger { border-color: #7c4045; color: #ffaaaa; background: #2b191b; }
+.button.danger:hover { border-color: #8a2d54; color: var(--neon-magenta-hot); background: #2b1420; filter: drop-shadow(0 0 8px var(--glow-magenta)); }
+.button.danger:disabled { opacity: 1; border-color: var(--border); color: var(--muted); background: var(--elevated); filter: none; }
 .back-link, .text-link { width: fit-content; display: inline-flex; align-items: center; gap: 6px; color: var(--accent); text-decoration: none; }
 .back-link:hover, .text-link:hover, .entity-link:hover { text-decoration: underline; }
 .entity-link { color: var(--text); font-weight: 750; text-decoration: none; }
@@ -233,9 +274,10 @@ a.metric-block:hover, .metric-block:hover { border-color: #52606f; background: v
 .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border-soft); }
 .form-actions > span { margin-right: auto; color: var(--muted); font-size: 12px; }
 .member-add-form { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, .4fr) auto; align-items: end; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border-soft); }
-.table-scroll { width: 100%; max-width: 100%; overflow: auto; }
+.table-scroll { width: 100%; max-width: 100%; max-height: min(64vh, 720px); overflow: auto; overscroll-behavior: contain; }
 table { width: 100%; min-width: 760px; border-collapse: collapse; }
 .provider-table { min-width: 1100px; }
+.receipts-table { min-width: 1320px; }
 .provider-table .status-badge { white-space: nowrap; overflow-wrap: normal; }
 .provider-table code, .release-table code { white-space: nowrap; }
 .provider-model-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -400,10 +442,69 @@ th input[type="checkbox"], td input[type="checkbox"] { width: 18px; height: 18px
 .passkey-removal-form p { margin: 5px 0 12px; color: #ddc2c5; }
 .passkey-removal-form label { display: grid; gap: 6px; color: #f0d6d8; font-size: 13px; font-weight: 650; }
 .passkey-removal-input { width: 100%; min-height: 36px; padding: 0 10px; border: 1px solid #8a6065; border-radius: var(--radius-s); background: #15171b; color: var(--text); }
+/* ConfirmDialog contract — shared <dialog> treatment for confirm/cancel gates
+   (e.g. the account-purge flow replacing window.confirm). Same glass panel
+   language as .operation-dialog/.passkey-dialog; callers that want the
+   chamfered corners add data-augmented-ui="tl-clip br-clip border" (handled
+   by chamfer.css). Expected DOM: <dialog class="confirm-dialog"> with an
+   optional <header>, a .confirm-dialog-body, and .confirm-dialog-actions. */
+.confirm-dialog {
+  width: min(480px, calc(100vw - 32px)); max-height: min(560px, calc(100vh - 32px)); padding: 0; overflow: hidden;
+  border: 1px solid var(--border); color: var(--text); background: var(--overlay);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: var(--shadow-3);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .confirm-dialog { background: rgba(23, 26, 31, .97); }
+}
+.confirm-dialog::backdrop { background: rgba(0, 0, 0, .72); }
+.confirm-dialog > header { min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.confirm-dialog > header h2 { margin: 0; font-size: 17px; }
+.confirm-dialog-body { padding: 16px; color: var(--muted); line-height: 1.55; overflow-wrap: anywhere; }
+.confirm-dialog-body strong { color: var(--text); }
+.confirm-dialog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
 .sync-job-row { justify-content: space-between; }
 .sync-job-row > span:first-child { min-width: 0; }
 .sync-job-row small { display: block; margin-top: 4px; color: var(--muted); }
 .danger-icon { color: var(--danger); }
+
+/* Disabled-reason hint bubble. Contract: any disabled control (or
+   [aria-disabled="true"] link) carrying data-disabled-reason="..." shows the
+   reason above itself on hover / focus-visible — pure CSS touch support to
+   replace the native title-only pattern. Anchored right:0 + viewport-capped
+   width so the bubble never causes horizontal document overflow; the region
+   is pointer-events:none so it can't block clicks. */
+[data-disabled-reason]:is(:disabled, [aria-disabled="true"]) { position: relative; }
+[data-disabled-reason]:is(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible)::after {
+  content: attr(data-disabled-reason);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 70;
+  width: max-content;
+  max-width: min(260px, 78vw);
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  color: var(--text);
+  background: rgba(14, 16, 20, .97);
+  box-shadow: var(--shadow-2);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+/* .button owns `overflow: clip` + a chamfered clip-path, both of which would
+   cut the bubble off. While a disabled .button with a reason is hovered, lift
+   the overflow and expand the clip polygon with a chimney above the box —
+   the button's own painting is unaffected (background/border never paint
+   outside the border-box; only the bubble needs the headroom). */
+.button[data-disabled-reason]:is(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible) {
+  overflow: visible;
+  clip-path: polygon(0 -80px, 100% -80px, 100% 100%, 0 100%, 0 8px, 8px 0);
+}
 .risk-label { min-width: 30px; height: 24px; display: grid; place-items: center; border: 1px solid #6f5e2b; border-radius: var(--radius-s); color: #eed477; background: #2a2515; font-size: 11px; font-weight: 800; }
 .operation-progress { min-height: 140px; display: grid; place-items: center; align-content: center; gap: 8px; color: var(--muted); }
 .operation-progress strong { color: var(--text); }
@@ -447,7 +548,6 @@ th input[type="checkbox"], td input[type="checkbox"] { width: 18px; height: 18px
   .sidebar { display: none; }
   .shell-main { margin-left: 0; }
   .mobile-menu { display: inline-grid; }
-  .drawer-scrim { display: block; position: fixed; inset: 0; z-index: 49; border: 0; background: rgba(0, 0, 0, .58); }
   .mobile-drawer { display: none; position: fixed; z-index: 50; inset: 0 auto 0 0; width: min(300px, 86vw); max-width: none; max-height: none; margin: 0; flex-direction: column; border: 0; border-right: 1px solid var(--border); background: var(--surface-2); }
   .mobile-drawer[open] { display: flex; }
   .mobile-drawer::backdrop { background: rgba(0, 0, 0, .58); }
@@ -507,9 +607,10 @@ th input[type="checkbox"], td input[type="checkbox"] { width: 18px; height: 18px
   .spot-editor-row .icon-button { grid-column: 3; grid-row: 1; align-self: end; }
   .button, .icon-button, .primary-command, .ghost-command { min-height: 44px; }
   .icon-button { width: 44px; height: 44px; flex-basis: 44px; }
-  .table-scroll { overflow: visible; }
+  .table-scroll { overflow: visible; max-height: none; }
   .member-section table { min-width: 0; }
   .provider-table { min-width: 0; }
+  .receipts-table { min-width: 0; }
   table, thead, tbody, tr, th, td { display: block; min-width: 0; width: 100%; }
   thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
   tbody { display: grid; gap: 8px; padding: 8px; }

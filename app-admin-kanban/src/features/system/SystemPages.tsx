@@ -156,6 +156,7 @@ export function ProvidersPage() {
                     aria-label="Provider 資料表"
                   >
                     <table className="provider-table">
+                      <caption className="sr-only">AI 與外部 providers 狀態清單</caption>
                       <thead>
                         <tr>
                           <th scope="col">Provider</th>
@@ -256,6 +257,17 @@ export function ProvidersPage() {
                                   : `Probe ${provider.requiredModel || provider.label}`}
                                 aria-label={`Probe ${provider.label}`}
                                 disabled={provider.configured === false || coolingDown || query.isFetching || !writePolicy.canProbe}
+                                data-disabled-reason={!writePolicy.canProbe
+                                  ? writePolicy.policyLabel
+                                  : provider.configured === false
+                                  ? "Provider 未設定"
+                                  : coolingDown
+                                  ? `Probe 冷卻中，至 ${
+                                    formatDateTime(provider.probeAvailableAt)
+                                  }`
+                                  : query.isFetching
+                                  ? "正在更新資料，請稍後"
+                                  : undefined}
                                 onClick={() =>
                                   operationFlow.begin({
                                     action: "provider_probe",
@@ -410,6 +422,7 @@ function ReleaseProvenance({ runtime }: { runtime: RuntimeData }) {
         aria-label="版本與部署 provenance 資料表"
       >
         <table className="release-table">
+          <caption className="sr-only">版本與部署 provenance 清單</caption>
           <thead>
             <tr>
               <th scope="col">Component</th>

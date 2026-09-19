@@ -1,15 +1,13 @@
-import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router';
 import { AdminSessionProvider } from './app/session';
-import { queryClient } from './app/queryClient';
 import { router } from './app/routes';
 
+// No QueryClientProvider here — it lives inside the lazy ProtectedShell chunk so
+// @tanstack/react-query never lands in the entry (login) bundle.
 export function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AdminSessionProvider>
-        <RouterProvider router={router} />
-      </AdminSessionProvider>
-    </QueryClientProvider>
+    <AdminSessionProvider>
+      <RouterProvider router={router} />
+    </AdminSessionProvider>
   );
 }

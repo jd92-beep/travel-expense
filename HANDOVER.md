@@ -2,11 +2,14 @@
 
 ## Last Worked On
 - **Date**: 2026-09-20 HKT
-- **Focus**: Session 92 — Admin `1.3.9` LIVE: fresh-login CSRF chicken-and-egg fix deployed via
-  the protected workflow; Boss's fresh Chrome login PASSED; Open Item 1 closed.
+- **Focus**: Session 93 — Admin `1.4.0`: full-console analysis; bundle/boot performance overhaul
+  (framer-motion removed, lazy shell, optimistic login, font preload), CSS purge (augmented-ui
+  replaced), UX pass (danger purge styling, ConfirmDialog, toasts, pagination persistence,
+  filter unification, captions, search shortcuts).
 - **Agent**: Kimi Code.
-- **App version**: Admin `1.3.9` live (`44d674e`, Vercel `dpl_BRSAuxpZAPVPeLUyYLiskkb4sxNB`).
-  Compact `0.24.0` live from Session 91.
+- **App version**: Admin `1.4.0` committed; production still `1.3.9` until Boss authorizes the
+  protected dispatch (edge provenance + secrets steps required again — see Session 92).
+  Compact `0.24.0` live.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -140,6 +143,58 @@ you closed with your session number.
    the original mixed-schema `conflicting-duplicate=7`, `meta-fallback=5`, `skipped-row=2` assertions.
 
 ## What Was Done
+
+### Session 93 (Kimi Code — Admin 1.4.0 console analysis + perf/UX overhaul)
+
+Admin `1.4.0`. Front-end only (`app-admin-kanban`); no BFF, Edge, DB or credential change.
+Deep audit (two read-only passes: UX/UI inventory + performance) then three implementation
+passes. All verification green: typecheck, build, unit 34/34, contract 24/24, login-gate 3/3,
+full smoke 50 passed / 1 skipped.
+1. **Performance — bundle** — removed the `motion` dependency entirely (framer-motion shipped
+   whole, ~131 kB min, for 4 call sites): BlurFade/RouteTransition are CSS keyframes now
+   (tiered via `html[data-fx-tier]`, opacity-pinned axe contract preserved), NumberTicker is an
+   inline rAF tween, both nav indicators are CSS-transitioned (active-index translateY for the
+   admin pill, measured left/width for WorkspaceNav). Lazy `ProtectedShell` route drops
+   AdminShell + PasskeyManagerDialog from the entry; `QueryClientProvider` moved behind the
+   auth gate with a dynamic `queryClient` import in session.tsx (react-query out of entry).
+   Entry JS on /login **493.8 → 324.1 kB min (−34%)**, gzip ~101 kB.
+2. **Performance — boot path** — LoginRoute renders the gate optimistically (no splash wait on
+   the session roundtrip; `LoginGate` gained an `active` prop so the three.js scene only loads
+   when sure no session exists, via requestIdleCallback). Fonts self-hosted in `public/fonts/`
+   with fixed-name `@font-face` + `<link rel="preload">` in index.html (oxanium 14 kB +
+   jetbrains-mono 40 kB). Workspace prefetch fires all 5 reads concurrently
+   (`Promise.allSettled`; smoke `maxInFlight` bound relaxed 2→5 to match). Measured on the
+   built app: **cold 161 ms / warm reload 29 ms** to an interactive login form (local server;
+   real-network adds RTT — repeat visits land well inside Boss's 0.3 s target, cold first
+   visits will not on slow networks).
+3. **CSS — augmented-ui purged** — the 167 kB `augmented-ui.min.css` import replaced by a
+   ~3 kB native `clip-path`/`::before` chamfer implementation keyed on the same
+   `data-augmented-ui` attributes (zero TSX churn). Global CSS **228.6 → 65.5 kB min (12.7 kB
+   gz)**. (Optional components.css lazy split was evaluated and skipped — cascade risk not
+   worth ~6 kB gz.)
+4. **UX — safety + feedback** — `.button.danger` now exists (the 永久刪除用戶 purge button
+   previously rendered as a plain secondary — real hazard); the `window.confirm` gate became a
+   shared `ConfirmDialog` (`<dialog>` + backdrop click/Escape cancel + focus return). New
+   Toaster (aria-live region, 4 s auto-dismiss, max 3) wired to CSV export + support-bundle
+   download. Disabled mutating controls carry `data-disabled-reason` with a pure-CSS tooltip
+   (touch-usable; reasons via shared `adminMutationDisabledReason()`). `StatusBadge` unknown
+   statuses render 「未知狀態」 instead of raw English tokens.
+5. **UX — tables/filters/navigation** — `.table-scroll` gained a real scroll box
+   (`max-height: min(64vh,720px)`) so sticky headers actually stick (reverts to page flow on
+   ≤767 px stacked cards); the 13-column receipts table got `min-width: 1320px`; all 17 tables
+   now have sr-only captions. Pagination gained 「回第一頁」 + sessionStorage cursor-stack
+   persistence (per-list `storageKey`, only restored when the URL cursor matches). Filter model
+   unified to text-submit + select-instant everywhere — audit datetime fields are now draft
+   state applied on submit (smoke updated to click 套用文字篩選). Empty states gained an
+   `action` slot (清除篩選 on filtered lists, 返回總覽 on the 404). Global search keeps its
+   draft and focuses on `/` or Cmd/Ctrl+K.
+6. **Honest scope notes** — not done (structural, need design buy-in): reconciliation trip
+   picker, DataTable/DataToolbar primitives, token consolidation (~78 ad-hoc hexes), copy
+   register normalization, pagination totals (needs API support). Fresh-visit <0.3 s is not
+   achievable on real networks; repeat-visit target is met locally.
+7. **Pending** — production deploy of `1.4.0` needs Boss authorization; the release train
+   requires baking Edge provenance + aligning the three provenance secrets first (Session 92
+   procedure).
 
 ### Session 92 (Kimi Code — Admin fresh-login CSRF chicken-and-egg fix)
 

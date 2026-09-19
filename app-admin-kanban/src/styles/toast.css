@@ -1,0 +1,68 @@
+/* Toast contract — DOM is added by a follow-up change; this file is the full
+   CSS surface it can rely on:
+     <div class="toast-region" aria-live="polite">
+       <div class="toast toast--success|toast--error|toast--info" role="status">…</div>
+     </div>
+   The region is a fixed bottom-right stack: pointer-events:none on the region
+   (it must never swallow clicks on the workspace behind it) with pointer-events
+   re-enabled per toast. Entrance is translateY+fade over --dur-2 — safe to use
+   opacity 0→1 here because toasts fire strictly post-interaction, never on
+   first paint; reduced-motion.css's blanket clamp neutralizes the animation
+   for prefers-reduced-motion users. */
+
+.toast-region {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 90;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  width: min(340px, calc(100vw - 32px));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  position: relative;
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  color: var(--text);
+  background: var(--overlay);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+  line-height: 1.45;
+  animation: toast-in var(--dur-2) var(--ease-out) backwards;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .toast { background: rgba(23, 26, 31, .97); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Variants reuse the status accent colors as a 3px inset leading edge plus a
+   matched border tone (same pairing as .status-* badges). */
+.toast--success { border-color: #326c3d; box-shadow: inset 3px 0 0 var(--success), var(--shadow-2); }
+.toast--error { border-color: #7c4045; box-shadow: inset 3px 0 0 var(--danger), var(--shadow-2); }
+.toast--info { border-color: #2f5f77; box-shadow: inset 3px 0 0 var(--info), var(--shadow-2); }
+
+/* Clear the fixed mobile bottom nav (58px + its border). */
+@media (max-width: 767px) {
+  .toast-region { bottom: 74px; }
+}

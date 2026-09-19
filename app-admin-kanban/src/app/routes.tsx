@@ -1,18 +1,24 @@
+import { lazy, Suspense } from "react";
 import {
   createBrowserRouter,
+  Link,
   Navigate,
   useLocation,
   useNavigate,
 } from "react-router";
 import { LoginGate } from "../components/LoginGate";
 import { EmptyState } from "../components/primitives/ConsolePrimitives";
-import { AdminShell } from "./AdminShell";
 import {
   RequireAdminSession,
   SessionBoundaryError,
   SessionSplash,
   useAdminSession,
 } from "./session";
+
+// Lazy: the whole protected branch (AdminShell + QueryClientProvider + react-query) stays
+// out of the entry chunk; RequireAdminSession below gates it while the session check is
+// still pending.
+const ProtectedShell = lazy(() => import("./ProtectedShell"));
 
 function LoginRoute() {
   const { checking, retrySession, session, sessionError, setSession } = useAdminSession();
@@ -22,11 +28,17 @@ function LoginRoute() {
       "from" in location.state
     ? String(location.state.from)
     : "/overview";
-  if (checking) return <SessionSplash />;
+  // Optimistic: render the login form while the session check is still in flight instead of
+  // blocking it behind SessionSplash — the check is a serverless roundtrip that 401s for
+  // logged-out visitors anyway. The heavy login decorations stay gated behind
+  // `active={!checking && !session}` so they never start downloading during the check, and
+  // a resolved session still wins via the Navigate below. An auth-state outage keeps the
+  // console fail-closed (SessionBoundaryError, no form).
   if (sessionError) return <SessionBoundaryError error={sessionError} retry={retrySession} />;
   if (session) return <Navigate to="/overview" replace />;
   return (
     <LoginGate
+      active={!checking && !session}
       onLogin={(value) => {
         setSession(value);
         navigate(from, { replace: true });
@@ -35,10 +47,12 @@ function LoginRoute() {
   );
 }
 
-function ProtectedShell() {
+function Protected() {
   return (
     <RequireAdminSession>
-      <AdminShell />
+      <Suspense fallback={<SessionSplash />}>
+        <ProtectedShell />
+      </Suspense>
     </RequireAdminSession>
   );
 }
@@ -47,7 +61,7 @@ export const router = createBrowserRouter([
   { path: "/login", element: <LoginRoute /> },
   {
     path: "/",
-    element: <ProtectedShell />,
+    element: <Protected />,
     hydrateFallbackElement: <SessionSplash />,
     children: [
       { index: true, element: <Navigate to="/overview" replace /> },
@@ -72,7 +86,13 @@ export const router = createBrowserRouter([
       {
         path: "*",
         element: (
-          <EmptyState title="找不到頁面" detail="此 route 不存在或已移除。" />
+          <EmptyState
+            title="找不到頁面"
+            detail="此 route 不存在或已移除。"
+            action={
+              <Link className="button secondary" to="/overview">返回總覽</Link>
+            }
+          />
         ),
       },
     ],

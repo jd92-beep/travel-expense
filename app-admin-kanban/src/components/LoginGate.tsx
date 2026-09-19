@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { KeyRound, Lock, Shield, TriangleAlert } from 'lucide-react';
 import { AdminApiError, ensureWebAuthnFocus, loginAdmin } from '../lib/adminApi';
 import type { AdminSession } from '../lib/types';
@@ -11,12 +11,50 @@ import Particles from './fx/Particles';
 // keeps it out of the main chunk entirely (verified in the production build output).
 const LoginScene3D = lazy(() => import('./fx/LoginScene3D'));
 
-export function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => void }) {
+type IdleCapableWindow = Window & {
+  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+export function LoginGate(
+  { onLogin, active = true }: {
+    onLogin: (session: AdminSession) => void;
+    /** False while a session pre-check is still pending: the heavy three.js chunk must not
+     * start downloading until the gate knows this visit will actually present the login
+     * form. */
+    active?: boolean;
+  },
+) {
   const tier = useEffectsTier();
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [enrollmentClosed, setEnrollmentClosed] = useState(false);
+  // The 3D showpiece mounts only after first paint, in an idle window (setTimeout fallback
+  // ~200ms) — and only once `active` says this visit is really staying on the login form.
+  // The form itself is never gated on this state.
+  const [sceneReady, setSceneReady] = useState(false);
+
+  useEffect(() => {
+    if (!active || tier !== 'full' || sceneReady) return;
+    const idleWindow = window as IdleCapableWindow;
+    let cancelled = false;
+    const start = () => {
+      if (!cancelled) setSceneReady(true);
+    };
+    if (typeof idleWindow.requestIdleCallback === 'function') {
+      const handle = idleWindow.requestIdleCallback(start, { timeout: 1200 });
+      return () => {
+        cancelled = true;
+        idleWindow.cancelIdleCallback?.(handle);
+      };
+    }
+    const handle = window.setTimeout(start, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [active, tier, sceneReady]);
 
   function resetToLogin() {
     setEnrollmentClosed(false);
@@ -56,7 +94,7 @@ export function LoginGate({ onLogin }: { onLogin: (session: AdminSession) => voi
   return (
     <main className="login-screen">
       <div className="login-fx" aria-hidden="true">
-        {tier === 'full' && (
+        {tier === 'full' && sceneReady && (
           <Suspense fallback={null}>
             <LoginScene3D />
           </Suspense>

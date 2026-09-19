@@ -2,7 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { Navigate, useLocation } from "react-router";
 import { LoaderCircle, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { AdminApiError, clearSession, currentSession, logoutAdmin } from "../lib/adminApi";
-import { queryClient } from "./queryClient";
 import type { AdminSession } from "../lib/types";
 
 type SessionContextValue = {
@@ -17,8 +16,13 @@ type SessionContextValue = {
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
+// Dynamic import: session.tsx is on the entry (login) path, so it must not statically pull
+// @tanstack/react-query into the entry chunk — the cached-query drop happens on the same
+// dynamic chunk the protected branch already loads.
 function dropCachedAdminQueries() {
-  queryClient.removeQueries({ queryKey: ["admin"] });
+  void import("./queryClient").then((m) => {
+    m.queryClient.removeQueries({ queryKey: ["admin"] });
+  });
 }
 
 export function AdminSessionProvider(
