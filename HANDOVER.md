@@ -205,7 +205,14 @@ full smoke 50 passed / 1 skipped.
    `35483016157`, Boss approved the gate, all 8 jobs green. Live
    `https://travel-expense-admin-kanban.vercel.app/api/health` → version `1.4.1`, gitSha
    `9eb662743306ada242a42315d3219a1969879d38`, deployment `dpl_CW3X2nrzhS5MDXN7LUncToEgcWwR`,
-   `acceptingReadTraffic=true`.
+   `acceptingReadTraffic=true`. Post-deploy verification (Session 93b, same day): fresh-browser
+   login on the live console PASSED in an isolated Chrome context (passphrase + Boss passkey,
+   session `Boss · passphrase+passkey`); /overview + /data/receipts rendered with correct
+   chamfer panels (pixel-checked TL/BR corners; the 1.4.1 bleed polygon is live on all 8
+   `data-augmented-ui` elements), 「未知狀態」 badge fallback visible on Notion, Toaster live
+   region present, logout returned to /login. Real-network cold load to an interactive login
+   form measured ~3.2 s from this machine — sub-0.3 s cold first visits are not achievable on
+   real networks; the repeat-visit target is met locally (161 ms cold / 29 ms warm).
 
 ### Session 92 (Kimi Code — Admin fresh-login CSRF chicken-and-egg fix)
 
