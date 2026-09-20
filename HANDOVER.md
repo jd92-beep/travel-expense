@@ -2,14 +2,14 @@
 
 ## Last Worked On
 - **Date**: 2026-09-20 HKT
-- **Focus**: Session 93 — Admin `1.4.0`: full-console analysis; bundle/boot performance overhaul
+- **Focus**: Session 93 — Admin `1.4.0`/`1.4.1`: full-console analysis; bundle/boot performance overhaul
   (framer-motion removed, lazy shell, optimistic login, font preload), CSS purge (augmented-ui
   replaced), UX pass (danger purge styling, ConfirmDialog, toasts, pagination persistence,
-  filter unification, captions, search shortcuts).
+  filter unification, captions, search shortcuts); then production release train with a
+  smoke-test race fix.
 - **Agent**: Kimi Code.
-- **App version**: Admin `1.4.0` committed; production still `1.3.9` until Boss authorizes the
-  protected dispatch (edge provenance + secrets steps required again — see Session 92).
-  Compact `0.24.0` live.
+- **App version**: Admin **`1.4.1` LIVE** (`9eb6627`, Vercel `dpl_CW3X2nrzhS5MDXN7LUncToEgcWwR`,
+  protected workflow `35483016157`). Compact `0.24.0` live.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -192,9 +192,20 @@ full smoke 50 passed / 1 skipped.
    picker, DataTable/DataToolbar primitives, token consolidation (~78 ad-hoc hexes), copy
    register normalization, pagination totals (needs API support). Fresh-visit <0.3 s is not
    achievable on real networks; repeat-visit target is met locally.
-7. **Pending** — production deploy of `1.4.0` needs Boss authorization; the release train
-   requires baking Edge provenance + aligning the three provenance secrets first (Session 92
-   procedure).
+7. **Deployed (Session 93b) — Admin `1.4.1` LIVE** — Boss authorized the protected dispatch;
+   the full release train ran on `d3eb1c7` (1.4.0 overhaul + a post-commit chamfer subpixel
+   fix found in the working tree + lockfile version sync 1.3.9→1.4.1, package.json 1.4.1).
+   First dispatch `35482604904` failed closed in CI on one pre-existing smoke race: the
+   "provider cooldown" test fixed its cooldown deadline at test-setup time (`Date.now()+1s`)
+   while the mock builds the payload per request and the page clock starts at mount — on a
+   slow runner the 1 s window expires before Chromium boots (same test passed on the `1f54214`
+   CI run; app code unchanged since `1.3.9` there). Fixed the test to compute the deadline
+   inside the route handler (`providerProbeAvailableInMs: 1_500`, request-time) — `9eb6627`.
+   Re-aligned edge provenance + all three SHA secrets on `9eb6627`, dispatched
+   `35483016157`, Boss approved the gate, all 8 jobs green. Live
+   `https://travel-expense-admin-kanban.vercel.app/api/health` → version `1.4.1`, gitSha
+   `9eb662743306ada242a42315d3219a1969879d38`, deployment `dpl_CW3X2nrzhS5MDXN7LUncToEgcWwR`,
+   `acceptingReadTraffic=true`.
 
 ### Session 92 (Kimi Code — Admin fresh-login CSRF chicken-and-egg fix)
 

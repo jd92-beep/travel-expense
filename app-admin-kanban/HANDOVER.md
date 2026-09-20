@@ -1,22 +1,27 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-09-16 HKT
+Last updated: 2026-09-20 HKT
 
 ## Current Status
 
-- **`1.4.0` code ready, production `1.3.9`** — Session 93 perf/UX overhaul (front-end only):
-  framer-motion dependency removed (CSS/rAF replacements), lazy ProtectedShell +
-  react-query out of the entry (login entry JS 493.8→324.1 kB min), optimistic login render,
-  self-hosted preloaded fonts, idle-deferred three.js scene, concurrent workspace prefetch,
-  augmented-ui CSS replaced by native clip-path (CSS 228.6→65.5 kB min), sticky table headers
-  (real scroll box), receipts table min-width, `.button.danger`, shared ConfirmDialog (no more
-  `window.confirm`), Toaster (CSV/support-bundle), `data-disabled-reason` tooltips,
-  「未知狀態」 badge fallback, cursor-stack pagination with sessionStorage persistence, unified
-  submit-based filters, empty-state actions, `/` + Cmd/Ctrl+K search focus. Measured on built
-  app: cold 161 ms / warm reload 29 ms to interactive login form (local). typecheck/build/
-  unit 34/contract 24/login-gate 3/full smoke 50+1 skip green. Deploy note: release train
-  needs edge provenance bake + 3 secret alignments (Session 92 procedure) before the protected
-  dispatch.
+- **Production `1.4.1` LIVE** — Session 93 perf/UX overhaul, promoted by protected workflow
+  `35483016157` at exact SHA `9eb662743306ada242a42315d3219a1969879d38`. Live `/api/health`
+  returns version `1.4.1`, gitSha `9eb6627…`, deployment `dpl_CW3X2nrzhS5MDXN7LUncToEgcWwR`,
+  `acceptingReadTraffic=true`. Contents (front-end only): framer-motion removed
+  (CSS/rAF replacements), lazy ProtectedShell + react-query out of the entry
+  (login entry JS 493.8→324.1 kB min), optimistic login render, self-hosted preloaded fonts,
+  idle-deferred three.js scene, concurrent workspace prefetch, augmented-ui replaced by native
+  `chamfer.css` clip-path with 1 px border-ring bleed (CSS 228.6→65.5 kB min), sticky table
+  headers, receipts table min-width, `.button.danger`, shared ConfirmDialog, Toaster,
+  `data-disabled-reason` tooltips, 「未知狀態」 badge fallback, cursor-stack pagination with
+  sessionStorage, submit-based filters, empty-state actions, `/` + Cmd/Ctrl+K search focus.
+  Measured on built app: cold 161 ms / warm reload 29 ms to interactive login form (local).
+  Also includes the smoke-test race fix (`9eb6627`): the "provider cooldown" spec now computes
+  its cooldown deadline at request time inside the mock route (`providerProbeAvailableInMs`),
+  closing a CI flake where a setup-time `Date.now()+1s` deadline expired before a slow
+  runner's page mount. Release train note: edge provenance baked + 3 secrets aligned on the
+  exact release SHA before each dispatch (first dispatch `35482604904` on `d3eb1c7` failed
+  closed on that flake; superseded by `35483016157`).
 - **Production `1.3.9` LIVE** — protected workflow `35451419090` promoted exact SHA
   `44d674e7193419960edfdd1ef49e2a4f740cb9f9`. Live `/api/health` returns version `1.3.9`,
   gitSha `44d674e…`, deployment `dpl_BRSAuxpZAPVPeLUyYLiskkb4sxNB`, `acceptingReadTraffic=true`.
