@@ -296,7 +296,7 @@ async function setupApi(page, options = {}) {
           { sourceId: 'notion-only', status: 'notion_only', supabaseReceiptId: null, notionCopies: 1, linked: false },
         ],
       }; break;
-      case '/api/admin/providers': data = options.providers || [{ provider: 'google', label: 'Google Gemma', configured: true, healthy: true, status: 'healthy', storedStatus: 'connected', models: ['google/gemma-4-31b-it'], requiredModel: 'google/gemma-4-31b-it', actualModel: 'google/gemma-4-31b-it', lastSuccessfulRequestAt: new Date().toISOString(), lastProbeAt: null, probeCooldownSeconds: 60, probeAvailableAt: options.providerProbeAvailableAt || null, p50LatencyMs: 420, p95LatencyMs: 800, errors24h: 0, rateLimited24h: 0 }]; break;
+      case '/api/admin/providers': data = options.providers || [{ provider: 'google', label: 'Google Gemma', configured: true, healthy: true, status: 'healthy', storedStatus: 'connected', models: ['google/gemma-4-31b-it'], requiredModel: 'google/gemma-4-31b-it', actualModel: 'google/gemma-4-31b-it', lastSuccessfulRequestAt: new Date().toISOString(), lastProbeAt: null, probeCooldownSeconds: 60, probeAvailableAt: options.providerProbeAvailableInMs != null ? new Date(Date.now() + options.providerProbeAvailableInMs).toISOString() : options.providerProbeAvailableAt || null, p50LatencyMs: 420, p95LatencyMs: 800, errors24h: 0, rateLimited24h: 0 }]; break;
       case '/api/admin/runtime': data = { adminFrontend: { version: '1.0.0-rc.1', gitSha: 'abc123', deploymentId: 'deploy-1', health: 'healthy' }, edge: { deploymentId: 'edge-1', sourceSha: 'abc123', routeVersion: 'admin-kanban-v1' }, broker: { version: '1.0.0', health: 'healthy' }, database: { auditContractVersion: 'admin-audit-v2', contractVersion: 'admin-operation-v1', itineraryContractVersion: 'versioned-itinerary-v1', receiptContractVersion: 'canonical-receipt-v1', schemaVersion: '20260712123000' }, clients: { compactVersion: '0.9.0', androidVersion: '0.9.0' }, runtimePolicy: options.runtimePolicy || { status: 'allowlisted', version: 'admin-write-mode-v1', source: 'smoke-default', expiresAt: null, writable: true }, drift: [] }; break;
       case '/api/admin/audit': data = { items: options.auditItems || [] }; meta = { total: (options.auditItems || []).length }; break;
       case `/api/admin/audit/${auditEventId}`: data = { id: auditEventId, sequence: 42, previous_event_hash: 'e'.repeat(64), event_hash: 'f'.repeat(64), admin_subject_hash: 'a'.repeat(64), authentication_method: 'passphrase+passkey', session_hash: 'b'.repeat(64), risk: 'R2', action: 'operation_completed', target_type: 'trip', target_id_hash: 'c'.repeat(64), preview_counts: { affected: 1 }, before_state: { version: 6 }, after_state: { version: 7 }, result: { status: 'completed' }, error_code: null, request_id: requestId, operation_id: operationId, incident_id: null, frontend_version: '1.0.0-rc.1', edge_version: 'admin-kanban-v1', schema_version: '20260712123000', created_at: new Date().toISOString() }; break;
@@ -898,7 +898,9 @@ test('provider R1 operation requires server preview before commit', async ({ pag
 
 test('provider cooldown is visible and blocks duplicate probes', async ({ page }) => {
   await setupApi(page, {
-    providerProbeAvailableAt: new Date(Date.now() + 1_000).toISOString(),
+    // Computed inside the route handler at request time: a timestamp fixed at
+    // setup time can already be expired by the time CI boots the page mount.
+    providerProbeAvailableInMs: 1_500,
   });
   await page.goto('/system/providers');
   await expect(page.getByText('Cooldown 至')).toBeVisible();
