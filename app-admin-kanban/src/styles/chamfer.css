@@ -23,13 +23,22 @@
 [data-augmented-ui~="tl-clip"][data-augmented-ui~="br-clip"] {
   --chamfer-tl: var(--aug-tl1, 15px);
   --chamfer-br: var(--aug-br1, 15px);
+  /* Polygon traces the same outline augmented-ui generated (measured from the
+     live build): the straight edges run 1px OUTSIDE the box (-1px / 100%+1px)
+     so the border ring's outer hairline bleeds a subpixel past the border box
+     exactly as before. The duplicate/degenerate points augmented-ui emitted
+     don't affect the fill and are dropped. */
   clip-path: polygon(
+    -1px var(--chamfer-tl),
     0 var(--chamfer-tl),
     var(--chamfer-tl) 0,
-    100% 0,
+    var(--chamfer-tl) -1px,
+    calc(100% + 1px) -1px,
+    calc(100% + 1px) calc(100% - var(--chamfer-br)),
     100% calc(100% - var(--chamfer-br)),
     calc(100% - var(--chamfer-br)) 100%,
-    0 100%
+    calc(100% - var(--chamfer-br)) calc(100% + 1px),
+    -1px calc(100% + 1px)
   );
 }
 
