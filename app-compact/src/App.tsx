@@ -668,6 +668,7 @@ export function App() {
         <ReceiptEditor
           state={state}
           receipt={editing}
+          currentUserId={effectiveSupabaseSession?.user?.id || ''}
           onCancel={() => setEditing(undefined)}
           onSave={(receipt) => {
             const stamped = stampReceiptForTrip(state, receipt);

@@ -458,6 +458,9 @@ export function History({
                     <strong>
                       {isPendingReceipt(r) && <span className="history-pending-mini">pending</span>}
                       {r.visibility === 'private' && <span className="history-private-mini" title="只有自己見到" aria-label="私人紀錄，只有自己見到">🔒</span>}
+                      {r.createdByLabel && r.createdByLabel !== 'You' && (
+                        <span className="history-owner-mini" title={`由 ${r.createdByLabel} 記錄`} aria-label={`由 ${r.createdByLabel} 記錄`}>👤 {r.createdByLabel}</span>
+                      )}
                       {displayStore(r)}
                     </strong>
                     <small>{[cat.name, r.date ? r.date.slice(5).replace('-', '/') : '', r.region || r.regionSnapshot, person?.name].filter(Boolean).join(' · ')}</small>

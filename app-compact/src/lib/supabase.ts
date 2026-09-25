@@ -547,12 +547,12 @@ function rowToReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupabaseId
   return rowToReceiptForTrip(row, state, trip, localId, currentUserId);
 }
 
-function rowToPulledReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupabaseId: Map<string, TripProfile>, currentUserId?: string): Receipt | null {
+function rowToPulledReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupabaseId: Map<string, TripProfile>, currentUserId?: string, ownerDisplayName?: string): Receipt | null {
   const trip = tripBySupabaseId.get(row.trip_id) || activeTrip(state);
-  return rowToReceiptForTrip(row, state, trip, undefined, currentUserId);
+  return rowToReceiptForTrip(row, state, trip, undefined, currentUserId, ownerDisplayName);
 }
 
-function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: TripProfile, localId?: string, currentUserId?: string): Receipt {
+function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: TripProfile, localId?: string, currentUserId?: string, ownerDisplayName?: string): Receipt {
   const ledgerSyncStatus = ledgerSyncStatusForRow(row);
   const recordKind = row.record_kind === 'settlement' || String(row.category || '').toLowerCase() === 'settlement'
     ? 'settlement'
@@ -562,7 +562,7 @@ function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: Tri
     id: localId || row.id,
     supabaseId: row.id,
     ownerId: row.owner_id,
-    createdByLabel: row.owner_id === currentUserId ? 'You' : 'Trip member',
+    createdByLabel: row.owner_id === currentUserId ? 'You' : (ownerDisplayName || 'Trip member'),
     ledgerSyncStatus,
     tripId: trip.id,
     store: row.store,
@@ -1562,7 +1562,7 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   }
   const receipts = activeReceiptRows
     .map((row) => {
-      const receipt = rowToPulledReceipt(row, state, tripBySupabaseId, session.user.id);
+      const receipt = rowToPulledReceipt(row, state, tripBySupabaseId, session.user.id, profileNames.get(row.owner_id));
       if (!receipt) return null;
       const storagePath = photoMap.get(row.id);
       if (storagePath) {

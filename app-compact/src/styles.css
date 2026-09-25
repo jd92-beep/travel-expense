@@ -14930,6 +14930,19 @@ input[type="checkbox"] {
   margin-right: 4px;
   font-size: 0.8em;
 }
+.history-owner-mini {
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #5b4a68;
+  background: rgba(122, 92, 148, 0.12);
+  border: 1px solid rgba(122, 92, 148, 0.22);
+  vertical-align: middle;
+  white-space: nowrap;
+}
 
 /* ===================== MOTION LAYER v2 (effects tiers) =====================
    html.fx-full / .fx-balanced / .fx-lite are stamped by Shell (getEffectsTier).
