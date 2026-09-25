@@ -5,7 +5,7 @@
 ## 🎯 Project 總覽
 - **Project 名**: Travel Expense (語音輸入可能會變咗 "Triple Expansion" 🤣，明晒！)
 - **Repo 路徑**: `/Users/tommy_1/Documents/Projects/travel-expense`
-- **Live URL**: `https://jd92-beep.github.io/travel-expense/` (GitHub Pages) / `https://travel-expense-react.vercel.app` (Public React Vercel)
+- **Live URL**: `https://travel-expense-compact.vercel.app` (主要公開 Compact) / `https://travel-expense-react.vercel.app` (Public React Vercel) / `https://jd92-beep.github.io/travel-expense/` (GitHub Pages root = 無狀態轉址到 Compact)
 - **目的**: 原本係幫 Boss (Tony) 記 2026 年名古屋旅行嘅帳，而家已經演化成公開多用戶產品：Supabase 多用戶 RLS、旅程共享（editor/viewer）、私人收據可見度、獨立 Admin 後台，支持 AI OCR、Email 解析同行程 tracking。
 - **Tech Stack**: Vanilla JS + HTML (Legacy 主版) / React 19 + Vite + TS (`app-react/`) / React 19 + Vite (現役 Compact `app-compact/`) / Admin Kanban (`app-admin-kanban/`) / Google Apps Script (Email-to-Notion) / Notion API 做 Database。
 
@@ -46,7 +46,7 @@
 ---
 
 ## 🗂 重點檔案地圖
-- `index.html`: Legacy 主程式 (~10,000 行，已全面剔除 Zhipu，升級為 Kimi-first connections/voice/OCR fallback)。
+- `index.html`: Pages root 而家係無狀態 CSP 轉址去 Compact；舊版 legacy 內嵌 app 已退役，唔好再喺度加功能。
 - `legacy-notion.js`: 由 index.html 抽離 the legacy Notion sync module，要 keep 住 compatible。
 - `app-react/`: 新版 React 19 + Vite + TS 專案，已 100% 編譯通過。核心 AI 調用在 `src/lib/ai.ts` 與 `src/lib/credentialBroker.ts`。
 - `app-compact/`: 現役部署版 React 19 + Vite + TS 專案（手機優化），獨立版本管理。

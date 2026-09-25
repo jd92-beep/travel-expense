@@ -38,12 +38,12 @@ npm run smoke:settings
 npm run smoke:production-gate
 ```
 
-Compact app 和 React app 獨立版本管理。現時 production 版本係 Compact Web `0.17.1`、React `0.2.7`、Admin `1.3.4` 同 Broker `2026.08.24.1`；Android worktree
+Compact app 和 React app 獨立版本管理。現時 production 版本係 Compact Web `0.24.0`、React `0.2.10`、Admin `1.4.1` 同 Broker `2026.09.15.1`；Android worktree
 仍係 `0.22.0`（versionCode `2200`）。Compact 同 React 已部署到 Vercel、Netlify 同 GitHub Pages；Supabase 私有 receipt-photo cutover 同 Broker Durable Object 亦已套用。Admin Console 由 protected
-workflow `32687928249` 以 Git SHA `d92edfd3694e12e92651a8b43401624bb75f4c41` promotion 到 Vercel deployment
-`dpl_67SXrHRZoxKP1C7jkssnEThxSWDL`；live `/api/health` 回 `200`、exact SHA 及
-`acceptingReadTraffic=true`，未登入 `/api/admin/session` 回 canonical `401`。Console Providers 會列出五個
-既有 Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output
+workflow `35483016157` 以 commit `9eb6627` promotion 到 Vercel deployment
+`dpl_CW3X2nrzhS5MDXN7LUncToEgcWwR`；live `/api/health` 回 `200`、exact SHA 及
+`acceptingReadTraffic=true`，未登入 `/api/admin/session` 回 canonical `401`。Console Providers 會列出六個
+approved Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output
 tokens 嘅 request 測試 availability。Seedance 係 media model，唔會混入 LLM selector。
 
 ## 外觀主題（Compact／Android）
@@ -63,9 +63,10 @@ React app 只保留相同資料欄位，避免同步時刪除 Compact／Android 
 Admin Console production URL 是 `https://travel-expense-admin-kanban.vercel.app`。readiness 會在呼叫 Edge
 前拒絕格式錯誤嘅 hash；production health 與 unauthenticated route 行為已驗證：未登入 session 回 `401`，
 direct catch-all session query 回 `404`。現有 Admin passphrase 維持不變並仍然需要；passkey 只會新增保護，不會取代它。
-第一個 Boss passkey 已完成登記，bootstrap secret 已從 production 移除。Boss 正進行最後一次 post-bootstrap
-fresh login check，完成前不會宣稱該項 check 已通過。所有寫入仍由 Edge backend 以 `deny_all` 拒絕，R3 與
-generic controls 保持 server-disabled。任何 passphrase、token 或 secret 都不會寫入 README、GitHub 或前端程式碼。
+第一個 Boss passkey 已完成登記，bootstrap secret 已從 production 移除；post-bootstrap fresh-browser login 已喺 live
+`1.3.9` 通過，並喺 `1.4.1` 重新驗證。Generic runtime writes 維持 server-disabled；只有 reviewed 窄通道存在
+（provider probe-only 模式，以及預設關閉嘅 gated `admin_purge_user`），R3 與 generic controls 保持 server-disabled。
+任何 passphrase、token 或 secret 都不會寫入 README、GitHub 或前端程式碼。
 
 ## 第一次使用
 
@@ -274,7 +275,7 @@ Supabase Edge Function secret `RESEND_API_KEY` 已設定。現時 Resend account
 ## Developer Quick Start
 
 ```bash
-cd /Users/tommy/Documents/Codex/travel-expense
+cd /Users/tommy_1/Documents/Projects/travel-expense
 
 # React public app
 cd app-react
@@ -321,7 +322,7 @@ SUPABASE_TRIP_ACTIVE_SMOKE=1 npx playwright test tests/supabase-trip-active-smok
 ```text
 travel-expense/
   app-react/                 React 19 + Vite public app
-  app-admin-kanban/          Admin Console 1.0 Vercel surface
+  app-admin-kanban/          Admin Console 1.4.1 Vercel surface
   index.html                 Stateless CSP-protected redirect to Compact
   legacy-notion.js           Legacy Notion sync helper
   email-to-notion.gs         Google Apps Script email importer
