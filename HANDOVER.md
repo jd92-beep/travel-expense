@@ -9,7 +9,9 @@
   reconciliation (69/69 aligned, `db push` channel restored).
 - **Agent**: Kimi Code.
 - **App version**: Compact **`0.24.3` LIVE** (GitHub Pages deploy green; commits `56e1348`,
-  `1dc4758`, `ab4a05c`, `53d407d`). Admin `1.4.1` live.
+  `1dc4758`, `ab4a05c`, `53d407d`). Admin `1.4.1` live. Android branch **`0.24.0` /
+  versionCode 2400** on origin (`fed13c4`, `codex/admin-console-1.0-android`) — main `dda100f`
+  merged in with the shared-ledger fixes; gate battery green (details in Item 28).
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +20,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.24.3`; the Android branch is `0.22.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.24.3`; the Android branch is `0.24.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -158,6 +160,20 @@ you closed with your session number.
    remote-only hotfixes stubbed): `migration list` 69/69 aligned and `db push --dry-run`
    reports "Remote database is up to date". Remaining open follow-ups stay in Items 2, 6,
    7, 12 and 14.
+28. 🟢 **Session 94 `main` → Android merge COMPLETED** — main `dda100f` merged into
+   `codex/admin-console-1.0-android` as `fed13c4` (pushed to origin): Android `0.24.0` /
+   versionCode 2400. 17 conflicted files resolved with main as baseline plus Android-only
+   layers preserved (Capacitor SystemBars, deep-link updateStateRef, recurring rules,
+   syncReadiness panel, settlement creation, deep person-removal cleanup,
+   ANDROID_AI_MODELS surface). Android now carries the 0.24.1–0.24.3 shared-ledger fixes.
+   Gates green: typecheck, build, security:scan, shared-ledger/shared-contract contracts,
+   settings 12/12, history 8/8, mobile-layout, privacy, offline, sync-classify, unit 6/6.
+   Post-merge fixes required: History conflict-requeue queue-item fields, Weather duplicate
+   `sessionReady`, ReceiptEditor duplicate delete button, changeJournal error-preservation
+   line, plus test realignment to main's redesigned UI labels/catalog. Pre-existing
+   baseline-identical failures unchanged (NOT merge regressions): session-smoke `.lock-error`
+   case and theme-smoke Taiwan dark contrast (99 failures, same as `2094dd1`) — both remain
+   open for a future Android session. Emulator QA / release AAB not run this session.
 
 ## What Was Done
 
