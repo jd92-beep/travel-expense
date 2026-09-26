@@ -551,6 +551,9 @@ export function useSyncEngine(
         supabaseData.trips.map((trip) => trip.supabaseId).filter((id): id is string => !!id),
       );
       let computedPending = 0;
+      // One-sync-cycle banner when this pull purged trips (membership revoked / trip deleted),
+      // so the removal is visible instead of silently dropping shared records.
+      let purgeNotice = '';
       if (aliveRef.current) {
         setState((current) => {
           const mergedBase = mergePulledData(current, receipts, trips, supabaseData.tombstones);
@@ -653,6 +656,7 @@ export function useSyncEngine(
                   && !(item.payload?.tripId && purgedTripIds.has(item.payload.tripId))),
               };
               console.warn('[SyncEngine] purged revoked/deleted trips from local cache:', [...purgedTripIds]);
+              purgeNotice = `你已被移出或旅程已刪除（${purgedTripIds.size} 個），相關共享紀錄已從本機移除。`;
             }
           }
           // Server truth beats the local flag: if this pull shows no storage photo for a
@@ -765,9 +769,9 @@ export function useSyncEngine(
             syncQueue: freshQueue,
             // Transient-only pull failures don't earn the red banner: stay 'queued'/'idle' and let
             // the retry loop heal it. lastSyncedAt already isn't advanced on any error (nextSyncedAt).
-            globalSyncStatus: hardPullError || failedItem ? 'error' : (computedPending ? 'queued' : (pullErrors.length ? 'idle' : 'synced')),
+            globalSyncStatus: purgeNotice ? 'error' : (hardPullError || failedItem ? 'error' : (computedPending ? 'queued' : (pullErrors.length ? 'idle' : 'synced'))),
             lastSyncedAt: nextSyncedAt,
-            syncError: hardPullError ? pullErrors.join(' | ') : failedItem?.error || '',
+            syncError: purgeNotice || (hardPullError ? pullErrors.join(' | ') : failedItem?.error || ''),
           };
         });
       }
